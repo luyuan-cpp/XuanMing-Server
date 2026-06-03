@@ -1,0 +1,25 @@
+go 1.23
+
+// Pandora Go workspace
+//
+// 13 个业务 go 服务 + 1 个公共框架 pkg
+// W1-D1 阶段所有 go.mod 还未创建,本文件先占位,
+// 等 W1-D2 拷 mmorpg 公共代码到 pkg/ 时再 `go work sync`。
+
+use (
+	./pkg
+
+	./login
+	./player
+	./data_service
+	./friend
+	./chat
+	./player_locator
+	./team
+	./matchmaker
+	./trade
+	./dialogue
+	./ds_allocator
+	./hub_allocator
+	./battle_result
+)

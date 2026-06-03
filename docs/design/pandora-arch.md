@@ -1,0 +1,270 @@
+# Pandora 总架构
+
+> 立项决策、玩家流转、服务清单、关键时序。本文档是 §1 必读。
+
+## 1. 项目定位
+
+- **类型**:MOBA + 持续在线大厅(类 Albion / New World 城镇 + LoL 战斗)
+- **核心循环**:登录 → 进大厅(可走动 / 互打 / 试技能 / NPC 对话 / 交易 / 组队)→ 匹配 → 进战斗 DS 打一局 → 结算回大厅
+- **关键参数**:
+  - 大厅 DS:**500 人/实例**,单城镇约 1km²,**全图自由 PvP**
+  - 战斗 DS:10 人(5v5),约 25 分钟/局
+  - 战斗 tick:30~60 Hz / 大厅 tick:20~30 Hz
+
+## 2. 双仓库结构
+
+```
+GitHub:
+├── github.com/luyuancpp/Pandora           # 后端(go)+ proto + docs + deploy
+└── github.com/luyuancpp/Pandora-Client    # UE 5.7 客户端 + 大厅 DS + 战斗 DS(待定名)
+
+本地:
+├── F:/work/Pandora/                       # 后端工作目录
+└── F:/work/Pandora-Client/                # UE 工作目录(待 D4 初始化)
+```
+
+**协作纪律**:
+- proto **source of truth 在 Pandora 后端仓库**(`Pandora/proto/`)
+- `Pandora` CI 在 proto 改动时,自动生成 cpp .pb.h 推送到 UE 仓库的 `Source/Pandora/Generated/Proto/`
+- UE 仓库不允许直接改 .proto,所有改动从后端仓库来
+
+## 3. 服务清单(go,共 13 个)
+
+| # | 服务 | 职责 | 是否有状态 | 依赖 |
+|---|---|---|---|---|
+| 1 | **login** | 账号 / 登录 / 颁发 DS 票据 | 无 | mysql + redis |
+| 2 | **player** | 玩家档案 / 段位 / 英雄池 / 皮肤 | 无(读穿 mysql) | mysql + redis |
+| 3 | **data_service** | 玩家数据读写网关 / 缓存 | 无 | mysql + redis |
+| 4 | **friend** | 好友 / 黑名单 | 无 | mysql + redis |
+| 5 | **chat** | 频道(世界 / 队伍 / 私聊) | 弱(channel 路由) | redis pub/sub + kafka |
+| 6 | **player_locator** | 玩家位置(hub_id / battle_id) | 强 | redis |
+| 7 | **team** | 组队状态机 | 强 | redis |
+| 8 | **matchmaker** | MMR / 队伍合并 / 排队 / bot 降级 | 强 | redis + ds_allocator |
+| 9 | **trade** | 两阶段交易 / 审计 | 强 | redis + mysql + kafka |
+| 10 | **dialogue** | NPC 对话树运行时 | 无(读配置) | mysql / 配置中心 |
+| 11 | **ds_allocator** | 战斗 DS 调度(Agones GameServer) | 弱(etcd) | k8s + agones + etcd |
+| 12 | **hub_allocator** | 大厅 DS 分片调度 | 弱(etcd) | k8s + agones + etcd |
+| 13 | **battle_result** | 战斗结算消费 / 幂等落库 | 无 | kafka + mysql |
+
+## 4. UE 端模块(共 5 个,在 UE 仓库)
+
+| 模块 | 用途 | 编译目标 |
+|---|---|---|
+| `Source/Pandora/` | 客户端(玩家本地运行) | Win64 Game / Linux Game |
+| `Source/PandoraShared/` | 客户端 + DS 共用(GAS、proto、票据) | 全部 |
+| `Source/PandoraHubServer/` | 大厅 DS 专属(GameMode、AOI、跨分片) | Linux Server |
+| `Source/PandoraBattleServer/` | 战斗 DS 专属(GameMode、结算上报) | Linux Server |
+| `Source/PandoraEditor/` | 编辑器扩展(技能数据 DataAsset 编辑器) | Editor |
+
+## 5. 玩家流转图
+
+```
+┌─────────┐
+│ Client  │
+└────┬────┘
+     │ 1. POST /login(账号 + 密码)
+     ▼
+┌─────────┐  2. 查 mysql 验证        ┌─────────┐
+│  login  │ ◀─────────────────────▶ │  mysql  │
+└────┬────┘                          └─────────┘
+     │ 3. 调 hub_allocator 分配 hub
+     ▼
+┌──────────────┐  4. 查 etcd 选 hub  ┌──────────┐
+│ hub_allocator│ ◀─────────────────▶│ Agones K8s│
+└──────┬───────┘                     └──────────┘
+       │ 5. 返回 hub_ds_addr + JWT 票据
+       ▼
+┌─────────┐
+│ Client  │ 6. 直连 hub DS(UDP / Unreal NetDriver)
+└────┬────┘
+     ▼
+┌──────────────┐  7. 校验票据(无状态 JWT)
+│   Hub DS     │
+│ (Linux UE)   │  8. 玩家在大厅走动 / 放技能 / 互打
+└──────┬───────┘  9. NPC / 商店 / 交易 / 组队 → gRPC 调后端
+       │
+       │ 10. 玩家点"开始匹配" → gRPC 调 matchmaker
+       ▼
+┌──────────────┐  11. MMR 撮合 5v5
+│  matchmaker  │
+└──────┬───────┘
+       │ 12. 凑齐 10 人 → 调 ds_allocator
+       ▼
+┌──────────────┐  13. Agones 拉起 battle DS pod
+│ ds_allocator │
+└──────┬───────┘
+       │ 14. battle_ds_addr 推回 hub DS
+       ▼
+┌──────────────┐  15. hub DS 把地址发给客户端,断开连接
+│   Hub DS     │
+└──────┬───────┘
+       │ 16. 客户端用新票据连 battle DS
+       ▼
+┌──────────────┐  17. 战斗(25 分钟)
+│  Battle DS   │
+└──────┬───────┘  18. 结束 → kafka 发 BattleResult
+       │
+       ▼
+┌──────────────┐  19. 消费 → 幂等落库 → 段位更新
+│battle_result │
+└──────────────┘
+       │
+       ▼
+       玩家从 battle DS 退出 → 重新连 hub DS(回大厅)
+```
+
+## 6. 协议矩阵
+
+| Caller → Callee | 协议 | 节奏 |
+|---|---|---|
+| Client → login | gRPC(同步) | 登录时一次 |
+| Client → Hub DS | UDP / Unreal NetDriver | 高频(20~30 Hz) |
+| Client → Battle DS | UDP / Unreal NetDriver | 高频(30~60 Hz) |
+| Hub DS → 后端各服务 | gRPC(同步) | 玩家行为触发 |
+| Battle DS → battle_result | Kafka(异步,at-least-once) | 战斗结束一次 |
+| ds_allocator ↔ Battle DS | gRPC 双向流(心跳) | 5s/次 |
+| hub_allocator ↔ Hub DS | gRPC 双向流(心跳 + 玩家计数) | 5s/次 |
+| matchmaker → ds_allocator | gRPC | 匹配成功一次 |
+| 各服务 ↔ etcd | gRPC | 服务发现 |
+| 各服务 ↔ Kafka | Kafka 协议 | 异步事件 |
+
+## 7. 关键时序
+
+### 时序 1:玩家从 Hub 进 Battle(最复杂的链路)
+
+```
+Client    Hub DS    matchmaker    ds_allocator    Agones    Battle DS    battle_result
+  │         │           │              │             │          │             │
+  │ Match   │           │              │             │          │             │
+  │────────▶│           │              │             │          │             │
+  │         │ StartMatch│              │             │          │             │
+  │         │──────────▶│              │             │          │             │
+  │         │           │ (MMR 撮合)   │             │          │             │
+  │         │           │ Allocate     │             │          │             │
+  │         │           │─────────────▶│             │          │             │
+  │         │           │              │ CreateGameSrv│         │             │
+  │         │           │              │────────────▶│          │             │
+  │         │           │              │             │ k8s 起 pod│            │
+  │         │           │              │             │──────────▶│            │
+  │         │           │              │             │          │ Ready       │
+  │         │           │              │             │◀─────────│             │
+  │         │           │              │  ds_addr    │          │             │
+  │         │           │              │◀────────────│          │             │
+  │         │           │ ds_addr+票据 │             │          │             │
+  │         │           │◀─────────────│             │          │             │
+  │         │  推送通知 │              │             │          │             │
+  │         │◀──────────│              │             │          │             │
+  │ ds_addr │           │              │             │          │             │
+  │◀────────│           │              │             │          │             │
+  │   断开 hub          │              │             │          │             │
+  │────×    │           │              │             │          │             │
+  │ 连 battle DS(带票据)                            │          │             │
+  │─────────────────────────────────────────────────────────────▶│            │
+  │                                                              │ 校验票据   │
+  │              战斗开始(25 分钟)                              │            │
+  │ ◀══════════════════════════════════════════════════════════▶ │            │
+  │                                                              │            │
+  │                                                              │ 战斗结束   │
+  │                                                              │ Kafka 发   │
+  │                                                              │──────────▶│
+  │                                                              │            │ 幂等落库
+  │ 客户端断开 battle DS,重连 hub DS 回大厅                                  │
+```
+
+### 时序 2:大厅内的技能命中(500 人 PvP 关键路径)
+
+```
+Client A          Hub DS                Client B (在 A 50 米内)
+   │                │                       │
+   │ CastAbility    │                       │
+   │───────────────▶│                       │
+   │                │ GAS Predict(本地)    │
+   │                │                       │
+   │                │ Activate Ability      │
+   │                │ (服务端权威)          │
+   │                │                       │
+   │                │ 执行 Cost / CD        │
+   │                │ 命中判定(网格 trace) │
+   │                │                       │
+   │                │ ApplyGameplayEffect   │
+   │                │ to Target B           │
+   │                │                       │
+   │                │ AOI 广播 GameplayCue  │
+   │                │──────────────────────▶│
+   │                │                       │ 表现层(特效/音效)
+   │                │ Replicate B 血量      │
+   │                │──────────────────────▶│
+   │ Replicate A    │                       │
+   │ ability state  │                       │
+   │◀───────────────│                       │
+```
+
+## 8. 部署拓扑(本地开发期)
+
+```
+开发机 (Windows F:)
+├── docker-compose:
+│   ├── mysql       :3307
+│   ├── redis       :6380
+│   ├── kafka       :9093
+│   ├── etcd        :2380
+│   ├── prometheus  :9091
+│   └── grafana     :3001
+│
+├── go services(各自一个进程,monorepo go.work):
+│   ├── login           :50001
+│   ├── player          :50002
+│   ├── data_service    :50003
+│   ├── friend          :50004
+│   ├── chat            :50005
+│   ├── player_locator  :50006
+│   ├── team            :50010
+│   ├── matchmaker      :50011
+│   ├── trade           :50012
+│   ├── dialogue        :50013
+│   ├── ds_allocator    :50020
+│   ├── hub_allocator   :50021
+│   └── battle_result   :50022 (kafka consumer)
+│
+├── minikube(本地 k8s):
+│   ├── agones-system
+│   └── pandora-ds:
+│       ├── hub-fleet     (Hub DS pods, replicas=N)
+│       └── battle-fleet  (Battle DS pods, allocate on demand)
+│
+└── UE 编辑器(F:/work/Pandora-Client/)
+    ├── Editor 跑客户端(PIE)
+    └── Linux Server target → docker image → minikube
+```
+
+## 9. 关键不变量(任何改动都要满足,继承 CLAUDE.md §9)
+
+1. **玩家在线只能在一个 DS**(hub 或 battle,不能两个)— player_locator 强制
+2. **战斗结果幂等**(同一 match_id 只能落库一次)— battle_result 用 mysql unique key
+3. **DS 票据短时效**(JWT exp 5 分钟,防止泄漏)— login 颁发,DS 校验
+4. **DS 崩溃必有补偿**(15s 心跳超时 → ds_allocator 标记 abandoned → 玩家段位回滚)
+5. **proto 字段编号永不复用**(deprecate 不删除)
+6. **MMR 计算在 battle_result**(不在 DS 算,DS 不可信)
+
+## 10. 风险登记册
+
+| 风险 | 级别 | 缓解 |
+|---|---|---|
+| 500 人 hub Replication 性能 | 🔴 高 | Iris + AOI 网格 + 限流;早压测 |
+| GAS + Iris 兼容性坑 | 🔴 高 | 留 2 周 buffer;不行回退 RepGraph |
+| DS 崩溃数据丢失 | 🟡 中 | kafka at-least-once + 幂等 + 死信 |
+| 跨 hub 分片可见性 | 🟡 中 | 先做"看不到"最简方案 |
+| 防作弊 | 🟡 中 | 服务端权威 + 移动速度校验 + 审计日志 |
+| UE 5.7 API 不稳定 | 🟡 中 | 关注 release notes,必要时降到 5.6 |
+| 单人开发节奏 | 🟡 中 | 严格遵守 PROGRESS.md + 每日 commit |
+
+## 11. 决策行(继承 mmorpg ARCH §11 风格,只追加)
+
+| Round | 日期 | 决策 | 数据 |
+|---|---|---|---|
+| 0 | 2026-06-03 | 立项,推倒 mmorpg,新建 Pandora 项目 | - |
+| 0 | 2026-06-03 | 后端 monorepo go.work,UE 独立仓库 | - |
+| 0 | 2026-06-03 | 大厅 DS 化,500 人/实例,全图自由 PvP | - |
+| 0 | 2026-06-03 | UE 5.7 + Iris + GAS,Agones 调度 | - |
+| 0 | 2026-06-03 | License MIT,Go 1.23,基础设施全新搭一套 | - |
+| 0 | 2026-06-03 | 后端框架继续用 go-zero(复用 mmorpg) | - |

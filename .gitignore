@@ -1,0 +1,79 @@
+# ============================================================
+# Pandora 后端仓库 .gitignore
+# ============================================================
+
+# Go 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+build/
+dist/
+
+# Go module 本地缓存
+vendor/
+
+# 运行时产物
+run/
+logs/
+*.log
+*.pid
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE / 编辑器
+.vscode/
+.idea/
+.vs/
+*.iml
+.fleet/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage / 测试
+*.coverprofile
+coverage.out
+coverage.html
+
+# 协议生成产物(强制走 buf gen,不入库可选 — 这里入库便于客户端直接消费)
+# proto/gen/ — 暂时入库,如需排除取消注释
+
+# 压测产物(robot 下的 logs/ 已经在上面 logs/ 通配里)
+robot/logs/
+
+# k8s 本地配置
+deploy/k8s/local/
+*.kubeconfig
+
+# Docker 本地数据卷
+deploy/data/
+
+# 第三方下载缓存
+third_party/_cache/
+
+# 私钥 / 证书
+*.pem
+*.key
+*.crt
+*.p12
+secrets/

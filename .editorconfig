@@ -1,0 +1,42 @@
+# ============================================================
+# Pandora EditorConfig
+# https://editorconfig.org/
+# ============================================================
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Go 用 tab(go fmt 强制)
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Makefile 必须 tab
+[Makefile]
+indent_style = tab
+
+# YAML 用 2 空格(社区惯例)
+[*.{yml,yaml}]
+indent_size = 2
+
+# JSON 用 2 空格
+[*.json]
+indent_size = 2
+
+# Proto 用 2 空格(buf 默认)
+[*.proto]
+indent_size = 2
+
+# Markdown 保留尾随空格(可能有强制换行)
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows 脚本用 CRLF
+[*.{ps1,bat,cmd}]
+end_of_line = crlf

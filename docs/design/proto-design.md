@@ -1,0 +1,318 @@
+# Pandora Proto 设计
+
+> 全新协议,**不复用 mmorpg**。本文档是 D3 写 .proto 文件的执行依据。
+
+## 1. 设计原则
+
+1. **完全推翻 mmorpg 协议**,不做兼容
+2. **按服务分包**,每个 go 服务一个 .proto 文件
+3. **gRPC 双向**:同步走 unary RPC,推送走 server stream 或 Kafka
+4. **kafka 消息走 envelope**:`KafkaEnvelope { topic, key, payload(bytes), trace_id, ts }`
+5. **字段编号预留**:每个消息预留 50~99 段给后续扩展
+6. **向前兼容**:不删字段不改类型,只 `reserved <num>; // <reason>`
+
+## 2. proto 目录结构
+
+```
+Pandora/proto/
+├── buf.yaml
+├── buf.gen.go.yaml          # 生成 go pb 到 Pandora/proto/gen/go/
+├── buf.gen.cpp.yaml         # 生成 cpp pb 到 Pandora-Client/Source/Pandora/Generated/Proto/
+├── common/
+│   ├── errcode.proto        # 错误码枚举
+│   ├── pagination.proto     # 通用分页
+│   ├── timestamp.proto      # 时间封装
+│   └── kafka_envelope.proto # Kafka 消息信封
+├── login/
+│   └── login.proto          # LoginService(账号 + 票据)
+├── player/
+│   └── player.proto         # PlayerService(玩家档案 + 段位 + 英雄池)
+├── team/
+│   └── team.proto           # TeamService(组队状态机)
+├── match/
+│   └── match.proto          # MatchService(匹配)
+├── ds/
+│   └── allocator.proto      # DSAllocatorService(战斗 DS 调度)
+├── hub/
+│   └── allocator.proto      # HubAllocatorService(大厅 DS 调度)
+├── battle/
+│   └── battle.proto         # BattleResultService(结算上报)
+├── trade/
+│   └── trade.proto          # TradeService(两阶段交易)
+├── dialogue/
+│   └── dialogue.proto       # DialogueService(NPC 对话树)
+├── chat/
+│   └── chat.proto           # ChatService(频道)
+├── friend/
+│   └── friend.proto         # FriendService
+├── locator/
+│   └── locator.proto        # PlayerLocatorService
+├── data_service/
+│   └── data_service.proto   # DataService(玩家数据读写网关)
+└── ds_runtime/              # ⭐ DS 运行时协议(UE 客户端 ↔ UE DS 之间)
+    ├── hub.proto            # 大厅 DS RPC(NPC 触发、商店、跨 hub 切换)
+    └── battle.proto         # 战斗 DS RPC(出装、投降、战绩)
+```
+
+## 3. 核心消息设计(关键服务)
+
+### 3.1 login.proto
+
+```proto
+service LoginService {
+  rpc Login(LoginReq) returns (LoginResp);
+  rpc Logout(LogoutReq) returns (LogoutResp);
+  rpc IssueDSTicket(IssueDSTicketReq) returns (IssueDSTicketResp);
+  rpc VerifyDSTicket(VerifyDSTicketReq) returns (VerifyDSTicketResp);
+}
+
+message LoginReq {
+  string account = 1;
+  string password_hash = 2;     // 客户端先 sha256
+  string device_id = 3;
+  string client_version = 4;
+}
+
+message LoginResp {
+  ErrCode code = 1;
+  int64 player_id = 2;
+  string session_token = 3;     // 连后端用
+  string hub_ds_addr = 4;       // 直连大厅 DS 的 IP:port
+  string hub_ticket = 5;        // hub DS 票据(JWT,含 player_id + exp)
+}
+
+message DSTicket {              // JWT payload
+  int64 player_id = 1;
+  string match_id = 2;          // 战斗 DS 才有,hub 留空
+  int64 issued_at_ms = 3;
+  int64 expires_at_ms = 4;
+  string ds_type = 5;           // "hub" | "battle"
+  string jti = 6;               // JWT ID,防重放
+}
+```
+
+### 3.2 team.proto
+
+```proto
+service TeamService {
+  rpc CreateTeam(CreateTeamReq) returns (CreateTeamResp);
+  rpc Invite(InviteReq) returns (InviteResp);
+  rpc AcceptInvite(AcceptInviteReq) returns (AcceptInviteResp);
+  rpc LeaveTeam(LeaveTeamReq) returns (LeaveTeamResp);
+  rpc Kick(KickReq) returns (KickResp);
+  rpc SetReady(SetReadyReq) returns (SetReadyResp);
+  rpc StreamTeamUpdates(StreamTeamUpdatesReq) returns (stream TeamUpdate);
+}
+
+enum TeamState {
+  TEAM_STATE_UNSPECIFIED = 0;
+  TEAM_STATE_FORMING = 1;
+  TEAM_STATE_READY = 2;
+  TEAM_STATE_MATCHING = 3;
+  TEAM_STATE_IN_BATTLE = 4;
+  TEAM_STATE_DISBANDED = 5;
+}
+
+message Team {
+  string team_id = 1;
+  int64 captain_id = 2;
+  repeated TeamMember members = 3;
+  TeamState state = 4;
+  int64 created_at_ms = 5;
+  int32 max_size = 6;           // MOBA 5 人队
+}
+
+message TeamMember {
+  int64 player_id = 1;
+  string nickname = 2;
+  int32 mmr = 3;
+  bool ready = 4;
+  int32 hero_id = 5;
+}
+```
+
+### 3.3 match.proto
+
+```proto
+service MatchService {
+  rpc StartMatch(StartMatchReq) returns (StartMatchResp);
+  rpc CancelMatch(CancelMatchReq) returns (CancelMatchResp);
+  rpc StreamMatchProgress(StreamMatchProgressReq) returns (stream MatchProgress);
+  rpc ConfirmMatch(ConfirmMatchReq) returns (ConfirmMatchResp);
+}
+
+enum MatchStage {
+  MATCH_STAGE_QUEUEING = 0;
+  MATCH_STAGE_FOUND = 1;
+  MATCH_STAGE_CONFIRM = 2;
+  MATCH_STAGE_ALLOCATING = 3;
+  MATCH_STAGE_READY = 4;
+  MATCH_STAGE_FAILED = 5;
+}
+
+message MatchProgress {
+  string match_id = 1;
+  MatchStage stage = 2;
+  int32 queue_seconds = 3;
+  int32 estimated_wait_seconds = 4;
+  string battle_ds_addr = 5;
+  string battle_ticket = 6;
+  repeated int64 team_a = 7;
+  repeated int64 team_b = 8;
+}
+```
+
+### 3.4 ds/allocator.proto
+
+```proto
+service DSAllocatorService {
+  rpc AllocateBattle(AllocateBattleReq) returns (AllocateBattleResp);
+  rpc ReleaseBattle(ReleaseBattleReq) returns (ReleaseBattleResp);
+  rpc Heartbeat(stream HeartbeatReq) returns (stream HeartbeatResp);
+  rpc ListBattles(ListBattlesReq) returns (ListBattlesResp);
+}
+
+message AllocateBattleReq {
+  string match_id = 1;
+  repeated int64 player_ids = 2;
+  int32 map_id = 3;
+  string game_mode = 4;
+}
+
+message AllocateBattleResp {
+  ErrCode code = 1;
+  string ds_addr = 2;
+  string ds_pod_name = 3;
+  int64 allocated_at_ms = 4;
+}
+
+message HeartbeatReq {
+  string ds_pod_name = 1;
+  string match_id = 2;
+  int32 player_count = 3;
+  float cpu_pct = 4;
+  float mem_mb = 5;
+  string state = 6;             // "warming" | "ready" | "running" | "ended"
+}
+```
+
+### 3.5 battle.proto
+
+```proto
+service BattleResultService {
+  rpc ReportResult(ReportResultReq) returns (ReportResultResp);
+  rpc QueryHistory(QueryHistoryReq) returns (QueryHistoryResp);
+}
+
+message BattleResult {
+  string match_id = 1;          // 幂等 key
+  int64 started_at_ms = 2;
+  int64 ended_at_ms = 3;
+  int32 winner_team = 4;        // 0=A win, 1=B win, 2=draw
+  repeated PlayerStats stats = 5;
+  string ds_pod_name = 6;
+}
+
+message PlayerStats {
+  int64 player_id = 1;
+  int32 hero_id = 2;
+  int32 team = 3;
+  int32 kills = 4;
+  int32 deaths = 5;
+  int32 assists = 6;
+  int64 damage_dealt = 7;
+  int64 damage_taken = 8;
+  int64 healing = 9;
+  int64 gold = 10;
+  int32 mmr_delta = 11;
+}
+```
+
+### 3.6 ds_runtime/hub.proto(UE 客户端 ↔ Hub DS)
+
+```proto
+service HubRuntimeService {
+  rpc TriggerNPC(TriggerNPCReq) returns (TriggerNPCResp);
+  rpc OpenShop(OpenShopReq) returns (OpenShopResp);
+  rpc TransferToHub(TransferToHubReq) returns (TransferToHubResp);
+  rpc EnterBattle(EnterBattleReq) returns (EnterBattleResp);
+}
+
+message TransferToHubReq {
+  string target_hub_id = 1;
+  Vector3 spawn_pos = 2;
+}
+
+message Vector3 { float x = 1; float y = 2; float z = 3; }
+```
+
+## 4. 错误码段规划(避免冲突)
+
+```
+0           = OK
+1-999       = 公共错(网络、超时、参数、权限)
+1000-1999   = login
+2000-2999   = player
+3000-3999   = team
+4000-4999   = match
+5000-5999   = ds_allocator
+6000-6999   = battle_result
+7000-7999   = trade
+8000-8999   = dialogue
+9000-9999   = chat / friend / locator
+10000-10999 = data_service
+11000+      = 预留
+```
+
+详细错误码清单写到 `pkg/errcode/errors.go`(D2 实现)。
+
+## 5. Kafka topic 命名规范
+
+```
+pandora.<domain>.<event>     格式
+pandora.dlq.<original_topic> 死信队列
+```
+
+| Topic | 用途 |
+|---|---|
+| `pandora.login.event` | 登录登出事件 |
+| `pandora.match.found` | 匹配成功通知 |
+| `pandora.match.failed` | 匹配失败 |
+| `pandora.ds.lifecycle` | DS 拉起/回收事件 |
+| `pandora.battle.result` | 战斗结算(at-least-once,消费者幂等落库) |
+| `pandora.player.update` | 玩家档案变更 |
+| `pandora.trade.audit` | 交易审计日志 |
+| `pandora.chat.world` | 世界聊天 |
+| `pandora.locator.update` | 玩家位置变更 |
+| `pandora.dlq.<topic>` | 死信队列 |
+
+详细 partition / retention 设计见 `infra.md` §4。
+
+## 6. proto 工具链选型(D3 决策)
+
+**候选**:
+- A. **buf**(推荐):标准化 lint + breaking change 检测 + 多语言代码生成
+- B. **protoc + Makefile**:轻量,但要手维护版本
+- C. **bazel + rules_proto**:大型项目最佳,但学习曲线陡
+
+**建议 A(buf)**,理由:
+- buf 内置 breaking change 检测,符合"字段编号永不复用"不变量
+- 双仓库场景下,buf 生成器可以一次配置 go + cpp 两种产物
+- 社区主流,UE 项目对接成熟
+
+## 7. 字段命名约定
+
+- 时间戳:`<name>_at_ms`(明确单位为毫秒,int64,Unix epoch)
+- ID:`<entity>_id`(player_id / team_id / match_id 都用 int64;UUID 用 string)
+- 枚举:`<TYPE>_<NAME>`(`TEAM_STATE_FORMING`),并以 `<TYPE>_UNSPECIFIED = 0` 兜底
+- 布尔:`is_<adj>` / `has_<noun>`(避免 `<name>_flag`)
+- 集合:复数(`player_ids` / `members`)
+
+## 8. D3 执行清单
+
+1. 写 `buf.yaml` / `buf.gen.go.yaml` / `buf.gen.cpp.yaml`
+2. 写 14 个 service 的 .proto 骨架(只声明 RPC 和核心消息,不写所有字段)
+3. 跑 `buf lint` 通过
+4. 跑 `buf generate` 产出 go pb 到 `proto/gen/go/`
+5. 写 `tools/scripts/proto_gen.ps1` 包装 buf 命令
+6. 在 `PROGRESS.md` 追加 D3 完成记录

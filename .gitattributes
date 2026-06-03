@@ -1,0 +1,40 @@
+# ============================================================
+# Pandora 行尾规范
+# ============================================================
+
+# 默认按文本处理,自动转换换行符
+* text=auto eol=lf
+
+# 强制 LF(跨平台脚本和源码)
+*.go      text eol=lf
+*.proto   text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.sh      text eol=lf
+*.toml    text eol=lf
+*.ini     text eol=lf
+*.editorconfig text eol=lf
+
+# Windows 脚本强制 CRLF(否则 PowerShell 报错)
+*.ps1     text eol=crlf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# 二进制(防止 git 误判)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.zip     binary
+*.tar     binary
+*.tar.gz  binary
+*.tgz     binary
+*.7z      binary
+*.exe     binary
+*.dll     binary
+*.so      binary
+*.dylib   binary
+*.pdf     binary
