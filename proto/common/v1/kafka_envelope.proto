@@ -1,0 +1,28 @@
+// Pandora Kafka 消息信封。
+//
+// 所有 kafka 消息(pandora.<domain>.<event> topic)统一用本信封封装,
+// payload 是真正的 proto 序列化字节,业务方按 topic 反序列化对应类型。
+//
+// 设计原因:
+//   - 统一 trace_id 透传(整链路打日志、查问题用同一 ID)
+//   - 统一时间戳(消费端可以判延迟)
+//   - payload 是 bytes,业务可以独立演化各自 schema 不影响信封
+
+syntax = "proto3";
+
+package pandora.common.v1;
+
+message KafkaEnvelope {
+  // 信封字段(1-9 核心)
+  string topic    = 1;  // 与 kafka topic 一致(冗余,便于离线消费看)
+  string key      = 2;  // 分区 key(玩家 ID / match_id 等),与 kafka message key 一致
+  bytes  payload  = 3;  // 业务 proto 序列化字节
+  string trace_id = 4;
+  int64  ts_ms    = 5;  // 信封创建时间(生产端打)
+
+  // 6-9 reserved core
+  reserved 6 to 9;
+
+  // 10-49 扩展(版本/压缩/签名等),W1-D3 不用
+  reserved 10 to 49;
+}

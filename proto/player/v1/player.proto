@@ -1,0 +1,104 @@
+// Pandora PlayerService 协议。
+//
+// 职责(docs/design/go-services.md §2.2):
+//   - 玩家档案(昵称/头像/等级/段位)
+//   - 英雄解锁记录 / 皮肤
+//   - MMR 读写(写由 battle_result 调,必须幂等 idempotency_key=match_id)
+
+syntax = "proto3";
+
+package pandora.player.v1;
+
+import "common/v1/errcode.proto";
+
+service PlayerService {
+  rpc GetProfile(GetProfileReq) returns (GetProfileResp);
+  rpc UpdateNickname(UpdateNicknameReq) returns (UpdateNicknameResp);
+  rpc ListHeroes(ListHeroesReq) returns (ListHeroesResp);
+  rpc UnlockHero(UnlockHeroReq) returns (UnlockHeroResp);
+  rpc GetMMR(GetMMRReq) returns (GetMMRResp);
+  rpc UpdateMMR(UpdateMMRReq) returns (UpdateMMRResp);
+}
+
+// ===== 玩家档案 =====
+
+message PlayerProfile {
+  int64  player_id     = 1;
+  string nickname      = 2;
+  int32  level         = 3;
+  int32  mmr           = 4;
+  string avatar        = 5;
+  int64  created_at_ms = 6;
+  int64  last_seen_ms  = 7;
+  // 8-9 reserved core
+  reserved 8 to 9;
+
+  int32  total_battles = 10;
+  int32  total_wins    = 11;
+  // 12-49 reserved for stats
+  reserved 12 to 49;
+}
+
+message GetProfileReq {
+  int64 player_id = 1;
+}
+
+message GetProfileResp {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerProfile profile = 2;
+}
+
+message UpdateNicknameReq {
+  int64  player_id = 1;
+  string nickname  = 2;
+}
+
+message UpdateNicknameResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// ===== 英雄 =====
+
+message ListHeroesReq {
+  int64 player_id = 1;
+}
+
+message ListHeroesResp {
+  pandora.common.v1.ErrCode code = 1;
+  repeated int32 hero_ids = 2;
+}
+
+message UnlockHeroReq {
+  int64  player_id = 1;
+  int32  hero_id   = 2;
+  string source   = 3;  // "purchase" | "reward" | "freebie"
+}
+
+message UnlockHeroResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// ===== MMR(段位)=====
+
+message GetMMRReq {
+  int64 player_id = 1;
+}
+
+message GetMMRResp {
+  pandora.common.v1.ErrCode code = 1;
+  int32 mmr = 2;
+}
+
+// UpdateMMR 必须幂等(idempotency_key 通常是 match_id)。
+// 同一 idempotency_key 重复调用,服务端只算一次。
+message UpdateMMRReq {
+  int64  player_id       = 1;
+  int32  delta           = 2;
+  string reason          = 3;  // "win" | "lose" | "abandon" | "rollback"
+  string idempotency_key = 4;  // 一般是 match_id
+}
+
+message UpdateMMRResp {
+  pandora.common.v1.ErrCode code = 1;
+  int32 new_mmr = 2;
+}

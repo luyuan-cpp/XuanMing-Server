@@ -1,0 +1,57 @@
+// Pandora DataService 协议。
+//
+// 职责(docs/design/go-services.md §2.3):
+//   - 玩家数据统一读写网关(保证 cache + db + kafka 三处一致)
+//   - 缓存失效广播
+//
+// 写流程:DB 写成功 → kafka 发 update → 删 cache(cache-aside)
+// 读流程:cache 命中返回,miss 读 db 写 cache
+// 乐观锁:UPDATE ... WHERE version = ?
+
+syntax = "proto3";
+
+package pandora.data_service.v1;
+
+import "common/v1/errcode.proto";
+
+service DataService {
+  rpc ReadPlayer(ReadPlayerReq) returns (ReadPlayerResp);
+  rpc WritePlayer(WritePlayerReq) returns (WritePlayerResp);
+  rpc InvalidateCache(InvalidateCacheReq) returns (InvalidateCacheResp);
+}
+
+// PlayerData 是 player 数据的中性容器(不依赖 player.v1 类型,避免循环依赖)。
+// fields 是 KV 形式,业务 W2 写代码时再决定是否升级为强 schema。
+message PlayerData {
+  int64 player_id = 1;
+  int32 version   = 2;  // 乐观锁
+  bytes data      = 3;  // 序列化的 PlayerProfile bytes
+  // 4-9 reserved
+  reserved 4 to 9;
+}
+
+message ReadPlayerReq {
+  int64 player_id = 1;
+}
+
+message ReadPlayerResp {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerData data = 2;
+}
+
+message WritePlayerReq {
+  PlayerData data = 1;
+}
+
+message WritePlayerResp {
+  pandora.common.v1.ErrCode code = 1;
+  int32 new_version = 2;
+}
+
+message InvalidateCacheReq {
+  int64 player_id = 1;
+}
+
+message InvalidateCacheResp {
+  pandora.common.v1.ErrCode code = 1;
+}

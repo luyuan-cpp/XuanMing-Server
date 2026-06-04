@@ -1,0 +1,32 @@
+# Pandora Proto Go 生成配置
+#
+# 用法:
+#   cd proto && buf generate --template buf.gen.go.yaml
+#
+# 产物路径:proto/gen/go/<domain>/v1/*.pb.go
+# 比如 proto/login/v1/login.proto → proto/gen/go/login/v1/{login.pb.go, login_grpc.pb.go}
+#
+# managed.go_package_prefix 让所有 .proto 自动得到统一的 go_package,
+# 不需要在每个 .proto 里手写 option go_package。
+
+version: v2
+
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/luyuancpp/pandora/proto/gen/go
+
+plugins:
+  # protobuf message
+  - remote: buf.build/protocolbuffers/go:v1.36.5
+    out: gen/go
+    opt:
+      - paths=source_relative
+
+  # gRPC service stub
+  - remote: buf.build/grpc/go:v1.5.1
+    out: gen/go
+    opt:
+      - paths=source_relative
+      - require_unimplemented_servers=false

@@ -1,0 +1,19 @@
+// Pandora 通用分页结构。
+
+syntax = "proto3";
+
+package pandora.common.v1;
+
+// PageReq 分页请求。
+message PageReq {
+  int32 page = 1;   // 从 1 开始
+  int32 size = 2;   // 每页条数,建议 ≤ 100
+}
+
+// PageMeta 分页响应元信息。
+message PageMeta {
+  int32 page        = 1;
+  int32 size        = 2;
+  int64 total       = 3;  // 总记录数
+  int32 total_pages = 4;
+}

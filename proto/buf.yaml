@@ -1,0 +1,38 @@
+# Pandora Proto Buf Module 配置
+#
+# 来源:docs/design/proto-design.md §2(目录结构) + §6(工具链选型)
+#
+# 作用:
+#   - 声明本目录是一个 buf module(version: v2,buf 1.32+ 支持)
+#   - lint 规则:用 STANDARD,但豁免几条与 Pandora 风格冲突的
+#   - breaking 检测以 FILE 粒度,任何 proto 改动都要保证文件级向后兼容
+#
+# 用法:
+#   cd proto
+#   buf lint
+#   buf generate --template buf.gen.go.yaml
+#   buf breaking --against '.git#branch=main'
+
+version: v2
+
+modules:
+  - path: .
+
+lint:
+  use:
+    - STANDARD
+  except:
+    # 包名 pandora.<domain>.v1,buf 默认要求版本后缀,我们已对齐,无需豁免
+    # 但 STANDARD 默认强制 enum 值带枚举名前缀,会让 ErrCode 枚举值变成 ERR_CODE_OK,太啰嗦
+    - ENUM_VALUE_PREFIX
+    # ErrCode 枚举的 0 值不强制叫 ERR_CODE_UNSPECIFIED,我们用 OK
+    - ENUM_ZERO_VALUE_SUFFIX
+
+breaking:
+  use:
+    - FILE
+
+deps: []
+
+# W1-D3 不引入 googleapis / well-known-types
+# W2+ 如果需要 google.protobuf.Timestamp / google.api.http 再加

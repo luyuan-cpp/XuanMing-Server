@@ -1,0 +1,91 @@
+// Pandora TradeService 协议。
+//
+// 职责(docs/design/go-services.md §2.9):玩家间交易(两阶段)
+// 状态机:PENDING → BUYER_CONFIRMED → SELLER_CONFIRMED → COMPLETED
+//                                                      ↓
+//                                                    FAILED / EXPIRED
+
+syntax = "proto3";
+
+package pandora.trade.v1;
+
+import "common/v1/errcode.proto";
+
+service TradeService {
+  rpc CreateOrder(CreateOrderReq) returns (CreateOrderResp);
+  rpc ConfirmOrder(ConfirmOrderReq) returns (ConfirmOrderResp);
+  rpc CancelOrder(CancelOrderReq) returns (CancelOrderResp);
+  rpc ListMyOrders(ListMyOrdersReq) returns (ListMyOrdersResp);
+}
+
+enum OrderState {
+  ORDER_STATE_UNSPECIFIED      = 0;
+  ORDER_STATE_PENDING          = 1;
+  ORDER_STATE_BUYER_CONFIRMED  = 2;
+  ORDER_STATE_SELLER_CONFIRMED = 3;
+  ORDER_STATE_COMPLETED        = 4;
+  ORDER_STATE_FAILED           = 5;
+  ORDER_STATE_EXPIRED          = 6;
+  ORDER_STATE_CANCELED         = 7;
+}
+
+message TradeItem {
+  string item_uid = 1;  // 道具实例 ID
+  int32  count    = 2;
+  // 3-9 reserved
+  reserved 3 to 9;
+}
+
+message Order {
+  string  order_id   = 1;
+  int64   seller_id  = 2;
+  int64   buyer_id   = 3;
+  repeated TradeItem items = 4;
+  int64   price      = 5;  // 金币
+  OrderState state   = 6;
+  int64   created_at_ms = 7;
+  int64   expires_at_ms = 8;
+  // 9 reserved
+  reserved 9;
+}
+
+message CreateOrderReq {
+  int64 seller_id  = 1;
+  int64 buyer_id   = 2;
+  repeated TradeItem items = 3;
+  int64 price      = 4;
+}
+
+message CreateOrderResp {
+  pandora.common.v1.ErrCode code = 1;
+  string order_id = 2;
+}
+
+message ConfirmOrderReq {
+  int64  player_id = 1;
+  string order_id  = 2;
+}
+
+message ConfirmOrderResp {
+  pandora.common.v1.ErrCode code = 1;
+  OrderState new_state = 2;
+}
+
+message CancelOrderReq {
+  int64  player_id = 1;
+  string order_id  = 2;
+}
+
+message CancelOrderResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message ListMyOrdersReq {
+  int64 player_id = 1;
+  bool  active_only = 2;
+}
+
+message ListMyOrdersResp {
+  pandora.common.v1.ErrCode code = 1;
+  repeated Order orders = 2;
+}

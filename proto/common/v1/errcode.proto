@@ -1,0 +1,114 @@
+// Pandora 全局错误码。
+//
+// 段位规划(必须跟 pkg/errcode/errcode.go 完全同步):
+//   0           = OK
+//   1-999       = 公共错(网络、超时、参数、权限)
+//   1000-1999   = login
+//   2000-2999   = player
+//   3000-3999   = team
+//   4000-4999   = match
+//   5000-5999   = ds_allocator / hub_allocator
+//   6000-6999   = battle_result
+//   7000-7999   = trade
+//   8000-8999   = dialogue
+//   9000-9999   = chat / friend / locator
+//   10000-10999 = data_service
+//   11000+      = 预留
+//
+// 字段编号永不复用(reserved 不删)。改 enum 值名 = breaking change,禁止。
+
+syntax = "proto3";
+
+package pandora.common.v1;
+
+enum ErrCode {
+  // 0:成功
+  OK = 0;
+
+  // 1-999 公共
+  ERR_UNKNOWN          = 1;
+  ERR_INTERNAL         = 2;
+  ERR_TIMEOUT          = 3;
+  ERR_INVALID_ARG      = 4;
+  ERR_NOT_FOUND        = 5;
+  ERR_ALREADY_EXISTS   = 6;
+  ERR_PERMISSION_DENY  = 7;
+  ERR_UNAUTHORIZED     = 8;
+  ERR_RATE_LIMITED     = 9;
+  ERR_UNAVAILABLE      = 10;
+  ERR_CANCELED         = 11;
+  ERR_INVALID_STATE    = 12;
+
+  // 1000-1999 login
+  ERR_LOGIN_ACCOUNT_NOT_FOUND  = 1001;
+  ERR_LOGIN_PASSWORD_MISMATCH  = 1002;
+  ERR_LOGIN_DEVICE_BANNED      = 1003;
+  ERR_LOGIN_ACCOUNT_BANNED     = 1004;
+  ERR_LOGIN_TOO_MANY_DEVICES   = 1005;
+  ERR_LOGIN_TICKET_EXPIRED     = 1010;
+  ERR_LOGIN_TICKET_INVALID     = 1011;
+  ERR_LOGIN_TICKET_REPLAYED    = 1012;
+
+  // 2000-2999 player
+  ERR_PLAYER_NOT_FOUND         = 2001;
+  ERR_PLAYER_VERSION_MISMATCH  = 2002;
+  ERR_PLAYER_NICKNAME_TAKEN    = 2003;
+  ERR_PLAYER_HERO_LOCKED       = 2010;
+  ERR_PLAYER_HERO_ALREADY_OWN  = 2011;
+
+  // 3000-3999 team
+  ERR_TEAM_NOT_FOUND           = 3001;
+  ERR_TEAM_FULL                = 3002;
+  ERR_TEAM_NOT_CAPTAIN         = 3003;
+  ERR_TEAM_ALREADY_IN_TEAM     = 3004;
+  ERR_TEAM_INVITE_EXPIRED      = 3005;
+  ERR_TEAM_WRONG_STATE         = 3006;
+
+  // 4000-4999 match
+  ERR_MATCH_NOT_FOUND          = 4001;
+  ERR_MATCH_ALREADY_MATCHING   = 4002;
+  ERR_MATCH_CONFIRM_TIMEOUT    = 4003;
+  ERR_MATCH_DECLINED           = 4004;
+  ERR_MATCH_TEAM_NOT_READY     = 4005;
+
+  // 5000-5999 DS / Hub allocator
+  ERR_DS_NO_AVAILABLE          = 5001;
+  ERR_DS_ALLOCATION_FAILED     = 5002;
+  ERR_DS_POD_NOT_FOUND         = 5003;
+  ERR_DS_HEARTBEAT_TIMEOUT     = 5004;
+  ERR_HUB_NO_AVAILABLE         = 5101;
+  ERR_HUB_TRANSFER_FAILED      = 5102;
+
+  // 6000-6999 battle_result
+  ERR_BATTLE_RESULT_DUPLICATE  = 6001;
+  ERR_BATTLE_RESULT_DECODE     = 6002;
+  ERR_BATTLE_RESULT_DB_WRITE   = 6003;
+
+  // 7000-7999 trade
+  ERR_TRADE_ORDER_NOT_FOUND    = 7001;
+  ERR_TRADE_ORDER_EXPIRED      = 7002;
+  ERR_TRADE_WRONG_STATE        = 7003;
+  ERR_TRADE_INSUFFICIENT       = 7004;
+  ERR_TRADE_LOCK_FAILED        = 7005;
+
+  // 8000-8999 dialogue
+  ERR_DIALOGUE_NOT_FOUND       = 8001;
+  ERR_DIALOGUE_OPTION_INVALID  = 8002;
+
+  // 9000-9999 chat / friend / locator
+  ERR_CHAT_CHANNEL_INVALID     = 9001;
+  ERR_CHAT_MESSAGE_TOO_LONG    = 9002;
+  ERR_CHAT_MUTED               = 9003;
+
+  ERR_FRIEND_NOT_FOUND         = 9101;
+  ERR_FRIEND_ALREADY_ADDED     = 9102;
+  ERR_FRIEND_BLOCKED           = 9103;
+
+  ERR_LOCATOR_NOT_FOUND        = 9201;
+  ERR_LOCATOR_CONFLICT         = 9202;
+
+  // 10000-10999 data_service
+  ERR_DATA_VERSION_MISMATCH    = 10001;
+  ERR_DATA_LOCK_TIMEOUT        = 10002;
+  ERR_DATA_MIGRATE             = 10003;
+}

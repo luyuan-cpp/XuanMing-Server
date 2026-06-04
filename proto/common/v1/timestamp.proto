@@ -1,0 +1,14 @@
+// Pandora 时间戳包装。
+//
+// 全局约定(docs/design/infra.md §7):所有时间戳用 Unix milliseconds(int64)。
+// proto 字段命名 `xxx_at_ms`,本文件 TimestampMs 用于需要传 nullable 时间戳的场景。
+
+syntax = "proto3";
+
+package pandora.common.v1;
+
+// TimestampMs 包装一个毫秒级时间戳。
+// 直接用 int64 也行,本类型适合 message 字段用 optional 语义。
+message TimestampMs {
+  int64 ms = 1;  // Unix epoch milliseconds, UTC
+}

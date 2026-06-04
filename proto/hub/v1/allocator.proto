@@ -1,0 +1,97 @@
+// Pandora HubAllocatorService 协议。
+//
+// 职责(docs/design/go-services.md §2.12):大厅 DS 分片调度
+//
+// Hub DS Fleet 常驻 N 个 pod,每个 200~500 人上限。
+// 玩家进 hub 时按 region + 队友所在 hub + 最空 hub 选;跨分片走 Transfer。
+//
+// ⚠️ Heartbeat 单向 unary(架构决策 2026-06-03,同 DSAllocator):
+//   go-zero zrpc 不支持 server stream,改为 Hub DS 每 5s 主动调用。
+//   控制指令通过 response 字段下发,延迟 ≤ 5s 可接受。
+
+syntax = "proto3";
+
+package pandora.hub.v1;
+
+import "common/v1/errcode.proto";
+
+service HubAllocatorService {
+  rpc AssignHub(AssignHubReq) returns (AssignHubResp);
+  rpc ReleaseHub(ReleaseHubReq) returns (ReleaseHubResp);
+  rpc TransferHub(TransferHubReq) returns (TransferHubResp);
+  rpc ListHubs(ListHubsReq) returns (ListHubsResp);
+  rpc Heartbeat(HubHeartbeatReq) returns (HubHeartbeatResp);  // Hub DS 每 5s 主动调
+}
+
+message AssignHubReq {
+  int64  player_id = 1;
+  string region    = 2;
+  string team_id   = 3;  // 可选,优先选队友所在 hub
+}
+
+message AssignHubResp {
+  pandora.common.v1.ErrCode code = 1;
+  string hub_ds_addr = 2;
+  string hub_ticket  = 3;  // JWT
+  string hub_pod_name = 4;
+  int32  shard_id    = 5;
+}
+
+message ReleaseHubReq {
+  int64 player_id = 1;
+}
+
+message ReleaseHubResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message TransferHubReq {
+  int64  player_id     = 1;
+  string target_hub_id = 2;  // 玩家点的传送点目标
+}
+
+message TransferHubResp {
+  pandora.common.v1.ErrCode code = 1;
+  string new_hub_ds_addr = 2;
+  string new_hub_ticket  = 3;
+}
+
+// ===== List =====
+
+message HubInfo {
+  string hub_pod_name = 1;
+  string hub_addr     = 2;
+  string region       = 3;
+  int32  player_count = 4;
+  int32  capacity     = 5;
+  string state        = 6;  // "ready" | "draining"
+}
+
+message ListHubsReq {
+  string region = 1;  // 空 = 全部
+}
+
+message ListHubsResp {
+  pandora.common.v1.ErrCode code = 1;
+  repeated HubInfo hubs = 2;
+}
+
+// ===== Heartbeat(单向 unary,Hub DS 每 5s 调一次)=====
+
+message HubHeartbeatReq {
+  string hub_pod_name = 1;
+  int32  player_count = 2;
+  float  cpu_pct      = 3;
+  float  mem_mb       = 4;
+  string state        = 5;  // "ready" | "draining" | "stopping"
+  int64  ts_ms        = 6;
+  // 7-9 reserved
+  reserved 7 to 9;
+}
+
+message HubHeartbeatResp {
+  pandora.common.v1.ErrCode code = 1;
+  string command = 2;  // "" | "drain" | "stop" | "reload_config"
+  // 3-9 reserved
+  reserved 3 to 9;
+}

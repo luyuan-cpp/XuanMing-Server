@@ -1,0 +1,65 @@
+// Pandora PlayerLocator 协议。
+//
+// 职责(docs/design/go-services.md §2.6):
+//   玩家当前在哪(hub_id / battle_id),
+//   保证不变量"玩家同一时刻只能在一个 Location"(CLAUDE.md §9.1)
+
+syntax = "proto3";
+
+package pandora.locator.v1;
+
+import "common/v1/errcode.proto";
+
+service PlayerLocatorService {
+  rpc SetLocation(SetLocationReq) returns (SetLocationResp);
+  rpc GetLocation(GetLocationReq) returns (GetLocationResp);
+  rpc ClearLocation(ClearLocationReq) returns (ClearLocationResp);
+}
+
+enum LocationState {
+  LOCATION_STATE_UNSPECIFIED   = 0;
+  LOCATION_STATE_OFFLINE       = 1;
+  LOCATION_STATE_LOGIN_PENDING = 2;
+  LOCATION_STATE_HUB           = 3;
+  LOCATION_STATE_MATCHING      = 4;
+  LOCATION_STATE_BATTLE        = 5;
+}
+
+message Location {
+  LocationState state = 1;
+
+  // 各 state 的附加字段(仅相关 state 时填):
+  string hub_pod      = 2;  // HUB 时
+  int32  shard_id     = 3;  // HUB 时
+  string match_id     = 4;  // MATCHING / BATTLE 时
+  string battle_pod   = 5;  // BATTLE 时
+  int64  updated_at_ms = 6;
+  // 7-9 reserved
+  reserved 7 to 9;
+}
+
+message SetLocationReq {
+  int64    player_id = 1;
+  Location location  = 2;
+}
+
+message SetLocationResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message GetLocationReq {
+  int64 player_id = 1;
+}
+
+message GetLocationResp {
+  pandora.common.v1.ErrCode code = 1;
+  Location location = 2;
+}
+
+message ClearLocationReq {
+  int64 player_id = 1;
+}
+
+message ClearLocationResp {
+  pandora.common.v1.ErrCode code = 1;
+}

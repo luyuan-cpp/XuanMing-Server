@@ -1,6 +1,12 @@
 # Pandora Go 服务清单与契约
 
-> 13 个 go 服务的职责边界、对外接口、关键状态、依赖矩阵。
+> 14 个 go 服务的职责边界、对外接口、关键状态、依赖矩阵。
+>
+> ⚠️ **2026-06-04 架构终版**:
+> - 框架统一 **Kratos**(替代 go-zero,详见 `gateway-decision.md` §4)
+> - Edge Gateway 用 **Envoy**(替代之前规划的 pandora-gateway 自研)
+> - 推送 = **集中 push 服务 + gRPC server stream**(替代之前规划的自研 WebSocket)
+> - 客户端协议:**gRPC-Web over HTTP/2 TLS**(UE FHttpModule + 自研协议解析)
 
 ## 1. 服务总览
 
@@ -19,6 +25,11 @@
 | 11 | ds_allocator | 50020 | 弱 | etcd + k8s | (生产 ds.lifecycle) |
 | 12 | hub_allocator | 50021 | 弱 | etcd + k8s | (生产 ds.lifecycle) |
 | 13 | battle_result | 50022 | 无 | mysql | battle.result |
+| 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* |
+
+⭐ = 2026-06-04 终版新增。push 是 Kratos transport/grpc 暴露的 server stream 服务,客户端通过 Envoy 连过来,详见 `gateway-decision.md` §6。
+
+**Edge Gateway = Envoy**(端口 8443 HTTPS),不是 go 服务,不计在表格内。
 
 ## 2. 各服务详细契约
 
@@ -348,16 +359,87 @@ kafka msg → 验证签名 → 检查 mysql.battles WHERE match_id=?
                           battle DS 上报
 ```
 
+
 ## 4. W1 真正要写的服务(只写骨架)
 
 W1 不写业务逻辑,只搭框架:
 
 | 服务 | W1 范围 |
 |---|---|
-| login | main.go + servicecontext + 健康检查 + 注册 etcd + 一个 mock Login RPC(返回固定票据) |
+| login | main.go(Kratos)+ kratos.App 启动 + 健康检查 + 注册 etcd + 一个 mock Login RPC(返回固定票据) |
 | ds_allocator | main.go + 健康检查 + Agones 客户端连接验证 + 一个 mock AllocateBattle RPC |
 | hub_allocator | 同上 |
 | 其它 10 个 | 只有空目录 + cmd/main.go 占位 + 注册 etcd |
 
 W2 开始才正式写业务逻辑,顺序:
-**login → player + data_service → team → matchmaker → ds_allocator + hub_allocator → battle_result → 其它**
+**pkg 重写(Kratos)→ login → Envoy 配置打通 → push(server stream + kafka 消费)→ UE 客户端 grpc-web → player + data_service → team → matchmaker → ds_allocator + hub_allocator → battle_result → 其它**
+
+---
+
+## 5. push 服务详细契约(2026-06-04 终版)
+
+> ⚠️ 之前 2026-06-03 规划的 "pandora-gateway"(go-zero/gateway)已被否决,Edge Gateway 改用 **Envoy**(基础设施,不是 go 服务)。
+> 之前规划的 "WebSocket pandora-push" 已被否决,改用 **gRPC server stream + Kratos**。
+
+### 5.1 push 服务(Kratos transport/grpc + server stream)
+
+**职责**:
+- 客户端通过 Envoy 连过来,调 `PushService.Subscribe`(server stream)维持长连
+- 集中持有所有在线客户端的 stream(内存索引 `player_id → grpc.ServerStream`)
+- 消费多个推送 kafka topics,按 player_id 路由到对应 stream
+- 离线消息缓存(redis ZSET,5min)
+- 重连补推
+
+**对外 API**(详见 `proto/push/v1/push.proto`,W2 时创建):
+
+```proto
+service PushService {
+  // 客户端登录后立刻调,一直保持连接
+  // 服务端通过 stream.Send(PushFrame) 持续推送 player_id 相关的所有事件
+  rpc Subscribe(SubscribeReq) returns (stream PushFrame);
+}
+
+message SubscribeReq {
+  string session_token = 1;  // JWT,Envoy 已校验,这里冗余检查
+  int64  last_seen_ms  = 2;  // 重连补推用
+}
+
+message PushFrame {
+  string topic    = 1;  // pandora.team.update / pandora.match.progress / ...
+  bytes  payload  = 2;  // 业务 Event message 序列化(如 TeamUpdateEvent)
+  int64  ts_ms    = 3;
+  string trace_id = 4;
+}
+```
+
+**实现**(Kratos 风格):
+- 框架:Kratos `transport/grpc`(支持 server stream,go-zero zrpc 不支持是切换主因)
+- WebSocket 库:**不用**(走标准 gRPC,不要自研 ws frame)
+- kafka:`sarama` 消费推送 topics(同 mmorpg 拷过来的 `pkg/kafkax`)
+- 内存索引:`sync.Map[playerID]*PushService_SubscribeServer`
+- 离线消息:redis ZSET,score=ts_ms,member=encoded PushFrame
+- 客户端连接:经 Envoy 转发(Envoy 处理 gRPC-Web ↔ gRPC),push 服务只看到标准 gRPC stream
+
+**依赖**:
+- 上游:Envoy(转发 gRPC-Web → gRPC stream)
+- 下游:kafka(消费推送 topics)+ redis(离线消息 + 玩家在线索引)+ login(JWT 校验,可选)
+
+**关键不变量**:
+- 同一玩家同一时刻只有一条 stream(新 Subscribe 挤掉旧 stream)
+- 推送至少送达一次(kafka at-least-once,客户端按 PushFrame.ts_ms 去重)
+- 重连后自动补推最近 5min 离线消息
+- push 重启不丢业务事件(kafka offset commit 保证)
+
+**多实例扩展(W6+)**:
+- 同一 consumer group `pandora-push`,kafka 按 partition 分配
+- player_id → push_instance 索引存 redis,跨实例 gRPC 转发
+- W1-W4 单实例够用,后置优化
+
+**为什么不用自研 WebSocket envelope(2026-06-04 决策)**:
+1. gRPC-Web 是 grpc.io 官方规范,Envoy 内置 grpc-web filter 转发
+2. UE FHttpModule 已暴露 HTTP/2 + TLS(用户验证过源码,见 `gateway-decision.md` §3)
+3. Kratos transport/grpc 原生支持 server stream,代码量比自研 WebSocket 少
+4. 调试用 grpcurl 等标准工具,不用自己写 ws 调试器
+5. 协议层标准化是 Pandora 铁律(大厂 / 最标准方案)
+
+详见 `gateway-decision.md` §6 / §10。

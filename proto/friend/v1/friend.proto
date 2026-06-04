@@ -1,0 +1,70 @@
+// Pandora FriendService 协议。
+//
+// 职责(docs/design/go-services.md §2.4):好友 / 黑名单 / 拒绝列表
+// MOBA 早期不实现,先留接口骨架。
+
+syntax = "proto3";
+
+package pandora.friend.v1;
+
+import "common/v1/errcode.proto";
+
+service FriendService {
+  rpc AddFriend(AddFriendReq) returns (AddFriendResp);
+  rpc AcceptFriend(AcceptFriendReq) returns (AcceptFriendResp);
+  rpc ListFriends(ListFriendsReq) returns (ListFriendsResp);
+  rpc Block(BlockReq) returns (BlockResp);
+}
+
+enum FriendRequestStatus {
+  FRIEND_REQUEST_STATUS_UNSPECIFIED = 0;
+  FRIEND_REQUEST_STATUS_PENDING     = 1;
+  FRIEND_REQUEST_STATUS_ACCEPTED    = 2;
+  FRIEND_REQUEST_STATUS_REJECTED    = 3;
+  FRIEND_REQUEST_STATUS_EXPIRED     = 4;
+}
+
+message FriendInfo {
+  int64 player_id     = 1;
+  string nickname     = 2;
+  bool is_online      = 3;
+  int64 since_ms      = 4;
+  int64 last_seen_ms  = 5;
+}
+
+message AddFriendReq {
+  int64 player_id        = 1;
+  int64 target_player_id = 2;
+}
+
+message AddFriendResp {
+  pandora.common.v1.ErrCode code = 1;
+  string request_id = 2;
+}
+
+message AcceptFriendReq {
+  int64  player_id  = 1;
+  string request_id = 2;
+}
+
+message AcceptFriendResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message ListFriendsReq {
+  int64 player_id = 1;
+}
+
+message ListFriendsResp {
+  pandora.common.v1.ErrCode code = 1;
+  repeated FriendInfo friends = 2;
+}
+
+message BlockReq {
+  int64 player_id        = 1;
+  int64 target_player_id = 2;
+}
+
+message BlockResp {
+  pandora.common.v1.ErrCode code = 1;
+}

@@ -1,0 +1,18 @@
+# Pandora Proto C++ 生成配置(D4+ UE 仓库使用)
+#
+# 用法(D4+ UE 仓库 init 之后):
+#   cd proto && buf generate --template buf.gen.cpp.yaml
+#
+# 产物路径:proto/gen/cpp/**/*.pb.{h,cc} 和 *.grpc.pb.{h,cc}
+#
+# D3 阶段不跑这个 template(W1-D3 边界:不生成 cpp pb)。
+# 等 D4 UE 仓库初始化时,把 proto/gen/cpp/ 内容拷到 UE 工程的 Source/Pandora/Generated/Proto/。
+
+version: v2
+
+plugins:
+  - remote: buf.build/protocolbuffers/cpp:v29.3
+    out: gen/cpp
+
+  - remote: buf.build/grpc/cpp:v1.69.0
+    out: gen/cpp

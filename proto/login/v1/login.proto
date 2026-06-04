@@ -1,0 +1,89 @@
+// Pandora LoginService 协议。
+//
+// 职责(docs/design/go-services.md §2.1):
+//   - 账号注册 / 登录 / 登出
+//   - 颁发 Session Token(给客户端)
+//   - 颁发 DS Ticket(JWT,给 UE DS 校验)
+//   - 验证 DS Ticket(防重放,jti 黑名单)
+
+syntax = "proto3";
+
+package pandora.login.v1;
+
+import "common/v1/errcode.proto";
+
+service LoginService {
+  rpc Login(LoginReq) returns (LoginResp);
+  rpc Logout(LogoutReq) returns (LogoutResp);
+  rpc IssueDSTicket(IssueDSTicketReq) returns (IssueDSTicketResp);
+  rpc VerifyDSTicket(VerifyDSTicketReq) returns (VerifyDSTicketResp);
+}
+
+// ===== 登录 =====
+
+message LoginReq {
+  string account        = 1;
+  string password_hash  = 2;  // 客户端先 sha256
+  string device_id      = 3;
+  string client_version = 4;
+  // 5-9 reserved core
+  reserved 5 to 9;
+
+  string region = 10;
+  string locale = 11;
+  // 12-49 reserved for client metadata
+  reserved 12 to 49;
+}
+
+message LoginResp {
+  pandora.common.v1.ErrCode code = 1;
+  int64  player_id     = 2;
+  string session_token = 3;  // 连后端 gRPC 用
+  string hub_ds_addr   = 4;  // 直连大厅 DS 的 IP:port
+  string hub_ticket    = 5;  // hub DS 票据(JWT)
+  // 6-9 reserved
+  reserved 6 to 9;
+}
+
+message LogoutReq {
+  string session_token = 1;
+}
+
+message LogoutResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// ===== DS 票据 =====
+
+// DSTicket 是 JWT 的 payload(不直接传输,这里 message 描述结构以便 cpp/go 共享)。
+message DSTicket {
+  int64  player_id      = 1;
+  string match_id       = 2;  // battle DS 才有,hub 留空
+  int64  issued_at_ms   = 3;
+  int64  expires_at_ms  = 4;
+  string ds_type        = 5;  // "hub" | "battle"
+  string jti            = 6;  // JWT ID,防重放
+  // 7-9 reserved
+  reserved 7 to 9;
+}
+
+message IssueDSTicketReq {
+  string session_token = 1;
+  string ds_type       = 2;  // "hub" | "battle"
+  string target_id     = 3;  // 目标 DS pod / match_id
+}
+
+message IssueDSTicketResp {
+  pandora.common.v1.ErrCode code = 1;
+  string ticket = 2;  // JWT 编码后的字符串
+}
+
+message VerifyDSTicketReq {
+  string ticket       = 1;
+  string ds_pod_name  = 2;
+}
+
+message VerifyDSTicketResp {
+  pandora.common.v1.ErrCode code = 1;
+  DSTicket claims = 2;
+}

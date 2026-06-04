@@ -1,0 +1,79 @@
+// Pandora BattleResultService 协议。
+//
+// 职责(docs/design/go-services.md §2.13):
+//   - 消费 pandora.battle.result topic,幂等落库(unique key = match_id)
+//   - 提供战绩查询 RPC
+//
+// 关键不变量(CLAUDE.md §9.2):同一 match_id 只能落库一次。
+// MMR 计算在这里(DS 不可信)。
+
+syntax = "proto3";
+
+package pandora.battle.v1;
+
+import "common/v1/errcode.proto";
+
+service BattleResultService {
+  rpc ReportResult(ReportResultReq) returns (ReportResultResp);
+  rpc GetMatchResult(GetMatchResultReq) returns (GetMatchResultResp);
+  rpc ListPlayerHistory(ListPlayerHistoryReq) returns (ListPlayerHistoryResp);
+}
+
+message PlayerStats {
+  int64 player_id     = 1;
+  int32 hero_id       = 2;
+  int32 team          = 3;  // 0 or 1
+  int32 kills         = 4;
+  int32 deaths        = 5;
+  int32 assists       = 6;
+  int64 damage_dealt  = 7;
+  int64 damage_taken  = 8;
+  int64 healing       = 9;
+  int64 gold          = 10;
+  int32 mmr_delta     = 11;  // 段位变化(后端算,DS 不可信)
+  // 12-19 reserved
+  reserved 12 to 19;
+}
+
+message BattleResult {
+  string match_id     = 1;
+  int64  started_at_ms = 2;
+  int64  ended_at_ms   = 3;
+  int32  winner_team  = 4;  // 0=A win, 1=B win, 2=draw
+  repeated PlayerStats stats = 5;
+  string ds_pod_name  = 6;
+  string game_mode    = 7;
+  int32  map_id       = 8;
+  // 9 reserved
+  reserved 9;
+}
+
+// DS 通过 kafka envelope 上报,但本 RPC 也提供同步上报用法(测试 / 兼容)
+message ReportResultReq {
+  BattleResult result = 1;
+}
+
+message ReportResultResp {
+  pandora.common.v1.ErrCode code = 1;
+  bool already_recorded = 2;  // true = 幂等命中,本次跳过
+}
+
+message GetMatchResultReq {
+  string match_id = 1;
+}
+
+message GetMatchResultResp {
+  pandora.common.v1.ErrCode code = 1;
+  BattleResult result = 2;
+}
+
+message ListPlayerHistoryReq {
+  int64 player_id = 1;
+  int32 limit     = 2;
+  int64 before_ms = 3;  // 分页游标:返回 ended_at_ms < before_ms 的记录
+}
+
+message ListPlayerHistoryResp {
+  pandora.common.v1.ErrCode code = 1;
+  repeated BattleResult results = 2;
+}

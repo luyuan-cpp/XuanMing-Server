@@ -1,0 +1,81 @@
+// Pandora ChatService 协议。
+//
+// 职责(docs/design/go-services.md §2.5):频道(世界 / 队伍 / 私聊)
+//
+// ⚠️ 推送架构(ds-arch.md §0.8):
+//   go-zero zrpc 不支持 gRPC server stream。
+//   消息通过 kafka 推送给 Hub DS,DS 转 UE ClientRPC 给客户端:
+//     pandora.chat.world    世界频道(key=hub_pod / 全局)
+//     pandora.chat.team     队伍频道(key=team_id)
+//     pandora.chat.private  私聊(key=target_player_id)
+//   本 service **只提供发送 RPC**,接收靠 kafka 推送链路。
+
+syntax = "proto3";
+
+package pandora.chat.v1;
+
+import "common/v1/errcode.proto";
+
+service ChatService {
+  rpc SendMessage(SendMessageReq) returns (SendMessageResp);
+  rpc PullHistory(PullHistoryReq) returns (PullHistoryResp);  // 拉历史(私聊离线消息等)
+}
+
+enum ChatChannel {
+  CHAT_CHANNEL_UNSPECIFIED = 0;
+  CHAT_CHANNEL_WORLD       = 1;
+  CHAT_CHANNEL_TEAM        = 2;
+  CHAT_CHANNEL_PRIVATE     = 3;
+  CHAT_CHANNEL_SYSTEM      = 4;
+}
+
+message ChatMessage {
+  string message_id      = 1;
+  int64  sender_id       = 2;
+  string sender_nickname = 3;
+  ChatChannel channel    = 4;
+  int64  target_id       = 5;  // PRIVATE = target player; TEAM = team_id 转 int64; WORLD 留 0
+  string content         = 6;  // ≤ 256
+  int64  send_time_ms    = 7;
+  // 8-9 reserved
+  reserved 8 to 9;
+}
+
+message SendMessageReq {
+  int64       sender_id  = 1;
+  ChatChannel channel    = 2;
+  int64       target_id  = 3;
+  string      content    = 4;
+  string      request_id = 5;  // 客户端去重
+}
+
+message SendMessageResp {
+  pandora.common.v1.ErrCode code = 1;
+  string message_id = 2;
+}
+
+message PullHistoryReq {
+  int64       player_id = 1;
+  ChatChannel channel   = 2;
+  int64       peer_id   = 3;  // 私聊用,世界/队伍留 0
+  int32       limit     = 4;  // ≤ 100
+  int64       before_ms = 5;  // 分页游标
+}
+
+message PullHistoryResp {
+  pandora.common.v1.ErrCode code = 1;
+  repeated ChatMessage messages = 2;
+}
+
+// ===== Kafka 推送 payload =====
+//
+// 三个 topic 共用同一 payload 类型:
+//   pandora.chat.world / pandora.chat.team / pandora.chat.private
+// 消费方:Hub DS,按订阅范围(频道 + target)路由到 PlayerController,转 UE ClientRPC。
+
+message ChatPushEvent {
+  ChatMessage message      = 1;
+  int64       to_player_id = 2;  // 接收的玩家(也是 kafka key)
+  // 3-9 reserved
+  reserved 3 to 9;
+}

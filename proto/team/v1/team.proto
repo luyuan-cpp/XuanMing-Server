@@ -1,0 +1,146 @@
+// Pandora TeamService 协议。
+//
+// 职责(docs/design/go-services.md §2.7):组队(5 人队)
+// 状态机:FORMING → READY(全员 ready)→ MATCHING → IN_BATTLE → DISBANDED
+//
+// ⚠️ 推送架构(ds-arch.md §0.8):
+//   go-zero zrpc 不支持 gRPC server stream。
+//   "队伍状态变更"通过 kafka topic `pandora.team.update`(key=player_id)
+//   广播给所有相关玩家所在的 Hub DS,由 DS 转成 UE ClientRPC 推给客户端。
+//   本 service **不提供** StreamTeamUpdates RPC。
+
+syntax = "proto3";
+
+package pandora.team.v1;
+
+import "common/v1/errcode.proto";
+
+service TeamService {
+  rpc CreateTeam(CreateTeamReq) returns (CreateTeamResp);
+  rpc Invite(InviteReq) returns (InviteResp);
+  rpc AcceptInvite(AcceptInviteReq) returns (AcceptInviteResp);
+  rpc LeaveTeam(LeaveTeamReq) returns (LeaveTeamResp);
+  rpc Kick(KickReq) returns (KickResp);
+  rpc SetReady(SetReadyReq) returns (SetReadyResp);
+  rpc GetTeam(GetTeamReq) returns (GetTeamResp);  // 客户端拉一次完整 Team(进入大厅时)
+}
+
+enum TeamState {
+  TEAM_STATE_UNSPECIFIED = 0;
+  TEAM_STATE_FORMING     = 1;
+  TEAM_STATE_READY       = 2;
+  TEAM_STATE_MATCHING    = 3;
+  TEAM_STATE_IN_BATTLE   = 4;
+  TEAM_STATE_DISBANDED   = 5;
+}
+
+message TeamMember {
+  int64  player_id = 1;
+  string nickname  = 2;
+  int32  mmr       = 3;
+  bool   ready     = 4;
+  int32  hero_id   = 5;
+  // 6-9 reserved
+  reserved 6 to 9;
+}
+
+message Team {
+  string team_id       = 1;
+  int64  captain_id    = 2;
+  repeated TeamMember members = 3;
+  TeamState state      = 4;
+  int64  created_at_ms = 5;
+  int32  max_size      = 6;  // MOBA 5
+  // 7-9 reserved
+  reserved 7 to 9;
+}
+
+// ===== RPC =====
+
+message CreateTeamReq {
+  int64 player_id = 1;
+}
+
+message CreateTeamResp {
+  pandora.common.v1.ErrCode code = 1;
+  string team_id = 2;
+}
+
+message InviteReq {
+  string team_id        = 1;
+  int64  inviter_id     = 2;
+  int64  target_player_id = 3;
+}
+
+message InviteResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message AcceptInviteReq {
+  int64  player_id = 1;
+  string team_id   = 2;
+}
+
+message AcceptInviteResp {
+  pandora.common.v1.ErrCode code = 1;
+  Team team = 2;
+}
+
+message LeaveTeamReq {
+  string team_id   = 1;
+  int64  player_id = 2;
+}
+
+message LeaveTeamResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message KickReq {
+  string team_id           = 1;
+  int64  captain_id        = 2;
+  int64  target_player_id  = 3;
+}
+
+message KickResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message SetReadyReq {
+  string team_id   = 1;
+  int64  player_id = 2;
+  bool   ready     = 3;
+  int32  hero_id   = 4;  // 可选,选英雄一并设
+}
+
+message SetReadyResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message GetTeamReq {
+  string team_id = 1;
+}
+
+message GetTeamResp {
+  pandora.common.v1.ErrCode code = 1;
+  Team team = 2;
+}
+
+// ===== Kafka 推送 payload =====
+//
+// topic: pandora.team.update
+// key:   player_id(每个相关玩家收到一份;同队 5 人 = 5 条消息)
+// 消费方:Hub DS(玩家所在 hub),按 player_id 路由��对应 PlayerController
+//        转成 UE ClientRPC 推给客户端。
+//
+// 该 message 通过 kafka_envelope.proto 的 KafkaEnvelope.payload 传输,
+// 不通过 gRPC 直接 stream。
+
+message TeamUpdateEvent {
+  Team   team           = 1;
+  string change_summary = 2;  // "joined" | "left" | "ready" | "kicked" | "disbanded" | ...
+  int64  by_player_id   = 3;  // 触发本次变更的玩家
+  int64  to_player_id   = 4;  // 接收推送的玩家(也是 kafka key)
+  int64  ts_ms          = 5;
+  // 6-9 reserved
+  reserved 6 to 9;
+}

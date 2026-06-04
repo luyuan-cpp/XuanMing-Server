@@ -1,0 +1,101 @@
+// Pandora MatchService 协议。
+//
+// 职责(docs/design/go-services.md §2.8):撮合 5v5
+// 流程:enqueue → MMR 撮合 → 凑齐 10 → 确认期(15s)→ 全确认 → 拉 DS → 发 ds_addr
+//
+// ⚠️ 推送架构(ds-arch.md §0.8):
+//   go-zero zrpc 不支持 gRPC server stream。
+//   "匹配进度变化"(QUEUEING / FOUND / CONFIRM / READY 各阶段)通过 kafka topic
+//   `pandora.match.progress`(key=player_id)推给玩家所在 Hub DS,DS 转 UE ClientRPC。
+//   本 service **不提供** StreamMatchProgress RPC,客户端按需调 GetMatchProgress 拉一次。
+
+syntax = "proto3";
+
+package pandora.match.v1;
+
+import "common/v1/errcode.proto";
+
+service MatchService {
+  rpc StartMatch(StartMatchReq) returns (StartMatchResp);
+  rpc CancelMatch(CancelMatchReq) returns (CancelMatchResp);
+  rpc ConfirmMatch(ConfirmMatchReq) returns (ConfirmMatchResp);
+  rpc GetMatchProgress(GetMatchProgressReq) returns (GetMatchProgressResp);
+}
+
+enum MatchStage {
+  MATCH_STAGE_UNSPECIFIED = 0;
+  MATCH_STAGE_QUEUEING    = 1;
+  MATCH_STAGE_FOUND       = 2;  // 凑齐 10 人
+  MATCH_STAGE_CONFIRM     = 3;  // 等待玩家确认
+  MATCH_STAGE_ALLOCATING  = 4;  // 拉 DS 中
+  MATCH_STAGE_READY       = 5;  // DS 就绪,可以连
+  MATCH_STAGE_FAILED      = 6;
+}
+
+message StartMatchReq {
+  string team_id = 1;
+}
+
+message StartMatchResp {
+  pandora.common.v1.ErrCode code = 1;
+  string match_id = 2;
+}
+
+message CancelMatchReq {
+  string match_id = 1;
+  int64  player_id = 2;
+}
+
+message CancelMatchResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message ConfirmMatchReq {
+  int64  player_id = 1;
+  string match_id  = 2;
+  bool   accept    = 3;  // false = 拒绝
+}
+
+message ConfirmMatchResp {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message GetMatchProgressReq {
+  string match_id = 1;
+}
+
+message GetMatchProgressResp {
+  pandora.common.v1.ErrCode code = 1;
+  MatchProgress progress = 2;
+}
+
+message MatchProgress {
+  string     match_id              = 1;
+  MatchStage stage                 = 2;
+  int32      queue_seconds         = 3;
+  int32      estimated_wait_seconds = 4;
+  // ALLOCATING / READY 时填
+  string battle_ds_addr = 5;
+  string battle_ticket  = 6;
+  // FOUND / CONFIRM 时填
+  repeated int64 team_a = 7;  // 5 人 player_id
+  repeated int64 team_b = 8;
+  // 9-19 reserved
+  reserved 9 to 19;
+}
+
+// ===== Kafka 推送 payload =====
+//
+// topic: pandora.match.progress
+// key:   player_id
+// 消费方:Hub DS,转 UE ClientRPC 给客户端。
+//
+// 客户端首次进匹配可以调 GetMatchProgress 拉一次,之后被动接收推送。
+
+message MatchProgressEvent {
+  MatchProgress progress     = 1;
+  int64         to_player_id = 2;  // 接收推送的玩家(也是 kafka key)
+  int64         ts_ms        = 3;
+  // 4-9 reserved
+  reserved 4 to 9;
+}

@@ -158,12 +158,20 @@ pandora.dlq.<original_topic>     # 死信队列
 | `pandora.login.event` | 8 | 7d | login | 风控、审计 | 登录登出 |
 | `pandora.match.found` | 4 | 3d | matchmaker | ds_allocator | 匹配成功 |
 | `pandora.match.failed` | 4 | 3d | matchmaker | (告警) | 匹配失败/超时 |
+| `pandora.match.progress` ⭐ | 8 | 1h | matchmaker | **push** | 匹配进度推送(key=player_id)|
+| `pandora.team.update` ⭐ | 8 | 1h | team | **push** | 队伍状态变更推送(key=player_id)|
+| `pandora.chat.world` | 16 | 1d | chat | **push** | 世界聊天推送 |
+| `pandora.chat.team` ⭐ | 8 | 1h | chat | **push** | 队伍聊天推送(key=player_id)|
+| `pandora.chat.private` ⭐ | 8 | 1d | chat | **push** | 私聊推送(key=target_player_id)|
+| `pandora.player.update` | 8 | 7d | player / data_service | **push** + 缓存失效 | 玩家档案变更 |
+| `pandora.friend.event` ⭐ | 4 | 1d | friend | **push** | 好友请求 / 上线提醒 |
+| `pandora.system.notify` ⭐ | 4 | 7d | 运营 / 各 go | **push** | 系统公告 / 邮件 / 红点 |
 | `pandora.ds.lifecycle` | 4 | 7d | ds_allocator / hub_allocator | 监控 | DS 拉起/回收/崩溃 |
-| `pandora.battle.result` | 16 | 30d | battle DS | battle_result | ⭐ 核心,at-least-once + 幂等落库 |
-| `pandora.player.update` | 8 | 7d | player / data_service | 缓存失效、推送 | 玩家档案变更 |
+| `pandora.battle.result` | 16 | 30d | Battle DS | battle_result | ⭐ 核心,at-least-once + 幂等落库 |
 | `pandora.trade.audit` | 4 | 90d | trade | 审计、风控 | 交易日志(append-only) |
-| `pandora.chat.world` | 16 | 1d | chat | 各 hub DS | 世界聊天 |
 | `pandora.locator.update` | 8 | 1h | hub DS / battle DS | player_locator | 玩家位置变更 |
+
+⭐ = 2026-06-03 新增推送 topic,见 `gateway-decision.md` §5。所有标 ⭐ 的 topic 都被 **pandora-push** 服务消费,统一推 WebSocket 给客户端。
 
 ### 4.3 分区键约定
 
@@ -249,6 +257,11 @@ pandora.dlq.<original_topic>     # 死信队列
 | ds_allocator | 50020 | 51020 |
 | hub_allocator | 50021 | 51021 |
 | battle_result | 50022 | 51022 |
+| **gateway** ⭐ | **8080**(HTTP)| **51014** |
+| **push** ⭐ | **8081**(WebSocket)| **51015** |
+
+⭐ = 2026-06-03 架构推翻后新增,见 `gateway-decision.md`。
+gateway / push 对外暴露非 gRPC 端口(HTTP / WebSocket),而非 50000 段。
 
 ### 6.3 UE DS 端口
 

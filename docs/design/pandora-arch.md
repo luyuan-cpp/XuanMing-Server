@@ -28,7 +28,13 @@ GitHub:
 - `Pandora` CI 在 proto 改动时,自动生成 cpp .pb.h 推送到 UE 仓库的 `Source/Pandora/Generated/Proto/`
 - UE 仓库不允许直接改 .proto,所有改动从后端仓库来
 
-## 3. 服务清单(go,共 13 个)
+## 3. 服务清单(go,共 14 个)
+
+⚠️ **架构演化记录**:
+- 2026-06-03 上午:13 个业务服(login + 12 个)
+- 2026-06-03 中午:推翻,加 gateway + push → 15 个(2026-06-04 再次推翻)
+- **2026-06-04 终版:14 个**(13 业务服 + 1 集中 push 服务)
+- gateway 不作为 go 服务(改用 **Envoy** 这个基础设施组件,详见 `gateway-decision.md`)
 
 | # | 服务 | 职责 | 是否有状态 | 依赖 |
 |---|---|---|---|---|
@@ -45,6 +51,11 @@ GitHub:
 | 11 | **ds_allocator** | 战斗 DS 调度(Agones GameServer) | 弱(etcd) | k8s + agones + etcd |
 | 12 | **hub_allocator** | 大厅 DS 分片调度 | 弱(etcd) | k8s + agones + etcd |
 | 13 | **battle_result** | 战斗结算消费 / 幂等落库 | 无 | kafka + mysql |
+| 14 | **push** ⭐ | gRPC server stream 推送(集中持有客户端 stream + 消费 kafka 转发) | 强(连接索引) | kafka + redis(离线消息) |
+
+⭐ = 2026-06-04 终版新增。push 是 Kratos transport/grpc 暴露的 server stream 服务,客户端通过 Envoy 连过来,详见 `gateway-decision.md` §6。
+
+**框架统一**:13 个业务服 + push 服务**全部用 Kratos**(2026-06-04 推翻 D2.1 go-zero 决策)。Envoy 作为基础设施,不计 go 服务。
 
 ## 4. UE 端模块(共 5 个,在 UE 仓库)
 
@@ -115,18 +126,27 @@ GitHub:
 
 ## 6. 协议矩阵
 
-| Caller → Callee | 协议 | 节奏 |
-|---|---|---|
-| Client → login | gRPC(同步) | 登录时一次 |
-| Client → Hub DS | UDP / Unreal NetDriver | 高频(20~30 Hz) |
-| Client → Battle DS | UDP / Unreal NetDriver | 高频(30~60 Hz) |
-| Hub DS → 后端各服务 | gRPC(同步) | 玩家行为触发 |
-| Battle DS → battle_result | Kafka(异步,at-least-once) | 战斗结束一次 |
-| ds_allocator ↔ Battle DS | gRPC 双向流(心跳) | 5s/次 |
-| hub_allocator ↔ Hub DS | gRPC 双向流(心跳 + 玩家计数) | 5s/次 |
-| matchmaker → ds_allocator | gRPC | 匹配成功一次 |
-| 各服务 ↔ etcd | gRPC | 服务发现 |
-| 各服务 ↔ Kafka | Kafka 协议 | 异步事件 |
+⚠️ **架构决策 2026-06-04 终版**:
+- 客户端 **2 条连接**(① UE NetDriver / ② FHttpModule gRPC-Web over HTTP/2 TLS)
+- 后端框架 **Kratos**(替代 go-zero)
+- Edge Gateway 用 **Envoy**(替代 go-zero gateway)
+- 推送走 **gRPC server stream**(集中 push 服务持有客户端 stream)
+
+详见 `gateway-decision.md`。
+
+| Caller → Callee | 协议 | 节奏 | 备注 |
+|---|---|---|---|
+| **Client → Envoy**(8443 HTTPS)| gRPC-Web over **HTTP/2 + TLS** | unary 1~10 req/s/玩家;stream 长连 | UE FHttpModule 自带,自研 grpc-web frame 解析 |
+| **Client → Hub DS / Battle DS** | UE NetDriver(UDP-like)| 高频 30~60Hz | 仅游戏内同步,GAS / Replication |
+| Envoy → 各 Kratos 业务服 | 标准 gRPC unary + server stream | 业务请求触发 / stream 长连 | k8s Service + DNS 服务发现 |
+| matchmaker → ds_allocator | gRPC unary | 匹配成功一次 | 拉起战斗 DS |
+| Hub DS → hub_allocator | gRPC **unary** Heartbeat | **每 5s** | 单向心跳,response 携带控制指令 |
+| Battle DS → ds_allocator | gRPC **unary** Heartbeat | **每 5s** | 同上 |
+| 业务服 → kafka | 生产推送事件 | 业务变更触发 | push 服务消费 |
+| push → kafka | 消费推送 topics | 持续 | consumer group: pandora-push |
+| Battle DS → battle_result | Kafka(at-least-once)| 战斗结束一次 | `pandora.battle.result` topic |
+| 各服务 ↔ etcd | gRPC | 服务发现 / 配置 | k8s Service 也可代替 |
+| 各服务 ↔ Kafka | Kafka 协议 | 异步事件 | sarama |
 
 ## 7. 关键时序
 
@@ -268,3 +288,15 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 0 | 2026-06-03 | UE 5.7 + Iris + GAS,Agones 调度 | - |
 | 0 | 2026-06-03 | License MIT,Go 1.23,基础设施全新搭一套 | - |
 | 0 | 2026-06-03 | 后端框架继续用 go-zero(复用 mmorpg) | - |
+| 0 | 2026-06-03 | **否决"严格 A:客户端只连 DS"** | 见 `architecture-rejected-strict-ds-only.md`,6 个不可接受后果(故障域过大 / 500 人 PvP 性能预算被破 / UE 代码量爆炸 / 大厂无先例) |
+| 0 | 2026-06-03 | 业务请求走独立通道(不经过 DS),具体方案待定 | 候选:WebSocket gateway / 客户端直连各 go 服务 / 专用 push 服务,详见 `gateway-decision.md`(待写) |
+| 0 | 2026-06-03 | 推送方案选定 P3:**专用 push 服务** | 业务 → kafka → push(go,新增第 14 个服务)→ 客户端;Hub DS 不兼任推送中转 |
+| 0 | 2026-06-03 | **RPC response 与 kafka push 乱序问题确认 = 协议设计问题**(非架构问题) | 见 `protocol-ordering-rules.md`,固化 4 个原则 |
+| 0 | 2026-06-03 | 4 协议原则 | Response 同步完整 / push 不发给 caller / 已受理型显式标注 / proto 注释强制 |
+| 0 | **2026-06-04** | **切换后端框架:go-zero → Kratos**(推翻 D2.1)| go-zero 不支持 gRPC stream,推送架构受限;Kratos 基于原生 grpc-go,完整支持 unary + stream |
+| 0 | 2026-06-04 | 引入 **Envoy 作为 Edge Gateway** | 标准 gRPC-Web ↔ gRPC 协议转换,替代 go-zero/gateway |
+| 0 | 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.7 FHttpModule 已暴露(`SetOption("HttpVersion","2TLS")`),源码挖掘验证 |
+| 0 | 2026-06-04 | 推送架构:**集中 push 服务 + gRPC server stream** | 替代之前规划的 WebSocket 自研 + envelope,标准 gRPC 协议 |
+| 0 | 2026-06-04 | 客户端实现:**自研 grpc-web 客户端基于 FHttpModule** | 不引入第三方 UE gRPC 插件(80MB+ / SSL 冲突 / UE 5.x 兼容性差);大厂(米哈游/腾讯/网易/Riot/Epic)客户端都不直连 gRPC |
+| 0 | 2026-06-04 | 服务清单 13 → **14**(新增 push)| Envoy 作为基础设施不计 go 服务 |
+| 0 | 2026-06-04 | 客户端连接最终值 = **2 条**(NetDriver + FHttpModule)| 用户铁律确认 |

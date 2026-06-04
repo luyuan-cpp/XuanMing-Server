@@ -57,11 +57,93 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **D1** | 仓库骨架 + 11 份文档落盘 | ✅ 完成(2026-06-03,commit b4f6351) |
-| **D2** | 拷 mmorpg pkg + docker-compose + dev_up.ps1 | 🟢 进行中(2026-06-03) |
-| D3 | 写 .proto + buf 工具链 | ⏸️ |
+| **D2** | 拷 mmorpg pkg + docker-compose + dev_up.ps1 | ✅ 完成(2026-06-03,commit 94045f0) |
+| **D3** | 写 .proto + buf 工具链 | 🟢 进行中(2026-06-03) |
 | D4 | UE 仓库初始化(用户主导) | ⏸️ |
 | D5-D6 | UE DS 骨架代码(HubGameMode / BattleGameMode + Agones SDK) | ⏸️ |
 | D7 | k8s + Agones + 端到端 hello world | ⏸️ |
+
+### D3 完成清单(2026-06-03)
+
+#### buf 工具链(3 个文件)
+- [x] `proto/buf.yaml` v2 module + STANDARD lint(豁免 ENUM_VALUE_PREFIX / ENUM_ZERO_VALUE_SUFFIX)
+- [x] `proto/buf.gen.go.yaml` 用 buf.build 远程插件,managed.go_package_prefix 全局统一
+- [x] `proto/buf.gen.cpp.yaml` 占位(D4+ UE 仓库使用)
+
+#### proto 源(19 个文件,1373 行)
+
+**common/v1/(4 个)**:
+- [x] `errcode.proto` 全段位错误码 enum(64 个常量,跟 pkg/errcode 1:1 同步)
+- [x] `timestamp.proto` TimestampMs 包装
+- [x] `pagination.proto` PageReq + PageMeta
+- [x] `kafka_envelope.proto` 统一信封(topic / key / payload / trace_id / ts_ms)
+
+**13 个业务服务(每个一个 .proto)**:
+- [x] `login/v1/login.proto` LoginService(Login / Logout / IssueDSTicket / VerifyDSTicket)+ DSTicket
+- [x] `player/v1/player.proto` PlayerService(GetProfile / UpdateNickname / ListHeroes / UnlockHero / GetMMR / UpdateMMR 幂等)
+- [x] `data_service/v1/data_service.proto` ReadPlayer / WritePlayer / InvalidateCache + 乐观锁 version
+- [x] `friend/v1/friend.proto` AddFriend / Accept / List / Block + FriendRequestStatus enum
+- [x] `chat/v1/chat.proto` SendMessage / StreamMessages + ChatChannel enum
+- [x] `locator/v1/locator.proto` PlayerLocatorService + Location + LocationState enum
+- [x] `team/v1/team.proto` 7 个 RPC + StreamTeamUpdates 推送 + TeamState 5 状态
+- [x] `match/v1/match.proto` 4 个 RPC + StreamMatchProgress + MatchStage 6 状态
+- [x] `trade/v1/trade.proto` 4 个 RPC + Order + OrderState 7 状态
+- [x] `dialogue/v1/dialogue.proto` Start / Choose / End + DialogueState
+- [x] `ds/v1/allocator.proto` AllocateBattle / Release / Heartbeat 双向流 / ListBattles
+- [x] `hub/v1/allocator.proto` Assign / Release / Transfer / List / Heartbeat
+- [x] `battle/v1/battle.proto` ReportResult 幂等 / GetMatchResult / ListPlayerHistory + BattleResult + PlayerStats
+
+**ds_runtime(2 个,UE Client ↔ UE DS)**:
+- [x] `ds_runtime/v1/hub.proto` HubRuntime(TriggerNPC / OpenShop / TransferToHub / EnterBattle)+ Vector3
+- [x] `ds_runtime/v1/battle.proto` BattleRuntime(ChooseHero / PurchaseItem / UpgradeAbility / VoteSurrender / Disconnect)
+
+#### 工具脚本
+- [x] `tools/scripts/proto_gen.ps1`(buf 检查 + lint + breaking + go gen + cpp gen,支持 -Lint / -Cpp / -Breaking)
+
+#### 手工 lint(buf 未装,代替自动 lint)
+- [x] 19 个文件 syntax = "proto3" 全部第一个非注释行 ✅
+- [x] 15 个 package 名全部 `pandora.<domain>.v1` 规范 ✅
+- [x] 15 个文件各 1 个 service 块(common 4 个无 service)✅
+- [x] 字段编号无重复(awk 脚本误报已手工核对)✅
+- [x] 所有时间戳字段命名 `_at_ms` / `_time_ms` / `ts_ms`(统一 int64 毫秒)✅
+- [x] proto ErrCode(64) ↔ pkg/errcode(64) 数量一致 ✅
+
+#### 待用户安装 buf 后才能验的
+- [ ] `buf lint` 全绿(预期通过,但需 buf 实跑)
+- [ ] `buf generate` 产 .pb.go(W2 写第一个服务前必跑)
+- [ ] 生成的 pb 能 `go build`(W2 引用时验证)
+
+#### 中途修正:ds_runtime/battle.proto 协议边界
+
+⚠️ **用户在 D3 末尾发现错误**:"战斗用 UE GAS 啊,不用 battle proto 场景同步的 proto 吧"
+
+修正:
+- 删除 `BattleRuntimeService.PurchaseItem`(出装走 GAS Ability,不走 gRPC)
+- 删除 `BattleRuntimeService.UpgradeAbility`(升级技能走 GAS Ability)
+- 保留 `ChooseHero / VoteSurrender / Disconnect`(战斗外 UI 业务,非 tick 同步)
+
+在 `docs/design/ds-arch.md §0` 加了"协议边界:GAS / Replication vs gRPC"必读章节:
+- 走 GAS / Replication:移动 / 技能 / HP / buff / 命中 / 伤害 / 出装 / 升技能 / 表现层
+- 走 gRPC:跨进程 / 战斗外 UI / 后端服务联动
+- 反模式禁令(为下一会话 AI 立法)
+
+**纪律**:proto 不写战斗 tick 字段;UE Replication 字段不写 proto。
+
+#### 后续提醒(写入新一会话 AI 必读)
+
+⚠️ **buf 未安装,proto/gen/ 暂时空目录**。用户装完 buf 后第一次跑:
+```powershell
+winget install bufbuild.buf
+pwsh tools/scripts/proto_gen.ps1
+```
+跑完后 `proto/gen/go/` 会产出 .pb.go,W2 写代码时直接 `import "github.com/luyuancpp/pandora/proto/gen/go/<domain>/v1"`。
+
+⚠️ **errcode 双向同步纪律**:proto/common/v1/errcode.proto 和 pkg/errcode/errcode.go 数值必须一致,**改任一边必须同步改另一边**。W2+ 考虑加 pre-commit hook 自动校验。
+
+⚠️ **协议边界(GAS vs gRPC)是最重要的不变量**(ds-arch.md §0),新会话 AI 动 proto 前必读。
+
+
+
 
 ### D2 完成清单(2026-06-03)
 
@@ -137,5 +219,117 @@
 1. 本文(掌握当前进度)
 2. `CLAUDE.md`(项目规范)
 3. `docs/design/pandora-arch.md`(架构总图)
-4. `git log -20 --oneline`(最近改动)
-5. 当前打开的 PR(如果有)
+4. **`docs/design/architecture-rejected-strict-ds-only.md`**(2026-06-03 否决方案,反面教材)
+5. `docs/design/gateway-decision.md`(待写,业务通道选型)
+6. `git log -20 --oneline`(最近改动)
+7. 当前打开的 PR(如果有)
+
+---
+
+## D3 阶段 — 架构推翻记录(2026-06-03)
+
+### 背景
+
+D3 写完 19 个 .proto + buf 工具链后,用户在收尾阶段连续提出 6 个深刻问题,导致架构反复调整:
+
+1. "战斗用 UE GAS,不用 battle proto 场景同步" → 调整 ds_runtime/battle.proto,加 ds-arch.md §0 协议边界
+2. "UE 有的功能 proto 里面不应该有" → 删除整个 `proto/ds_runtime/` 目录
+3. "go-zero 不支持 gRPC 推送,我服务怎么推送" → 触发推送架构重新设计
+4. "客户端只连 DS,中间不能任何跳转" → 走错"严格 A"路线
+5. "大厂做法是什么" → 对齐发现严格 A 无大厂先例
+6. "DS 崩了不该影响业务功能" → 否决严格 A,改走业务独立通道(类大厦方案)
+7. "为什么 Hub DS 每 5s 主动请求" → 澄清心跳方向 + 频率原理
+8. "Client 不走 gRPC,走 WebSocket;后台才走 gRPC" → 修正协议矩阵
+
+### 最终决策(写入 pandora-arch.md §11 + gateway-decision.md)
+
+#### 三连接架构(对齐大厦,故障域隔离)
+
+| 通道 | 协议 | 用途 | 谁实现 |
+|---|---|---|---|
+| ① Client → DS | UE NetDriver(UDP-like)| 仅游戏内同步 / GAS / Replication | UE 引擎自带 |
+| ② Client → gateway | **HTTP/JSON** | 所有业务请求(登录/组队/匹配/商店/...) | UE HttpModule(引擎自带)|
+| ③ Client → push | **WebSocket** | 推送接收(组队邀请/匹配进度/聊天) | UE WebSocketsModule(引擎自带)|
+
+⭐ **Client 不走 gRPC,gRPC 仅存在于后台服务之间**(gateway → 业务服 / DS → allocator / 服务互调)。
+
+#### 新增 2 个 go 服务(13 → 15)
+
+| 服务 | 实现 | 端口 |
+|---|---|---|
+| **gateway** | go-zero gateway 官方组件 + yaml 配置 | 8080(HTTP)/ 51014(metrics) |
+| **push** | gorilla/websocket + sarama + redis | 8081(WebSocket)/ 51015(metrics) |
+
+#### Heartbeat 改造
+
+DS Heartbeat 从 gRPC 双向流 → **unary 每 5s 主动调**:
+- DS 是 client,allocator 是 server(go-zero 友好)
+- DS 上报状态 + allocator 通过 response 下发指令(stop/drain/reload)
+- 5s 是 k8s / Agones 标准心跳频率,故障检测延迟 = 3 个周期(15s)
+
+#### 被否决方案(反面教材)
+
+- ❌ **严格 A:客户端只连 DS** — 详见 `docs/design/architecture-rejected-strict-ds-only.md`,6 个不可接受后果(Hub DS 兼网关、500 人 PvP 预算崩、UE 代码量翻 2~3 倍、单点故障、登录死锁、大厦无先例)
+
+### D3 最终产出清单
+
+#### proto 源(17 个文件,~1300 行)
+
+**common/v1/**(4 个,不动):errcode / timestamp / pagination / kafka_envelope
+
+**13 个业务服务**(原本不动,仅 5 个改造):
+- ~~team.StreamTeamUpdates~~ → 删除 stream RPC,加 `GetTeam`(unary)+ 保留 `TeamUpdateEvent`(给 push 消费)
+- ~~match.StreamMatchProgress~~ → 同上,`GetMatchProgress` + `MatchProgressEvent`
+- ~~chat.StreamMessages~~ → 同上,`PullHistory` + `ChatPushEvent`
+- ~~ds.allocator.Heartbeat 双向流~~ → 改 unary
+- ~~hub.allocator.Heartbeat 双向流~~ → 改 unary
+
+**ds_runtime/**:整个目录已删除(UE 有的功能 proto 不写)
+
+#### 文档(新增 / 大改 4 份)
+
+- ✅ `docs/design/gateway-decision.md`(**新建**,~470 行)三连接架构 + go-zero gateway + push 服务详细设计 + 端到端时序 + 故障域分析
+- ✅ `docs/design/architecture-rejected-strict-ds-only.md`(**新建**,~120 行)反面教材,严格 A 6 个后果
+- ✅ `docs/design/ds-arch.md` §0(**重写**)从"GAS vs gRPC 协议边界" → "客户端三连接 + 后端 gRPC"协议矩阵 + 反模式禁令补强
+- ✅ `docs/design/pandora-arch.md` §3 / §6 / §11 服务清单 13→15 + 协议矩阵重写 + 决策行 +3
+- ✅ `docs/design/go-services.md` §1 / §4 / §5 加 gateway / push 详细契约
+- ✅ `docs/design/infra.md` §4.2 / §6.2 加推送 topics + gateway/push 端口
+
+#### 服务骨架
+
+- ✅ 新增 `gateway/.gitkeep` 和 `push/.gitkeep` 占位目录
+- ✅ `go.work` use 列表加 gateway / push 注释行(W2+ 启用)
+
+#### proto.gen 工具链(D3 原产出,保持)
+
+- ✅ `proto/buf.yaml` / `buf.gen.go.yaml` / `buf.gen.cpp.yaml`
+- ✅ `tools/scripts/proto_gen.ps1`
+- ⚠️ buf 未安装,proto/gen/ 暂时空目录(用户装完 buf 跑一次)
+
+### W2 路线图(收尾时定)
+
+W2 写代码顺序(`go-services.md §4` 已更新):
+**login → gateway(配 yaml)→ push(WebSocket 服骨架)→ player + data_service → team → matchmaker → ds_allocator + hub_allocator → battle_result → 其它**
+
+### 下一会话 AI 必读补充
+
+⚠️ **三连接架构是根基,不能再推翻** — 这次推翻成本已经很高(D3 改了一整天)。任何 AI 想"简化成两条连接"或"DS 兼任网关"之前,**必须读完 `architecture-rejected-strict-ds-only.md`**。
+
+⚠️ **"Client 不走 gRPC"是硬规则**:proto 里不允许出现 `Client → XxxService` 这种直接面向客户端的 service。所有客户端业务通过 gateway 转发 → 业务服。
+
+⚠️ **gateway 完全不需要"为每个业务写代码"**:配 yaml 把 HTTP path 映射到 gRPC method 即可。push 也几乎不需要随业务改动(只是消费 kafka + 转 WebSocket)。
+
+⚠️ **错误码三向同步**:proto/common/v1/errcode.proto ↔ pkg/errcode/errcode.go(W2 时也要考虑给 UE 客户端生成一份 ErrCode 枚举)
+
+⚠️ **协议顺序规则**(2026-06-03 末追加,见 `docs/design/protocol-ordering-rules.md`):
+
+RPC response 与 kafka push 是两条独立异步通道,无法保证顺序。**乱序问题靠协议设计层面解决,不靠架构**:
+
+1. **原则 1**:立即完成型 RPC 的 response 必须返完整业务数据(客户端不需要等 push)
+2. **原则 2**:kafka push 不发给请求发起方 — 强制使用 `PushToPlayers` helper(W2 实现)
+3. **原则 3**:已受理型 RPC(如 StartMatch / ConfirmMatch)显式标注,客户端 UI 状态机由 push 驱动
+4. **原则 4**:每个 RPC 在 proto 注释里标注"立即完成"或"已受理"语义
+
+⚠️ **下次会话 AI 写 RPC 前必须**:确定语义 → 写注释 → check response 完整性 → 决定 push 收件人(排除 caller)→ 调对应 helper 函数。
+
+

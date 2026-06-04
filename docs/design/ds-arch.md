@@ -2,6 +2,131 @@
 
 > Hub DS / Battle DS 的运行时设计、Iris + GAS 配置、500 人 PvP 关键路径、跨 DS 切换流程。
 
+## 0. ⭐ 协议边界:GAS / Replication vs gRPC
+
+**这是 Pandora 最重要的架构原则,任何 AI 会话开始前必须读完本节再动 proto / UE 代码**。
+
+### 0.1 战斗内 / 大厅内 = 全走 UE Replication + GAS
+
+走 **UE Replication / GAS,不走 gRPC** 的事(全部):
+
+| 类别 | 例子 |
+|---|---|
+| 玩家移动 | 位置 / 速度 / 朝向 / 跳跃 |
+| 玩家动作 | 普攻 / 释放技能(Q/W/E/R)/ 闪现 / 走位 |
+| 战斗状态 | HP / MP / shield / buff / debuff / 技能 CD |
+| 命中判定 | 服务端 trace,客户端 GAS 预测 |
+| 伤害计算 | GameplayEffect Modifier(服务端权威) |
+| 技能升级 | GAS Ability LevelUp(进战斗后用 Gold 升 Q/W/E/R) |
+| **出装 / 购买道具** | GAS Ability `UPandoraAbility_PurchaseItem`(扣金币 + 加属性 = GameplayEffect) |
+| 表现层 | GameplayCue(特效 / 音效 / 飘字)走 Multicast |
+| 大厅互打 | 跟战斗里完全一样,只是 Map 不同 |
+| 大厅 NPC 触发碰撞 | 走 Overlap + 服务端权威 |
+
+### 0.2 客户端两连接 + 后端 gRPC 协议矩阵
+
+⚠️ **架构决策 2026-06-04 终版**(详见 `gateway-decision.md`):
+- Client **不走 gRPC**(自己直接走),也不走 HTTP/JSON
+- Client 走 **gRPC-Web over HTTP/2 TLS**(UE 5.7 FHttpModule 自带,自研 grpc-web frame 解析)
+- **gRPC 标准协议只存在于后台服务之间**(Envoy → Kratos / 服务之间互调)
+- **客户端连接最终值 = 2 条**(① NetDriver / ② FHttpModule)
+
+#### Client 侧两条连接
+
+| Caller → Callee | 协议 | 用途 |
+|---|---|---|
+| Client → **Envoy**(8443 HTTPS) | **gRPC-Web over HTTP/2 + TLS** | 所有业务请求(unary)+ 推送接收(server stream)|
+| Client → Hub DS / Battle DS | **UE NetDriver**(UDP-like) | 仅游戏内同步(GAS / Replication / 30~60Hz tick)|
+
+✅ 两条连接职责清晰:① 高频游戏 tick,② 业务 + 推送复用同一 gRPC-Web 长连。
+✅ 客户端零第三方 SDK(UE 引擎自带 NetDriver + FHttpModule)。
+
+#### 后台服务之间(走标准 gRPC)
+
+| Caller → Callee | 协议 | 用途 |
+|---|---|---|
+| Envoy → Kratos 业务服 | 标准 gRPC unary | gRPC-Web 请求转标准 gRPC 后路由 |
+| Envoy → push 服务 | 标准 gRPC server stream | 客户端订阅推送的长连转发 |
+| matchmaker → ds_allocator | gRPC unary | 匹配成功调度战斗 DS |
+| Hub DS → hub_allocator | gRPC **unary** Heartbeat **每 5s** | 单向心跳 + 接收控制指令(Kratos 支持双向流,但本期保留 unary 简化)|
+| Battle DS → ds_allocator | gRPC **unary** Heartbeat **每 5s** | 同上 |
+| 各 go 服务 → 各 go 服务 | gRPC unary | 内部 RPC(如 player ↔ data_service)|
+
+#### 异步事件(走 Kafka)
+
+| Caller → Callee | 协议 | 用途 |
+|---|---|---|
+| 各业务服务 → kafka | 生产推送事件 | push 服务消费 → server stream 推给客户端 |
+| push → kafka | 消费推送 topics | 转发到客户端 stream |
+| Battle DS → battle_result(via kafka) | Kafka(at-least-once)| 战斗结算上报 |
+
+#### 服务发现 / 配置
+
+| Caller → Callee | 协议 | 用途 |
+|---|---|---|
+| 各 go 服务 ↔ etcd / k8s Service DNS | etcd 协议 / DNS | 服务注册 / 发现 / 配置中心 |
+| Envoy ↔ k8s Service | DNS(STRICT_DNS) | Edge Gateway 路由后端 |
+
+**已删除的反模式连接**:
+- ~~Client → 各业务 go 服务 直连 gRPC~~(改走 Envoy gRPC-Web)
+- ~~Client → 自研 pandora-gateway HTTP/JSON~~(2026-06-04 推翻,改 gRPC-Web)
+- ~~Client → 自研 pandora-push WebSocket~~(2026-06-04 推翻,改 server stream over Envoy)
+- ~~Client → Battle DS gRPC `BattleRuntimeService`~~(整个 service 删除,UE ServerRPC 即可)
+- ~~Client → Hub DS gRPC `HubRuntimeService`~~(同上,proto/ds_runtime/ 已删)
+- ~~Hub DS / Battle DS Heartbeat 双向流~~(改 unary 每 5s 主动调)
+
+### 0.3 反模式禁令(写代码前必须背诵)
+
+- ❌ **不要**为"玩家放技能"写 RPC(走 GAS Ability)
+- ❌ **不要**为"玩家造成伤害"写 RPC(走 GameplayEffect)
+- ❌ **不要**为"玩家移动"写 RPC(走 CharacterMovement Replication)
+- ❌ **不要**为"出装 / 升技能"写 RPC(走 GAS Ability,购买装备 = 扣 Gold + 加 GameplayEffect)
+- ❌ **不要**为"大厅 NPC 触发"写 tick RPC(走 Overlap)
+- ❌ **不要**给 Replication 字段写 proto(UE 自己用 GENERATED_BODY 生成)
+- ❌ **不要**让 Client 直连业务 go 服务的 gRPC(走 Envoy 统一入口)
+- ❌ **不要**让 Hub DS / Battle DS 兼任业务网关(详见 `architecture-rejected-strict-ds-only.md`)
+- ❌ **不要**为 Client ↔ DS 的业务通信写 gRPC service(用 UE ServerRPC)
+- ❌ **不要**写 BattleRuntimeService / HubRuntimeService 之类的 service(典型反模式,proto/ds_runtime/ 已删)
+- ❌ **不要在 UE 客户端拉 grpc-cpp 大依赖**(80MB+ / SSL 冲突 / UE 5.x 兼容性差;用 FHttpModule + 自研 grpc-web 客户端)
+- ❌ **不要装第三方 UE gRPC 插件**(同上 5 个共性坑,见 gateway-decision.md §11)
+
+**为什么这样设计**:
+
+**①  游戏内 tick 同步**(战斗 30~60Hz / 大厅 20~30Hz)用 UE NetDriver:
+- UDP + delta + AOI,专为游戏 tick 设计,500 人 hub 能扛
+- GAS 自带客户端预测 / 回滚 / 网络优化,自己写 RPC 是重复造轮子
+- gRPC(TCP + HTTP/2)做不了这个频率,**协议层不为高频 tick 设计**
+
+**②  业务请求 + 推送**(组队 / 匹配 / 商店 / 段位 / 推送)用 gRPC-Web over HTTP/2:
+- 业务请求 1~10 req/s/玩家,推送几次/局,**gRPC-Web 完全够,无性能问题**
+- "gRPC 不适合 tick 同步" ≠ "gRPC 不适合业务请求",**两个完全不同的频率档**
+- Envoy 用工业标准 grpc-web filter,UE FHttpModule 天然兼容
+- 客户端用 FHttpModule + 自研协议解析(~3-5 天),包体不增加 80MB
+
+**③  两条连接物理独立,故障域完全隔离**(2026-06-04 用户提醒补充):
+- ② gRPC-Web 卡了 / 重连 / 断开 → 对 ① NetDriver(游戏同步)**零影响**
+- ① NetDriver 断了(进入大厅 / 战斗切换)→ 对 ② **零影响**(② 长连保持)
+- Envoy 崩 → 玩家继续战斗(看不到大厅 UI 更新但战斗正常)
+- Battle DS 崩 → 玩家断战斗但 UI 业务通过 ② 正常用
+
+**④  Battle DS 内部用 gRPC 也不影响 tick**(W5-W6 实现约束):
+- Battle DS → ds_allocator Heartbeat = 5s/次,极低频
+- Battle DS → battle_result(via kafka)= 1 次/局
+- Battle DS → login.VerifyDSTicket = 1 次/玩家进入
+- **所有 gRPC client 调用必须在独立 goroutine + 超时(5s)**,不阻塞 UE 主 tick 线程
+
+### 0.4 什么时候打破 0.1 原则?
+
+**几乎不打破**。唯一例外:跨服 PvP 跨 DS 同步(W4+ 后期需求,目前不在范围)。
+
+如果未来某个特性看起来"需要 tick 同步但又是跨服",优先方案是:
+- 把它做成"非实时"(异步消息触发表现)
+- 或者拆成小局对战(走 ds_allocator 跨服分配 battle DS)
+
+不要为单一特性引入"通过 gRPC 做 tick"的混合架构,会让性能模型崩塌。
+
+---
+
 ## 1. DS 双形态对比
 
 | 维度 | Hub DS(大厅) | Battle DS(战斗) |
