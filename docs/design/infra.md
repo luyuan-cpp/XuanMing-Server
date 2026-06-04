@@ -254,16 +254,31 @@ pandora.dlq.<original_topic>     # 死信队列
 | matchmaker | 50011 | 51011 |
 | trade | 50012 | 51012 |
 | dialogue | 50013 | 51013 |
+| **push** ⭐ | **50014**(gRPC server stream)| **51014** |
 | ds_allocator | 50020 | 51020 |
 | hub_allocator | 50021 | 51021 |
 | battle_result | 50022 | 51022 |
-| **gateway** ⭐ | **8080**(HTTP)| **51014** |
-| **push** ⭐ | **8081**(WebSocket)| **51015** |
 
-⭐ = 2026-06-03 架构推翻后新增,见 `gateway-decision.md`。
-gateway / push 对外暴露非 gRPC 端口(HTTP / WebSocket),而非 50000 段。
+⭐ = 2026-06-04 终版新增。push 服务用 Kratos transport/grpc 暴露 server stream,客户端经 Envoy 连过来(gRPC-Web → gRPC 转换)。
 
-### 6.3 UE DS 端口
+**所有 14 个 go 服务全部用 gRPC 端口**(50001-50022 段),协议统一。
+
+### 6.3 Edge Gateway(Envoy)
+
+| 服务 | 端口 | 用途 |
+|---|---|---|
+| Envoy(HTTPS)| **8443** | 客户端入口,gRPC-Web over HTTP/2 TLS |
+| Envoy admin | **9901** | 配置 / metrics / 健康检查 |
+
+Envoy 是基础设施组件,**不是 go 服务**。它做:
+- TLS 终止(客户端 HTTPS → 内网明文 gRPC)
+- gRPC-Web ↔ gRPC 协议转换(envoy `grpc_web` filter)
+- JWT 鉴权(envoy `jwt_authn` filter)
+- 限流 / 熔断 / 重试
+
+详见 `gateway-decision.md` §5。
+
+### 6.4 UE DS 端口
 
 - Hub DS:Agones 从 7000-7500 动态分配
 - Battle DS:Agones 从 7501-8000 动态分配

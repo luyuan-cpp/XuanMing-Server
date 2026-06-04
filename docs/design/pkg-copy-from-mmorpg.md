@@ -89,40 +89,98 @@ Pandora/pkg/
 
 ⚠️ **D2 实际可能跨 D2-D3**,文档和 proto 设计可以并行进行。
 
-## 5. D2.1 框架决策(已定:go-zero)
+## 5. 框架决策(2026-06-04 终版:Kratos,推翻 go-zero)
 
-**2026-06-03 决策:Pandora 后端框架继续用 `go-zero`**
+### 5.0 决策演化历史(只追加,不删旧)
 
-理由:
+| 日期 | 决策 | 状态 |
+|---|---|---|
+| 2026-06-03 | D2.1 选 **go-zero**(复用 mmorpg 90% 代码,4~5 天)| ❌ **已推翻** |
+| 2026-06-04 | 切换 **Kratos**(支持 gRPC server stream,大厂 / 最标准方案优先)| ✅ **当前决策** |
+
+### 5.1 ❌ 旧决策(go-zero,2026-06-03,已推翻)
+
+> 仅供历史参考,不再有效。下面整段保留是为了让未来 AI / 开发者理解为什么之前选 go-zero、为什么推翻。
+
+**当时理由**:
 - 复用 mmorpg 90% 公共代码,D2 工作量 4~5 天(原生 grpc-go 自研要 10+ 天)
 - 单人开发节奏:先快速跑通 W1-W4,后期(W12+)如遇限制再考虑迁移
 - mmorpg 已稳定使用 go-zero 1.9.x,踩坑期已过
 
-后期如要迁移,补偿成本:
-- ~13 个服务 servicecontext.go 重写
-- log 从 logx 迁 zap
-- config 从 zrpc.RpcServerConf 改成自定义结构
-- 估 1~2 个月返工(可控)
+**推翻原因**(2026-06-04):
+1. **go-zero zrpc 不支持 gRPC server stream**(经多轮验证)
+2. Pandora 推送架构本应走 gRPC server stream,go-zero 限制下要自研 WebSocket + envelope + kafka 转 ws 路由层(~6 天)
+3. 自研 ws 协议**违反"协议标准化"铁律**(2026-06-04 用户明确要求"大厂 + 最标准方案")
+4. 切换 Kratos 工作量(~4 天)≈ 自研 ws(~6 天),**还省一次返工**
+5. UE 5.7 FHttpModule 已暴露 HTTP/2(用户挖源码验证),客户端用 gRPC-Web 协议跟后端 Kratos + Envoy 一气贯通
 
-**所以 W2 起所有 13 个服务的 servicecontext 模板锁定 go-zero 风格**。
+### 5.2 ✅ 新决策(Kratos,2026-06-04)
 
-## 6. 落地步骤(D2 执行清单,基于 go-zero 决策)
+**Pandora 后端框架统一用 Kratos**(B 站官方维护,基于原生 grpc-go)。
 
-1. ~~决策 D2.1~~(已定:go-zero)
+**理由**:
+- 完整支持 gRPC unary + server stream + client stream + bidi(go-zero 只 unary)
+- 推送架构能用 gRPC server stream(替代自研 WebSocket)
+- 可拔插 log / metrics / tracing(OpenTelemetry 标准)
+- proto-first + protoc-gen-go-http(同 proto 生成 gRPC + HTTP 两套)
+- B 站 / 米哈游游戏后端有验证
+- 跟 Envoy 配合自然(都是标准 gRPC,无非标转换层)
+
+**架构组合**:
+```
+Client(UE FHttpModule)→ gRPC-Web over HTTP/2 TLS
+                          ↓
+Envoy(Edge Gateway)→ gRPC-Web ↔ gRPC 协议转换
+                       ↓
+14 个 Kratos 业务服 ↔ 14 个 gRPC unary + push 服务 server stream
+```
+
+**详见**:`gateway-decision.md`(Kratos + Envoy + gRPC-Web 完整设计)
+
+### 5.3 D2 已写的 pkg/ 怎么处理(W2 第一周做)
+
+D2 已写代码用 go-zero,需要部分重写:
+
+| 模块 | 操作 | 估时 |
+|---|---|---|
+| `pkg/snowflake` | 不动(纯算法零依赖)| 0 |
+| `pkg/cache` | 不动 | 0 |
+| `pkg/errcode` | 不动 | 0 |
+| `pkg/metrics` | 不动(prometheus 通用)| 0 |
+| `pkg/redislock` | 改 `logx` → `kratos log` | 0.2 天 |
+| `pkg/grpcstats` | 改 `logx` → `kratos log`,可能用 Kratos middleware 重新实现 | 0.5 天 |
+| `pkg/kafkax` | 改 `logx` → `kratos log` | 0.2 天 |
+| `pkg/svc` | 改 BaseContext 嵌入的 config 类型 | 0.2 天 |
+| `pkg/log` | **重写**:基于 Kratos log 接口 + zap 实现 | 0.5 天 |
+| `pkg/config` | **重写**:基于 Kratos config(viper / 文件 / etcd) | 0.5 天 |
+| `pkg/grpcserver` | **重写**:基于 Kratos `transport/grpc` + middleware | 0.7 天 |
+| `pkg/grpcclient` | **重写**:基于 Kratos `transport/grpc` client + middleware | 0.5 天 |
+| 新增 `pkg/transport/http` | Kratos `transport/http` 包装(给 Envoy 转过来的请求用)| 0.5 天 |
+| 新增 `pkg/middleware` | trace / auth / metrics / recover 拦截器 Kratos 风格 | 0.7 天 |
+
+**总计:~4.5 天**(W2 第一周专注做这件事)。
+
+**所以 W2 起所有 14 个服务的初始化模板锁定 Kratos 风格**。
+
+## 6. ❌ 旧落地步骤(基于 go-zero 决策,已废弃)
+
+> 下面段落保留作历史参考。新落地步骤见 §5.3 表格 + W2 plan(W2 开工时另开 plan 模式定具体执行清单)。
+
+1. ~~决策 D2.1~~(已推翻,见 §5.0)
 2. 拷 4 个 🟢 模块,改 import,跑 `go build`
    - `mmorpg/go/shared/snowflake/` → `Pandora/pkg/snowflake/`
    - `mmorpg/go/shared/cache/` → `Pandora/pkg/cache/`
    - `mmorpg/go/shared/grpcstats/` → `Pandora/pkg/grpcstats/`
    - `mmorpg/go/db/internal/locker/` → `Pandora/pkg/redislock/`
-3. 抽 `pkg/config/`(以 mmorpg login config 为骨架,**保留 `zrpc.RpcServerConf` 嵌入**,剥 LegacyGate / SaToken / SceneManager 等 MMO 字段)
-4. `pkg/log/`(直接用 `go-zero/core/logx`,不抽包,服务直接 import)
+3. ~~抽 `pkg/config/`(保留 `zrpc.RpcServerConf` 嵌入)~~(改 Kratos config,见 §5.3)
+4. ~~`pkg/log/`(直接用 `go-zero/core/logx`)~~(改 Kratos log + zap)
 5. 抽 `pkg/metrics/`(prometheus 注册器 + 标准指标声明工具)
-6. 抽 `pkg/grpcserver/`(go-zero zrpc + 自定义拦截器:trace_id 注入 / metrics / panic recover)
-7. 抽 `pkg/grpcclient/`(go-zero zrpc.MustNewClient 包装 + 重试 + 熔断)
-8. 抽 `pkg/kafka/`(producer + consumer 包装 sarama)
-9. `pkg/etcdregistry/`(直接用 go-zero zrpc 内置 etcd discovery,这一项可以不抽)
-10. 写 `pkg/errcode/`(对照 `proto-design.md` §4 错误码段)
-11. 写 `pkg/svc/`(服务初始化模板:连接 mysql/redis/etcd/kafka 的标准流程)
+6. ~~抽 `pkg/grpcserver/`(go-zero zrpc 拦截器)~~(改 Kratos transport/grpc + middleware)
+7. ~~抽 `pkg/grpcclient/`(go-zero zrpc.MustNewClient)~~(改 Kratos transport/grpc client)
+8. 抽 `pkg/kafka/`(producer + consumer 包装 sarama)— 仍有效,改 log 即可
+9. ~~`pkg/etcdregistry/`(go-zero zrpc 内置 etcd discovery)~~(Kratos 也有 registry/etcd)
+10. 写 `pkg/errcode/`(对照 `proto-design.md` §4 错误码段)— 仍有效
+11. ~~写 `pkg/svc/`(servicecontext 模板)~~(改 Kratos 风格 BaseContext)
 12. 跑 `go build ./pkg/...` 全绿
 13. 写 `pkg/<each>/<each>_test.go` 至少冒烟测试
 14. 在 `PROGRESS.md` 追加 D2 完成记录

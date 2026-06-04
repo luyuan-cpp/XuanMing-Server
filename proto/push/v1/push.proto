@@ -1,0 +1,84 @@
+// Pandora PushService 协议(2026-06-04 终版,Kratos transport/grpc + server stream)。
+//
+// 职责:
+//   - 客户端登录后立刻调 Subscribe(server stream),维持长连接
+//   - 服务端集中持有所有在线客户端 stream,按 player_id 路由 kafka 事件
+//   - 转发推送 topics(team / match / chat / player / friend / system)给对应客户端
+//   - 离线消息缓存 redis ZSET(5min,重连补推)
+//
+// ⚠️ 架构边界(详见 docs/design/gateway-decision.md §6):
+//   - 客户端走 gRPC-Web over HTTP/2 TLS 连 Envoy,Envoy 转标准 gRPC 给本服务
+//   - 本服务**不是 WebSocket 服务**(2026-06-03 规划的自研 WebSocket 已被否决)
+//   - 本服务**不是 HTTP 网关**(那是 Envoy 的职责)
+//   - 业务服推送事件全部走 kafka,push 服务消费转 stream(不接业务服直接 gRPC 调用)
+//
+// ⚠️ 协议铁律(详见 docs/design/protocol-ordering-rules.md):
+//   - 原则 2:发起方不收自己触发的 push(业务服 produce kafka 时排除 caller_player_id)
+//   - 原则 3:已受理型 RPC(match.StartMatch / ConfirmMatch)是例外,push 给发起方也发
+//
+// W2 实现:Kratos transport/grpc 注册本 service,内部启动 sarama consumer goroutine
+// 消费 pandora.team.update / pandora.match.progress / pandora.chat.* / pandora.player.update /
+// pandora.friend.event / pandora.system.notify 等 topics。
+
+syntax = "proto3";
+
+package pandora.push.v1;
+
+import "common/v1/errcode.proto";
+
+service PushService {
+  // Subscribe 客户端登录后立刻调,维持长连接接收所有推送。
+  //
+  // 语义:**已受理 + 长连**(不是立即完成型 RPC)。
+  // 客户端拿到 stream 后,等待 server 推 PushFrame;直到 client 主动关闭或 server 断开。
+  //
+  // server 端流程:
+  //   1. 从 ctx 拿 JWT(Envoy 已校验,这里冗余检查 player_id)
+  //   2. 注册 stream 到内存索引:player_id → stream
+  //   3. 补推离线消息(redis ZSET pandora:push:offline:<player_id>,score in [last_seen_ms, now])
+  //   4. 阻塞等 ctx.Done(client 断开 / server 关闭)
+  //   5. 另一 goroutine 消费 kafka,按 player_id 找 stream.Send(PushFrame)
+  //
+  // 客户端流程(UE FHttpModule + 自研 grpc-web):
+  //   - HTTP POST /pandora.push.v1.PushService/Subscribe
+  //   - Content-Type: application/grpc-web+proto
+  //   - SetOption("HttpVersion", "2TLS")
+  //   - SetResponseBodyReceiveStreamDelegateV2 收 stream 字节,解析 grpc-web frame
+  //   - 每收到一帧 PushFrame,按 topic 分发到 UI handler
+  rpc Subscribe(SubscribeReq) returns (stream PushFrame);
+}
+
+message SubscribeReq {
+  // session_token 是 JWT,Envoy 已通过 jwt_authn filter 校验。
+  // push 服务可冗余校验一次(用于 stream 中途 token 过期检测)。
+  string session_token = 1;
+
+  // last_seen_ms 用于断线重连补推:客户端记得最后收到的 PushFrame.ts_ms,
+  // 重连时传过来,server 从 redis ZSET 查 score > last_seen_ms 的离线消息补推。
+  // 首次连接传 0(不补推)。
+  int64 last_seen_ms = 2;
+
+  // 3-9 reserved core
+  reserved 3 to 9;
+}
+
+message PushFrame {
+  // topic 跟 kafka topic 一致,客户端用来分发到不同 UI handler。
+  // 例:pandora.team.update / pandora.match.progress / pandora.chat.world / ...
+  string topic = 1;
+
+  // payload 是业务 Event message 的 protobuf 序列化字节。
+  // 例:topic=pandora.team.update → payload=TeamUpdateEvent serialized bytes
+  // 客户端按 topic 选对应 message 反序列化。
+  bytes payload = 2;
+
+  // ts_ms 是事件生产时间(业务服 produce kafka 时打的时间戳),
+  // 客户端按 ts_ms 去重(应对 kafka at-least-once 重复)。
+  int64 ts_ms = 3;
+
+  // trace_id 跟业务 RPC 的 trace_id 同源,用于全链路排查。
+  string trace_id = 4;
+
+  // 5-9 reserved core
+  reserved 5 to 9;
+}
