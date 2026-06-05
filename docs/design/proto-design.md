@@ -306,7 +306,7 @@ pandora.dlq.<original_topic> 死信队列
 - 运行时 / 业务 ID:`<entity>_id`(`player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等 Snowflake ID 一律用 `uint64`;未知 / 空值用 `0`,需要 presence 时用 `optional uint64`)
 - 配置表 ID:`<entity>_id` 或 `<entity>_config_id`(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等默认用 `uint32`;容易和运行时实体混淆时优先用 `<entity>_config_id`)
 - UUID:只有外部系统已定义为 UUID 时才用 `string`
-- 枚举:`<TYPE>_<NAME>`(`TEAM_STATE_FORMING`),并以 `<TYPE>_UNSPECIFIED = 0` 兜底
+- 枚举:`<TYPE>_<NAME>`(`TEAM_STATE_FORMING`),并以 `<TYPE>_UNSPECIFIED = 0` 兜底;状态 / 类型 / 原因等 enum value 和 Go mirror 常量保持生成 enum 类型或 `int32` 语义,不因取值非负改成 `uint32`
 - 布尔:`is_<adj>` / `has_<noun>`(避免 `<name>_flag`)
 - 集合:复数(`player_ids` / `members`)
 
