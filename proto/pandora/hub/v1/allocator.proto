@@ -34,7 +34,7 @@ message AssignHubResponse {
   string hub_ds_addr = 2;
   string hub_ticket  = 3;  // JWT
   string hub_pod_name = 4;
-  int32  shard_id    = 5;
+  uint32 shard_id    = 5;
 }
 
 message ReleaseHubRequest {

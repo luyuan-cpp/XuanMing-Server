@@ -59,31 +59,6 @@ struct TeamMemberDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 TeamMemberDefaultTypeInternal _TeamMember_default_instance_;
 
-inline constexpr SetReadyResponse::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        _cached_size_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR SetReadyResponse::SetReadyResponse(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct SetReadyResponseDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR SetReadyResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~SetReadyResponseDefaultTypeInternal() {}
-  union {
-    SetReadyResponse _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SetReadyResponseDefaultTypeInternal _SetReadyResponse_default_instance_;
-
 inline constexpr SetReadyRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : team_id_{::uint64_t{0u}},
@@ -112,31 +87,6 @@ struct SetReadyRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SetReadyRequestDefaultTypeInternal _SetReadyRequest_default_instance_;
 
-inline constexpr LeaveTeamResponse::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        _cached_size_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR LeaveTeamResponse::LeaveTeamResponse(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct LeaveTeamResponseDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR LeaveTeamResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~LeaveTeamResponseDefaultTypeInternal() {}
-  union {
-    LeaveTeamResponse _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LeaveTeamResponseDefaultTypeInternal _LeaveTeamResponse_default_instance_;
-
 inline constexpr LeaveTeamRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : team_id_{::uint64_t{0u}},
@@ -162,31 +112,6 @@ struct LeaveTeamRequestDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LeaveTeamRequestDefaultTypeInternal _LeaveTeamRequest_default_instance_;
-
-inline constexpr KickResponse::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        _cached_size_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR KickResponse::KickResponse(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct KickResponseDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR KickResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~KickResponseDefaultTypeInternal() {}
-  union {
-    KickResponse _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 KickResponseDefaultTypeInternal _KickResponse_default_instance_;
 
 inline constexpr KickRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -214,31 +139,6 @@ struct KickRequestDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 KickRequestDefaultTypeInternal _KickRequest_default_instance_;
-
-inline constexpr InviteResponse::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        _cached_size_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR InviteResponse::InviteResponse(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct InviteResponseDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR InviteResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~InviteResponseDefaultTypeInternal() {}
-  union {
-    InviteResponse _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InviteResponseDefaultTypeInternal _InviteResponse_default_instance_;
 
 inline constexpr InviteRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -292,32 +192,6 @@ struct GetTeamRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GetTeamRequestDefaultTypeInternal _GetTeamRequest_default_instance_;
 
-inline constexpr CreateTeamResponse::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : team_id_{::uint64_t{0u}},
-        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        _cached_size_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR CreateTeamResponse::CreateTeamResponse(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct CreateTeamResponseDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR CreateTeamResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~CreateTeamResponseDefaultTypeInternal() {}
-  union {
-    CreateTeamResponse _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CreateTeamResponseDefaultTypeInternal _CreateTeamResponse_default_instance_;
-
 inline constexpr CreateTeamRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : player_id_{::uint64_t{0u}},
@@ -347,6 +221,7 @@ inline constexpr AcceptInviteRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : player_id_{::uint64_t{0u}},
         team_id_{::uint64_t{0u}},
+        invite_id_{::uint64_t{0u}},
         _cached_size_{0} {}
 
 template <typename>
@@ -402,13 +277,12 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 inline constexpr TeamUpdateEvent::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        change_summary_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
         team_{nullptr},
         by_player_id_{::uint64_t{0u}},
         to_player_id_{::uint64_t{0u}},
-        ts_ms_{::int64_t{0}} {}
+        ts_ms_{::int64_t{0}},
+        invite_id_{::uint64_t{0u}},
+        reason_{static_cast< ::pandora::team::v1::TeamUpdateReason >(0)} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR TeamUpdateEvent::TeamUpdateEvent(::_pbi::ConstantInitialized)
@@ -429,6 +303,112 @@ struct TeamUpdateEventDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 TeamUpdateEventDefaultTypeInternal _TeamUpdateEvent_default_instance_;
+
+inline constexpr SetReadyResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        team_{nullptr},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR SetReadyResponse::SetReadyResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct SetReadyResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SetReadyResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SetReadyResponseDefaultTypeInternal() {}
+  union {
+    SetReadyResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SetReadyResponseDefaultTypeInternal _SetReadyResponse_default_instance_;
+
+inline constexpr LeaveTeamResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        team_{nullptr},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR LeaveTeamResponse::LeaveTeamResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct LeaveTeamResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR LeaveTeamResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~LeaveTeamResponseDefaultTypeInternal() {}
+  union {
+    LeaveTeamResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LeaveTeamResponseDefaultTypeInternal _LeaveTeamResponse_default_instance_;
+
+inline constexpr KickResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        team_{nullptr},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR KickResponse::KickResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct KickResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR KickResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~KickResponseDefaultTypeInternal() {}
+  union {
+    KickResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 KickResponseDefaultTypeInternal _KickResponse_default_instance_;
+
+inline constexpr InviteResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        team_{nullptr},
+        invite_id_{::uint64_t{0u}},
+        expires_at_ms_{::int64_t{0}},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR InviteResponse::InviteResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct InviteResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR InviteResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~InviteResponseDefaultTypeInternal() {}
+  union {
+    InviteResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InviteResponseDefaultTypeInternal _InviteResponse_default_instance_;
 
 inline constexpr GetTeamResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -455,6 +435,33 @@ struct GetTeamResponseDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GetTeamResponseDefaultTypeInternal _GetTeamResponse_default_instance_;
+
+inline constexpr CreateTeamResponse::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        team_{nullptr},
+        team_id_{::uint64_t{0u}},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR CreateTeamResponse::CreateTeamResponse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct CreateTeamResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CreateTeamResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CreateTeamResponseDefaultTypeInternal() {}
+  union {
+    CreateTeamResponse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CreateTeamResponseDefaultTypeInternal _CreateTeamResponse_default_instance_;
 
 inline constexpr AcceptInviteResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -484,7 +491,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 }  // namespace v1
 }  // namespace team
 }  // namespace pandora
-static const ::_pb::EnumDescriptor* file_level_enum_descriptors_pandora_2fteam_2fv1_2fteam_2eproto[1];
+static const ::_pb::EnumDescriptor* file_level_enum_descriptors_pandora_2fteam_2fv1_2fteam_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor**
     file_level_service_descriptors_pandora_2fteam_2fv1_2fteam_2eproto = nullptr;
 const ::uint32_t
@@ -526,7 +533,7 @@ const ::uint32_t
         ~0u,  // no _split_
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::CreateTeamRequest, _impl_.player_id_),
-        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::CreateTeamResponse, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::CreateTeamResponse, _internal_metadata_),
         ~0u,  // no _extensions_
         ~0u,  // no _oneof_case_
@@ -536,6 +543,10 @@ const ::uint32_t
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::CreateTeamResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::CreateTeamResponse, _impl_.team_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::CreateTeamResponse, _impl_.team_),
+        ~0u,
+        ~0u,
+        0,
         ~0u,  // no _has_bits_
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -547,7 +558,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_.inviter_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteRequest, _impl_.target_player_id_),
-        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _internal_metadata_),
         ~0u,  // no _extensions_
         ~0u,  // no _oneof_case_
@@ -556,6 +567,13 @@ const ::uint32_t
         ~0u,  // no _split_
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _impl_.team_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _impl_.invite_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::InviteResponse, _impl_.expires_at_ms_),
+        ~0u,
+        0,
+        ~0u,
+        ~0u,
         ~0u,  // no _has_bits_
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -566,6 +584,7 @@ const ::uint32_t
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_.team_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteRequest, _impl_.invite_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteResponse, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::AcceptInviteResponse, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -588,7 +607,7 @@ const ::uint32_t
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamRequest, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamRequest, _impl_.player_id_),
-        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamResponse, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamResponse, _internal_metadata_),
         ~0u,  // no _extensions_
         ~0u,  // no _oneof_case_
@@ -597,6 +616,9 @@ const ::uint32_t
         ~0u,  // no _split_
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::LeaveTeamResponse, _impl_.team_),
+        ~0u,
+        0,
         ~0u,  // no _has_bits_
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -608,7 +630,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_.captain_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickRequest, _impl_.target_player_id_),
-        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickResponse, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickResponse, _internal_metadata_),
         ~0u,  // no _extensions_
         ~0u,  // no _oneof_case_
@@ -617,6 +639,9 @@ const ::uint32_t
         ~0u,  // no _split_
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::KickResponse, _impl_.team_),
+        ~0u,
+        0,
         ~0u,  // no _has_bits_
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -629,7 +654,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.ready_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyRequest, _impl_.hero_id_),
-        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyResponse, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyResponse, _internal_metadata_),
         ~0u,  // no _extensions_
         ~0u,  // no _oneof_case_
@@ -638,6 +663,9 @@ const ::uint32_t
         ~0u,  // no _split_
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::SetReadyResponse, _impl_.team_),
+        ~0u,
+        0,
         ~0u,  // no _has_bits_
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::GetTeamRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -668,11 +696,13 @@ const ::uint32_t
         ~0u,  // no _split_
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.team_),
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.change_summary_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.by_player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.to_player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.ts_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::TeamUpdateEvent, _impl_.invite_id_),
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -684,20 +714,20 @@ static const ::_pbi::MigrationSchema
         {0, -1, -1, sizeof(::pandora::team::v1::TeamMember)},
         {13, -1, -1, sizeof(::pandora::team::v1::Team)},
         {27, -1, -1, sizeof(::pandora::team::v1::CreateTeamRequest)},
-        {36, -1, -1, sizeof(::pandora::team::v1::CreateTeamResponse)},
-        {46, -1, -1, sizeof(::pandora::team::v1::InviteRequest)},
-        {57, -1, -1, sizeof(::pandora::team::v1::InviteResponse)},
-        {66, -1, -1, sizeof(::pandora::team::v1::AcceptInviteRequest)},
-        {76, 86, -1, sizeof(::pandora::team::v1::AcceptInviteResponse)},
-        {88, -1, -1, sizeof(::pandora::team::v1::LeaveTeamRequest)},
-        {98, -1, -1, sizeof(::pandora::team::v1::LeaveTeamResponse)},
-        {107, -1, -1, sizeof(::pandora::team::v1::KickRequest)},
-        {118, -1, -1, sizeof(::pandora::team::v1::KickResponse)},
-        {127, -1, -1, sizeof(::pandora::team::v1::SetReadyRequest)},
-        {139, -1, -1, sizeof(::pandora::team::v1::SetReadyResponse)},
-        {148, -1, -1, sizeof(::pandora::team::v1::GetTeamRequest)},
-        {157, 167, -1, sizeof(::pandora::team::v1::GetTeamResponse)},
-        {169, 182, -1, sizeof(::pandora::team::v1::TeamUpdateEvent)},
+        {36, 47, -1, sizeof(::pandora::team::v1::CreateTeamResponse)},
+        {50, -1, -1, sizeof(::pandora::team::v1::InviteRequest)},
+        {61, 73, -1, sizeof(::pandora::team::v1::InviteResponse)},
+        {77, -1, -1, sizeof(::pandora::team::v1::AcceptInviteRequest)},
+        {88, 98, -1, sizeof(::pandora::team::v1::AcceptInviteResponse)},
+        {100, -1, -1, sizeof(::pandora::team::v1::LeaveTeamRequest)},
+        {110, 120, -1, sizeof(::pandora::team::v1::LeaveTeamResponse)},
+        {122, -1, -1, sizeof(::pandora::team::v1::KickRequest)},
+        {133, 143, -1, sizeof(::pandora::team::v1::KickResponse)},
+        {145, -1, -1, sizeof(::pandora::team::v1::SetReadyRequest)},
+        {157, 167, -1, sizeof(::pandora::team::v1::SetReadyResponse)},
+        {169, -1, -1, sizeof(::pandora::team::v1::GetTeamRequest)},
+        {178, 188, -1, sizeof(::pandora::team::v1::GetTeamResponse)},
+        {190, 204, -1, sizeof(::pandora::team::v1::TeamUpdateEvent)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::team::v1::_TeamMember_default_instance_._instance,
@@ -732,59 +762,79 @@ const char descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto[] ABSL_A
     "andora.team.v1.TeamStateR\005state\022\"\n\rcreat"
     "ed_at_ms\030\005 \001(\003R\013createdAtMs\022\031\n\010max_size\030"
     "\006 \001(\005R\007maxSizeJ\004\010\007\020\n\"0\n\021CreateTeamReques"
-    "t\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"]\n\022Create"
-    "TeamResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCodeR\004code\022\027\n\007team_id\030\002 \001(\004R\006t"
-    "eamId\"q\n\rInviteRequest\022\027\n\007team_id\030\001 \001(\004R"
-    "\006teamId\022\035\n\ninviter_id\030\002 \001(\004R\tinviterId\022("
-    "\n\020target_player_id\030\003 \001(\004R\016targetPlayerId"
-    "\"@\n\016InviteResponse\022.\n\004code\030\001 \001(\0162\032.pando"
-    "ra.common.v1.ErrCodeR\004code\"K\n\023AcceptInvi"
-    "teRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\027"
-    "\n\007team_id\030\002 \001(\004R\006teamId\"q\n\024AcceptInviteR"
-    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
-    "1.ErrCodeR\004code\022)\n\004team\030\002 \001(\0132\025.pandora."
-    "team.v1.TeamR\004team\"H\n\020LeaveTeamRequest\022\027"
-    "\n\007team_id\030\001 \001(\004R\006teamId\022\033\n\tplayer_id\030\002 \001"
-    "(\004R\010playerId\"C\n\021LeaveTeamResponse\022.\n\004cod"
-    "e\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004cod"
-    "e\"o\n\013KickRequest\022\027\n\007team_id\030\001 \001(\004R\006teamI"
-    "d\022\035\n\ncaptain_id\030\002 \001(\004R\tcaptainId\022(\n\020targ"
-    "et_player_id\030\003 \001(\004R\016targetPlayerId\">\n\014Ki"
-    "ckResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCodeR\004code\"v\n\017SetReadyRequest\022\027\n"
-    "\007team_id\030\001 \001(\004R\006teamId\022\033\n\tplayer_id\030\002 \001("
-    "\004R\010playerId\022\024\n\005ready\030\003 \001(\010R\005ready\022\027\n\007her"
-    "o_id\030\004 \001(\rR\006heroId\"B\n\020SetReadyResponse\022."
-    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
-    "R\004code\")\n\016GetTeamRequest\022\027\n\007team_id\030\001 \001("
-    "\004R\006teamId\"l\n\017GetTeamResponse\022.\n\004code\030\001 \001"
-    "(\0162\032.pandora.common.v1.ErrCodeR\004code\022)\n\004"
-    "team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004team\""
-    "\302\001\n\017TeamUpdateEvent\022)\n\004team\030\001 \001(\0132\025.pand"
-    "ora.team.v1.TeamR\004team\022%\n\016change_summary"
-    "\030\002 \001(\tR\rchangeSummary\022 \n\014by_player_id\030\003 "
-    "\001(\004R\nbyPlayerId\022 \n\014to_player_id\030\004 \001(\004R\nt"
-    "oPlayerId\022\023\n\005ts_ms\030\005 \001(\003R\004tsMsJ\004\010\006\020\n*\242\001\n"
-    "\tTeamState\022\032\n\026TEAM_STATE_UNSPECIFIED\020\000\022\026"
-    "\n\022TEAM_STATE_FORMING\020\001\022\024\n\020TEAM_STATE_REA"
-    "DY\020\002\022\027\n\023TEAM_STATE_MATCHING\020\003\022\030\n\024TEAM_ST"
-    "ATE_IN_BATTLE\020\004\022\030\n\024TEAM_STATE_DISBANDED\020"
-    "\0052\304\004\n\013TeamService\022U\n\nCreateTeam\022\".pandor"
-    "a.team.v1.CreateTeamRequest\032#.pandora.te"
-    "am.v1.CreateTeamResponse\022I\n\006Invite\022\036.pan"
-    "dora.team.v1.InviteRequest\032\037.pandora.tea"
-    "m.v1.InviteResponse\022[\n\014AcceptInvite\022$.pa"
-    "ndora.team.v1.AcceptInviteRequest\032%.pand"
-    "ora.team.v1.AcceptInviteResponse\022R\n\tLeav"
-    "eTeam\022!.pandora.team.v1.LeaveTeamRequest"
-    "\032\".pandora.team.v1.LeaveTeamResponse\022C\n\004"
-    "Kick\022\034.pandora.team.v1.KickRequest\032\035.pan"
-    "dora.team.v1.KickResponse\022O\n\010SetReady\022 ."
-    "pandora.team.v1.SetReadyRequest\032!.pandor"
-    "a.team.v1.SetReadyResponse\022L\n\007GetTeam\022\037."
-    "pandora.team.v1.GetTeamRequest\032 .pandora"
-    ".team.v1.GetTeamResponseb\006proto3"
+    "t\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\"\210\001\n\022Creat"
+    "eTeamResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\022\027\n\007team_id\030\002 \001(\004R\006"
+    "teamId\022)\n\004team\030\003 \001(\0132\025.pandora.team.v1.T"
+    "eamR\004team\"q\n\rInviteRequest\022\027\n\007team_id\030\001 "
+    "\001(\004R\006teamId\022\035\n\ninviter_id\030\002 \001(\004R\tinviter"
+    "Id\022(\n\020target_player_id\030\003 \001(\004R\016targetPlay"
+    "erId\"\254\001\n\016InviteResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\022)\n\004team\030"
+    "\002 \001(\0132\025.pandora.team.v1.TeamR\004team\022\033\n\tin"
+    "vite_id\030\003 \001(\004R\010inviteId\022\"\n\rexpires_at_ms"
+    "\030\004 \001(\003R\013expiresAtMs\"h\n\023AcceptInviteReque"
+    "st\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\027\n\007team_"
+    "id\030\002 \001(\004R\006teamId\022\033\n\tinvite_id\030\003 \001(\004R\010inv"
+    "iteId\"q\n\024AcceptInviteResponse\022.\n\004code\030\001 "
+    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\022)\n"
+    "\004team\030\002 \001(\0132\025.pandora.team.v1.TeamR\004team"
+    "\"H\n\020LeaveTeamRequest\022\027\n\007team_id\030\001 \001(\004R\006t"
+    "eamId\022\033\n\tplayer_id\030\002 \001(\004R\010playerId\"n\n\021Le"
+    "aveTeamResponse\022.\n\004code\030\001 \001(\0162\032.pandora."
+    "common.v1.ErrCodeR\004code\022)\n\004team\030\002 \001(\0132\025."
+    "pandora.team.v1.TeamR\004team\"o\n\013KickReques"
+    "t\022\027\n\007team_id\030\001 \001(\004R\006teamId\022\035\n\ncaptain_id"
+    "\030\002 \001(\004R\tcaptainId\022(\n\020target_player_id\030\003 "
+    "\001(\004R\016targetPlayerId\"i\n\014KickResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\022)\n\004team\030\002 \001(\0132\025.pandora.team.v1.Team"
+    "R\004team\"v\n\017SetReadyRequest\022\027\n\007team_id\030\001 \001"
+    "(\004R\006teamId\022\033\n\tplayer_id\030\002 \001(\004R\010playerId\022"
+    "\024\n\005ready\030\003 \001(\010R\005ready\022\027\n\007hero_id\030\004 \001(\rR\006"
+    "heroId\"m\n\020SetReadyResponse\022.\n\004code\030\001 \001(\016"
+    "2\032.pandora.common.v1.ErrCodeR\004code\022)\n\004te"
+    "am\030\002 \001(\0132\025.pandora.team.v1.TeamR\004team\")\n"
+    "\016GetTeamRequest\022\027\n\007team_id\030\001 \001(\004R\006teamId"
+    "\"l\n\017GetTeamResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\022)\n\004team\030\002 \001("
+    "\0132\025.pandora.team.v1.TeamR\004team\"\211\002\n\017TeamU"
+    "pdateEvent\022)\n\004team\030\001 \001(\0132\025.pandora.team."
+    "v1.TeamR\004team\022 \n\014by_player_id\030\003 \001(\004R\nbyP"
+    "layerId\022 \n\014to_player_id\030\004 \001(\004R\ntoPlayerI"
+    "d\022\023\n\005ts_ms\030\005 \001(\003R\004tsMs\0229\n\006reason\030\n \001(\0162!"
+    ".pandora.team.v1.TeamUpdateReasonR\006reaso"
+    "n\022\033\n\tinvite_id\030\013 \001(\004R\010inviteIdJ\004\010\002\020\003J\004\010\006"
+    "\020\nR\016change_summary*\242\001\n\tTeamState\022\032\n\026TEAM"
+    "_STATE_UNSPECIFIED\020\000\022\026\n\022TEAM_STATE_FORMI"
+    "NG\020\001\022\024\n\020TEAM_STATE_READY\020\002\022\027\n\023TEAM_STATE"
+    "_MATCHING\020\003\022\030\n\024TEAM_STATE_IN_BATTLE\020\004\022\030\n"
+    "\024TEAM_STATE_DISBANDED\020\005*\205\003\n\020TeamUpdateRe"
+    "ason\022\"\n\036TEAM_UPDATE_REASON_UNSPECIFIED\020\000"
+    "\022$\n TEAM_UPDATE_REASON_MEMBER_JOINED\020\001\022\""
+    "\n\036TEAM_UPDATE_REASON_MEMBER_LEFT\020\002\022$\n TE"
+    "AM_UPDATE_REASON_MEMBER_KICKED\020\003\022#\n\037TEAM"
+    "_UPDATE_REASON_MEMBER_READY\020\004\022#\n\037TEAM_UP"
+    "DATE_REASON_HERO_CHANGED\020\005\022\'\n#TEAM_UPDAT"
+    "E_REASON_CAPTAIN_TRANSFER\020\006\022$\n TEAM_UPDA"
+    "TE_REASON_STATE_CHANGED\020\007\022 \n\034TEAM_UPDATE"
+    "_REASON_DISBANDED\020\010\022\"\n\036TEAM_UPDATE_REASO"
+    "N_INVITE_SENT\020\t2\304\004\n\013TeamService\022U\n\nCreat"
+    "eTeam\022\".pandora.team.v1.CreateTeamReques"
+    "t\032#.pandora.team.v1.CreateTeamResponse\022I"
+    "\n\006Invite\022\036.pandora.team.v1.InviteRequest"
+    "\032\037.pandora.team.v1.InviteResponse\022[\n\014Acc"
+    "eptInvite\022$.pandora.team.v1.AcceptInvite"
+    "Request\032%.pandora.team.v1.AcceptInviteRe"
+    "sponse\022R\n\tLeaveTeam\022!.pandora.team.v1.Le"
+    "aveTeamRequest\032\".pandora.team.v1.LeaveTe"
+    "amResponse\022C\n\004Kick\022\034.pandora.team.v1.Kic"
+    "kRequest\032\035.pandora.team.v1.KickResponse\022"
+    "O\n\010SetReady\022 .pandora.team.v1.SetReadyRe"
+    "quest\032!.pandora.team.v1.SetReadyResponse"
+    "\022L\n\007GetTeam\022\037.pandora.team.v1.GetTeamReq"
+    "uest\032 .pandora.team.v1.GetTeamResponseb\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_deps[1] =
     {
@@ -794,7 +844,7 @@ static ::absl::once_flag descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto = {
     false,
     false,
-    2592,
+    3366,
     descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto,
     "pandora/team/v1/team.proto",
     &descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_once,
@@ -818,6 +868,15 @@ PROTOBUF_CONSTINIT const uint32_t TeamState_internal_data_[] = {
     393216u, 0u, };
 bool TeamState_IsValid(int value) {
   return 0 <= value && value <= 5;
+}
+const ::google::protobuf::EnumDescriptor* TeamUpdateReason_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto);
+  return file_level_enum_descriptors_pandora_2fteam_2fv1_2fteam_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t TeamUpdateReason_internal_data_[] = {
+    655360u, 0u, };
+bool TeamUpdateReason_IsValid(int value) {
+  return 0 <= value && value <= 9;
 }
 // ===================================================================
 
@@ -1743,6 +1802,10 @@ void CreateTeamRequest::InternalSwap(CreateTeamRequest* PROTOBUF_RESTRICT other)
 
 class CreateTeamResponse::_Internal {
  public:
+  using HasBits =
+      decltype(std::declval<CreateTeamResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_._has_bits_);
 };
 
 CreateTeamResponse::CreateTeamResponse(::google::protobuf::Arena* arena)
@@ -1754,10 +1817,38 @@ CreateTeamResponse::CreateTeamResponse(::google::protobuf::Arena* arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.team.v1.CreateTeamResponse)
 }
+inline PROTOBUF_NDEBUG_INLINE CreateTeamResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::team::v1::CreateTeamResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
 CreateTeamResponse::CreateTeamResponse(
-    ::google::protobuf::Arena* arena, const CreateTeamResponse& from)
-    : CreateTeamResponse(arena) {
-  MergeFrom(from);
+    ::google::protobuf::Arena* arena,
+    const CreateTeamResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CreateTeamResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.team_ = (cached_has_bits & 0x00000001u) ? ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(
+                              arena, *from._impl_.team_)
+                        : nullptr;
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, team_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, team_id_),
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, team_id_) +
+               sizeof(Impl_::code_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.team.v1.CreateTeamResponse)
 }
 inline PROTOBUF_NDEBUG_INLINE CreateTeamResponse::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
@@ -1767,10 +1858,10 @@ inline PROTOBUF_NDEBUG_INLINE CreateTeamResponse::Impl_::Impl_(
 inline void CreateTeamResponse::SharedCtor(::_pb::Arena* arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char *>(&_impl_) +
-               offsetof(Impl_, team_id_),
+               offsetof(Impl_, team_),
            0,
            offsetof(Impl_, code_) -
-               offsetof(Impl_, team_id_) +
+               offsetof(Impl_, team_) +
                sizeof(Impl_::code_));
 }
 CreateTeamResponse::~CreateTeamResponse() {
@@ -1781,6 +1872,7 @@ inline void CreateTeamResponse::SharedDtor(MessageLite& self) {
   CreateTeamResponse& this_ = static_cast<CreateTeamResponse&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.team_;
   this_._impl_.~Impl_();
 }
 
@@ -1820,17 +1912,17 @@ const ::google::protobuf::internal::ClassData* CreateTeamResponse::GetClassData(
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 0, 0, 2> CreateTeamResponse::_table_ = {
+const ::_pbi::TcParseTable<2, 3, 1, 0, 2> CreateTeamResponse::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    3,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -1838,24 +1930,31 @@ const ::_pbi::TcParseTable<1, 2, 0, 0, 2> CreateTeamResponse::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::team::v1::CreateTeamResponse>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // uint64 team_id = 2 [json_name = "teamId"];
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateTeamResponse, _impl_.team_id_), 63>(),
-     {16, 63, 0, PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_id_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateTeamResponse, _impl_.code_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.code_)}},
+    // uint64 team_id = 2 [json_name = "teamId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateTeamResponse, _impl_.team_id_), 63>(),
+     {16, 63, 0, PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_id_)}},
+    // .pandora.team.v1.Team team = 3 [json_name = "team"];
+    {::_pbi::TcParser::FastMtS1,
+     {26, 0, 0, PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_)}},
   }}, {{
     65535, 65535
   }}, {{
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-    {PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.code_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.code_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
     // uint64 team_id = 2 [json_name = "teamId"];
-    {PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_id_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_id_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
-  }},
-  // no aux_entries
-  {{
+    // .pandora.team.v1.Team team = 3 [json_name = "team"];
+    {PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::pandora::team::v1::Team>()},
+  }}, {{
   }},
 };
 
@@ -1866,9 +1965,15 @@ PROTOBUF_NOINLINE void CreateTeamResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(_impl_.team_ != nullptr);
+    _impl_.team_->Clear();
+  }
   ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
       reinterpret_cast<char*>(&_impl_.code_) -
       reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.code_));
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -1901,6 +2006,14 @@ PROTOBUF_NOINLINE void CreateTeamResponse::Clear() {
                 2, this_._internal_team_id(), target);
           }
 
+          cached_has_bits = this_._impl_._has_bits_[0];
+          // .pandora.team.v1.Team team = 3 [json_name = "team"];
+          if (cached_has_bits & 0x00000001u) {
+            target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+                3, *this_._impl_.team_, this_._impl_.team_->GetCachedSize(), target,
+                stream);
+          }
+
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
             target =
                 ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1926,6 +2039,14 @@ PROTOBUF_NOINLINE void CreateTeamResponse::Clear() {
 
           ::_pbi::Prefetch5LinesFrom7Lines(&this_);
            {
+            // .pandora.team.v1.Team team = 3 [json_name = "team"];
+            cached_has_bits = this_._impl_._has_bits_[0];
+            if (cached_has_bits & 0x00000001u) {
+              total_size += 1 +
+                            ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.team_);
+            }
+          }
+           {
             // uint64 team_id = 2 [json_name = "teamId"];
             if (this_._internal_team_id() != 0) {
               total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
@@ -1944,17 +2065,29 @@ PROTOBUF_NOINLINE void CreateTeamResponse::Clear() {
 void CreateTeamResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<CreateTeamResponse*>(&to_msg);
   auto& from = static_cast<const CreateTeamResponse&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:pandora.team.v1.CreateTeamResponse)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(from._impl_.team_ != nullptr);
+    if (_this->_impl_.team_ == nullptr) {
+      _this->_impl_.team_ =
+          ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(arena, *from._impl_.team_);
+    } else {
+      _this->_impl_.team_->MergeFrom(*from._impl_.team_);
+    }
+  }
   if (from._internal_team_id() != 0) {
     _this->_impl_.team_id_ = from._impl_.team_id_;
   }
   if (from._internal_code() != 0) {
     _this->_impl_.code_ = from._impl_.code_;
   }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -1969,12 +2102,13 @@ void CreateTeamResponse::CopyFrom(const CreateTeamResponse& from) {
 void CreateTeamResponse::InternalSwap(CreateTeamResponse* PROTOBUF_RESTRICT other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.code_)
       + sizeof(CreateTeamResponse::_impl_.code_)
-      - PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_id_)>(
-          reinterpret_cast<char*>(&_impl_.team_id_),
-          reinterpret_cast<char*>(&other->_impl_.team_id_));
+      - PROTOBUF_FIELD_OFFSET(CreateTeamResponse, _impl_.team_)>(
+          reinterpret_cast<char*>(&_impl_.team_),
+          reinterpret_cast<char*>(&other->_impl_.team_));
 }
 
 ::google::protobuf::Metadata CreateTeamResponse::GetMetadata() const {
@@ -2247,6 +2381,10 @@ void InviteRequest::InternalSwap(InviteRequest* PROTOBUF_RESTRICT other) {
 
 class InviteResponse::_Internal {
  public:
+  using HasBits =
+      decltype(std::declval<InviteResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_._has_bits_);
 };
 
 InviteResponse::InviteResponse(::google::protobuf::Arena* arena)
@@ -2258,10 +2396,38 @@ InviteResponse::InviteResponse(::google::protobuf::Arena* arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.team.v1.InviteResponse)
 }
+inline PROTOBUF_NDEBUG_INLINE InviteResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::team::v1::InviteResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
 InviteResponse::InviteResponse(
-    ::google::protobuf::Arena* arena, const InviteResponse& from)
-    : InviteResponse(arena) {
-  MergeFrom(from);
+    ::google::protobuf::Arena* arena,
+    const InviteResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  InviteResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.team_ = (cached_has_bits & 0x00000001u) ? ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(
+                              arena, *from._impl_.team_)
+                        : nullptr;
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, invite_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, invite_id_),
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, invite_id_) +
+               sizeof(Impl_::code_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.team.v1.InviteResponse)
 }
 inline PROTOBUF_NDEBUG_INLINE InviteResponse::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
@@ -2270,7 +2436,12 @@ inline PROTOBUF_NDEBUG_INLINE InviteResponse::Impl_::Impl_(
 
 inline void InviteResponse::SharedCtor(::_pb::Arena* arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.code_ = {};
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, team_),
+           0,
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, team_) +
+               sizeof(Impl_::code_));
 }
 InviteResponse::~InviteResponse() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.InviteResponse)
@@ -2280,6 +2451,7 @@ inline void InviteResponse::SharedDtor(MessageLite& self) {
   InviteResponse& this_ = static_cast<InviteResponse&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.team_;
   this_._impl_.~Impl_();
 }
 
@@ -2319,17 +2491,17 @@ const ::google::protobuf::internal::ClassData* InviteResponse::GetClassData() co
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 0, 2> InviteResponse::_table_ = {
+const ::_pbi::TcParseTable<2, 4, 1, 0, 2> InviteResponse::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    4, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967280,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    4,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -2337,18 +2509,36 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> InviteResponse::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::team::v1::InviteResponse>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteResponse, _impl_.expires_at_ms_), 63>(),
+     {32, 63, 0, PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.expires_at_ms_)}},
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(InviteResponse, _impl_.code_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.code_)}},
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0, PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.team_)}},
+    // uint64 invite_id = 3 [json_name = "inviteId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(InviteResponse, _impl_.invite_id_), 63>(),
+     {24, 63, 0, PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.invite_id_)}},
   }}, {{
     65535, 65535
   }}, {{
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-    {PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.code_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.code_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-  }},
-  // no aux_entries
-  {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.team_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // uint64 invite_id = 3 [json_name = "inviteId"];
+    {PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.invite_id_), -1, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+    {PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.expires_at_ms_), -1, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::pandora::team::v1::Team>()},
+  }}, {{
   }},
 };
 
@@ -2359,7 +2549,15 @@ PROTOBUF_NOINLINE void InviteResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.code_ = 0;
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(_impl_.team_ != nullptr);
+    _impl_.team_->Clear();
+  }
+  ::memset(&_impl_.invite_id_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.code_) -
+      reinterpret_cast<char*>(&_impl_.invite_id_)) + sizeof(_impl_.code_));
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -2385,6 +2583,28 @@ PROTOBUF_NOINLINE void InviteResponse::Clear() {
                 1, this_._internal_code(), target);
           }
 
+          cached_has_bits = this_._impl_._has_bits_[0];
+          // .pandora.team.v1.Team team = 2 [json_name = "team"];
+          if (cached_has_bits & 0x00000001u) {
+            target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+                2, *this_._impl_.team_, this_._impl_.team_->GetCachedSize(), target,
+                stream);
+          }
+
+          // uint64 invite_id = 3 [json_name = "inviteId"];
+          if (this_._internal_invite_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                3, this_._internal_invite_id(), target);
+          }
+
+          // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+          if (this_._internal_expires_at_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<4>(
+                    stream, this_._internal_expires_at_ms(), target);
+          }
+
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
             target =
                 ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2408,7 +2628,26 @@ PROTOBUF_NOINLINE void InviteResponse::Clear() {
           // Prevent compiler warnings about cached_has_bits being unused
           (void)cached_has_bits;
 
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
            {
+            // .pandora.team.v1.Team team = 2 [json_name = "team"];
+            cached_has_bits = this_._impl_._has_bits_[0];
+            if (cached_has_bits & 0x00000001u) {
+              total_size += 1 +
+                            ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.team_);
+            }
+          }
+           {
+            // uint64 invite_id = 3 [json_name = "inviteId"];
+            if (this_._internal_invite_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_invite_id());
+            }
+            // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+            if (this_._internal_expires_at_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_expires_at_ms());
+            }
             // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
             if (this_._internal_code() != 0) {
               total_size += 1 +
@@ -2422,14 +2661,32 @@ PROTOBUF_NOINLINE void InviteResponse::Clear() {
 void InviteResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<InviteResponse*>(&to_msg);
   auto& from = static_cast<const InviteResponse&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:pandora.team.v1.InviteResponse)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(from._impl_.team_ != nullptr);
+    if (_this->_impl_.team_ == nullptr) {
+      _this->_impl_.team_ =
+          ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(arena, *from._impl_.team_);
+    } else {
+      _this->_impl_.team_->MergeFrom(*from._impl_.team_);
+    }
+  }
+  if (from._internal_invite_id() != 0) {
+    _this->_impl_.invite_id_ = from._impl_.invite_id_;
+  }
+  if (from._internal_expires_at_ms() != 0) {
+    _this->_impl_.expires_at_ms_ = from._impl_.expires_at_ms_;
+  }
   if (from._internal_code() != 0) {
     _this->_impl_.code_ = from._impl_.code_;
   }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -2444,7 +2701,13 @@ void InviteResponse::CopyFrom(const InviteResponse& from) {
 void InviteResponse::InternalSwap(InviteResponse* PROTOBUF_RESTRICT other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_.code_, other->_impl_.code_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.code_)
+      + sizeof(InviteResponse::_impl_.code_)
+      - PROTOBUF_FIELD_OFFSET(InviteResponse, _impl_.team_)>(
+          reinterpret_cast<char*>(&_impl_.team_),
+          reinterpret_cast<char*>(&other->_impl_.team_));
 }
 
 ::google::protobuf::Metadata InviteResponse::GetMetadata() const {
@@ -2480,9 +2743,9 @@ inline void AcceptInviteRequest::SharedCtor(::_pb::Arena* arena) {
   ::memset(reinterpret_cast<char *>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, team_id_) -
+           offsetof(Impl_, invite_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::team_id_));
+               sizeof(Impl_::invite_id_));
 }
 AcceptInviteRequest::~AcceptInviteRequest() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.AcceptInviteRequest)
@@ -2531,15 +2794,15 @@ const ::google::protobuf::internal::ClassData* AcceptInviteRequest::GetClassData
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 0, 0, 2> AcceptInviteRequest::_table_ = {
+const ::_pbi::TcParseTable<2, 3, 0, 0, 2> AcceptInviteRequest::_table_ = {
   {
     0,  // no _has_bits_
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
+    3,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     _class_data_.base(),
@@ -2549,12 +2812,16 @@ const ::_pbi::TcParseTable<1, 2, 0, 0, 2> AcceptInviteRequest::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::team::v1::AcceptInviteRequest>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // uint64 team_id = 2 [json_name = "teamId"];
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.team_id_), 63>(),
-     {16, 63, 0, PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint64 player_id = 1 [json_name = "playerId"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.player_id_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.player_id_)}},
+    // uint64 team_id = 2 [json_name = "teamId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.team_id_), 63>(),
+     {16, 63, 0, PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_)}},
+    // uint64 invite_id = 3 [json_name = "inviteId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcceptInviteRequest, _impl_.invite_id_), 63>(),
+     {24, 63, 0, PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_)}},
   }}, {{
     65535, 65535
   }}, {{
@@ -2563,6 +2830,9 @@ const ::_pbi::TcParseTable<1, 2, 0, 0, 2> AcceptInviteRequest::_table_ = {
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
     // uint64 team_id = 2 [json_name = "teamId"];
     {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // uint64 invite_id = 3 [json_name = "inviteId"];
+    {PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
   }},
   // no aux_entries
@@ -2578,8 +2848,8 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
   (void) cached_has_bits;
 
   ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-      reinterpret_cast<char*>(&_impl_.team_id_) -
-      reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.team_id_));
+      reinterpret_cast<char*>(&_impl_.invite_id_) -
+      reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.invite_id_));
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -2610,6 +2880,13 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
             target = stream->EnsureSpace(target);
             target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
                 2, this_._internal_team_id(), target);
+          }
+
+          // uint64 invite_id = 3 [json_name = "inviteId"];
+          if (this_._internal_invite_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                3, this_._internal_invite_id(), target);
           }
 
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -2647,6 +2924,11 @@ PROTOBUF_NOINLINE void AcceptInviteRequest::Clear() {
               total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
                   this_._internal_team_id());
             }
+            // uint64 invite_id = 3 [json_name = "inviteId"];
+            if (this_._internal_invite_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_invite_id());
+            }
           }
           return this_.MaybeComputeUnknownFieldsSize(total_size,
                                                      &this_._impl_._cached_size_);
@@ -2666,6 +2948,9 @@ void AcceptInviteRequest::MergeImpl(::google::protobuf::MessageLite& to_msg, con
   if (from._internal_team_id() != 0) {
     _this->_impl_.team_id_ = from._impl_.team_id_;
   }
+  if (from._internal_invite_id() != 0) {
+    _this->_impl_.invite_id_ = from._impl_.invite_id_;
+  }
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -2681,8 +2966,8 @@ void AcceptInviteRequest::InternalSwap(AcceptInviteRequest* PROTOBUF_RESTRICT ot
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.team_id_)
-      + sizeof(AcceptInviteRequest::_impl_.team_id_)
+      PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.invite_id_)
+      + sizeof(AcceptInviteRequest::_impl_.invite_id_)
       - PROTOBUF_FIELD_OFFSET(AcceptInviteRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -3222,6 +3507,10 @@ void LeaveTeamRequest::InternalSwap(LeaveTeamRequest* PROTOBUF_RESTRICT other) {
 
 class LeaveTeamResponse::_Internal {
  public:
+  using HasBits =
+      decltype(std::declval<LeaveTeamResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_._has_bits_);
 };
 
 LeaveTeamResponse::LeaveTeamResponse(::google::protobuf::Arena* arena)
@@ -3233,10 +3522,32 @@ LeaveTeamResponse::LeaveTeamResponse(::google::protobuf::Arena* arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.team.v1.LeaveTeamResponse)
 }
+inline PROTOBUF_NDEBUG_INLINE LeaveTeamResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::team::v1::LeaveTeamResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
 LeaveTeamResponse::LeaveTeamResponse(
-    ::google::protobuf::Arena* arena, const LeaveTeamResponse& from)
-    : LeaveTeamResponse(arena) {
-  MergeFrom(from);
+    ::google::protobuf::Arena* arena,
+    const LeaveTeamResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  LeaveTeamResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.team_ = (cached_has_bits & 0x00000001u) ? ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(
+                              arena, *from._impl_.team_)
+                        : nullptr;
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.team.v1.LeaveTeamResponse)
 }
 inline PROTOBUF_NDEBUG_INLINE LeaveTeamResponse::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
@@ -3245,7 +3556,12 @@ inline PROTOBUF_NDEBUG_INLINE LeaveTeamResponse::Impl_::Impl_(
 
 inline void LeaveTeamResponse::SharedCtor(::_pb::Arena* arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.code_ = {};
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, team_),
+           0,
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, team_) +
+               sizeof(Impl_::code_));
 }
 LeaveTeamResponse::~LeaveTeamResponse() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.LeaveTeamResponse)
@@ -3255,6 +3571,7 @@ inline void LeaveTeamResponse::SharedDtor(MessageLite& self) {
   LeaveTeamResponse& this_ = static_cast<LeaveTeamResponse&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.team_;
   this_._impl_.~Impl_();
 }
 
@@ -3294,17 +3611,17 @@ const ::google::protobuf::internal::ClassData* LeaveTeamResponse::GetClassData()
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 0, 2> LeaveTeamResponse::_table_ = {
+const ::_pbi::TcParseTable<1, 2, 1, 0, 2> LeaveTeamResponse::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    2,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -3312,6 +3629,9 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> LeaveTeamResponse::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::team::v1::LeaveTeamResponse>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0, PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.team_)}},
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LeaveTeamResponse, _impl_.code_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.code_)}},
@@ -3319,11 +3639,14 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> LeaveTeamResponse::_table_ = {
     65535, 65535
   }}, {{
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-    {PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.code_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.code_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-  }},
-  // no aux_entries
-  {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.team_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::pandora::team::v1::Team>()},
+  }}, {{
   }},
 };
 
@@ -3334,7 +3657,13 @@ PROTOBUF_NOINLINE void LeaveTeamResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(_impl_.team_ != nullptr);
+    _impl_.team_->Clear();
+  }
   _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -3360,6 +3689,14 @@ PROTOBUF_NOINLINE void LeaveTeamResponse::Clear() {
                 1, this_._internal_code(), target);
           }
 
+          cached_has_bits = this_._impl_._has_bits_[0];
+          // .pandora.team.v1.Team team = 2 [json_name = "team"];
+          if (cached_has_bits & 0x00000001u) {
+            target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+                2, *this_._impl_.team_, this_._impl_.team_->GetCachedSize(), target,
+                stream);
+          }
+
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
             target =
                 ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3383,6 +3720,15 @@ PROTOBUF_NOINLINE void LeaveTeamResponse::Clear() {
           // Prevent compiler warnings about cached_has_bits being unused
           (void)cached_has_bits;
 
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // .pandora.team.v1.Team team = 2 [json_name = "team"];
+            cached_has_bits = this_._impl_._has_bits_[0];
+            if (cached_has_bits & 0x00000001u) {
+              total_size += 1 +
+                            ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.team_);
+            }
+          }
            {
             // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
             if (this_._internal_code() != 0) {
@@ -3397,14 +3743,26 @@ PROTOBUF_NOINLINE void LeaveTeamResponse::Clear() {
 void LeaveTeamResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<LeaveTeamResponse*>(&to_msg);
   auto& from = static_cast<const LeaveTeamResponse&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:pandora.team.v1.LeaveTeamResponse)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(from._impl_.team_ != nullptr);
+    if (_this->_impl_.team_ == nullptr) {
+      _this->_impl_.team_ =
+          ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(arena, *from._impl_.team_);
+    } else {
+      _this->_impl_.team_->MergeFrom(*from._impl_.team_);
+    }
+  }
   if (from._internal_code() != 0) {
     _this->_impl_.code_ = from._impl_.code_;
   }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -3419,7 +3777,13 @@ void LeaveTeamResponse::CopyFrom(const LeaveTeamResponse& from) {
 void LeaveTeamResponse::InternalSwap(LeaveTeamResponse* PROTOBUF_RESTRICT other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_.code_, other->_impl_.code_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.code_)
+      + sizeof(LeaveTeamResponse::_impl_.code_)
+      - PROTOBUF_FIELD_OFFSET(LeaveTeamResponse, _impl_.team_)>(
+          reinterpret_cast<char*>(&_impl_.team_),
+          reinterpret_cast<char*>(&other->_impl_.team_));
 }
 
 ::google::protobuf::Metadata LeaveTeamResponse::GetMetadata() const {
@@ -3692,6 +4056,10 @@ void KickRequest::InternalSwap(KickRequest* PROTOBUF_RESTRICT other) {
 
 class KickResponse::_Internal {
  public:
+  using HasBits =
+      decltype(std::declval<KickResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(KickResponse, _impl_._has_bits_);
 };
 
 KickResponse::KickResponse(::google::protobuf::Arena* arena)
@@ -3703,10 +4071,32 @@ KickResponse::KickResponse(::google::protobuf::Arena* arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.team.v1.KickResponse)
 }
+inline PROTOBUF_NDEBUG_INLINE KickResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::team::v1::KickResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
 KickResponse::KickResponse(
-    ::google::protobuf::Arena* arena, const KickResponse& from)
-    : KickResponse(arena) {
-  MergeFrom(from);
+    ::google::protobuf::Arena* arena,
+    const KickResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  KickResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.team_ = (cached_has_bits & 0x00000001u) ? ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(
+                              arena, *from._impl_.team_)
+                        : nullptr;
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.team.v1.KickResponse)
 }
 inline PROTOBUF_NDEBUG_INLINE KickResponse::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
@@ -3715,7 +4105,12 @@ inline PROTOBUF_NDEBUG_INLINE KickResponse::Impl_::Impl_(
 
 inline void KickResponse::SharedCtor(::_pb::Arena* arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.code_ = {};
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, team_),
+           0,
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, team_) +
+               sizeof(Impl_::code_));
 }
 KickResponse::~KickResponse() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.KickResponse)
@@ -3725,6 +4120,7 @@ inline void KickResponse::SharedDtor(MessageLite& self) {
   KickResponse& this_ = static_cast<KickResponse&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.team_;
   this_._impl_.~Impl_();
 }
 
@@ -3764,17 +4160,17 @@ const ::google::protobuf::internal::ClassData* KickResponse::GetClassData() cons
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 0, 2> KickResponse::_table_ = {
+const ::_pbi::TcParseTable<1, 2, 1, 0, 2> KickResponse::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(KickResponse, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    2,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -3782,6 +4178,9 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> KickResponse::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::team::v1::KickResponse>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0, PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.team_)}},
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(KickResponse, _impl_.code_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.code_)}},
@@ -3789,11 +4188,14 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> KickResponse::_table_ = {
     65535, 65535
   }}, {{
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-    {PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.code_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.code_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-  }},
-  // no aux_entries
-  {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.team_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::pandora::team::v1::Team>()},
+  }}, {{
   }},
 };
 
@@ -3804,7 +4206,13 @@ PROTOBUF_NOINLINE void KickResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(_impl_.team_ != nullptr);
+    _impl_.team_->Clear();
+  }
   _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -3830,6 +4238,14 @@ PROTOBUF_NOINLINE void KickResponse::Clear() {
                 1, this_._internal_code(), target);
           }
 
+          cached_has_bits = this_._impl_._has_bits_[0];
+          // .pandora.team.v1.Team team = 2 [json_name = "team"];
+          if (cached_has_bits & 0x00000001u) {
+            target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+                2, *this_._impl_.team_, this_._impl_.team_->GetCachedSize(), target,
+                stream);
+          }
+
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
             target =
                 ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3853,6 +4269,15 @@ PROTOBUF_NOINLINE void KickResponse::Clear() {
           // Prevent compiler warnings about cached_has_bits being unused
           (void)cached_has_bits;
 
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // .pandora.team.v1.Team team = 2 [json_name = "team"];
+            cached_has_bits = this_._impl_._has_bits_[0];
+            if (cached_has_bits & 0x00000001u) {
+              total_size += 1 +
+                            ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.team_);
+            }
+          }
            {
             // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
             if (this_._internal_code() != 0) {
@@ -3867,14 +4292,26 @@ PROTOBUF_NOINLINE void KickResponse::Clear() {
 void KickResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<KickResponse*>(&to_msg);
   auto& from = static_cast<const KickResponse&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:pandora.team.v1.KickResponse)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(from._impl_.team_ != nullptr);
+    if (_this->_impl_.team_ == nullptr) {
+      _this->_impl_.team_ =
+          ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(arena, *from._impl_.team_);
+    } else {
+      _this->_impl_.team_->MergeFrom(*from._impl_.team_);
+    }
+  }
   if (from._internal_code() != 0) {
     _this->_impl_.code_ = from._impl_.code_;
   }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -3889,7 +4326,13 @@ void KickResponse::CopyFrom(const KickResponse& from) {
 void KickResponse::InternalSwap(KickResponse* PROTOBUF_RESTRICT other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_.code_, other->_impl_.code_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.code_)
+      + sizeof(KickResponse::_impl_.code_)
+      - PROTOBUF_FIELD_OFFSET(KickResponse, _impl_.team_)>(
+          reinterpret_cast<char*>(&_impl_.team_),
+          reinterpret_cast<char*>(&other->_impl_.team_));
 }
 
 ::google::protobuf::Metadata KickResponse::GetMetadata() const {
@@ -4181,6 +4624,10 @@ void SetReadyRequest::InternalSwap(SetReadyRequest* PROTOBUF_RESTRICT other) {
 
 class SetReadyResponse::_Internal {
  public:
+  using HasBits =
+      decltype(std::declval<SetReadyResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_._has_bits_);
 };
 
 SetReadyResponse::SetReadyResponse(::google::protobuf::Arena* arena)
@@ -4192,10 +4639,32 @@ SetReadyResponse::SetReadyResponse(::google::protobuf::Arena* arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.team.v1.SetReadyResponse)
 }
+inline PROTOBUF_NDEBUG_INLINE SetReadyResponse::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::team::v1::SetReadyResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
 SetReadyResponse::SetReadyResponse(
-    ::google::protobuf::Arena* arena, const SetReadyResponse& from)
-    : SetReadyResponse(arena) {
-  MergeFrom(from);
+    ::google::protobuf::Arena* arena,
+    const SetReadyResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SetReadyResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.team_ = (cached_has_bits & 0x00000001u) ? ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(
+                              arena, *from._impl_.team_)
+                        : nullptr;
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.team.v1.SetReadyResponse)
 }
 inline PROTOBUF_NDEBUG_INLINE SetReadyResponse::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
@@ -4204,7 +4673,12 @@ inline PROTOBUF_NDEBUG_INLINE SetReadyResponse::Impl_::Impl_(
 
 inline void SetReadyResponse::SharedCtor(::_pb::Arena* arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.code_ = {};
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, team_),
+           0,
+           offsetof(Impl_, code_) -
+               offsetof(Impl_, team_) +
+               sizeof(Impl_::code_));
 }
 SetReadyResponse::~SetReadyResponse() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.SetReadyResponse)
@@ -4214,6 +4688,7 @@ inline void SetReadyResponse::SharedDtor(MessageLite& self) {
   SetReadyResponse& this_ = static_cast<SetReadyResponse&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.team_;
   this_._impl_.~Impl_();
 }
 
@@ -4253,17 +4728,17 @@ const ::google::protobuf::internal::ClassData* SetReadyResponse::GetClassData() 
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 0, 2> SetReadyResponse::_table_ = {
+const ::_pbi::TcParseTable<1, 2, 1, 0, 2> SetReadyResponse::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    2,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -4271,6 +4746,9 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> SetReadyResponse::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::team::v1::SetReadyResponse>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 0, PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.team_)}},
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetReadyResponse, _impl_.code_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.code_)}},
@@ -4278,11 +4756,14 @@ const ::_pbi::TcParseTable<0, 1, 0, 0, 2> SetReadyResponse::_table_ = {
     65535, 65535
   }}, {{
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-    {PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.code_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.code_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-  }},
-  // no aux_entries
-  {{
+    // .pandora.team.v1.Team team = 2 [json_name = "team"];
+    {PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.team_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }}, {{
+    {::_pbi::TcParser::GetTable<::pandora::team::v1::Team>()},
+  }}, {{
   }},
 };
 
@@ -4293,7 +4774,13 @@ PROTOBUF_NOINLINE void SetReadyResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(_impl_.team_ != nullptr);
+    _impl_.team_->Clear();
+  }
   _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -4319,6 +4806,14 @@ PROTOBUF_NOINLINE void SetReadyResponse::Clear() {
                 1, this_._internal_code(), target);
           }
 
+          cached_has_bits = this_._impl_._has_bits_[0];
+          // .pandora.team.v1.Team team = 2 [json_name = "team"];
+          if (cached_has_bits & 0x00000001u) {
+            target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+                2, *this_._impl_.team_, this_._impl_.team_->GetCachedSize(), target,
+                stream);
+          }
+
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
             target =
                 ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4342,6 +4837,15 @@ PROTOBUF_NOINLINE void SetReadyResponse::Clear() {
           // Prevent compiler warnings about cached_has_bits being unused
           (void)cached_has_bits;
 
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // .pandora.team.v1.Team team = 2 [json_name = "team"];
+            cached_has_bits = this_._impl_._has_bits_[0];
+            if (cached_has_bits & 0x00000001u) {
+              total_size += 1 +
+                            ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.team_);
+            }
+          }
            {
             // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
             if (this_._internal_code() != 0) {
@@ -4356,14 +4860,26 @@ PROTOBUF_NOINLINE void SetReadyResponse::Clear() {
 void SetReadyResponse::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<SetReadyResponse*>(&to_msg);
   auto& from = static_cast<const SetReadyResponse&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:pandora.team.v1.SetReadyResponse)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    ABSL_DCHECK(from._impl_.team_ != nullptr);
+    if (_this->_impl_.team_ == nullptr) {
+      _this->_impl_.team_ =
+          ::google::protobuf::Message::CopyConstruct<::pandora::team::v1::Team>(arena, *from._impl_.team_);
+    } else {
+      _this->_impl_.team_->MergeFrom(*from._impl_.team_);
+    }
+  }
   if (from._internal_code() != 0) {
     _this->_impl_.code_ = from._impl_.code_;
   }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -4378,7 +4894,13 @@ void SetReadyResponse::CopyFrom(const SetReadyResponse& from) {
 void SetReadyResponse::InternalSwap(SetReadyResponse* PROTOBUF_RESTRICT other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_.code_, other->_impl_.code_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.code_)
+      + sizeof(SetReadyResponse::_impl_.code_)
+      - PROTOBUF_FIELD_OFFSET(SetReadyResponse, _impl_.team_)>(
+          reinterpret_cast<char*>(&_impl_.team_),
+          reinterpret_cast<char*>(&other->_impl_.team_));
 }
 
 ::google::protobuf::Metadata SetReadyResponse::GetMetadata() const {
@@ -4900,8 +5422,7 @@ inline PROTOBUF_NDEBUG_INLINE TeamUpdateEvent::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
     const Impl_& from, const ::pandora::team::v1::TeamUpdateEvent& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0},
-        change_summary_(arena, from.change_summary_) {}
+        _cached_size_{0} {}
 
 TeamUpdateEvent::TeamUpdateEvent(
     ::google::protobuf::Arena* arena,
@@ -4924,26 +5445,25 @@ TeamUpdateEvent::TeamUpdateEvent(
                offsetof(Impl_, by_player_id_),
            reinterpret_cast<const char *>(&from._impl_) +
                offsetof(Impl_, by_player_id_),
-           offsetof(Impl_, ts_ms_) -
+           offsetof(Impl_, reason_) -
                offsetof(Impl_, by_player_id_) +
-               sizeof(Impl_::ts_ms_));
+               sizeof(Impl_::reason_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.team.v1.TeamUpdateEvent)
 }
 inline PROTOBUF_NDEBUG_INLINE TeamUpdateEvent::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* arena)
-      : _cached_size_{0},
-        change_summary_(arena) {}
+      : _cached_size_{0} {}
 
 inline void TeamUpdateEvent::SharedCtor(::_pb::Arena* arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char *>(&_impl_) +
                offsetof(Impl_, team_),
            0,
-           offsetof(Impl_, ts_ms_) -
+           offsetof(Impl_, reason_) -
                offsetof(Impl_, team_) +
-               sizeof(Impl_::ts_ms_));
+               sizeof(Impl_::reason_));
 }
 TeamUpdateEvent::~TeamUpdateEvent() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.TeamUpdateEvent)
@@ -4953,7 +5473,6 @@ inline void TeamUpdateEvent::SharedDtor(MessageLite& self) {
   TeamUpdateEvent& this_ = static_cast<TeamUpdateEvent&>(self);
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.change_summary_.Destroy();
   delete this_._impl_.team_;
   this_._impl_.~Impl_();
 }
@@ -4963,7 +5482,7 @@ inline void* TeamUpdateEvent::PlacementNew_(const void*, void* mem,
   return ::new (mem) TeamUpdateEvent(arena);
 }
 constexpr auto TeamUpdateEvent::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TeamUpdateEvent),
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(TeamUpdateEvent),
                                             alignof(TeamUpdateEvent));
 }
 PROTOBUF_CONSTINIT
@@ -4994,15 +5513,15 @@ const ::google::protobuf::internal::ClassData* TeamUpdateEvent::GetClassData() c
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 5, 1, 54, 2> TeamUpdateEvent::_table_ = {
+const ::_pbi::TcParseTable<3, 6, 1, 0, 2> TeamUpdateEvent::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_._has_bits_),
     0, // no _extensions_
-    5, 56,  // max_field_number, fast_idx_mask
+    11, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967264,  // skipmap
+    4294965730,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    5,  // num_field_entries
+    6,  // num_field_entries
     1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
@@ -5016,9 +5535,9 @@ const ::_pbi::TcParseTable<3, 5, 1, 54, 2> TeamUpdateEvent::_table_ = {
     // .pandora.team.v1.Team team = 1 [json_name = "team"];
     {::_pbi::TcParser::FastMtS1,
      {10, 0, 0, PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.team_)}},
-    // string change_summary = 2 [json_name = "changeSummary"];
-    {::_pbi::TcParser::FastUS1,
-     {18, 63, 0, PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.change_summary_)}},
+    // .pandora.team.v1.TeamUpdateReason reason = 10 [json_name = "reason"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TeamUpdateEvent, _impl_.reason_), 63>(),
+     {80, 63, 0, PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.reason_)}},
     // uint64 by_player_id = 3 [json_name = "byPlayerId"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TeamUpdateEvent, _impl_.by_player_id_), 63>(),
      {24, 63, 0, PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.by_player_id_)}},
@@ -5036,9 +5555,6 @@ const ::_pbi::TcParseTable<3, 5, 1, 54, 2> TeamUpdateEvent::_table_ = {
     // .pandora.team.v1.Team team = 1 [json_name = "team"];
     {PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.team_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // string change_summary = 2 [json_name = "changeSummary"];
-    {PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.change_summary_), -1, 0,
-    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // uint64 by_player_id = 3 [json_name = "byPlayerId"];
     {PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.by_player_id_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
@@ -5048,12 +5564,15 @@ const ::_pbi::TcParseTable<3, 5, 1, 54, 2> TeamUpdateEvent::_table_ = {
     // int64 ts_ms = 5 [json_name = "tsMs"];
     {PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.ts_ms_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+    // .pandora.team.v1.TeamUpdateReason reason = 10 [json_name = "reason"];
+    {PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.reason_), -1, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
+    // uint64 invite_id = 11 [json_name = "inviteId"];
+    {PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.invite_id_), -1, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
   }}, {{
     {::_pbi::TcParser::GetTable<::pandora::team::v1::Team>()},
   }}, {{
-    "\37\0\16\0\0\0\0\0"
-    "pandora.team.v1.TeamUpdateEvent"
-    "change_summary"
   }},
 };
 
@@ -5064,15 +5583,14 @@ PROTOBUF_NOINLINE void TeamUpdateEvent::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.change_summary_.ClearToEmpty();
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000001u) {
     ABSL_DCHECK(_impl_.team_ != nullptr);
     _impl_.team_->Clear();
   }
   ::memset(&_impl_.by_player_id_, 0, static_cast<::size_t>(
-      reinterpret_cast<char*>(&_impl_.ts_ms_) -
-      reinterpret_cast<char*>(&_impl_.by_player_id_)) + sizeof(_impl_.ts_ms_));
+      reinterpret_cast<char*>(&_impl_.reason_) -
+      reinterpret_cast<char*>(&_impl_.by_player_id_)) + sizeof(_impl_.reason_));
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -5100,14 +5618,6 @@ PROTOBUF_NOINLINE void TeamUpdateEvent::Clear() {
                 stream);
           }
 
-          // string change_summary = 2 [json_name = "changeSummary"];
-          if (!this_._internal_change_summary().empty()) {
-            const std::string& _s = this_._internal_change_summary();
-            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.team.v1.TeamUpdateEvent.change_summary");
-            target = stream->WriteStringMaybeAliased(2, _s, target);
-          }
-
           // uint64 by_player_id = 3 [json_name = "byPlayerId"];
           if (this_._internal_by_player_id() != 0) {
             target = stream->EnsureSpace(target);
@@ -5127,6 +5637,20 @@ PROTOBUF_NOINLINE void TeamUpdateEvent::Clear() {
             target = ::google::protobuf::internal::WireFormatLite::
                 WriteInt64ToArrayWithField<5>(
                     stream, this_._internal_ts_ms(), target);
+          }
+
+          // .pandora.team.v1.TeamUpdateReason reason = 10 [json_name = "reason"];
+          if (this_._internal_reason() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteEnumToArray(
+                10, this_._internal_reason(), target);
+          }
+
+          // uint64 invite_id = 11 [json_name = "inviteId"];
+          if (this_._internal_invite_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                11, this_._internal_invite_id(), target);
           }
 
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -5154,13 +5678,6 @@ PROTOBUF_NOINLINE void TeamUpdateEvent::Clear() {
 
           ::_pbi::Prefetch5LinesFrom7Lines(&this_);
            {
-            // string change_summary = 2 [json_name = "changeSummary"];
-            if (!this_._internal_change_summary().empty()) {
-              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                              this_._internal_change_summary());
-            }
-          }
-           {
             // .pandora.team.v1.Team team = 1 [json_name = "team"];
             cached_has_bits = this_._impl_._has_bits_[0];
             if (cached_has_bits & 0x00000001u) {
@@ -5184,6 +5701,16 @@ PROTOBUF_NOINLINE void TeamUpdateEvent::Clear() {
               total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
                   this_._internal_ts_ms());
             }
+            // uint64 invite_id = 11 [json_name = "inviteId"];
+            if (this_._internal_invite_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_invite_id());
+            }
+            // .pandora.team.v1.TeamUpdateReason reason = 10 [json_name = "reason"];
+            if (this_._internal_reason() != 0) {
+              total_size += 1 +
+                            ::_pbi::WireFormatLite::EnumSize(this_._internal_reason());
+            }
           }
           return this_.MaybeComputeUnknownFieldsSize(total_size,
                                                      &this_._impl_._cached_size_);
@@ -5198,9 +5725,6 @@ void TeamUpdateEvent::MergeImpl(::google::protobuf::MessageLite& to_msg, const :
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (!from._internal_change_summary().empty()) {
-    _this->_internal_set_change_summary(from._internal_change_summary());
-  }
   cached_has_bits = from._impl_._has_bits_[0];
   if (cached_has_bits & 0x00000001u) {
     ABSL_DCHECK(from._impl_.team_ != nullptr);
@@ -5220,6 +5744,12 @@ void TeamUpdateEvent::MergeImpl(::google::protobuf::MessageLite& to_msg, const :
   if (from._internal_ts_ms() != 0) {
     _this->_impl_.ts_ms_ = from._impl_.ts_ms_;
   }
+  if (from._internal_invite_id() != 0) {
+    _this->_impl_.invite_id_ = from._impl_.invite_id_;
+  }
+  if (from._internal_reason() != 0) {
+    _this->_impl_.reason_ = from._impl_.reason_;
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
@@ -5234,14 +5764,11 @@ void TeamUpdateEvent::CopyFrom(const TeamUpdateEvent& from) {
 
 void TeamUpdateEvent::InternalSwap(TeamUpdateEvent* PROTOBUF_RESTRICT other) {
   using std::swap;
-  auto* arena = GetArena();
-  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.change_summary_, &other->_impl_.change_summary_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.ts_ms_)
-      + sizeof(TeamUpdateEvent::_impl_.ts_ms_)
+      PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.reason_)
+      + sizeof(TeamUpdateEvent::_impl_.reason_)
       - PROTOBUF_FIELD_OFFSET(TeamUpdateEvent, _impl_.team_)>(
           reinterpret_cast<char*>(&_impl_.team_),
           reinterpret_cast<char*>(&other->_impl_.team_));

@@ -36,7 +36,7 @@ type LocationInput struct {
 	PlayerID  uint64
 	State     int32
 	HubPod    string
-	ShardID   int32
+	ShardID   uint32
 	MatchID   uint64
 	BattlePod string
 }
@@ -45,7 +45,7 @@ type LocationInput struct {
 type LocationOutput struct {
 	State       int32
 	HubPod      string
-	ShardID     int32
+	ShardID     uint32
 	MatchID     uint64
 	BattlePod   string
 	UpdatedAtMs int64

@@ -62,7 +62,7 @@ inline constexpr Location::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         state_{static_cast< ::pandora::locator::v1::LocationState >(0)},
-        shard_id_{0},
+        shard_id_{0u},
         match_id_{::uint64_t{0u}},
         updated_at_ms_{::int64_t{0}},
         _cached_size_{0} {}
@@ -323,7 +323,7 @@ const char descriptor_table_protodef_pandora_2flocator_2fv1_2flocator_2eproto[] 
     "ora.locator.v1\032\037pandora/common/v1/errcod"
     "e.proto\"\333\001\n\010Location\0227\n\005state\030\001 \001(\0162!.pa"
     "ndora.locator.v1.LocationStateR\005state\022\027\n"
-    "\007hub_pod\030\002 \001(\tR\006hubPod\022\031\n\010shard_id\030\003 \001(\005"
+    "\007hub_pod\030\002 \001(\tR\006hubPod\022\031\n\010shard_id\030\003 \001(\r"
     "R\007shardId\022\031\n\010match_id\030\004 \001(\004R\007matchId\022\035\n\n"
     "battle_pod\030\005 \001(\tR\tbattlePod\022\"\n\rupdated_a"
     "t_ms\030\006 \001(\003R\013updatedAtMsJ\004\010\007\020\n\"k\n\022SetLoca"
@@ -521,7 +521,7 @@ const ::_pbi::TcParseTable<3, 6, 0, 53, 2> Location::_table_ = {
     // string hub_pod = 2 [json_name = "hubPod"];
     {::_pbi::TcParser::FastUS1,
      {18, 63, 0, PROTOBUF_FIELD_OFFSET(Location, _impl_.hub_pod_)}},
-    // int32 shard_id = 3 [json_name = "shardId"];
+    // uint32 shard_id = 3 [json_name = "shardId"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Location, _impl_.shard_id_), 63>(),
      {24, 63, 0, PROTOBUF_FIELD_OFFSET(Location, _impl_.shard_id_)}},
     // uint64 match_id = 4 [json_name = "matchId"];
@@ -543,9 +543,9 @@ const ::_pbi::TcParseTable<3, 6, 0, 53, 2> Location::_table_ = {
     // string hub_pod = 2 [json_name = "hubPod"];
     {PROTOBUF_FIELD_OFFSET(Location, _impl_.hub_pod_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // int32 shard_id = 3 [json_name = "shardId"];
+    // uint32 shard_id = 3 [json_name = "shardId"];
     {PROTOBUF_FIELD_OFFSET(Location, _impl_.shard_id_), 0, 0,
-    (0 | ::_fl::kFcSingular | ::_fl::kInt32)},
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
     // uint64 match_id = 4 [json_name = "matchId"];
     {PROTOBUF_FIELD_OFFSET(Location, _impl_.match_id_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
@@ -610,11 +610,11 @@ PROTOBUF_NOINLINE void Location::Clear() {
             target = stream->WriteStringMaybeAliased(2, _s, target);
           }
 
-          // int32 shard_id = 3 [json_name = "shardId"];
+          // uint32 shard_id = 3 [json_name = "shardId"];
           if (this_._internal_shard_id() != 0) {
-            target = ::google::protobuf::internal::WireFormatLite::
-                WriteInt32ToArrayWithField<3>(
-                    stream, this_._internal_shard_id(), target);
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+                3, this_._internal_shard_id(), target);
           }
 
           // uint64 match_id = 4 [json_name = "matchId"];
@@ -679,9 +679,9 @@ PROTOBUF_NOINLINE void Location::Clear() {
               total_size += 1 +
                             ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
             }
-            // int32 shard_id = 3 [json_name = "shardId"];
+            // uint32 shard_id = 3 [json_name = "shardId"];
             if (this_._internal_shard_id() != 0) {
-              total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+              total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
                   this_._internal_shard_id());
             }
             // uint64 match_id = 4 [json_name = "matchId"];

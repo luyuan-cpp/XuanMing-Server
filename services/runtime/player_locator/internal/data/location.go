@@ -25,7 +25,7 @@ import (
 type LocationRecord struct {
 	State       int32
 	HubPod      string
-	ShardID     int32
+	ShardID     uint32
 	MatchID     uint64
 	BattlePod   string
 	UpdatedAtMs int64
@@ -101,8 +101,8 @@ func (r *RedisLocationRepo) Get(ctx context.Context, playerID uint64) (LocationR
 		}
 	}
 	if v, ok := m["shard_id"]; ok {
-		if x, e := strconv.ParseInt(v, 10, 32); e == nil {
-			rec.ShardID = int32(x)
+		if x, e := strconv.ParseUint(v, 10, 32); e == nil {
+			rec.ShardID = uint32(x)
 		}
 	}
 	if v, ok := m["match_id"]; ok {

@@ -2063,14 +2063,14 @@ class AssignHubResponse final : public ::google::protobuf::Message
   void _internal_set_code(::pandora::common::v1::ErrCode value);
 
   public:
-  // int32 shard_id = 5 [json_name = "shardId"];
+  // uint32 shard_id = 5 [json_name = "shardId"];
   void clear_shard_id() ;
-  ::int32_t shard_id() const;
-  void set_shard_id(::int32_t value);
+  ::uint32_t shard_id() const;
+  void set_shard_id(::uint32_t value);
 
   private:
-  ::int32_t _internal_shard_id() const;
-  void _internal_set_shard_id(::int32_t value);
+  ::uint32_t _internal_shard_id() const;
+  void _internal_set_shard_id(::uint32_t value);
 
   public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.AssignHubResponse)
@@ -2100,7 +2100,7 @@ class AssignHubResponse final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr hub_ticket_;
     ::google::protobuf::internal::ArenaStringPtr hub_pod_name_;
     int code_;
-    ::int32_t shard_id_;
+    ::uint32_t shard_id_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2815,24 +2815,24 @@ inline void AssignHubResponse::set_allocated_hub_pod_name(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.AssignHubResponse.hub_pod_name)
 }
 
-// int32 shard_id = 5 [json_name = "shardId"];
+// uint32 shard_id = 5 [json_name = "shardId"];
 inline void AssignHubResponse::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.shard_id_ = 0;
+  _impl_.shard_id_ = 0u;
 }
-inline ::int32_t AssignHubResponse::shard_id() const {
+inline ::uint32_t AssignHubResponse::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubResponse.shard_id)
   return _internal_shard_id();
 }
-inline void AssignHubResponse::set_shard_id(::int32_t value) {
+inline void AssignHubResponse::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubResponse.shard_id)
 }
-inline ::int32_t AssignHubResponse::_internal_shard_id() const {
+inline ::uint32_t AssignHubResponse::_internal_shard_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.shard_id_;
 }
-inline void AssignHubResponse::_internal_set_shard_id(::int32_t value) {
+inline void AssignHubResponse::_internal_set_shard_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = value;
 }

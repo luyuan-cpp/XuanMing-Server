@@ -7,10 +7,9 @@
 // 职责(docs/design/go-services.md §2.7):组队(5 人队)
 // 状态机:FORMING → READY(全员 ready)→ MATCHING → IN_BATTLE → DISBANDED
 //
-// ⚠️ 推送架构(ds-arch.md §0.8):
-//   go-zero zrpc 不支持 gRPC server stream。
+// 推送架构(ds-arch.md §0.8):
 //   "队伍状态变更"通过 kafka topic `pandora.team.update`(key=player_id)
-//   广播给所有相关玩家所在的 Hub DS,由 DS 转成 UE ClientRPC 推给客户端。
+//   广播给所有相关玩家所在的 push 服务 → push 服务 server stream 推给客户端。
 //   本 service **不提供** StreamTeamUpdates RPC。
 //
 #ifndef GRPC_pandora_2fteam_2fv1_2fteam_2eproto__INCLUDED
@@ -41,6 +40,10 @@ namespace pandora {
 namespace team {
 namespace v1 {
 
+// 所有写 RPC 均为"立即完成型":biz 完成状态机迁移 + 写 redis + 发 kafka 后立刻返回。
+//   - 不阻塞等待外部服务;不 hold 连接
+//   - PushToPlayers 不发给 caller(协议原则 2)
+// StartMatch → 由 matchmaker 负责(W3 ⑧),此处不提供 RPC。
 class TeamService final {
  public:
   static constexpr char const* service_full_name() {
@@ -56,6 +59,7 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::CreateTeamResponse>> PrepareAsyncCreateTeam(::grpc::ClientContext* context, const ::pandora::team::v1::CreateTeamRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::CreateTeamResponse>>(PrepareAsyncCreateTeamRaw(context, request, cq));
     }
+    // 立即完成型
     virtual ::grpc::Status Invite(::grpc::ClientContext* context, const ::pandora::team::v1::InviteRequest& request, ::pandora::team::v1::InviteResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::InviteResponse>> AsyncInvite(::grpc::ClientContext* context, const ::pandora::team::v1::InviteRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::InviteResponse>>(AsyncInviteRaw(context, request, cq));
@@ -63,6 +67,7 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::InviteResponse>> PrepareAsyncInvite(::grpc::ClientContext* context, const ::pandora::team::v1::InviteRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::InviteResponse>>(PrepareAsyncInviteRaw(context, request, cq));
     }
+    // 立即完成型;push 不发 inviter
     virtual ::grpc::Status AcceptInvite(::grpc::ClientContext* context, const ::pandora::team::v1::AcceptInviteRequest& request, ::pandora::team::v1::AcceptInviteResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::AcceptInviteResponse>> AsyncAcceptInvite(::grpc::ClientContext* context, const ::pandora::team::v1::AcceptInviteRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::AcceptInviteResponse>>(AsyncAcceptInviteRaw(context, request, cq));
@@ -70,6 +75,7 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::AcceptInviteResponse>> PrepareAsyncAcceptInvite(::grpc::ClientContext* context, const ::pandora::team::v1::AcceptInviteRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::AcceptInviteResponse>>(PrepareAsyncAcceptInviteRaw(context, request, cq));
     }
+    // 立即完成型
     virtual ::grpc::Status LeaveTeam(::grpc::ClientContext* context, const ::pandora::team::v1::LeaveTeamRequest& request, ::pandora::team::v1::LeaveTeamResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::LeaveTeamResponse>> AsyncLeaveTeam(::grpc::ClientContext* context, const ::pandora::team::v1::LeaveTeamRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::LeaveTeamResponse>>(AsyncLeaveTeamRaw(context, request, cq));
@@ -77,6 +83,7 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::LeaveTeamResponse>> PrepareAsyncLeaveTeam(::grpc::ClientContext* context, const ::pandora::team::v1::LeaveTeamRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::LeaveTeamResponse>>(PrepareAsyncLeaveTeamRaw(context, request, cq));
     }
+    // 立即完成型
     virtual ::grpc::Status Kick(::grpc::ClientContext* context, const ::pandora::team::v1::KickRequest& request, ::pandora::team::v1::KickResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::KickResponse>> AsyncKick(::grpc::ClientContext* context, const ::pandora::team::v1::KickRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::KickResponse>>(AsyncKickRaw(context, request, cq));
@@ -84,6 +91,7 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::KickResponse>> PrepareAsyncKick(::grpc::ClientContext* context, const ::pandora::team::v1::KickRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::KickResponse>>(PrepareAsyncKickRaw(context, request, cq));
     }
+    // 立即完成型;push 不发 captain
     virtual ::grpc::Status SetReady(::grpc::ClientContext* context, const ::pandora::team::v1::SetReadyRequest& request, ::pandora::team::v1::SetReadyResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::SetReadyResponse>> AsyncSetReady(::grpc::ClientContext* context, const ::pandora::team::v1::SetReadyRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::SetReadyResponse>>(AsyncSetReadyRaw(context, request, cq));
@@ -91,6 +99,7 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::SetReadyResponse>> PrepareAsyncSetReady(::grpc::ClientContext* context, const ::pandora::team::v1::SetReadyRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::SetReadyResponse>>(PrepareAsyncSetReadyRaw(context, request, cq));
     }
+    // 立即完成型
     virtual ::grpc::Status GetTeam(::grpc::ClientContext* context, const ::pandora::team::v1::GetTeamRequest& request, ::pandora::team::v1::GetTeamResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::GetTeamResponse>> AsyncGetTeam(::grpc::ClientContext* context, const ::pandora::team::v1::GetTeamRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::GetTeamResponse>>(AsyncGetTeamRaw(context, request, cq));
@@ -98,25 +107,31 @@ class TeamService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::GetTeamResponse>> PrepareAsyncGetTeam(::grpc::ClientContext* context, const ::pandora::team::v1::GetTeamRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::pandora::team::v1::GetTeamResponse>>(PrepareAsyncGetTeamRaw(context, request, cq));
     }
-    // 客户端拉一次完整 Team(进入大厅时)
+    // 只读,客户端进入大厅时拉一次完整快照
     class async_interface {
      public:
       virtual ~async_interface() {}
       virtual void CreateTeam(::grpc::ClientContext* context, const ::pandora::team::v1::CreateTeamRequest* request, ::pandora::team::v1::CreateTeamResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void CreateTeam(::grpc::ClientContext* context, const ::pandora::team::v1::CreateTeamRequest* request, ::pandora::team::v1::CreateTeamResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 立即完成型
       virtual void Invite(::grpc::ClientContext* context, const ::pandora::team::v1::InviteRequest* request, ::pandora::team::v1::InviteResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void Invite(::grpc::ClientContext* context, const ::pandora::team::v1::InviteRequest* request, ::pandora::team::v1::InviteResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 立即完成型;push 不发 inviter
       virtual void AcceptInvite(::grpc::ClientContext* context, const ::pandora::team::v1::AcceptInviteRequest* request, ::pandora::team::v1::AcceptInviteResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void AcceptInvite(::grpc::ClientContext* context, const ::pandora::team::v1::AcceptInviteRequest* request, ::pandora::team::v1::AcceptInviteResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 立即完成型
       virtual void LeaveTeam(::grpc::ClientContext* context, const ::pandora::team::v1::LeaveTeamRequest* request, ::pandora::team::v1::LeaveTeamResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void LeaveTeam(::grpc::ClientContext* context, const ::pandora::team::v1::LeaveTeamRequest* request, ::pandora::team::v1::LeaveTeamResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 立即完成型
       virtual void Kick(::grpc::ClientContext* context, const ::pandora::team::v1::KickRequest* request, ::pandora::team::v1::KickResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void Kick(::grpc::ClientContext* context, const ::pandora::team::v1::KickRequest* request, ::pandora::team::v1::KickResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 立即完成型;push 不发 captain
       virtual void SetReady(::grpc::ClientContext* context, const ::pandora::team::v1::SetReadyRequest* request, ::pandora::team::v1::SetReadyResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void SetReady(::grpc::ClientContext* context, const ::pandora::team::v1::SetReadyRequest* request, ::pandora::team::v1::SetReadyResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 立即完成型
       virtual void GetTeam(::grpc::ClientContext* context, const ::pandora::team::v1::GetTeamRequest* request, ::pandora::team::v1::GetTeamResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void GetTeam(::grpc::ClientContext* context, const ::pandora::team::v1::GetTeamRequest* request, ::pandora::team::v1::GetTeamResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      // 客户端拉一次完整 Team(进入大厅时)
+      // 只读,客户端进入大厅时拉一次完整快照
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -246,13 +261,19 @@ class TeamService final {
     Service();
     virtual ~Service();
     virtual ::grpc::Status CreateTeam(::grpc::ServerContext* context, const ::pandora::team::v1::CreateTeamRequest* request, ::pandora::team::v1::CreateTeamResponse* response);
+    // 立即完成型
     virtual ::grpc::Status Invite(::grpc::ServerContext* context, const ::pandora::team::v1::InviteRequest* request, ::pandora::team::v1::InviteResponse* response);
+    // 立即完成型;push 不发 inviter
     virtual ::grpc::Status AcceptInvite(::grpc::ServerContext* context, const ::pandora::team::v1::AcceptInviteRequest* request, ::pandora::team::v1::AcceptInviteResponse* response);
+    // 立即完成型
     virtual ::grpc::Status LeaveTeam(::grpc::ServerContext* context, const ::pandora::team::v1::LeaveTeamRequest* request, ::pandora::team::v1::LeaveTeamResponse* response);
+    // 立即完成型
     virtual ::grpc::Status Kick(::grpc::ServerContext* context, const ::pandora::team::v1::KickRequest* request, ::pandora::team::v1::KickResponse* response);
+    // 立即完成型;push 不发 captain
     virtual ::grpc::Status SetReady(::grpc::ServerContext* context, const ::pandora::team::v1::SetReadyRequest* request, ::pandora::team::v1::SetReadyResponse* response);
+    // 立即完成型
     virtual ::grpc::Status GetTeam(::grpc::ServerContext* context, const ::pandora::team::v1::GetTeamRequest* request, ::pandora::team::v1::GetTeamResponse* response);
-    // 客户端拉一次完整 Team(进入大厅时)
+    // 只读,客户端进入大厅时拉一次完整快照
   };
   template <class BaseClass>
   class WithAsyncMethod_CreateTeam : public BaseClass {

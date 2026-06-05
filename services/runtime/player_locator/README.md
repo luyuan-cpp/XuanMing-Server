@@ -32,7 +32,7 @@ PlayerLocatorService.ClearLocation(player_id)         → ok
 - `state`         LocationState 枚举的字符串名(`hub`/`battle`/...,便于人读)
 - `state_code`    int32 枚举值(便于程序判断)
 - `hub_pod`       HUB 时填
-- `shard_id`      HUB 时填(int32 to string)
+- `shard_id`      HUB 时填(uint32 to string)
 - `match_id`      MATCHING / BATTLE 时填
 - `battle_pod`    BATTLE 时填
 - `updated_at_ms` 服务端记录的写入时刻

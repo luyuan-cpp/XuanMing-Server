@@ -274,7 +274,7 @@ inline constexpr AssignHubResponse::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        shard_id_{0},
+        shard_id_{0u},
         _cached_size_{0} {}
 
 template <typename>
@@ -521,7 +521,7 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "odeR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAdd"
     "r\022\035\n\nhub_ticket\030\003 \001(\tR\thubTicket\022 \n\014hub_"
     "pod_name\030\004 \001(\tR\nhubPodName\022\031\n\010shard_id\030\005"
-    " \001(\005R\007shardId\"0\n\021ReleaseHubRequest\022\033\n\tpl"
+    " \001(\rR\007shardId\"0\n\021ReleaseHubRequest\022\033\n\tpl"
     "ayer_id\030\001 \001(\004R\010playerId\"D\n\022ReleaseHubRes"
     "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
     "ErrCodeR\004code\"U\n\022TransferHubRequest\022\033\n\tp"
@@ -1024,7 +1024,7 @@ const ::_pbi::TcParseTable<3, 5, 0, 74, 2> AssignHubResponse::_table_ = {
     // string hub_pod_name = 4 [json_name = "hubPodName"];
     {::_pbi::TcParser::FastUS1,
      {34, 63, 0, PROTOBUF_FIELD_OFFSET(AssignHubResponse, _impl_.hub_pod_name_)}},
-    // int32 shard_id = 5 [json_name = "shardId"];
+    // uint32 shard_id = 5 [json_name = "shardId"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AssignHubResponse, _impl_.shard_id_), 63>(),
      {40, 63, 0, PROTOBUF_FIELD_OFFSET(AssignHubResponse, _impl_.shard_id_)}},
     {::_pbi::TcParser::MiniParse, {}},
@@ -1044,9 +1044,9 @@ const ::_pbi::TcParseTable<3, 5, 0, 74, 2> AssignHubResponse::_table_ = {
     // string hub_pod_name = 4 [json_name = "hubPodName"];
     {PROTOBUF_FIELD_OFFSET(AssignHubResponse, _impl_.hub_pod_name_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // int32 shard_id = 5 [json_name = "shardId"];
+    // uint32 shard_id = 5 [json_name = "shardId"];
     {PROTOBUF_FIELD_OFFSET(AssignHubResponse, _impl_.shard_id_), 0, 0,
-    (0 | ::_fl::kFcSingular | ::_fl::kInt32)},
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
   }},
   // no aux_entries
   {{
@@ -1120,11 +1120,11 @@ PROTOBUF_NOINLINE void AssignHubResponse::Clear() {
             target = stream->WriteStringMaybeAliased(4, _s, target);
           }
 
-          // int32 shard_id = 5 [json_name = "shardId"];
+          // uint32 shard_id = 5 [json_name = "shardId"];
           if (this_._internal_shard_id() != 0) {
-            target = ::google::protobuf::internal::WireFormatLite::
-                WriteInt32ToArrayWithField<5>(
-                    stream, this_._internal_shard_id(), target);
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+                5, this_._internal_shard_id(), target);
           }
 
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -1172,9 +1172,9 @@ PROTOBUF_NOINLINE void AssignHubResponse::Clear() {
               total_size += 1 +
                             ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
             }
-            // int32 shard_id = 5 [json_name = "shardId"];
+            // uint32 shard_id = 5 [json_name = "shardId"];
             if (this_._internal_shard_id() != 0) {
-              total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+              total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
                   this_._internal_shard_id());
             }
           }

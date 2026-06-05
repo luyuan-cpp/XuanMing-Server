@@ -516,14 +516,14 @@ class Location final : public ::google::protobuf::Message
   void _internal_set_state(::pandora::locator::v1::LocationState value);
 
   public:
-  // int32 shard_id = 3 [json_name = "shardId"];
+  // uint32 shard_id = 3 [json_name = "shardId"];
   void clear_shard_id() ;
-  ::int32_t shard_id() const;
-  void set_shard_id(::int32_t value);
+  ::uint32_t shard_id() const;
+  void set_shard_id(::uint32_t value);
 
   private:
-  ::int32_t _internal_shard_id() const;
-  void _internal_set_shard_id(::int32_t value);
+  ::uint32_t _internal_shard_id() const;
+  void _internal_set_shard_id(::uint32_t value);
 
   public:
   // uint64 match_id = 4 [json_name = "matchId"];
@@ -572,7 +572,7 @@ class Location final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr hub_pod_;
     ::google::protobuf::internal::ArenaStringPtr battle_pod_;
     int state_;
-    ::int32_t shard_id_;
+    ::uint32_t shard_id_;
     ::uint64_t match_id_;
     ::int64_t updated_at_ms_;
     ::google::protobuf::internal::CachedSize _cached_size_;
@@ -1654,24 +1654,24 @@ inline void Location::set_allocated_hub_pod(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.Location.hub_pod)
 }
 
-// int32 shard_id = 3 [json_name = "shardId"];
+// uint32 shard_id = 3 [json_name = "shardId"];
 inline void Location::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.shard_id_ = 0;
+  _impl_.shard_id_ = 0u;
 }
-inline ::int32_t Location::shard_id() const {
+inline ::uint32_t Location::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.Location.shard_id)
   return _internal_shard_id();
 }
-inline void Location::set_shard_id(::int32_t value) {
+inline void Location::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.Location.shard_id)
 }
-inline ::int32_t Location::_internal_shard_id() const {
+inline ::uint32_t Location::_internal_shard_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.shard_id_;
 }
-inline void Location::_internal_set_shard_id(::int32_t value) {
+inline void Location::_internal_set_shard_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = value;
 }
