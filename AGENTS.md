@@ -117,9 +117,10 @@ AI 跑出错时:
 - 深度阅读代码和设计文档,分析完整详细做法
 - 开 plan 模式列文件清单 / 动作 / 风险 / 工期,给人审
 - 对需要外部环境的任务,只输出"环境配置方案 / 命令 / 风险 / 验收标准",交给 ChatGPT / Codex 执行
+- 对非代码任务,或项目分析 / 逻辑细节任务中需要执行的辅助部分(环境 / 证书 / Docker / git 收尾 / 文档清理 / 调研结论整理等),生成可直接粘贴给 ChatGPT / Codex 的执行操作信息,由 ChatGPT / Codex 执行
 - 审过后改代码 / proto / yaml / 脚本 / 文档
 - 跑项目内验证命令(build / test / lint / docker compose 配置检查)
-- 在 ChatGPT / Codex 配好环境后,基于项目命令复查并确认是否满足代码联调要求
+- 在 ChatGPT / Codex 完成环境配置 / 文档整理 / git 收尾后,必须复查相关文件、配置、命令输出和项目内验证结果,确认满足下一步联调要求后才能继续
 
 **Claude 系模型不负责**:
 - 安装 / 升级 / 卸载本机工具(winget / choco / go install / npm install -g 等)
@@ -129,17 +130,20 @@ AI 跑出错时:
 
 **ChatGPT / Codex 负责**:
 - 根据 Claude 系模型给出的环境配置方案,检查并安装本机工具(mkcert / grpcurl / buf / protoc / docker image 等)
+- 根据 Claude 系模型给出的非代码任务辅助操作信息,执行环境 / 证书 / Docker / git 收尾 / 文档清理 / 调研结论整理等操作
 - 改本机开发环境和证书信任 / 生成本地证书 / 拉 Docker 镜像 / 启停本地环境(仅在用户明确批准后)
 - 做环境就绪确认,把结果反馈给 Claude 系模型 / 用户
 - 输出 git status / diff --stat / commit message 建议
 - 在用户明确说"帮我 commit"时执行 git commit
+- ChatGPT / Codex 做完后必须把改动范围、验证结果、剩余未处理项告诉 Claude 系模型,由 Claude 系模型审核确认
+- ChatGPT / Codex 不实现业务代码,不处理业务逻辑细节;只做审核、问题分析、辅助执行和收尾。发现问题时,生成可直接粘贴给 Claude 系模型的问题反馈。
 
 **人负责最终授权**:
 - 环境改动前批准
 - commit 前批准
 - push / PR / release 全部人手动执行
 
-> 简单说:Claude 系模型烧 token 做深度分析和写代码;ChatGPT / Codex 做环境配置、环境执行、git 收尾;配好后再由 Claude 系模型用项目验证确认。
+> 简单说:Claude 系模型烧 token 做深度分析和写代码;ChatGPT / Codex 做环境配置、环境执行、git 收尾;做完后必须交回 Claude 系模型审核确认。
 
 **AI 负责**:
 - 后端 go 代码、proto、yaml、shell 脚本

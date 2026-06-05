@@ -109,6 +109,8 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 
 Claude 只负责配置文件和项目内验证。
 如果需要生成证书 / 拉镜像 / 启停环境,输出方案交给 ChatGPT / Codex。
+非代码任务,或项目分析 / 逻辑细节任务中需要执行的辅助部分,由 Claude 生成可直接粘贴给 ChatGPT / Codex 的操作信息,再交给 ChatGPT / Codex 执行。
+ChatGPT / Codex 做完环境配置后,Claude 必须复查相关文件、命令输出和项目内验证结果。
 
 ### Step 2:W2 ⑥ — 端到端 hello world
 
@@ -142,6 +144,8 @@ Claude 只负责配置文件和项目内验证。
 - 只改 plan 范围内文件。
 - 跑项目内验证命令。
 - 不做 git 收尾,把验证结果交给 ChatGPT / Codex。
+- ChatGPT / Codex 做完环境 / 文档 / git 收尾后,Claude 必须审核相关产物和验证结果。
+- 非代码任务,或项目分析 / 逻辑细节任务中需要执行的辅助部分,由 Claude 生成执行操作信息,用户复制给 ChatGPT / Codex 执行。
 
 ### 4.3 跨 AI 分工
 
@@ -150,8 +154,10 @@ Claude 只负责配置文件和项目内验证。
 - 深度分析
 - 输出详细做法
 - plan
+- 生成可直接粘贴给 ChatGPT / Codex 的非代码任务辅助执行操作信息
 - 改代码 / proto / yaml / 脚本 / 文档
 - 跑项目内验证
+- 审核 ChatGPT / Codex 完成的环境配置、文档整理、git 收尾结果
 
 **Claude 系模型不负责**:
 
@@ -172,10 +178,13 @@ Claude 只负责配置文件和项目内验证。
 **ChatGPT / Codex 负责**:
 
 - 本机工具和环境配置
+- 执行 Claude 系模型生成的非代码任务辅助操作信息
 - 证书 / Docker 镜像 / 本地环境启停
 - 环境确认
 - git status / diff / commit message 建议
 - 用户明确授权后的 commit
+- 完成后把改动范围、验证结果、剩余未处理项交给 Claude 系模型复查
+- 不实现业务代码,不处理业务逻辑细节;只做审核、问题分析、辅助执行和收尾。发现问题时,生成可直接粘贴给 Claude 系模型的问题反馈。
 
 ### 4.4 失败和红线
 
