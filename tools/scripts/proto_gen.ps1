@@ -1,4 +1,4 @@
-# Pandora Proto 代码生成
+﻿# Pandora Proto 代码生成
 #
 # 用法:
 #   pwsh tools/scripts/proto_gen.ps1            # buf lint + 生成 go pb
@@ -13,6 +13,10 @@
 #
 # 第一次 buf generate 会从 buf.build 拉远程插件(protoc-gen-go / protoc-gen-go-grpc 等),
 # 需要外网。
+#
+# Kratos HTTP 代码生成使用本地 protoc-gen-go-http(不是 BSR 远程插件),
+# 需确保 PATH 可找到该命令。安装方式:
+#   go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
 
 param(
     [switch]$Lint,
@@ -36,9 +40,23 @@ if ($null -eq $bufCmd) {
     exit 1
 }
 
+# 检查 Kratos HTTP plugin(仅 generate go 时需要)
+if (-not $Lint) {
+    $kratosHttpCmd = Get-Command protoc-gen-go-http -ErrorAction SilentlyContinue
+    if ($null -eq $kratosHttpCmd) {
+        Write-Host "[ERR] protoc-gen-go-http 未安装或不在 PATH" -ForegroundColor Red
+        Write-Host "  请先安装 Go,然后运行:"
+        Write-Host "    go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest"
+        exit 1
+    }
+}
+
 Write-Host "===== Pandora proto gen =====" -ForegroundColor Cyan
 Write-Host "buf:   $($bufCmd.Source)"
 Write-Host "proto: $ProtoDir"
+if (-not $Lint) {
+    Write-Host "http:  $($kratosHttpCmd.Source)"
+}
 
 Push-Location $ProtoDir
 try {

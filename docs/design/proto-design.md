@@ -60,20 +60,20 @@ Pandora/proto/
 
 ```proto
 service LoginService {
-  rpc Login(LoginReq) returns (LoginResp);
-  rpc Logout(LogoutReq) returns (LogoutResp);
-  rpc IssueDSTicket(IssueDSTicketReq) returns (IssueDSTicketResp);
-  rpc VerifyDSTicket(VerifyDSTicketReq) returns (VerifyDSTicketResp);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc IssueDSTicket(IssueDSTicketRequest) returns (IssueDSTicketResponse);
+  rpc VerifyDSTicket(VerifyDSTicketRequest) returns (VerifyDSTicketResponse);
 }
 
-message LoginReq {
+message LoginRequest {
   string account = 1;
   string password_hash = 2;     // 客户端先 sha256
   string device_id = 3;
   string client_version = 4;
 }
 
-message LoginResp {
+message LoginResponse {
   ErrCode code = 1;
   int64 player_id = 2;
   string session_token = 3;     // 连后端用
@@ -95,13 +95,13 @@ message DSTicket {              // JWT payload
 
 ```proto
 service TeamService {
-  rpc CreateTeam(CreateTeamReq) returns (CreateTeamResp);
-  rpc Invite(InviteReq) returns (InviteResp);
-  rpc AcceptInvite(AcceptInviteReq) returns (AcceptInviteResp);
-  rpc LeaveTeam(LeaveTeamReq) returns (LeaveTeamResp);
-  rpc Kick(KickReq) returns (KickResp);
-  rpc SetReady(SetReadyReq) returns (SetReadyResp);
-  rpc StreamTeamUpdates(StreamTeamUpdatesReq) returns (stream TeamUpdate);
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
+  rpc Invite(InviteRequest) returns (InviteResponse);
+  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
+  rpc LeaveTeam(LeaveTeamRequest) returns (LeaveTeamResponse);
+  rpc Kick(KickRequest) returns (KickResponse);
+  rpc SetReady(SetReadyRequest) returns (SetReadyResponse);
+  rpc StreamTeamUpdates(StreamTeamUpdatesRequest) returns (stream TeamUpdate);
 }
 
 enum TeamState {
@@ -135,10 +135,10 @@ message TeamMember {
 
 ```proto
 service MatchService {
-  rpc StartMatch(StartMatchReq) returns (StartMatchResp);
-  rpc CancelMatch(CancelMatchReq) returns (CancelMatchResp);
-  rpc StreamMatchProgress(StreamMatchProgressReq) returns (stream MatchProgress);
-  rpc ConfirmMatch(ConfirmMatchReq) returns (ConfirmMatchResp);
+  rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
+  rpc CancelMatch(CancelMatchRequest) returns (CancelMatchResponse);
+  rpc StreamMatchProgress(StreamMatchProgressRequest) returns (stream MatchProgress);
+  rpc ConfirmMatch(ConfirmMatchRequest) returns (ConfirmMatchResponse);
 }
 
 enum MatchStage {
@@ -166,27 +166,27 @@ message MatchProgress {
 
 ```proto
 service DSAllocatorService {
-  rpc AllocateBattle(AllocateBattleReq) returns (AllocateBattleResp);
-  rpc ReleaseBattle(ReleaseBattleReq) returns (ReleaseBattleResp);
-  rpc Heartbeat(stream HeartbeatReq) returns (stream HeartbeatResp);
-  rpc ListBattles(ListBattlesReq) returns (ListBattlesResp);
+  rpc AllocateBattle(AllocateBattleRequest) returns (AllocateBattleResponse);
+  rpc ReleaseBattle(ReleaseBattleRequest) returns (ReleaseBattleResponse);
+  rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
+  rpc ListBattles(ListBattlesRequest) returns (ListBattlesResponse);
 }
 
-message AllocateBattleReq {
+message AllocateBattleRequest {
   string match_id = 1;
   repeated int64 player_ids = 2;
   int32 map_id = 3;
   string game_mode = 4;
 }
 
-message AllocateBattleResp {
+message AllocateBattleResponse {
   ErrCode code = 1;
   string ds_addr = 2;
   string ds_pod_name = 3;
   int64 allocated_at_ms = 4;
 }
 
-message HeartbeatReq {
+message HeartbeatRequest {
   string ds_pod_name = 1;
   string match_id = 2;
   int32 player_count = 3;
@@ -200,8 +200,8 @@ message HeartbeatReq {
 
 ```proto
 service BattleResultService {
-  rpc ReportResult(ReportResultReq) returns (ReportResultResp);
-  rpc QueryHistory(QueryHistoryReq) returns (QueryHistoryResp);
+  rpc ReportResult(ReportResultRequest) returns (ReportResultResponse);
+  rpc QueryHistory(QueryHistoryRequest) returns (QueryHistoryResponse);
 }
 
 message BattleResult {
@@ -232,13 +232,13 @@ message PlayerStats {
 
 ```proto
 service HubRuntimeService {
-  rpc TriggerNPC(TriggerNPCReq) returns (TriggerNPCResp);
-  rpc OpenShop(OpenShopReq) returns (OpenShopResp);
-  rpc TransferToHub(TransferToHubReq) returns (TransferToHubResp);
-  rpc EnterBattle(EnterBattleReq) returns (EnterBattleResp);
+  rpc TriggerNPC(TriggerNPCRequest) returns (TriggerNPCResponse);
+  rpc OpenShop(OpenShopRequest) returns (OpenShopResponse);
+  rpc TransferToHub(TransferToHubRequest) returns (TransferToHubResponse);
+  rpc EnterBattle(EnterBattleRequest) returns (EnterBattleResponse);
 }
 
-message TransferToHubReq {
+message TransferToHubRequest {
   string target_hub_id = 1;
   Vector3 spawn_pos = 2;
 }

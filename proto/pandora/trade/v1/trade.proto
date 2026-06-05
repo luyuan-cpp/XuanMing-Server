@@ -9,13 +9,13 @@ syntax = "proto3";
 
 package pandora.trade.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service TradeService {
-  rpc CreateOrder(CreateOrderReq) returns (CreateOrderResp);
-  rpc ConfirmOrder(ConfirmOrderReq) returns (ConfirmOrderResp);
-  rpc CancelOrder(CancelOrderReq) returns (CancelOrderResp);
-  rpc ListMyOrders(ListMyOrdersReq) returns (ListMyOrdersResp);
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc ConfirmOrder(ConfirmOrderRequest) returns (ConfirmOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+  rpc ListMyOrders(ListMyOrdersRequest) returns (ListMyOrdersResponse);
 }
 
 enum OrderState {
@@ -49,43 +49,43 @@ message Order {
   reserved 9;
 }
 
-message CreateOrderReq {
+message CreateOrderRequest {
   int64 seller_id  = 1;
   int64 buyer_id   = 2;
   repeated TradeItem items = 3;
   int64 price      = 4;
 }
 
-message CreateOrderResp {
+message CreateOrderResponse {
   pandora.common.v1.ErrCode code = 1;
   string order_id = 2;
 }
 
-message ConfirmOrderReq {
+message ConfirmOrderRequest {
   int64  player_id = 1;
   string order_id  = 2;
 }
 
-message ConfirmOrderResp {
+message ConfirmOrderResponse {
   pandora.common.v1.ErrCode code = 1;
   OrderState new_state = 2;
 }
 
-message CancelOrderReq {
+message CancelOrderRequest {
   int64  player_id = 1;
   string order_id  = 2;
 }
 
-message CancelOrderResp {
+message CancelOrderResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message ListMyOrdersReq {
+message ListMyOrdersRequest {
   int64 player_id = 1;
   bool  active_only = 2;
 }
 
-message ListMyOrdersResp {
+message ListMyOrdersResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated Order orders = 2;
 }

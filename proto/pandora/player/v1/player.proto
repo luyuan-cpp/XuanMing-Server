@@ -9,15 +9,15 @@ syntax = "proto3";
 
 package pandora.player.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service PlayerService {
-  rpc GetProfile(GetProfileReq) returns (GetProfileResp);
-  rpc UpdateNickname(UpdateNicknameReq) returns (UpdateNicknameResp);
-  rpc ListHeroes(ListHeroesReq) returns (ListHeroesResp);
-  rpc UnlockHero(UnlockHeroReq) returns (UnlockHeroResp);
-  rpc GetMMR(GetMMRReq) returns (GetMMRResp);
-  rpc UpdateMMR(UpdateMMRReq) returns (UpdateMMRResp);
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+  rpc UpdateNickname(UpdateNicknameRequest) returns (UpdateNicknameResponse);
+  rpc ListHeroes(ListHeroesRequest) returns (ListHeroesResponse);
+  rpc UnlockHero(UnlockHeroRequest) returns (UnlockHeroResponse);
+  rpc GetMMR(GetMMRRequest) returns (GetMMRResponse);
+  rpc UpdateMMR(UpdateMMRRequest) returns (UpdateMMRResponse);
 }
 
 // ===== 玩家档案 =====
@@ -39,66 +39,66 @@ message PlayerProfile {
   reserved 12 to 49;
 }
 
-message GetProfileReq {
+message GetProfileRequest {
   int64 player_id = 1;
 }
 
-message GetProfileResp {
+message GetProfileResponse {
   pandora.common.v1.ErrCode code = 1;
   PlayerProfile profile = 2;
 }
 
-message UpdateNicknameReq {
+message UpdateNicknameRequest {
   int64  player_id = 1;
   string nickname  = 2;
 }
 
-message UpdateNicknameResp {
+message UpdateNicknameResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
 // ===== 英雄 =====
 
-message ListHeroesReq {
+message ListHeroesRequest {
   int64 player_id = 1;
 }
 
-message ListHeroesResp {
+message ListHeroesResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated int32 hero_ids = 2;
 }
 
-message UnlockHeroReq {
+message UnlockHeroRequest {
   int64  player_id = 1;
   int32  hero_id   = 2;
   string source   = 3;  // "purchase" | "reward" | "freebie"
 }
 
-message UnlockHeroResp {
+message UnlockHeroResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
 // ===== MMR(段位)=====
 
-message GetMMRReq {
+message GetMMRRequest {
   int64 player_id = 1;
 }
 
-message GetMMRResp {
+message GetMMRResponse {
   pandora.common.v1.ErrCode code = 1;
   int32 mmr = 2;
 }
 
 // UpdateMMR 必须幂等(idempotency_key 通常是 match_id)。
 // 同一 idempotency_key 重复调用,服务端只算一次。
-message UpdateMMRReq {
+message UpdateMMRRequest {
   int64  player_id       = 1;
   int32  delta           = 2;
   string reason          = 3;  // "win" | "lose" | "abandon" | "rollback"
   string idempotency_key = 4;  // 一般是 match_id
 }
 
-message UpdateMMRResp {
+message UpdateMMRResponse {
   pandora.common.v1.ErrCode code = 1;
   int32 new_mmr = 2;
 }

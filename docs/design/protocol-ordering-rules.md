@@ -87,9 +87,9 @@ Client 玩家 A 快速点击 3 次:
   Push 3:     team.update, T2 created         ← 同上
 
 UI 状态机:
-- 收到 Resp 1:UI 显示 T1
-- 收到 Resp 2:UI 清空
-- 收到 Resp 3:UI 显示 T2
+- 收到 Response 1:UI 显示 T1
+- 收到 Response 2:UI 清空
+- 收到 Response 3:UI 显示 T2
 - 收到 Push 1:UI 又显示 T1(回退!闪烁)
 - 收到 Push 2:UI 又清空(回退!闪烁)
 - 收到 Push 3:UI 又显示 T2
@@ -159,15 +159,15 @@ B 看到:
 ```proto
 // ✅ 正确
 service TeamService {
-  rpc CreateTeam(CreateTeamReq) returns (CreateTeamResp);
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
 }
-message CreateTeamResp {
+message CreateTeamResponse {
   ErrCode code = 1;
   Team    team = 2;   // ⭐ 完整 Team,客户端拿到 response 就能渲染
 }
 
 // ❌ 错误(违反原则 1)
-message CreateTeamResp {
+message CreateTeamResponse {
   ErrCode code    = 1;
   string  team_id = 2;   // 只返 ID,客户端要等 push 才能拿完整数据
 }
@@ -245,7 +245,7 @@ A 的客户端代码要写:
 
 ```go
 // ✅ 正确
-func (s *TeamService) Invite(ctx, req *InviteReq) (*InviteResp, error) {
+func (s *TeamService) Invite(ctx, req *InviteRequest) (*InviteResponse, error) {
     caller := ctx.Value("player_id").(int64)  // = req.captain_id 通常
     
     // ... 写 redis 记录邀请 ...
@@ -253,16 +253,16 @@ func (s *TeamService) Invite(ctx, req *InviteReq) (*InviteResp, error) {
     // 只 push 给被邀请的 B,不 push caller
     kafka.Send("pandora.team.update", key=req.target_player_id, payload=...)
     
-    return &InviteResp{Ok: true}, nil
+    return &InviteResponse{Ok: true}, nil
 }
 
 // ❌ 错误
-func (s *TeamService) Invite(ctx, req *InviteReq) (*InviteResp, error) {
+func (s *TeamService) Invite(ctx, req *InviteRequest) (*InviteResponse, error) {
     // 错!给所有相关玩家都发,包括 caller
     for _, p := range []int64{req.captain_id, req.target_player_id} {
         kafka.Send("pandora.team.update", key=p, payload=...)
     }
-    return &InviteResp{Ok: true}, nil
+    return &InviteResponse{Ok: true}, nil
 }
 ```
 
@@ -280,8 +280,8 @@ func (s *TeamService) Invite(ctx, req *InviteReq) (*InviteResp, error) {
 
 ```proto
 // ✅ 正确(StartMatch 是已受理型)
-rpc StartMatch(StartMatchReq) returns (StartMatchResp);
-message StartMatchResp {
+rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
+message StartMatchResponse {
   ErrCode code     = 1;
   string  match_id = 2;   // 已入队,后续 stage 走 push
 }
@@ -298,11 +298,11 @@ message StartMatchResp {
 ```proto
 // CreateTeam: 立即完成(synchronous),response 含完整 Team
 // kafka push 不发给发起方(他看 RPC response 即可)
-rpc CreateTeam(CreateTeamReq) returns (CreateTeamResp);
+rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
 
 // StartMatch: 已受理(accepted),后续 stage 变化走 push
 // ⚠️ 例外:matchmaker 的 push 给所有队员包括发起方自己(原则 3 例外)
-rpc StartMatch(StartMatchReq) returns (StartMatchResp);
+rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
 ```
 
 让客户端开发者一看注释就知道:

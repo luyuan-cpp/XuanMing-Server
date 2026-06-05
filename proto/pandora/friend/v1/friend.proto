@@ -7,13 +7,13 @@ syntax = "proto3";
 
 package pandora.friend.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service FriendService {
-  rpc AddFriend(AddFriendReq) returns (AddFriendResp);
-  rpc AcceptFriend(AcceptFriendReq) returns (AcceptFriendResp);
-  rpc ListFriends(ListFriendsReq) returns (ListFriendsResp);
-  rpc Block(BlockReq) returns (BlockResp);
+  rpc AddFriend(AddFriendRequest) returns (AddFriendResponse);
+  rpc AcceptFriend(AcceptFriendRequest) returns (AcceptFriendResponse);
+  rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
+  rpc Block(BlockRequest) returns (BlockResponse);
 }
 
 enum FriendRequestStatus {
@@ -32,39 +32,39 @@ message FriendInfo {
   int64 last_seen_ms  = 5;
 }
 
-message AddFriendReq {
+message AddFriendRequest {
   int64 player_id        = 1;
   int64 target_player_id = 2;
 }
 
-message AddFriendResp {
+message AddFriendResponse {
   pandora.common.v1.ErrCode code = 1;
   string request_id = 2;
 }
 
-message AcceptFriendReq {
+message AcceptFriendRequest {
   int64  player_id  = 1;
   string request_id = 2;
 }
 
-message AcceptFriendResp {
+message AcceptFriendResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message ListFriendsReq {
+message ListFriendsRequest {
   int64 player_id = 1;
 }
 
-message ListFriendsResp {
+message ListFriendsResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated FriendInfo friends = 2;
 }
 
-message BlockReq {
+message BlockRequest {
   int64 player_id        = 1;
   int64 target_player_id = 2;
 }
 
-message BlockResp {
+message BlockResponse {
   pandora.common.v1.ErrCode code = 1;
 }

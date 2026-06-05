@@ -23,6 +23,10 @@ toolchain go1.24.5
 
 use ./pkg
 
+// ⚠️ 构建验证:仓库根没有 go.mod,不能在根目录跑 go build ./...
+// 正确做法:按 use 列表构建,例如 go build ./pkg/...
+// W2+ 每新增一个 use,同步追加到 CLAUDE.md §4.1 的验证命令中
+//
 // W2+ 启用以下 use 行(每个服务在 cmd/main.go + go.mod 创建后启用):
 //
 // use ./services/account/login

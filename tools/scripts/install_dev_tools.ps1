@@ -1,4 +1,4 @@
-# Pandora 开发环境工具链一键安装(Windows / PowerShell)
+﻿# Pandora 开发环境工具链一键安装(Windows / PowerShell)
 #
 # 安装的工具:
 #   - buf       proto 工具(lint / generate / breaking)
@@ -6,7 +6,7 @@
 #   - grpcurl   gRPC 端到端测试(命令行 grpcurl 调 gRPC 服务)
 #
 # 不安装的(用户应已有):
-#   - go        Go 编译器
+#   - go        Go 编译器(必需;Kratos `protoc-gen-go-http` 是本地 plugin)
 #   - docker    docker desktop
 #   - git       版本控制
 #

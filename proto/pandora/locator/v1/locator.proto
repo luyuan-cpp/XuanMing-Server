@@ -8,12 +8,12 @@ syntax = "proto3";
 
 package pandora.locator.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service PlayerLocatorService {
-  rpc SetLocation(SetLocationReq) returns (SetLocationResp);
-  rpc GetLocation(GetLocationReq) returns (GetLocationResp);
-  rpc ClearLocation(ClearLocationReq) returns (ClearLocationResp);
+  rpc SetLocation(SetLocationRequest) returns (SetLocationResponse);
+  rpc GetLocation(GetLocationRequest) returns (GetLocationResponse);
+  rpc ClearLocation(ClearLocationRequest) returns (ClearLocationResponse);
 }
 
 enum LocationState {
@@ -38,28 +38,28 @@ message Location {
   reserved 7 to 9;
 }
 
-message SetLocationReq {
+message SetLocationRequest {
   int64    player_id = 1;
   Location location  = 2;
 }
 
-message SetLocationResp {
+message SetLocationResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message GetLocationReq {
+message GetLocationRequest {
   int64 player_id = 1;
 }
 
-message GetLocationResp {
+message GetLocationResponse {
   pandora.common.v1.ErrCode code = 1;
   Location location = 2;
 }
 
-message ClearLocationReq {
+message ClearLocationRequest {
   int64 player_id = 1;
 }
 
-message ClearLocationResp {
+message ClearLocationResponse {
   pandora.common.v1.ErrCode code = 1;
 }

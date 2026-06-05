@@ -4,8 +4,8 @@ syntax = "proto3";
 
 package pandora.common.v1;
 
-// PageReq 分页请求。
-message PageReq {
+// PageRequest 分页请求。
+message PageRequest {
   int32 page = 1;   // 从 1 开始
   int32 size = 2;   // 每页条数,建议 ≤ 100
 }

@@ -24,7 +24,7 @@ syntax = "proto3";
 
 package pandora.push.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service PushService {
   // Subscribe 客户端登录后立刻调,维持长连接接收所有推送。
@@ -45,10 +45,14 @@ service PushService {
   //   - SetOption("HttpVersion", "2TLS")
   //   - SetResponseBodyReceiveStreamDelegateV2 收 stream 字节,解析 grpc-web frame
   //   - 每收到一帧 PushFrame,按 topic 分发到 UI handler
-  rpc Subscribe(SubscribeReq) returns (stream PushFrame);
+  //
+  // PushFrame 不是 SubscribeResponse —— 它是"持续推送的事件帧",语义不是单次响应,
+  // 改名 SubscribeResponse 反而误导。豁免 buf 单条 lint 规则(对齐 protocol-ordering-rules.md)。
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Subscribe(SubscribeRequest) returns (stream PushFrame);
 }
 
-message SubscribeReq {
+message SubscribeRequest {
   // session_token 是 JWT,Envoy 已通过 jwt_authn filter 校验。
   // push 服务可冗余校验一次(用于 stream 中途 token 过期检测)。
   string session_token = 1;

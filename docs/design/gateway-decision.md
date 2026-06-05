@@ -235,10 +235,10 @@ Request->SetOption(HttpRequestOptions::HttpVersion, FHttpConstants::VERSION_2TLS
 Request->SetContent(GrpcWebEncodeUnary(CreateTeamReqProto));
 
 Request->OnProcessRequestComplete().BindLambda(
-    [](FHttpRequestPtr Req, FHttpResponsePtr Resp, bool bSuccess) {
+    [](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess) {
         if (bSuccess) {
-            CreateTeamResp Result;
-            GrpcWebDecodeUnary(Resp->GetContent(), Result);
+            CreateTeamResponse Result;
+            GrpcWebDecodeUnary(Response->GetContent(), Result);
             UI->ShowTeam(Result.team);
         }
     }
@@ -248,17 +248,17 @@ Request->ProcessRequest();
 
 ```cpp
 // 接 server stream(push 服务订阅)
-TSharedRef<IHttpRequest> StreamReq = FHttpModule::Get().CreateRequest();
-StreamReq->SetURL("https://pandora-gw.example.com/pandora.push.v1.PushService/Subscribe");
-StreamReq->SetVerb("POST");
-StreamReq->SetHeader("Content-Type", "application/grpc-web+proto");
-StreamReq->SetHeader("X-Grpc-Web", "1");
-StreamReq->SetHeader("Authorization", "Bearer " + SessionToken);
-StreamReq->SetOption(HttpRequestOptions::HttpVersion, FHttpConstants::VERSION_2TLS);
-StreamReq->SetContent(GrpcWebEncodeUnary(SubscribeReqProto));
+TSharedRef<IHttpRequest> StreamRequest = FHttpModule::Get().CreateRequest();
+StreamRequest->SetURL("https://pandora-gw.example.com/pandora.push.v1.PushService/Subscribe");
+StreamRequest->SetVerb("POST");
+StreamRequest->SetHeader("Content-Type", "application/grpc-web+proto");
+StreamRequest->SetHeader("X-Grpc-Web", "1");
+StreamRequest->SetHeader("Authorization", "Bearer " + SessionToken);
+StreamRequest->SetOption(HttpRequestOptions::HttpVersion, FHttpConstants::VERSION_2TLS);
+StreamRequest->SetContent(GrpcWebEncodeUnary(SubscribeReqProto));
 
 // ⭐ 关键:用 StreamDelegateV2 接收 server stream 数据块
-StreamReq->SetResponseBodyReceiveStreamDelegateV2(
+StreamRequest->SetResponseBodyReceiveStreamDelegateV2(
     FHttpRequestStreamDelegateV2::CreateLambda(
         [](void* Ptr, int64& InOutLength) {
             // libcurl 每收到一块字节,这里立刻被调用(非 game thread)
@@ -267,7 +267,7 @@ StreamReq->SetResponseBodyReceiveStreamDelegateV2(
         }
     )
 );
-StreamReq->ProcessRequest();
+StreamRequest->ProcessRequest();
 ```
 
 ### 3.4 UE 5.7 vs HTTP/1.1 fallback
@@ -451,14 +451,14 @@ static_resources:
 ### 6.2 push 服务设计
 
 ```go
-// proto/push/v1/push.proto(W2 §2.5 加)
+// proto/pandora/push/v1/push.proto(W2 §2.5 加)
 service PushService {
   // Subscribe:客户端首次登录后立刻调,维持长连接
   // 服务端 server stream 推送所有 player_id 相关事件
-  rpc Subscribe(SubscribeReq) returns (stream PushFrame);
+  rpc Subscribe(SubscribeRequest) returns (stream PushFrame);
 }
 
-message SubscribeReq {
+message SubscribeRequest {
   string session_token = 1;  // 鉴权(或走 Envoy JWT,这里冗余)
   int64  last_seen_ms  = 2;  // 重连补推用
 }
@@ -475,7 +475,7 @@ message PushFrame {
 
 ```go
 // push 服务 main 逻辑
-func (s *PushService) Subscribe(req *SubscribeReq, stream PushService_SubscribeServer) error {
+func (s *PushService) Subscribe(req *SubscribeRequest, stream PushService_SubscribeServer) error {
     playerID := extractPlayerIDFromJWT(stream.Context())
     
     // 1. 注册 stream 到内存索引
@@ -588,7 +588,7 @@ Client:UI 增量刷新(去重靠 ts_ms,见 protocol-ordering-rules.md §5.3)
   │ UI 点"邀请 B"                          │                          │
   │ ② FHttpModule POST                    │                          │
   │   /pandora.team.v1.TeamService/Invite │                          │
-  │   gRPC-Web frame {InviteReq{B}}       │                          │
+  │   gRPC-Web frame {InviteRequest{B}}       │                          │
   │   HTTP/2 + TLS                        │                          │
   │───────────────────────────────────────▶│                          │
   │                                        │ Envoy: 解 TLS / 鉴权     │
@@ -601,7 +601,7 @@ Client:UI 增量刷新(去重靠 ts_ms,见 protocol-ordering-rules.md §5.3)
   │                                        │ ← gRPC response {ok}     │
   │                                        │ Envoy: grpc→grpc-web    │
   │ gRPC-Web response                     │                          │
-  │ {InviteResp{ok}}                      │                          │
+  │ {InviteResponse{ok}}                      │                          │
   │◀──────────────────────────────────────│                          │
   │ UI 显示"已邀请 B"                      │                          │
   │                                        │                          │

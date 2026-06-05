@@ -89,7 +89,12 @@ pwsh tools/scripts/dev_up.ps1
 pwsh tools/scripts/proto_gen.ps1
 ```
 
-第一次跑会从 buf.build 拉远程插件(`protocolbuffers/go` / `grpc/go` / `go-kratos/kratos`),需要外网。
+第一次跑会从 buf.build 拉远程插件(`protocolbuffers/go` / `grpc/go`),需要外网。
+Kratos HTTP 代码生成走本地 `protoc-gen-go-http`,需要先装 Go 并执行:
+
+```powershell
+go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
+```
 
 ### 4. 编译 + 启动服务
 

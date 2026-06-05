@@ -4,13 +4,18 @@
 #   cd proto && buf generate --template buf.gen.go.yaml
 #
 # 产物路径:proto/gen/go/<domain>/v1/*.pb.go
-# 比如 proto/login/v1/login.proto → proto/gen/go/login/v1/{login.pb.go, login_grpc.pb.go, login_http.pb.go}
+# 比如 proto/pandora/login/v1/login.proto → proto/gen/go/login/v1/{login.pb.go, login_grpc.pb.go, login_http.pb.go}
 #
 # 4 个 plugin(2026-06-05 W2 调整):
 #   1. protobuf/go      生成 message
 #   2. grpc/go          生成 gRPC server/client stub
 #   3. kratos-http      生成 Kratos HTTP handler(由 google.api.http 注解驱动)
 #   4. kratos-errors    生成 Kratos errors helper(可选,W3+ 启用)
+#
+# 注意:
+#   - Kratos 官方当前推荐本地 protoc plugin(`protoc-gen-go-http`),
+#     BSR 上不存在可直接用的 `buf.build/go-kratos/kratos` 远程插件。
+#   - 因此这里混用 remote(protobuf/grpc) + local(kratos-http) 是预期行为。
 #
 # managed.go_package_prefix 让所有 .proto 自动得到统一的 go_package,
 # 不需要在每个 .proto 里手写 option go_package。
@@ -39,7 +44,8 @@ plugins:
 
   # 3) Kratos HTTP handler(从 google.api.http 注解生成 RESTful HTTP server / client)
   #    生成 *_http.pb.go,业务侧 RegisterLoginServiceHTTPServer(srv, impl)
-  - remote: buf.build/go-kratos/kratos:v2.9.2
+  #    依赖本机已安装 protoc-gen-go-http(v2.9.2)
+  - local: protoc-gen-go-http
     out: gen/go
     opt:
       - paths=source_relative

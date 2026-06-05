@@ -13,16 +13,16 @@ syntax = "proto3";
 
 package pandora.team.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service TeamService {
-  rpc CreateTeam(CreateTeamReq) returns (CreateTeamResp);
-  rpc Invite(InviteReq) returns (InviteResp);
-  rpc AcceptInvite(AcceptInviteReq) returns (AcceptInviteResp);
-  rpc LeaveTeam(LeaveTeamReq) returns (LeaveTeamResp);
-  rpc Kick(KickReq) returns (KickResp);
-  rpc SetReady(SetReadyReq) returns (SetReadyResp);
-  rpc GetTeam(GetTeamReq) returns (GetTeamResp);  // 客户端拉一次完整 Team(进入大厅时)
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
+  rpc Invite(InviteRequest) returns (InviteResponse);
+  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
+  rpc LeaveTeam(LeaveTeamRequest) returns (LeaveTeamResponse);
+  rpc Kick(KickRequest) returns (KickResponse);
+  rpc SetReady(SetReadyRequest) returns (SetReadyResponse);
+  rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);  // 客户端拉一次完整 Team(进入大厅时)
 }
 
 enum TeamState {
@@ -57,70 +57,70 @@ message Team {
 
 // ===== RPC =====
 
-message CreateTeamReq {
+message CreateTeamRequest {
   int64 player_id = 1;
 }
 
-message CreateTeamResp {
+message CreateTeamResponse {
   pandora.common.v1.ErrCode code = 1;
   string team_id = 2;
 }
 
-message InviteReq {
+message InviteRequest {
   string team_id        = 1;
   int64  inviter_id     = 2;
   int64  target_player_id = 3;
 }
 
-message InviteResp {
+message InviteResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message AcceptInviteReq {
+message AcceptInviteRequest {
   int64  player_id = 1;
   string team_id   = 2;
 }
 
-message AcceptInviteResp {
+message AcceptInviteResponse {
   pandora.common.v1.ErrCode code = 1;
   Team team = 2;
 }
 
-message LeaveTeamReq {
+message LeaveTeamRequest {
   string team_id   = 1;
   int64  player_id = 2;
 }
 
-message LeaveTeamResp {
+message LeaveTeamResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message KickReq {
+message KickRequest {
   string team_id           = 1;
   int64  captain_id        = 2;
   int64  target_player_id  = 3;
 }
 
-message KickResp {
+message KickResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message SetReadyReq {
+message SetReadyRequest {
   string team_id   = 1;
   int64  player_id = 2;
   bool   ready     = 3;
   int32  hero_id   = 4;  // 可选,选英雄一并设
 }
 
-message SetReadyResp {
+message SetReadyResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message GetTeamReq {
+message GetTeamRequest {
   string team_id = 1;
 }
 
-message GetTeamResp {
+message GetTeamResponse {
   pandora.common.v1.ErrCode code = 1;
   Team team = 2;
 }

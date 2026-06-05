@@ -8,12 +8,12 @@ syntax = "proto3";
 
 package pandora.dialogue.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service DialogueService {
-  rpc StartDialogue(StartDialogueReq) returns (StartDialogueResp);
-  rpc ChooseOption(ChooseOptionReq) returns (ChooseOptionResp);
-  rpc EndDialogue(EndDialogueReq) returns (EndDialogueResp);
+  rpc StartDialogue(StartDialogueRequest) returns (StartDialogueResponse);
+  rpc ChooseOption(ChooseOptionRequest) returns (ChooseOptionResponse);
+  rpc EndDialogue(EndDialogueRequest) returns (EndDialogueResponse);
 }
 
 message DialogueOption {
@@ -36,32 +36,32 @@ message DialogueState {
   reserved 8 to 9;
 }
 
-message StartDialogueReq {
+message StartDialogueRequest {
   int64 player_id = 1;
   int32 npc_id    = 2;
 }
 
-message StartDialogueResp {
+message StartDialogueResponse {
   pandora.common.v1.ErrCode code = 1;
   DialogueState state = 2;
 }
 
-message ChooseOptionReq {
+message ChooseOptionRequest {
   int64  player_id   = 1;
   string dialogue_id = 2;
   string option_id   = 3;
 }
 
-message ChooseOptionResp {
+message ChooseOptionResponse {
   pandora.common.v1.ErrCode code = 1;
   DialogueState state = 2;
 }
 
-message EndDialogueReq {
+message EndDialogueRequest {
   int64  player_id   = 1;
   string dialogue_id = 2;
 }
 
-message EndDialogueResp {
+message EndDialogueResponse {
   pandora.common.v1.ErrCode code = 1;
 }

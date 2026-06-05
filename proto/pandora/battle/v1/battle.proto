@@ -11,12 +11,12 @@ syntax = "proto3";
 
 package pandora.battle.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service BattleResultService {
-  rpc ReportResult(ReportResultReq) returns (ReportResultResp);
-  rpc GetMatchResult(GetMatchResultReq) returns (GetMatchResultResp);
-  rpc ListPlayerHistory(ListPlayerHistoryReq) returns (ListPlayerHistoryResp);
+  rpc ReportResult(ReportResultRequest) returns (ReportResultResponse);
+  rpc GetMatchResult(GetMatchResultRequest) returns (GetMatchResultResponse);
+  rpc ListPlayerHistory(ListPlayerHistoryRequest) returns (ListPlayerHistoryResponse);
 }
 
 message PlayerStats {
@@ -49,31 +49,31 @@ message BattleResult {
 }
 
 // DS 通过 kafka envelope 上报,但本 RPC 也提供同步上报用法(测试 / 兼容)
-message ReportResultReq {
+message ReportResultRequest {
   BattleResult result = 1;
 }
 
-message ReportResultResp {
+message ReportResultResponse {
   pandora.common.v1.ErrCode code = 1;
   bool already_recorded = 2;  // true = 幂等命中,本次跳过
 }
 
-message GetMatchResultReq {
+message GetMatchResultRequest {
   string match_id = 1;
 }
 
-message GetMatchResultResp {
+message GetMatchResultResponse {
   pandora.common.v1.ErrCode code = 1;
   BattleResult result = 2;
 }
 
-message ListPlayerHistoryReq {
+message ListPlayerHistoryRequest {
   int64 player_id = 1;
   int32 limit     = 2;
   int64 before_ms = 3;  // 分页游标:返回 ended_at_ms < before_ms 的记录
 }
 
-message ListPlayerHistoryResp {
+message ListPlayerHistoryResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated BattleResult results = 2;
 }

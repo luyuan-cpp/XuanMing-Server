@@ -67,7 +67,7 @@
 
 #### buf 工具链(3 个文件)
 - [x] `proto/buf.yaml` v2 module + STANDARD lint(豁免 ENUM_VALUE_PREFIX / ENUM_ZERO_VALUE_SUFFIX)
-- [x] `proto/buf.gen.go.yaml` 用 buf.build 远程插件,managed.go_package_prefix 全局统一
+- [x] `proto/buf.gen.go.yaml` 用 buf.build 远程插件(`protobuf/go` + `grpc/go`) + 本地 `protoc-gen-go-http`,managed.go_package_prefix 全局统一
 - [x] `proto/buf.gen.cpp.yaml` 占位(D4+ UE 仓库使用)
 
 #### proto 源(19 个文件,1373 行)
@@ -75,7 +75,7 @@
 **common/v1/(4 个)**:
 - [x] `errcode.proto` 全段位错误码 enum(64 个常量,跟 pkg/errcode 1:1 同步)
 - [x] `timestamp.proto` TimestampMs 包装
-- [x] `pagination.proto` PageReq + PageMeta
+- [x] `pagination.proto` PageRequest + PageMeta
 - [x] `kafka_envelope.proto` 统一信封(topic / key / payload / trace_id / ts_ms)
 
 **13 个业务服务(每个一个 .proto)**:
@@ -138,7 +138,7 @@ pwsh tools/scripts/proto_gen.ps1
 ```
 跑完后 `proto/gen/go/` 会产出 .pb.go,W2 写代码时直接 `import "github.com/luyuancpp/pandora/proto/gen/go/<domain>/v1"`。
 
-⚠️ **errcode 双向同步纪律**:proto/common/v1/errcode.proto 和 pkg/errcode/errcode.go 数值必须一致,**改任一边必须同步改另一边**。W2+ 考虑加 pre-commit hook 自动校验。
+⚠️ **errcode 双向同步纪律**:proto/pandora/common/v1/errcode.proto 和 pkg/errcode/errcode.go 数值必须一致,**改任一边必须同步改另一边**。W2+ 考虑加 pre-commit hook 自动校验。
 
 ⚠️ **协议边界(GAS vs gRPC)是最重要的不变量**(ds-arch.md §0),新会话 AI 动 proto 前必读。
 
@@ -188,6 +188,24 @@ pwsh tools/scripts/proto_gen.ps1
 ⚠️ kafkax 是 **W1-D2 简化版**:无 retry queue / 无 DLQ / 无 plainProducer。W2 写 battle_result 时再补全。
 
 ⚠️ Phase 2 docker compose 没有 `up -d` 实跑(留给用户;镜像 pull 需要他网络)。`compose config --quiet` ��验证 yaml 语法 + 端口绑定正确。
+
+### go.work 构建口径修正(2026-06-05)
+
+**问题**:CLAUDE.md §4.1 原写 `go build ./...`,但仓库根没有 go.mod,go.work 多 module 模式下此命令报错:
+```
+pattern ./...: directory prefix . does not contain modules listed in go.work or their selected dependencies
+```
+
+**决策**:
+- 确认继续 go.work 多 module 模式(pkg 一个 module、每个服务一个 go.mod)
+- 根目录不加 go.mod(不回退到单根模式)
+- CLAUDE.md §4.1 验证命令改为按 go.work use 列表逐 module 构建
+- 当前阶段验证命令:`go build ./pkg/...`
+- W2+ 新增服务 module 时同步追加到验证命令
+
+**修改文件**:
+- `CLAUDE.md` §4.1 — 改验证命令为 workspace 级
+- `go.work` — 追加构建注意事项注释
 
 ### 待用户决策
 
@@ -319,7 +337,7 @@ W2 写代码顺序(`go-services.md §4` 已更新):
 
 ⚠️ **gateway 完全不需要"为每个业务写代码"**:配 yaml 把 HTTP path 映射到 gRPC method 即可。push 也几乎不需要随业务改动(只是消费 kafka + 转 WebSocket)。
 
-⚠️ **错误码三向同步**:proto/common/v1/errcode.proto ↔ pkg/errcode/errcode.go(W2 时也要考虑给 UE 客户端生成一份 ErrCode 枚举)
+⚠️ **错误码三向同步**:proto/pandora/common/v1/errcode.proto ↔ pkg/errcode/errcode.go(W2 时也要考虑给 UE 客户端生成一份 ErrCode 枚举)
 
 ⚠️ **协议顺序规则**(2026-06-03 末追加,见 `docs/design/protocol-ordering-rules.md`):
 
@@ -418,7 +436,7 @@ curl_easy_setopt(EasyHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
 
 #### Proto 调整(plan 块 2)
 
-- [ ] 新增 `proto/push/v1/push.proto`(PushService.Subscribe server stream)
+- [ ] 新增 `proto/pandora/push/v1/push.proto`(PushService.Subscribe server stream)
 - [ ] 13 个业务 .proto 加 `google.api.http` 注解(W2 时一起加,本期不强制)
 - [ ] `buf.yaml` 加 `buf.build/googleapis/googleapis` deps(同上)
 

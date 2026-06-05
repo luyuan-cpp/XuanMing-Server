@@ -390,16 +390,16 @@ W2 开始才正式写业务逻辑,顺序:
 - 离线消息缓存(redis ZSET,5min)
 - 重连补推
 
-**对外 API**(详见 `proto/push/v1/push.proto`,W2 时创建):
+**对外 API**(详见 `proto/pandora/push/v1/push.proto`,W2 时创建):
 
 ```proto
 service PushService {
   // 客户端登录后立刻调,一直保持连接
   // 服务端通过 stream.Send(PushFrame) 持续推送 player_id 相关的所有事件
-  rpc Subscribe(SubscribeReq) returns (stream PushFrame);
+  rpc Subscribe(SubscribeRequest) returns (stream PushFrame);
 }
 
-message SubscribeReq {
+message SubscribeRequest {
   string session_token = 1;  // JWT,Envoy 已校验,这里冗余检查
   int64  last_seen_ms  = 2;  // 重连补推用
 }

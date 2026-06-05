@@ -13,23 +13,23 @@ syntax = "proto3";
 
 package pandora.hub.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service HubAllocatorService {
-  rpc AssignHub(AssignHubReq) returns (AssignHubResp);
-  rpc ReleaseHub(ReleaseHubReq) returns (ReleaseHubResp);
-  rpc TransferHub(TransferHubReq) returns (TransferHubResp);
-  rpc ListHubs(ListHubsReq) returns (ListHubsResp);
-  rpc Heartbeat(HubHeartbeatReq) returns (HubHeartbeatResp);  // Hub DS 每 5s 主动调
+  rpc AssignHub(AssignHubRequest) returns (AssignHubResponse);
+  rpc ReleaseHub(ReleaseHubRequest) returns (ReleaseHubResponse);
+  rpc TransferHub(TransferHubRequest) returns (TransferHubResponse);
+  rpc ListHubs(ListHubsRequest) returns (ListHubsResponse);
+   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // Hub DS 每 5s 主动调
 }
 
-message AssignHubReq {
+message AssignHubRequest {
   int64  player_id = 1;
   string region    = 2;
   string team_id   = 3;  // 可选,优先选队友所在 hub
 }
 
-message AssignHubResp {
+message AssignHubResponse {
   pandora.common.v1.ErrCode code = 1;
   string hub_ds_addr = 2;
   string hub_ticket  = 3;  // JWT
@@ -37,20 +37,20 @@ message AssignHubResp {
   int32  shard_id    = 5;
 }
 
-message ReleaseHubReq {
+message ReleaseHubRequest {
   int64 player_id = 1;
 }
 
-message ReleaseHubResp {
+message ReleaseHubResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message TransferHubReq {
+message TransferHubRequest {
   int64  player_id     = 1;
   string target_hub_id = 2;  // 玩家点的传送点目标
 }
 
-message TransferHubResp {
+message TransferHubResponse {
   pandora.common.v1.ErrCode code = 1;
   string new_hub_ds_addr = 2;
   string new_hub_ticket  = 3;
@@ -67,18 +67,18 @@ message HubInfo {
   string state        = 6;  // "ready" | "draining"
 }
 
-message ListHubsReq {
+message ListHubsRequest {
   string region = 1;  // 空 = 全部
 }
 
-message ListHubsResp {
+message ListHubsResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated HubInfo hubs = 2;
 }
 
 // ===== Heartbeat(单向 unary,Hub DS 每 5s 调一次)=====
 
-message HubHeartbeatReq {
+ message HeartbeatRequest {
   string hub_pod_name = 1;
   int32  player_count = 2;
   float  cpu_pct      = 3;
@@ -89,7 +89,7 @@ message HubHeartbeatReq {
   reserved 7 to 9;
 }
 
-message HubHeartbeatResp {
+ message HeartbeatResponse {
   pandora.common.v1.ErrCode code = 1;
   string command = 2;  // "" | "drain" | "stop" | "reload_config"
   // 3-9 reserved

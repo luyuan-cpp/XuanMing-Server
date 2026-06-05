@@ -14,11 +14,11 @@ syntax = "proto3";
 
 package pandora.chat.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service ChatService {
-  rpc SendMessage(SendMessageReq) returns (SendMessageResp);
-  rpc PullHistory(PullHistoryReq) returns (PullHistoryResp);  // 拉历史(私聊离线消息等)
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc PullHistory(PullHistoryRequest) returns (PullHistoryResponse);  // 拉历史(私聊离线消息等)
 }
 
 enum ChatChannel {
@@ -41,7 +41,7 @@ message ChatMessage {
   reserved 8 to 9;
 }
 
-message SendMessageReq {
+message SendMessageRequest {
   int64       sender_id  = 1;
   ChatChannel channel    = 2;
   int64       target_id  = 3;
@@ -49,12 +49,12 @@ message SendMessageReq {
   string      request_id = 5;  // 客户端去重
 }
 
-message SendMessageResp {
+message SendMessageResponse {
   pandora.common.v1.ErrCode code = 1;
   string message_id = 2;
 }
 
-message PullHistoryReq {
+message PullHistoryRequest {
   int64       player_id = 1;
   ChatChannel channel   = 2;
   int64       peer_id   = 3;  // 私聊用,世界/队伍留 0
@@ -62,7 +62,7 @@ message PullHistoryReq {
   int64       before_ms = 5;  // 分页游标
 }
 
-message PullHistoryResp {
+message PullHistoryResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated ChatMessage messages = 2;
 }

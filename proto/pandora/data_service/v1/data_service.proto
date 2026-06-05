@@ -12,12 +12,12 @@ syntax = "proto3";
 
 package pandora.data_service.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service DataService {
-  rpc ReadPlayer(ReadPlayerReq) returns (ReadPlayerResp);
-  rpc WritePlayer(WritePlayerReq) returns (WritePlayerResp);
-  rpc InvalidateCache(InvalidateCacheReq) returns (InvalidateCacheResp);
+  rpc ReadPlayer(ReadPlayerRequest) returns (ReadPlayerResponse);
+  rpc WritePlayer(WritePlayerRequest) returns (WritePlayerResponse);
+  rpc InvalidateCache(InvalidateCacheRequest) returns (InvalidateCacheResponse);
 }
 
 // PlayerData 是 player 数据的中性容器(不依赖 player.v1 类型,避免循环依赖)。
@@ -30,28 +30,28 @@ message PlayerData {
   reserved 4 to 9;
 }
 
-message ReadPlayerReq {
+message ReadPlayerRequest {
   int64 player_id = 1;
 }
 
-message ReadPlayerResp {
+message ReadPlayerResponse {
   pandora.common.v1.ErrCode code = 1;
   PlayerData data = 2;
 }
 
-message WritePlayerReq {
+message WritePlayerRequest {
   PlayerData data = 1;
 }
 
-message WritePlayerResp {
+message WritePlayerResponse {
   pandora.common.v1.ErrCode code = 1;
   int32 new_version = 2;
 }
 
-message InvalidateCacheReq {
+message InvalidateCacheRequest {
   int64 player_id = 1;
 }
 
-message InvalidateCacheResp {
+message InvalidateCacheResponse {
   pandora.common.v1.ErrCode code = 1;
 }

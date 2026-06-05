@@ -13,13 +13,13 @@ syntax = "proto3";
 
 package pandora.match.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service MatchService {
-  rpc StartMatch(StartMatchReq) returns (StartMatchResp);
-  rpc CancelMatch(CancelMatchReq) returns (CancelMatchResp);
-  rpc ConfirmMatch(ConfirmMatchReq) returns (ConfirmMatchResp);
-  rpc GetMatchProgress(GetMatchProgressReq) returns (GetMatchProgressResp);
+  rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
+  rpc CancelMatch(CancelMatchRequest) returns (CancelMatchResponse);
+  rpc ConfirmMatch(ConfirmMatchRequest) returns (ConfirmMatchResponse);
+  rpc GetMatchProgress(GetMatchProgressRequest) returns (GetMatchProgressResponse);
 }
 
 enum MatchStage {
@@ -32,39 +32,39 @@ enum MatchStage {
   MATCH_STAGE_FAILED      = 6;
 }
 
-message StartMatchReq {
+message StartMatchRequest {
   string team_id = 1;
 }
 
-message StartMatchResp {
+message StartMatchResponse {
   pandora.common.v1.ErrCode code = 1;
   string match_id = 2;
 }
 
-message CancelMatchReq {
+message CancelMatchRequest {
   string match_id = 1;
   int64  player_id = 2;
 }
 
-message CancelMatchResp {
+message CancelMatchResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message ConfirmMatchReq {
+message ConfirmMatchRequest {
   int64  player_id = 1;
   string match_id  = 2;
   bool   accept    = 3;  // false = 拒绝
 }
 
-message ConfirmMatchResp {
+message ConfirmMatchResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
-message GetMatchProgressReq {
+message GetMatchProgressRequest {
   string match_id = 1;
 }
 
-message GetMatchProgressResp {
+message GetMatchProgressResponse {
   pandora.common.v1.ErrCode code = 1;
   MatchProgress progress = 2;
 }

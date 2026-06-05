@@ -15,13 +15,13 @@ syntax = "proto3";
 
 package pandora.login.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 import "google/api/annotations.proto";
 
 service LoginService {
   // Login 立即完成型(synchronous),response 含完整 session_token + hub 地址
   // kafka push 不发给 caller(他看 RPC response 即可)
-  rpc Login(LoginReq) returns (LoginResp) {
+  rpc Login(LoginRequest) returns (LoginResponse) {
     option (google.api.http) = {
       post: "/v1/login"
       body: "*"
@@ -29,7 +29,7 @@ service LoginService {
   }
 
   // Logout 立即完成型,清 session
-  rpc Logout(LogoutReq) returns (LogoutResp) {
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (google.api.http) = {
       post: "/v1/logout"
       body: "*"
@@ -37,7 +37,7 @@ service LoginService {
   }
 
   // IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
-  rpc IssueDSTicket(IssueDSTicketReq) returns (IssueDSTicketResp) {
+  rpc IssueDSTicket(IssueDSTicketRequest) returns (IssueDSTicketResponse) {
     option (google.api.http) = {
       post: "/v1/ds/ticket/issue"
       body: "*"
@@ -46,7 +46,7 @@ service LoginService {
 
   // VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
   // ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
-  rpc VerifyDSTicket(VerifyDSTicketReq) returns (VerifyDSTicketResp) {
+  rpc VerifyDSTicket(VerifyDSTicketRequest) returns (VerifyDSTicketResponse) {
     option (google.api.http) = {
       post: "/v1/ds/ticket/verify"
       body: "*"
@@ -56,7 +56,7 @@ service LoginService {
 
 // ===== 登录 =====
 
-message LoginReq {
+message LoginRequest {
   string account        = 1;
   string password_hash  = 2;  // 客户端先 sha256
   string device_id      = 3;
@@ -70,7 +70,7 @@ message LoginReq {
   reserved 12 to 49;
 }
 
-message LoginResp {
+message LoginResponse {
   pandora.common.v1.ErrCode code = 1;
   int64  player_id     = 2;
   string session_token = 3;  // 连后端 gRPC 用
@@ -80,11 +80,11 @@ message LoginResp {
   reserved 6 to 9;
 }
 
-message LogoutReq {
+message LogoutRequest {
   string session_token = 1;
 }
 
-message LogoutResp {
+message LogoutResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
@@ -102,23 +102,23 @@ message DSTicket {
   reserved 7 to 9;
 }
 
-message IssueDSTicketReq {
+message IssueDSTicketRequest {
   string session_token = 1;
   string ds_type       = 2;  // "hub" | "battle"
   string target_id     = 3;  // 目标 DS pod / match_id
 }
 
-message IssueDSTicketResp {
+message IssueDSTicketResponse {
   pandora.common.v1.ErrCode code = 1;
   string ticket = 2;  // JWT 编码后的字符串
 }
 
-message VerifyDSTicketReq {
+message VerifyDSTicketRequest {
   string ticket       = 1;
   string ds_pod_name  = 2;
 }
 
-message VerifyDSTicketResp {
+message VerifyDSTicketResponse {
   pandora.common.v1.ErrCode code = 1;
   DSTicket claims = 2;
 }

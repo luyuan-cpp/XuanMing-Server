@@ -12,18 +12,18 @@ syntax = "proto3";
 
 package pandora.ds.v1;
 
-import "common/v1/errcode.proto";
+import "pandora/common/v1/errcode.proto";
 
 service DSAllocatorService {
-  rpc AllocateBattle(AllocateBattleReq) returns (AllocateBattleResp);
-  rpc ReleaseBattle(ReleaseBattleReq) returns (ReleaseBattleResp);
-  rpc Heartbeat(HeartbeatReq) returns (HeartbeatResp);  // DS 每 5s 主动调
-  rpc ListBattles(ListBattlesReq) returns (ListBattlesResp);
+  rpc AllocateBattle(AllocateBattleRequest) returns (AllocateBattleResponse);
+  rpc ReleaseBattle(ReleaseBattleRequest) returns (ReleaseBattleResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // DS 每 5s 主动调
+  rpc ListBattles(ListBattlesRequest) returns (ListBattlesResponse);
 }
 
 // ===== Allocate / Release =====
 
-message AllocateBattleReq {
+message AllocateBattleRequest {
   string match_id  = 1;
   repeated int64 player_ids = 2;
   int32  map_id    = 3;
@@ -32,26 +32,26 @@ message AllocateBattleReq {
   reserved 5 to 9;
 }
 
-message AllocateBattleResp {
+message AllocateBattleResponse {
   pandora.common.v1.ErrCode code = 1;
   string ds_addr        = 2;
   string ds_pod_name    = 3;
   int64  allocated_at_ms = 4;
 }
 
-message ReleaseBattleReq {
+message ReleaseBattleRequest {
   string match_id = 1;
   string reason   = 2;  // "completed" | "abandoned" | "crash"
 }
 
-message ReleaseBattleResp {
+message ReleaseBattleResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
 // ===== Heartbeat(单向 unary,DS 每 5s 调一次)=====
 
 // DS 上报状态
-message HeartbeatReq {
+message HeartbeatRequest {
   string ds_pod_name = 1;
   string match_id    = 2;
   int32  player_count = 3;
@@ -64,7 +64,7 @@ message HeartbeatReq {
 }
 
 // allocator 返回控制指令(DS 在下次 heartbeat 之间消费)
-message HeartbeatResp {
+message HeartbeatResponse {
   pandora.common.v1.ErrCode code = 1;
   string command = 2;  // "" | "stop" | "drain" | "reload_config"
   // 3-9 reserved for future control commands
@@ -82,11 +82,11 @@ message BattleInfo {
   int64  allocated_at_ms = 6;
 }
 
-message ListBattlesReq {
+message ListBattlesRequest {
   string state_filter = 1;  // 空 = 全部
 }
 
-message ListBattlesResp {
+message ListBattlesResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated BattleInfo battles = 2;
 }
