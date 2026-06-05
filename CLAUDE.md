@@ -60,6 +60,9 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 | R0 | 2026-06-03 | 双仓库:后端 Pandora,UE 独立仓库 |
 | R0 | 2026-06-03 | License MIT,Go 1.23,基础设施全新 |
 | R0 | 2026-06-03 | **后端框架继续用 go-zero**(历史决策,后续已切换 Kratos) |
+| W2 ④ | 2026-06-05 | **Envoy v1.38.0 边缘网关本地 docker 落地**(listener :8443 TLS + grpc_web/cors/router,login_cluster unary 5s + push_cluster server stream timeout 0s,`dns_lookup_family: V4_ONLY` 修 Windows host.docker.internal IPv6 坑) |
+| W2 ⑤ | 2026-06-05 | **push 服务骨架完成**(Pandora 首个 server stream Kratos 服,5s mock tick,ConnectionManager 顶号语义,gRPC :50014 / HTTP :51014) |
+| W2 ⑥ | 2026-06-05 | **客户端连接铁律第 2 条全链路打通**(经 Envoy :8443 LoginService/Login unary + PushService/Subscribe server stream 12s 收 3 帧,reflection list 6 services) |
 
 后续每轮压测 / 大决策追加一行,**永不删旧行**。
 

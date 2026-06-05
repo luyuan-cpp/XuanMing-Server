@@ -989,3 +989,126 @@ unary + server stream 全打通。
   - login 接真 mysql / redis(去掉 mock)
   - 第 3 个业务服:player_locator(在线管理)或 friend(社交首版)
 
+
+---
+
+## W2 ⑦ — 文档同步收尾(2026-06-05)
+
+W2 ④/⑤/⑥ 三步骨架 + 端到端验证已完成,本段只做文档同步,不动代码,不动 yaml,不动脚本。
+
+### 完成内容
+
+#### 1. `docs/design/go-services.md` 同步状态
+
+- §1 服务总览表新增"骨架状态"列(14 行 + Envoy):
+  - **login** ✅ W2 ③(mock,W3 接 mysql/redis)
+  - **push** ✅ W2 ⑤(mock 5s tick,W3 接 kafka)
+  - **Envoy**(表外加注)✅ W2 ④ 落地(v1.38.0 docker,login_cluster + push_cluster + grpc_web/cors/router)
+  - 其它 12 个业务服:⏸️ W3 / W3+ / W4 / W4+ 各按计划标记
+- §4 W2 路线图改成 6 步已完成 + 6 项 W3+ 待办的有序清单(原本只有一行文字)
+
+#### 2. `CLAUDE.md` §7 决策行追加 3 行
+
+- W2 ④ 2026-06-05:Envoy v1.38.0 落地(含 V4_ONLY / server stream timeout 0s 关键坑)
+- W2 ⑤ 2026-06-05:push 骨架完成(首个 server stream Kratos 服)
+- W2 ⑥ 2026-06-05:客户端连接铁律第 2 条全链路打通
+
+#### 3. PROGRESS.md 加本段
+
+### 验证(Claude 跑)
+
+```
+go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/...
+go vet   ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/...
+```
+
+两条命令 exit=0(纯文档改动,不涉及代码,只为确保动 docs 后构建仍稳)。
+
+### 待 Codex 执行(W2 ⑦ git 收尾)
+
+按 `AGENTS.md §11.1`,以下交给 Codex:
+
+```powershell
+# 在 E:\work\Pandora 执行
+git status
+git diff --stat
+git diff -- CLAUDE.md docs/design/go-services.md PROGRESS.md
+```
+
+Codex 应看到 3 个文件变更:
+
+```
+ CLAUDE.md                       |  3 +++
+ PROGRESS.md                     | +++++++++++++ (本段)
+ docs/design/go-services.md      | +++/---       (表加状态列 + W2 路线图重写)
+```
+
+**注意**:如果 W2 ④/⑤/⑥ 之前已经 commit 过,本次 W2 ⑦ 单独 commit;如果之前未 commit(W2 ⑤ + W2 ④/⑥ 待 commit 段都在),Codex 应**整批一起 commit** 成一个 commit(3+5+4+6+7 是连续递进,合一个 commit 更清晰)。**Codex 决定后告诉用户**。
+
+#### Codex 可直接用的 commit message 建议(W2 ④+⑤+⑥+⑦ 合一)
+
+```
+feat(envoy,push,login): W2 ④⑤⑥⑦ 边缘网关 + push 骨架 + 端到端验证 + 文档同步
+
+W2 ⑤ push 服务骨架(Pandora 首个 server stream Kratos 服)
+- services/runtime/push/{cmd,etc,internal/{conf,biz,service,server}}
+- Subscribe server stream + 5s mock tick(topic=pandora.system.notify, payload=hello)
+- ConnectionManager 顶号 / SendTo / Broadcast(W3 kafka 消费者直接复用)
+- gRPC :50014 / HTTP :51014(仅 /metrics)
+- prometheus 抓取目标 + go.work + CLAUDE.md §4.1 验证命令同步
+
+W2 ④ Envoy v1.38 边缘网关本地 docker
+- deploy/envoy/{envoy.yaml,.gitignore,README.md}
+  listener :8443 TLS + grpc_web/cors/router filters
+  login_cluster (unary 5s) + push_cluster (server stream timeout 0s)
+  上游 h2c 显式 http2_protocol_options(漏了 envoy 用 HTTP/1.1 → 415)
+  dns_lookup_family V4_ONLY(Windows host.docker.internal 默认 IPv6,envoy 连不上)
+  reflection 路由放行(dev 联调用,W3 上线前关)
+- docker-compose.dev.yml 加 envoy service(image v1.38-latest,
+  extra_hosts host.docker.internal:host-gateway,默认随基础设施一起启)
+- pkg/grpcserver 注释说明 Kratos 默认已开 reflection
+  (W3 上线前传 kgrpc.DisableReflection() 关)
+- dev_status.ps1 端口表加 8443 / 9901
+
+W2 ⑥ 端到端 hello world(客户端连接铁律第 2 条全打通)
+- 经 envoy :8443 LoginService/Login → playerId + sessionToken + hubDsAddr + hubTicket
+- 经 envoy :8443 reflection list → 6 services(含 pandora.login.v1.LoginService)
+- 经 envoy :8443 PushService/Subscribe -max-time 12 → 收 3 帧 PushFrame
+- login 日志确认 trace_id 透传 + msg=login_ok
+
+W2 ⑦ 文档同步收尾
+- docs/design/go-services.md §1 服务表加骨架状态列(login/push ✅,Envoy 表外加注 ✅)
+- docs/design/go-services.md §4 W2 路线图改有序清单(6 步完成 + 6 项 W3+ 待办)
+- CLAUDE.md §7 决策行追加 W2 ④/⑤/⑥
+- PROGRESS.md 加 W2 ⑦ 段
+
+Pandora 客户端连接铁律第 2 条(FHttpModule → Envoy gRPC-Web over HTTP/2 TLS)
+unary + server stream 全打通。W3 起接 mysql/redis + JWT。
+
+接 commit ee12479(W2 ②⁺)。
+```
+
+> 如果 W2 ④/⑤/⑥ 已经 commit,W2 ⑦ 单独 commit message:
+>
+> ```
+> docs(w2-7): W2 ⑦ 收尾 — 同步 go-services / CLAUDE / PROGRESS
+>
+> - go-services.md §1 服务表加骨架状态列(login/push ✅,Envoy 表外加注 ✅)
+> - go-services.md §4 W2 路线图改有序清单(6 步完成 + 6 项 W3+ 待办)
+> - CLAUDE.md §7 决策行追加 W2 ④/⑤/⑥
+> - PROGRESS.md 加 W2 ⑦ 段
+>
+> 纯文档,不动代码 / yaml / 脚本。Claude 已跑 build + vet 验证仍稳。
+> ```
+
+### 下一步(W3 起点)
+
+W2 收官,W3 真正开始接外部存储 + 鉴权 + 第 3 个业务服。建议 W3 路线:
+
+1. **W3 ①** Envoy `jwt_authn` filter + login 发真 JWT(替换 uuid session_token)
+2. **W3 ②** login 接 mysql(account 表)+ redis(session 缓存),去掉 mock
+3. **W3 ③** `kgrpc.DisableReflection()` 开关化(`etc/*-dev.yaml` 含 reflection: true,prod 关)
+4. **W3 ④** push 接 kafka(消费 `pandora.{team,match,chat,player,friend,system}.*` 6 个 topic)+ redis ZSET 离线 5min
+5. **W3 ⑤** 第 3 个业务服:`player_locator`(在线管理,locator.update topic,login 登录时调 SetLocation)
+6. **W3 ⑥** Kratos config Duration 包装类型(同时实现 UnmarshalJSON / UnmarshalYAML),解决 yaml 不能写 `"5s"` 这个限制
+7. **W3 ⑦** UE 客户端首版:FHttpModule + 自研 grpc-web 解析(参考 `gateway-decision.md` §7)

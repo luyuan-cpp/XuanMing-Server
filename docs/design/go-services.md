@@ -10,26 +10,26 @@
 
 ## 1. 服务总览
 
-| # | 服务 | gRPC 端口 | 状态性 | 主要存储 | 主要消费 kafka |
-|---|---|---|---|---|---|
-| 1 | login | 50001 | 无 | mysql + redis | (生产 login.event) |
-| 2 | player | 50002 | 无 | mysql + redis | player.update |
-| 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) |
-| 4 | friend | 50004 | 无 | mysql + redis | - |
-| 5 | chat | 50005 | 弱 | redis pub/sub | chat.world |
-| 6 | player_locator | 50006 | 强 | redis | locator.update |
-| 7 | team | 50010 | 强 | redis | - |
-| 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) |
-| 9 | trade | 50012 | 强 | redis + mysql | trade.audit |
-| 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - |
-| 11 | ds_allocator | 50020 | 弱 | etcd + k8s | (生产 ds.lifecycle) |
-| 12 | hub_allocator | 50021 | 弱 | etcd + k8s | (生产 ds.lifecycle) |
-| 13 | battle_result | 50022 | 无 | mysql | battle.result |
-| 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* |
+| # | 服务 | gRPC 端口 | 状态性 | 主要存储 | 主要消费 kafka | 骨架状态 |
+|---|---|---|---|---|---|---|
+| 1 | login | 50001 | 无 | mysql + redis | (生产 login.event) | ✅ W2 ③(mock,W3 接 mysql/redis) |
+| 2 | player | 50002 | 无 | mysql + redis | player.update | ⏸️ W3 |
+| 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | ⏸️ W3 |
+| 4 | friend | 50004 | 无 | mysql + redis | - | ⏸️ W3+ |
+| 5 | chat | 50005 | 弱 | redis pub/sub | chat.world | ⏸️ W3+ |
+| 6 | player_locator | 50006 | 强 | redis | locator.update | ⏸️ W3 |
+| 7 | team | 50010 | 强 | redis | - | ⏸️ W3 |
+| 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ⏸️ W3 |
+| 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ W4+ |
+| 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ W4+ |
+| 11 | ds_allocator | 50020 | 弱 | etcd + k8s | (生产 ds.lifecycle) | ⏸️ W3 |
+| 12 | hub_allocator | 50021 | 弱 | etcd + k8s | (生产 ds.lifecycle) | ⏸️ W3 |
+| 13 | battle_result | 50022 | 无 | mysql | battle.result | ⏸️ W4 |
+| 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |
 
 ⭐ = 2026-06-04 终版新增。push 是 Kratos transport/grpc 暴露的 server stream 服务,客户端通过 Envoy 连过来,详见 `gateway-decision.md` §6。
 
-**Edge Gateway = Envoy**(端口 8443 HTTPS),不是 go 服务,不计在表格内。
+**Edge Gateway = Envoy**(端口 8443 HTTPS),不是 go 服务,不计在表格内。**状态**:✅ W2 ④ 落地(v1.38.0 docker,login_cluster + push_cluster + grpc_web/cors/router filters,详见 `PROGRESS.md` W2 ④ 段)。
 
 ## 2. 各服务详细契约
 
@@ -372,7 +372,19 @@ W1 不写业务逻辑,只搭框架:
 | 其它 10 个 | 只有空目录 + cmd/main.go 占位 + 注册 etcd |
 
 W2 开始才正式写业务逻辑,顺序:
-**pkg 重写(Kratos)→ login → Envoy 配置打通 → push(server stream + kafka 消费)→ UE 客户端 grpc-web → player + data_service → team → matchmaker → ds_allocator + hub_allocator → battle_result → 其它**
+
+1. ✅ pkg 重写(Kratos)— W2 ①(commit 见 PROGRESS.md)
+2. ✅ proto 全 buf STANDARD + 生成产物 — W2 ②⁺(commit `ee12479`)
+3. ✅ **login** 骨架(Kratos 标准分层,mock 行为可联调)— W2 ③
+4. ✅ **Envoy** v1.38 边缘网关(login_cluster + push_cluster + grpc_web/cors/router)— W2 ④
+5. ✅ **push** 骨架(首个 server stream,5s mock tick)— W2 ⑤
+6. ✅ 经 Envoy 端到端 hello world(login unary + push server stream + reflection)— W2 ⑥
+7. ⏸️ UE 客户端 grpc-web(W3+,FHttpModule 自研 grpc-web 解析)
+8. ⏸️ player + data_service(W3)
+9. ⏸️ team → matchmaker(W3)
+10. ⏸️ ds_allocator + hub_allocator(W3)
+11. ⏸️ battle_result(W4)
+12. ⏸️ 其它(friend / chat / trade / dialogue,W4+)
 
 ---
 
