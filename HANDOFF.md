@@ -469,26 +469,26 @@ grpcurl -insecure :8443 ... PushService/Subscribe               # 经 Envoy 接 
 
 ### 4.2.1 跨 AI 平台硬性分工(节省 token)
 
-**Claude Code 只负责脑力和代码**:
+**Claude 系模型(Copilot Claude / Claude Code / Cursor Claude 等)只负责脑力和代码**:
 - 深度分析完整详细做法
 - 开 plan 模式给用户审
 - 审过后改代码 / proto / yaml / 脚本 / 文档
 - 跑项目内验证(build / test / lint / docker compose config)
-- 输出 git status / diff --stat / commit message 建议
 
-**Claude Code 不做环境和提交**:
+**Claude 系模型不做环境和 git 收尾**:
 - 不安装 / 升级 / 卸载本机工具
 - 不改 PATH / 证书信任 / Docker Desktop 设置 / 防火墙等系统环境
 - 不拉大型 Docker 镜像作为环境准备动作
-- 不执行 git commit / push / tag
+- 不执行 git status / diff --stat / commit message 建议 / commit / push / tag
 
 **ChatGPT / Codex 负责环境和提交收尾**:
 - 检查并安装本机工具(mkcert / grpcurl / buf / protoc / docker image 等)
 - 在用户批准后改本机开发环境和证书信任
 - 做环境就绪确认,把结果反馈给 Claude Code / 用户
+- 输出 git status / diff --stat / commit message 建议
 - 在用户明确说"帮我 commit"时执行 git commit
 
-原则:Claude Code token 用在分析和改代码;安装工具、环境准备、提交收尾交给 ChatGPT / Codex。
+原则:Claude 系模型 token 用在分析和改代码;安装工具、环境准备、git 收尾交给 ChatGPT / Codex。
 
 ### 4.3 触碰红线立即停止
 
