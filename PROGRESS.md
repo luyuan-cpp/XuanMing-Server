@@ -928,3 +928,64 @@ Phase C 端到端:直连 :50014 reflection list 6 services;
 - **W2 ⑦** 收尾:同步 `docs/design/go-services.md`(标 login/push/envoy 三项完成)+ 用户 commit/push
 - **W3 准备**:reflection 开关化(传 `kgrpc.DisableReflection()`)/ Envoy 加 jwt_authn / 业务服 14 个全上 / 接 OpenTelemetry collector
 
+---
+
+## W2 ⑥ — login 经 envoy 端到端(2026-06-05)
+
+继 W2 ④ envoy 落地后,把 Pandora 客户端连接铁律第 2 条的另一半(unary login)走通。**全 Claude 跑,不需要 Codex / 不需要起 mysql/redis**(login W2 mock 阶段不接外部存储)。
+
+### 完成内容
+
+无新代码改动,纯运行时验证(W2 ④ 已配好 login_cluster + V4_ONLY + reflection 路由)。
+
+### 验证结果
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| 1. 起 login | `go run ./cmd/login -conf etc/login-dev.yaml` | ✅ service_ready grpc=:50001 http=:51001 mock_player_id=30872216333713408 |
+| 2. 直连 :50001 LoginService/Login(基线) | `grpcurl -plaintext ...` | ✅ playerId=30872216333713408 / sessionToken=92ff9dd0-... / hubDsAddr=127.0.0.1:7777 / hubTicket=mock-hub-ticket-7a2c6d97-... |
+| **3. 经 envoy :8443 LoginService/Login** | `grpcurl -insecure ...` | ✅ 同字段全在,sessionToken / hubTicket 是新 uuid(证明真到了后端) |
+| 4. 经 envoy :8443 reflection list | `grpcurl -insecure 127.0.0.1:8443 list` | ✅ 6 services:reflection v1 / v1alpha / health / channelz / kratos.api.Metadata / **pandora.login.v1.LoginService** |
+| 5. login 日志 | tail | ✅ 两次 `trace_id=... msg=login_ok player_id=30872216333713408 device_id=d1` + `rpc_ok transport=grpc op=/pandora.login.v1.LoginService/Login latency_ms=0` |
+
+**结论**:Pandora 客户端连接铁律第 2 条(FHttpModule → Envoy gRPC-Web over HTTP/2 TLS)**unary + server stream 全打通**。
+
+- W2 ④ Phase C:push server stream 12s 收 3 帧 ✅
+- W2 ⑥:login unary 拿 4 字段 + reflection list 6 services ✅
+
+login_cluster 在 W2 ④ 加的 `dns_lookup_family: V4_ONLY` 同样有效(本轮直接拿到响应,无需再修)。
+
+### 待 commit 改动
+
+W2 ⑥ 本身**没改任何文件**(无新增 / 无修改),只是把 W2 ④ 配的 login_cluster 路径走通了。
+
+PROGRESS.md 本段属于 W2 ④ 同批 commit 的一部分(W2 ④ 改动已含 PROGRESS.md M),建议合到 W2 ④ commit:
+
+```
+feat(envoy): W2 ④ + ⑥ Envoy v1.38 边缘网关 + login/push 经 envoy 端到端
+
+(原 W2 ④ commit 内容)
+
+W2 ⑥ 端到端 hello world 全过:
+- 经 envoy :8443 LoginService/Login → playerId + sessionToken + hubDsAddr + hubTicket
+- 经 envoy :8443 reflection list → 6 services(含 pandora.login.v1.LoginService)
+- 经 envoy :8443 PushService/Subscribe(W2 ④ Phase C 已含)→ 12s 3 帧 PushFrame
+- login 日志确认 trace_id 透传 + msg=login_ok player_id=30872216333713408
+
+Pandora 客户端连接铁律第 2 条(FHttpModule → Envoy gRPC-Web over HTTP/2 TLS)
+unary + server stream 全打通。
+```
+
+### 下一步(W2 ⑦)
+
+- **W2 ⑦** 收尾:
+  1. 同步 `docs/design/go-services.md`:标 login / push / envoy 三项 ✅,更新当前里程碑表
+  2. CLAUDE.md §7 决策行追加 W2 ④/⑤/⑥ 行
+  3. Codex 跑 git status / diff --stat / commit message 建议,用户授权后 Codex commit
+  4. 用户手动 push
+- **W3 准备**(收尾后立刻能起):
+  - reflection 开关化(传 `kgrpc.DisableReflection()`)
+  - Envoy 加 jwt_authn(login 真发 JWT,sub 注入 `x-jwt-payload-sub` header 给 push)
+  - login 接真 mysql / redis(去掉 mock)
+  - 第 3 个业务服:player_locator(在线管理)或 friend(社交首版)
+
