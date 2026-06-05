@@ -24,19 +24,19 @@ import (
 
 type mockSender struct {
 	mu     sync.Mutex
-	frames map[int64]*pushv1.PushFrame
-	online map[int64]bool
+	frames map[uint64]*pushv1.PushFrame
+	online map[uint64]bool
 	sendEr error
 }
 
 func newMockSender() *mockSender {
 	return &mockSender{
-		frames: make(map[int64]*pushv1.PushFrame),
-		online: make(map[int64]bool),
+		frames: make(map[uint64]*pushv1.PushFrame),
+		online: make(map[uint64]bool),
 	}
 }
 
-func (m *mockSender) SendTo(playerID int64, frame *pushv1.PushFrame) (bool, error) {
+func (m *mockSender) SendTo(playerID uint64, frame *pushv1.PushFrame) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.online[playerID] {
@@ -51,15 +51,15 @@ func (m *mockSender) SendTo(playerID int64, frame *pushv1.PushFrame) (bool, erro
 
 type mockOffline struct {
 	mu        sync.Mutex
-	appended  map[int64][]*pushv1.PushFrame
+	appended  map[uint64][]*pushv1.PushFrame
 	appendErr error // 非 nil 时,Append 直接返这个错(用于 R2 用例)
 }
 
 func newMockOffline() *mockOffline {
-	return &mockOffline{appended: make(map[int64][]*pushv1.PushFrame)}
+	return &mockOffline{appended: make(map[uint64][]*pushv1.PushFrame)}
 }
 
-func (o *mockOffline) Append(_ context.Context, playerID int64, frame *pushv1.PushFrame) error {
+func (o *mockOffline) Append(_ context.Context, playerID uint64, frame *pushv1.PushFrame) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.appendErr != nil {
@@ -69,7 +69,7 @@ func (o *mockOffline) Append(_ context.Context, playerID int64, frame *pushv1.Pu
 	return nil
 }
 
-func (o *mockOffline) Range(_ context.Context, playerID int64, _ int64) ([]data.OfflineFrame, error) {
+func (o *mockOffline) Range(_ context.Context, playerID uint64, _ int64) ([]data.OfflineFrame, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	out := make([]data.OfflineFrame, 0, len(o.appended[playerID]))

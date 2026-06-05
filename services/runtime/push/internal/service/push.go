@@ -75,9 +75,9 @@ func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.Push
 //
 // W3:Envoy jwt_authn filter 会把 JWT 解出来的 sub 注入 metadata,
 // 这里换成 metadata.FromIncomingContext + 读 "x-jwt-payload-sub" 等标准头。
-func extractPlayerID(ctx context.Context) int64 {
+func extractPlayerID(ctx context.Context) uint64 {
 	if v := ctx.Value(plog.CtxKeyPlayerID); v != nil {
-		if id, ok := v.(int64); ok {
+		if id, ok := v.(uint64); ok {
 			return id
 		}
 	}

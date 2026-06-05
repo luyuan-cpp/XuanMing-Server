@@ -20,8 +20,8 @@ service BattleResultService {
 }
 
 message PlayerStats {
-  int64 player_id     = 1;
-  int32 hero_id       = 2;
+  uint64 player_id    = 1;
+  uint32 hero_id      = 2;
   int32 team          = 3;  // 0 or 1
   int32 kills         = 4;
   int32 deaths        = 5;
@@ -36,14 +36,14 @@ message PlayerStats {
 }
 
 message BattleResult {
-  string match_id     = 1;
+  uint64 match_id     = 1;
   int64  started_at_ms = 2;
   int64  ended_at_ms   = 3;
   int32  winner_team  = 4;  // 0=A win, 1=B win, 2=draw
   repeated PlayerStats stats = 5;
   string ds_pod_name  = 6;
   string game_mode    = 7;
-  int32  map_id       = 8;
+  uint32 map_id       = 8;
   // 9 reserved
   reserved 9;
 }
@@ -59,7 +59,7 @@ message ReportResultResponse {
 }
 
 message GetMatchResultRequest {
-  string match_id = 1;
+  uint64 match_id = 1;
 }
 
 message GetMatchResultResponse {
@@ -68,7 +68,7 @@ message GetMatchResultResponse {
 }
 
 message ListPlayerHistoryRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
   int32 limit     = 2;
   int64 before_ms = 3;  // 分页游标:返回 ended_at_ms < before_ms 的记录
 }

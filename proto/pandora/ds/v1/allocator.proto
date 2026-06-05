@@ -24,9 +24,9 @@ service DSAllocatorService {
 // ===== Allocate / Release =====
 
 message AllocateBattleRequest {
-  string match_id  = 1;
-  repeated int64 player_ids = 2;
-  int32  map_id    = 3;
+  uint64 match_id  = 1;
+  repeated uint64 player_ids = 2;
+  uint32 map_id    = 3;
   string game_mode = 4;  // "ranked_5v5" | "casual_5v5" | "custom"
   // 5-9 reserved
   reserved 5 to 9;
@@ -40,7 +40,7 @@ message AllocateBattleResponse {
 }
 
 message ReleaseBattleRequest {
-  string match_id = 1;
+  uint64 match_id = 1;
   string reason   = 2;  // "completed" | "abandoned" | "crash"
 }
 
@@ -53,7 +53,7 @@ message ReleaseBattleResponse {
 // DS 上报状态
 message HeartbeatRequest {
   string ds_pod_name = 1;
-  string match_id    = 2;
+  uint64 match_id    = 2;
   int32  player_count = 3;
   float  cpu_pct     = 4;
   float  mem_mb      = 5;
@@ -74,7 +74,7 @@ message HeartbeatResponse {
 // ===== List =====
 
 message BattleInfo {
-  string match_id    = 1;
+  uint64 match_id    = 1;
   string ds_pod_name = 2;
   string ds_addr     = 3;
   string state       = 4;

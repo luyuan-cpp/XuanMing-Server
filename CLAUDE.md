@@ -45,6 +45,8 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 3. 同时生成 cpp pb 推送到 UE 仓库的 `Source/Pandora/Generated/Proto/`(CI 自动 PR)
 4. UE 客户端改动跟在后端 PR 之后合并
 5. 字段编号**永不复用**,只能 deprecate(`reserved 5;` + 注释原因)
+6. `player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等 Snowflake 业务 ID **一律用 `uint64`**;不准再用 `int64` / `string` 承载这类 ID。未知 / 空值用 `0`,需要表达 presence 时用 `optional uint64`
+7. 配置表 ID / 静态表 ID **默认用 `uint32`**(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等);如果字段名容易和运行时实体混淆,新协议优先命名为 `<entity>_config_id`
 
 ## 6. 服务命名 / 端口规范
 
@@ -67,7 +69,9 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 | W3 ② | 2026-06-05 | **login 接 MySQL + Redis 真实化**(pkg/mysqlx 标准 database/sql 工厂 + pkg/passwd bcrypt 封装,`pandora_account` 库 3 张表 accounts/account_devices/account_bans,MySQLAccountRepo+SeedAccount 自动种 dev 账号,RedisSessionRepo `pandora:sess:<player_id>` 顶号 TxPipeline,RedisTicketJTIRepo `pandora:ticket:<jti>` SETNX 防 replay,Logout 真验 session.Delete,Kratos config JSON 不解 duration 所以 yaml 不写时长字段) |
 | W3 ⑤ | 2026-06-05 | **player_locator 服务上线**(Kratos unary,gRPC :50006 / HTTP :51006,Redis hash `pandora:locator:<player_id>` 30s TTL,SetLocation TxPipeline(Del+HSet+Expire) 防字段残留,不变量 §1 入口落地,login.Login 成功后调 SetLocation(state=LOGIN_PENDING) 失败仅 Warn,locator biz 单测 7 用例覆盖输入校验 / OFFLINE 占位 / 默认 TTL) |
 | W3 ⑥/③ | 2026-06-05 | **Duration 包装类型 + gRPC reflection 开关化**(pkg/config.Duration 实现 UnmarshalJSON/MarshalJSON 解 "5s"/"24h" + 数字 ns 向后兼容,pkg/config.Base 全部 15+ 个 `time.Duration` 字段切换,业务读取处统一 `.Std()`;Grpc 新增 `EnableReflection bool` 默认 false → prod 关 reflection 防 schema 泄露,pkg/grpcserver `if !c.Grpc.EnableReflection { kgrpc.DisableReflection() }`;已启用 3 服(login/push/locator)`etc/*-dev.yaml` 全部直接写 duration 字符串 + `enable_reflection: true`,删除"yaml 不写时长字段"长篇约束注释;Duration 单测 8 用例 + Kratos config e2e 加载链路验证) |
-| W3 ④ | 2026-06-05 | **push 接 kafka + redis ZSET 离线 5min**(push 删 mock tick → KafkaConsumer 每 topic 一个共享 GroupID,Handler 按 `key=strconv.Itoa(player_id)` 不变量 §9 路由 → 在线 ConnectionManager.SendTo / 离线 RedisOfflineCacheRepo Append;ZSET `pandora:push:offline:%d`,score=ts_ms,member=PushFrame proto bytes+seq 后缀防同 ms 去重塌陷,TxPipeline ZAdd+Expire 每写刷 TTL;`pkg/kafkax.PushToPlayers` helper 把原则 2 排除 caller 工程化(callerID=0 = 原则 3 例外全发);`pkg/kafkax/topics.go` 集中 6 个 push topic 常量;新增 `ERR_PUSH_OFFLINE_CORRUPTED=9301` / `ERR_PUSH_KAFKA_CONSUMER_DOWN=9302`;W3 ④ 仅订阅 proto 已就绪的 3 个(team.update/match.progress/chat.private),余 3 个等业务服上线补;单测 11 用例(producer 4 / offline 4 / consumer 3)) |
+| W3 ④ | 2026-06-05 | **push 接 kafka + redis ZSET 离线 5min**(push 删 mock tick → KafkaConsumer 每 topic 一个共享 GroupID,Handler 按 `key=strconv.FormatUint(player_id,10)` 不变量 §9 路由 → 在线 ConnectionManager.SendTo / 离线 RedisOfflineCacheRepo Append;ZSET `pandora:push:offline:%d`,score=ts_ms,member=PushFrame proto bytes+seq 后缀防同 ms 去重塌陷,TxPipeline ZAdd+Expire 每写刷 TTL;`pkg/kafkax.PushToPlayers` helper 把原则 2 排除 caller 工程化(callerID=0 = 原则 3 例外全发);`pkg/kafkax/topics.go` 集中 6 个 push topic 常量;新增 `ERR_PUSH_OFFLINE_CORRUPTED=9301` / `ERR_PUSH_KAFKA_CONSUMER_DOWN=9302`;W3 ④ 仅订阅 proto 已就绪的 3 个(team.update/match.progress/chat.private),余 3 个等业务服上线补;单测 11 用例(producer 4 / offline 4 / consumer 3)) |
+| W3 ⑦.0 | 2026-06-05 | **业务 ID 全量 int64/string → uint64 迁移**(14 个业务 proto 按规则迁移并 regen go/cpp pb;`pkg/auth` JWT sub 改 `FormatUint/ParseUint`,`pkg/middleware` 拒绝负数 player_id,`pkg/kafkax.PushToPlayers` 改 `uint64` + kafka key `FormatUint`;login/push/player_locator 三服全链路同步;配置表 ID 如 `npc_id/hero_id/map_id` 保持/改为 `uint32`;`request_id/device_id/trace_id` 保持 string) |
+| 协议硬规则 | 2026-06-05 | **Snowflake 业务 ID 一律 uint64**(`player_id` / `team_id` / `match_id` / `order_id` 等);**配置表 ID 默认 uint32**(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等);后续 proto / Go / SQL / Redis / Kafka key 不得新增有符号业务 ID |
 | AI 协作 | 2026-06-05 | **Claude 模型分工固化**:Opus 4.7 负责出 Plan / 审 Plan / 难题攻关 / 最终把关;Sonnet 4.6 按审过的 Plan 写代码 / 补测试 / 跑项目内验证;ChatGPT / Codex 继续负责环境执行和 git 收尾 |
 
 后续每轮压测 / 大决策追加一行,**永不删旧行**。
@@ -98,6 +102,8 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 8. **所有写都要带 trace_id**
 9. **kafka topic key = 业务实体 ID**(同一玩家 / 同一对局事件有序)
 10. **Redis lock TTL ≤ 30s**,业务跑完主动释放
+11. **Snowflake 业务 ID 一律 uint64**(`player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等),不准新增 `int64` / `string` 型业务 ID
+12. **配置表 ID 默认 uint32**(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等),不准新增有符号配置 ID
 
 ## 10. AI 协作约定
 

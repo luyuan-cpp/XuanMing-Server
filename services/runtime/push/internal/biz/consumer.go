@@ -5,7 +5,7 @@
 //
 // 设计要点:
 //   - **每个 topic 一个 consumer**,共享同一 GroupID(简化,后期可重构为单 consumer 多 topic)
-//   - kafka key 必须是 strconv.FormatInt(player_id, 10)(不变量 §9);非数字 key log + ack 跳过
+//   - kafka key 必须是 strconv.FormatUint(player_id, 10)(不变量 §9);非数字 key log + ack 跳过
 //     避免单条脏数据阻塞整个 partition
 //   - trace_id 从 sarama.Headers["trace_id"] 取(业务 producer 没塞则空,允许)
 //   - Handler 返回 nil → ack(W1-D2 简化策略,W2 battle_result 时再补 retry queue)
@@ -31,7 +31,7 @@ import (
 
 // FrameSender 抽象 ConnectionManager.SendTo(便于 consumer 单测注入)。
 type FrameSender interface {
-	SendTo(playerID int64, frame *pushv1.PushFrame) (online bool, err error)
+	SendTo(playerID uint64, frame *pushv1.PushFrame) (online bool, err error)
 }
 
 // KafkaConsumer 包装一个 topic 的消费循环。
@@ -100,7 +100,7 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	h := plog.With(ctx)
 
 	// 1. 取 player_id(不变量 §9:key 必须是 player_id 序列化字符串)
-	playerID, err := strconv.ParseInt(string(msg.Key), 10, 64)
+	playerID, err := strconv.ParseUint(string(msg.Key), 10, 64)
 	if err != nil {
 		h.Warnw(
 			"msg", "kafka_push_invalid_key",

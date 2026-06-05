@@ -33,11 +33,11 @@ const (
 
 // LocationInput 是 SetLocation 的入参(从 service 层 proto 翻译)。
 type LocationInput struct {
-	PlayerID  int64
+	PlayerID  uint64
 	State     int32
 	HubPod    string
 	ShardID   int32
-	MatchID   string
+	MatchID   uint64
 	BattlePod string
 }
 
@@ -46,7 +46,7 @@ type LocationOutput struct {
 	State       int32
 	HubPod      string
 	ShardID     int32
-	MatchID     string
+	MatchID     uint64
 	BattlePod   string
 	UpdatedAtMs int64
 }
@@ -74,7 +74,7 @@ func NewLocatorUsecase(repo data.LocationRepo, ttl time.Duration) *LocatorUsecas
 //   - state=MATCHING / BATTLE → match_id 非空
 //   - state=BATTLE → battle_pod 非空
 func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) error {
-	if in.PlayerID <= 0 {
+	if in.PlayerID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	if in.State < LocationStateUnspecified || in.State > LocationStateBattle {
@@ -86,11 +86,11 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 			return errcode.New(errcode.ErrInvalidArg, "HUB state requires hub_pod")
 		}
 	case LocationStateMatching:
-		if in.MatchID == "" {
+		if in.MatchID == 0 {
 			return errcode.New(errcode.ErrInvalidArg, "MATCHING state requires match_id")
 		}
 	case LocationStateBattle:
-		if in.MatchID == "" || in.BattlePod == "" {
+		if in.MatchID == 0 || in.BattlePod == "" {
 			return errcode.New(errcode.ErrInvalidArg, "BATTLE state requires match_id + battle_pod")
 		}
 	}
@@ -114,8 +114,8 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 }
 
 // GetLocation 读 redis hash;key 不存在返回 OFFLINE 占位记录(不报错)。
-func (u *LocatorUsecase) GetLocation(ctx context.Context, playerID int64) (LocationOutput, error) {
-	if playerID <= 0 {
+func (u *LocatorUsecase) GetLocation(ctx context.Context, playerID uint64) (LocationOutput, error) {
+	if playerID == 0 {
 		return LocationOutput{}, errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	rec, found, err := u.repo.Get(ctx, playerID)
@@ -137,8 +137,8 @@ func (u *LocatorUsecase) GetLocation(ctx context.Context, playerID int64) (Locat
 }
 
 // ClearLocation Unlink redis hash。
-func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID int64) error {
-	if playerID <= 0 {
+func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) error {
+	if playerID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
 	}
 	if err := u.repo.Delete(ctx, playerID); err != nil {

@@ -165,7 +165,7 @@ func main() {
 func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper, sf *snowflake.Node) (data.AccountRepo, string, sqlDBLike) {
 	if cfg.Node.MySQLClient.DSN == "" {
 		// fallback mock
-		mockPlayerID := int64(sf.Generate())
+		mockPlayerID := sf.Generate()
 		bcryptHash, err := passwd.Hash(cfg.Login.MockPasswordHash, passwd.DevCost)
 		if err != nil {
 			h.Errorw("msg", "mock_hash_failed", "err", err)
@@ -188,7 +188,7 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper, sf *snowflake.Node) 
 			h.Errorw("msg", "seed_hash_failed", "err", herr)
 			os.Exit(1)
 		}
-		seedID := int64(sf.Generate())
+		seedID := sf.Generate()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		realID, created, serr := data.SeedAccount(ctx, db, cfg.Login.MockAccount, bcryptHash, seedID)
 		cancel()

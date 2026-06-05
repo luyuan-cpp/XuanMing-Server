@@ -24,7 +24,7 @@ import (
 // LocationNotifier 给 login.biz 上报玩家"登录中"状态。
 // addr 未配 → main 注入 nil,biz 检查 nil 直接跳过。
 type LocationNotifier interface {
-	NotifyLoginPending(ctx context.Context, playerID int64, deviceID string) error
+	NotifyLoginPending(ctx context.Context, playerID uint64, deviceID string) error
 }
 
 // GrpcLocationNotifier 实现 LocationNotifier,内嵌 grpc client。
@@ -47,7 +47,7 @@ func NewGrpcLocationNotifier(conn *grpc.ClientConn) *GrpcLocationNotifier {
 //
 // 不变量 §1 入口:这一行写完,locator 就把该 player_id 标记为"正在登录",
 // 后续 hub DS 拿到玩家后改 state=HUB;客户端如果重复登录会再次刷此 key + TTL。
-func (n *GrpcLocationNotifier) NotifyLoginPending(ctx context.Context, playerID int64, deviceID string) error {
+func (n *GrpcLocationNotifier) NotifyLoginPending(ctx context.Context, playerID uint64, deviceID string) error {
 	req := &locatorv1.SetLocationRequest{
 		PlayerId: playerID,
 		Location: &locatorv1.Location{

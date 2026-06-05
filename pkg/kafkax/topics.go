@@ -4,7 +4,7 @@
 // 防止字符串拼写漂移。每个 topic 对应一个 proto Event message(payload bytes 反序列化)。
 //
 // 不变量(docs/design/protocol-ordering-rules.md):
-//   - 玩家相关 topic 的 kafka key = strconv.FormatInt(player_id, 10),保证同玩家事件保序
+//   - 玩家相关 topic 的 kafka key = strconv.FormatUint(player_id, 10),保证同玩家事件保序
 //   - system.notify / chat.world 是广播类,key 可空(由 push 服务 Broadcast 处理)
 //   - 业务 producer 必须用 PushToPlayers helper 排除 caller_player_id(原则 2)
 //

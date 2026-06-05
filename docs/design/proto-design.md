@@ -75,15 +75,15 @@ message LoginRequest {
 
 message LoginResponse {
   ErrCode code = 1;
-  int64 player_id = 2;
+  uint64 player_id = 2;
   string session_token = 3;     // 连后端用
   string hub_ds_addr = 4;       // 直连大厅 DS 的 IP:port
   string hub_ticket = 5;        // hub DS 票据(JWT,含 player_id + exp)
 }
 
 message DSTicket {              // JWT payload
-  int64 player_id = 1;
-  string match_id = 2;          // 战斗 DS 才有,hub 留空
+  uint64 player_id = 1;
+  uint64 match_id = 2;          // 战斗 DS 才有,hub 为 0
   int64 issued_at_ms = 3;
   int64 expires_at_ms = 4;
   string ds_type = 5;           // "hub" | "battle"
@@ -114,8 +114,8 @@ enum TeamState {
 }
 
 message Team {
-  string team_id = 1;
-  int64 captain_id = 2;
+  uint64 team_id = 1;
+  uint64 captain_id = 2;
   repeated TeamMember members = 3;
   TeamState state = 4;
   int64 created_at_ms = 5;
@@ -123,7 +123,7 @@ message Team {
 }
 
 message TeamMember {
-  int64 player_id = 1;
+  uint64 player_id = 1;
   string nickname = 2;
   int32 mmr = 3;
   bool ready = 4;
@@ -151,14 +151,14 @@ enum MatchStage {
 }
 
 message MatchProgress {
-  string match_id = 1;
+  uint64 match_id = 1;
   MatchStage stage = 2;
   int32 queue_seconds = 3;
   int32 estimated_wait_seconds = 4;
   string battle_ds_addr = 5;
   string battle_ticket = 6;
-  repeated int64 team_a = 7;
-  repeated int64 team_b = 8;
+  repeated uint64 team_a = 7;
+  repeated uint64 team_b = 8;
 }
 ```
 
@@ -173,8 +173,8 @@ service DSAllocatorService {
 }
 
 message AllocateBattleRequest {
-  string match_id = 1;
-  repeated int64 player_ids = 2;
+  uint64 match_id = 1;
+  repeated uint64 player_ids = 2;
   int32 map_id = 3;
   string game_mode = 4;
 }
@@ -188,7 +188,7 @@ message AllocateBattleResponse {
 
 message HeartbeatRequest {
   string ds_pod_name = 1;
-  string match_id = 2;
+  uint64 match_id = 2;
   int32 player_count = 3;
   float cpu_pct = 4;
   float mem_mb = 5;
@@ -205,7 +205,7 @@ service BattleResultService {
 }
 
 message BattleResult {
-  string match_id = 1;          // 幂等 key
+  uint64 match_id = 1;          // 幂等 key
   int64 started_at_ms = 2;
   int64 ended_at_ms = 3;
   int32 winner_team = 4;        // 0=A win, 1=B win, 2=draw
@@ -214,7 +214,7 @@ message BattleResult {
 }
 
 message PlayerStats {
-  int64 player_id = 1;
+  uint64 player_id = 1;
   int32 hero_id = 2;
   int32 team = 3;
   int32 kills = 4;
@@ -303,7 +303,9 @@ pandora.dlq.<original_topic> 死信队列
 ## 7. 字段命名约定
 
 - 时间戳:`<name>_at_ms`(明确单位为毫秒,int64,Unix epoch)
-- ID:`<entity>_id`(player_id / team_id / match_id 都用 int64;UUID 用 string)
+- 运行时 / 业务 ID:`<entity>_id`(`player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等 Snowflake ID 一律用 `uint64`;未知 / 空值用 `0`,需要 presence 时用 `optional uint64`)
+- 配置表 ID:`<entity>_id` 或 `<entity>_config_id`(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等默认用 `uint32`;容易和运行时实体混淆时优先用 `<entity>_config_id`)
+- UUID:只有外部系统已定义为 UUID 时才用 `string`
 - 枚举:`<TYPE>_<NAME>`(`TEAM_STATE_FORMING`),并以 `<TYPE>_UNSPECIFIED = 0` 兜底
 - 布尔:`is_<adj>` / `has_<noun>`(避免 `<name>_flag`)
 - 集合:复数(`player_ids` / `members`)

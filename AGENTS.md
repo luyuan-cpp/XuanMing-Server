@@ -32,11 +32,8 @@
 - ❌ `git commit`(默认不,除非用户明确说"帮我 commit")
 - ❌ **Claude 系模型(Copilot Claude / Claude Code / Cursor Claude 等)不安装工具 / 不改本机环境 / 不做 git 收尾**(见 §11.1 分工)
 - ❌ 登录任何远端账号(GitHub / k8s 集群 / 云厂商 / 注册表 / 其它)
-- ❌ 删除文件不经人确认
-- ❌ 改 main 分支保护规则
 - ❌ 改 CI 凭证 / secrets
 - ❌ 写 secret / token / 密码到 git 跟踪文件
-- ❌ 在 main 直接 commit(走 feature 分支)
 - ❌ `kubectl apply` 到生产集群(只能本地 minikube / 用户专门指定的 dev 集群)
 - ❌ `docker push` 到 registry(交给人)
 
@@ -67,10 +64,11 @@
 详见 `CLAUDE.md §5`。
 
 要点:
-- proto 只在本仓库改
 - 改完必须跑 `pwsh tools/scripts/proto_gen.ps1`
 - commit message 加 `[proto]` 标记
 - 字段编号永不复用
+- `player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等 Snowflake 业务 ID **一律用 `uint64`**,不准新增 `int64` / `string` 型业务 ID;未知 / 空值用 `0`,需要 presence 时用 `optional uint64`
+- `npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等配置表 ID **默认用 `uint32`**,不准新增有符号配置 ID;容易和运行时实体混淆时优先命名 `<entity>_config_id`
 
 ## 7. 跨 AI 协作冲突解决
 

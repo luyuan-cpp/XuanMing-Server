@@ -37,9 +37,9 @@ message TradeItem {
 }
 
 message Order {
-  string  order_id   = 1;
-  int64   seller_id  = 2;
-  int64   buyer_id   = 3;
+  uint64  order_id   = 1;
+  uint64  seller_id  = 2;
+  uint64  buyer_id   = 3;
   repeated TradeItem items = 4;
   int64   price      = 5;  // 金币
   OrderState state   = 6;
@@ -50,20 +50,20 @@ message Order {
 }
 
 message CreateOrderRequest {
-  int64 seller_id  = 1;
-  int64 buyer_id   = 2;
+  uint64 seller_id = 1;
+  uint64 buyer_id  = 2;
   repeated TradeItem items = 3;
   int64 price      = 4;
 }
 
 message CreateOrderResponse {
   pandora.common.v1.ErrCode code = 1;
-  string order_id = 2;
+  uint64 order_id = 2;
 }
 
 message ConfirmOrderRequest {
-  int64  player_id = 1;
-  string order_id  = 2;
+  uint64 player_id = 1;
+  uint64 order_id  = 2;
 }
 
 message ConfirmOrderResponse {
@@ -72,8 +72,8 @@ message ConfirmOrderResponse {
 }
 
 message CancelOrderRequest {
-  int64  player_id = 1;
-  string order_id  = 2;
+  uint64 player_id = 1;
+  uint64 order_id  = 2;
 }
 
 message CancelOrderResponse {
@@ -81,7 +81,7 @@ message CancelOrderResponse {
 }
 
 message ListMyOrdersRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
   bool  active_only = 2;
 }
 

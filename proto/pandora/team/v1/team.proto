@@ -35,18 +35,18 @@ enum TeamState {
 }
 
 message TeamMember {
-  int64  player_id = 1;
+  uint64 player_id = 1;
   string nickname  = 2;
   int32  mmr       = 3;
   bool   ready     = 4;
-  int32  hero_id   = 5;
+  uint32 hero_id   = 5;
   // 6-9 reserved
   reserved 6 to 9;
 }
 
 message Team {
-  string team_id       = 1;
-  int64  captain_id    = 2;
+  uint64 team_id       = 1;
+  uint64 captain_id    = 2;
   repeated TeamMember members = 3;
   TeamState state      = 4;
   int64  created_at_ms = 5;
@@ -58,18 +58,18 @@ message Team {
 // ===== RPC =====
 
 message CreateTeamRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message CreateTeamResponse {
   pandora.common.v1.ErrCode code = 1;
-  string team_id = 2;
+  uint64 team_id = 2;
 }
 
 message InviteRequest {
-  string team_id        = 1;
-  int64  inviter_id     = 2;
-  int64  target_player_id = 3;
+  uint64 team_id          = 1;
+  uint64 inviter_id       = 2;
+  uint64 target_player_id = 3;
 }
 
 message InviteResponse {
@@ -77,8 +77,8 @@ message InviteResponse {
 }
 
 message AcceptInviteRequest {
-  int64  player_id = 1;
-  string team_id   = 2;
+  uint64 player_id = 1;
+  uint64 team_id   = 2;
 }
 
 message AcceptInviteResponse {
@@ -87,8 +87,8 @@ message AcceptInviteResponse {
 }
 
 message LeaveTeamRequest {
-  string team_id   = 1;
-  int64  player_id = 2;
+  uint64 team_id   = 1;
+  uint64 player_id = 2;
 }
 
 message LeaveTeamResponse {
@@ -96,9 +96,9 @@ message LeaveTeamResponse {
 }
 
 message KickRequest {
-  string team_id           = 1;
-  int64  captain_id        = 2;
-  int64  target_player_id  = 3;
+  uint64 team_id           = 1;
+  uint64 captain_id        = 2;
+  uint64 target_player_id  = 3;
 }
 
 message KickResponse {
@@ -106,10 +106,10 @@ message KickResponse {
 }
 
 message SetReadyRequest {
-  string team_id   = 1;
-  int64  player_id = 2;
+  uint64 team_id   = 1;
+  uint64 player_id = 2;
   bool   ready     = 3;
-  int32  hero_id   = 4;  // 可选,选英雄一并设
+  uint32 hero_id   = 4;  // 可选,选英雄一并设
 }
 
 message SetReadyResponse {
@@ -117,7 +117,7 @@ message SetReadyResponse {
 }
 
 message GetTeamRequest {
-  string team_id = 1;
+  uint64 team_id = 1;
 }
 
 message GetTeamResponse {
@@ -138,8 +138,8 @@ message GetTeamResponse {
 message TeamUpdateEvent {
   Team   team           = 1;
   string change_summary = 2;  // "joined" | "left" | "ready" | "kicked" | "disbanded" | ...
-  int64  by_player_id   = 3;  // 触发本次变更的玩家
-  int64  to_player_id   = 4;  // 接收推送的玩家(也是 kafka key)
+  uint64 by_player_id   = 3;  // 触发本次变更的玩家
+  uint64 to_player_id   = 4;  // 接收推送的玩家(也是 kafka key)
   int64  ts_ms          = 5;
   // 6-9 reserved
   reserved 6 to 9;

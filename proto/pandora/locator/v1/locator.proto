@@ -31,7 +31,7 @@ message Location {
   // 各 state 的附加字段(仅相关 state 时填):
   string hub_pod      = 2;  // HUB 时
   int32  shard_id     = 3;  // HUB 时
-  string match_id     = 4;  // MATCHING / BATTLE 时
+  uint64 match_id     = 4;  // MATCHING / BATTLE 时
   string battle_pod   = 5;  // BATTLE 时
   int64  updated_at_ms = 6;
   // 7-9 reserved
@@ -39,7 +39,7 @@ message Location {
 }
 
 message SetLocationRequest {
-  int64    player_id = 1;
+  uint64   player_id = 1;
   Location location  = 2;
 }
 
@@ -48,7 +48,7 @@ message SetLocationResponse {
 }
 
 message GetLocationRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message GetLocationResponse {
@@ -57,7 +57,7 @@ message GetLocationResponse {
 }
 
 message ClearLocationRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message ClearLocationResponse {

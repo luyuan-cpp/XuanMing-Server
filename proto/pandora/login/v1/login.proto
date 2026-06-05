@@ -72,7 +72,7 @@ message LoginRequest {
 
 message LoginResponse {
   pandora.common.v1.ErrCode code = 1;
-  int64  player_id     = 2;
+  uint64 player_id     = 2;
   string session_token = 3;  // 连后端 gRPC 用
   string hub_ds_addr   = 4;  // 直连大厅 DS 的 IP:port
   string hub_ticket    = 5;  // hub DS 票据(JWT)
@@ -92,8 +92,8 @@ message LogoutResponse {
 
 // DSTicket 是 JWT 的 payload(不直接传输,这里 message 描述结构以便 cpp/go 共享)。
 message DSTicket {
-  int64  player_id      = 1;
-  string match_id       = 2;  // battle DS 才有,hub 留空
+  uint64 player_id      = 1;
+  uint64 match_id       = 2;  // battle DS 才有,hub 为 0
   int64  issued_at_ms   = 3;
   int64  expires_at_ms  = 4;
   string ds_type        = 5;  // "hub" | "battle"
@@ -105,7 +105,7 @@ message DSTicket {
 message IssueDSTicketRequest {
   string session_token = 1;
   string ds_type       = 2;  // "hub" | "battle"
-  string target_id     = 3;  // 目标 DS pod / match_id
+  uint64 target_id     = 3;  // battle match_id,hub 为 0
 }
 
 message IssueDSTicketResponse {

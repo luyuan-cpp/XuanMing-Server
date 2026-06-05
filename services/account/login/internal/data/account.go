@@ -28,17 +28,17 @@ import (
 type AccountRepo interface {
 	// FindByAccount 根据账号名查 player_id + bcrypt 哈希后的密码。
 	// 找不到返回 ErrLoginAccountNotFound。
-	FindByAccount(ctx context.Context, account string) (playerID int64, passwordHash string, err error)
+	FindByAccount(ctx context.Context, account string) (playerID uint64, passwordHash string, err error)
 
 	// CreateAccount 新建账号(snowflake 分配的 playerID 传入)。
 	// 账号已存在返回 ErrAlreadyExists。
-	CreateAccount(ctx context.Context, playerID int64, account, bcryptHash string) error
+	CreateAccount(ctx context.Context, playerID uint64, account, bcryptHash string) error
 
 	// CheckBanned 检查账号 / 设备是否在有效封禁期内(account_bans 表 expires_at>now 或 NULL)。
-	CheckBanned(ctx context.Context, playerID int64, deviceID string) (banned bool, err error)
+	CheckBanned(ctx context.Context, playerID uint64, deviceID string) (banned bool, err error)
 
 	// TouchDevice 记录最近一次登录设备(account_devices upsert)。失败由 biz 层只记日志。
-	TouchDevice(ctx context.Context, playerID int64, deviceID string) error
+	TouchDevice(ctx context.Context, playerID uint64, deviceID string) error
 }
 
 // =====================================================================
@@ -49,13 +49,13 @@ type AccountRepo interface {
 type MockAccountRepo struct {
 	Account      string
 	PasswordHash string
-	PlayerID     int64
+	PlayerID     uint64
 }
 
 // NewMockAccountRepo 构造 mock。bcryptHash 必须是 pkg/passwd.Hash 结果(60 字节)。
 //
 // W3 ②:为了跟真实 MySQL 实现行为一致,main 启动时调一次 passwd.Hash(MockPasswordHash) 转换。
-func NewMockAccountRepo(account, bcryptHash string, playerID int64) *MockAccountRepo {
+func NewMockAccountRepo(account, bcryptHash string, playerID uint64) *MockAccountRepo {
 	return &MockAccountRepo{
 		Account:      account,
 		PasswordHash: bcryptHash,
@@ -63,22 +63,22 @@ func NewMockAccountRepo(account, bcryptHash string, playerID int64) *MockAccount
 	}
 }
 
-func (m *MockAccountRepo) FindByAccount(_ context.Context, account string) (int64, string, error) {
+func (m *MockAccountRepo) FindByAccount(_ context.Context, account string) (uint64, string, error) {
 	if account != m.Account {
 		return 0, "", errcode.New(errcode.ErrLoginAccountNotFound, "account=%s not found", account)
 	}
 	return m.PlayerID, m.PasswordHash, nil
 }
 
-func (m *MockAccountRepo) CreateAccount(_ context.Context, _ int64, _, _ string) error {
+func (m *MockAccountRepo) CreateAccount(_ context.Context, _ uint64, _, _ string) error {
 	return errcode.New(errcode.ErrAlreadyExists, "mock repo does not support create")
 }
 
-func (m *MockAccountRepo) CheckBanned(_ context.Context, _ int64, _ string) (bool, error) {
+func (m *MockAccountRepo) CheckBanned(_ context.Context, _ uint64, _ string) (bool, error) {
 	return false, nil
 }
 
-func (m *MockAccountRepo) TouchDevice(_ context.Context, _ int64, _ string) error {
+func (m *MockAccountRepo) TouchDevice(_ context.Context, _ uint64, _ string) error {
 	return nil
 }
 
@@ -96,10 +96,10 @@ func NewMySQLAccountRepo(db *sql.DB) *MySQLAccountRepo {
 	return &MySQLAccountRepo{db: db}
 }
 
-func (r *MySQLAccountRepo) FindByAccount(ctx context.Context, account string) (int64, string, error) {
+func (r *MySQLAccountRepo) FindByAccount(ctx context.Context, account string) (uint64, string, error) {
 	const q = `SELECT player_id, password_hash FROM accounts WHERE account = ? LIMIT 1`
 	var (
-		playerID int64
+		playerID uint64
 		hash     string
 	)
 	err := r.db.QueryRowContext(ctx, q, account).Scan(&playerID, &hash)
@@ -112,7 +112,7 @@ func (r *MySQLAccountRepo) FindByAccount(ctx context.Context, account string) (i
 	return playerID, hash, nil
 }
 
-func (r *MySQLAccountRepo) CreateAccount(ctx context.Context, playerID int64, account, bcryptHash string) error {
+func (r *MySQLAccountRepo) CreateAccount(ctx context.Context, playerID uint64, account, bcryptHash string) error {
 	const q = `INSERT INTO accounts(player_id, account, password_hash) VALUES (?, ?, ?)`
 	_, err := r.db.ExecContext(ctx, q, playerID, account, bcryptHash)
 	if err != nil {
@@ -125,7 +125,7 @@ func (r *MySQLAccountRepo) CreateAccount(ctx context.Context, playerID int64, ac
 	return nil
 }
 
-func (r *MySQLAccountRepo) CheckBanned(ctx context.Context, playerID int64, deviceID string) (bool, error) {
+func (r *MySQLAccountRepo) CheckBanned(ctx context.Context, playerID uint64, deviceID string) (bool, error) {
 	const q = `SELECT COUNT(*) FROM account_bans
 WHERE (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
   AND ((player_id IS NOT NULL AND player_id = ?) OR (device_id IS NOT NULL AND device_id = ?))`
@@ -136,7 +136,7 @@ WHERE (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
 	return cnt > 0, nil
 }
 
-func (r *MySQLAccountRepo) TouchDevice(ctx context.Context, playerID int64, deviceID string) error {
+func (r *MySQLAccountRepo) TouchDevice(ctx context.Context, playerID uint64, deviceID string) error {
 	if deviceID == "" {
 		return nil
 	}
@@ -171,8 +171,8 @@ func isDupErr(err error) bool {
 //	device_id  string  当前设备
 //	exp_ms     int64   session 过期 unix ms
 type SessionRepo interface {
-	Set(ctx context.Context, playerID int64, token, jti, deviceID string, ttl time.Duration) error
-	Delete(ctx context.Context, playerID int64) error
+	Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration) error
+	Delete(ctx context.Context, playerID uint64) error
 }
 
 // RedisSessionRepo 基于 go-redis/v9 的 SessionRepo 实现。
@@ -185,11 +185,11 @@ func NewRedisSessionRepo(rdb *redis.Client) *RedisSessionRepo {
 	return &RedisSessionRepo{rdb: rdb}
 }
 
-func sessKey(playerID int64) string {
+func sessKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:sess:%d", playerID)
 }
 
-func (r *RedisSessionRepo) Set(ctx context.Context, playerID int64, token, jti, deviceID string, ttl time.Duration) error {
+func (r *RedisSessionRepo) Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration) error {
 	key := sessKey(playerID)
 	pipe := r.rdb.TxPipeline()
 	pipe.HSet(ctx, key,
@@ -205,7 +205,7 @@ func (r *RedisSessionRepo) Set(ctx context.Context, playerID int64, token, jti, 
 	return nil
 }
 
-func (r *RedisSessionRepo) Delete(ctx context.Context, playerID int64) error {
+func (r *RedisSessionRepo) Delete(ctx context.Context, playerID uint64) error {
 	if err := r.rdb.Del(ctx, sessKey(playerID)).Err(); err != nil && !errors.Is(err, redis.Nil) {
 		return errcode.New(errcode.ErrInternal, "redis sess del: %v", err)
 	}
@@ -261,7 +261,7 @@ func (r *RedisTicketJTIRepo) MarkUsed(ctx context.Context, jti string, ttl time.
 // 返回 (playerID, created, err):
 //   - 已存在:created=false,playerID=表中现存的
 //   - 新建:created=true,playerID=传入的 fallbackPlayerID
-func SeedAccount(ctx context.Context, db *sql.DB, account, bcryptHash string, fallbackPlayerID int64) (int64, bool, error) {
+func SeedAccount(ctx context.Context, db *sql.DB, account, bcryptHash string, fallbackPlayerID uint64) (uint64, bool, error) {
 	repo := &MySQLAccountRepo{db: db}
 
 	// 1. 先查

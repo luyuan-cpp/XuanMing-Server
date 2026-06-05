@@ -20,19 +20,19 @@ import (
 
 // stubRepo 内存版 LocationRepo,只供单测用。
 type stubRepo struct {
-	store map[int64]data.LocationRecord
+	store map[uint64]data.LocationRecord
 }
 
 func newStubRepo() *stubRepo {
-	return &stubRepo{store: map[int64]data.LocationRecord{}}
+	return &stubRepo{store: map[uint64]data.LocationRecord{}}
 }
 
-func (s *stubRepo) Set(_ context.Context, playerID int64, rec data.LocationRecord, _ time.Duration) error {
+func (s *stubRepo) Set(_ context.Context, playerID uint64, rec data.LocationRecord, _ time.Duration) error {
 	s.store[playerID] = rec
 	return nil
 }
 
-func (s *stubRepo) Get(_ context.Context, playerID int64) (data.LocationRecord, bool, error) {
+func (s *stubRepo) Get(_ context.Context, playerID uint64) (data.LocationRecord, bool, error) {
 	rec, ok := s.store[playerID]
 	if !ok {
 		return data.LocationRecord{}, false, nil
@@ -40,7 +40,7 @@ func (s *stubRepo) Get(_ context.Context, playerID int64) (data.LocationRecord, 
 	return rec, true, nil
 }
 
-func (s *stubRepo) Delete(_ context.Context, playerID int64) error {
+func (s *stubRepo) Delete(_ context.Context, playerID uint64) error {
 	delete(s.store, playerID)
 	return nil
 }
@@ -53,12 +53,11 @@ func TestSetLocation_InvalidInput(t *testing.T) {
 		in   LocationInput
 	}{
 		{"zero player_id", LocationInput{PlayerID: 0, State: LocationStateHub, HubPod: "p1"}},
-		{"negative player_id", LocationInput{PlayerID: -1, State: LocationStateHub, HubPod: "p1"}},
 		{"state out of range", LocationInput{PlayerID: 1, State: 99}},
 		{"hub without pod", LocationInput{PlayerID: 1, State: LocationStateHub}},
 		{"matching without match_id", LocationInput{PlayerID: 1, State: LocationStateMatching}},
 		{"battle missing match_id", LocationInput{PlayerID: 1, State: LocationStateBattle, BattlePod: "bp"}},
-		{"battle missing battle_pod", LocationInput{PlayerID: 1, State: LocationStateBattle, MatchID: "m"}},
+		{"battle missing battle_pod", LocationInput{PlayerID: 1, State: LocationStateBattle, MatchID: 1001}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -121,7 +120,7 @@ func TestClearLocation(t *testing.T) {
 	if err := uc.SetLocation(ctx, LocationInput{
 		PlayerID: 7,
 		State:    LocationStateMatching,
-		MatchID:  "m-abc",
+		MatchID:  1001,
 	}); err != nil {
 		t.Fatalf("SetLocation failed: %v", err)
 	}

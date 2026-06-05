@@ -178,7 +178,7 @@ func (p *KeyOrderedProducer) SendRaw(ctx context.Context, key string, payload []
 //     - 例外:已受理型 RPC(MatchProgressEvent 等)需要发给所有人含发起方,
 //     传 callerPlayerID = 0 跳过排除
 //
-//  2. 每个目标 player_id 用 SendRaw 发一次,kafka key = strconv.FormatInt(playerID, 10),
+//  2. 每个目标 player_id 用 SendRaw 发一次,kafka key = strconv.FormatUint(playerID, 10),
 //     一致性哈希保证同玩家事件落同一 partition,partition 内 sarama 保序(不变量 §9)
 //
 //  3. 失败 log+continue 不阻断:某玩家发失败不能影响其他玩家;返回 (sent, lastErr),
@@ -186,13 +186,13 @@ func (p *KeyOrderedProducer) SendRaw(ctx context.Context, key string, payload []
 //
 // 调用示例(team 服务广播队员变更):
 //
-//	memberIDs := []int64{1001, 1002, 1003}
+//	memberIDs := []uint64{1001, 1002, 1003}
 //	payload, _ := proto.Marshal(&teamv1.TeamUpdateEvent{...})
 //	producer.PushToPlayers(ctx, callerID, memberIDs, payload)
 func (p *KeyOrderedProducer) PushToPlayers(
 	ctx context.Context,
-	callerPlayerID int64,
-	toPlayerIDs []int64,
+	callerPlayerID uint64,
+	toPlayerIDs []uint64,
 	payload []byte,
 ) (sent int, lastErr error) {
 	for _, pid := range toPlayerIDs {
@@ -200,7 +200,7 @@ func (p *KeyOrderedProducer) PushToPlayers(
 			// 原则 2:不发给发起方;callerPlayerID=0 时该条件永不满足 → 全发(原则 3 例外)
 			continue
 		}
-		if err := p.SendRaw(ctx, strconv.FormatInt(pid, 10), payload); err != nil {
+		if err := p.SendRaw(ctx, strconv.FormatUint(pid, 10), payload); err != nil {
 			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d err=%v",
 				p.topic, pid, err)
 			lastErr = err

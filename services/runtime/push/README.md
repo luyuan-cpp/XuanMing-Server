@@ -56,7 +56,7 @@ internal/
 ```
 业务服 producer
   └─ kafkax.PushToPlayers(ctx, callerPID, toPIDs, payload)
-       └─ SendRaw(key=strconv.Itoa(playerID))  ← 一致性哈希,同 player_id 同 partition,partition 内保序
+       └─ SendRaw(key=strconv.FormatUint(playerID, 10))  ← 一致性哈希,同 player_id 同 partition,partition 内保序
             ↓ kafka pandora.team.update / pandora.match.progress / pandora.chat.private
 push 服务 KafkaConsumer(每 topic 一个)
   └─ handle(msg): key 非数字 → log+ack 跳过;否则 →

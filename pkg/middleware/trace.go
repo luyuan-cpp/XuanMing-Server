@@ -13,10 +13,11 @@ package middleware
 
 import (
 	"context"
+	"strconv"
 
-	"github.com/google/uuid"
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
+	"github.com/google/uuid"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 )
@@ -74,7 +75,7 @@ func extractTraceID(ctx context.Context) string {
 // extractPlayerID 从 metadata 拿 player_id(Envoy / gateway 鉴权后注入到 header)。
 //
 // Returns 0 if not present.
-func extractPlayerID(ctx context.Context) int64 {
+func extractPlayerID(ctx context.Context) uint64 {
 	tr, ok := transport.FromServerContext(ctx)
 	if !ok {
 		return 0
@@ -83,13 +84,9 @@ func extractPlayerID(ctx context.Context) int64 {
 	if v == "" {
 		return 0
 	}
-	// Quick parse:不引入 strconv 单独错误处理
-	var id int64
-	for _, c := range v {
-		if c < '0' || c > '9' {
-			return 0
-		}
-		id = id*10 + int64(c-'0')
+	id, err := strconv.ParseUint(v, 10, 64)
+	if err != nil {
+		return 0
 	}
 	return id
 }

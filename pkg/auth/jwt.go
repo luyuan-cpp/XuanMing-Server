@@ -54,12 +54,12 @@ type SessionClaims struct {
 	jwt.RegisteredClaims
 }
 
-// PlayerID 把 sub 字符串解成 int64。失败返回 0。
-func (s *SessionClaims) PlayerID() int64 {
+// PlayerID 把 sub 字符串解成 uint64。失败返回 0。
+func (s *SessionClaims) PlayerID() uint64 {
 	if s.Subject == "" {
 		return 0
 	}
-	id, err := strconv.ParseInt(s.Subject, 10, 64)
+	id, err := strconv.ParseUint(s.Subject, 10, 64)
 	if err != nil {
 		return 0
 	}
@@ -70,19 +70,19 @@ func (s *SessionClaims) PlayerID() int64 {
 //
 // 自定义 claim:
 //   - ds_type:"hub" / "battle"
-//   - match_id:battle DS 才有(hub 留空)
+//   - match_id:battle DS 才有(hub 为 0)
 type DSTicketClaims struct {
 	jwt.RegisteredClaims
 	DSType  string `json:"ds_type"`
-	MatchID string `json:"match_id,omitempty"`
+	MatchID uint64 `json:"match_id,omitempty"`
 }
 
-// PlayerID 把 sub 字符串解成 int64。失败返回 0。
-func (t *DSTicketClaims) PlayerID() int64 {
+// PlayerID 把 sub 字符串解成 uint64。失败返回 0。
+func (t *DSTicketClaims) PlayerID() uint64 {
 	if t.Subject == "" {
 		return 0
 	}
-	id, err := strconv.ParseInt(t.Subject, 10, 64)
+	id, err := strconv.ParseUint(t.Subject, 10, 64)
 	if err != nil {
 		return 0
 	}
@@ -185,8 +185,8 @@ func (v *Verifier) DSTicketTTL() time.Duration { return v.cfg.DSTicketTTL }
 // SignSession 签发 SessionToken。jti 由调用方传(uuid v4)。
 //
 // 返回:JWT 字符串 / 过期时刻(unix ms,给客户端展示用)/ error。
-func (s *Signer) SignSession(playerID int64, jti string) (token string, expiresAtMs int64, err error) {
-	if playerID <= 0 {
+func (s *Signer) SignSession(playerID uint64, jti string) (token string, expiresAtMs int64, err error) {
+	if playerID == 0 {
 		return "", 0, errors.New("auth.SignSession: playerID must be > 0")
 	}
 	if jti == "" {
@@ -197,7 +197,7 @@ func (s *Signer) SignSession(playerID int64, jti string) (token string, expiresA
 	claims := SessionClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
-			Subject:   strconv.FormatInt(playerID, 10),
+			Subject:   strconv.FormatUint(playerID, 10),
 			Audience:  jwt.ClaimStrings{s.cfg.Audience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(exp),
@@ -215,8 +215,8 @@ func (s *Signer) SignSession(playerID int64, jti string) (token string, expiresA
 // SignDSTicket 签发 DS 票据。dsType / matchID 按 docs/design/proto-design.md DSTicket message。
 //
 // 不变量 §3:本方法默认 TTL=5min。
-func (s *Signer) SignDSTicket(playerID int64, dsType DSType, matchID, jti string) (token string, expiresAtMs int64, err error) {
-	if playerID <= 0 {
+func (s *Signer) SignDSTicket(playerID uint64, dsType DSType, matchID uint64, jti string) (token string, expiresAtMs int64, err error) {
+	if playerID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: playerID must be > 0")
 	}
 	if dsType != DSTypeHub && dsType != DSTypeBattle {
@@ -225,7 +225,7 @@ func (s *Signer) SignDSTicket(playerID int64, dsType DSType, matchID, jti string
 	if jti == "" {
 		return "", 0, errors.New("auth.SignDSTicket: jti must be non-empty")
 	}
-	if dsType == DSTypeBattle && matchID == "" {
+	if dsType == DSTypeBattle && matchID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: battle DSTicket requires matchID")
 	}
 	now := s.cfg.NowFn()
@@ -233,7 +233,7 @@ func (s *Signer) SignDSTicket(playerID int64, dsType DSType, matchID, jti string
 	claims := DSTicketClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
-			Subject:   strconv.FormatInt(playerID, 10),
+			Subject:   strconv.FormatUint(playerID, 10),
 			Audience:  jwt.ClaimStrings{s.cfg.Audience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(exp),
@@ -271,7 +271,7 @@ func (v *Verifier) VerifySession(token string) (*SessionClaims, error) {
 //   - 签名 / exp / iss / aud(parseInto)
 //   - sub 为有效 player_id
 //   - ds_type 必在 "hub" / "battle"
-//   - dsType=battle 时 match_id 必非空(与 SignDSTicket 防御性检查对称,防伪造 token 跳过 sign 分支)
+//   - dsType=battle 时 match_id 必非 0(与 SignDSTicket 防御性检查对称,防伪造 token 跳过 sign 分支)
 //
 // 防重放(jti 黑名单)需要调用方再走一次 redis SET NX EX 检查;本方法只验签 + exp。
 func (v *Verifier) VerifyDSTicket(token string) (*DSTicketClaims, error) {
@@ -285,7 +285,7 @@ func (v *Verifier) VerifyDSTicket(token string) (*DSTicketClaims, error) {
 	if claims.DSType != string(DSTypeHub) && claims.DSType != string(DSTypeBattle) {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket dsType invalid: %q", claims.DSType)
 	}
-	if claims.DSType == string(DSTypeBattle) && claims.MatchID == "" {
+	if claims.DSType == string(DSTypeBattle) && claims.MatchID == 0 {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "battle ds ticket missing match_id")
 	}
 	return &claims, nil

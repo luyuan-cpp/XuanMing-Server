@@ -31,7 +31,7 @@ import (
 
 // LoginResult 是 LoginUsecase.Login 的产出。service 层再翻译成 proto。
 type LoginResult struct {
-	PlayerID       int64
+	PlayerID       uint64
 	SessionToken   string // JWT(W3 ①)
 	SessionExpMs   int64  // session_token exp(unix ms),客户端展示 / 提前别未过期
 	HubDSAddr      string
@@ -112,7 +112,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		h.Errorw("msg", "sign_session_failed", "err", err, "player_id", playerID)
 		return nil, errcode.New(errcode.ErrInternal, "sign session failed: %v", err)
 	}
-	hubTicket, hubExpMs, err := u.signer.SignDSTicket(playerID, auth.DSTypeHub, "", uuid.NewString())
+	hubTicket, hubExpMs, err := u.signer.SignDSTicket(playerID, auth.DSTypeHub, 0, uuid.NewString())
 	if err != nil {
 		h.Errorw("msg", "sign_hub_ticket_failed", "err", err, "player_id", playerID)
 		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed: %v", err)
@@ -170,7 +170,7 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 		return nil
 	}
 	playerID := claims.PlayerID()
-	if playerID <= 0 {
+	if playerID == 0 {
 		h.Warnw("msg", "logout_session_no_player")
 		return nil
 	}

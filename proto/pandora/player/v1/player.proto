@@ -23,7 +23,7 @@ service PlayerService {
 // ===== 玩家档案 =====
 
 message PlayerProfile {
-  int64  player_id     = 1;
+  uint64 player_id     = 1;
   string nickname      = 2;
   int32  level         = 3;
   int32  mmr           = 4;
@@ -40,7 +40,7 @@ message PlayerProfile {
 }
 
 message GetProfileRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message GetProfileResponse {
@@ -49,7 +49,7 @@ message GetProfileResponse {
 }
 
 message UpdateNicknameRequest {
-  int64  player_id = 1;
+  uint64 player_id = 1;
   string nickname  = 2;
 }
 
@@ -60,17 +60,17 @@ message UpdateNicknameResponse {
 // ===== 英雄 =====
 
 message ListHeroesRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message ListHeroesResponse {
   pandora.common.v1.ErrCode code = 1;
-  repeated int32 hero_ids = 2;
+  repeated uint32 hero_ids = 2;
 }
 
 message UnlockHeroRequest {
-  int64  player_id = 1;
-  int32  hero_id   = 2;
+  uint64 player_id = 1;
+  uint32 hero_id   = 2;
   string source   = 3;  // "purchase" | "reward" | "freebie"
 }
 
@@ -81,7 +81,7 @@ message UnlockHeroResponse {
 // ===== MMR(段位)=====
 
 message GetMMRRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message GetMMRResponse {
@@ -92,7 +92,7 @@ message GetMMRResponse {
 // UpdateMMR 必须幂等(idempotency_key 通常是 match_id)。
 // 同一 idempotency_key 重复调用,服务端只算一次。
 message UpdateMMRRequest {
-  int64  player_id       = 1;
+  uint64 player_id       = 1;
   int32  delta           = 2;
   string reason          = 3;  // "win" | "lose" | "abandon" | "rollback"
   string idempotency_key = 4;  // 一般是 match_id

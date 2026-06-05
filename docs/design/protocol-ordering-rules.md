@@ -169,7 +169,7 @@ message CreateTeamResponse {
 // ❌ 错误(违反原则 1)
 message CreateTeamResponse {
   ErrCode code    = 1;
-  string  team_id = 2;   // 只返 ID,客户端要等 push 才能拿完整数据
+  uint64  team_id = 2;   // 只返 ID,客户端要等 push 才能拿完整数据
 }
 ```
 
@@ -246,7 +246,7 @@ A 的客户端代码要写:
 ```go
 // ✅ 正确
 func (s *TeamService) Invite(ctx, req *InviteRequest) (*InviteResponse, error) {
-    caller := ctx.Value("player_id").(int64)  // = req.captain_id 通常
+    caller := ctx.Value("player_id").(uint64)  // = req.captain_id 通常
     
     // ... 写 redis 记录邀请 ...
     
@@ -259,7 +259,7 @@ func (s *TeamService) Invite(ctx, req *InviteRequest) (*InviteResponse, error) {
 // ❌ 错误
 func (s *TeamService) Invite(ctx, req *InviteRequest) (*InviteResponse, error) {
     // 错!给所有相关玩家都发,包括 caller
-    for _, p := range []int64{req.captain_id, req.target_player_id} {
+    for _, p := range []uint64{req.captain_id, req.target_player_id} {
         kafka.Send("pandora.team.update", key=p, payload=...)
     }
     return &InviteResponse{Ok: true}, nil
@@ -283,7 +283,7 @@ func (s *TeamService) Invite(ctx, req *InviteRequest) (*InviteResponse, error) {
 rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
 message StartMatchResponse {
   ErrCode code     = 1;
-  string  match_id = 2;   // 已入队,后续 stage 走 push
+  uint64  match_id = 2;   // 已入队,后续 stage 走 push
 }
 ```
 
@@ -422,7 +422,7 @@ OnPushReceived(envelope) {
 
 ```go
 // pkg/push/helper.go(W2 时实现)
-func PushToPlayers(ctx context.Context, topic string, recipients []int64, payload proto.Message) error {
+func PushToPlayers(ctx context.Context, topic string, recipients []uint64, payload proto.Message) error {
     callerID := GetCallerPlayerID(ctx)  // 从 ctx 拿,没有就是 0
     
     for _, recipientID := range recipients {
@@ -441,7 +441,7 @@ func PushToPlayers(ctx context.Context, topic string, recipients []int64, payloa
 
 ```go
 // pkg/push/helper.go
-func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []int64, payload proto.Message) error {
+func PushToAllIncludingCaller(ctx context.Context, topic string, recipients []uint64, payload proto.Message) error {
     // ⚠️ 这个函数仅用于已受理型 RPC 的 stage 推进
     // 使用前必须确认 RPC 是"已受理"语义
     for _, recipientID := range recipients {

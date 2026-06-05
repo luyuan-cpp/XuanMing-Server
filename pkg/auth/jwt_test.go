@@ -30,13 +30,13 @@ func newTestSigner(t *testing.T, now time.Time) (*Signer, *Verifier) {
 
 // signRawDSTicketForTest 直接用底层 jwt 库签 token,绕过 Signer.SignDSTicket 的 pre-check,
 // 用于构造 "dsType=battle 但 match_id=空" 这种恶意载荷,验证 VerifyDSTicket 防御。
-func signRawDSTicketForTest(t *testing.T, s *Signer, playerID int64, dsType, matchID string) string {
+func signRawDSTicketForTest(t *testing.T, s *Signer, playerID uint64, dsType string, matchID uint64) string {
 	t.Helper()
 	now := s.cfg.NowFn()
 	claims := DSTicketClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
-			Subject:   strconv.FormatInt(playerID, 10),
+			Subject:   strconv.FormatUint(playerID, 10),
 			Audience:  jwt.ClaimStrings{s.cfg.Audience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.DSTicketTTL)),
@@ -110,7 +110,7 @@ func TestSignAndVerifyDSTicket(t *testing.T) {
 	now := time.Unix(1_780_000_000, 0).UTC()
 	s, v := newTestSigner(t, now)
 
-	tok, _, err := s.SignDSTicket(7777, DSTypeBattle, "match-xyz", "jti-1")
+	tok, _, err := s.SignDSTicket(7777, DSTypeBattle, 9001, "jti-1")
 	if err != nil {
 		t.Fatalf("SignDSTicket: %v", err)
 	}
@@ -121,8 +121,8 @@ func TestSignAndVerifyDSTicket(t *testing.T) {
 	if c.PlayerID() != 7777 {
 		t.Fatalf("PlayerID: %d", c.PlayerID())
 	}
-	if c.DSType != "battle" || c.MatchID != "match-xyz" {
-		t.Fatalf("ds_type=%q match_id=%q", c.DSType, c.MatchID)
+	if c.DSType != "battle" || c.MatchID != 9001 {
+		t.Fatalf("ds_type=%q match_id=%d", c.DSType, c.MatchID)
 	}
 }
 
@@ -130,10 +130,10 @@ func TestSignDSTicketRequiresMatchIDForBattle(t *testing.T) {
 	now := time.Unix(1_780_000_000, 0).UTC()
 	s, _ := newTestSigner(t, now)
 
-	if _, _, err := s.SignDSTicket(1, DSTypeBattle, "", "jti"); err == nil {
+	if _, _, err := s.SignDSTicket(1, DSTypeBattle, 0, "jti"); err == nil {
 		t.Fatal("expected error when battle ticket missing match_id")
 	}
-	if _, _, err := s.SignDSTicket(1, DSTypeHub, "", "jti"); err != nil {
+	if _, _, err := s.SignDSTicket(1, DSTypeHub, 0, "jti"); err != nil {
 		t.Fatalf("hub ticket without match_id should be OK: %v", err)
 	}
 }
@@ -230,13 +230,13 @@ func TestVerifyDSTicketRejectsBattleWithoutMatchID(t *testing.T) {
 
 	// 直接构造一个绕过 SignDSTicket 校验的"恶意"battle token:
 	// 用底层 jwt 库手工签,确保 ds_type=battle 但 match_id 为空。
-	tok := signRawDSTicketForTest(t, s, 42, "battle", "")
+	tok := signRawDSTicketForTest(t, s, 42, "battle", 0)
 	if _, err := v.VerifyDSTicket(tok); err == nil {
 		t.Fatal("expected reject battle ticket without match_id")
 	}
 
 	// 对照:hub ticket 不需要 match_id,应放行
-	hubTok, _, err := s.SignDSTicket(42, DSTypeHub, "", "jti-hub")
+	hubTok, _, err := s.SignDSTicket(42, DSTypeHub, 0, "jti-hub")
 	if err != nil {
 		t.Fatalf("hub SignDSTicket: %v", err)
 	}
@@ -245,11 +245,35 @@ func TestVerifyDSTicketRejectsBattleWithoutMatchID(t *testing.T) {
 	}
 
 	// 对照:battle + match_id 应放行
-	battleTok, _, err := s.SignDSTicket(42, DSTypeBattle, "m-1", "jti-b")
+	battleTok, _, err := s.SignDSTicket(42, DSTypeBattle, 1001, "jti-b")
 	if err != nil {
 		t.Fatalf("battle SignDSTicket: %v", err)
 	}
 	if _, err := v.VerifyDSTicket(battleTok); err != nil {
 		t.Fatalf("battle ticket with match_id should verify: %v", err)
+	}
+}
+
+func TestVerifySessionRejectsNegativeSub(t *testing.T) {
+	now := time.Unix(1_780_000_000, 0).UTC()
+	s, v := newTestSigner(t, now)
+
+	claims := SessionClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.cfg.Issuer,
+			Subject:   "-1",
+			Audience:  jwt.ClaimStrings{s.cfg.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.SessionTTL)),
+			ID:        "jti-negative",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	str, err := tok.SignedString(s.cfg.Secret)
+	if err != nil {
+		t.Fatalf("SignedString: %v", err)
+	}
+	if _, err := v.VerifySession(str); err == nil {
+		t.Fatal("expected negative sub rejected")
 	}
 }

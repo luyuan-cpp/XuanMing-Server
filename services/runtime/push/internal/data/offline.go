@@ -37,11 +37,11 @@ type OfflineFrame struct {
 // OfflineCacheRepo 是离线消息缓存的抽象接口。
 type OfflineCacheRepo interface {
 	// Append 把一帧 PushFrame 追加到该玩家的离线 ZSET,并刷新 TTL。
-	Append(ctx context.Context, playerID int64, frame *pushv1.PushFrame) error
+	Append(ctx context.Context, playerID uint64, frame *pushv1.PushFrame) error
 
 	// Range 拉取该玩家 score > sinceMs 的离线帧(按时间升序)。
 	// sinceMs=0 返回所有未过期帧。
-	Range(ctx context.Context, playerID int64, sinceMs int64) ([]OfflineFrame, error)
+	Range(ctx context.Context, playerID uint64, sinceMs int64) ([]OfflineFrame, error)
 }
 
 // RedisOfflineCacheRepo 是基于 go-redis/v9 ZSET 的实现。
@@ -63,7 +63,7 @@ func NewRedisOfflineCacheRepo(rdb *redis.Client, ttl time.Duration) *RedisOfflin
 }
 
 // offlineKey 是 push 离线 ZSET 的 key 模板。
-func offlineKey(playerID int64) string {
+func offlineKey(playerID uint64) string {
 	return fmt.Sprintf("pandora:push:offline:%d", playerID)
 }
 
@@ -97,7 +97,7 @@ func decodeMember(raw []byte) []byte {
 //
 // 用 TxPipeline(ZAdd + Expire),保证 ZSET 写入后 TTL 立即刷新。
 // frame 为 nil 直接返参数错误。
-func (r *RedisOfflineCacheRepo) Append(ctx context.Context, playerID int64, frame *pushv1.PushFrame) error {
+func (r *RedisOfflineCacheRepo) Append(ctx context.Context, playerID uint64, frame *pushv1.PushFrame) error {
 	if frame == nil {
 		return errcode.New(errcode.ErrInvalidArg, "nil frame")
 	}
@@ -125,7 +125,7 @@ func (r *RedisOfflineCacheRepo) Append(ctx context.Context, playerID int64, fram
 //
 // 用 ZRangeByScoreWithScores 一次拉完;假设单玩家离线峰值 <= 几百帧,
 // 不分页(若后续监控发现热玩家堆积,再加 Count 分页)。
-func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID int64, sinceMs int64) ([]OfflineFrame, error) {
+func (r *RedisOfflineCacheRepo) Range(ctx context.Context, playerID uint64, sinceMs int64) ([]OfflineFrame, error) {
 	min := "-inf"
 	if sinceMs > 0 {
 		// (sinceMs → score > sinceMs(开区间)

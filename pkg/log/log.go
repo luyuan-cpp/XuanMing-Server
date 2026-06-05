@@ -117,16 +117,16 @@ func WithTraceID(ctx context.Context, traceID string) context.Context {
 }
 
 // WithPlayerID 把 player_id 塞进 ctx。
-func WithPlayerID(ctx context.Context, playerID int64) context.Context {
+func WithPlayerID(ctx context.Context, playerID uint64) context.Context {
 	return context.WithValue(ctx, CtxKeyPlayerID, playerID)
 }
 
 // WithMatchID 把 match_id 塞进 ctx。
-func WithMatchID(ctx context.Context, matchID string) context.Context {
+func WithMatchID(ctx context.Context, matchID uint64) context.Context {
 	return context.WithValue(ctx, CtxKeyMatchID, matchID)
 }
 
 // WithTeamID 把 team_id 塞进 ctx。
-func WithTeamID(ctx context.Context, teamID string) context.Context {
+func WithTeamID(ctx context.Context, teamID uint64) context.Context {
 	return context.WithValue(ctx, CtxKeyTeamID, teamID)
 }

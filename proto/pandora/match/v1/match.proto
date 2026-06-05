@@ -33,17 +33,17 @@ enum MatchStage {
 }
 
 message StartMatchRequest {
-  string team_id = 1;
+  uint64 team_id = 1;
 }
 
 message StartMatchResponse {
   pandora.common.v1.ErrCode code = 1;
-  string match_id = 2;
+  uint64 match_id = 2;
 }
 
 message CancelMatchRequest {
-  string match_id = 1;
-  int64  player_id = 2;
+  uint64 match_id = 1;
+  uint64 player_id = 2;
 }
 
 message CancelMatchResponse {
@@ -51,8 +51,8 @@ message CancelMatchResponse {
 }
 
 message ConfirmMatchRequest {
-  int64  player_id = 1;
-  string match_id  = 2;
+  uint64 player_id = 1;
+  uint64 match_id  = 2;
   bool   accept    = 3;  // false = 拒绝
 }
 
@@ -61,7 +61,7 @@ message ConfirmMatchResponse {
 }
 
 message GetMatchProgressRequest {
-  string match_id = 1;
+  uint64 match_id = 1;
 }
 
 message GetMatchProgressResponse {
@@ -70,7 +70,7 @@ message GetMatchProgressResponse {
 }
 
 message MatchProgress {
-  string     match_id              = 1;
+  uint64     match_id              = 1;
   MatchStage stage                 = 2;
   int32      queue_seconds         = 3;
   int32      estimated_wait_seconds = 4;
@@ -78,8 +78,8 @@ message MatchProgress {
   string battle_ds_addr = 5;
   string battle_ticket  = 6;
   // FOUND / CONFIRM 时填
-  repeated int64 team_a = 7;  // 5 人 player_id
-  repeated int64 team_b = 8;
+  repeated uint64 team_a = 7;  // 5 人 player_id
+  repeated uint64 team_b = 8;
   // 9-19 reserved
   reserved 9 to 19;
 }
@@ -94,7 +94,7 @@ message MatchProgress {
 
 message MatchProgressEvent {
   MatchProgress progress     = 1;
-  int64         to_player_id = 2;  // 接收推送的玩家(也是 kafka key)
+  uint64        to_player_id = 2;  // 接收推送的玩家(也是 kafka key)
   int64         ts_ms        = 3;
   // 4-9 reserved
   reserved 4 to 9;

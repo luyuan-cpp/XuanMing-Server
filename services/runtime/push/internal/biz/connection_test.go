@@ -22,7 +22,7 @@ import (
 // reentrantStream 模拟 grpc ServerStreamingServer:在 Send 中故意用 atomic.Bool 探测重入,
 // 任何并发 Send 都会立即 t.Errorf。再加 sleep 也不需要,reentrance 标志比 race detector 还快。
 type reentrantStream struct {
-	t       *testing.T
+	t        *testing.T
 	inFlight atomic.Bool
 	count    atomic.Int64
 }
@@ -40,7 +40,7 @@ func (s *reentrantStream) Send(_ *pushv1.PushFrame) error {
 
 func (*reentrantStream) SetHeader(metadata.MD) error  { return nil }
 func (*reentrantStream) SendHeader(metadata.MD) error { return nil }
-func (*reentrantStream) SetTrailer(metadata.MD)      {}
+func (*reentrantStream) SetTrailer(metadata.MD)       {}
 func (*reentrantStream) Context() context.Context     { return context.Background() }
 func (*reentrantStream) SendMsg(any) error            { return nil }
 func (*reentrantStream) RecvMsg(any) error            { return nil }
@@ -56,7 +56,7 @@ func TestSendTo_ConcurrentSafe(t *testing.T) {
 	cm := NewConnectionManager()
 	stream := &reentrantStream{t: t}
 
-	const playerID = int64(42)
+	const playerID = uint64(42)
 	cm.Register(playerID, stream, func() {})
 
 	const (
@@ -92,7 +92,7 @@ func TestBroadcast_ConcurrentSafe(t *testing.T) {
 	cm := NewConnectionManager()
 	stream := &reentrantStream{t: t}
 
-	const playerID = int64(99)
+	const playerID = uint64(99)
 	cm.Register(playerID, stream, func() {})
 
 	frame := &pushv1.PushFrame{Topic: "test", TsMs: 1}
@@ -123,7 +123,7 @@ func TestRegister_TopOff(t *testing.T) {
 	stream1 := &reentrantStream{t: t}
 	stream2 := &reentrantStream{t: t}
 
-	const playerID = int64(7)
+	const playerID = uint64(7)
 
 	var closed1 atomic.Bool
 	slot1 := cm.Register(playerID, stream1, func() { closed1.Store(true) })

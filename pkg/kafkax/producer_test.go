@@ -40,7 +40,7 @@ func TestPushToPlayers_SkipsCaller(t *testing.T) {
 
 	p := newTestProducer(t, mp)
 
-	sent, err := p.PushToPlayers(context.Background(), 100, []int64{100, 200, 300}, []byte("payload"))
+	sent, err := p.PushToPlayers(context.Background(), 100, []uint64{100, 200, 300}, []byte("payload"))
 	if err != nil {
 		t.Fatalf("PushToPlayers err=%v", err)
 	}
@@ -60,7 +60,7 @@ func TestPushToPlayers_CallerZeroSendsAll(t *testing.T) {
 
 	p := newTestProducer(t, mp)
 
-	sent, err := p.PushToPlayers(context.Background(), 0, []int64{1, 2, 3}, []byte("payload"))
+	sent, err := p.PushToPlayers(context.Background(), 0, []uint64{1, 2, 3}, []byte("payload"))
 	if err != nil {
 		t.Fatalf("PushToPlayers err=%v", err)
 	}
@@ -81,7 +81,7 @@ func TestPushToPlayers_PartialFailureContinues(t *testing.T) {
 
 	p := newTestProducer(t, mp)
 
-	sent, err := p.PushToPlayers(context.Background(), 0, []int64{1, 2, 3}, []byte("payload"))
+	sent, err := p.PushToPlayers(context.Background(), 0, []uint64{1, 2, 3}, []byte("payload"))
 	if sent != 2 {
 		t.Fatalf("sent=%d want=2", sent)
 	}
@@ -98,7 +98,7 @@ func TestPushToPlayers_AllCallerNoSend(t *testing.T) {
 
 	p := newTestProducer(t, mp)
 
-	sent, err := p.PushToPlayers(context.Background(), 100, []int64{100}, []byte("payload"))
+	sent, err := p.PushToPlayers(context.Background(), 100, []uint64{100}, []byte("payload"))
 	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}

@@ -73,8 +73,8 @@ func (s *LoginService) Logout(ctx context.Context, req *loginv1.LogoutRequest) (
 //
 // W3 ②:加 jti SETNX EX 5min 防重放,加 session 在线检查。
 func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTicketRequest) (*loginv1.IssueDSTicketResponse, error) {
-	playerID, _ := ctx.Value(plog.CtxKeyPlayerID).(int64)
-	if playerID <= 0 {
+	playerID, _ := ctx.Value(plog.CtxKeyPlayerID).(uint64)
+	if playerID == 0 {
 		plog.With(ctx).Warnw("msg", "ds_ticket_issue_no_player_id")
 		return &loginv1.IssueDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}

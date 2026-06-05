@@ -31,14 +31,14 @@ type DSTicketResult struct {
 	Ticket      string
 	JTI         string
 	ExpiresAtMs int64
-	PlayerID    int64
+	PlayerID    uint64
 }
 
 // DSTicketClaims 是 VerifyDSTicket 的产出(透传 auth.DSTicketClaims 的核心字段,
 // service 层翻译成 proto LoginService.DSTicket message)。
 type DSTicketClaims struct {
-	PlayerID    int64
-	MatchID     string
+	PlayerID    uint64
+	MatchID     uint64
 	DSType      string
 	JTI         string
 	IssuedAtMs  int64
@@ -63,14 +63,14 @@ func NewTicketUsecase(signer *auth.Signer, verifier *auth.Verifier, jtiRepo data
 // IssueDSTicket 给指定 player 签 hub / battle DS 票据。
 //
 // dsType: "hub" / "battle"
-// targetID: hub 留空;battle 必须填 match_id
+// targetID: hub 为 0;battle 必须填 match_id
 // playerID: 已通过 session 校验(本用例不再二次解 session_token,只信调用方)
 //
 // 失败返回 *errcode.Error。
-func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID int64, dsType, targetID string) (*DSTicketResult, error) {
+func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID uint64, dsType string, targetID uint64) (*DSTicketResult, error) {
 	h := plog.With(ctx)
 
-	if playerID <= 0 {
+	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
 	}
 	var ds auth.DSType
@@ -82,7 +82,7 @@ func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID int64, dsTyp
 	default:
 		return nil, errcode.New(errcode.ErrInvalidArg, "dsType must be hub|battle, got %q", dsType)
 	}
-	if ds == auth.DSTypeBattle && targetID == "" {
+	if ds == auth.DSTypeBattle && targetID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "battle DSTicket requires match_id (targetID)")
 	}
 

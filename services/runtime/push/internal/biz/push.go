@@ -55,7 +55,7 @@ func (u *PushUsecase) Conns() *ConnectionManager {
 func (u *PushUsecase) RunSubscribeStream(
 	ctx context.Context,
 	slot *StreamSlot,
-	playerID int64,
+	playerID uint64,
 	sinceMs int64,
 ) error {
 	h := plog.With(ctx)

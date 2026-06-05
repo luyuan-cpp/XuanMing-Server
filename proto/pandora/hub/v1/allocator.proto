@@ -24,9 +24,9 @@ service HubAllocatorService {
 }
 
 message AssignHubRequest {
-  int64  player_id = 1;
+  uint64 player_id = 1;
   string region    = 2;
-  string team_id   = 3;  // 可选,优先选队友所在 hub
+  uint64 team_id   = 3;  // 可选,优先选队友所在 hub
 }
 
 message AssignHubResponse {
@@ -38,7 +38,7 @@ message AssignHubResponse {
 }
 
 message ReleaseHubRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message ReleaseHubResponse {
@@ -46,8 +46,8 @@ message ReleaseHubResponse {
 }
 
 message TransferHubRequest {
-  int64  player_id     = 1;
-  string target_hub_id = 2;  // 玩家点的传送点目标
+  uint64 player_id     = 1;
+  uint64 target_hub_id = 2;  // 玩家点的传送点目标
 }
 
 message TransferHubResponse {

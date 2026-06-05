@@ -25,7 +25,7 @@ enum FriendRequestStatus {
 }
 
 message FriendInfo {
-  int64 player_id     = 1;
+  uint64 player_id    = 1;
   string nickname     = 2;
   bool is_online      = 3;
   int64 since_ms      = 4;
@@ -33,8 +33,8 @@ message FriendInfo {
 }
 
 message AddFriendRequest {
-  int64 player_id        = 1;
-  int64 target_player_id = 2;
+  uint64 player_id        = 1;
+  uint64 target_player_id = 2;
 }
 
 message AddFriendResponse {
@@ -43,7 +43,7 @@ message AddFriendResponse {
 }
 
 message AcceptFriendRequest {
-  int64  player_id  = 1;
+  uint64 player_id  = 1;
   string request_id = 2;
 }
 
@@ -52,7 +52,7 @@ message AcceptFriendResponse {
 }
 
 message ListFriendsRequest {
-  int64 player_id = 1;
+  uint64 player_id = 1;
 }
 
 message ListFriendsResponse {
@@ -61,8 +61,8 @@ message ListFriendsResponse {
 }
 
 message BlockRequest {
-  int64 player_id        = 1;
-  int64 target_player_id = 2;
+  uint64 player_id        = 1;
+  uint64 target_player_id = 2;
 }
 
 message BlockResponse {

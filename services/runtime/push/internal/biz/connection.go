@@ -55,15 +55,15 @@ func (s *StreamSlot) SafeSend(frame *pushv1.PushFrame) error {
 // 并发安全(读写锁,仅保护 map 本身;Send 的串行化在 StreamSlot.sendMu)。
 type ConnectionManager struct {
 	mu       sync.RWMutex
-	bySlot   map[int64]*StreamSlot // key = player_id;value = 该玩家当前 slot
-	closeFns map[int64]func()      // 旧 stream 被顶号时的 close 回调
+	bySlot   map[uint64]*StreamSlot // key = player_id;value = 该玩家当前 slot
+	closeFns map[uint64]func()      // 旧 stream 被顶号时的 close 回调
 }
 
 // NewConnectionManager 构造空索引。
 func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
-		bySlot:   make(map[int64]*StreamSlot),
-		closeFns: make(map[int64]func()),
+		bySlot:   make(map[uint64]*StreamSlot),
+		closeFns: make(map[uint64]func()),
 	}
 }
 
@@ -73,7 +73,7 @@ func NewConnectionManager() *ConnectionManager {
 // 主动退出(接 ctx cancel)。调用方应在 Subscribe 阻塞结束后调 Unregister 反注册。
 //
 // 返回的 *StreamSlot 用于 RunSubscribeStream replay 循环 — 与 KafkaConsumer.SendTo 共享 sendMu。
-func (m *ConnectionManager) Register(playerID int64, stream PushStream, closeFn func()) *StreamSlot {
+func (m *ConnectionManager) Register(playerID uint64, stream PushStream, closeFn func()) *StreamSlot {
 	slot := &StreamSlot{stream: stream}
 
 	m.mu.Lock()
@@ -90,7 +90,7 @@ func (m *ConnectionManager) Register(playerID int64, stream PushStream, closeFn 
 
 // Unregister 把 player_id 从索引中移除(仅当当前 slot 等于传入的 slot 时才移除,
 // 避免顶号场景下新 stream 把自己的位置删掉)。
-func (m *ConnectionManager) Unregister(playerID int64, slot *StreamSlot) {
+func (m *ConnectionManager) Unregister(playerID uint64, slot *StreamSlot) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -104,7 +104,7 @@ func (m *ConnectionManager) Unregister(playerID int64, slot *StreamSlot) {
 // 玩家不在线返回 (false, nil)(由调用方决定写离线缓存还是丢弃)。
 //
 // KafkaConsumer 路由 push 消息时调本方法。
-func (m *ConnectionManager) SendTo(playerID int64, frame *pushv1.PushFrame) (bool, error) {
+func (m *ConnectionManager) SendTo(playerID uint64, frame *pushv1.PushFrame) (bool, error) {
 	m.mu.RLock()
 	slot, ok := m.bySlot[playerID]
 	m.mu.RUnlock()
