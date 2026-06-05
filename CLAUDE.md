@@ -1,7 +1,7 @@
 # Pandora 项目规范
 
 > 本文档是 Pandora 项目的"宪法",AI 协作和人类开发都必须遵守。
-> 继承 mmorpg CLAUDE.md 的纪律,适配 MOBA 玩法 + UE DS + 双仓库架构。
+> Pandora 后端项目规范,适配 MOBA 玩法 + UE DS + 双仓库架构。
 
 ## 1. 项目基本信息
 
@@ -54,16 +54,16 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 
 | Round | 日期 | 关键决策 / 数据 |
 |---|---|---|
-| R0 | 2026-06-03 | 立项,推倒 mmorpg,新建 Pandora 项目 |
+| R0 | 2026-06-03 | 立项,新建 Pandora 项目 |
 | R0 | 2026-06-03 | 大厅 DS 化,500 人/实例,全图自由 PvP |
 | R0 | 2026-06-03 | UE 5.7 + Iris + GAS,Agones 调度 |
 | R0 | 2026-06-03 | 双仓库:后端 Pandora,UE 独立仓库 |
 | R0 | 2026-06-03 | License MIT,Go 1.23,基础设施全新 |
-| R0 | 2026-06-03 | **后端框架继续用 go-zero**(复用 mmorpg 公共代码) |
+| R0 | 2026-06-03 | **后端框架继续用 go-zero**(历史决策,后续已切换 Kratos) |
 
 后续每轮压测 / 大决策追加一行,**永不删旧行**。
 
-## 8. 压测纪律(继承 mmorpg §8/§9)
+## 8. 压测纪律
 
 详见 [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md)。**核心规则**:
 
@@ -73,7 +73,7 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 - summarize 脚本输出五段二维表,**不许手 grep raw prom**
 - **没有对比表不许声明"性能提升"**
 - 压期间不上传日志
-- **每次登录压测把所有 redis/mysql/etcd 数据全部删除再开新一轮**(对应 mmorpg §9.6)
+- **每次登录压测把所有 redis/mysql/etcd 数据全部删除再开新一轮**
 
 ## 9. 不变量(数据一致性 / 安全)
 

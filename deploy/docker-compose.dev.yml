@@ -1,6 +1,6 @@
 # Pandora 开发环境基础设施
 #
-# 端口规划严格对齐 docs/design/infra.md §6.1,与 mmorpg(3306/6379/9092/2379/9090/3000)错开。
+# 端口规划严格对齐 docs/design/infra.md §6.1。
 #
 # 用法:
 #   pwsh tools/scripts/dev_up.ps1

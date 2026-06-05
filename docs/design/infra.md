@@ -230,15 +230,15 @@ pandora.dlq.<original_topic>     # 死信队列
 
 | 服务 | 端口 | 备注 |
 |---|---|---|
-| MySQL | 3307 | 跟 mmorpg 3306 错开 |
-| Redis | 6380 | 跟 mmorpg 6379 错开 |
-| Kafka | 9093 | 跟 mmorpg 9092 错开 |
+| MySQL | 3307 | 开发环境端口 |
+| Redis | 6380 | 开发环境端口 |
+| Kafka | 9093 | 开发环境端口 |
 | Zookeeper | 2182 | |
-| etcd client | 2380 | 跟 mmorpg 2379 错开 |
+| etcd client | 2380 | 开发环境端口 |
 | etcd peer | 2381 | |
-| Prometheus | 9091 | 跟 mmorpg 9090 错开 |
-| Grafana | 3001 | 跟 mmorpg 3000 错开 |
-| Jaeger UI | 16687 | 跟 mmorpg 16686 错开 |
+| Prometheus | 9091 | 开发环境端口 |
+| Grafana | 3001 | 开发环境端口 |
+| Jaeger UI | 16687 | 开发环境端口 |
 
 ### 6.2 Go 服务 gRPC 端口
 

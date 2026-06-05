@@ -15,7 +15,7 @@
 ```
 Pandora/
 ├── pkg/                   # Go 公共框架(log/metrics/grpc/kafka/redis lock 等)
-├── proto/                 # 协议(全新设计,不复用 mmorpg)
+├── proto/                 # 协议定义与生成产物
 ├── login/                 # 13 个 go 服务(W1 仅骨架,W2+ 实现)
 ├── player/
 ├── data_service/
@@ -45,11 +45,10 @@ Pandora/
 4. [`docs/design/ds-arch.md`](./docs/design/ds-arch.md) — UE DS(Hub / Battle)架构
 5. [`docs/design/infra.md`](./docs/design/infra.md) — MySQL / Redis / Kafka / etcd 命名规范
 6. [`docs/design/proto-design.md`](./docs/design/proto-design.md) — 协议设计
-7. [`docs/design/pkg-copy-from-mmorpg.md`](./docs/design/pkg-copy-from-mmorpg.md) — 公共框架来源
-8. [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md) — 压测纪律(继承 mmorpg §8/§9)
-9. [`docs/design/pvp-rules.md`](./docs/design/pvp-rules.md) — PvP 规则待定项
-10. [`AGENTS.md`](./AGENTS.md) — AI 协作守则
-11. [`PROGRESS.md`](./PROGRESS.md) — 当前进度
+7. [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md) — 压测纪律
+8. [`docs/design/pvp-rules.md`](./docs/design/pvp-rules.md) — PvP 规则待定项
+9. [`AGENTS.md`](./AGENTS.md) — AI 协作守则
+10. [`PROGRESS.md`](./PROGRESS.md) — 当前进度
 
 ## 快速启动
 

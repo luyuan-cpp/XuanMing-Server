@@ -278,16 +278,16 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | UE 5.7 API 不稳定 | 🟡 中 | 关注 release notes,必要时降到 5.6 |
 | 单人开发节奏 | 🟡 中 | 严格遵守 PROGRESS.md + 每日 commit |
 
-## 11. 决策行(继承 mmorpg ARCH §11 风格,只追加)
+## 11. 决策行(只追加)
 
 | Round | 日期 | 决策 | 数据 |
 |---|---|---|---|
-| 0 | 2026-06-03 | 立项,推倒 mmorpg,新建 Pandora 项目 | - |
+| 0 | 2026-06-03 | 立项,新建 Pandora 项目 | - |
 | 0 | 2026-06-03 | 后端 monorepo go.work,UE 独立仓库 | - |
 | 0 | 2026-06-03 | 大厅 DS 化,500 人/实例,全图自由 PvP | - |
 | 0 | 2026-06-03 | UE 5.7 + Iris + GAS,Agones 调度 | - |
 | 0 | 2026-06-03 | License MIT,Go 1.23,基础设施全新搭一套 | - |
-| 0 | 2026-06-03 | 后端框架继续用 go-zero(复用 mmorpg) | - |
+| 0 | 2026-06-03 | 后端框架继续用 go-zero(历史决策,后续已切换 Kratos) | - |
 | 0 | 2026-06-03 | **否决"严格 A:客户端只连 DS"** | 见 `architecture-rejected-strict-ds-only.md`,6 个不可接受后果(故障域过大 / 500 人 PvP 性能预算被破 / UE 代码量爆炸 / 大厂无先例) |
 | 0 | 2026-06-03 | 业务请求走独立通道(不经过 DS),具体方案待定 | 候选:WebSocket gateway / 客户端直连各 go 服务 / 专用 push 服务,详见 `gateway-decision.md`(待写) |
 | 0 | 2026-06-03 | 推送方案选定 P3:**专用 push 服务** | 业务 → kafka → push(go,新增第 14 个服务)→ 客户端;Hub DS 不兼任推送中转 |

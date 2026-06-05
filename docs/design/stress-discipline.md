@@ -1,6 +1,6 @@
 # Pandora 压测纪律
 
-> **继承自 mmorpg CLAUDE.md §8 §9**,适配到 Pandora 项目路径与工具脚本。
+> Pandora 压测执行规范,适配 Pandora 项目路径与工具脚本。
 
 ## 1. 总原则
 
@@ -9,7 +9,7 @@
 3. **prom 数据只读 summarize 脚本输出,不许手 grep raw dump**
 4. **结果文档复用脚本输出表格,不贴 raw count/sum 数字**
 5. **压期间不上传任何日志**
-6. **每次登录压测把所有 redis/mysql/etcd 数据全部删除再开新一轮**(继承 mmorpg §9.6)
+6. **每次登录压测把所有 redis/mysql/etcd 数据全部删除再开新一轮**
 
 ## 2. 压测目录结构
 
@@ -78,7 +78,7 @@ F:/work/Pandora/
    # prom snapshot 目录新建
    New-Item F:/work/Pandora/robot/logs/stress-<name>-<ts>/prom-snapshots/ -ItemType Directory
    ```
-3. **DS pod 清理**(继承 mmorpg §9 + 新增 k8s 部分):
+3. **DS pod 清理**:
    ```bash
    kubectl delete gameserver --all -n pandora
    kubectl delete fleet --all -n pandora && kubectl apply -f deploy/k8s/fleets.yaml
@@ -94,7 +94,7 @@ F:/work/Pandora/
     -StartTime '<yyyy-MM-dd HH:mm:ss>' `
     -Stages 2,5,10,15,18
   ```
-- **不许手拉单端口**(`curl :51001/metrics > t2m.txt` 这种 mmorpg legacy 不再用)
+- **不许手拉单端口**(`curl :51001/metrics > t2m.txt` 这种临时抓取不再用)
 
 ### 4.3 跑测后
 
@@ -126,7 +126,7 @@ F:/work/Pandora/
 
 ## 5. summarize 脚本输出五段表
 
-跟 mmorpg 对齐,适配 Pandora 关键路径:
+适配 Pandora 关键路径:
 
 | 段 | 内容 | 数据源 |
 |---|---|---|
@@ -167,14 +167,14 @@ stress-4-battle-50rooms-20260710.md
 6. 瓶颈分析
 7. 决策行(写回 pandora-arch.md §11)
 
-## 8. 与 mmorpg 的差异点
+## 8. Pandora 特有关注点
 
-mmorpg 是单进程 cpp scene 压测,Pandora 是分布式 + UE DS,新增:
+Pandora 是分布式后端 + UE DS,压测时额外关注:
 
-| 维度 | mmorpg | Pandora 新增 |
-|---|---|---|
-| 受测组件 | scene_manager | 13 个 go 服务 + UE Hub DS + UE Battle DS |
-| 压测客户端 | go robot 模拟登录 | go robot + UE headless client(后期) |
-| 关键瓶颈 | scene tick / DB task | matchmaker MMR / Replication Graph / Iris |
-| 必看指标 | enterscene 子阶段 | match.found 链路 / hub_player_count / ds_pod_ready_p99 |
-| 清理重点 | redis lock / kafka offset | + k8s GameServer / Agones Fleet |
+| 维度 | 关注点 |
+|---|---|
+| 受测组件 | 14 个 go 服务 + UE Hub DS + UE Battle DS |
+| 压测客户端 | go robot + UE headless client(后期) |
+| 关键瓶颈 | matchmaker MMR / Replication Graph / Iris |
+| 必看指标 | match.found 链路 / hub_player_count / ds_pod_ready_p99 |
+| 清理重点 | redis lock / kafka offset / k8s GameServer / Agones Fleet |

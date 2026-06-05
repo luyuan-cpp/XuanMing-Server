@@ -415,7 +415,7 @@ message PushFrame {
 **实现**(Kratos 风格):
 - 框架:Kratos `transport/grpc`(支持 server stream,go-zero zrpc 不支持是切换主因)
 - WebSocket 库:**不用**(走标准 gRPC,不要自研 ws frame)
-- kafka:`sarama` 消费推送 topics(同 mmorpg 拷过来的 `pkg/kafkax`)
+- kafka:`sarama` 消费推送 topics,复用 `pkg/kafkax`
 - 内存索引:`sync.Map[playerID]*PushService_SubscribeServer`
 - 离线消息:redis ZSET,score=ts_ms,member=encoded PushFrame
 - 客户端连接:经 Envoy 转发(Envoy 处理 gRPC-Web ↔ gRPC),push 服务只看到标准 gRPC stream

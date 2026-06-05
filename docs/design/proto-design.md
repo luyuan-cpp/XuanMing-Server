@@ -1,10 +1,10 @@
 # Pandora Proto 设计
 
-> 全新协议,**不复用 mmorpg**。本文档是 D3 写 .proto 文件的执行依据。
+> Pandora 协议设计。本文档是 D3 写 .proto 文件的执行依据。
 
 ## 1. 设计原则
 
-1. **完全推翻 mmorpg 协议**,不做兼容
+1. **Pandora 协议独立设计**,不做旧协议兼容
 2. **按服务分包**,每个 go 服务一个 .proto 文件
 3. **gRPC 双向**:同步走 unary RPC,推送走 server stream 或 Kafka
 4. **kafka 消息走 envelope**:`KafkaEnvelope { topic, key, payload(bytes), trace_id, ts }`
