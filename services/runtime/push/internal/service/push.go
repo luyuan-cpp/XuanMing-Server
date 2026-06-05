@@ -38,25 +38,27 @@ func NewPushService(uc *biz.PushUsecase) *PushService {
 //  1. Envoy jwt_authn filter 已校验 JWT 并把 sub 提到 x-pandora-player-id 头
 //  2. pmw.AuthOptional() 中间件把 header 中 player_id 注入到 ctx
 //  3. 本方法从 ctx 取 player_id;0 表示匿名(直连 :50014 联调时正常)
-//  4. 注册 stream 到 ConnectionManager(顶号语义:旧 stream 会被 close)
+//  4. 注册 stream 到 ConnectionManager(顶号语义:旧 stream 会被 close),拿到 *StreamSlot
 //  5. defer 反注册
-//  6. 跑 mock 推送循环(RunMockStream)直到 ctx.Done 或 stream 失败
 //
-// W3 ④ 真实化:
-//   - 校验 req.SessionToken(已被 Envoy 校验,业务侧无需重复;DSTicket 由 login.VerifyDSTicket 二次验)
-//   - 按 req.LastSeenMs 从 redis ZSET pandora:push:offline:<player_id> 补推离线消息
-//   - 不再调 RunMockStream,改阻塞等 ctx.Done(实际推送由 kafka consumer 调 Conns().SendTo)
+// W3 ④ 真实化(2026-06-05):
+//   - 走 uc.RunSubscribeStream(slot, ...):按 req.LastSeenMs 补推 redis ZSET 离线帧,然后阻塞等 ctx.Done
+//   - 实际新消息由 main.go 装配的 KafkaConsumer 调 cm.SendTo 直接推到 stream
+//   - mock tick 已退役
+//
+// W3 ④ 二次修复(Opus 审查 R1):replay 补推与 KafkaConsumer.SendTo 共享 slot.sendMu 串行化,
+// 防止两个 goroutine 并发 stream.Send 撕坏 HTTP/2 帧。
 func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.PushService_SubscribeServer) error {
 	ctx := stream.Context()
 	h := plog.With(ctx)
 
 	playerID := extractPlayerID(ctx)
 
-	// 注册到内存索引(W2 mock ticker 用不到,但 W3 kafka 路由会用)
+	// 注册到内存索引(KafkaConsumer 路由 SendTo 时按 player_id 找到这个 slot)
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	s.uc.Conns().Register(playerID, stream, cancel)
-	defer s.uc.Conns().Unregister(playerID, stream)
+	slot := s.uc.Conns().Register(playerID, stream, cancel)
+	defer s.uc.Conns().Unregister(playerID, slot)
 
 	h.Infow(
 		"msg", "push_stream_open",
@@ -65,8 +67,7 @@ func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.Push
 		"online_total", s.uc.Conns().Size(),
 	)
 
-	// W2 mock 推送循环(W3 改成 select { case <-ctx.Done(): return nil })
-	return s.uc.RunMockStream(subCtx, stream)
+	return s.uc.RunSubscribeStream(subCtx, slot, playerID, req.GetLastSeenMs())
 }
 
 // extractPlayerID 从 gRPC metadata 拿 x-player-id(W2 联调用)。

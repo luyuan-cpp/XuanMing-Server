@@ -12,6 +12,7 @@ package kafkax
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -167,6 +168,47 @@ func (p *KeyOrderedProducer) SendRaw(ctx context.Context, key string, payload []
 	}
 	atomic.AddInt64(&p.successCount, 1)
 	return nil
+}
+
+// PushToPlayers 把同一份 payload 按 player_id 路由分发到 N 个玩家(W3 ④,2026-06-05)。
+//
+// 这是 push 推送的统一入口,**业务服必须走本方法**,review 时只看一处:
+//
+//  1. 自动排除 callerPlayerID(原则 2:发起方不收自己触发的 push,看 RPC response 即可)
+//     - 例外:已受理型 RPC(MatchProgressEvent 等)需要发给所有人含发起方,
+//     传 callerPlayerID = 0 跳过排除
+//
+//  2. 每个目标 player_id 用 SendRaw 发一次,kafka key = strconv.FormatInt(playerID, 10),
+//     一致性哈希保证同玩家事件落同一 partition,partition 内 sarama 保序(不变量 §9)
+//
+//  3. 失败 log+continue 不阻断:某玩家发失败不能影响其他玩家;返回 (sent, lastErr),
+//     调用方决定是否汇报(本批 W3 ④ 只让业务侧调用方记日志,不上抛业务错误)
+//
+// 调用示例(team 服务广播队员变更):
+//
+//	memberIDs := []int64{1001, 1002, 1003}
+//	payload, _ := proto.Marshal(&teamv1.TeamUpdateEvent{...})
+//	producer.PushToPlayers(ctx, callerID, memberIDs, payload)
+func (p *KeyOrderedProducer) PushToPlayers(
+	ctx context.Context,
+	callerPlayerID int64,
+	toPlayerIDs []int64,
+	payload []byte,
+) (sent int, lastErr error) {
+	for _, pid := range toPlayerIDs {
+		if pid == callerPlayerID {
+			// 原则 2:不发给发起方;callerPlayerID=0 时该条件永不满足 → 全发(原则 3 例外)
+			continue
+		}
+		if err := p.SendRaw(ctx, strconv.FormatInt(pid, 10), payload); err != nil {
+			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d err=%v",
+				p.topic, pid, err)
+			lastErr = err
+			continue
+		}
+		sent++
+	}
+	return sent, lastErr
 }
 
 // Close 优雅关闭。

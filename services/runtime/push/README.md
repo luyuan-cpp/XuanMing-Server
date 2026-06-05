@@ -1,6 +1,6 @@
 # Pandora push 服务
 
-> Pandora 第二个 Kratos 业务服(W2 ⑤,2026-06-05),server stream 长连推送。
+> Pandora 第二个 Kratos 业务服(W2 ⑤ → W3 ④,2026-06-05 真实化),server stream 长连推送。
 
 ## 职责
 
@@ -9,12 +9,12 @@
 - 客户端登录后立刻 `Subscribe(server stream)` 维持长连接
 - 服务端持有所有在线客户端 stream,按 `player_id` 路由 kafka 事件
 - 转发推送 topics(`pandora.team.update` / `pandora.match.progress` / `pandora.chat.*` / `pandora.player.update` / `pandora.friend.event` / `pandora.system.notify`)
-- 离线消息缓存 redis ZSET(5min,断线重连补推)
+- 离线消息缓存 redis ZSET(5min,断线重连按 `last_seen_ms` 补推)
 
 ## 协议铁律(对齐 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))
 
-- **原则 2**:发起方不收自己触发的 push(业务服 produce kafka 时排除 caller_player_id)
-- **原则 3**:已受理型 RPC(`match.StartMatch` / `ConfirmMatch`)是例外,push 给发起方也发
+- **原则 2**:发起方不收自己触发的 push(业务服 produce kafka 时**必须用 `pkg/kafkax.PushToPlayers` helper**,helper 自动排除 caller_player_id)
+- **原则 3**:已受理型 RPC(`match.StartMatch` / `ConfirmMatch`)是例外,传 `callerPlayerID=0` 让 helper 跳过排除,push 给所有人含发起方
 
 ## 架构边界
 
@@ -35,56 +35,93 @@
 ## 目录结构(Kratos 标准分层,对齐 login)
 
 ```
-cmd/push/main.go              启动入口
-etc/push-dev.yaml             开发期配置
+cmd/push/main.go              启动入口(W3 ④:redis + kafka consumer 装配)
+etc/push-dev.yaml             开发期配置(W3 ④:kafka + topics + offline_cache_ttl)
 internal/
-  conf/                       配置结构(嵌入 pkg/config.Base)
+  conf/                       配置结构(嵌入 pkg/config.Base + PushConf{Topics, OfflineCacheTTL})
   service/                    RPC 入口(实现 pushv1.PushServiceServer)
   biz/                        usecase
     connection.go             player_id → stream 内存索引(顶号语义)
-    push.go                   PushUsecase + RunMockStream
+    push.go                   PushUsecase + RunSubscribeStream(补推 + 阻塞等推送)
+    consumer.go               KafkaConsumer(每 topic 一个,共享 GroupID)
+  data/
+    offline.go                RedisOfflineCacheRepo(ZSET pandora:push:offline:<player_id>)
   server/                     grpc / http server 注册
-                              (data/ 留待 W3 redis ZSET 接入时再加)
 ```
 
-## W2 mock 行为
+## W3 ④ 真实化(2026-06-05)
 
-- `Subscribe(SubscribeRequest{session_token, last_seen_ms})`:
-  - 校验 session_token:**W2 跳过**(W3 走 Envoy jwt_authn + 冗余校验)
-  - `last_seen_ms` 补推离线消息:**W2 不做**(W3 redis ZSET)
-  - 注册 stream 到 ConnectionManager(顶号语义:同 player_id 旧 stream 自动断)
-  - 启 ticker(默认 5s,见 `conf.PushConf.MockTickInterval`)
-  - 周期 Send `PushFrame{topic="pandora.system.notify", payload="hello", ts_ms=now, trace_id=ctx}`
-  - ctx.Done(client 断 / server stop / 顶号 cancel)→ 反注册退出
+### 数据流
+
+```
+业务服 producer
+  └─ kafkax.PushToPlayers(ctx, callerPID, toPIDs, payload)
+       └─ SendRaw(key=strconv.Itoa(playerID))  ← 一致性哈希,同 player_id 同 partition,partition 内保序
+            ↓ kafka pandora.team.update / pandora.match.progress / pandora.chat.private
+push 服务 KafkaConsumer(每 topic 一个)
+  └─ handle(msg): key 非数字 → log+ack 跳过;否则 →
+       ├─ 在线: ConnectionManager.SendTo(playerID, PushFrame) → stream
+       └─ 离线: offline.Append(playerID, frame) → redis ZSET
+                                                  (score=ts_ms, TTL=5m 每写刷新)
+客户端重连
+  └─ Subscribe(last_seen_ms=N)
+       └─ RunSubscribeStream: offline.Range(playerID, sinceMs=N) → 补推 → 阻塞等 ctx.Done
+```
+
+### 配置示例(`etc/push-dev.yaml`)
+
+```yaml
+kafka:
+  brokers: ["127.0.0.1:9093"]   # Pandora 端口规划(非 vanilla 9092)
+  group_id: "pandora-push"
+  partition_cnt: 4
+  dial_timeout: "2s"
+
+push:
+  topics:
+    - "pandora.team.update"
+    - "pandora.match.progress"
+    - "pandora.chat.private"
+  offline_cache_ttl: "5m"
+```
 
 ## 本地启动
 
 ```powershell
-# 1. 基础设施(redis 可选,W2 不连也能跑)
+# 1. 基础设施(redis + kafka)
 pwsh tools/scripts/dev_up.ps1
 
 # 2. 启 push
-cd F:\work\Pandora
+cd e:\work\Pandora
 go run ./services/runtime/push/cmd/push -conf services/runtime/push/etc/push-dev.yaml
 ```
 
-## 验证(可选,需装 grpcurl)
+## 验证(可选,需装 grpcurl + kafka-console-producer)
 
 ```powershell
-# 直连 gRPC server stream(W2 没经 Envoy,用 -plaintext)
-# 期望:首帧立即返回,之后每 5s 一帧 PushFrame
-grpcurl -plaintext -d '{\"session_token\":\"mock\",\"last_seen_ms\":0}' `
+# 1) 客户端 subscribe(直连,无 token)
+grpcurl -plaintext -d '{\"session_token\":\"\",\"last_seen_ms\":0}' `
   127.0.0.1:50014 pandora.push.v1.PushService/Subscribe
 
-# Prometheus 抓 metrics
+# 2) 另起 terminal,往 kafka 写一条 key=42 的消息(进 kafka 容器)
+docker exec -it pandora-kafka kafka-console-producer.sh `
+  --bootstrap-server 127.0.0.1:9093 `
+  --topic pandora.team.update `
+  --property "parse.key=true" --property "key.separator=:"
+# 输入:42:dummy-payload
+# 客户端 1) 那边应立即收到一帧 PushFrame{topic=pandora.team.update}
+
+# 3) 断开 grpcurl 后再 produce,redis 应见离线缓存
+redis-cli -p 6380 ZRANGE pandora:push:offline:42 0 -1 WITHSCORES
+
+# 4) Prometheus 抓 metrics
 curl http://127.0.0.1:51014/metrics | Select-String pandora
 ```
 
-## 下一步(W3 真实化路线)
+## 下一步(W3 路线剩余)
 
-- [ ] 接 sarama consumer:订阅 6 个 push topic,按 key=player_id 找 `Conns().SendTo`
-- [ ] 接 redis:离线消息 ZSET(`pandora:push:offline:<player_id>`)+ 重连补推
-- [ ] JWT 校验:从 metadata 取 `x-jwt-payload-sub`,冗余校验防 token 中途过期
-- [ ] 系统公告类(`pandora.system.notify`)走 `Conns().Broadcast`
-- [ ] /metrics 暴露 `pandora_push_online_streams` / `pandora_push_send_failed_total` 等指标
-- [ ] kafka topic key 校验:不变量 §9(同一玩家事件有序 → key=player_id)
+- [ ] 接入业务侧 producer:team / match / chat 服务上线时,在对应 RPC 后调 `kafkax.PushToPlayers`
+- [ ] 补 `player.update` / `friend.event` / `system.notify` 3 个 Event message proto,topic 加进 `pkg/kafkax.PushTopics` + 本 yaml
+- [ ] `/metrics` 自定义指标 `pandora_push_online_streams` / `pandora_push_send_failed_total`
+- [ ] 系统公告类(`pandora.system.notify`)走 `Conns().Broadcast`(本批不接,等 system 服务上线)
+- [ ] DSTicket 二次校验(`pandora.ds.v1` 票据已被 Envoy 校验,但 push 服务接 DS-targeted 推送时可加冗余)

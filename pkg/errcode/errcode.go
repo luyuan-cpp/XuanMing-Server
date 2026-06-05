@@ -58,7 +58,7 @@ const (
 
 // player(2000-2999)
 const (
-	ErrPlayerNotFound       Code = 2001
+	ErrPlayerNotFound        Code = 2001
 	ErrPlayerVersionMismatch Code = 2002 // 乐观锁冲突
 	ErrPlayerNicknameTaken   Code = 2003
 	ErrPlayerHeroLocked      Code = 2010
@@ -67,31 +67,31 @@ const (
 
 // team(3000-3999)
 const (
-	ErrTeamNotFound       Code = 3001
-	ErrTeamFull           Code = 3002
-	ErrTeamNotCaptain     Code = 3003
-	ErrTeamAlreadyInTeam  Code = 3004
-	ErrTeamInviteExpired  Code = 3005
-	ErrTeamWrongState     Code = 3006
+	ErrTeamNotFound      Code = 3001
+	ErrTeamFull          Code = 3002
+	ErrTeamNotCaptain    Code = 3003
+	ErrTeamAlreadyInTeam Code = 3004
+	ErrTeamInviteExpired Code = 3005
+	ErrTeamWrongState    Code = 3006
 )
 
 // match(4000-4999)
 const (
-	ErrMatchNotFound       Code = 4001
+	ErrMatchNotFound        Code = 4001
 	ErrMatchAlreadyMatching Code = 4002
-	ErrMatchConfirmTimeout Code = 4003
-	ErrMatchDeclined       Code = 4004
-	ErrMatchTeamNotReady   Code = 4005
+	ErrMatchConfirmTimeout  Code = 4003
+	ErrMatchDeclined        Code = 4004
+	ErrMatchTeamNotReady    Code = 4005
 )
 
 // ds_allocator / hub_allocator(5000-5999)
 const (
-	ErrDSNoAvailable       Code = 5001
-	ErrDSAllocationFailed  Code = 5002
-	ErrDSPodNotFound       Code = 5003
-	ErrDSHeartbeatTimeout  Code = 5004
-	ErrHubNoAvailable      Code = 5101
-	ErrHubTransferFailed   Code = 5102
+	ErrDSNoAvailable      Code = 5001
+	ErrDSAllocationFailed Code = 5002
+	ErrDSPodNotFound      Code = 5003
+	ErrDSHeartbeatTimeout Code = 5004
+	ErrHubNoAvailable     Code = 5101
+	ErrHubTransferFailed  Code = 5102
 )
 
 // battle_result(6000-6999)
@@ -112,7 +112,7 @@ const (
 
 // dialogue(8000-8999)
 const (
-	ErrDialogueNotFound    Code = 8001
+	ErrDialogueNotFound      Code = 8001
 	ErrDialogueOptionInvalid Code = 8002
 )
 
@@ -126,8 +126,13 @@ const (
 	ErrFriendAlreadyAdded Code = 9102
 	ErrFriendBlocked      Code = 9103
 
-	ErrLocatorNotFound    Code = 9201
-	ErrLocatorConflict    Code = 9202 // 玩家同时在两个 DS
+	ErrLocatorNotFound Code = 9201
+	ErrLocatorConflict Code = 9202 // 玩家同时在两个 DS
+
+	// push 服务(W3 ④,2026-06-05)
+	ErrPushOfflineCorrupted Code = 9301 // 离线 ZSET 数据损坏(反序列化失败) / offline.Append 写 redis 失败(W3 ④ 二次修复)
+	// ErrPushKafkaConsumerDown 由 W4 push 健康检查 / consumer group rebalance handler 触发上报,W3 ④ 仅占位。
+	ErrPushKafkaConsumerDown Code = 9302 // kafka consumer 异常下线
 )
 
 // data_service(10000-10999)
