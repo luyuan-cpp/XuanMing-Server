@@ -87,8 +87,8 @@ func main() {
 		Issuer:      cfg.Login.JWT.Issuer,
 		Audience:    cfg.Login.JWT.Audience,
 		Secret:      []byte(cfg.Login.JWT.Secret),
-		SessionTTL:  cfg.Login.JWT.SessionTTL,
-		DSTicketTTL: cfg.Login.JWT.DSTicketTTL,
+		SessionTTL:  cfg.Login.JWT.SessionTTL.Std(),
+		DSTicketTTL: cfg.Login.JWT.DSTicketTTL.Std(),
 	}
 	signer, err := auth.NewSigner(authCfg)
 	if err != nil {
@@ -216,9 +216,9 @@ func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, da
 		Addr:         rc.Host,
 		Password:     rc.Password,
 		DB:           int(rc.DB),
-		DialTimeout:  rc.DialTimeout,
-		ReadTimeout:  rc.ReadTimeout,
-		WriteTimeout: rc.WriteTimeout,
+		DialTimeout:  rc.DialTimeout.Std(),
+		ReadTimeout:  rc.ReadTimeout.Std(),
+		WriteTimeout: rc.WriteTimeout.Std(),
 	})
 	// 启动期 ping 一次,确保 redis 可达;失败致命(login 不可降级)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

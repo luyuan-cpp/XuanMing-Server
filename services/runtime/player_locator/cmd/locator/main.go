@@ -79,9 +79,9 @@ func main() {
 		Addr:         rc.Host,
 		Password:     rc.Password,
 		DB:           int(rc.DB),
-		DialTimeout:  rc.DialTimeout,
-		ReadTimeout:  rc.ReadTimeout,
-		WriteTimeout: rc.WriteTimeout,
+		DialTimeout:  rc.DialTimeout.Std(),
+		ReadTimeout:  rc.ReadTimeout.Std(),
+		WriteTimeout: rc.WriteTimeout.Std(),
 	})
 	defer func() { _ = rdb.Close() }()
 
@@ -95,7 +95,7 @@ func main() {
 
 	// 4. 三层装配
 	repo := data.NewRedisLocationRepo(rdb)
-	uc := biz.NewLocatorUsecase(repo, cfg.Locator.LocationTTL)
+	uc := biz.NewLocatorUsecase(repo, cfg.Locator.LocationTTL.Std())
 	svc := service.NewLocatorService(uc)
 
 	// 5. gRPC + HTTP

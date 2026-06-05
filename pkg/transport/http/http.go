@@ -50,7 +50,7 @@ func MustNewServer(c config.Http, customMW ...middleware.Middleware) *khttp.Serv
 		opts = append(opts, khttp.Network(c.Network))
 	}
 	if c.Timeout > 0 {
-		opts = append(opts, khttp.Timeout(c.Timeout))
+		opts = append(opts, khttp.Timeout(c.Timeout.Std()))
 	}
 
 	return khttp.NewServer(opts...)

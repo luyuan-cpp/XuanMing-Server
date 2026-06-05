@@ -52,9 +52,9 @@ func MustNewBaseContext(c config.Base) *BaseContext {
 		Addr:         c.Node.RedisClient.Host,
 		Password:     c.Node.RedisClient.Password,
 		DB:           int(c.Node.RedisClient.DB),
-		DialTimeout:  c.Node.RedisClient.DialTimeout,
-		ReadTimeout:  c.Node.RedisClient.ReadTimeout,
-		WriteTimeout: c.Node.RedisClient.WriteTimeout,
+		DialTimeout:  c.Node.RedisClient.DialTimeout.Std(),
+		ReadTimeout:  c.Node.RedisClient.ReadTimeout.Std(),
+		WriteTimeout: c.Node.RedisClient.WriteTimeout.Std(),
 	})
 
 	// 2. Snowflake

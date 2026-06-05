@@ -64,7 +64,7 @@ func NewClient(c config.MySQLConf) (*sql.DB, error) {
 	if maxIdle <= 0 {
 		maxIdle = defaultMaxIdleConns
 	}
-	maxLife := c.ConnMaxLifetime
+	maxLife := c.ConnMaxLifetime.Std()
 	if maxLife <= 0 {
 		maxLife = defaultConnMaxLifetime
 	}
@@ -73,7 +73,7 @@ func NewClient(c config.MySQLConf) (*sql.DB, error) {
 	db.SetMaxIdleConns(maxIdle)
 	db.SetConnMaxLifetime(maxLife)
 
-	pingTimeout := c.PingTimeout
+	pingTimeout := c.PingTimeout.Std()
 	if pingTimeout <= 0 {
 		pingTimeout = defaultPingTimeout
 	}

@@ -20,7 +20,6 @@ package config
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/IBM/sarama"
 )
@@ -63,17 +62,26 @@ type Server struct {
 }
 
 // Grpc gRPC server 监听。
+//
+// EnableReflection(W3 ③,2026-06-05):
+//
+//	  - true:保留 Kratos 默认的 grpc.reflection 注册(grpcurl list 可用,便于联调)
+//	  - false(默认):pkg/grpcserver.MustNewServer 会加 kgrpc.DisableReflection() 关掉
+//
+//	 prod 默认不写本字段(零值 false)= 关 reflection,避免攻击面额外暴露。
+//	 dev yaml 显式写 enable_reflection: true 打开。
 type Grpc struct {
-	Network string        `yaml:"network,omitempty" json:"network,omitempty"` // 默认 "tcp"
-	Addr    string        `yaml:"addr" json:"addr"`                           // 例 ":50001"
-	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"` // 默认 1s
+	Network          string   `yaml:"network,omitempty" json:"network,omitempty"`                       // 默认 "tcp"
+	Addr             string   `yaml:"addr" json:"addr"`                                                 // 例 ":50001"
+	Timeout          Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`                       // 默认 1s
+	EnableReflection bool     `yaml:"enable_reflection,omitempty" json:"enable_reflection,omitempty"`   // dev:true; prod:false(默认)
 }
 
 // Http HTTP server 监听(给 protoc-gen-go-http 生成的 handler 用)。
 type Http struct {
-	Network string        `yaml:"network,omitempty" json:"network,omitempty"`
-	Addr    string        `yaml:"addr" json:"addr"` // 例 ":51001"
-	Timeout time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Network string   `yaml:"network,omitempty" json:"network,omitempty"`
+	Addr    string   `yaml:"addr" json:"addr"` // 例 ":51001"
+	Timeout Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 // NodeConfig 节点级配置。
@@ -83,9 +91,9 @@ type NodeConfig struct {
 	SessionExpireMin uint32        `yaml:"session_expire_min,omitempty" json:"session_expire_min,omitempty"` // 默认 1440 (24h)
 	RedisClient      RedisConf     `yaml:"redis_client" json:"redis_client"`
 	MySQLClient      MySQLConf     `yaml:"mysql_client,omitempty" json:"mysql_client,omitempty"`             // W3 ② 起接 mysql 的服务用
-	LeaseTTL         int64         `yaml:"lease_ttl,omitempty" json:"lease_ttl,omitempty"`                   // 秒,默认 10
-	MaxLoginDuration time.Duration `yaml:"max_login_duration,omitempty" json:"max_login_duration,omitempty"` // 默认 24h
-	LogoutGraceTime  time.Duration `yaml:"logout_grace_time,omitempty" json:"logout_grace_time,omitempty"`   // 默认 5m
+	LeaseTTL         int64    `yaml:"lease_ttl,omitempty" json:"lease_ttl,omitempty"`                   // 秒,默认 10
+	MaxLoginDuration Duration `yaml:"max_login_duration,omitempty" json:"max_login_duration,omitempty"` // 默认 24h
+	LogoutGraceTime  Duration `yaml:"logout_grace_time,omitempty" json:"logout_grace_time,omitempty"`   // 默认 5m
 }
 
 // MySQLConf MySQL 客户端配置(W3 ②,2026-06-05)。
@@ -94,41 +102,44 @@ type NodeConfig struct {
 //
 //	pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci
 //
-// ⚠️ duration 字段(ConnMaxLifetime / PingTimeout)沿用 W2 ④ 坑:Kratos config
-// 走 JSON 不解 "30m"/"3s" 字符串,所以 yaml 不写本字段,业务 Defaults() 填默认。
+// W3 ⑥(2026-06-05):duration 字段改用 config.Duration 包装类型,yaml 可写 "30m"/"3s" 字符串。
 type MySQLConf struct {
-	DSN             string        `yaml:"dsn" json:"dsn"`
-	MaxOpenConns    int           `yaml:"max_open_conns,omitempty" json:"max_open_conns,omitempty"`
-	MaxIdleConns    int           `yaml:"max_idle_conns,omitempty" json:"max_idle_conns,omitempty"`
-	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime,omitempty" json:"conn_max_lifetime,omitempty"`
-	PingTimeout     time.Duration `yaml:"ping_timeout,omitempty" json:"ping_timeout,omitempty"`
+	DSN             string   `yaml:"dsn" json:"dsn"`
+	MaxOpenConns    int      `yaml:"max_open_conns,omitempty" json:"max_open_conns,omitempty"`
+	MaxIdleConns    int      `yaml:"max_idle_conns,omitempty" json:"max_idle_conns,omitempty"`
+	ConnMaxLifetime Duration `yaml:"conn_max_lifetime,omitempty" json:"conn_max_lifetime,omitempty"`
+	PingTimeout     Duration `yaml:"ping_timeout,omitempty" json:"ping_timeout,omitempty"`
 }
 
 // RedisConf Redis 客户端配置。
+//
+// W3 ⑥(2026-06-05):duration 字段改用 config.Duration,yaml 可写 "2s"/"30s" 字符串。
 type RedisConf struct {
-	Host         string        `yaml:"host" json:"host"`
-	Password     string        `yaml:"password,omitempty" json:"password,omitempty"`
-	DB           uint32        `yaml:"db,omitempty" json:"db,omitempty"`
-	DefaultTTL   time.Duration `yaml:"default_ttl,omitempty" json:"default_ttl,omitempty"`
-	DialTimeout  time.Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
-	ReadTimeout  time.Duration `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
-	WriteTimeout time.Duration `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+	Host         string   `yaml:"host" json:"host"`
+	Password     string   `yaml:"password,omitempty" json:"password,omitempty"`
+	DB           uint32   `yaml:"db,omitempty" json:"db,omitempty"`
+	DefaultTTL   Duration `yaml:"default_ttl,omitempty" json:"default_ttl,omitempty"`
+	DialTimeout  Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+	ReadTimeout  Duration `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
+	WriteTimeout Duration `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
 }
 
 // KafkaConfig Kafka 生产/消费通用配置。
+//
+// W3 ⑥(2026-06-05):duration 字段改用 config.Duration,yaml 可写 "5s"/"100ms" 字符串。
 type KafkaConfig struct {
-	Brokers          []string      `yaml:"brokers" json:"brokers"`
-	GroupID          string        `yaml:"group_id,omitempty" json:"group_id,omitempty"`
-	PartitionCnt     int32         `yaml:"partition_cnt,omitempty" json:"partition_cnt,omitempty"`         // 默认 4
-	InitialPartition int           `yaml:"initial_partition,omitempty" json:"initial_partition,omitempty"` // 默认 4
-	DialTimeout      time.Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
-	ReadTimeout      time.Duration `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
-	WriteTimeout     time.Duration `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
-	RetryMax         int           `yaml:"retry_max,omitempty" json:"retry_max,omitempty"`
-	RetryBackoff     time.Duration `yaml:"retry_backoff,omitempty" json:"retry_backoff,omitempty"`
-	ChannelBuffer    int           `yaml:"channel_buffer,omitempty" json:"channel_buffer,omitempty"`
-	SyncInterval     time.Duration `yaml:"sync_interval,omitempty" json:"sync_interval,omitempty"`
-	StatsInterval    time.Duration `yaml:"stats_interval,omitempty" json:"stats_interval,omitempty"`
+	Brokers          []string `yaml:"brokers" json:"brokers"`
+	GroupID          string   `yaml:"group_id,omitempty" json:"group_id,omitempty"`
+	PartitionCnt     int32    `yaml:"partition_cnt,omitempty" json:"partition_cnt,omitempty"`         // 默认 4
+	InitialPartition int      `yaml:"initial_partition,omitempty" json:"initial_partition,omitempty"` // 默认 4
+	DialTimeout      Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+	ReadTimeout      Duration `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
+	WriteTimeout     Duration `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+	RetryMax         int      `yaml:"retry_max,omitempty" json:"retry_max,omitempty"`
+	RetryBackoff     Duration `yaml:"retry_backoff,omitempty" json:"retry_backoff,omitempty"`
+	ChannelBuffer    int      `yaml:"channel_buffer,omitempty" json:"channel_buffer,omitempty"`
+	SyncInterval     Duration `yaml:"sync_interval,omitempty" json:"sync_interval,omitempty"`
+	StatsInterval    Duration `yaml:"stats_interval,omitempty" json:"stats_interval,omitempty"`
 	// CompressionType: "none" | "gzip" | "snappy" | "lz4" | "zstd"(默认 none)
 	// 用 string 比 int 更人类可读,内部用 ParseCompression 转换。
 	CompressionType string `yaml:"compression_type,omitempty" json:"compression_type,omitempty"`
@@ -176,17 +187,17 @@ type RegistryConf struct {
 
 // EtcdRegistryConf etcd 注册中心(W3+ 接入)。
 type EtcdRegistryConf struct {
-	Hosts       []string      `yaml:"hosts" json:"hosts"`
-	Key         string        `yaml:"key,omitempty" json:"key,omitempty"`                   // service path,默认按服务名构造
-	DialTimeout time.Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"` // 默认 5s
+	Hosts       []string `yaml:"hosts" json:"hosts"`
+	Key         string   `yaml:"key,omitempty" json:"key,omitempty"`                   // service path,默认按服务名构造
+	DialTimeout Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"` // 默认 5s
 }
 
 // TimeoutConf 各种公共超时。
 type TimeoutConf struct {
-	EtcdDialTimeout         time.Duration `yaml:"etcd_dial_timeout,omitempty" json:"etcd_dial_timeout,omitempty"`
-	ServiceDiscoveryTimeout time.Duration `yaml:"service_discovery_timeout,omitempty" json:"service_discovery_timeout,omitempty"`
-	TaskWaitTimeout         time.Duration `yaml:"task_wait_timeout,omitempty" json:"task_wait_timeout,omitempty"`
-	RoleCacheExpire         time.Duration `yaml:"role_cache_expire,omitempty" json:"role_cache_expire,omitempty"`
+	EtcdDialTimeout         Duration `yaml:"etcd_dial_timeout,omitempty" json:"etcd_dial_timeout,omitempty"`
+	ServiceDiscoveryTimeout Duration `yaml:"service_discovery_timeout,omitempty" json:"service_discovery_timeout,omitempty"`
+	TaskWaitTimeout         Duration `yaml:"task_wait_timeout,omitempty" json:"task_wait_timeout,omitempty"`
+	RoleCacheExpire         Duration `yaml:"role_cache_expire,omitempty" json:"role_cache_expire,omitempty"`
 }
 
 // BuildTopic 按 docs/design/infra.md §4 规范构造 kafka topic。

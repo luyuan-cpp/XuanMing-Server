@@ -68,7 +68,7 @@ func main() {
 
 	// 3. 三层装配
 	conns := biz.NewConnectionManager()
-	uc := biz.NewPushUsecase(conns, cfg.Push.MockTickInterval, cfg.Push.MockTopic, cfg.Push.MockPayload)
+	uc := biz.NewPushUsecase(conns, cfg.Push.MockTickInterval.Std(), cfg.Push.MockTopic, cfg.Push.MockPayload)
 	svc := service.NewPushService(uc)
 
 	// 4. gRPC + HTTP server

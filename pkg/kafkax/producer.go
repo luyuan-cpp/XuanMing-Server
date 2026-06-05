@@ -51,13 +51,13 @@ type KeyOrderedProducer struct {
 func NewKeyOrderedProducer(cfg config.KafkaConfig, topic string) (*KeyOrderedProducer, error) {
 	c := sarama.NewConfig()
 	c.Version = sarama.V3_6_0_0
-	c.Net.DialTimeout = cfg.DialTimeout
-	c.Net.ReadTimeout = cfg.ReadTimeout
-	c.Net.WriteTimeout = cfg.WriteTimeout
+	c.Net.DialTimeout = cfg.DialTimeout.Std()
+	c.Net.ReadTimeout = cfg.ReadTimeout.Std()
+	c.Net.WriteTimeout = cfg.WriteTimeout.Std()
 	c.Producer.Return.Successes = true
 	c.Producer.Return.Errors = true
 	c.Producer.Retry.Max = cfg.RetryMax
-	c.Producer.Retry.Backoff = cfg.RetryBackoff
+	c.Producer.Retry.Backoff = cfg.RetryBackoff.Std()
 	c.Producer.RequiredAcks = sarama.WaitForAll
 	c.ChannelBufferSize = cfg.ChannelBuffer
 	c.Producer.Compression = cfg.ParseCompression()

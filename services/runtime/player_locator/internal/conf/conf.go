@@ -16,15 +16,15 @@ type Config struct {
 
 // LocatorConf 是 player_locator 私有配置。
 type LocatorConf struct {
-	// LocationTTL Redis hash 的 TTL(W2 ④ 坑:不写 yaml,由 Defaults 提供)。
-	// 默认 30s,对齐 infra.md §3.2 表中的 30s heartbeat。
-	LocationTTL time.Duration `yaml:"location_ttl,omitempty" json:"location_ttl,omitempty"`
+	// LocationTTL Redis hash 的 TTL。默认 30s,对齐 infra.md §3.2 表中的 30s heartbeat。
+	// W3 ⑥(2026-06-05):字段改用 config.Duration,etc yaml 可写 "30s" 字符串。
+	LocationTTL config.Duration `yaml:"location_ttl,omitempty" json:"location_ttl,omitempty"`
 }
 
 // Defaults 填默认值。
 func (c *Config) Defaults() {
 	if c.Locator.LocationTTL == 0 {
-		c.Locator.LocationTTL = 30 * time.Second
+		c.Locator.LocationTTL = config.Duration(30 * time.Second)
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50006"

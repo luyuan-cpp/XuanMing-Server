@@ -1,16 +1,16 @@
-# Pandora player_locator 服务开发期配置(W3 ⑤)。
-#
-# ⚠️ Kratos config JSON 不解 "30s" 这种 duration 字符串,所以本文件不写 duration 字段,
-#    所有超时 / TTL 由 conf.Defaults() 提供。
+# Pandora player_locator 服务开发期配置(W3 ⑤,W3 ⑥ 2026-06-05 重写)。
 #
 # - gRPC :50006 / HTTP :51006(仅 /metrics)
 # - 强 Redis 依赖(redis 连不上 → 启动失败,本服务是 Pandora "玩家在哪" 唯一真源)
 # - 不接 MySQL / Kafka(W3 ⑤ 范围)
+# - W3 ⑥ 起 duration 字段用 pkg/config.Duration 包装,yaml 可直接写 "30s"
+# - W3 ③ 起 server.grpc.enable_reflection 可控,dev: true / prod: false(零值)
 
 server:
   grpc:
     network: tcp
     addr: ":50006"
+    enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调
   http:
     network: tcp
     addr: ":51006"
@@ -20,6 +20,7 @@ node:
   redis_client:
     host: "127.0.0.1:6380"
     db: 0
+    dial_timeout: "2s"          # W3 ⑥ 示范
 
 snowflake:
   epoch: 1773446400
@@ -27,5 +28,6 @@ snowflake:
   step_bits: 15
 
 locator:
-  # 默认 TTL 30s(infra.md §3.2 表)。SetLocation 每次刷 TTL,30s 不刷 → 视为离线,GetLocation 返 OFFLINE。
-  # 在 conf.Defaults() 里填,本 yaml 不写,避免 Kratos JSON 不解 duration 坑。
+  # infra.md §3.2 表中 30s heartbeat。SetLocation 每次刷 TTL,30s 不刷 → 视为离线。
+  # W3 ⑥ 起可直接 yaml 写字符串:
+  location_ttl: "30s"

@@ -1,17 +1,17 @@
-# Pandora login 服务开发期配置(W2 ③)。
-#
-# ⚠️ 重要约束:Kratos config 底层走 JSON 反序列化,**不能**把 "2s" / "24h" 这种
-# duration 字符串塞 yaml(time.Duration 是 int64,JSON 解不出来)。
-# 所以本文件**完全不写 duration 字段**,所有超时/TTL 都由 conf.Defaults() 提供。
+# Pandora login 服务开发期配置(W2 ③,W3 ⑥ 2026-06-05 重写)。
 #
 # - gRPC 端口 50001 / HTTP 端口 51001(同时暴露 /metrics 和 RESTful)
-# - W2 阶段不连 MySQL,Redis 起客户端但允许连不上(BaseContext 容错)
-# - W3 接入真实账号库时,改 mock_* 为空(走真实流程)
+# - W3 ② 起接 MySQL(pandora_account)+ Redis 真实化(session / ticket jti)
+# - W3 ⑤ 起接 player_locator(登录成功后 SetLocation(LOGIN_PENDING))
+# - W3 ⑥ 起 duration 字段用 pkg/config.Duration 包装,yaml 可直接写 "5s" / "24h"
+#   (此前的 "Kratos JSON 不解 duration,yaml 不写时长字段" 限制已解除)
+# - W3 ③ 起 server.grpc.enable_reflection 可控,dev: true / prod: false(零值)
 
 server:
   grpc:
     network: tcp
     addr: ":50001"
+    enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调;prod 留空 = false 关闭
   http:
     network: tcp
     addr: ":51001"
@@ -20,16 +20,17 @@ node:
   zone_id: 1
   session_expire_min: 1440
   redis_client:
-    host: "127.0.0.1:6380"   # Pandora Redis 端口(deploy/docker-compose.dev.yml)
+    host: "127.0.0.1:6380"      # Pandora Redis 端口(deploy/docker-compose.dev.yml)
     db: 0
-  # W3 ②(2026-06-05)接 MySQL:dev 期连本机 docker mysql 的 pandora_account 库。
+    dial_timeout: "2s"          # W3 ⑥ 示范:Duration 字符串(此前必须 yaml 留空走 pkg 默认)
+  # W3 ② 接 MySQL:dev 连本机 docker mysql 的 pandora_account 库。
   # DSN 留空 → fallback 到 MockAccountRepo(不接 mysql 也能跑通 login 联调)。
-  # ⚠️ duration 字段(conn_max_lifetime/ping_timeout)不写 yaml(Kratos JSON 不解 duration),
-  #    走 pkg/mysqlx 的默认值(30m / 3s)。
   mysql_client:
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_account?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
     max_open_conns: 32
     max_idle_conns: 8
+    conn_max_lifetime: "30m"    # W3 ⑥ 示范
+    ping_timeout: "3s"
 
 snowflake:
   epoch: 1773446400
@@ -41,6 +42,8 @@ locker:
   player_lock_ttl: 10
 
 login:
+  session_token_ttl: "24h"      # W3 ⑥ 示范:此前靠 Defaults() 填,现可直写
+  ds_ticket_ttl: "5m"           # 不变量 §3:DS 票据短时效
   mock_hub_ds_addr: "127.0.0.1:7777"
   mock_account: "test"
   mock_password_hash: "abc"
@@ -49,15 +52,14 @@ login:
   # ⚠️ secret 跟 deploy/envoy/envoy.yaml jwt_authn provider 必须一致(envoy 那边
   #    放的是 base64url(secret) 的 JWKS)。可用以下命令算出 base64url:
   #      python -c "import base64; print(base64.urlsafe_b64encode(b'pandora-dev-jwt-secret-change-me-32!').rstrip(b'='))"
-  # ⚠️ session_ttl / ds_ticket_ttl 不写 yaml(Kratos JSON 不解 duration),由 conf.Defaults() 填:
-  #    session_ttl=24h, ds_ticket_ttl=5min。
   jwt:
     issuer: "pandora-login"
     audience: "pandora-client"
     secret: "pandora-dev-jwt-secret-change-me-32!"
+    session_ttl: "24h"          # W3 ⑥ 示范
+    ds_ticket_ttl: "5m"
 
   # W3 ⑤(2026-06-05):登录成功后调 PlayerLocatorService.SetLocation(state=LOGIN_PENDING)。
   # addr 留空 → 不调 locator(login 仍可独立跑;hub DS 接入后由 hub 上报 HUB 状态)。
-  # 启用:把 addr 改为 "127.0.0.1:50006" 即可(player_locator gRPC 端口)。
   locator:
     addr: "127.0.0.1:50006"

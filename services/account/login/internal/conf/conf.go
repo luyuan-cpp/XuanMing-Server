@@ -28,11 +28,11 @@ type Config struct {
 // LoginConf 是 login 服务私有配置。
 type LoginConf struct {
 	// SessionTokenTTL session_token 的有效期(写到 redis,W2 mock 暂不用;W3 ① 用作 JWT exp)。
-	SessionTokenTTL time.Duration `yaml:"session_token_ttl,omitempty" json:"session_token_ttl,omitempty"`
+	SessionTokenTTL config.Duration `yaml:"session_token_ttl,omitempty" json:"session_token_ttl,omitempty"`
 
 	// DSTicketTTL DS 票据有效期(JWT exp - issued_at)。
 	// 不变量 §3:DS 票据短时效。默认 5 分钟。
-	DSTicketTTL time.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
+	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 
 	// MockHubDSAddr W2 mock 阶段直接返给客户端的 hub DS 地址。
 	// W3 改成调 hub_allocator.Assign 拿真实地址。
@@ -65,20 +65,20 @@ type LocatorClientConf struct {
 //   - Secret base64某种 / 明文 都可以,但 envoy.yaml 里是 base64url(secret) 填进 JWKS 的 k 字段
 //   - SessionTTL 默认 24h;DSTicketTTL 默认 5min(不变量 §3)
 type JWTConf struct {
-	Issuer      string        `yaml:"issuer,omitempty" json:"issuer,omitempty"`
-	Audience    string        `yaml:"audience,omitempty" json:"audience,omitempty"`
-	Secret      string        `yaml:"secret,omitempty" json:"secret,omitempty"`
-	SessionTTL  time.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
-	DSTicketTTL time.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
+	Issuer      string          `yaml:"issuer,omitempty" json:"issuer,omitempty"`
+	Audience    string          `yaml:"audience,omitempty" json:"audience,omitempty"`
+	Secret      string          `yaml:"secret,omitempty" json:"secret,omitempty"`
+	SessionTTL  config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
+	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 }
 
 // Defaults 把零值填成 Pandora 标准默认值(W2 mock 阶段用)。
 func (c *Config) Defaults() {
 	if c.Login.SessionTokenTTL == 0 {
-		c.Login.SessionTokenTTL = 24 * time.Hour
+		c.Login.SessionTokenTTL = config.Duration(24 * time.Hour)
 	}
 	if c.Login.DSTicketTTL == 0 {
-		c.Login.DSTicketTTL = 5 * time.Minute
+		c.Login.DSTicketTTL = config.Duration(5 * time.Minute)
 	}
 	if c.Login.MockHubDSAddr == "" {
 		c.Login.MockHubDSAddr = "127.0.0.1:7777"

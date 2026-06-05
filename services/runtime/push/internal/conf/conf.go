@@ -28,10 +28,8 @@ type Config struct {
 // PushConf 是 push 服务私有配置。
 type PushConf struct {
 	// MockTickInterval W2 mock 阶段每个 Subscribe stream 的推送间隔。
-	// ⚠️ 跟 LoginConf 同样的约束:Kratos config 走 JSON 不解 duration 字符串,
-	//   所以 etc/push-dev.yaml 里不写本字段,统一由 Defaults() 填默认值(5s)。
-	//   W3+ ops 想调时,可在 pkg/config 加 Duration 包装类型同步实现 UnmarshalJSON/YAML。
-	MockTickInterval time.Duration `yaml:"mock_tick_interval,omitempty" json:"mock_tick_interval,omitempty"`
+	// W3 ⑥(2026-06-05):字段改用 config.Duration,etc yaml 可写 "5s" 字符串。
+	MockTickInterval config.Duration `yaml:"mock_tick_interval,omitempty" json:"mock_tick_interval,omitempty"`
 
 	// MockTopic W2 mock 推送的 PushFrame.topic 字段。
 	// 默认 "pandora.system.notify"(infra.md §4 推送 topic 之一)。
@@ -42,13 +40,13 @@ type PushConf struct {
 	MockPayload string `yaml:"mock_payload,omitempty" json:"mock_payload,omitempty"`
 
 	// OfflineCacheTTL 离线消息缓存 redis ZSET 的 TTL(W2 不用,W3 真实化时启用)。
-	OfflineCacheTTL time.Duration `yaml:"offline_cache_ttl,omitempty" json:"offline_cache_ttl,omitempty"`
+	OfflineCacheTTL config.Duration `yaml:"offline_cache_ttl,omitempty" json:"offline_cache_ttl,omitempty"`
 }
 
 // Defaults 把零值填成 Pandora 标准默认值(W2 mock 阶段用)。
 func (c *Config) Defaults() {
 	if c.Push.MockTickInterval == 0 {
-		c.Push.MockTickInterval = 5 * time.Second
+		c.Push.MockTickInterval = config.Duration(5 * time.Second)
 	}
 	if c.Push.MockTopic == "" {
 		c.Push.MockTopic = "pandora.system.notify"
@@ -57,7 +55,7 @@ func (c *Config) Defaults() {
 		c.Push.MockPayload = "hello"
 	}
 	if c.Push.OfflineCacheTTL == 0 {
-		c.Push.OfflineCacheTTL = 5 * time.Minute
+		c.Push.OfflineCacheTTL = config.Duration(5 * time.Minute)
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50014"

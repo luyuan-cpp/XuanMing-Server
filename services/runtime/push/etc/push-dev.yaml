@@ -1,18 +1,16 @@
-# Pandora push 服务开发期配置(W2 ⑤)。
-#
-# ⚠️ 重要约束:Kratos config 底层走 JSON 反序列化,**不能**把 "2s" / "5s" 这种
-# duration 字符串塞 yaml(time.Duration 是 int64,JSON 解不出来)。
-# 所以本文件**完全不写 duration 字段**,所有 tick 周期 / 超时都由 conf.Defaults() 提供。
+# Pandora push 服务开发期配置(W2 ⑤,W3 ⑥ 2026-06-05 重写)。
 #
 # - gRPC 端口 50014(server stream,客户端经 Envoy gRPC-Web 连过来)
-# - HTTP 端口 51014(目前只暴露 /metrics;push 服务无 RESTful RPC,push.proto 没有 google.api.http 注解)
+# - HTTP 端口 51014(目前只暴露 /metrics;push 服务无 RESTful RPC)
 # - W2 不连 kafka,Subscribe 直接走内部 ticker mock
-# - Redis 起客户端但允许连不上(BaseContext 容错;W3 用 redis ZSET 做离线补推)
+# - W3 ⑥ 起 duration 字段用 pkg/config.Duration 包装,yaml 可直接写 "5s" / "5m"
+# - W3 ③ 起 server.grpc.enable_reflection 可控,dev: true / prod: false(零值)
 
 server:
   grpc:
     network: tcp
     addr: ":50014"
+    enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调
   http:
     network: tcp
     addr: ":51014"
@@ -21,8 +19,9 @@ node:
   zone_id: 1
   session_expire_min: 1440
   redis_client:
-    host: "127.0.0.1:6380"   # Pandora Redis 端口(deploy/docker-compose.dev.yml)
+    host: "127.0.0.1:6380"      # Pandora Redis 端口(deploy/docker-compose.dev.yml)
     db: 0
+    dial_timeout: "2s"          # W3 ⑥ 示范
 
 snowflake:
   epoch: 1773446400
@@ -30,7 +29,8 @@ snowflake:
   step_bits: 15
 
 push:
-  # W2 mock:Subscribe 接入后每 N 秒推一帧 PushFrame(0 走 conf.Defaults 默认 5s)。
-  # mock_tick_interval_ms: 5000   ← duration 不能写 yaml,留 0 走默认
+  # W3 ⑥ 示范:duration 可直接写字符串(此前必须留空走 Defaults())
+  mock_tick_interval: "5s"
   mock_topic: "pandora.system.notify"
   mock_payload: "hello"
+  offline_cache_ttl: "5m"
