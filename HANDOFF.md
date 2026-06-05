@@ -106,6 +106,7 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 | `635cf01` | W1-D3 协议骨架(18 个 .proto)+ 网关决策 |
 | `6f582e7` | W1-D3 收尾 push.proto + UE gRPC 插件评估 |
 | `e307dd8` | W2 ⓪+①+② Kratos 切换 + services/ 重构 + buf 工具链补全 |
+| `ee12479` | W2 ②⁺ proto 全遵 buf STANDARD(目录 + 命名) |
 
 ### W2 阶段任务清单
 
@@ -114,11 +115,11 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 | W2 ⓪ services/ 目录重构 | ✅ commit `e307dd8` |
 | W2 ① pkg/ 重写 go-zero → Kratos v2.9.2 | ✅ commit `e307dd8`(go build/vet/test 全绿) |
 | W2 ② proto 工具链(buf + Kratos plugin) | ✅ commit `e307dd8` |
-| **W2 ②⁺ proto 全遵 buf STANDARD** | 🟡 **进行中,已 git mv 18 个 .proto 到 `proto/pandora/`,未 commit** |
-| W2 ③ login 服务(Kratos 第一个业务服) | ⏸️ 等 ②⁺ |
+| W2 ②⁺ proto 全遵 buf STANDARD | ✅ commit `ee12479` |
+| **W2 ③ login 服务(Kratos 第一个业务服)** | ✅ **2026-06-05 完成,待用户 commit**(见 PROGRESS.md "W2 ③") |
 | W2 ④ Envoy v1.38.0 本地 docker | ⏸️ 可并行 |
-| W2 ⑤ push 服务骨架(server stream) | ⏸️ 等 ②⁺ |
-| W2 ⑥ 端到端 hello world 测试 | ⏸️ 等所有 |
+| W2 ⑤ push 服务骨架(server stream) | ⏸️ 可开始,模板复用 login |
+| W2 ⑥ 端到端 hello world 测试 | ⏸️ 等 ④⑤ |
 | W2 ⑦ 收尾 + 文档同步 | ⏸️ 等所有 |
 
 ### 当前 git status(未 commit 改动)

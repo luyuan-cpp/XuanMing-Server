@@ -538,3 +538,142 @@ F:/work/Pandora/
 
 ⚠️ **2026-06-05 起服务在 `services/<域>/<服务>/`**,任何 AI 看到"login/" 根目录平铺的内容时,要意识到那是历史路径,实际位置在 `services/account/login/`。
 
+---
+
+## W2 ③ — login 服务骨架(2026-06-05)
+
+### 背景
+
+W2 ②⁺ 已 commit(`ee12479`),proto 全遵 buf STANDARD + 生成产物 OK。接班按 `HANDOFF.md §3 Step 2` 写 login 服务(Pandora 第一个 Kratos 业务服)。
+
+### 完成内容
+
+#### 1. 修复 buf 生成的 google.api 局部化引用
+
+- `proto/buf.gen.go.yaml` 加 `managed.disable` 排除 `buf.build/googleapis/googleapis`(否则生成的 login.pb.go 会写出 `_ "github.com/.../proto/gen/go/google/api"` 这种我们并没产物的本地引用,导致 build 失败)
+- 重新跑 `pwsh tools/scripts/proto_gen.ps1` 让 login.pb.go 改用上游 `google.golang.org/genproto/googleapis/api/annotations`
+
+#### 2. 新增 proto module
+
+- 新增 `proto/go.mod`(module `github.com/luyuancpp/pandora/proto`)
+- 把生成的 `gen/go/...` 全部纳入这个 module(后续业务服 import `github.com/luyuancpp/pandora/proto/gen/go/pandora/<X>/v1`)
+
+#### 3. login 服务目录结构(Kratos 标准分层)
+
+```
+services/account/login/
+├── cmd/login/main.go                  入口:加载 yaml + 装配三层 + 起 Kratos App
+├── etc/login-dev.yaml                 dev 配置(⚠️ 不写 duration,见下)
+├── go.mod / go.sum                    module + replace pkg/proto 到本地
+├── README.md                          端口/职责/启动/W3 路线
+└── internal/
+    ├── conf/conf.go                   嵌入 pkg/config.Base + LoginConf
+    ├── data/account.go                AccountRepo 接口 + MockAccountRepo(W2)
+    ├── biz/login.go                   LoginUsecase(纯业务逻辑)
+    ├── service/login.go               实现 loginv1.LoginServiceServer
+    └── server/
+        ├── grpc.go                    grpcserver.MustNewServer + Register
+        └── http.go                    phttp.MustNewServer + /metrics + Register
+```
+
+#### 4. W2 mock 行为(可联调)
+
+- `Login(account="test", password_hash="abc", device_id=*)` → `ErrCode_OK` + uuid session_token + `127.0.0.1:7777` + uuid hub_ticket
+- 账号不对 → `ErrCode_ERR_LOGIN_ACCOUNT_NOT_FOUND`
+- 密码不对 → `ErrCode_ERR_LOGIN_PASSWORD_MISMATCH`
+- `Logout` → 总是 OK
+- `IssueDSTicket` / `VerifyDSTicket` → 返 `ErrCode_ERR_UNKNOWN`(W3 接 JWT + hub_allocator)
+- player_id 用 snowflake 启动时生成,固定不变(W3 接 mysql 替换)
+
+#### 5. 端口
+
+| 协议 | 端口 | 用途 |
+|---|---|---|
+| gRPC | 50001 | 客户端经 Envoy gRPC-Web 来的主流量(W2 直连验证) |
+| HTTP | 51001 | `/metrics` Prometheus + `/v1/login` `/v1/logout` `/v1/ds/ticket/*` RESTful |
+
+#### 6. go.work / go.mod 调整
+
+- `go.work` 启用 `use ./proto` 和 `use ./services/account/login`
+- `services/account/login/go.mod` 加 `replace` 把 `pandora/pkg` 和 `pandora/proto` 指向本地路径(`go mod tidy` 不读 go.work,只认 replace)
+
+#### 7. 验证(2026-06-05)
+
+```
+go build ./pkg/... ./proto/... ./services/account/login/...  全绿
+go vet   ./pkg/... ./proto/... ./services/account/login/...  无警告
+go run   ./services/account/login/cmd/login -conf services/account/login/etc/login-dev.yaml
+  → [HTTP] server listening on: [::]:51001
+  → [gRPC] server listening on: [::]:50001
+
+curl POST /v1/login {test/abc/d1}      → code=OK, session_token=uuid, hub=127.0.0.1:7777  ✅
+curl POST /v1/login {wrong/abc/d1}     → code=ERR_LOGIN_ACCOUNT_NOT_FOUND                  ✅
+curl GET  /metrics                     → 含 pandora_rpc_duration_seconds histogram         ✅
+日志带 trace_id(每请求一份 UUID)+ player_id                                                 ✅
+```
+
+### 踩到的坑(写给下一会话 AI)
+
+#### 坑 1:Kratos config 不能解析 `"2s"` / `"24h"` 这种 duration 字符串
+
+- 现象:`json: cannot unmarshal string into Go struct field Grpc.Base.Server.Grpc.Timeout of type time.Duration`
+- 原因:Kratos config 内部走 JSON 反序列化,`time.Duration` 是 int64,JSON 期望数字,不接受字符串
+- W2 解法:**yaml 完全不写 duration 字段**,全靠 `conf.Defaults()` 在代码里设定
+- 后续(W3+)如要支持 ops 改 timeout:写一个 `Duration` 包装类型(同时实现 `UnmarshalJSON` 和 `UnmarshalYAML`)替换所有 `time.Duration` 字段;或者改用环境变量
+- 影响范围:**所有 14 个业务服共用 `pkg/config.Base`,W3 改一次后续全受益**
+
+#### 坑 2:buf managed mode 会覆盖 googleapis 的 go_package
+
+- 现象:生成的 `login.pb.go` 写 `_ "github.com/luyuancpp/pandora/proto/gen/go/google/api"`,但我们并没生成 google/api 的产物
+- 解法:`buf.gen.go.yaml` 加 `managed.disable` 排除 `buf.build/googleapis/googleapis` 模块,让它继续指向上游 `google.golang.org/genproto/googleapis/api/annotations`(已在 module deps)
+- 影响:**只要 .proto 引 google/api/annotations.proto(即用 google.api.http 注解)就会踩,本服务 + 后续所有用 HTTP 路由的服务都受益**
+
+#### 坑 3:go.work + replace 双写
+
+- `go mod tidy` 不读 go.work(只读单 module 的 go.mod)
+- 所以 services/account/login/go.mod 必须显式 `replace github.com/luyuancpp/pandora/pkg => ../../../pkg`(以及 `pandora/proto`)
+- 否则 `go mod tidy` 会去远端找版本,失败:"invalid version: unknown revision 000000000000"
+- 后续每个新服务的 go.mod 都要照抄这两条 replace(路径深度可能要调,services 下三层用 `../../../`)
+
+### 待 commit 的改动(用户手动)
+
+```
+M  go.work                                         (加 use ./proto + use ./services/account/login)
+M  go.work.sum                                     (tidy 自动更新)
+M  proto/buf.gen.go.yaml                           (加 disable googleapis)
+M  proto/gen/go/pandora/login/v1/login.pb.go       (重新生成,改用上游 google api 包)
+D  services/account/login/.gitkeep
+?? proto/go.mod / proto/go.sum                     (新 module)
+?? services/account/login/README.md
+?? services/account/login/cmd/login/main.go
+?? services/account/login/etc/login-dev.yaml
+?? services/account/login/go.mod / go.sum
+?? services/account/login/internal/{conf,data,biz,service,server}/*.go
+```
+
+建议 commit:
+```
+feat(login): W2 ③ login 服务骨架(Pandora 第一个 Kratos 业务服)
+
+- 标准 Kratos 分层:cmd/etc/internal/{conf,data,biz,service,server}
+- W2 mock:test/abc 通过,签固定 hub 地址 + uuid session token
+- IssueDSTicket / VerifyDSTicket 返 ERR_UNKNOWN,W3 接 JWT 后真实化
+- gRPC :50001,HTTP :51001(同时承载 /metrics + RESTful)
+- 修复 buf managed 覆盖 googleapis go_package 的 bug
+- 新增 proto module(github.com/luyuancpp/pandora/proto)
+
+接 commit ee12479(W2 ②⁺)。
+```
+
+### 下一步(W2 ④ / ⑤)
+
+按 `HANDOFF.md §3 Step 3` 起 Envoy(本地 docker),然后 `Step 4` 起 push 服务骨架,
+再做 `Step 5` 端到端 hello world,最后 `Step 6` W2 收尾。
+
+⚠️ **写 push / 其它服务时直接复用 login 的目录模板**:
+- 拷 `services/account/login/{cmd,etc,internal/{conf,data,biz,service,server}}` 整层
+- 改 module 路径(go.mod replace 的相对路径深度按目录层级算)
+- 改端口(见 `infra.md §6.2`)
+- 改 proto import(`pandora/<X>/v1`)
+- yaml **不写 duration 字段**(坑 1)
+

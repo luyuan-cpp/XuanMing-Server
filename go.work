@@ -22,6 +22,8 @@ toolchain go1.24.5
 // 自动要求 1.24.0,虽然 PROGRESS.md 写的目标版本是 1.23,但 1.24 兼容,接受升级。
 
 use ./pkg
+use ./proto
+use ./services/account/login
 
 // ⚠️ 构建验证:仓库根没有 go.mod,不能在根目录跑 go build ./...
 // 正确做法:按 use 列表构建,例如 go build ./pkg/...
@@ -29,7 +31,7 @@ use ./pkg
 //
 // W2+ 启用以下 use 行(每个服务在 cmd/main.go + go.mod 创建后启用):
 //
-// use ./services/account/login
+// use ./services/account/login  ← W2 ③ 已启用
 // use ./services/account/player
 // use ./services/social/friend
 // use ./services/social/chat

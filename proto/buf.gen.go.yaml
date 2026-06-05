@@ -24,6 +24,13 @@ version: v2
 
 managed:
   enabled: true
+  # 不要 override googleapis(google/api/annotations.proto 等)的 go_package,
+  # 让它们继续指向 google.golang.org/genproto/googleapis/api/annotations(已在 module deps),
+  # 否则 protoc-gen-go 会生成 `_ "github.com/.../proto/gen/go/google/api"` 这种本地引用,
+  # 而我们并没有在本仓库生成 google/api/ 的 .pb.go 产物,会导致 go build 找不到包。
+  disable:
+    - module: buf.build/googleapis/googleapis
+      file_option: go_package_prefix
   override:
     - file_option: go_package_prefix
       value: github.com/luyuancpp/pandora/proto/gen/go

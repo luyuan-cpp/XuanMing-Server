@@ -1,0 +1,38 @@
+# Pandora login 服务开发期配置(W2 ③)。
+#
+# ⚠️ 重要约束:Kratos config 底层走 JSON 反序列化,**不能**把 "2s" / "24h" 这种
+# duration 字符串塞 yaml(time.Duration 是 int64,JSON 解不出来)。
+# 所以本文件**完全不写 duration 字段**,所有超时/TTL 都由 conf.Defaults() 提供。
+#
+# - gRPC 端口 50001 / HTTP 端口 51001(同时暴露 /metrics 和 RESTful)
+# - W2 阶段不连 MySQL,Redis 起客户端但允许连不上(BaseContext 容错)
+# - W3 接入真实账号库时,改 mock_* 为空(走真实流程)
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50001"
+  http:
+    network: tcp
+    addr: ":51001"
+
+node:
+  zone_id: 1
+  session_expire_min: 1440
+  redis_client:
+    host: "127.0.0.1:6380"   # Pandora Redis 端口(deploy/docker-compose.dev.yml)
+    db: 0
+
+snowflake:
+  epoch: 1773446400
+  node_bits: 17
+  step_bits: 15
+
+locker:
+  account_lock_ttl: 10
+  player_lock_ttl: 10
+
+login:
+  mock_hub_ds_addr: "127.0.0.1:7777"
+  mock_account: "test"
+  mock_password_hash: "abc"
