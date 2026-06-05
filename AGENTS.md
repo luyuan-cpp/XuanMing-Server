@@ -30,6 +30,7 @@
 
 - ❌ `git push` / `git tag`(人审过手动推)
 - ❌ `git commit`(默认不,除非用户明确说"帮我 commit")
+- ❌ **Claude Code 不安装工具 / 不改本机环境 / 不做 git commit**(见 §11.1 分工)
 - ❌ 登录任何远端账号(GitHub / k8s 集群 / 云厂商 / 注册表 / 其它)
 - ❌ 删除文件不经人确认
 - ❌ 改 main 分支保护规则
@@ -110,6 +111,36 @@ AI 跑出错时:
 - 发现自己即将 push 远端
 
 ## 11. 合作分工(默认)
+
+### 11.1 跨 AI 平台硬性分工
+
+为节省 Claude Code token,本项目固定按下面分工:
+
+**Claude Code 负责**:
+- 深度阅读代码和设计文档,分析完整详细做法
+- 开 plan 模式列文件清单 / 动作 / 风险 / 工期,给人审
+- 审过后改代码 / proto / yaml / 脚本 / 文档
+- 跑项目内验证命令(build / test / lint / docker compose 配置检查)
+- 输出 git status / diff --stat / commit message 建议
+
+**Claude Code 不负责**:
+- 安装 / 升级 / 卸载本机工具(winget / choco / go install / npm install -g 等)
+- 改系统环境(PATH / 证书信任 / Docker Desktop 设置 / 防火墙等)
+- 拉大型 Docker 镜像作为环境准备动作
+- git commit / push / tag
+
+**ChatGPT / Codex 负责**:
+- 检查并安装本机工具(mkcert / grpcurl / buf / protoc / docker image 等)
+- 改本机开发环境和证书信任(仅在用户明确批准后)
+- 做环境就绪确认,把结果反馈给 Claude Code / 用户
+- 在用户明确说"帮我 commit"时执行 git commit
+
+**人负责最终授权**:
+- 环境改动前批准
+- commit 前批准
+- push / PR / release 全部人手动执行
+
+> 简单说:Claude Code 烧 token 做脑力和代码;ChatGPT / Codex 做工具安装、环境准备、提交收尾。
 
 **AI 负责**:
 - 后端 go 代码、proto、yaml、shell 脚本

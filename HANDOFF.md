@@ -37,14 +37,14 @@ Client(UE 5.7)
 | 项 | 锁定值 |
 |---|---|
 | Go 框架 | **Kratos v2.9.2**(推翻 D2.1 go-zero) |
-| Go 版本 | 1.24.0 + toolchain go1.24.5 |
+| Go 版本 | go1.26.4 |
 | Log | Kratos log + **zap** 实现 |
 | Config | yaml + file source(W3+ 接 etcd) |
 | Edge Gateway | **Envoy v1.38.0**(grpc-web filter)|
 | 服务发现 | k8s Service + DNS(W3 + Kratos registry/etcd 可选) |
 | Kafka client | sarama v1.43.1 |
 | Redis client | go-redis/v9 v9.16.0 |
-| Proto 工具 | **buf v1.50.0** |
+| Proto 工具 | **buf v1.70.0** |
 
 ### 1.3 协议铁律
 
@@ -466,6 +466,29 @@ grpcurl -insecure :8443 ... PushService/Subscribe               # 经 Envoy 接 
 - **不读 `F:/work/mmorpg/client/`**(继承 mmorpg §9.7)
 - **用中文回复**(项目规则)
 - **任务前先查 task tool**(看历史进度)
+
+### 4.2.1 跨 AI 平台硬性分工(节省 token)
+
+**Claude Code 只负责脑力和代码**:
+- 深度分析完整详细做法
+- 开 plan 模式给用户审
+- 审过后改代码 / proto / yaml / 脚本 / 文档
+- 跑项目内验证(build / test / lint / docker compose config)
+- 输出 git status / diff --stat / commit message 建议
+
+**Claude Code 不做环境和提交**:
+- 不安装 / 升级 / 卸载本机工具
+- 不改 PATH / 证书信任 / Docker Desktop 设置 / 防火墙等系统环境
+- 不拉大型 Docker 镜像作为环境准备动作
+- 不执行 git commit / push / tag
+
+**ChatGPT / Codex 负责环境和提交收尾**:
+- 检查并安装本机工具(mkcert / grpcurl / buf / protoc / docker image 等)
+- 在用户批准后改本机开发环境和证书信任
+- 做环境就绪确认,把结果反馈给 Claude Code / 用户
+- 在用户明确说"帮我 commit"时执行 git commit
+
+原则:Claude Code token 用在分析和改代码;安装工具、环境准备、提交收尾交给 ChatGPT / Codex。
 
 ### 4.3 触碰红线立即停止
 
