@@ -3,10 +3,9 @@
 // 职责(docs/design/go-services.md §2.7):组队(5 人队)
 // 状态机:FORMING → READY(全员 ready)→ MATCHING → IN_BATTLE → DISBANDED
 //
-// ⚠️ 推送架构(ds-arch.md §0.8):
-//   go-zero zrpc 不支持 gRPC server stream。
+// 推送架构(ds-arch.md §0.8):
 //   "队伍状态变更"通过 kafka topic `pandora.team.update`(key=player_id)
-//   广播给所有相关玩家所在的 Hub DS,由 DS 转成 UE ClientRPC 推给客户端。
+//   广播给所有相关玩家所在的 push 服务 → push 服务 server stream 推给客户端。
 //   本 service **不提供** StreamTeamUpdates RPC。
 
 syntax = "proto3";
@@ -15,14 +14,18 @@ package pandora.team.v1;
 
 import "pandora/common/v1/errcode.proto";
 
+// 所有写 RPC 均为"立即完成型":biz 完成状态机迁移 + 写 redis + 发 kafka 后立刻返回。
+//   - 不阻塞等待外部服务;不 hold 连接
+//   - PushToPlayers 不发给 caller(协议原则 2)
+// StartMatch → 由 matchmaker 负责(W3 ⑧),此处不提供 RPC。
 service TeamService {
-  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
-  rpc Invite(InviteRequest) returns (InviteResponse);
-  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
-  rpc LeaveTeam(LeaveTeamRequest) returns (LeaveTeamResponse);
-  rpc Kick(KickRequest) returns (KickResponse);
-  rpc SetReady(SetReadyRequest) returns (SetReadyResponse);
-  rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);  // 客户端拉一次完整 Team(进入大厅时)
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);       // 立即完成型
+  rpc Invite(InviteRequest) returns (InviteResponse);                    // 立即完成型;push 不发 inviter
+  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);  // 立即完成型
+  rpc LeaveTeam(LeaveTeamRequest) returns (LeaveTeamResponse);           // 立即完成型
+  rpc Kick(KickRequest) returns (KickResponse);                          // 立即完成型;push 不发 captain
+  rpc SetReady(SetReadyRequest) returns (SetReadyResponse);              // 立即完成型
+  rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);                 // 只读,客户端进入大厅时拉一次完整快照
 }
 
 enum TeamState {
@@ -58,62 +61,70 @@ message Team {
 // ===== RPC =====
 
 message CreateTeamRequest {
-  uint64 player_id = 1;
+  uint64 player_id = 1;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
 }
 
 message CreateTeamResponse {
   pandora.common.v1.ErrCode code = 1;
   uint64 team_id = 2;
+  Team   team    = 3;  // 完整快照;客户端无需再发 GetTeam
 }
 
 message InviteRequest {
   uint64 team_id          = 1;
-  uint64 inviter_id       = 2;
+  uint64 inviter_id       = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
   uint64 target_player_id = 3;
 }
 
 message InviteResponse {
   pandora.common.v1.ErrCode code = 1;
+  Team   team          = 2;  // 发送邀请后的完整队伍快照
+  uint64 invite_id     = 3;  // 邀请令牌 ID;AcceptInvite 时回传可校验未过期
+  int64  expires_at_ms = 4;  // 邀请过期时间(unix ms)
 }
 
 message AcceptInviteRequest {
-  uint64 player_id = 1;
+  uint64 player_id = 1;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
   uint64 team_id   = 2;
+  uint64 invite_id = 3;  // 可选;传入时服务端校验未过期/未取消;不传时仅校验 team_id
 }
 
 message AcceptInviteResponse {
   pandora.common.v1.ErrCode code = 1;
-  Team team = 2;
+  Team team = 2;  // 加入后的完整队伍快照(协议原则 1)
 }
 
 message LeaveTeamRequest {
   uint64 team_id   = 1;
-  uint64 player_id = 2;
+  uint64 player_id = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
 }
 
 message LeaveTeamResponse {
   pandora.common.v1.ErrCode code = 1;
+  Team team = 2;  // 离开后的队伍快照(已解散时 team.state=DISBANDED)
 }
 
 message KickRequest {
   uint64 team_id           = 1;
-  uint64 captain_id        = 2;
+  uint64 captain_id        = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
   uint64 target_player_id  = 3;
 }
 
 message KickResponse {
   pandora.common.v1.ErrCode code = 1;
+  Team team = 2;  // 踢人后的完整队伍快照
 }
 
 message SetReadyRequest {
   uint64 team_id   = 1;
-  uint64 player_id = 2;
+  uint64 player_id = 2;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
   bool   ready     = 3;
-  uint32 hero_id   = 4;  // 可选,选英雄一并设
+  uint32 hero_id   = 4;  // 0=不改 hero 只切 ready 状态;≥1=设英雄并 ready(选英雄一并设置)
 }
 
 message SetReadyResponse {
   pandora.common.v1.ErrCode code = 1;
+  Team team = 2;  // 变更 ready 状态后的完整队伍快照
 }
 
 message GetTeamRequest {
@@ -128,19 +139,36 @@ message GetTeamResponse {
 // ===== Kafka 推送 payload =====
 //
 // topic: pandora.team.update
-// key:   player_id(每个相关玩家收到一份;同队 5 人 = 5 条消息)
-// 消费方:Hub DS(玩家所在 hub),按 player_id 路由��对应 PlayerController
-//        转成 UE ClientRPC 推给客户端。
+// key:   player_id(每个相关玩家收到一份;同队 5 人 = 5 条消息,不变量 §9)
+// 消费方:push 服务 KafkaConsumer → ConnectionManager.SendTo → 客户端 server stream。
 //
-// 该 message 通过 kafka_envelope.proto 的 KafkaEnvelope.payload 传输,
-// 不通过 gRPC 直接 stream。
+// 该 message 通过 KafkaEnvelope.payload 传输,不通过 gRPC 直接 stream。
+
+// TeamUpdateReason 描述本次 TeamUpdateEvent 的触发原因,供客户端决定播放哪段动画/音效。
+// 枚举值编号永不复用(只 reserved)。
+enum TeamUpdateReason {
+  TEAM_UPDATE_REASON_UNSPECIFIED      = 0;
+  TEAM_UPDATE_REASON_MEMBER_JOINED    = 1;
+  TEAM_UPDATE_REASON_MEMBER_LEFT      = 2;
+  TEAM_UPDATE_REASON_MEMBER_KICKED    = 3;
+  TEAM_UPDATE_REASON_MEMBER_READY     = 4;
+  TEAM_UPDATE_REASON_HERO_CHANGED     = 5;
+  TEAM_UPDATE_REASON_CAPTAIN_TRANSFER = 6;
+  TEAM_UPDATE_REASON_STATE_CHANGED    = 7;
+  TEAM_UPDATE_REASON_DISBANDED        = 8;
+  TEAM_UPDATE_REASON_INVITE_SENT      = 9;
+}
 
 message TeamUpdateEvent {
-  Team   team           = 1;
-  string change_summary = 2;  // "joined" | "left" | "ready" | "kicked" | "disbanded" | ...
-  uint64 by_player_id   = 3;  // 触发本次变更的玩家
-  uint64 to_player_id   = 4;  // 接收推送的玩家(也是 kafka key)
-  int64  ts_ms          = 5;
+  Team   team         = 1;
+  // 2 was string change_summary — 已删除(W3 ⑦ Phase 1)
+  reserved 2;
+  reserved "change_summary";
+  uint64 by_player_id = 3;  // 触发本次变更的玩家
+  uint64 to_player_id = 4;  // 接收推送的玩家(也是 kafka key)
+  int64  ts_ms        = 5;
   // 6-9 reserved
   reserved 6 to 9;
+  TeamUpdateReason reason    = 10;  // 变更原因;客户端用于播动画/音效
+  uint64           invite_id = 11;  // reason=INVITE_SENT 时填;其他 reason 为 0
 }

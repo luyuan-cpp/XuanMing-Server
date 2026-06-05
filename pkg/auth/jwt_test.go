@@ -277,3 +277,54 @@ func TestVerifySessionRejectsNegativeSub(t *testing.T) {
 		t.Fatal("expected negative sub rejected")
 	}
 }
+
+// TestVerifySessionRejectsOverflowSub 验证 sub 超出 uint64 上限时被拒绝。
+func TestVerifySessionRejectsOverflowSub(t *testing.T) {
+	now := time.Unix(1_780_000_000, 0).UTC()
+	s, v := newTestSigner(t, now)
+
+	// "99999999999999999999" 超过 uint64 最大值(18446744073709551615),ParseUint 报错
+	claims := SessionClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.cfg.Issuer,
+			Subject:   "99999999999999999999",
+			Audience:  jwt.ClaimStrings{s.cfg.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.SessionTTL)),
+			ID:        "jti-overflow",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	str, err := tok.SignedString(s.cfg.Secret)
+	if err != nil {
+		t.Fatalf("SignedString: %v", err)
+	}
+	if _, err := v.VerifySession(str); err == nil {
+		t.Fatal("expected overflow sub rejected")
+	}
+}
+
+// TestVerifySessionRejectsNonNumericSub 验证 sub 为非数字字符串时被拒绝。
+func TestVerifySessionRejectsNonNumericSub(t *testing.T) {
+	now := time.Unix(1_780_000_000, 0).UTC()
+	s, v := newTestSigner(t, now)
+
+	claims := SessionClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.cfg.Issuer,
+			Subject:   "evil",
+			Audience:  jwt.ClaimStrings{s.cfg.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.SessionTTL)),
+			ID:        "jti-non-numeric",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	str, err := tok.SignedString(s.cfg.Secret)
+	if err != nil {
+		t.Fatalf("SignedString: %v", err)
+	}
+	if _, err := v.VerifySession(str); err == nil {
+		t.Fatal("expected non-numeric sub rejected")
+	}
+}

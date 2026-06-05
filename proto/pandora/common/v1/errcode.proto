@@ -63,6 +63,7 @@ enum ErrCode {
   ERR_TEAM_ALREADY_IN_TEAM     = 3004;
   ERR_TEAM_INVITE_EXPIRED      = 3005;
   ERR_TEAM_WRONG_STATE         = 3006;
+  ERR_TEAM_CONCURRENT          = 3007;  // WATCH/MULTI/EXEC 乐观锁重试耗尽
 
   // 4000-4999 match
   ERR_MATCH_NOT_FOUND          = 4001;

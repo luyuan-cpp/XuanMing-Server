@@ -73,6 +73,7 @@ const (
 	ErrTeamAlreadyInTeam Code = 3004
 	ErrTeamInviteExpired Code = 3005
 	ErrTeamWrongState    Code = 3006
+	ErrTeamConcurrent    Code = 3007 // WATCH/MULTI/EXEC 乐观锁重试耗尽
 )
 
 // match(4000-4999)

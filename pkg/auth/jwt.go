@@ -259,7 +259,7 @@ func (v *Verifier) VerifySession(token string) (*SessionClaims, error) {
 	if err := v.parseInto(token, &claims); err != nil {
 		return nil, err
 	}
-	if claims.PlayerID() <= 0 {
+	if claims.PlayerID() == 0 {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "session sub not a valid player_id")
 	}
 	return &claims, nil
@@ -279,7 +279,7 @@ func (v *Verifier) VerifyDSTicket(token string) (*DSTicketClaims, error) {
 	if err := v.parseInto(token, &claims); err != nil {
 		return nil, err
 	}
-	if claims.PlayerID() <= 0 {
+	if claims.PlayerID() == 0 {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket sub not a valid player_id")
 	}
 	if claims.DSType != string(DSTypeHub) && claims.DSType != string(DSTypeBattle) {
