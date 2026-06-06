@@ -39,7 +39,9 @@ type MatchConf struct {
 	// DSAllocatorAddr 是 ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS)。
 	// 留空则用 StubDSAllocator(W4 ① 行为,返回固定 mock 地址 + mock 票据)。
 	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
-
+	// LocatorAddr 是 player_locator 服务 gRPC 直连地址（撮合状态机上报玩家位置：
+	// 成局→MATCHING、就绪→BATTLE，不变量 §1）。留空则不上报（本机不起 locator 也能跑撮合）。
+	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
 	// MapId 撮合成局后请求的战斗地图配置 ID(配置表 ID,uint32)。
 	MapId uint32 `yaml:"map_id,omitempty" json:"map_id,omitempty"`
 

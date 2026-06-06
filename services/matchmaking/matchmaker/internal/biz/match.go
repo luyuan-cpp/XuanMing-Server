@@ -49,10 +49,22 @@ type MatchEventPusher interface {
 	PushMatchProgress(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte) (sent int, err error)
 }
 
-// DSAllocator 申请战斗 DS(W4 ① 打桩,W4 ② 接 ds_allocator gRPC)。
+// DSAllocator 申请战斗 DS（W4 ① 打桩，W4 ② 接 ds_allocator gRPC）。
 type DSAllocator interface {
-	// AllocateBattle 为 match 申请战斗 DS,返回 ds 地址 + 每个玩家的入场票据。
+	// AllocateBattle 为 match 申请战斗 DS，返回 ds 地址 + 每个玩家的入场票据。
 	AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64) (dsAddr string, tickets map[uint64]string, err error)
+}
+
+// LocationNotifier 把玩家位置变更上报给 player_locator（不变量 §1：玩家同一时刻只在一个 Location）。
+//
+// 状态权属：matchmaker 是 MATCHING / BATTLE 两个状态的权威（它掌握撮合生命周期）；
+// HUB 状态由 hub DS 上报，故撮合失败 / 取消时 matchmaker 不回写 HUB（交回 hub DS）。
+// 弱依赖：addr 未配 → main 注入 nil，biz 检查 nil 跳过；调用失败仅 Warn 不阻断撮合。
+type LocationNotifier interface {
+	// NotifyMatching 撮合成局（进入确认期）→ 把成员标记为 MATCHING（带 match_id）。
+	NotifyMatching(ctx context.Context, playerIDs []uint64, matchID uint64) error
+	// NotifyBattle 全员确认 + DS 就绪 → 把成员标记为 BATTLE（带 match_id + battle_pod）。
+	NotifyBattle(ctx context.Context, playerIDs []uint64, matchID uint64, battlePod string) error
 }
 
 // IDGenerator 生成唯一 match_id(snowflake)。
@@ -84,12 +96,33 @@ type MatchUsecase struct {
 	pusher    MatchEventPusher
 	allocator DSAllocator
 	idGen     IDGenerator
+	locator   LocationNotifier // 可为 nil（本机不起 player_locator 时不上报位置）
 	cfg       conf.MatchConf
 }
 
-// NewMatchUsecase 构造 MatchUsecase。
-func NewMatchUsecase(repo data.MatchRepo, reader TeamReader, pusher MatchEventPusher, allocator DSAllocator, idGen IDGenerator, cfg conf.MatchConf) *MatchUsecase {
-	return &MatchUsecase{repo: repo, reader: reader, pusher: pusher, allocator: allocator, idGen: idGen, cfg: cfg}
+// NewMatchUsecase 构造 MatchUsecase。locator 可为 nil（弱依赖，不上报位置）。
+func NewMatchUsecase(repo data.MatchRepo, reader TeamReader, pusher MatchEventPusher, allocator DSAllocator, idGen IDGenerator, locator LocationNotifier, cfg conf.MatchConf) *MatchUsecase {
+	return &MatchUsecase{repo: repo, reader: reader, pusher: pusher, allocator: allocator, idGen: idGen, locator: locator, cfg: cfg}
+}
+
+// notifyMatching 把 match 成员位置标记为 MATCHING（弱依赖：nil 跳过 / 失败仅 Warn）。
+func (u *MatchUsecase) notifyMatching(ctx context.Context, playerIDs []uint64, matchID uint64) {
+	if u.locator == nil {
+		return
+	}
+	if err := u.locator.NotifyMatching(ctx, playerIDs, matchID); err != nil {
+		plog.With(ctx).Warnw("msg", "locator_notify_matching_failed", "match_id", matchID, "err", err)
+	}
+}
+
+// notifyBattle 把 match 成员位置标记为 BATTLE（弱依赖：nil 跳过 / 失败仅 Warn）。
+func (u *MatchUsecase) notifyBattle(ctx context.Context, playerIDs []uint64, matchID uint64, battlePod string) {
+	if u.locator == nil {
+		return
+	}
+	if err := u.locator.NotifyBattle(ctx, playerIDs, matchID, battlePod); err != nil {
+		plog.With(ctx).Warnw("msg", "locator_notify_battle_failed", "match_id", matchID, "err", err)
+	}
 }
 
 func (u *MatchUsecase) ticketTTL() time.Duration { return u.cfg.TicketTTL.Std() }
@@ -355,6 +388,9 @@ func (u *MatchUsecase) onAllConfirmed(ctx context.Context, m *matchv1.MatchStora
 		return
 	}
 
+	// 全员确认 + DS 就绪：上报 locator BATTLE（battle_pod 用 ds_addr 唯一标识 DS，不变量 §1，弱依赖）
+	u.notifyBattle(ctx, playerIDs, m.MatchId, dsAddr)
+
 	// 每个玩家单独带自己的 battle_ticket 推 READY 进度
 	now := time.Now().UnixMilli()
 	for _, member := range ready.Members {
@@ -533,7 +569,8 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 		plog.With(ctx).Errorw("msg", "create_match_failed", "match_id", matchID, "err", err)
 		return err
 	}
-
+	// 撮合成局，成员进入确认期：上报 locator MATCHING（不变量 §1，弱依赖）
+	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
 	// 推 FOUND → CONFIRM 进度给全体(原则 3 例外:含发起方)
 	u.pushProgress(ctx, matchID, stageFound, members, "", "")
 	u.pushProgress(ctx, matchID, stageConfirm, members, "", "")

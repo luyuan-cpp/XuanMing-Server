@@ -26,6 +26,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
@@ -157,8 +158,18 @@ func main() {
 		allocator = biz.NewStubDSAllocator("") // W4 ① 打桩;无 ds_allocator_addr 时兜底
 		helper.Warnw("msg", "ds_allocator_addr_empty", "hint", "using StubDSAllocator (mock ds_addr + mock tickets)")
 	}
-
-	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, sf, cfg.Match)
+	// player_locator gRPC notifier（弱依赖：locator_addr 留空 → 不上报位置）
+	// 撮合成局→MATCHING、全员确认就绪→BATTLE（不变量 §1）
+	var locator biz.LocationNotifier
+	if cfg.Match.LocatorAddr != "" {
+		ln := data.NewGrpcLocationNotifier(grpcclient.MustDialInsecure(cfg.Match.LocatorAddr))
+		defer func() { _ = ln.Close() }()
+		locator = ln
+		helper.Infow("msg", "locator_notifier_ready", "locator_addr", cfg.Match.LocatorAddr)
+	} else {
+		helper.Warnw("msg", "locator_addr_empty", "hint", "match state (MATCHING/BATTLE) will not be reported to player_locator")
+	}
+	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, sf, locator, cfg.Match)
 	svc := service.NewMatchService(uc, sf)
 
 	// 8. gRPC + HTTP

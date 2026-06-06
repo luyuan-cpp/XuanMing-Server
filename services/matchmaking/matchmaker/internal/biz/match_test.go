@@ -61,13 +61,57 @@ func (f *fakeIDGen) Generate() uint64 {
 	return id
 }
 
+// mockLocator 记录 matchmaker 上报的 MATCHING / BATTLE 状态，用于断言状态机串联。
+type mockLocator struct {
+	mu       sync.Mutex
+	matching map[uint64]uint64 // playerID -> matchID
+	battle   map[uint64]string // playerID -> battlePod
+}
+
+func newMockLocator() *mockLocator {
+	return &mockLocator{matching: map[uint64]uint64{}, battle: map[uint64]string{}}
+}
+
+func (m *mockLocator) NotifyMatching(_ context.Context, ids []uint64, matchID uint64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, id := range ids {
+		m.matching[id] = matchID
+	}
+	return nil
+}
+
+func (m *mockLocator) NotifyBattle(_ context.Context, ids []uint64, matchID uint64, pod string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, id := range ids {
+		m.battle[id] = pod
+	}
+	return nil
+}
+
+func (m *mockLocator) matchingOf(id uint64) (uint64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.matching[id]
+	return v, ok
+}
+
+func (m *mockLocator) battleOf(id uint64) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.battle[id]
+	return v, ok
+}
+
 // ── 测试夹具 ──────────────────────────────────────────────────────────────────
 
 type fixture struct {
-	repo   *data.RedisMatchRepo
-	pusher *mockPusher
-	uc     *MatchUsecase
-	cfg    conf.MatchConf
+	repo    *data.RedisMatchRepo
+	pusher  *mockPusher
+	locator *mockLocator
+	uc      *MatchUsecase
+	cfg     conf.MatchConf
 }
 
 func newFixture(t *testing.T, firstMatchID uint64) *fixture {
@@ -85,9 +129,10 @@ func newFixture(t *testing.T, firstMatchID uint64) *fixture {
 	c.Defaults()
 	repo := data.NewRedisMatchRepo(rdb)
 	pusher := &mockPusher{}
+	locator := newMockLocator()
 	idGen := &fakeIDGen{next: firstMatchID}
-	uc := NewMatchUsecase(repo, nil, pusher, NewStubDSAllocator("127.0.0.1:7777"), idGen, c.Match)
-	return &fixture{repo: repo, pusher: pusher, uc: uc, cfg: c.Match}
+	uc := NewMatchUsecase(repo, nil, pusher, NewStubDSAllocator("127.0.0.1:7777"), idGen, locator, c.Match)
+	return &fixture{repo: repo, pusher: pusher, locator: locator, uc: uc, cfg: c.Match}
 }
 
 // seedTicket 写一张票据并声明其全体成员归属。
@@ -190,6 +235,47 @@ func TestConfirmMatch_AllAccept_Ready(t *testing.T) {
 	}
 	if got := f.pusher.lastStageFor(1); got != stageReady {
 		t.Fatalf("player 1 last push stage = %v, want READY", got)
+	}
+}
+
+// 撮合成局 → locator 上报全员 MATCHING(带 match_id);全员确认就绪 → 上报 BATTLE(带 ds_addr)。
+func TestLocatorState_MatchingThenBattle(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	for i := uint64(1); i <= 10; i++ {
+		f.seedTicket(t, ctx, 100+i, []uint64{i}, 1000)
+	}
+
+	// 成局:进确认期,全员应被标记 MATCHING(match_id=999)
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+	for i := uint64(1); i <= 10; i++ {
+		got, ok := f.locator.matchingOf(i)
+		if !ok || got != 999 {
+			t.Fatalf("player %d MATCHING match_id = %d ok=%v, want 999", i, got, ok)
+		}
+		// 此阶段尚未进战斗,不应有 BATTLE 上报
+		if _, ok := f.locator.battleOf(i); ok {
+			t.Fatalf("player %d unexpectedly BATTLE before confirm", i)
+		}
+	}
+
+	// 全员确认 → READY,全员应被标记 BATTLE(battle_pod = ds_addr)
+	for i := uint64(1); i <= 10; i++ {
+		if err := f.uc.ConfirmMatch(ctx, i, 999, true); err != nil {
+			t.Fatalf("confirm player %d: %v", i, err)
+		}
+	}
+	m, _, _ := f.repo.GetMatch(ctx, 999)
+	for i := uint64(1); i <= 10; i++ {
+		pod, ok := f.locator.battleOf(i)
+		if !ok || pod == "" {
+			t.Fatalf("player %d BATTLE pod = %q ok=%v, want non-empty", i, pod, ok)
+		}
+		if pod != m.BattleDsAddr {
+			t.Fatalf("player %d BATTLE pod = %q, want ds_addr %q", i, pod, m.BattleDsAddr)
+		}
 	}
 }
 
@@ -307,7 +393,7 @@ func TestFormMatch_ReserveFailsMidway_RollsBackNoMatch(t *testing.T) {
 
 	// 第 2 次 ReserveTicket 失败:第 1 张已预留,应被回滚退回队列
 	faulty := &faultyReserveRepo{MatchRepo: f.repo, failOnCall: 2}
-	uc := NewMatchUsecase(faulty, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"), &fakeIDGen{next: 999}, f.cfg)
+	uc := NewMatchUsecase(faulty, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"), &fakeIDGen{next: 999}, nil, f.cfg)
 
 	sideA := make([]*matchv1.MatchTicketStorageRecord, 0, 5)
 	sideB := make([]*matchv1.MatchTicketStorageRecord, 0, 5)
@@ -357,7 +443,7 @@ func TestMatchOnce_ReserveFails_NoOrphanMatch(t *testing.T) {
 	}
 
 	faulty := &faultyReserveRepo{MatchRepo: f.repo, failOnCall: 0} // 全部失败
-	uc := NewMatchUsecase(faulty, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"), &fakeIDGen{next: 999}, f.cfg)
+	uc := NewMatchUsecase(faulty, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"), &fakeIDGen{next: 999}, nil, f.cfg)
 
 	if err := uc.matchOnce(ctx); err != nil {
 		t.Fatalf("matchOnce should swallow form errors and continue: %v", err)

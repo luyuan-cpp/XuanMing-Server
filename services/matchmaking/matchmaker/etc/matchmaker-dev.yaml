@@ -42,8 +42,8 @@ match:
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
-  ds_allocator_addr: "127.0.0.1:50020"
-  # map_id: 战斗地图配置 ID(配置表 ID,uint32)
+  ds_allocator_addr: "127.0.0.1:50020"  # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报）;留空不上报
+  locator_addr: "127.0.0.1:50006"  # map_id: 战斗地图配置 ID(配置表 ID,uint32)
   map_id: 1
   # game_mode: 战斗模式标识,透传给 ds_allocator
   game_mode: "5v5_ranked"

@@ -17,9 +17,9 @@
 | 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | ⏸️ UE 主链路后再评估(当前 player 已先直连 MySQL) |
 | 4 | friend | 50004 | 无 | mysql + redis | - | 🧊 暂缓到最后(UE + 核心链路完成后再做) |
 | 5 | chat | 50005 | 弱 | redis pub/sub | chat.world | 🧊 暂缓到最后(UE + 核心链路完成后再做) |
-| 6 | player_locator | 50006 | 强 | redis | locator.update | ✅ W3 ⑤ |
+| 6 | player_locator | 50006 | 强 | redis | locator.update | ✅ W3 ⑤(W4 ⑦ matchmaker 上报 MATCHING/BATTLE) |
 | 7 | team | 50010 | 强 | redis | - | ✅ W3 ⑦ |
-| 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ✅ W4 ① |
+| 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ✅ W4 ①(W4 ⑦ 接 locator 串 MATCHING/BATTLE) |
 | 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ UE 主链路后(非当前阻塞项) |
 | 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ UE 主链路后(先可用 UE/配置占位) |
 | 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned;真 Agones 留后续) |
