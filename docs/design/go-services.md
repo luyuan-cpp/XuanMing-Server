@@ -22,7 +22,7 @@
 | 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ✅ W4 ①(W4 ⑦ 接 locator 串 MATCHING/BATTLE) |
 | 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ UE 主链路后(非当前阻塞项) |
 | 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ UE 主链路后(先可用 UE/配置占位) |
-| 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned;真 Agones 留后续) |
+| 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned,W4 ⑧ abandoned 可靠补偿;真 Agones 留后续) |
 | 12 | hub_allocator | 50021 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ⑤(Mock Fleet 骨架;接 login 待做) |
 | 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿) |
 | 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |

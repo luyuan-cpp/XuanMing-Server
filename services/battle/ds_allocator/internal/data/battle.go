@@ -36,8 +36,12 @@ type BattleRepo interface {
 	// GetBattle 读战斗镜像。not found 返 (nil, false, nil)。
 	GetBattle(ctx context.Context, matchID uint64) (*dsv1.BattleStorageRecord, bool, error)
 	// UpdateBattleWithLock WATCH/MULTI/EXEC 读-改-写;CAS 失败重试 maxRetry 次,耗尽返 ErrDSAllocationFailed。
-	// fn 内同步更新 active ZSET score(last_heartbeat_ms)由调用方在 fn 后通过 TouchActive 完成。
+	// SET 刷新 battle key TTL=battleTTL(心跳 / 正常状态更新用,续命活对局)。
 	UpdateBattleWithLock(ctx context.Context, matchID uint64, maxRetry int, fn func(*dsv1.BattleStorageRecord) error, battleTTL time.Duration) error
+	// UpdateBattleKeepTTL 同 UpdateBattleWithLock,但 SET 用 redis.KeepTTL 保留 battle key 原 TTL **不刷新**。
+	// sweep abandoned 标记 + 补偿重试路径专用:保证 BattleTTL(从最后一次心跳起算)是补偿重试的天然上界,
+	// Kafka 长期不可用时镜像最终过期 → GetBattle miss → 清理 active,不会因每轮重试无限刷 TTL / 无限堆积。
+	UpdateBattleKeepTTL(ctx context.Context, matchID uint64, maxRetry int, fn func(*dsv1.BattleStorageRecord) error) error
 	// TouchActive 刷新 active ZSET 中该 match 的 score(last_heartbeat_ms)。
 	TouchActive(ctx context.Context, matchID uint64, lastHeartbeatMs int64) error
 	// RemoveActive 把 match 移出 active ZSET(战斗结束/释放,不再心跳扫描)。
@@ -99,6 +103,28 @@ func (r *RedisBattleRepo) UpdateBattleWithLock(
 	fn func(*dsv1.BattleStorageRecord) error,
 	battleTTL time.Duration,
 ) error {
+	return r.updateWithLock(ctx, matchID, maxRetry, fn, battleTTL)
+}
+
+// UpdateBattleKeepTTL 同 UpdateBattleWithLock,但 SET 用 redis.KeepTTL(-1)保留 battle key 原 TTL 不刷新。
+func (r *RedisBattleRepo) UpdateBattleKeepTTL(
+	ctx context.Context,
+	matchID uint64,
+	maxRetry int,
+	fn func(*dsv1.BattleStorageRecord) error,
+) error {
+	return r.updateWithLock(ctx, matchID, maxRetry, fn, redis.KeepTTL)
+}
+
+// updateWithLock 是 UpdateBattleWithLock / UpdateBattleKeepTTL 的共享实现。
+// expiration 传 battleTTL 则刷新 TTL;传 redis.KeepTTL 则保留原 TTL 不刷新(补偿重试天然上界靠此)。
+func (r *RedisBattleRepo) updateWithLock(
+	ctx context.Context,
+	matchID uint64,
+	maxRetry int,
+	fn func(*dsv1.BattleStorageRecord) error,
+	expiration time.Duration,
+) error {
 	key := battleKey(matchID)
 
 	for attempt := 0; attempt <= maxRetry; attempt++ {
@@ -124,7 +150,7 @@ func (r *RedisBattleRepo) UpdateBattleWithLock(
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, payload, battleTTL)
+				pipe.Set(ctx, key, payload, expiration)
 				pipe.ZAdd(ctx, activeKey, redis.Z{Score: float64(battle.LastHeartbeatMs), Member: battle.MatchId})
 				return nil
 			})

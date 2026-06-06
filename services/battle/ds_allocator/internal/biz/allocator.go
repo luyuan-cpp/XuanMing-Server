@@ -9,7 +9,8 @@
 //
 // 关键不变量:
 //   - AllocateBattle 幂等(同 match_id 已有镜像 → 直接回已分配地址,不重复 Allocate)
-//   - 心跳超时 → abandoned(W4 ② 仅回收 + 日志;玩家段位回滚补偿留 W4 ③ 接 battle_result)
+//   - 心跳超时 → abandoned + 发 ds.lifecycle 补偿事件;投递成功才移出 active,
+//     失败保留在 active 下一轮重试(W4 ⑧ 可靠补偿,不变量 §4)
 package biz
 
 import (
@@ -45,7 +46,11 @@ const updateMaxRetry = 3
 // DSLifecyclePusher 发 pandora.ds.lifecycle 事件(W4 ③,2026-06-06)。
 //
 // 心跳超时标记 abandoned 后,由它把 DSLifecycleEvent{phase=ABANDONED} 发给 battle_result
-// 做玩家段位回滚补偿(不变量 §4 DS 崩溃必有补偿)。弱依赖:实现内部 fail 静默(返回 error 仅记日志)。
+// 做玩家段位回滚补偿(不变量 §4 DS 崩溃必有补偿)。
+//
+// W4 ⑧:投递失败不再静默丢——sweepOnce 把对局保留在 active ZSET,下一轮 sweep 重试,
+// 直到投递成功或镜像 TTL 过期;配合 battle_result 幂等消费构成 at-least-once 闭环。
+// 实现可在内部失败时返回 error(由 sweepOnce 触发重试)。
 type DSLifecyclePusher interface {
 	PublishLifecycle(ctx context.Context, evt *dsv1.DSLifecycleEvent) error
 }
@@ -233,7 +238,17 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 	}
 }
 
-// sweepOnce 扫描一次:last_heartbeat_ms 早于阈值的战斗 → 标记 abandoned + 回收。
+// sweepOnce 扫描一次:last_heartbeat_ms 早于阈值的战斗 → 标记 abandoned + 回收 + 可靠补偿。
+//
+// W4 ⑧ 可靠补偿(不变量 §4 DS 崩溃必有补偿):
+// 把 active ZSET 自身当作补偿事件的「outbox」——abandoned 的对局在 ds.lifecycle 事件
+// 成功投递前**不移出 active**,故下一轮 sweep 会再次命中并重试投递;只有投递成功(或未配置
+// kafka 的 best-effort 回退)才 ExpireBattle 移出 active。配合 battle_result 幂等消费
+// (不变量 §2),整条补偿链是 at-least-once 闭环,可穿越 Kafka 临时不可用。
+//
+// 天然上界靠 UpdateBattleKeepTTL(KEEPTTL):标记 abandoned + 每轮重试都**保留**镜像原 TTL
+// 不刷新,故 Kafka 长期不可用时镜像最终在 BattleTTL(从最后一次心跳起算)后过期 →
+// GetBattle miss → RemoveActive 清理,补偿重试不会无限延长 TTL / 无限堆积。
 func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	threshold := time.Now().Add(-u.cfg.HeartbeatTimeout.Std()).UnixMilli()
 	stale, err := u.repo.RangeStaleBattles(ctx, threshold)
@@ -242,54 +257,67 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	}
 	for _, mid := range stale {
 		var podName string
-		var skip bool
+		var endedSkip bool
+		var wasAbandoned bool
 		var playerIDs []uint64
 		var mapID uint32
 		var gameMode string
-		lerr := u.repo.UpdateBattleWithLock(ctx, mid, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
-			if b.State == stateEnded || b.State == stateAbandoned {
-				skip = true // 已结算,本次不处理(让其随 active 移除/TTL 过期)
+		// KEEPTTL:标记 abandoned / 每轮重试不刷新 battle key TTL,保证 BattleTTL 是补偿重试上界。
+		lerr := u.repo.UpdateBattleKeepTTL(ctx, mid, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
+			if b.State == stateEnded {
+				endedSkip = true // 正常结算,移出 active 不补偿
 				return nil
 			}
+			wasAbandoned = b.State == stateAbandoned // 已 abandoned 仅重试投递,不重复回收 pod
 			b.State = stateAbandoned
 			podName = b.DsPodName
 			playerIDs = b.PlayerIds
 			mapID = b.MapId
 			gameMode = b.GameMode
 			return nil
-		}, u.battleTTL())
+		})
 		if lerr != nil {
 			if errcode.As(lerr) == errcode.ErrDSPodNotFound {
-				_ = u.repo.RemoveActive(ctx, mid) // 镜像已没,清理残留 active 项
+				_ = u.repo.RemoveActive(ctx, mid) // 镜像 TTL 过期:清理残留 active(补偿重试的天然上界)
 				continue
 			}
 			plog.With(ctx).Warnw("msg", "sweep_lock_failed", "match_id", mid, "err", lerr)
 			continue
 		}
-		if skip {
+		if endedSkip {
 			_ = u.repo.RemoveActive(ctx, mid)
 			continue
 		}
-		if rerr := u.alloc.Release(ctx, podName); rerr != nil {
-			plog.With(ctx).Warnw("msg", "sweep_release_failed", "match_id", mid, "pod", podName, "err", rerr)
+		// 仅首次转入 abandoned 时回收 pod(避免补偿重试期间对同一 pod 重复 Release)
+		if !wasAbandoned {
+			if rerr := u.alloc.Release(ctx, podName); rerr != nil {
+				plog.With(ctx).Warnw("msg", "sweep_release_failed", "match_id", mid, "pod", podName, "err", rerr)
+			}
+			plog.With(ctx).Infow("msg", "battle_abandoned_heartbeat_timeout", "match_id", mid, "pod", podName)
 		}
-		// 终态镜像保留一段供查询,移出 active 不再扫描
-		if eerr := u.repo.ExpireBattle(ctx, mid, u.battleTTL()); eerr != nil {
-			plog.With(ctx).Warnw("msg", "sweep_expire_failed", "match_id", mid, "err", eerr)
+		// 投递 abandoned 补偿事件:成功(或未配 kafka 的 best-effort 回退)才移出 active;
+		// 失败则保留在 active,下一轮 sweep 重试(可靠补偿,不变量 §4)。
+		if u.deliverAbandoned(ctx, mid, podName, playerIDs, mapID, gameMode) {
+			// 终态镜像保留一段供查询,移出 active 不再扫描
+			if eerr := u.repo.ExpireBattle(ctx, mid, u.battleTTL()); eerr != nil {
+				plog.With(ctx).Warnw("msg", "sweep_expire_failed", "match_id", mid, "err", eerr)
+			}
 		}
-		// W4 ③:best-effort 通知 battle_result 玩家段位回滚(弱依赖,publish 失败仅 Warn)。
-		// 注意:Kafka 不可用时事件会丢,不变量 §4「DS 崩溃必有补偿」当前只在 broker 正常时成立;
-		// 可靠补偿(重试 / 待补偿扫描 / outbox)留 W4 ④+。
-		u.publishAbandoned(ctx, mid, podName, playerIDs, mapID, gameMode)
-		plog.With(ctx).Infow("msg", "battle_abandoned_heartbeat_timeout", "match_id", mid, "pod", podName)
 	}
 	return nil
 }
 
-// publishAbandoned 发 DSLifecycleEvent{phase=ABANDONED} 给 battle_result(弱依赖,失败仅记日志)。
-func (u *AllocatorUsecase) publishAbandoned(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) {
+// deliverAbandoned 发 DSLifecycleEvent{phase=ABANDONED} 给 battle_result 做玩家段位回滚补偿。
+//
+// 返回值语义(给 sweepOnce 决定是否移出 active):
+//   - true  → 可移出 active:已成功投递,或未配置 kafka(无补偿通道)走 best-effort 回退。
+//   - false → 投递失败,保留在 active 下一轮 sweep 重试(可靠补偿,不变量 §4)。
+//
+// 未配置 kafka 时返回 true 而非把对局永久卡在 active:此时显式选择了「无补偿通道」,
+// abandoned 镜像仍落 Redis 供查;若卡在 active 只会每轮 sweep 重复回收且无人消费。
+func (u *AllocatorUsecase) deliverAbandoned(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) bool {
 	if u.lifecycle == nil {
-		return // kafka 未就绪:不发(W4 ③ 弱依赖,abandoned 镜像已落 Redis 供查)
+		return true // 未配置补偿通道:best-effort 回退,直接移出 active
 	}
 	evt := &dsv1.DSLifecycleEvent{
 		MatchId:   matchID,
@@ -301,6 +329,10 @@ func (u *AllocatorUsecase) publishAbandoned(ctx context.Context, matchID uint64,
 		TsMs:      time.Now().UnixMilli(),
 	}
 	if err := u.lifecycle.PublishLifecycle(ctx, evt); err != nil {
-		plog.With(ctx).Warnw("msg", "ds_lifecycle_publish_failed", "match_id", matchID, "err", err)
+		// 保留在 active,下轮 sweep 重试(穿越 Kafka 临时不可用)
+		plog.With(ctx).Warnw("msg", "ds_lifecycle_publish_failed_will_retry", "match_id", matchID, "err", err)
+		return false
 	}
+	plog.With(ctx).Infow("msg", "ds_lifecycle_published", "match_id", matchID)
+	return true
 }
