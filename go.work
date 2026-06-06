@@ -39,6 +39,8 @@ use ./services/matchmaking/matchmaker
 
 use ./services/battle/ds_allocator
 
+use ./services/battle/hub_allocator
+
 use ./services/battle/battle_result
 
 // ⚠️ 构建验证:仓库根没有 go.mod,不能在根目录跑 go build ./...

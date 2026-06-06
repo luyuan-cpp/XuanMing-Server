@@ -13,17 +13,17 @@
 | # | 服务 | gRPC 端口 | 状态性 | 主要存储 | 主要消费 kafka | 骨架状态 |
 |---|---|---|---|---|---|---|
 | 1 | login | 50001 | 无 | mysql + redis | (生产 login.event) | ✅ W2 ③(mock,W3 接 mysql/redis) |
-| 2 | player | 50002 | 无 | mysql + redis | player.update | ⏸️ W3 |
-| 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | ⏸️ W3 |
-| 4 | friend | 50004 | 无 | mysql + redis | - | ⏸️ W3+ |
-| 5 | chat | 50005 | 弱 | redis pub/sub | chat.world | ⏸️ W3+ |
-| 6 | player_locator | 50006 | 强 | redis | locator.update | ⏸️ W3 |
-| 7 | team | 50010 | 强 | redis | - | ⏸️ W3 |
-| 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ⏸️ W3 |
-| 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ W4+ |
-| 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ W4+ |
+| 2 | player | 50002 | 无 | mysql + redis | player.update | ✅ W4 ④(MMR 写回 + GetMMR reader) |
+| 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | ⏸️ UE 主链路后再评估(当前 player 已先直连 MySQL) |
+| 4 | friend | 50004 | 无 | mysql + redis | - | 🧊 暂缓到最后(UE + 核心链路完成后再做) |
+| 5 | chat | 50005 | 弱 | redis pub/sub | chat.world | 🧊 暂缓到最后(UE + 核心链路完成后再做) |
+| 6 | player_locator | 50006 | 强 | redis | locator.update | ✅ W3 ⑤ |
+| 7 | team | 50010 | 强 | redis | - | ✅ W3 ⑦ |
+| 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ✅ W4 ① |
+| 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ UE 主链路后(非当前阻塞项) |
+| 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ UE 主链路后(先可用 UE/配置占位) |
 | 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned;真 Agones 留后续) |
-| 12 | hub_allocator | 50021 | 弱 | etcd + k8s | (生产 ds.lifecycle) | ⏸️ W3 |
+| 12 | hub_allocator | 50021 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ⑤(Mock Fleet 骨架;接 login 待做) |
 | 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿) |
 | 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |
 
@@ -121,6 +121,8 @@ Block(player_id, target_id) → ok
 
 **MOBA 早期可不做**,先留接口骨架。
 
+**2026-06-06 排期决策**:friend 不进入当前后端主线。等 UE 客户端 / Hub DS / Battle DS / Agones / 核心登录-进大厅-匹配-进战斗-结算闭环全部完成后,再作为社交尾部功能实现。
+
 ---
 
 ### 2.5 chat
@@ -130,7 +132,7 @@ Block(player_id, target_id) → ok
 **对外 RPC**:
 ```
 SendMessage(player_id, channel, content) → message_id
-StreamMessages(player_id, channel) → stream Message
+PullHistory(player_id, channel) → []ChatMessage
 ```
 
 **实现**:
@@ -139,6 +141,8 @@ StreamMessages(player_id, channel) → stream Message
 - 私聊:redis pub/sub + 离线 mysql
 
 **反作弊**:消息内容服务端过敏感词,长度 ≤256
+
+**2026-06-06 排期决策**:chat 不进入当前后端主线。push 可以继续保留 `pandora.chat.*` topic 和订阅模板,但 chat 服务本体等 UE 与所有核心功能完成后再做。
 
 ---
 
@@ -379,12 +383,14 @@ W2 开始才正式写业务逻辑,顺序:
 4. ✅ **Envoy** v1.38 边缘网关(login_cluster + push_cluster + grpc_web/cors/router)— W2 ④
 5. ✅ **push** 骨架(首个 server stream,5s mock tick)— W2 ⑤
 6. ✅ 经 Envoy 端到端 hello world(login unary + push server stream + reflection)— W2 ⑥
-7. ⏸️ UE 客户端 grpc-web(W3+,FHttpModule 自研 grpc-web 解析)
-8. ⏸️ player + data_service(W3)
-9. ⏸️ team → matchmaker(W3)
-10. ✅ ds_allocator(W4 ②,Mock 分配器)+ ⏸️ hub_allocator(W3)
-11. ✅ battle_result(W4 ③,幂等落库 + Elo MMR + abandoned 补偿)
-12. ⏸️ 其它(friend / chat / trade / dialogue,W4+)
+7. ✅ player_locator / team / matchmaker / ds_allocator / battle_result / player 核心链路已完成到 W4 ④
+8. ✅ **hub_allocator** 骨架(W4 ⑤):Mock Fleet 分片调度 + AssignHub/ReleaseHub/TransferHub/ListHubs/Heartbeat + 心跳超时扫描 + 签 hub DSTicket(接 login 待做)
+9. ⏭️ login 接 hub_allocator.AssignHub(替换 mock hub_addr),补不变量 §1 的大厅入口闭环
+10. ⏭️ 可靠补偿 / outbox 或对账路径:修正 player.update / ds.lifecycle 弱依赖阶段限制
+11. ⏭️ UE 客户端 grpc-web(FHttpModule 自研解析)+ Envoy 全业务路由接入
+12. ⏭️ UE Hub DS / Battle DS 骨架 + GAS / Iris / Agones 联调,打通登录→进大厅→匹配→进战斗→结算→回大厅
+13. ⏭️ trade / dialogue / data_service 按 UE 主链路需要补最小版本
+14. 🧊 friend / chat 暂缓到最后:UE 与核心业务全部完成后再做社交完整实现
 
 ---
 

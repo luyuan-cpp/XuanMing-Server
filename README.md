@@ -16,19 +16,7 @@
 Pandora/
 ├── pkg/                   # Go 公共框架(log/metrics/grpc/kafka/redis lock 等)
 ├── proto/                 # 协议定义与生成产物
-├── login/                 # 13 个 go 服务(W1 仅骨架,W2+ 实现)
-├── player/
-├── data_service/
-├── team/
-├── matchmaker/
-├── ds_allocator/
-├── hub_allocator/
-├── battle_result/
-├── trade/
-├── dialogue/
-├── chat/
-├── friend/
-├── player_locator/
+├── services/              # 14 个 go 服务(按 account/runtime/matchmaking/battle/social 等域分组)
 ├── deploy/                # docker-compose / k8s / Agones yaml
 ├── tools/scripts/         # 开发与压测脚本
 ├── docs/design/           # 架构与设计文档(必读)
@@ -41,7 +29,7 @@ Pandora/
 
 1. [`CLAUDE.md`](./CLAUDE.md) — 项目宪法(规范、压测纪律、不变量)
 2. [`docs/design/pandora-arch.md`](./docs/design/pandora-arch.md) — 总架构图与玩家流转
-3. [`docs/design/go-services.md`](./docs/design/go-services.md) — 13 个 go 服务的职责边界
+3. [`docs/design/go-services.md`](./docs/design/go-services.md) — 14 个 go 服务的职责边界
 4. [`docs/design/ds-arch.md`](./docs/design/ds-arch.md) — UE DS(Hub / Battle)架构
 5. [`docs/design/infra.md`](./docs/design/infra.md) — MySQL / Redis / Kafka / etcd 命名规范
 6. [`docs/design/proto-design.md`](./docs/design/proto-design.md) — 协议设计
@@ -98,8 +86,8 @@ go install github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v2@latest
 ### 4. 编译 + 启动服务
 
 ```powershell
-# 编译所有 Go 服务
-go build ./...
+# 编译当前已启用 module(完整口径见 CLAUDE.md §4.1 / go.work)
+go build ./pkg/... ./proto/... ./services/account/login/... ./services/account/player/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/... ./services/matchmaking/matchmaker/... ./services/battle/ds_allocator/... ./services/battle/battle_result/...
 
 # 启动 login(W2)
 go run ./services/account/login/cmd/login -conf services/account/login/etc/login-dev.yaml

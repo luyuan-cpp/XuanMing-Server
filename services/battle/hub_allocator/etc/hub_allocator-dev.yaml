@@ -1,0 +1,57 @@
+# Pandora hub_allocator 服务开发期配置(W4 ⑤,2026-06-06)。
+#
+# - gRPC :50021 / HTTP :51021(仅 /metrics)
+# - Redis 强依赖(大厅 DS 分片镜像 + 玩家归属 + 心跳超时 ZSET 扫描)
+# - JWT 强依赖(AssignHub / TransferHub 签 hub DSTicket,不变量 §3)
+# - W4 ⑤ 用 MockHubFleetProvider(种确定性假分片),真 Agones Fleet 接入留后续
+# - duration 字段用 pkg/config.Duration,yaml 可直接写 "15s"
+# - dev: enable_reflection=true 便于 grpcurl 联调
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50021"
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+  http:
+    network: tcp
+    addr: ":51021"
+
+node:
+  zone_id: 1
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
+
+# jwt: 给玩家签 hub DSTicket(不变量 §3 短时效 5min)
+# secret/issuer/audience 必须与 login 服务 + Envoy jwt_authn provider 完全一致
+jwt:
+  issuer: "pandora-login"
+  audience: "pandora-client"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  session_ttl: "24h"
+  ds_ticket_ttl: "5m"
+
+hub:
+  # heartbeat_timeout: Hub DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → 分片 draining 停止分配
+  heartbeat_timeout: "15s"
+  # sweep_interval: 后台心跳超时扫描间隔
+  sweep_interval: "5s"
+  # shard_ttl: 分片镜像 Redis key TTL(每次 Assign/Heartbeat 刷新)
+  shard_ttl: "30m"
+  # assignment_ttl: 玩家→分片归属 Redis key TTL(每次 Assign/Transfer 刷新)
+  assignment_ttl: "30m"
+  # default_region: AssignHub 未指定 region 时的兜底分区
+  default_region: "global"
+  # default_capacity: 单分片人数上限(大厅 500 人/实例)
+  default_capacity: 500
+  # optimistic_retry: WATCH/MULTI/EXEC 乐观锁冲突最大重试次数
+  optimistic_retry: 3
+  # mock_shard_count: W4 ⑤ MockHubFleetProvider 每 region 种的假分片数
+  mock_shard_count: 3
+  # mock_hub_addr_host: Mock 分片返回的假 Hub DS host
+  mock_hub_addr_host: "127.0.0.1"
+  # mock_hub_port_base: Mock 分片端口基址(分片 port = base + shard_id)
+  mock_hub_port_base: 7777

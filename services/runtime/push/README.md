@@ -120,8 +120,10 @@ curl http://127.0.0.1:51014/metrics | Select-String pandora
 
 ## 下一步(W3 路线剩余)
 
-- [ ] 接入业务侧 producer:team / match / chat 服务上线时,在对应 RPC 后调 `kafkax.PushToPlayers`
-- [ ] 补 `player.update` / `friend.event` / `system.notify` 3 个 Event message proto,topic 加进 `pkg/kafkax.PushTopics` + 本 yaml
+- [ ] 接入业务侧 producer:team / match / player 已按各服务上线节奏推进;chat 仅保留 topic 模板,不作为当前任务
+- [ ] `friend.event` / `system.notify` 保留为后期模板;friend 当前暂缓到最后,不要为了补 topic 提前实现 friend 服务
 - [ ] `/metrics` 自定义指标 `pandora_push_online_streams` / `pandora_push_send_failed_total`
 - [ ] 系统公告类(`pandora.system.notify`)走 `Conns().Broadcast`(本批不接,等 system 服务上线)
 - [ ] DSTicket 二次校验(`pandora.ds.v1` 票据已被 Envoy 校验,但 push 服务接 DS-targeted 推送时可加冗余)
+
+**2026-06-06 排期说明**:`chat` / `friend` 对应 topic 和订阅配置只是模板占位,服务本体等 UE 与核心业务链路全部完成后再做。

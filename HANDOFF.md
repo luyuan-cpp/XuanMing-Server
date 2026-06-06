@@ -95,34 +95,30 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 
 ## §3 当前下一步
 
-### Step 1:W2 ④ — Envoy v1.38.0 本地 docker
+### Step 1:W4 ⑤ — hub_allocator 服务实现
 
 目标:
 
-1. 新增 `deploy/envoy/envoy.yaml`
-2. 修改 `deploy/docker-compose.dev.yml`,加 envoy service
-3. 配置 login + push 两个 cluster
-4. 配置 LoginService / PushService 路由
-5. push server stream 路由 timeout = 0s
-6. TLS 使用 `/etc/envoy/cert.pem` + `/etc/envoy/key.pem`
-7. 启用 grpc_web / cors / router filters
+1. 基于已生成的 `proto/pandora/hub/v1/allocator.proto` 与 `HubShardStorageRecord` / `HubAssignmentStorageRecord` 落地 Kratos 服务
+2. 接 Redis 维护 hub 分片镜像与玩家归属,容量默认 500 人/实例
+3. 实现 `AssignHub` / `ReleaseHub` / `TransferHub` / `ListHubs` / `Heartbeat`
+4. login 调 hub_allocator 拿真实 `hub_ds_addr` + hub ticket
+5. 当前无真实 Agones/Hub DS 时可先用 mock seed hub,但协议和存储边界必须按最终形态写
 
-Claude 只负责配置文件和项目内验证。
-如果需要生成证书 / 拉镜像 / 启停环境,输出方案交给 ChatGPT / Codex。
-非代码任务,或项目分析 / 逻辑细节任务中需要执行的辅助部分,由 Claude 生成可直接粘贴给 ChatGPT / Codex 的操作信息,再交给 ChatGPT / Codex 执行。
-ChatGPT / Codex 做完环境配置后,Claude 必须复查相关文件、命令输出和项目内验证结果。
+### Step 2:可靠补偿收口
 
-### Step 2:W2 ⑥ — 端到端 hello world
+- 修 W4 ③ 已记录的阶段限制:`ds.lifecycle` / `player.update` 仍是 best-effort,需要 outbox、待补偿队列或 battle_result 对账路径三选一
+- 目标是让 `CLAUDE.md §9.4 DS 崩溃必有补偿` 从"Kafka 正常时成立"升级为可靠闭环
 
-等 Envoy 配好后再做:
+### Step 3:UE 主链路
 
-- 直连 login
-- 经 Envoy 调 LoginService/Login
-- 经 Envoy 调 PushService/Subscribe
+- UE 客户端 grpc-web(FHttpModule 自研解析)接 Envoy
+- UE Hub DS / Battle DS 骨架 + GAS / Iris / Agones 联调
+- 打通登录 → 进大厅 → 匹配 → 进战斗 → 结算 → 回大厅
 
-### Step 3:W2 ⑦ — 收尾
+### 明确暂缓
 
-由 ChatGPT / Codex 做 git status / diff / commit message 建议。
+`friend`(:50004) 和 `chat`(:50005) 现在不做;保留 proto / 端口 / topic 规划,等 UE 与核心链路全部完成后,再作为社交尾部功能实现。
 
 ---
 
