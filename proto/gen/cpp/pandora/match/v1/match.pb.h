@@ -74,12 +74,21 @@ extern GetMatchProgressRequestDefaultTypeInternal _GetMatchProgressRequest_defau
 class GetMatchProgressResponse;
 struct GetMatchProgressResponseDefaultTypeInternal;
 extern GetMatchProgressResponseDefaultTypeInternal _GetMatchProgressResponse_default_instance_;
+class MatchMemberStorageRecord;
+struct MatchMemberStorageRecordDefaultTypeInternal;
+extern MatchMemberStorageRecordDefaultTypeInternal _MatchMemberStorageRecord_default_instance_;
 class MatchProgress;
 struct MatchProgressDefaultTypeInternal;
 extern MatchProgressDefaultTypeInternal _MatchProgress_default_instance_;
 class MatchProgressEvent;
 struct MatchProgressEventDefaultTypeInternal;
 extern MatchProgressEventDefaultTypeInternal _MatchProgressEvent_default_instance_;
+class MatchStorageRecord;
+struct MatchStorageRecordDefaultTypeInternal;
+extern MatchStorageRecordDefaultTypeInternal _MatchStorageRecord_default_instance_;
+class MatchTicketStorageRecord;
+struct MatchTicketStorageRecordDefaultTypeInternal;
+extern MatchTicketStorageRecordDefaultTypeInternal _MatchTicketStorageRecord_default_instance_;
 class StartMatchRequest;
 struct StartMatchRequestDefaultTypeInternal;
 extern StartMatchRequestDefaultTypeInternal _StartMatchRequest_default_instance_;
@@ -134,6 +143,41 @@ inline const std::string& MatchStage_Name(MatchStage value) {
 inline bool MatchStage_Parse(absl::string_view name, MatchStage* value) {
   return ::google::protobuf::internal::ParseNamedEnum<MatchStage>(
       MatchStage_descriptor(), name, value);
+}
+enum MatchConfirmStatus : int {
+  MATCH_CONFIRM_STATUS_UNSPECIFIED = 0,
+  MATCH_CONFIRM_STATUS_PENDING = 1,
+  MATCH_CONFIRM_STATUS_ACCEPTED = 2,
+  MATCH_CONFIRM_STATUS_REJECTED = 3,
+  MatchConfirmStatus_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      std::numeric_limits<::int32_t>::min(),
+  MatchConfirmStatus_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      std::numeric_limits<::int32_t>::max(),
+};
+
+bool MatchConfirmStatus_IsValid(int value);
+extern const uint32_t MatchConfirmStatus_internal_data_[];
+constexpr MatchConfirmStatus MatchConfirmStatus_MIN = static_cast<MatchConfirmStatus>(0);
+constexpr MatchConfirmStatus MatchConfirmStatus_MAX = static_cast<MatchConfirmStatus>(3);
+constexpr int MatchConfirmStatus_ARRAYSIZE = 3 + 1;
+const ::google::protobuf::EnumDescriptor*
+MatchConfirmStatus_descriptor();
+template <typename T>
+const std::string& MatchConfirmStatus_Name(T value) {
+  static_assert(std::is_same<T, MatchConfirmStatus>::value ||
+                    std::is_integral<T>::value,
+                "Incorrect type passed to MatchConfirmStatus_Name().");
+  return MatchConfirmStatus_Name(static_cast<MatchConfirmStatus>(value));
+}
+template <>
+inline const std::string& MatchConfirmStatus_Name(MatchConfirmStatus value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<MatchConfirmStatus_descriptor,
+                                                 0, 3>(
+      static_cast<int>(value));
+}
+inline bool MatchConfirmStatus_Parse(absl::string_view name, MatchConfirmStatus* value) {
+  return ::google::protobuf::internal::ParseNamedEnum<MatchConfirmStatus>(
+      MatchConfirmStatus_descriptor(), name, value);
 }
 
 // ===================================================================
@@ -829,6 +873,256 @@ class MatchProgress final : public ::google::protobuf::Message
     int stage_;
     ::int32_t queue_seconds_;
     ::int32_t estimated_wait_seconds_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmatch_2fv1_2fmatch_2eproto;
+};
+// -------------------------------------------------------------------
+
+class MatchMemberStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.match.v1.MatchMemberStorageRecord) */ {
+ public:
+  inline MatchMemberStorageRecord() : MatchMemberStorageRecord(nullptr) {}
+  ~MatchMemberStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchMemberStorageRecord* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchMemberStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MatchMemberStorageRecord(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline MatchMemberStorageRecord(const MatchMemberStorageRecord& from) : MatchMemberStorageRecord(nullptr, from) {}
+  inline MatchMemberStorageRecord(MatchMemberStorageRecord&& from) noexcept
+      : MatchMemberStorageRecord(nullptr, std::move(from)) {}
+  inline MatchMemberStorageRecord& operator=(const MatchMemberStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchMemberStorageRecord& operator=(MatchMemberStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MatchMemberStorageRecord& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const MatchMemberStorageRecord* internal_default_instance() {
+    return reinterpret_cast<const MatchMemberStorageRecord*>(
+        &_MatchMemberStorageRecord_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(MatchMemberStorageRecord& a, MatchMemberStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchMemberStorageRecord* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchMemberStorageRecord* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MatchMemberStorageRecord* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchMemberStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchMemberStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchMemberStorageRecord& from) { MatchMemberStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchMemberStorageRecord* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.match.v1.MatchMemberStorageRecord"; }
+
+ protected:
+  explicit MatchMemberStorageRecord(::google::protobuf::Arena* arena);
+  MatchMemberStorageRecord(::google::protobuf::Arena* arena, const MatchMemberStorageRecord& from);
+  MatchMemberStorageRecord(::google::protobuf::Arena* arena, MatchMemberStorageRecord&& from) noexcept
+      : MatchMemberStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kTeamIdFieldNumber = 2,
+    kMmrFieldNumber = 3,
+    kHeroIdFieldNumber = 4,
+    kSideFieldNumber = 5,
+    kConfirmFieldNumber = 6,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 team_id = 2 [json_name = "teamId"];
+  void clear_team_id() ;
+  ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // int32 mmr = 3 [json_name = "mmr"];
+  void clear_mmr() ;
+  ::int32_t mmr() const;
+  void set_mmr(::int32_t value);
+
+  private:
+  ::int32_t _internal_mmr() const;
+  void _internal_set_mmr(::int32_t value);
+
+  public:
+  // uint32 hero_id = 4 [json_name = "heroId"];
+  void clear_hero_id() ;
+  ::uint32_t hero_id() const;
+  void set_hero_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_hero_id() const;
+  void _internal_set_hero_id(::uint32_t value);
+
+  public:
+  // int32 side = 5 [json_name = "side"];
+  void clear_side() ;
+  ::int32_t side() const;
+  void set_side(::int32_t value);
+
+  private:
+  ::int32_t _internal_side() const;
+  void _internal_set_side(::int32_t value);
+
+  public:
+  // .pandora.match.v1.MatchConfirmStatus confirm = 6 [json_name = "confirm"];
+  void clear_confirm() ;
+  ::pandora::match::v1::MatchConfirmStatus confirm() const;
+  void set_confirm(::pandora::match::v1::MatchConfirmStatus value);
+
+  private:
+  ::pandora::match::v1::MatchConfirmStatus _internal_confirm() const;
+  void _internal_set_confirm(::pandora::match::v1::MatchConfirmStatus value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchMemberStorageRecord)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      3, 6, 0,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const MatchMemberStorageRecord& from_msg);
+    ::uint64_t player_id_;
+    ::uint64_t team_id_;
+    ::int32_t mmr_;
+    ::uint32_t hero_id_;
+    ::int32_t side_;
+    int confirm_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1815,6 +2109,577 @@ class CancelMatchRequest final : public ::google::protobuf::Message
                           const CancelMatchRequest& from_msg);
     ::uint64_t match_id_;
     ::uint64_t player_id_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmatch_2fv1_2fmatch_2eproto;
+};
+// -------------------------------------------------------------------
+
+class MatchTicketStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.match.v1.MatchTicketStorageRecord) */ {
+ public:
+  inline MatchTicketStorageRecord() : MatchTicketStorageRecord(nullptr) {}
+  ~MatchTicketStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchTicketStorageRecord* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchTicketStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MatchTicketStorageRecord(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline MatchTicketStorageRecord(const MatchTicketStorageRecord& from) : MatchTicketStorageRecord(nullptr, from) {}
+  inline MatchTicketStorageRecord(MatchTicketStorageRecord&& from) noexcept
+      : MatchTicketStorageRecord(nullptr, std::move(from)) {}
+  inline MatchTicketStorageRecord& operator=(const MatchTicketStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchTicketStorageRecord& operator=(MatchTicketStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MatchTicketStorageRecord& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const MatchTicketStorageRecord* internal_default_instance() {
+    return reinterpret_cast<const MatchTicketStorageRecord*>(
+        &_MatchTicketStorageRecord_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(MatchTicketStorageRecord& a, MatchTicketStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchTicketStorageRecord* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchTicketStorageRecord* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MatchTicketStorageRecord* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchTicketStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchTicketStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchTicketStorageRecord& from) { MatchTicketStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchTicketStorageRecord* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.match.v1.MatchTicketStorageRecord"; }
+
+ protected:
+  explicit MatchTicketStorageRecord(::google::protobuf::Arena* arena);
+  MatchTicketStorageRecord(::google::protobuf::Arena* arena, const MatchTicketStorageRecord& from);
+  MatchTicketStorageRecord(::google::protobuf::Arena* arena, MatchTicketStorageRecord&& from) noexcept
+      : MatchTicketStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMembersFieldNumber = 4,
+    kTicketIdFieldNumber = 1,
+    kTeamIdFieldNumber = 2,
+    kCaptainIdFieldNumber = 3,
+    kEnqueuedAtMsFieldNumber = 6,
+    kMatchIdFieldNumber = 7,
+    kAvgMmrFieldNumber = 5,
+  };
+  // repeated .pandora.match.v1.MatchMemberStorageRecord members = 4 [json_name = "members"];
+  int members_size() const;
+  private:
+  int _internal_members_size() const;
+
+  public:
+  void clear_members() ;
+  ::pandora::match::v1::MatchMemberStorageRecord* mutable_members(int index);
+  ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>* mutable_members();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>& _internal_members() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>* _internal_mutable_members();
+  public:
+  const ::pandora::match::v1::MatchMemberStorageRecord& members(int index) const;
+  ::pandora::match::v1::MatchMemberStorageRecord* add_members();
+  const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>& members() const;
+  // uint64 ticket_id = 1 [json_name = "ticketId"];
+  void clear_ticket_id() ;
+  ::uint64_t ticket_id() const;
+  void set_ticket_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ticket_id() const;
+  void _internal_set_ticket_id(::uint64_t value);
+
+  public:
+  // uint64 team_id = 2 [json_name = "teamId"];
+  void clear_team_id() ;
+  ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // uint64 captain_id = 3 [json_name = "captainId"];
+  void clear_captain_id() ;
+  ::uint64_t captain_id() const;
+  void set_captain_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_captain_id() const;
+  void _internal_set_captain_id(::uint64_t value);
+
+  public:
+  // int64 enqueued_at_ms = 6 [json_name = "enqueuedAtMs"];
+  void clear_enqueued_at_ms() ;
+  ::int64_t enqueued_at_ms() const;
+  void set_enqueued_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_enqueued_at_ms() const;
+  void _internal_set_enqueued_at_ms(::int64_t value);
+
+  public:
+  // uint64 match_id = 7 [json_name = "matchId"];
+  void clear_match_id() ;
+  ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // int32 avg_mmr = 5 [json_name = "avgMmr"];
+  void clear_avg_mmr() ;
+  ::int32_t avg_mmr() const;
+  void set_avg_mmr(::int32_t value);
+
+  private:
+  ::int32_t _internal_avg_mmr() const;
+  void _internal_set_avg_mmr(::int32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchTicketStorageRecord)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      3, 7, 1,
+      0, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const MatchTicketStorageRecord& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::pandora::match::v1::MatchMemberStorageRecord > members_;
+    ::uint64_t ticket_id_;
+    ::uint64_t team_id_;
+    ::uint64_t captain_id_;
+    ::int64_t enqueued_at_ms_;
+    ::uint64_t match_id_;
+    ::int32_t avg_mmr_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmatch_2fv1_2fmatch_2eproto;
+};
+// -------------------------------------------------------------------
+
+class MatchStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.match.v1.MatchStorageRecord) */ {
+ public:
+  inline MatchStorageRecord() : MatchStorageRecord(nullptr) {}
+  ~MatchStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchStorageRecord* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR MatchStorageRecord(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline MatchStorageRecord(const MatchStorageRecord& from) : MatchStorageRecord(nullptr, from) {}
+  inline MatchStorageRecord(MatchStorageRecord&& from) noexcept
+      : MatchStorageRecord(nullptr, std::move(from)) {}
+  inline MatchStorageRecord& operator=(const MatchStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchStorageRecord& operator=(MatchStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const MatchStorageRecord& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const MatchStorageRecord* internal_default_instance() {
+    return reinterpret_cast<const MatchStorageRecord*>(
+        &_MatchStorageRecord_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(MatchStorageRecord& a, MatchStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchStorageRecord* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchStorageRecord* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  MatchStorageRecord* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchStorageRecord& from) { MatchStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchStorageRecord* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.match.v1.MatchStorageRecord"; }
+
+ protected:
+  explicit MatchStorageRecord(::google::protobuf::Arena* arena);
+  MatchStorageRecord(::google::protobuf::Arena* arena, const MatchStorageRecord& from);
+  MatchStorageRecord(::google::protobuf::Arena* arena, MatchStorageRecord&& from) noexcept
+      : MatchStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMembersFieldNumber = 3,
+    kTicketIdsFieldNumber = 4,
+    kBattleDsAddrFieldNumber = 7,
+    kBattleTicketFieldNumber = 8,
+    kMatchIdFieldNumber = 1,
+    kCreatedAtMsFieldNumber = 5,
+    kConfirmDeadlineMsFieldNumber = 6,
+    kStageFieldNumber = 2,
+  };
+  // repeated .pandora.match.v1.MatchMemberStorageRecord members = 3 [json_name = "members"];
+  int members_size() const;
+  private:
+  int _internal_members_size() const;
+
+  public:
+  void clear_members() ;
+  ::pandora::match::v1::MatchMemberStorageRecord* mutable_members(int index);
+  ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>* mutable_members();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>& _internal_members() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>* _internal_mutable_members();
+  public:
+  const ::pandora::match::v1::MatchMemberStorageRecord& members(int index) const;
+  ::pandora::match::v1::MatchMemberStorageRecord* add_members();
+  const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>& members() const;
+  // repeated uint64 ticket_ids = 4 [json_name = "ticketIds"];
+  int ticket_ids_size() const;
+  private:
+  int _internal_ticket_ids_size() const;
+
+  public:
+  void clear_ticket_ids() ;
+  ::uint64_t ticket_ids(int index) const;
+  void set_ticket_ids(int index, ::uint64_t value);
+  void add_ticket_ids(::uint64_t value);
+  const ::google::protobuf::RepeatedField<::uint64_t>& ticket_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* mutable_ticket_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_ticket_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_ticket_ids();
+
+  public:
+  // string battle_ds_addr = 7 [json_name = "battleDsAddr"];
+  void clear_battle_ds_addr() ;
+  const std::string& battle_ds_addr() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_battle_ds_addr(Arg_&& arg, Args_... args);
+  std::string* mutable_battle_ds_addr();
+  PROTOBUF_NODISCARD std::string* release_battle_ds_addr();
+  void set_allocated_battle_ds_addr(std::string* value);
+
+  private:
+  const std::string& _internal_battle_ds_addr() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ds_addr(
+      const std::string& value);
+  std::string* _internal_mutable_battle_ds_addr();
+
+  public:
+  // string battle_ticket = 8 [json_name = "battleTicket"];
+  void clear_battle_ticket() ;
+  const std::string& battle_ticket() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_battle_ticket(Arg_&& arg, Args_... args);
+  std::string* mutable_battle_ticket();
+  PROTOBUF_NODISCARD std::string* release_battle_ticket();
+  void set_allocated_battle_ticket(std::string* value);
+
+  private:
+  const std::string& _internal_battle_ticket() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ticket(
+      const std::string& value);
+  std::string* _internal_mutable_battle_ticket();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // int64 created_at_ms = 5 [json_name = "createdAtMs"];
+  void clear_created_at_ms() ;
+  ::int64_t created_at_ms() const;
+  void set_created_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_created_at_ms() const;
+  void _internal_set_created_at_ms(::int64_t value);
+
+  public:
+  // int64 confirm_deadline_ms = 6 [json_name = "confirmDeadlineMs"];
+  void clear_confirm_deadline_ms() ;
+  ::int64_t confirm_deadline_ms() const;
+  void set_confirm_deadline_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_confirm_deadline_ms() const;
+  void _internal_set_confirm_deadline_ms(::int64_t value);
+
+  public:
+  // .pandora.match.v1.MatchStage stage = 2 [json_name = "stage"];
+  void clear_stage() ;
+  ::pandora::match::v1::MatchStage stage() const;
+  void set_stage(::pandora::match::v1::MatchStage value);
+
+  private:
+  ::pandora::match::v1::MatchStage _internal_stage() const;
+  void _internal_set_stage(::pandora::match::v1::MatchStage value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchStorageRecord)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      3, 8, 1,
+      79, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const MatchStorageRecord& from_msg);
+    ::google::protobuf::RepeatedPtrField< ::pandora::match::v1::MatchMemberStorageRecord > members_;
+    ::google::protobuf::RepeatedField<::uint64_t> ticket_ids_;
+    ::google::protobuf::internal::CachedSize _ticket_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr battle_ds_addr_;
+    ::google::protobuf::internal::ArenaStringPtr battle_ticket_;
+    ::uint64_t match_id_;
+    ::int64_t created_at_ms_;
+    ::int64_t confirm_deadline_ms_;
+    int stage_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3076,6 +3941,609 @@ inline void MatchProgressEvent::_internal_set_ts_ms(::int64_t value) {
   _impl_.ts_ms_ = value;
 }
 
+// -------------------------------------------------------------------
+
+// MatchMemberStorageRecord
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void MatchMemberStorageRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchMemberStorageRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.player_id)
+  return _internal_player_id();
+}
+inline void MatchMemberStorageRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.player_id)
+}
+inline ::uint64_t MatchMemberStorageRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MatchMemberStorageRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 team_id = 2 [json_name = "teamId"];
+inline void MatchMemberStorageRecord::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchMemberStorageRecord::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.team_id)
+  return _internal_team_id();
+}
+inline void MatchMemberStorageRecord::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.team_id)
+}
+inline ::uint64_t MatchMemberStorageRecord::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void MatchMemberStorageRecord::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// int32 mmr = 3 [json_name = "mmr"];
+inline void MatchMemberStorageRecord::clear_mmr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mmr_ = 0;
+}
+inline ::int32_t MatchMemberStorageRecord::mmr() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.mmr)
+  return _internal_mmr();
+}
+inline void MatchMemberStorageRecord::set_mmr(::int32_t value) {
+  _internal_set_mmr(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.mmr)
+}
+inline ::int32_t MatchMemberStorageRecord::_internal_mmr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mmr_;
+}
+inline void MatchMemberStorageRecord::_internal_set_mmr(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mmr_ = value;
+}
+
+// uint32 hero_id = 4 [json_name = "heroId"];
+inline void MatchMemberStorageRecord::clear_hero_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hero_id_ = 0u;
+}
+inline ::uint32_t MatchMemberStorageRecord::hero_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.hero_id)
+  return _internal_hero_id();
+}
+inline void MatchMemberStorageRecord::set_hero_id(::uint32_t value) {
+  _internal_set_hero_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.hero_id)
+}
+inline ::uint32_t MatchMemberStorageRecord::_internal_hero_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hero_id_;
+}
+inline void MatchMemberStorageRecord::_internal_set_hero_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hero_id_ = value;
+}
+
+// int32 side = 5 [json_name = "side"];
+inline void MatchMemberStorageRecord::clear_side() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_ = 0;
+}
+inline ::int32_t MatchMemberStorageRecord::side() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.side)
+  return _internal_side();
+}
+inline void MatchMemberStorageRecord::set_side(::int32_t value) {
+  _internal_set_side(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.side)
+}
+inline ::int32_t MatchMemberStorageRecord::_internal_side() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.side_;
+}
+inline void MatchMemberStorageRecord::_internal_set_side(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_ = value;
+}
+
+// .pandora.match.v1.MatchConfirmStatus confirm = 6 [json_name = "confirm"];
+inline void MatchMemberStorageRecord::clear_confirm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirm_ = 0;
+}
+inline ::pandora::match::v1::MatchConfirmStatus MatchMemberStorageRecord::confirm() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchMemberStorageRecord.confirm)
+  return _internal_confirm();
+}
+inline void MatchMemberStorageRecord::set_confirm(::pandora::match::v1::MatchConfirmStatus value) {
+  _internal_set_confirm(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchMemberStorageRecord.confirm)
+}
+inline ::pandora::match::v1::MatchConfirmStatus MatchMemberStorageRecord::_internal_confirm() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::match::v1::MatchConfirmStatus>(_impl_.confirm_);
+}
+inline void MatchMemberStorageRecord::_internal_set_confirm(::pandora::match::v1::MatchConfirmStatus value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirm_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchTicketStorageRecord
+
+// uint64 ticket_id = 1 [json_name = "ticketId"];
+inline void MatchTicketStorageRecord::clear_ticket_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchTicketStorageRecord::ticket_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.ticket_id)
+  return _internal_ticket_id();
+}
+inline void MatchTicketStorageRecord::set_ticket_id(::uint64_t value) {
+  _internal_set_ticket_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.ticket_id)
+}
+inline ::uint64_t MatchTicketStorageRecord::_internal_ticket_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ticket_id_;
+}
+inline void MatchTicketStorageRecord::_internal_set_ticket_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_id_ = value;
+}
+
+// uint64 team_id = 2 [json_name = "teamId"];
+inline void MatchTicketStorageRecord::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchTicketStorageRecord::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.team_id)
+  return _internal_team_id();
+}
+inline void MatchTicketStorageRecord::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.team_id)
+}
+inline ::uint64_t MatchTicketStorageRecord::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void MatchTicketStorageRecord::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// uint64 captain_id = 3 [json_name = "captainId"];
+inline void MatchTicketStorageRecord::clear_captain_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.captain_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchTicketStorageRecord::captain_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.captain_id)
+  return _internal_captain_id();
+}
+inline void MatchTicketStorageRecord::set_captain_id(::uint64_t value) {
+  _internal_set_captain_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.captain_id)
+}
+inline ::uint64_t MatchTicketStorageRecord::_internal_captain_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.captain_id_;
+}
+inline void MatchTicketStorageRecord::_internal_set_captain_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.captain_id_ = value;
+}
+
+// repeated .pandora.match.v1.MatchMemberStorageRecord members = 4 [json_name = "members"];
+inline int MatchTicketStorageRecord::_internal_members_size() const {
+  return _internal_members().size();
+}
+inline int MatchTicketStorageRecord::members_size() const {
+  return _internal_members_size();
+}
+inline void MatchTicketStorageRecord::clear_members() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.members_.Clear();
+}
+inline ::pandora::match::v1::MatchMemberStorageRecord* MatchTicketStorageRecord::mutable_members(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.match.v1.MatchTicketStorageRecord.members)
+  return _internal_mutable_members()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>* MatchTicketStorageRecord::mutable_members()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:pandora.match.v1.MatchTicketStorageRecord.members)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_members();
+}
+inline const ::pandora::match::v1::MatchMemberStorageRecord& MatchTicketStorageRecord::members(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.members)
+  return _internal_members().Get(index);
+}
+inline ::pandora::match::v1::MatchMemberStorageRecord* MatchTicketStorageRecord::add_members() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::match::v1::MatchMemberStorageRecord* _add = _internal_mutable_members()->Add();
+  // @@protoc_insertion_point(field_add:pandora.match.v1.MatchTicketStorageRecord.members)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>& MatchTicketStorageRecord::members() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.match.v1.MatchTicketStorageRecord.members)
+  return _internal_members();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>&
+MatchTicketStorageRecord::_internal_members() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.members_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>*
+MatchTicketStorageRecord::_internal_mutable_members() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.members_;
+}
+
+// int32 avg_mmr = 5 [json_name = "avgMmr"];
+inline void MatchTicketStorageRecord::clear_avg_mmr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.avg_mmr_ = 0;
+}
+inline ::int32_t MatchTicketStorageRecord::avg_mmr() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.avg_mmr)
+  return _internal_avg_mmr();
+}
+inline void MatchTicketStorageRecord::set_avg_mmr(::int32_t value) {
+  _internal_set_avg_mmr(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.avg_mmr)
+}
+inline ::int32_t MatchTicketStorageRecord::_internal_avg_mmr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.avg_mmr_;
+}
+inline void MatchTicketStorageRecord::_internal_set_avg_mmr(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.avg_mmr_ = value;
+}
+
+// int64 enqueued_at_ms = 6 [json_name = "enqueuedAtMs"];
+inline void MatchTicketStorageRecord::clear_enqueued_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enqueued_at_ms_ = ::int64_t{0};
+}
+inline ::int64_t MatchTicketStorageRecord::enqueued_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.enqueued_at_ms)
+  return _internal_enqueued_at_ms();
+}
+inline void MatchTicketStorageRecord::set_enqueued_at_ms(::int64_t value) {
+  _internal_set_enqueued_at_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.enqueued_at_ms)
+}
+inline ::int64_t MatchTicketStorageRecord::_internal_enqueued_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enqueued_at_ms_;
+}
+inline void MatchTicketStorageRecord::_internal_set_enqueued_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enqueued_at_ms_ = value;
+}
+
+// uint64 match_id = 7 [json_name = "matchId"];
+inline void MatchTicketStorageRecord::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchTicketStorageRecord::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.match_id)
+  return _internal_match_id();
+}
+inline void MatchTicketStorageRecord::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.match_id)
+}
+inline ::uint64_t MatchTicketStorageRecord::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void MatchTicketStorageRecord::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchStorageRecord
+
+// uint64 match_id = 1 [json_name = "matchId"];
+inline void MatchStorageRecord::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t MatchStorageRecord::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.match_id)
+  return _internal_match_id();
+}
+inline void MatchStorageRecord::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.match_id)
+}
+inline ::uint64_t MatchStorageRecord::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void MatchStorageRecord::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// .pandora.match.v1.MatchStage stage = 2 [json_name = "stage"];
+inline void MatchStorageRecord::clear_stage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage_ = 0;
+}
+inline ::pandora::match::v1::MatchStage MatchStorageRecord::stage() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.stage)
+  return _internal_stage();
+}
+inline void MatchStorageRecord::set_stage(::pandora::match::v1::MatchStage value) {
+  _internal_set_stage(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.stage)
+}
+inline ::pandora::match::v1::MatchStage MatchStorageRecord::_internal_stage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::match::v1::MatchStage>(_impl_.stage_);
+}
+inline void MatchStorageRecord::_internal_set_stage(::pandora::match::v1::MatchStage value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage_ = value;
+}
+
+// repeated .pandora.match.v1.MatchMemberStorageRecord members = 3 [json_name = "members"];
+inline int MatchStorageRecord::_internal_members_size() const {
+  return _internal_members().size();
+}
+inline int MatchStorageRecord::members_size() const {
+  return _internal_members_size();
+}
+inline void MatchStorageRecord::clear_members() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.members_.Clear();
+}
+inline ::pandora::match::v1::MatchMemberStorageRecord* MatchStorageRecord::mutable_members(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.match.v1.MatchStorageRecord.members)
+  return _internal_mutable_members()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>* MatchStorageRecord::mutable_members()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:pandora.match.v1.MatchStorageRecord.members)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_members();
+}
+inline const ::pandora::match::v1::MatchMemberStorageRecord& MatchStorageRecord::members(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.members)
+  return _internal_members().Get(index);
+}
+inline ::pandora::match::v1::MatchMemberStorageRecord* MatchStorageRecord::add_members() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::match::v1::MatchMemberStorageRecord* _add = _internal_mutable_members()->Add();
+  // @@protoc_insertion_point(field_add:pandora.match.v1.MatchStorageRecord.members)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>& MatchStorageRecord::members() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.match.v1.MatchStorageRecord.members)
+  return _internal_members();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>&
+MatchStorageRecord::_internal_members() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.members_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::match::v1::MatchMemberStorageRecord>*
+MatchStorageRecord::_internal_mutable_members() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.members_;
+}
+
+// repeated uint64 ticket_ids = 4 [json_name = "ticketIds"];
+inline int MatchStorageRecord::_internal_ticket_ids_size() const {
+  return _internal_ticket_ids().size();
+}
+inline int MatchStorageRecord::ticket_ids_size() const {
+  return _internal_ticket_ids_size();
+}
+inline void MatchStorageRecord::clear_ticket_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_ids_.Clear();
+}
+inline ::uint64_t MatchStorageRecord::ticket_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.ticket_ids)
+  return _internal_ticket_ids().Get(index);
+}
+inline void MatchStorageRecord::set_ticket_ids(int index, ::uint64_t value) {
+  _internal_mutable_ticket_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.ticket_ids)
+}
+inline void MatchStorageRecord::add_ticket_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_ticket_ids()->Add(value);
+  // @@protoc_insertion_point(field_add:pandora.match.v1.MatchStorageRecord.ticket_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& MatchStorageRecord::ticket_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.match.v1.MatchStorageRecord.ticket_ids)
+  return _internal_ticket_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* MatchStorageRecord::mutable_ticket_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:pandora.match.v1.MatchStorageRecord.ticket_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_ticket_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+MatchStorageRecord::_internal_ticket_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ticket_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* MatchStorageRecord::_internal_mutable_ticket_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.ticket_ids_;
+}
+
+// int64 created_at_ms = 5 [json_name = "createdAtMs"];
+inline void MatchStorageRecord::clear_created_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = ::int64_t{0};
+}
+inline ::int64_t MatchStorageRecord::created_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.created_at_ms)
+  return _internal_created_at_ms();
+}
+inline void MatchStorageRecord::set_created_at_ms(::int64_t value) {
+  _internal_set_created_at_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.created_at_ms)
+}
+inline ::int64_t MatchStorageRecord::_internal_created_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_at_ms_;
+}
+inline void MatchStorageRecord::_internal_set_created_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = value;
+}
+
+// int64 confirm_deadline_ms = 6 [json_name = "confirmDeadlineMs"];
+inline void MatchStorageRecord::clear_confirm_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirm_deadline_ms_ = ::int64_t{0};
+}
+inline ::int64_t MatchStorageRecord::confirm_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.confirm_deadline_ms)
+  return _internal_confirm_deadline_ms();
+}
+inline void MatchStorageRecord::set_confirm_deadline_ms(::int64_t value) {
+  _internal_set_confirm_deadline_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.confirm_deadline_ms)
+}
+inline ::int64_t MatchStorageRecord::_internal_confirm_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.confirm_deadline_ms_;
+}
+inline void MatchStorageRecord::_internal_set_confirm_deadline_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirm_deadline_ms_ = value;
+}
+
+// string battle_ds_addr = 7 [json_name = "battleDsAddr"];
+inline void MatchStorageRecord::clear_battle_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ds_addr_.ClearToEmpty();
+}
+inline const std::string& MatchStorageRecord::battle_ds_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.battle_ds_addr)
+  return _internal_battle_ds_addr();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void MatchStorageRecord::set_battle_ds_addr(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.battle_ds_addr)
+}
+inline std::string* MatchStorageRecord::mutable_battle_ds_addr() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_battle_ds_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.match.v1.MatchStorageRecord.battle_ds_addr)
+  return _s;
+}
+inline const std::string& MatchStorageRecord::_internal_battle_ds_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_ds_addr_.Get();
+}
+inline void MatchStorageRecord::_internal_set_battle_ds_addr(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ds_addr_.Set(value, GetArena());
+}
+inline std::string* MatchStorageRecord::_internal_mutable_battle_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.battle_ds_addr_.Mutable( GetArena());
+}
+inline std::string* MatchStorageRecord::release_battle_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.match.v1.MatchStorageRecord.battle_ds_addr)
+  return _impl_.battle_ds_addr_.Release();
+}
+inline void MatchStorageRecord::set_allocated_battle_ds_addr(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ds_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ds_addr_.IsDefault()) {
+    _impl_.battle_ds_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.MatchStorageRecord.battle_ds_addr)
+}
+
+// string battle_ticket = 8 [json_name = "battleTicket"];
+inline void MatchStorageRecord::clear_battle_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ticket_.ClearToEmpty();
+}
+inline const std::string& MatchStorageRecord::battle_ticket() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.battle_ticket)
+  return _internal_battle_ticket();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void MatchStorageRecord::set_battle_ticket(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.battle_ticket)
+}
+inline std::string* MatchStorageRecord::mutable_battle_ticket() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_battle_ticket();
+  // @@protoc_insertion_point(field_mutable:pandora.match.v1.MatchStorageRecord.battle_ticket)
+  return _s;
+}
+inline const std::string& MatchStorageRecord::_internal_battle_ticket() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_ticket_.Get();
+}
+inline void MatchStorageRecord::_internal_set_battle_ticket(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ticket_.Set(value, GetArena());
+}
+inline std::string* MatchStorageRecord::_internal_mutable_battle_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.battle_ticket_.Mutable( GetArena());
+}
+inline std::string* MatchStorageRecord::release_battle_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.match.v1.MatchStorageRecord.battle_ticket)
+  return _impl_.battle_ticket_.Release();
+}
+inline void MatchStorageRecord::set_allocated_battle_ticket(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ticket_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ticket_.IsDefault()) {
+    _impl_.battle_ticket_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.MatchStorageRecord.battle_ticket)
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -3094,6 +4562,12 @@ struct is_proto_enum<::pandora::match::v1::MatchStage> : std::true_type {};
 template <>
 inline const EnumDescriptor* GetEnumDescriptor<::pandora::match::v1::MatchStage>() {
   return ::pandora::match::v1::MatchStage_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::match::v1::MatchConfirmStatus> : std::true_type {};
+template <>
+inline const EnumDescriptor* GetEnumDescriptor<::pandora::match::v1::MatchConfirmStatus>() {
+  return ::pandora::match::v1::MatchConfirmStatus_descriptor();
 }
 
 }  // namespace protobuf

@@ -28,6 +28,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
 // @@protoc_insertion_point(includes)
@@ -90,6 +91,40 @@ namespace protobuf {
 namespace pandora {
 namespace battle {
 namespace v1 {
+enum BattleOutcome : int {
+  BATTLE_OUTCOME_UNSPECIFIED = 0,
+  BATTLE_OUTCOME_NORMAL = 1,
+  BATTLE_OUTCOME_ABANDONED = 2,
+  BattleOutcome_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      std::numeric_limits<::int32_t>::min(),
+  BattleOutcome_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      std::numeric_limits<::int32_t>::max(),
+};
+
+bool BattleOutcome_IsValid(int value);
+extern const uint32_t BattleOutcome_internal_data_[];
+constexpr BattleOutcome BattleOutcome_MIN = static_cast<BattleOutcome>(0);
+constexpr BattleOutcome BattleOutcome_MAX = static_cast<BattleOutcome>(2);
+constexpr int BattleOutcome_ARRAYSIZE = 2 + 1;
+const ::google::protobuf::EnumDescriptor*
+BattleOutcome_descriptor();
+template <typename T>
+const std::string& BattleOutcome_Name(T value) {
+  static_assert(std::is_same<T, BattleOutcome>::value ||
+                    std::is_integral<T>::value,
+                "Incorrect type passed to BattleOutcome_Name().");
+  return BattleOutcome_Name(static_cast<BattleOutcome>(value));
+}
+template <>
+inline const std::string& BattleOutcome_Name(BattleOutcome value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<BattleOutcome_descriptor,
+                                                 0, 2>(
+      static_cast<int>(value));
+}
+inline bool BattleOutcome_Parse(absl::string_view name, BattleOutcome* value) {
+  return ::google::protobuf::internal::ParseNamedEnum<BattleOutcome>(
+      BattleOutcome_descriptor(), name, value);
+}
 
 // ===================================================================
 
@@ -1166,6 +1201,7 @@ class BattleResult final : public ::google::protobuf::Message
     kEndedAtMsFieldNumber = 3,
     kWinnerTeamFieldNumber = 4,
     kMapIdFieldNumber = 8,
+    kOutcomeFieldNumber = 10,
   };
   // repeated .pandora.battle.v1.PlayerStats stats = 5 [json_name = "stats"];
   int stats_size() const;
@@ -1266,12 +1302,22 @@ class BattleResult final : public ::google::protobuf::Message
   void _internal_set_map_id(::uint32_t value);
 
   public:
+  // .pandora.battle.v1.BattleOutcome outcome = 10 [json_name = "outcome"];
+  void clear_outcome() ;
+  ::pandora::battle::v1::BattleOutcome outcome() const;
+  void set_outcome(::pandora::battle::v1::BattleOutcome value);
+
+  private:
+  ::pandora::battle::v1::BattleOutcome _internal_outcome() const;
+  void _internal_set_outcome(::pandora::battle::v1::BattleOutcome value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.battle.v1.BattleResult)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
   static const ::google::protobuf::internal::TcParseTable<
-      3, 8, 1,
+      4, 9, 1,
       67, 2>
       _table_;
 
@@ -1297,6 +1343,7 @@ class BattleResult final : public ::google::protobuf::Message
     ::int64_t ended_at_ms_;
     ::int32_t winner_team_;
     ::uint32_t map_id_;
+    int outcome_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2434,6 +2481,28 @@ inline void BattleResult::_internal_set_map_id(::uint32_t value) {
   _impl_.map_id_ = value;
 }
 
+// .pandora.battle.v1.BattleOutcome outcome = 10 [json_name = "outcome"];
+inline void BattleResult::clear_outcome() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = 0;
+}
+inline ::pandora::battle::v1::BattleOutcome BattleResult::outcome() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.BattleResult.outcome)
+  return _internal_outcome();
+}
+inline void BattleResult::set_outcome(::pandora::battle::v1::BattleOutcome value) {
+  _internal_set_outcome(value);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.BattleResult.outcome)
+}
+inline ::pandora::battle::v1::BattleOutcome BattleResult::_internal_outcome() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::battle::v1::BattleOutcome>(_impl_.outcome_);
+}
+inline void BattleResult::_internal_set_outcome(::pandora::battle::v1::BattleOutcome value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ReportResultRequest
@@ -2884,6 +2953,19 @@ ListPlayerHistoryResponse::_internal_mutable_results() {
 }  // namespace battle
 }  // namespace pandora
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::pandora::battle::v1::BattleOutcome> : std::true_type {};
+template <>
+inline const EnumDescriptor* GetEnumDescriptor<::pandora::battle::v1::BattleOutcome>() {
+  return ::pandora::battle::v1::BattleOutcome_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

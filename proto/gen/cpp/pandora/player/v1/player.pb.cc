@@ -193,6 +193,37 @@ struct UnlockHeroRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 UnlockHeroRequestDefaultTypeInternal _UnlockHeroRequest_default_instance_;
 
+inline constexpr PlayerUpdateEvent::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        match_id_{::uint64_t{0u}},
+        ts_ms_{::int64_t{0}},
+        mmr_delta_{0},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR PlayerUpdateEvent::PlayerUpdateEvent(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct PlayerUpdateEventDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR PlayerUpdateEventDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~PlayerUpdateEventDefaultTypeInternal() {}
+  union {
+    PlayerUpdateEvent _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PlayerUpdateEventDefaultTypeInternal _PlayerUpdateEvent_default_instance_;
+
 inline constexpr PlayerProfile::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : nickname_(
@@ -530,6 +561,19 @@ const ::uint32_t
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::player::v1::UpdateMMRResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::player::v1::UpdateMMRResponse, _impl_.new_mmr_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerUpdateEvent, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerUpdateEvent, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerUpdateEvent, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerUpdateEvent, _impl_.mmr_delta_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerUpdateEvent, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::PlayerUpdateEvent, _impl_.ts_ms_),
 };
 
 static const ::_pbi::MigrationSchema
@@ -547,6 +591,7 @@ static const ::_pbi::MigrationSchema
         {105, -1, -1, sizeof(::pandora::player::v1::GetMMRResponse)},
         {115, -1, -1, sizeof(::pandora::player::v1::UpdateMMRRequest)},
         {127, -1, -1, sizeof(::pandora::player::v1::UpdateMMRResponse)},
+        {137, -1, -1, sizeof(::pandora::player::v1::PlayerUpdateEvent)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::player::v1::_PlayerProfile_default_instance_._instance,
@@ -562,6 +607,7 @@ static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::player::v1::_GetMMRResponse_default_instance_._instance,
     &::pandora::player::v1::_UpdateMMRRequest_default_instance_._instance,
     &::pandora::player::v1::_UpdateMMRResponse_default_instance_._instance,
+    &::pandora::player::v1::_PlayerUpdateEvent_default_instance_._instance,
 };
 const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -599,21 +645,25 @@ const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] AB
     " \001(\tR\006reason\022\'\n\017idempotency_key\030\004 \001(\tR\016i"
     "dempotencyKey\"\\\n\021UpdateMMRResponse\022.\n\004co"
     "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
-    "de\022\027\n\007new_mmr\030\002 \001(\005R\006newMmr2\256\004\n\rPlayerSe"
-    "rvice\022Y\n\nGetProfile\022$.pandora.player.v1."
-    "GetProfileRequest\032%.pandora.player.v1.Ge"
-    "tProfileResponse\022e\n\016UpdateNickname\022(.pan"
-    "dora.player.v1.UpdateNicknameRequest\032).p"
-    "andora.player.v1.UpdateNicknameResponse\022"
-    "Y\n\nListHeroes\022$.pandora.player.v1.ListHe"
-    "roesRequest\032%.pandora.player.v1.ListHero"
-    "esResponse\022Y\n\nUnlockHero\022$.pandora.playe"
-    "r.v1.UnlockHeroRequest\032%.pandora.player."
-    "v1.UnlockHeroResponse\022M\n\006GetMMR\022 .pandor"
-    "a.player.v1.GetMMRRequest\032!.pandora.play"
-    "er.v1.GetMMRResponse\022V\n\tUpdateMMR\022#.pand"
-    "ora.player.v1.UpdateMMRRequest\032$.pandora"
-    ".player.v1.UpdateMMRResponseb\006proto3"
+    "de\022\027\n\007new_mmr\030\002 \001(\005R\006newMmr\"\225\001\n\021PlayerUp"
+    "dateEvent\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031"
+    "\n\010match_id\030\002 \001(\004R\007matchId\022\033\n\tmmr_delta\030\003"
+    " \001(\005R\010mmrDelta\022\026\n\006reason\030\004 \001(\tR\006reason\022\023"
+    "\n\005ts_ms\030\005 \001(\003R\004tsMs2\256\004\n\rPlayerService\022Y\n"
+    "\nGetProfile\022$.pandora.player.v1.GetProfi"
+    "leRequest\032%.pandora.player.v1.GetProfile"
+    "Response\022e\n\016UpdateNickname\022(.pandora.pla"
+    "yer.v1.UpdateNicknameRequest\032).pandora.p"
+    "layer.v1.UpdateNicknameResponse\022Y\n\nListH"
+    "eroes\022$.pandora.player.v1.ListHeroesRequ"
+    "est\032%.pandora.player.v1.ListHeroesRespon"
+    "se\022Y\n\nUnlockHero\022$.pandora.player.v1.Unl"
+    "ockHeroRequest\032%.pandora.player.v1.Unloc"
+    "kHeroResponse\022M\n\006GetMMR\022 .pandora.player"
+    ".v1.GetMMRRequest\032!.pandora.player.v1.Ge"
+    "tMMRResponse\022V\n\tUpdateMMR\022#.pandora.play"
+    "er.v1.UpdateMMRRequest\032$.pandora.player."
+    "v1.UpdateMMRResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps[1] =
     {
@@ -623,13 +673,13 @@ static ::absl::once_flag descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto = {
     false,
     false,
-    1956,
+    2108,
     descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto,
     "pandora/player/v1/player.proto",
     &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_once,
     descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps,
     1,
-    13,
+    14,
     schemas,
     file_default_instances,
     TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto::offsets,
@@ -4022,6 +4072,347 @@ void UpdateMMRResponse::InternalSwap(UpdateMMRResponse* PROTOBUF_RESTRICT other)
 }
 
 ::google::protobuf::Metadata UpdateMMRResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class PlayerUpdateEvent::_Internal {
+ public:
+};
+
+PlayerUpdateEvent::PlayerUpdateEvent(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.PlayerUpdateEvent)
+}
+inline PROTOBUF_NDEBUG_INLINE PlayerUpdateEvent::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::player::v1::PlayerUpdateEvent& from_msg)
+      : reason_(arena, from.reason_),
+        _cached_size_{0} {}
+
+PlayerUpdateEvent::PlayerUpdateEvent(
+    ::google::protobuf::Arena* arena,
+    const PlayerUpdateEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerUpdateEvent* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, mmr_delta_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::mmr_delta_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.PlayerUpdateEvent)
+}
+inline PROTOBUF_NDEBUG_INLINE PlayerUpdateEvent::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : reason_(arena),
+        _cached_size_{0} {}
+
+inline void PlayerUpdateEvent::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, mmr_delta_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::mmr_delta_));
+}
+PlayerUpdateEvent::~PlayerUpdateEvent() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.PlayerUpdateEvent)
+  SharedDtor(*this);
+}
+inline void PlayerUpdateEvent::SharedDtor(MessageLite& self) {
+  PlayerUpdateEvent& this_ = static_cast<PlayerUpdateEvent&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.reason_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PlayerUpdateEvent::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) PlayerUpdateEvent(arena);
+}
+constexpr auto PlayerUpdateEvent::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerUpdateEvent),
+                                            alignof(PlayerUpdateEvent));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull PlayerUpdateEvent::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_PlayerUpdateEvent_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &PlayerUpdateEvent::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<PlayerUpdateEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &PlayerUpdateEvent::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<PlayerUpdateEvent>(), &PlayerUpdateEvent::ByteSizeLong,
+            &PlayerUpdateEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_._cached_size_),
+        false,
+    },
+    &PlayerUpdateEvent::kDescriptorMethods,
+    &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* PlayerUpdateEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 5, 0, 50, 2> PlayerUpdateEvent::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    5, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967264,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    5,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::pandora::player::v1::PlayerUpdateEvent>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 player_id = 1 [json_name = "playerId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUpdateEvent, _impl_.player_id_), 63>(),
+     {8, 63, 0, PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.player_id_)}},
+    // uint64 match_id = 2 [json_name = "matchId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUpdateEvent, _impl_.match_id_), 63>(),
+     {16, 63, 0, PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.match_id_)}},
+    // int32 mmr_delta = 3 [json_name = "mmrDelta"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerUpdateEvent, _impl_.mmr_delta_), 63>(),
+     {24, 63, 0, PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.mmr_delta_)}},
+    // string reason = 4 [json_name = "reason"];
+    {::_pbi::TcParser::FastUS1,
+     {34, 63, 0, PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.reason_)}},
+    // int64 ts_ms = 5 [json_name = "tsMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerUpdateEvent, _impl_.ts_ms_), 63>(),
+     {40, 63, 0, PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.ts_ms_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint64 player_id = 1 [json_name = "playerId"];
+    {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.player_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // uint64 match_id = 2 [json_name = "matchId"];
+    {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.match_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // int32 mmr_delta = 3 [json_name = "mmrDelta"];
+    {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.mmr_delta_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt32)},
+    // string reason = 4 [json_name = "reason"];
+    {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.reason_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // int64 ts_ms = 5 [json_name = "tsMs"];
+    {PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.ts_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+  }},
+  // no aux_entries
+  {{
+    "\43\0\0\0\6\0\0\0"
+    "pandora.player.v1.PlayerUpdateEvent"
+    "reason"
+  }},
+};
+
+PROTOBUF_NOINLINE void PlayerUpdateEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.PlayerUpdateEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.reason_.ClearToEmpty();
+  ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.mmr_delta_) -
+      reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.mmr_delta_));
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* PlayerUpdateEvent::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const PlayerUpdateEvent& this_ = static_cast<const PlayerUpdateEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* PlayerUpdateEvent::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const PlayerUpdateEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.PlayerUpdateEvent)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // uint64 player_id = 1 [json_name = "playerId"];
+          if (this_._internal_player_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                1, this_._internal_player_id(), target);
+          }
+
+          // uint64 match_id = 2 [json_name = "matchId"];
+          if (this_._internal_match_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                2, this_._internal_match_id(), target);
+          }
+
+          // int32 mmr_delta = 3 [json_name = "mmrDelta"];
+          if (this_._internal_mmr_delta() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt32ToArrayWithField<3>(
+                    stream, this_._internal_mmr_delta(), target);
+          }
+
+          // string reason = 4 [json_name = "reason"];
+          if (!this_._internal_reason().empty()) {
+            const std::string& _s = this_._internal_reason();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.PlayerUpdateEvent.reason");
+            target = stream->WriteStringMaybeAliased(4, _s, target);
+          }
+
+          // int64 ts_ms = 5 [json_name = "tsMs"];
+          if (this_._internal_ts_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<5>(
+                    stream, this_._internal_ts_ms(), target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.PlayerUpdateEvent)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t PlayerUpdateEvent::ByteSizeLong(const MessageLite& base) {
+          const PlayerUpdateEvent& this_ = static_cast<const PlayerUpdateEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t PlayerUpdateEvent::ByteSizeLong() const {
+          const PlayerUpdateEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.PlayerUpdateEvent)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // string reason = 4 [json_name = "reason"];
+            if (!this_._internal_reason().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_reason());
+            }
+            // uint64 player_id = 1 [json_name = "playerId"];
+            if (this_._internal_player_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_player_id());
+            }
+            // uint64 match_id = 2 [json_name = "matchId"];
+            if (this_._internal_match_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_match_id());
+            }
+            // int64 ts_ms = 5 [json_name = "tsMs"];
+            if (this_._internal_ts_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_ts_ms());
+            }
+            // int32 mmr_delta = 3 [json_name = "mmrDelta"];
+            if (this_._internal_mmr_delta() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+                  this_._internal_mmr_delta());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void PlayerUpdateEvent::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<PlayerUpdateEvent*>(&to_msg);
+  auto& from = static_cast<const PlayerUpdateEvent&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.PlayerUpdateEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_reason().empty()) {
+    _this->_internal_set_reason(from._internal_reason());
+  }
+  if (from._internal_player_id() != 0) {
+    _this->_impl_.player_id_ = from._impl_.player_id_;
+  }
+  if (from._internal_match_id() != 0) {
+    _this->_impl_.match_id_ = from._impl_.match_id_;
+  }
+  if (from._internal_ts_ms() != 0) {
+    _this->_impl_.ts_ms_ = from._impl_.ts_ms_;
+  }
+  if (from._internal_mmr_delta() != 0) {
+    _this->_impl_.mmr_delta_ = from._impl_.mmr_delta_;
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void PlayerUpdateEvent::CopyFrom(const PlayerUpdateEvent& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.PlayerUpdateEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerUpdateEvent::InternalSwap(PlayerUpdateEvent* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.mmr_delta_)
+      + sizeof(PlayerUpdateEvent::_impl_.mmr_delta_)
+      - PROTOBUF_FIELD_OFFSET(PlayerUpdateEvent, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata PlayerUpdateEvent::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

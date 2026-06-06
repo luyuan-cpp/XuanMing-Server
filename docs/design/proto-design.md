@@ -338,6 +338,7 @@ pandora.dlq.<original_topic> 死信队列
   - 不用"客户端 proto / 服务器 proto"这种叫法;统一说"客户端可见结构 / 存储快照结构"
   - **proto bytes 只用于快照/blob**(Redis value、Kafka payload、MySQL blob 列);关系型 MySQL 表的结构化列直接映射 proto 字段,临时小令牌(如 invite)可继续用 redis hash,都不强制序列化成 bytes
   - proto message 直接当存储 record 时禁止值拷贝(`a := *rec` 会复制内部 state/mu/sizeCache),克隆一律用 `proto.Clone`
+  - **禁止把存储快照直接返回 / 推送给客户端**;response / push 只使用客户端可见结构,由服务端从存储 record / DB / Redis 中按当前客户端需求的最小字段集填充,必要时计算派生字段
 - 布尔:`is_<adj>` / `has_<noun>`(避免 `<name>_flag`)
 - 集合:复数(`player_ids` / `members`)
 

@@ -155,6 +155,7 @@ inline constexpr BattleResult::Impl_::Impl_(
         ended_at_ms_{::int64_t{0}},
         winner_team_{0},
         map_id_{0u},
+        outcome_{static_cast< ::pandora::battle::v1::BattleOutcome >(0)},
         _cached_size_{0} {}
 
 template <typename>
@@ -256,8 +257,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 }  // namespace v1
 }  // namespace battle
 }  // namespace pandora
-static constexpr const ::_pb::EnumDescriptor**
-    file_level_enum_descriptors_pandora_2fbattle_2fv1_2fbattle_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* file_level_enum_descriptors_pandora_2fbattle_2fv1_2fbattle_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor**
     file_level_service_descriptors_pandora_2fbattle_2fv1_2fbattle_2eproto = nullptr;
 const ::uint32_t
@@ -298,6 +298,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleResult, _impl_.ds_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleResult, _impl_.game_mode_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleResult, _impl_.map_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleResult, _impl_.outcome_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ReportResultRequest, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::ReportResultRequest, _internal_metadata_),
         ~0u,  // no _extensions_
@@ -366,12 +367,12 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, -1, -1, sizeof(::pandora::battle::v1::PlayerStats)},
         {19, -1, -1, sizeof(::pandora::battle::v1::BattleResult)},
-        {35, 44, -1, sizeof(::pandora::battle::v1::ReportResultRequest)},
-        {45, -1, -1, sizeof(::pandora::battle::v1::ReportResultResponse)},
-        {55, -1, -1, sizeof(::pandora::battle::v1::GetMatchResultRequest)},
-        {64, 74, -1, sizeof(::pandora::battle::v1::GetMatchResultResponse)},
-        {76, -1, -1, sizeof(::pandora::battle::v1::ListPlayerHistoryRequest)},
-        {87, -1, -1, sizeof(::pandora::battle::v1::ListPlayerHistoryResponse)},
+        {36, 45, -1, sizeof(::pandora::battle::v1::ReportResultRequest)},
+        {46, -1, -1, sizeof(::pandora::battle::v1::ReportResultResponse)},
+        {56, -1, -1, sizeof(::pandora::battle::v1::GetMatchResultRequest)},
+        {65, 75, -1, sizeof(::pandora::battle::v1::GetMatchResultResponse)},
+        {77, -1, -1, sizeof(::pandora::battle::v1::ListPlayerHistoryRequest)},
+        {88, -1, -1, sizeof(::pandora::battle::v1::ListPlayerHistoryResponse)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::battle::v1::_PlayerStats_default_instance_._instance,
@@ -394,7 +395,7 @@ const char descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto[] AB
     "ssists\022!\n\014damage_dealt\030\007 \001(\003R\013damageDeal"
     "t\022!\n\014damage_taken\030\010 \001(\003R\013damageTaken\022\030\n\007"
     "healing\030\t \001(\003R\007healing\022\022\n\004gold\030\n \001(\003R\004go"
-    "ld\022\033\n\tmmr_delta\030\013 \001(\005R\010mmrDeltaJ\004\010\014\020\024\"\236\002"
+    "ld\022\033\n\tmmr_delta\030\013 \001(\005R\010mmrDeltaJ\004\010\014\020\024\"\332\002"
     "\n\014BattleResult\022\031\n\010match_id\030\001 \001(\004R\007matchI"
     "d\022\"\n\rstarted_at_ms\030\002 \001(\003R\013startedAtMs\022\036\n"
     "\013ended_at_ms\030\003 \001(\003R\tendedAtMs\022\037\n\013winner_"
@@ -402,31 +403,35 @@ const char descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto[] AB
     "pandora.battle.v1.PlayerStatsR\005stats\022\036\n\013"
     "ds_pod_name\030\006 \001(\tR\tdsPodName\022\033\n\tgame_mod"
     "e\030\007 \001(\tR\010gameMode\022\025\n\006map_id\030\010 \001(\rR\005mapId"
-    "J\004\010\t\020\n\"N\n\023ReportResultRequest\0227\n\006result\030"
-    "\001 \001(\0132\037.pandora.battle.v1.BattleResultR\006"
-    "result\"q\n\024ReportResultResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022)"
-    "\n\020already_recorded\030\002 \001(\010R\017alreadyRecorde"
-    "d\"2\n\025GetMatchResultRequest\022\031\n\010match_id\030\001"
-    " \001(\004R\007matchId\"\201\001\n\026GetMatchResultResponse"
-    "\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCo"
-    "deR\004code\0227\n\006result\030\002 \001(\0132\037.pandora.battl"
-    "e.v1.BattleResultR\006result\"j\n\030ListPlayerH"
-    "istoryRequest\022\033\n\tplayer_id\030\001 \001(\004R\010player"
-    "Id\022\024\n\005limit\030\002 \001(\005R\005limit\022\033\n\tbefore_ms\030\003 "
-    "\001(\003R\010beforeMs\"\206\001\n\031ListPlayerHistoryRespo"
-    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCodeR\004code\0229\n\007results\030\002 \003(\0132\037.pandora.b"
-    "attle.v1.BattleResultR\007results2\315\002\n\023Battl"
-    "eResultService\022_\n\014ReportResult\022&.pandora"
-    ".battle.v1.ReportResultRequest\032\'.pandora"
-    ".battle.v1.ReportResultResponse\022e\n\016GetMa"
-    "tchResult\022(.pandora.battle.v1.GetMatchRe"
-    "sultRequest\032).pandora.battle.v1.GetMatch"
-    "ResultResponse\022n\n\021ListPlayerHistory\022+.pa"
-    "ndora.battle.v1.ListPlayerHistoryRequest"
-    "\032,.pandora.battle.v1.ListPlayerHistoryRe"
-    "sponseb\006proto3"
+    "\022:\n\007outcome\030\n \001(\0162 .pandora.battle.v1.Ba"
+    "ttleOutcomeR\007outcomeJ\004\010\t\020\n\"N\n\023ReportResu"
+    "ltRequest\0227\n\006result\030\001 \001(\0132\037.pandora.batt"
+    "le.v1.BattleResultR\006result\"q\n\024ReportResu"
+    "ltResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\022)\n\020already_recorded\030\002"
+    " \001(\010R\017alreadyRecorded\"2\n\025GetMatchResultR"
+    "equest\022\031\n\010match_id\030\001 \001(\004R\007matchId\"\201\001\n\026Ge"
+    "tMatchResultResponse\022.\n\004code\030\001 \001(\0162\032.pan"
+    "dora.common.v1.ErrCodeR\004code\0227\n\006result\030\002"
+    " \001(\0132\037.pandora.battle.v1.BattleResultR\006r"
+    "esult\"j\n\030ListPlayerHistoryRequest\022\033\n\tpla"
+    "yer_id\030\001 \001(\004R\010playerId\022\024\n\005limit\030\002 \001(\005R\005l"
+    "imit\022\033\n\tbefore_ms\030\003 \001(\003R\010beforeMs\"\206\001\n\031Li"
+    "stPlayerHistoryResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\0229\n\007resul"
+    "ts\030\002 \003(\0132\037.pandora.battle.v1.BattleResul"
+    "tR\007results*h\n\rBattleOutcome\022\036\n\032BATTLE_OU"
+    "TCOME_UNSPECIFIED\020\000\022\031\n\025BATTLE_OUTCOME_NO"
+    "RMAL\020\001\022\034\n\030BATTLE_OUTCOME_ABANDONED\020\0022\315\002\n"
+    "\023BattleResultService\022_\n\014ReportResult\022&.p"
+    "andora.battle.v1.ReportResultRequest\032\'.p"
+    "andora.battle.v1.ReportResultResponse\022e\n"
+    "\016GetMatchResult\022(.pandora.battle.v1.GetM"
+    "atchResultRequest\032).pandora.battle.v1.Ge"
+    "tMatchResultResponse\022n\n\021ListPlayerHistor"
+    "y\022+.pandora.battle.v1.ListPlayerHistoryR"
+    "equest\032,.pandora.battle.v1.ListPlayerHis"
+    "toryResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_deps[1] =
     {
@@ -436,7 +441,7 @@ static ::absl::once_flag descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto = {
     false,
     false,
-    1654,
+    1820,
     descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto,
     "pandora/battle/v1/battle.proto",
     &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_once,
@@ -452,6 +457,15 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fbatt
 namespace pandora {
 namespace battle {
 namespace v1 {
+const ::google::protobuf::EnumDescriptor* BattleOutcome_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto);
+  return file_level_enum_descriptors_pandora_2fbattle_2fv1_2fbattle_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t BattleOutcome_internal_data_[] = {
+    196608u, 0u, };
+bool BattleOutcome_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
 // ===================================================================
 
 class PlayerStats::_Internal {
@@ -927,9 +941,9 @@ BattleResult::BattleResult(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char *>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, map_id_) -
+           offsetof(Impl_, outcome_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::map_id_));
+               sizeof(Impl_::outcome_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.battle.v1.BattleResult)
 }
@@ -946,9 +960,9 @@ inline void BattleResult::SharedCtor(::_pb::Arena* arena) {
   ::memset(reinterpret_cast<char *>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, map_id_) -
+           offsetof(Impl_, outcome_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::map_id_));
+               sizeof(Impl_::outcome_));
 }
 BattleResult::~BattleResult() {
   // @@protoc_insertion_point(destructor:pandora.battle.v1.BattleResult)
@@ -1011,15 +1025,15 @@ const ::google::protobuf::internal::ClassData* BattleResult::GetClassData() cons
   return _class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 8, 1, 67, 2> BattleResult::_table_ = {
+const ::_pbi::TcParseTable<4, 9, 1, 67, 2> BattleResult::_table_ = {
   {
     0,  // no _has_bits_
     0, // no _extensions_
-    8, 56,  // max_field_number, fast_idx_mask
+    10, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967040,  // skipmap
+    4294966528,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    8,  // num_field_entries
+    9,  // num_field_entries
     1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     _class_data_.base(),
@@ -1029,9 +1043,7 @@ const ::_pbi::TcParseTable<3, 8, 1, 67, 2> BattleResult::_table_ = {
     ::_pbi::TcParser::GetTable<::pandora::battle::v1::BattleResult>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // uint32 map_id = 8 [json_name = "mapId"];
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResult, _impl_.map_id_), 63>(),
-     {64, 63, 0, PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.map_id_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint64 match_id = 1 [json_name = "matchId"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleResult, _impl_.match_id_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.match_id_)}},
@@ -1053,6 +1065,18 @@ const ::_pbi::TcParseTable<3, 8, 1, 67, 2> BattleResult::_table_ = {
     // string game_mode = 7 [json_name = "gameMode"];
     {::_pbi::TcParser::FastUS1,
      {58, 63, 0, PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.game_mode_)}},
+    // uint32 map_id = 8 [json_name = "mapId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResult, _impl_.map_id_), 63>(),
+     {64, 63, 0, PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.map_id_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    // .pandora.battle.v1.BattleOutcome outcome = 10 [json_name = "outcome"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResult, _impl_.outcome_), 63>(),
+     {80, 63, 0, PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.outcome_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -1080,6 +1104,9 @@ const ::_pbi::TcParseTable<3, 8, 1, 67, 2> BattleResult::_table_ = {
     // uint32 map_id = 8 [json_name = "mapId"];
     {PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.map_id_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
+    // .pandora.battle.v1.BattleOutcome outcome = 10 [json_name = "outcome"];
+    {PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.outcome_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
   }}, {{
     {::_pbi::TcParser::GetTable<::pandora::battle::v1::PlayerStats>()},
   }}, {{
@@ -1101,8 +1128,8 @@ PROTOBUF_NOINLINE void BattleResult::Clear() {
   _impl_.ds_pod_name_.ClearToEmpty();
   _impl_.game_mode_.ClearToEmpty();
   ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
-      reinterpret_cast<char*>(&_impl_.map_id_) -
-      reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.map_id_));
+      reinterpret_cast<char*>(&_impl_.outcome_) -
+      reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.outcome_));
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
 
@@ -1183,6 +1210,13 @@ PROTOBUF_NOINLINE void BattleResult::Clear() {
                 8, this_._internal_map_id(), target);
           }
 
+          // .pandora.battle.v1.BattleOutcome outcome = 10 [json_name = "outcome"];
+          if (this_._internal_outcome() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteEnumToArray(
+                10, this_._internal_outcome(), target);
+          }
+
           if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
             target =
                 ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1252,6 +1286,11 @@ PROTOBUF_NOINLINE void BattleResult::Clear() {
               total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
                   this_._internal_map_id());
             }
+            // .pandora.battle.v1.BattleOutcome outcome = 10 [json_name = "outcome"];
+            if (this_._internal_outcome() != 0) {
+              total_size += 1 +
+                            ::_pbi::WireFormatLite::EnumSize(this_._internal_outcome());
+            }
           }
           return this_.MaybeComputeUnknownFieldsSize(total_size,
                                                      &this_._impl_._cached_size_);
@@ -1288,6 +1327,9 @@ void BattleResult::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::go
   if (from._internal_map_id() != 0) {
     _this->_impl_.map_id_ = from._impl_.map_id_;
   }
+  if (from._internal_outcome() != 0) {
+    _this->_impl_.outcome_ = from._impl_.outcome_;
+  }
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -1308,8 +1350,8 @@ void BattleResult::InternalSwap(BattleResult* PROTOBUF_RESTRICT other) {
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_pod_name_, &other->_impl_.ds_pod_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.map_id_)
-      + sizeof(BattleResult::_impl_.map_id_)
+      PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.outcome_)
+      + sizeof(BattleResult::_impl_.outcome_)
       - PROTOBUF_FIELD_OFFSET(BattleResult, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

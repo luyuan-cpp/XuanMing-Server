@@ -22,9 +22,9 @@
 | 8 | matchmaker | 50011 | 强 | redis | (生产 match.found) | ⏸️ W3 |
 | 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ W4+ |
 | 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ W4+ |
-| 11 | ds_allocator | 50020 | 弱 | etcd + k8s | (生产 ds.lifecycle) | ⏸️ W3 |
+| 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned;真 Agones 留后续) |
 | 12 | hub_allocator | 50021 | 弱 | etcd + k8s | (生产 ds.lifecycle) | ⏸️ W3 |
-| 13 | battle_result | 50022 | 无 | mysql | battle.result | ⏸️ W4 |
+| 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿) |
 | 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |
 
 ⭐ = 2026-06-04 终版新增。push 是 Kratos transport/grpc 暴露的 server stream 服务,客户端通过 Envoy 连过来,详见 `gateway-decision.md` §6。
@@ -382,8 +382,8 @@ W2 开始才正式写业务逻辑,顺序:
 7. ⏸️ UE 客户端 grpc-web(W3+,FHttpModule 自研 grpc-web 解析)
 8. ⏸️ player + data_service(W3)
 9. ⏸️ team → matchmaker(W3)
-10. ⏸️ ds_allocator + hub_allocator(W3)
-11. ⏸️ battle_result(W4)
+10. ✅ ds_allocator(W4 ②,Mock 分配器)+ ⏸️ hub_allocator(W3)
+11. ✅ battle_result(W4 ③,幂等落库 + Elo MMR + abandoned 补偿)
 12. ⏸️ 其它(friend / chat / trade / dialogue,W4+)
 
 ---

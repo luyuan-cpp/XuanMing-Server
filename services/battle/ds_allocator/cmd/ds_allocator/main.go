@@ -18,14 +18,18 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
@@ -100,6 +104,22 @@ func main() {
 	repo := data.NewRedisBattleRepo(rdb)
 	allocator := biz.NewMockGameServerAllocator(cfg.Allocator) // W4 ② 打桩;W4 ③ 接 Agones
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
+
+	// 4.1 ds.lifecycle producer(弱依赖:心跳超时 abandoned → 通知 battle_result 段位回滚补偿,不变量 §4)
+	if len(cfg.Kafka.Brokers) > 0 {
+		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicDSLifecycle)
+		if perr != nil {
+			helper.Warnw("msg", "ds_lifecycle_producer_init_failed", "err", perr,
+				"hint", "abandoned 事件将不发送,abandoned 镜像仍落 Redis 供查")
+		} else {
+			defer func() { _ = producer.Close() }()
+			uc.SetLifecyclePusher(&dsLifecyclePusher{p: producer})
+			helper.Infow("msg", "ds_lifecycle_producer_ready", "topic", kafkax.TopicDSLifecycle)
+		}
+	} else {
+		helper.Warnw("msg", "kafka_brokers_empty", "hint", "ds.lifecycle abandoned 事件禁用")
+	}
+
 	svc := service.NewAllocatorService(uc)
 
 	// 5. gRPC + HTTP
@@ -131,4 +151,18 @@ func main() {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
 	}
+}
+
+// dsLifecyclePusher 把 biz.DSLifecyclePusher 适配到 kafkax.KeyOrderedProducer。
+// key=match_id(不变量 §9 同对局事件保序)。
+type dsLifecyclePusher struct {
+	p *kafkax.KeyOrderedProducer
+}
+
+func (d *dsLifecyclePusher) PublishLifecycle(ctx context.Context, evt *dsv1.DSLifecycleEvent) error {
+	payload, err := proto.Marshal(evt)
+	if err != nil {
+		return err
+	}
+	return d.p.SendRaw(ctx, strconv.FormatUint(evt.GetMatchId(), 10), payload)
 }

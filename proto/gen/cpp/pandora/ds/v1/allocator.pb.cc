@@ -171,6 +171,85 @@ struct HeartbeatRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HeartbeatRequestDefaultTypeInternal _HeartbeatRequest_default_instance_;
 
+inline constexpr DSLifecycleEvent::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : player_ids_{},
+        _player_ids_cached_byte_size_{0},
+        ds_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        game_mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        match_id_{::uint64_t{0u}},
+        phase_{static_cast< ::pandora::ds::v1::DSLifecyclePhase >(0)},
+        map_id_{0u},
+        ts_ms_{::int64_t{0}},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR DSLifecycleEvent::DSLifecycleEvent(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct DSLifecycleEventDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DSLifecycleEventDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DSLifecycleEventDefaultTypeInternal() {}
+  union {
+    DSLifecycleEvent _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DSLifecycleEventDefaultTypeInternal _DSLifecycleEvent_default_instance_;
+
+inline constexpr BattleStorageRecord::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : player_ids_{},
+        _player_ids_cached_byte_size_{0},
+        ds_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ds_addr_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        state_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        game_mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        match_id_{::uint64_t{0u}},
+        allocated_at_ms_{::int64_t{0}},
+        map_id_{0u},
+        player_count_{0},
+        last_heartbeat_ms_{::int64_t{0}},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR BattleStorageRecord::BattleStorageRecord(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct BattleStorageRecordDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR BattleStorageRecordDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~BattleStorageRecordDefaultTypeInternal() {}
+  union {
+    BattleStorageRecord _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BattleStorageRecordDefaultTypeInternal _BattleStorageRecord_default_instance_;
+
 inline constexpr BattleInfo::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : ds_pod_name_(
@@ -298,8 +377,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 }  // namespace v1
 }  // namespace ds
 }  // namespace pandora
-static constexpr const ::_pb::EnumDescriptor**
-    file_level_enum_descriptors_pandora_2fds_2fv1_2fallocator_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* file_level_enum_descriptors_pandora_2fds_2fv1_2fallocator_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor**
     file_level_service_descriptors_pandora_2fds_2fv1_2fallocator_2eproto = nullptr;
 const ::uint32_t
@@ -406,6 +484,39 @@ const ::uint32_t
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ListBattlesResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ListBattlesResponse, _impl_.battles_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_addr_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.player_ids_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.map_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.game_mode_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.allocated_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.last_heartbeat_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.player_count_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.ds_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.phase_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.player_ids_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.map_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.game_mode_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_.ts_ms_),
 };
 
 static const ::_pbi::MigrationSchema
@@ -419,6 +530,8 @@ static const ::_pbi::MigrationSchema
         {68, -1, -1, sizeof(::pandora::ds::v1::BattleInfo)},
         {82, -1, -1, sizeof(::pandora::ds::v1::ListBattlesRequest)},
         {91, -1, -1, sizeof(::pandora::ds::v1::ListBattlesResponse)},
+        {101, -1, -1, sizeof(::pandora::ds::v1::BattleStorageRecord)},
+        {119, -1, -1, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::ds::v1::_AllocateBattleRequest_default_instance_._instance,
@@ -430,6 +543,8 @@ static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::ds::v1::_BattleInfo_default_instance_._instance,
     &::pandora::ds::v1::_ListBattlesRequest_default_instance_._instance,
     &::pandora::ds::v1::_ListBattlesResponse_default_instance_._instance,
+    &::pandora::ds::v1::_BattleStorageRecord_default_instance_._instance,
+    &::pandora::ds::v1::_DSLifecycleEvent_default_instance_._instance,
 };
 const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -463,17 +578,35 @@ const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABS
     "e_filter\030\001 \001(\tR\013stateFilter\"z\n\023ListBattl"
     "esResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
     "n.v1.ErrCodeR\004code\0223\n\007battles\030\002 \003(\0132\031.pa"
-    "ndora.ds.v1.BattleInfoR\007battles2\365\002\n\022DSAl"
-    "locatorService\022]\n\016AllocateBattle\022$.pando"
-    "ra.ds.v1.AllocateBattleRequest\032%.pandora"
-    ".ds.v1.AllocateBattleResponse\022Z\n\rRelease"
-    "Battle\022#.pandora.ds.v1.ReleaseBattleRequ"
-    "est\032$.pandora.ds.v1.ReleaseBattleRespons"
-    "e\022N\n\tHeartbeat\022\037.pandora.ds.v1.Heartbeat"
-    "Request\032 .pandora.ds.v1.HeartbeatRespons"
-    "e\022T\n\013ListBattles\022!.pandora.ds.v1.ListBat"
-    "tlesRequest\032\".pandora.ds.v1.ListBattlesR"
-    "esponseb\006proto3"
+    "ndora.ds.v1.BattleInfoR\007battles\"\311\002\n\023Batt"
+    "leStorageRecord\022\031\n\010match_id\030\001 \001(\004R\007match"
+    "Id\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\022\027\n\007ds"
+    "_addr\030\003 \001(\tR\006dsAddr\022\024\n\005state\030\004 \001(\tR\005stat"
+    "e\022\035\n\nplayer_ids\030\005 \003(\004R\tplayerIds\022\025\n\006map_"
+    "id\030\006 \001(\rR\005mapId\022\033\n\tgame_mode\030\007 \001(\tR\010game"
+    "Mode\022&\n\017allocated_at_ms\030\010 \001(\003R\rallocated"
+    "AtMs\022*\n\021last_heartbeat_ms\030\t \001(\003R\017lastHea"
+    "rtbeatMs\022!\n\014player_count\030\n \001(\005R\013playerCo"
+    "unt\"\354\001\n\020DSLifecycleEvent\022\031\n\010match_id\030\001 \001"
+    "(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodN"
+    "ame\0225\n\005phase\030\003 \001(\0162\037.pandora.ds.v1.DSLif"
+    "ecyclePhaseR\005phase\022\035\n\nplayer_ids\030\004 \003(\004R\t"
+    "playerIds\022\025\n\006map_id\030\005 \001(\rR\005mapId\022\033\n\tgame"
+    "_mode\030\006 \001(\tR\010gameMode\022\023\n\005ts_ms\030\007 \001(\003R\004ts"
+    "Ms*\233\001\n\020DSLifecyclePhase\022\"\n\036DS_LIFECYCLE_"
+    "PHASE_UNSPECIFIED\020\000\022 \n\034DS_LIFECYCLE_PHAS"
+    "E_ALLOCATED\020\001\022\037\n\033DS_LIFECYCLE_PHASE_RELE"
+    "ASED\020\002\022 \n\034DS_LIFECYCLE_PHASE_ABANDONED\020\003"
+    "2\365\002\n\022DSAllocatorService\022]\n\016AllocateBattl"
+    "e\022$.pandora.ds.v1.AllocateBattleRequest\032"
+    "%.pandora.ds.v1.AllocateBattleResponse\022Z"
+    "\n\rReleaseBattle\022#.pandora.ds.v1.ReleaseB"
+    "attleRequest\032$.pandora.ds.v1.ReleaseBatt"
+    "leResponse\022N\n\tHeartbeat\022\037.pandora.ds.v1."
+    "HeartbeatRequest\032 .pandora.ds.v1.Heartbe"
+    "atResponse\022T\n\013ListBattles\022!.pandora.ds.v"
+    "1.ListBattlesRequest\032\".pandora.ds.v1.Lis"
+    "tBattlesResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps[1] =
     {
@@ -483,13 +616,13 @@ static ::absl::once_flag descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto = {
     false,
     false,
-    1615,
+    2344,
     descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto,
     "pandora/ds/v1/allocator.proto",
     &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_once,
     descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps,
     1,
-    9,
+    11,
     schemas,
     file_default_instances,
     TableStruct_pandora_2fds_2fv1_2fallocator_2eproto::offsets,
@@ -499,6 +632,15 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fds_2
 namespace pandora {
 namespace ds {
 namespace v1 {
+const ::google::protobuf::EnumDescriptor* DSLifecyclePhase_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto);
+  return file_level_enum_descriptors_pandora_2fds_2fv1_2fallocator_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t DSLifecyclePhase_internal_data_[] = {
+    262144u, 0u, };
+bool DSLifecyclePhase_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
 // ===================================================================
 
 class AllocateBattleRequest::_Internal {
@@ -3142,6 +3284,908 @@ void ListBattlesResponse::InternalSwap(ListBattlesResponse* PROTOBUF_RESTRICT ot
 }
 
 ::google::protobuf::Metadata ListBattlesResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class BattleStorageRecord::_Internal {
+ public:
+};
+
+BattleStorageRecord::BattleStorageRecord(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.ds.v1.BattleStorageRecord)
+}
+inline PROTOBUF_NDEBUG_INLINE BattleStorageRecord::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::ds::v1::BattleStorageRecord& from_msg)
+      : player_ids_{visibility, arena, from.player_ids_},
+        _player_ids_cached_byte_size_{0},
+        ds_pod_name_(arena, from.ds_pod_name_),
+        ds_addr_(arena, from.ds_addr_),
+        state_(arena, from.state_),
+        game_mode_(arena, from.game_mode_),
+        _cached_size_{0} {}
+
+BattleStorageRecord::BattleStorageRecord(
+    ::google::protobuf::Arena* arena,
+    const BattleStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BattleStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, match_id_),
+           offsetof(Impl_, last_heartbeat_ms_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::last_heartbeat_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.BattleStorageRecord)
+}
+inline PROTOBUF_NDEBUG_INLINE BattleStorageRecord::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : player_ids_{visibility, arena},
+        _player_ids_cached_byte_size_{0},
+        ds_pod_name_(arena),
+        ds_addr_(arena),
+        state_(arena),
+        game_mode_(arena),
+        _cached_size_{0} {}
+
+inline void BattleStorageRecord::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           0,
+           offsetof(Impl_, last_heartbeat_ms_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::last_heartbeat_ms_));
+}
+BattleStorageRecord::~BattleStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.ds.v1.BattleStorageRecord)
+  SharedDtor(*this);
+}
+inline void BattleStorageRecord::SharedDtor(MessageLite& self) {
+  BattleStorageRecord& this_ = static_cast<BattleStorageRecord&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.ds_pod_name_.Destroy();
+  this_._impl_.ds_addr_.Destroy();
+  this_._impl_.state_.Destroy();
+  this_._impl_.game_mode_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* BattleStorageRecord::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) BattleStorageRecord(arena);
+}
+constexpr auto BattleStorageRecord::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_ids_) +
+          decltype(BattleStorageRecord::_impl_.player_ids_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(BattleStorageRecord), alignof(BattleStorageRecord), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&BattleStorageRecord::PlacementNew_,
+                                 sizeof(BattleStorageRecord),
+                                 alignof(BattleStorageRecord));
+  }
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull BattleStorageRecord::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_BattleStorageRecord_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &BattleStorageRecord::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<BattleStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &BattleStorageRecord::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<BattleStorageRecord>(), &BattleStorageRecord::ByteSizeLong,
+            &BattleStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_._cached_size_),
+        false,
+    },
+    &BattleStorageRecord::kDescriptorMethods,
+    &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* BattleStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<4, 10, 0, 82, 2> BattleStorageRecord::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    10, 120,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294966272,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    10,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::pandora::ds::v1::BattleStorageRecord>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 match_id = 1 [json_name = "matchId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleStorageRecord, _impl_.match_id_), 63>(),
+     {8, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.match_id_)}},
+    // string ds_pod_name = 2 [json_name = "dsPodName"];
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ds_pod_name_)}},
+    // string ds_addr = 3 [json_name = "dsAddr"];
+    {::_pbi::TcParser::FastUS1,
+     {26, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ds_addr_)}},
+    // string state = 4 [json_name = "state"];
+    {::_pbi::TcParser::FastUS1,
+     {34, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.state_)}},
+    // repeated uint64 player_ids = 5 [json_name = "playerIds"];
+    {::_pbi::TcParser::FastV64P1,
+     {42, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_ids_)}},
+    // uint32 map_id = 6 [json_name = "mapId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleStorageRecord, _impl_.map_id_), 63>(),
+     {48, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.map_id_)}},
+    // string game_mode = 7 [json_name = "gameMode"];
+    {::_pbi::TcParser::FastUS1,
+     {58, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.game_mode_)}},
+    // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleStorageRecord, _impl_.allocated_at_ms_), 63>(),
+     {64, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.allocated_at_ms_)}},
+    // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleStorageRecord, _impl_.last_heartbeat_ms_), 63>(),
+     {72, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.last_heartbeat_ms_)}},
+    // int32 player_count = 10 [json_name = "playerCount"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleStorageRecord, _impl_.player_count_), 63>(),
+     {80, 63, 0, PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_count_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint64 match_id = 1 [json_name = "matchId"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.match_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // string ds_pod_name = 2 [json_name = "dsPodName"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ds_pod_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string ds_addr = 3 [json_name = "dsAddr"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.ds_addr_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string state = 4 [json_name = "state"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.state_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // repeated uint64 player_ids = 5 [json_name = "playerIds"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_ids_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    // uint32 map_id = 6 [json_name = "mapId"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.map_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
+    // string game_mode = 7 [json_name = "gameMode"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.game_mode_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.allocated_at_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+    // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.last_heartbeat_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+    // int32 player_count = 10 [json_name = "playerCount"];
+    {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_count_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt32)},
+  }},
+  // no aux_entries
+  {{
+    "\41\0\13\7\5\0\0\11\0\0\0\0\0\0\0\0"
+    "pandora.ds.v1.BattleStorageRecord"
+    "ds_pod_name"
+    "ds_addr"
+    "state"
+    "game_mode"
+  }},
+};
+
+PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.ds.v1.BattleStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.player_ids_.Clear();
+  _impl_.ds_pod_name_.ClearToEmpty();
+  _impl_.ds_addr_.ClearToEmpty();
+  _impl_.state_.ClearToEmpty();
+  _impl_.game_mode_.ClearToEmpty();
+  ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.last_heartbeat_ms_) -
+      reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.last_heartbeat_ms_));
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* BattleStorageRecord::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const BattleStorageRecord& this_ = static_cast<const BattleStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* BattleStorageRecord::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const BattleStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:pandora.ds.v1.BattleStorageRecord)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // uint64 match_id = 1 [json_name = "matchId"];
+          if (this_._internal_match_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                1, this_._internal_match_id(), target);
+          }
+
+          // string ds_pod_name = 2 [json_name = "dsPodName"];
+          if (!this_._internal_ds_pod_name().empty()) {
+            const std::string& _s = this_._internal_ds_pod_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.BattleStorageRecord.ds_pod_name");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // string ds_addr = 3 [json_name = "dsAddr"];
+          if (!this_._internal_ds_addr().empty()) {
+            const std::string& _s = this_._internal_ds_addr();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.BattleStorageRecord.ds_addr");
+            target = stream->WriteStringMaybeAliased(3, _s, target);
+          }
+
+          // string state = 4 [json_name = "state"];
+          if (!this_._internal_state().empty()) {
+            const std::string& _s = this_._internal_state();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.BattleStorageRecord.state");
+            target = stream->WriteStringMaybeAliased(4, _s, target);
+          }
+
+          // repeated uint64 player_ids = 5 [json_name = "playerIds"];
+          {
+            int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+            if (byte_size > 0) {
+              target = stream->WriteUInt64Packed(
+                  5, this_._internal_player_ids(), byte_size, target);
+            }
+          }
+
+          // uint32 map_id = 6 [json_name = "mapId"];
+          if (this_._internal_map_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+                6, this_._internal_map_id(), target);
+          }
+
+          // string game_mode = 7 [json_name = "gameMode"];
+          if (!this_._internal_game_mode().empty()) {
+            const std::string& _s = this_._internal_game_mode();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.BattleStorageRecord.game_mode");
+            target = stream->WriteStringMaybeAliased(7, _s, target);
+          }
+
+          // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+          if (this_._internal_allocated_at_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<8>(
+                    stream, this_._internal_allocated_at_ms(), target);
+          }
+
+          // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+          if (this_._internal_last_heartbeat_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<9>(
+                    stream, this_._internal_last_heartbeat_ms(), target);
+          }
+
+          // int32 player_count = 10 [json_name = "playerCount"];
+          if (this_._internal_player_count() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt32ToArrayWithField<10>(
+                    stream, this_._internal_player_count(), target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:pandora.ds.v1.BattleStorageRecord)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t BattleStorageRecord::ByteSizeLong(const MessageLite& base) {
+          const BattleStorageRecord& this_ = static_cast<const BattleStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t BattleStorageRecord::ByteSizeLong() const {
+          const BattleStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:pandora.ds.v1.BattleStorageRecord)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // repeated uint64 player_ids = 5 [json_name = "playerIds"];
+            {
+              total_size +=
+                  ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+                      this_._internal_player_ids(), 1,
+                      this_._impl_._player_ids_cached_byte_size_);
+            }
+          }
+           {
+            // string ds_pod_name = 2 [json_name = "dsPodName"];
+            if (!this_._internal_ds_pod_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_ds_pod_name());
+            }
+            // string ds_addr = 3 [json_name = "dsAddr"];
+            if (!this_._internal_ds_addr().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_ds_addr());
+            }
+            // string state = 4 [json_name = "state"];
+            if (!this_._internal_state().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_state());
+            }
+            // string game_mode = 7 [json_name = "gameMode"];
+            if (!this_._internal_game_mode().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_game_mode());
+            }
+            // uint64 match_id = 1 [json_name = "matchId"];
+            if (this_._internal_match_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_match_id());
+            }
+            // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+            if (this_._internal_allocated_at_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_allocated_at_ms());
+            }
+            // uint32 map_id = 6 [json_name = "mapId"];
+            if (this_._internal_map_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+                  this_._internal_map_id());
+            }
+            // int32 player_count = 10 [json_name = "playerCount"];
+            if (this_._internal_player_count() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+                  this_._internal_player_count());
+            }
+            // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+            if (this_._internal_last_heartbeat_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_last_heartbeat_ms());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void BattleStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<BattleStorageRecord*>(&to_msg);
+  auto& from = static_cast<const BattleStorageRecord&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.ds.v1.BattleStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+  if (!from._internal_ds_pod_name().empty()) {
+    _this->_internal_set_ds_pod_name(from._internal_ds_pod_name());
+  }
+  if (!from._internal_ds_addr().empty()) {
+    _this->_internal_set_ds_addr(from._internal_ds_addr());
+  }
+  if (!from._internal_state().empty()) {
+    _this->_internal_set_state(from._internal_state());
+  }
+  if (!from._internal_game_mode().empty()) {
+    _this->_internal_set_game_mode(from._internal_game_mode());
+  }
+  if (from._internal_match_id() != 0) {
+    _this->_impl_.match_id_ = from._impl_.match_id_;
+  }
+  if (from._internal_allocated_at_ms() != 0) {
+    _this->_impl_.allocated_at_ms_ = from._impl_.allocated_at_ms_;
+  }
+  if (from._internal_map_id() != 0) {
+    _this->_impl_.map_id_ = from._impl_.map_id_;
+  }
+  if (from._internal_player_count() != 0) {
+    _this->_impl_.player_count_ = from._impl_.player_count_;
+  }
+  if (from._internal_last_heartbeat_ms() != 0) {
+    _this->_impl_.last_heartbeat_ms_ = from._impl_.last_heartbeat_ms_;
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void BattleStorageRecord::CopyFrom(const BattleStorageRecord& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:pandora.ds.v1.BattleStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BattleStorageRecord::InternalSwap(BattleStorageRecord* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_pod_name_, &other->_impl_.ds_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_addr_, &other->_impl_.ds_addr_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.state_, &other->_impl_.state_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.last_heartbeat_ms_)
+      + sizeof(BattleStorageRecord::_impl_.last_heartbeat_ms_)
+      - PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.match_id_)>(
+          reinterpret_cast<char*>(&_impl_.match_id_),
+          reinterpret_cast<char*>(&other->_impl_.match_id_));
+}
+
+::google::protobuf::Metadata BattleStorageRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class DSLifecycleEvent::_Internal {
+ public:
+};
+
+DSLifecycleEvent::DSLifecycleEvent(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.ds.v1.DSLifecycleEvent)
+}
+inline PROTOBUF_NDEBUG_INLINE DSLifecycleEvent::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::ds::v1::DSLifecycleEvent& from_msg)
+      : player_ids_{visibility, arena, from.player_ids_},
+        _player_ids_cached_byte_size_{0},
+        ds_pod_name_(arena, from.ds_pod_name_),
+        game_mode_(arena, from.game_mode_),
+        _cached_size_{0} {}
+
+DSLifecycleEvent::DSLifecycleEvent(
+    ::google::protobuf::Arena* arena,
+    const DSLifecycleEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  DSLifecycleEvent* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, match_id_),
+           offsetof(Impl_, ts_ms_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::ts_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.DSLifecycleEvent)
+}
+inline PROTOBUF_NDEBUG_INLINE DSLifecycleEvent::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : player_ids_{visibility, arena},
+        _player_ids_cached_byte_size_{0},
+        ds_pod_name_(arena),
+        game_mode_(arena),
+        _cached_size_{0} {}
+
+inline void DSLifecycleEvent::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           0,
+           offsetof(Impl_, ts_ms_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::ts_ms_));
+}
+DSLifecycleEvent::~DSLifecycleEvent() {
+  // @@protoc_insertion_point(destructor:pandora.ds.v1.DSLifecycleEvent)
+  SharedDtor(*this);
+}
+inline void DSLifecycleEvent::SharedDtor(MessageLite& self) {
+  DSLifecycleEvent& this_ = static_cast<DSLifecycleEvent&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.ds_pod_name_.Destroy();
+  this_._impl_.game_mode_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* DSLifecycleEvent::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) DSLifecycleEvent(arena);
+}
+constexpr auto DSLifecycleEvent::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.player_ids_) +
+          decltype(DSLifecycleEvent::_impl_.player_ids_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(DSLifecycleEvent), alignof(DSLifecycleEvent), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&DSLifecycleEvent::PlacementNew_,
+                                 sizeof(DSLifecycleEvent),
+                                 alignof(DSLifecycleEvent));
+  }
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull DSLifecycleEvent::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_DSLifecycleEvent_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &DSLifecycleEvent::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<DSLifecycleEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &DSLifecycleEvent::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<DSLifecycleEvent>(), &DSLifecycleEvent::ByteSizeLong,
+            &DSLifecycleEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_._cached_size_),
+        false,
+    },
+    &DSLifecycleEvent::kDescriptorMethods,
+    &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* DSLifecycleEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 7, 0, 59, 2> DSLifecycleEvent::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    7, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967168,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    7,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::pandora::ds::v1::DSLifecycleEvent>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 match_id = 1 [json_name = "matchId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSLifecycleEvent, _impl_.match_id_), 63>(),
+     {8, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.match_id_)}},
+    // string ds_pod_name = 2 [json_name = "dsPodName"];
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.ds_pod_name_)}},
+    // .pandora.ds.v1.DSLifecyclePhase phase = 3 [json_name = "phase"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSLifecycleEvent, _impl_.phase_), 63>(),
+     {24, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.phase_)}},
+    // repeated uint64 player_ids = 4 [json_name = "playerIds"];
+    {::_pbi::TcParser::FastV64P1,
+     {34, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.player_ids_)}},
+    // uint32 map_id = 5 [json_name = "mapId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSLifecycleEvent, _impl_.map_id_), 63>(),
+     {40, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.map_id_)}},
+    // string game_mode = 6 [json_name = "gameMode"];
+    {::_pbi::TcParser::FastUS1,
+     {50, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.game_mode_)}},
+    // int64 ts_ms = 7 [json_name = "tsMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSLifecycleEvent, _impl_.ts_ms_), 63>(),
+     {56, 63, 0, PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.ts_ms_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint64 match_id = 1 [json_name = "matchId"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.match_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // string ds_pod_name = 2 [json_name = "dsPodName"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.ds_pod_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .pandora.ds.v1.DSLifecyclePhase phase = 3 [json_name = "phase"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.phase_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
+    // repeated uint64 player_ids = 4 [json_name = "playerIds"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.player_ids_), 0, 0,
+    (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    // uint32 map_id = 5 [json_name = "mapId"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.map_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
+    // string game_mode = 6 [json_name = "gameMode"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.game_mode_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // int64 ts_ms = 7 [json_name = "tsMs"];
+    {PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.ts_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+  }},
+  // no aux_entries
+  {{
+    "\36\0\13\0\0\0\11\0"
+    "pandora.ds.v1.DSLifecycleEvent"
+    "ds_pod_name"
+    "game_mode"
+  }},
+};
+
+PROTOBUF_NOINLINE void DSLifecycleEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.ds.v1.DSLifecycleEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.player_ids_.Clear();
+  _impl_.ds_pod_name_.ClearToEmpty();
+  _impl_.game_mode_.ClearToEmpty();
+  ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.ts_ms_) -
+      reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.ts_ms_));
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* DSLifecycleEvent::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const DSLifecycleEvent& this_ = static_cast<const DSLifecycleEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* DSLifecycleEvent::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const DSLifecycleEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:pandora.ds.v1.DSLifecycleEvent)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // uint64 match_id = 1 [json_name = "matchId"];
+          if (this_._internal_match_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                1, this_._internal_match_id(), target);
+          }
+
+          // string ds_pod_name = 2 [json_name = "dsPodName"];
+          if (!this_._internal_ds_pod_name().empty()) {
+            const std::string& _s = this_._internal_ds_pod_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.DSLifecycleEvent.ds_pod_name");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // .pandora.ds.v1.DSLifecyclePhase phase = 3 [json_name = "phase"];
+          if (this_._internal_phase() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteEnumToArray(
+                3, this_._internal_phase(), target);
+          }
+
+          // repeated uint64 player_ids = 4 [json_name = "playerIds"];
+          {
+            int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+            if (byte_size > 0) {
+              target = stream->WriteUInt64Packed(
+                  4, this_._internal_player_ids(), byte_size, target);
+            }
+          }
+
+          // uint32 map_id = 5 [json_name = "mapId"];
+          if (this_._internal_map_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+                5, this_._internal_map_id(), target);
+          }
+
+          // string game_mode = 6 [json_name = "gameMode"];
+          if (!this_._internal_game_mode().empty()) {
+            const std::string& _s = this_._internal_game_mode();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.DSLifecycleEvent.game_mode");
+            target = stream->WriteStringMaybeAliased(6, _s, target);
+          }
+
+          // int64 ts_ms = 7 [json_name = "tsMs"];
+          if (this_._internal_ts_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<7>(
+                    stream, this_._internal_ts_ms(), target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:pandora.ds.v1.DSLifecycleEvent)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t DSLifecycleEvent::ByteSizeLong(const MessageLite& base) {
+          const DSLifecycleEvent& this_ = static_cast<const DSLifecycleEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t DSLifecycleEvent::ByteSizeLong() const {
+          const DSLifecycleEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:pandora.ds.v1.DSLifecycleEvent)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // repeated uint64 player_ids = 4 [json_name = "playerIds"];
+            {
+              total_size +=
+                  ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+                      this_._internal_player_ids(), 1,
+                      this_._impl_._player_ids_cached_byte_size_);
+            }
+          }
+           {
+            // string ds_pod_name = 2 [json_name = "dsPodName"];
+            if (!this_._internal_ds_pod_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_ds_pod_name());
+            }
+            // string game_mode = 6 [json_name = "gameMode"];
+            if (!this_._internal_game_mode().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_game_mode());
+            }
+            // uint64 match_id = 1 [json_name = "matchId"];
+            if (this_._internal_match_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_match_id());
+            }
+            // .pandora.ds.v1.DSLifecyclePhase phase = 3 [json_name = "phase"];
+            if (this_._internal_phase() != 0) {
+              total_size += 1 +
+                            ::_pbi::WireFormatLite::EnumSize(this_._internal_phase());
+            }
+            // uint32 map_id = 5 [json_name = "mapId"];
+            if (this_._internal_map_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+                  this_._internal_map_id());
+            }
+            // int64 ts_ms = 7 [json_name = "tsMs"];
+            if (this_._internal_ts_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_ts_ms());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void DSLifecycleEvent::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<DSLifecycleEvent*>(&to_msg);
+  auto& from = static_cast<const DSLifecycleEvent&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.ds.v1.DSLifecycleEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+  if (!from._internal_ds_pod_name().empty()) {
+    _this->_internal_set_ds_pod_name(from._internal_ds_pod_name());
+  }
+  if (!from._internal_game_mode().empty()) {
+    _this->_internal_set_game_mode(from._internal_game_mode());
+  }
+  if (from._internal_match_id() != 0) {
+    _this->_impl_.match_id_ = from._impl_.match_id_;
+  }
+  if (from._internal_phase() != 0) {
+    _this->_impl_.phase_ = from._impl_.phase_;
+  }
+  if (from._internal_map_id() != 0) {
+    _this->_impl_.map_id_ = from._impl_.map_id_;
+  }
+  if (from._internal_ts_ms() != 0) {
+    _this->_impl_.ts_ms_ = from._impl_.ts_ms_;
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void DSLifecycleEvent::CopyFrom(const DSLifecycleEvent& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:pandora.ds.v1.DSLifecycleEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void DSLifecycleEvent::InternalSwap(DSLifecycleEvent* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_pod_name_, &other->_impl_.ds_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.ts_ms_)
+      + sizeof(DSLifecycleEvent::_impl_.ts_ms_)
+      - PROTOBUF_FIELD_OFFSET(DSLifecycleEvent, _impl_.match_id_)>(
+          reinterpret_cast<char*>(&_impl_.match_id_),
+          reinterpret_cast<char*>(&other->_impl_.match_id_));
+}
+
+::google::protobuf::Metadata DSLifecycleEvent::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

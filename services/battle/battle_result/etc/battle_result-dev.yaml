@@ -1,0 +1,50 @@
+# Pandora battle_result 服务开发期配置(W4 ③,2026-06-06)。
+#
+# - gRPC :50022 / HTTP :51022(仅 /metrics)
+# - MySQL 强依赖(pandora_battle 库:battles + battle_player_stats,幂等落库 不变量 §2)
+# - Kafka 强依赖(消费 pandora.battle.result / pandora.ds.lifecycle)
+# - player.update producer 弱依赖(player 服务上线后消费做幂等 UpdateMMR)
+# - W4 ③ player 服务未上线 → StaticMMRReader 全返 base_mmr,player_addr 留空
+# - duration 字段用 pkg/config.Duration,yaml 可直接写 "3s"
+# - dev: enable_reflection=true 便于 grpcurl 联调
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50022"
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+  http:
+    network: tcp
+    addr: ":51022"
+
+node:
+  zone_id: 1
+  # MySQL:dev 连本机 docker mysql 的 pandora_battle 库(强依赖,DSN 必填)。
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_battle?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+    max_open_conns: 32
+    max_idle_conns: 8
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+snowflake:
+  epoch: 1773446400
+  node_bits: 17
+  step_bits: 15
+
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  group_id: "pandora-battle-result"
+  partition_cnt: 4
+
+battle:
+  # elo_k_factor: Elo K 系数(胜负 MMR 变化幅度上限 ≈ K)
+  elo_k_factor: 32
+  # base_mmr: 玩家缺省 MMR(W4 ③ player 未上线 → StaticMMRReader 全返此值)
+  base_mmr: 1500
+  # consume_topics: 订阅 topic(留空走默认 [pandora.battle.result, pandora.ds.lifecycle])
+  consume_topics:
+    - "pandora.battle.result"
+    - "pandora.ds.lifecycle"
+  # player_addr: player 服务 gRPC 地址(W4 ③ 未上线 → 留空走 StaticMMRReader)
+  player_addr: ""

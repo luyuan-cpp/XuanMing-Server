@@ -266,6 +266,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 5. **proto 字段编号上线后不复用**(上线后 deprecate 不删除;开发期间已删除字段可复用编号,但必须重新生成 proto 并完整编译所有已启用 module)
 6. **MMR 计算在 battle_result**(不在 DS 算,DS 不可信)
 7. **Snowflake 业务 ID 一律 uint64,配置表 ID 默认 uint32,proto enum / 状态常量保持生成 enum 类型或 int32 语义**;ID unsigned 规则不扩展到 `TEAM_STATE_*` / `STATE_*` / `*_REASON_*` 等枚举常量
+8. **客户端只拿客户端可见结构**:不得把服务端存储快照 / 数据库整行 / Redis value 原样返回或推送给客户端;服务端按客户端当前需求的最小数据单位组装视图,必要时重新计算派生字段。
 
 ## 10. 风险登记册
 
@@ -299,6 +300,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | 0 | 2026-06-04 | 客户端协议:**gRPC-Web over HTTP/2 TLS** | UE 5.7 FHttpModule 已暴露(`SetOption("HttpVersion","2TLS")`),源码挖掘验证 |
 | 0 | 2026-06-04 | 推送架构:**集中 push 服务 + gRPC server stream** | 替代之前规划的 WebSocket 自研 + envelope,标准 gRPC 协议 |
 | W3 ⑦.0 | 2026-06-05 | **协议类型边界固化** | Snowflake 业务 ID 一律 `uint64`;配置表 ID 默认 `uint32`;proto enum / 状态常量保持生成 enum 类型或 `int32` 语义,不按非负常量改 `uint32` |
+| W4 文档 | 2026-06-06 | **客户端可见结构与服务端存储快照硬隔离** | 面向客户端的 response / push 不得直接返回 `*StorageRecord`、数据库整行、Redis value、内部 Kafka envelope 或审计字段;由服务端按客户端最小需求组装 / 计算视图 |
 | 0 | 2026-06-04 | 客户端实现:**自研 grpc-web 客户端基于 FHttpModule** | 不引入第三方 UE gRPC 插件(80MB+ / SSL 冲突 / UE 5.x 兼容性差);大厂(米哈游/腾讯/网易/Riot/Epic)客户端都不直连 gRPC |
 | 0 | 2026-06-04 | 服务清单 13 → **14**(新增 push)| Envoy 作为基础设施不计 go 服务 |
 | 0 | 2026-06-04 | 客户端连接最终值 = **2 条**(NetDriver + FHttpModule)| 用户铁律确认 |

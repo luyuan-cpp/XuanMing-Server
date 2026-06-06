@@ -1853,3 +1853,94 @@ go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/p
 ds_allocator 接真 Agones:`AgonesGameServerAllocator` 实现 `GameServerAllocator` 接口,
 调 K8s `allocation.agones.dev/v1` GameServerAllocation CRD;sweep abandoned 后通知
 battle_result 做玩家段位回滚补偿(不变量 §4);battle_result / hub_allocator 服务上线。
+
+---
+
+## W4 文档规则补充 — 客户端可见结构与存储快照隔离(2026-06-06)
+
+用户确认一条协议硬规则:**不能直接把服务器的存储数据发送给客户端**。
+
+已落文档:
+- `CLAUDE.md` §5.11 / §9.14:面向客户端的 RPC response / push payload 只能使用"客户端可见结构",不得直接返回 `*StorageRecord`、数据库整行、Redis value、内部 Kafka envelope 或审计字段。
+- `docs/design/pandora-arch.md` §9 / §11:作为架构不变量和决策行同步。
+- `docs/design/proto-design.md` §7:写 proto 时按客户端当前需求的最小字段集填充,必要时由服务端计算派生字段。
+
+判断:这个要求是对的,应作为硬性要求。它能减少敏感字段泄漏、避免客户端和服务端存储结构耦合、降低以后存储迁移成本,也能让 response / push 更稳定、更小。
+
+
+---
+
+## W4 ③ — battle_result 服务上线 + ds_allocator 发 abandoned 事件(2026-06-06)
+
+Pandora 第 7 个 Kratos 业务服。对局结算落库 + MMR 计算 + DS 崩溃补偿闭环。
+
+### 范围
+
+- **battle_result 新服**:gRPC :50022 / HTTP :51022(仅 /metrics)
+- **MySQL 强依赖**(`pandora_battle` 库,无 Redis):
+  - `battles`(PK match_id,outcome NORMAL/ABANDONED,winner_team,ds_pod_name,game_mode,map_id)
+  - `battle_player_stats`(uk_match_player(match_id,player_id) 幂等键,kills/deaths/assists/伤害/治疗/金币/mmr_delta)
+- **消费 `pandora.battle.result`** → `ReportResult` 幂等落库(不变量 §2,SaveResult 命中 unique → alreadyRecorded 不重复写)
+- **标准 Elo MMR 在此算**(不变量 §6,DS 上报 mmr_delta 一律被覆盖):
+  - `expectedA = 1/(1+10^((avgB-avgA)/400))`,K=32,胜 1 / 负 0 / 平 0.5
+  - 两队按 avg MMR 算 deltaA/deltaB,写回每个 stat.mmr_delta;K 相等时两队对称
+  - W4 ③ player 服务未上线 → `StaticMMRReader` 全返 base_mmr 1500;`player_addr` 留作 player gRPC reader 钩子
+- **消费 `pandora.ds.lifecycle` 的 ABANDONED** → `HandleAbandoned` 写 outcome=ABANDONED + delta 全 0 补偿记录(幂等,不变量 §4)
+- **落库成功才发 `pandora.player.update`** `PlayerUpdateEvent`(kafka key=player_id 不变量 §9,player 服务上线后消费做幂等 UpdateMMR;弱依赖 broker 不通则静默丢)
+- **RPC**:`ReportResult`(同步兜底)/`GetMatchResult`/`ListPlayerHistory`
+  - 风险入口加固(Codex 复审):`ReportResult` 收到 `Outcome=ABANDONED` 时**强制 mmr_delta 全 0**(不走 assignMMR),防 DS 不可信地通过 battle.result 伪造 abandoned 改段位(不变量 §4/§6);权威 abandoned 路径仍是 ds.lifecycle → HandleAbandoned
+- **ds_allocator 改动**:`sweepOnce` 心跳超时 abandoned 后,经新增 `DSLifecyclePusher`(**弱依赖**,nil-safe)发 `DSLifecycleEvent{phase=ABANDONED, player_ids/map_id/game_mode}`(key=match_id)给 battle_result 补偿,替换原 `// TODO(W4 ③)` 注释
+
+### proto 改动 [proto]
+
+- `proto/pandora/battle/v1/battle.proto`:新增 `enum BattleOutcome { UNSPECIFIED/NORMAL/ABANDONED }` + `BattleResult.outcome=10`(field 9 保留)
+- `proto/pandora/player/v1/player.proto`:新增 `message PlayerUpdateEvent { player_id, match_id, mmr_delta, reason, ts_ms }`
+- `proto/pandora/ds/v1/allocator.proto`:新增 `enum DSLifecyclePhase { UNSPECIFIED/ALLOCATED/RELEASED/ABANDONED }` + `message DSLifecycleEvent { match_id, ds_pod_name, phase, player_ids, map_id, game_mode, ts_ms }`
+- `pkg/kafkax/topics.go`:新增 `TopicBattleResult = "pandora.battle.result"` / `TopicDSLifecycle = "pandora.ds.lifecycle"`
+- go + cpp pb 已 regen(`pwsh tools/scripts/proto_gen.ps1` / `-Cpp`)
+
+### errcode
+
+- 复用已存在 `ERR_BATTLE_RESULT_DUPLICATE=6001` / `ERR_BATTLE_RESULT_DECODE=6002` / `ERR_BATTLE_RESULT_DB_WRITE=6003`(无新增)
+
+### 验证
+
+实际跑过的命令与结果(Codex 复审要求据实记录,不复述未跑的范围):
+
+- **build(8 module)PASS** `BUILD=0`:
+  ```pwsh
+  go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/... ./services/matchmaking/matchmaker/... ./services/battle/ds_allocator/... ./services/battle/battle_result/...
+  ```
+- **vet(仅本轮改动的 2 module)PASS** `VET=0`(未对全 8 module 跑 vet):
+  ```pwsh
+  go vet ./services/battle/battle_result/... ./services/battle/ds_allocator/...
+  ```
+- **test PASS** `TEST=0`:`go test ./services/battle/battle_result/...`(biz 8 用例)+ `go test ./services/battle/ds_allocator/...`(既有用例全绿)
+
+- battle_result biz 8 用例:Elo 等分对称(+16/-16) / 平局对称(0/0) / 强队赢得少 + K 守恒、ReportResult 覆盖 DS 脏 mmr_delta + 幂等命中、**ReportResult 收到 ABANDONED 强制 delta 全 0**(风险入口加固)、HandleAbandoned outcome=ABANDONED + delta 全 0 + 幂等、ReportResult/HandleAbandoned 输入校验
+- 新增 `deploy/mysql-init/03-battle-tables.sql`(`pandora_battle` 库已在 01 创建,仅建 2 张表)
+- go.work 启用 `use ./services/battle/battle_result`
+- 未做:8 module 全量 vet / `go test -race`(本机无 mingw gcc,-race 留 Codex/CI)/ 真 MySQL+Kafka 联调(环境步,交 Codex)
+
+### 交接 Codex(环境/收尾)
+
+- battle_result 是新 module,建议 Codex 在 `services/battle/battle_result` 跑 `go mod tidy` 复核 go.sum(workspace 模式下 build 已通过,本机已跑过一次 tidy;tidy 用于固化直接/间接依赖与校验和;注意别误删测试用直接依赖)
+- ds_allocator go.mod 无新增直接依赖(`proto.Marshal` 走已有 protobuf direct,`kafkax`/`sarama` 走已有间接);如 tidy 有调整请复核
+- 联调:需起 mysql(:3307,`pandora_battle` 库执行 03 建表)+ kafka(:9093)+ battle_result(:50022)+ ds_allocator(:50020);battle_result `kafka.brokers` 必填,player.update producer 弱依赖
+
+### 已知阶段限制(W4 ③,Codex 复审澄清)
+
+- **abandoned 补偿当前不是"必有补偿"的可靠闭环,只是 best-effort**(纠正上文遣词):
+  - ds_allocator 发 `ds.lifecycle` 是**弱依赖**:Kafka publish 失败只 `Warn`,事件**会丢**;abandoned 镜像虽留在 ds_allocator 的 Redis(供查),但 battle_result 不会收到补偿事件
+  - battle_result 的 player.update 也是弱依赖,同理 publish 失败静默丢
+  - 因此不变量 §4「DS 崩溃必有补偿」在 W4 ③ 阶段**只在 Kafka 正常时成立**;broker 抖动 / 分区不可用时补偿可能缺失,无重试、无待补偿扫描、无死信
+- **可靠补偿留后续**(任选其一,W4 ④+ 决策):
+  - ds_allocator 发 lifecycle 失败时落本地"待补偿队列"(Redis ZSET),后台扫描重发(类似 sweep)
+  - 或 battle_result 增一条对账路径:周期扫 ds_allocator 的 abandoned 镜像与本库 `battles` 差集补录
+  - 或把 lifecycle / player.update 改成**强依赖 + 事务性 outbox**(落库与发事件原子)
+
+### 后续路线(W4 ④+)
+
+- player 服务上线消费 `pandora.player.update` 做幂等 UpdateMMR,并把 battle_result 的 `StaticMMRReader` 换成真 player gRPC reader(填 `player_addr`)
+- ds_allocator 接真 Agones GameServerAllocation CRD(环境就绪步,交 Codex/人)
+- battle_result data 层 MySQL 集成测试(需真 DB 或 sqlmock,留后续)

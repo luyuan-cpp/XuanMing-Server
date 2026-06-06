@@ -50,6 +50,21 @@ const (
 	TopicSystemNotify = "pandora.system.notify"
 )
 
+// 非推送 topic(服务间事件,push 不订阅;W4 ③,2026-06-06)。
+//
+// 这两个不是给客户端推送用的,而是后端服务间异步事件:
+//   - battle.result:战斗 DS 上报结算 → battle_result 幂等落库(key=match_id,不变量 §9)
+//   - ds.lifecycle:ds_allocator 发 DS 生命周期事件(W4 ③ 仅 abandoned)→ battle_result 补偿
+const (
+	// TopicBattleResult — proto: pandora.battle.v1.BattleResult
+	// key=match_id;at-least-once,消费者(battle_result)幂等落库(不变量 §2)
+	TopicBattleResult = "pandora.battle.result"
+
+	// TopicDSLifecycle — proto: pandora.ds.v1.DSLifecycleEvent
+	// key=match_id;W4 ③ ds_allocator 心跳超时发 ABANDONED → battle_result 写补偿记录(不变量 §4)
+	TopicDSLifecycle = "pandora.ds.lifecycle"
+)
+
 // PushTopics 是 push 服务默认订阅的 topic 集合(W3 ④ 启用的 3 个)。
 //
 // 后续 player.update / friend.event / system.notify Event message 落地后,

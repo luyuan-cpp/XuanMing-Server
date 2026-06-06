@@ -110,3 +110,31 @@ message BattleStorageRecord {
   int32  player_count      = 10;
 }
 
+// ===== 生命周期事件(kafka pandora.ds.lifecycle)=====
+
+// DSLifecyclePhase 是 DS 实例生命周期阶段。
+//
+// W4 ③:ds_allocator 仅在心跳超时补偿时发 ABANDONED(不变量 §4);
+// ALLOCATED / RELEASED 留后续 DS 监控接入时启用,占位先定义保持枚举稳定。
+enum DSLifecyclePhase {
+  DS_LIFECYCLE_PHASE_UNSPECIFIED = 0;
+  DS_LIFECYCLE_PHASE_ALLOCATED   = 1;  // 分配成功(W4 ③ 暂不发)
+  DS_LIFECYCLE_PHASE_RELEASED    = 2;  // 正常回收(W4 ③ 暂不发)
+  DS_LIFECYCLE_PHASE_ABANDONED   = 3;  // 心跳超时 → 玩家段位回滚补偿
+}
+
+// DSLifecycleEvent 是 ds_allocator 发到 pandora.ds.lifecycle 的事件
+// (kafka key = match_id,不变量 §9 同对局事件保序)。
+//
+// 消费方 battle_result:ABANDONED → 写 abandoned 战绩(outcome=ABANDONED,mmr_delta 全 0,
+// 不变量 §4 DS 崩溃必有补偿);player 服务上线后据此回滚玩家段位。
+message DSLifecycleEvent {
+  uint64 match_id          = 1;
+  string ds_pod_name       = 2;
+  DSLifecyclePhase phase   = 3;
+  repeated uint64 player_ids = 4;
+  uint32 map_id            = 5;
+  string game_mode         = 6;
+  int64  ts_ms             = 7;
+}
+

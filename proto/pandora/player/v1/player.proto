@@ -102,3 +102,18 @@ message UpdateMMRResponse {
   pandora.common.v1.ErrCode code = 1;
   int32 new_mmr = 2;
 }
+
+// ===== 推送事件(kafka pandora.player.update)=====
+
+// PlayerUpdateEvent 是玩家档案变更事件(kafka key = player_id,不变量 §9)。
+//
+// W4 ③:battle_result 结算后发本事件携带 mmr_delta(reason="win"/"lose"/"abandon"),
+// player 服务上线后消费做幂等 UpdateMMR(idempotency_key=match_id);push 可订阅推客户端。
+// W4 ③ 阶段尚无消费方,先定义 proto + 生产侧打通,至少投递一次保留供后续消费。
+message PlayerUpdateEvent {
+  uint64 player_id = 1;
+  uint64 match_id  = 2;  // 幂等键来源
+  int32  mmr_delta = 3;
+  string reason    = 4;  // "win" | "lose" | "draw" | "abandon"
+  int64  ts_ms     = 5;
+}

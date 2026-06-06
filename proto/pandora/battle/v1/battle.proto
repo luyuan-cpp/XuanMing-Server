@@ -46,6 +46,16 @@ message BattleResult {
   uint32 map_id       = 8;
   // 9 reserved
   reserved 9;
+  BattleOutcome outcome = 10;  // 结算类型(正常 / DS 崩溃补偿)
+}
+
+// BattleOutcome 区分正常结算与 DS 崩溃补偿(不变量 §4)。
+//
+// ABANDONED:DS 心跳超时,battle_result 写补偿记录,mmr_delta 全 0,玩家不掉段。
+enum BattleOutcome {
+  BATTLE_OUTCOME_UNSPECIFIED = 0;
+  BATTLE_OUTCOME_NORMAL      = 1;  // 正常结算
+  BATTLE_OUTCOME_ABANDONED   = 2;  // DS 崩溃补偿,mmr_delta 全 0
 }
 
 // DS 通过 kafka envelope 上报,但本 RPC 也提供同步上报用法(测试 / 兼容)

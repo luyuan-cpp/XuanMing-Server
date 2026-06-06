@@ -28,6 +28,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
 // @@protoc_insertion_point(includes)
@@ -64,6 +65,12 @@ extern AllocateBattleResponseDefaultTypeInternal _AllocateBattleResponse_default
 class BattleInfo;
 struct BattleInfoDefaultTypeInternal;
 extern BattleInfoDefaultTypeInternal _BattleInfo_default_instance_;
+class BattleStorageRecord;
+struct BattleStorageRecordDefaultTypeInternal;
+extern BattleStorageRecordDefaultTypeInternal _BattleStorageRecord_default_instance_;
+class DSLifecycleEvent;
+struct DSLifecycleEventDefaultTypeInternal;
+extern DSLifecycleEventDefaultTypeInternal _DSLifecycleEvent_default_instance_;
 class HeartbeatRequest;
 struct HeartbeatRequestDefaultTypeInternal;
 extern HeartbeatRequestDefaultTypeInternal _HeartbeatRequest_default_instance_;
@@ -93,6 +100,41 @@ namespace protobuf {
 namespace pandora {
 namespace ds {
 namespace v1 {
+enum DSLifecyclePhase : int {
+  DS_LIFECYCLE_PHASE_UNSPECIFIED = 0,
+  DS_LIFECYCLE_PHASE_ALLOCATED = 1,
+  DS_LIFECYCLE_PHASE_RELEASED = 2,
+  DS_LIFECYCLE_PHASE_ABANDONED = 3,
+  DSLifecyclePhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      std::numeric_limits<::int32_t>::min(),
+  DSLifecyclePhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      std::numeric_limits<::int32_t>::max(),
+};
+
+bool DSLifecyclePhase_IsValid(int value);
+extern const uint32_t DSLifecyclePhase_internal_data_[];
+constexpr DSLifecyclePhase DSLifecyclePhase_MIN = static_cast<DSLifecyclePhase>(0);
+constexpr DSLifecyclePhase DSLifecyclePhase_MAX = static_cast<DSLifecyclePhase>(3);
+constexpr int DSLifecyclePhase_ARRAYSIZE = 3 + 1;
+const ::google::protobuf::EnumDescriptor*
+DSLifecyclePhase_descriptor();
+template <typename T>
+const std::string& DSLifecyclePhase_Name(T value) {
+  static_assert(std::is_same<T, DSLifecyclePhase>::value ||
+                    std::is_integral<T>::value,
+                "Incorrect type passed to DSLifecyclePhase_Name().");
+  return DSLifecyclePhase_Name(static_cast<DSLifecyclePhase>(value));
+}
+template <>
+inline const std::string& DSLifecyclePhase_Name(DSLifecyclePhase value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<DSLifecyclePhase_descriptor,
+                                                 0, 3>(
+      static_cast<int>(value));
+}
+inline bool DSLifecyclePhase_Parse(absl::string_view name, DSLifecyclePhase* value) {
+  return ::google::protobuf::internal::ParseNamedEnum<DSLifecyclePhase>(
+      DSLifecyclePhase_descriptor(), name, value);
+}
 
 // ===================================================================
 
@@ -1167,6 +1209,620 @@ class HeartbeatRequest final : public ::google::protobuf::Message
     float cpu_pct_;
     ::int64_t ts_ms_;
     float mem_mb_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class DSLifecycleEvent final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.DSLifecycleEvent) */ {
+ public:
+  inline DSLifecycleEvent() : DSLifecycleEvent(nullptr) {}
+  ~DSLifecycleEvent() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DSLifecycleEvent* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DSLifecycleEvent));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR DSLifecycleEvent(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline DSLifecycleEvent(const DSLifecycleEvent& from) : DSLifecycleEvent(nullptr, from) {}
+  inline DSLifecycleEvent(DSLifecycleEvent&& from) noexcept
+      : DSLifecycleEvent(nullptr, std::move(from)) {}
+  inline DSLifecycleEvent& operator=(const DSLifecycleEvent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DSLifecycleEvent& operator=(DSLifecycleEvent&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const DSLifecycleEvent& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DSLifecycleEvent* internal_default_instance() {
+    return reinterpret_cast<const DSLifecycleEvent*>(
+        &_DSLifecycleEvent_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(DSLifecycleEvent& a, DSLifecycleEvent& b) { a.Swap(&b); }
+  inline void Swap(DSLifecycleEvent* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DSLifecycleEvent* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DSLifecycleEvent* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DSLifecycleEvent>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DSLifecycleEvent& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DSLifecycleEvent& from) { DSLifecycleEvent::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DSLifecycleEvent* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.DSLifecycleEvent"; }
+
+ protected:
+  explicit DSLifecycleEvent(::google::protobuf::Arena* arena);
+  DSLifecycleEvent(::google::protobuf::Arena* arena, const DSLifecycleEvent& from);
+  DSLifecycleEvent(::google::protobuf::Arena* arena, DSLifecycleEvent&& from) noexcept
+      : DSLifecycleEvent(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 4,
+    kDsPodNameFieldNumber = 2,
+    kGameModeFieldNumber = 6,
+    kMatchIdFieldNumber = 1,
+    kPhaseFieldNumber = 3,
+    kMapIdFieldNumber = 5,
+    kTsMsFieldNumber = 7,
+  };
+  // repeated uint64 player_ids = 4 [json_name = "playerIds"];
+  int player_ids_size() const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  const ::google::protobuf::RepeatedField<::uint64_t>& player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_player_ids();
+
+  public:
+  // string ds_pod_name = 2 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  const std::string& ds_pod_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  std::string* mutable_ds_pod_name();
+  PROTOBUF_NODISCARD std::string* release_ds_pod_name();
+  void set_allocated_ds_pod_name(std::string* value);
+
+  private:
+  const std::string& _internal_ds_pod_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(
+      const std::string& value);
+  std::string* _internal_mutable_ds_pod_name();
+
+  public:
+  // string game_mode = 6 [json_name = "gameMode"];
+  void clear_game_mode() ;
+  const std::string& game_mode() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_game_mode(Arg_&& arg, Args_... args);
+  std::string* mutable_game_mode();
+  PROTOBUF_NODISCARD std::string* release_game_mode();
+  void set_allocated_game_mode(std::string* value);
+
+  private:
+  const std::string& _internal_game_mode() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(
+      const std::string& value);
+  std::string* _internal_mutable_game_mode();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // .pandora.ds.v1.DSLifecyclePhase phase = 3 [json_name = "phase"];
+  void clear_phase() ;
+  ::pandora::ds::v1::DSLifecyclePhase phase() const;
+  void set_phase(::pandora::ds::v1::DSLifecyclePhase value);
+
+  private:
+  ::pandora::ds::v1::DSLifecyclePhase _internal_phase() const;
+  void _internal_set_phase(::pandora::ds::v1::DSLifecyclePhase value);
+
+  public:
+  // uint32 map_id = 5 [json_name = "mapId"];
+  void clear_map_id() ;
+  ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // int64 ts_ms = 7 [json_name = "tsMs"];
+  void clear_ts_ms() ;
+  ::int64_t ts_ms() const;
+  void set_ts_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_ts_ms() const;
+  void _internal_set_ts_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.DSLifecycleEvent)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      3, 7, 0,
+      59, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const DSLifecycleEvent& from_msg);
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::uint64_t match_id_;
+    int phase_;
+    ::uint32_t map_id_;
+    ::int64_t ts_ms_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class BattleStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattleStorageRecord) */ {
+ public:
+  inline BattleStorageRecord() : BattleStorageRecord(nullptr) {}
+  ~BattleStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleStorageRecord* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR BattleStorageRecord(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline BattleStorageRecord(const BattleStorageRecord& from) : BattleStorageRecord(nullptr, from) {}
+  inline BattleStorageRecord(BattleStorageRecord&& from) noexcept
+      : BattleStorageRecord(nullptr, std::move(from)) {}
+  inline BattleStorageRecord& operator=(const BattleStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleStorageRecord& operator=(BattleStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const BattleStorageRecord& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const BattleStorageRecord* internal_default_instance() {
+    return reinterpret_cast<const BattleStorageRecord*>(
+        &_BattleStorageRecord_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(BattleStorageRecord& a, BattleStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(BattleStorageRecord* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleStorageRecord* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  BattleStorageRecord* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleStorageRecord& from) { BattleStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleStorageRecord* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.BattleStorageRecord"; }
+
+ protected:
+  explicit BattleStorageRecord(::google::protobuf::Arena* arena);
+  BattleStorageRecord(::google::protobuf::Arena* arena, const BattleStorageRecord& from);
+  BattleStorageRecord(::google::protobuf::Arena* arena, BattleStorageRecord&& from) noexcept
+      : BattleStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 5,
+    kDsPodNameFieldNumber = 2,
+    kDsAddrFieldNumber = 3,
+    kStateFieldNumber = 4,
+    kGameModeFieldNumber = 7,
+    kMatchIdFieldNumber = 1,
+    kAllocatedAtMsFieldNumber = 8,
+    kMapIdFieldNumber = 6,
+    kPlayerCountFieldNumber = 10,
+    kLastHeartbeatMsFieldNumber = 9,
+  };
+  // repeated uint64 player_ids = 5 [json_name = "playerIds"];
+  int player_ids_size() const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  const ::google::protobuf::RepeatedField<::uint64_t>& player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_player_ids();
+
+  public:
+  // string ds_pod_name = 2 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  const std::string& ds_pod_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  std::string* mutable_ds_pod_name();
+  PROTOBUF_NODISCARD std::string* release_ds_pod_name();
+  void set_allocated_ds_pod_name(std::string* value);
+
+  private:
+  const std::string& _internal_ds_pod_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(
+      const std::string& value);
+  std::string* _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_addr = 3 [json_name = "dsAddr"];
+  void clear_ds_addr() ;
+  const std::string& ds_addr() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_ds_addr(Arg_&& arg, Args_... args);
+  std::string* mutable_ds_addr();
+  PROTOBUF_NODISCARD std::string* release_ds_addr();
+  void set_allocated_ds_addr(std::string* value);
+
+  private:
+  const std::string& _internal_ds_addr() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_ds_addr(
+      const std::string& value);
+  std::string* _internal_mutable_ds_addr();
+
+  public:
+  // string state = 4 [json_name = "state"];
+  void clear_state() ;
+  const std::string& state() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_state(Arg_&& arg, Args_... args);
+  std::string* mutable_state();
+  PROTOBUF_NODISCARD std::string* release_state();
+  void set_allocated_state(std::string* value);
+
+  private:
+  const std::string& _internal_state() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_state(
+      const std::string& value);
+  std::string* _internal_mutable_state();
+
+  public:
+  // string game_mode = 7 [json_name = "gameMode"];
+  void clear_game_mode() ;
+  const std::string& game_mode() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_game_mode(Arg_&& arg, Args_... args);
+  std::string* mutable_game_mode();
+  PROTOBUF_NODISCARD std::string* release_game_mode();
+  void set_allocated_game_mode(std::string* value);
+
+  private:
+  const std::string& _internal_game_mode() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(
+      const std::string& value);
+  std::string* _internal_mutable_game_mode();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+  void clear_allocated_at_ms() ;
+  ::int64_t allocated_at_ms() const;
+  void set_allocated_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_allocated_at_ms() const;
+  void _internal_set_allocated_at_ms(::int64_t value);
+
+  public:
+  // uint32 map_id = 6 [json_name = "mapId"];
+  void clear_map_id() ;
+  ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // int32 player_count = 10 [json_name = "playerCount"];
+  void clear_player_count() ;
+  ::int32_t player_count() const;
+  void set_player_count(::int32_t value);
+
+  private:
+  ::int32_t _internal_player_count() const;
+  void _internal_set_player_count(::int32_t value);
+
+  public:
+  // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+  void clear_last_heartbeat_ms() ;
+  ::int64_t last_heartbeat_ms() const;
+  void set_last_heartbeat_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_last_heartbeat_ms() const;
+  void _internal_set_last_heartbeat_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      4, 10, 0,
+      82, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const BattleStorageRecord& from_msg);
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_addr_;
+    ::google::protobuf::internal::ArenaStringPtr state_;
+    ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::uint64_t match_id_;
+    ::int64_t allocated_at_ms_;
+    ::uint32_t map_id_;
+    ::int32_t player_count_;
+    ::int64_t last_heartbeat_ms_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3152,6 +3808,590 @@ ListBattlesResponse::_internal_mutable_battles() {
   return &_impl_.battles_;
 }
 
+// -------------------------------------------------------------------
+
+// BattleStorageRecord
+
+// uint64 match_id = 1 [json_name = "matchId"];
+inline void BattleStorageRecord::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t BattleStorageRecord::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.match_id)
+  return _internal_match_id();
+}
+inline void BattleStorageRecord::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.match_id)
+}
+inline ::uint64_t BattleStorageRecord::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void BattleStorageRecord::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// string ds_pod_name = 2 [json_name = "dsPodName"];
+inline void BattleStorageRecord::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+}
+inline const std::string& BattleStorageRecord::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_ds_pod_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
+}
+inline std::string* BattleStorageRecord::mutable_ds_pod_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
+  return _s;
+}
+inline const std::string& BattleStorageRecord::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void BattleStorageRecord::_internal_set_ds_pod_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline std::string* BattleStorageRecord::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline std::string* BattleStorageRecord::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
+  return _impl_.ds_pod_name_.Release();
+}
+inline void BattleStorageRecord::set_allocated_ds_pod_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
+}
+
+// string ds_addr = 3 [json_name = "dsAddr"];
+inline void BattleStorageRecord::clear_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_addr_.ClearToEmpty();
+}
+inline const std::string& BattleStorageRecord::ds_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.ds_addr)
+  return _internal_ds_addr();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_ds_addr(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ds_addr)
+}
+inline std::string* BattleStorageRecord::mutable_ds_addr() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_ds_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.ds_addr)
+  return _s;
+}
+inline const std::string& BattleStorageRecord::_internal_ds_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_addr_.Get();
+}
+inline void BattleStorageRecord::_internal_set_ds_addr(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_addr_.Set(value, GetArena());
+}
+inline std::string* BattleStorageRecord::_internal_mutable_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_addr_.Mutable( GetArena());
+}
+inline std::string* BattleStorageRecord::release_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.ds_addr)
+  return _impl_.ds_addr_.Release();
+}
+inline void BattleStorageRecord::set_allocated_ds_addr(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_addr_.IsDefault()) {
+    _impl_.ds_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.ds_addr)
+}
+
+// string state = 4 [json_name = "state"];
+inline void BattleStorageRecord::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.ClearToEmpty();
+}
+inline const std::string& BattleStorageRecord::state() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.state)
+  return _internal_state();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_state(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.state)
+}
+inline std::string* BattleStorageRecord::mutable_state() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.state)
+  return _s;
+}
+inline const std::string& BattleStorageRecord::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_.Get();
+}
+inline void BattleStorageRecord::_internal_set_state(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.Set(value, GetArena());
+}
+inline std::string* BattleStorageRecord::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.state_.Mutable( GetArena());
+}
+inline std::string* BattleStorageRecord::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.state)
+  return _impl_.state_.Release();
+}
+inline void BattleStorageRecord::set_allocated_state(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.state_.IsDefault()) {
+    _impl_.state_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.state)
+}
+
+// repeated uint64 player_ids = 5 [json_name = "playerIds"];
+inline int BattleStorageRecord::_internal_player_ids_size() const {
+  return _internal_player_ids().size();
+}
+inline int BattleStorageRecord::player_ids_size() const {
+  return _internal_player_ids_size();
+}
+inline void BattleStorageRecord::clear_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_ids_.Clear();
+}
+inline ::uint64_t BattleStorageRecord::player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.player_ids)
+  return _internal_player_ids().Get(index);
+}
+inline void BattleStorageRecord::set_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.player_ids)
+}
+inline void BattleStorageRecord::add_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_ids()->Add(value);
+  // @@protoc_insertion_point(field_add:pandora.ds.v1.BattleStorageRecord.player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BattleStorageRecord::player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.ds.v1.BattleStorageRecord.player_ids)
+  return _internal_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* BattleStorageRecord::mutable_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:pandora.ds.v1.BattleStorageRecord.player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BattleStorageRecord::_internal_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* BattleStorageRecord::_internal_mutable_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_ids_;
+}
+
+// uint32 map_id = 6 [json_name = "mapId"];
+inline void BattleStorageRecord::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+}
+inline ::uint32_t BattleStorageRecord::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.map_id)
+  return _internal_map_id();
+}
+inline void BattleStorageRecord::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.map_id)
+}
+inline ::uint32_t BattleStorageRecord::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void BattleStorageRecord::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
+// string game_mode = 7 [json_name = "gameMode"];
+inline void BattleStorageRecord::clear_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.ClearToEmpty();
+}
+inline const std::string& BattleStorageRecord::game_mode() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.game_mode)
+  return _internal_game_mode();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_game_mode(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.game_mode)
+}
+inline std::string* BattleStorageRecord::mutable_game_mode() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_game_mode();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.game_mode)
+  return _s;
+}
+inline const std::string& BattleStorageRecord::_internal_game_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.game_mode_.Get();
+}
+inline void BattleStorageRecord::_internal_set_game_mode(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.Set(value, GetArena());
+}
+inline std::string* BattleStorageRecord::_internal_mutable_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.game_mode_.Mutable( GetArena());
+}
+inline std::string* BattleStorageRecord::release_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.game_mode)
+  return _impl_.game_mode_.Release();
+}
+inline void BattleStorageRecord::set_allocated_game_mode(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.game_mode_.IsDefault()) {
+    _impl_.game_mode_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.game_mode)
+}
+
+// int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+inline void BattleStorageRecord::clear_allocated_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocated_at_ms_ = ::int64_t{0};
+}
+inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
+  return _internal_allocated_at_ms();
+}
+inline void BattleStorageRecord::set_allocated_at_ms(::int64_t value) {
+  _internal_set_allocated_at_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
+}
+inline ::int64_t BattleStorageRecord::_internal_allocated_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocated_at_ms_;
+}
+inline void BattleStorageRecord::_internal_set_allocated_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocated_at_ms_ = value;
+}
+
+// int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+inline void BattleStorageRecord::clear_last_heartbeat_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_heartbeat_ms_ = ::int64_t{0};
+}
+inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
+  return _internal_last_heartbeat_ms();
+}
+inline void BattleStorageRecord::set_last_heartbeat_ms(::int64_t value) {
+  _internal_set_last_heartbeat_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
+}
+inline ::int64_t BattleStorageRecord::_internal_last_heartbeat_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_heartbeat_ms_;
+}
+inline void BattleStorageRecord::_internal_set_last_heartbeat_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_heartbeat_ms_ = value;
+}
+
+// int32 player_count = 10 [json_name = "playerCount"];
+inline void BattleStorageRecord::clear_player_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_count_ = 0;
+}
+inline ::int32_t BattleStorageRecord::player_count() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.player_count)
+  return _internal_player_count();
+}
+inline void BattleStorageRecord::set_player_count(::int32_t value) {
+  _internal_set_player_count(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.player_count)
+}
+inline ::int32_t BattleStorageRecord::_internal_player_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_count_;
+}
+inline void BattleStorageRecord::_internal_set_player_count(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// DSLifecycleEvent
+
+// uint64 match_id = 1 [json_name = "matchId"];
+inline void DSLifecycleEvent::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t DSLifecycleEvent::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.match_id)
+  return _internal_match_id();
+}
+inline void DSLifecycleEvent::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.match_id)
+}
+inline ::uint64_t DSLifecycleEvent::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void DSLifecycleEvent::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// string ds_pod_name = 2 [json_name = "dsPodName"];
+inline void DSLifecycleEvent::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+}
+inline const std::string& DSLifecycleEvent::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void DSLifecycleEvent::set_ds_pod_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.ds_pod_name)
+}
+inline std::string* DSLifecycleEvent::mutable_ds_pod_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.DSLifecycleEvent.ds_pod_name)
+  return _s;
+}
+inline const std::string& DSLifecycleEvent::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void DSLifecycleEvent::_internal_set_ds_pod_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline std::string* DSLifecycleEvent::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline std::string* DSLifecycleEvent::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.DSLifecycleEvent.ds_pod_name)
+  return _impl_.ds_pod_name_.Release();
+}
+inline void DSLifecycleEvent::set_allocated_ds_pod_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.DSLifecycleEvent.ds_pod_name)
+}
+
+// .pandora.ds.v1.DSLifecyclePhase phase = 3 [json_name = "phase"];
+inline void DSLifecycleEvent::clear_phase() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = 0;
+}
+inline ::pandora::ds::v1::DSLifecyclePhase DSLifecycleEvent::phase() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.phase)
+  return _internal_phase();
+}
+inline void DSLifecycleEvent::set_phase(::pandora::ds::v1::DSLifecyclePhase value) {
+  _internal_set_phase(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.phase)
+}
+inline ::pandora::ds::v1::DSLifecyclePhase DSLifecycleEvent::_internal_phase() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::ds::v1::DSLifecyclePhase>(_impl_.phase_);
+}
+inline void DSLifecycleEvent::_internal_set_phase(::pandora::ds::v1::DSLifecyclePhase value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = value;
+}
+
+// repeated uint64 player_ids = 4 [json_name = "playerIds"];
+inline int DSLifecycleEvent::_internal_player_ids_size() const {
+  return _internal_player_ids().size();
+}
+inline int DSLifecycleEvent::player_ids_size() const {
+  return _internal_player_ids_size();
+}
+inline void DSLifecycleEvent::clear_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_ids_.Clear();
+}
+inline ::uint64_t DSLifecycleEvent::player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.player_ids)
+  return _internal_player_ids().Get(index);
+}
+inline void DSLifecycleEvent::set_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.player_ids)
+}
+inline void DSLifecycleEvent::add_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_ids()->Add(value);
+  // @@protoc_insertion_point(field_add:pandora.ds.v1.DSLifecycleEvent.player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& DSLifecycleEvent::player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.ds.v1.DSLifecycleEvent.player_ids)
+  return _internal_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* DSLifecycleEvent::mutable_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable_list:pandora.ds.v1.DSLifecycleEvent.player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+DSLifecycleEvent::_internal_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* DSLifecycleEvent::_internal_mutable_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_ids_;
+}
+
+// uint32 map_id = 5 [json_name = "mapId"];
+inline void DSLifecycleEvent::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+}
+inline ::uint32_t DSLifecycleEvent::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.map_id)
+  return _internal_map_id();
+}
+inline void DSLifecycleEvent::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.map_id)
+}
+inline ::uint32_t DSLifecycleEvent::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void DSLifecycleEvent::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
+// string game_mode = 6 [json_name = "gameMode"];
+inline void DSLifecycleEvent::clear_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.ClearToEmpty();
+}
+inline const std::string& DSLifecycleEvent::game_mode() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.game_mode)
+  return _internal_game_mode();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void DSLifecycleEvent::set_game_mode(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.game_mode)
+}
+inline std::string* DSLifecycleEvent::mutable_game_mode() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_game_mode();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.DSLifecycleEvent.game_mode)
+  return _s;
+}
+inline const std::string& DSLifecycleEvent::_internal_game_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.game_mode_.Get();
+}
+inline void DSLifecycleEvent::_internal_set_game_mode(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.Set(value, GetArena());
+}
+inline std::string* DSLifecycleEvent::_internal_mutable_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.game_mode_.Mutable( GetArena());
+}
+inline std::string* DSLifecycleEvent::release_game_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.DSLifecycleEvent.game_mode)
+  return _impl_.game_mode_.Release();
+}
+inline void DSLifecycleEvent::set_allocated_game_mode(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.game_mode_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.game_mode_.IsDefault()) {
+    _impl_.game_mode_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.DSLifecycleEvent.game_mode)
+}
+
+// int64 ts_ms = 7 [json_name = "tsMs"];
+inline void DSLifecycleEvent::clear_ts_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ts_ms_ = ::int64_t{0};
+}
+inline ::int64_t DSLifecycleEvent::ts_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.DSLifecycleEvent.ts_ms)
+  return _internal_ts_ms();
+}
+inline void DSLifecycleEvent::set_ts_ms(::int64_t value) {
+  _internal_set_ts_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.DSLifecycleEvent.ts_ms)
+}
+inline ::int64_t DSLifecycleEvent::_internal_ts_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ts_ms_;
+}
+inline void DSLifecycleEvent::_internal_set_ts_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ts_ms_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -3161,6 +4401,19 @@ ListBattlesResponse::_internal_mutable_battles() {
 }  // namespace ds
 }  // namespace pandora
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::pandora::ds::v1::DSLifecyclePhase> : std::true_type {};
+template <>
+inline const EnumDescriptor* GetEnumDescriptor<::pandora::ds::v1::DSLifecyclePhase>() {
+  return ::pandora::ds::v1::DSLifecyclePhase_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

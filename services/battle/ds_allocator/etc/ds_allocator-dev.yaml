@@ -29,6 +29,13 @@ snowflake:
   node_bits: 17
   step_bits: 15
 
+# W4 ③:ds.lifecycle producer(弱依赖)。心跳超时 abandoned → 发 DSLifecycleEvent 给
+# battle_result 做玩家段位回滚补偿(不变量 §4)。brokers 留空则不发(abandoned 镜像仍落 Redis)。
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  group_id: "pandora-ds-allocator"
+  partition_cnt: 4
+
 allocator:
   # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned
   heartbeat_timeout: "15s"

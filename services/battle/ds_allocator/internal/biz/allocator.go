@@ -42,17 +42,29 @@ const (
 // 乐观锁重试次数(心跳/状态更新冲突)。
 const updateMaxRetry = 3
 
+// DSLifecyclePusher 发 pandora.ds.lifecycle 事件(W4 ③,2026-06-06)。
+//
+// 心跳超时标记 abandoned 后,由它把 DSLifecycleEvent{phase=ABANDONED} 发给 battle_result
+// 做玩家段位回滚补偿(不变量 §4 DS 崩溃必有补偿)。弱依赖:实现内部 fail 静默(返回 error 仅记日志)。
+type DSLifecyclePusher interface {
+	PublishLifecycle(ctx context.Context, evt *dsv1.DSLifecycleEvent) error
+}
+
 // AllocatorUsecase 是 ds_allocator 业务逻辑核心。
 type AllocatorUsecase struct {
-	repo  data.BattleRepo
-	alloc GameServerAllocator
-	cfg   conf.AllocatorConf
+	repo      data.BattleRepo
+	alloc     GameServerAllocator
+	cfg       conf.AllocatorConf
+	lifecycle DSLifecyclePusher // 可为 nil(kafka 不可用时静默不发 abandoned 事件)
 }
 
 // NewAllocatorUsecase 构造 AllocatorUsecase。
 func NewAllocatorUsecase(repo data.BattleRepo, alloc GameServerAllocator, cfg conf.AllocatorConf) *AllocatorUsecase {
 	return &AllocatorUsecase{repo: repo, alloc: alloc, cfg: cfg}
 }
+
+// SetLifecyclePusher 注入 ds.lifecycle 事件发送器(main 在 kafka 就绪时调用,弱依赖)。
+func (u *AllocatorUsecase) SetLifecyclePusher(p DSLifecyclePusher) { u.lifecycle = p }
 
 func (u *AllocatorUsecase) battleTTL() time.Duration { return u.cfg.BattleTTL.Std() }
 
@@ -231,6 +243,9 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	for _, mid := range stale {
 		var podName string
 		var skip bool
+		var playerIDs []uint64
+		var mapID uint32
+		var gameMode string
 		lerr := u.repo.UpdateBattleWithLock(ctx, mid, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
 			if b.State == stateEnded || b.State == stateAbandoned {
 				skip = true // 已结算,本次不处理(让其随 active 移除/TTL 过期)
@@ -238,6 +253,9 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			}
 			b.State = stateAbandoned
 			podName = b.DsPodName
+			playerIDs = b.PlayerIds
+			mapID = b.MapId
+			gameMode = b.GameMode
 			return nil
 		}, u.battleTTL())
 		if lerr != nil {
@@ -259,8 +277,30 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 		if eerr := u.repo.ExpireBattle(ctx, mid, u.battleTTL()); eerr != nil {
 			plog.With(ctx).Warnw("msg", "sweep_expire_failed", "match_id", mid, "err", eerr)
 		}
-		// TODO(W4 ③):通知 battle_result 玩家段位回滚(不变量 §4 DS 崩溃必有补偿)
+		// W4 ③:best-effort 通知 battle_result 玩家段位回滚(弱依赖,publish 失败仅 Warn)。
+		// 注意:Kafka 不可用时事件会丢,不变量 §4「DS 崩溃必有补偿」当前只在 broker 正常时成立;
+		// 可靠补偿(重试 / 待补偿扫描 / outbox)留 W4 ④+。
+		u.publishAbandoned(ctx, mid, podName, playerIDs, mapID, gameMode)
 		plog.With(ctx).Infow("msg", "battle_abandoned_heartbeat_timeout", "match_id", mid, "pod", podName)
 	}
 	return nil
+}
+
+// publishAbandoned 发 DSLifecycleEvent{phase=ABANDONED} 给 battle_result(弱依赖,失败仅记日志)。
+func (u *AllocatorUsecase) publishAbandoned(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) {
+	if u.lifecycle == nil {
+		return // kafka 未就绪:不发(W4 ③ 弱依赖,abandoned 镜像已落 Redis 供查)
+	}
+	evt := &dsv1.DSLifecycleEvent{
+		MatchId:   matchID,
+		DsPodName: podName,
+		Phase:     dsv1.DSLifecyclePhase_DS_LIFECYCLE_PHASE_ABANDONED,
+		PlayerIds: playerIDs,
+		MapId:     mapID,
+		GameMode:  gameMode,
+		TsMs:      time.Now().UnixMilli(),
+	}
+	if err := u.lifecycle.PublishLifecycle(ctx, evt); err != nil {
+		plog.With(ctx).Warnw("msg", "ds_lifecycle_publish_failed", "match_id", matchID, "err", err)
+	}
 }
