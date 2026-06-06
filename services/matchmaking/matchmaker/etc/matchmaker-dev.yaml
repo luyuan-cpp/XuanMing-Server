@@ -41,6 +41,12 @@ snowflake:
 match:
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:50010"
+  # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
+  ds_allocator_addr: "127.0.0.1:50020"
+  # map_id: 战斗地图配置 ID(配置表 ID,uint32)
+  map_id: 1
+  # game_mode: 战斗模式标识,透传给 ds_allocator
+  game_mode: "5v5_ranked"
   # confirm_timeout: 凑齐 10 人后的确认期时长
   confirm_timeout: "15s"
   # match_interval: 后台撮合循环扫描间隔
@@ -59,3 +65,13 @@ match:
   mmr_max_window: 2000
   # optimistic_retry: WATCH/MULTI/EXEC 冲突时最大重试次数
   optimistic_retry: 3
+
+# jwt: 给战斗 DS 票据签名(battle DSTicket,不变量 §3 短时效 5min)
+# secret/issuer/audience 必须与 login 服务 + Envoy jwt_authn provider 完全一致
+jwt:
+  issuer: "pandora-login"
+  audience: "pandora-client"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  session_ttl: "24h"
+  ds_ticket_ttl: "5m"
+

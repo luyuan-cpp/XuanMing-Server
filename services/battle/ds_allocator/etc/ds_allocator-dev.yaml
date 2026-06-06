@@ -1,0 +1,44 @@
+# Pandora ds_allocator 服务开发期配置(W4 ②,2026-06-06)。
+#
+# - gRPC :50020 / HTTP :51020(仅 /metrics)
+# - Redis 强依赖(DS 战斗实例镜像 + 心跳超时 ZSET 扫描)
+# - W4 ② 用 MockGameServerAllocator(返回假 pod/addr),真 Agones 接入留 W4 ③+
+# - duration 字段用 pkg/config.Duration,yaml 可直接写 "15s"
+# - dev: enable_reflection=true 便于 grpcurl 联调
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50020"
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+  http:
+    network: tcp
+    addr: ":51020"
+
+node:
+  zone_id: 1
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
+
+snowflake:
+  epoch: 1773446400
+  node_bits: 17
+  step_bits: 15
+
+allocator:
+  # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned
+  heartbeat_timeout: "15s"
+  # sweep_interval: 后台心跳超时扫描间隔
+  sweep_interval: "5s"
+  # battle_ttl: 战斗 DS 镜像 Redis key TTL(防僵尸镜像)
+  battle_ttl: "2h"
+  # mock_ds_addr_host: W4 ② MockGameServerAllocator 返回的假 DS host
+  mock_ds_addr_host: "127.0.0.1"
+  # mock_ds_port_base: Mock 端口基址(每场 port = base + match_id % range)
+  mock_ds_port_base: 30000
+  # mock_ds_port_range: Mock 端口取模范围
+  mock_ds_port_range: 1000

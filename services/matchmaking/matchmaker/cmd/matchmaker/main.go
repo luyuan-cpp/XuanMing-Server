@@ -25,6 +25,7 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
@@ -130,7 +131,33 @@ func main() {
 
 	// 7. 装配链
 	repo := data.NewRedisMatchRepo(rdb)
-	allocator := biz.NewStubDSAllocator("") // W4 ① 打桩;W4 ② 接 ds_allocator gRPC
+
+	// DSAllocator:ds_allocator_addr 非空 → 真 gRPC 拉 DS + 签 battle 票据;否则 W4 ① 打桩
+	var allocator biz.DSAllocator
+	if cfg.Match.DSAllocatorAddr != "" {
+		authCfg := auth.Config{
+			Issuer:      cfg.JWT.Issuer,
+			Audience:    cfg.JWT.Audience,
+			Secret:      []byte(cfg.JWT.Secret),
+			SessionTTL:  cfg.JWT.SessionTTL.Std(),
+			DSTicketTTL: cfg.JWT.DSTicketTTL.Std(),
+		}
+		signer, serr := auth.NewSigner(authCfg)
+		if serr != nil {
+			helper.Errorw("msg", "ds_ticket_signer_init_failed", "err", serr,
+				"hint", "jwt.secret must be >=32 bytes and match login/envoy")
+			os.Exit(1)
+		}
+		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, signer, cfg.Match.MapId, cfg.Match.GameMode)
+		defer func() { _ = ga.Close() }()
+		allocator = ga
+		helper.Infow("msg", "ds_allocator_grpc_ready", "ds_allocator_addr", cfg.Match.DSAllocatorAddr,
+			"map_id", cfg.Match.MapId, "game_mode", cfg.Match.GameMode)
+	} else {
+		allocator = biz.NewStubDSAllocator("") // W4 ① 打桩;无 ds_allocator_addr 时兜底
+		helper.Warnw("msg", "ds_allocator_addr_empty", "hint", "using StubDSAllocator (mock ds_addr + mock tickets)")
+	}
+
 	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, sf, cfg.Match)
 	svc := service.NewMatchService(uc, sf)
 

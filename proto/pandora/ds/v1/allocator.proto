@@ -90,3 +90,23 @@ message ListBattlesResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated BattleInfo battles = 2;
 }
+
+// ===== 服务端存储快照 =====
+
+// BattleStorageRecord 是 ds_allocator 在 Redis 中维护的战斗 DS 实例镜像
+// (CLAUDE.md §5.8 服务端存储快照,key `pandora:ds:battle:{<match_id>}` proto bytes)。
+//
+// 注意:这是**服务端内部存储**结构,不直接外发给客户端;客户端可见的对局信息走 BattleInfo。
+message BattleStorageRecord {
+  uint64 match_id          = 1;
+  string ds_pod_name       = 2;
+  string ds_addr           = 3;
+  string state             = 4;  // "warming" | "ready" | "running" | "ended" | "abandoned"
+  repeated uint64 player_ids = 5;
+  uint32 map_id            = 6;
+  string game_mode         = 7;
+  int64  allocated_at_ms   = 8;
+  int64  last_heartbeat_ms = 9;  // 最近一次 DS Heartbeat 时刻(心跳超时扫描用,不变量 §4)
+  int32  player_count      = 10;
+}
+

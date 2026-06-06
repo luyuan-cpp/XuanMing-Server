@@ -1771,3 +1771,85 @@ go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/p
 
 ds_allocator 服务上线 → 替换 `StubDSAllocator` 为真实 Agones GameServerAllocation;
 确认期票据归属保留至战斗结束的补偿(不变量 §4 DS 崩溃补偿)。
+
+
+---
+
+## W4 ② — ds_allocator 服务上线 + matchmaker 接真实拉 DS(2026-06-06)
+
+Pandora 第 6 个 Kratos 业务服。撮合全员确认后由 matchmaker 调 ds_allocator 拉一个
+战斗 DS,ds_allocator 维护 DS 状态镜像 + 心跳超时补偿。W4 ② 用 Mock 分配器跑通全链路,
+真 Agones GameServerAllocation CRD 接入留 W4 ③+(环境就绪步)。
+
+### ds_allocator 服务(services/battle/ds_allocator/)
+
+- gRPC :50020 / HTTP :51020(仅 /metrics,ds proto 无 google.api.http 注解)
+- 4 RPC:
+  - `AllocateBattle`:matchmaker 全员确认后调,申请 DS pod → 写镜像 → 回 ds_addr/pod。
+    **幂等**:同 match_id 已有镜像直接回已分配地址(防 matchmaker 重试重复拉 DS)
+  - `ReleaseBattle`:对局结束/异常,回收 pod + 删镜像(幂等,镜像不存在视为已释放)
+  - `Heartbeat`:战斗 DS 每 5s 上报(单向 unary),刷新 last_heartbeat_ms + state;
+    孤儿 DS(无镜像)返 command=`stop` 让其自停
+  - `ListBattles`:运维/调试查询(可按 state 过滤)
+- 后台 `RunHeartbeatSweep`(SweepInterval 5s):`sweepOnce` 扫
+  `RangeStaleBattles(now - HeartbeatTimeout 15s)` → 标记 abandoned + GameServer.Release +
+  移出 active,终态镜像保留供查(不变量 §4 DS 崩溃必有补偿;W4 ③ TODO 通知 battle_result
+  做玩家段位回滚)
+- `GameServerAllocator` 接口 + `MockGameServerAllocator`(W4 ②):
+  pod=`pandora-battle-<match_id>`,addr=`<host>:<base + match_id%range>`
+
+### Redis key
+
+- `pandora:ds:battle:{<match_id>}` = `BattleStorageRecord` proto bytes(hashtag `{}` 锁
+  cluster slot,TTL=BattleTTL 2h)
+- `pandora:ds:active` = ZSET(score=last_heartbeat_ms,member=match_id),心跳超时扫描
+- 状态写 WATCH/MULTI/EXEC 乐观锁,冲突重试耗尽返 `ERR_DS_ALLOCATION_FAILED=5002`
+
+### matchmaker 接真实拉 DS(GrpcDSAllocator)
+
+- 新增 `internal/data/ds_allocator.go` 的 `GrpcDSAllocator`,替换 W4 ① 的 `StubDSAllocator`
+  (`ds_allocator_addr` 非空才启用,否则仍走桩,本机不起 ds_allocator 也能跑撮合骨架)
+- **职责切分**:ds_allocator 只负责"拉一个 DS pod"返回 ds_addr/pod_name,**不签票据**;
+  battle DSTicket 由 matchmaker 用 `pkg/auth.Signer.SignDSTicket(pid, DSTypeBattle, match_id, uuid)`
+  签发(不变量 §3 短时效 5min;MMR 在 battle_result 算,DS 不可信,不变量 §6,票据须可信后端签)
+- matchmaker 配置:`match.ds_allocator_addr` / `match.map_id`(uint32)/ `match.game_mode` +
+  顶层 `jwt`(issuer/audience/secret/session_ttl/ds_ticket_ttl,secret 与 login/Envoy 共享)
+
+### proto 改动 [proto]
+
+新增(ds/v1):`BattleStorageRecord`(服务端 Redis 存储快照:match_id / ds_pod_name /
+ds_addr / state / player_ids / map_id / game_mode / allocated_at_ms / last_heartbeat_ms /
+player_count)。已 regen go + cpp pb。复用既有 `ERR_DS_*`(5001-5004),无新增 errcode。
+
+### 解耦接口
+
+- ds_allocator biz `BattleRepo`(data Redis 实现)/ `GameServerAllocator`(Mock 实现)
+- matchmaker biz `DSAllocator`(StubDSAllocator 桩 / GrpcDSAllocator 真实)
+
+### 验证(2026-06-06,Claude)
+
+8-module build / vet / test 全 PASS(新增 `./services/battle/ds_allocator/...`):
+
+```pwsh
+go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/... ./services/matchmaking/matchmaker/... ./services/battle/ds_allocator/...
+```
+
+- ds_allocator biz 单测 7 用例:分配 / 幂等回放 / 释放幂等 / 心跳更新状态 /
+  孤儿 DS 返 stop / 列举 + state 过滤 / 心跳超时 sweep 标记 abandoned 并移出 active
+- ds_allocator data 单测 6 用例:创建-读回往返 + active ZSET / get miss / stale 扫描 /
+  UpdateBattleWithLock 刷新 + active score / notfound 返 ErrDSPodNotFound / 删除清 active
+- matchmaker 修复:go.mod 补回 `alicebob/miniredis/v2` 直接依赖(W4 ① Codex tidy 误删)
+
+### 交接 Codex(环境/收尾)
+
+- ds_allocator 是新 module,建议 Codex 在 `services/battle/ds_allocator` 跑 `go mod tidy`
+  生成 go.sum(workspace 模式下 build 已通过,tidy 用于固化直接/间接依赖与校验和)
+- matchmaker `google/uuid` 现已直接 import,tidy 会将其从 indirect 提升为 direct
+- 联调:需本机起 redis(:6380)+ ds_allocator(:50020)+ matchmaker(:50011);
+  matchmaker `ds_allocator_addr` 空则退化为 StubDSAllocator
+
+### 后续路线(W4 ③)
+
+ds_allocator 接真 Agones:`AgonesGameServerAllocator` 实现 `GameServerAllocator` 接口,
+调 K8s `allocation.agones.dev/v1` GameServerAllocation CRD;sweep abandoned 后通知
+battle_result 做玩家段位回滚补偿(不变量 §4);battle_result / hub_allocator 服务上线。

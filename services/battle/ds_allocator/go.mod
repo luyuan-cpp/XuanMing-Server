@@ -1,26 +1,26 @@
-module github.com/luyuancpp/pandora/services/matchmaking/matchmaker
+module github.com/luyuancpp/pandora/services/battle/ds_allocator
 
 go 1.25.0
 
-// W4 ① matchmaker 服务(Pandora 第 5 个 Kratos 业务服,2026-06-06)。
+// W4 ② ds_allocator 服务(Pandora 第 6 个 Kratos 业务服,2026-06-06)。
 //
-// 职责(docs/design/go-services.md §2.8):撮合 5v5
-//   排队 → MMR 撮合 → 凑齐 5+5 → 确认期(15s)→ 全确认 → 拉 DS → 推 ds_addr。
+// 职责(docs/design/go-services.md §2.11):战斗 DS 调度(Agones GameServer)
+//   AllocateBattle / ReleaseBattle / Heartbeat / ListBattles。
+//   W4 ② 阶段用 MockGameServerAllocator(返回假 pod/addr)+ Redis DS 状态镜像;
+//   真 Agones GameServerAllocation CRD 接入留后续环境就绪步(W4 ③+)。
 //
 // 依赖来源:
 //   - pkg/        (公共框架,go.work use)
-//   - proto/      (match/v1 + team/v1 + common/v1)
-//   - Kratos v2.9.2 / IBM/sarama(kafka push) / go-redis/v9(排队 ZSET + WATCH/MULTI/EXEC)
+//   - proto/      (ds/v1 + common/v1)
+//   - Kratos v2.9.2 / go-redis/v9(DS 镜像 + 心跳超时 ZSET 扫描)
 //   - alicebob/miniredis/v2 (data 单测)
 
 require (
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/go-kratos/kratos/v2 v2.9.2
-	github.com/google/uuid v1.6.0
 	github.com/luyuancpp/pandora/pkg v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.16.0
-	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -38,8 +38,8 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-kratos/aegis v0.2.0 // indirect
 	github.com/go-playground/form/v4 v4.2.0 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -67,6 +67,7 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 

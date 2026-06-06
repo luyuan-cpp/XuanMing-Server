@@ -12,6 +12,22 @@ type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
 
 	Match MatchConf `yaml:"match" json:"match"`
+
+	// JWT 用于给战斗 DS 票据签名(matchmaker 全员确认 → 调 ds_allocator 拉 DS →
+	// 给每个玩家签一张 battle DSTicket)。secret 必须与 login / Envoy jwt_authn 一致。
+	// 留空(无 ds_allocator_addr)时不签票据,仍走 StubDSAllocator。
+	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
+}
+
+// JWTConf 是签发 battle DSTicket 的 JWT 参数(镜像 login.JWTConf)。
+//
+// Issuer / Audience / Secret 必须与 login 服务和 Envoy jwt_authn provider 完全一致。
+type JWTConf struct {
+	Issuer      string          `yaml:"issuer,omitempty" json:"issuer,omitempty"`
+	Audience    string          `yaml:"audience,omitempty" json:"audience,omitempty"`
+	Secret      string          `yaml:"secret,omitempty" json:"secret,omitempty"`
+	SessionTTL  config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
+	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 }
 
 // MatchConf 是 matchmaker 服务私有配置。
@@ -19,6 +35,16 @@ type MatchConf struct {
 	// TeamAddr 是 team 服务 gRPC 直连地址(StartMatch 时拉取队伍快照校验 READY)。
 	// 留空则 StartMatch 跳过 team 校验(本机不起 team 也能跑撮合骨架)。
 	TeamAddr string `yaml:"team_addr,omitempty" json:"team_addr,omitempty"`
+
+	// DSAllocatorAddr 是 ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS)。
+	// 留空则用 StubDSAllocator(W4 ① 行为,返回固定 mock 地址 + mock 票据)。
+	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
+
+	// MapId 撮合成局后请求的战斗地图配置 ID(配置表 ID,uint32)。
+	MapId uint32 `yaml:"map_id,omitempty" json:"map_id,omitempty"`
+
+	// GameMode 战斗模式标识(如 "5v5_ranked"),透传给 ds_allocator。
+	GameMode string `yaml:"game_mode,omitempty" json:"game_mode,omitempty"`
 
 	// ConfirmTimeout 确认期时长,凑齐 10 人后等待全员确认的窗口(默认 15s)。
 	ConfirmTimeout config.Duration `yaml:"confirm_timeout,omitempty" json:"confirm_timeout,omitempty"`
@@ -77,6 +103,12 @@ func (c *Config) Defaults() {
 	}
 	if c.Match.OptimisticRetry == 0 {
 		c.Match.OptimisticRetry = 3
+	}
+	if c.Match.MapId == 0 {
+		c.Match.MapId = 1
+	}
+	if c.Match.GameMode == "" {
+		c.Match.GameMode = "5v5_ranked"
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50011"
