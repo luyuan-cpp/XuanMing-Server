@@ -62,10 +62,7 @@
 ## 6. proto 同步
 
 proto 规则以 `CLAUDE.md §5` 为准,本文件不重复维护细则,避免双文档漂移。
-
-四类 message 各司其职(细节见 `CLAUDE.md §5.8`):RPC 用 `<Verb><Domain>Request/Response`;客户端可见结构用短名(`Team` / `TeamMember`);服务端存储快照用 `<Domain>StorageRecord` + 子结构 `<Domain><Part>StorageRecord`;服务间事件用 `<Domain><Action>Event`。
-
-核心是**不手写与 proto 重复的并行 struct**;proto bytes 只用于快照/blob(Redis value、Kafka payload、MySQL blob 列),关系型 MySQL 表和临时小令牌不强制 proto 化。
+具体看 `CLAUDE.md §5.8`-`§5.10` 和 `docs/design/proto-design.md`。
 
 ## 7. 跨 AI 协作冲突解决
 
@@ -106,12 +103,12 @@ AI 跑出错时:
 
 ### 11.1 跨 AI 平台硬性分工
 
-为节省 Claude 系模型 token,本项目固定按下面分工:
+为保证 Pandora 服务器主程序安全稳定,本项目固定按下面分工:
 
 **Claude 模型选择规则**:
-- **Claude Opus 4.7 以上**:负责出 Plan / 审 Plan / 难题攻关 / 最终把关。包括深读文档和代码、列文件清单 / 动作 / 风险 / 工期、复杂架构评审、跨服务一致性、核心战斗 / 匹配 / 交易逻辑 review、安全漏洞分析、疑难 bug 定位、大范围重构方案审核。
-- **Claude Sonnet 4.6**:按 Opus 4.7 以上审过的 Plan 改代码和补测试,负责常规 go / UE C++ / proto / yaml / shell / ps1 / 文档修改、普通 bug 修复、项目内 build / test / lint 验证。Sonnet 不擅自扩大 Plan 范围。
-- 默认工作流:**Opus 4.7 以上出 Plan → 人审核 → Sonnet 4.6 按 Plan 写实现并验证 → Opus 4.7 以上最终 review → ChatGPT / Codex 做环境执行和 git 收尾**。
+- **最高可用 Claude 模型(Opus 4.8 以上或更高)**:负责出 Plan / 审 Plan / 难题攻关 / 写代码 / 补测试 / 跑项目内验证 / 最终把关。包括深读文档和代码、列文件清单 / 动作 / 风险 / 工期、复杂架构评审、跨服务一致性、核心战斗 / 匹配 / 交易逻辑 review、安全漏洞分析、疑难 bug 定位、大范围重构方案审核。
+- **不得把业务代码实现固定交给低一档模型**:本项目是第一次服务器主程序,优先安全稳定,不以节省 token 为由降低模型级别。
+- 默认工作流:**最高可用 Claude 模型出 Plan → 人审核 → 最高可用 Claude 模型按 Plan 写实现并验证 → 最高可用 Claude 模型最终 review → ChatGPT / Codex 做环境执行和 git 收尾**。
 
 **Claude 系模型(Copilot Claude / Claude Code / Cursor Claude 等)负责**:
 - 深度阅读代码和设计文档,分析完整详细做法

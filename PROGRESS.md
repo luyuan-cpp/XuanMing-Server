@@ -1418,7 +1418,7 @@ Codex 在 W3 ②/⑤ commit 前审查发现 6 个阻塞项,Claude 按 AGENTS.md 
 |---|---|---|
 | 1 | `login/internal/server/grpc.go::NewGRPCServer` 没接 `pmw.AuthOptional()`,带 token 调 IssueDSTicket 返 `ERR_UNAUTHORIZED` | grpc.go 增加 `pmw.AuthOptional()` 中间件(跟 push 同 pattern),注释说明 Optional 而非 Required 的理由(Login 本身无 token、Envoy 已按 path 强制 JWT) |
 | 2 | `go.work` 是 `go 1.25.0`,与 HANDOFF.md `go1.26.4` 不符 | `go.work` 升 `go 1.26.4` 锁定一致,注释段补"再升级须同步 HANDOFF.md" |
-| 3 | 改动范围混 W3 ① / ② / ⑤ + AGENTS/CLAUDE 协作规则,跨度大 | 本轮 commit 仍单批(用户已批 plan),但通过 PROGRESS.md 拆段 + commit message 明确 scope = "W3 ②+⑤ + Codex 审查修复"。下次 Sonnet 4.6 按规则一段 plan 一次 commit |
+| 3 | 改动范围混 W3 ① / ② / ⑤ + AGENTS/CLAUDE 协作规则,跨度大 | 本轮 commit 仍单批(用户已批 plan),但通过 PROGRESS.md 拆段 + commit message 明确 scope = "W3 ②+⑤ + Codex 审查修复"。下次最高可用 Claude 模型按规则一段 plan 一次 commit |
 | 4 | `pkg/auth.Config.Validate` 注释写 ≥32 字节但实际只校验 ≥16 | Validate 改为 `< 32` 拒,错误消息 `need >=32 for HS256`(对齐 RFC 7518 §3.2);新增 `TestValidateRejects16And31ByteSecrets`(2 子用例)+ `TestValidateAccepts32ByteSecret` |
 | 5 | `VerifyDSTicket` 未对称 SignDSTicket 的 battle/match_id 防御 | VerifyDSTicket 新增 `dsType==battle && match_id==""` → `ErrLoginTicketInvalid`;新增 `TestVerifyDSTicketRejectsBattleWithoutMatchID`(用 raw jwt 库构造恶意 token 测对称防御) |
 | 6 | `.tmp-locator.err` Codex 联调时 redirect 的临时 906B 日志 | `.gitignore` 加 `.tmp-*` 兜底;经用户授权后 `Remove-Item` 删除文件(已不在 working tree) |
@@ -1503,7 +1503,7 @@ Pop-Location
 
 ### ��һ��
 
-�� PROGRESS.md ����·�߽��� **W3 �� hub_allocator / W3 �� token ����** �� **W3 �� Kafka ����**(�� Opus 4.7 �� Plan)��
+�� PROGRESS.md ����·�߽��� **W3 �� hub_allocator / W3 �� token ����** �� **W3 �� Kafka ����**(�� Opus 4.8 �� Plan)��
 
 
 ---
@@ -1568,13 +1568,13 @@ W3 ④ 新增 12 个单测全 PASS:`kafkax` 4(PushToPlayers) + `push/internal/da
 
 ### 下一步
 
-按 PROGRESS.md 既有路线进入 **W3 ⑦ hub_allocator**(把 §1 不变量补全:玩家分配 hub 实例)、**W3 ⑧ matchmaker 骨架** 或 **W3 ⑨ team 服务**(由 Opus 4.7 出 Plan)。
+按 PROGRESS.md 既有路线进入 **W3 ⑦ hub_allocator**(把 §1 不变量补全:玩家分配 hub 实例)、**W3 ⑧ matchmaker 骨架** 或 **W3 ⑨ team 服务**(由 Opus 4.8 出 Plan)。
 
 ---
 
 ## W3 ④ Opus 审查二次修复(2026-06-05)
 
-Codex 审过 W3 ④ 一次修复后,Opus 4.7 又审了一遍,Sonnet 4.6 按 Plan 执行的二次修复。
+Codex 审过 W3 ④ 一次修复后,Opus 4.8 又审了一遍,最高可用 Claude 模型按 Plan 执行的二次修复。
 
 ### 风险表
 
@@ -1624,3 +1624,64 @@ Codex 审过 W3 ④ 一次修复后,Opus 4.7 又审了一遍,Sonnet 4.6 按 Plan
    - LOW  R5: errcode 9302 加 TODO 占位说明
    ```
    (本次无 proto 改动,不带 `[proto]` 标记)
+
+---
+
+## W3 ⑦ ✅ team 服务上线(2026-06-05)
+
+Pandora 第 4 个 Kratos 业务服(login / push / player_locator 之后),首个"多写 RPC + 乐观锁 + kafka 广播"组合服。`go.work` 已 `use ./services/matchmaking/team`。
+
+### 职责与端口
+
+- gRPC **:50010** / HTTP **:51010**(HTTP 仅挂 `/metrics`,team.proto 无 `google.api.http` 注解)
+- Redis **强依赖**(队伍状态 WATCH/MULTI/EXEC 乐观锁)
+- Kafka producer 发布 `pandora.team.update`(push 服务已订阅消费)
+- dev:`enable_reflection: true` 便于 grpcurl 联调;prod 零值关闭
+
+### 7 个 RPC(全"立即完成型",协议原则 1)
+
+| RPC | 语义 | push |
+|---|---|---|
+| `CreateTeam` | 建队,playerID 为队长 | 推队长自己(创建快照确认) |
+| `Invite` | 邀请目标玩家 | 不发 inviter(原则 2) |
+| `AcceptInvite` | 接受邀请入队 | 广播队内 |
+| `LeaveTeam` | 离队 | 广播队内 |
+| `Kick` | 队长踢人 | 不发 captain(原则 2) |
+| `SetReady` | 设置准备状态 | 广播队内 |
+| `GetTeam` | 只读拉完整快照(进大厅时一次) | 无 |
+
+### Redis key 设计
+
+- `pandora:team:{<team_id>}` = `TeamStorageRecord` proto bytes;hashtag `{}` 括住 team_id 保同队所有 key 落同一 cluster slot(兜底)
+- `pandora:team:player:<player_id>` = `team_id` string,`ClaimPlayer` 用 **SETNX** 原子声明归属,落不变量 §1(一人只能在一个队);CreateTeam 写 team 失败时回滚 claim(`DeletePlayerIndex`)避免玩家被永久锁死
+- `pandora:team:invite:<invite_id>` = hash(`team_id` / `target_player_id`),TTL=`InviteTTL`(60s);2 字段短令牌按 CLAUDE.md §5.9 保留 hash 不升级 proto bytes
+
+### 并发与状态机
+
+- 写路径统一走 `UpdateWithLock`:WATCH → GET(proto 反序列化)→ fn(modify) → MULTI/SET/EXEC;EXEC=nil(CAS 失败)重试至 `OptimisticRetry` 次,耗尽返 `ERR_TEAM_CONCURRENT=3007`
+- fn 自身业务错误不重试,直接透传;非 CAS 的其他 redis 错误也不重试
+- 状态机:`FORMING` → `READY`(全员 ready)/ `READY` → `FORMING`(任一成员 leave/kick);`MATCHING` / `IN_BATTLE` 由后续撮合/战斗服驱动;`DISBANDED` 拒绝任何写(`ErrTeamWrongState`),解散后改短 TTL(`DisbandedRetention` 5min)供客户端查最终态
+- `TeamStorageRecord` proto 直接当存储 record,克隆一律 `proto.Clone`,**禁止值拷贝**(`a := *rec` 会复制内部 state/mu/sizeCache)
+
+### kafka 广播
+
+- 写路径成功后发 `pandora.team.update` 的 `TeamUpdateEvent`(`proto.Marshal` → `PushToPlayers`),key=player_id 落不变量 §9 同 partition 保序
+- biz 通过 `TeamEventPusher` 接口解耦,不直接依赖 kafka/grpc;`callerPlayerID != 0` 时排除发起者自身(协议原则 2)
+
+### 配置(全 `config.Duration`)
+
+`ActiveTTL` 60min(活跃队伍生命周期,防僵尸队)/ `InviteTTL` 60s / `DisbandedRetention` 5min / `MaxMembers` 5(MOBA 5v5)/ `OptimisticRetry` 乐观锁重试次数。`Defaults()` 兜零值防 panic。
+
+### 验证
+
+- 6-module build / vet / test 全 PASS(新增 `./services/matchmaking/team/...`):
+  ```pwsh
+  go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/...
+  go vet   ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/...
+  go test  ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/... -count=1
+  ```
+- biz + data 单测覆盖(状态机迁移 / 乐观锁冲突 / ClaimPlayer 一人一队 / invite TTL)
+
+### 后续路线(W4)
+
+`hub_allocator`(补不变量 §1:玩家分配 hub 实例)/ `matchmaker` 骨架 / UE 客户端首版,均为 W3 路线图末尾"可选下一步",顺延 W4,由 Opus 4.8 出 Plan。

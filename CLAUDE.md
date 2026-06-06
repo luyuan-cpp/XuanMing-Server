@@ -27,7 +27,7 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 
 1. 不准在没有跑通 **所有已启用 module 的构建** 的情况下 commit
    - 本项目采用 `go.work` 多 module 模式,仓库根没有 `go.mod`,**不能**在根目录跑 `go build ./...`
-   - 当前阶段（W3 ⑤ 后）：验证命令为 `go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/...`
+   - 当前阶段（W3 ⑦ 后）：验证命令为 `go build ./pkg/... ./proto/... ./services/account/login/... ./services/runtime/push/... ./services/runtime/player_locator/... ./services/matchmaking/team/...`
    - W2+ 每个服务 module 启用后,追加对应路径
    - 完整命令参考 `go.work` 文件中的 `use` 列表
 2. commit message 格式:`<type>(<scope>): <subject>`
@@ -85,8 +85,9 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 | W3 ⑥/③ | 2026-06-05 | **Duration 包装类型 + gRPC reflection 开关化**(pkg/config.Duration 实现 UnmarshalJSON/MarshalJSON 解 "5s"/"24h" + 数字 ns 向后兼容,pkg/config.Base 全部 15+ 个 `time.Duration` 字段切换,业务读取处统一 `.Std()`;Grpc 新增 `EnableReflection bool` 默认 false → prod 关 reflection 防 schema 泄露,pkg/grpcserver `if !c.Grpc.EnableReflection { kgrpc.DisableReflection() }`;已启用 3 服(login/push/locator)`etc/*-dev.yaml` 全部直接写 duration 字符串 + `enable_reflection: true`,删除"yaml 不写时长字段"长篇约束注释;Duration 单测 8 用例 + Kratos config e2e 加载链路验证) |
 | W3 ④ | 2026-06-05 | **push 接 kafka + redis ZSET 离线 5min**(push 删 mock tick → KafkaConsumer 每 topic 一个共享 GroupID,Handler 按 `key=strconv.FormatUint(player_id,10)` 不变量 §9 路由 → 在线 ConnectionManager.SendTo / 离线 RedisOfflineCacheRepo Append;ZSET `pandora:push:offline:%d`,score=ts_ms,member=PushFrame proto bytes+seq 后缀防同 ms 去重塌陷,TxPipeline ZAdd+Expire 每写刷 TTL;`pkg/kafkax.PushToPlayers` helper 把原则 2 排除 caller 工程化(callerID=0 = 原则 3 例外全发);`pkg/kafkax/topics.go` 集中 6 个 push topic 常量;新增 `ERR_PUSH_OFFLINE_CORRUPTED=9301` / `ERR_PUSH_KAFKA_CONSUMER_DOWN=9302`;W3 ④ 仅订阅 proto 已就绪的 3 个(team.update/match.progress/chat.private),余 3 个等业务服上线补;单测 11 用例(producer 4 / offline 4 / consumer 3)) |
 | W3 ⑦.0 | 2026-06-05 | **业务 ID 全量 int64/string → uint64 迁移**(14 个业务 proto 按规则迁移并 regen go/cpp pb;`pkg/auth` JWT sub 改 `FormatUint/ParseUint`,`pkg/middleware` 拒绝负数 player_id,`pkg/kafkax.PushToPlayers` 改 `uint64` + kafka key `FormatUint`;login/push/player_locator 三服全链路同步;配置表 ID 如 `npc_id/hero_id/map_id` 保持/改为 `uint32`;`request_id/device_id/trace_id` 保持 string) |
+| W3 ⑦ | 2026-06-05 | **team 服务上线**(第 4 个 Kratos 业务服,gRPC :50010 / HTTP :51010 仅 /metrics;7 RPC `CreateTeam`/`Invite`/`AcceptInvite`/`LeaveTeam`/`Kick`/`SetReady`/`GetTeam` 全"立即完成型"(`GetTeam` 只读快照);Redis WATCH/MULTI/EXEC 乐观锁,冲突重试 `OptimisticRetry` 次耗尽返 `ERR_TEAM_CONCURRENT=3007`;key `pandora:team:{<team_id>}`=`TeamStorageRecord` proto bytes(hashtag `{}` 锁 cluster slot)+ `pandora:team:player:<player_id>` `ClaimPlayer` SETNX 保不变量 §1 一人一队 + `pandora:team:invite:<invite_id>` hash InviteTTL 60s;状态机 FORMING/READY/MATCHING/IN_BATTLE/DISBANDED,DISBANDED 拒绝写;写路径发 `pandora.team.update` kafka `TeamUpdateEvent`(push 已订阅),协议原则 2 push 不发 caller;`TeamStorageRecord` proto 直接做存储 record,克隆用 `proto.Clone` 不值拷贝;duration 全 `config.Duration`(ActiveTTL 60min/InviteTTL 60s/DisbandedRetention 5min/MaxMembers 5);biz+data 单测覆盖) |
 | 协议硬规则 | 2026-06-05 | **Snowflake 业务 ID 一律 uint64**(`player_id` / `team_id` / `match_id` / `order_id` 等);**配置表 ID 默认 uint32**(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等);**proto enum / 状态常量保持生成 enum 类型或 int32 语义**,不按非负常量改 `uint32`;后续 proto / Go / SQL / Redis / Kafka key 不得新增有符号业务 ID |
-| AI 协作 | 2026-06-05 | **Claude 模型分工固化**:Opus 4.7 以上负责出 Plan / 审 Plan / 难题攻关 / 最终把关;Sonnet 4.6 按审过的 Plan 写代码 / 补测试 / 跑项目内验证;ChatGPT / Codex 继续负责环境执行和 git 收尾 |
+| AI 协作 | 2026-06-05 | **Claude 模型分工固化**:最高可用 Claude 模型(Opus 4.8 以上或更高)负责出 Plan / 审 Plan / 难题攻关 / 写代码 / 补测试 / 跑项目内验证 / 最终把关;不得把业务代码实现固定交给低一档模型;ChatGPT / Codex 继续负责环境执行和 git 收尾 |
 
 后续每轮压测 / 大决策追加一行,**永不删旧行**。
 
