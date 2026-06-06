@@ -24,7 +24,7 @@
 | 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ UE 主链路后(先可用 UE/配置占位) |
 | 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned,W4 ⑧ abandoned 可靠补偿;真 Agones 留后续) |
 | 12 | hub_allocator | 50021 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ⑤(Mock Fleet 骨架;接 login 待做) |
-| 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿) |
+| 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿),W4 ⑨(player.update 事务出箱可靠化) |
 | 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |
 
 ⭐ = 2026-06-04 终版新增。push 是 Kratos transport/grpc 暴露的 server stream 服务,客户端通过 Envoy 连过来,详见 `gateway-decision.md` §6。
@@ -322,14 +322,16 @@ ListPlayerHistory(player_id, limit) → []BattleResult
 ```
 kafka msg → 验证签名 → 检查 mysql.battles WHERE match_id=? 
                       → 已存在?跳过(幂等)
-                      → 不存在?事务{insert battles + insert battle_player_stats + 发 player.update}
+                      → 不存在?事务{insert battles + insert battle_player_stats + insert player_update_outbox}
                       → ack
                       → 失败 3 次 → DLQ
+后台 RunOutboxPublisher(2s):FetchOutbox(FIFO) → 投递 pandora.player.update → 成功才 DeleteOutbox
+                      → 投递失败保留出箱行下轮重试(at-least-once,W4 ⑨ 不变量 §4)
 ```
 
 **关键不变量**:
 - **幂等键 = match_id**(unique index)
-- **事务边界**:battles + stats 必须同一事务
+- **事务边界**:battles + stats + player_update_outbox 必须同一事务(W4 ⑨ 落库与待发布段位事件原子)
 - **MMR 计算在这里**(不在 DS 算,DS 不可信)
 
 ---
@@ -386,7 +388,7 @@ W2 开始才正式写业务逻辑,顺序:
 7. ✅ player_locator / team / matchmaker / ds_allocator / battle_result / player 核心链路已完成到 W4 ④
 8. ✅ **hub_allocator** 骨架(W4 ⑤):Mock Fleet 分片调度 + AssignHub/ReleaseHub/TransferHub/ListHubs/Heartbeat + 心跳超时扫描 + 签 hub DSTicket(接 login 待做)
 9. ⏭️ login 接 hub_allocator.AssignHub(替换 mock hub_addr),补不变量 §1 的大厅入口闭环
-10. ⏭️ 可靠补偿 / outbox 或对账路径:修正 player.update / ds.lifecycle 弱依赖阶段限制
+10. 🟢 可靠补偿 / outbox:W4 ⑧ ds.lifecycle(Redis ZSET 当 outbox)+ W4 ⑨ player.update(MySQL 事务出箱)均已 at-least-once 可靠化;余真 Agones CRD / locator HUB 对账
 11. ⏭️ UE 客户端 grpc-web(FHttpModule 自研解析)+ Envoy 全业务路由接入
 12. ⏭️ UE Hub DS / Battle DS 骨架 + GAS / Iris / Agones 联调,打通登录→进大厅→匹配→进战斗→结算→回大厅
 13. ⏭️ trade / dialogue / data_service 按 UE 主链路需要补最小版本

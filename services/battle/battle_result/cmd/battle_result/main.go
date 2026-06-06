@@ -2,7 +2,8 @@
 //
 // 职责:消费 pandora.battle.result 幂等落库 + 算 MMR(不变量 §2/§6),
 // 消费 pandora.ds.lifecycle 的 ABANDONED 做 DS 崩溃补偿(不变量 §4),
-// 落库后发 pandora.player.update(player 上线后消费),并提供战绩查询 RPC。
+// 落库同事务写 player.update 出箱 + 后台发布器可靠投递(W4 ⑨ 不变量 §4),
+// 并提供战绩查询 RPC。
 //
 // 启动顺序(对齐 ds_allocator / push):
 //  1. 解析 -conf 路径,加载 yaml
@@ -10,7 +11,8 @@
 //  3. log.Setup → 全局 zap logger
 //  4. MySQL client + Ping(强依赖:结算落库不可降级)
 //  5. MMR reader(W4 ③ player 未上线 → StaticMMRReader)
-//  6. player.update kafka producer(弱依赖:broker 不通则 warn,push 静默丢)
+//  6. player.update kafka producer(弱依赖:broker 不通则 warn;player.update 已写事务出箱,
+//     producer/broker 不可用时出箱积压不丢,等 producer 可用后由发布器补发,当前需重启/重配)
 //  7. 装配 BattleResultUsecase → BattleResultService → gRPC/HTTP server
 //  8. 按 ConsumeTopics 每 topic 一个 KafkaConsumer,handler 按 topic 路由
 //  9. kratos.New(...).Run() 阻塞
@@ -98,20 +100,20 @@ func main() {
 			"hint", "player_addr 未配置 → StaticMMRReader 兜底")
 	}
 
-	// 5. player.update producer(弱依赖)
+	// 5. player.update producer(出箱发布器使用;init 失败则出箱积压等 producer 可用,不丢)
 	var pusher biz.PlayerUpdatePusher
 	if len(cfg.Kafka.Brokers) > 0 {
 		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicPlayerUpdate)
 		if perr != nil {
 			helper.Warnw("msg", "player_update_producer_init_failed", "err", perr,
-				"hint", "player.update push will be silently dropped until kafka is available")
+				"hint", "outbox rows accumulate (not dropped); publisher resumes when producer is available")
 		} else {
 			defer func() { _ = producer.Close() }()
 			pusher = &playerUpdatePusher{p: producer}
 			helper.Infow("msg", "player_update_producer_ready", "topic", kafkax.TopicPlayerUpdate)
 		}
 	} else {
-		helper.Warnw("msg", "kafka_brokers_empty", "hint", "player.update push disabled")
+		helper.Warnw("msg", "kafka_brokers_empty", "hint", "outbox publisher idle until brokers configured")
 	}
 
 	// 6. 装配链
@@ -121,6 +123,11 @@ func main() {
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
+
+	// 6.1 后台 player.update 出箱发布器(W4 ⑨ 可靠补偿,随进程生命周期启停)
+	pubCtx, pubCancel := context.WithCancel(context.Background())
+	defer pubCancel()
+	go uc.RunOutboxPublisher(pubCtx)
 
 	// 7. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
 	consumers := mustBuildConsumers(&cfg, uc, helper)
@@ -144,6 +151,7 @@ func main() {
 		"consume_topics", cfg.Battle.ConsumeTopics,
 		"elo_k", cfg.Battle.EloKFactor,
 		"base_mmr", cfg.Battle.BaseMMR,
+		"outbox_interval", cfg.Battle.OutboxPublishInterval.String(),
 	)
 
 	// 8. Kratos App

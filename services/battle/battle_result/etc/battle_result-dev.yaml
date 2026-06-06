@@ -3,7 +3,7 @@
 # - gRPC :50022 / HTTP :51022(仅 /metrics)
 # - MySQL 强依赖(pandora_battle 库:battles + battle_player_stats,幂等落库 不变量 §2)
 # - Kafka 强依赖(消费 pandora.battle.result / pandora.ds.lifecycle)
-# - player.update producer 弱依赖(player 服务消费做幂等 UpdateMMR)
+# - player.update 事务出箱发布(W4 ⑨ at-least-once 可靠补偿,不变量 §4;player 服务幂等 UpdateMMR)
 # - W4 ④ player 服务已上线 → player_addr 指向 player gRPC,GrpcMMRReader 读真实当前 MMR
 # - duration 字段用 pkg/config.Duration,yaml 可直接写 "3s"
 # - dev: enable_reflection=true 便于 grpcurl 联调
@@ -49,3 +49,6 @@ battle:
   # player_addr: player 服务 gRPC 地址(W4 ④ player 已上线 → 接真实当前 MMR;
   # 弱依赖:gRPC 懒连接,player 未起时调用失败由 biz 回退 base_mmr,不阻断落库)
   player_addr: "127.0.0.1:50002"
+  # W4 ⑨ player.update 事务出箱发布器:落库同事务写出箱 → 后台轮询投递 Kafka(at-least-once 不变量 §4)
+  outbox_publish_interval: "2s"
+  outbox_batch_size: 128

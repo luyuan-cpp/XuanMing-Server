@@ -14,21 +14,37 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 )
 
+// OutboxRecord 是一条待发布的 player.update 事务出箱记录(W4 ⑨,不变量 §4)。
+//
+// 落 battles + battle_player_stats 的同一事务里写入,二者原子提交;后台发布器轮询
+// 出箱表逐条投递 Kafka,投递成功才删行。ID 仅 FetchOutbox 返回时填充。
+type OutboxRecord struct {
+	ID       int64  // 出箱行主键(SaveResult 入参时忽略,FetchOutbox 返回时填充)
+	PlayerID uint64 // kafka key(不变量 §9 同玩家事件保序)
+	Payload  []byte // player.v1.PlayerUpdateEvent proto bytes
+}
+
 // BattleRepo 是 battle_result 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type BattleRepo interface {
-	// SaveResult 事务写 battles + battle_player_stats。
-	// 幂等:match_id 已存在 → 返回 (true, nil),不重复写。
-	SaveResult(ctx context.Context, result *battlev1.BattleResult) (alreadyRecorded bool, err error)
+	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox。
+	// 三者原子提交(不变量 §4:落库与待发布段位事件不会半成功)。
+	// 幂等:match_id 已存在 → 返回 (true, nil),不重复写(出箱也不写)。
+	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord) (alreadyRecorded bool, err error)
 	// GetResult 读一场对局结算(含全部玩家战绩)。not found → (nil, false, nil)。
 	GetResult(ctx context.Context, matchID uint64) (*battlev1.BattleResult, bool, error)
 	// ListPlayerHistory 倒序列出玩家参与的对局(ended_at_ms < beforeMs,最多 limit 条)。
 	// beforeMs<=0 表示从最新开始。
 	ListPlayerHistory(ctx context.Context, playerID uint64, limit int, beforeMs int64) ([]*battlev1.BattleResult, error)
+	// FetchOutbox 按 id 升序取最多 limit 条待发布出箱记录(FIFO 保序)。
+	FetchOutbox(ctx context.Context, limit int) ([]OutboxRecord, error)
+	// DeleteOutbox 删除已成功投递的出箱行。
+	DeleteOutbox(ctx context.Context, id int64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -41,7 +57,7 @@ func NewMySQLBattleRepo(db *sql.DB) *MySQLBattleRepo {
 	return &MySQLBattleRepo{db: db}
 }
 
-func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult) (bool, error) {
+func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord) (bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "begin tx: %v", err)
@@ -93,10 +109,58 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		}
 	}
 
+	// 同事务写 player.update 出箱(不变量 §4:落库与待发布段位事件原子提交)。
+	const insOutbox = `INSERT INTO player_update_outbox
+(match_id, player_id, payload, created_at_ms)
+VALUES (?, ?, ?, ?)`
+	nowMs := time.Now().UnixMilli()
+	for _, o := range outbox {
+		if _, oerr := tx.ExecContext(ctx, insOutbox,
+			result.GetMatchId(), o.PlayerID, o.Payload, nowMs,
+		); oerr != nil {
+			return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert outbox match=%d player=%d: %v",
+				result.GetMatchId(), o.PlayerID, oerr)
+		}
+	}
+
 	if cerr := tx.Commit(); cerr != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
 	}
 	return false, nil
+}
+
+// FetchOutbox 按 id 升序取最多 limit 条待发布出箱记录(FIFO 保序)。
+func (r *MySQLBattleRepo) FetchOutbox(ctx context.Context, limit int) ([]OutboxRecord, error) {
+	if limit <= 0 {
+		limit = 128
+	}
+	const q = `SELECT id, player_id, payload FROM player_update_outbox ORDER BY id ASC LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "query outbox: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]OutboxRecord, 0, limit)
+	for rows.Next() {
+		var rec OutboxRecord
+		if serr := rows.Scan(&rec.ID, &rec.PlayerID, &rec.Payload); serr != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan outbox: %v", serr)
+		}
+		out = append(out, rec)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate outbox: %v", rerr)
+	}
+	return out, nil
+}
+
+// DeleteOutbox 删除已成功投递的出箱行。
+func (r *MySQLBattleRepo) DeleteOutbox(ctx context.Context, id int64) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM player_update_outbox WHERE id = ?`, id); err != nil {
+		return errcode.New(errcode.ErrInternal, "delete outbox id=%d: %v", id, err)
+	}
+	return nil
 }
 
 func (r *MySQLBattleRepo) GetResult(ctx context.Context, matchID uint64) (*battlev1.BattleResult, bool, error) {

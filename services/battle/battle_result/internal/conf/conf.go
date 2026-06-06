@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"time"
+
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 )
@@ -27,6 +29,12 @@ type BattleConf struct {
 	// PlayerAddr player 服务 gRPC 地址(弱依赖:空 → 用 BaseMMR 静态 reader)。
 	// W4 ③ player 未上线,留空;player 上线后填地址接真实当前 MMR。
 	PlayerAddr string `yaml:"player_addr,omitempty" json:"player_addr,omitempty"`
+
+	// OutboxPublishInterval player.update 出箱发布轮询间隔(W4 ⑨,默认 2s)。
+	OutboxPublishInterval config.Duration `yaml:"outbox_publish_interval,omitempty" json:"outbox_publish_interval,omitempty"`
+
+	// OutboxBatchSize 每轮发布取多少条出箱记录(默认 128)。
+	OutboxBatchSize int `yaml:"outbox_batch_size,omitempty" json:"outbox_batch_size,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -39,6 +47,12 @@ func (c *Config) Defaults() {
 	}
 	if len(c.Battle.ConsumeTopics) == 0 {
 		c.Battle.ConsumeTopics = []string{kafkax.TopicBattleResult, kafkax.TopicDSLifecycle}
+	}
+	if c.Battle.OutboxPublishInterval.Std() <= 0 {
+		c.Battle.OutboxPublishInterval = config.Duration(2 * time.Second)
+	}
+	if c.Battle.OutboxBatchSize <= 0 {
+		c.Battle.OutboxBatchSize = 128
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50022"

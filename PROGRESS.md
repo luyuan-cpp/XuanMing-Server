@@ -2327,3 +2327,88 @@ sweep 无限刷新 TTL、无限留在 active、无限重试。原新增的 `Test
 **教训**:用 outbox 语义复用既有「带 TTL 刷新」的写路径时,务必确认重试不会顺带刷新 TTL/score 把
 「TTL 当上界」的前提冲掉;写「天然上界 / 不无限堆积」这类绝对保证前,必须有一条**持续失败**的测试
 直接验证 TTL/堆积不增长,而不是只测「失败几次后成功」。
+
+
+## W4 ⑨ ✅ battle_result player.update 事务出箱可靠化(不变量 §4 第二段闭环)(2026-06-06)
+
+把 W4 ③ 遗留的「battle_result 落库后发 player.update 是 best-effort 弱依赖」升级为
+**at-least-once 可靠闭环**,补上 HANDOFF §3 Step 2「可靠补偿收口」的最后一段。
+W4 ⑧ 已让 `ds.lifecycle`(ds_allocator → battle_result)可靠;本轮让 `player.update`
+(battle_result → player 段位写)可靠。新增 1 张 MySQL 表 + 2 个出箱配置,无新服 / 无新 proto /
+无新 errcode。
+
+### 解决的问题
+
+W4 ③ `ReportResult` / `HandleAbandoned` 落库成功后调 `pushOne` 直接发 `pandora.player.update`,
+这是 best-effort:Kafka 不可用时 publish 失败仅 Warn,**事件直接丢** → 玩家段位永不更新。
+不变量 §4「DS 崩溃必有补偿(15s 心跳超时 → abandoned → 段位回滚)」的补偿链末段断裂——
+即使 abandoned 事件可靠送达 battle_result(W4 ⑧),battle_result 再写给 player 的段位变更仍会丢。
+
+### 设计:事务出箱(transactional outbox)
+
+battle_result 是 MySQL-only 服务(无 Redis),不能复刻 W4 ⑧ 的「Redis ZSET 当 outbox」。
+改用经典事务出箱:
+
+- 新增表 `pandora_battle.player_update_outbox`(PK `id` 自增,`uk_match_player` 防重入,
+  `payload` = `player.v1.PlayerUpdateEvent` proto bytes,`created_at_ms`)。
+- `SaveResult` 在落 `battles` + `battle_player_stats` 的**同一事务**里再写出箱行,三者原子提交
+  (不变量 §4:落库与待发布段位事件不会半成功)。幂等命中(dup match_id)→ 出箱也不写。
+- 后台 `RunOutboxPublisher`(`OutboxPublishInterval` 默认 2s)按 `id` FIFO 取 `OutboxBatchSize`
+  (默认 128)条 → 逐条投递 Kafka(key=player_id,不变量 §9 同玩家保序)→ 投递成功才
+  `DeleteOutbox` 删行;投递失败立即中断本批、保留出箱行下一轮重试(保证同玩家事件按 id 顺序投递)。
+- 配合 player 服务幂等消费(W4 ④ `mmr_history` uk 幂等键),整条段位写链是 **at-least-once
+  可靠闭环**,可穿越 Kafka 临时不可用(broker 恢复后下一轮 publisher 自动补发)。
+- **天然不堆积**:出箱表只存待发布事件,投递成功即 DELETE。DELETE-on-publish 若在「投递成功但
+  删行失败」窗口崩溃 → 重发,player 幂等消费吸收重复,符合 at-least-once。
+
+### 改了什么
+
+- `deploy/mysql-init/05-battle-outbox.sql`:新增 `player_update_outbox` 表。
+- `internal/data/battle_repo.go`:加 `OutboxRecord` 类型;`SaveResult` 签名加 `outbox []OutboxRecord`
+  参数并在事务内写出箱;新增 `FetchOutbox`(id 升序取批)/ `DeleteOutbox`(删已投递行);`BattleRepo`
+  接口同步。
+- `internal/biz/battle_result.go`:`ReportResult` / `HandleAbandoned` 改为 MMR 算完先 `buildOutbox`
+  (NORMAL → win/lose/draw;ABANDONED → delta 0 + reason "abandon")再传给 `SaveResult` 入事务;
+  删除原 `pushPlayerUpdates` / `pushOne` 直推路径。新增 `RunOutboxPublisher`(后台循环)/
+  `publishOutboxBatch`(取批投递,失败中断保留重试,返成功条数)/ `outboxBatchSize`。
+  `PlayerUpdatePusher` 接口语义从「失败静默丢」改为「失败触发下一轮重试」;pusher nil(producer
+  未配)时出箱积压不丢、等 producer 可用恢复。
+- `internal/conf/conf.go`:加 `OutboxPublishInterval`(config.Duration 2s)/ `OutboxBatchSize`(128)
+  + Defaults。
+- `cmd/battle_result/main.go`:`go uc.RunOutboxPublisher(pubCtx)`(随进程生命周期启停);producer
+  init 失败注释改为「出箱积压不丢」语义;`service_ready` 日志加 `outbox_interval`。
+- `etc/battle_result-dev.yaml`:加 `battle.outbox_publish_interval` / `outbox_batch_size`,头注释
+  把 player.update 从「producer 弱依赖」改为「事务出箱可靠补偿」。
+
+### 验证
+
+- 10 module BUILD=0
+- battle_result VET=0 / TEST=0(biz 7→11 用例)
+- 新增 4 单测:
+  - `TestOutboxWrittenAtomicallyOnSave`:落库即入箱 4 条、publisher 未跑前 0 推送。
+  - `TestOutboxReliablePublish_RetryUntilDelivered`:前 2 轮投递失败出箱保留 4 条、第 3 轮
+    Kafka 恢复全投递清空、第 4 轮空批无副作用。
+  - `TestOutboxPublishMidBatchFailureKeepsOrder`:一批第 3 条失败 → 前 2 条删、剩 player 3/4
+    按 id 顺序保留下轮续传。
+  - `TestOutboxNilPusherNoLoss`:pusher nil 时 0 投递且出箱 4 条不丢。
+  - 既有 `TestReportResultAssignsMMRAndIdempotent` / `TestHandleAbandonedZeroDeltaIdempotent`
+    改为 `publishOutboxBatch` 驱动后断言推送。
+
+### Codex 需要做的(W4 ⑨ 收尾)
+
+1. `git status` / `git diff --stat` 确认改动范围(battle_result data/biz/conf/main/yaml/test +
+   `deploy/mysql-init/05-battle-outbox.sql` + CLAUDE.md + PROGRESS.md + go-services.md)
+2. `go mod tidy`(battle_result 依赖集未变,无新增直接依赖;确认 go.sum 稳定)
+3. 集成验证:重建 mysql(装载 05-battle-outbox.sql)+ 起 battle_result(:50022);
+   投一条 `pandora.battle.result` → 观察 `battle_result_recorded` + 出箱表 4 行;**故意停 Kafka
+   broker** → publisher 日志 `outbox_publish_batch_failed` 持续重试、出箱行不减;**恢复 Kafka** →
+   `outbox_published` 并出箱清空,player 服务收到 player.update 改段位。
+4. 提 commit:`feat(battle_result): W4 ⑨ player.update 事务出箱可靠补偿(at-least-once)`
+
+### 下一步
+
+- player.update 之外,确认整条「abandoned → 段位回滚」端到端闭环联调(ds_allocator W4 ⑧ outbox →
+  battle_result 消费 → W4 ⑨ outbox → player 幂等 UpdateMMR)
+- 真 Agones GameServerAllocation CRD(`AgonesGameServerAllocator` 替换 Mock,biz 零改)
+- locator HUB 状态由 hub DS 上报 + locator Conflict 检测(多 DS 上报同 player)
+- UE 主链路:登录 → 进大厅 → 匹配 → 进战斗 → 结算 → 回大厅
