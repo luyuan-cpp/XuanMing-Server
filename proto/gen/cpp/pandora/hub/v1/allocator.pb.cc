@@ -162,6 +162,47 @@ struct ListHubsRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ListHubsRequestDefaultTypeInternal _ListHubsRequest_default_instance_;
 
+inline constexpr HubShardStorageRecord::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : hub_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_addr_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        region_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        state_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        shard_id_{0u},
+        player_count_{0},
+        last_heartbeat_ms_{::int64_t{0}},
+        created_at_ms_{::int64_t{0}},
+        capacity_{0},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR HubShardStorageRecord::HubShardStorageRecord(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct HubShardStorageRecordDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR HubShardStorageRecordDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~HubShardStorageRecordDefaultTypeInternal() {}
+  union {
+    HubShardStorageRecord _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HubShardStorageRecordDefaultTypeInternal _HubShardStorageRecord_default_instance_;
+
 inline constexpr HubInfo::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : hub_pod_name_(
@@ -199,6 +240,43 @@ struct HubInfoDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HubInfoDefaultTypeInternal _HubInfo_default_instance_;
+
+inline constexpr HubAssignmentStorageRecord::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : hub_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_addr_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        region_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        team_id_{::uint64_t{0u}},
+        assigned_at_ms_{::int64_t{0}},
+        shard_id_{0u},
+        _cached_size_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR HubAssignmentStorageRecord::HubAssignmentStorageRecord(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct HubAssignmentStorageRecordDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR HubAssignmentStorageRecordDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~HubAssignmentStorageRecordDefaultTypeInternal() {}
+  union {
+    HubAssignmentStorageRecord _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HubAssignmentStorageRecordDefaultTypeInternal _HubAssignmentStorageRecord_default_instance_;
 
 inline constexpr HeartbeatResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -481,6 +559,38 @@ const ::uint32_t
         ~0u,  // no sizeof(Split)
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatResponse, _impl_.command_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.hub_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.hub_addr_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.region_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.shard_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.player_count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.capacity_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.last_heartbeat_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.created_at_ms_),
+        ~0u,  // no _has_bits_
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _internal_metadata_),
+        ~0u,  // no _extensions_
+        ~0u,  // no _oneof_case_
+        ~0u,  // no _weak_field_map_
+        ~0u,  // no _inlined_string_donated_
+        ~0u,  // no _split_
+        ~0u,  // no sizeof(Split)
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.hub_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.hub_addr_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.shard_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.region_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.team_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.assigned_at_ms_),
 };
 
 static const ::_pbi::MigrationSchema
@@ -496,6 +606,8 @@ static const ::_pbi::MigrationSchema
         {86, -1, -1, sizeof(::pandora::hub::v1::ListHubsResponse)},
         {96, -1, -1, sizeof(::pandora::hub::v1::HeartbeatRequest)},
         {110, -1, -1, sizeof(::pandora::hub::v1::HeartbeatResponse)},
+        {120, -1, -1, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
+        {137, -1, -1, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
 };
 static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::hub::v1::_AssignHubRequest_default_instance_._instance,
@@ -509,6 +621,8 @@ static const ::_pb::Message* const file_default_instances[] = {
     &::pandora::hub::v1::_ListHubsResponse_default_instance_._instance,
     &::pandora::hub::v1::_HeartbeatRequest_default_instance_._instance,
     &::pandora::hub::v1::_HeartbeatResponse_default_instance_._instance,
+    &::pandora::hub::v1::_HubShardStorageRecord_default_instance_._instance,
+    &::pandora::hub::v1::_HubAssignmentStorageRecord_default_instance_._instance,
 };
 const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -545,19 +659,32 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "memMb\022\024\n\005state\030\005 \001(\tR\005state\022\023\n\005ts_ms\030\006 \001"
     "(\003R\004tsMsJ\004\010\007\020\n\"c\n\021HeartbeatResponse\022.\n\004c"
     "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
-    "ode\022\030\n\007command\030\002 \001(\tR\007commandJ\004\010\003\020\n2\265\003\n\023"
-    "HubAllocatorService\022P\n\tAssignHub\022 .pando"
-    "ra.hub.v1.AssignHubRequest\032!.pandora.hub"
-    ".v1.AssignHubResponse\022S\n\nReleaseHub\022!.pa"
-    "ndora.hub.v1.ReleaseHubRequest\032\".pandora"
-    ".hub.v1.ReleaseHubResponse\022V\n\013TransferHu"
-    "b\022\".pandora.hub.v1.TransferHubRequest\032#."
-    "pandora.hub.v1.TransferHubResponse\022M\n\010Li"
-    "stHubs\022\037.pandora.hub.v1.ListHubsRequest\032"
-    " .pandora.hub.v1.ListHubsResponse\022P\n\tHea"
-    "rtbeat\022 .pandora.hub.v1.HeartbeatRequest"
-    "\032!.pandora.hub.v1.HeartbeatResponseb\006pro"
-    "to3"
+    "ode\022\030\n\007command\030\002 \001(\tR\007commandJ\004\010\003\020\n\"\254\002\n\025"
+    "HubShardStorageRecord\022 \n\014hub_pod_name\030\001 "
+    "\001(\tR\nhubPodName\022\031\n\010hub_addr\030\002 \001(\tR\007hubAd"
+    "dr\022\026\n\006region\030\003 \001(\tR\006region\022\031\n\010shard_id\030\004"
+    " \001(\rR\007shardId\022!\n\014player_count\030\005 \001(\005R\013pla"
+    "yerCount\022\032\n\010capacity\030\006 \001(\005R\010capacity\022\024\n\005"
+    "state\030\007 \001(\tR\005state\022*\n\021last_heartbeat_ms\030"
+    "\010 \001(\003R\017lastHeartbeatMs\022\"\n\rcreated_at_ms\030"
+    "\t \001(\003R\013createdAtMs\"\350\001\n\032HubAssignmentStor"
+    "ageRecord\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022 "
+    "\n\014hub_pod_name\030\002 \001(\tR\nhubPodName\022\031\n\010hub_"
+    "addr\030\003 \001(\tR\007hubAddr\022\031\n\010shard_id\030\004 \001(\rR\007s"
+    "hardId\022\026\n\006region\030\005 \001(\tR\006region\022\027\n\007team_i"
+    "d\030\006 \001(\004R\006teamId\022$\n\016assigned_at_ms\030\007 \001(\003R"
+    "\014assignedAtMs2\265\003\n\023HubAllocatorService\022P\n"
+    "\tAssignHub\022 .pandora.hub.v1.AssignHubReq"
+    "uest\032!.pandora.hub.v1.AssignHubResponse\022"
+    "S\n\nReleaseHub\022!.pandora.hub.v1.ReleaseHu"
+    "bRequest\032\".pandora.hub.v1.ReleaseHubResp"
+    "onse\022V\n\013TransferHub\022\".pandora.hub.v1.Tra"
+    "nsferHubRequest\032#.pandora.hub.v1.Transfe"
+    "rHubResponse\022M\n\010ListHubs\022\037.pandora.hub.v"
+    "1.ListHubsRequest\032 .pandora.hub.v1.ListH"
+    "ubsResponse\022P\n\tHeartbeat\022 .pandora.hub.v"
+    "1.HeartbeatRequest\032!.pandora.hub.v1.Hear"
+    "tbeatResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps[1] =
     {
@@ -567,13 +694,13 @@ static ::absl::once_flag descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto = {
     false,
     false,
-    1803,
+    2341,
     descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto,
     "pandora/hub/v1/allocator.proto",
     &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_once,
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps,
     1,
-    11,
+    13,
     schemas,
     file_default_instances,
     TableStruct_pandora_2fhub_2fv1_2fallocator_2eproto::offsets,
@@ -3679,6 +3806,851 @@ void HeartbeatResponse::InternalSwap(HeartbeatResponse* PROTOBUF_RESTRICT other)
 }
 
 ::google::protobuf::Metadata HeartbeatResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class HubShardStorageRecord::_Internal {
+ public:
+};
+
+HubShardStorageRecord::HubShardStorageRecord(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.HubShardStorageRecord)
+}
+inline PROTOBUF_NDEBUG_INLINE HubShardStorageRecord::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::hub::v1::HubShardStorageRecord& from_msg)
+      : hub_pod_name_(arena, from.hub_pod_name_),
+        hub_addr_(arena, from.hub_addr_),
+        region_(arena, from.region_),
+        state_(arena, from.state_),
+        _cached_size_{0} {}
+
+HubShardStorageRecord::HubShardStorageRecord(
+    ::google::protobuf::Arena* arena,
+    const HubShardStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HubShardStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, shard_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, shard_id_),
+           offsetof(Impl_, capacity_) -
+               offsetof(Impl_, shard_id_) +
+               sizeof(Impl_::capacity_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HubShardStorageRecord)
+}
+inline PROTOBUF_NDEBUG_INLINE HubShardStorageRecord::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : hub_pod_name_(arena),
+        hub_addr_(arena),
+        region_(arena),
+        state_(arena),
+        _cached_size_{0} {}
+
+inline void HubShardStorageRecord::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, shard_id_),
+           0,
+           offsetof(Impl_, capacity_) -
+               offsetof(Impl_, shard_id_) +
+               sizeof(Impl_::capacity_));
+}
+HubShardStorageRecord::~HubShardStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.HubShardStorageRecord)
+  SharedDtor(*this);
+}
+inline void HubShardStorageRecord::SharedDtor(MessageLite& self) {
+  HubShardStorageRecord& this_ = static_cast<HubShardStorageRecord&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.hub_pod_name_.Destroy();
+  this_._impl_.hub_addr_.Destroy();
+  this_._impl_.region_.Destroy();
+  this_._impl_.state_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* HubShardStorageRecord::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) HubShardStorageRecord(arena);
+}
+constexpr auto HubShardStorageRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HubShardStorageRecord),
+                                            alignof(HubShardStorageRecord));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull HubShardStorageRecord::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_HubShardStorageRecord_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &HubShardStorageRecord::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<HubShardStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &HubShardStorageRecord::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<HubShardStorageRecord>(), &HubShardStorageRecord::ByteSizeLong,
+            &HubShardStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_._cached_size_),
+        false,
+    },
+    &HubShardStorageRecord::kDescriptorMethods,
+    &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* HubShardStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<4, 9, 0, 84, 2> HubShardStorageRecord::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    9, 120,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294966784,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    9,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::pandora::hub::v1::HubShardStorageRecord>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string hub_pod_name = 1 [json_name = "hubPodName"];
+    {::_pbi::TcParser::FastUS1,
+     {10, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.hub_pod_name_)}},
+    // string hub_addr = 2 [json_name = "hubAddr"];
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.hub_addr_)}},
+    // string region = 3 [json_name = "region"];
+    {::_pbi::TcParser::FastUS1,
+     {26, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.region_)}},
+    // uint32 shard_id = 4 [json_name = "shardId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.shard_id_), 63>(),
+     {32, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_)}},
+    // int32 player_count = 5 [json_name = "playerCount"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.player_count_), 63>(),
+     {40, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.player_count_)}},
+    // int32 capacity = 6 [json_name = "capacity"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.capacity_), 63>(),
+     {48, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.capacity_)}},
+    // string state = 7 [json_name = "state"];
+    {::_pbi::TcParser::FastUS1,
+     {58, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.state_)}},
+    // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.last_heartbeat_ms_), 63>(),
+     {64, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_heartbeat_ms_)}},
+    // int64 created_at_ms = 9 [json_name = "createdAtMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.created_at_ms_), 63>(),
+     {72, 63, 0, PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.created_at_ms_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string hub_pod_name = 1 [json_name = "hubPodName"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.hub_pod_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string hub_addr = 2 [json_name = "hubAddr"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.hub_addr_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string region = 3 [json_name = "region"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.region_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // uint32 shard_id = 4 [json_name = "shardId"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
+    // int32 player_count = 5 [json_name = "playerCount"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.player_count_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt32)},
+    // int32 capacity = 6 [json_name = "capacity"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.capacity_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt32)},
+    // string state = 7 [json_name = "state"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.state_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_heartbeat_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+    // int64 created_at_ms = 9 [json_name = "createdAtMs"];
+    {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.created_at_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+  }},
+  // no aux_entries
+  {{
+    "\44\14\10\6\0\0\0\5\0\0\0\0\0\0\0\0"
+    "pandora.hub.v1.HubShardStorageRecord"
+    "hub_pod_name"
+    "hub_addr"
+    "region"
+    "state"
+  }},
+};
+
+PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.HubShardStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.hub_pod_name_.ClearToEmpty();
+  _impl_.hub_addr_.ClearToEmpty();
+  _impl_.region_.ClearToEmpty();
+  _impl_.state_.ClearToEmpty();
+  ::memset(&_impl_.shard_id_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.capacity_) -
+      reinterpret_cast<char*>(&_impl_.shard_id_)) + sizeof(_impl_.capacity_));
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* HubShardStorageRecord::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const HubShardStorageRecord& this_ = static_cast<const HubShardStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* HubShardStorageRecord::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const HubShardStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.HubShardStorageRecord)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // string hub_pod_name = 1 [json_name = "hubPodName"];
+          if (!this_._internal_hub_pod_name().empty()) {
+            const std::string& _s = this_._internal_hub_pod_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubShardStorageRecord.hub_pod_name");
+            target = stream->WriteStringMaybeAliased(1, _s, target);
+          }
+
+          // string hub_addr = 2 [json_name = "hubAddr"];
+          if (!this_._internal_hub_addr().empty()) {
+            const std::string& _s = this_._internal_hub_addr();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubShardStorageRecord.hub_addr");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // string region = 3 [json_name = "region"];
+          if (!this_._internal_region().empty()) {
+            const std::string& _s = this_._internal_region();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubShardStorageRecord.region");
+            target = stream->WriteStringMaybeAliased(3, _s, target);
+          }
+
+          // uint32 shard_id = 4 [json_name = "shardId"];
+          if (this_._internal_shard_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+                4, this_._internal_shard_id(), target);
+          }
+
+          // int32 player_count = 5 [json_name = "playerCount"];
+          if (this_._internal_player_count() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt32ToArrayWithField<5>(
+                    stream, this_._internal_player_count(), target);
+          }
+
+          // int32 capacity = 6 [json_name = "capacity"];
+          if (this_._internal_capacity() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt32ToArrayWithField<6>(
+                    stream, this_._internal_capacity(), target);
+          }
+
+          // string state = 7 [json_name = "state"];
+          if (!this_._internal_state().empty()) {
+            const std::string& _s = this_._internal_state();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubShardStorageRecord.state");
+            target = stream->WriteStringMaybeAliased(7, _s, target);
+          }
+
+          // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
+          if (this_._internal_last_heartbeat_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<8>(
+                    stream, this_._internal_last_heartbeat_ms(), target);
+          }
+
+          // int64 created_at_ms = 9 [json_name = "createdAtMs"];
+          if (this_._internal_created_at_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<9>(
+                    stream, this_._internal_created_at_ms(), target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.HubShardStorageRecord)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t HubShardStorageRecord::ByteSizeLong(const MessageLite& base) {
+          const HubShardStorageRecord& this_ = static_cast<const HubShardStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t HubShardStorageRecord::ByteSizeLong() const {
+          const HubShardStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.HubShardStorageRecord)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // string hub_pod_name = 1 [json_name = "hubPodName"];
+            if (!this_._internal_hub_pod_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_hub_pod_name());
+            }
+            // string hub_addr = 2 [json_name = "hubAddr"];
+            if (!this_._internal_hub_addr().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_hub_addr());
+            }
+            // string region = 3 [json_name = "region"];
+            if (!this_._internal_region().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_region());
+            }
+            // string state = 7 [json_name = "state"];
+            if (!this_._internal_state().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_state());
+            }
+            // uint32 shard_id = 4 [json_name = "shardId"];
+            if (this_._internal_shard_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+                  this_._internal_shard_id());
+            }
+            // int32 player_count = 5 [json_name = "playerCount"];
+            if (this_._internal_player_count() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+                  this_._internal_player_count());
+            }
+            // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
+            if (this_._internal_last_heartbeat_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_last_heartbeat_ms());
+            }
+            // int64 created_at_ms = 9 [json_name = "createdAtMs"];
+            if (this_._internal_created_at_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_created_at_ms());
+            }
+            // int32 capacity = 6 [json_name = "capacity"];
+            if (this_._internal_capacity() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+                  this_._internal_capacity());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void HubShardStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<HubShardStorageRecord*>(&to_msg);
+  auto& from = static_cast<const HubShardStorageRecord&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.HubShardStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_hub_pod_name().empty()) {
+    _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
+  }
+  if (!from._internal_hub_addr().empty()) {
+    _this->_internal_set_hub_addr(from._internal_hub_addr());
+  }
+  if (!from._internal_region().empty()) {
+    _this->_internal_set_region(from._internal_region());
+  }
+  if (!from._internal_state().empty()) {
+    _this->_internal_set_state(from._internal_state());
+  }
+  if (from._internal_shard_id() != 0) {
+    _this->_impl_.shard_id_ = from._impl_.shard_id_;
+  }
+  if (from._internal_player_count() != 0) {
+    _this->_impl_.player_count_ = from._impl_.player_count_;
+  }
+  if (from._internal_last_heartbeat_ms() != 0) {
+    _this->_impl_.last_heartbeat_ms_ = from._impl_.last_heartbeat_ms_;
+  }
+  if (from._internal_created_at_ms() != 0) {
+    _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
+  }
+  if (from._internal_capacity() != 0) {
+    _this->_impl_.capacity_ = from._impl_.capacity_;
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void HubShardStorageRecord::CopyFrom(const HubShardStorageRecord& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.HubShardStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HubShardStorageRecord::InternalSwap(HubShardStorageRecord* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_addr_, &other->_impl_.hub_addr_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.region_, &other->_impl_.region_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.state_, &other->_impl_.state_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.capacity_)
+      + sizeof(HubShardStorageRecord::_impl_.capacity_)
+      - PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_)>(
+          reinterpret_cast<char*>(&_impl_.shard_id_),
+          reinterpret_cast<char*>(&other->_impl_.shard_id_));
+}
+
+::google::protobuf::Metadata HubShardStorageRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class HubAssignmentStorageRecord::_Internal {
+ public:
+};
+
+HubAssignmentStorageRecord::HubAssignmentStorageRecord(::google::protobuf::Arena* arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.HubAssignmentStorageRecord)
+}
+inline PROTOBUF_NDEBUG_INLINE HubAssignmentStorageRecord::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility, ::google::protobuf::Arena* arena,
+    const Impl_& from, const ::pandora::hub::v1::HubAssignmentStorageRecord& from_msg)
+      : hub_pod_name_(arena, from.hub_pod_name_),
+        hub_addr_(arena, from.hub_addr_),
+        region_(arena, from.region_),
+        _cached_size_{0} {}
+
+HubAssignmentStorageRecord::HubAssignmentStorageRecord(
+    ::google::protobuf::Arena* arena,
+    const HubAssignmentStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, _class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HubAssignmentStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char *>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, shard_id_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::shard_id_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HubAssignmentStorageRecord)
+}
+inline PROTOBUF_NDEBUG_INLINE HubAssignmentStorageRecord::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* arena)
+      : hub_pod_name_(arena),
+        hub_addr_(arena),
+        region_(arena),
+        _cached_size_{0} {}
+
+inline void HubAssignmentStorageRecord::SharedCtor(::_pb::Arena* arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, shard_id_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::shard_id_));
+}
+HubAssignmentStorageRecord::~HubAssignmentStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.HubAssignmentStorageRecord)
+  SharedDtor(*this);
+}
+inline void HubAssignmentStorageRecord::SharedDtor(MessageLite& self) {
+  HubAssignmentStorageRecord& this_ = static_cast<HubAssignmentStorageRecord&>(self);
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.hub_pod_name_.Destroy();
+  this_._impl_.hub_addr_.Destroy();
+  this_._impl_.region_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* HubAssignmentStorageRecord::PlacementNew_(const void*, void* mem,
+                                        ::google::protobuf::Arena* arena) {
+  return ::new (mem) HubAssignmentStorageRecord(arena);
+}
+constexpr auto HubAssignmentStorageRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HubAssignmentStorageRecord),
+                                            alignof(HubAssignmentStorageRecord));
+}
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataFull HubAssignmentStorageRecord::_class_data_ = {
+    ::google::protobuf::internal::ClassData{
+        &_HubAssignmentStorageRecord_default_instance_._instance,
+        &_table_.header,
+        nullptr,  // OnDemandRegisterArenaDtor
+        nullptr,  // IsInitialized
+        &HubAssignmentStorageRecord::MergeImpl,
+        ::google::protobuf::Message::GetNewImpl<HubAssignmentStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        &HubAssignmentStorageRecord::SharedDtor,
+        ::google::protobuf::Message::GetClearImpl<HubAssignmentStorageRecord>(), &HubAssignmentStorageRecord::ByteSizeLong,
+            &HubAssignmentStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+        PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_._cached_size_),
+        false,
+    },
+    &HubAssignmentStorageRecord::kDescriptorMethods,
+    &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+    nullptr,  // tracker
+};
+const ::google::protobuf::internal::ClassData* HubAssignmentStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(_class_data_.tc_table);
+  return _class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 7, 0, 76, 2> HubAssignmentStorageRecord::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    7, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967168,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    7,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    _class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::pandora::hub::v1::HubAssignmentStorageRecord>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 player_id = 1 [json_name = "playerId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.player_id_), 63>(),
+     {8, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_)}},
+    // string hub_pod_name = 2 [json_name = "hubPodName"];
+    {::_pbi::TcParser::FastUS1,
+     {18, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_pod_name_)}},
+    // string hub_addr = 3 [json_name = "hubAddr"];
+    {::_pbi::TcParser::FastUS1,
+     {26, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_addr_)}},
+    // uint32 shard_id = 4 [json_name = "shardId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.shard_id_), 63>(),
+     {32, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_)}},
+    // string region = 5 [json_name = "region"];
+    {::_pbi::TcParser::FastUS1,
+     {42, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.region_)}},
+    // uint64 team_id = 6 [json_name = "teamId"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.team_id_), 63>(),
+     {48, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_)}},
+    // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), 63>(),
+     {56, 63, 0, PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint64 player_id = 1 [json_name = "playerId"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // string hub_pod_name = 2 [json_name = "hubPodName"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_pod_name_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string hub_addr = 3 [json_name = "hubAddr"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_addr_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // uint32 shard_id = 4 [json_name = "shardId"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt32)},
+    // string region = 5 [json_name = "region"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.region_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // uint64 team_id = 6 [json_name = "teamId"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
+    // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+    {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), 0, 0,
+    (0 | ::_fl::kFcSingular | ::_fl::kInt64)},
+  }},
+  // no aux_entries
+  {{
+    "\51\0\14\10\0\6\0\0"
+    "pandora.hub.v1.HubAssignmentStorageRecord"
+    "hub_pod_name"
+    "hub_addr"
+    "region"
+  }},
+};
+
+PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.HubAssignmentStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.hub_pod_name_.ClearToEmpty();
+  _impl_.hub_addr_.ClearToEmpty();
+  _impl_.region_.ClearToEmpty();
+  ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.shard_id_) -
+      reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.shard_id_));
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::uint8_t* HubAssignmentStorageRecord::_InternalSerialize(
+            const MessageLite& base, ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) {
+          const HubAssignmentStorageRecord& this_ = static_cast<const HubAssignmentStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::uint8_t* HubAssignmentStorageRecord::_InternalSerialize(
+            ::uint8_t* target,
+            ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+          const HubAssignmentStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.HubAssignmentStorageRecord)
+          ::uint32_t cached_has_bits = 0;
+          (void)cached_has_bits;
+
+          // uint64 player_id = 1 [json_name = "playerId"];
+          if (this_._internal_player_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                1, this_._internal_player_id(), target);
+          }
+
+          // string hub_pod_name = 2 [json_name = "hubPodName"];
+          if (!this_._internal_hub_pod_name().empty()) {
+            const std::string& _s = this_._internal_hub_pod_name();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubAssignmentStorageRecord.hub_pod_name");
+            target = stream->WriteStringMaybeAliased(2, _s, target);
+          }
+
+          // string hub_addr = 3 [json_name = "hubAddr"];
+          if (!this_._internal_hub_addr().empty()) {
+            const std::string& _s = this_._internal_hub_addr();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubAssignmentStorageRecord.hub_addr");
+            target = stream->WriteStringMaybeAliased(3, _s, target);
+          }
+
+          // uint32 shard_id = 4 [json_name = "shardId"];
+          if (this_._internal_shard_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+                4, this_._internal_shard_id(), target);
+          }
+
+          // string region = 5 [json_name = "region"];
+          if (!this_._internal_region().empty()) {
+            const std::string& _s = this_._internal_region();
+            ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+                _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubAssignmentStorageRecord.region");
+            target = stream->WriteStringMaybeAliased(5, _s, target);
+          }
+
+          // uint64 team_id = 6 [json_name = "teamId"];
+          if (this_._internal_team_id() != 0) {
+            target = stream->EnsureSpace(target);
+            target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+                6, this_._internal_team_id(), target);
+          }
+
+          // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+          if (this_._internal_assigned_at_ms() != 0) {
+            target = ::google::protobuf::internal::WireFormatLite::
+                WriteInt64ToArrayWithField<7>(
+                    stream, this_._internal_assigned_at_ms(), target);
+          }
+
+          if (PROTOBUF_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+            target =
+                ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+                    this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+          }
+          // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.HubAssignmentStorageRecord)
+          return target;
+        }
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+        ::size_t HubAssignmentStorageRecord::ByteSizeLong(const MessageLite& base) {
+          const HubAssignmentStorageRecord& this_ = static_cast<const HubAssignmentStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+        ::size_t HubAssignmentStorageRecord::ByteSizeLong() const {
+          const HubAssignmentStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.HubAssignmentStorageRecord)
+          ::size_t total_size = 0;
+
+          ::uint32_t cached_has_bits = 0;
+          // Prevent compiler warnings about cached_has_bits being unused
+          (void)cached_has_bits;
+
+          ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+           {
+            // string hub_pod_name = 2 [json_name = "hubPodName"];
+            if (!this_._internal_hub_pod_name().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_hub_pod_name());
+            }
+            // string hub_addr = 3 [json_name = "hubAddr"];
+            if (!this_._internal_hub_addr().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_hub_addr());
+            }
+            // string region = 5 [json_name = "region"];
+            if (!this_._internal_region().empty()) {
+              total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                              this_._internal_region());
+            }
+            // uint64 player_id = 1 [json_name = "playerId"];
+            if (this_._internal_player_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_player_id());
+            }
+            // uint64 team_id = 6 [json_name = "teamId"];
+            if (this_._internal_team_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+                  this_._internal_team_id());
+            }
+            // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+            if (this_._internal_assigned_at_ms() != 0) {
+              total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+                  this_._internal_assigned_at_ms());
+            }
+            // uint32 shard_id = 4 [json_name = "shardId"];
+            if (this_._internal_shard_id() != 0) {
+              total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+                  this_._internal_shard_id());
+            }
+          }
+          return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                                     &this_._impl_._cached_size_);
+        }
+
+void HubAssignmentStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<HubAssignmentStorageRecord*>(&to_msg);
+  auto& from = static_cast<const HubAssignmentStorageRecord&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.HubAssignmentStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_hub_pod_name().empty()) {
+    _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
+  }
+  if (!from._internal_hub_addr().empty()) {
+    _this->_internal_set_hub_addr(from._internal_hub_addr());
+  }
+  if (!from._internal_region().empty()) {
+    _this->_internal_set_region(from._internal_region());
+  }
+  if (from._internal_player_id() != 0) {
+    _this->_impl_.player_id_ = from._impl_.player_id_;
+  }
+  if (from._internal_team_id() != 0) {
+    _this->_impl_.team_id_ = from._impl_.team_id_;
+  }
+  if (from._internal_assigned_at_ms() != 0) {
+    _this->_impl_.assigned_at_ms_ = from._impl_.assigned_at_ms_;
+  }
+  if (from._internal_shard_id() != 0) {
+    _this->_impl_.shard_id_ = from._impl_.shard_id_;
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void HubAssignmentStorageRecord::CopyFrom(const HubAssignmentStorageRecord& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.HubAssignmentStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HubAssignmentStorageRecord::InternalSwap(HubAssignmentStorageRecord* PROTOBUF_RESTRICT other) {
+  using std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_addr_, &other->_impl_.hub_addr_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.region_, &other->_impl_.region_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_)
+      + sizeof(HubAssignmentStorageRecord::_impl_.shard_id_)
+      - PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata HubAssignmentStorageRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

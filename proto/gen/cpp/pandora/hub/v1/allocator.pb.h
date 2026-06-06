@@ -67,9 +67,15 @@ extern HeartbeatRequestDefaultTypeInternal _HeartbeatRequest_default_instance_;
 class HeartbeatResponse;
 struct HeartbeatResponseDefaultTypeInternal;
 extern HeartbeatResponseDefaultTypeInternal _HeartbeatResponse_default_instance_;
+class HubAssignmentStorageRecord;
+struct HubAssignmentStorageRecordDefaultTypeInternal;
+extern HubAssignmentStorageRecordDefaultTypeInternal _HubAssignmentStorageRecord_default_instance_;
 class HubInfo;
 struct HubInfoDefaultTypeInternal;
 extern HubInfoDefaultTypeInternal _HubInfo_default_instance_;
+class HubShardStorageRecord;
+struct HubShardStorageRecordDefaultTypeInternal;
+extern HubShardStorageRecordDefaultTypeInternal _HubShardStorageRecord_default_instance_;
 class ListHubsRequest;
 struct ListHubsRequestDefaultTypeInternal;
 extern ListHubsRequestDefaultTypeInternal _ListHubsRequest_default_instance_;
@@ -1109,6 +1115,316 @@ class ListHubsRequest final : public ::google::protobuf::Message
 };
 // -------------------------------------------------------------------
 
+class HubShardStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.hub.v1.HubShardStorageRecord) */ {
+ public:
+  inline HubShardStorageRecord() : HubShardStorageRecord(nullptr) {}
+  ~HubShardStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HubShardStorageRecord* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HubShardStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HubShardStorageRecord(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline HubShardStorageRecord(const HubShardStorageRecord& from) : HubShardStorageRecord(nullptr, from) {}
+  inline HubShardStorageRecord(HubShardStorageRecord&& from) noexcept
+      : HubShardStorageRecord(nullptr, std::move(from)) {}
+  inline HubShardStorageRecord& operator=(const HubShardStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HubShardStorageRecord& operator=(HubShardStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const HubShardStorageRecord& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const HubShardStorageRecord* internal_default_instance() {
+    return reinterpret_cast<const HubShardStorageRecord*>(
+        &_HubShardStorageRecord_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(HubShardStorageRecord& a, HubShardStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(HubShardStorageRecord* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HubShardStorageRecord* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HubShardStorageRecord* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HubShardStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HubShardStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HubShardStorageRecord& from) { HubShardStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HubShardStorageRecord* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.hub.v1.HubShardStorageRecord"; }
+
+ protected:
+  explicit HubShardStorageRecord(::google::protobuf::Arena* arena);
+  HubShardStorageRecord(::google::protobuf::Arena* arena, const HubShardStorageRecord& from);
+  HubShardStorageRecord(::google::protobuf::Arena* arena, HubShardStorageRecord&& from) noexcept
+      : HubShardStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHubPodNameFieldNumber = 1,
+    kHubAddrFieldNumber = 2,
+    kRegionFieldNumber = 3,
+    kStateFieldNumber = 7,
+    kShardIdFieldNumber = 4,
+    kPlayerCountFieldNumber = 5,
+    kLastHeartbeatMsFieldNumber = 8,
+    kCreatedAtMsFieldNumber = 9,
+    kCapacityFieldNumber = 6,
+  };
+  // string hub_pod_name = 1 [json_name = "hubPodName"];
+  void clear_hub_pod_name() ;
+  const std::string& hub_pod_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_hub_pod_name(Arg_&& arg, Args_... args);
+  std::string* mutable_hub_pod_name();
+  PROTOBUF_NODISCARD std::string* release_hub_pod_name();
+  void set_allocated_hub_pod_name(std::string* value);
+
+  private:
+  const std::string& _internal_hub_pod_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod_name(
+      const std::string& value);
+  std::string* _internal_mutable_hub_pod_name();
+
+  public:
+  // string hub_addr = 2 [json_name = "hubAddr"];
+  void clear_hub_addr() ;
+  const std::string& hub_addr() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_hub_addr(Arg_&& arg, Args_... args);
+  std::string* mutable_hub_addr();
+  PROTOBUF_NODISCARD std::string* release_hub_addr();
+  void set_allocated_hub_addr(std::string* value);
+
+  private:
+  const std::string& _internal_hub_addr() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_hub_addr(
+      const std::string& value);
+  std::string* _internal_mutable_hub_addr();
+
+  public:
+  // string region = 3 [json_name = "region"];
+  void clear_region() ;
+  const std::string& region() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_region(Arg_&& arg, Args_... args);
+  std::string* mutable_region();
+  PROTOBUF_NODISCARD std::string* release_region();
+  void set_allocated_region(std::string* value);
+
+  private:
+  const std::string& _internal_region() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_region(
+      const std::string& value);
+  std::string* _internal_mutable_region();
+
+  public:
+  // string state = 7 [json_name = "state"];
+  void clear_state() ;
+  const std::string& state() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_state(Arg_&& arg, Args_... args);
+  std::string* mutable_state();
+  PROTOBUF_NODISCARD std::string* release_state();
+  void set_allocated_state(std::string* value);
+
+  private:
+  const std::string& _internal_state() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_state(
+      const std::string& value);
+  std::string* _internal_mutable_state();
+
+  public:
+  // uint32 shard_id = 4 [json_name = "shardId"];
+  void clear_shard_id() ;
+  ::uint32_t shard_id() const;
+  void set_shard_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_shard_id() const;
+  void _internal_set_shard_id(::uint32_t value);
+
+  public:
+  // int32 player_count = 5 [json_name = "playerCount"];
+  void clear_player_count() ;
+  ::int32_t player_count() const;
+  void set_player_count(::int32_t value);
+
+  private:
+  ::int32_t _internal_player_count() const;
+  void _internal_set_player_count(::int32_t value);
+
+  public:
+  // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
+  void clear_last_heartbeat_ms() ;
+  ::int64_t last_heartbeat_ms() const;
+  void set_last_heartbeat_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_last_heartbeat_ms() const;
+  void _internal_set_last_heartbeat_ms(::int64_t value);
+
+  public:
+  // int64 created_at_ms = 9 [json_name = "createdAtMs"];
+  void clear_created_at_ms() ;
+  ::int64_t created_at_ms() const;
+  void set_created_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_created_at_ms() const;
+  void _internal_set_created_at_ms(::int64_t value);
+
+  public:
+  // int32 capacity = 6 [json_name = "capacity"];
+  void clear_capacity() ;
+  ::int32_t capacity() const;
+  void set_capacity(::int32_t value);
+
+  private:
+  ::int32_t _internal_capacity() const;
+  void _internal_set_capacity(::int32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubShardStorageRecord)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      4, 9, 0,
+      84, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const HubShardStorageRecord& from_msg);
+    ::google::protobuf::internal::ArenaStringPtr hub_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr hub_addr_;
+    ::google::protobuf::internal::ArenaStringPtr region_;
+    ::google::protobuf::internal::ArenaStringPtr state_;
+    ::uint32_t shard_id_;
+    ::int32_t player_count_;
+    ::int64_t last_heartbeat_ms_;
+    ::int64_t created_at_ms_;
+    ::int32_t capacity_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fhub_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class HubInfo final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.hub.v1.HubInfo) */ {
  public:
@@ -1375,6 +1691,286 @@ class HubInfo final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr state_;
     ::int32_t player_count_;
     ::int32_t capacity_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fhub_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class HubAssignmentStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.hub.v1.HubAssignmentStorageRecord) */ {
+ public:
+  inline HubAssignmentStorageRecord() : HubAssignmentStorageRecord(nullptr) {}
+  ~HubAssignmentStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HubAssignmentStorageRecord* msg, std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HubAssignmentStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HubAssignmentStorageRecord(
+      ::google::protobuf::internal::ConstantInitialized);
+
+  inline HubAssignmentStorageRecord(const HubAssignmentStorageRecord& from) : HubAssignmentStorageRecord(nullptr, from) {}
+  inline HubAssignmentStorageRecord(HubAssignmentStorageRecord&& from) noexcept
+      : HubAssignmentStorageRecord(nullptr, std::move(from)) {}
+  inline HubAssignmentStorageRecord& operator=(const HubAssignmentStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HubAssignmentStorageRecord& operator=(HubAssignmentStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const HubAssignmentStorageRecord& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const HubAssignmentStorageRecord* internal_default_instance() {
+    return reinterpret_cast<const HubAssignmentStorageRecord*>(
+        &_HubAssignmentStorageRecord_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(HubAssignmentStorageRecord& a, HubAssignmentStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(HubAssignmentStorageRecord* other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HubAssignmentStorageRecord* other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HubAssignmentStorageRecord* New(::google::protobuf::Arena* arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HubAssignmentStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HubAssignmentStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HubAssignmentStorageRecord& from) { HubAssignmentStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(
+      ::google::protobuf::MessageLite& to_msg,
+      const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* _InternalSerialize(
+      const MessageLite& msg, ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* _InternalSerialize(
+      ::uint8_t* target,
+      ::google::protobuf::io::EpsCopyOutputStream* stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HubAssignmentStorageRecord* other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(
+      ::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.hub.v1.HubAssignmentStorageRecord"; }
+
+ protected:
+  explicit HubAssignmentStorageRecord(::google::protobuf::Arena* arena);
+  HubAssignmentStorageRecord(::google::protobuf::Arena* arena, const HubAssignmentStorageRecord& from);
+  HubAssignmentStorageRecord(::google::protobuf::Arena* arena, HubAssignmentStorageRecord&& from) noexcept
+      : HubAssignmentStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* GetClassData() const PROTOBUF_FINAL;
+  static void* PlacementNew_(const void*, void* mem,
+                             ::google::protobuf::Arena* arena);
+  static constexpr auto InternalNewImpl_();
+  static const ::google::protobuf::internal::ClassDataFull _class_data_;
+
+ public:
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHubPodNameFieldNumber = 2,
+    kHubAddrFieldNumber = 3,
+    kRegionFieldNumber = 5,
+    kPlayerIdFieldNumber = 1,
+    kTeamIdFieldNumber = 6,
+    kAssignedAtMsFieldNumber = 7,
+    kShardIdFieldNumber = 4,
+  };
+  // string hub_pod_name = 2 [json_name = "hubPodName"];
+  void clear_hub_pod_name() ;
+  const std::string& hub_pod_name() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_hub_pod_name(Arg_&& arg, Args_... args);
+  std::string* mutable_hub_pod_name();
+  PROTOBUF_NODISCARD std::string* release_hub_pod_name();
+  void set_allocated_hub_pod_name(std::string* value);
+
+  private:
+  const std::string& _internal_hub_pod_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod_name(
+      const std::string& value);
+  std::string* _internal_mutable_hub_pod_name();
+
+  public:
+  // string hub_addr = 3 [json_name = "hubAddr"];
+  void clear_hub_addr() ;
+  const std::string& hub_addr() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_hub_addr(Arg_&& arg, Args_... args);
+  std::string* mutable_hub_addr();
+  PROTOBUF_NODISCARD std::string* release_hub_addr();
+  void set_allocated_hub_addr(std::string* value);
+
+  private:
+  const std::string& _internal_hub_addr() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_hub_addr(
+      const std::string& value);
+  std::string* _internal_mutable_hub_addr();
+
+  public:
+  // string region = 5 [json_name = "region"];
+  void clear_region() ;
+  const std::string& region() const;
+  template <typename Arg_ = const std::string&, typename... Args_>
+  void set_region(Arg_&& arg, Args_... args);
+  std::string* mutable_region();
+  PROTOBUF_NODISCARD std::string* release_region();
+  void set_allocated_region(std::string* value);
+
+  private:
+  const std::string& _internal_region() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_region(
+      const std::string& value);
+  std::string* _internal_mutable_region();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 team_id = 6 [json_name = "teamId"];
+  void clear_team_id() ;
+  ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+  void clear_assigned_at_ms() ;
+  ::int64_t assigned_at_ms() const;
+  void set_assigned_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_assigned_at_ms() const;
+  void _internal_set_assigned_at_ms(::int64_t value);
+
+  public:
+  // uint32 shard_id = 4 [json_name = "shardId"];
+  void clear_shard_id() ;
+  ::uint32_t shard_id() const;
+  void set_shard_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_shard_id() const;
+  void _internal_set_shard_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubAssignmentStorageRecord)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<
+      3, 7, 0,
+      76, 2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(
+        ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena);
+    inline explicit Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                          ::google::protobuf::Arena* arena, const Impl_& from,
+                          const HubAssignmentStorageRecord& from_msg);
+    ::google::protobuf::internal::ArenaStringPtr hub_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr hub_addr_;
+    ::google::protobuf::internal::ArenaStringPtr region_;
+    ::uint64_t player_id_;
+    ::uint64_t team_id_;
+    ::int64_t assigned_at_ms_;
+    ::uint32_t shard_id_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3686,6 +4282,548 @@ inline void HeartbeatResponse::set_allocated_command(std::string* value) {
     _impl_.command_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HeartbeatResponse.command)
+}
+
+// -------------------------------------------------------------------
+
+// HubShardStorageRecord
+
+// string hub_pod_name = 1 [json_name = "hubPodName"];
+inline void HubShardStorageRecord::clear_hub_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.ClearToEmpty();
+}
+inline const std::string& HubShardStorageRecord::hub_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.hub_pod_name)
+  return _internal_hub_pod_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_hub_pod_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.hub_pod_name)
+}
+inline std::string* HubShardStorageRecord::mutable_hub_pod_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_hub_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.hub_pod_name)
+  return _s;
+}
+inline const std::string& HubShardStorageRecord::_internal_hub_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_pod_name_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_hub_pod_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.Set(value, GetArena());
+}
+inline std::string* HubShardStorageRecord::_internal_mutable_hub_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_pod_name_.Mutable( GetArena());
+}
+inline std::string* HubShardStorageRecord::release_hub_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.hub_pod_name)
+  return _impl_.hub_pod_name_.Release();
+}
+inline void HubShardStorageRecord::set_allocated_hub_pod_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_pod_name_.IsDefault()) {
+    _impl_.hub_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.hub_pod_name)
+}
+
+// string hub_addr = 2 [json_name = "hubAddr"];
+inline void HubShardStorageRecord::clear_hub_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.ClearToEmpty();
+}
+inline const std::string& HubShardStorageRecord::hub_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.hub_addr)
+  return _internal_hub_addr();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_hub_addr(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.hub_addr)
+}
+inline std::string* HubShardStorageRecord::mutable_hub_addr() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_hub_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.hub_addr)
+  return _s;
+}
+inline const std::string& HubShardStorageRecord::_internal_hub_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_addr_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_hub_addr(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.Set(value, GetArena());
+}
+inline std::string* HubShardStorageRecord::_internal_mutable_hub_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_addr_.Mutable( GetArena());
+}
+inline std::string* HubShardStorageRecord::release_hub_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.hub_addr)
+  return _impl_.hub_addr_.Release();
+}
+inline void HubShardStorageRecord::set_allocated_hub_addr(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_addr_.IsDefault()) {
+    _impl_.hub_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.hub_addr)
+}
+
+// string region = 3 [json_name = "region"];
+inline void HubShardStorageRecord::clear_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.ClearToEmpty();
+}
+inline const std::string& HubShardStorageRecord::region() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.region)
+  return _internal_region();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_region(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.region)
+}
+inline std::string* HubShardStorageRecord::mutable_region() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_region();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.region)
+  return _s;
+}
+inline const std::string& HubShardStorageRecord::_internal_region() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.region_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_region(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.Set(value, GetArena());
+}
+inline std::string* HubShardStorageRecord::_internal_mutable_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.region_.Mutable( GetArena());
+}
+inline std::string* HubShardStorageRecord::release_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.region)
+  return _impl_.region_.Release();
+}
+inline void HubShardStorageRecord::set_allocated_region(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.region_.IsDefault()) {
+    _impl_.region_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.region)
+}
+
+// uint32 shard_id = 4 [json_name = "shardId"];
+inline void HubShardStorageRecord::clear_shard_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_id_ = 0u;
+}
+inline ::uint32_t HubShardStorageRecord::shard_id() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.shard_id)
+  return _internal_shard_id();
+}
+inline void HubShardStorageRecord::set_shard_id(::uint32_t value) {
+  _internal_set_shard_id(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.shard_id)
+}
+inline ::uint32_t HubShardStorageRecord::_internal_shard_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.shard_id_;
+}
+inline void HubShardStorageRecord::_internal_set_shard_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_id_ = value;
+}
+
+// int32 player_count = 5 [json_name = "playerCount"];
+inline void HubShardStorageRecord::clear_player_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_count_ = 0;
+}
+inline ::int32_t HubShardStorageRecord::player_count() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.player_count)
+  return _internal_player_count();
+}
+inline void HubShardStorageRecord::set_player_count(::int32_t value) {
+  _internal_set_player_count(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.player_count)
+}
+inline ::int32_t HubShardStorageRecord::_internal_player_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_count_;
+}
+inline void HubShardStorageRecord::_internal_set_player_count(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_count_ = value;
+}
+
+// int32 capacity = 6 [json_name = "capacity"];
+inline void HubShardStorageRecord::clear_capacity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.capacity_ = 0;
+}
+inline ::int32_t HubShardStorageRecord::capacity() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.capacity)
+  return _internal_capacity();
+}
+inline void HubShardStorageRecord::set_capacity(::int32_t value) {
+  _internal_set_capacity(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.capacity)
+}
+inline ::int32_t HubShardStorageRecord::_internal_capacity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.capacity_;
+}
+inline void HubShardStorageRecord::_internal_set_capacity(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.capacity_ = value;
+}
+
+// string state = 7 [json_name = "state"];
+inline void HubShardStorageRecord::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.ClearToEmpty();
+}
+inline const std::string& HubShardStorageRecord::state() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.state)
+  return _internal_state();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_state(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.state)
+}
+inline std::string* HubShardStorageRecord::mutable_state() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.state)
+  return _s;
+}
+inline const std::string& HubShardStorageRecord::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_state(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.Set(value, GetArena());
+}
+inline std::string* HubShardStorageRecord::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.state_.Mutable( GetArena());
+}
+inline std::string* HubShardStorageRecord::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.state)
+  return _impl_.state_.Release();
+}
+inline void HubShardStorageRecord::set_allocated_state(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.state_.IsDefault()) {
+    _impl_.state_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.state)
+}
+
+// int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
+inline void HubShardStorageRecord::clear_last_heartbeat_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_heartbeat_ms_ = ::int64_t{0};
+}
+inline ::int64_t HubShardStorageRecord::last_heartbeat_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_heartbeat_ms)
+  return _internal_last_heartbeat_ms();
+}
+inline void HubShardStorageRecord::set_last_heartbeat_ms(::int64_t value) {
+  _internal_set_last_heartbeat_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_heartbeat_ms)
+}
+inline ::int64_t HubShardStorageRecord::_internal_last_heartbeat_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_heartbeat_ms_;
+}
+inline void HubShardStorageRecord::_internal_set_last_heartbeat_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_heartbeat_ms_ = value;
+}
+
+// int64 created_at_ms = 9 [json_name = "createdAtMs"];
+inline void HubShardStorageRecord::clear_created_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = ::int64_t{0};
+}
+inline ::int64_t HubShardStorageRecord::created_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.created_at_ms)
+  return _internal_created_at_ms();
+}
+inline void HubShardStorageRecord::set_created_at_ms(::int64_t value) {
+  _internal_set_created_at_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.created_at_ms)
+}
+inline ::int64_t HubShardStorageRecord::_internal_created_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_at_ms_;
+}
+inline void HubShardStorageRecord::_internal_set_created_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// HubAssignmentStorageRecord
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void HubAssignmentStorageRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t HubAssignmentStorageRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.player_id)
+  return _internal_player_id();
+}
+inline void HubAssignmentStorageRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.player_id)
+}
+inline ::uint64_t HubAssignmentStorageRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string hub_pod_name = 2 [json_name = "hubPodName"];
+inline void HubAssignmentStorageRecord::clear_hub_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.ClearToEmpty();
+}
+inline const std::string& HubAssignmentStorageRecord::hub_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.hub_pod_name)
+  return _internal_hub_pod_name();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_hub_pod_name(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.hub_pod_name)
+}
+inline std::string* HubAssignmentStorageRecord::mutable_hub_pod_name() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_hub_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.hub_pod_name)
+  return _s;
+}
+inline const std::string& HubAssignmentStorageRecord::_internal_hub_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_pod_name_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_hub_pod_name(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.Set(value, GetArena());
+}
+inline std::string* HubAssignmentStorageRecord::_internal_mutable_hub_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_pod_name_.Mutable( GetArena());
+}
+inline std::string* HubAssignmentStorageRecord::release_hub_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.hub_pod_name)
+  return _impl_.hub_pod_name_.Release();
+}
+inline void HubAssignmentStorageRecord::set_allocated_hub_pod_name(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_pod_name_.IsDefault()) {
+    _impl_.hub_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.hub_pod_name)
+}
+
+// string hub_addr = 3 [json_name = "hubAddr"];
+inline void HubAssignmentStorageRecord::clear_hub_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.ClearToEmpty();
+}
+inline const std::string& HubAssignmentStorageRecord::hub_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.hub_addr)
+  return _internal_hub_addr();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_hub_addr(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.hub_addr)
+}
+inline std::string* HubAssignmentStorageRecord::mutable_hub_addr() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_hub_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.hub_addr)
+  return _s;
+}
+inline const std::string& HubAssignmentStorageRecord::_internal_hub_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_addr_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_hub_addr(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.Set(value, GetArena());
+}
+inline std::string* HubAssignmentStorageRecord::_internal_mutable_hub_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_addr_.Mutable( GetArena());
+}
+inline std::string* HubAssignmentStorageRecord::release_hub_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.hub_addr)
+  return _impl_.hub_addr_.Release();
+}
+inline void HubAssignmentStorageRecord::set_allocated_hub_addr(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_addr_.IsDefault()) {
+    _impl_.hub_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.hub_addr)
+}
+
+// uint32 shard_id = 4 [json_name = "shardId"];
+inline void HubAssignmentStorageRecord::clear_shard_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_id_ = 0u;
+}
+inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
+  return _internal_shard_id();
+}
+inline void HubAssignmentStorageRecord::set_shard_id(::uint32_t value) {
+  _internal_set_shard_id(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
+}
+inline ::uint32_t HubAssignmentStorageRecord::_internal_shard_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.shard_id_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_shard_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_id_ = value;
+}
+
+// string region = 5 [json_name = "region"];
+inline void HubAssignmentStorageRecord::clear_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.ClearToEmpty();
+}
+inline const std::string& HubAssignmentStorageRecord::region() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.region)
+  return _internal_region();
+}
+template <typename Arg_, typename... Args_>
+inline PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_region(Arg_&& arg,
+                                                     Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.region)
+}
+inline std::string* HubAssignmentStorageRecord::mutable_region() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  std::string* _s = _internal_mutable_region();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.region)
+  return _s;
+}
+inline const std::string& HubAssignmentStorageRecord::_internal_region() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.region_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_region(const std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.Set(value, GetArena());
+}
+inline std::string* HubAssignmentStorageRecord::_internal_mutable_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.region_.Mutable( GetArena());
+}
+inline std::string* HubAssignmentStorageRecord::release_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.region)
+  return _impl_.region_.Release();
+}
+inline void HubAssignmentStorageRecord::set_allocated_region(std::string* value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.region_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.region_.IsDefault()) {
+    _impl_.region_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.region)
+}
+
+// uint64 team_id = 6 [json_name = "teamId"];
+inline void HubAssignmentStorageRecord::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+}
+inline ::uint64_t HubAssignmentStorageRecord::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.team_id)
+  return _internal_team_id();
+}
+inline void HubAssignmentStorageRecord::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.team_id)
+}
+inline ::uint64_t HubAssignmentStorageRecord::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+inline void HubAssignmentStorageRecord::clear_assigned_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.assigned_at_ms_ = ::int64_t{0};
+}
+inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
+  return _internal_assigned_at_ms();
+}
+inline void HubAssignmentStorageRecord::set_assigned_at_ms(::int64_t value) {
+  _internal_set_assigned_at_ms(value);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
+}
+inline ::int64_t HubAssignmentStorageRecord::_internal_assigned_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.assigned_at_ms_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_assigned_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.assigned_at_ms_ = value;
 }
 
 #ifdef __GNUC__

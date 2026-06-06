@@ -95,3 +95,36 @@ message ListHubsResponse {
   // 3-9 reserved
   reserved 3 to 9;
 }
+
+// ===== 服务端存储快照(CLAUDE.md §5.8)=====
+
+// HubShardStorageRecord 是 hub_allocator 在 Redis 中维护的大厅 DS 分片镜像
+// (key `pandora:hub:shard:{<hub_pod_name>}` proto bytes,hashtag 锁 cluster slot)。
+//
+// 注意:服务端内部存储结构,不外发客户端;客户端可见的分片信息走 HubInfo。
+// player_count 是 hub_allocator 维护的「已分配人数」(AssignHub 自增 / ReleaseHub 自减,
+// 容量判定以此为准);Hub DS Heartbeat 上报的真实在线数也会回写此字段做对账
+// (漂移窗口 ≤ 一个心跳周期,W4 ⑤ Mock 期无真实 DS 时仅由分配计数维护)。
+message HubShardStorageRecord {
+  string hub_pod_name      = 1;
+  string hub_addr          = 2;
+  string region            = 3;
+  uint32 shard_id          = 4;   // 配置/拓扑分片号(uint32,不变量 §12)
+  int32  player_count      = 5;   // 已分配人数(容量判定基准)
+  int32  capacity          = 6;   // 分片人数上限(默认 500)
+  string state             = 7;   // "ready" | "draining" | "stopping"
+  int64  last_heartbeat_ms = 8;   // 最近一次 Hub DS Heartbeat 时刻(0=从未心跳,Mock 种子)
+  int64  created_at_ms     = 9;
+}
+
+// HubAssignmentStorageRecord 是 hub_allocator 在 Redis 中维护的「玩家→分片」归属镜像
+// (key `pandora:hub:player:<player_id>` proto bytes,落不变量 §1 玩家在线只在一个 hub DS)。
+message HubAssignmentStorageRecord {
+  uint64 player_id      = 1;
+  string hub_pod_name   = 2;
+  string hub_addr       = 3;
+  uint32 shard_id       = 4;
+  string region         = 5;
+  uint64 team_id        = 6;   // 0=无队伍
+  int64  assigned_at_ms = 7;
+}
