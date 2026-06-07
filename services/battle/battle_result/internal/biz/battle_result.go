@@ -12,11 +12,12 @@
 //   - MMR 覆盖 DS 上报值(只信对局胜负 winner_team,不信 DS 给的 mmr_delta)
 //
 // W4 ⑨ 可靠补偿(事务出箱,HANDOFF §3 Step 2):
-//   W4 ③ 落库后直接发 player.update 是 best-effort 弱依赖,Kafka 不可用时事件直接丢
-//   → 玩家段位永不更新。W4 ⑨ 改为:落 battles + stats 的同一事务里再写 player.update
-//   出箱行(原子提交);后台 RunOutboxPublisher 轮询出箱逐条投递 Kafka,成功才删行。
-//   配合 player 服务幂等消费(W4 ④ mmr_history uk),整条段位写链是 at-least-once
-//   可靠闭环,可穿越 Kafka 临时不可用。
+//
+//	W4 ③ 落库后直接发 player.update 是 best-effort 弱依赖,Kafka 不可用时事件直接丢
+//	→ 玩家段位永不更新。W4 ⑨ 改为:落 battles + stats 的同一事务里再写 player.update
+//	出箱行(原子提交);后台 RunOutboxPublisher 轮询出箱逐条投递 Kafka,成功才删行。
+//	配合 player 服务幂等消费(W4 ④ mmr_history uk),整条段位写链是 at-least-once
+//	可靠闭环,可穿越 Kafka 临时不可用。
 package biz
 
 import (
@@ -43,7 +44,7 @@ type MMRReader interface {
 // PlayerUpdatePusher 发 pandora.player.update 事件(kafka key=player_id,不变量 §9)。
 //
 // W4 ⑨ 起由后台 RunOutboxPublisher 调用:投递失败 → 返回 error → 出箱行保留下轮重试
-//(不再是 best-effort 静默丢)。
+// (不再是 best-effort 静默丢)。
 type PlayerUpdatePusher interface {
 	PushPlayerUpdate(ctx context.Context, playerID uint64, payload []byte) error
 }
