@@ -24,11 +24,11 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/biz"
@@ -81,14 +81,7 @@ func main() {
 		helper.Errorw("msg", "redis_host_required")
 		os.Exit(1)
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         rc.Host,
-		Password:     rc.Password,
-		DB:           int(rc.DB),
-		DialTimeout:  rc.DialTimeout.Std(),
-		ReadTimeout:  rc.ReadTimeout.Std(),
-		WriteTimeout: rc.WriteTimeout.Std(),
-	})
+	rdb := redisx.NewClient(rc)
 	defer func() { _ = rdb.Close() }()
 
 	pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

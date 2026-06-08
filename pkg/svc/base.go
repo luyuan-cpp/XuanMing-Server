@@ -20,11 +20,12 @@
 package svc
 
 import (
-	"github.com/redis/go-redis/v9"
 	klog "github.com/go-kratos/kratos/v2/log"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/redislock"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
 )
 
@@ -48,14 +49,7 @@ type BaseContext struct {
 // 调用前必须已经 log.Setup() 过(初始化 logx)。
 func MustNewBaseContext(c config.Base) *BaseContext {
 	// 1. Redis client
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         c.Node.RedisClient.Host,
-		Password:     c.Node.RedisClient.Password,
-		DB:           int(c.Node.RedisClient.DB),
-		DialTimeout:  c.Node.RedisClient.DialTimeout.Std(),
-		ReadTimeout:  c.Node.RedisClient.ReadTimeout.Std(),
-		WriteTimeout: c.Node.RedisClient.WriteTimeout.Std(),
-	})
+	rdb := redisx.NewClient(c.Node.RedisClient)
 
 	// 2. Snowflake
 	sf := snowflake.NewNode(uint64(c.Node.ZoneId))

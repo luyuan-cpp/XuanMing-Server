@@ -166,3 +166,12 @@ AI 跑出错时:
 ## 12. 中文回复
 
 继承 `CLAUDE.md §3`。所有 AI 对话产出用中文。代码注释、commit、文档全中文。
+
+## 13. 命名硬规则:UE 侧一律用 Pandora
+
+**UE 工程 / 模块 / 类 / 文件 / 命名空间一律用 `Pandora` 命名,永久废弃 `Xuanming` / `Xm` 前缀**(2026-06-08 Codex 改名编译审核通过):
+
+- 工程入口 `Pandora.uproject`、主模块 `Source/Pandora/`、类前缀 `Pandora*`(`PandoraGameMode` / `PandoraCharacter` / `UPandoraBackendSubsystem` 等)
+- **任何 AI 新建 UE 文件 / 类 / 模块都不准再用 `Xuanming` / `Xm`**
+- 唯一例外:git 仓库名(https://github.com/luyuancpp/Xuanming.git)与本地目录(`D:\luyuan\Xuanming`)暂保留 `Xuanming`,**仅作路径,不进代码**
+- 细则与大小写规则见 `CLAUDE.md §11`、`§13`

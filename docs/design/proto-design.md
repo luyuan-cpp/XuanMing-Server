@@ -17,7 +17,7 @@
 Pandora/proto/
 ├── buf.yaml
 ├── buf.gen.go.yaml          # 生成 go pb 到 Pandora/proto/gen/go/
-├── buf.gen.cpp.yaml         # 生成 cpp pb 到 Pandora-Client/Source/Pandora/Generated/Proto/
+├── buf.gen.cpp.yaml         # 生成 cpp pb 到 D:/luyuan/Xuanming/Source/Pandora/Generated/Proto/
 ├── common/
 │   ├── errcode.proto        # 错误码枚举
 │   ├── pagination.proto     # 通用分页

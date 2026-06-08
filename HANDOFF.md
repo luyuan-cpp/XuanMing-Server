@@ -193,7 +193,7 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 
 ## §5 当前未决项
 
-- ✅ UE 仓库名（D4，2026-06-08 解除）：**Xuanming** https://github.com/luyuancpp/Xuanming.git，本地 `D:\luyuan\Xuanming`（UE 5.7 源码版，M0–M1.5 FPS PoC 已完成：DS 联机 / 角色 / EnhancedInput / 武器 / MVVM HUD / GAS）
+- ✅ UE 仓库名（D4，2026-06-08 解除）：git 仓库 **Xuanming** https://github.com/luyuancpp/Xuanming.git，本地 `D:\luyuan\Xuanming`（UE 5.7 源码版，M0–M1.5 FPS PoC 已完成：DS 联机 / 角色 / EnhancedInput / 武器 / MVVM HUD / GAS）。**UE 工程/模块/类命名统一为 Pandora**（`Pandora.uproject` + `Source/Pandora/` + `Pandora*` 类前缀，Codex 已改名编译审核通过；以后 UE 侧一律用 Pandora 命名，不再用 Xuanming/Xm）
 - ⏸️ k8s 选型:阿里云 ACK / 自建 / 先 minikube(D7 阻塞)
 - ⏸️ Envoy 跑模式:k8s Ingress / 独立 Pod(D7 决定)
 - ⏸️ JWT 鉴权细节(login 服务签发 + Envoy jwt_authn filter)(W3 写 login 时定)

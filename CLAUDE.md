@@ -16,11 +16,12 @@
 
 ```
 E:/work/Pandora/                # 后端（本仓库）
-D:/luyuan/Xuanming/             # UE 客户端 + DS（Xuanming，独立仓库）
+D:/luyuan/Xuanming/             # UE 客户端 + DS（git 仓库名 Xuanming，UE 工程已统一为 Pandora）
 ```
 
-- UE 仓库：https://github.com/luyuancpp/Xuanming.git（public，2026-06-08 D4 定名）
+- UE git 仓库：https://github.com/luyuancpp/Xuanming.git（public，2026-06-08 D4 定名）
 - 本地路径：`D:\luyuan\Xuanming`（UE 5.7 源码版 + DS + Client）
+- **UE 工程/模块/类命名统一为 Pandora**（2026-06-08 Codex 改名编译审核通过）：`Pandora.uproject` + `Source/Pandora/` 模块 + `Pandora*` 类前缀；**不再用 Xuanming/Xm 前缀**（git 仓库名与本地目录暂保留 Xuanming）
 - proto cpp pb 同步目标仓库为 Xuanming（具体输出路径待接 buf.gen.cpp.yaml）
 
 ## 3. 中文回复
@@ -108,7 +109,7 @@ D:/luyuan/Xuanming/             # UE 客户端 + DS（Xuanming，独立仓库）
 | W4 ⑩ | 2026-06-06 | **player_locator 状态机守卫(不变量 §1「玩家在线只能在一个 DS」收口)**(无新服无新 proto 无新 errcode:`ERR_LOCATOR_CONFLICT=9202` Go/proto 两端 W1 已就绪,本轮才首次使用;纯 data + biz 改)。W3 ⑤ 遗留:`SetLocation` 是覆盖式写(无读、last-writer-wins),`biz` 注释自留 TODO「W4+ 接 DS 注册表后加 Conflict 检测」。现把覆盖写升级为 **WATCH/MULTI/EXEC 原子读-判-写**(`RedisLocationRepo.SetGuarded`,对齐 team/matchmaker/ds_allocator/hub_allocator 乐观锁惯例,CAS 冲突重试 `optimisticRetry`=3 次耗尽返 `ErrLocatorConflict`),在写前把当前记录交给 biz `guardTransition` 守卫。**守卫规则(用 state 本身识别写入方权威,无需 reporter 字段)**:`LOGIN_PENDING`(login)/`MATCHING`/`BATTLE`(matchmaker)来自可信控制面 → 一律放行(顶号语义);`HUB` 是唯一来自数据面 hub DS、可能 stale 的写 → **当前状态为 `MATCHING` 时拒绝(`ErrLocatorConflict`)**:玩家在撮合确认期(~15s)物理上仍连着 hub DS、hub DS 会持续上报 HUB,若放行会把 matchmaker 刚写的 `MATCHING` 顶回 `HUB`,使其他服务误判玩家仍在大厅闲逛。`BATTLE→HUB`(战斗结束返回大厅)是合法回流故放行;**stale hub DS 顶掉 active `BATTLE` 的极端场景需 fence/match_id 令牌区分,留待 hub DS(UE)落地后做**(本轮明确记为阶段限制,不用绝对词)。`data.LocationRepo` 接口 `Set`→`SetGuarded`(WATCH 内 `readLocation` 复用 `parseLocationMap`,Get 同步复用);biz `SetLocation` 走 `SetGuarded(...,guardTransition(in))`,`NewLocatorUsecase` 签名不变(retry 用 biz 包常量,不污染 conf/main)。**对现有调用方零影响**:login 只写 LOGIN_PENDING、matchmaker 只写 MATCHING/BATTLE,均不触发守卫;HUB 上报当前无人发(hub DS 是 UE 未建),本轮是把接收契约提前就位。biz 7→10 用例(新增 HUB-during-MATCHING 被拒且 MATCHING 不被顶、控制面写恒胜、HUB 从 OFFLINE/LOGIN_PENDING/HUB/BATTLE 放行)。验证:10 module BUILD=0,player_locator VET=0 / TEST=0。**真 Agones CRD + BATTLE fence + locator HUB 上报方(UE hub DS) + UE 主链路留后续**) |
 | W4 ⑪ | 2026-06-06 | **player_locator BATTLE fence 补齐 stale HUB 顶 BATTLE 缺口**(无新 proto:复用 `Location.match_id` 作为 HUB 回流 fence 令牌;无新 errcode:仍用 `ERR_LOCATOR_CONFLICT=9202`)。W4 ⑩ 留下的阶段限制是「仅凭 state 无法区分合法 `BATTLE→HUB` 回流与 stale hub 顶 active BATTLE」;本轮明确 hub DS 上报契约:玩家从 battle DS 返回 hub DS 时,`HUB` 上报必须携带刚结束战斗的 `match_id`(从 battle DSTicket 取),locator 仅在 `in.match_id == cur.match_id && in.match_id != 0` 时允许覆盖 `BATTLE`;`match_id=0` 或不匹配一律拒 `ErrLocatorConflict`。`HUB` 中的 `match_id` 只作 fence,写入前清零,不持久化到 HUB 记录,避免其它服务误读玩家仍有活跃对局。新增 3 个 biz 单测覆盖正确令牌回流、缺令牌 stale HUB 拒绝、错误令牌 stale HUB 拒绝;README + go-services 记录 hub DS 上报契约。 |
 | W4 ⑫ | 2026-06-08 | **ds_allocator 接真 Agones GameServerAllocation REST allocator**(无新 proto / 无新 errcode / 无新第三方依赖;保留 Mock fallback)。新增 `AgonesGameServerAllocator` 用标准库 `net/http` 直连 k8s apiserver REST:`POST /apis/allocation.agones.dev/v1/namespaces/{ns}/gameserverallocations`,selector `agones.dev/fleet=<fleet_name>`,给分配出的 GameServer 打 `pandora.dev/match-id/map-id/game-mode` 业务 label;`status.state=="Allocated"` 时返回 `gameServerName + address:first_port`,非 Allocated 返 `ERR_DS_NO_AVAILABLE=5001`,HTTP/解析/状态不完整返 `ERR_DS_ALLOCATION_FAILED=5002`。`Release` 走 `DELETE /apis/agones.dev/v1/namespaces/{ns}/gameservers/{pod}`,404 视作幂等成功。配置新增 `agones.enabled/api_server/namespace/fleet_name/token_path/ca_path/insecure_skip_tls_verify/allocate_timeout`,dev 默认 `enabled=false` 继续 Mock,集群内默认 `https://kubernetes.default.svc` + ServiceAccount token/CA。Codex 复审补强 k8s label value 清洗(首尾必须字母数字,全非法回 `unknown`)和单测。验证:10 module BUILD=0,ds_allocator VET=0 / TEST=0(data 新增 httptest apiserver 用例)。真集群联调等 D7 k8s/provider 环境拍板。 |
-| UE 仓库 | 2026-06-08 | **D4 解除:UE 客户端 + DS 仓库定名 Xuanming**,https://github.com/luyuancpp/Xuanming.git(public),本地 `D:\luyuan\Xuanming`(UE 5.7.4 源码版)。现状:FPS PoC M0–M1.5 已完成(DS 联机骨架 / 白盒角色 / EnhancedInput / hitscan 武器 / MVVM HUD / GAS 冰咒技能),**尚未接后端**(无 gRPC-Web / Envoy / proto 集成)。本轮起在 Xuanming 仓 `Source/Xuanming/{Public,Private}/Net/` 落地 gRPC-Web 客户端 C++ 骨架(FHttpModule 自研,客户端零额外依赖):`FXmProtoWriter/Reader`(极简 protobuf wire codec)+ `FXmGrpcWeb`(gRPC-Web frame 编解码 + stream parser)+ `UXuanmingBackendSubsystem`(GameInstanceSubsystem,Login unary + Subscribe server stream 接 Envoy :8443)。对接 HANDOFF §3 Step 3「UE 主链路」第一段。 |
+| UE 仓库 | 2026-06-08 | **D4 解除:UE 客户端 + DS git 仓库定名 Xuanming**,https://github.com/luyuancpp/Xuanming.git(public),本地 `D:\luyuan\Xuanming`(UE 5.7.4 源码版)。现状:FPS PoC M0–M1.5 已完成(DS 联机骨架 / 白盒角色 / EnhancedInput / hitscan 武器 / MVVM HUD / GAS 冰咒技能)。本轮在 `Source/Pandora/{Public,Private}/Net/` 落地 gRPC-Web 客户端 C++ 骨架(FHttpModule 自研,客户端零额外依赖):`FPandoraProtoWriter/Reader`(极简 protobuf wire codec)+ `FPandoraGrpcWeb`(gRPC-Web frame 编解码 + stream parser)+ `UPandoraBackendSubsystem`(GameInstanceSubsystem,Login unary + Subscribe server stream 接 Envoy :8443)。对接 HANDOFF §3 Step 3「UE 主链路」第一段。**Codex 改名+编译审核通过(2026-06-08):UE 工程/模块/类前缀全统一为 Pandora,`Pandora.uproject` + `Source/Pandora/` + `Pandora*` 类,废弃 Xuanming/Xm 前缀;以后 UE 侧一律用 Pandora 命名**(git 仓库名与本地目录暂保留 Xuanming)。 |
 
 后续每轮压测 / 大决策追加一行,**永不删旧行**。
 
@@ -149,11 +150,12 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 
 ## 11. UE 工程约束(写给 UE 仓库的开发者参考)
 
-1. 类前缀统一 `Pandora*`(GameMode / Character / PlayerController)
-2. 服务端逻辑统一在 `PandoraHubServer` / `PandoraBattleServer` 模块,不在 `Source/Pandora/` 客户端模块
-3. 蓝图只做"胶水"(挂技能动画 / UMG 绑定),逻辑在 C++
-4. 资源走 Git LFS(`.uasset / .umap / .fbx / .png / .wav / .ogg`)
-5. **永远不要在 git 里提交** `Binaries/ Intermediate/ DerivedDataCache/ Saved/`
+1. **UE 工程 / 模块 / 类命名一律用 `Pandora`,永久废弃 `Xuanming` / `Xm` 前缀**(2026-06-08 Codex 改名编译审核通过):`Pandora.uproject` + `Source/Pandora/` 模块 + `Pandora*` 类前缀。git 仓库名与本地目录暂保留 `Xuanming`,但**代码侧任何新文件 / 类 / 模块 / 命名空间都不准再用 Xuanming / Xm**。
+2. 类前缀统一 `Pandora*`(GameMode / Character / PlayerController)
+3. 服务端逻辑统一在 `PandoraHubServer` / `PandoraBattleServer` 模块,不在 `Source/Pandora/` 客户端模块
+4. 蓝图只做"胶水"(挂技能动画 / UMG 绑定),逻辑在 C++
+5. 资源走 Git LFS(`.uasset / .umap / .fbx / .png / .wav / .ogg`)
+6. **永远不要在 git 里提交** `Binaries/ Intermediate/ DerivedDataCache/ Saved/`
 
 ## 12. 不要做的事
 
@@ -162,9 +164,11 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 - ❌ 不要把 player_id 当 prometheus label(高基数会爆)
 - ❌ 不要在 W1 写业务逻辑,只搭骨架
 - ❌ 不要混用 `Pandora` / `pandora` / `MOBA` / `moba` 命名 — 见 §2 大小写规则
+- ❌ **UE 侧不要再用 `Xuanming` / `Xm` 命名任何工程 / 模块 / 类 / 文件 — 一律 `Pandora`**(见 §11.1)
 
 ## 13. 命名大小写规则(强制)
 
-- **Pandora**(首字母大写):仓库名 / 本地路径 / 工程类前缀 / 文档项目名引用
+- **Pandora**(首字母大写):仓库名 / 本地路径 / 工程类前缀 / 文档项目名引用 / **UE 工程 / 模块 / 类前缀**
 - **pandora**(全小写):kafka topic / mysql / redis key / docker 镜像 / go module
 - **MOBA**:仅描述游戏类型时使用("Pandora 是一款 MOBA"),**不能**指代项目本身
+- **`Xuanming` / `Xm`**:**已废弃命名**,仅保留为 UE git 仓库名和本地目录路径(`D:\luyuan\Xuanming`);**代码 / 工程 / 类 / 模块一律不再使用**

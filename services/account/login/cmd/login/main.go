@@ -33,6 +33,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/passwd"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
@@ -221,14 +222,7 @@ func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, da
 		h.Warnw("msg", "redis_disabled_in_config")
 		return nil, nil, nil
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         rc.Host,
-		Password:     rc.Password,
-		DB:           int(rc.DB),
-		DialTimeout:  rc.DialTimeout.Std(),
-		ReadTimeout:  rc.ReadTimeout.Std(),
-		WriteTimeout: rc.WriteTimeout.Std(),
-	})
+	rdb := redisx.NewClient(rc)
 	// 启动期 ping 一次,确保 redis 可达;失败致命(login 不可降级)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

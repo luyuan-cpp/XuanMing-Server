@@ -28,6 +28,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/biz"
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/conf"
@@ -132,14 +133,7 @@ func mustBuildRedis(cfg *conf.Config, h kratosHelper) *redis.Client {
 		h.Errorw("msg", "redis_host_empty", "hint", "node.redis_client.host required for push offline cache")
 		os.Exit(1)
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         rc.Host,
-		Password:     rc.Password,
-		DB:           int(rc.DB),
-		DialTimeout:  rc.DialTimeout.Std(),
-		ReadTimeout:  rc.ReadTimeout.Std(),
-		WriteTimeout: rc.WriteTimeout.Std(),
-	})
+	rdb := redisx.NewClient(rc)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {

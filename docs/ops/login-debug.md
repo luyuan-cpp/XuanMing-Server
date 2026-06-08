@@ -187,15 +187,17 @@ grpcurl -plaintext -max-time 300 `
 {"account":"test1","passwordHash":"abc","deviceId":"login-debug"}
 ```
 
-### 5.3 Redis maint_notifications 警告
+### 5.3 Redis maint_notifications 历史警告
 
-日志:
+旧版本 go-redis 启动时可能出现:
 
 ```text
 maintnotifications disabled due to handshake error
 ```
 
-这是 go-redis 客户端能力探测警告,不影响登录调试。
+这是 go-redis 客户端能力探测警告,不影响登录调试。2026-06-08 起项目已升级
+`github.com/redis/go-redis/v9` 到 `v9.20.0`,并通过 `pkg/redisx.NewClient` 统一禁用
+维护通知探测;正常启动日志里不应再出现这条噪音。
 
 ## 6. 这次登录测的是什么连接
 

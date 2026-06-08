@@ -147,7 +147,7 @@
 ## 2. UE 工程模块划分
 
 ```
-F:/work/Pandora-Client/Source/
+D:/luyuan/Xuanming/Source/
 ├── Pandora/                  # 客户端
 │   ├── PandoraGameInstance   # 登录流程、跨 DS 切换
 │   ├── PandoraPlayerController
