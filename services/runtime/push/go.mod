@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/runtime/push
 
-go 1.25.0
+go 1.26.4
 
 // W3 ④ push 服务(2026-06-05 真实化,W2 ⑤ mock tick 已退役)。
 //

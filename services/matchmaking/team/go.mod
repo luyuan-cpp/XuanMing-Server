@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/matchmaking/team
 
-go 1.25.0
+go 1.26.4
 
 // W3 ⑦ team 服务(Pandora 第 4 个 Kratos 业务服,2026-06-05)。
 //

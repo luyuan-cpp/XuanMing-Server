@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/battle/ds_allocator
 
-go 1.25.0
+go 1.26.4
 
 // W4 ② ds_allocator 服务(Pandora 第 6 个 Kratos 业务服,2026-06-06)。
 //

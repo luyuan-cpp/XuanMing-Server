@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/runtime/player_locator
 
-go 1.25.0
+go 1.26.4
 
 // W3 ⑤ player_locator 服务(Pandora 第 3 个 Kratos 业务服)。
 //
