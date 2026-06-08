@@ -1,0 +1,258 @@
+# 组队调试手册
+
+> 用途:本机用 VS Code / grpcurl 调试 Pandora team 服务。
+> 当前 team 服务没有 RESTful HTTP 路由,`51010` 只提供 `/metrics`;组队 RPC 直连 gRPC `50010`。
+
+## 1. 启动顺序
+
+### 1.1 基础设施
+
+最小只需要 Redis:
+
+```powershell
+docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env up -d redis
+```
+
+team 配置里有 Kafka producer。Kafka 不起时,team 会记录 `kafka_producer_init_failed` 并继续跑,只是不发 `pandora.team.update` 推送。
+
+如果要连 push 推送一起测,再起 Kafka / Zookeeper / push:
+
+```powershell
+docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env up -d zookeeper kafka redis
+go run ./services/runtime/push/cmd/push -conf services/runtime/push/etc/push-dev.yaml
+```
+
+### 1.2 VS Code 启 team
+
+VS Code 使用 [.vscode/launch.json](../../.vscode/launch.json) 里的 `Debug team`:
+
+```json
+{
+  "name": "Debug team",
+  "type": "go",
+  "request": "launch",
+  "mode": "auto",
+  "program": "${workspaceFolder}/services/matchmaking/team/cmd/team",
+  "cwd": "${workspaceFolder}",
+  "args": [
+    "-conf",
+    "${workspaceFolder}/services/matchmaking/team/etc/team-dev.yaml"
+  ]
+}
+```
+
+启动日志应看到:
+
+```text
+redis_connected addr=127.0.0.1:6380
+service_ready grpc=:50010 http=:51010 ...
+```
+
+如果 Kafka 没起,看到下面日志是允许的:
+
+```text
+kafka_producer_init_failed ... team push will be silently dropped until kafka is available
+```
+
+## 2. 身份怎么传
+
+team 的写 RPC 不信 proto body 里的 `player_id`,而是从 ctx 里的 `player_id` 取调用者身份。
+
+本地直连 gRPC 时,用 metadata 模拟 Envoy 鉴权后的注入:
+
+```powershell
+-H "x-pandora-player-id: 30907585389428737"
+```
+
+常用 demo 账号:
+
+| 账号 | player_id |
+|---|---:|
+| test1 | 30907585389428737 |
+| test2 | 30907585389428738 |
+| test3 | 30907585389428739 |
+| test4 | 30907585389428740 |
+| test5 | 30907585389428741 |
+
+## 3. 基本流程
+
+### 3.1 创建队伍(test1)
+
+```powershell
+grpcurl -plaintext `
+  -H "x-pandora-player-id: 30907585389428737" `
+  -d '{}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/CreateTeam
+```
+
+返回里记录:
+
+- `teamId`
+- `team.teamId`
+- `team.captainId`
+
+### 3.2 邀请 test2
+
+把 `<TEAM_ID>` 换成上一步返回的 `teamId`:
+
+```powershell
+grpcurl -plaintext `
+  -H "x-pandora-player-id: 30907585389428737" `
+  -d '{"teamId":"<TEAM_ID>","targetPlayerId":"30907585389428738"}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/Invite
+```
+
+返回里记录:
+
+- `inviteId`
+- `expiresAtMs`
+
+### 3.3 test2 接受邀请
+
+```powershell
+grpcurl -plaintext `
+  -H "x-pandora-player-id: 30907585389428738" `
+  -d '{"teamId":"<TEAM_ID>","inviteId":"<INVITE_ID>"}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/AcceptInvite
+```
+
+成功后 `team.members` 应包含 test1 / test2 两个 player_id。
+
+### 3.4 查询队伍
+
+GetTeam 是只读 RPC,不要求 metadata:
+
+```powershell
+grpcurl -plaintext `
+  -d '{"teamId":"<TEAM_ID>"}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/GetTeam
+```
+
+### 3.5 设置准备
+
+test1 准备:
+
+```powershell
+grpcurl -plaintext `
+  -H "x-pandora-player-id: 30907585389428737" `
+  -d '{"teamId":"<TEAM_ID>","ready":true,"heroId":1}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/SetReady
+```
+
+test2 准备:
+
+```powershell
+grpcurl -plaintext `
+  -H "x-pandora-player-id: 30907585389428738" `
+  -d '{"teamId":"<TEAM_ID>","ready":true,"heroId":2}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/SetReady
+```
+
+当前队伍未满 5 人时,state 通常仍是 `TEAM_STATE_FORMING`;满 5 人且全 ready 后才会自动进入 `TEAM_STATE_READY`。
+
+## 4. PowerShell 变量版
+
+可以用变量减少手抄:
+
+```powershell
+$p1 = "30907585389428737"
+$p2 = "30907585389428738"
+
+$create = grpcurl -plaintext -H "x-pandora-player-id: $p1" -d '{}' `
+  127.0.0.1:50010 pandora.team.v1.TeamService/CreateTeam | ConvertFrom-Json
+
+$teamId = $create.teamId
+
+$invite = grpcurl -plaintext -H "x-pandora-player-id: $p1" `
+  -d "{`"teamId`":`"$teamId`",`"targetPlayerId`":`"$p2`"}" `
+  127.0.0.1:50010 pandora.team.v1.TeamService/Invite | ConvertFrom-Json
+
+$inviteId = $invite.inviteId
+
+grpcurl -plaintext -H "x-pandora-player-id: $p2" `
+  -d "{`"teamId`":`"$teamId`",`"inviteId`":`"$inviteId`"}" `
+  127.0.0.1:50010 pandora.team.v1.TeamService/AcceptInvite
+```
+
+## 5. 清理 Redis 组队状态
+
+如果重复调试时遇到:
+
+- 玩家已在队伍
+- 邀请已存在 / 已过期
+- 队伍状态残留
+
+可以只清 team 相关 Redis key:
+
+```powershell
+docker exec pandora-redis redis-cli --scan --pattern "pandora:team:*" `
+  | ForEach-Object { docker exec pandora-redis redis-cli UNLINK $_ }
+```
+
+注意:这会清空本地所有 team 调试状态,不要在联调别人流程时随手执行。
+
+## 6. 建议断点
+
+service 层:
+
+- `services/matchmaking/team/internal/service/team.go`
+- `CreateTeam`
+- `Invite`
+- `AcceptInvite`
+- `SetReady`
+
+biz 层:
+
+- `services/matchmaking/team/internal/biz/team.go`
+- `CreateTeam`
+- `Invite`
+- `AcceptInvite`
+- `SetReady`
+- `publishUpdate`
+
+data 层:
+
+- `services/matchmaking/team/internal/data/team.go`
+- Redis `WATCH/MULTI/EXEC` 写队伍状态
+- `SetInvite` / `GetInvite`
+
+## 7. 常见问题
+
+### 7.1 返回 ERR_UNAUTHORIZED
+
+写 RPC 没带 metadata:
+
+```powershell
+-H "x-pandora-player-id: <player_id>"
+```
+
+直连 `50010` 时,业务服务不会自己验 JWT,只读取这个 header / metadata。
+
+### 7.2 端口 51010 不能调 RPC
+
+正常。team 的 HTTP server 只挂 `/metrics`,没有 RESTful RPC。
+
+组队 RPC 用:
+
+```text
+127.0.0.1:50010
+```
+
+### 7.3 Kafka 没起
+
+基础组队逻辑仍可调,只是没有 push 事件。要测推送再起 Kafka + push。
+
+### 7.4 字段名
+
+grpcurl 使用 proto JSON 名称,写:
+
+```json
+{"teamId":"...","targetPlayerId":"...","inviteId":"...","heroId":1}
+```
+
+不是:
+
+```json
+{"team_id":"...","target_player_id":"...","invite_id":"...","hero_id":1}
+```
+
