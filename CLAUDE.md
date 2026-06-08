@@ -15,9 +15,13 @@
 ## 2. 仓库结构与边界
 
 ```
-F:/work/Pandora/                # 后端(本仓库)
-F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
+E:/work/Pandora/                # 后端（本仓库）
+D:/luyuan/Xuanming/             # UE 客户端 + DS（Xuanming，独立仓库）
 ```
+
+- UE 仓库：https://github.com/luyuancpp/Xuanming.git（public，2026-06-08 D4 定名）
+- 本地路径：`D:\luyuan\Xuanming`（UE 5.7 源码版 + DS + Client）
+- proto cpp pb 同步目标仓库为 Xuanming（具体输出路径待接 buf.gen.cpp.yaml）
 
 ## 3. 中文回复
 
@@ -104,6 +108,7 @@ F:/work/Pandora-Client/         # UE 客户端 + DS(待定名,独立仓库)
 | W4 ⑩ | 2026-06-06 | **player_locator 状态机守卫(不变量 §1「玩家在线只能在一个 DS」收口)**(无新服无新 proto 无新 errcode:`ERR_LOCATOR_CONFLICT=9202` Go/proto 两端 W1 已就绪,本轮才首次使用;纯 data + biz 改)。W3 ⑤ 遗留:`SetLocation` 是覆盖式写(无读、last-writer-wins),`biz` 注释自留 TODO「W4+ 接 DS 注册表后加 Conflict 检测」。现把覆盖写升级为 **WATCH/MULTI/EXEC 原子读-判-写**(`RedisLocationRepo.SetGuarded`,对齐 team/matchmaker/ds_allocator/hub_allocator 乐观锁惯例,CAS 冲突重试 `optimisticRetry`=3 次耗尽返 `ErrLocatorConflict`),在写前把当前记录交给 biz `guardTransition` 守卫。**守卫规则(用 state 本身识别写入方权威,无需 reporter 字段)**:`LOGIN_PENDING`(login)/`MATCHING`/`BATTLE`(matchmaker)来自可信控制面 → 一律放行(顶号语义);`HUB` 是唯一来自数据面 hub DS、可能 stale 的写 → **当前状态为 `MATCHING` 时拒绝(`ErrLocatorConflict`)**:玩家在撮合确认期(~15s)物理上仍连着 hub DS、hub DS 会持续上报 HUB,若放行会把 matchmaker 刚写的 `MATCHING` 顶回 `HUB`,使其他服务误判玩家仍在大厅闲逛。`BATTLE→HUB`(战斗结束返回大厅)是合法回流故放行;**stale hub DS 顶掉 active `BATTLE` 的极端场景需 fence/match_id 令牌区分,留待 hub DS(UE)落地后做**(本轮明确记为阶段限制,不用绝对词)。`data.LocationRepo` 接口 `Set`→`SetGuarded`(WATCH 内 `readLocation` 复用 `parseLocationMap`,Get 同步复用);biz `SetLocation` 走 `SetGuarded(...,guardTransition(in))`,`NewLocatorUsecase` 签名不变(retry 用 biz 包常量,不污染 conf/main)。**对现有调用方零影响**:login 只写 LOGIN_PENDING、matchmaker 只写 MATCHING/BATTLE,均不触发守卫;HUB 上报当前无人发(hub DS 是 UE 未建),本轮是把接收契约提前就位。biz 7→10 用例(新增 HUB-during-MATCHING 被拒且 MATCHING 不被顶、控制面写恒胜、HUB 从 OFFLINE/LOGIN_PENDING/HUB/BATTLE 放行)。验证:10 module BUILD=0,player_locator VET=0 / TEST=0。**真 Agones CRD + BATTLE fence + locator HUB 上报方(UE hub DS) + UE 主链路留后续**) |
 | W4 ⑪ | 2026-06-06 | **player_locator BATTLE fence 补齐 stale HUB 顶 BATTLE 缺口**(无新 proto:复用 `Location.match_id` 作为 HUB 回流 fence 令牌;无新 errcode:仍用 `ERR_LOCATOR_CONFLICT=9202`)。W4 ⑩ 留下的阶段限制是「仅凭 state 无法区分合法 `BATTLE→HUB` 回流与 stale hub 顶 active BATTLE」;本轮明确 hub DS 上报契约:玩家从 battle DS 返回 hub DS 时,`HUB` 上报必须携带刚结束战斗的 `match_id`(从 battle DSTicket 取),locator 仅在 `in.match_id == cur.match_id && in.match_id != 0` 时允许覆盖 `BATTLE`;`match_id=0` 或不匹配一律拒 `ErrLocatorConflict`。`HUB` 中的 `match_id` 只作 fence,写入前清零,不持久化到 HUB 记录,避免其它服务误读玩家仍有活跃对局。新增 3 个 biz 单测覆盖正确令牌回流、缺令牌 stale HUB 拒绝、错误令牌 stale HUB 拒绝;README + go-services 记录 hub DS 上报契约。 |
 | W4 ⑫ | 2026-06-08 | **ds_allocator 接真 Agones GameServerAllocation REST allocator**(无新 proto / 无新 errcode / 无新第三方依赖;保留 Mock fallback)。新增 `AgonesGameServerAllocator` 用标准库 `net/http` 直连 k8s apiserver REST:`POST /apis/allocation.agones.dev/v1/namespaces/{ns}/gameserverallocations`,selector `agones.dev/fleet=<fleet_name>`,给分配出的 GameServer 打 `pandora.dev/match-id/map-id/game-mode` 业务 label;`status.state=="Allocated"` 时返回 `gameServerName + address:first_port`,非 Allocated 返 `ERR_DS_NO_AVAILABLE=5001`,HTTP/解析/状态不完整返 `ERR_DS_ALLOCATION_FAILED=5002`。`Release` 走 `DELETE /apis/agones.dev/v1/namespaces/{ns}/gameservers/{pod}`,404 视作幂等成功。配置新增 `agones.enabled/api_server/namespace/fleet_name/token_path/ca_path/insecure_skip_tls_verify/allocate_timeout`,dev 默认 `enabled=false` 继续 Mock,集群内默认 `https://kubernetes.default.svc` + ServiceAccount token/CA。Codex 复审补强 k8s label value 清洗(首尾必须字母数字,全非法回 `unknown`)和单测。验证:10 module BUILD=0,ds_allocator VET=0 / TEST=0(data 新增 httptest apiserver 用例)。真集群联调等 D7 k8s/provider 环境拍板。 |
+| UE 仓库 | 2026-06-08 | **D4 解除:UE 客户端 + DS 仓库定名 Xuanming**,https://github.com/luyuancpp/Xuanming.git(public),本地 `D:\luyuan\Xuanming`(UE 5.7.4 源码版)。现状:FPS PoC M0–M1.5 已完成(DS 联机骨架 / 白盒角色 / EnhancedInput / hitscan 武器 / MVVM HUD / GAS 冰咒技能),**尚未接后端**(无 gRPC-Web / Envoy / proto 集成)。本轮起在 Xuanming 仓 `Source/Xuanming/{Public,Private}/Net/` 落地 gRPC-Web 客户端 C++ 骨架(FHttpModule 自研,客户端零额外依赖):`FXmProtoWriter/Reader`(极简 protobuf wire codec)+ `FXmGrpcWeb`(gRPC-Web frame 编解码 + stream parser)+ `UXuanmingBackendSubsystem`(GameInstanceSubsystem,Login unary + Subscribe server stream 接 Envoy :8443)。对接 HANDOFF §3 Step 3「UE 主链路」第一段。 |
 
 后续每轮压测 / 大决策追加一行,**永不删旧行**。
 

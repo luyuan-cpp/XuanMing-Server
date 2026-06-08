@@ -10,7 +10,7 @@
 |---|---|
 | 项目名 | **Pandora**(项目)/ pandora(资源命名空间) |
 | 后端仓库 | https://github.com/luyuancpp/Pandora.git(public) |
-| UE 仓库 | 待定(暂用 Pandora-Client 占位) |
+| UE 仓库 | **Xuanming** https://github.com/luyuancpp/Xuanming.git（2026-06-08 定名） |
 | UE 版本 | 5.7(Iris + GAS,默认 Iris,退路 Replication Graph) |
 | 类型 | MOBA + 持续在线大厅 |
 | 大厅 | 500 人/实例,单城镇约 1km²,**全图自由 PvP** |
@@ -209,7 +209,7 @@ pattern ./...: directory prefix . does not contain modules listed in go.work or 
 
 #### 阻塞 D2 的(必须定)
 - [x] **D2.1 框架选型**:**继续用 go-zero**(2026-06-03 决策)
-- [ ] **UE 仓库名**(暂用 Pandora-Client 占位,D4 阻塞)
+- [x] **UE 仓库名**：**Xuanming** https://github.com/luyuancpp/Xuanming.git（2026-06-08 解除 D4）
 - [ ] **k8s 选型**:阿里云 ACK / 自建 / 先 minikube(D7 阻塞)
 
 #### 非阻塞但要尽快定
