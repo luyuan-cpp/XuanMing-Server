@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/data"
 )
 
@@ -27,7 +28,13 @@ func newStubRepo() *stubRepo {
 	return &stubRepo{store: map[uint64]data.LocationRecord{}}
 }
 
-func (s *stubRepo) Set(_ context.Context, playerID uint64, rec data.LocationRecord, _ time.Duration) error {
+func (s *stubRepo) SetGuarded(_ context.Context, playerID uint64, rec data.LocationRecord, _ time.Duration, _ int, guard func(cur data.LocationRecord, found bool) error) error {
+	cur, found := s.store[playerID]
+	if guard != nil {
+		if err := guard(cur, found); err != nil {
+			return err
+		}
+	}
 	s.store[playerID] = rec
 	return nil
 }
@@ -67,7 +74,6 @@ func TestSetLocation_InvalidInput(t *testing.T) {
 		})
 	}
 }
-
 func TestSetLocation_AndGet(t *testing.T) {
 	repo := newStubRepo()
 	uc := NewLocatorUsecase(repo, 30*time.Second)
@@ -161,5 +167,99 @@ func TestNewLocatorUsecase_DefaultTTL(t *testing.T) {
 	uc3 := NewLocatorUsecase(newStubRepo(), 5*time.Second)
 	if uc3.ttl != 5*time.Second {
 		t.Errorf("explicit ttl=5s expected, got %v", uc3.ttl)
+	}
+}
+
+// --- W4 ⑩ 状态机守卫(不变量 §1) ---
+
+// TestGuard_HubRejectedDuringMatching:玩家在 MATCHING 时,hub DS 的 HUB 上报被拒,
+// 且 MATCHING 状态不被顶掉。
+func TestGuard_HubRejectedDuringMatching(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	ctx := context.Background()
+
+	// matchmaker 写 MATCHING(控制面)
+	if err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 100, State: LocationStateMatching, MatchID: 8888,
+	}); err != nil {
+		t.Fatalf("set MATCHING failed: %v", err)
+	}
+
+	// hub DS 上报 HUB(stale)→ 应被拒
+	err := uc.SetLocation(ctx, LocationInput{
+		PlayerID: 100, State: LocationStateHub, HubPod: "hub-pod-2", ShardID: 1,
+	})
+	if err == nil {
+		t.Fatal("expected ErrLocatorConflict for HUB report during MATCHING, got nil")
+	}
+	if got := errcode.As(err); got != errcode.ErrLocatorConflict {
+		t.Errorf("expected ErrLocatorConflict(9202), got %d", got)
+	}
+
+	// MATCHING 不被顶掉
+	out, _ := uc.GetLocation(ctx, 100)
+	if out.State != LocationStateMatching {
+		t.Errorf("MATCHING should survive stale HUB report, got state=%d", out.State)
+	}
+	if out.MatchID != 8888 {
+		t.Errorf("match_id should remain 8888, got %d", out.MatchID)
+	}
+}
+
+// TestGuard_ControlPlaneAlwaysWins:控制面写(MATCHING→BATTLE、LOGIN_PENDING 顶号)不受守卫拦截。
+func TestGuard_ControlPlaneAlwaysWins(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	ctx := context.Background()
+
+	// MATCHING → BATTLE(matchmaker 全员确认)
+	if err := uc.SetLocation(ctx, LocationInput{PlayerID: 1, State: LocationStateMatching, MatchID: 7}); err != nil {
+		t.Fatalf("set MATCHING failed: %v", err)
+	}
+	if err := uc.SetLocation(ctx, LocationInput{PlayerID: 1, State: LocationStateBattle, MatchID: 7, BattlePod: "bp-1"}); err != nil {
+		t.Fatalf("MATCHING→BATTLE should pass, got %v", err)
+	}
+	if out, _ := uc.GetLocation(ctx, 1); out.State != LocationStateBattle {
+		t.Errorf("state should be BATTLE, got %d", out.State)
+	}
+
+	// 新登录 LOGIN_PENDING 顶号(覆盖 BATTLE)
+	if err := uc.SetLocation(ctx, LocationInput{PlayerID: 1, State: LocationStateLoginPending}); err != nil {
+		t.Fatalf("LOGIN_PENDING 顶号 should pass, got %v", err)
+	}
+	if out, _ := uc.GetLocation(ctx, 1); out.State != LocationStateLoginPending {
+		t.Errorf("state should be LOGIN_PENDING, got %d", out.State)
+	}
+}
+
+// TestGuard_HubAllowedFromNonMatching:HUB 上报在 OFFLINE / LOGIN_PENDING / HUB / BATTLE 时放行。
+func TestGuard_HubAllowedFromNonMatching(t *testing.T) {
+	ctx := context.Background()
+
+	cases := []struct {
+		name string
+		seed *LocationInput // nil = 不预置(OFFLINE)
+	}{
+		{"from offline", nil},
+		{"from login_pending", &LocationInput{PlayerID: 1, State: LocationStateLoginPending}},
+		{"from hub", &LocationInput{PlayerID: 1, State: LocationStateHub, HubPod: "hub-a"}},
+		{"from battle (return to hub)", &LocationInput{PlayerID: 1, State: LocationStateBattle, MatchID: 5, BattlePod: "bp"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
+			if c.seed != nil {
+				if err := uc.SetLocation(ctx, *c.seed); err != nil {
+					t.Fatalf("seed failed: %v", err)
+				}
+			}
+			if err := uc.SetLocation(ctx, LocationInput{PlayerID: 1, State: LocationStateHub, HubPod: "hub-b", ShardID: 2}); err != nil {
+				t.Fatalf("HUB report should pass from %s, got %v", c.name, err)
+			}
+			if out, _ := uc.GetLocation(ctx, 1); out.State != LocationStateHub || out.HubPod != "hub-b" {
+				t.Errorf("state should be HUB(hub-b), got state=%d pod=%s", out.State, out.HubPod)
+			}
+		})
 	}
 }

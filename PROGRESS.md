@@ -2412,3 +2412,90 @@ battle_result 是 MySQL-only 服务(无 Redis),不能复刻 W4 ⑧ 的「Redis Z
 - 真 Agones GameServerAllocation CRD(`AgonesGameServerAllocator` 替换 Mock,biz 零改)
 - locator HUB 状态由 hub DS 上报 + locator Conflict 检测(多 DS 上报同 player)
 - UE 主链路:登录 → 进大厅 → 匹配 → 进战斗 → 结算 → 回大厅
+
+---
+
+## W4 ⑩ player_locator 状态机守卫(2026-06-06,Claude Opus）
+
+补 HANDOFF §3 Step 2「可靠补偿收口」之后的不变量 §1 收口:把 player_locator 的
+**覆盖式写**升级为带状态机守卫的**原子读-判-写**,落实 CLAUDE.md §9.1
+「玩家在线只能在一个 DS」。
+
+W3 ⑤ 遗留:`SetLocation` 直接 DEL+HSET 覆盖(无读、last-writer-wins),`biz` 注释
+自留 TODO「W4+ 接 DS 注册表后加 Conflict 检测」。本轮兑现该 TODO。
+
+无新服 / 无新 proto / 无新 errcode:`ERR_LOCATOR_CONFLICT=9202` 在 Go errcode 和
+proto 两端 W1 早已就绪,本轮才**首次使用**。纯 data + biz 改动。
+
+### 核心设计:用 state 本身识别写入方权威
+
+locator 的写入方按 state 天然分两类,**无需在 proto 加 reporter/fence 字段**:
+
+| 写入方 | 写的 state | 可信度 |
+|---|---|---|
+| login(控制面) | `LOGIN_PENDING` | 可信,顶号 |
+| matchmaker(控制面) | `MATCHING` / `BATTLE` | 可信,撮合生命周期权威 |
+| hub DS(数据面,UE 未建) | `HUB` | **可能 stale**,需守卫 |
+
+### 守卫规则(`guardTransition`)
+
+- 控制面写(`LOGIN_PENDING` / `MATCHING` / `BATTLE`)→ **一律放行**(顶号语义)。
+- `HUB` 上报(唯一来自数据面)→ **当前状态为 `MATCHING` 时拒绝 `ErrLocatorConflict`**。
+  - 玩家在撮合确认期(~15s)物理上仍连着 hub DS,hub DS 会持续上报 `HUB`;
+    若放行会把 matchmaker 刚写的 `MATCHING` 顶回 `HUB`,使其他服务误判玩家仍在大厅闲逛。
+- `BATTLE → HUB`(战斗结束返回大厅)是合法回流 → **放行**。
+
+### 原子性:WATCH/MULTI/EXEC
+
+`RedisLocationRepo.Set` → `SetGuarded(ctx, playerID, rec, ttl, maxRetry, guard)`:
+对齐 team / matchmaker / ds_allocator / hub_allocator 的乐观锁惯例。
+
+```
+for attempt := 0..maxRetry:
+  WATCH key
+    cur = readLocation(key)        # HGETALL + parseLocationMap(复用 Get 的解析)
+    if guard(cur, found) != nil: 中止,原样返回守卫错误(不重试)
+    MULTI: DEL + HSET(覆盖) + EXPIRE(刷新 TTL)
+  EXEC
+  TxFailedErr → CAS 冲突重试;耗尽 → ErrLocatorConflict
+```
+
+读-判-写在 WATCH 内原子完成,堵住「hub DS 读到 pre-MATCHING 旧值 → matchmaker 写
+MATCHING → hub DS 覆盖回 HUB」的竞态(EXEC 会因 key 变更失败 → 重试 → 重读见
+MATCHING → 拒绝)。`optimisticRetry=3` 用 biz 包常量,`NewLocatorUsecase` 签名不变,
+不动 conf / main / 既有测试调用点。
+
+### 对现有调用方零影响
+
+login 只写 `LOGIN_PENDING`、matchmaker 只写 `MATCHING` / `BATTLE`,都走放行分支,
+不触发守卫;`HUB` 上报当前**无人发送**(hub DS 是 UE,未建)。本轮是把接收契约
+提前就位,等 UE hub DS 落地即生效。
+
+### 阶段限制(据实,不用绝对词)
+
+stale hub DS 顶掉 active `BATTLE` 的极端场景(玩家已进战斗 DS,旧 hub DS 误报 HUB)
+本轮**不处理**:`BATTLE → HUB` 与「stale hub 顶 BATTLE」仅凭 state 无法区分,需要
+fence / 已结束 match_id 令牌,留待 UE hub DS 落地后做。当前 `BATTLE` 期间真 hub DS
+已不再持有该玩家、正常不会上报,故风险窗口很小。
+
+### 改动文件
+
+- `services/runtime/player_locator/internal/data/location.go`:`Set` → `SetGuarded`
+  (WATCH/MULTI/EXEC),抽出 `readLocation` / `parseLocationMap` 供 Get 与 SetGuarded 复用。
+- `services/runtime/player_locator/internal/biz/locator.go`:`SetLocation` 走
+  `SetGuarded(...,guardTransition(in))`,新增 `guardTransition` 守卫 + `optimisticRetry` 常量。
+- `services/runtime/player_locator/internal/biz/locator_test.go`:stub `Set`→`SetGuarded`
+  (执行 guard),新增 3 组守卫单测。
+
+### 验证(2026-06-06,Claude)
+
+- 10-module BUILD=0
+- player_locator VET=0 / TEST=0(biz 7→10 用例:HUB-during-MATCHING 被拒且 MATCHING
+  不被顶 + 控制面写恒胜 + HUB 从 OFFLINE/LOGIN_PENDING/HUB/BATTLE 放行)
+
+### 下一步
+
+- 真 Agones GameServerAllocation CRD(`AgonesGameServerAllocator` 替换 Mock,biz 零改)
+- BATTLE fence(stale hub 顶 BATTLE 防御)+ locator HUB 上报方(UE hub DS)
+- 端到端 abandoned → 段位回滚联调
+- UE 主链路:登录 → 进大厅 → 匹配 → 进战斗 → 结算 → 回大厅

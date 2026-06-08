@@ -8,7 +8,11 @@
 // 不变量 §1(CLAUDE.md §9.1)"玩家只能在一个 Location":
 //
 //	redis hash 是单写者(SetLocation),覆盖语义 = 自动顶号;
-//	W4+ 接 DS 注册表后,加 Conflict 检测(同 player 被多个 DS 上报 → ErrLocatorConflict)。
+//	W4 ⑩(2026-06-06):接 hub DS 上报后,加状态机守卫(guardTransition):
+//	只有 HUB 上报来自数据面(hub DS),可能 stale;LOGIN_PENDING / MATCHING / BATTLE
+//	来自可信控制面(login / matchmaker),直接顶号。HUB 上报覆盖控制面 MATCHING 时
+//	返回 ErrLocatorConflict(玩家在确认期仍连 hub DS,hub DS 会持续上报 HUB,
+//	必须挡住以免顶掉 matchmaker 刚写的 MATCHING)。
 package biz
 
 import (
@@ -30,6 +34,9 @@ const (
 	LocationStateMatching     int32 = 4
 	LocationStateBattle       int32 = 5
 )
+
+// optimisticRetry 是 SetGuarded WATCH/MULTI/EXEC 的 CAS 冲突重试次数。
+const optimisticRetry = 3
 
 // LocationInput 是 SetLocation 的入参(从 service 层 proto 翻译)。
 type LocationInput struct {
@@ -103,7 +110,7 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 		BattlePod:   in.BattlePod,
 		UpdatedAtMs: time.Now().UnixMilli(),
 	}
-	if err := u.repo.Set(ctx, in.PlayerID, rec, u.ttl); err != nil {
+	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, guardTransition(in)); err != nil {
 		return err
 	}
 	plog.With(ctx).Infow("msg", "location_set",
@@ -111,6 +118,30 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 		"hub_pod", in.HubPod, "match_id", in.MatchID, "battle_pod", in.BattlePod,
 		"ttl_ms", u.ttl.Milliseconds())
 	return nil
+}
+
+// guardTransition 返回 SetGuarded 的状态机守卫闭包,实现不变量 §1。
+//
+// 守卫只针对 HUB 上报(唯一来自数据面 hub DS、可能 stale 的写):
+//   - 当前是 MATCHING 时拒绝 HUB 上报 → ErrLocatorConflict。
+//     玩家在撮合确认期物理上仍连着 hub DS,hub DS 会持续上报 HUB,
+//     若放行会把 matchmaker 刚写的 MATCHING 顶掉,使其他服务误判玩家仍在大厅闲逛。
+//
+// 控制面写(LOGIN_PENDING / MATCHING / BATTLE 来自 login / matchmaker)一律放行(顶号语义)。
+// BATTLE→HUB(战斗结束返回大厅)是合法回流,放行;stale hub DS 顶掉 BATTLE 的极端场景
+// 需要 fence/match_id 令牌区分,留待 hub DS(UE)落地后做。
+func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool) error {
+	return func(cur data.LocationRecord, found bool) error {
+		if !found {
+			return nil
+		}
+		if in.State == LocationStateHub && cur.State == LocationStateMatching {
+			return errcode.New(errcode.ErrLocatorConflict,
+				"player %d in MATCHING(match_id=%d), reject stale HUB report pod=%s",
+				in.PlayerID, cur.MatchID, in.HubPod)
+		}
+		return nil
+	}
 }
 
 // GetLocation 读 redis hash;key 不存在返回 OFFLINE 占位记录(不报错)。
