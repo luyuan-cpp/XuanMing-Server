@@ -131,7 +131,8 @@
 - **match_id 下发**：matchmaker AllocateBattle 时把 match_id 打到 GameServer label（`pandora.dev/match-id`），
   Battle DS 经 SDK 读 label 拿 match_id；或经 battle_ticket（JWT claim）取。
 - **占位验证**：UE DS 就绪前，先用 `deploy/k8s/agones` 的 simple-game-server 占位 Fleet 验
-  Agones 分配链路（见 README §4 第一步）；心跳/locator 链路等真 DS 或 grpcurl stub（第二步）。
+  Agones 分配链路（见 README §4 第一步）；心跳 / locator 链路用 `tools/scripts/ds_heartbeat_stub.ps1`
+  当 stub（grpcurl 周期调 Heartbeat + SetLocation，第二步），真 UE DS 就绪后替换。
 
 ---
 

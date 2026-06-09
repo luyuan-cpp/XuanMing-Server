@@ -121,7 +121,22 @@ kubectl create -f deploy/k8s/agones/40-gameserverallocation-example.yaml -o yaml
 - 真 UE Pandora Hub DS / Battle DS（`D:\luyuan\Xuanming`，独立仓库）按
   `docs/design/agones-dev.md` 的「DS 心跳上报契约」实现后，心跳链路 + locator HUB/BATTLE
   上报闭环才能端到端跑通。
-- 如需在 UE DS 就绪前先验后端心跳/sweep，可写一个 grpcurl 脚本周期调 `Heartbeat` 当 stub。
+- **UE DS 就绪前用 stub 脚本先验后端心跳 / sweep / locator 闭环**
+  （`tools/scripts/ds_heartbeat_stub.ps1`，grpcurl 周期调 Heartbeat + SetLocation）：
+
+```powershell
+# 起 hub_allocator + player_locator(本机进程, 连 dev redis), 然后:
+# 种子分片 → 持续心跳 → Ctrl+C 停 → 看 hub_allocator sweep 标 draining
+pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role hub -AssignFirst -PlayerId 30907585389428737
+pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role hub -PodName pandora-hub-global-1 -PlayerCount 42
+
+# 战斗 DS: 需先经 matchmaker/AllocateBattle 建镜像(mock 名 pandora-battle-<matchId>)
+pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role battle -PodName pandora-battle-123456 -MatchId 123456
+
+# locator BATTLE→HUB 合法回流(带 fence matchId, W4 ⑪)
+pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role hub -PodName pandora-hub-global-1 `
+    -LocatorPlayerId 30907585389428737 -ShardId 1 -FenceMatchId 123456 -Count 1
+```
 
 ---
 
