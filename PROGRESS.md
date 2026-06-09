@@ -2610,3 +2610,77 @@ W4 ⑩ 已用 `WATCH/MULTI/EXEC + guardTransition` 挡住 `MATCHING` 被 stale `
 
 - `docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env config --quiet`
   通过。
+
+
+## W4 ⑭ ✅ 真 Agones + Kafka + MySQL 两段补偿链验证跑通(2026-06-09)
+
+把 W4 ⑧ / W4 ⑨ 的可靠补偿设计从单测与 stub 级别推进到本地真实基础设施联调:
+Agones 分配链路、Kafka 事件链路、MySQL battle/player 落库链路都已跑通。本轮还顺带
+修了一个会静默禁用 4 个 producer 服务弱依赖事件链的 kafkax 超时 bug(见下)。
+
+### 真实 Agones 联调环境(Codex 验收)
+
+- minikube v1.30.0 + Kubernetes v1.30.0 + Agones 1.58.0(Helm 安装);本地网络封
+  Google preload,`minikube start` 必带 `--preload=false --cache-images=false` +
+  阿里云 `kicbase` base-image。
+- Fleet:`pandora-battle` 2/2 Ready、`pandora-hub` 3/3 Ready(`region=cn`)。
+- `ds_allocator` 跑 `allocator_mode=agones`、`hub_allocator` 跑 `fleet_mode=agones`;
+  `AllocateBattle` / `AssignHub` 返真实 GameServer 地址(如 `ds_addr=192.168.49.2:7929`、
+  `hub_ds_addr=192.168.49.2:7136`),并写入业务 label `pandora.dev/match-id` /
+  `map-id` / `game-mode`。
+
+### 验证结果
+
+- NORMAL 结算路径:5v5 正常战斗结果经 `battle_result` 落库,player.update 事务出箱发布
+  (`outbox_published=10`),player 服务消费后段位写回(1516 / 1484),`total_battles` /
+  `total_wins` 计数正确;Elo delta 为 +16 / -16,守恒(`delta_sum=0`)。
+- ABANDONED 补偿路径:DS 崩溃补偿结果强制 `mmr_delta=0`,10 名玩家均不掉段(MMR 维持
+  1500),`total_battles=0`,`mmr_history` 10 行 delta 全 0,outbox 清零;幂等重复提交
+  (`alreadyRecorded=true`)不二次改段位。
+- 两段补偿链都可复现:
+  - 第一段:`tools/scripts/ds_heartbeat_stub.ps1` 验 DS 心跳超时 → abandoned
+    (`battle_abandoned_heartbeat_timeout`)→ `pandora.ds.lifecycle`
+    (`ds_lifecycle_published`)。
+  - 第二段:`tools/scripts/battle_result_outbox_probe.ps1` 验 ReportResult →
+    battle_result 事务出箱 → `pandora.player.update` → player 段位回写。
+
+### kafkax producer 超时修复(commit d3df901)
+
+- 现象:producer 初始化报 `Net.DialTimeout must be > 0`,初始化失败仅 Warn,导致
+  `ds.lifecycle` 补偿、`player.update` 出箱、`team.update`、`match.progress` 等弱依赖
+  事件链被**静默禁用**。
+- 根因:`pkg/kafkax/producer.go` 在 yaml 省略 kafka 超时字段时,把 sarama 默认的 30s
+  `Net.DialTimeout` / `ReadTimeout` / `WriteTimeout` 无条件覆盖为配置零值,而 sarama
+  `Validate()` 要求三者都 > 0。波及全部 4 个 producer 服务(ds_allocator / battle_result
+  的 kafka 段无超时字段;team / matchmaker 有 dial+write 但省 read),各自在 yaml 省略的
+  那个字段上失败。基于 sarama/mocks 的单测绕过了 config 构建,故从未捕获。
+- 修复:抽 `buildProducerConfig`,三个 Net 超时改为 `if d := cfg.X.Std(); d > 0 { ... }`
+  正值守卫,零值时保留 sarama 30s 安全默认,不覆盖。**不改任何 dev yaml**(代码边界
+  防御足够,避免范围蔓延)。新增 2 个回归单测覆盖全零回退 + 部分覆盖。
+- 验证:pkg BUILD=0、kafkax TEST/VET=0、4 个 producer 服务 BUILD=0;Codex 真实环境确认
+  `ds_lifecycle_producer_ready` + `player_update_producer_ready` 日志出现。
+
+### hub_allocator 接入 Agones Fleet 发现(commit 278a2a2)
+
+- 本轮联调的使能代码:把 hub_allocator 的 `MockHubFleetProvider` 升级为可配置的真
+  Agones Fleet 发现(`internal/biz/agones_fleet.go` 250 行 + 测试 186 行),Mock 保留
+  作为本地无 k8s fallback。
+- 配套落地 `deploy/k8s/agones/`(rbac-allocator / fleet-battle / fleet-hub /
+  allocation-example + README)与 `docs/design/agones-dev.md` 联调手册。
+
+### 脚本修复
+
+- 修复 `tools/scripts/battle_result_outbox_probe.ps1` 的 ABANDONED 判定:
+  proto3 JSON 会省略 0 值字段,因此 `mmrDelta=0` 时看不到 `mmrDelta` 字段是正常情况。
+  新逻辑改为 stats 存在且没有任何非 0 `mmrDelta` 即判定通过。
+
+### 文档同步
+
+- `docs/design/agones-dev.md`:补充两段补偿链 stub 验证说明。
+- `deploy/k8s/agones/README.md`:在本地 Agones 验证步骤中并列引用
+  `ds_heartbeat_stub.ps1` 与 `battle_result_outbox_probe.ps1`。
+
+### 后续
+
+- UE Hub DS / Battle DS 在 `C:\work\Pandora` 实现真实业务 Heartbeat 与 locator HUB/BATTLE
+  fence 上报后,用真实 UE DS 替换 stub 脚本继续跑主链路。
