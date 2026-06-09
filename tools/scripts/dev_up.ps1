@@ -62,8 +62,10 @@ $timeout = 120  # 秒
 $elapsed = 0
 $step = 5
 while ($elapsed -lt $timeout) {
-    $unhealthy = docker compose -f $ComposeFile --env-file $EnvFile ps --format json |
-        ConvertFrom-Json |
+    $psLines = docker compose -f $ComposeFile --env-file $EnvFile ps --format json
+    $unhealthy = $psLines |
+        Where-Object { $_ -and $_.Trim() -ne "" } |
+        ForEach-Object { $_ | ConvertFrom-Json } |
         Where-Object { $_.Health -ne "healthy" -and $_.Health -ne "" } |
         Select-Object -ExpandProperty Name
     if ($null -eq $unhealthy -or $unhealthy.Count -eq 0) { break }

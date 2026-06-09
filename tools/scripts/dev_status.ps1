@@ -18,8 +18,15 @@ Write-Host "===== 端口监听 =====" -ForegroundColor Cyan
 # 9091 prometheus / 3001 grafana / 8443 envoy(客户端入口) / 9901 envoy-admin
 $ports = @(3307, 6380, 9093, 2380, 2381, 9091, 3001, 8443, 9901)
 foreach ($p in $ports) {
-    $r = Test-NetConnection -ComputerName 127.0.0.1 -Port $p -WarningAction SilentlyContinue
-    if ($r.TcpTestSucceeded) {
+    $client = [System.Net.Sockets.TcpClient]::new()
+    $connect = $client.BeginConnect("127.0.0.1", $p, $null, $null)
+    $ok = $connect.AsyncWaitHandle.WaitOne(500, $false)
+    if ($ok) {
+        try { $client.EndConnect($connect) } catch { $ok = $false }
+    }
+    $client.Close()
+
+    if ($ok) {
         Write-Host "  [OK] :$p" -ForegroundColor Green
     } else {
         Write-Host "  [--] :$p" -ForegroundColor DarkGray
