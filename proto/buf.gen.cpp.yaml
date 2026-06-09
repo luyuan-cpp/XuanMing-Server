@@ -3,17 +3,12 @@
 # 用法:
 #   cd proto && buf generate --template buf.gen.cpp.yaml
 #
-# 产物路径:proto/gen/cpp/**/*.pb.{h,cc}(只生成消息 pb,不再生成 *.grpc.pb.*)
+# 产物路径:proto/gen/cpp/**/*.pb.{h,cc}(只生成消息 pb,不生成 *.grpc.pb.*)
 #
 # 决策(2026-06-09,见 docs/design/decision-revisit-ue-proto-codec.md):
-#   - UE 客户端/DS 改用「生成的 protobuf pb」做消息编解码,废弃手写 wire codec。
-#   - **只链 libprotobuf(v35.0,源码随 UBT 构建),不链 grpc-cpp**:gRPC-Web 经 Envoy 是 HTTP/1.1,
-#     传输层用 FPandoraGrpcWeb + FHttpModule,不需要 grpc++ 运行时。
-#   - 故移除 grpc/cpp 插件 —— *.grpc.pb.* 会 include grpc++ 头,UE 侧没有该依赖会编不过。
-#   - ⚠️ gencode 版本必须与 UE ThirdParty 链接的 libprotobuf 运行时版本一致(protobuf 有硬版本检查):
-#     这里 cpp 插件钉 v35.0 ⇔ ThirdParty 必须是 protobuf v35.0。
-#   - ⚠️ buf 远程插件 tag 可能滞后 protobuf release;若 buf.build/protocolbuffers/cpp:v35.0 不可用,
-#     改用 protobuf v35.0 release 自带的 protoc 直接生成(Codex 本就要从源码构建 v35.0)。
+#   - UE 客户端/DS 使用生成的 protobuf pb 编解码,废弃手写 wire codec。
+#   - 只链 libprotobuf(v35.0,源码随 UBT 构建),不链 grpc-cpp。
+#   - gencode 版本必须与 UE ThirdParty protobuf 运行时版本一致。
 #
 # 生成后把 proto/gen/cpp/ 内容同步到 UE 工程的 Source/Pandora/Generated/Proto/(PandoraProto module)。
 
