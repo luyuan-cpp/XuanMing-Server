@@ -1,6 +1,6 @@
 # 决策复议:UE 客户端改用生成的 protobuf pb,废弃手写 wire codec
 
-> 状态:**待人拍板**(本文按 AGENTS.md §7 提出,用于复议已落档决策)
+> 状态:**已拍板(2026-06-09 人确认采纳)** —— 采用方案 A 中间路线,protobuf **v35.0**,**源码随 UE(UBT)构建**。
 > 提出人:Claude(Opus)/ 2026-06-09
 > 关联决策:CLAUDE.md §7 `UE 仓库 | 2026-06-08`「gRPC-Web 客户端 C++ 骨架(FHttpModule 自研,**客户端零额外依赖**):`FPandoraProtoWriter/Reader`(极简 protobuf wire codec)」
 
@@ -40,17 +40,18 @@
 
 **但当时把「grpc-cpp 很重」与「protobuf 也不能用」错误绑定了** —— 这两件事可以分开。
 
-## 4. 提议:中间路线 = 只链 libprotobuf-lite,不链 grpc-cpp
+## 4. 提议:中间路线 = 只链 libprotobuf,不链 grpc-cpp
 
 | 层 | 现状(妥协) | 改为 |
 |---|---|---|
-| 消息序列化 | 手写 `FPandoraProtoWriter` 填字段号 | **生成的 `*.pb.h` `SerializeToArray` / `ParseFromArray`**(libprotobuf-lite) |
+| 消息序列化 | 手写 `FPandoraProtoWriter` 填字段号 | **生成的 `*.pb.h` `SerializeToArray` / `ParseFromArray`**(libprotobuf) |
 | gRPC-Web 帧(5 字节头 + trailer) | `FPandoraGrpcWeb` | **保留**(走 Envoy 是 HTTP/1.1,本就不需要 grpc-cpp) |
 | HTTP 传输 | `FHttpModule` | **保留** |
 
 **关键认知:gRPC-Web 经 Envoy 是普通 HTTP/1.1 请求,根本不需要 grpc-cpp 的传输栈。**
-只有「消息编解码」需要 protobuf 运行时,而 **libprotobuf-lite(`optimize_for=LITE_RUNTIME`)
-比完整 protobuf 轻很多、比 grpc-cpp 轻一个量级**,不含反射/descriptor/文本格式,适合客户端。
+只有「消息编解码」需要 protobuf 运行时,而 **libprotobuf 比 grpc-cpp 轻一个量级**;
+后续若确认 UE 侧不依赖 descriptor/反射/text format,再评估 `optimize_for=LITE_RUNTIME`
+切到 lite runtime 减体积。
 
 收益:
 
@@ -62,16 +63,29 @@
 
 ## 5. 落地方案与分工(对齐 AGENTS §11.1)
 
+### 5.0 已拍板的关键选择(2026-06-09)
+
+| 项 | 决定 | 理由 |
+|---|---|---|
+| protobuf 版本 | **v35.0**(latest release) | 用最新稳定版;gencode 与运行时同版本钉死 |
+| 二进制来源 | **源码随 UE(UBT)构建**,不用预编译库下发 | UE Linux DS 用自带 clang+libc++,系统预编译 `.a` 链不进(ABI 撕裂);UBT 编译自动匹配工具链,跨平台「免费」跟着编。UE 5.7.4 源码版集成第三方源码本就容易 |
+| 链接范围 | **只链 libprotobuf,不链 grpc-cpp** | gRPC-Web 经 Envoy 是 HTTP/1.1,传输层 `FPandoraGrpcWeb`+`FHttpModule` 足够;grpc-cpp 数十 MB + 跨平台坑,不引 |
+| grpc/cpp 生成插件 | **移除**(buf.gen.cpp.yaml 已删) | `*.grpc.pb.*` include grpc++ 头,UE 侧无该依赖会编不过;只留 `protocolbuffers/cpp` 生成消息 pb |
+| C++ 标准 | **C++17**(protobuf v35.0 要求) | UE 5.7 默认 ≥C++17,满足 |
+
+**⚠️ 必须遵守的硬约束:**
+- **abseil-cpp 跟着进来**:protobuf v22+ 强依赖 abseil,v35.0 亦然(release notes 多处 abseil)。所以「只链 protobuf」实际也会拖入 abseil,**这正是选源码构建的另一理由**(abseil 也不必逐平台预编译)。`ThirdParty/` 要同时纳管 protobuf v35.0 + 对应 abseil tag,**版本钉死不浮动**。
+- **gencode 版本 == 运行时版本**:protobuf C++ 有硬版本检查。`buf.gen.cpp.yaml` 的 `protocolbuffers/cpp:v35.0` 生成的 `*.pb.cc` 必须与 ThirdParty 链接的 libprotobuf **同为 v35.0**,否则编译/运行报版本不匹配。
+
 ### 5.1 环境/构建(Codex / 人 —— 触碰构建环境,Claude 不做)
 
-1. 取得 / 构建 **libprotobuf-lite** 静态库(Win64 优先,后续补目标平台),放 UE `ThirdParty/`。
-2. 写 `ThirdParty/Protobuf/Protobuf.Build.cs`(暴露 include 路径 + lib),按需开 `bUseRTTI` /
-   `bEnableExceptions`(protobuf-lite 通常不需 RTTI,异常视编译报错定夺)。
-3. 评估 cpp pb 是否切 `optimize_for = LITE_RUNTIME`(改 proto 文件 option 或 buf managed),
-   减小体积;若保留完整 runtime 也可先跑通再优化。
-4. 在 UE 编辑器里编译验证「一个 trivial pb(如 login)能 include + link + round-trip」。
+1. 取 **protobuf v35.0 源码** + **对应版本的 abseil-cpp 源码**,放 UE `ThirdParty/Protobuf/` 与 `ThirdParty/Abseil/`(版本钉死,对齐 5.0 表)。
+2. 写 `ThirdParty/Protobuf/Protobuf.Build.cs`(+ abseil 的 Build.cs 或合并),让 **UBT 从源码编译**(非预编译 lib),按需开 `bUseRTTI` / `bEnableExceptions` / `bEnableUndefinedIdentifierWarnings=false` 等(protobuf 通常不需 RTTI,异常按编译报错定夺);先保 **Win64(客户端)+ Linux(DS)** 两平台。
+3. **确认 buf 远程插件 `protocolbuffers/cpp:v35.0` 是否可用**:可用则 `cd proto && buf generate --template buf.gen.cpp.yaml`;若 tag 滞后不可用,用 v35.0 release 自带 `protoc` 直接生成(反正要从源码构建 v35.0)。生成物同步到 UE `Source/Pandora/Generated/Proto/`。
+4. 在 UE 编辑器里编译验证「一个 trivial pb(如 login)能 include + link + round-trip(`SerializeToArray`/`ParseFromArray`)」,Win64 + Linux 各过一遍。
+5. (可选优化)评估 cpp pb 是否切 `optimize_for = LITE_RUNTIME` 减体积;**先按完整 runtime 跑通,再决定是否切**(切了去 descriptor/反射/text format,客户端够用但要确认无代码依赖反射)。
 
-### 5.2 代码(Claude 可做 —— 纯 C++,不碰构建环境)
+### 5.2 代码(Claude 可做 —— 纯 C++ 逻辑,不碰构建环境)
 
 5. 新建 `PandoraProto` UE module,纳管生成的 `*.pb.cc`(隔离 protobuf 编译设置,不污染主模块)。
 6. **重构消息编解码**:把 `FPandoraProtoWriter` 手填字段号的消息构造,换成生成 pb 的
@@ -89,13 +103,16 @@
 
 ## 6. 风险与回退
 
-- **风险**:跨平台(尤其主机/移动)libprotobuf-lite 工具链可能有坑 → 先只保 Win64,逐平台补。
+- **风险**:跨平台(尤其主机/移动)protobuf 工具链可能有坑 → 先只保 Win64,逐平台补。
 - **回退**:若某平台 protobuf 实在链不进,可退守「**用 proto codegen 自动生成 UE 友好序列化器**」
   (仍以 proto 为真相源,但生成而非手写)——比当前手写强,作为 B 计划保留。
 - 决策一旦拍板,更新 CLAUDE.md §7(复议行)+ 本文状态,并在 UE 仓库 README 记录 ThirdParty 约定。
 
-## 7. 待拍板项(请人确认)
+## 7. 拍板记录(2026-06-09 人确认)
 
-- [ ] 同意加 **libprotobuf-lite** 客户端依赖(推翻「零额外依赖」)?
-- [ ] cpp pb 是否切 `LITE_RUNTIME`?
-- [ ] ThirdParty 二进制来源:预编译下发 vs 源码随构建?(影响 Codex 环境步骤)
+- [x] 同意加 **libprotobuf** 客户端依赖(推翻「零额外依赖」)—— **采纳**。
+- [x] protobuf 版本 = **v35.0**(latest)。
+- [x] 二进制来源 = **源码随 UE(UBT)构建**(非预编译下发)。
+- [x] 链接范围 = **只 libprotobuf,不 grpc-cpp**;buf.gen.cpp.yaml **移除 grpc/cpp 插件**。
+- [ ] `optimize_for = LITE_RUNTIME` 切不切:**先按完整 runtime 跑通,再评估**(5.1 第 5 步)。
+- [ ] (并行)Claude 起草 5.2 代码,**合并前必须等 5.1 ThirdParty 落地 + UE 编译通过**。
