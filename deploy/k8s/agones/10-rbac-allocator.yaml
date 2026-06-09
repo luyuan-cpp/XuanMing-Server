@@ -1,0 +1,48 @@
+# pandora-allocator ServiceAccount + RBAC（W4 ⑬，本地 Agones dev 联调）
+#
+# 用途：给 ds_allocator / hub_allocator 调用 Agones API 的最小权限。
+#   - ds_allocator：POST GameServerAllocation（allocation.agones.dev）+ DELETE GameServer（agones.dev）
+#   - hub_allocator：LIST GameServer（agones.dev，发现 Hub 分片拓扑）
+#
+# 本地 dev（allocator 作为本机进程连 minikube apiserver）取 token 方式见本目录 README。
+# 集群内运行时把本 ServiceAccount 挂到 allocator Pod 上即可（in-cluster token 自动注入）。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pandora-allocator
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pandora-allocator
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+rules:
+  # ds_allocator：按需分配战斗 DS
+  - apiGroups: ["allocation.agones.dev"]
+    resources: ["gameserverallocations"]
+    verbs: ["create"]
+  # ds_allocator Release / hub_allocator 分片发现
+  - apiGroups: ["agones.dev"]
+    resources: ["gameservers"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pandora-allocator
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+subjects:
+  - kind: ServiceAccount
+    name: pandora-allocator
+    namespace: default
+roleRef:
+  kind: Role
+  name: pandora-allocator
+  apiGroup: rbac.authorization.k8s.io

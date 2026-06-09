@@ -34,9 +34,9 @@ services:
       retries: 10
     networks: [pandora-net]
 
-  # ===== Redis 7.4 =====
+  # ===== Redis 8.8 =====
   redis:
-    image: redis:7.4-alpine
+    image: redis:8.8.0-alpine
     container_name: pandora-redis
     restart: unless-stopped
     ports:

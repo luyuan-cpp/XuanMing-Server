@@ -54,3 +54,24 @@ func AuthOptional() middleware.Middleware {
 		}
 	}
 }
+
+// PlayerIDFromContext 取 player_id,兼容 unary 与 server stream 两条路径。
+//
+// ⚠️ Kratos v2 的 unary middleware 链(AuthRequired / AuthOptional)**只对 unary RPC 生效**;
+// server stream RPC(如 push.Subscribe)走 Kratos 独立的 stream 拦截器,不跑这条链,
+// 所以 ctx 里不会有中间件注入的 player_id。但 stream 拦截器**会建立 transport context**,
+// Envoy jwt_authn 注入的 x-pandora-player-id 头能从 transport.RequestHeader 读到。
+//
+// 取值优先级:
+//  1. ctx.Value(player_id)——unary 路径,中间件已注入(已鉴权)
+//  2. transport RequestHeader 的 x-pandora-player-id——stream 路径,Envoy 鉴权后注入
+//
+// 取不到返回 0(直连内网端口联调时无网关注入,按匿名处理)。
+func PlayerIDFromContext(ctx context.Context) uint64 {
+	if v := ctx.Value(plog.CtxKeyPlayerID); v != nil {
+		if id, ok := v.(uint64); ok && id > 0 {
+			return id
+		}
+	}
+	return extractPlayerID(ctx)
+}

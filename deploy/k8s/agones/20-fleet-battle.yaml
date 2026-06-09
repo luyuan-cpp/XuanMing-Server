@@ -1,0 +1,48 @@
+# pandora-battle Fleet（W4 ⑬，本地 Agones dev 联调）
+#
+# 战斗 DS 走 Agones「按需分配」模型：matchmaker 全员确认 → ds_allocator POST
+# GameServerAllocation（selector agones.dev/fleet=pandora-battle）→ 拿到一个 Ready
+# GameServer 转 Allocated，返回 address:port 给客户端进战斗。
+#
+# dev 占位镜像：Agones 官方 simple-game-server（自带 Agones SDK：Ready/Health，
+# 让 Fleet 真的进 Ready 状态，可验证「分配 → Allocated → 返回真实 addr」整条链路）。
+# 真 UE Pandora Battle DS 镜像就绪后替换 image 即可（容器端口改 7777，详见 ds-arch.md）。
+#
+# ⚠️ 注意：simple-game-server 不会向 ds_allocator 发 Heartbeat（那是 Pandora DS 业务心跳，
+# 与 Agones SDK health 是两回事）。心跳上报链路要等真 UE DS 或 stub，见 README「分两步验证」。
+apiVersion: agones.dev/v1
+kind: Fleet
+metadata:
+  name: pandora-battle
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+    pandora.dev/role: battle
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        pandora.dev/role: battle
+    spec:
+      ports:
+        - name: default
+          portPolicy: Dynamic
+          containerPort: 7777
+          protocol: UDP
+      health:
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        failureThreshold: 3
+      template:
+        spec:
+          containers:
+            - name: pandora-battle-ds
+              image: us-docker.pkg.dev/agones-images/examples/simple-game-server:0.37
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi

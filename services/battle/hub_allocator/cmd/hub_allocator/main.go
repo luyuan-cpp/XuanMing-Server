@@ -109,7 +109,23 @@ func main() {
 
 	// 5. 装配链
 	repo := data.NewRedisHubRepo(rdb)
-	fleet := biz.NewMockHubFleetProvider(cfg.Hub) // W4 ⑤ 打桩;W4+ 接 Agones Fleet
+	// W4 ⑬:agones.enabled=true → 真 GameServer 列表发现分片拓扑;否则回退 Mock(本地/无集群联调)。
+	var fleet biz.HubFleetProvider
+	if cfg.Agones.Enabled {
+		af, ferr := biz.NewAgonesHubFleetProvider(cfg)
+		if ferr != nil {
+			helper.Errorw("msg", "agones_fleet_provider_init_failed", "err", ferr,
+				"hint", "检查 agones.fleet_name / ca_path 配置")
+			os.Exit(1)
+		}
+		fleet = af
+		helper.Infow("msg", "agones_fleet_provider_ready",
+			"api_server", cfg.Agones.APIServer, "namespace", cfg.Agones.Namespace, "fleet", cfg.Agones.FleetName)
+	} else {
+		fleet = biz.NewMockHubFleetProvider(cfg.Hub)
+		helper.Warnw("msg", "mock_fleet_provider_active",
+			"hint", "agones.enabled=false,用确定性假分片(无真实 Hub DS)")
+	}
 	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer}, cfg.Hub)
 	svc := service.NewHubService(uc)
 
@@ -131,6 +147,7 @@ func main() {
 		"sweep_interval", cfg.Hub.SweepInterval.String(),
 		"default_region", cfg.Hub.DefaultRegion,
 		"mock_shard_count", cfg.Hub.MockShardCount,
+		"fleet_mode", fleetMode(cfg.Agones.Enabled),
 	)
 
 	// 8. Kratos App
@@ -153,4 +170,12 @@ type hubTicketSigner struct {
 
 func (h *hubTicketSigner) SignHubTicket(playerID uint64) (string, int64, error) {
 	return h.signer.SignDSTicket(playerID, auth.DSTypeHub, 0, uuid.NewString())
+}
+
+// fleetMode 返回 service_ready 日志里的分片发现模式字符串。
+func fleetMode(agonesEnabled bool) string {
+	if agonesEnabled {
+		return "agones"
+	}
+	return "mock"
 }

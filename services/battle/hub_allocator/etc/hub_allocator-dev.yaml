@@ -56,3 +56,17 @@ hub:
   mock_hub_addr_host: "127.0.0.1"
   # mock_hub_port_base: Mock 分片端口基址(分片 port = base + shard_id)
   mock_hub_port_base: 7777
+
+# W4 ⑬: 真 Agones Hub DS Fleet 发现配置。
+# dev 默认 enabled=false 走 Mock(本机无 k8s/Agones 也能跑 hub_allocator)。
+# 本地 minikube 联调:enabled=true + fleet_name + api_server(minikube apiserver) + token_path。
+# 集群内运行时 api_server/token_path/ca_path 可留空用 in-cluster 默认。
+agones:
+  enabled: false
+  # api_server: "https://kubernetes.default.svc"   # in-cluster 默认;minikube 外联填 https://<minikube-ip>:8443
+  # namespace: "default"
+  fleet_name: "pandora-hub"
+  # token_path: "/var/run/secrets/kubernetes.io/serviceaccount/token"  # in-cluster 默认;"-" 禁用 token
+  # ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
+  # insecure_skip_tls_verify: false   # 仅 dev(minikube 外联自签证书时可临时开)
+  list_timeout: "5s"

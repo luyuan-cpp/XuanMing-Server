@@ -1,0 +1,51 @@
+# pandora-hub Fleet（W4 ⑬，本地 Agones dev 联调）
+#
+# 大厅 Hub DS 走「常驻分片」模型（不同于战斗 DS 的按需分配）：Hub DS GameServer 持续
+# Ready 运行，hub_allocator 经 AgonesHubFleetProvider LIST 这些 GameServer 发现分片拓扑
+# （selector agones.dev/fleet=pandora-hub,pandora.dev/region=<region>），自己在 Redis 里
+# 维护各分片 player_count 做容量判定（500 人/实例），不走 Agones GameServerAllocation。
+#
+# region 标签必填：hub_allocator 按 pandora.dev/region 过滤分片;本 dev Fleet 标 region=cn。
+# capacity 标签可选：单分片人数上限（缺省用 hub.default_capacity=500）。
+# shard-id 标签可选:同 Fleet 多副本无法静态区分,缺省由 hub_allocator 按 pod 名哈希派生。
+#
+# dev 占位镜像同 battle（simple-game-server 自带 Agones SDK 让分片进 Ready）。
+# 真 UE Pandora Hub DS 镜像就绪后替换 image。Hub DS 业务心跳上报 hub_allocator 见 ds-arch.md。
+apiVersion: agones.dev/v1
+kind: Fleet
+metadata:
+  name: pandora-hub
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+    pandora.dev/role: hub
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        pandora.dev/role: hub
+        pandora.dev/region: cn
+        pandora.dev/capacity: "500"
+    spec:
+      ports:
+        - name: default
+          portPolicy: Dynamic
+          containerPort: 7777
+          protocol: UDP
+      health:
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        failureThreshold: 3
+      template:
+        spec:
+          containers:
+            - name: pandora-hub-ds
+              image: us-docker.pkg.dev/agones-images/examples/simple-game-server:0.37
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi

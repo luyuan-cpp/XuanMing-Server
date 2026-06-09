@@ -13,6 +13,7 @@ import (
 	"context"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/biz"
@@ -36,10 +37,15 @@ func NewPushService(uc *biz.PushUsecase) *PushService {
 //
 // W3 ① 流程(2026-06-05):
 //  1. Envoy jwt_authn filter 已校验 JWT 并把 sub 提到 x-pandora-player-id 头
-//  2. pmw.AuthOptional() 中间件把 header 中 player_id 注入到 ctx
-//  3. 本方法从 ctx 取 player_id;0 表示匿名(直连 :50014 联调时正常)
-//  4. 注册 stream 到 ConnectionManager(顶号语义:旧 stream 会被 close),拿到 *StreamSlot
-//  5. defer 反注册
+//  2. 本方法从 ctx 取 player_id;0 表示匿名(直连 :50014 联调时正常)
+//  3. 注册 stream 到 ConnectionManager(顶号语义:旧 stream 会被 close),拿到 *StreamSlot
+//  4. defer 反注册
+//
+// ⚠️ player_id 提取(2026-06-08 修复):Subscribe 是 server stream,Kratos v2 的 unary
+// middleware 链(pmw.AuthOptional)**对 stream 不生效**,因此不能依赖 ctx.Value 拿
+// 中间件注入的 player_id(那样恒为 0,kafka 业务推送无法路由到本 stream)。改用
+// pmw.PlayerIDFromContext:它在 stream 路径直接从 Kratos transport 的 x-pandora-player-id
+// 头(Envoy jwt_authn 注入)读取真实 player_id。
 //
 // W3 ④ 真实化(2026-06-05):
 //   - 走 uc.RunSubscribeStream(slot, ...):按 req.LastSeenMs 补推 redis ZSET 离线帧,然后阻塞等 ctx.Done
@@ -50,9 +56,13 @@ func NewPushService(uc *biz.PushUsecase) *PushService {
 // 防止两个 goroutine 并发 stream.Send 撕坏 HTTP/2 帧。
 func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.PushService_SubscribeServer) error {
 	ctx := stream.Context()
-	h := plog.With(ctx)
 
-	playerID := extractPlayerID(ctx)
+	// server stream 不跑 unary 中间件链,直接从 transport header 取 Envoy 注入的 player_id。
+	playerID := pmw.PlayerIDFromContext(ctx)
+	if playerID > 0 {
+		ctx = plog.WithPlayerID(ctx, playerID)
+	}
+	h := plog.With(ctx)
 
 	// 注册到内存索引(KafkaConsumer 路由 SendTo 时按 player_id 找到这个 slot)
 	subCtx, cancel := context.WithCancel(ctx)
@@ -68,18 +78,4 @@ func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.Push
 	)
 
 	return s.uc.RunSubscribeStream(subCtx, slot, playerID, req.GetLastSeenMs())
-}
-
-// extractPlayerID 从 gRPC metadata 拿 x-player-id(W2 联调用)。
-// 取不到返回 0(允许匿名 stream,mock 推送不依赖 player_id)。
-//
-// W3:Envoy jwt_authn filter 会把 JWT 解出来的 sub 注入 metadata,
-// 这里换成 metadata.FromIncomingContext + 读 "x-jwt-payload-sub" 等标准头。
-func extractPlayerID(ctx context.Context) uint64 {
-	if v := ctx.Value(plog.CtxKeyPlayerID); v != nil {
-		if id, ok := v.(uint64); ok {
-			return id
-		}
-	}
-	return 0
 }

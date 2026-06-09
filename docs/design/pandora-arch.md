@@ -16,7 +16,7 @@
 ```
 GitHub:
 ├── github.com/luyuancpp/Pandora           # 后端(go)+ proto + docs + deploy
-└── github.com/luyuancpp/Xuanming          # UE 5.7 客户端 + 大厅 DS + 战斗 DS
+└── github.com/luyuancpp/Pandora-Client       # UE 5.7 客户端 + 大厅 DS + 战斗 DS（本地目录仍为 Xuanming）
 
 本地:
 ├── F:/work/Pandora/                       # 后端工作目录

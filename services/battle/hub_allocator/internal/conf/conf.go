@@ -16,6 +16,46 @@ type Config struct {
 	// JWT 用于给玩家签发 hub DSTicket(AssignHub / TransferHub 返回 hub_ticket)。
 	// Issuer / Audience / Secret 必须与 login / Envoy jwt_authn provider 完全一致。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
+
+	// Agones 真 Hub DS Fleet 发现配置(W4 ⑬)。enabled=false(默认)→ MockHubFleetProvider。
+	Agones AgonesConf `yaml:"agones" json:"agones"`
+}
+
+// AgonesConf 是真 Agones Hub DS Fleet 发现配置(W4 ⑬,镜像 ds_allocator.AgonesConf)。
+//
+// Enabled=false(默认)→ 用 MockHubFleetProvider;Enabled=true → 用
+// AgonesHubFleetProvider(经 k8s apiserver REST 查 agones.dev/v1 GameServer 列表,
+// 按 agones.dev/fleet=<FleetName> + pandora.dev/region=<region> 标签过滤)。
+//
+// 集群内运行时 token_path / ca_path / api_server / namespace 留空即用 in-cluster 默认;
+// 集群外联调(本机进程 → minikube)可显式指定 api_server + token_path(或 kubectl proxy 不带 token)。
+type AgonesConf struct {
+	// Enabled 打开真 Agones 分片发现(默认 false → Mock)。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+
+	// APIServer k8s apiserver 地址(默认 https://kubernetes.default.svc,in-cluster)。
+	APIServer string `yaml:"api_server,omitempty" json:"api_server,omitempty"`
+
+	// Namespace GameServer 所在命名空间(默认 default)。
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// FleetName 选择 Hub DS GameServer 的 Fleet 名(selector agones.dev/fleet=<FleetName>)。
+	// Enabled=true 时必填,否则构造失败。
+	FleetName string `yaml:"fleet_name,omitempty" json:"fleet_name,omitempty"`
+
+	// TokenPath ServiceAccount bearer token 文件路径
+	// (默认 /var/run/secrets/kubernetes.io/serviceaccount/token;留 "-" 显式禁用 token)。
+	TokenPath string `yaml:"token_path,omitempty" json:"token_path,omitempty"`
+
+	// CAPath apiserver CA 证书路径
+	// (默认 /var/run/secrets/kubernetes.io/serviceaccount/ca.crt)。
+	CAPath string `yaml:"ca_path,omitempty" json:"ca_path,omitempty"`
+
+	// InsecureSkipTLSVerify 跳过 apiserver TLS 校验(仅 dev,生产禁用)。
+	InsecureSkipTLSVerify bool `yaml:"insecure_skip_tls_verify,omitempty" json:"insecure_skip_tls_verify,omitempty"`
+
+	// ListTimeout 单次 LIST GameServer REST 调用超时(默认 5s)。
+	ListTimeout config.Duration `yaml:"list_timeout,omitempty" json:"list_timeout,omitempty"`
 }
 
 // JWTConf 是签发 hub DSTicket 的 JWT 参数(镜像 login.JWTConf / matchmaker.JWTConf)。
@@ -93,6 +133,21 @@ func (c *Config) Defaults() {
 	}
 	if c.Hub.MockHubPortBase == 0 {
 		c.Hub.MockHubPortBase = 7777
+	}
+	if c.Agones.APIServer == "" {
+		c.Agones.APIServer = "https://kubernetes.default.svc"
+	}
+	if c.Agones.Namespace == "" {
+		c.Agones.Namespace = "default"
+	}
+	if c.Agones.TokenPath == "" {
+		c.Agones.TokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	}
+	if c.Agones.CAPath == "" {
+		c.Agones.CAPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	}
+	if c.Agones.ListTimeout == 0 {
+		c.Agones.ListTimeout = config.Duration(5 * time.Second)
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50021"

@@ -19,10 +19,14 @@ import (
 // ⚠️ Subscribe 是 server stream RPC,Kratos transport/grpc 会自动处理 stream 生命周期,
 // 业务侧 PushService.Subscribe 收到的 stream.Context() 在 client 断开时自动 cancel。
 //
-// W3 ①(2026-06-05):加 pmw.AuthOptional() 中间件,把 Envoy jwt_authn 从 JWT 提到
-// x-pandora-player-id 头里的 player_id 注入到 ctx。Subscribe 业务侧 extractPlayerID
-// 从 ctx 读到正确的 player_id 用于 ConnectionManager 顶号。Optional 而非 Required:
-// W2 mock 阶段(没经 Envoy / 直连 :50014)仍能联调通过,player_id=0。
+// W3 ①(2026-06-05):加 pmw.AuthOptional() 中间件。
+//
+// ⚠️ 注意(2026-06-08 修正):AuthOptional 是 Kratos unary middleware,**只对 unary RPC 生效**。
+// push 当前唯一 RPC Subscribe 是 server stream,Kratos 不在 unary 链上跑它,所以 AuthOptional
+// 对 Subscribe 实际是 no-op;Subscribe 的 player_id 由 service 层 pmw.PlayerIDFromContext 直接
+// 从 Kratos transport 的 x-pandora-player-id 头(Envoy jwt_authn 注入)读取。这里保留
+// AuthOptional 仅为将来 push 若新增 unary RPC 时的鉴权占位,不影响 Subscribe。
+// 网关侧鉴权强约束在 Envoy jwt_authn(prefix /pandora.push.v1.PushService/ requires JWT)。
 func NewGRPCServer(cfg *conf.Config, svc *service.PushService) *kgrpc.Server {
 	srv := grpcserver.MustNewServer(cfg.Server, pmw.AuthOptional())
 	pushv1.RegisterPushServiceServer(srv, svc)

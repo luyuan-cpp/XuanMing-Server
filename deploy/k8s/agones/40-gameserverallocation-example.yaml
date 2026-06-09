@@ -1,0 +1,23 @@
+# GameServerAllocation 手测样例（W4 ⑬）
+#
+# 手动验证 ds_allocator 走的「分配」链路：直接 apply 本文件，Agones 会从 pandora-battle
+# Fleet 选一个 Ready GameServer 转 Allocated，并把 spec.metadata.labels 打到该 GameServer 上
+# （与 ds_allocator AgonesGameServerAllocator.Allocate 发出的请求体结构一致）。
+#
+#   kubectl create -f deploy/k8s/agones/40-gameserverallocation-example.yaml -o yaml
+#
+# 看返回 status.state=Allocated + status.address + status.ports[0].port 即成功。
+# 注意：GameServerAllocation 是「一次性」对象，每次 create 触发一次分配（不要用 apply 复用）。
+apiVersion: allocation.agones.dev/v1
+kind: GameServerAllocation
+metadata:
+  namespace: default
+spec:
+  selectors:
+    - matchLabels:
+        agones.dev/fleet: pandora-battle
+  metadata:
+    labels:
+      pandora.dev/match-id: "123456"
+      pandora.dev/map-id: "2"
+      pandora.dev/game-mode: "moba_5v5"

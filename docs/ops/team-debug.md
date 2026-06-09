@@ -76,12 +76,18 @@ team 的写 RPC 不信 proto body 里的 `player_id`,而是从 ctx 里的 `playe
 
 ## 3. 基本流程
 
+PowerShell 里 `grpcurl -d '{"teamId":"..."}'` 或 `grpcurl -d $body` 都容易被
+native exe 参数传递吃掉双引号。下面统一用 `ConvertTo-Json -Compress` 生成请求体,
+再通过管道配合 `grpcurl -d '@'` 从 stdin 读取 JSON。
+
 ### 3.1 创建队伍(test1)
 
 ```powershell
-grpcurl -plaintext `
+$body = @{} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428737" `
-  -d '{}' `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/CreateTeam
 ```
 
@@ -96,9 +102,15 @@ grpcurl -plaintext `
 把 `<TEAM_ID>` 换成上一步返回的 `teamId`:
 
 ```powershell
-grpcurl -plaintext `
+$teamId = "这里填CreateTeam返回的teamId"
+$body = @{
+  teamId = $teamId
+  targetPlayerId = "30907585389428738"
+} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428737" `
-  -d '{"teamId":"<TEAM_ID>","targetPlayerId":"30907585389428738"}' `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/Invite
 ```
 
@@ -110,9 +122,16 @@ grpcurl -plaintext `
 ### 3.3 test2 接受邀请
 
 ```powershell
-grpcurl -plaintext `
+$teamId = "这里填CreateTeam返回的teamId"
+$inviteId = "这里填Invite返回的inviteId"
+$body = @{
+  teamId = $teamId
+  inviteId = $inviteId
+} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428738" `
-  -d '{"teamId":"<TEAM_ID>","inviteId":"<INVITE_ID>"}' `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/AcceptInvite
 ```
 
@@ -123,8 +142,13 @@ grpcurl -plaintext `
 GetTeam 是只读 RPC,不要求 metadata:
 
 ```powershell
-grpcurl -plaintext `
-  -d '{"teamId":"<TEAM_ID>"}' `
+$teamId = "这里填CreateTeam返回的teamId"
+$body = @{
+  teamId = $teamId
+} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/GetTeam
 ```
 
@@ -133,18 +157,32 @@ grpcurl -plaintext `
 test1 准备:
 
 ```powershell
-grpcurl -plaintext `
+$teamId = "这里填CreateTeam返回的teamId"
+$body = @{
+  teamId = $teamId
+  ready = $true
+  heroId = 1
+} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428737" `
-  -d '{"teamId":"<TEAM_ID>","ready":true,"heroId":1}' `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/SetReady
 ```
 
 test2 准备:
 
 ```powershell
-grpcurl -plaintext `
+$teamId = "这里填CreateTeam返回的teamId"
+$body = @{
+  teamId = $teamId
+  ready = $true
+  heroId = 2
+} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext `
   -H "x-pandora-player-id: 30907585389428738" `
-  -d '{"teamId":"<TEAM_ID>","ready":true,"heroId":2}' `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/SetReady
 ```
 
@@ -158,19 +196,30 @@ grpcurl -plaintext `
 $p1 = "30907585389428737"
 $p2 = "30907585389428738"
 
-$create = grpcurl -plaintext -H "x-pandora-player-id: $p1" -d '{}' `
+$body = @{} | ConvertTo-Json -Compress
+$create = $body | grpcurl -plaintext -H "x-pandora-player-id: $p1" -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/CreateTeam | ConvertFrom-Json
 
 $teamId = $create.teamId
 
-$invite = grpcurl -plaintext -H "x-pandora-player-id: $p1" `
-  -d "{`"teamId`":`"$teamId`",`"targetPlayerId`":`"$p2`"}" `
+$body = @{
+  teamId = $teamId
+  targetPlayerId = $p2
+} | ConvertTo-Json -Compress
+
+$invite = $body | grpcurl -plaintext -H "x-pandora-player-id: $p1" `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/Invite | ConvertFrom-Json
 
 $inviteId = $invite.inviteId
 
-grpcurl -plaintext -H "x-pandora-player-id: $p2" `
-  -d "{`"teamId`":`"$teamId`",`"inviteId`":`"$inviteId`"}" `
+$body = @{
+  teamId = $teamId
+  inviteId = $inviteId
+} | ConvertTo-Json -Compress
+
+$body | grpcurl -plaintext -H "x-pandora-player-id: $p2" `
+  -d '@' `
   127.0.0.1:50010 pandora.team.v1.TeamService/AcceptInvite
 ```
 
@@ -255,3 +304,7 @@ grpcurl 使用 proto JSON 名称,写:
 ```json
 {"team_id":"...","target_player_id":"...","invite_id":"...","hero_id":1}
 ```
+
+PowerShell 调试时优先用 `ConvertTo-Json -Compress` 生成 `$body`,再用
+`$body | grpcurl ... -d '@'` 从 stdin 读取;不要直接手写 `-d '{"teamId":"..."}'`,
+也不要用 `-d $body`,否则很容易变成无引号 JSON。

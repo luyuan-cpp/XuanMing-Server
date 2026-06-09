@@ -173,5 +173,5 @@ AI 跑出错时:
 
 - 工程入口 `Pandora.uproject`、主模块 `Source/Pandora/`、类前缀 `Pandora*`(`PandoraGameMode` / `PandoraCharacter` / `UPandoraBackendSubsystem` 等)
 - **任何 AI 新建 UE 文件 / 类 / 模块都不准再用 `Xuanming` / `Xm`**
-- 唯一例外:git 仓库名(https://github.com/luyuancpp/Xuanming.git)与本地目录(`D:\luyuan\Xuanming`)暂保留 `Xuanming`,**仅作路径,不进代码**
+- 唯一例外:git 仓库名已改为 Pandora-Client(https://github.com/luyuancpp/Pandora-Client.git)与本地目录(`D:\luyuan\Xuanming`)暂保留 `Xuanming`,**仅作路径,不进代码**
 - 细则与大小写规则见 `CLAUDE.md §11`、`§13`

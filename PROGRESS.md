@@ -10,7 +10,7 @@
 |---|---|
 | 项目名 | **Pandora**(项目)/ pandora(资源命名空间) |
 | 后端仓库 | https://github.com/luyuancpp/Pandora.git(public) |
-| UE 仓库 | git 仓库 **Xuanming** https://github.com/luyuancpp/Xuanming.git；UE 工程统一为 **Pandora**（2026-06-08） |
+| UE 仓库 | git 仓库 **Pandora-Client** https://github.com/luyuancpp/Pandora-Client.git（本地目录仍为 `D:\luyuan\Xuanming`）；UE 工程统一为 **Pandora**（2026-06-09 仓库由 Xuanming 改名） |
 | UE 版本 | 5.7(Iris + GAS,默认 Iris,退路 Replication Graph) |
 | 类型 | MOBA + 持续在线大厅 |
 | 大厅 | 500 人/实例,单城镇约 1km²,**全图自由 PvP** |
@@ -209,7 +209,7 @@ pattern ./...: directory prefix . does not contain modules listed in go.work or 
 
 #### 阻塞 D2 的(必须定)
 - [x] **D2.1 框架选型**:**继续用 go-zero**(2026-06-03 决策)
-- [x] **UE 仓库名**：git 仓库 **Xuanming** https://github.com/luyuancpp/Xuanming.git；UE 工程/模块/类统一为 **Pandora**（2026-06-08 解除 D4，以后 UE 侧用 Pandora 命名）
+- [x] **UE 仓库名**：git 仓库 **Pandora-Client** https://github.com/luyuancpp/Pandora-Client.git（本地目录仍为 `D:\luyuan\Xuanming`）；UE 工程/模块/类统一为 **Pandora**（2026-06-08 解除 D4，2026-06-09 由 Xuanming 改名 Pandora-Client，以后 UE 侧用 Pandora 命名）
 - [ ] **k8s 选型**:阿里云 ACK / 自建 / 先 minikube(D7 阻塞)
 
 #### 非阻塞但要尽快定
@@ -2587,3 +2587,26 @@ W4 ⑩ 已用 `WATCH/MULTI/EXEC + guardTransition` 挡住 `MATCHING` 被 stale `
 ### 后续
 
 - D7 k8s/provider 环境拍板后,用真 Agones Fleet 做 Allocate/Release 集群联调。
+
+
+## W4 ⑬ ✅ 本地 Redis 镜像升级到 Redis 8.8.0 Alpine(2026-06-08)
+
+按用户要求把开发期 docker-compose 的 Redis 从 7.4 线升级到当前 Redis 8 Alpine
+小版本固定镜像。
+
+### 决策
+
+- 使用 `redis:8.8.0-alpine`。
+- 不使用 `latest` / `8-alpine`,避免后续 Docker Hub tag 漂移导致开发机、CI、
+  其他协作者拉到不同 Redis 小版本。
+- `CLAUDE.md` 当前基础设施口径同步从 Redis 7 更新为 Redis 8。
+
+### 改动文件
+
+- `deploy/docker-compose.dev.yml`:Redis 镜像改为 `redis:8.8.0-alpine`。
+- `CLAUDE.md`:基础设施版本和决策行同步。
+
+### 验证
+
+- `docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env config --quiet`
+  通过。
