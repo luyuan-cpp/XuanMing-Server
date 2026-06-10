@@ -61,17 +61,46 @@ Write-Host "[4/4] Waiting for healthy..." -ForegroundColor Yellow
 $timeout = 120  # 秒
 $elapsed = 0
 $step = 5
+function Get-ComposePsJson {
+    $lines = @(docker compose -f $ComposeFile --env-file $EnvFile ps --format json)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERR] docker compose ps failed" -ForegroundColor Red
+        exit 1
+    }
+
+    if ($lines.Count -eq 0) { return @() }
+
+    $text = ($lines -join "`n").Trim()
+    if ($text.StartsWith("[")) {
+        return @($text | ConvertFrom-Json)
+    }
+
+    $items = @()
+    foreach ($line in $lines) {
+        if ($line -and $line.Trim() -ne "") {
+            $items += ConvertFrom-Json -InputObject $line
+        }
+    }
+    return $items
+}
+
 while ($elapsed -lt $timeout) {
-    $psLines = docker compose -f $ComposeFile --env-file $EnvFile ps --format json
-    $unhealthy = $psLines |
-        Where-Object { $_ -and $_.Trim() -ne "" } |
-        ForEach-Object { $_ | ConvertFrom-Json } |
-        Where-Object { $_.Health -ne "healthy" -and $_.Health -ne "" } |
+    $unhealthy = Get-ComposePsJson |
+        Where-Object {
+            ($_.Health -and $_.Health -ne "healthy") -or
+            (-not $_.Health -and $_.State -ne "running")
+        } |
         Select-Object -ExpandProperty Name
     if ($null -eq $unhealthy -or $unhealthy.Count -eq 0) { break }
     Start-Sleep -Seconds $step
     $elapsed += $step
     Write-Host "  ${elapsed}s waiting: $($unhealthy -join ', ')"
+}
+
+if ($elapsed -ge $timeout) {
+    Write-Host "[ERR] containers not ready after ${timeout}s" -ForegroundColor Red
+    docker compose -f $ComposeFile --env-file $EnvFile ps
+    exit 1
 }
 
 Write-Host ""
