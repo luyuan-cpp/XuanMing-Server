@@ -301,6 +301,41 @@ Envoy 是基础设施组件,**不是 go 服务**。它做:
 
 ⚠️ 禁止用自增 id 当业务标识对外。
 
+### 8.1 Snowflake nodeID 分配决策
+
+**当前阶段不引入中心化发号器,继续使用本地 snowflake + 静态 `node.zone_id`。**
+
+原因:
+- `pkg/snowflake` 的 ID 生成是本地 CAS 纯内存路径,没有系统调用和网络往返;每个节点吞吐上限由位域设计约束,不是 Redis/数据库吞吐约束。
+- `Redis INCR` 每次取号都要打网络,延迟比本地 snowflake 高 4~5 个数量级,且单 Redis 变成全服共享吞吐上限和可用性单点。
+- `Redis INCR` 还有正确性硬伤:RDB/AOF 持久化窗口、主从复制滞后或故障切换都可能导致计数回退,重启后发出历史重复 ID;要堵住必须牺牲性能或人工跳号。
+- 号段模式可以缓解吞吐,但仍依赖中心存储,ID 不含时间信息,对 Pandora 当前 snowflake 方案没有额外收益。
+
+**Redis 不用于发业务 ID,也不作为 snowflake nodeID 租约服务。**
+
+未来如果进入 k8s 多副本动态扩缩阶段,同一服务会跑 N 个 pod,静态 `zone_id` 人工规划不再适合,再补一个 etcd Lease 版 nodeID 自动分配:
+
+```
+启动 -> etcd Grant lease(TTL 15s)
+     -> 事务抢占 /pandora/snowflake/node/<id> 并绑定 lease
+     -> 后台 KeepAlive 续租
+     -> KeepAlive channel 关闭 = 租约丢失
+     -> 进程主动退出,避免两个活进程共用同一 nodeID
+```
+
+注意:用了 etcd 之后仍然需要一个后台 `KeepAlive` / session monitor,但这不是 Redis 方案里自己拼的"看门狗"。区别是:
+- etcd Lease 是 nodeID 独占权的事实来源;
+- monitor 只负责持续接收 etcd 的 KeepAlive 确认;
+- 一旦 KeepAlive channel 关闭、续租失败、lease 被 revoke 或 session done,进程必须先停止发号再主动退出;
+- 不能把失租当普通告警处理,也不能在本地继续 `Generate`,否则会和新 holder 形成同 nodeID 双活。
+
+落点:
+- 新增 `snowflake.NewNodeFromEtcd(...)` 一类工厂;
+- `snowflake.Node` 本体和 `Generate` CAS 热路径不改;
+- 静态配置仍保留为本地/dev/单副本默认路径;
+- etcd `KeepAlive` 不是普通健康检查,而是 nodeID 独占权的 fencing 信号;KeepAlive channel 关闭、续租失败或确认 lease 丢失时,进程必须立即停止发号并主动退出,不能只打日志继续运行。
+- 不用 Redis `SETNX + TTL + 看门狗` 拼租约:Redis 看门狗只能努力续租,不能证明旧 holder 已停止发号;GC 停顿、网络分区、进程卡死但业务线程仍跑等场景下,租约可能过期并被新进程领走,旧进程恢复后形成同 nodeID 双活。
+
 ## 9. 字符串长度上限(数据库 VARCHAR)
 
 | 字段类型 | 上限 |
