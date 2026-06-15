@@ -28,22 +28,18 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 ## 4. 提交纪律
 
-1. 不准在没有跑通 **所有已启用 module 的构建** 的情况下 commit
-   - 本项目采用 `go.work` 多 module 模式,仓库根没有 `go.mod`,**不能**在根目录跑 `go build ./...`
-   - 完整命令参考 `go.work` 文件中的 `use` 列表
-2. commit message 格式:`<type>(<scope>): <subject>`
+1. commit message 格式:`<type>(<scope>): <subject>`
    - type:feat / fix / refactor / test / docs / chore / perf
    - scope:服务名(login / matchmaker)/ pkg / docs / deploy
    - 例:`feat(matchmaker): MMR 撮合算法初版`
-3. proto 改动要在 commit message 标注 `[proto]`,提醒同步到 UE 仓库
-4. **永远不准 force push main**
-5. PR 描述必须含:动机 / 改动范围 / 测试方式 / 风险点
+2. proto 改动要在 commit message 标注 `[proto]`,提醒同步到 UE 仓库
+3. PR 描述必须含:动机 / 改动范围 / 测试方式 / 风险点
 
 ## 5. proto 同步流程(双仓库)
 
-1. 改完跑 `pwsh tools/scripts/proto_gen.ps1` 生成 go pb
-2. 同时生成 cpp pb 推送到 UE 仓库的 `Source/Pandora/Generated/Proto/`(CI 自动 PR)
-3. UE 客户端改动跟在后端 PR 之后合并
+1. proto 改动后由 Codex 执行 `pwsh tools/scripts/proto_gen.ps1` 生成 go pb
+2. cpp pb 同步到 UE 仓库 `Source/Pandora/Generated/Proto/` 的操作由 Codex 执行
+3. UE 客户端改动跟随后端 proto 同步,由 Codex 协助处理
 4. 字段编号规则:上线后**不复用**,只能 deprecate(`reserved 5;` + 注释原因);开发期间已删除字段可复用编号,但必须重新生成 proto 并完整编译所有已启用 module
 5. `player_id` / `team_id` / `match_id` / `order_id` / `message_id` / `dialogue_id` / `hub_id` / `invite_id` 等 Snowflake 业务 ID **一律用 `uint64`**;不准再用 `int64` / `string` 承载这类 ID。未知 / 空值用 `0`,需要表达 presence 时用 `optional uint64`
 6. 配置表 ID / 静态表 ID **默认用 `uint32`**(`npc_id` / `hero_id` / `skill_id` / `item_config_id` / `map_id` 等);如果字段名容易和运行时实体混淆,新协议优先命名为 `<entity>_config_id`
@@ -114,12 +110,11 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 
 ## 11. UE 工程约束(写给 UE 仓库的开发者参考)
 
-1. **UE 工程 / 模块 / 类命名一律用 `Pandora`,永久废弃 `Xuanming` / `Xm` 前缀**。**代码侧任何新文件 / 类 / 模块 / 命名空间都不准再用 Xuanming / Xm**。
-2. 类前缀统一 `Pandora*`(GameMode / Character / PlayerController)
-3. 服务端逻辑统一在 `PandoraHubServer` / `PandoraBattleServer` 模块,不在 `Source/Pandora/` 客户端模块
-4. 蓝图只做"胶水"(挂技能动画 / UMG 绑定),逻辑在 C++
-5. 资源走 Git LFS(`.uasset / .umap / .fbx / .png / .wav / .ogg`)
-6. **永远不要在 git 里提交** `Binaries/ Intermediate/ DerivedDataCache/ Saved/`
+1. 类前缀统一 `Pandora*`(GameMode / Character / PlayerController)
+2. 服务端逻辑统一在 `PandoraHubServer` / `PandoraBattleServer` 模块,不在 `Source/Pandora/` 客户端模块
+3. 蓝图只做"胶水"(挂技能动画 / UMG 绑定),逻辑在 C++
+4. 资源走 Git LFS(`.uasset / .umap / .fbx / .png / .wav / .ogg`)
+5. **永远不要在 git 里提交** `Binaries/ Intermediate/ DerivedDataCache/ Saved/`
 
 ## 12. 不要做的事
 
@@ -134,6 +129,5 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 
 - **Pandora**(首字母大写):仓库名 / 本地路径 / 工程类前缀 / 文档项目名引用 / **UE 工程 / 模块 / 类前缀**
 - **pandora**(全小写):kafka topic / mysql / redis key / docker 镜像 / go module
-- **MOBA**:仅描述游戏类型时使用("Pandora 是一款 MOBA"),**不能**指代项目本身
 - **`Pandora-Client`**(CapitalCase,带连字符):UE 客户端仓库名。⚠️ **不要和 JWT audience `pandora-client`(全小写)混淆** —— 后者是 envoy / login / auth 配置里的鉴权受众,改仓库名时**绝不能**动它
 - **`Xuanming` / `Xm`**:**已废弃命名**,**代码 / 工程 / 类 / 模块一律不再使用**
