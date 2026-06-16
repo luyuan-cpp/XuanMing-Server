@@ -92,6 +92,32 @@ login:
 生产环境留 `false`（默认），走正常 bcrypt 校验。
 
 > 注:`mock` 模式（未配 MySQL DSN 时的 fallback）仍是单账号，“任意账号”懒注册只在接了 MySQL 的路径生效。
+
+## 开发期“假注册”开关 `login.dev_auto_register`
+
+> ⚠️ **纯 dev / 联调开关，默认 `false`，绝不能上生产。**
+
+注册不属于 login 服务的正式职责;为联调方便提供一个“首登即注册”的 dev 开关:
+
+```yaml
+login:
+  dev_auto_register: true   # 默认 false（生产必须留 false）
+```
+
+开启后（`true`）:账号不存在时**首次登录自动注册**一条 `accounts` 记录
+（snowflake 分配 `player_id`，密码存入本次客户端所发 `password_hash` 的 bcrypt 哈希），
+启动时打 `DEV_AUTO_REGISTER_ENABLED` 警告日志。
+
+与 `dev_skip_password` 正交组合:
+
+| dev_auto_register | dev_skip_password | 行为 |
+|---|---|---|
+| false | false | 正常:账号必须存在 + 密码必须匹配 |
+| **true** | false | **假注册**:未知账号首登即注册并存本次密码,后续用同密码走正常 bcrypt 校验（错密码仍拦） |
+| false | true | 免密:已存在账号任意密码放行;未知账号也会被懒注册 |
+| true | true | 最宽松:任意账号名 + 任意密码都能进 |
+
+⚠️ **绝不能上生产** —— 生产留 `false`（默认），账号不存在直接返 `ErrLoginAccountNotFound`。
 - [ ] 接 MySQL pandora_account 库(替 MockAccountRepo)
 - [ ] 接 Redis session 缓存
 - [ ] 调 hub_allocator.Assign 拿真实 hub_ds_addr
