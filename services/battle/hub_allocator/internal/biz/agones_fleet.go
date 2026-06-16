@@ -16,6 +16,7 @@
 package biz
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -140,6 +141,14 @@ type gsListResponse struct {
 	Items []gameServer `json:"items"`
 }
 
+type fleetSpec struct {
+	Replicas int32 `json:"replicas"`
+}
+
+type fleetResponse struct {
+	Spec fleetSpec `json:"spec"`
+}
+
 // ListShards LIST 指定 Fleet + region 下的 GameServer,映射成候选分片拓扑。
 func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) ([]ShardCandidate, error) {
 	selector := fleetLabelKey + "=" + a.fleetName
@@ -151,7 +160,7 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 	listURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?%s",
 		a.apiServer, a.namespace, q.Encode())
 
-	respBytes, status, err := a.do(ctx, http.MethodGet, listURL)
+	respBytes, status, err := a.do(ctx, http.MethodGet, listURL, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("agones: list gameservers region=%s: %w", region, err)
 	}
@@ -185,16 +194,60 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 	return out, nil
 }
 
+// GetFleetReplicas 读取 Fleet 当前 spec.replicas。
+func (a *AgonesHubFleetProvider) GetFleetReplicas(ctx context.Context) (int32, error) {
+	fleetURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/fleets/%s",
+		a.apiServer, a.namespace, a.fleetName)
+
+	respBytes, status, err := a.do(ctx, http.MethodGet, fleetURL, nil, "")
+	if err != nil {
+		return 0, fmt.Errorf("agones: get fleet %s: %w", a.fleetName, err)
+	}
+	if status < 200 || status >= 300 {
+		return 0, fmt.Errorf("agones: get fleet %s http %d: %s",
+			a.fleetName, status, truncateBody(respBytes, 256))
+	}
+
+	var fleet fleetResponse
+	if err := json.Unmarshal(respBytes, &fleet); err != nil {
+		return 0, fmt.Errorf("agones: decode fleet %s: %w", a.fleetName, err)
+	}
+	return fleet.Spec.Replicas, nil
+}
+
+// SetFleetReplicas PATCH Fleet spec.replicas。
+func (a *AgonesHubFleetProvider) SetFleetReplicas(ctx context.Context, replicas int32) error {
+	if replicas < 0 {
+		replicas = 0
+	}
+	fleetURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/fleets/%s",
+		a.apiServer, a.namespace, a.fleetName)
+	patchBody := []byte(fmt.Sprintf(`{"spec":{"replicas":%d}}`, replicas))
+
+	respBytes, status, err := a.do(ctx, http.MethodPatch, fleetURL, patchBody, "application/merge-patch+json")
+	if err != nil {
+		return fmt.Errorf("agones: patch fleet replicas=%d: %w", replicas, err)
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("agones: patch fleet replicas=%d http %d: %s",
+			replicas, status, truncateBody(respBytes, 256))
+	}
+	return nil
+}
+
 // do 发一次带鉴权的 REST 请求,返回 (body, statusCode, transportErr)。
-func (a *AgonesHubFleetProvider) do(ctx context.Context, method, reqURL string) ([]byte, int, error) {
+func (a *AgonesHubFleetProvider) do(ctx context.Context, method, reqURL string, body []byte, contentType string) ([]byte, int, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, a.listTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, method, reqURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, method, reqURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
 	}
 	req.Header.Set("Accept", "application/json")
+	if len(body) > 0 && contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	// 每次请求重读 token(容忍 in-cluster 投影 token 轮转);"-" 或空 → 不带。
 	if a.tokenPath != "" && a.tokenPath != "-" {
 		if tok, terr := os.ReadFile(a.tokenPath); terr == nil {

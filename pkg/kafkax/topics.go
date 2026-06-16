@@ -41,13 +41,18 @@ const (
 	// key=player_id;玩家档案变更通知(MMR/昵称/英雄池)
 	TopicPlayerUpdate = "pandora.player.update"
 
-	// TopicFriendEvent — proto: pandora.friend.v1.FriendEventEvent(W3+ 补)
-	// key=player_id;原则 2:发给接收方
+	// TopicFriendEvent — proto: pandora.friend.v1.FriendEvent
+	// key=to_player_id;原则 2:发给接收方(好友请求 / 接受通知)
 	TopicFriendEvent = "pandora.friend.event"
 
 	// TopicSystemNotify — proto: pandora.system.v1.SystemNotifyEvent(W3+ 补)
 	// 广播类(key 可空);系统公告 / 邮件红点 / 运营推送
 	TopicSystemNotify = "pandora.system.notify"
+
+	// TopicHubMigrate — proto: pandora.hub.v1.HubMigrateEvent
+	// key=player_id;原则 2 例外:强制整合(缩容排空)时把「新分片地址+新 hub 票据+倒计时」
+	// 推给被迁移玩家本人,客户端倒计时到点重连新大厅(与 Hub DS drain 心跳指令双通道)
+	TopicHubMigrate = "pandora.hub.migrate"
 )
 
 // 非推送 topic(服务间事件,push 不订阅;W4 ③,2026-06-06)。
@@ -65,12 +70,16 @@ const (
 	TopicDSLifecycle = "pandora.ds.lifecycle"
 )
 
-// PushTopics 是 push 服务默认订阅的 topic 集合(W3 ④ 启用的 3 个)。
+// PushTopics 是 push 服务默认订阅的 topic 集合。
 //
-// 后续 player.update / friend.event / system.notify Event message 落地后,
+// W3 ④ 启用 team.update / match.progress / chat.private;
+// 2026-06-15 friend 服务上线,补 friend.event(好友请求 / 接受推送)。
+// 后续 player.update / system.notify Event message 落地后,
 // 在对应业务服 PR 里把常量加进本切片,push etc yaml 同步加 topics。
 var PushTopics = []string{
 	TopicTeamUpdate,
 	TopicMatchProgress,
 	TopicChatPrivate,
+	TopicHubMigrate,
+	TopicFriendEvent,
 }

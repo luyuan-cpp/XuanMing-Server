@@ -187,6 +187,7 @@ services:
     restart: unless-stopped
     ports:
       - "8443:8443"   # 客户端 HTTPS / gRPC-Web 入口
+      - "8444:8444"   # DS 面 HTTPS / gRPC-Web 入口(UE Hub/Battle DS → 内部服务,agones-dev.md §5.1)
       - "9901:9901"   # admin(本机 only,生产关闭)
     volumes:
       - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro

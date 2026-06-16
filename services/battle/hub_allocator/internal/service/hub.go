@@ -93,7 +93,11 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	if err != nil {
 		return &hubv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
 	}
-	return &hubv1.HeartbeatResponse{Code: commonv1.ErrCode_OK, Command: res.Command}, nil
+	return &hubv1.HeartbeatResponse{
+		Code:         commonv1.ErrCode_OK,
+		Command:      res.Command,
+		GraceSeconds: res.GraceSeconds,
+	}, nil
 }
 
 // ── 辅助 ──────────────────────────────────────────────────────────────────────

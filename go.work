@@ -29,6 +29,8 @@ use ./services/account/login
 
 use ./services/account/player
 
+use ./services/social/friend
+
 use ./services/runtime/push
 
 use ./services/runtime/player_locator
@@ -53,7 +55,7 @@ use ./services/battle/battle_result
 // use ./services/runtime/push           ← W2 ⑤ 已启用(Kratos transport/grpc server stream)
 // use ./services/runtime/player_locator ← W3 ⑤ 已启用(Kratos unary,Redis 强依赖)
 // use ./services/account/player
-// use ./services/social/friend
+// use ./services/social/friend            ← 2026-06-15 已启用(MySQL pandora_social + kafka friend.event + locator 在线状态)
 // use ./services/social/chat
 // use ./services/social/dialogue
 // use ./services/matchmaking/team          ← W3 ⑦ 已启用(见 line 34)

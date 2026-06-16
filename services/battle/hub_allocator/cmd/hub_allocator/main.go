@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 
@@ -125,8 +126,34 @@ func main() {
 		fleet = biz.NewMockHubFleetProvider(cfg.Hub)
 		helper.Warnw("msg", "mock_fleet_provider_active",
 			"hint", "agones.enabled=false,用确定性假分片(无真实 Hub DS)")
+		// Mock 是拓扑-only 不实现 HubFleetScaler:autoscale/consolidation 在此模式下不会运行。
+		// 明确告警避免“yaml 开了但实际没生效”的误导。
+		if cfg.Hub.AutoScaleEnabled || cfg.Hub.ConsolidationEnabled {
+			helper.Warnw("msg", "autoscale_inert_under_mock",
+				"autoscale_enabled", cfg.Hub.AutoScaleEnabled,
+				"consolidation_enabled", cfg.Hub.ConsolidationEnabled,
+				"hint", "Mock 无真实 Fleet scaler:自动扩缩容/强制整合不会运行,需 agones.enabled=true")
+		}
 	}
 	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer}, cfg.Hub)
+
+	// 5.1 Kafka producer → migratePusher(弱依赖:broker 不通则 warn 并继续,迁移推送静默丢弃,
+	// Hub DS drain 心跳指令仍兜底让客户端重连到新分片)。强制整合 consolidation 才需要。
+	if len(cfg.Kafka.Brokers) > 0 {
+		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicHubMigrate)
+		if perr != nil {
+			helper.Warnw("msg", "kafka_producer_init_failed", "err", perr,
+				"hint", "hub migrate push will be silently dropped until kafka is available")
+		} else {
+			defer func() { _ = producer.Close() }()
+			uc.SetMigratePusher(&kafkaMigratePusher{p: producer})
+			helper.Infow("msg", "kafka_producer_ready", "topic", kafkax.TopicHubMigrate)
+		}
+	} else if cfg.Hub.ConsolidationEnabled {
+		helper.Warnw("msg", "kafka_brokers_empty",
+			"hint", "consolidation_enabled 但无 kafka:迁移仅靠 Hub DS drain 心跳兜底,无无缝倒计时推送")
+	}
+
 	svc := service.NewHubService(uc)
 
 	// 6. gRPC + HTTP
@@ -148,6 +175,8 @@ func main() {
 		"default_region", cfg.Hub.DefaultRegion,
 		"mock_shard_count", cfg.Hub.MockShardCount,
 		"fleet_mode", fleetMode(cfg.Agones.Enabled),
+		"autoscale_enabled", cfg.Hub.AutoScaleEnabled,
+		"consolidation_enabled", cfg.Hub.ConsolidationEnabled,
 	)
 
 	// 8. Kratos App
@@ -170,6 +199,17 @@ type hubTicketSigner struct {
 
 func (h *hubTicketSigner) SignHubTicket(playerID uint64) (string, int64, error) {
 	return h.signer.SignDSTicket(playerID, auth.DSTypeHub, 0, uuid.NewString())
+}
+
+// kafkaMigratePusher 把 biz.HubMigratePusher 适配到 kafkax.KeyOrderedProducer。
+// 强制整合时把 HubMigrateEvent payload 按 player_id(kafka key)推给被迁移玩家本人。
+type kafkaMigratePusher struct {
+	p *kafkax.KeyOrderedProducer
+}
+
+func (k *kafkaMigratePusher) PushMigrate(ctx context.Context, playerID uint64, payload []byte) error {
+	_, err := k.p.PushToPlayers(ctx, 0, []uint64{playerID}, payload)
+	return err
 }
 
 // fleetMode 返回 service_ready 日志里的分片发现模式字符串。

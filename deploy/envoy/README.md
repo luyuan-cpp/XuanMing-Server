@@ -18,14 +18,29 @@
 | 端口 | 用途 | 暴露 |
 |---|---|---|
 | **8443** | 客户端入口(HTTPS / gRPC-Web over HTTP/2 TLS) | 0.0.0.0(本机) |
+| **8444** | DS 面入口(UE Hub/Battle DS → 内部服务,gRPC-Web,agones-dev.md §5.1) | 0.0.0.0(本机,生产须网络隔离) |
 | **9901** | Envoy admin(`/ready` `/clusters` `/stats` `/config_dump`) | 0.0.0.0(本机) |
 
 ## 上游 cluster(W2 ④)
 
+客户端面(`:8443` `pandora_listener`,带 jwt_authn):
+
 | cluster | 后端业务服 | 端口 | 协议 | timeout |
 |---|---|---|---|---|
-| `login_cluster` | login | host.docker.internal:50001 | h2c | route 5s |
-| `push_cluster`  | push  | host.docker.internal:50014 | h2c | route 0s(server stream) |
+| `login_cluster`  | login | host.docker.internal:50001 | h2c | route 5s |
+| `push_cluster`   | push  | host.docker.internal:50014 | h2c | route 0s(server stream) |
+| `team_cluster`   | team  | host.docker.internal:50010 | h2c | route 15s |
+| `match_cluster`  | matchmaker | host.docker.internal:50011 | h2c | route 15s |
+| `friend_cluster` | friend | host.docker.internal:50004 | h2c | route 15s |
+
+DS 面(`:8444` `pandora_ds_listener`,**不挂 jwt_authn**,DS 身份由 UE NetDriver 层 DSTicket 校验,见 agones-dev.md §5):
+
+| cluster | 内部服务 | 端口 | 协议 | timeout | DS 用途 |
+|---|---|---|---|---|---|
+| `hub_allocator_cluster`  | hub_allocator | host.docker.internal:50021 | h2c | route 15s | Hub DS 心跳 |
+| `ds_allocator_cluster`   | ds_allocator  | host.docker.internal:50020 | h2c | route 15s | Battle DS 心跳 |
+| `locator_cluster`        | player_locator | host.docker.internal:50006 | h2c | route 15s | Hub DS SetLocation(HUB) |
+| `battle_result_cluster`  | battle_result | host.docker.internal:50022 | h2c | route 15s | Battle DS 同步结算上报 |
 
 后续业务服上线时,**复制 cluster 块改名 + 改端口 + 加一条 route prefix** 即可。
 

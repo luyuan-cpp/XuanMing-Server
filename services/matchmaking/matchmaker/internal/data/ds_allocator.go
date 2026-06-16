@@ -79,3 +79,15 @@ func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, pl
 	}
 	return resp.GetDsAddr(), tickets, nil
 }
+
+// SignBattleTicket 给（重连 / 换设备的）玩家现签一张新的 battle DSTicket（新 jti）。
+// 实现 biz.DSAllocator：复用与 AllocateBattle 同一个 signer / 同样的 claims（dsType=battle + match_id），
+// 只是每次新 uuid jti。GetMatchProgress 在 READY 阶段下发它，支持换手机 / 掉线重连。
+func (g *GrpcDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64) (string, error) {
+	token, _, err := g.signer.SignDSTicket(playerID, auth.DSTypeBattle, matchID, uuid.NewString())
+	if err != nil {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"re-sign battle ticket for player %d match %d failed: %v", playerID, matchID, err)
+	}
+	return token, nil
+}

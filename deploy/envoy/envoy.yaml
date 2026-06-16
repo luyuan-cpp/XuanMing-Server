@@ -131,6 +131,11 @@ static_resources:
                   prefix: "/pandora.match.v1.MatchService/"
                 requires:
                   provider_name: "pandora_session"
+              # friend 服务所有 RPC 均需 JWT(player_id 以 JWT sub 为准,R5)
+              - match:
+                  prefix: "/pandora.friend.v1.FriendService/"
+                requires:
+                  provider_name: "pandora_session"
               # 没列到的 path(login.Login / login.VerifyDSTicket / grpc reflection)默认放行。
               # VerifyDSTicket 是 DS → login 的内部调用,不带玩家 JWT;靠 ext_authz 限内网(W3+)。
 
@@ -191,6 +196,14 @@ static_resources:
                   timeout: 15s
                   idle_timeout: 60s
 
+              # ----- friend(unary,立即完成型,demo 15s 超时)-----
+              - match:
+                  prefix: "/pandora.friend.v1.FriendService/"
+                route:
+                  cluster: friend_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+
               # ----- gRPC reflection(联调用,grpcurl list/describe)-----
               # W2 dev:放行,联调省心
               # W3 生产:用 ext_authz / direct_response 403 块掉
@@ -206,6 +219,100 @@ static_resources:
                   cluster: login_cluster
                   timeout: 0s
                   idle_timeout: 0s
+
+  # ============================================================================
+  # DS gRPC-Web 入口监听器(:8444) —— UE Hub/Battle DS → 内部服务(agones-dev.md §5.1 方案 A)
+  # ----------------------------------------------------------------------------
+  # 为什么独立监听器而不是复用 :8443:
+  #   :8443 是「客户端面」(玩家 SessionToken + jwt_authn),若把内部服务路由挂上去,
+  #   未列入 jwt_authn rules 的 path 会被 allow_missing 放行 → 任意公网客户端可直接调
+  #   battle_result.ReportResult / locator.SetLocation 伪造战绩/定位。故 DS 面单独开
+  #   :8444,与客户端面物理隔离,便于后续单独加 mTLS / 网络策略锁死「只允许 DS pod 访问」。
+  #
+  # UE DS 走 gRPC-Web(FHttpModule),内部服务(hub :50021 / ds :50020 / locator :50006 /
+  # battle_result :50022)裸端口是原生 gRPC(h2c),这里用 grpc_web filter 做协议转换。
+  # UE DS `UPandoraDSBackendSubsystem` 的 4 个 Endpoint 经 SetEndpoints / Game.ini 指向
+  # 本监听器(dev: https://host:8444,bUseTls=true),路径按 gRPC 全名路由到各内部服务。
+  #
+  # ⚠️ 鉴权说明:本监听器**不挂 player jwt_authn**(DS→后端内部调用不带玩家 SessionToken,
+  # 内部服务用 pmw.AuthOptional)。DS 身份真正校验发生在 UE NetDriver 层的 DSTicket 校验
+  # (PreLogin/InitNewPlayer,见 agones-dev.md §5)。生产期须对 :8444 加网络隔离 + mTLS/ext_authz,
+  # 不可直接暴露公网。
+  # ============================================================================
+  - name: pandora_ds_listener
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8444
+    filter_chains:
+    - transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain:
+                filename: /etc/envoy/cert.pem
+              private_key:
+                filename: /etc/envoy/key.pem
+            alpn_protocols: [ "h2", "http/1.1" ]
+      filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: pandora_ds_hcm
+          codec_type: AUTO
+          stream_idle_timeout: 0s
+          request_timeout: 0s
+          common_http_protocol_options:
+            idle_timeout: 0s
+          access_log:
+          - name: envoy.access_loggers.stdout
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+          http_filters:
+          # ⭐ gRPC-Web 字节流 → 标准 gRPC(DS 侧同客户端,复用 grpc-web codec)
+          - name: envoy.filters.http.grpc_web
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+          # 注意:DS 面不挂 jwt_authn(见上方鉴权说明)。
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          route_config:
+            name: pandora_ds_routes
+            virtual_hosts:
+            - name: pandora_ds_vh
+              domains: [ "*" ]
+              routes:
+              # ----- Hub DS → hub_allocator.Heartbeat(unary 5s 心跳)-----
+              - match:
+                  prefix: "/pandora.hub.v1.HubAllocatorService/"
+                route:
+                  cluster: hub_allocator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- Battle DS → ds_allocator.Heartbeat(unary 5s 心跳)-----
+              - match:
+                  prefix: "/pandora.ds.v1.DSAllocatorService/"
+                route:
+                  cluster: ds_allocator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- Hub DS → player_locator.SetLocation(HUB 上报)-----
+              - match:
+                  prefix: "/pandora.locator.v1.PlayerLocatorService/"
+                route:
+                  cluster: locator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- Battle DS → battle_result.ReportResult(同步结算上报,§6)-----
+              - match:
+                  prefix: "/pandora.battle.v1.BattleResultService/"
+                route:
+                  cluster: battle_result_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
 
   clusters:
   # ===== login_cluster =====
@@ -300,3 +407,113 @@ static_resources:
               socket_address:
                 address: host.docker.internal
                 port_value: 50011
+
+  # ===== friend_cluster(unary,demo 15s 超时)=====
+  - name: friend_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: friend_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50004
+
+  # ===========================================================================
+  # DS 面内部服务 cluster(供 :8444 pandora_ds_listener 使用,agones-dev.md §5.1)
+  # 全部 h2c 上游(业务服明文 HTTP/2),host.docker.internal 解析到宿主机进程。
+  # ===========================================================================
+
+  # ===== hub_allocator_cluster(Hub DS 心跳,:50021)=====
+  - name: hub_allocator_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: hub_allocator_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50021
+
+  # ===== ds_allocator_cluster(Battle DS 心跳,:50020)=====
+  - name: ds_allocator_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: ds_allocator_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50020
+
+  # ===== locator_cluster(Hub DS SetLocation(HUB),:50006)=====
+  - name: locator_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: locator_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50006
+
+  # ===== battle_result_cluster(Battle DS 同步结算上报,:50022)=====
+  - name: battle_result_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: battle_result_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50022

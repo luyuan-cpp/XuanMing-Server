@@ -1,7 +1,10 @@
 // Pandora FriendService 协议。
 //
-// 职责(docs/design/go-services.md §2.4):好友 / 黑名单 / 拒绝列表
-// MOBA 早期不实现,先留接口骨架。
+// 职责(docs/design/go-services.md §2.4):好友 / 黑名单 / 拒绝列表。
+//
+// 数据落地:pandora_social 库(friendships / friend_requests / blocks),
+// 结构化列直接映射 proto 字段(CLAUDE.md §5.9 关系型表不强制 proto 化 blob)。
+// 好友请求 / 接受通过 kafka pandora.friend.event → push 推送给接收方。
 
 syntax = "proto3";
 
@@ -24,6 +27,8 @@ enum FriendRequestStatus {
   FRIEND_REQUEST_STATUS_EXPIRED     = 4;
 }
 
+// FriendInfo 是客户端可见的好友视图(CLAUDE.md §5.8 客户端可见结构)。
+// is_online / last_seen_ms 由 player_locator 实时填充(弱依赖,查不到按离线)。
 message FriendInfo {
   uint64 player_id    = 1;
   string nickname     = 2;
@@ -33,18 +38,21 @@ message FriendInfo {
 }
 
 message AddFriendRequest {
+  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
   uint64 player_id        = 1;
   uint64 target_player_id = 2;
 }
 
 message AddFriendResponse {
   pandora.common.v1.ErrCode code = 1;
-  string request_id = 2;
+  // request_id 是 snowflake 生成的好友请求 ID(uint64,不变量 §9.11)。
+  uint64 request_id = 2;
 }
 
 message AcceptFriendRequest {
+  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
   uint64 player_id  = 1;
-  string request_id = 2;
+  uint64 request_id = 2;
 }
 
 message AcceptFriendResponse {
@@ -52,6 +60,7 @@ message AcceptFriendResponse {
 }
 
 message ListFriendsRequest {
+  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
   uint64 player_id = 1;
 }
 
@@ -61,10 +70,32 @@ message ListFriendsResponse {
 }
 
 message BlockRequest {
+  // player_id 由服务端以 JWT ctx 为准覆盖(R5),请求体可不填。
   uint64 player_id        = 1;
   uint64 target_player_id = 2;
 }
 
 message BlockResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+// ===== 推送事件(kafka pandora.friend.event)=====
+
+// FriendEventReason 区分好友事件类型,客户端据此弹"收到好友请求" / "对方已接受"。
+enum FriendEventReason {
+  FRIEND_EVENT_REASON_UNSPECIFIED      = 0;
+  FRIEND_EVENT_REASON_REQUEST_RECEIVED = 1;  // 收到 by_player_id 的好友请求
+  FRIEND_EVENT_REASON_REQUEST_ACCEPTED = 2;  // by_player_id 接受了你的好友请求
+}
+
+// FriendEvent 是好友变更推送事件(kafka key = to_player_id,不变量 §9)。
+//
+// 每条事件精确标识一个接收方(to_player_id),由 friend 服务通过
+// kafkax.PushToPlayers 发到 pandora.friend.event,push 服务转发给该玩家的 stream。
+message FriendEvent {
+  uint64 by_player_id = 1;  // 触发事件的玩家(发起请求 / 接受请求者)
+  uint64 to_player_id = 2;  // 接收方(精确标识本条事件给谁)
+  uint64 request_id   = 3;  // 关联的好友请求 ID(REQUEST_RECEIVED 时供 AcceptFriend 用)
+  FriendEventReason reason = 4;
+  int64  ts_ms        = 5;
 }

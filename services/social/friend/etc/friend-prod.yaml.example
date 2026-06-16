@@ -1,0 +1,32 @@
+# Pandora friend 服务生产配置模板(2026-06-15)。
+#
+# 真实部署时复制为 friend-prod.yaml 并按集群实际地址 / 密码填写,**不要提交真实密码到 git**。
+# - gRPC :50004 / HTTP :51004(仅 /metrics)
+# - prod: enable_reflection 不写(零值 false,关 reflection 减少攻击面)
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50004"
+    timeout: "3s"
+  http:
+    network: tcp
+    addr: ":51004"
+
+node:
+  zone_id: 1
+  mysql_client:
+    dsn: "pandora:__REPLACE_WITH_SECRET__@tcp(mysql:3306)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+    max_open_conns: 64
+    max_idle_conns: 16
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+kafka:
+  brokers: ["kafka:9092"]
+  group_id: "pandora-friend"
+  partition_cnt: 4
+
+friend:
+  max_friends: 200
+  locator_addr: "player-locator:50006"

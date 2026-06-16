@@ -6,24 +6,38 @@
 #   ./deploy/ds/install-agones.sh [VERSION]
 #   VERSION 默认 1.58.0（撰写时最新稳定版）。升级时把这里和 Fleet 一起过一遍。
 #
-# 前置：kubectl 指向目标集群、已装 helm 3。K8s 版本需在 Agones 支持矩阵内
-#       （v1.58 支持 K8s 1.33 / 1.34 / 1.35）。
+# 前置：kubectl 指向目标集群、已装 helm 3。
+# 本仓库启动/压测基线：Agones v1.58.0 + Kubernetes v1.35.1。
 set -euo pipefail
 
 VERSION="${1:-1.58.0}"
 NAMESPACE="agones-system"
+INSTALL_YAML_URL="https://raw.githubusercontent.com/agones-dev/agones/v${VERSION}/install/yaml/install.yaml"
 
 echo "[install-agones] 目标版本: ${VERSION}"
 
-helm repo add agones https://agones.dev/chart/stable
-helm repo update
+if helm repo add agones https://agones.dev/chart/stable 2>/dev/null || true; then
+  :
+fi
 
-# featureGates 可按需开关；这里用稳定默认。生产建议设置多副本 + 反亲和（见官方 HA 文档）。
-helm upgrade --install agones agones/agones \
-  --version "${VERSION}" \
-  --namespace "${NAMESPACE}" \
-  --create-namespace \
-  --wait
+# 国内网络下 agones.dev/chart/stable 会跳到 Google Storage，可能不可达。
+# 先走 Helm；失败后自动 fallback 到官方 release install.yaml。
+if helm repo update && helm upgrade --install agones agones/agones \
+    --version "${VERSION}" \
+    --namespace "${NAMESPACE}" \
+    --create-namespace \
+    --wait; then
+  echo "[install-agones] Helm 安装完成。"
+else
+  echo "[install-agones] Helm repo 不可用，fallback 到 install.yaml: ${INSTALL_YAML_URL}" >&2
+  kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+  # Agones v1.58 CRD 较大，普通 client-side apply 会触发 262KB annotation 限制。
+  # server-side apply 可避开；force-conflicts 用于清理前一次 client-side 半安装留下的 field manager。
+  kubectl apply --server-side --force-conflicts -f "${INSTALL_YAML_URL}"
+  kubectl -n "${NAMESPACE}" rollout status deployment/agones-controller --timeout=10m
+  kubectl -n "${NAMESPACE}" rollout status deployment/agones-extensions --timeout=10m
+  kubectl -n "${NAMESPACE}" rollout status deployment/agones-allocator --timeout=10m || true
+fi
 
 echo "[install-agones] 校验 CRD 与控制器："
 kubectl get crd | grep agones.dev || true

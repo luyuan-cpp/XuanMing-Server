@@ -92,8 +92,12 @@ message ListHubsResponse {
  message HeartbeatResponse {
   pandora.common.v1.ErrCode code = 1;
   string command = 2;  // "" | "drain" | "stop" | "reload_config"
-  // 3-9 reserved
-  reserved 3 to 9;
+  // grace_seconds: command=="drain"/"stop" 时下发的优雅迁移倒计时(秒)。
+  // Hub DS 收到后向在场玩家弹「N 秒后切换大厅」UMG 提示;倒计时到点强制切到新分片。
+  // command=="" 时为 0。
+  int32 grace_seconds = 3;
+  // 4-9 reserved
+  reserved 4 to 9;
 }
 
 // ===== 服务端存储快照(CLAUDE.md §5.8)=====
@@ -115,6 +119,9 @@ message HubShardStorageRecord {
   string state             = 7;   // "ready" | "draining" | "stopping"
   int64  last_heartbeat_ms = 8;   // 最近一次 Hub DS Heartbeat 时刻(0=从未心跳,Mock 种子)
   int64  created_at_ms     = 9;
+  // draining_since_ms: 强制整合时被标记 draining 的时刻(0=未在缩容排空中)。
+  // 缩容回收要等 now-draining_since_ms ≥ grace 且 player_count==0 才删分片,避免提前杀 pod。
+  int64  draining_since_ms = 10;
 }
 
 // HubAssignmentStorageRecord 是 hub_allocator 在 Redis 中维护的「玩家→分片」归属镜像
@@ -127,4 +134,27 @@ message HubAssignmentStorageRecord {
   string region         = 5;
   uint64 team_id        = 6;   // 0=无队伍
   int64  assigned_at_ms = 7;
+}
+
+// ===== 服务间事件(Kafka 推送,客户端可见 payload)=====
+
+// HubMigrateEvent 是强制整合(缩容排空)时 hub_allocator 通过 Kafka topic
+// `pandora.hub.migrate`(kafka key=player_id,保序)推给单个玩家的迁移通知。
+//
+// 双通道之一(另一通道是 Hub DS Heartbeat 下发的 command="drain"+grace_seconds):
+//   - 后端已完成服务端权威搬迁(归属改到 to_hub_pod_name,旧分片计数已减),
+//     本事件把「新分片地址 + 新 hub 票据 + 倒计时」直接送到客户端,
+//     客户端在 grace_seconds 内提示玩家,倒计时到点用 to_hub_ticket 重连 to_hub_ds_addr。
+//
+// 客户端可见结构(CLAUDE.md §5.14):只含客户端重连所需最小字段,不外泄存储快照。
+message HubMigrateEvent {
+  uint64 player_id       = 1;
+  string from_hub_pod    = 2;   // 原分片 pod(展示/日志用)
+  string to_hub_ds_addr  = 3;   // 新分片 DS 地址
+  string to_hub_ticket   = 4;   // 新分片 hub DSTicket(JWT,5min)
+  string to_hub_pod_name = 5;
+  uint32 to_shard_id     = 6;
+  int32  grace_seconds   = 7;   // 倒计时(秒),到点强制切换
+  string reason          = 8;   // "consolidation" | "maintenance"
+  int64  ts_ms           = 9;
 }

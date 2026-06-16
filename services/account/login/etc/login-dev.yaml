@@ -55,6 +55,12 @@ login:
   #   false → 走正常 bcrypt 密码校验
   dev_skip_password: true
 
+  # 开发期“假注册”(⚠️ 仅本机 / 联调,严禁上生产):
+  #   true  → 账号不存在时首登自动注册(存本次密码 bcrypt 哈希),
+  #           单开此项时后续用同密码走正常校验(“首登即注”)
+  #   false → 账号不存在直接报 ErrLoginAccountNotFound
+  dev_auto_register: true
+
   # JWT(W3 ①,2026-06-05):HS256 共享密钥模式。
   # ⚠️ secret 跟 deploy/envoy/envoy.yaml jwt_authn provider 必须一致(envoy 那边
   #    放的是 base64url(secret) 的 JWKS)。可用以下命令算出 base64url:

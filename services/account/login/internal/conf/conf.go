@@ -51,6 +51,17 @@ type LoginConf struct {
 	// 这样客户端随便填一个账号名即可进入,无需独立注册流程。
 	DevSkipPassword bool `yaml:"dev_skip_password,omitempty" json:"dev_skip_password,omitempty"`
 
+	// DevAutoRegister 开发期“假注册”开关(默认 false)。
+	//
+	// 为 true 时(仅供本机 / 联调,⚠️ 严禁上生产):账号不存在时首次登录
+	// 自动注册一条 accounts 记录(snowflake 分配 player_id,存入本次客户端所发密码的 bcrypt 哈希)。
+	//
+	// 与 DevSkipPassword 正交:
+	//   - 仅 DevAutoRegister:首登即注册,后续用同密码走正常 bcrypt 校验(真实“首登即注”语义)
+	//   - 仅 DevSkipPassword:跳过密码校验(未知账号也会被懒注册,保持原行为)
+	//   - 两者都开:任意账号名 + 任意密码都能进(最宽松 dev 模式)
+	DevAutoRegister bool `yaml:"dev_auto_register,omitempty" json:"dev_auto_register,omitempty"`
+
 	// JWT 设置(W3 ①,2026-06-05)。
 	// dev/prod 都走 HS256,secret 要跟 deploy/envoy/envoy.yaml 的 jwt_authn provider 保持一致。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`

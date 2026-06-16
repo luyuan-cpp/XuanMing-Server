@@ -8,6 +8,7 @@ package biz
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // StubDSAllocator 是 DSAllocator 的打桩实现(W4 ①)。
@@ -31,4 +32,9 @@ func (s *StubDSAllocator) AllocateBattle(_ context.Context, matchID uint64, play
 		tickets[pid] = fmt.Sprintf("mock-ticket-%d-%d", matchID, pid)
 	}
 	return s.MockAddr, tickets, nil
+}
+
+// SignBattleTicket 桩：返回带纳秒后缀的 mock 票，模拟“每次新 jti”。实现 biz.DSAllocator。
+func (s *StubDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64) (string, error) {
+	return fmt.Sprintf("mock-ticket-%d-%d-%d", matchID, playerID, time.Now().UnixNano()), nil
 }

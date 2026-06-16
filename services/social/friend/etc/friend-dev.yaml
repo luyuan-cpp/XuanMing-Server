@@ -1,0 +1,38 @@
+# Pandora friend 服务开发期配置(2026-06-15)。
+#
+# - gRPC :50004 / HTTP :51004(仅 /metrics)
+# - MySQL 强依赖(pandora_social 库:friendships + friend_requests + blocks)
+# - Kafka 弱依赖(生产 pandora.friend.event → push 推送好友请求 / 接受通知)
+# - locator 弱依赖(ListFriends 填在线状态;addr 空则全部离线)
+# - dev: enable_reflection=true 便于 grpcurl 联调
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50004"
+    timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+  http:
+    network: tcp
+    addr: ":51004"
+
+node:
+  zone_id: 1
+  # MySQL:dev 连本机 docker mysql 的 pandora_social 库(强依赖,DSN 必填)。
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+    max_open_conns: 32
+    max_idle_conns: 8
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  group_id: "pandora-friend"
+  partition_cnt: 4
+
+friend:
+  # max_friends: 单玩家好友数量上限(默认 200)
+  max_friends: 200
+  # locator_addr: player_locator gRPC 地址;空 → ListFriends 不查在线状态(弱依赖)
+  locator_addr: "127.0.0.1:50006"

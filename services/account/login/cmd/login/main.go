@@ -134,10 +134,14 @@ func main() {
 	}()
 
 	// 6. biz + service 装配
-	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, cfg.Login.DevSkipPassword)
+	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister)
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
 			"warn", "password verification disabled + unknown accounts auto-provisioned; NEVER enable in prod")
+	}
+	if cfg.Login.DevAutoRegister {
+		helper.Warnw("msg", "DEV_AUTO_REGISTER_ENABLED",
+			"warn", "unknown accounts auto-registered on first login; NEVER enable in prod")
 	}
 	ticketUC := biz.NewTicketUsecase(signer, verifier, jtiRepo)
 	svc := service.NewLoginService(loginUC, ticketUC)
@@ -156,6 +160,7 @@ func main() {
 		"locator_notifier", locatorMode,
 		"hub_assigner", hubMode,
 		"dev_skip_password", cfg.Login.DevSkipPassword,
+		"dev_auto_register", cfg.Login.DevAutoRegister,
 		"jwt_issuer", cfg.Login.JWT.Issuer,
 		"jwt_audience", cfg.Login.JWT.Audience,
 		"jwt_session_ttl", cfg.Login.JWT.SessionTTL.String(),

@@ -58,7 +58,7 @@ New-Item -ItemType Directory -Force -Path $BinDir, $LogDir | Out-Null
 # Profiles:
 #   login = 测登录/组队最小集(player_locator + hub_allocator + push + team + login)
 #   match = 完整主链路(在 login 基础上 + player + ds_allocator + battle_result + matchmaker)
-#   all   = 全部 9 个服务
+#   all   = 全部 10 个服务(含 social/friend)
 $Services = @(
     @{ Name = 'player_locator'; Dir = 'services/runtime/player_locator';   Cmd = 'locator';        Conf = 'etc/locator-dev.yaml';        Port = 50006; Profiles = @('login', 'match', 'all') }
     @{ Name = 'hub_allocator';  Dir = 'services/battle/hub_allocator';      Cmd = 'hub_allocator';  Conf = 'etc/hub_allocator-dev.yaml';  Port = 50021; Profiles = @('login', 'match', 'all') }
@@ -66,6 +66,7 @@ $Services = @(
     @{ Name = 'ds_allocator';   Dir = 'services/battle/ds_allocator';       Cmd = 'ds_allocator';   Conf = 'etc/ds_allocator-dev.yaml';   Port = 50020; Profiles = @('match', 'all') }
     @{ Name = 'push';           Dir = 'services/runtime/push';              Cmd = 'push';           Conf = 'etc/push-dev.yaml';           Port = 50014; Profiles = @('login', 'match', 'all') }
     @{ Name = 'team';           Dir = 'services/matchmaking/team';          Cmd = 'team';           Conf = 'etc/team-dev.yaml';           Port = 50010; Profiles = @('login', 'match', 'all') }
+    @{ Name = 'friend';         Dir = 'services/social/friend';             Cmd = 'friend';         Conf = 'etc/friend-dev.yaml';         Port = 50004; Profiles = @('all') }
     @{ Name = 'battle_result';  Dir = 'services/battle/battle_result';      Cmd = 'battle_result';  Conf = 'etc/battle_result-dev.yaml';  Port = 50022; Profiles = @('match', 'all') }
     @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-dev.yaml';     Port = 50011; Profiles = @('match', 'all') }
     @{ Name = 'login';          Dir = 'services/account/login';             Cmd = 'login';          Conf = 'etc/login-dev.yaml';          Port = 50001; Profiles = @('login', 'match', 'all') }

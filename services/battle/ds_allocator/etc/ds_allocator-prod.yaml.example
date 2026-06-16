@@ -48,3 +48,8 @@ agones:
   # token_path / ca_path: 留空用 in-cluster ServiceAccount 默认
   insecure_skip_tls_verify: false   # 生产必须 false(校验 apiserver 证书)
   allocate_timeout: "5s"
+
+# 本机 Windows DS 拉起模式仅用于开发调试,生产固定关闭(用上方 agones)。
+# ⚠️ 不能与 agones.enabled 同时为 true。
+local_ds:
+  enabled: false

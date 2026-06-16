@@ -63,3 +63,22 @@ agones:
   # ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
   # insecure_skip_tls_verify: false   # 仅 dev
   allocate_timeout: "5s"
+
+# 本机拉起 Windows Dedicated Server 调试模式(与 agones 并列的第二种 DS 启动方式)。
+# enabled=true 时匹配成局后 ds_allocator 直接 exec 打包好的 UE Windows DS,分配本机端口返回真实地址。
+# ⚠️ agones.enabled 与 local_ds.enabled 不能同时为 true(否则启动 fatal)。
+# 本机调试步骤:① UE 打包 Windows Server 版到 C:\work\Pandora-Client-SVN 下
+#              ② executable_path 指向 PandoraServer.exe
+#              ③ local_ds.enabled=true + agones.enabled=false
+local_ds:
+  enabled: false
+  # executable_path: "C:\\work\\Pandora-Client-SVN\\Build\\WindowsServer\\PandoraServer.exe"
+  # map_name: "/Game/Maps/BattleMap"          # DS 加载的关卡(留空用 DS 默认关卡)
+  advertise_host: "127.0.0.1"                  # 返回给客户端 NetDriver 连接的 host
+  port_base: 7777                              # 端口池基址
+  port_range: 100                              # 端口池大小,实际端口在 [base, base+range) 取空闲
+  # working_dir: ""                            # DS 进程工作目录(留空用当前目录)
+  log_dir: "run/dev/logs/ds"                   # 每个 DS 进程 stdout/stderr 落 <pod>.log
+  # extra_args: ["-PANDORA_BACKEND=https://127.0.0.1:8444"]  # 追加 UE DS 命令行参数
+  # extra_env:                                 # 注入 DS 进程额外环境变量
+  #   PANDORA_REGION: "cn"

@@ -31,6 +31,14 @@ jwt:
   session_ttl: "24h"
   ds_ticket_ttl: "5m"
 
+# kafka producer:发布 pandora.hub.migrate 强制整合迁移通知(push 订阅)。
+# brokers 为空 + consolidation_enabled=true 时迁移仅靠 Hub DS drain 心跳兜底(无无缝推送)。
+kafka:
+  brokers: ["kafka:9092"]
+  dial_timeout: "2s"
+  write_timeout: "5s"
+  idempotent: true
+
 hub:
   heartbeat_timeout: "15s"        # 不变量 §4
   sweep_interval: "5s"
@@ -38,6 +46,14 @@ hub:
   assignment_ttl: "30m"
   default_region: "global"
   default_capacity: 500           # 大厅 500 人/实例
+  # autoscale_enabled / consolidation_enabled 仅在 agones.enabled=true(下方,真 Fleet scaler)时生效。
+  autoscale_enabled: true         # 开启 Hub Fleet 自动扩缩容
+  players_per_hub: 500            # >500 自动扩到新大厅(ceil(total/500))
+  min_replicas: 1                 # 开服默认大厅副本数(可配置)
+  max_replicas: 50                # 大厅副本上限(按容量预算调整)
+  consolidation_enabled: true     # 强制整合:低负载时搬迁玩家排空分片后缩容(需 kafka 推送无缝倒计时)
+  migrate_grace_seconds: 30       # 迁移优雅倒计时(秒) + 缩容回收最短等待
+  consolidation_batch: 50         # 单 tick 每分片最多迁移人数(防撑死)
   optimistic_retry: 3
   # prod 用真 Agones(下方 agones.enabled: true),不再需要 mock_* 字段
 

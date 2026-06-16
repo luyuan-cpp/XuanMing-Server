@@ -42,7 +42,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\037pandora/common/v1/errcode.proto\022\021pando"
-    "ra.common.v1*\341\016\n\007ErrCode\022\006\n\002OK\020\000\022\017\n\013ERR_"
+    "ra.common.v1*\370\016\n\007ErrCode\022\006\n\002OK\020\000\022\017\n\013ERR_"
     "UNKNOWN\020\001\022\020\n\014ERR_INTERNAL\020\002\022\017\n\013ERR_TIMEO"
     "UT\020\003\022\023\n\017ERR_INVALID_ARG\020\004\022\021\n\rERR_NOT_FOU"
     "ND\020\005\022\026\n\022ERR_ALREADY_EXISTS\020\006\022\027\n\023ERR_PERM"
@@ -84,18 +84,19 @@ const char descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto[] A
     "\251F\022\036\n\031ERR_CHAT_MESSAGE_TOO_LONG\020\252F\022\023\n\016ER"
     "R_CHAT_MUTED\020\253F\022\031\n\024ERR_FRIEND_NOT_FOUND\020"
     "\215G\022\035\n\030ERR_FRIEND_ALREADY_ADDED\020\216G\022\027\n\022ERR"
-    "_FRIEND_BLOCKED\020\217G\022\032\n\025ERR_LOCATOR_NOT_FO"
-    "UND\020\361G\022\031\n\024ERR_LOCATOR_CONFLICT\020\362G\022\037\n\032ERR"
-    "_PUSH_OFFLINE_CORRUPTED\020\325H\022!\n\034ERR_PUSH_K"
-    "AFKA_CONSUMER_DOWN\020\326H\022\036\n\031ERR_DATA_VERSIO"
-    "N_MISMATCH\020\221N\022\032\n\025ERR_DATA_LOCK_TIMEOUT\020\222"
-    "N\022\025\n\020ERR_DATA_MIGRATE\020\223Nb\006proto3"
+    "_FRIEND_BLOCKED\020\217G\022\025\n\020ERR_FRIEND_LIMIT\020\220"
+    "G\022\032\n\025ERR_LOCATOR_NOT_FOUND\020\361G\022\031\n\024ERR_LOC"
+    "ATOR_CONFLICT\020\362G\022\037\n\032ERR_PUSH_OFFLINE_COR"
+    "RUPTED\020\325H\022!\n\034ERR_PUSH_KAFKA_CONSUMER_DOW"
+    "N\020\326H\022\036\n\031ERR_DATA_VERSION_MISMATCH\020\221N\022\032\n\025"
+    "ERR_DATA_LOCK_TIMEOUT\020\222N\022\025\n\020ERR_DATA_MIG"
+    "RATE\020\223Nb\006proto3"
 };
 static ::absl::once_flag descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto = {
     false,
     false,
-    1952,
+    1975,
     descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto,
     "pandora/common/v1/errcode.proto",
     &descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto_once,
@@ -117,7 +118,7 @@ ErrCode_descriptor() {
   return file_level_enum_descriptors_pandora_2fcommon_2fv1_2ferrcode_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t ErrCode_internal_data_[] = {
-    851968u, 3604480u, 5102u, 3003u, 9103u, 1012u, 4004u, 7005u, 9302u, 1004u, 2010u, 3007u, 5002u, 7001u, 9002u, 9202u, 10002u, 1002u, 1010u, 2002u, 3001u, 3005u, 4002u, 4006u, 5004u, 6002u, 7003u, 8002u, 9101u, 9201u, 9301u, 10001u, 10003u, 1001u, 1003u, 1005u, 1011u, 2001u, 2003u, 2011u, 3002u, 3004u, 3006u, 4001u, 4003u, 4005u, 5001u, 5003u, 5101u, 6001u, 6003u, 7002u, 7004u, 8001u, 9001u, 9003u, 9102u, };
+    851968u, 3670016u, 5102u, 3003u, 9103u, 1012u, 4004u, 7005u, 9302u, 1004u, 2010u, 3007u, 5002u, 7001u, 9002u, 9202u, 10002u, 1002u, 1010u, 2002u, 3001u, 3005u, 4002u, 4006u, 5004u, 6002u, 7003u, 8002u, 9101u, 9201u, 9301u, 10001u, 10003u, 1001u, 1003u, 1005u, 1011u, 2001u, 2003u, 2011u, 3002u, 3004u, 3006u, 4001u, 4003u, 4005u, 5001u, 5003u, 5101u, 6001u, 6003u, 7002u, 7004u, 8001u, 9001u, 9003u, 9102u, 9104u, };
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace v1
 }  // namespace common

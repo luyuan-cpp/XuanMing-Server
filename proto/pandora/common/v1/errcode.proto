@@ -105,6 +105,7 @@ enum ErrCode {
   ERR_FRIEND_NOT_FOUND         = 9101;
   ERR_FRIEND_ALREADY_ADDED     = 9102;
   ERR_FRIEND_BLOCKED           = 9103;
+  ERR_FRIEND_LIMIT             = 9104; // 好友数已达上限
 
   ERR_LOCATOR_NOT_FOUND        = 9201;
   ERR_LOCATOR_CONFLICT         = 9202;

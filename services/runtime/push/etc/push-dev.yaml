@@ -41,12 +41,15 @@ snowflake:
   step_bits: 15
 
 push:
-  # 订阅 topic 列表;不填走 kafkax.PushTopics 默认(team.update / match.progress / chat.private 3 个)。
-  # 未来 player.update / friend.event / system.notify Event 落地后,在 kafkax/topics.go 加常量并追加本列表。
+  # 订阅 topic 列表;不填走 kafkax.PushTopics 默认。
+  # 2026-06-15 friend 服务上线,补 pandora.friend.event。
+  # 2026-06-15 hub_allocator 强制整合上线,补 pandora.hub.migrate(大厅迁移通知)。
   topics:
     - "pandora.team.update"
     - "pandora.match.progress"
     - "pandora.chat.private"
+    - "pandora.friend.event"
+    - "pandora.hub.migrate"
 
   # 离线消息 redis ZSET TTL(每次写入刷新)。
   offline_cache_ttl: "5m"

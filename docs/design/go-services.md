@@ -15,7 +15,7 @@
 | 1 | login | 50001 | 无 | mysql + redis | (生产 login.event) | ✅ W2 ③(mock,W3 接 mysql/redis) |
 | 2 | player | 50002 | 无 | mysql + redis | player.update | ✅ W4 ④(MMR 写回 + GetMMR reader) |
 | 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | ⏸️ UE 主链路后再评估(当前 player 已先直连 MySQL) |
-| 4 | friend | 50004 | 无 | mysql + redis | - | 🧊 暂缓到最后(UE + 核心链路完成后再做) |
+| 4 | friend | 50004 | 弱(friend.event 推送) | mysql | pandora.friend.event | ✅ 2026-06-15(好友请求/接受/列表/拉黑 + locator 在线状态) |
 | 5 | chat | 50005 | 弱 | redis pub/sub | chat.world | 🧊 暂缓到最后(UE + 核心链路完成后再做) |
 | 6 | player_locator | 50006 | 强 | redis | locator.update | ✅ W3 ⑤(W4 ⑦ matchmaker 上报 MATCHING/BATTLE) |
 | 7 | team | 50010 | 强 | redis | - | ✅ W3 ⑦ |
@@ -23,7 +23,7 @@
 | 9 | trade | 50012 | 强 | redis + mysql | trade.audit | ⏸️ UE 主链路后(非当前阻塞项) |
 | 10 | dialogue | 50013 | 无 | mysql / 配置中心 | - | ⏸️ UE 主链路后(先可用 UE/配置占位) |
 | 11 | ds_allocator | 50020 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ②(Mock 分配器,W4 ③ 发 abandoned,W4 ⑧ abandoned 可靠补偿,W4 ⑫ 真 Agones REST allocator) |
-| 12 | hub_allocator | 50021 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ⑤(Mock Fleet 骨架;接 login 待做) |
+| 12 | hub_allocator | 50021 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ⑤ + 自动扩缩容(2026-06-15:按在线人数控 Agones Fleet 副本) |
 | 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿),W4 ⑨(player.update 事务出箱可靠化) |
 | 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |
 
@@ -119,9 +119,11 @@ ListFriends(player_id) → []FriendInfo
 Block(player_id, target_id) → ok
 ```
 
-**MOBA 早期可不做**,先留接口骨架。
+**实现说明**：request_id 用 snowflake uint64（不变量 §9.11）；player_id 均以 JWT ctx 为准（R5）覆盖请求体。
 
-**2026-06-06 排期决策**:friend 不进入当前后端主线。等 UE 客户端 / Hub DS / Battle DS / Agones / 核心登录-进大厅-匹配-进战斗-结算闭环全部完成后,再作为社交尾部功能实现。
+**2026-06-06 排期决策**（已提前）：friend 原定暂缓到最后。
+
+**2026-06-15 实现**：按「补全 friend 模块」要求提前落地完整 Kratos 服务（第 11 个业务服）：好友图落 pandora_social（friendships / friend_requests / blocks），好友请求 / 接受经 kafka pandora.friend.event → push 推送给接收方，ListFriends 经 player_locator 填在线状态（弱依赖）。见 PROGRESS.md「社交域 ①」。
 
 ---
 
@@ -190,6 +192,12 @@ GetTeam(team_id) → Team 完整快照(只读)
 GetMyTeam() → has_team + Team 完整快照(只读;登录后进大厅时调一次,队伍主界面直接渲染;player_id 以 JWT 为准,查 pandora:team:player:<id> 索引;没队伍返 OK+has_team=false;索引命中但队伍已过期/解散时按无队伍处理并清脏索引。带宽:一次性 unary,5 人队 ~200 字节,比拆两次 RPC 更省)
 ```
 队伍状态变更推送走 kafka `pandora.team.update` → push 服务 server stream,**不提供** StreamTeamUpdates RPC。
+
+**客户端同步约定(2026-06-15)**:
+- `TeamUpdateEvent.team` 服务端已填充完整 `Team` 客户端可见快照,不是空信号;该快照来自 `TeamStorageRecord` 经 `recordToProto` 组装,不暴露存储侧字段。
+- 常规队伍状态变更(`MEMBER_JOINED` / `MEMBER_LEFT` / `READY_CHANGED` / `CAPTAIN_CHANGED` / `DISBANDED` 等)客户端仍把 push 当"有变化"信号,收到后防抖合并调用 `GetMyTeam` 读取当前权威态,只在 `GetMyTeam` 回包路径写本地 `CurrentTeamSnapshot`。原因是 kafka → push → client stream 是 at-least-once 链路,可能重复、乱序或客户端处理时已过期;`GetMyTeam` 从 Redis 当前索引/队伍记录读取,并带脏索引清理逻辑,保证 UI 最终收敛到服务端权威态。
+- `INVITE_SENT` 是例外:被邀请人此时还没入队,`GetMyTeam` 查不到这条邀请,客户端应直接读取 push 里的 `reason` / `invite_id` / `team` 展示邀请 UI。
+- 客户端侧对 push 驱动的快照请求做短窗口防抖(当前 UE 为约 0.5s),避免多名队员同时变更或批量 push 时触发 `GetMyTeam` 请求风暴。5 人队完整 `Team` 约 200 字节,防抖后重拉一次 unary 成本很低,换来单一写入路径和抗乱序能力。
 
 **状态机**:
 ```
@@ -308,6 +316,31 @@ ListHubs() → []HubInfo
 - 新玩家进来 → 选最空 + 同 region + 队友所在 hub
 - 队友所在 hub 已满 → 加入 hub waitlist 或换 hub
 
+**自动扩缩容策略**(2026-06-15,`hub.autoscale_enabled=true` + `agones.enabled=true` 生效):
+- 走 Agones Fleet 副本控制(读/改 Fleet `spec.replicas`),不引入 FleetAutoscaler CRD
+- 开服默认拉起 `hub.min_replicas`(默认 1)个大厅
+- 后台 reconcile(复用 `hub.sweep_interval`)按 `desired = ceil(total_players / players_per_hub)`
+  **只扩不缩**,受 `hub.max_replicas`(默认 20)上限约束(`players_per_hub` 默认 500)
+- 总在线人数为 0 → 回收到 `hub.min_replicas`(空大厅自动回收)
+- `AssignHub` 遇分片全满(`ErrHubNoAvailable`)→ 立即兜底 `+1` 扩容,上游重试进新大厅
+- 配置项:`hub.autoscale_enabled` / `players_per_hub` / `min_replicas` / `max_replicas`
+
+**强制整合 + 玩家迁移通知**(2026-06-15,`hub.consolidation_enabled=true` 生效):
+- 不再只「空大厅自动回收」,而是低负载时**主动排空人少的大厅 + 服务端权威搬迁玩家**
+- reconcile 发现 ready 分片多于负载所需(`need = ceil(total/players_per_hub)`)→ 按负载升序
+  把**最空的多余分片**标 `draining` 并盖 `draining_since_ms`,逐分片每 tick 最多搬
+  `consolidation_batch`(默认 50)人到同 region 最空 ready 分片,搬迁顺序镜像 TransferHub
+  (占新位 → 切归属 → 退旧位)并重签 hub 票据
+- **切换前提示走双通道**:
+  - 通道 A:draining 分片的 Hub DS `Heartbeat` 收 `command="drain"` + `grace_seconds`(默认 30)
+    → 场内 UMG 倒计时提示 → 到点重连(重连 `AssignHub` 幂等返回迁移后新分片)
+  - 通道 B:后端按 `key=player_id` 推 `pandora.hub.migrate`/`HubMigrateEvent`(新地址 + 新票据 +
+    倒计时)→ push 服务转发 → 客户端无缝倒计时切大厅
+- 排空(`player_count=0`)且过 `migrate_grace_seconds` 后才 `RemoveShard` + 缩 Fleet 副本,
+  避免提前杀 pod 打断在场玩家
+- 配置项:`hub.consolidation_enabled` / `migrate_grace_seconds` / `consolidation_batch` + kafka
+  producer 块;契约见 [`docs/design/agones-dev.md`](./agones-dev.md)
+
 **关键不变量**:
 - 同队伍优先在同一 hub
 - 跨分片切换"先连新,后断旧",2 秒内完成
@@ -398,7 +431,7 @@ W2 开始才正式写业务逻辑,顺序:
 11. ⏭️ UE 客户端 grpc-web(FHttpModule 自研解析)+ Envoy 全业务路由接入
 12. ⏭️ UE Hub DS / Battle DS 骨架 + GAS / Iris / Agones 联调,打通登录→进大厅→匹配→进战斗→结算→回大厅
 13. ⏭️ trade / dialogue / data_service 按 UE 主链路需要补最小版本
-14. 🧊 friend / chat 暂缓到最后:UE 与核心业务全部完成后再做社交完整实现
+14. 🧊 chat 暂缓到最后：UE 与核心业务全部完成后再做完整实现（friend 已于 2026-06-15 提前上线，见 §2.4）
 
 ---
 

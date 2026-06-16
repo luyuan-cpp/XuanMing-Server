@@ -28,11 +28,25 @@ type HubFleetProvider interface {
 	ListShards(ctx context.Context, region string) ([]ShardCandidate, error)
 }
 
+// HubFleetScaler 是 Hub Fleet 副本扩缩容能力(可选)。
+//
+// **仅真 Agones provider(AgonesHubFleetProvider)实现**。MockHubFleetProvider 刻意不实现本接口:
+// 否则它会提供退化语义(Get 返回固定假副本数、Set 是 no-op),让 HubUsecase.autoScaleEnabled()
+// 在 Mock 下误以为“可扩缩容”——每轮 reconcile 都跑但实际不变,还会对假分片/假玩家跑 consolidation。
+// 故 autoscale/consolidation 仅在接真 Agones(agones.enabled=true)时生效。
+type HubFleetScaler interface {
+	GetFleetReplicas(ctx context.Context) (int32, error)
+	SetFleetReplicas(ctx context.Context, replicas int32) error
+}
+
 // MockHubFleetProvider 是 W4 ⑤ 的打桩实现:不连 k8s,按 region 生成 MockShardCount 个确定性假分片。
 //
 // pod   = pandora-hub-<region>-<i>(i 从 1 起)
 // addr  = MockHubAddrHost:(MockHubPortBase + i)
 // 保证同 region 多次列举分片拓扑稳定(实时负载在 Redis,这里只给拓扑)。
+//
+// **拓扑-only:不实现 HubFleetScaler**。故 Mock 模式下 scaler==nil → autoScaleEnabled()==false,
+// 自动扩缩容/强制整合都不会跑(避免退化 no-op 误导)。
 type MockHubFleetProvider struct {
 	cfg conf.HubConf
 }

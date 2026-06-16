@@ -100,6 +100,32 @@ type HubConf struct {
 
 	// MockHubPortBase W4 ⑤ Mock 分片端口基址(默认 7777;分片 port = base + shard_id)。
 	MockHubPortBase int `yaml:"mock_hub_port_base,omitempty" json:"mock_hub_port_base,omitempty"`
+
+	// AutoScaleEnabled 是否开启 Hub Fleet 自动扩缩容(默认 false)。
+	// 开启条件:建议配合 agones.enabled=true(真 Fleet Provider),否则仅记录日志不生效。
+	AutoScaleEnabled bool `yaml:"autoscale_enabled,omitempty" json:"autoscale_enabled,omitempty"`
+
+	// PlayersPerHub 自动扩容阈值:单 Hub 目标承载人数(默认 500)。
+	// 例:总在线 501 → 期望副本 ceil(501/500)=2。
+	PlayersPerHub int32 `yaml:"players_per_hub,omitempty" json:"players_per_hub,omitempty"`
+
+	// MinReplicas 开服默认保底大厅副本数(默认 1)。
+	MinReplicas int32 `yaml:"min_replicas,omitempty" json:"min_replicas,omitempty"`
+
+	// MaxReplicas 大厅副本上限(默认 20)。
+	MaxReplicas int32 `yaml:"max_replicas,omitempty" json:"max_replicas,omitempty"`
+
+	// ConsolidationEnabled 是否开启强制整合(低负载时把人换到该去的分片,排空分片后缩容,默认 false)。
+	// 依赖 autoscale_enabled=true + kafka.brokers 非空(推迁迁移通知);任一缺失只记日志不生效。
+	ConsolidationEnabled bool `yaml:"consolidation_enabled,omitempty" json:"consolidation_enabled,omitempty"`
+
+	// MigrateGraceSeconds 迁移优雅倒计时(秒,默认 30)。
+	// 下发给客户端/Hub DS 的提示倒计时;也是排空分片可被缩容回收的最短等待(避免提前杀 pod)。
+	MigrateGraceSeconds int32 `yaml:"migrate_grace_seconds,omitempty" json:"migrate_grace_seconds,omitempty"`
+
+	// ConsolidationBatch 单次 reconcile 每个排空分片最多迁移的玩家数(默认 50,防撑死)。
+	// 超过部分留给下一个 sweep 周期继续排。
+	ConsolidationBatch int `yaml:"consolidation_batch,omitempty" json:"consolidation_batch,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -133,6 +159,24 @@ func (c *Config) Defaults() {
 	}
 	if c.Hub.MockHubPortBase == 0 {
 		c.Hub.MockHubPortBase = 7777
+	}
+	if c.Hub.PlayersPerHub == 0 {
+		c.Hub.PlayersPerHub = 500
+	}
+	if c.Hub.MinReplicas == 0 {
+		c.Hub.MinReplicas = 1
+	}
+	if c.Hub.MaxReplicas == 0 {
+		c.Hub.MaxReplicas = 20
+	}
+	if c.Hub.MaxReplicas < c.Hub.MinReplicas {
+		c.Hub.MaxReplicas = c.Hub.MinReplicas
+	}
+	if c.Hub.MigrateGraceSeconds == 0 {
+		c.Hub.MigrateGraceSeconds = 30
+	}
+	if c.Hub.ConsolidationBatch == 0 {
+		c.Hub.ConsolidationBatch = 50
 	}
 	if c.Agones.APIServer == "" {
 		c.Agones.APIServer = "https://kubernetes.default.svc"

@@ -53,6 +53,11 @@ type MatchEventPusher interface {
 type DSAllocator interface {
 	// AllocateBattle 为 match 申请战斗 DS，返回 ds 地址 + 每个玩家的入场票据。
 	AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64) (dsAddr string, tickets map[uint64]string, err error)
+
+	// SignBattleTicket 给（重连 / 换设备的）玩家现签一张新的 battle DSTicket（新 jti、sub=playerID）。
+	// GetMatchProgress 在 READY 阶段调用它下发票据：每次新 jti，避免复用同一张票撞 DS 侧 jti
+	// 一次性防重放（换手机 / 掉线重连刚需）；票 sub 锁定调用者本人，比共享票更严。
+	SignBattleTicket(ctx context.Context, playerID, matchID uint64) (token string, err error)
 }
 
 // LocationNotifier 把玩家位置变更上报给 player_locator（不变量 §1：玩家同一时刻只在一个 Location）。
@@ -408,11 +413,15 @@ func (u *MatchUsecase) onAllConfirmed(ctx context.Context, m *matchv1.MatchStora
 // ── RPC 4:GetMatchProgress ───────────────────────────────────────────────────
 
 // GetMatchProgress 查询进度。id 可能是 match_id(已撮合)或 ticket_id(排队中)。
-func (u *MatchUsecase) GetMatchProgress(ctx context.Context, id uint64) (*matchv1.MatchProgress, error) {
+// callerID 是发起查询的玩家(JWT 注入，0=未鉴权)。READY 阶段且 caller 是本局成员时，
+// 给他现签一张新 battle DSTicket(新 jti)下发，支持换手机 / 掉线重连(见 refreshBattleTicket)。
+func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64) (*matchv1.MatchProgress, error) {
 	if m, found, err := u.repo.GetMatch(ctx, id); err != nil {
 		return nil, err
 	} else if found {
-		return matchToProgress(m), nil
+		prog := matchToProgress(m)
+		u.refreshBattleTicket(ctx, m, callerID, prog)
+		return prog, nil
 	}
 	if t, found, err := u.repo.GetTicket(ctx, id); err != nil {
 		return nil, err
@@ -420,6 +429,26 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, id uint64) (*matchv
 		return ticketToProgress(t), nil
 	}
 	return nil, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
+}
+
+// refreshBattleTicket 在 READY 阶段为发起查询的本人现签一张新的 battle DSTicket(新 jti)，
+// 覆盖 prog 里来自存储的票字段。这样换手机 / 掉线重连每次都拿新 jti，不会撞 DS 侧 jti 一次性
+// 防重放；票 sub 锁定调用者本人。
+// 守卫：callerID!=0 且 stage=READY 且有 ds_addr 且 caller 是本局成员才签；任何不满足或签发失败
+// 都保留存储票字段(dev/stub 兜底，绝不让查询失败)。
+func (u *MatchUsecase) refreshBattleTicket(ctx context.Context, m *matchv1.MatchStorageRecord, callerID uint64, prog *matchv1.MatchProgress) {
+	if callerID == 0 || m.Stage != stageReady || m.BattleDsAddr == "" {
+		return
+	}
+	if memberIndex(m.Members, callerID) < 0 {
+		return // 非本局成员，不签票
+	}
+	token, err := u.allocator.SignBattleTicket(ctx, callerID, m.MatchId)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "resign_battle_ticket_failed", "match_id", m.MatchId, "player_id", callerID, "err", err)
+		return
+	}
+	prog.BattleTicket = token
 }
 
 // ── 后台撮合循环 ──────────────────────────────────────────────────────────────

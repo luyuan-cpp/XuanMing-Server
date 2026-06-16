@@ -13,6 +13,53 @@ type Config struct {
 
 	Allocator AllocatorConf `yaml:"allocator" json:"allocator"`
 	Agones    AgonesConf    `yaml:"agones" json:"agones"`
+	LocalDS   LocalDSConf   `yaml:"local_ds" json:"local_ds"`
+}
+
+// LocalDSConf 是「本机拉起 Windows Dedicated Server 进程」的调试后端配置。
+//
+// 这是与 Agones(Linux 生产)并列的第二种 DS 启动方式,专供本机联调:匹配成局后
+// ds_allocator 直接 exec 打包好的 UE Windows DS 可执行文件,分配一个本机端口,返回
+// 真实地址(host:port)给客户端 NetDriver 连入;Release / 心跳超时 abandoned 时 Kill 进程。
+//
+// 三种 DS 启动方式互斥,按 main.go 优先级选装配:
+//   - agones.enabled=true   → AgonesGameServerAllocator(Linux 生产)
+//   - local_ds.enabled=true → LocalGameServerAllocator(本机 Windows 调试,本结构)
+//   - 都为 false            → MockGameServerAllocator(确定性假地址,无真实 DS)
+//
+// agones.enabled 与 local_ds.enabled 不可同时为 true(main.go 会 fatal)。
+type LocalDSConf struct {
+	// Enabled 打开本机拉起 Windows DS 进程(默认 false)。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+
+	// ExecutablePath 打包好的 UE Windows Dedicated Server 可执行文件绝对路径
+	// (例如 C:\work\Pandora-Client-SVN\...\PandoraServer.exe)。Enabled=true 时必填且必须存在。
+	ExecutablePath string `yaml:"executable_path,omitempty" json:"executable_path,omitempty"`
+
+	// MapName 启动时加载的 UE 关卡(DS 命令行首个位置参数,例如 /Game/Maps/BattleMap)。
+	// 留空则不带关卡参数,由 DS 自身默认关卡决定。
+	MapName string `yaml:"map_name,omitempty" json:"map_name,omitempty"`
+
+	// AdvertiseHost 返回给客户端的可连接 host(默认 127.0.0.1,本机联调)。
+	AdvertiseHost string `yaml:"advertise_host,omitempty" json:"advertise_host,omitempty"`
+
+	// PortBase 分配给 DS 进程的端口基址(默认 7777)。
+	PortBase int `yaml:"port_base,omitempty" json:"port_base,omitempty"`
+
+	// PortRange 端口池大小(默认 100),实际端口在 [PortBase, PortBase+PortRange) 内取空闲。
+	PortRange int `yaml:"port_range,omitempty" json:"port_range,omitempty"`
+
+	// WorkingDir DS 进程工作目录(留空用 ds_allocator 当前目录)。
+	WorkingDir string `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+
+	// LogDir DS 进程 stdout/stderr 落盘目录(默认 run/dev/logs/ds);每进程一个 <pod>.log。
+	LogDir string `yaml:"log_dir,omitempty" json:"log_dir,omitempty"`
+
+	// ExtraArgs 追加到 DS 命令行末尾的额外参数(例如后端 gRPC-Web 入口地址覆盖)。
+	ExtraArgs []string `yaml:"extra_args,omitempty" json:"extra_args,omitempty"`
+
+	// ExtraEnv 注入 DS 进程的额外环境变量(在 PANDORA_MATCH_ID 等内置变量之后追加)。
+	ExtraEnv map[string]string `yaml:"extra_env,omitempty" json:"extra_env,omitempty"`
 }
 
 // AgonesConf 是真 Agones GameServerAllocation 后端配置(W4 ⑫)。
@@ -110,6 +157,18 @@ func (c *Config) Defaults() {
 	}
 	if c.Agones.AllocateTimeout == 0 {
 		c.Agones.AllocateTimeout = config.Duration(5 * time.Second)
+	}
+	if c.LocalDS.AdvertiseHost == "" {
+		c.LocalDS.AdvertiseHost = "127.0.0.1"
+	}
+	if c.LocalDS.PortBase == 0 {
+		c.LocalDS.PortBase = 7777
+	}
+	if c.LocalDS.PortRange == 0 {
+		c.LocalDS.PortRange = 100
+	}
+	if c.LocalDS.LogDir == "" {
+		c.LocalDS.LogDir = "run/dev/logs/ds"
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50020"

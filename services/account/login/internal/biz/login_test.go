@@ -90,7 +90,7 @@ func newTestUsecase(t *testing.T, hub data.HubAssigner) *LoginUsecase {
 	hash := mustBcrypt(t, "pw")
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
 	sf := snowflake.NewNode(1)
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, hub, sf, "127.0.0.1:7777", "cn", signer, verifier, false)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, hub, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false)
 }
 
 func TestLogin_HubAssignerSuccess(t *testing.T) {
@@ -168,24 +168,26 @@ func TestLogin_HubAssignerError_FallbackSelfSign(t *testing.T) {
 // devFakeRepo 模拟 MySQL 行为:按 account 名查/建,验证免密模式下的懒注册稳定性。
 type devFakeRepo struct {
 	accounts map[string]uint64 // account -> player_id
+	hashes   map[string]string // account -> bcrypt password_hash
 	created  []string          // 记录被 CreateAccount 的账号(断言"只建一次")
 }
 
 func newDevFakeRepo() *devFakeRepo {
-	return &devFakeRepo{accounts: map[string]uint64{}}
+	return &devFakeRepo{accounts: map[string]uint64{}, hashes: map[string]string{}}
 }
 
 func (r *devFakeRepo) FindByAccount(_ context.Context, account string) (uint64, string, error) {
 	if id, ok := r.accounts[account]; ok {
-		return id, "", nil
+		return id, r.hashes[account], nil
 	}
 	return 0, "", errcode.New(errcode.ErrLoginAccountNotFound, "account=%s not found", account)
 }
-func (r *devFakeRepo) CreateAccount(_ context.Context, playerID uint64, account, _ string) error {
+func (r *devFakeRepo) CreateAccount(_ context.Context, playerID uint64, account, passwordHash string) error {
 	if _, ok := r.accounts[account]; ok {
 		return errcode.New(errcode.ErrAlreadyExists, "account=%s exists", account)
 	}
 	r.accounts[account] = playerID
+	r.hashes[account] = passwordHash
 	r.created = append(r.created, account)
 	return nil
 }
@@ -207,7 +209,23 @@ func newDevSkipUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 	}
 	sf := snowflake.NewNode(1)
 	// hubAssigner=nil 走自签回退;devSkipPassword=true。
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, true)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, true, false)
+}
+
+// newDevAutoRegUsecase 构造 devAutoRegister=true 、 devSkipPassword=false 的用例。
+func newDevAutoRegUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
+	t.Helper()
+	cfg := auth.Config{Secret: []byte(testSecret)}
+	signer, err := auth.NewSigner(cfg)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	verifier, err := auth.NewVerifier(cfg)
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	sf := snowflake.NewNode(1)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, true)
 }
 
 // TestLogin_DevSkipPassword_AutoProvision 验证:免密模式下任意新账号自动建号,
@@ -252,5 +270,41 @@ func TestLogin_DevSkipPassword_ExistingAccountWrongPassword(t *testing.T) {
 	}
 	if len(repo.created) != 0 {
 		t.Errorf("existing account should not be re-created, got %d creates", len(repo.created))
+	}
+}
+
+// TestLogin_DevAutoRegister_FirstLoginRegisters 验证假注册(不免密)语义:
+//   - 首登未知账号 → 自动注册,存本次密码;
+//   - 同账号同密码再登 → 走正常 bcrypt 校验通过,player_id 稳定;
+//   - 同账号错密码 → ErrLoginPasswordMismatch(密码仍生效)。
+func TestLogin_DevAutoRegister_FirstLoginRegisters(t *testing.T) {
+	repo := newDevFakeRepo()
+	uc := newDevAutoRegUsecase(t, repo)
+
+	res1, err := uc.Login(context.Background(), "newbie", "pw1", "dev-1")
+	if err != nil {
+		t.Fatalf("first login (register): %v", err)
+	}
+	if res1.PlayerID == 0 {
+		t.Fatalf("PlayerID = 0, want auto-registered id")
+	}
+	if len(repo.created) != 1 {
+		t.Fatalf("account created %d times, want exactly 1", len(repo.created))
+	}
+
+	// 同密码复登 → bcrypt 校验通过,同一 player_id。
+	res2, err := uc.Login(context.Background(), "newbie", "pw1", "dev-2")
+	if err != nil {
+		t.Fatalf("second login (verify): %v", err)
+	}
+	if res2.PlayerID != res1.PlayerID {
+		t.Errorf("PlayerID not stable: first=%d second=%d", res1.PlayerID, res2.PlayerID)
+	}
+
+	// 错密码 → 仍拦(假注册不等于免密)。
+	if _, err := uc.Login(context.Background(), "newbie", "wrong-pw", "dev-3"); err == nil {
+		t.Errorf("wrong password should be rejected when only auto_register is on")
+	} else if errcode.As(err) != errcode.ErrLoginPasswordMismatch {
+		t.Errorf("err code = %d, want ErrLoginPasswordMismatch(%d)", errcode.As(err), errcode.ErrLoginPasswordMismatch)
 	}
 }

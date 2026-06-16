@@ -35,6 +35,11 @@ func shardKey(pod string) string       { return fmt.Sprintf("pandora:hub:shard:{
 func assignKey(playerID uint64) string { return fmt.Sprintf("pandora:hub:player:%d", playerID) }
 func teamKey(teamID uint64) string     { return fmt.Sprintf("pandora:hub:team:%d", teamID) }
 
+// membersKey 是分片成员反向索引(SET,成员=player_id 十进制字符串)。
+// hashtag {pod} 与 shardKey 同 slot,强制整合时按分片枚举玩家做服务端权威搬迁。
+// best-effort:漂移不影响正确性(双通道中 Hub DS drain 心跳指令兼底漏听的玩家)。
+func membersKey(pod string) string { return fmt.Sprintf("pandora:hub:shard:members:{%s}", pod) }
+
 // ── 接口 ──────────────────────────────────────────────────────────────────────
 
 // HubRepo 是 hub_allocator 数据层抽象。biz 层只依赖此接口,不依赖 redis。
@@ -69,6 +74,13 @@ type HubRepo interface {
 	GetTeamShard(ctx context.Context, teamID uint64) (string, bool, error)
 	// SetTeamShard 写队伍同分片提示(TTL=assignmentTTL)。
 	SetTeamShard(ctx context.Context, teamID uint64, pod string, assignmentTTL time.Duration) error
+
+	// AddShardMember 把 player_id 记入分片成员反向索引(强制整合枚举玩家用),TTL=assignmentTTL。
+	AddShardMember(ctx context.Context, pod string, playerID uint64, assignmentTTL time.Duration) error
+	// RemoveShardMember 把 player_id 移出分片成员反向索引。
+	RemoveShardMember(ctx context.Context, pod string, playerID uint64) error
+	// ListShardMembers 列出分片成员反向索引中的 player_id(强制整合时遍历待迁玩家)。
+	ListShardMembers(ctx context.Context, pod string) ([]uint64, error)
 }
 
 // ── Redis 实现 ────────────────────────────────────────────────────────────────
@@ -204,7 +216,9 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 		found = true
 		// Hub DS 上报为准:对账在线数 / 状态 / 心跳时刻
 		rec.PlayerCount = playerCount
-		if state != "" {
+		// 状态机:允许 DS 上报升级 drain 等级(ready→draining→stopping),
+		// 但禁止把 allocator 强制整合标记的 draining/stopping 被 DS 上报的 ready 冲掉。
+		if state != "" && !(drainRank(rec.State) > drainRank(state)) {
 			rec.State = state
 		}
 		rec.LastHeartbeatMs = tsMs
@@ -229,6 +243,7 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 func (r *RedisHubRepo) RemoveShard(ctx context.Context, pod string) error {
 	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.Del(ctx, shardKey(pod))
+		pipe.Del(ctx, membersKey(pod))
 		pipe.SRem(ctx, shardsSetKey, pod)
 		pipe.ZRem(ctx, activeKey, pod)
 		return nil
@@ -290,7 +305,50 @@ func (r *RedisHubRepo) SetTeamShard(ctx context.Context, teamID uint64, pod stri
 	return r.rdb.Set(ctx, teamKey(teamID), pod, assignmentTTL).Err()
 }
 
+func (r *RedisHubRepo) AddShardMember(ctx context.Context, pod string, playerID uint64, assignmentTTL time.Duration) error {
+	key := membersKey(pod)
+	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.SAdd(ctx, key, strconv.FormatUint(playerID, 10))
+		pipe.Expire(ctx, key, assignmentTTL)
+		return nil
+	})
+	return err
+}
+
+func (r *RedisHubRepo) RemoveShardMember(ctx context.Context, pod string, playerID uint64) error {
+	return r.rdb.SRem(ctx, membersKey(pod), strconv.FormatUint(playerID, 10)).Err()
+}
+
+func (r *RedisHubRepo) ListShardMembers(ctx context.Context, pod string) ([]uint64, error) {
+	members, err := r.rdb.SMembers(ctx, membersKey(pod)).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uint64, 0, len(members))
+	for _, m := range members {
+		pid, perr := strconv.ParseUint(m, 10, 64)
+		if perr != nil {
+			continue // 脏成员,跳过
+		}
+		out = append(out, pid)
+	}
+	return out, nil
+}
+
 // ── 序列化辅助 ────────────────────────────────────────────────────────────────
+
+// drainRank 把分片状态映射成排空等级(ready<draining<stopping),
+// 心跳路径用它防止 allocator 标记的 draining/stopping 被 DS 上报的 ready 降级。
+func drainRank(state string) int {
+	switch state {
+	case "draining":
+		return 1
+	case "stopping":
+		return 2
+	default:
+		return 0 // "ready" / "" / 未知
+	}
+}
 
 func marshalShard(rec *hubv1.HubShardStorageRecord) ([]byte, error) {
 	if rec == nil {

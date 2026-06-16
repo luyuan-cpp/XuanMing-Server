@@ -23,6 +23,7 @@ type fakeRepo struct {
 	active      map[string]int64 // pod → last_heartbeat_ms
 	assignments map[uint64]*hubv1.HubAssignmentStorageRecord
 	teamShards  map[uint64]string
+	members     map[string]map[uint64]bool // pod → set(player_id)
 
 	// setAssignErr 非 nil 时,SetAssignment 直接返回该错误(测试注入失败用)。
 	setAssignErr error
@@ -34,6 +35,7 @@ func newFakeRepo() *fakeRepo {
 		active:      map[string]int64{},
 		assignments: map[uint64]*hubv1.HubAssignmentStorageRecord{},
 		teamShards:  map[uint64]string{},
+		members:     map[string]map[uint64]bool{},
 	}
 }
 
@@ -87,7 +89,8 @@ func (f *fakeRepo) HeartbeatShard(_ context.Context, pod string, playerCount int
 		return false, nil
 	}
 	s.PlayerCount = playerCount
-	if state != "" {
+	// 镜像 RedisHubRepo:禁止 DS 上报的 ready 把 allocator 标记的 draining/stopping 降级。
+	if state != "" && !(fakeDrainRank(s.State) > fakeDrainRank(state)) {
 		s.State = state
 	}
 	s.LastHeartbeatMs = tsMs
@@ -95,11 +98,23 @@ func (f *fakeRepo) HeartbeatShard(_ context.Context, pod string, playerCount int
 	return true, nil
 }
 
+func fakeDrainRank(state string) int {
+	switch state {
+	case "draining":
+		return 1
+	case "stopping":
+		return 2
+	default:
+		return 0
+	}
+}
+
 func (f *fakeRepo) RemoveShard(_ context.Context, pod string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.shards, pod)
 	delete(f.active, pod)
+	delete(f.members, pod)
 	return nil
 }
 
@@ -163,6 +178,35 @@ func (f *fakeRepo) SetTeamShard(_ context.Context, teamID uint64, pod string, _ 
 	return nil
 }
 
+func (f *fakeRepo) AddShardMember(_ context.Context, pod string, playerID uint64, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.members[pod] == nil {
+		f.members[pod] = map[uint64]bool{}
+	}
+	f.members[pod][playerID] = true
+	return nil
+}
+
+func (f *fakeRepo) RemoveShardMember(_ context.Context, pod string, playerID uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if m, ok := f.members[pod]; ok {
+		delete(m, playerID)
+	}
+	return nil
+}
+
+func (f *fakeRepo) ListShardMembers(_ context.Context, pod string) ([]uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]uint64, 0, len(f.members[pod]))
+	for pid := range f.members[pod] {
+		out = append(out, pid)
+	}
+	return out, nil
+}
+
 // playerCount 是测试断言辅助。
 func (f *fakeRepo) playerCount(pod string) int32 {
 	f.mu.Lock()
@@ -181,8 +225,51 @@ func (s *fakeSigner) SignHubTicket(playerID uint64) (string, int64, error) {
 	return "hub-ticket-fake", time.Now().Add(5 * time.Minute).UnixMilli(), nil
 }
 
+// fakeMigratePusher 记录强制整合迁移推送(测试断言用)。
+type fakeMigratePusher struct {
+	mu     sync.Mutex
+	pushes []uint64
+}
+
+func (p *fakeMigratePusher) PushMigrate(_ context.Context, playerID uint64, _ []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pushes = append(p.pushes, playerID)
+	return nil
+}
+
+func (p *fakeMigratePusher) count() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.pushes)
+}
+
 var _ data.HubRepo = (*fakeRepo)(nil)
 var _ TicketSigner = (*fakeSigner)(nil)
+var _ HubMigratePusher = (*fakeMigratePusher)(nil)
+var _ HubFleetScaler = (*memFleetScaler)(nil)
+
+// memFleetScaler 是测试用的可变副本数 Fleet scaler。
+// MockHubFleetProvider 本身不再实现 HubFleetScaler(拓扑-only),故 reconcile/consolidation
+// 测试需要它来让 NewHubUsecase 检测到 scaler 从而启用治理;Set 真实改变 replicas(非 no-op)。
+type memFleetScaler struct {
+	*MockHubFleetProvider
+	mu       sync.Mutex
+	replicas int32
+}
+
+func (f *memFleetScaler) GetFleetReplicas(context.Context) (int32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.replicas, nil
+}
+
+func (f *memFleetScaler) SetFleetReplicas(_ context.Context, r int32) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replicas = r
+	return nil
+}
 
 // ── 测试夹具 ──────────────────────────────────────────────────────────────────
 
@@ -520,5 +607,192 @@ func TestAssignHub_InvalidPlayer(t *testing.T) {
 		t.Fatal("want invalid-arg error for player_id 0")
 	} else if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("want ErrInvalidArg, got %d", errcode.As(err))
+	}
+}
+
+// ── 强制整合 + 迁移 ───────────────────────────────────────────────────────────
+
+// newConsolidationUsecase 构造开启自动扩缩容 + 强制整合的 usecase,并注入迁移推送替身。
+func newConsolidationUsecase(grace int32) (*HubUsecase, *fakeRepo, *fakeMigratePusher) {
+	cfg := testConf()
+	cfg.AutoScaleEnabled = true
+	cfg.ConsolidationEnabled = true
+	cfg.PlayersPerHub = 500
+	cfg.MigrateGraceSeconds = grace
+	cfg.ConsolidationBatch = 50
+	repo := newFakeRepo()
+	fleet := &memFleetScaler{
+		MockHubFleetProvider: NewMockHubFleetProvider(cfg),
+		replicas:             int32(cfg.MockShardCount),
+	}
+	pusher := &fakeMigratePusher{}
+	uc := NewHubUsecase(repo, fleet, &fakeSigner{}, cfg)
+	uc.SetMigratePusher(pusher)
+	return uc, repo, pusher
+}
+
+// seedShard 直接在 fakeRepo 写入一个分片镜像。
+func seedShard(repo *fakeRepo, pod string, shardID uint32, count int32) {
+	_ = repo.CreateShard(context.Background(), &hubv1.HubShardStorageRecord{
+		HubPodName:  pod,
+		HubAddr:     pod + ":7777",
+		Region:      "global",
+		ShardId:     shardID,
+		PlayerCount: count,
+		Capacity:    500,
+		State:       stateReady,
+	}, time.Minute)
+}
+
+// seedPlayer 直接写入玩家归属 + 成员反向索引。
+func seedPlayer(repo *fakeRepo, playerID uint64, pod string, shardID uint32) {
+	ctx := context.Background()
+	_ = repo.SetAssignment(ctx, &hubv1.HubAssignmentStorageRecord{
+		PlayerId:   playerID,
+		HubPodName: pod,
+		HubAddr:    pod + ":7777",
+		ShardId:    shardID,
+		Region:     "global",
+	}, time.Minute)
+	_ = repo.AddShardMember(ctx, pod, playerID, time.Minute)
+}
+
+func TestReconcile_ConsolidationMigratesPlayers(t *testing.T) {
+	uc, repo, pusher := newConsolidationUsecase(30)
+	ctx := context.Background()
+
+	// 两个 ready 分片:a 载 1 人,b 载 2 人。总在线 3 → need=1 → 多余 1 个分片(最空那个被排空)。
+	seedShard(repo, "hub-a", 1, 1)
+	seedShard(repo, "hub-b", 2, 2)
+	seedPlayer(repo, 1001, "hub-a", 1)
+	seedPlayer(repo, 1002, "hub-b", 2)
+	seedPlayer(repo, 1003, "hub-b", 2)
+
+	if err := uc.reconcileFleetReplicas(ctx); err != nil {
+		t.Fatalf("reconcile err: %v", err)
+	}
+
+	// 最空分片 hub-a 被排空 → draining + 玩家迁到 hub-b。
+	a, _, _ := repo.GetShard(ctx, "hub-a")
+	if a.State != stateDraining {
+		t.Fatalf("least-loaded shard hub-a should be draining, got %q", a.State)
+	}
+	if a.DrainingSinceMs == 0 {
+		t.Fatal("draining shard should stamp DrainingSinceMs")
+	}
+	if got := repo.playerCount("hub-a"); got != 0 {
+		t.Fatalf("drained shard hub-a want 0 players, got %d", got)
+	}
+	if got := repo.playerCount("hub-b"); got != 3 {
+		t.Fatalf("target shard hub-b want 3 players, got %d", got)
+	}
+	// 玩家 1001 的归属已迁到 hub-b。
+	asn, found, _ := repo.GetAssignment(ctx, 1001)
+	if !found || asn.HubPodName != "hub-b" {
+		t.Fatalf("player 1001 should be migrated to hub-b, got found=%v pod=%v", found, asn.GetHubPodName())
+	}
+	// 推送了 1 条迁移通知(只有 hub-a 上的 1 个玩家被迁)。
+	if pusher.count() != 1 {
+		t.Fatalf("want 1 migrate push, got %d", pusher.count())
+	}
+}
+
+func TestHeartbeat_DrainingShardReturnsDrainCommand(t *testing.T) {
+	uc, repo, _ := newConsolidationUsecase(45)
+	ctx := context.Background()
+	seedShard(repo, "hub-x", 1, 0)
+	// 标记 draining
+	_ = repo.UpdateShardWithLock(ctx, "hub-x", 1, func(s *hubv1.HubShardStorageRecord) error {
+		s.State = stateDraining
+		s.DrainingSinceMs = time.Now().UnixMilli()
+		return nil
+	}, time.Minute)
+
+	// DS 仍上报 ready,不应把 draining 降级回 ready。
+	res, err := uc.Heartbeat(ctx, "hub-x", 0, "ready", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat err: %v", err)
+	}
+	if res.Command != commandDrain {
+		t.Fatalf("draining shard want drain command, got %q", res.Command)
+	}
+	if res.GraceSeconds != 45 {
+		t.Fatalf("want grace 45, got %d", res.GraceSeconds)
+	}
+	s, _, _ := repo.GetShard(ctx, "hub-x")
+	if s.State != stateDraining {
+		t.Fatalf("DS ready report must not downgrade draining, got %q", s.State)
+	}
+}
+
+func TestReconcile_ReclaimsEmptyDrainedShardAfterGrace(t *testing.T) {
+	uc, repo, _ := newConsolidationUsecase(30)
+	ctx := context.Background()
+
+	// 一个已排空、draining 且过 grace 的分片 → 应被回收删除。
+	seedShard(repo, "hub-old", 1, 0)
+	_ = repo.UpdateShardWithLock(ctx, "hub-old", 1, func(s *hubv1.HubShardStorageRecord) error {
+		s.State = stateDraining
+		s.DrainingSinceMs = time.Now().Add(-1 * time.Hour).UnixMilli() // 远超 grace
+		return nil
+	}, time.Minute)
+
+	if err := uc.reconcileFleetReplicas(ctx); err != nil {
+		t.Fatalf("reconcile err: %v", err)
+	}
+	if _, found, _ := repo.GetShard(ctx, "hub-old"); found {
+		t.Fatal("empty drained shard past grace should be reclaimed")
+	}
+}
+
+func TestReconcile_KeepsDrainedShardWithinGrace(t *testing.T) {
+	uc, repo, _ := newConsolidationUsecase(30)
+	ctx := context.Background()
+
+	// draining 已排空但未过 grace → 保持存活(让在场玩家完成倒计时切换)。
+	seedShard(repo, "hub-young", 1, 0)
+	_ = repo.UpdateShardWithLock(ctx, "hub-young", 1, func(s *hubv1.HubShardStorageRecord) error {
+		s.State = stateDraining
+		s.DrainingSinceMs = time.Now().UnixMilli()
+		return nil
+	}, time.Minute)
+
+	if err := uc.reconcileFleetReplicas(ctx); err != nil {
+		t.Fatalf("reconcile err: %v", err)
+	}
+	if _, found, _ := repo.GetShard(ctx, "hub-young"); !found {
+		t.Fatal("drained shard within grace should NOT be reclaimed yet")
+	}
+}
+
+// 大厅没人时,超出 min_replicas 的空 ready 分片必须被标 draining + 盖戳(可回收),
+// 而不是直接缩 Fleet 留下不可回收的 stale 镜像。
+func TestReconcile_ZeroPlayersDrainsEmptySurplusForReclaim(t *testing.T) {
+	uc, repo, _ := newConsolidationUsecase(30)
+	ctx := context.Background()
+
+	// 三个空 ready 分片,总在线=0,min_replicas=1 → 保留 shard_id 最小的 1 个,排空其余 2 个。
+	seedShard(repo, "hub-1", 1, 0)
+	seedShard(repo, "hub-2", 2, 0)
+	seedShard(repo, "hub-3", 3, 0)
+
+	if err := uc.reconcileFleetReplicas(ctx); err != nil {
+		t.Fatalf("reconcile err: %v", err)
+	}
+
+	// 保底分片 hub-1 保持 ready。
+	s1, _, _ := repo.GetShard(ctx, "hub-1")
+	if s1.State != stateReady {
+		t.Fatalf("kept shard hub-1 should stay ready, got %q", s1.State)
+	}
+	// 多余空分片 hub-2 / hub-3 被标 draining 且盖戳(否则缩 Fleet 后镜像不可回收)。
+	for _, pod := range []string{"hub-2", "hub-3"} {
+		s, _, _ := repo.GetShard(ctx, pod)
+		if s.State != stateDraining {
+			t.Fatalf("surplus empty shard %s should be draining, got %q", pod, s.State)
+		}
+		if s.DrainingSinceMs == 0 {
+			t.Fatalf("surplus empty shard %s must stamp DrainingSinceMs for reclaim", pod)
+		}
 	}
 }

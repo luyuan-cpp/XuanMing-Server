@@ -35,6 +35,15 @@ jwt:
   session_ttl: "24h"
   ds_ticket_ttl: "5m"
 
+# kafka producer 配置(发布 pandora.hub.migrate 强制整合迁移通知,push 服务订阅消费)。
+# 弱依赖:brokers 不通只警告不阫塞。brokers 为空 + consolidation_enabled=true 时,
+# 迁移仅靠 Hub DS drain 心跳指令兜底(无无缝倒计时推送)。brokers 9093 = Pandora 端口规划。
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  dial_timeout: "2s"
+  write_timeout: "5s"
+  idempotent: true
+
 hub:
   # heartbeat_timeout: Hub DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → 分片 draining 停止分配
   heartbeat_timeout: "15s"
@@ -48,6 +57,25 @@ hub:
   default_region: "global"
   # default_capacity: 单分片人数上限(大厅 500 人/实例)
   default_capacity: 500
+  # autoscale_enabled: Hub Fleet 自动扩缩容。
+  # ⚠️ 只在 agones.enabled=true(真 Fleet scaler)时生效:Mock provider 是拓扑-only 不实现 scaler,
+  # 开了也不会运行(进程启动会打 autoscale_inert_under_mock 告警)。dev 默认走 Mock → 此处保持 false。
+  # 想在本机验真实扩缩容:设 agones.enabled=true + minikube/Agones 环境。整合逻辑本身有 biz 单测覆盖。
+  autoscale_enabled: false
+  # players_per_hub: 单 Hub 目标承载人数(>500 自动扩容到新大厅)
+  players_per_hub: 500
+  # min_replicas: 开服默认拉起大厅副本数(可配置)
+  min_replicas: 1
+  # max_replicas: 大厅副本上限(防止异常扩容)
+  max_replicas: 20
+  # consolidation_enabled: 强制整合(低负载时把人换到该去的分片,排空后缩容)。
+  # 依赖 autoscale_enabled=true(故同样需 agones.enabled=true 才生效)+ kafka.brokers(推无缝迁移通知)。
+  # Mock 模式下不会运行(避免对假分片/假玩家跑搬迁误导);搬迁逻辑由 biz 单测验证。
+  consolidation_enabled: false
+  # migrate_grace_seconds: 迁移优雅倒计时(秒),客户端/Hub DS 提示倒计时 + 缩容回收最短等待
+  migrate_grace_seconds: 30
+  # consolidation_batch: 单次 reconcile 每个排空分片最多迁移人数(防撑死,超过部分下个周期续排)
+  consolidation_batch: 50
   # optimistic_retry: WATCH/MULTI/EXEC 乐观锁冲突最大重试次数
   optimistic_retry: 3
   # mock_shard_count: W4 ⑤ MockHubFleetProvider 每 region 种的假分片数

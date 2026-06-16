@@ -53,8 +53,12 @@ type LoginUsecase struct {
 	verifier    *auth.Verifier
 
 	// devSkipPassword 开发期免密登录(conf.LoginConf.DevSkipPassword)。
-	// 为 true 时跳过密码校验,且账号不存在时自动懒注册一个稳定 player_id。
+	// 为 true 时跳过密码校验。
 	devSkipPassword bool
+
+	// devAutoRegister 开发期“假注册”(conf.LoginConf.DevAutoRegister)。
+	// 为 true 时账号不存在则首登自动注册(存入本次密码 bcrypt 哈希)。
+	devAutoRegister bool
 }
 
 // NewLoginUsecase 构造 LoginUsecase。
@@ -75,6 +79,7 @@ func NewLoginUsecase(
 	signer *auth.Signer,
 	verifier *auth.Verifier,
 	devSkipPassword bool,
+	devAutoRegister bool,
 ) *LoginUsecase {
 	return &LoginUsecase{
 		repo:            repo,
@@ -87,6 +92,7 @@ func NewLoginUsecase(
 		signer:          signer,
 		verifier:        verifier,
 		devSkipPassword: devSkipPassword,
+		devAutoRegister: devAutoRegister,
 	}
 }
 
@@ -105,17 +111,18 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 
 	playerID, expected, err := u.repo.FindByAccount(ctx, account)
 	if err != nil {
-		// 开发期免密模式 + 账号不存在 → 懒注册一个稳定 player_id(不阻断登录)。
-		if !(u.devSkipPassword && errcode.As(err) == errcode.ErrLoginAccountNotFound) {
+		// 账号不存在:开发期“假注册” / 免密任一开关打开 → 首登自动注册(不阻断登录)。
+		if errcode.As(err) != errcode.ErrLoginAccountNotFound || !(u.devAutoRegister || u.devSkipPassword) {
 			h.Warnw("msg", "login_account_not_found", "account", account)
 			return nil, err
 		}
-		playerID, err = u.ensureAccount(ctx, account)
+		playerID, err = u.ensureAccount(ctx, account, passwordHash)
 		if err != nil {
-			h.Errorw("msg", "login_auto_provision_failed", "err", err, "account", account)
+			h.Errorw("msg", "login_auto_register_failed", "err", err, "account", account)
 			return nil, err
 		}
-		h.Infow("msg", "login_dev_auto_provisioned", "account", account, "player_id", playerID)
+		// 刚注册:密码即客户端本次所发,无需再校验。
+		h.Warnw("msg", "login_dev_auto_registered", "account", account, "player_id", playerID)
 	} else if u.devSkipPassword {
 		// 账号已存在 + 免密模式 → 跳过密码校验。
 		h.Warnw("msg", "login_dev_skip_password", "account", account, "player_id", playerID)
@@ -183,14 +190,19 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	}, nil
 }
 
-// ensureAccount 在开发期免密模式下为不存在的账号懒注册一条记录,返回稳定 player_id。
+// ensureAccount 在开发期假注册 / 免密模式下为不存在的账号首登注册一条记录,返回稳定 player_id。
 //
-// snowflake 分配新 player_id 写入 accounts(uk_account 唯一);并发下若已被别的请求建好,
-// CreateAccount 返回 ErrAlreadyExists,回查拿到已存在的 player_id(保证同 account 名稳定)。
-// 密码哈希存空串:这类账号只能走免密模式登录(passwd.Verify 对空哈希恒失败,关掉开关即失效)。
-func (u *LoginUsecase) ensureAccount(ctx context.Context, account string) (uint64, error) {
+// snowflake 分配新 player_id 写入 accounts(uk_account 唯一),密码存入本次客户端所发
+// passwordHash 的 bcrypt 哈希 → 后续用同密码可走正常 bcrypt 校验(真实“首登即注”)。
+// 并发下若已被别的请求建好,CreateAccount 返回 ErrAlreadyExists,回查拿已存在的
+// player_id(保证同 account 名稳定)。
+func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash string) (uint64, error) {
+	bcryptHash, err := passwd.Hash(passwordHash, passwd.DevCost)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "hash password for auto-register: %v", err)
+	}
 	newID := u.sf.Generate()
-	if err := u.repo.CreateAccount(ctx, newID, account, ""); err != nil {
+	if err := u.repo.CreateAccount(ctx, newID, account, bcryptHash); err != nil {
 		if errcode.As(err) == errcode.ErrAlreadyExists {
 			id, _, ferr := u.repo.FindByAccount(ctx, account)
 			if ferr != nil {

@@ -83,12 +83,12 @@ func (s *MatchService) ConfirmMatch(ctx context.Context, req *matchv1.ConfirmMat
 	return &matchv1.ConfirmMatchResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// GetMatchProgress 查询匹配进度(只读,match_id 即授权)。
+// GetMatchProgress 查询匹配进度。match_id 即授权；READY 阶段额外按 callerID 给本人现签新 battle 票（重连用）。
 func (s *MatchService) GetMatchProgress(ctx context.Context, req *matchv1.GetMatchProgressRequest) (*matchv1.GetMatchProgressResponse, error) {
 	if req.GetMatchId() == 0 {
 		return &matchv1.GetMatchProgressResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	prog, err := s.uc.GetMatchProgress(ctx, req.GetMatchId())
+	prog, err := s.uc.GetMatchProgress(ctx, callerID(ctx), req.GetMatchId())
 	if err != nil {
 		return &matchv1.GetMatchProgressResponse{Code: toProtoCode(err)}, nil
 	}

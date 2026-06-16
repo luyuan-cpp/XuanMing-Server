@@ -127,6 +127,7 @@ const (
 	ErrFriendNotFound     Code = 9101
 	ErrFriendAlreadyAdded Code = 9102
 	ErrFriendBlocked      Code = 9103
+	ErrFriendLimit        Code = 9104 // 好友数已达上限(AcceptFriend 接受时原子校验)
 
 	ErrLocatorNotFound Code = 9201
 	ErrLocatorConflict Code = 9202 // 玩家同时在两个 DS

@@ -1,0 +1,37 @@
+// Package conf 是 friend 服务的私有配置结构(2026-06-15)。
+package conf
+
+import (
+	"github.com/luyuancpp/pandora/pkg/config"
+)
+
+// Config 是 friend 服务的完整配置。
+type Config struct {
+	config.Base `yaml:",inline" mapstructure:",squash"`
+
+	Friend FriendConf `yaml:"friend" json:"friend"`
+}
+
+// FriendConf 是 friend 服务私有配置。
+type FriendConf struct {
+	// MaxFriends 单玩家好友数量上限(默认 200)。
+	// AddFriend 时对 requester 提前失败;权威校验在 AcceptFriend 事务内对双方原子执行。
+	MaxFriends int `yaml:"max_friends,omitempty" json:"max_friends,omitempty"`
+
+	// LocatorAddr player_locator gRPC 地址(host:port)。
+	// 空 → ListFriends 不查在线状态(is_online 全 false,弱依赖)。
+	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
+}
+
+// Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
+func (c *Config) Defaults() {
+	if c.Friend.MaxFriends <= 0 {
+		c.Friend.MaxFriends = 200
+	}
+	if c.Server.Grpc.Addr == "" {
+		c.Server.Grpc.Addr = ":50004"
+	}
+	if c.Server.Http.Addr == "" {
+		c.Server.Http.Addr = ":51004"
+	}
+}
