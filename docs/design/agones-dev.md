@@ -297,6 +297,40 @@ sequenceDiagram
     Note over DA: ds_allocator 自身退出时 Close() 杀光在管 DS 防孤儿
 ```
 
+### 2.5 UE 5.7 Launcher / 源码版 / Installed Build 网络兼容性（2026-06-16）
+
+UE 客户端能否连上 DS,核心看 `FNetworkVersion` 的输入是否一致,尤其是
+`CompatibleChangelist`、UE 版本号和 `IsLicenseeVersion`。当前已确认:
+
+| 引擎 | CompatibleChangelist |
+|---|---:|
+| Launcher `UE_5.7` | `47537391` |
+| 源码版 `D:\UnrealEngine` | `47537391` |
+
+因此当前个人联调阶段可以使用 **Launcher UE_5.7 客户端 + 源码版 `D:\UnrealEngine` DS**,
+前提是**不改引擎源码、不改 `Build.version`、不重新同步到不同 CL**。在这个前提下,
+两边 `CompatibleChangelist` 一致,网络兼容。
+
+Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继承源码版的版本信息;只要产出后的
+`Build.version` 仍保持 `CompatibleChangelist=47537391`,就仍可与 Launcher `UE_5.7` 客户端兼容。
+风险在于 BuildGraph 产 Installed Build 时可能显式写入或改写 changelist;如果产出结果变成其它
+`CompatibleChangelist`,就可能与 Launcher 客户端网络版本不一致。
+
+阶段纪律:
+
+| 阶段 | 客户端引擎 | 服务器引擎 | 兼容性要求 |
+|---|---|---|---|
+| 个人打通链路 | Launcher `UE_5.7` | 源码版 `D:\UnrealEngine` | 已验证 CL 一致;不改引擎源码 / `Build.version` |
+| 团队规模化 | 同一个 Installed Build | 同一个 Installed Build | 推荐方案,单一引擎天然一致 |
+| 不推荐但可临时用 | Launcher `UE_5.7` | Installed Build | 必须人工确认产物 `CompatibleChangelist=47537391` |
+
+**一劳永逸的团队方案**:一旦团队上 Installed Build,客户端和服务器都用同一个 Installed Build 出包,
+不要长期维护「客户端 Launcher、服务器 Installed Build」两套引擎。这样只有一个引擎版本源,
+不会再靠人工对齐网络版本。
+
+验收要求:每次产出 Installed Build 或更换 DS 引擎前,检查产物 `Build.version` 的
+`CompatibleChangelist` 是否仍与当前客户端引擎一致;不一致时先停下确认,不要直接进入联调。
+
 ---
 
 ## 3. DS 业务心跳上报契约（UE 侧实现）
@@ -362,6 +396,7 @@ sequenceDiagram
   方式客户端代码**一致**,不必为调试/生产分叉(只是 Agones 下几乎一次连上,退避循环基本不触发)。
 - **后端无需改动**:DS 起好后正常每 5s 调 `ds_allocator.Heartbeat`(§3.2);客户端连入前 DS 未上报
   也不影响 allocator 镜像(镜像在 `Allocate` 时已写好,心跳只续期 + 容量对账)。
+
 ---
 
 ## 4. player_locator HUB/BATTLE 上报闭环契约（UE 侧实现）

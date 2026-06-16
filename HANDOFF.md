@@ -214,3 +214,85 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 | proto 生成脚本 | `tools/scripts/proto_gen.ps1` |
 | docker compose | `deploy/docker-compose.dev.yml` |
 | Prometheus 配置 | `deploy/prometheus/prometheus.yml` |
+
+---
+
+## §7 UE 引擎 / Dedicated Server 构建事实(2026-06-16 实测确认)
+
+### 7.1 已验证事实(新会话不要重复怀疑)
+
+1. **Launcher 发行版打不了 Dedicated Server**:`D:\Program Files\Epic Games\UE_5.7` 的 `InstalledPlatforms` 只有 `PlatformType=Editor/Game`,**无 `Server`**;Epic 官方设计如此,勾任何 optional component 都补不回来。报错 `Server targets are not currently supported from this engine distribution` 即源于此。
+2. **源码版能打 Server**:`D:\UnrealEngine`,UE 5.7.4,`BranchName=UE5`,Editor + UBT 已编译,是 source build(无 `Engine\Build\InstalledBuild.txt`)。
+3. **两个引擎网络兼容(已逐字段实测)**:
+   | 字段 | Launcher | 源码版 | 影响联机 |
+   |---|---|---|---|
+   | Major/Minor/Patch | 5.7.4 | 5.7.4 | 是,一致 |
+   | **CompatibleChangelist** | **47537391** | **47537391** | **核心,一致** |
+   | IsLicenseeVersion | 0 | 0 | 是,一致 |
+   | Changelist | 51494982 | 0 | 否 |
+   | BranchName | `++UE5+Release-5.7` | `UE5` | 否 |
+   - 联机握手(`FNetworkVersion`)= 5.7.4 + `CompatibleChangelist` + `IsLicenseeVersion`,三者一致 → 兼容。
+4. **Linux 工具链已装**:机器级 `LINUX_MULTIARCH_ROOT = C:\UnrealToolchains\v26_clang-20.1.8-rockylinux8`。
+5. **客户端工程**:`C:\work\Pandora-Client-SVN\Pandora\Pandora.uproject`,已有 `Pandora`(Game)/`PandoraEditor`/`PandoraServer`(`Type=TargetType.Server`)。
+6. **DS 打包脚本**:`C:\work\Pandora-Client-SVN\Tool\Server\Agones\build-linux-ds.ps1`,已改成自动锁定源码版引擎(扫 HKCU `Builds` 里无 `InstalledBuild.txt` 的那个);**未改** `Pandora.uproject` 的 `EngineAssociation`(保持 `"5.7"`,不把本机 GUID 提交进 SVN)。
+
+### 7.2 引擎选型纪律
+
+- **现阶段(个人打通 DS 链路)**:客户端用 Launcher 出 Win64 包,DS 用源码版 `D:\UnrealEngine` 打 Linux Server。已验证兼容,**唯一红线:不改 `D:\UnrealEngine` 引擎源码**(改了 `CompatibleChangelist` 不再可靠,必须客户端也同源出包)。
+- **团队规模化**:用源码版产一个 `WithServer=true` 的 **Installed Build**(标准做法,大团队主流,经 CI/构建农场分发);届时**客户端也切到同一个 Installed Build 出包**,单引擎天然兼容。
+- **Installed Build 只能用源码版 `D:\UnrealEngine` 产**,Launcher 版是成品、无源码无构建能力,不能当母机。
+
+### 7.3 交接话术:用源码版产支持 Server 的 Installed Build
+
+> 新会话(如 Claude Code)做 Installed Build 时,整段复制下面给它:
+
+```
+你接手 Pandora 项目的一个 UE 引擎构建任务:用源码版引擎产出一个支持 Dedicated Server 的 Installed Build,供团队和 CI 后续消费。开工前先读项目根的 AGENTS.md / CLAUDE.md(尤其 §11.1 跨 AI 分工:改本机环境、装工具、跑重型构建这类动作要先和用户确认,由用户/Codex 执行;你负责方案、脚本、项目内验证)。
+
+## 背景(已由上一会话实测确认,不要重复怀疑)
+
+1. 目标:Epic Launcher 发行版引擎(D:\Program Files\Epic Games\UE_5.7)官方设计上不支持构建 Dedicated Server target(InstalledPlatforms 里只有 PlatformType=Editor/Game,无 Server)。已确认无法靠勾 optional component 解决。
+2. 源码版引擎:D:\UnrealEngine,UE 5.7.4,BranchName=UE5,Editor 和 UBT 已编译完成,是 source build(无 Engine\Build\InstalledBuild.txt 标记)。它支持 Server target。
+3. 两个引擎 Build.version 已比对,网络兼容:
+   - Launcher:CompatibleChangelist = 47537391
+   - 源码版  :CompatibleChangelist = 47537391
+   - 联机握手(FNetworkVersion)看 CompatibleChangelist + 5.7.4 + IsLicenseeVersion=0,三者一致 = 兼容。
+4. Linux 交叉编译工具链已装好,机器级环境变量 LINUX_MULTIARCH_ROOT = C:\UnrealToolchains\v26_clang-20.1.8-rockylinux8。
+5. 客户端工程:C:\work\Pandora-Client-SVN\Pandora\Pandora.uproject,已有 Target:Pandora(Game)、PandoraEditor、PandoraServer(Type=TargetType.Server)。
+6. 后端 DS 打包脚本:C:\work\Pandora-Client-SVN\Tool\Server\Agones\build-linux-ds.ps1,已改成自动锁定源码版引擎(扫 HKCU Builds 里无 InstalledBuild.txt 的那个)。
+
+## 本次任务
+
+用源码版 D:\UnrealEngine 产出一个 Installed Build,要求:
+- 含 Win64(Editor+Game)
+- 含 Linux 平台支持
+- 含 Server target 支持(关键:-set:WithServer=true)
+- 关键纪律:产出的 Installed Build 的 Build.version 里 CompatibleChangelist 必须仍为 47537391,以便和现有 Launcher 客户端联机兼容。不要改引擎源码,不要 sync 到别的 changelist。
+
+官方机制是跑 BuildGraph:
+  D:\UnrealEngine\Engine\Build\BatchFiles\RunUAT.bat BuildGraph ^
+    -Script=Engine\Build\InstalledEngineBuild.xml ^
+    -Target="Make Installed Build Win64" ^
+    -set:WithWin64=true -set:WithLinux=true -set:WithServer=true ^
+    -set:WithClient=true -set:WithDDC=false
+产物默认在 D:\UnrealEngine\LocalBuilds\Engine\Windows。
+
+## 要你做的事(按顺序,每步先说明再执行)
+
+1. 先只读核对:打印 D:\UnrealEngine\Engine\Build\InstalledEngineBuild.xml 里可用的 -set 选项(不同 5.7 版本开关名可能不同,如 WithServer / WithLinux / HostPlatformOnly 等),确认正确的参数名,不要照抄上面命令就跑。
+2. 给出最终 BuildGraph 命令草案 + 预计耗时 + 产物大小 + 磁盘占用,交用户确认后再执行(这是改本机环境的重活,按 §11.1 需用户授权)。
+3. 用户授权后执行 BuildGraph,全程留意失败立即停并报告(不要自动重试、不要绕过失败)。
+4. 产出后校验:打印 LocalBuilds\Engine\Windows\Engine\Build\Build.version,确认 CompatibleChangelist == 47537391;确认 Engine\Config\BaseEngine.ini 的 InstalledPlatforms 里出现 PlatformType="Server"。
+5. 用产出的 Installed Build 验证能编 Server target:
+   <InstalledBuild>\Engine\Build\BatchFiles\Build.bat PandoraServer Linux Development -project="C:\work\Pandora-Client-SVN\Pandora\Pandora.uproject"
+6. 汇报:产物路径、Build.version 校验结果、Server 平台是否出现、Server target 是否编过、磁盘占用、剩余风险。
+
+## 红线(触发就停下问用户)
+
+- 需要改引擎源码、sync 别的 CL、装/升级工具、改系统环境
+- BuildGraph 失败
+- 产出的 CompatibleChangelist != 47537391(会导致和 Launcher 客户端不兼容)
+- 要动 Pandora.uproject 的 EngineAssociation(不要提交本机 GUID 进 SVN)
+
+先读 AGENTS.md / CLAUDE.md,然后从第 1 步(只读核对 InstalledEngineBuild.xml 的开关)开始。
+```
