@@ -32,6 +32,18 @@ type MMRChange struct {
 	IncWin         bool // 是否计一胜(total_wins+1)
 }
 
+// AttrAllocation 是一次加点请求里对某属性增加的点数(只增,Points>0)。
+type AttrAllocation struct {
+	Key    string
+	Points int32
+}
+
+// AttrPoint 是某条属性的已分配点数。
+type AttrPoint struct {
+	Key    string
+	Points int32
+}
+
 // PlayerRepo 是 player 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type PlayerRepo interface {
 	// EnsureProfile 确保玩家档案存在(INSERT IGNORE 默认档案),已存在则不动。
@@ -48,6 +60,23 @@ type PlayerRepo interface {
 	GetMMR(ctx context.Context, playerID uint64) (mmr int, found bool, err error)
 	// ApplyMMRChange 幂等改 MMR + 战绩计数。命中幂等键 → (已记录 new_mmr, true, nil)。
 	ApplyMMRChange(ctx context.Context, change MMRChange) (newMMR int, already bool, err error)
+
+	// ── 出战养成 ──────────────────────────────────────────────────────────
+	// IsHeroOwned 判断玩家是否已解锁该英雄。
+	IsHeroOwned(ctx context.Context, playerID uint64, heroID uint32) (bool, error)
+	// SetActiveHero 设定出战英雄(玩家须先 EnsureProfile;英雄拥有校验在 biz 层)。
+	SetActiveHero(ctx context.Context, playerID uint64, heroID uint32) error
+	// GetActiveHero 读出战英雄。未选定 / 未建档 → (0, nil)。
+	GetActiveHero(ctx context.Context, playerID uint64) (uint32, error)
+	// GrantAttributePoints 幂等授予可分配点。命中幂等键 → (当前 unspent, true, nil)。
+	GrantAttributePoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (unspent int, already bool, err error)
+	// AllocateAttributePoints 分配点(事务:校验 unspent>=sum,扣减,累加 player_attributes)。
+	// 点数不足 → ErrPlayerInsufficientPoints。
+	AllocateAttributePoints(ctx context.Context, playerID uint64, allocs []AttrAllocation) (unspent int, err error)
+	// ResetAttributes 洗点(已分配点全退回 unspent,清空 player_attributes)。
+	ResetAttributes(ctx context.Context, playerID uint64) (unspent int, err error)
+	// GetAttributes 读已分配属性点 + 未分配点。
+	GetAttributes(ctx context.Context, playerID uint64) (attrs []AttrPoint, unspent int, err error)
 }
 
 // MySQLPlayerRepo 是基于 database/sql 的 PlayerRepo 实现。
@@ -223,6 +252,200 @@ WHERE player_id = ?`
 		return 0, false, errcode.New(errcode.ErrInternal, "commit player=%d: %v", change.PlayerID, cerr)
 	}
 	return newMMR, false, nil
+}
+
+// ── 出战养成 ──────────────────────────────────────────────────────────────────
+
+func (r *MySQLPlayerRepo) IsHeroOwned(ctx context.Context, playerID uint64, heroID uint32) (bool, error) {
+	const q = `SELECT 1 FROM player_heroes WHERE player_id = ? AND hero_id = ? LIMIT 1`
+	var x int
+	err := r.db.QueryRowContext(ctx, q, playerID, heroID).Scan(&x)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "check hero owned player=%d hero=%d: %v", playerID, heroID, err)
+	}
+	return true, nil
+}
+
+func (r *MySQLPlayerRepo) SetActiveHero(ctx context.Context, playerID uint64, heroID uint32) error {
+	const q = `UPDATE players SET active_hero_id = ? WHERE player_id = ?`
+	if _, err := r.db.ExecContext(ctx, q, heroID, playerID); err != nil {
+		return errcode.New(errcode.ErrInternal, "set active hero player=%d hero=%d: %v", playerID, heroID, err)
+	}
+	return nil
+}
+
+func (r *MySQLPlayerRepo) GetActiveHero(ctx context.Context, playerID uint64) (uint32, error) {
+	const q = `SELECT active_hero_id FROM players WHERE player_id = ? LIMIT 1`
+	var heroID uint32
+	err := r.db.QueryRowContext(ctx, q, playerID).Scan(&heroID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "get active hero player=%d: %v", playerID, err)
+	}
+	return heroID, nil
+}
+
+// GrantAttributePoints 幂等授予可分配点(不变量 §2 风格:idempotency_key 防重复授予)。
+//
+// 流程:
+//  1. INSERT attr_point_grants(命中 uk → 幂等:读回当前 unspent 返回 already=true,不重复加)
+//  2. UPDATE players SET unspent_attr_points += points
+//  3. 读回 unspent
+func (r *MySQLPlayerRepo) GrantAttributePoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (int, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	const insGrant = `INSERT INTO attr_point_grants (player_id, idempotency_key, points) VALUES (?, ?, ?)`
+	if _, gerr := tx.ExecContext(ctx, insGrant, playerID, idempotencyKey, points); gerr != nil {
+		if isDupErr(gerr) {
+			// 幂等命中:读回当前 unspent,不重复授予
+			var cur int
+			qerr := tx.QueryRowContext(ctx, `SELECT unspent_attr_points FROM players WHERE player_id = ? LIMIT 1`, playerID).Scan(&cur)
+			if errors.Is(qerr, sql.ErrNoRows) {
+				return 0, false, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+			}
+			if qerr != nil {
+				return 0, false, errcode.New(errcode.ErrInternal, "read unspent player=%d: %v", playerID, qerr)
+			}
+			return cur, true, nil
+		}
+		return 0, false, errcode.New(errcode.ErrInternal, "insert grant player=%d: %v", playerID, gerr)
+	}
+
+	const updPlayer = `UPDATE players SET unspent_attr_points = unspent_attr_points + ? WHERE player_id = ?`
+	res, uerr := tx.ExecContext(ctx, updPlayer, points, playerID)
+	if uerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "grant unspent player=%d: %v", playerID, uerr)
+	}
+	if affected, _ := res.RowsAffected(); affected == 0 {
+		return 0, false, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+	}
+
+	var unspent int
+	if qerr := tx.QueryRowContext(ctx, `SELECT unspent_attr_points FROM players WHERE player_id = ? LIMIT 1`, playerID).Scan(&unspent); qerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "read unspent player=%d: %v", playerID, qerr)
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "commit grant player=%d: %v", playerID, cerr)
+	}
+	return unspent, false, nil
+}
+
+// AllocateAttributePoints 分配点(事务:锁 players 行校验 unspent>=sum,扣减,累加 player_attributes)。
+func (r *MySQLPlayerRepo) AllocateAttributePoints(ctx context.Context, playerID uint64, allocs []AttrAllocation) (int, error) {
+	var sum int32
+	for _, a := range allocs {
+		sum += a.Points
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var unspent int
+	err = tx.QueryRowContext(ctx, `SELECT unspent_attr_points FROM players WHERE player_id = ? FOR UPDATE`, playerID).Scan(&unspent)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "lock player=%d: %v", playerID, err)
+	}
+	if int(sum) > unspent {
+		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient points player=%d need=%d have=%d", playerID, sum, unspent)
+	}
+
+	const upsert = `INSERT INTO player_attributes (player_id, attr_key, points) VALUES (?, ?, ?)
+ON DUPLICATE KEY UPDATE points = points + VALUES(points)`
+	for _, a := range allocs {
+		if _, aerr := tx.ExecContext(ctx, upsert, playerID, a.Key, a.Points); aerr != nil {
+			return 0, errcode.New(errcode.ErrInternal, "upsert attr player=%d key=%s: %v", playerID, a.Key, aerr)
+		}
+	}
+
+	newUnspent := unspent - int(sum)
+	if _, uerr := tx.ExecContext(ctx, `UPDATE players SET unspent_attr_points = ? WHERE player_id = ?`, newUnspent, playerID); uerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "deduct unspent player=%d: %v", playerID, uerr)
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "commit allocate player=%d: %v", playerID, cerr)
+	}
+	return newUnspent, nil
+}
+
+// ResetAttributes 洗点(事务:锁 players 行,sum(已分配点)退回 unspent,清空 player_attributes)。
+func (r *MySQLPlayerRepo) ResetAttributes(ctx context.Context, playerID uint64) (int, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var unspent int
+	err = tx.QueryRowContext(ctx, `SELECT unspent_attr_points FROM players WHERE player_id = ? FOR UPDATE`, playerID).Scan(&unspent)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "lock player=%d: %v", playerID, err)
+	}
+
+	var allocated int
+	if qerr := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(points), 0) FROM player_attributes WHERE player_id = ?`, playerID).Scan(&allocated); qerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "sum attr player=%d: %v", playerID, qerr)
+	}
+	if _, derr := tx.ExecContext(ctx, `DELETE FROM player_attributes WHERE player_id = ?`, playerID); derr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "clear attr player=%d: %v", playerID, derr)
+	}
+
+	newUnspent := unspent + allocated
+	if _, uerr := tx.ExecContext(ctx, `UPDATE players SET unspent_attr_points = ? WHERE player_id = ?`, newUnspent, playerID); uerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "restore unspent player=%d: %v", playerID, uerr)
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "commit reset player=%d: %v", playerID, cerr)
+	}
+	return newUnspent, nil
+}
+
+func (r *MySQLPlayerRepo) GetAttributes(ctx context.Context, playerID uint64) ([]AttrPoint, int, error) {
+	const q = `SELECT attr_key, points FROM player_attributes WHERE player_id = ? ORDER BY attr_key`
+	rows, err := r.db.QueryContext(ctx, q, playerID)
+	if err != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "query attrs player=%d: %v", playerID, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var attrs []AttrPoint
+	for rows.Next() {
+		var a AttrPoint
+		if serr := rows.Scan(&a.Key, &a.Points); serr != nil {
+			return nil, 0, errcode.New(errcode.ErrInternal, "scan attr player=%d: %v", playerID, serr)
+		}
+		attrs = append(attrs, a)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "iterate attrs player=%d: %v", playerID, rerr)
+	}
+
+	var unspent int
+	uerr := r.db.QueryRowContext(ctx, `SELECT unspent_attr_points FROM players WHERE player_id = ? LIMIT 1`, playerID).Scan(&unspent)
+	if errors.Is(uerr, sql.ErrNoRows) {
+		return attrs, 0, nil
+	}
+	if uerr != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "read unspent player=%d: %v", playerID, uerr)
+	}
+	return attrs, unspent, nil
 }
 
 // isDupErr 判断是否 MySQL 1062 唯一键冲突(go-sql-driver 错误串含 "Error 1062")。

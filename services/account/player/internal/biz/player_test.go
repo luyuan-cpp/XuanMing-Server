@@ -24,16 +24,24 @@ type fakeProfile struct {
 
 // fakeRepo 是 data.PlayerRepo 的内存实现(复刻 MySQL 幂等语义)。
 type fakeRepo struct {
-	players map[uint64]*fakeProfile
-	heroes  map[uint64]map[uint32]bool
-	idem    map[string]int // key=playerID|idempotencyKey → 已记录 new_mmr
+	players    map[uint64]*fakeProfile
+	heroes     map[uint64]map[uint32]bool
+	idem       map[string]int // key=playerID|idempotencyKey → 已记录 new_mmr
+	activeHero map[uint64]uint32
+	attrs      map[uint64]map[string]int32
+	unspent    map[uint64]int
+	grants     map[string]bool // key=playerID|idempotencyKey
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		players: map[uint64]*fakeProfile{},
-		heroes:  map[uint64]map[uint32]bool{},
-		idem:    map[string]int{},
+		players:    map[uint64]*fakeProfile{},
+		heroes:     map[uint64]map[uint32]bool{},
+		idem:       map[string]int{},
+		activeHero: map[uint64]uint32{},
+		attrs:      map[uint64]map[string]int32{},
+		unspent:    map[uint64]int{},
+		grants:     map[string]bool{},
 	}
 }
 
@@ -127,8 +135,71 @@ func keyOf(pid uint64, k string) string {
 	return strconv.FormatUint(pid, 10) + "|" + k
 }
 
+func (f *fakeRepo) IsHeroOwned(_ context.Context, playerID uint64, heroID uint32) (bool, error) {
+	return f.heroes[playerID][heroID], nil
+}
+
+func (f *fakeRepo) SetActiveHero(_ context.Context, playerID uint64, heroID uint32) error {
+	f.activeHero[playerID] = heroID
+	return nil
+}
+
+func (f *fakeRepo) GetActiveHero(_ context.Context, playerID uint64) (uint32, error) {
+	return f.activeHero[playerID], nil
+}
+
+func (f *fakeRepo) GrantAttributePoints(_ context.Context, playerID uint64, points int32, idempotencyKey string) (int, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	if f.grants[gk] {
+		return f.unspent[playerID], true, nil
+	}
+	f.grants[gk] = true
+	f.unspent[playerID] += int(points)
+	return f.unspent[playerID], false, nil
+}
+
+func (f *fakeRepo) AllocateAttributePoints(_ context.Context, playerID uint64, allocs []data.AttrAllocation) (int, error) {
+	var sum int32
+	for _, a := range allocs {
+		sum += a.Points
+	}
+	if int(sum) > f.unspent[playerID] {
+		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient")
+	}
+	if f.attrs[playerID] == nil {
+		f.attrs[playerID] = map[string]int32{}
+	}
+	for _, a := range allocs {
+		f.attrs[playerID][a.Key] += a.Points
+	}
+	f.unspent[playerID] -= int(sum)
+	return f.unspent[playerID], nil
+}
+
+func (f *fakeRepo) ResetAttributes(_ context.Context, playerID uint64) (int, error) {
+	var total int32
+	for _, p := range f.attrs[playerID] {
+		total += p
+	}
+	f.attrs[playerID] = map[string]int32{}
+	f.unspent[playerID] += int(total)
+	return f.unspent[playerID], nil
+}
+
+func (f *fakeRepo) GetAttributes(_ context.Context, playerID uint64) ([]data.AttrPoint, int, error) {
+	var out []data.AttrPoint
+	for k, p := range f.attrs[playerID] {
+		out = append(out, data.AttrPoint{Key: k, Points: p})
+	}
+	return out, f.unspent[playerID], nil
+}
+
 func newUC(repo data.PlayerRepo) *PlayerUsecase {
 	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32})
+}
+
+func newUCHero(repo data.PlayerRepo) *PlayerUsecase {
+	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, HeroSelectionEnabled: true})
 }
 
 func TestUpdateMMR_AppliesDelta(t *testing.T) {
@@ -267,5 +338,154 @@ func TestBattleFlags(t *testing.T) {
 		if b != c.wantBattle || w != c.wantWin {
 			t.Fatalf("reason=%q: want (battle=%v win=%v), got (%v %v)", c.reason, c.wantBattle, c.wantWin, b, w)
 		}
+	}
+}
+
+// ── 出战养成 ──────────────────────────────────────────────────────────────────
+
+func TestSelectHero_FeatureDisabled(t *testing.T) {
+	uc := newUC(newFakeRepo()) // HeroSelectionEnabled=false
+	err := uc.SelectHero(context.Background(), 100, 7)
+	if errcode.As(err) != errcode.ErrPlayerFeatureDisabled {
+		t.Fatalf("disabled toggle should be ErrPlayerFeatureDisabled, got %v", err)
+	}
+}
+
+func TestSelectHero_NotOwned(t *testing.T) {
+	uc := newUCHero(newFakeRepo())
+	err := uc.SelectHero(context.Background(), 100, 7)
+	if errcode.As(err) != errcode.ErrPlayerHeroLocked {
+		t.Fatalf("unowned hero should be ErrPlayerHeroLocked, got %v", err)
+	}
+}
+
+func TestSelectHero_Success(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCHero(repo)
+	if err := uc.UnlockHero(context.Background(), 100, 7, "reward"); err != nil {
+		t.Fatalf("unlock err: %v", err)
+	}
+	if err := uc.SelectHero(context.Background(), 100, 7); err != nil {
+		t.Fatalf("select err: %v", err)
+	}
+	hero, err := uc.GetActiveHero(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("get active err: %v", err)
+	}
+	if hero != 7 {
+		t.Fatalf("active hero want 7, got %d", hero)
+	}
+}
+
+func TestGrantAttributePoints_Idempotent(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	first, err := uc.GrantAttributePoints(context.Background(), 100, 5, "lvlup-10")
+	if err != nil {
+		t.Fatalf("first grant err: %v", err)
+	}
+	if first != 5 {
+		t.Fatalf("first grant unspent want 5, got %d", first)
+	}
+	second, err := uc.GrantAttributePoints(context.Background(), 100, 5, "lvlup-10")
+	if err != nil {
+		t.Fatalf("second grant err: %v", err)
+	}
+	if second != 5 {
+		t.Fatalf("idempotent grant should not double-add, want 5, got %d", second)
+	}
+}
+
+func TestGrantAttributePoints_RequiresKey(t *testing.T) {
+	uc := newUC(newFakeRepo())
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 5, ""); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("empty key should be ErrInvalidArg, got %v", err)
+	}
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 0, "k"); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("non-positive points should be ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestAllocateAttributePoints_Insufficient(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 3, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	_, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{{Key: "str", Points: 5}})
+	if errcode.As(err) != errcode.ErrPlayerInsufficientPoints {
+		t.Fatalf("over-allocate should be ErrPlayerInsufficientPoints, got %v", err)
+	}
+}
+
+func TestAllocateAttributePoints_SuccessThenReset(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 10, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	unspent, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{{Key: "str", Points: 3}, {Key: "agi", Points: 2}})
+	if err != nil {
+		t.Fatalf("allocate err: %v", err)
+	}
+	if unspent != 5 {
+		t.Fatalf("after allocate 5, unspent want 5, got %d", unspent)
+	}
+	attrs, u2, err := uc.GetAttributes(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("get attrs err: %v", err)
+	}
+	if u2 != 5 || len(attrs) != 2 {
+		t.Fatalf("want unspent=5 attrs=2, got unspent=%d attrs=%d", u2, len(attrs))
+	}
+	resetUnspent, err := uc.ResetAttributes(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("reset err: %v", err)
+	}
+	if resetUnspent != 10 {
+		t.Fatalf("after reset all points return, unspent want 10, got %d", resetUnspent)
+	}
+}
+
+func TestAllocateAttributePoints_Validation(t *testing.T) {
+	uc := newUC(newFakeRepo())
+	if _, err := uc.AllocateAttributePoints(context.Background(), 100, nil); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("empty allocs should be ErrInvalidArg, got %v", err)
+	}
+	if _, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{{Key: "", Points: 1}}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("empty key should be ErrInvalidArg, got %v", err)
+	}
+	if _, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{{Key: "str", Points: 0}}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("non-positive points should be ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestGetLoadout_Snapshot(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCHero(repo)
+	if err := uc.UnlockHero(context.Background(), 100, 7, "reward"); err != nil {
+		t.Fatalf("unlock err: %v", err)
+	}
+	if err := uc.SelectHero(context.Background(), 100, 7); err != nil {
+		t.Fatalf("select err: %v", err)
+	}
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 4, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	if _, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{{Key: "str", Points: 1}}); err != nil {
+		t.Fatalf("allocate err: %v", err)
+	}
+	loadout, err := uc.GetLoadout(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("loadout err: %v", err)
+	}
+	if loadout.GetActiveHeroId() != 7 {
+		t.Fatalf("loadout hero want 7, got %d", loadout.GetActiveHeroId())
+	}
+	if loadout.GetUnspentAttrPoints() != 3 {
+		t.Fatalf("loadout unspent want 3, got %d", loadout.GetUnspentAttrPoints())
+	}
+	if len(loadout.GetAttributes()) != 1 {
+		t.Fatalf("loadout attrs want 1, got %d", len(loadout.GetAttributes()))
 	}
 }

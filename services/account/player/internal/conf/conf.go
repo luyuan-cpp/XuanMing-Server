@@ -27,6 +27,10 @@ type PlayerConf struct {
 	// MaxNicknameLen 昵称最大长度(UpdateNickname 校验,默认 32)。
 	MaxNicknameLen int `yaml:"max_nickname_len,omitempty" json:"max_nickname_len,omitempty"`
 
+	// HeroSelectionEnabled 出战英雄选择功能开关(默认 false,demo 阶段跳过选英雄,
+	// 与 login demo-skip 风格一致;关闭时 SelectHero 返回 ERR_PLAYER_FEATURE_DISABLED)。
+	HeroSelectionEnabled bool `yaml:"hero_selection_enabled,omitempty" json:"hero_selection_enabled,omitempty"`
+
 	// ConsumeTopics 本服订阅的 kafka topic(默认 [player.update])。
 	ConsumeTopics []string `yaml:"consume_topics,omitempty" json:"consume_topics,omitempty"`
 }

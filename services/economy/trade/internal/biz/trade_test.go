@@ -272,4 +272,3 @@ func TestConfirm_NotFound(t *testing.T) {
 	_, err := uc.ConfirmOrder(context.Background(), 1, 999)
 	wantCode(t, err, errcode.ErrTradeOrderNotFound)
 }
-

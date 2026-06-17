@@ -17,6 +17,7 @@ import (
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
 	"github.com/luyuancpp/pandora/services/account/player/internal/biz"
+	"github.com/luyuancpp/pandora/services/account/player/internal/data"
 )
 
 // PlayerService 实现 playerv1.PlayerServiceServer。
@@ -101,6 +102,99 @@ func (s *PlayerService) UpdateMMR(ctx context.Context, req *playerv1.UpdateMMRRe
 		return &playerv1.UpdateMMRResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.UpdateMMRResponse{Code: commonv1.ErrCode_OK, NewMmr: int32(newMMR)}, nil
+}
+
+// ── 出战养成 ──────────────────────────────────────────────────────────────────
+
+// SelectHero 设定出战英雄。
+func (s *PlayerService) SelectHero(ctx context.Context, req *playerv1.SelectHeroRequest) (*playerv1.SelectHeroResponse, error) {
+	if req.GetPlayerId() == 0 || req.GetHeroId() == 0 {
+		return &playerv1.SelectHeroResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	if err := s.uc.SelectHero(ctx, req.GetPlayerId(), req.GetHeroId()); err != nil {
+		return &playerv1.SelectHeroResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.SelectHeroResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// GetActiveHero 读出战英雄(未选定返回 hero_id=0)。
+func (s *PlayerService) GetActiveHero(ctx context.Context, req *playerv1.GetActiveHeroRequest) (*playerv1.GetActiveHeroResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GetActiveHeroResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	heroID, err := s.uc.GetActiveHero(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.GetActiveHeroResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.GetActiveHeroResponse{Code: commonv1.ErrCode_OK, HeroId: heroID}, nil
+}
+
+// GrantAttributePoints 幂等授予可分配点。
+func (s *PlayerService) GrantAttributePoints(ctx context.Context, req *playerv1.GrantAttributePointsRequest) (*playerv1.GrantAttributePointsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GrantAttributePointsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	unspent, err := s.uc.GrantAttributePoints(ctx, req.GetPlayerId(), req.GetPoints(), req.GetIdempotencyKey())
+	if err != nil {
+		return &playerv1.GrantAttributePointsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.GrantAttributePointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
+}
+
+// AllocateAttributePoints 分配属性点。
+func (s *PlayerService) AllocateAttributePoints(ctx context.Context, req *playerv1.AllocateAttributePointsRequest) (*playerv1.AllocateAttributePointsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.AllocateAttributePointsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	allocs := make([]data.AttrAllocation, 0, len(req.GetAllocations()))
+	for _, a := range req.GetAllocations() {
+		allocs = append(allocs, data.AttrAllocation{Key: a.GetAttrKey(), Points: a.GetPoints()})
+	}
+	unspent, err := s.uc.AllocateAttributePoints(ctx, req.GetPlayerId(), allocs)
+	if err != nil {
+		return &playerv1.AllocateAttributePointsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.AllocateAttributePointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
+}
+
+// ResetAttributes 洗点。
+func (s *PlayerService) ResetAttributes(ctx context.Context, req *playerv1.ResetAttributesRequest) (*playerv1.ResetAttributesResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.ResetAttributesResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	unspent, err := s.uc.ResetAttributes(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.ResetAttributesResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.ResetAttributesResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
+}
+
+// GetAttributes 读已分配属性点 + 未分配点。
+func (s *PlayerService) GetAttributes(ctx context.Context, req *playerv1.GetAttributesRequest) (*playerv1.GetAttributesResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GetAttributesResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	attrs, unspent, err := s.uc.GetAttributes(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.GetAttributesResponse{Code: toProtoCode(err)}, nil
+	}
+	out := make([]*playerv1.AttributeAllocation, 0, len(attrs))
+	for _, a := range attrs {
+		out = append(out, &playerv1.AttributeAllocation{AttrKey: a.Key, Points: a.Points})
+	}
+	return &playerv1.GetAttributesResponse{Code: commonv1.ErrCode_OK, Attributes: out, UnspentPoints: int32(unspent)}, nil
+}
+
+// GetLoadout 组装开战前快照(出战英雄 + 属性点)。
+func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadoutRequest) (*playerv1.GetLoadoutResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GetLoadoutResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	loadout, err := s.uc.GetLoadout(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.GetLoadoutResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.GetLoadoutResponse{Code: commonv1.ErrCode_OK, Loadout: loadout}, nil
 }
 
 // toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。

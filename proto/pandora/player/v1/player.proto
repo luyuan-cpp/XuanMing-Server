@@ -18,6 +18,17 @@ service PlayerService {
   rpc UnlockHero(UnlockHeroRequest) returns (UnlockHeroResponse);
   rpc GetMMR(GetMMRRequest) returns (GetMMRResponse);
   rpc UpdateMMR(UpdateMMRRequest) returns (UpdateMMRResponse);
+
+  // ── 出战养成(选英雄 / 属性加点 / 出战快照)──
+  // 边界(docs/design/ds-arch.md §0):仅大厅态持久化与配置;纯战斗内逻辑(技能/出装/
+  // 道具即时使用)走 UE GAS,不经 gRPC。GetLoadout 提供"开战前快照"。
+  rpc SelectHero(SelectHeroRequest) returns (SelectHeroResponse);
+  rpc GetActiveHero(GetActiveHeroRequest) returns (GetActiveHeroResponse);
+  rpc GrantAttributePoints(GrantAttributePointsRequest) returns (GrantAttributePointsResponse);
+  rpc AllocateAttributePoints(AllocateAttributePointsRequest) returns (AllocateAttributePointsResponse);
+  rpc ResetAttributes(ResetAttributesRequest) returns (ResetAttributesResponse);
+  rpc GetAttributes(GetAttributesRequest) returns (GetAttributesResponse);
+  rpc GetLoadout(GetLoadoutRequest) returns (GetLoadoutResponse);
 }
 
 // ===== 玩家档案 =====
@@ -116,4 +127,92 @@ message PlayerUpdateEvent {
   int32  mmr_delta = 3;
   string reason    = 4;  // "win" | "lose" | "draw" | "abandon"
   int64  ts_ms     = 5;
+}
+
+// ===== 出战养成(选英雄 / 属性加点 / 出战快照)=====
+
+// AttributeAllocation 是某条属性的已分配点数(客户端可见结构)。
+// attr_key 是属性键(如 "str" / "agi" / "int" / "vit"),由配置约定。
+message AttributeAllocation {
+  string attr_key = 1;
+  int32  points   = 2;
+}
+
+// SelectHero 设定出战英雄(只能选已解锁英雄;功能开关关闭时返回 ERR_PLAYER_FEATURE_DISABLED)。
+message SelectHeroRequest {
+  uint64 player_id = 1;
+  uint32 hero_id   = 2;
+}
+
+message SelectHeroResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message GetActiveHeroRequest {
+  uint64 player_id = 1;
+}
+
+message GetActiveHeroResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint32 hero_id = 2;  // 0 表示未选定
+}
+
+// GrantAttributePoints 幂等授予可分配点(idempotency_key 防重复授予,来源:升级/活动)。
+message GrantAttributePointsRequest {
+  uint64 player_id       = 1;
+  int32  points          = 2;  // 须 > 0
+  string idempotency_key = 3;
+}
+
+message GrantAttributePointsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32 unspent_points = 2;  // 授予后剩余可分配点
+}
+
+// AllocateAttributePoints 分配属性点(点数不足返回 ERR_PLAYER_INSUFFICIENT_POINTS)。
+message AllocateAttributePointsRequest {
+  uint64 player_id = 1;
+  repeated AttributeAllocation allocations = 2;  // 每条 points 须 > 0
+}
+
+message AllocateAttributePointsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32 unspent_points = 2;  // 分配后剩余可分配点
+}
+
+// ResetAttributes 洗点(已分配点全退回可分配点)。
+message ResetAttributesRequest {
+  uint64 player_id = 1;
+}
+
+message ResetAttributesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32 unspent_points = 2;  // 洗点后可分配点
+}
+
+message GetAttributesRequest {
+  uint64 player_id = 1;
+}
+
+message GetAttributesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated AttributeAllocation attributes = 2;
+  int32 unspent_points = 3;
+}
+
+// PlayerLoadout 是开战前快照(出战英雄 + 属性点),供匹配/进战下发(客户端可见结构)。
+message PlayerLoadout {
+  uint64 player_id = 1;
+  uint32 active_hero_id = 2;
+  repeated AttributeAllocation attributes = 3;
+  int32 unspent_attr_points = 4;
+}
+
+message GetLoadoutRequest {
+  uint64 player_id = 1;
+}
+
+message GetLoadoutResponse {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerLoadout loadout = 2;
 }

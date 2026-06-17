@@ -31,5 +31,6 @@ player:
   mmr_floor: 0
   default_nickname_prefix: "Player_"
   max_nickname_len: 32
+  hero_selection_enabled: true
   consume_topics:
     - "pandora.player.update"

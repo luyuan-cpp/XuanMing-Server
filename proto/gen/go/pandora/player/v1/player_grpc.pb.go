@@ -26,12 +26,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlayerService_GetProfile_FullMethodName     = "/pandora.player.v1.PlayerService/GetProfile"
-	PlayerService_UpdateNickname_FullMethodName = "/pandora.player.v1.PlayerService/UpdateNickname"
-	PlayerService_ListHeroes_FullMethodName     = "/pandora.player.v1.PlayerService/ListHeroes"
-	PlayerService_UnlockHero_FullMethodName     = "/pandora.player.v1.PlayerService/UnlockHero"
-	PlayerService_GetMMR_FullMethodName         = "/pandora.player.v1.PlayerService/GetMMR"
-	PlayerService_UpdateMMR_FullMethodName      = "/pandora.player.v1.PlayerService/UpdateMMR"
+	PlayerService_GetProfile_FullMethodName              = "/pandora.player.v1.PlayerService/GetProfile"
+	PlayerService_UpdateNickname_FullMethodName          = "/pandora.player.v1.PlayerService/UpdateNickname"
+	PlayerService_ListHeroes_FullMethodName              = "/pandora.player.v1.PlayerService/ListHeroes"
+	PlayerService_UnlockHero_FullMethodName              = "/pandora.player.v1.PlayerService/UnlockHero"
+	PlayerService_GetMMR_FullMethodName                  = "/pandora.player.v1.PlayerService/GetMMR"
+	PlayerService_UpdateMMR_FullMethodName               = "/pandora.player.v1.PlayerService/UpdateMMR"
+	PlayerService_SelectHero_FullMethodName              = "/pandora.player.v1.PlayerService/SelectHero"
+	PlayerService_GetActiveHero_FullMethodName           = "/pandora.player.v1.PlayerService/GetActiveHero"
+	PlayerService_GrantAttributePoints_FullMethodName    = "/pandora.player.v1.PlayerService/GrantAttributePoints"
+	PlayerService_AllocateAttributePoints_FullMethodName = "/pandora.player.v1.PlayerService/AllocateAttributePoints"
+	PlayerService_ResetAttributes_FullMethodName         = "/pandora.player.v1.PlayerService/ResetAttributes"
+	PlayerService_GetAttributes_FullMethodName           = "/pandora.player.v1.PlayerService/GetAttributes"
+	PlayerService_GetLoadout_FullMethodName              = "/pandora.player.v1.PlayerService/GetLoadout"
 )
 
 // PlayerServiceClient is the client API for PlayerService service.
@@ -44,6 +51,16 @@ type PlayerServiceClient interface {
 	UnlockHero(ctx context.Context, in *UnlockHeroRequest, opts ...grpc.CallOption) (*UnlockHeroResponse, error)
 	GetMMR(ctx context.Context, in *GetMMRRequest, opts ...grpc.CallOption) (*GetMMRResponse, error)
 	UpdateMMR(ctx context.Context, in *UpdateMMRRequest, opts ...grpc.CallOption) (*UpdateMMRResponse, error)
+	// ── 出战养成(选英雄 / 属性加点 / 出战快照)──
+	// 边界(docs/design/ds-arch.md §0):仅大厅态持久化与配置;纯战斗内逻辑(技能/出装/
+	// 道具即时使用)走 UE GAS,不经 gRPC。GetLoadout 提供"开战前快照"。
+	SelectHero(ctx context.Context, in *SelectHeroRequest, opts ...grpc.CallOption) (*SelectHeroResponse, error)
+	GetActiveHero(ctx context.Context, in *GetActiveHeroRequest, opts ...grpc.CallOption) (*GetActiveHeroResponse, error)
+	GrantAttributePoints(ctx context.Context, in *GrantAttributePointsRequest, opts ...grpc.CallOption) (*GrantAttributePointsResponse, error)
+	AllocateAttributePoints(ctx context.Context, in *AllocateAttributePointsRequest, opts ...grpc.CallOption) (*AllocateAttributePointsResponse, error)
+	ResetAttributes(ctx context.Context, in *ResetAttributesRequest, opts ...grpc.CallOption) (*ResetAttributesResponse, error)
+	GetAttributes(ctx context.Context, in *GetAttributesRequest, opts ...grpc.CallOption) (*GetAttributesResponse, error)
+	GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error)
 }
 
 type playerServiceClient struct {
@@ -114,6 +131,76 @@ func (c *playerServiceClient) UpdateMMR(ctx context.Context, in *UpdateMMRReques
 	return out, nil
 }
 
+func (c *playerServiceClient) SelectHero(ctx context.Context, in *SelectHeroRequest, opts ...grpc.CallOption) (*SelectHeroResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelectHeroResponse)
+	err := c.cc.Invoke(ctx, PlayerService_SelectHero_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetActiveHero(ctx context.Context, in *GetActiveHeroRequest, opts ...grpc.CallOption) (*GetActiveHeroResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetActiveHeroResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetActiveHero_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GrantAttributePoints(ctx context.Context, in *GrantAttributePointsRequest, opts ...grpc.CallOption) (*GrantAttributePointsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GrantAttributePointsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GrantAttributePoints_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) AllocateAttributePoints(ctx context.Context, in *AllocateAttributePointsRequest, opts ...grpc.CallOption) (*AllocateAttributePointsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AllocateAttributePointsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_AllocateAttributePoints_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) ResetAttributes(ctx context.Context, in *ResetAttributesRequest, opts ...grpc.CallOption) (*ResetAttributesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResetAttributesResponse)
+	err := c.cc.Invoke(ctx, PlayerService_ResetAttributes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetAttributes(ctx context.Context, in *GetAttributesRequest, opts ...grpc.CallOption) (*GetAttributesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAttributesResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetAttributes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLoadoutResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerServiceServer is the server API for PlayerService service.
 // All implementations should embed UnimplementedPlayerServiceServer
 // for forward compatibility.
@@ -124,6 +211,16 @@ type PlayerServiceServer interface {
 	UnlockHero(context.Context, *UnlockHeroRequest) (*UnlockHeroResponse, error)
 	GetMMR(context.Context, *GetMMRRequest) (*GetMMRResponse, error)
 	UpdateMMR(context.Context, *UpdateMMRRequest) (*UpdateMMRResponse, error)
+	// ── 出战养成(选英雄 / 属性加点 / 出战快照)──
+	// 边界(docs/design/ds-arch.md §0):仅大厅态持久化与配置;纯战斗内逻辑(技能/出装/
+	// 道具即时使用)走 UE GAS,不经 gRPC。GetLoadout 提供"开战前快照"。
+	SelectHero(context.Context, *SelectHeroRequest) (*SelectHeroResponse, error)
+	GetActiveHero(context.Context, *GetActiveHeroRequest) (*GetActiveHeroResponse, error)
+	GrantAttributePoints(context.Context, *GrantAttributePointsRequest) (*GrantAttributePointsResponse, error)
+	AllocateAttributePoints(context.Context, *AllocateAttributePointsRequest) (*AllocateAttributePointsResponse, error)
+	ResetAttributes(context.Context, *ResetAttributesRequest) (*ResetAttributesResponse, error)
+	GetAttributes(context.Context, *GetAttributesRequest) (*GetAttributesResponse, error)
+	GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error)
 }
 
 // UnimplementedPlayerServiceServer should be embedded to have
@@ -150,6 +247,27 @@ func (UnimplementedPlayerServiceServer) GetMMR(context.Context, *GetMMRRequest) 
 }
 func (UnimplementedPlayerServiceServer) UpdateMMR(context.Context, *UpdateMMRRequest) (*UpdateMMRResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateMMR not implemented")
+}
+func (UnimplementedPlayerServiceServer) SelectHero(context.Context, *SelectHeroRequest) (*SelectHeroResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SelectHero not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetActiveHero(context.Context, *GetActiveHeroRequest) (*GetActiveHeroResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetActiveHero not implemented")
+}
+func (UnimplementedPlayerServiceServer) GrantAttributePoints(context.Context, *GrantAttributePointsRequest) (*GrantAttributePointsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GrantAttributePoints not implemented")
+}
+func (UnimplementedPlayerServiceServer) AllocateAttributePoints(context.Context, *AllocateAttributePointsRequest) (*AllocateAttributePointsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AllocateAttributePoints not implemented")
+}
+func (UnimplementedPlayerServiceServer) ResetAttributes(context.Context, *ResetAttributesRequest) (*ResetAttributesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetAttributes not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetAttributes(context.Context, *GetAttributesRequest) (*GetAttributesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAttributes not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLoadout not implemented")
 }
 func (UnimplementedPlayerServiceServer) testEmbeddedByValue() {}
 
@@ -279,6 +397,132 @@ func _PlayerService_UpdateMMR_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerService_SelectHero_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SelectHeroRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).SelectHero(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_SelectHero_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).SelectHero(ctx, req.(*SelectHeroRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetActiveHero_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetActiveHeroRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetActiveHero(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetActiveHero_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetActiveHero(ctx, req.(*GetActiveHeroRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GrantAttributePoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GrantAttributePointsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GrantAttributePoints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GrantAttributePoints_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GrantAttributePoints(ctx, req.(*GrantAttributePointsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_AllocateAttributePoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AllocateAttributePointsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).AllocateAttributePoints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_AllocateAttributePoints_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).AllocateAttributePoints(ctx, req.(*AllocateAttributePointsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_ResetAttributes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetAttributesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).ResetAttributes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_ResetAttributes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).ResetAttributes(ctx, req.(*ResetAttributesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetAttributes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAttributesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetAttributes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetAttributes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetAttributes(ctx, req.(*GetAttributesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetLoadout(ctx, req.(*GetLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerService_ServiceDesc is the grpc.ServiceDesc for PlayerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -309,6 +553,34 @@ var PlayerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateMMR",
 			Handler:    _PlayerService_UpdateMMR_Handler,
+		},
+		{
+			MethodName: "SelectHero",
+			Handler:    _PlayerService_SelectHero_Handler,
+		},
+		{
+			MethodName: "GetActiveHero",
+			Handler:    _PlayerService_GetActiveHero_Handler,
+		},
+		{
+			MethodName: "GrantAttributePoints",
+			Handler:    _PlayerService_GrantAttributePoints_Handler,
+		},
+		{
+			MethodName: "AllocateAttributePoints",
+			Handler:    _PlayerService_AllocateAttributePoints_Handler,
+		},
+		{
+			MethodName: "ResetAttributes",
+			Handler:    _PlayerService_ResetAttributes_Handler,
+		},
+		{
+			MethodName: "GetAttributes",
+			Handler:    _PlayerService_GetAttributes_Handler,
+		},
+		{
+			MethodName: "GetLoadout",
+			Handler:    _PlayerService_GetLoadout_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

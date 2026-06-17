@@ -4,9 +4,11 @@
 -- (01-create-databases.sql 先建库 + grant,本文件接着建表)。
 --
 -- 表清单(对齐 docs/design/infra.md §2.1 pandora_player):
---   players       玩家档案(player_id PK,昵称 / 等级 / 段位 mmr / 战绩计数)
+--   players       玩家档案(player_id PK,昵称 / 等级 / 段位 mmr / 战绩计数 / 出战英雄 / 属性点)
 --   player_heroes 英雄解锁记录(uk player_id+hero_id)
 --   mmr_history   MMR 变化历史 + 幂等键(uk player_id+idempotency_key,不变量 §2)
+--   player_attributes 属性加点已分配点(uk player_id+attr_key)
+--   attr_point_grants 属性点授予幂等表(uk player_id+idempotency_key)
 --
 -- 约定:
 --   - player_id 由 login 服务用 snowflake 生成(BIGINT UNSIGNED),player 服务不生成
@@ -24,6 +26,8 @@ CREATE TABLE IF NOT EXISTS `players` (
     `avatar`        VARCHAR(255)     NOT NULL DEFAULT '',
     `total_battles` INT              NOT NULL DEFAULT 0,
     `total_wins`    INT              NOT NULL DEFAULT 0,
+    `active_hero_id`      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '选定出战英雄 hero_id(0=未选定)',
+    `unspent_attr_points` INT          NOT NULL DEFAULT 0 COMMENT '未分配属性点',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `last_seen_at`  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),
@@ -58,3 +62,27 @@ CREATE TABLE IF NOT EXISTS `mmr_history` (
     KEY `idx_player_created` (`player_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家 MMR 变化历史 + 幂等键(不变量 §2)';
+
+CREATE TABLE IF NOT EXISTS `player_attributes` (
+    `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`  BIGINT UNSIGNED  NOT NULL,
+    `attr_key`   VARCHAR(32)      NOT NULL COMMENT '属性键: str | agi | int | vit 等',
+    `points`     INT              NOT NULL DEFAULT 0 COMMENT '该属性已分配点(>=0)',
+    `updated_at` DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_attr` (`player_id`, `attr_key`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家属性加点已分配点';
+
+CREATE TABLE IF NOT EXISTS `attr_point_grants` (
+    `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`       BIGINT UNSIGNED  NOT NULL,
+    `idempotency_key` VARCHAR(64)      NOT NULL COMMENT '防重复授予(如 level_up:<level> / reward:<id>)',
+    `points`          INT              NOT NULL COMMENT '本次授予点数(>0)',
+    `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_grant` (`player_id`, `idempotency_key`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 属性点授予幂等表';
