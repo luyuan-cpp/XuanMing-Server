@@ -1,0 +1,18 @@
+# Pandora Kill-Switch 规则文件(login 服务示例)
+#
+# 用途:RPC 级临时关停。某个 RPC / service 出重大问题时在这里加一行,
+# 改文件即热生效(秒级,无需重启),修好后删掉那行即恢复。
+#
+# 规则 key 三级粒度(value = 关停原因,会回传给客户端,可留空):
+#   单 RPC :"pandora.login.v1.LoginService/Login"
+#   整服    :"pandora.login.v1.LoginService/*"
+#   功能组  :"feature/<name>"   # 需服务用 killswitch.RegisterFeature 先归组
+#   全局    :"*"                # 关掉所有 RPC,慎用(整服维护)
+#
+# 当前:空 = 全部放行。
+rules: {}
+
+# 示例(取消注释即关停对应 RPC):
+# rules:
+#   "pandora.login.v1.LoginService/Login": "登录链路热修中 #123"
+#   "pandora.login.v1.LoginService/*": "login 整服维护"

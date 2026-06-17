@@ -22,10 +22,10 @@ import (
 // MustNewServer 创建并配置一个 Kratos gRPC Server。
 //
 // 默认 middleware 链(从外到内):
-//   1. Recovery     最外层捕 panic
-//   2. Trace        trace_id 注入 / 透传
-//   3. Logging      access log
-//   4. Metrics      Prometheus 指标
+//  1. Recovery     最外层捕 panic
+//  2. Trace        trace_id 注入 / 透传
+//  3. Logging      access log
+//  4. Metrics      Prometheus 指标
 //
 // 业务可通过 customMW 追加自定义 middleware(顺序在默认之后):
 //
@@ -36,12 +36,26 @@ import (
 //	app := kratos.New(kratos.Server(srv))
 //	app.Run()
 func MustNewServer(c config.Server, customMW ...middleware.Middleware) *kgrpc.Server {
-	mws := append([]middleware.Middleware{
+	// 默认 middleware 链(从外到内):
+	//   Recovery → Trace → Logging → Metrics → [RateLimit] → KillSwitch → custom → business
+	//
+	// RateLimit / KillSwitch 放在 Metrics 内层:被限流 / 被关停的请求仍会被
+	// Logging + Metrics 记录(pandora_rpc_total{code=...} 能看到拒绝次数),便于观测。
+	base := []middleware.Middleware{
 		pmw.Recovery(),
 		pmw.Trace(),
 		pmw.Logging(),
 		pmw.Metrics(),
-	}, customMW...)
+	}
+	// 第 4 层:BBR 自适应限流(过载保护)。dev 默认关,prod 显式开。
+	if c.Grpc.EnableRateLimit {
+		base = append(base, pmw.RateLimit())
+	}
+	// 第 3 层:RPC 级临时关停(Kill-Switch)。无条件挂载——未装配时 fail-open 放行,
+	// 开销仅一次 atomic load + map 查询。
+	base = append(base, pmw.KillSwitch())
+
+	mws := append(base, customMW...)
 
 	opts := []kgrpc.ServerOption{
 		kgrpc.Address(c.Grpc.Addr),

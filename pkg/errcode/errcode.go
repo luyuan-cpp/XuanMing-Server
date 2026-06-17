@@ -30,18 +30,19 @@ type Code int32
 const (
 	OK Code = 0
 
-	ErrUnknown        Code = 1
-	ErrInternal       Code = 2
-	ErrTimeout        Code = 3
-	ErrInvalidArg     Code = 4
-	ErrNotFound       Code = 5
-	ErrAlreadyExists  Code = 6
-	ErrPermissionDeny Code = 7
-	ErrUnauthorized   Code = 8
-	ErrRateLimited    Code = 9
-	ErrUnavailable    Code = 10
-	ErrCanceled       Code = 11
-	ErrInvalidState   Code = 12
+	ErrUnknown         Code = 1
+	ErrInternal        Code = 2
+	ErrTimeout         Code = 3
+	ErrInvalidArg      Code = 4
+	ErrNotFound        Code = 5
+	ErrAlreadyExists   Code = 6
+	ErrPermissionDeny  Code = 7
+	ErrUnauthorized    Code = 8
+	ErrRateLimited     Code = 9
+	ErrUnavailable     Code = 10
+	ErrCanceled        Code = 11
+	ErrInvalidState    Code = 12
+	ErrServiceDisabled Code = 13 // RPC 被 Kill-Switch 临时关停(维护中,稍后可重试)
 )
 
 // login(1000-1999)
@@ -58,11 +59,13 @@ const (
 
 // player(2000-2999)
 const (
-	ErrPlayerNotFound        Code = 2001
-	ErrPlayerVersionMismatch Code = 2002 // 乐观锁冲突
-	ErrPlayerNicknameTaken   Code = 2003
-	ErrPlayerHeroLocked      Code = 2010
-	ErrPlayerHeroAlreadyOwn  Code = 2011
+	ErrPlayerNotFound           Code = 2001
+	ErrPlayerVersionMismatch    Code = 2002 // 乐观锁冲突
+	ErrPlayerNicknameTaken      Code = 2003
+	ErrPlayerHeroLocked         Code = 2010
+	ErrPlayerHeroAlreadyOwn     Code = 2011
+	ErrPlayerFeatureDisabled    Code = 2020 // 出战养成功能未开启(feature toggle 关闭)
+	ErrPlayerInsufficientPoints Code = 2021 // 属性点不足
 )
 
 // team(3000-3999)
@@ -180,7 +183,7 @@ func As(err error) Code {
 // 不可重试:参数错 / 权限错 / 业务状态机错
 func IsRetryable(code Code) bool {
 	switch code {
-	case ErrTimeout, ErrUnavailable, ErrRateLimited,
+	case ErrTimeout, ErrUnavailable, ErrRateLimited, ErrServiceDisabled,
 		ErrDSAllocationFailed, ErrHubTransferFailed:
 		return true
 	default:

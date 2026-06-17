@@ -177,6 +177,25 @@ static_resources:
                   max_age: "600"
 
               routes:
+              # ===== 维护模式 / 整组紧急挡流(第 1 层,默认注释)=====
+              # 用途:某个对外 service 出重大问题,想在网关层立刻挡住客户端(不动业务服)。
+              # 取消注释对应 match + 改 docker restart pandora-envoy 即生效;修好后再注释回去。
+              # ⚠️ Envoy 按顺序匹配,维护路由必须放在正常路由之前才会优先命中。
+              # 详见 docs/ops/service-killswitch.md §3。
+              #
+              # - match:
+              #     prefix: "/pandora.match.v1.MatchService/"   # 挡整个 match 服务
+              #   direct_response:
+              #     status: 503
+              #     body:
+              #       inline_string: "match service under maintenance"
+              # - match:
+              #     prefix: "/pandora.trade.v1.TradeService/CreateOrder"  # 只挡单个 RPC
+              #   direct_response:
+              #     status: 503
+              #     body:
+              #       inline_string: "create order temporarily disabled"
+
               # ----- login(unary,立即完成型,demo 15s 超时)-----
               - match:
                   prefix: "/pandora.login.v1.LoginService/"

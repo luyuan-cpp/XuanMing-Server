@@ -57,6 +57,12 @@ func NewPushService(uc *biz.PushUsecase) *PushService {
 func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.PushService_SubscribeServer) error {
 	ctx := stream.Context()
 
+	// server stream 不跑 unary 中间件链,KillSwitch 不会自动生效,这里手动查一次开关。
+	// 命中 Subscribe 关停规则时拒绝建连(返回 ErrServiceDisabled),修好后删规则即恢复。
+	if err := pmw.KillSwitchStreamCheck(ctx); err != nil {
+		return err
+	}
+
 	// server stream 不跑 unary 中间件链,直接从 transport header 取 Envoy 注入的 player_id。
 	playerID := pmw.PlayerIDFromContext(ctx)
 	if playerID > 0 {

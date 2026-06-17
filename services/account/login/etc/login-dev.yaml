@@ -42,6 +42,16 @@ locker:
   account_lock_ttl: 10
   player_lock_ttl: 10
 
+# RPC 级临时关停(Kill-Switch):某个 RPC/service 出问题想临时关、修好再开。
+#   - source=file:改下面 file_path 指向的 yaml 即热生效(dev 推荐,零依赖)
+#   - source=etcd:prod 用,多实例一致;需 login main 里 blank import pkg/killswitch/etcdkv
+#   - 关停操作见 docs/ops/service-killswitch.md
+killswitch:
+  enabled: true
+  source: "file"
+  file_path: "etc/killswitch.yaml"   # 相对各服务工作目录;改这个文件即生效
+  # fail_closed: false               # 默认 false = fail-open(开关系统故障也放行,不拖垮服务)
+
 login:
   session_token_ttl: "24h"      # W3 ⑥ 示范:此前靠 Defaults() 填,现可直写
   ds_ticket_ttl: "5m"           # 不变量 §3:DS 票据短时效

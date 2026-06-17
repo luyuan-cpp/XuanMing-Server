@@ -51,7 +51,10 @@ use ./services/battle/battle_result
 
 use ./services/economy/trade
 
-use ./services/data/data_service
+use (
+	./pkg/killswitch/etcdkv
+	./services/data/data_service
+)
 
 // ⚠️ 构建验证:仓库根没有 go.mod,不能在根目录跑 go build ./...
 // 正确做法:按 use 列表构建,例如 go build ./pkg/...

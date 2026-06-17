@@ -60,9 +60,12 @@ func MustDialInsecure(endpoint string, customMW ...middleware.Middleware) *grpc.
 }
 
 func mustDial(insecure bool, endpoint string, reg registry.Discovery, customMW ...middleware.Middleware) *grpc.ClientConn {
+	// 默认 client middleware:Trace 透传 + Metrics + 第 4 层熔断(SRE breaker)。
+	// 熔断挂在 client 侧:下游故障时快速失败,避免雪崩拖垮调用方。
 	mws := append([]middleware.Middleware{
 		pmw.Trace(),
 		pmw.Metrics(),
+		pmw.CircuitBreaker(),
 	}, customMW...)
 
 	opts := []kgrpc.ClientOption{

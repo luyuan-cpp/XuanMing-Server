@@ -53,6 +53,9 @@ type Base struct {
 
 	// Kafka 生产者/消费者通用配置
 	Kafka KafkaConfig `yaml:"kafka,omitempty" json:"kafka,omitempty"`
+
+	// KillSwitch RPC 级临时关停(Kill-Switch)
+	KillSwitch KillSwitchConf `yaml:"killswitch,omitempty" json:"killswitch,omitempty"`
 }
 
 // Server Kratos 风格的 server 监听配置(替代 go-zero zrpc.RpcServerConf)。
@@ -65,16 +68,18 @@ type Server struct {
 //
 // EnableReflection(W3 ③,2026-06-05):
 //
-//	  - true:保留 Kratos 默认的 grpc.reflection 注册(grpcurl list 可用,便于联调)
-//	  - false(默认):pkg/grpcserver.MustNewServer 会加 kgrpc.DisableReflection() 关掉
+//   - true:保留 Kratos 默认的 grpc.reflection 注册(grpcurl list 可用,便于联调)
 //
-//	 prod 默认不写本字段(零值 false)= 关 reflection,避免攻击面额外暴露。
-//	 dev yaml 显式写 enable_reflection: true 打开。
+//   - false(默认):pkg/grpcserver.MustNewServer 会加 kgrpc.DisableReflection() 关掉
+//
+//     prod 默认不写本字段(零值 false)= 关 reflection,避免攻击面额外暴露。
+//     dev yaml 显式写 enable_reflection: true 打开。
 type Grpc struct {
-	Network          string   `yaml:"network,omitempty" json:"network,omitempty"`                       // 默认 "tcp"
-	Addr             string   `yaml:"addr" json:"addr"`                                                 // 例 ":50001"
-	Timeout          Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`                       // 默认 1s
-	EnableReflection bool     `yaml:"enable_reflection,omitempty" json:"enable_reflection,omitempty"`   // dev:true; prod:false(默认)
+	Network          string   `yaml:"network,omitempty" json:"network,omitempty"`                     // 默认 "tcp"
+	Addr             string   `yaml:"addr" json:"addr"`                                               // 例 ":50001"
+	Timeout          Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`                     // 默认 1s
+	EnableReflection bool     `yaml:"enable_reflection,omitempty" json:"enable_reflection,omitempty"` // dev:true; prod:false(默认)
+	EnableRateLimit  bool     `yaml:"enable_rate_limit,omitempty" json:"enable_rate_limit,omitempty"` // 第4层 BBR 自适应限流;dev:false; prod:true
 }
 
 // Http HTTP server 监听(给 protoc-gen-go-http 生成的 handler 用)。
@@ -87,13 +92,13 @@ type Http struct {
 // NodeConfig 节点级配置。
 type NodeConfig struct {
 	// ZoneId 是分服 ID。Pandora 单服模式默认填 1。
-	ZoneId           uint32        `yaml:"zone_id" json:"zone_id"`
-	SessionExpireMin uint32        `yaml:"session_expire_min,omitempty" json:"session_expire_min,omitempty"` // 默认 1440 (24h)
-	RedisClient      RedisConf     `yaml:"redis_client" json:"redis_client"`
-	MySQLClient      MySQLConf     `yaml:"mysql_client,omitempty" json:"mysql_client,omitempty"`             // W3 ② 起接 mysql 的服务用
-	LeaseTTL         int64    `yaml:"lease_ttl,omitempty" json:"lease_ttl,omitempty"`                   // 秒,默认 10
-	MaxLoginDuration Duration `yaml:"max_login_duration,omitempty" json:"max_login_duration,omitempty"` // 默认 24h
-	LogoutGraceTime  Duration `yaml:"logout_grace_time,omitempty" json:"logout_grace_time,omitempty"`   // 默认 5m
+	ZoneId           uint32    `yaml:"zone_id" json:"zone_id"`
+	SessionExpireMin uint32    `yaml:"session_expire_min,omitempty" json:"session_expire_min,omitempty"` // 默认 1440 (24h)
+	RedisClient      RedisConf `yaml:"redis_client" json:"redis_client"`
+	MySQLClient      MySQLConf `yaml:"mysql_client,omitempty" json:"mysql_client,omitempty"`             // W3 ② 起接 mysql 的服务用
+	LeaseTTL         int64     `yaml:"lease_ttl,omitempty" json:"lease_ttl,omitempty"`                   // 秒,默认 10
+	MaxLoginDuration Duration  `yaml:"max_login_duration,omitempty" json:"max_login_duration,omitempty"` // 默认 24h
+	LogoutGraceTime  Duration  `yaml:"logout_grace_time,omitempty" json:"logout_grace_time,omitempty"`   // 默认 5m
 }
 
 // MySQLConf MySQL 客户端配置(W3 ②,2026-06-05)。
@@ -192,6 +197,33 @@ type LockerConf struct {
 // RegistryConf 服务注册发现。
 type RegistryConf struct {
 	Etcd EtcdRegistryConf `yaml:"etcd,omitempty" json:"etcd,omitempty"`
+}
+
+// KillSwitchConf RPC 级临时关停(Kill-Switch)配置。
+//
+// 出现重大问题想临时关某个 service / RPC、修好再开,不发版不重启、秒级热生效。
+// 由 pkg/svc.BaseContext 在装配时翻译成 killswitch.Config 并启动开关源,
+// pkg/middleware.KillSwitch() 在 gRPC server 链上拦截命中规则的 RPC。
+type KillSwitchConf struct {
+	// Enabled 为 false 时不启用 Kill-Switch(全放行)。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+
+	// Source 开关源:"file"(dev 默认,改 yaml 即生效)/ "etcd"(prod,集中多实例一致)。
+	// etcd 源需服务在 main 里 blank import pkg/killswitch/etcdkv。
+	Source string `yaml:"source,omitempty" json:"source,omitempty"`
+
+	// FilePath file 源监听的 yaml(默认 "etc/killswitch.yaml")。
+	FilePath string `yaml:"file_path,omitempty" json:"file_path,omitempty"`
+
+	// Etcd* 给 etcd 源用。
+	EtcdEndpoints   []string `yaml:"etcd_endpoints,omitempty" json:"etcd_endpoints,omitempty"`
+	EtcdPrefix      string   `yaml:"etcd_prefix,omitempty" json:"etcd_prefix,omitempty"` // 默认 "/pandora/killswitch/"
+	EtcdDialTimeout Duration `yaml:"etcd_dial_timeout,omitempty" json:"etcd_dial_timeout,omitempty"`
+
+	// FailClosed 控制源构造失败时的行为。
+	// 零值 false = fail-open(放行,Kill-Switch 自身故障绝不拖垮服务,推荐默认)。
+	// true = fail-closed(源建不起来则 main fatal,仅在你要求"开关系统必须在线"时用)。
+	FailClosed bool `yaml:"fail_closed,omitempty" json:"fail_closed,omitempty"`
 }
 
 // EtcdRegistryConf etcd 注册中心(W3+ 接入)。
