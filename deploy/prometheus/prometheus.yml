@@ -1,6 +1,6 @@
 # Pandora Prometheus 配置
 #
-# 抓取目标:13 个 go 服务的 metrics 端口(51001~51022,见 docs/design/infra.md §6.3)+
+# 抓取目标:14 个 go 服务的 metrics 端口(51001~51022,见 docs/design/infra.md §6.3)+
 # Pandora 自身(promehteus 自监控)。
 #
 # host.docker.internal 让容器内的 prometheus 能访问 host 上跑的 go 服务进程。
@@ -18,7 +18,7 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # 13 个 go 服务
+  # 14 个 go 服务
   - job_name: pandora-go-services
     static_configs:
       # 基础玩家服务
@@ -44,6 +44,8 @@ scrape_configs:
         labels: { service: matchmaker }
       - targets: ['host.docker.internal:51012']
         labels: { service: trade }
+      - targets: ['host.docker.internal:51015']
+        labels: { service: inventory }
       - targets: ['host.docker.internal:51013']
         labels: { service: dialogue }
       # DS 调度 / 结算

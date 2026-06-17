@@ -113,6 +113,16 @@ const (
 	ErrTradeWrongState    Code = 7003
 	ErrTradeInsufficient  Code = 7004
 	ErrTradeLockFailed    Code = 7005
+
+	// inventory(背包,同属 economy 域,复用 7000 段)
+	ErrInventoryItemNotFound  Code = 7010 // 道具实例不存在 / 不属于该玩家
+	ErrInventoryInsufficient  Code = 7011 // 道具数量不足(扣减/出售/使用)
+	ErrInventoryItemNotUsable Code = 7012 // 该道具不可在大厅使用(战斗内道具走 GAS)
+	ErrInventoryNotSellable   Code = 7013 // 该道具不可出售
+	ErrInventoryLockFailed    Code = 7014 // 乐观锁重试耗尽(WATCH/MULTI/EXEC 冲突)
+	// ErrInventoryIdempotencyConflict 同一 idempotency_key 复用到不同请求(op/item/count/gold 指纹不一致),
+	// 拒绝静默当 no-op;相同指纹的重放返回首次执行的结果快照(不变量 §9.7)。
+	ErrInventoryIdempotencyConflict Code = 7015
 )
 
 // dialogue(8000-8999)

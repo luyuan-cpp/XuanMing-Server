@@ -38,6 +38,12 @@ const (
 	PlayerService_AllocateAttributePoints_FullMethodName = "/pandora.player.v1.PlayerService/AllocateAttributePoints"
 	PlayerService_ResetAttributes_FullMethodName         = "/pandora.player.v1.PlayerService/ResetAttributes"
 	PlayerService_GetAttributes_FullMethodName           = "/pandora.player.v1.PlayerService/GetAttributes"
+	PlayerService_SetEquipment_FullMethodName            = "/pandora.player.v1.PlayerService/SetEquipment"
+	PlayerService_GetEquipment_FullMethodName            = "/pandora.player.v1.PlayerService/GetEquipment"
+	PlayerService_GrantTalentPoints_FullMethodName       = "/pandora.player.v1.PlayerService/GrantTalentPoints"
+	PlayerService_SetTalents_FullMethodName              = "/pandora.player.v1.PlayerService/SetTalents"
+	PlayerService_ResetTalents_FullMethodName            = "/pandora.player.v1.PlayerService/ResetTalents"
+	PlayerService_GetTalents_FullMethodName              = "/pandora.player.v1.PlayerService/GetTalents"
 	PlayerService_GetLoadout_FullMethodName              = "/pandora.player.v1.PlayerService/GetLoadout"
 )
 
@@ -60,6 +66,15 @@ type PlayerServiceClient interface {
 	AllocateAttributePoints(ctx context.Context, in *AllocateAttributePointsRequest, opts ...grpc.CallOption) (*AllocateAttributePointsResponse, error)
 	ResetAttributes(ctx context.Context, in *ResetAttributesRequest, opts ...grpc.CallOption) (*ResetAttributesResponse, error)
 	GetAttributes(ctx context.Context, in *GetAttributesRequest, opts ...grpc.CallOption) (*GetAttributesResponse, error)
+	// ── 出战装备预设 / 天赋树(W5 ② loadout)──
+	// 装备预设 = 大厅态"出装预设"(引用装备配置 ID),开战前转成初始 GameplayEffect;
+	// 战斗内买装 / 换装走 UE GAS,不经 gRPC(ds-arch.md §0.1、§0.5)。
+	SetEquipment(ctx context.Context, in *SetEquipmentRequest, opts ...grpc.CallOption) (*SetEquipmentResponse, error)
+	GetEquipment(ctx context.Context, in *GetEquipmentRequest, opts ...grpc.CallOption) (*GetEquipmentResponse, error)
+	GrantTalentPoints(ctx context.Context, in *GrantTalentPointsRequest, opts ...grpc.CallOption) (*GrantTalentPointsResponse, error)
+	SetTalents(ctx context.Context, in *SetTalentsRequest, opts ...grpc.CallOption) (*SetTalentsResponse, error)
+	ResetTalents(ctx context.Context, in *ResetTalentsRequest, opts ...grpc.CallOption) (*ResetTalentsResponse, error)
+	GetTalents(ctx context.Context, in *GetTalentsRequest, opts ...grpc.CallOption) (*GetTalentsResponse, error)
 	GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error)
 }
 
@@ -191,6 +206,66 @@ func (c *playerServiceClient) GetAttributes(ctx context.Context, in *GetAttribut
 	return out, nil
 }
 
+func (c *playerServiceClient) SetEquipment(ctx context.Context, in *SetEquipmentRequest, opts ...grpc.CallOption) (*SetEquipmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetEquipmentResponse)
+	err := c.cc.Invoke(ctx, PlayerService_SetEquipment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetEquipment(ctx context.Context, in *GetEquipmentRequest, opts ...grpc.CallOption) (*GetEquipmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEquipmentResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetEquipment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GrantTalentPoints(ctx context.Context, in *GrantTalentPointsRequest, opts ...grpc.CallOption) (*GrantTalentPointsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GrantTalentPointsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GrantTalentPoints_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) SetTalents(ctx context.Context, in *SetTalentsRequest, opts ...grpc.CallOption) (*SetTalentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetTalentsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_SetTalents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) ResetTalents(ctx context.Context, in *ResetTalentsRequest, opts ...grpc.CallOption) (*ResetTalentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResetTalentsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_ResetTalents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetTalents(ctx context.Context, in *GetTalentsRequest, opts ...grpc.CallOption) (*GetTalentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTalentsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetTalents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *playerServiceClient) GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetLoadoutResponse)
@@ -220,6 +295,15 @@ type PlayerServiceServer interface {
 	AllocateAttributePoints(context.Context, *AllocateAttributePointsRequest) (*AllocateAttributePointsResponse, error)
 	ResetAttributes(context.Context, *ResetAttributesRequest) (*ResetAttributesResponse, error)
 	GetAttributes(context.Context, *GetAttributesRequest) (*GetAttributesResponse, error)
+	// ── 出战装备预设 / 天赋树(W5 ② loadout)──
+	// 装备预设 = 大厅态"出装预设"(引用装备配置 ID),开战前转成初始 GameplayEffect;
+	// 战斗内买装 / 换装走 UE GAS,不经 gRPC(ds-arch.md §0.1、§0.5)。
+	SetEquipment(context.Context, *SetEquipmentRequest) (*SetEquipmentResponse, error)
+	GetEquipment(context.Context, *GetEquipmentRequest) (*GetEquipmentResponse, error)
+	GrantTalentPoints(context.Context, *GrantTalentPointsRequest) (*GrantTalentPointsResponse, error)
+	SetTalents(context.Context, *SetTalentsRequest) (*SetTalentsResponse, error)
+	ResetTalents(context.Context, *ResetTalentsRequest) (*ResetTalentsResponse, error)
+	GetTalents(context.Context, *GetTalentsRequest) (*GetTalentsResponse, error)
 	GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error)
 }
 
@@ -265,6 +349,24 @@ func (UnimplementedPlayerServiceServer) ResetAttributes(context.Context, *ResetA
 }
 func (UnimplementedPlayerServiceServer) GetAttributes(context.Context, *GetAttributesRequest) (*GetAttributesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAttributes not implemented")
+}
+func (UnimplementedPlayerServiceServer) SetEquipment(context.Context, *SetEquipmentRequest) (*SetEquipmentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetEquipment not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetEquipment(context.Context, *GetEquipmentRequest) (*GetEquipmentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEquipment not implemented")
+}
+func (UnimplementedPlayerServiceServer) GrantTalentPoints(context.Context, *GrantTalentPointsRequest) (*GrantTalentPointsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GrantTalentPoints not implemented")
+}
+func (UnimplementedPlayerServiceServer) SetTalents(context.Context, *SetTalentsRequest) (*SetTalentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTalents not implemented")
+}
+func (UnimplementedPlayerServiceServer) ResetTalents(context.Context, *ResetTalentsRequest) (*ResetTalentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResetTalents not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetTalents(context.Context, *GetTalentsRequest) (*GetTalentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTalents not implemented")
 }
 func (UnimplementedPlayerServiceServer) GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLoadout not implemented")
@@ -505,6 +607,114 @@ func _PlayerService_GetAttributes_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerService_SetEquipment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEquipmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).SetEquipment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_SetEquipment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).SetEquipment(ctx, req.(*SetEquipmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetEquipment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEquipmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetEquipment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetEquipment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetEquipment(ctx, req.(*GetEquipmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GrantTalentPoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GrantTalentPointsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GrantTalentPoints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GrantTalentPoints_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GrantTalentPoints(ctx, req.(*GrantTalentPointsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_SetTalents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTalentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).SetTalents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_SetTalents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).SetTalents(ctx, req.(*SetTalentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_ResetTalents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetTalentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).ResetTalents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_ResetTalents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).ResetTalents(ctx, req.(*ResetTalentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetTalents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTalentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetTalents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetTalents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetTalents(ctx, req.(*GetTalentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlayerService_GetLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetLoadoutRequest)
 	if err := dec(in); err != nil {
@@ -577,6 +787,30 @@ var PlayerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAttributes",
 			Handler:    _PlayerService_GetAttributes_Handler,
+		},
+		{
+			MethodName: "SetEquipment",
+			Handler:    _PlayerService_SetEquipment_Handler,
+		},
+		{
+			MethodName: "GetEquipment",
+			Handler:    _PlayerService_GetEquipment_Handler,
+		},
+		{
+			MethodName: "GrantTalentPoints",
+			Handler:    _PlayerService_GrantTalentPoints_Handler,
+		},
+		{
+			MethodName: "SetTalents",
+			Handler:    _PlayerService_SetTalents_Handler,
+		},
+		{
+			MethodName: "ResetTalents",
+			Handler:    _PlayerService_ResetTalents_Handler,
+		},
+		{
+			MethodName: "GetTalents",
+			Handler:    _PlayerService_GetTalents_Handler,
 		},
 		{
 			MethodName: "GetLoadout",

@@ -281,7 +281,129 @@ func (u *PlayerUsecase) GetAttributes(ctx context.Context, playerID uint64) ([]d
 	return u.repo.GetAttributes(ctx, playerID)
 }
 
-// GetLoadout 组装开战前快照(出战英雄 + 属性点 + 未分配点),供匹配/进战下发。
+// ── 出战装备预设 / 天赋树 ──────────────────────────────────────────────────────
+//
+// 边界(ds-arch.md §0.5):装备预设 / 天赋是大厅态持久化,开战前转成初始 GameplayEffect;
+// 战斗内买装 / 换装 / 用道具走 UE GAS,不经 gRPC。
+
+// SetEquipment 全量替换出战装备预设(功能开关关闭 → ErrPlayerFeatureDisabled;槽位重复 / 配置非法 → ErrInvalidArg)。
+//
+// ⚠️ 安全限制(2026-06-17 审查):此处**只校验槽位不重复 + item_config_id 非 0**,
+// 尚未校验玩家是否拥有该装备 / item 是否为装备类型 / 槽位是否匹配。GetLoadout 会把装备转成
+// Battle DS 初始效果,故在接 inventory/配置表做拥有权+类型+槽位校验前,**不可对客户端开放**
+// (靠 LoadoutCustomizeEnabled 默认 false + player.v1 不在 Envoy 暴露双重关闭,见 conf.go 说明)。
+// TODO(配置表就绪后):校验 ownEquipment(playerID,item) + isEquip(item) + slotMatch(item,slot)。
+func (u *PlayerUsecase) SetEquipment(ctx context.Context, playerID uint64, slots []data.EquipmentSlot) error {
+	if playerID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if !u.cfg.LoadoutCustomizeEnabled {
+		return errcode.New(errcode.ErrPlayerFeatureDisabled, "loadout customize disabled")
+	}
+	seen := make(map[uint32]struct{}, len(slots))
+	for _, s := range slots {
+		if s.ItemConfigID == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "item_config_id required for slot %d", s.Slot)
+		}
+		if _, dup := seen[s.Slot]; dup {
+			return errcode.New(errcode.ErrInvalidArg, "duplicate slot %d", s.Slot)
+		}
+		seen[s.Slot] = struct{}{}
+	}
+	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+		return err
+	}
+	if err := u.repo.SetEquipment(ctx, playerID, slots); err != nil {
+		return err
+	}
+	plog.With(ctx).Infow("msg", "set_equipment", "player_id", playerID, "slots", len(slots))
+	return nil
+}
+
+// GetEquipment 读出战装备预设。
+func (u *PlayerUsecase) GetEquipment(ctx context.Context, playerID uint64) ([]data.EquipmentSlot, error) {
+	if playerID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	return u.repo.GetEquipment(ctx, playerID)
+}
+
+// GrantTalentPoints 幂等授予天赋点(来源:升级 / 活动,系统驱动不受 LoadoutCustomizeEnabled 影响)。
+func (u *PlayerUsecase) GrantTalentPoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (int, error) {
+	if playerID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if points <= 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "points must be positive")
+	}
+	if idempotencyKey == "" {
+		return 0, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
+	}
+	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+		return 0, err
+	}
+	unspent, already, err := u.repo.GrantTalentPoints(ctx, playerID, points, idempotencyKey)
+	if err != nil {
+		return 0, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "grant_talent_idempotent_hit",
+			"player_id", playerID, "idempotency_key", idempotencyKey, "unspent", unspent)
+	}
+	return unspent, nil
+}
+
+// SetTalents 全量重置天赋分配(功能开关关闭 → ErrPlayerFeatureDisabled;
+// talent_id 重复 / level<=0 → ErrInvalidArg;sum(level) 超额 → ErrPlayerInsufficientPoints)。
+func (u *PlayerUsecase) SetTalents(ctx context.Context, playerID uint64, talents []data.TalentLevel) (int, error) {
+	if playerID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if !u.cfg.LoadoutCustomizeEnabled {
+		return 0, errcode.New(errcode.ErrPlayerFeatureDisabled, "loadout customize disabled")
+	}
+	seen := make(map[uint32]struct{}, len(talents))
+	for _, t := range talents {
+		if t.TalentID == 0 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "talent_id required")
+		}
+		if t.Level <= 0 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "level must be positive: talent=%d", t.TalentID)
+		}
+		if _, dup := seen[t.TalentID]; dup {
+			return 0, errcode.New(errcode.ErrInvalidArg, "duplicate talent_id %d", t.TalentID)
+		}
+		seen[t.TalentID] = struct{}{}
+	}
+	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+		return 0, err
+	}
+	return u.repo.SetTalents(ctx, playerID, talents)
+}
+
+// ResetTalents 清空天赋分配(功能开关关闭 → ErrPlayerFeatureDisabled)。
+func (u *PlayerUsecase) ResetTalents(ctx context.Context, playerID uint64) (int, error) {
+	if playerID == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if !u.cfg.LoadoutCustomizeEnabled {
+		return 0, errcode.New(errcode.ErrPlayerFeatureDisabled, "loadout customize disabled")
+	}
+	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
+		return 0, err
+	}
+	return u.repo.ResetTalents(ctx, playerID)
+}
+
+// GetTalents 读已点天赋 + 可点天赋点。
+func (u *PlayerUsecase) GetTalents(ctx context.Context, playerID uint64) ([]data.TalentLevel, int, error) {
+	if playerID == 0 {
+		return nil, 0, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	return u.repo.GetTalents(ctx, playerID)
+}
+
+// GetLoadout 组装开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋),供匹配/进战下发。
 func (u *PlayerUsecase) GetLoadout(ctx context.Context, playerID uint64) (*playerv1.PlayerLoadout, error) {
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
@@ -298,11 +420,30 @@ func (u *PlayerUsecase) GetLoadout(ctx context.Context, playerID uint64) (*playe
 	for _, a := range attrs {
 		pts = append(pts, &playerv1.AttributeAllocation{AttrKey: a.Key, Points: a.Points})
 	}
+	equip, err := u.repo.GetEquipment(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	eq := make([]*playerv1.LoadoutEquipment, 0, len(equip))
+	for _, s := range equip {
+		eq = append(eq, &playerv1.LoadoutEquipment{Slot: s.Slot, ItemConfigId: s.ItemConfigID})
+	}
+	talents, talentUnspent, err := u.repo.GetTalents(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	tl := make([]*playerv1.TalentNode, 0, len(talents))
+	for _, t := range talents {
+		tl = append(tl, &playerv1.TalentNode{TalentId: t.TalentID, Level: t.Level})
+	}
 	return &playerv1.PlayerLoadout{
-		PlayerId:          playerID,
-		ActiveHeroId:      heroID,
-		Attributes:        pts,
-		UnspentAttrPoints: int32(unspent),
+		PlayerId:            playerID,
+		ActiveHeroId:        heroID,
+		Attributes:          pts,
+		UnspentAttrPoints:   int32(unspent),
+		Equipment:           eq,
+		Talents:             tl,
+		UnspentTalentPoints: int32(talentUnspent),
 	}, nil
 }
 

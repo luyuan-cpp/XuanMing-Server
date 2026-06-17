@@ -125,6 +125,40 @@
 
 不要为单一特性引入"通过 gRPC 做 tick"的混合架构,会让性能模型崩塌。
 
+### 0.5 开战前养成快照下发契约(W5 养成/背包)
+
+养成系统(选英雄 / 属性加点 / 装备槽 / 天赋树)全部是**大厅态持久化**,落库在 player 服务;
+战斗内的技能/出装/购买道具/即时用道具仍走 UE GAS(§0.1),后端**只在开战前下发一次快照**,
+战后只接收结算(`battle_result`)。下发链路如下:
+
+```
+匹配成功(matchmaker)
+   → ds_allocator 分配 Battle DS,给每个 player 生成 DS 票据(JWT exp 5min,不变量 §9.3)
+   → 客户端持票据连 Battle DS
+   → Battle DS 启动后,对每个进场玩家调用 player.GetLoadout(player_id)
+       拿到 PlayerLoadout{active_hero_id, attributes[], unspent_attr_points,
+                          equipment[], talents[]}
+   → Battle DS 用快照初始化该玩家的 GAS(英雄 / 属性基础值 / 装备初始 GameplayEffect / 天赋被动)
+   → 之后战斗内一切变化(升技能/再出装/买道具)走 GAS,不回写 player 服务
+```
+
+**契约要点(不变量,任何 AI review 必须守):**
+
+1. **快照只读一次**:Battle DS 进场时拉一次 `GetLoadout`,战斗中**不再轮询** player 服务。
+2. **快照是客户端可见结构**:`GetLoadout` 返回 `PlayerLoadout`(客户端可见结构),
+   **不下发** `*StorageRecord` / 数据库整行(不变量 §14)。
+3. **DS 不可信**:快照里的属性/装备只是"开战初始值",最终段位/经济结算仍以 `battle_result`
+   服务端重算为准(不变量 §6),DS 上报的数值只作展示与回放。
+4. **空值降级**:`active_hero_id=0`(玩家没选英雄)时 Battle DS 用默认英雄兜底,不阻断进场。
+5. **拉取超时**:`GetLoadout` 必须在独立 goroutine + 5s 超时(§0「④」),超时用空快照兜底进场,
+   并打 `trace_id` 告警,绝不阻塞 UE 主 tick 线程。
+6. **装备/天赋只影响初始**:装备槽(`equipment[]`)和天赋(`talents[]`)在开战前转成
+   一组初始 `GameplayEffect` / 被动 Ability;战斗内的买装/换装是 GAS 行为,与 player 服务无关。
+
+> 实现位置:`player.GetLoadout` 已在 W5 ① 落地(英雄 + 属性点);装备槽 / 天赋树字段在 W5 ②
+> 扩展到同一 `PlayerLoadout`(见 `go-services.md` §2.2 与 player 服务 proto)。Battle DS 侧的
+> 快照消费代码在 UE DS 仓库,跟随本契约实现。
+
 ---
 
 ## 1. DS 双形态对比

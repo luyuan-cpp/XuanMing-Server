@@ -151,6 +151,21 @@ static_resources:
                   prefix: "/pandora.dialogue.v1.DialogueService/"
                 requires:
                   provider_name: "pandora_session"
+              # inventory:只放行 3 个客户端 RPC(GetInventory / UseItem / SellItem),均需 JWT;
+              # player_id 以 JWT sub 为准(服务端再用 caller 身份覆盖请求体,见 internal/service)。
+              # GrantItems 是系统内部发放,故意不在网关暴露(下方 route 也不挂),客户端打不到。
+              - match:
+                  prefix: "/pandora.inventory.v1.InventoryService/GetInventory"
+                requires:
+                  provider_name: "pandora_session"
+              - match:
+                  prefix: "/pandora.inventory.v1.InventoryService/UseItem"
+                requires:
+                  provider_name: "pandora_session"
+              - match:
+                  prefix: "/pandora.inventory.v1.InventoryService/SellItem"
+                requires:
+                  provider_name: "pandora_session"
               # 没列到的 path(login.Login / login.VerifyDSTicket / grpc reflection)默认放行。
               # VerifyDSTicket 是 DS → login 的内部调用,不带玩家 JWT;靠 ext_authz 限内网(W3+)。
 
@@ -260,6 +275,28 @@ static_resources:
                   prefix: "/pandora.dialogue.v1.DialogueService/"
                 route:
                   cluster: dialogue_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+
+              # ----- inventory(unary,立即完成型,demo 15s 超时)-----
+              # ⚠️ 只暴露 3 个客户端 RPC(逐方法路由);GrantItems 是系统内部发放,故意不挂路由,
+              # 客户端经网关打 GrantItems 会 404,杜绝伪造发放(配合 service 层 caller 身份校验)。
+              - match:
+                  prefix: "/pandora.inventory.v1.InventoryService/GetInventory"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  prefix: "/pandora.inventory.v1.InventoryService/UseItem"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  prefix: "/pandora.inventory.v1.InventoryService/SellItem"
+                route:
+                  cluster: inventory_cluster
                   timeout: 15s
                   idle_timeout: 60s
 
@@ -550,6 +587,26 @@ static_resources:
               socket_address:
                 address: host.docker.internal
                 port_value: 50013
+
+  - name: inventory_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: inventory_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50015
 
   # ===========================================================================
   # DS 面内部服务 cluster(供 :8444 pandora_ds_listener 使用,agones-dev.md §5.1)

@@ -58,7 +58,7 @@ New-Item -ItemType Directory -Force -Path $BinDir, $LogDir | Out-Null
 # Profiles:
 #   login = 测登录/组队最小集(player_locator + hub_allocator + push + team + login)
 #   match = 完整主链路(在 login 基础上 + player + ds_allocator + battle_result + matchmaker)
-#   all   = 全部 14 个服务(含 social/friend、social/chat、social/dialogue、data/data_service、economy/trade)
+#   all   = 全部 15 个服务(含 social/friend、social/chat、social/dialogue、data/data_service、economy/trade、economy/inventory)
 $Services = @(
     @{ Name = 'player_locator'; Dir = 'services/runtime/player_locator';   Cmd = 'locator';        Conf = 'etc/locator-dev.yaml';        Port = 50006; Profiles = @('login', 'match', 'all') }
     @{ Name = 'hub_allocator';  Dir = 'services/battle/hub_allocator';      Cmd = 'hub_allocator';  Conf = 'etc/hub_allocator-dev.yaml';  Port = 50021; Profiles = @('login', 'match', 'all') }
@@ -71,6 +71,7 @@ $Services = @(
     @{ Name = 'dialogue';       Dir = 'services/social/dialogue';           Cmd = 'dialogue';       Conf = 'etc/dialogue-dev.yaml';       Port = 50013; Profiles = @('all') }
     @{ Name = 'data_service';   Dir = 'services/data/data_service';         Cmd = 'data_service';   Conf = 'etc/data_service-dev.yaml';   Port = 50003; Profiles = @('all') }
     @{ Name = 'trade';          Dir = 'services/economy/trade';             Cmd = 'trade';          Conf = 'etc/trade-dev.yaml';          Port = 50012; Profiles = @('all') }
+    @{ Name = 'inventory';      Dir = 'services/economy/inventory';         Cmd = 'inventory';      Conf = 'etc/inventory-dev.yaml';      Port = 50015; Profiles = @('all') }
     @{ Name = 'battle_result';  Dir = 'services/battle/battle_result';      Cmd = 'battle_result';  Conf = 'etc/battle_result-dev.yaml';  Port = 50022; Profiles = @('match', 'all') }
     @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-dev.yaml';     Port = 50011; Profiles = @('match', 'all') }
     @{ Name = 'login';          Dir = 'services/account/login';             Cmd = 'login';          Conf = 'etc/login-dev.yaml';          Port = 50001; Profiles = @('login', 'match', 'all') }

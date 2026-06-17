@@ -1,0 +1,110 @@
+// Pandora InventoryService 协议(背包,W5 ③ 2026-06-18)。
+//
+// 职责(docs/design/go-services.md §2.9 economy 域):
+//   - 玩家货币(金币)余额读写
+//   - 背包道具持有(按 item_config_id 堆叠计数)
+//   - 大厅态道具使用(开箱 / 经验书 / 消耗品)与出售换金币
+//
+// 边界(docs/design/ds-arch.md §0.1):
+//   - 战斗内即时用道具 / 出装 / 购买道具 = UE GAS(GameplayEffect),不经 gRPC;
+//   - 本服务只管大厅态持久化与经济结算,反作弊靠 WATCH/MULTI/EXEC 乐观锁 + 幂等键。
+//
+// 不变量(CLAUDE.md §9.7):交易/扣减必须原子 + 有补偿幂等键;
+//   GrantItems / UseItem / SellItem 全部带 idempotency_key,同键只生效一次。
+
+syntax = "proto3";
+
+package pandora.inventory.v1;
+
+import "pandora/common/v1/errcode.proto";
+
+service InventoryService {
+  // GetInventory 读玩家背包(货币 + 道具堆叠);客户端可见结构,不下发存储字段。
+  rpc GetInventory(GetInventoryRequest) returns (GetInventoryResponse);
+
+  // GrantItems 幂等发放道具 / 货币(系统驱动:战后掉落 / 活动 / 购买到账)。
+  rpc GrantItems(GrantItemsRequest) returns (GrantItemsResponse);
+
+  // UseItem 大厅态使用消耗品(开箱 / 经验书等);战斗内即时道具走 GAS,不走此 RPC。
+  rpc UseItem(UseItemRequest) returns (UseItemResponse);
+
+  // SellItem 出售道具换金币(原子扣道具 + 加金币)。
+  rpc SellItem(SellItemRequest) returns (SellItemResponse);
+}
+
+// ItemStack 是背包里某配置道具的持有堆叠(客户端可见结构)。
+// item_config_id 是道具配置 ID(uint32,§12);count 是持有数量(>0)。
+message ItemStack {
+  uint32 item_config_id = 1;
+  int64  count          = 2;
+}
+
+// ItemGrant 是一次发放里对某配置道具增加的数量(count>0)。
+message ItemGrant {
+  uint32 item_config_id = 1;
+  int64  count          = 2;
+}
+
+// CurrencyKind 货币类型(枚举底层 int32,§13;不属于 ID 规则)。
+enum CurrencyKind {
+  CURRENCY_KIND_UNSPECIFIED = 0;
+  CURRENCY_KIND_GOLD        = 1;  // 金币(出售道具 / 大厅经济主货币)
+}
+
+// Inventory 是玩家背包快照(客户端可见结构)。
+message Inventory {
+  uint64 player_id = 1;
+  int64  gold      = 2;  // 金币余额
+  repeated ItemStack items = 3;
+}
+
+message GetInventoryRequest {
+  uint64 player_id = 1;
+}
+
+message GetInventoryResponse {
+  pandora.common.v1.ErrCode code = 1;
+  Inventory inventory = 2;
+}
+
+// GrantItemsRequest 幂等发放(idempotency_key 防重复入账,来源:drop:<match_id> / reward:<id>)。
+message GrantItemsRequest {
+  uint64 player_id       = 1;
+  repeated ItemGrant items = 2;  // 每条 count 须 > 0
+  int64  gold            = 3;    // 同时发放金币(>=0)
+  string idempotency_key = 4;
+}
+
+message GrantItemsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 gold = 2;  // 发放后金币余额
+}
+
+// UseItemRequest 大厅态使用消耗品(数量不足 → ERR_INVENTORY_INSUFFICIENT;
+// 不可大厅使用 → ERR_INVENTORY_ITEM_NOT_USABLE)。
+message UseItemRequest {
+  uint64 player_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  count           = 3;  // 须 > 0
+  string idempotency_key = 4;
+}
+
+message UseItemResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 remaining = 2;  // 使用后该道具剩余数量
+}
+
+// SellItemRequest 出售道具换金币(数量不足 → ERR_INVENTORY_INSUFFICIENT;
+// 不可出售 → ERR_INVENTORY_NOT_SELLABLE)。
+message SellItemRequest {
+  uint64 player_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  count           = 3;  // 须 > 0
+  string idempotency_key = 4;
+}
+
+message SellItemResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int64 remaining = 2;  // 出售后该道具剩余数量
+  int64 gold      = 3;  // 出售后金币余额
+}

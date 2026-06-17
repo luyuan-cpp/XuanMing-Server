@@ -24,24 +24,32 @@ type fakeProfile struct {
 
 // fakeRepo 是 data.PlayerRepo 的内存实现(复刻 MySQL 幂等语义)。
 type fakeRepo struct {
-	players    map[uint64]*fakeProfile
-	heroes     map[uint64]map[uint32]bool
-	idem       map[string]int // key=playerID|idempotencyKey → 已记录 new_mmr
-	activeHero map[uint64]uint32
-	attrs      map[uint64]map[string]int32
-	unspent    map[uint64]int
-	grants     map[string]bool // key=playerID|idempotencyKey
+	players      map[uint64]*fakeProfile
+	heroes       map[uint64]map[uint32]bool
+	idem         map[string]int // key=playerID|idempotencyKey → 已记录 new_mmr
+	activeHero   map[uint64]uint32
+	attrs        map[uint64]map[string]int32
+	unspent      map[uint64]int
+	grants       map[string]bool // key=playerID|idempotencyKey
+	equipment    map[uint64][]data.EquipmentSlot
+	talents      map[uint64]map[uint32]int32
+	talentTotal  map[uint64]int
+	talentGrants map[string]bool // key=playerID|idempotencyKey
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		players:    map[uint64]*fakeProfile{},
-		heroes:     map[uint64]map[uint32]bool{},
-		idem:       map[string]int{},
-		activeHero: map[uint64]uint32{},
-		attrs:      map[uint64]map[string]int32{},
-		unspent:    map[uint64]int{},
-		grants:     map[string]bool{},
+		players:      map[uint64]*fakeProfile{},
+		heroes:       map[uint64]map[uint32]bool{},
+		idem:         map[string]int{},
+		activeHero:   map[uint64]uint32{},
+		attrs:        map[uint64]map[string]int32{},
+		unspent:      map[uint64]int{},
+		grants:       map[string]bool{},
+		equipment:    map[uint64][]data.EquipmentSlot{},
+		talents:      map[uint64]map[uint32]int32{},
+		talentTotal:  map[uint64]int{},
+		talentGrants: map[string]bool{},
 	}
 }
 
@@ -194,12 +202,74 @@ func (f *fakeRepo) GetAttributes(_ context.Context, playerID uint64) ([]data.Att
 	return out, f.unspent[playerID], nil
 }
 
+func (f *fakeRepo) SetEquipment(_ context.Context, playerID uint64, slots []data.EquipmentSlot) error {
+	cp := make([]data.EquipmentSlot, len(slots))
+	copy(cp, slots)
+	f.equipment[playerID] = cp
+	return nil
+}
+
+func (f *fakeRepo) GetEquipment(_ context.Context, playerID uint64) ([]data.EquipmentSlot, error) {
+	return f.equipment[playerID], nil
+}
+
+func (f *fakeRepo) talentUsed(playerID uint64) int {
+	var used int
+	for _, lv := range f.talents[playerID] {
+		used += int(lv)
+	}
+	return used
+}
+
+func (f *fakeRepo) GrantTalentPoints(_ context.Context, playerID uint64, points int32, idempotencyKey string) (int, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	if f.talentGrants[gk] {
+		return f.talentTotal[playerID] - f.talentUsed(playerID), true, nil
+	}
+	f.talentGrants[gk] = true
+	f.talentTotal[playerID] += int(points)
+	return f.talentTotal[playerID] - f.talentUsed(playerID), false, nil
+}
+
+func (f *fakeRepo) SetTalents(_ context.Context, playerID uint64, talents []data.TalentLevel) (int, error) {
+	var sum int32
+	for _, t := range talents {
+		sum += t.Level
+	}
+	if int(sum) > f.talentTotal[playerID] {
+		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient")
+	}
+	m := map[uint32]int32{}
+	for _, t := range talents {
+		m[t.TalentID] = t.Level
+	}
+	f.talents[playerID] = m
+	return f.talentTotal[playerID] - int(sum), nil
+}
+
+func (f *fakeRepo) ResetTalents(_ context.Context, playerID uint64) (int, error) {
+	f.talents[playerID] = map[uint32]int32{}
+	return f.talentTotal[playerID], nil
+}
+
+func (f *fakeRepo) GetTalents(_ context.Context, playerID uint64) ([]data.TalentLevel, int, error) {
+	var out []data.TalentLevel
+	for id, lv := range f.talents[playerID] {
+		out = append(out, data.TalentLevel{TalentID: id, Level: lv})
+	}
+	return out, f.talentTotal[playerID] - f.talentUsed(playerID), nil
+}
+
 func newUC(repo data.PlayerRepo) *PlayerUsecase {
 	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32})
 }
 
 func newUCHero(repo data.PlayerRepo) *PlayerUsecase {
 	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, HeroSelectionEnabled: true})
+}
+
+func newUCLoadout(repo data.PlayerRepo) *PlayerUsecase {
+	return NewPlayerUsecase(repo, conf.PlayerConf{BaseMMR: 1500, MMRFloor: 0, DefaultNicknamePrefix: "Player_", MaxNicknameLen: 32, HeroSelectionEnabled: true, LoadoutCustomizeEnabled: true})
 }
 
 func TestUpdateMMR_AppliesDelta(t *testing.T) {
@@ -487,5 +557,135 @@ func TestGetLoadout_Snapshot(t *testing.T) {
 	}
 	if len(loadout.GetAttributes()) != 1 {
 		t.Fatalf("loadout attrs want 1, got %d", len(loadout.GetAttributes()))
+	}
+}
+
+// ── 出战装备预设 / 天赋树(W5 ②)──────────────────────────────────────────────
+
+func TestSetEquipment_FeatureDisabled(t *testing.T) {
+	uc := newUCHero(newFakeRepo()) // LoadoutCustomizeEnabled=false
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}})
+	if errcode.As(err) != errcode.ErrPlayerFeatureDisabled {
+		t.Fatalf("disabled toggle should be ErrPlayerFeatureDisabled, got %v", err)
+	}
+}
+
+func TestSetEquipment_DuplicateSlot(t *testing.T) {
+	uc := newUCLoadout(newFakeRepo())
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}, {Slot: 0, ItemConfigID: 1002}})
+	if errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("duplicate slot should be ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestSetEquipment_RequiresItemConfig(t *testing.T) {
+	uc := newUCLoadout(newFakeRepo())
+	err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 0}})
+	if errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("zero item_config_id should be ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestSetEquipment_SuccessThenGet(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCLoadout(repo)
+	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}, {Slot: 1, ItemConfigID: 1002}}); err != nil {
+		t.Fatalf("set equipment err: %v", err)
+	}
+	slots, err := uc.GetEquipment(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("get equipment err: %v", err)
+	}
+	if len(slots) != 2 {
+		t.Fatalf("equipment want 2 slots, got %d", len(slots))
+	}
+}
+
+func TestGrantTalentPoints_Idempotent(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCLoadout(repo)
+	first, err := uc.GrantTalentPoints(context.Background(), 100, 6, "lvlup-20")
+	if err != nil {
+		t.Fatalf("first grant err: %v", err)
+	}
+	if first != 6 {
+		t.Fatalf("first talent grant unspent want 6, got %d", first)
+	}
+	second, err := uc.GrantTalentPoints(context.Background(), 100, 6, "lvlup-20")
+	if err != nil {
+		t.Fatalf("second grant err: %v", err)
+	}
+	if second != 6 {
+		t.Fatalf("idempotent talent grant should not double-add, want 6, got %d", second)
+	}
+}
+
+func TestSetTalents_Insufficient(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCLoadout(repo)
+	if _, err := uc.GrantTalentPoints(context.Background(), 100, 2, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	_, err := uc.SetTalents(context.Background(), 100, []data.TalentLevel{{TalentID: 5001, Level: 3}})
+	if errcode.As(err) != errcode.ErrPlayerInsufficientPoints {
+		t.Fatalf("over-spec should be ErrPlayerInsufficientPoints, got %v", err)
+	}
+}
+
+func TestSetTalents_DuplicateTalent(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCLoadout(repo)
+	if _, err := uc.GrantTalentPoints(context.Background(), 100, 5, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	_, err := uc.SetTalents(context.Background(), 100, []data.TalentLevel{{TalentID: 5001, Level: 1}, {TalentID: 5001, Level: 1}})
+	if errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("duplicate talent_id should be ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestSetTalents_SuccessThenResetAndLoadout(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUCLoadout(repo)
+	if err := uc.UnlockHero(context.Background(), 100, 7, "reward"); err != nil {
+		t.Fatalf("unlock err: %v", err)
+	}
+	if err := uc.SelectHero(context.Background(), 100, 7); err != nil {
+		t.Fatalf("select err: %v", err)
+	}
+	if err := uc.SetEquipment(context.Background(), 100, []data.EquipmentSlot{{Slot: 0, ItemConfigID: 1001}}); err != nil {
+		t.Fatalf("set equipment err: %v", err)
+	}
+	if _, err := uc.GrantTalentPoints(context.Background(), 100, 5, "g1"); err != nil {
+		t.Fatalf("grant talent err: %v", err)
+	}
+	unspent, err := uc.SetTalents(context.Background(), 100, []data.TalentLevel{{TalentID: 5001, Level: 2}})
+	if err != nil {
+		t.Fatalf("set talents err: %v", err)
+	}
+	if unspent != 3 {
+		t.Fatalf("after spec 2 of 5, talent unspent want 3, got %d", unspent)
+	}
+
+	loadout, err := uc.GetLoadout(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("loadout err: %v", err)
+	}
+	if len(loadout.GetEquipment()) != 1 {
+		t.Fatalf("loadout equipment want 1, got %d", len(loadout.GetEquipment()))
+	}
+	if len(loadout.GetTalents()) != 1 {
+		t.Fatalf("loadout talents want 1, got %d", len(loadout.GetTalents()))
+	}
+	if loadout.GetUnspentTalentPoints() != 3 {
+		t.Fatalf("loadout talent unspent want 3, got %d", loadout.GetUnspentTalentPoints())
+	}
+
+	resetUnspent, err := uc.ResetTalents(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("reset talents err: %v", err)
+	}
+	if resetUnspent != 5 {
+		t.Fatalf("after reset talents all return, want 5, got %d", resetUnspent)
 	}
 }

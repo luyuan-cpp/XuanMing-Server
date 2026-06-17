@@ -185,7 +185,94 @@ func (s *PlayerService) GetAttributes(ctx context.Context, req *playerv1.GetAttr
 	return &playerv1.GetAttributesResponse{Code: commonv1.ErrCode_OK, Attributes: out, UnspentPoints: int32(unspent)}, nil
 }
 
-// GetLoadout 组装开战前快照(出战英雄 + 属性点)。
+// SetEquipment 全量替换出战装备预设。
+func (s *PlayerService) SetEquipment(ctx context.Context, req *playerv1.SetEquipmentRequest) (*playerv1.SetEquipmentResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.SetEquipmentResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	slots := make([]data.EquipmentSlot, 0, len(req.GetEquipment()))
+	for _, e := range req.GetEquipment() {
+		slots = append(slots, data.EquipmentSlot{Slot: e.GetSlot(), ItemConfigID: e.GetItemConfigId()})
+	}
+	if err := s.uc.SetEquipment(ctx, req.GetPlayerId(), slots); err != nil {
+		return &playerv1.SetEquipmentResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.SetEquipmentResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// GetEquipment 读出战装备预设。
+func (s *PlayerService) GetEquipment(ctx context.Context, req *playerv1.GetEquipmentRequest) (*playerv1.GetEquipmentResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GetEquipmentResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	slots, err := s.uc.GetEquipment(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.GetEquipmentResponse{Code: toProtoCode(err)}, nil
+	}
+	out := make([]*playerv1.LoadoutEquipment, 0, len(slots))
+	for _, sl := range slots {
+		out = append(out, &playerv1.LoadoutEquipment{Slot: sl.Slot, ItemConfigId: sl.ItemConfigID})
+	}
+	return &playerv1.GetEquipmentResponse{Code: commonv1.ErrCode_OK, Equipment: out}, nil
+}
+
+// GrantTalentPoints 幂等授予天赋点。
+func (s *PlayerService) GrantTalentPoints(ctx context.Context, req *playerv1.GrantTalentPointsRequest) (*playerv1.GrantTalentPointsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GrantTalentPointsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	unspent, err := s.uc.GrantTalentPoints(ctx, req.GetPlayerId(), req.GetPoints(), req.GetIdempotencyKey())
+	if err != nil {
+		return &playerv1.GrantTalentPointsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.GrantTalentPointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
+}
+
+// SetTalents 全量重置天赋分配。
+func (s *PlayerService) SetTalents(ctx context.Context, req *playerv1.SetTalentsRequest) (*playerv1.SetTalentsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.SetTalentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	talents := make([]data.TalentLevel, 0, len(req.GetTalents()))
+	for _, t := range req.GetTalents() {
+		talents = append(talents, data.TalentLevel{TalentID: t.GetTalentId(), Level: t.GetLevel()})
+	}
+	unspent, err := s.uc.SetTalents(ctx, req.GetPlayerId(), talents)
+	if err != nil {
+		return &playerv1.SetTalentsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.SetTalentsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
+}
+
+// ResetTalents 清空天赋分配。
+func (s *PlayerService) ResetTalents(ctx context.Context, req *playerv1.ResetTalentsRequest) (*playerv1.ResetTalentsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.ResetTalentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	unspent, err := s.uc.ResetTalents(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.ResetTalentsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.ResetTalentsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
+}
+
+// GetTalents 读已点天赋 + 可点天赋点。
+func (s *PlayerService) GetTalents(ctx context.Context, req *playerv1.GetTalentsRequest) (*playerv1.GetTalentsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GetTalentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	talents, unspent, err := s.uc.GetTalents(ctx, req.GetPlayerId())
+	if err != nil {
+		return &playerv1.GetTalentsResponse{Code: toProtoCode(err)}, nil
+	}
+	out := make([]*playerv1.TalentNode, 0, len(talents))
+	for _, t := range talents {
+		out = append(out, &playerv1.TalentNode{TalentId: t.TalentID, Level: t.Level})
+	}
+	return &playerv1.GetTalentsResponse{Code: commonv1.ErrCode_OK, Talents: out, UnspentPoints: int32(unspent)}, nil
+}
+
+// GetLoadout 组装开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋)。
 func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadoutRequest) (*playerv1.GetLoadoutResponse, error) {
 	if req.GetPlayerId() == 0 {
 		return &playerv1.GetLoadoutResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil

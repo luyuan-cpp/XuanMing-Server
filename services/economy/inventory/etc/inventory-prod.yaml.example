@@ -1,0 +1,33 @@
+# Pandora inventory 服务生产配置示例(W5 ③,2026-06-18)。
+# 复制为 inventory-prod.yaml 后按环境填真实值;勿提交真实凭证(AGENTS.md §3)。
+#
+# - gRPC :50015 / HTTP :51015(仅 /metrics)
+# - MySQL 强依赖(pandora_trade 库)
+# - prod: enable_reflection 关闭(零值=false,不写即关)
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50015"
+    timeout: "5s"               # prod 按接口收紧
+  http:
+    network: tcp
+    addr: ":51015"
+
+node:
+  zone_id: 1
+  mysql_client:
+    dsn: "pandora:__SET_ME__@tcp(mysql:3306)/pandora_trade?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+    max_open_conns: 64
+    max_idle_conns: 16
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+inventory:
+  # 生产道具规则应由配置表服务下发 / 同步;此处仅占位示例。
+  item_rules:
+    - item_config_id: 2001
+      usable: true
+    - item_config_id: 3001
+      sellable: true
+      sell_unit_price: 10

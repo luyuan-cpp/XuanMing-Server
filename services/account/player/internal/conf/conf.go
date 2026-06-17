@@ -31,6 +31,17 @@ type PlayerConf struct {
 	// 与 login demo-skip 风格一致;关闭时 SelectHero 返回 ERR_PLAYER_FEATURE_DISABLED)。
 	HeroSelectionEnabled bool `yaml:"hero_selection_enabled,omitempty" json:"hero_selection_enabled,omitempty"`
 
+	// LoadoutCustomizeEnabled 出战装备预设 / 天赋树自定义功能开关(默认 false,demo 阶段跳过;
+	// 关闭时 SetEquipment / SetTalents / ResetTalents 返回 ERR_PLAYER_FEATURE_DISABLED;
+	// 授予类 GrantTalentPoints 由系统驱动不受此开关影响)。
+	//
+	// ⚠️ 安全(2026-06-17 审查):SetEquipment 目前**只校验槽位不重复 + item_config_id 非 0**,
+	// 未校验玩家是否拥有该装备 / item 是否为装备 / 槽位是否匹配。因 GetLoadout 会把装备转成
+	// Battle DS 初始 GameplayEffect,启用后等于客户端可给自己配任意装备。
+	// **在接 inventory/配置表做拥有权 + 类型 + 槽位校验前,严禁对客户端开放**:
+	// (1) 生产保持 false;(2) 不在 Envoy 暴露 player.v1.PlayerService 路由(当前未暴露)。
+	LoadoutCustomizeEnabled bool `yaml:"loadout_customize_enabled,omitempty" json:"loadout_customize_enabled,omitempty"`
+
 	// ConsumeTopics 本服订阅的 kafka topic(默认 [player.update])。
 	ConsumeTopics []string `yaml:"consume_topics,omitempty" json:"consume_topics,omitempty"`
 }

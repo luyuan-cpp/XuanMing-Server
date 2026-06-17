@@ -9,6 +9,9 @@
 --   mmr_history   MMR 变化历史 + 幂等键(uk player_id+idempotency_key,不变量 §2)
 --   player_attributes 属性加点已分配点(uk player_id+attr_key)
 --   attr_point_grants 属性点授予幂等表(uk player_id+idempotency_key)
+--   player_equipment  出战装备预设(uk player_id+slot)
+--   player_talents    天赋树已点分配(uk player_id+talent_id,re-spec 全量替换)
+--   talent_point_grants 天赋点授予幂等表(uk player_id+idempotency_key)
 --
 -- 约定:
 --   - player_id 由 login 服务用 snowflake 生成(BIGINT UNSIGNED),player 服务不生成
@@ -28,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `players` (
     `total_wins`    INT              NOT NULL DEFAULT 0,
     `active_hero_id`      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '选定出战英雄 hero_id(0=未选定)',
     `unspent_attr_points` INT          NOT NULL DEFAULT 0 COMMENT '未分配属性点',
+    `total_talent_points` INT          NOT NULL DEFAULT 0 COMMENT '累计授予天赋点(可点 = total - SUM(player_talents.level))',
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `last_seen_at`  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`),
@@ -86,3 +90,39 @@ CREATE TABLE IF NOT EXISTS `attr_point_grants` (
     KEY `idx_player` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 属性点授予幂等表';
+
+CREATE TABLE IF NOT EXISTS `player_equipment` (
+    `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`       BIGINT UNSIGNED  NOT NULL,
+    `slot`            INT UNSIGNED     NOT NULL COMMENT '出战装备预设槽位序号',
+    `item_config_id`  INT UNSIGNED     NOT NULL COMMENT '装备配置 ID(uint32)',
+    `updated_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_slot` (`player_id`, `slot`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家出战装备预设(大厅态;开战前转初始 GameplayEffect)';
+
+CREATE TABLE IF NOT EXISTS `player_talents` (
+    `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`  BIGINT UNSIGNED  NOT NULL,
+    `talent_id`  INT UNSIGNED     NOT NULL COMMENT '天赋配置 ID(uint32)',
+    `level`      INT              NOT NULL DEFAULT 0 COMMENT '该天赋节点已点等级(>0)',
+    `updated_at` DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_talent` (`player_id`, `talent_id`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家天赋树已点分配(re-spec 全量替换)';
+
+CREATE TABLE IF NOT EXISTS `talent_point_grants` (
+    `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`       BIGINT UNSIGNED  NOT NULL,
+    `idempotency_key` VARCHAR(64)      NOT NULL COMMENT '防重复授予(如 level_up:<level> / reward:<id>)',
+    `points`          INT              NOT NULL COMMENT '本次授予点数(>0)',
+    `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_talent_grant` (`player_id`, `idempotency_key`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 天赋点授予幂等表';

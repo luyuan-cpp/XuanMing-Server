@@ -51,6 +51,8 @@ use ./services/battle/battle_result
 
 use ./services/economy/trade
 
+use ./services/economy/inventory
+
 use (
 	./pkg/killswitch/etcdkv
 	./services/data/data_service

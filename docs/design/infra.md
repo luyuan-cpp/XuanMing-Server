@@ -255,13 +255,14 @@ pandora.dlq.<original_topic>     # 死信队列
 | trade | 50012 | 51012 |
 | dialogue | 50013 | 51013 |
 | **push** ⭐ | **50014**(gRPC server stream)| **51014** |
+| inventory | 50015 | 51015 |
 | ds_allocator | 50020 | 51020 |
 | hub_allocator | 50021 | 51021 |
 | battle_result | 50022 | 51022 |
 
 ⭐ = 2026-06-04 终版新增。push 服务用 Kratos transport/grpc 暴露 server stream,客户端经 Envoy 连过来(gRPC-Web → gRPC 转换)。
 
-**所有 14 个 go 服务全部用 gRPC 端口**(50001-50022 段),协议统一。
+**所有 go 服务全部用 gRPC 端口**(50001-50022 段),协议统一。inventory(W5 ③ 新增,economy 域,50015/51015)落在 push(50014)与 battle 块(50020+)之间的空档。
 
 ### 6.3 Edge Gateway(Envoy)
 

@@ -28,6 +28,17 @@ service PlayerService {
   rpc AllocateAttributePoints(AllocateAttributePointsRequest) returns (AllocateAttributePointsResponse);
   rpc ResetAttributes(ResetAttributesRequest) returns (ResetAttributesResponse);
   rpc GetAttributes(GetAttributesRequest) returns (GetAttributesResponse);
+
+  // ── 出战装备预设 / 天赋树(W5 ② loadout)──
+  // 装备预设 = 大厅态"出装预设"(引用装备配置 ID),开战前转成初始 GameplayEffect;
+  // 战斗内买装 / 换装走 UE GAS,不经 gRPC(ds-arch.md §0.1、§0.5)。
+  rpc SetEquipment(SetEquipmentRequest) returns (SetEquipmentResponse);
+  rpc GetEquipment(GetEquipmentRequest) returns (GetEquipmentResponse);
+  rpc GrantTalentPoints(GrantTalentPointsRequest) returns (GrantTalentPointsResponse);
+  rpc SetTalents(SetTalentsRequest) returns (SetTalentsResponse);
+  rpc ResetTalents(ResetTalentsRequest) returns (ResetTalentsResponse);
+  rpc GetTalents(GetTalentsRequest) returns (GetTalentsResponse);
+
   rpc GetLoadout(GetLoadoutRequest) returns (GetLoadoutResponse);
 }
 
@@ -200,12 +211,91 @@ message GetAttributesResponse {
   int32 unspent_points = 3;
 }
 
-// PlayerLoadout 是开战前快照(出战英雄 + 属性点),供匹配/进战下发(客户端可见结构)。
+// LoadoutEquipment 是出战装备预设的一个槽位(大厅态;开战前转成初始 GameplayEffect,ds-arch §0.5)。
+// slot 是槽位序号(0..N-1,配置约定);item_config_id 是装备配置 ID(uint32,§12)。
+message LoadoutEquipment {
+  uint32 slot           = 1;
+  uint32 item_config_id = 2;
+}
+
+// TalentNode 是天赋树某节点的已点等级(客户端可见结构)。
+// talent_id 是天赋配置 ID(uint32,§12);level 是已点等级(>0)。
+message TalentNode {
+  uint32 talent_id = 1;
+  int32  level     = 2;
+}
+
+// SetEquipment 全量替换出战装备预设(功能开关关闭时返回 ERR_PLAYER_FEATURE_DISABLED)。
+message SetEquipmentRequest {
+  uint64 player_id = 1;
+  repeated LoadoutEquipment equipment = 2;  // 槽位唯一;item_config_id 须 > 0
+}
+
+message SetEquipmentResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message GetEquipmentRequest {
+  uint64 player_id = 1;
+}
+
+message GetEquipmentResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated LoadoutEquipment equipment = 2;
+}
+
+// GrantTalentPoints 幂等授予天赋点(来源:升级 / 活动,idempotency_key 防重复授予)。
+message GrantTalentPointsRequest {
+  uint64 player_id       = 1;
+  int32  points          = 2;  // 须 > 0
+  string idempotency_key = 3;
+}
+
+message GrantTalentPointsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32 unspent_points = 2;  // 授予后剩余可点天赋点
+}
+
+// SetTalents 全量重置天赋分配(re-spec;sum(level) 超过已授予天赋点 → ERR_PLAYER_INSUFFICIENT_POINTS)。
+message SetTalentsRequest {
+  uint64 player_id = 1;
+  repeated TalentNode talents = 2;  // talent_id 唯一;level 须 > 0
+}
+
+message SetTalentsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32 unspent_points = 2;  // 设置后剩余可点天赋点
+}
+
+// ResetTalents 清空天赋分配(全部退回可点天赋点)。
+message ResetTalentsRequest {
+  uint64 player_id = 1;
+}
+
+message ResetTalentsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32 unspent_points = 2;
+}
+
+message GetTalentsRequest {
+  uint64 player_id = 1;
+}
+
+message GetTalentsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated TalentNode talents = 2;
+  int32 unspent_points = 3;
+}
+
+// PlayerLoadout 是开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋),供匹配/进战下发(客户端可见结构)。
 message PlayerLoadout {
   uint64 player_id = 1;
   uint32 active_hero_id = 2;
   repeated AttributeAllocation attributes = 3;
   int32 unspent_attr_points = 4;
+  repeated LoadoutEquipment equipment = 5;
+  repeated TalentNode talents = 6;
+  int32 unspent_talent_points = 7;
 }
 
 message GetLoadoutRequest {

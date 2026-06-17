@@ -44,6 +44,18 @@ type AttrPoint struct {
 	Points int32
 }
 
+// EquipmentSlot 是出战装备预设的一个槽位。
+type EquipmentSlot struct {
+	Slot         uint32
+	ItemConfigID uint32
+}
+
+// TalentLevel 是天赋树某节点的已点等级。
+type TalentLevel struct {
+	TalentID uint32
+	Level    int32
+}
+
 // PlayerRepo 是 player 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type PlayerRepo interface {
 	// EnsureProfile 确保玩家档案存在(INSERT IGNORE 默认档案),已存在则不动。
@@ -77,6 +89,20 @@ type PlayerRepo interface {
 	ResetAttributes(ctx context.Context, playerID uint64) (unspent int, err error)
 	// GetAttributes 读已分配属性点 + 未分配点。
 	GetAttributes(ctx context.Context, playerID uint64) (attrs []AttrPoint, unspent int, err error)
+
+	// ── 出战装备预设 / 天赋树 ────────────────────────────────────
+	// SetEquipment 全量替换出战装备预设(事务:删旧 + 插新)。
+	SetEquipment(ctx context.Context, playerID uint64, slots []EquipmentSlot) error
+	// GetEquipment 读出战装备预设(按 slot 排序)。
+	GetEquipment(ctx context.Context, playerID uint64) ([]EquipmentSlot, error)
+	// GrantTalentPoints 幂等授予天赋点(total_talent_points += points)。命中幂等键 → (当前可点, true, nil)。
+	GrantTalentPoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (unspent int, already bool, err error)
+	// SetTalents 全量重置天赋(事务:校验 sum(level)<=total,替换 player_talents)。点数不足 → ErrPlayerInsufficientPoints。
+	SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel) (unspent int, err error)
+	// ResetTalents 清空天赋(返回 total = 全部可点)。
+	ResetTalents(ctx context.Context, playerID uint64) (unspent int, err error)
+	// GetTalents 读已点天赋 + 可点天赋点(total - SUM(level))。
+	GetTalents(ctx context.Context, playerID uint64) (talents []TalentLevel, unspent int, err error)
 }
 
 // MySQLPlayerRepo 是基于 database/sql 的 PlayerRepo 实现。
@@ -446,6 +472,217 @@ func (r *MySQLPlayerRepo) GetAttributes(ctx context.Context, playerID uint64) ([
 		return nil, 0, errcode.New(errcode.ErrInternal, "read unspent player=%d: %v", playerID, uerr)
 	}
 	return attrs, unspent, nil
+}
+
+// ── 出战装备预设 / 天赋树 ──────────────────────────────────────────────────────
+
+// rowQueryer 抽象 *sql.DB / *sql.Tx 的 QueryRowContext,供 talentUnspent 复用。
+type rowQueryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// talentUnspent 读可点天赋点 = total_talent_points - SUM(player_talents.level)。
+// 玩家未建档 → ErrPlayerNotFound(调用方须先 EnsureProfile)。
+func talentUnspent(ctx context.Context, q rowQueryer, playerID uint64) (int, error) {
+	var total int
+	if err := q.QueryRowContext(ctx, `SELECT total_talent_points FROM players WHERE player_id = ? LIMIT 1`, playerID).Scan(&total); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+		}
+		return 0, errcode.New(errcode.ErrInternal, "read total talent player=%d: %v", playerID, err)
+	}
+	var used int
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(level), 0) FROM player_talents WHERE player_id = ?`, playerID).Scan(&used); err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "sum talent player=%d: %v", playerID, err)
+	}
+	return total - used, nil
+}
+
+// SetEquipment 全量替换出战装备预设(事务:删旧 + 按 slot 插新;uk_player_slot 保证 slot 唯一)。
+func (r *MySQLPlayerRepo) SetEquipment(ctx context.Context, playerID uint64, slots []EquipmentSlot) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, derr := tx.ExecContext(ctx, `DELETE FROM player_equipment WHERE player_id = ?`, playerID); derr != nil {
+		return errcode.New(errcode.ErrInternal, "clear equipment player=%d: %v", playerID, derr)
+	}
+	const ins = `INSERT INTO player_equipment (player_id, slot, item_config_id) VALUES (?, ?, ?)`
+	for _, s := range slots {
+		if _, ierr := tx.ExecContext(ctx, ins, playerID, s.Slot, s.ItemConfigID); ierr != nil {
+			if isDupErr(ierr) {
+				return errcode.New(errcode.ErrInvalidArg, "duplicate equipment slot player=%d slot=%d", playerID, s.Slot)
+			}
+			return errcode.New(errcode.ErrInternal, "insert equipment player=%d slot=%d: %v", playerID, s.Slot, ierr)
+		}
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return errcode.New(errcode.ErrInternal, "commit equipment player=%d: %v", playerID, cerr)
+	}
+	return nil
+}
+
+func (r *MySQLPlayerRepo) GetEquipment(ctx context.Context, playerID uint64) ([]EquipmentSlot, error) {
+	const q = `SELECT slot, item_config_id FROM player_equipment WHERE player_id = ? ORDER BY slot`
+	rows, err := r.db.QueryContext(ctx, q, playerID)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "query equipment player=%d: %v", playerID, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var slots []EquipmentSlot
+	for rows.Next() {
+		var s EquipmentSlot
+		if serr := rows.Scan(&s.Slot, &s.ItemConfigID); serr != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan equipment player=%d: %v", playerID, serr)
+		}
+		slots = append(slots, s)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate equipment player=%d: %v", playerID, rerr)
+	}
+	return slots, nil
+}
+
+// GrantTalentPoints 幂等授予天赋点(命中 uk → 读回当前可点,不重复授予)。
+func (r *MySQLPlayerRepo) GrantTalentPoints(ctx context.Context, playerID uint64, points int32, idempotencyKey string) (int, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	const insGrant = `INSERT INTO talent_point_grants (player_id, idempotency_key, points) VALUES (?, ?, ?)`
+	if _, gerr := tx.ExecContext(ctx, insGrant, playerID, idempotencyKey, points); gerr != nil {
+		if isDupErr(gerr) {
+			unspent, uerr := talentUnspent(ctx, tx, playerID)
+			if uerr != nil {
+				return 0, false, uerr
+			}
+			return unspent, true, nil
+		}
+		return 0, false, errcode.New(errcode.ErrInternal, "insert talent grant player=%d: %v", playerID, gerr)
+	}
+
+	res, uerr := tx.ExecContext(ctx, `UPDATE players SET total_talent_points = total_talent_points + ? WHERE player_id = ?`, points, playerID)
+	if uerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "grant talent player=%d: %v", playerID, uerr)
+	}
+	if affected, _ := res.RowsAffected(); affected == 0 {
+		return 0, false, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+	}
+
+	unspent, terr := talentUnspent(ctx, tx, playerID)
+	if terr != nil {
+		return 0, false, terr
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "commit talent grant player=%d: %v", playerID, cerr)
+	}
+	return unspent, false, nil
+}
+
+// SetTalents 全量重置天赋(事务:锁 players 行,校验 sum(level)<=total,替换 player_talents)。
+func (r *MySQLPlayerRepo) SetTalents(ctx context.Context, playerID uint64, talents []TalentLevel) (int, error) {
+	var sum int32
+	for _, t := range talents {
+		sum += t.Level
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var total int
+	err = tx.QueryRowContext(ctx, `SELECT total_talent_points FROM players WHERE player_id = ? FOR UPDATE`, playerID).Scan(&total)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "lock player=%d: %v", playerID, err)
+	}
+	if int(sum) > total {
+		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient talent points player=%d need=%d have=%d", playerID, sum, total)
+	}
+
+	if _, derr := tx.ExecContext(ctx, `DELETE FROM player_talents WHERE player_id = ?`, playerID); derr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "clear talents player=%d: %v", playerID, derr)
+	}
+	const ins = `INSERT INTO player_talents (player_id, talent_id, level) VALUES (?, ?, ?)`
+	for _, t := range talents {
+		if _, ierr := tx.ExecContext(ctx, ins, playerID, t.TalentID, t.Level); ierr != nil {
+			if isDupErr(ierr) {
+				return 0, errcode.New(errcode.ErrInvalidArg, "duplicate talent_id player=%d talent=%d", playerID, t.TalentID)
+			}
+			return 0, errcode.New(errcode.ErrInternal, "insert talent player=%d talent=%d: %v", playerID, t.TalentID, ierr)
+		}
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "commit talents player=%d: %v", playerID, cerr)
+	}
+	return total - int(sum), nil
+}
+
+// ResetTalents 清空天赋(事务:锁 players 行,删 player_talents,可点恢复为 total)。
+func (r *MySQLPlayerRepo) ResetTalents(ctx context.Context, playerID uint64) (int, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var total int
+	err = tx.QueryRowContext(ctx, `SELECT total_talent_points FROM players WHERE player_id = ? FOR UPDATE`, playerID).Scan(&total)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "lock player=%d: %v", playerID, err)
+	}
+	if _, derr := tx.ExecContext(ctx, `DELETE FROM player_talents WHERE player_id = ?`, playerID); derr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "clear talents player=%d: %v", playerID, derr)
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "commit reset talents player=%d: %v", playerID, cerr)
+	}
+	return total, nil
+}
+
+func (r *MySQLPlayerRepo) GetTalents(ctx context.Context, playerID uint64) ([]TalentLevel, int, error) {
+	const q = `SELECT talent_id, level FROM player_talents WHERE player_id = ? ORDER BY talent_id`
+	rows, err := r.db.QueryContext(ctx, q, playerID)
+	if err != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "query talents player=%d: %v", playerID, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var talents []TalentLevel
+	var used int32
+	for rows.Next() {
+		var t TalentLevel
+		if serr := rows.Scan(&t.TalentID, &t.Level); serr != nil {
+			return nil, 0, errcode.New(errcode.ErrInternal, "scan talent player=%d: %v", playerID, serr)
+		}
+		talents = append(talents, t)
+		used += t.Level
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "iterate talents player=%d: %v", playerID, rerr)
+	}
+
+	var total int
+	terr := r.db.QueryRowContext(ctx, `SELECT total_talent_points FROM players WHERE player_id = ? LIMIT 1`, playerID).Scan(&total)
+	if errors.Is(terr, sql.ErrNoRows) {
+		return talents, 0, nil
+	}
+	if terr != nil {
+		return nil, 0, errcode.New(errcode.ErrInternal, "read total talent player=%d: %v", playerID, terr)
+	}
+	return talents, total - int(used), nil
 }
 
 // isDupErr 判断是否 MySQL 1062 唯一键冲突(go-sql-driver 错误串含 "Error 1062")。
