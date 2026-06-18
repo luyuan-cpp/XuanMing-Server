@@ -172,8 +172,8 @@ message GetMyTeamRequest {
 
 message GetMyTeamResponse {
   pandora.common.v1.ErrCode code = 1;
-  bool has_team = 2;  // false=玩家当前没有队伍(正常态,code 仍为 OK)
-  Team team     = 3;  // has_team=false 时为空;完整快照,队伍主界面直接用
+  bool has_team_msg = 2;  // false=玩家当前没有队伍(正常态,code 仍为 OK)
+  Team team         = 3;  // has_team_msg=false 时为空;完整快照,队伍主界面直接用
 }
 
 // ===== Kafka 推送 payload =====

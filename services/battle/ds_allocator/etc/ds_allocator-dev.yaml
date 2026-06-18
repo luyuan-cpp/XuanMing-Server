@@ -30,6 +30,16 @@ snowflake:
   node_bits: 17
   step_bits: 15
 
+# ── DS 启动后端模式(标准两模式开关)─────────────────────────────────────────
+# mode 单一开关决定战斗 DS 怎么起,与 hub_allocator.mode 对齐:
+#   "local"  → 本机直接 exec 打包好的 Windows DS 进程(Windows 单机自测,见下方 local_ds)
+#   "agones" → k8s Agones GameServerAllocation(Linux 线上,见下方 agones)
+#   "mock"   → 确定性假地址(无真实 DS,离线联调)
+# mode 为权威开关;留空时才回退按 agones.enabled / local_ds.enabled 推导(向后兼容旧配置)。
+# dev 默认 local:下载/打包好 Windows DS 后开客户端即可端到端自测(匹配成局→后端 exec 战斗 DS→连入)。
+# 上线切 "agones"。
+mode: "local"
+
 # W4 ③:ds.lifecycle producer(弱依赖)。心跳超时 abandoned → 发 DSLifecycleEvent 给
 # battle_result 做玩家段位回滚补偿(不变量 §4)。brokers 留空则不发(abandoned 镜像仍落 Redis)。
 kafka:
@@ -59,7 +69,7 @@ allocator:
 #    (kubectl proxy 端口、临时 token 文件路径都随机),**不要提交进仓库**。
 #    本机联调请改本地 ignored 配置或临时覆盖,示例见 deploy/k8s/agones/README.md。
 agones:
-  enabled: true
+  enabled: false
   api_server: "https://127.0.0.1:61863"        # 本机 minikube apiserver(每台机端口不同)
   namespace: "default"
   fleet_name: "pandora-battle"
@@ -68,21 +78,23 @@ agones:
   insecure_skip_tls_verify: true   # 仅 dev
   allocate_timeout: "5s"
 
-# 本机拉起 Windows Dedicated Server 调试模式(与 agones 并列的第二种 DS 启动方式)。
-# enabled=true 时匹配成局后 ds_allocator 直接 exec 打包好的 UE Windows DS,分配本机端口返回真实地址。
-# ⚠️ agones.enabled 与 local_ds.enabled 不能同时为 true(否则启动 fatal)。
-# 本机调试步骤:① UE 打包 Windows Server 版到 C:\work\Pandora-Client-SVN 下
-#              ② executable_path 指向 PandoraServer.exe
-#              ③ local_ds.enabled=true + agones.enabled=false
+# 本机拉起 Windows Dedicated Server 调试模式(mode=local 时生效)。
+# 匹配成局后 ds_allocator 直接 exec 打包好的 UE Windows DS,分配本机端口返回真实地址。
+# 本机调试步骤:① UE 打包 Windows Server 版(产出 PandoraServer.exe)
+#              ② executable_path 指向该 PandoraServer.exe
+#              ③ 顶部 mode 置 "local"
 local_ds:
-  enabled: false
-  # executable_path: "C:\\work\\Pandora-Client-SVN\\Build\\WindowsServer\\PandoraServer.exe"
-  # map_name: "/Game/Maps/BattleMap"          # DS 加载的关卡(留空用 DS 默认关卡)
+  enabled: true
+  executable_path: "F:\\work\\PandoraDSArchive\\WindowsServerLocal\\Pandora\\Binaries\\Win64\\PandoraServer.exe"
+  map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 战斗 DS 加载的关卡(留空用 DS 默认关卡)
   advertise_host: "127.0.0.1"                  # 返回给客户端 NetDriver 连接的 host
-  port_base: 7777                              # 端口池基址
+  port_base: 7800                              # 战斗 DS 端口池基址(与 hub 7777 错开)
   port_range: 100                              # 端口池大小,实际端口在 [base, base+range) 取空闲
-  # working_dir: ""                            # DS 进程工作目录(留空用当前目录)
+  working_dir: "F:\\work\\PandoraDSArchive\\WindowsServerLocal\\Pandora" # DS 进程工作目录
   log_dir: "run/dev/logs/ds"                   # 每个 DS 进程 stdout/stderr 落 <pod>.log
   # extra_args: ["-PANDORA_BACKEND=https://127.0.0.1:8444"]  # 追加 UE DS 命令行参数
-  # extra_env:                                 # 注入 DS 进程额外环境变量
-  #   PANDORA_REGION: "cn"
+  extra_env:                                   # 注入 DS 进程额外环境变量
+    PANDORA_DS_ALLOCATOR_ADDR: "127.0.0.1:8444"
+    PANDORA_PLAYER_LOCATOR_ADDR: "127.0.0.1:8444"
+    PANDORA_BATTLE_RESULT_ADDR: "127.0.0.1:8444"
+    PANDORA_DS_ALLOCATOR_TLS: "1"

@@ -1,0 +1,370 @@
+# Pandora 15 个 go 业务服务(k8s Deployment + Service)
+#
+# 镜像:pandora/<svc>:dev(k8s 模式由 start.ps1 docker build 后 `minikube image load`;
+#       online 模式由 kustomize overlay 把镜像换成 registry 推送的带版本 tag)。
+# 配置:configmap pandora-config(launcher 用 run/cluster/etc 现场生成),
+#       按 subPath 把 <svc>.yaml 挂成 /app/etc/cluster.yaml。
+#
+# Service 短名 = 服务名,同 namespace 内 <svc>:<port> 直连(与 docker/compose 对齐)。
+#
+# 这个文件很长但全是同构片段;新增服务照抄一段、改 4 处(name/image/configKey/port)即可。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: login, namespace: pandora, labels: { app: login } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: login } }
+  template:
+    metadata: { labels: { app: login } }
+    spec:
+      containers:
+        - name: login
+          image: pandora/login:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50001 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: login.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: login, namespace: pandora }
+spec: { selector: { app: login }, ports: [ { port: 50001, targetPort: 50001 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: player, namespace: pandora, labels: { app: player } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: player } }
+  template:
+    metadata: { labels: { app: player } }
+    spec:
+      containers:
+        - name: player
+          image: pandora/player:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50002 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: player, namespace: pandora }
+spec: { selector: { app: player }, ports: [ { port: 50002, targetPort: 50002 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: data-service, namespace: pandora, labels: { app: data-service } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: data-service } }
+  template:
+    metadata: { labels: { app: data-service } }
+    spec:
+      containers:
+        - name: data-service
+          image: pandora/data-service:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50003 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: data-service.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: data-service, namespace: pandora }
+spec: { selector: { app: data-service }, ports: [ { port: 50003, targetPort: 50003 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: friend, namespace: pandora, labels: { app: friend } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: friend } }
+  template:
+    metadata: { labels: { app: friend } }
+    spec:
+      containers:
+        - name: friend
+          image: pandora/friend:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50004 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: friend.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: friend, namespace: pandora }
+spec: { selector: { app: friend }, ports: [ { port: 50004, targetPort: 50004 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: chat, namespace: pandora, labels: { app: chat } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: chat } }
+  template:
+    metadata: { labels: { app: chat } }
+    spec:
+      containers:
+        - name: chat
+          image: pandora/chat:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50005 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: chat.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: chat, namespace: pandora }
+spec: { selector: { app: chat }, ports: [ { port: 50005, targetPort: 50005 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: player-locator, namespace: pandora, labels: { app: player-locator } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: player-locator } }
+  template:
+    metadata: { labels: { app: player-locator } }
+    spec:
+      containers:
+        - name: player-locator
+          image: pandora/player-locator:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50006 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player-locator.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: player-locator, namespace: pandora }
+spec: { selector: { app: player-locator }, ports: [ { port: 50006, targetPort: 50006 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: team, namespace: pandora, labels: { app: team } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: team } }
+  template:
+    metadata: { labels: { app: team } }
+    spec:
+      containers:
+        - name: team
+          image: pandora/team:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50010 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: team.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: team, namespace: pandora }
+spec: { selector: { app: team }, ports: [ { port: 50010, targetPort: 50010 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: matchmaker, namespace: pandora, labels: { app: matchmaker } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: matchmaker } }
+  template:
+    metadata: { labels: { app: matchmaker } }
+    spec:
+      containers:
+        - name: matchmaker
+          image: pandora/matchmaker:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50011 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: matchmaker, namespace: pandora }
+spec: { selector: { app: matchmaker }, ports: [ { port: 50011, targetPort: 50011 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: trade, namespace: pandora, labels: { app: trade } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: trade } }
+  template:
+    metadata: { labels: { app: trade } }
+    spec:
+      containers:
+        - name: trade
+          image: pandora/trade:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50012 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: trade.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: trade, namespace: pandora }
+spec: { selector: { app: trade }, ports: [ { port: 50012, targetPort: 50012 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: dialogue, namespace: pandora, labels: { app: dialogue } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: dialogue } }
+  template:
+    metadata: { labels: { app: dialogue } }
+    spec:
+      containers:
+        - name: dialogue
+          image: pandora/dialogue:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50013 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: dialogue.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: dialogue, namespace: pandora }
+spec: { selector: { app: dialogue }, ports: [ { port: 50013, targetPort: 50013 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: push, namespace: pandora, labels: { app: push } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: push } }
+  template:
+    metadata: { labels: { app: push } }
+    spec:
+      containers:
+        - name: push
+          image: pandora/push:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50014 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: push.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: push, namespace: pandora }
+spec: { selector: { app: push }, ports: [ { port: 50014, targetPort: 50014 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: inventory, namespace: pandora, labels: { app: inventory } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: inventory } }
+  template:
+    metadata: { labels: { app: inventory } }
+    spec:
+      containers:
+        - name: inventory
+          image: pandora/inventory:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50015 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: inventory.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: inventory, namespace: pandora }
+spec: { selector: { app: inventory }, ports: [ { port: 50015, targetPort: 50015 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ds-allocator, namespace: pandora, labels: { app: ds-allocator } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ds-allocator } }
+  template:
+    metadata: { labels: { app: ds-allocator } }
+    spec:
+      containers:
+        - name: ds-allocator
+          image: pandora/ds-allocator:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50020 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ds-allocator, namespace: pandora }
+spec: { selector: { app: ds-allocator }, ports: [ { port: 50020, targetPort: 50020 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: hub-allocator, namespace: pandora, labels: { app: hub-allocator } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: hub-allocator } }
+  template:
+    metadata: { labels: { app: hub-allocator } }
+    spec:
+      containers:
+        - name: hub-allocator
+          image: pandora/hub-allocator:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50021 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: hub-allocator.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: hub-allocator, namespace: pandora }
+spec: { selector: { app: hub-allocator }, ports: [ { port: 50021, targetPort: 50021 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: battle-result, namespace: pandora, labels: { app: battle-result } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: battle-result } }
+  template:
+    metadata: { labels: { app: battle-result } }
+    spec:
+      containers:
+        - name: battle-result
+          image: pandora/battle-result:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50022 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: battle-result.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: battle-result, namespace: pandora }
+spec: { selector: { app: battle-result }, ports: [ { port: 50022, targetPort: 50022 } ] }

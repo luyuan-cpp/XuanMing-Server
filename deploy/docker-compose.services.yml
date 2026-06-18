@@ -1,0 +1,182 @@
+# Pandora 全业务服务容器编排(docker 模式)
+#
+# 这是「整套后端跑在容器里」的编排:15 个 go 服务各一个容器,全部接到基础设施所在的
+# 外部网络 pandora-net(由 deploy/docker-compose.dev.yml 创建)。
+#
+# 用法(推荐用一键脚本,自动先拉基础设施再起服务):
+#   pwsh tools/scripts/start.ps1 -Mode docker
+#
+# 手动用法:
+#   pwsh tools/scripts/dev_up.ps1                              # 1) 先起基础设施(建 pandora-net)
+#   pwsh tools/scripts/gen_cluster_config.ps1                 # 2) 生成集群版配置 run/cluster/etc
+#   docker compose -f deploy/docker-compose.services.yml up -d --build   # 3) 起服务
+#
+# 注意:docker 模式与 local 模式(宿主 go 进程)会抢同一批端口,二选一,别同时开。
+#
+# 配置覆盖:每个容器把 run/cluster/etc/<svc>.yaml 挂成 /app/etc/cluster.yaml,
+# 容器入口 `-conf etc/cluster.yaml`(地址已是容器服务名,见 gen_cluster_config.ps1)。
+
+x-svc-base: &svc-base
+  restart: unless-stopped
+  networks: [pandora-net]
+  command: ["-conf", "etc/cluster.yaml"]
+
+x-build-base: &build-base
+  context: ..
+  dockerfile: deploy/services/Dockerfile
+
+services:
+  login:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/account/login, CMD_NAME: login }
+    image: pandora/login:dev
+    container_name: pandora-login
+    volumes: [ "../run/cluster/etc/login.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50001:50001" ]
+
+  player:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/account/player, CMD_NAME: player }
+    image: pandora/player:dev
+    container_name: pandora-player
+    volumes: [ "../run/cluster/etc/player.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50002:50002" ]
+
+  data-service:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/data/data_service, CMD_NAME: data_service }
+    image: pandora/data-service:dev
+    container_name: pandora-data-service
+    volumes: [ "../run/cluster/etc/data-service.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50003:50003" ]
+
+  friend:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/social/friend, CMD_NAME: friend }
+    image: pandora/friend:dev
+    container_name: pandora-friend
+    volumes: [ "../run/cluster/etc/friend.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50004:50004" ]
+
+  chat:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/social/chat, CMD_NAME: chat }
+    image: pandora/chat:dev
+    container_name: pandora-chat
+    volumes: [ "../run/cluster/etc/chat.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50005:50005" ]
+
+  player-locator:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/runtime/player_locator, CMD_NAME: locator }
+    image: pandora/player-locator:dev
+    container_name: pandora-player-locator
+    volumes: [ "../run/cluster/etc/player-locator.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50006:50006" ]
+
+  team:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/matchmaking/team, CMD_NAME: team }
+    image: pandora/team:dev
+    container_name: pandora-team
+    volumes: [ "../run/cluster/etc/team.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50010:50010" ]
+
+  matchmaker:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/matchmaking/matchmaker, CMD_NAME: matchmaker }
+    image: pandora/matchmaker:dev
+    container_name: pandora-matchmaker
+    volumes: [ "../run/cluster/etc/matchmaker.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50011:50011" ]
+
+  trade:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/economy/trade, CMD_NAME: trade }
+    image: pandora/trade:dev
+    container_name: pandora-trade
+    volumes: [ "../run/cluster/etc/trade.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50012:50012" ]
+
+  dialogue:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/social/dialogue, CMD_NAME: dialogue }
+    image: pandora/dialogue:dev
+    container_name: pandora-dialogue
+    volumes: [ "../run/cluster/etc/dialogue.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50013:50013" ]
+
+  push:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/runtime/push, CMD_NAME: push }
+    image: pandora/push:dev
+    container_name: pandora-push
+    volumes: [ "../run/cluster/etc/push.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50014:50014" ]
+
+  inventory:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/economy/inventory, CMD_NAME: inventory }
+    image: pandora/inventory:dev
+    container_name: pandora-inventory
+    volumes: [ "../run/cluster/etc/inventory.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50015:50015" ]
+
+  ds-allocator:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/battle/ds_allocator, CMD_NAME: ds_allocator }
+    image: pandora/ds-allocator:dev
+    container_name: pandora-ds-allocator
+    volumes: [ "../run/cluster/etc/ds-allocator.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50020:50020" ]
+
+  hub-allocator:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/battle/hub_allocator, CMD_NAME: hub_allocator }
+    image: pandora/hub-allocator:dev
+    container_name: pandora-hub-allocator
+    volumes: [ "../run/cluster/etc/hub-allocator.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50021:50021" ]
+
+  battle-result:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/battle/battle_result, CMD_NAME: battle_result }
+    image: pandora/battle-result:dev
+    container_name: pandora-battle-result
+    volumes: [ "../run/cluster/etc/battle-result.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50022:50022" ]
+
+networks:
+  pandora-net:
+    name: pandora-net
+    external: true

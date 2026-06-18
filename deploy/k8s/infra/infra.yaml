@@ -1,0 +1,170 @@
+# Pandora 基础设施(k8s dev-grade,单副本,minikube/本地集群用)
+#
+# ⚠️ 这是「能把链路跑起来」的开发级基础设施,不是生产配置:
+#   - 单副本、emptyDir(Pod 重建丢数据)、明文口令、Kafka 单 broker。
+#   - 生产请用各自的 Operator / StatefulSet / 外部托管实例,并改 online overlay。
+#
+# 由 tools/scripts/start.ps1 -Mode k8s 自动 apply。MySQL 建库脚本通过
+# configmap pandora-mysql-init 注入(launcher 用 deploy/mysql-init 现场生成)。
+#
+# 服务名(同 namespace 内短名解析):mysql / redis / zookeeper / kafka / etcd
+# —— 与 docker-compose 一致,所以 run/cluster/etc 配置两边通用。
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mysql, namespace: pandora, labels: { app: mysql } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mysql } }
+  template:
+    metadata: { labels: { app: mysql } }
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_0900_ai_ci
+            - --max_connections=500
+          env:
+            - { name: MYSQL_ROOT_PASSWORD, value: pandora_dev_root }
+            - { name: MYSQL_USER, value: pandora }
+            - { name: MYSQL_PASSWORD, value: pandora_dev_pwd }
+          ports: [ { containerPort: 3306 } ]
+          volumeMounts:
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            - { name: data, mountPath: /var/lib/mysql }
+          readinessProbe:
+            exec: { command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -ppandora_dev_root"] }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: init
+          configMap: { name: pandora-mysql-init, optional: true }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mysql, namespace: pandora }
+spec:
+  selector: { app: mysql }
+  ports: [ { port: 3306, targetPort: 3306 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis, namespace: pandora, labels: { app: redis } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.8.0-alpine
+          args: ["redis-server", "--appendonly", "yes", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
+          ports: [ { containerPort: 6379 } ]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: pandora }
+spec:
+  selector: { app: redis }
+  ports: [ { port: 6379, targetPort: 6379 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: zookeeper, namespace: pandora, labels: { app: zookeeper } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: zookeeper } }
+  template:
+    metadata: { labels: { app: zookeeper } }
+    spec:
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.9.7
+          env:
+            - { name: ZOOKEEPER_CLIENT_PORT, value: "2181" }
+            - { name: ZOOKEEPER_TICK_TIME, value: "2000" }
+          ports: [ { containerPort: 2181 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: zookeeper, namespace: pandora }
+spec:
+  selector: { app: zookeeper }
+  ports: [ { port: 2181, targetPort: 2181 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: kafka, namespace: pandora, labels: { app: kafka } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kafka } }
+  template:
+    metadata: { labels: { app: kafka } }
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.9.7
+          env:
+            - { name: KAFKA_BROKER_ID, value: "1" }
+            - { name: KAFKA_ZOOKEEPER_CONNECT, value: "zookeeper:2181" }
+            # 集群内单 listener:广播 Service DNS 名 kafka:9092,go 服务直连这个
+            - { name: KAFKA_LISTENERS, value: "PLAINTEXT://0.0.0.0:9092" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka:9092" }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "PLAINTEXT:PLAINTEXT" }
+            - { name: KAFKA_INTER_BROKER_LISTENER_NAME, value: "PLAINTEXT" }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: "true" }
+            - { name: KAFKA_NUM_PARTITIONS, value: "4" }
+          ports: [ { containerPort: 9092 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kafka, namespace: pandora }
+spec:
+  selector: { app: kafka }
+  ports: [ { port: 9092, targetPort: 9092 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: etcd, namespace: pandora, labels: { app: etcd } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: etcd } }
+  template:
+    metadata: { labels: { app: etcd } }
+    spec:
+      containers:
+        - name: etcd
+          image: quay.io/coreos/etcd:v3.6.12
+          command:
+            - /usr/local/bin/etcd
+            - --name=pandora-etcd
+            - --data-dir=/etcd-data
+            - --listen-client-urls=http://0.0.0.0:2379
+            - --advertise-client-urls=http://etcd:2379
+            - --listen-peer-urls=http://0.0.0.0:2380
+            - --initial-advertise-peer-urls=http://etcd:2380
+            - --initial-cluster=pandora-etcd=http://etcd:2380
+            - --initial-cluster-token=pandora-etcd-cluster
+            - --initial-cluster-state=new
+          ports: [ { containerPort: 2379 }, { containerPort: 2380 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: etcd, namespace: pandora }
+spec:
+  selector: { app: etcd }
+  ports:
+    - { name: client, port: 2379, targetPort: 2379 }
+    - { name: peer, port: 2380, targetPort: 2380 }

@@ -44,6 +44,16 @@ kafka:
   write_timeout: "5s"
   idempotent: true
 
+# ── Hub DS 分片来源模式(标准两模式开关,与 ds_allocator.mode 对齐)─────────────
+# mode 单一开关决定大厅 DS 从哪来:
+#   "local"  → 本机 exec 一个常驻 Windows Hub DS 进程(Windows 单机自测,见下方 local_hub)
+#   "agones" → k8s Agones Fleet 发现 Hub DS 分片(Linux 线上,见下方 agones)
+#   "mock"   → 确定性假分片(无真实 Hub DS,离线联调)
+# mode 为权威开关;留空时才回退按 agones.enabled 推导(向后兼容旧配置)。
+# dev 默认 local:登录成功后 login 拿到本机 Hub DS 地址下发客户端,客户端 ClientTravel 进大厅。
+# 上线切 "agones"。
+mode: "local"
+
 hub:
   # heartbeat_timeout: Hub DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → 分片 draining 停止分配
   heartbeat_timeout: "15s"
@@ -90,7 +100,7 @@ hub:
 # 本地 minikube 联调:enabled=true + fleet_name + api_server(minikube apiserver) + token_path。
 # 集群内运行时 api_server/token_path/ca_path 可留空用 in-cluster 默认。
 agones:
-  enabled: true
+  enabled: false
   api_server: "https://127.0.0.1:61863"   # in-cluster 默认;minikube 外联填 https://<minikube-ip>:8443
   namespace: "default"
   fleet_name: "pandora-hub"
@@ -98,3 +108,22 @@ agones:
   # ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
   insecure_skip_tls_verify: true   # 仅 dev(minikube 外联自签证书时可临时开)
   list_timeout: "5s"
+
+# 本机拉起一个常驻 Windows Hub DS 调试模式(mode=local 时生效)。
+# hub_allocator 首次 AssignHub 时 exec 一个常驻 UE Windows DS(加载大厅关卡 / PandoraHubGameMode),
+# 把它作为唯一分片返回;进程随 hub_allocator 退出而 Kill。常驻不按对局回收(与战斗 DS 不同)。
+# 与战斗 DS 同一个 PandoraServer.exe,靠 map_name 区分大厅/战斗关卡;端口与战斗 DS(7800+)错开用 7777。
+local_hub:
+  executable_path: "F:\\work\\PandoraDSArchive\\WindowsServerLocal\\Pandora\\Binaries\\Win64\\PandoraServer.exe"
+  map_name: "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraHubGameMode" # 大厅关卡(留空用 DS 默认关卡)
+  advertise_host: "127.0.0.1"                  # 返回给客户端 NetDriver 连接的 host
+  port: 7777                                   # 常驻 Hub DS 监听端口
+  # region: "cn"                               # 留空取 hub.default_region
+  # capacity: 500                              # 留空取 hub.default_capacity
+  working_dir: "F:\\work\\PandoraDSArchive\\WindowsServerLocal\\Pandora" # DS 进程工作目录
+  log_dir: "run/dev/logs/ds"                   # Hub DS stdout/stderr 落 pandora-hub-local.log
+  # extra_args: ["-PANDORA_BACKEND=https://127.0.0.1:8444"]
+  extra_env:
+    PANDORA_HUB_ALLOCATOR_ADDR: "127.0.0.1:8444"
+    PANDORA_PLAYER_LOCATOR_ADDR: "127.0.0.1:8444"
+    PANDORA_DS_ALLOCATOR_TLS: "1"

@@ -1,0 +1,30 @@
+# Pandora go 服务镜像构建上下文裁剪(构建上下文 = 仓库根)。
+# 只保留 go.work / pkg / proto / services 这些 go 源码,排除产物、缓存、IDE、文档。
+
+.git/
+.github/
+.vscode/
+.idea/
+
+# 构建产物 / 运行期目录
+run/
+**/bin/
+**/*.exe
+**/*.test
+**/*.out
+
+# 部署产物(镜像不需要把部署目录再拷回去)
+deploy/ds/stage/
+deploy/dev-ca/
+deploy/envoy/cert.pem
+deploy/envoy/key.pem
+
+# 文档 / 杂项
+docs/
+robot/
+*.md
+LICENSE
+
+# OS 杂物
+**/.DS_Store
+Thumbs.db

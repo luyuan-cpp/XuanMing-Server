@@ -2,14 +2,33 @@
 package conf
 
 import (
+	"strings"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
+// DS 启动后端模式(标准两模式开关 + 离线兜底)。
+//
+//	ModeLocal  本机 exec Windows DS 进程(LocalDSConf),Windows 单机自测
+//	ModeAgones k8s Agones GameServerAllocation(AgonesConf),Linux 线上
+//	ModeMock   确定性假地址(无真实 DS),离线联调兜底
+const (
+	ModeLocal  = "local"
+	ModeAgones = "agones"
+	ModeMock   = "mock"
+)
+
 // Config 是 ds_allocator 服务的完整配置。
 type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
+
+	// Mode 选择 DS 启动后端,与 hub_allocator.mode 对齐的「标准两模式开关」:
+	//   "local"  → 本机 exec Windows DS 进程(LocalDSConf,Windows 单机自测)
+	//   "agones" → k8s Agones 分配(AgonesConf,Linux 线上)
+	//   "mock"   → 确定性假地址(无真实 DS,离线联调)
+	// 留空时按 legacy 的 agones.enabled / local_ds.enabled 推导(向后兼容旧配置)。
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
 
 	Allocator AllocatorConf `yaml:"allocator" json:"allocator"`
 	Agones    AgonesConf    `yaml:"agones" json:"agones"`
@@ -125,6 +144,18 @@ type AllocatorConf struct {
 
 // Defaults 填默认值。
 func (c *Config) Defaults() {
+	// Mode 归一化:显式 mode 优先;留空时按 legacy 的 enabled 开关推导(向后兼容)。
+	c.Mode = strings.ToLower(strings.TrimSpace(c.Mode))
+	if c.Mode == "" {
+		switch {
+		case c.Agones.Enabled:
+			c.Mode = ModeAgones
+		case c.LocalDS.Enabled:
+			c.Mode = ModeLocal
+		default:
+			c.Mode = ModeMock
+		}
+	}
 	if c.Allocator.HeartbeatTimeout == 0 {
 		c.Allocator.HeartbeatTimeout = config.Duration(15 * time.Second)
 	}

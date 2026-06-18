@@ -3010,10 +3010,10 @@ constexpr GetMyTeamResponse::ParseTableT_ GetMyTeamResponse::InternalGeneratePar
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetMyTeamResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.code_)}},
-      // bool has_team = 2 [json_name = "hasTeam"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetMyTeamResponse, _impl_.has_team_), 2>(),
+      // bool has_team_msg = 2 [json_name = "hasTeamMsg"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetMyTeamResponse, _impl_.has_team_msg_), 2>(),
        {16, 2, 0,
-        PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.has_team_)}},
+        PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.has_team_msg_)}},
       // .pandora.team.v1.Team team = 3 [json_name = "team"];
       {::_pbi::TcParser::FastMtS1,
        {26, 0, 0,
@@ -3023,8 +3023,8 @@ constexpr GetMyTeamResponse::ParseTableT_ GetMyTeamResponse::InternalGeneratePar
     }}, {{
       // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
-      // bool has_team = 2 [json_name = "hasTeam"];
-      {PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.has_team_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool has_team_msg = 2 [json_name = "hasTeamMsg"];
+      {PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.has_team_msg_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .pandora.team.v1.Team team = 3 [json_name = "team"];
       {PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.team_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
@@ -3047,7 +3047,7 @@ inline constexpr GetMyTeamResponse::Impl_::Impl_(
       : _cached_size_{0},
         team_{nullptr},
         code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
-        has_team_{false} {}
+        has_team_msg_{false} {}
 
 template <typename>
 constexpr GetMyTeamResponse::GetMyTeamResponse(::_pbi::ConstantInitialized,
@@ -3644,7 +3644,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::GetMyTeamResponse, _impl_._has_bits_),
         6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::GetMyTeamResponse, _impl_.code_),
-        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::GetMyTeamResponse, _impl_.has_team_),
+        PROTOBUF_FIELD_OFFSET(::pandora::team::v1::GetMyTeamResponse, _impl_.has_team_msg_),
         PROTOBUF_FIELD_OFFSET(::pandora::team::v1::GetMyTeamResponse, _impl_.team_),
         1,
         2,
@@ -3777,48 +3777,48 @@ const char descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto[] ABSL_A
     "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
     "code\022)\n\004team\030\002 \001(\0132\025.pandora.team.v1.Tea"
     "mR\004team\"/\n\020GetMyTeamRequest\022\033\n\tplayer_id"
-    "\030\001 \001(\004R\010playerId\"\211\001\n\021GetMyTeamResponse\022."
+    "\030\001 \001(\004R\010playerId\"\220\001\n\021GetMyTeamResponse\022."
     "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
-    "R\004code\022\031\n\010has_team\030\002 \001(\010R\007hasTeam\022)\n\004tea"
-    "m\030\003 \001(\0132\025.pandora.team.v1.TeamR\004team\"\211\002\n"
-    "\017TeamUpdateEvent\022)\n\004team\030\001 \001(\0132\025.pandora"
-    ".team.v1.TeamR\004team\022 \n\014by_player_id\030\003 \001("
-    "\004R\nbyPlayerId\022 \n\014to_player_id\030\004 \001(\004R\ntoP"
-    "layerId\022\023\n\005ts_ms\030\005 \001(\003R\004tsMs\0229\n\006reason\030\n"
-    " \001(\0162!.pandora.team.v1.TeamUpdateReasonR"
-    "\006reason\022\033\n\tinvite_id\030\013 \001(\004R\010inviteIdJ\004\010\002"
-    "\020\003J\004\010\006\020\nR\016change_summary*\242\001\n\tTeamState\022\032"
-    "\n\026TEAM_STATE_UNSPECIFIED\020\000\022\026\n\022TEAM_STATE"
-    "_FORMING\020\001\022\024\n\020TEAM_STATE_READY\020\002\022\027\n\023TEAM"
-    "_STATE_MATCHING\020\003\022\030\n\024TEAM_STATE_IN_BATTL"
-    "E\020\004\022\030\n\024TEAM_STATE_DISBANDED\020\005*\205\003\n\020TeamUp"
-    "dateReason\022\"\n\036TEAM_UPDATE_REASON_UNSPECI"
-    "FIED\020\000\022$\n TEAM_UPDATE_REASON_MEMBER_JOIN"
-    "ED\020\001\022\"\n\036TEAM_UPDATE_REASON_MEMBER_LEFT\020\002"
-    "\022$\n TEAM_UPDATE_REASON_MEMBER_KICKED\020\003\022#"
-    "\n\037TEAM_UPDATE_REASON_MEMBER_READY\020\004\022#\n\037T"
-    "EAM_UPDATE_REASON_HERO_CHANGED\020\005\022\'\n#TEAM"
-    "_UPDATE_REASON_CAPTAIN_TRANSFER\020\006\022$\n TEA"
-    "M_UPDATE_REASON_STATE_CHANGED\020\007\022 \n\034TEAM_"
-    "UPDATE_REASON_DISBANDED\020\010\022\"\n\036TEAM_UPDATE"
-    "_REASON_INVITE_SENT\020\t2\230\005\n\013TeamService\022U\n"
-    "\nCreateTeam\022\".pandora.team.v1.CreateTeam"
-    "Request\032#.pandora.team.v1.CreateTeamResp"
-    "onse\022I\n\006Invite\022\036.pandora.team.v1.InviteR"
-    "equest\032\037.pandora.team.v1.InviteResponse\022"
-    "[\n\014AcceptInvite\022$.pandora.team.v1.Accept"
-    "InviteRequest\032%.pandora.team.v1.AcceptIn"
-    "viteResponse\022R\n\tLeaveTeam\022!.pandora.team"
-    ".v1.LeaveTeamRequest\032\".pandora.team.v1.L"
-    "eaveTeamResponse\022C\n\004Kick\022\034.pandora.team."
-    "v1.KickRequest\032\035.pandora.team.v1.KickRes"
-    "ponse\022O\n\010SetReady\022 .pandora.team.v1.SetR"
-    "eadyRequest\032!.pandora.team.v1.SetReadyRe"
-    "sponse\022L\n\007GetTeam\022\037.pandora.team.v1.GetT"
-    "eamRequest\032 .pandora.team.v1.GetTeamResp"
-    "onse\022R\n\tGetMyTeam\022!.pandora.team.v1.GetM"
-    "yTeamRequest\032\".pandora.team.v1.GetMyTeam"
-    "Responseb\006proto3"
+    "R\004code\022 \n\014has_team_msg\030\002 \001(\010R\nhasTeamMsg"
+    "\022)\n\004team\030\003 \001(\0132\025.pandora.team.v1.TeamR\004t"
+    "eam\"\211\002\n\017TeamUpdateEvent\022)\n\004team\030\001 \001(\0132\025."
+    "pandora.team.v1.TeamR\004team\022 \n\014by_player_"
+    "id\030\003 \001(\004R\nbyPlayerId\022 \n\014to_player_id\030\004 \001"
+    "(\004R\ntoPlayerId\022\023\n\005ts_ms\030\005 \001(\003R\004tsMs\0229\n\006r"
+    "eason\030\n \001(\0162!.pandora.team.v1.TeamUpdate"
+    "ReasonR\006reason\022\033\n\tinvite_id\030\013 \001(\004R\010invit"
+    "eIdJ\004\010\002\020\003J\004\010\006\020\nR\016change_summary*\242\001\n\tTeam"
+    "State\022\032\n\026TEAM_STATE_UNSPECIFIED\020\000\022\026\n\022TEA"
+    "M_STATE_FORMING\020\001\022\024\n\020TEAM_STATE_READY\020\002\022"
+    "\027\n\023TEAM_STATE_MATCHING\020\003\022\030\n\024TEAM_STATE_I"
+    "N_BATTLE\020\004\022\030\n\024TEAM_STATE_DISBANDED\020\005*\205\003\n"
+    "\020TeamUpdateReason\022\"\n\036TEAM_UPDATE_REASON_"
+    "UNSPECIFIED\020\000\022$\n TEAM_UPDATE_REASON_MEMB"
+    "ER_JOINED\020\001\022\"\n\036TEAM_UPDATE_REASON_MEMBER"
+    "_LEFT\020\002\022$\n TEAM_UPDATE_REASON_MEMBER_KIC"
+    "KED\020\003\022#\n\037TEAM_UPDATE_REASON_MEMBER_READY"
+    "\020\004\022#\n\037TEAM_UPDATE_REASON_HERO_CHANGED\020\005\022"
+    "\'\n#TEAM_UPDATE_REASON_CAPTAIN_TRANSFER\020\006"
+    "\022$\n TEAM_UPDATE_REASON_STATE_CHANGED\020\007\022 "
+    "\n\034TEAM_UPDATE_REASON_DISBANDED\020\010\022\"\n\036TEAM"
+    "_UPDATE_REASON_INVITE_SENT\020\t2\230\005\n\013TeamSer"
+    "vice\022U\n\nCreateTeam\022\".pandora.team.v1.Cre"
+    "ateTeamRequest\032#.pandora.team.v1.CreateT"
+    "eamResponse\022I\n\006Invite\022\036.pandora.team.v1."
+    "InviteRequest\032\037.pandora.team.v1.InviteRe"
+    "sponse\022[\n\014AcceptInvite\022$.pandora.team.v1"
+    ".AcceptInviteRequest\032%.pandora.team.v1.A"
+    "cceptInviteResponse\022R\n\tLeaveTeam\022!.pando"
+    "ra.team.v1.LeaveTeamRequest\032\".pandora.te"
+    "am.v1.LeaveTeamResponse\022C\n\004Kick\022\034.pandor"
+    "a.team.v1.KickRequest\032\035.pandora.team.v1."
+    "KickResponse\022O\n\010SetReady\022 .pandora.team."
+    "v1.SetReadyRequest\032!.pandora.team.v1.Set"
+    "ReadyResponse\022L\n\007GetTeam\022\037.pandora.team."
+    "v1.GetTeamRequest\032 .pandora.team.v1.GetT"
+    "eamResponse\022R\n\tGetMyTeam\022!.pandora.team."
+    "v1.GetMyTeamRequest\032\".pandora.team.v1.Ge"
+    "tMyTeamResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_deps[1] = {
@@ -3828,7 +3828,7 @@ static ::absl::once_flag descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto = {
     false,
     false,
-    4096,
+    4103,
     descriptor_table_protodef_pandora_2fteam_2fv1_2fteam_2eproto,
     "pandora/team/v1/team.proto",
     &descriptor_table_pandora_2fteam_2fv1_2fteam_2eproto_once,
@@ -8896,9 +8896,9 @@ GetMyTeamResponse::GetMyTeamResponse(
                offsetof(Impl_, code_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, code_),
-           offsetof(Impl_, has_team_) -
+           offsetof(Impl_, has_team_msg_) -
                offsetof(Impl_, code_) +
-               sizeof(Impl_::has_team_));
+               sizeof(Impl_::has_team_msg_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.team.v1.GetMyTeamResponse)
 }
@@ -8912,9 +8912,9 @@ inline void GetMyTeamResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, team_),
            0,
-           offsetof(Impl_, has_team_) -
+           offsetof(Impl_, has_team_msg_) -
                offsetof(Impl_, team_) +
-               sizeof(Impl_::has_team_));
+               sizeof(Impl_::has_team_msg_));
 }
 GetMyTeamResponse::~GetMyTeamResponse() {
   // @@protoc_insertion_point(destructor:pandora.team.v1.GetMyTeamResponse)
@@ -8971,8 +8971,8 @@ PROTOBUF_NOINLINE void GetMyTeamResponse::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
     ::memset(&_impl_.code_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.has_team_) -
-        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.has_team_));
+        reinterpret_cast<char*>(&_impl_.has_team_msg_) -
+        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.has_team_msg_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -9006,12 +9006,12 @@ PROTOBUF_NOINLINE void GetMyTeamResponse::Clear() {
     }
   }
 
-  // bool has_team = 2 [json_name = "hasTeam"];
+  // bool has_team_msg = 2 [json_name = "hasTeamMsg"];
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_has_team() != 0) {
+    if (this_._internal_has_team_msg() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
-          2, this_._internal_has_team(), target);
+          2, this_._internal_has_team_msg(), target);
     }
   }
 
@@ -9060,9 +9060,9 @@ PROTOBUF_NOINLINE void GetMyTeamResponse::Clear() {
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
-    // bool has_team = 2 [json_name = "hasTeam"];
+    // bool has_team_msg = 2 [json_name = "hasTeamMsg"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_has_team() != 0) {
+      if (this_._internal_has_team_msg() != 0) {
         total_size += 2;
       }
     }
@@ -9100,8 +9100,8 @@ void GetMyTeamResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_has_team() != 0) {
-        _this->_impl_.has_team_ = from._impl_.has_team_;
+      if (from._internal_has_team_msg() != 0) {
+        _this->_impl_.has_team_msg_ = from._impl_.has_team_msg_;
       }
     }
   }
@@ -9123,8 +9123,8 @@ void GetMyTeamResponse::InternalSwap(GetMyTeamResponse* PROTOBUF_RESTRICT PROTOB
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.has_team_)
-      + sizeof(GetMyTeamResponse::_impl_.has_team_)
+      PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.has_team_msg_)
+      + sizeof(GetMyTeamResponse::_impl_.has_team_msg_)
       - PROTOBUF_FIELD_OFFSET(GetMyTeamResponse, _impl_.team_)>(
           reinterpret_cast<char*>(&_impl_.team_),
           reinterpret_cast<char*>(&other->_impl_.team_));

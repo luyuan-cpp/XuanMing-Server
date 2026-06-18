@@ -1,0 +1,44 @@
+# Pandora 线上(online)overlay
+#
+# 与本地集群的差异:
+#   - 镜像换成镜像仓库地址 + 版本 tag(占位 registry.example.com,由 start.ps1 -Mode online
+#     的 -Registry / -Tag 通过 `kustomize edit set image` 现场覆盖)
+#   - 关键链路服务副本数 >1(其余保持 1,按需调整)
+#
+# ⚠️ 线上不包含基础设施(mysql/redis/kafka/etcd)—— 生产用托管实例 / 各自 Operator,
+#    Service 名仍为 mysql/redis/kafka/etcd(在 pandora namespace 内由 ExternalName 或
+#    独立 StatefulSet 提供),从而 run/cluster/etc 配置仍然通用。
+#
+# 部署(由 start.ps1 -Mode online 编排,会先要求确认 kube-context):
+#   kubectl apply -k deploy/k8s/overlays/online
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: pandora
+
+resources:
+  - ../../services
+
+# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(15 个)。
+images:
+  - { name: pandora/login,          newName: registry.example.com/pandora/login,          newTag: latest }
+  - { name: pandora/player,         newName: registry.example.com/pandora/player,         newTag: latest }
+  - { name: pandora/data-service,   newName: registry.example.com/pandora/data-service,   newTag: latest }
+  - { name: pandora/friend,         newName: registry.example.com/pandora/friend,         newTag: latest }
+  - { name: pandora/chat,           newName: registry.example.com/pandora/chat,           newTag: latest }
+  - { name: pandora/player-locator, newName: registry.example.com/pandora/player-locator, newTag: latest }
+  - { name: pandora/team,           newName: registry.example.com/pandora/team,           newTag: latest }
+  - { name: pandora/matchmaker,     newName: registry.example.com/pandora/matchmaker,     newTag: latest }
+  - { name: pandora/trade,          newName: registry.example.com/pandora/trade,          newTag: latest }
+  - { name: pandora/dialogue,       newName: registry.example.com/pandora/dialogue,       newTag: latest }
+  - { name: pandora/push,           newName: registry.example.com/pandora/push,           newTag: latest }
+  - { name: pandora/inventory,      newName: registry.example.com/pandora/inventory,      newTag: latest }
+  - { name: pandora/ds-allocator,   newName: registry.example.com/pandora/ds-allocator,   newTag: latest }
+  - { name: pandora/hub-allocator,  newName: registry.example.com/pandora/hub-allocator,  newTag: latest }
+  - { name: pandora/battle-result,  newName: registry.example.com/pandora/battle-result,  newTag: latest }
+
+# 关键链路服务线上副本数(其余默认 1,按容量再调)。
+replicas:
+  - { name: login, count: 2 }
+  - { name: player-locator, count: 2 }
+  - { name: push, count: 2 }

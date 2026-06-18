@@ -2,14 +2,33 @@
 package conf
 
 import (
+	"strings"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
+// Hub DS 分片发现/启动模式(标准两模式开关 + 离线兜底,与 ds_allocator.mode 对齐)。
+//
+//	ModeLocal  本机 exec 一个常驻 Windows Hub DS 进程(LocalHubConf),Windows 单机自测
+//	ModeAgones k8s Agones Fleet 发现 Hub DS 分片(AgonesConf),Linux 线上
+//	ModeMock   确定性假分片(无真实 Hub DS),离线联调兜底
+const (
+	ModeLocal  = "local"
+	ModeAgones = "agones"
+	ModeMock   = "mock"
+)
+
 // Config 是 hub_allocator 服务的完整配置。
 type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
+
+	// Mode 选择 Hub DS 分片来源,与 ds_allocator.mode 对齐的「标准两模式开关」:
+	//   "local"  → 本机 exec 一个常驻 Windows Hub DS(LocalHub,Windows 单机自测)
+	//   "agones" → k8s Agones Fleet 发现分片(Agones,Linux 线上)
+	//   "mock"   → 确定性假分片(无真实 Hub DS,离线联调)
+	// 留空时按 legacy 的 agones.enabled 推导(向后兼容旧配置)。
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
 
 	Hub HubConf `yaml:"hub" json:"hub"`
 
@@ -17,8 +36,50 @@ type Config struct {
 	// Issuer / Audience / Secret 必须与 login / Envoy jwt_authn provider 完全一致。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
 
-	// Agones 真 Hub DS Fleet 发现配置(W4 ⑬)。enabled=false(默认)→ MockHubFleetProvider。
+	// Agones 真 Hub DS Fleet 发现配置(W4 ⑬)。mode=agones 时生效。
 	Agones AgonesConf `yaml:"agones" json:"agones"`
+
+	// LocalHub 本机 exec 常驻 Windows Hub DS 配置(mode=local 时生效)。
+	LocalHub LocalHubConf `yaml:"local_hub" json:"local_hub"`
+}
+
+// LocalHubConf 是「本机拉起一个常驻 Windows Hub Dedicated Server 进程」的调试后端配置(mode=local)。
+//
+// 与 ds_allocator.LocalDSConf 对称:这是 Windows 单机自测时大厅 DS 的来源。hub_allocator 在
+// 首次 AssignHub 时懒拉起一个常驻 Hub DS 进程(加载 hub 关卡 / PandoraHubGameMode),把它作为
+// 唯一分片返回给 login;进程随 hub_allocator 退出而 Kill。常驻不按对局回收(与战斗 DS 不同)。
+type LocalHubConf struct {
+	// ExecutablePath 打包好的 UE Windows Dedicated Server 可执行文件绝对路径
+	// (与战斗 DS 同一个 PandoraServer.exe,靠 map_name 区分大厅/战斗关卡)。mode=local 时必填且必须存在。
+	ExecutablePath string `yaml:"executable_path,omitempty" json:"executable_path,omitempty"`
+
+	// MapName 启动时加载的大厅关卡(DS 命令行首个位置参数,例如 /Game/Maps/HubMap)。
+	// 留空则不带关卡参数,由 DS 自身默认关卡决定。
+	MapName string `yaml:"map_name,omitempty" json:"map_name,omitempty"`
+
+	// AdvertiseHost 返回给客户端的可连接 host(默认 127.0.0.1,本机联调)。
+	AdvertiseHost string `yaml:"advertise_host,omitempty" json:"advertise_host,omitempty"`
+
+	// Port 常驻 Hub DS 监听端口(默认 7777)。
+	Port int `yaml:"port,omitempty" json:"port,omitempty"`
+
+	// Region 该本机 Hub 分片归属的 region(默认取 hub.default_region)。
+	Region string `yaml:"region,omitempty" json:"region,omitempty"`
+
+	// Capacity 该本机 Hub 分片人数上限(默认取 hub.default_capacity)。
+	Capacity int32 `yaml:"capacity,omitempty" json:"capacity,omitempty"`
+
+	// WorkingDir DS 进程工作目录(留空用 hub_allocator 当前目录)。
+	WorkingDir string `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+
+	// LogDir DS 进程 stdout/stderr 落盘目录(默认 run/dev/logs/ds);文件名 <pod>.log。
+	LogDir string `yaml:"log_dir,omitempty" json:"log_dir,omitempty"`
+
+	// ExtraArgs 追加到 DS 命令行末尾的额外参数。
+	ExtraArgs []string `yaml:"extra_args,omitempty" json:"extra_args,omitempty"`
+
+	// ExtraEnv 注入 DS 进程的额外环境变量(在内置 PANDORA_* 变量之后追加)。
+	ExtraEnv map[string]string `yaml:"extra_env,omitempty" json:"extra_env,omitempty"`
 }
 
 // AgonesConf 是真 Agones Hub DS Fleet 发现配置(W4 ⑬,镜像 ds_allocator.AgonesConf)。
@@ -130,6 +191,15 @@ type HubConf struct {
 
 // Defaults 填默认值。
 func (c *Config) Defaults() {
+	// Mode 归一化:显式 mode 优先;留空时按 legacy 的 agones.enabled 推导(向后兼容)。
+	c.Mode = strings.ToLower(strings.TrimSpace(c.Mode))
+	if c.Mode == "" {
+		if c.Agones.Enabled {
+			c.Mode = ModeAgones
+		} else {
+			c.Mode = ModeMock
+		}
+	}
 	if c.Hub.HeartbeatTimeout == 0 {
 		c.Hub.HeartbeatTimeout = config.Duration(15 * time.Second)
 	}
@@ -192,6 +262,22 @@ func (c *Config) Defaults() {
 	}
 	if c.Agones.ListTimeout == 0 {
 		c.Agones.ListTimeout = config.Duration(5 * time.Second)
+	}
+	// LocalHub 默认值(mode=local 时生效)。
+	if c.LocalHub.AdvertiseHost == "" {
+		c.LocalHub.AdvertiseHost = "127.0.0.1"
+	}
+	if c.LocalHub.Port == 0 {
+		c.LocalHub.Port = 7777
+	}
+	if c.LocalHub.Region == "" {
+		c.LocalHub.Region = c.Hub.DefaultRegion
+	}
+	if c.LocalHub.Capacity == 0 {
+		c.LocalHub.Capacity = c.Hub.DefaultCapacity
+	}
+	if c.LocalHub.LogDir == "" {
+		c.LocalHub.LogDir = "run/dev/logs/ds"
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50021"

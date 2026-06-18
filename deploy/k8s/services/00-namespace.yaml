@@ -1,0 +1,7 @@
+# Pandora namespace(docker/k8s/online 三种集群模式共用)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pandora
+  labels:
+    app.kubernetes.io/part-of: pandora

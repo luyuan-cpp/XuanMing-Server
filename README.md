@@ -40,6 +40,41 @@ Pandora/
 
 ## 快速启动
 
+### 0. 一键启动(推荐:策划/新人本地联调)
+
+一条命令把后端跑起来,会先检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;确实要让脚本尝试用 winget 安装时,显式追加 `-Install`:
+
+```powershell
+# 默认 local 模式(基础设施 docker + 15 个 go 服务宿主进程,可断点调试)
+pwsh tools/scripts/start.ps1
+
+# 也可双击仓库根的 start.cmd(无参数 = local 模式)
+```
+
+四种启动方式(`-Mode`):
+
+| 模式     | 说明                                                         | 命令 |
+|----------|--------------------------------------------------------------|------|
+| `local`  | 基础设施在 docker,go 服务宿主进程(可断点调试,**策划首选**) | `start.ps1 -Mode local -Profile match` |
+| `docker` | 基础设施 + 15 个 go 服务全部容器化                           | `start.ps1 -Mode docker` |
+| `k8s`    | 本地 minikube,贴近线上                                       | `start.ps1 -Mode k8s` |
+| `online` | 部署到远端 k8s(需人工授权并确认 kube-context,谨慎)      | `start.ps1 -Mode online -Registry <仓库> -Tag <版本>` |
+
+常用:
+
+```powershell
+pwsh tools/scripts/start.ps1 -Check            # 只检查工具不启动
+pwsh tools/scripts/start.ps1 -Install          # 缺工具时尝试 winget 安装
+pwsh tools/scripts/start.ps1 -Status           # 看状态
+pwsh tools/scripts/start.ps1 -Mode docker -Down # 停
+```
+
+> 关键产物:`deploy/services/Dockerfile`(15 服务共用)、`deploy/docker-compose.services.yml`、
+> `deploy/k8s/`(infra + services + online overlay)、`tools/scripts/gen_cluster_config.ps1`
+> (把 `127.0.0.1` 的 dev 配置转成容器服务名的集群版配置)。
+>
+> 下面 1~5 步是「手动分步」做法,想了解细节或单独调试时用。
+
 ### 1. 装开发工具链(首次)
 
 一键装齐 buf / mkcert / grpcurl(已装的会自动跳过):

@@ -1,0 +1,16 @@
+# Pandora go 服务 kustomize base(docker/k8s 本地集群直接 apply 这一层)
+#
+# 用法:
+#   kubectl apply -k deploy/k8s/services            # 本地(镜像 pandora/<svc>:dev)
+#   kubectl apply -k deploy/k8s/overlays/online     # 线上(覆盖 registry / tag / 副本数)
+#
+# ⚠️ ConfigMap pandora-config 不在这里 —— 由 start.ps1 用 run/cluster/etc 现场
+#    `kubectl create configmap` 生成(避免把会漂移的配置烘进 kustomize)。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: pandora
+
+resources:
+  - 00-namespace.yaml
+  - services.yaml

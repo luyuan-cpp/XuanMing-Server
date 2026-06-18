@@ -95,18 +95,13 @@ func main() {
 
 	// 4. 装配链
 	repo := data.NewRedisBattleRepo(rdb)
-	// DS 启动方式三选一(互斥),按优先级装配,biz 逻辑零改:
-	//   - agones.enabled=true   → 真 GameServerAllocation(Linux 生产)
-	//   - local_ds.enabled=true → 本机拉起 Windows DS 进程(调试)
-	//   - 都为 false            → Mock 确定性假地址(无真实 DS)
-	if cfg.Agones.Enabled && cfg.LocalDS.Enabled {
-		helper.Errorw("msg", "ds_backend_conflict",
-			"hint", "agones.enabled 与 local_ds.enabled 不能同时为 true,二选一")
-		os.Exit(1)
-	}
+	// DS 启动方式由 cfg.Mode 单一开关决定(标准两模式 + 离线兜底),biz 逻辑零改:
+	//   - mode=agones → 真 GameServerAllocation(Linux 生产)
+	//   - mode=local  → 本机拉起 Windows DS 进程(Windows 单机自测)
+	//   - mode=mock   → Mock 确定性假地址(无真实 DS,离线联调)
 	var allocator biz.GameServerAllocator
-	switch {
-	case cfg.Agones.Enabled:
+	switch cfg.Mode {
+	case conf.ModeAgones:
 		ag, aerr := data.NewAgonesGameServerAllocator(cfg.Agones)
 		if aerr != nil {
 			helper.Errorw("msg", "agones_allocator_init_failed", "err", aerr,
@@ -116,11 +111,11 @@ func main() {
 		allocator = ag
 		helper.Infow("msg", "agones_allocator_ready",
 			"api_server", cfg.Agones.APIServer, "namespace", cfg.Agones.Namespace, "fleet", cfg.Agones.FleetName)
-	case cfg.LocalDS.Enabled:
+	case conf.ModeLocal:
 		ld, lerr := data.NewLocalGameServerAllocator(cfg.LocalDS)
 		if lerr != nil {
 			helper.Errorw("msg", "local_ds_allocator_init_failed", "err", lerr,
-				"hint", "检查 local_ds.executable_path 是否指向打包好的 UE Windows DS 可执行文件")
+				"hint", "mode=local 需 local_ds.executable_path 指向打包好的 UE Windows DS 可执行文件")
 			os.Exit(1)
 		}
 		// 进程退出时杀掉全部在管 DS,避免遗留孤儿。
@@ -133,7 +128,7 @@ func main() {
 	default:
 		allocator = biz.NewMockGameServerAllocator(cfg.Allocator)
 		helper.Warnw("msg", "mock_allocator_active",
-			"hint", "agones.enabled=false 且 local_ds.enabled=false,用确定性假地址(无真实 DS)")
+			"mode", cfg.Mode, "hint", "mode=mock,用确定性假地址(无真实 DS)")
 	}
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
 
@@ -170,7 +165,7 @@ func main() {
 		"redis_addr", rc.Host,
 		"heartbeat_timeout", cfg.Allocator.HeartbeatTimeout.String(),
 		"sweep_interval", cfg.Allocator.SweepInterval.String(),
-		"allocator_mode", allocatorMode(cfg.Agones.Enabled, cfg.LocalDS.Enabled),
+		"allocator_mode", cfg.Mode,
 	)
 
 	// 7. Kratos App
@@ -197,16 +192,4 @@ func (d *dsLifecyclePusher) PublishLifecycle(ctx context.Context, evt *dsv1.DSLi
 		return err
 	}
 	return d.p.SendRaw(ctx, strconv.FormatUint(evt.GetMatchId(), 10), payload)
-}
-
-// allocatorMode 返回 service_ready 日志里的分配器模式字符串。
-func allocatorMode(agonesEnabled, localEnabled bool) string {
-	switch {
-	case agonesEnabled:
-		return "agones"
-	case localEnabled:
-		return "local"
-	default:
-		return "mock"
-	}
 }

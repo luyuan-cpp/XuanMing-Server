@@ -110,9 +110,13 @@ func main() {
 
 	// 5. 装配链
 	repo := data.NewRedisHubRepo(rdb)
-	// W4 ⑬:agones.enabled=true → 真 GameServer 列表发现分片拓扑;否则回退 Mock(本地/无集群联调)。
+	// Hub DS 分片来源由 cfg.Mode 单一开关决定(标准两模式 + 离线兜底),biz 逻辑零改:
+	//   - mode=agones → 真 GameServer 列表发现分片拓扑(Linux 线上)
+	//   - mode=local  → 本机 exec 一个常驻 Windows Hub DS(Windows 单机自测)
+	//   - mode=mock   → 确定性假分片(无真实 Hub DS,离线联调)
 	var fleet biz.HubFleetProvider
-	if cfg.Agones.Enabled {
+	switch cfg.Mode {
+	case conf.ModeAgones:
 		af, ferr := biz.NewAgonesHubFleetProvider(cfg)
 		if ferr != nil {
 			helper.Errorw("msg", "agones_fleet_provider_init_failed", "err", ferr,
@@ -122,17 +126,30 @@ func main() {
 		fleet = af
 		helper.Infow("msg", "agones_fleet_provider_ready",
 			"api_server", cfg.Agones.APIServer, "namespace", cfg.Agones.Namespace, "fleet", cfg.Agones.FleetName)
-	} else {
+	case conf.ModeLocal:
+		lf, lerr := biz.NewLocalHubFleetProvider(cfg.LocalHub)
+		if lerr != nil {
+			helper.Errorw("msg", "local_hub_fleet_provider_init_failed", "err", lerr,
+				"hint", "mode=local 需 local_hub.executable_path 指向打包好的 UE Windows DS 可执行文件")
+			os.Exit(1)
+		}
+		// 进程随 hub_allocator 退出而 Kill,避免遗留孤儿 Hub DS。
+		defer func() { _ = lf.Close() }()
+		fleet = lf
+		helper.Infow("msg", "local_hub_fleet_provider_ready",
+			"executable", cfg.LocalHub.ExecutablePath, "map", cfg.LocalHub.MapName,
+			"advertise_host", cfg.LocalHub.AdvertiseHost, "port", cfg.LocalHub.Port)
+	default:
 		fleet = biz.NewMockHubFleetProvider(cfg.Hub)
 		helper.Warnw("msg", "mock_fleet_provider_active",
-			"hint", "agones.enabled=false,用确定性假分片(无真实 Hub DS)")
+			"mode", cfg.Mode, "hint", "mode=mock,用确定性假分片(无真实 Hub DS)")
 		// Mock 是拓扑-only 不实现 HubFleetScaler:autoscale/consolidation 在此模式下不会运行。
 		// 明确告警避免“yaml 开了但实际没生效”的误导。
 		if cfg.Hub.AutoScaleEnabled || cfg.Hub.ConsolidationEnabled {
 			helper.Warnw("msg", "autoscale_inert_under_mock",
 				"autoscale_enabled", cfg.Hub.AutoScaleEnabled,
 				"consolidation_enabled", cfg.Hub.ConsolidationEnabled,
-				"hint", "Mock 无真实 Fleet scaler:自动扩缩容/强制整合不会运行,需 agones.enabled=true")
+				"hint", "Mock 无真实 Fleet scaler:自动扩缩容/强制整合不会运行,需 mode=agones")
 		}
 	}
 	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer}, cfg.Hub)
@@ -174,7 +191,7 @@ func main() {
 		"sweep_interval", cfg.Hub.SweepInterval.String(),
 		"default_region", cfg.Hub.DefaultRegion,
 		"mock_shard_count", cfg.Hub.MockShardCount,
-		"fleet_mode", fleetMode(cfg.Agones.Enabled),
+		"fleet_mode", cfg.Mode,
 		"autoscale_enabled", cfg.Hub.AutoScaleEnabled,
 		"consolidation_enabled", cfg.Hub.ConsolidationEnabled,
 	)
@@ -210,12 +227,4 @@ type kafkaMigratePusher struct {
 func (k *kafkaMigratePusher) PushMigrate(ctx context.Context, playerID uint64, payload []byte) error {
 	_, err := k.p.PushToPlayers(ctx, 0, []uint64{playerID}, payload)
 	return err
-}
-
-// fleetMode 返回 service_ready 日志里的分片发现模式字符串。
-func fleetMode(agonesEnabled bool) string {
-	if agonesEnabled {
-		return "agones"
-	}
-	return "mock"
 }

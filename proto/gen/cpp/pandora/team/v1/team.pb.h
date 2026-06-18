@@ -4675,7 +4675,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyTeamResponse final : public ::
   enum : int {
     kTeamFieldNumber = 3,
     kCodeFieldNumber = 1,
-    kHasTeamFieldNumber = 2,
+    kHasTeamMsgFieldNumber = 2,
   };
   // .pandora.team.v1.Team team = 3 [json_name = "team"];
   [[nodiscard]] bool has_team()
@@ -4703,14 +4703,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyTeamResponse final : public ::
   void _internal_set_code(::pandora::common::v1::ErrCode value);
 
   public:
-  // bool has_team = 2 [json_name = "hasTeam"];
-  void clear_has_team() ;
-  [[nodiscard]] bool has_team() const;
-  void set_has_team(bool value);
+  // bool has_team_msg = 2 [json_name = "hasTeamMsg"];
+  void clear_has_team_msg() ;
+  [[nodiscard]] bool has_team_msg() const;
+  void set_has_team_msg(bool value);
 
   private:
-  bool _internal_has_team() const;
-  void _internal_set_has_team(bool value);
+  bool _internal_has_team_msg() const;
+  void _internal_set_has_team_msg(bool value);
 
   public:
   // @@protoc_insertion_point(class_scope:pandora.team.v1.GetMyTeamResponse)
@@ -4748,7 +4748,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMyTeamResponse final : public ::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::pandora::team::v1::Team* PROTOBUF_NULLABLE team_;
     int code_;
-    bool has_team_;
+    bool has_team_msg_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7373,28 +7373,28 @@ inline void GetMyTeamResponse::_internal_set_code(::pandora::common::v1::ErrCode
   _impl_.code_ = value;
 }
 
-// bool has_team = 2 [json_name = "hasTeam"];
-inline void GetMyTeamResponse::clear_has_team() {
+// bool has_team_msg = 2 [json_name = "hasTeamMsg"];
+inline void GetMyTeamResponse::clear_has_team_msg() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.has_team_ = false;
+  _impl_.has_team_msg_ = false;
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
-inline bool GetMyTeamResponse::has_team() const {
-  // @@protoc_insertion_point(field_get:pandora.team.v1.GetMyTeamResponse.has_team)
-  return _internal_has_team();
+inline bool GetMyTeamResponse::has_team_msg() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.GetMyTeamResponse.has_team_msg)
+  return _internal_has_team_msg();
 }
-inline void GetMyTeamResponse::set_has_team(bool value) {
-  _internal_set_has_team(value);
+inline void GetMyTeamResponse::set_has_team_msg(bool value) {
+  _internal_set_has_team_msg(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:pandora.team.v1.GetMyTeamResponse.has_team)
+  // @@protoc_insertion_point(field_set:pandora.team.v1.GetMyTeamResponse.has_team_msg)
 }
-inline bool GetMyTeamResponse::_internal_has_team() const {
+inline bool GetMyTeamResponse::_internal_has_team_msg() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.has_team_;
+  return _impl_.has_team_msg_;
 }
-inline void GetMyTeamResponse::_internal_set_has_team(bool value) {
+inline void GetMyTeamResponse::_internal_set_has_team_msg(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.has_team_ = value;
+  _impl_.has_team_msg_ = value;
 }
 
 // .pandora.team.v1.Team team = 3 [json_name = "team"];
