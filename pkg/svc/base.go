@@ -33,7 +33,11 @@ import (
 // BaseContext 是所有 Pandora 服务共享的运行时上下文。
 type BaseContext struct {
 	// RedisClient 是该服务的主 Redis 客户端(对应 config.Node.RedisClient)。
-	RedisClient *redis.Client
+	//
+	// 类型为 redis.UniversalClient 接口(非 *redis.Client),按 config.RedisConf 的
+	// addrs / master_name 自动选型:单实例 / Sentinel 主从 / Cluster 分片。留空 = 单实例,
+	// 行为与旧版完全一致。详见 docs/design/scale-dau-2m.md §2。
+	RedisClient redis.UniversalClient
 
 	// Snowflake 是该服务用的 ID 生成器,NodeID 取 config.Node.ZoneId。
 	Snowflake *snowflake.Node
@@ -52,8 +56,8 @@ type BaseContext struct {
 //
 // 调用前必须已经 log.Setup() 过(初始化 logx)。
 func MustNewBaseContext(c config.Base) *BaseContext {
-	// 1. Redis client
-	rdb := redisx.NewClient(c.Node.RedisClient)
+	// 1. Redis client(UniversalClient:单实例 / Sentinel / Cluster 由配置驱动)
+	rdb := redisx.NewUniversalClient(c.Node.RedisClient)
 
 	// 2. Snowflake
 	sf := snowflake.NewNode(uint64(c.Node.ZoneId))

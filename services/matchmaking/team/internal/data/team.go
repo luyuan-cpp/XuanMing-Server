@@ -114,11 +114,11 @@ type TeamRepo interface {
 
 // RedisTeamRepo 是基于 go-redis/v9 的 TeamRepo 实现。
 type RedisTeamRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisTeamRepo 构造 RedisTeamRepo。
-func NewRedisTeamRepo(rdb *redis.Client) *RedisTeamRepo {
+func NewRedisTeamRepo(rdb redis.UniversalClient) *RedisTeamRepo {
 	return &RedisTeamRepo{rdb: rdb}
 }
 

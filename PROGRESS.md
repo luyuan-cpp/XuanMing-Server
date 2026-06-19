@@ -2294,3 +2294,53 @@ TiDB 兼容 MySQL 协议，`pkg/mysqlx` + `database/sql` + `go-sql-driver/mysql`
 ### 交接 Codex
 - [proto] cpp pb 同步到 UE Pandora-Client 仓库。
 - commit 建议:`feat(friend): 好友闭环 RPC(拒绝/查待处理/删好友/取消拉黑/查黑名单)[proto]`。
+
+## W5 Codex 收尾 ✅ DAU 200 万扩容底座 module 入 workspace（2026-06-19）
+
+承接 Claude 本轮「DAU 200 万扩容底座」交付，Codex 按 AGENTS.md §11.1 做环境 / workspace 收尾，不改业务逻辑、不改单机默认配置。
+
+### 完成内容
+
+- `go.work` 追加 `use ./pkg/snowflake/etcdnode`，让新独立 module 纳入根 workspace。
+- 在 `pkg/snowflake/etcdnode` 执行 `go mod tidy`，生成 `go.sum`，固化 `go.etcd.io/etcd/client/v3` 等依赖。
+- 保留该 module 独立边界：核心 `pkg/snowflake` 与业务服务不会无条件引入 etcd client；只有显式 import `pkg/snowflake/etcdnode` 的调用方承担依赖。
+
+### 验证
+
+- `go mod tidy`（目录：`pkg/snowflake/etcdnode`）EXIT=0。
+- `go test ./...`（目录：`pkg/snowflake/etcdnode`）EXIT=0（no test files）。
+- `go build ./pkg/snowflake/etcdnode/...`（目录：仓库根）EXIT=0。
+- `go build ./pkg/... ./pkg/snowflake/etcdnode/...`（目录：仓库根）EXIT=0。
+- `gofmt` 覆盖本轮新增 / 触达 Go 文件。
+
+### 剩余接力
+
+- 按具体服务选择样板接入 `SnowflakeConf.node_id_source="etcd"`，调用方必须监听 `Holder.Lost()`，失租立即停发并退出。
+- Redis Cluster / MySQL ShardSet / push 定向路由 / Agones Ready 池化仍按 `docs/design/scale-dau-2m.md` 分阶段施工。
+
+## W5 Codex 验收 ✅ Redis Sentinel / Cluster 本地实例已起并验证（2026-06-19）
+
+承接 Claude 本轮「Redis 去单点部署配置」交接，Codex 按 AGENTS.md §11.1 执行环境侧动作。
+
+### 启动与验证
+
+- `docker compose -f deploy/docker-compose.redis-sentinel.yml config --quiet` EXIT=0。
+- `docker compose -f deploy/docker-compose.redis-cluster.yml config --quiet` EXIT=0。
+- Docker Desktop daemon 初始未运行；Codex 启动 `com.docker.service` 与 Docker Desktop 后，`docker info` ready。
+- Sentinel 路线已启动：`docker compose -f deploy/docker-compose.redis-sentinel.yml up -d` EXIT=0。
+  - `pandora-sentinel-1 redis-cli -p 26379 sentinel master pandora-master` 返回 `flags=master`、`num-slaves=2`、`num-other-sentinels=2`、`quorum=2`。
+  - `pandora-redis-master` health=healthy，两个 replica 与三个 sentinel 均 running。
+- Cluster 路线已启动：`docker compose -f deploy/docker-compose.redis-cluster.yml up -d` EXIT=0。
+  - `pandora-rc-init` EXIT=0，日志显示 3 master + 3 replica，`[OK] All 16384 slots covered`。
+  - `redis-cli -c -p 6379 cluster info` 返回 `cluster_state:ok`、`cluster_slots_assigned=16384`、`cluster_known_nodes=6`、`cluster_size=3`。
+  - `cluster shards` 显示 3 个 master 分片区间：`0-5460`、`5461-10922`、`10923-16383`，各 1 个 replica，health=online。
+
+### CROSSSLOT 验证
+
+- 跨 slot 正例验证：`MGET pandora:cross:a pandora:cross:b` 返回 `CROSSSLOT Keys in request don't hash to the same slot`，证明本地环境确为 Redis Cluster 行为。
+- 同 hash tag 正例验证：`MGET pandora:ok:{demo}:a pandora:ok:{demo}:b` 返回 `1` / `2`。
+
+### 未执行项
+
+- 未把强随机 Redis 密码写入 `*-prod.yaml`：当前仓库未找到 `services/**/**-prod.yaml`，且真实生产密码不能写入 git 跟踪文件。生产应通过 secret/部署系统注入 `node.redis_client.password`，配置片段继续以占位符记录在 `deploy/redis/README.md`。
+- 生产 6 主 6 从仍按 `deploy/redis/README.md` §4 由 k8s redis-operator/helm 落地；本轮只验证本地 Sentinel 与最小 Cluster。

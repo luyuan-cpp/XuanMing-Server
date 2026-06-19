@@ -1,0 +1,145 @@
+# Pandora Redis 高可用部署【Sentinel 三哨兵 + 一主两从】
+#
+# 用途:解决 scale-dau-2m.md §2.1 的"单 Redis 单点"——先上 Sentinel 拿到
+#   ① 主从故障自动转移(可用性)② 读副本扩展,且 **多键事务/Lua 不受限**
+#   (单 slot 命名空间),作为切 Redis Cluster 前的过渡(两个跨 slot 服务
+#   trade/hub_allocator 已按 decision-revisit-*-crossslot.md 改造完毕,
+#   Cluster 也可直接上;Sentinel 是更低风险的第一步)。
+#
+# ⚠️ 按 AGENTS.md §11.1:本文件由 Claude 编写,**起容器/装载由 Codex 或人执行**。
+#   启动: docker compose -f deploy/docker-compose.redis-sentinel.yml up -d
+#   业务侧改 yaml: node.redis_client.master_name + addrs(见 deploy/redis/README.md)
+#
+# 拓扑:
+#   redis-master (1) ← redis-replica-1/2 (2)   数据面
+#   sentinel-1/2/3 (3)                         仲裁面(quorum=2)
+#   master 名(服务 yaml 里的 master_name)= pandora-master
+
+name: pandora-redis-sentinel
+
+services:
+  redis-master:
+    image: redis:8.8.0-alpine
+    container_name: pandora-redis-master
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "2gb"
+      - --maxmemory-policy
+      - "allkeys-lru"
+      - --requirepass
+      - "${REDIS_PASSWORD:-pandora_dev_pwd}"
+      - --masterauth
+      - "${REDIS_PASSWORD:-pandora_dev_pwd}"
+    ports:
+      - "6390:6379"
+    volumes:
+      - redis-master-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-pandora_dev_pwd}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [redis-net]
+
+  redis-replica-1:
+    image: redis:8.8.0-alpine
+    container_name: pandora-redis-replica-1
+    restart: unless-stopped
+    depends_on: [redis-master]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --replicaof
+      - "redis-master"
+      - "6379"
+      - --requirepass
+      - "${REDIS_PASSWORD:-pandora_dev_pwd}"
+      - --masterauth
+      - "${REDIS_PASSWORD:-pandora_dev_pwd}"
+    ports:
+      - "6391:6379"
+    volumes:
+      - redis-replica-1-data:/data
+    networks: [redis-net]
+
+  redis-replica-2:
+    image: redis:8.8.0-alpine
+    container_name: pandora-redis-replica-2
+    restart: unless-stopped
+    depends_on: [redis-master]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --replicaof
+      - "redis-master"
+      - "6379"
+      - --requirepass
+      - "${REDIS_PASSWORD:-pandora_dev_pwd}"
+      - --masterauth
+      - "${REDIS_PASSWORD:-pandora_dev_pwd}"
+    ports:
+      - "6392:6379"
+    volumes:
+      - redis-replica-2-data:/data
+    networks: [redis-net]
+
+  sentinel-1:
+    image: redis:8.8.0-alpine
+    container_name: pandora-sentinel-1
+    restart: unless-stopped
+    depends_on: [redis-master, redis-replica-1, redis-replica-2]
+    entrypoint: ["/bin/sh", "/etc/redis/sentinel-entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-pandora_dev_pwd}"
+      SENTINEL_QUORUM: "2"
+    ports:
+      - "26379:26379"
+    volumes:
+      - ./redis/sentinel-entrypoint.sh:/etc/redis/sentinel-entrypoint.sh:ro
+    networks: [redis-net]
+
+  sentinel-2:
+    image: redis:8.8.0-alpine
+    container_name: pandora-sentinel-2
+    restart: unless-stopped
+    depends_on: [redis-master, redis-replica-1, redis-replica-2]
+    entrypoint: ["/bin/sh", "/etc/redis/sentinel-entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-pandora_dev_pwd}"
+      SENTINEL_QUORUM: "2"
+    ports:
+      - "26380:26379"
+    volumes:
+      - ./redis/sentinel-entrypoint.sh:/etc/redis/sentinel-entrypoint.sh:ro
+    networks: [redis-net]
+
+  sentinel-3:
+    image: redis:8.8.0-alpine
+    container_name: pandora-sentinel-3
+    restart: unless-stopped
+    depends_on: [redis-master, redis-replica-1, redis-replica-2]
+    entrypoint: ["/bin/sh", "/etc/redis/sentinel-entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-pandora_dev_pwd}"
+      SENTINEL_QUORUM: "2"
+    ports:
+      - "26381:26379"
+    volumes:
+      - ./redis/sentinel-entrypoint.sh:/etc/redis/sentinel-entrypoint.sh:ro
+    networks: [redis-net]
+
+volumes:
+  redis-master-data: { name: pandora-redis-master-data }
+  redis-replica-1-data: { name: pandora-redis-replica-1-data }
+  redis-replica-2-data: { name: pandora-redis-replica-2-data }
+
+networks:
+  redis-net:
+    name: pandora-redis-net
+    driver: bridge

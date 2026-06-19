@@ -55,6 +55,7 @@ use ./services/economy/inventory
 
 use (
 	./pkg/killswitch/etcdkv
+	./pkg/snowflake/etcdnode
 	./services/data/data_service
 )
 

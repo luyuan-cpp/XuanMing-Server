@@ -226,13 +226,13 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper, sf *snowflake.Node) 
 
 // mustBuildRedisRepos 按 cfg 决定是否启 Redis Session / JTI repo。
 // host 为空时跳过(测试 / mock 模式)。redis 初始化失败 → panic。
-func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, data.TicketJTIRepo, *redis.Client) {
+func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, data.TicketJTIRepo, redis.UniversalClient) {
 	rc := cfg.Node.RedisClient
 	if rc.Host == "" {
 		h.Warnw("msg", "redis_disabled_in_config")
 		return nil, nil, nil
 	}
-	rdb := redisx.NewClient(rc)
+	rdb := redisx.NewUniversalClient(rc)
 	// 启动期 ping 一次,确保 redis 可达;失败致命(login 不可降级)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

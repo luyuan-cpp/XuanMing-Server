@@ -127,13 +127,13 @@ func main() {
 
 // mustBuildRedis 构造 redis 客户端并 ping;失败 exit(W3 ④ push 不可降级,
 // 没有 redis 就没有离线缓存,选 fail-fast 而不是假装运行)。
-func mustBuildRedis(cfg *conf.Config, h kratosHelper) *redis.Client {
+func mustBuildRedis(cfg *conf.Config, h kratosHelper) redis.UniversalClient {
 	rc := cfg.Node.RedisClient
 	if rc.Host == "" {
 		h.Errorw("msg", "redis_host_empty", "hint", "node.redis_client.host required for push offline cache")
 		os.Exit(1)
 	}
-	rdb := redisx.NewClient(rc)
+	rdb := redisx.NewUniversalClient(rc)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {

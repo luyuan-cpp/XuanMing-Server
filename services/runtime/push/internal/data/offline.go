@@ -46,7 +46,7 @@ type OfflineCacheRepo interface {
 
 // RedisOfflineCacheRepo 是基于 go-redis/v9 ZSET 的实现。
 type RedisOfflineCacheRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 	ttl time.Duration
 
 	// seq 单进程内自增,跟 score 拼成 member 后缀,
@@ -55,7 +55,7 @@ type RedisOfflineCacheRepo struct {
 }
 
 // NewRedisOfflineCacheRepo 构造,ttl<=0 时 fallback 到 5min(防 cfg 漏配)。
-func NewRedisOfflineCacheRepo(rdb *redis.Client, ttl time.Duration) *RedisOfflineCacheRepo {
+func NewRedisOfflineCacheRepo(rdb redis.UniversalClient, ttl time.Duration) *RedisOfflineCacheRepo {
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
 	}

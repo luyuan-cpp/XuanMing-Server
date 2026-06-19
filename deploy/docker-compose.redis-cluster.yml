@@ -1,0 +1,119 @@
+# Pandora Redis Cluster 部署【本地验证版:3 主 3 从最小集群】
+#
+# 用途:本地验证 hash tag / CROSSSLOT 改造(trade、hub_allocator 已按
+#   decision-revisit-*-crossslot.md 改完),最小可用集群 = 3 主 3 从。
+#   **生产按 scale-dau-2m.md §2.1 决策起 6 主 6 从**(k8s redis-operator/helm
+#   负责 announce-ip 与扩缩容,本 compose 仅供本机功能验证,不是生产拓扑)。
+#
+# 为什么用静态 IP:Redis Cluster gossip 用 IP 而非主机名互联,docker 桥接网络下
+#   必须给每个节点固定 IP 并设 --cluster-announce-ip,否则 MOVED/重定向会拿到
+#   错误地址。这里在 172.28.0.0/16 子网内分配固定 IP。
+#
+# ⚠️ 按 AGENTS.md §11.1:本文件由 Claude 编写,**起容器/建集群由 Codex 或人执行**。
+#   启动: docker compose -f deploy/docker-compose.redis-cluster.yml up -d
+#   建簇:  cluster-init 服务会在节点就绪后自动 redis-cli --cluster create
+#   业务侧改 yaml: node.redis_client.addrs(逗号分隔 6 节点),不填 master_name
+#   (见 deploy/redis/README.md)
+
+name: pandora-redis-cluster
+
+x-redis-node: &redis-node
+  image: redis:8.8.0-alpine
+  restart: unless-stopped
+
+services:
+  redis-node-1:
+    <<: *redis-node
+    container_name: pandora-rc-node-1
+    command: &node-cmd >
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --cluster-announce-ip 172.28.0.11
+    ports: ["7001:6379", "17001:16379"]
+    networks:
+      redis-cluster-net: { ipv4_address: 172.28.0.11 }
+
+  redis-node-2:
+    <<: *redis-node
+    container_name: pandora-rc-node-2
+    command: >
+      redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip 172.28.0.12
+    ports: ["7002:6379", "17002:16379"]
+    networks:
+      redis-cluster-net: { ipv4_address: 172.28.0.12 }
+
+  redis-node-3:
+    <<: *redis-node
+    container_name: pandora-rc-node-3
+    command: >
+      redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip 172.28.0.13
+    ports: ["7003:6379", "17003:16379"]
+    networks:
+      redis-cluster-net: { ipv4_address: 172.28.0.13 }
+
+  redis-node-4:
+    <<: *redis-node
+    container_name: pandora-rc-node-4
+    command: >
+      redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip 172.28.0.14
+    ports: ["7004:6379", "17004:16379"]
+    networks:
+      redis-cluster-net: { ipv4_address: 172.28.0.14 }
+
+  redis-node-5:
+    <<: *redis-node
+    container_name: pandora-rc-node-5
+    command: >
+      redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip 172.28.0.15
+    ports: ["7005:6379", "17005:16379"]
+    networks:
+      redis-cluster-net: { ipv4_address: 172.28.0.15 }
+
+  redis-node-6:
+    <<: *redis-node
+    container_name: pandora-rc-node-6
+    command: >
+      redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip 172.28.0.16
+    ports: ["7006:6379", "17006:16379"]
+    networks:
+      redis-cluster-net: { ipv4_address: 172.28.0.16 }
+
+  # 一次性建簇:3 主(node 1-3) + 3 从(node 4-6),--cluster-replicas 1
+  cluster-init:
+    <<: *redis-node
+    container_name: pandora-rc-init
+    restart: "no"
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        sleep 5 &&
+        echo 'yes' | redis-cli --cluster create
+        172.28.0.11:6379 172.28.0.12:6379 172.28.0.13:6379
+        172.28.0.14:6379 172.28.0.15:6379 172.28.0.16:6379
+        --cluster-replicas 1
+    networks: [redis-cluster-net]
+
+networks:
+  redis-cluster-net:
+    name: pandora-redis-cluster-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

@@ -87,11 +87,11 @@ type HubRepo interface {
 
 // RedisHubRepo 是基于 go-redis/v9 的 HubRepo 实现。
 type RedisHubRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisHubRepo 构造 RedisHubRepo。
-func NewRedisHubRepo(rdb *redis.Client) *RedisHubRepo {
+func NewRedisHubRepo(rdb redis.UniversalClient) *RedisHubRepo {
 	return &RedisHubRepo{rdb: rdb}
 }
 
@@ -131,17 +131,20 @@ func (r *RedisHubRepo) ListShards(ctx context.Context) ([]*hubv1.HubShardStorage
 	return out, nil
 }
 
+// CreateShard 写分片镜像(权威)并登记到全局 shards SET。
+//
+// Redis Cluster 兼容(decision-revisit-hub-crossslot.md):shardKey{pod} 与全局 shardsSetKey
+// 分属不同 slot,不能捆同一事务。① shardKey 单键 SET 权威落库;② shardsSetKey 独立 SADD
+// 登记 membership(必须成功,否则 ListShards 漏这个分片)。两步幂等,失败重试可重入。
 func (r *RedisHubRepo) CreateShard(ctx context.Context, rec *hubv1.HubShardStorageRecord, shardTTL time.Duration) error {
 	payload, err := marshalShard(rec)
 	if err != nil {
 		return err
 	}
-	_, err = r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Set(ctx, shardKey(rec.HubPodName), payload, shardTTL)
-		pipe.SAdd(ctx, shardsSetKey, rec.HubPodName)
-		return nil
-	})
-	return err
+	if err := r.rdb.Set(ctx, shardKey(rec.HubPodName), payload, shardTTL).Err(); err != nil {
+		return err
+	}
+	return r.rdb.SAdd(ctx, shardsSetKey, rec.HubPodName).Err()
 }
 
 func (r *RedisHubRepo) UpdateShardWithLock(
@@ -175,15 +178,18 @@ func (r *RedisHubRepo) UpdateShardWithLock(
 			if err != nil {
 				return err
 			}
+			// Cluster 兼容:WATCH/SET 只围 shardKey 单 slot;全局 shardsSetKey 移出事务。
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, key, payload, shardTTL)
-				pipe.SAdd(ctx, shardsSetKey, pod)
 				return nil
 			})
 			return err
 		}, key)
 
 		if txErr == nil {
+			// shards membership re-ensure(独立命令,幂等;membership 已在 CreateShard 建立,
+			// best-effort:失败不影响权威镜像,ListShards 自愈 + 下次心跳补)。
+			_ = r.rdb.SAdd(ctx, shardsSetKey, pod).Err()
 			return nil
 		}
 		if txErr == fnErr && fnErr != nil {
@@ -226,10 +232,9 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 		if merr != nil {
 			return merr
 		}
+		// Cluster 兼容:WATCH/SET 只围 shardKey 单 slot;全局 shards/active 索引移出事务(见下)。
 		_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, key, payload, shardTTL)
-			pipe.SAdd(ctx, shardsSetKey, pod)
-			pipe.ZAdd(ctx, activeKey, redis.Z{Score: float64(rec.LastHeartbeatMs), Member: pod})
 			return nil
 		})
 		return perr
@@ -237,18 +242,37 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 	if err != nil {
 		return false, err
 	}
+	if found {
+		// 全局索引:与 shardKey 不同 slot,各自独立命令。幂等;心跳高频,失败下次即补。
+		if serr := r.rdb.SAdd(ctx, shardsSetKey, pod).Err(); serr != nil {
+			return true, serr
+		}
+		if zerr := r.rdb.ZAdd(ctx, activeKey, redis.Z{Score: float64(tsMs), Member: pod}).Err(); zerr != nil {
+			return true, zerr
+		}
+	}
 	return found, nil
 }
 
+// RemoveShard 删分片镜像 + 成员索引 + 全局 shards/active 登记。
+//
+// Redis Cluster 兼容(decision-revisit-hub-crossslot.md):shardKey/membersKey 同 hashtag {pod}
+// 同 slot,一个 mini-tx;全局 shards/active 不同 slot,拆为独立命令。全部幂等,残留由 ListShards
+// 自愈 + active 扫到已删镜像跳过兜底。
 func (r *RedisHubRepo) RemoveShard(ctx context.Context, pod string) error {
-	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+	// per-pod 同 slot:镜像 + 成员索引一起删。
+	if _, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.Del(ctx, shardKey(pod))
 		pipe.Del(ctx, membersKey(pod))
-		pipe.SRem(ctx, shardsSetKey, pod)
-		pipe.ZRem(ctx, activeKey, pod)
 		return nil
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	// 全局索引:独立命令(不同 slot)。
+	if err := r.rdb.SRem(ctx, shardsSetKey, pod).Err(); err != nil {
+		return err
+	}
+	return r.rdb.ZRem(ctx, activeKey, pod).Err()
 }
 
 func (r *RedisHubRepo) RangeStaleShards(ctx context.Context, thresholdMs int64) ([]string, error) {

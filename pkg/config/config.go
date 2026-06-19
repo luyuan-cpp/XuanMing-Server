@@ -114,6 +114,13 @@ type MySQLConf struct {
 	MaxIdleConns    int      `yaml:"max_idle_conns,omitempty" json:"max_idle_conns,omitempty"`
 	ConnMaxLifetime Duration `yaml:"conn_max_lifetime,omitempty" json:"conn_max_lifetime,omitempty"`
 	PingTimeout     Duration `yaml:"ping_timeout,omitempty" json:"ping_timeout,omitempty"`
+
+	// Shards 是分库 DSN 列表。留空 = 单库(用 DSN)。配置 >=2 个 DSN = 分库模式,
+	// 由 mysqlx.NewShardSet 按 snowflake 业务 ID 路由(shard = id % len(Shards))。
+	// DAU 200万 / 千万注册量级下,单 MySQL 实例的写吞吐与单表行数都会触顶,按 player_id
+	// 水平分库分表;分片数一旦定稿不可随意改(rehash 代价高),详见 docs/design/scale-dau-2m.md。
+	// 池参数(MaxOpenConns 等)每个分片各自套用本结构的同名字段。
+	Shards []string `yaml:"shards,omitempty" json:"shards,omitempty"`
 }
 
 // RedisConf Redis 客户端配置。
@@ -127,6 +134,17 @@ type RedisConf struct {
 	DialTimeout  Duration `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
 	ReadTimeout  Duration `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
 	WriteTimeout Duration `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+
+	// Addrs 是 Redis Cluster / Sentinel 多节点地址。
+	//
+	// 留空 = 单实例模式(用 Host)。配置 >=1 个地址 = 集群模式,由 redisx.NewUniversalClient
+	// 构造 ClusterClient(go-redis UniversalClient 会按 Addrs 数量与 MasterName 自动选型)。
+	// DAU 200万 / 高 CCU 阶段单 Redis 必然成为吞吐与连接数单点,改配 Addrs 上 Redis Cluster,
+	// 分片键用业务 ID(player_id / team_id);详见 docs/design/scale-dau-2m.md。
+	Addrs []string `yaml:"addrs,omitempty" json:"addrs,omitempty"`
+
+	// MasterName 非空 = 走 Sentinel 故障转移(FailoverClient);为空且 Addrs 多节点 = Cluster。
+	MasterName string `yaml:"master_name,omitempty" json:"master_name,omitempty"`
 
 	// MaintNotifications 控制 go-redis 的 CLIENT MAINT_NOTIFICATIONS 能力探测。
 	//
@@ -186,6 +204,19 @@ type SnowflakeConf struct {
 	Epoch    int64  `yaml:"epoch,omitempty" json:"epoch,omitempty"`         // 默认 1773446400 (2026-03-14 UTC)
 	NodeBits uint32 `yaml:"node_bits,omitempty" json:"node_bits,omitempty"` // 默认 17
 	StepBits uint32 `yaml:"step_bits,omitempty" json:"step_bits,omitempty"` // 默认 15
+
+	// NodeIDSource 决定 snowflake nodeID 来源:
+	//   - ""/"static":用 node.zone_id 静态分配(单副本 / dev 默认)。
+	//   - "etcd":进入 k8s 多副本动态扩缩阶段,用 etcd Lease 自动抢占 nodeID。
+	//     需服务在 main 里 import pkg/snowflake/etcdnode,并据 Holder.Lost() 失租退出。
+	//     详见 docs/design/infra.md §8.1 与 docs/design/scale-dau-2m.md。
+	NodeIDSource string `yaml:"node_id_source,omitempty" json:"node_id_source,omitempty"`
+
+	// Etcd* 给 NodeIDSource="etcd" 用。
+	EtcdEndpoints   []string `yaml:"etcd_endpoints,omitempty" json:"etcd_endpoints,omitempty"`
+	EtcdPrefix      string   `yaml:"etcd_prefix,omitempty" json:"etcd_prefix,omitempty"`               // 默认 "/pandora/snowflake/node/"
+	EtcdServiceName string   `yaml:"etcd_service_name,omitempty" json:"etcd_service_name,omitempty"`   // 留空用服务名;隔离各服务 nodeID 空间
+	EtcdLeaseTTLSec int64    `yaml:"etcd_lease_ttl_sec,omitempty" json:"etcd_lease_ttl_sec,omitempty"` // 默认 15
 }
 
 // LockerConf 分布式锁默认 TTL。

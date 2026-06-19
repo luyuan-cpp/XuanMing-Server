@@ -177,11 +177,11 @@ type SessionRepo interface {
 
 // RedisSessionRepo 基于 go-redis/v9 的 SessionRepo 实现。
 type RedisSessionRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisSessionRepo 构造。
-func NewRedisSessionRepo(rdb *redis.Client) *RedisSessionRepo {
+func NewRedisSessionRepo(rdb redis.UniversalClient) *RedisSessionRepo {
 	return &RedisSessionRepo{rdb: rdb}
 }
 
@@ -225,11 +225,11 @@ type TicketJTIRepo interface {
 
 // RedisTicketJTIRepo 基于 go-redis/v9 的 TicketJTIRepo 实现。
 type RedisTicketJTIRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisTicketJTIRepo 构造。
-func NewRedisTicketJTIRepo(rdb *redis.Client) *RedisTicketJTIRepo {
+func NewRedisTicketJTIRepo(rdb redis.UniversalClient) *RedisTicketJTIRepo {
 	return &RedisTicketJTIRepo{rdb: rdb}
 }
 

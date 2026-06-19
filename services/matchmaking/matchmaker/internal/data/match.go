@@ -78,11 +78,11 @@ type MatchRepo interface {
 
 // RedisMatchRepo 是基于 go-redis/v9 的 MatchRepo 实现。
 type RedisMatchRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisMatchRepo 构造 RedisMatchRepo。
-func NewRedisMatchRepo(rdb *redis.Client) *RedisMatchRepo {
+func NewRedisMatchRepo(rdb redis.UniversalClient) *RedisMatchRepo {
 	return &RedisMatchRepo{rdb: rdb}
 }
 

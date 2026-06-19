@@ -77,7 +77,7 @@ func main() {
 		helper.Errorw("msg", "redis_host_required")
 		os.Exit(1)
 	}
-	rdb := redisx.NewClient(rc)
+	rdb := redisx.NewUniversalClient(rc)
 	defer func() { _ = rdb.Close() }()
 
 	pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

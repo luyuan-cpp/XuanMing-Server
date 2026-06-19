@@ -92,7 +92,7 @@ func main() {
 	// 4. Redis(弱依赖:旁路缓存,Ping 失败则降级为直连 MySQL)
 	var cache data.PlayerCache
 	if rc := cfg.Node.RedisClient; rc.Host != "" {
-		rdb := redisx.NewClient(rc)
+		rdb := redisx.NewUniversalClient(rc)
 		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		if perr := rdb.Ping(pingCtx).Err(); perr != nil {
 			cancel()

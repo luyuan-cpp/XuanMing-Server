@@ -58,32 +58,54 @@ type TradeRepo interface {
 
 // RedisTradeRepo 是基于 go-redis/v9 的 TradeRepo 实现。
 type RedisTradeRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisTradeRepo 构造。
-func NewRedisTradeRepo(rdb *redis.Client) *RedisTradeRepo {
+func NewRedisTradeRepo(rdb redis.UniversalClient) *RedisTradeRepo {
 	return &RedisTradeRepo{rdb: rdb}
 }
 
+// CreateOrder 写订单主体(权威单键)+ 买卖双方反查索引。
+//
+// Redis Cluster 兼容(decision-revisit-trade-crossslot.md):订单、卖家、买家分属 3 个 slot,
+// 不能捆同一 TxPipeline(否则 CROSSSLOT)。改为:① orderKey 单键 SET 权威落库(原子);
+// ② 各 playerKey 索引各自独立维护(SADD+EXPIRE 同 key 同 slot 一个 mini-tx)。
+// 任一步失败返回 error,调用方重试全幂等(SET 覆盖 / SADD 成员 / EXPIRE 刷新);
+// 订单主体写成功后即可经 GetOrder 直接访问,索引短暂缺失由重试 + TTL 对齐收敛。
+// 注:资源扣减原子性(CLAUDE.md §9 #7)在 biz 层 ResourceLedger,不在本方法。
 func (r *RedisTradeRepo) CreateOrder(ctx context.Context, order *tradev1.Order, orderTTL time.Duration) error {
 	payload, err := proto.Marshal(order)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "marshal order %d: %v", order.GetOrderId(), err)
 	}
-	pipe := r.rdb.TxPipeline()
-	pipe.Set(ctx, orderKey(order.GetOrderId()), payload, orderTTL)
-	idStr := strconv.FormatUint(order.GetOrderId(), 10)
-	pipe.SAdd(ctx, playerKey(order.GetSellerId()), idStr)
-	pipe.Expire(ctx, playerKey(order.GetSellerId()), orderTTL)
-	if order.GetBuyerId() != 0 {
-		pipe.SAdd(ctx, playerKey(order.GetBuyerId()), idStr)
-		pipe.Expire(ctx, playerKey(order.GetBuyerId()), orderTTL)
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
+	// 1. 权威:订单主体单键 SET(单 slot 原子)。失败 → 整体失败,无残留。
+	if err := r.rdb.Set(ctx, orderKey(order.GetOrderId()), payload, orderTTL).Err(); err != nil {
 		return errcode.New(errcode.ErrInternal, "create order %d: %v", order.GetOrderId(), err)
 	}
+	// 2. 反查索引:与订单不同 slot,各自独立维护,不与权威写捆事务。
+	idStr := strconv.FormatUint(order.GetOrderId(), 10)
+	if err := r.addPlayerOrderIndex(ctx, order.GetSellerId(), idStr, orderTTL); err != nil {
+		return errcode.New(errcode.ErrInternal, "index seller %d order %d: %v", order.GetSellerId(), order.GetOrderId(), err)
+	}
+	if order.GetBuyerId() != 0 {
+		if err := r.addPlayerOrderIndex(ctx, order.GetBuyerId(), idStr, orderTTL); err != nil {
+			return errcode.New(errcode.ErrInternal, "index buyer %d order %d: %v", order.GetBuyerId(), order.GetOrderId(), err)
+		}
+	}
 	return nil
+}
+
+// addPlayerOrderIndex 把 order_id 加入单个玩家的反查 SET 并刷新 TTL。
+// SADD + EXPIRE 同 key 同 slot,用一个 mini-TxPipeline(Cluster 合法,单玩家不跨 slot)。幂等。
+func (r *RedisTradeRepo) addPlayerOrderIndex(ctx context.Context, playerID uint64, idStr string, orderTTL time.Duration) error {
+	key := playerKey(playerID)
+	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.SAdd(ctx, key, idStr)
+		pipe.Expire(ctx, key, orderTTL)
+		return nil
+	})
+	return err
 }
 
 func (r *RedisTradeRepo) GetOrder(ctx context.Context, orderID uint64) (*tradev1.Order, bool, error) {

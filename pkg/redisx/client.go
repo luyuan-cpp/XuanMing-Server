@@ -45,3 +45,35 @@ func resolveMaintMode(s string) maintnotifications.Mode {
 	}
 	return DefaultMaintNotificationsMode
 }
+
+// NewUniversalClient 按公共 RedisConf 构造 go-redis UniversalClient,自动按拓扑选型:
+//
+//   - c.Addrs 为空            → 单实例 Client(等价 NewClient,Host 单点)
+//   - c.MasterName 非空       → Sentinel FailoverClient(主从故障转移)
+//   - c.Addrs 多节点且无 Master → Cluster ClusterClient(分片)
+//
+// 返回的 redis.UniversalClient 接口与 *redis.Client 同名方法兼容,业务 repo 只依赖接口即可
+// 在"单实例 → Cluster"之间切换而不改业务代码。DAU 200万 / 高 CCU 阶段把单 Redis 换成
+// Redis Cluster 时,只需在 yaml 填 addrs 列表,无需改 data 层。详见 docs/design/scale-dau-2m.md。
+//
+// ⚠️ Cluster 模式下跨 slot 的多键操作 / 事务 / Lua 受限:同一原子操作涉及的 key 必须落同一
+// slot(用 {hash_tag} 把同一玩家的相关 key 绑定到同一 slot,如 lock:{player:123})。
+// redislock / 多键 ZSET 等改造前必须核对 hash tag,详见 scale-dau-2m.md §Redis。
+func NewUniversalClient(c config.RedisConf) redis.UniversalClient {
+	addrs := c.Addrs
+	if len(addrs) == 0 {
+		addrs = []string{c.Host}
+	}
+	return redis.NewUniversalClient(&redis.UniversalOptions{
+		Addrs:        addrs,
+		MasterName:   c.MasterName,
+		Password:     c.Password,
+		DB:           int(c.DB),
+		DialTimeout:  c.DialTimeout.Std(),
+		ReadTimeout:  c.ReadTimeout.Std(),
+		WriteTimeout: c.WriteTimeout.Std(),
+		MaintNotificationsConfig: &maintnotifications.Config{
+			Mode: resolveMaintMode(c.MaintNotifications),
+		},
+	})
+}

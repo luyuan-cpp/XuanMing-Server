@@ -56,7 +56,7 @@ func singleflightDo(key string, fn func() (any, error)) (any, error) {
 // T 是业务层数据类型,要求可 json 序列化。
 func LoadOrCache[T any](
 	ctx context.Context,
-	rdb *redis.Client,
+	rdb redis.UniversalClient,
 	cacheKey string,
 	sfKey string,
 	ttl time.Duration,

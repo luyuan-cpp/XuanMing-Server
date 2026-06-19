@@ -35,11 +35,11 @@ type PlayerCache interface {
 
 // RedisPlayerCache 是基于 go-redis/v9 的 PlayerCache 实现。
 type RedisPlayerCache struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisPlayerCache 构造。
-func NewRedisPlayerCache(rdb *redis.Client) *RedisPlayerCache {
+func NewRedisPlayerCache(rdb redis.UniversalClient) *RedisPlayerCache {
 	return &RedisPlayerCache{rdb: rdb}
 }
 

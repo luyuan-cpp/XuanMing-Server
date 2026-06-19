@@ -47,11 +47,11 @@ type LocationRepo interface {
 
 // RedisLocationRepo 基于 go-redis/v9 的实现。
 type RedisLocationRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisLocationRepo 构造。
-func NewRedisLocationRepo(rdb *redis.Client) *RedisLocationRepo {
+func NewRedisLocationRepo(rdb redis.UniversalClient) *RedisLocationRepo {
 	return &RedisLocationRepo{rdb: rdb}
 }
 

@@ -60,11 +60,11 @@ type BattleRepo interface {
 
 // RedisBattleRepo 是基于 go-redis/v9 的 BattleRepo 实现。
 type RedisBattleRepo struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 }
 
 // NewRedisBattleRepo 构造 RedisBattleRepo。
-func NewRedisBattleRepo(rdb *redis.Client) *RedisBattleRepo {
+func NewRedisBattleRepo(rdb redis.UniversalClient) *RedisBattleRepo {
 	return &RedisBattleRepo{rdb: rdb}
 }
 
