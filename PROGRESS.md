@@ -2460,3 +2460,74 @@ go pb(37 files,buf lint OK)。cpp pb 待 Codex 同步 UE 仓库。
 - **单实例串行**:per-market 条带锁仅在单实例内成立;多实例部署需一致性哈希把同 market
   路由到同实例(或换 Redis 单写者 token),留扩容后续。
 - **真 MySQL + Kafka 联调**:环境启停交 Codex / 人(§11.1),本轮单测全内存 fake,未跑真依赖。
+
+## W5 拍卖结算接 inventory(2026-06-19)
+
+### 目标
+
+把 auction 的结算占位 `NoopSettlementLedger` 换成真实结算 —— 成交时真正扣货币 / 发道具
+(decision-revisit-auction-engine.md §3.4 #1/#2、CLAUDE.md 不变量 §9.2 / §9.7)。
+
+### 方案:inventory 新增 `SettleAuctionMatch` 系统 RPC(原子双方对转)
+
+- auction 与 inventory 是独立服务 / 独立库(pandora_auction vs pandora_trade),「卖家扣道具收
+  金币 + 买家扣金币收道具」的原子性必须落在 **inventory 单库本地事务**,故由 inventory 暴露一个
+  系统 RPC,auction 经内网 gRPC 调用。
+- **未复用 trade 的 `ResourceLedger`**:该原语本身仍是 Noop 占位,签名按 `*tradev1.Order`(P2P
+  托管语义)与 auction 的 `MatchRecord`(撮合成交语义)不兼容,当前无可复用的具体实现;此刻强抽
+  公共层属过度设计。后续若 trade 结算也落地,再评估是否统一(沿 decision-revisit §5.5 留口)。
+
+### proto(`[proto]`,已 regen)
+
+`proto/pandora/inventory/v1/inventory.proto` 加 `SettleAuctionMatch` RPC +
+`SettleAuctionMatchRequest`(match_id / seller_id / buyer_id / item_config_id / quantity /
+unit_price)/ `SettleAuctionMatchResponse`(code)。`pwsh tools/scripts/proto_gen.ps1` 通过
+(buf lint OK,go pb 37 files)。
+
+### inventory 端
+
+- `internal/data/inventory_repo.go`:`InventoryRepo` 加 `SettleAuctionMatch`;新 helper
+  `deductGoldTx`(FOR UPDATE 锁货币行,余额不足 → ErrInventoryInsufficient)、`addGoldTx` /
+  `addItemTx`(upsert)、`AuctionSettleFingerprint`。`MySQLInventoryRepo.SettleAuctionMatch`
+  在一个事务内完成双方对转:**防死锁** —— 对 inventory_ledger / player_items / player_currency
+  的行锁全部按「player_id 升序、同玩家先 items 表后 currency 表」总顺序获取(两条腿都改成先动
+  items 后动 currency),杜绝并发结算(尤其角色对调两笔)交叉成环。**幂等**:买卖双方各写一条同
+  `auction:settle:<match_id>` 流水,任一命中 uk → already 回放(资产只转一次)。
+- `internal/biz/inventory.go`:`SettleAuctionMatch` 校验(match_id/seller/buyer/item/qty/price,
+  拒自成交 seller==buyer,溢出安全乘算总价)→ 派生幂等键 → 调 repo。
+- `internal/service/inventory.go`:`SettleAuctionMatch` handler,鉴权同 GrantItems(系统接口,
+  带玩家 JWT 的客户端 callerID>0 → ERR_PERMISSION_DENY,只认内网直连;不在 Envoy 暴露)。
+- `deploy/mysql-init/08-inventory-tables.sql`:`inventory_ledger.op` 注释加 `auction_sell` /
+  `auction_buy`(VARCHAR(16) 容得下,无表结构变更)。
+- 单测加 5 例(全内存 fakeRepo):成交资产正确对转 / 同 match_id 重复结算不二次转移 / 卖家道具不足
+  / 买家金币不足 / 参数校验。
+
+### auction 端
+
+- `internal/data/settlement_client.go`(新):`GrpcInventoryLedger` 实现 `biz.SettlementLedger`,
+  调 inventory `SettleAuctionMatch`;成交价(被动挂单价)= `MatchRecord.Price` 作单价。
+  响应码映射:OK→nil、ERR_INVENTORY_INSUFFICIENT→`ErrAuctionInsufficient`、其它非 OK 原样透传。
+- `internal/conf/conf.go`:`AuctionConf` 加 `InventoryAddr`(配上走真实结算,留空退回 Noop)。
+- `cmd/auction/main.go`:第 7 步按 `inventory_addr` 装配 `GrpcInventoryLedger` 或 `Noop`。
+- `etc/auction-dev.yaml`:`auction.inventory_addr: 127.0.0.1:50015`。
+- `go mod tidy`(`google.golang.org/grpc` 转直接依赖);go.sum 固化以 Codex 复核为准。
+
+### 验证
+
+- inventory 模块 BUILD=0 / VET=0 / TEST=0(biz 含新增 5 例全过)。
+- auction 模块 BUILD=0 / VET=0 / TEST=0(原 7 例撮合单测不破)。
+- proto 模块 BUILD=0;`proto_gen.ps1` lint+generate 全过。
+
+### 行为说明 / 待办
+
+- **结算时机**:`AuctionUsecase.match` 在 `RecordMatch` 前调 `ledger.Settle`,失败即中止本次提交
+  (剩余不挂簿),成交不落库。即:买家金币 / 卖家道具不足 → 该笔撮合不成交,返回
+  `Err_Auction_Insufficient`。
+- **无 escrow(挂单不冻结)**:本轮只做「成交即时结算」,未做挂单冻结(下架道具 / 锁金币)。
+  极端下卖家挂单后道具被别处消耗、买家出价后金币花掉,会在成交时因不足而失败。挂单冻结 + 撤单 /
+  过期补偿退还是后续增量(decision-revisit §3.4 #1、§4 风险表「冻结资产未释放」),本轮不做。
+- **自撮合**:inventory 侧拒 seller==buyer;auction 撮合理论上可能自撮(同人挂买 + 挂卖交叉),
+  届时 Settle 失败中止该笔。撮合侧跳过自撮是后续优化项。
+- **真依赖联调**:本轮单测全内存 fake,未跑真 MySQL / gRPC 端到端(环境启停交 Codex / 人,§11.1)。
+- **Codex 收尾**:cpp pb 同步 UE 仓库([proto]);go.sum 复核;git 收尾等用户「帮我 commit」
+  (建议 scope `feat(auction): 拍卖成交接 inventory 真实结算 [proto]`,Claude 不做 git)。

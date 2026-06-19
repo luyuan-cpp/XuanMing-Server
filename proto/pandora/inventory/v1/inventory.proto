@@ -30,6 +30,15 @@ service InventoryService {
 
   // SellItem 出售道具换金币(原子扣道具 + 加金币)。
   rpc SellItem(SellItemRequest) returns (SellItemResponse);
+
+  // SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
+  //   同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
+  //     卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
+  //     买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+  // 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
+  // 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
+  // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+  rpc SettleAuctionMatch(SettleAuctionMatchRequest) returns (SettleAuctionMatchResponse);
 }
 
 // ItemStack 是背包里某配置道具的持有堆叠(客户端可见结构)。
@@ -107,4 +116,19 @@ message SellItemResponse {
   pandora.common.v1.ErrCode code = 1;
   int64 remaining = 2;  // 出售后该道具剩余数量
   int64 gold      = 3;  // 出售后金币余额
+}
+
+// SettleAuctionMatchRequest 拍卖成交结算(系统接口,后端内部直连)。
+// 幂等键 = match_id;总价 = quantity * unit_price(在 inventory 端做溢出安全乘法)。
+message SettleAuctionMatchRequest {
+  uint64 match_id       = 1;  // 成交幂等键(雪花 uint64,§11)
+  uint64 seller_id      = 2;  // 卖家 player_id(交付道具 / 收金币)
+  uint64 buyer_id       = 3;  // 买家 player_id(付金币 / 收道具)
+  uint32 item_config_id = 4;  // 成交道具配置 ID(uint32,§12)
+  int64  quantity       = 5;  // 成交数量(> 0)
+  int64  unit_price     = 6;  // 成交单价金币(> 0)
+}
+
+message SettleAuctionMatchResponse {
+  pandora.common.v1.ErrCode code = 1;
 }

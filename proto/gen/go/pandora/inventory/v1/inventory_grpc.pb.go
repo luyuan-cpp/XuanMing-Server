@@ -33,10 +33,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InventoryService_GetInventory_FullMethodName = "/pandora.inventory.v1.InventoryService/GetInventory"
-	InventoryService_GrantItems_FullMethodName   = "/pandora.inventory.v1.InventoryService/GrantItems"
-	InventoryService_UseItem_FullMethodName      = "/pandora.inventory.v1.InventoryService/UseItem"
-	InventoryService_SellItem_FullMethodName     = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_GetInventory_FullMethodName       = "/pandora.inventory.v1.InventoryService/GetInventory"
+	InventoryService_GrantItems_FullMethodName         = "/pandora.inventory.v1.InventoryService/GrantItems"
+	InventoryService_UseItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/UseItem"
+	InventoryService_SellItem_FullMethodName           = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_SettleAuctionMatch_FullMethodName = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -51,6 +52,14 @@ type InventoryServiceClient interface {
 	UseItem(ctx context.Context, in *UseItemRequest, opts ...grpc.CallOption) (*UseItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(ctx context.Context, in *SellItemRequest, opts ...grpc.CallOption) (*SellItemResponse, error)
+	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
+	//   同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
+	//     卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
+	//     买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	// 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
+	// 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	SettleAuctionMatch(ctx context.Context, in *SettleAuctionMatchRequest, opts ...grpc.CallOption) (*SettleAuctionMatchResponse, error)
 }
 
 type inventoryServiceClient struct {
@@ -101,6 +110,16 @@ func (c *inventoryServiceClient) SellItem(ctx context.Context, in *SellItemReque
 	return out, nil
 }
 
+func (c *inventoryServiceClient) SettleAuctionMatch(ctx context.Context, in *SettleAuctionMatchRequest, opts ...grpc.CallOption) (*SettleAuctionMatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SettleAuctionMatchResponse)
+	err := c.cc.Invoke(ctx, InventoryService_SettleAuctionMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InventoryServiceServer is the server API for InventoryService service.
 // All implementations should embed UnimplementedInventoryServiceServer
 // for forward compatibility.
@@ -113,6 +132,14 @@ type InventoryServiceServer interface {
 	UseItem(context.Context, *UseItemRequest) (*UseItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error)
+	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
+	//   同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
+	//     卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
+	//     买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	// 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
+	// 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	SettleAuctionMatch(context.Context, *SettleAuctionMatchRequest) (*SettleAuctionMatchResponse, error)
 }
 
 // UnimplementedInventoryServiceServer should be embedded to have
@@ -133,6 +160,9 @@ func (UnimplementedInventoryServiceServer) UseItem(context.Context, *UseItemRequ
 }
 func (UnimplementedInventoryServiceServer) SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SellItem not implemented")
+}
+func (UnimplementedInventoryServiceServer) SettleAuctionMatch(context.Context, *SettleAuctionMatchRequest) (*SettleAuctionMatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SettleAuctionMatch not implemented")
 }
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue() {}
 
@@ -226,6 +256,24 @@ func _InventoryService_SellItem_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_SettleAuctionMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SettleAuctionMatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).SettleAuctionMatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_SettleAuctionMatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).SettleAuctionMatch(ctx, req.(*SettleAuctionMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InventoryService_ServiceDesc is the grpc.ServiceDesc for InventoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -248,6 +296,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SellItem",
 			Handler:    _InventoryService_SellItem_Handler,
+		},
+		{
+			MethodName: "SettleAuctionMatch",
+			Handler:    _InventoryService_SettleAuctionMatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

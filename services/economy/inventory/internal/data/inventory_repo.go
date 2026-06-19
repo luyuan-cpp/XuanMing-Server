@@ -54,6 +54,14 @@ type InventoryRepo interface {
 
 	// SellItem 幂等出售(事务:INSERT ledger;扣道具 + 加 gold)。返回剩余数量 + 出售后 gold。
 	SellItem(ctx context.Context, playerID uint64, itemConfigID uint32, count, gold int64, idempotencyKey, detail string) (remaining, newGold int64, already bool, err error)
+
+	// SettleAuctionMatch 原子结算一笔拍卖成交(一个本地事务内卖↔买双方对转):
+	//   卖家扣 quantity 个 itemConfigID + 加 totalGold 金币;
+	//   买家扣 totalGold 金币 + 加 quantity 个 itemConfigID。
+	// idempotencyKey(= 业务层基于 match_id 派生)在事务内给买卖双方各记一条流水,
+	// 重复结算命中 uk → already=true(资产只转一次,不变量 §9.2 / §9.7);
+	// 卖家道具不足 / 买家金币不足 → ErrInventoryInsufficient,整笔回滚。
+	SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, detail string) (already bool, err error)
 }
 
 // MySQLInventoryRepo 是基于 database/sql 的 InventoryRepo 实现。
@@ -125,6 +133,13 @@ func UseFingerprint(itemConfigID uint32, count int64) string {
 // SellFingerprint 计算出售请求指纹(含算得的 gold)。
 func SellFingerprint(itemConfigID uint32, count, gold int64) string {
 	return hashHex(fmt.Sprintf("sell|%d:%d|gold=%d", itemConfigID, count, gold))
+}
+
+// AuctionSettleFingerprint 计算拍卖结算请求指纹(双方 + 道具 + 数量 + 总价)。
+// 同一 idempotency_key 复用到不同成交内容 → 指纹不一致判冲突,防 key 复用串改账。
+func AuctionSettleFingerprint(sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64) string {
+	return hashHex(fmt.Sprintf("auction_settle|seller=%d|buyer=%d|item=%d|qty=%d|gold=%d",
+		sellerID, buyerID, itemConfigID, quantity, totalGold))
 }
 
 func hashHex(s string) string {
@@ -316,6 +331,120 @@ ON DUPLICATE KEY UPDATE gold = gold + VALUES(gold)`
 		return 0, 0, false, errcode.New(errcode.ErrInternal, "commit sell player=%d: %v", playerID, cerr)
 	}
 	return remaining, newGold, false, nil
+}
+
+// deductGoldTx 在事务里锁货币行并扣减 n。
+//   - 行不存在(无货币记录,余额 0)或余额 < n → ErrInventoryInsufficient
+//   - 成功 → 返回扣减后余额
+func deductGoldTx(ctx context.Context, tx *sql.Tx, playerID uint64, n int64) (int64, error) {
+	var have int64
+	err := tx.QueryRowContext(ctx,
+		`SELECT gold FROM player_currency WHERE player_id = ? FOR UPDATE`, playerID).Scan(&have)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errcode.New(errcode.ErrInventoryInsufficient, "insufficient gold player=%d need=%d have=0", playerID, n)
+	}
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "lock gold player=%d: %v", playerID, err)
+	}
+	if have < n {
+		return 0, errcode.New(errcode.ErrInventoryInsufficient, "insufficient gold player=%d need=%d have=%d", playerID, n, have)
+	}
+	remaining := have - n
+	if _, uerr := tx.ExecContext(ctx,
+		`UPDATE player_currency SET gold = ? WHERE player_id = ?`, remaining, playerID); uerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "deduct gold player=%d: %v", playerID, uerr)
+	}
+	return remaining, nil
+}
+
+// addGoldTx 在事务里给玩家加金币(upsert,无行则建)。
+func addGoldTx(ctx context.Context, tx *sql.Tx, playerID uint64, n int64) error {
+	const upGold = `INSERT INTO player_currency (player_id, gold) VALUES (?, ?)
+ON DUPLICATE KEY UPDATE gold = gold + VALUES(gold)`
+	if _, err := tx.ExecContext(ctx, upGold, playerID, n); err != nil {
+		return errcode.New(errcode.ErrInternal, "add gold player=%d: %v", playerID, err)
+	}
+	return nil
+}
+
+// addItemTx 在事务里给玩家加道具(upsert 堆叠,无行则建)。
+func addItemTx(ctx context.Context, tx *sql.Tx, playerID uint64, itemConfigID uint32, n int64) error {
+	const upItem = `INSERT INTO player_items (player_id, item_config_id, count) VALUES (?, ?, ?)
+ON DUPLICATE KEY UPDATE count = count + VALUES(count)`
+	if _, err := tx.ExecContext(ctx, upItem, playerID, itemConfigID, n); err != nil {
+		return errcode.New(errcode.ErrInternal, "add item player=%d item=%d: %v", playerID, itemConfigID, err)
+	}
+	return nil
+}
+
+// SettleAuctionMatch 在一个本地事务里原子完成拍卖成交的卖↔买双方资产对转。
+//
+// 防死锁:对共享资源(inventory_ledger / player_items / player_currency)的行锁全部按
+//
+//	player_id 升序、同一玩家内「先 items 表后 currency 表」的总顺序获取,
+//
+// 杜绝并发结算(尤其角色对调的两笔)交叉持锁成环。
+// 幂等:买卖双方各记一条同 idempotency_key 的流水,任一命中 uk → already=true 回放(不重复扣)。
+func (r *MySQLInventoryRepo) SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, detail string) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	fp := AuctionSettleFingerprint(sellerID, buyerID, itemConfigID, quantity, totalGold)
+
+	// 1) 幂等流水:按 player_id 升序声明两条(同 key),避免并发交叉插入死锁。
+	loID, hiID := sellerID, buyerID
+	loOp, hiOp := "auction_sell", "auction_buy"
+	if buyerID < sellerID {
+		loID, hiID = buyerID, sellerID
+		loOp, hiOp = "auction_buy", "auction_sell"
+	}
+	loAlready, _, _, lerr := claimLedger(ctx, tx, loID, idempotencyKey, loOp, fp, detail)
+	if lerr != nil {
+		return false, lerr
+	}
+	hiAlready, _, _, herr := claimLedger(ctx, tx, hiID, idempotencyKey, hiOp, fp, detail)
+	if herr != nil {
+		return false, herr
+	}
+	if loAlready || hiAlready {
+		// 已结算过(双方流水原子写入,正常下同真同假;异常单边脏数据也按已处理回滚防双扣)。
+		return true, nil
+	}
+
+	// 2) 资产对转。两条腿都「先动 items 表、后动 currency 表」,配合 player 升序保证全局锁序一致。
+	sellerLeg := func() error {
+		if _, derr := deductItemTx(ctx, tx, sellerID, itemConfigID, quantity); derr != nil {
+			return derr // 卖家道具不足 → ErrInventoryInsufficient
+		}
+		return addGoldTx(ctx, tx, sellerID, totalGold)
+	}
+	buyerLeg := func() error {
+		if aerr := addItemTx(ctx, tx, buyerID, itemConfigID, quantity); aerr != nil {
+			return aerr
+		}
+		if _, derr := deductGoldTx(ctx, tx, buyerID, totalGold); derr != nil {
+			return derr // 买家金币不足 → ErrInventoryInsufficient
+		}
+		return nil
+	}
+	first, second := sellerLeg, buyerLeg
+	if buyerID < sellerID {
+		first, second = buyerLeg, sellerLeg
+	}
+	if ferr := first(); ferr != nil {
+		return false, ferr
+	}
+	if serr := second(); serr != nil {
+		return false, serr
+	}
+
+	if cerr := tx.Commit(); cerr != nil {
+		return false, errcode.New(errcode.ErrInternal, "commit auction settle match=%d: %v", matchID, cerr)
+	}
+	return false, nil
 }
 
 // isDupErr 判断是否 MySQL 1062 唯一键冲突(go-sql-driver 错误串含 "Error 1062")。

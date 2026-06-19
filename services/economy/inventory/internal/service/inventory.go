@@ -120,7 +120,22 @@ func (s *InventoryService) SellItem(ctx context.Context, req *inventoryv1.SellIt
 	return &inventoryv1.SellItemResponse{Code: commonv1.ErrCode_OK, Remaining: remaining, Gold: gold}, nil
 }
 
-// toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。
+// SettleAuctionMatch 原子结算拍卖成交(系统接口,仅后端内部直连)。
+//
+// 鉴权同 GrantItems:经 Envoy 的客户端调用必带 JWT(callerID>0)→ 一律拒绝,杜绝玩家自助结算
+// 套现 / 刷道具;合法调用者是 auction 服务内网直连(无 x-pandora-player-id 头 → callerID==0)。
+func (s *InventoryService) SettleAuctionMatch(ctx context.Context, req *inventoryv1.SettleAuctionMatchRequest) (*inventoryv1.SettleAuctionMatchResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.SettleAuctionMatchResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	err := s.uc.SettleAuctionMatch(ctx,
+		req.GetMatchId(), req.GetSellerId(), req.GetBuyerId(),
+		req.GetItemConfigId(), req.GetQuantity(), req.GetUnitPrice())
+	if err != nil {
+		return &inventoryv1.SettleAuctionMatchResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.SettleAuctionMatchResponse{Code: commonv1.ErrCode_OK}, nil
+}
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))
 }

@@ -13,7 +13,7 @@
 //  4. Redis + Ping(强依赖:订单簿不可降级)
 //  5. Snowflake(order_id / match_id 生成)
 //  6. kafka producer(pandora.auction.match + pandora.auction.audit)→ pusher(弱依赖)
-//  7. SettlementLedger(W1 用 NoopSettlementLedger 占位)
+//  7. SettlementLedger(配 inventory_addr 走真实结算;留空退回 NoopSettlementLedger 占位)
 //  8. 装配 AuctionUsecase → AuctionService → gRPC/HTTP server
 //  9. kratos.New(...).Run() 阻塞
 package main
@@ -156,8 +156,18 @@ func main() {
 		helper.Warnw("msg", "kafka_brokers_empty", "hint", "auction events disabled")
 	}
 
-	// 7. SettlementLedger:W1 占位(总是成功)。真实背包 / 货币原子事务接入后替换。
-	ledger := biz.NoopSettlementLedger{}
+	// 7. SettlementLedger:配了 inventory_addr → 走真实结算(inventory 卖↔买资产原子对转 +
+	//    match_id 幂等);留空 → 退回 NoopSettlementLedger 占位(仅无交易联调 / 单测用)。
+	var ledger biz.SettlementLedger
+	if addr := cfg.Auction.InventoryAddr; addr != "" {
+		gl := data.NewGrpcInventoryLedger(addr)
+		defer func() { _ = gl.Close() }()
+		ledger = gl
+		helper.Infow("msg", "settlement_ledger_ready", "mode", "inventory_grpc", "inventory_addr", addr)
+	} else {
+		ledger = biz.NoopSettlementLedger{}
+		helper.Warnw("msg", "settlement_ledger_noop", "hint", "auction.inventory_addr empty; matches settle as no-op")
+	}
 
 	// 8. 装配链
 	repo := data.NewMySQLAuctionRepo(router)

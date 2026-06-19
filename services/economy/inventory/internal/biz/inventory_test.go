@@ -112,6 +112,44 @@ func (f *fakeRepo) SellItem(_ context.Context, playerID uint64, itemConfigID uin
 	return have - count, f.gold[playerID], false, nil
 }
 
+func (f *fakeRepo) SettleAuctionMatch(_ context.Context, _, sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, _ string) (bool, error) {
+	fp := data.AuctionSettleFingerprint(sellerID, buyerID, itemConfigID, quantity, totalGold)
+	sk := keyOf(sellerID, idempotencyKey)
+	bk := keyOf(buyerID, idempotencyKey)
+	// 幂等命中:任一方流水已存(指纹一致)→ already 回放;指纹不一致 → 冲突。
+	if e, ok := f.ledger[sk]; ok {
+		if e.fingerprint != fp {
+			return false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return true, nil
+	}
+	if e, ok := f.ledger[bk]; ok {
+		if e.fingerprint != fp {
+			return false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return true, nil
+	}
+	// 卖家道具校验。
+	if f.items[sellerID] == nil || f.items[sellerID][itemConfigID] < quantity {
+		return false, errcode.New(errcode.ErrInventoryInsufficient, "seller item insufficient")
+	}
+	// 买家金币校验。
+	if f.gold[buyerID] < totalGold {
+		return false, errcode.New(errcode.ErrInventoryInsufficient, "buyer gold insufficient")
+	}
+	// 资产对转。
+	f.items[sellerID][itemConfigID] -= quantity
+	f.gold[sellerID] += totalGold
+	f.gold[buyerID] -= totalGold
+	if f.items[buyerID] == nil {
+		f.items[buyerID] = map[uint32]int64{}
+	}
+	f.items[buyerID][itemConfigID] += quantity
+	f.ledger[sk] = ledgerEntry{fingerprint: fp}
+	f.ledger[bk] = ledgerEntry{fingerprint: fp}
+	return false, nil
+}
+
 func newUC(repo data.InventoryRepo) *InventoryUsecase {
 	return NewInventoryUsecase(repo, conf.InventoryConf{
 		ItemRules: []conf.ItemRule{
@@ -279,5 +317,101 @@ func TestSellItem_ReplayReturnsSnapshot(t *testing.T) {
 	}
 	if remaining != 3 || gold != 20 {
 		t.Fatalf("replay must return first-time snapshot remaining=3 gold=20, got remaining=%d gold=%d", remaining, gold)
+	}
+}
+
+func TestSettleAuctionMatch_Success(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	// 卖家(10)持 5 个道具 7001;买家(20)持 1000 金币。
+	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
+		t.Fatalf("seed buyer err: %v", err)
+	}
+	// 成交:卖家交付 3 个 @ 单价 100 = 300 金币。
+	if err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100); err != nil {
+		t.Fatalf("settle err: %v", err)
+	}
+	if repo.items[10][7001] != 2 {
+		t.Fatalf("seller item want 2, got %d", repo.items[10][7001])
+	}
+	if repo.items[20][7001] != 3 {
+		t.Fatalf("buyer item want 3, got %d", repo.items[20][7001])
+	}
+	if repo.gold[10] != 300 {
+		t.Fatalf("seller gold want 300, got %d", repo.gold[10])
+	}
+	if repo.gold[20] != 700 {
+		t.Fatalf("buyer gold want 700, got %d", repo.gold[20])
+	}
+}
+
+func TestSettleAuctionMatch_Idempotent(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
+		t.Fatalf("seed buyer err: %v", err)
+	}
+	if err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100); err != nil {
+		t.Fatalf("first settle err: %v", err)
+	}
+	// 重复结算同一 match_id:资产不可二次转移。
+	if err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100); err != nil {
+		t.Fatalf("idempotent settle err: %v", err)
+	}
+	if repo.items[10][7001] != 2 || repo.items[20][7001] != 3 || repo.gold[10] != 300 || repo.gold[20] != 700 {
+		t.Fatalf("idempotent settle must not double-transfer: sellerItem=%d buyerItem=%d sellerGold=%d buyerGold=%d",
+			repo.items[10][7001], repo.items[20][7001], repo.gold[10], repo.gold[20])
+	}
+}
+
+func TestSettleAuctionMatch_SellerItemInsufficient(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 1}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
+		t.Fatalf("seed buyer err: %v", err)
+	}
+	err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100)
+	if errcode.As(err) != errcode.ErrInventoryInsufficient {
+		t.Fatalf("seller item insufficient should be ErrInventoryInsufficient, got %v", err)
+	}
+}
+
+func TestSettleAuctionMatch_BuyerGoldInsufficient(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	if _, err := uc.GrantItems(context.Background(), 20, nil, 100, "seed-buyer"); err != nil {
+		t.Fatalf("seed buyer err: %v", err)
+	}
+	err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100) // 需要 300,只有 100
+	if errcode.As(err) != errcode.ErrInventoryInsufficient {
+		t.Fatalf("buyer gold insufficient should be ErrInventoryInsufficient, got %v", err)
+	}
+}
+
+func TestSettleAuctionMatch_Validation(t *testing.T) {
+	uc := newUC(newFakeRepo())
+	if err := uc.SettleAuctionMatch(context.Background(), 0, 10, 20, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("zero match_id should be ErrInvalidArg, got %v", err)
+	}
+	if err := uc.SettleAuctionMatch(context.Background(), 1, 10, 10, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("self-trade should be ErrInvalidArg, got %v", err)
+	}
+	if err := uc.SettleAuctionMatch(context.Background(), 1, 10, 20, 7001, 0, 1); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("zero quantity should be ErrInvalidArg, got %v", err)
+	}
+	if err := uc.SettleAuctionMatch(context.Background(), 1, 10, 20, 7001, 1, 0); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("zero unit_price should be ErrInvalidArg, got %v", err)
 	}
 }

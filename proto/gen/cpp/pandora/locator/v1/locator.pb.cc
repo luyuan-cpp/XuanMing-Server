@@ -39,9 +39,27 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::GetLocationResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::BatchGetLocationRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::BatchGetLocationResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::ClearLocationRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::locator::v1::ClearLocationResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::SubscribePresenceRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::SubscribePresenceResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::UnsubscribePresenceRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::UnsubscribePresenceResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::PresenceChange
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::locator::v1::PresenceBatchEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
@@ -49,6 +67,582 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
 namespace pandora {
 namespace locator {
 namespace v1 {
+class UnsubscribePresenceResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnsubscribePresenceResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnsubscribePresenceResponse, _impl_._has_bits_);
+};
+
+constexpr UnsubscribePresenceResponse::ParseTableT_ UnsubscribePresenceResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnsubscribePresenceResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::UnsubscribePresenceResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnsubscribePresenceResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnsubscribePresenceResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(UnsubscribePresenceResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnsubscribePresenceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr UnsubscribePresenceResponse::UnsubscribePresenceResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnsubscribePresenceResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnsubscribePresenceResponse(arena);
+}
+constexpr auto UnsubscribePresenceResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnsubscribePresenceResponse), alignof(UnsubscribePresenceResponse));
+}
+constexpr auto UnsubscribePresenceResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnsubscribePresenceResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnsubscribePresenceResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnsubscribePresenceResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnsubscribePresenceResponse>(), &UnsubscribePresenceResponse::ByteSizeLong,
+              &UnsubscribePresenceResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnsubscribePresenceResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[13],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnsubscribePresenceResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnsubscribePresenceResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnsubscribePresenceResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnsubscribePresenceResponse::InternalGenerateClassData_(
+            _default, &UnsubscribePresenceResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnsubscribePresenceResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnsubscribePresenceResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnsubscribePresenceResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnsubscribePresenceResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnsubscribePresenceResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnsubscribePresenceResponseGlobalsTypeInternal UnsubscribePresenceResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnsubscribePresenceResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnsubscribePresenceResponse_globals_.GetClassData();
+#else
+  return UnsubscribePresenceResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class UnsubscribePresenceRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnsubscribePresenceRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnsubscribePresenceRequest, _impl_._has_bits_);
+};
+
+constexpr UnsubscribePresenceRequest::ParseTableT_ UnsubscribePresenceRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnsubscribePresenceRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::UnsubscribePresenceRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnsubscribePresenceRequest, _impl_.subscriber_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnsubscribePresenceRequest, _impl_.subscriber_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+      {PROTOBUF_FIELD_OFFSET(UnsubscribePresenceRequest, _impl_.subscriber_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnsubscribePresenceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        subscriber_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr UnsubscribePresenceRequest::UnsubscribePresenceRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnsubscribePresenceRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnsubscribePresenceRequest(arena);
+}
+constexpr auto UnsubscribePresenceRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnsubscribePresenceRequest), alignof(UnsubscribePresenceRequest));
+}
+constexpr auto UnsubscribePresenceRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnsubscribePresenceRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnsubscribePresenceRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnsubscribePresenceRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnsubscribePresenceRequest>(), &UnsubscribePresenceRequest::ByteSizeLong,
+              &UnsubscribePresenceRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnsubscribePresenceRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[12],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnsubscribePresenceRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnsubscribePresenceRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnsubscribePresenceRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnsubscribePresenceRequest::InternalGenerateClassData_(
+            _default, &UnsubscribePresenceRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnsubscribePresenceRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnsubscribePresenceRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnsubscribePresenceRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnsubscribePresenceRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnsubscribePresenceRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnsubscribePresenceRequestGlobalsTypeInternal UnsubscribePresenceRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnsubscribePresenceRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnsubscribePresenceRequest_globals_.GetClassData();
+#else
+  return UnsubscribePresenceRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SubscribePresenceResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SubscribePresenceResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SubscribePresenceResponse, _impl_._has_bits_);
+};
+
+constexpr SubscribePresenceResponse::ParseTableT_ SubscribePresenceResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SubscribePresenceResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::SubscribePresenceResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SubscribePresenceResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SubscribePresenceResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(SubscribePresenceResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SubscribePresenceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr SubscribePresenceResponse::SubscribePresenceResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SubscribePresenceResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SubscribePresenceResponse(arena);
+}
+constexpr auto SubscribePresenceResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SubscribePresenceResponse), alignof(SubscribePresenceResponse));
+}
+constexpr auto SubscribePresenceResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SubscribePresenceResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SubscribePresenceResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SubscribePresenceResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SubscribePresenceResponse>(), &SubscribePresenceResponse::ByteSizeLong,
+              &SubscribePresenceResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SubscribePresenceResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[11],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SubscribePresenceResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SubscribePresenceResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SubscribePresenceResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SubscribePresenceResponse::InternalGenerateClassData_(
+            _default, &SubscribePresenceResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SubscribePresenceResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SubscribePresenceResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SubscribePresenceResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SubscribePresenceResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SubscribePresenceResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SubscribePresenceResponseGlobalsTypeInternal SubscribePresenceResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SubscribePresenceResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SubscribePresenceResponse_globals_.GetClassData();
+#else
+  return SubscribePresenceResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SubscribePresenceRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SubscribePresenceRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_._has_bits_);
+};
+
+constexpr SubscribePresenceRequest::ParseTableT_ SubscribePresenceRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::SubscribePresenceRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 watched_player_ids = 2 [json_name = "watchedPlayerIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_.watched_player_ids_)}},
+      // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SubscribePresenceRequest, _impl_.subscriber_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_.subscriber_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+      {PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_.subscriber_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated uint64 watched_player_ids = 2 [json_name = "watchedPlayerIds"];
+      {PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_.watched_player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SubscribePresenceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        watched_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::SubscribePresenceRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceRequest, _impl_.watched_player_ids_)>()
+         }
+        ,
+        _watched_player_ids_cached_byte_size_{0},
+        subscriber_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr SubscribePresenceRequest::SubscribePresenceRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SubscribePresenceRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SubscribePresenceRequest(arena);
+}
+constexpr auto SubscribePresenceRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SubscribePresenceRequest), alignof(SubscribePresenceRequest));
+}
+constexpr auto SubscribePresenceRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SubscribePresenceRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SubscribePresenceRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SubscribePresenceRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SubscribePresenceRequest>(), &SubscribePresenceRequest::ByteSizeLong,
+              &SubscribePresenceRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SubscribePresenceRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SubscribePresenceRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SubscribePresenceRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SubscribePresenceRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SubscribePresenceRequest::InternalGenerateClassData_(
+            _default, &SubscribePresenceRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SubscribePresenceRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SubscribePresenceRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SubscribePresenceRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SubscribePresenceRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SubscribePresenceRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SubscribePresenceRequestGlobalsTypeInternal SubscribePresenceRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SubscribePresenceRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SubscribePresenceRequest_globals_.GetClassData();
+#else
+  return SubscribePresenceRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SetLocationResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<SetLocationResponse>()._impl_._has_bits_);
@@ -186,6 +780,162 @@ const ::_pbi::ClassData* SetLocationResponse_get_class_data() {
   return SetLocationResponse_globals_.GetClassData();
 #else
   return SetLocationResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PresenceChange::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PresenceChange>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_._has_bits_);
+};
+
+constexpr PresenceChange::ParseTableT_ PresenceChange::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::PresenceChange>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PresenceChange, _impl_.player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.player_id_)}},
+      // .pandora.locator.v1.PresenceStatus status = 2 [json_name = "status"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PresenceChange, _impl_.status_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.status_)}},
+      // int64 ts_ms = 3 [json_name = "tsMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PresenceChange, _impl_.ts_ms_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.ts_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .pandora.locator.v1.PresenceStatus status = 2 [json_name = "status"];
+      {PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.status_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // int64 ts_ms = 3 [json_name = "tsMs"];
+      {PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.ts_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PresenceChange::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_id_{::uint64_t{0u}},
+        ts_ms_{::int64_t{0}},
+        status_{static_cast< ::pandora::locator::v1::PresenceStatus >(0)} {}
+
+template <typename>
+constexpr PresenceChange::PresenceChange(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PresenceChange::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PresenceChange(arena);
+}
+constexpr auto PresenceChange::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PresenceChange), alignof(PresenceChange));
+}
+constexpr auto PresenceChange::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PresenceChange::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PresenceChange>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PresenceChange::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PresenceChange>(), &PresenceChange::ByteSizeLong,
+              &PresenceChange::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[14],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PresenceChangeGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PresenceChangeGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PresenceChange_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PresenceChange::InternalGenerateClassData_(
+            _default, &PresenceChange_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PresenceChange>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PresenceChangeGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PresenceChange _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PresenceChange>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PresenceChangeGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PresenceChangeGlobalsTypeInternal PresenceChange_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PresenceChange_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PresenceChange_globals_.GetClassData();
+#else
+  return PresenceChange_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -607,7 +1357,7 @@ constexpr auto ClearLocationResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -748,7 +1498,7 @@ constexpr auto ClearLocationRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
@@ -795,6 +1545,152 @@ const ::_pbi::ClassData* ClearLocationRequest_get_class_data() {
   return ClearLocationRequest_globals_.GetClassData();
 #else
   return ClearLocationRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchGetLocationRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchGetLocationRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchGetLocationRequest, _impl_._has_bits_);
+};
+
+constexpr BatchGetLocationRequest::ParseTableT_ BatchGetLocationRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchGetLocationRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::BatchGetLocationRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLocationRequest, _impl_.player_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLocationRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchGetLocationRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLocationRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+template <typename>
+constexpr BatchGetLocationRequest::BatchGetLocationRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchGetLocationRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchGetLocationRequest(arena);
+}
+constexpr auto BatchGetLocationRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BatchGetLocationRequest), alignof(BatchGetLocationRequest));
+}
+constexpr auto BatchGetLocationRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchGetLocationRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchGetLocationRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchGetLocationRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchGetLocationRequest>(), &BatchGetLocationRequest::ByteSizeLong,
+              &BatchGetLocationRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchGetLocationRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchGetLocationRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchGetLocationRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchGetLocationRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchGetLocationRequest::InternalGenerateClassData_(
+            _default, &BatchGetLocationRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLocationRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchGetLocationRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchGetLocationRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLocationRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchGetLocationRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchGetLocationRequestGlobalsTypeInternal BatchGetLocationRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchGetLocationRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchGetLocationRequest_globals_.GetClassData();
+#else
+  return BatchGetLocationRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -953,6 +1849,157 @@ const ::_pbi::ClassData* SetLocationRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PresenceBatchEvent::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PresenceBatchEvent>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PresenceBatchEvent, _impl_._has_bits_);
+};
+
+constexpr PresenceBatchEvent::ParseTableT_ PresenceBatchEvent::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PresenceBatchEvent, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::PresenceBatchEvent>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated .pandora.locator.v1.PresenceChange changes = 1 [json_name = "changes"];
+      {::_pbi::TcParser::FastMtR1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PresenceBatchEvent, _impl_.changes_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated .pandora.locator.v1.PresenceChange changes = 1 [json_name = "changes"];
+      {PROTOBUF_FIELD_OFFSET(PresenceBatchEvent, _impl_.changes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::locator::v1::PresenceChange>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::locator::v1::PresenceChange_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PresenceBatchEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        changes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::PresenceBatchEvent,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceBatchEvent, _impl_.changes_)>()
+         }
+     {}
+
+template <typename>
+constexpr PresenceBatchEvent::PresenceBatchEvent(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PresenceBatchEvent::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PresenceBatchEvent(arena);
+}
+constexpr auto PresenceBatchEvent::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PresenceBatchEvent), alignof(PresenceBatchEvent));
+}
+constexpr auto PresenceBatchEvent::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PresenceBatchEvent::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PresenceBatchEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PresenceBatchEvent::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PresenceBatchEvent>(), &PresenceBatchEvent::ByteSizeLong,
+              &PresenceBatchEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PresenceBatchEvent, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[15],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PresenceBatchEventGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PresenceBatchEventGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PresenceBatchEvent_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PresenceBatchEvent::InternalGenerateClassData_(
+            _default, &PresenceBatchEvent_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PresenceBatchEvent>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PresenceBatchEventGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PresenceBatchEvent _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PresenceBatchEvent>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PresenceBatchEventGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PresenceBatchEventGlobalsTypeInternal PresenceBatchEvent_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PresenceBatchEvent_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PresenceBatchEvent_globals_.GetClassData();
+#else
+  return PresenceBatchEvent_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetLocationResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetLocationResponse>()._impl_._has_bits_);
@@ -1107,11 +2154,306 @@ const ::_pbi::ClassData* GetLocationResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr BatchGetLocationResponse_LocationsEntry_DoNotUse::ParseTableT_ BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.locator.v1.Location value = 2 [json_name = "value"];
+      {::_pbi::TcParser::FastMtS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.value_)}},
+      // uint64 key = 1 [json_name = "key"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.key_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 key = 1 [json_name = "key"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .pandora.locator.v1.Location value = 2 [json_name = "value"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::locator::v1::Location>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::locator::v1::Location_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr BatchGetLocationResponse_LocationsEntry_DoNotUse::BatchGetLocationResponse_LocationsEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : BatchGetLocationResponse_LocationsEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL BatchGetLocationResponse_LocationsEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchGetLocationResponse_LocationsEntry_DoNotUse(arena);
+}
+constexpr auto BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BatchGetLocationResponse_LocationsEntry_DoNotUse), alignof(BatchGetLocationResponse_LocationsEntry_DoNotUse));
+}
+constexpr auto BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchGetLocationResponse_LocationsEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchGetLocationResponse_LocationsEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchGetLocationResponse_LocationsEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&BatchGetLocationResponse_LocationsEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchGetLocationResponse_LocationsEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchGetLocationResponse_LocationsEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLocationResponse_LocationsEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchGetLocationResponse_LocationsEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchGetLocationResponse_LocationsEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLocationResponse_LocationsEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse_LocationsEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchGetLocationResponse_LocationsEntry_DoNotUseGlobalsTypeInternal BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchGetLocationResponse_LocationsEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_.GetClassData();
+#else
+  return BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BatchGetLocationResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BatchGetLocationResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse, _impl_._has_bits_);
+};
+
+constexpr BatchGetLocationResponse::ParseTableT_ BatchGetLocationResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::locator::v1::BatchGetLocationResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BatchGetLocationResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // map<uint64, .pandora.locator.v1.Location> locations = 2 [json_name = "locations"];
+      {PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse, _impl_.locations_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+    }},
+    {{
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 4, 11, 0)},
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::pandora::locator::v1::Location>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::pandora::locator::v1::Location_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BatchGetLocationResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
+        locations_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLocationResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse, _impl_.locations_)>()
+         }
+     {}
+
+template <typename>
+constexpr BatchGetLocationResponse::BatchGetLocationResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BatchGetLocationResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BatchGetLocationResponse(arena);
+}
+constexpr auto BatchGetLocationResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BatchGetLocationResponse), alignof(BatchGetLocationResponse));
+}
+constexpr auto BatchGetLocationResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BatchGetLocationResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BatchGetLocationResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BatchGetLocationResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BatchGetLocationResponse>(), &BatchGetLocationResponse::ByteSizeLong,
+              &BatchGetLocationResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BatchGetLocationResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BatchGetLocationResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BatchGetLocationResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BatchGetLocationResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BatchGetLocationResponse::InternalGenerateClassData_(
+            _default, &BatchGetLocationResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLocationResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BatchGetLocationResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BatchGetLocationResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BatchGetLocationResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BatchGetLocationResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BatchGetLocationResponseGlobalsTypeInternal BatchGetLocationResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BatchGetLocationResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BatchGetLocationResponse_globals_.GetClassData();
+#else
+  return BatchGetLocationResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace v1
 }  // namespace locator
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2flocator_2fv1_2flocator_2eproto[1];
+    file_level_enum_descriptors_pandora_2flocator_2fv1_2flocator_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2flocator_2fv1_2flocator_2eproto = nullptr;
 const ::uint32_t
@@ -1157,6 +2499,25 @@ const ::uint32_t
         1,
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationRequest, _impl_.player_ids_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse, _impl_.locations_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ClearLocationRequest, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ClearLocationRequest, _impl_.player_id_),
@@ -1165,6 +2526,42 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ClearLocationResponse, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::ClearLocationResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceRequest, _impl_.subscriber_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceRequest, _impl_.watched_player_ids_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::UnsubscribePresenceRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::UnsubscribePresenceRequest, _impl_.subscriber_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::UnsubscribePresenceResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::UnsubscribePresenceResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceChange, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceChange, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceChange, _impl_.status_),
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceChange, _impl_.ts_ms_),
+        0,
+        2,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceBatchEvent, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceBatchEvent, _impl_.changes_),
         0,
 };
 
@@ -1175,8 +2572,17 @@ static const ::_pbi::MigrationSchema
         {22, sizeof(::pandora::locator::v1::SetLocationResponse)},
         {27, sizeof(::pandora::locator::v1::GetLocationRequest)},
         {32, sizeof(::pandora::locator::v1::GetLocationResponse)},
-        {39, sizeof(::pandora::locator::v1::ClearLocationRequest)},
-        {44, sizeof(::pandora::locator::v1::ClearLocationResponse)},
+        {39, sizeof(::pandora::locator::v1::BatchGetLocationRequest)},
+        {44, sizeof(::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse)},
+        {51, sizeof(::pandora::locator::v1::BatchGetLocationResponse)},
+        {58, sizeof(::pandora::locator::v1::ClearLocationRequest)},
+        {63, sizeof(::pandora::locator::v1::ClearLocationResponse)},
+        {68, sizeof(::pandora::locator::v1::SubscribePresenceRequest)},
+        {75, sizeof(::pandora::locator::v1::SubscribePresenceResponse)},
+        {80, sizeof(::pandora::locator::v1::UnsubscribePresenceRequest)},
+        {85, sizeof(::pandora::locator::v1::UnsubscribePresenceResponse)},
+        {90, sizeof(::pandora::locator::v1::PresenceChange)},
+        {99, sizeof(::pandora::locator::v1::PresenceBatchEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1185,8 +2591,17 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::locator::v1::SetLocationResponse_globals_,
         &::pandora::locator::v1::GetLocationRequest_globals_,
         &::pandora::locator::v1::GetLocationResponse_globals_,
+        &::pandora::locator::v1::BatchGetLocationRequest_globals_,
+        &::pandora::locator::v1::BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_,
+        &::pandora::locator::v1::BatchGetLocationResponse_globals_,
         &::pandora::locator::v1::ClearLocationRequest_globals_,
         &::pandora::locator::v1::ClearLocationResponse_globals_,
+        &::pandora::locator::v1::SubscribePresenceRequest_globals_,
+        &::pandora::locator::v1::SubscribePresenceResponse_globals_,
+        &::pandora::locator::v1::UnsubscribePresenceRequest_globals_,
+        &::pandora::locator::v1::UnsubscribePresenceResponse_globals_,
+        &::pandora::locator::v1::PresenceChange_globals_,
+        &::pandora::locator::v1::PresenceBatchEvent_globals_,
 };
 const char descriptor_table_protodef_pandora_2flocator_2fv1_2flocator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1206,23 +2621,57 @@ const char descriptor_table_protodef_pandora_2flocator_2fv1_2flocator_2eproto[] 
     "r_id\030\001 \001(\004R\010playerId\"\177\n\023GetLocationRespo"
     "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
     "rCodeR\004code\0228\n\010location\030\002 \001(\0132\034.pandora."
-    "locator.v1.LocationR\010location\"3\n\024ClearLo"
-    "cationRequest\022\033\n\tplayer_id\030\001 \001(\004R\010player"
-    "Id\"G\n\025ClearLocationResponse\022.\n\004code\030\001 \001("
-    "\0162\032.pandora.common.v1.ErrCodeR\004code*\275\001\n\r"
-    "LocationState\022\036\n\032LOCATION_STATE_UNSPECIF"
-    "IED\020\000\022\032\n\026LOCATION_STATE_OFFLINE\020\001\022 \n\034LOC"
-    "ATION_STATE_LOGIN_PENDING\020\002\022\026\n\022LOCATION_"
-    "STATE_HUB\020\003\022\033\n\027LOCATION_STATE_MATCHING\020\004"
-    "\022\031\n\025LOCATION_STATE_BATTLE\020\0052\274\002\n\024PlayerLo"
-    "catorService\022^\n\013SetLocation\022&.pandora.lo"
-    "cator.v1.SetLocationRequest\032\'.pandora.lo"
-    "cator.v1.SetLocationResponse\022^\n\013GetLocat"
-    "ion\022&.pandora.locator.v1.GetLocationRequ"
-    "est\032\'.pandora.locator.v1.GetLocationResp"
-    "onse\022d\n\rClearLocation\022(.pandora.locator."
-    "v1.ClearLocationRequest\032).pandora.locato"
-    "r.v1.ClearLocationResponseb\006proto3"
+    "locator.v1.LocationR\010location\"8\n\027BatchGe"
+    "tLocationRequest\022\035\n\nplayer_ids\030\001 \003(\004R\tpl"
+    "ayerIds\"\201\002\n\030BatchGetLocationResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022Y\n\tlocations\030\002 \003(\0132;.pandora.locato"
+    "r.v1.BatchGetLocationResponse.LocationsE"
+    "ntryR\tlocations\032Z\n\016LocationsEntry\022\020\n\003key"
+    "\030\001 \001(\004R\003key\0222\n\005value\030\002 \001(\0132\034.pandora.loc"
+    "ator.v1.LocationR\005value:\0028\001\"3\n\024ClearLoca"
+    "tionRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
+    "\"G\n\025ClearLocationResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\"m\n\030Sub"
+    "scribePresenceRequest\022#\n\rsubscriber_id\030\001"
+    " \001(\004R\014subscriberId\022,\n\022watched_player_ids"
+    "\030\002 \003(\004R\020watchedPlayerIds\"K\n\031SubscribePre"
+    "senceResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\"A\n\032UnsubscribePres"
+    "enceRequest\022#\n\rsubscriber_id\030\001 \001(\004R\014subs"
+    "criberId\"M\n\033UnsubscribePresenceResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\"~\n\016PresenceChange\022\033\n\tplayer_id\030\001"
+    " \001(\004R\010playerId\022:\n\006status\030\002 \001(\0162\".pandora"
+    ".locator.v1.PresenceStatusR\006status\022\023\n\005ts"
+    "_ms\030\003 \001(\003R\004tsMs\"R\n\022PresenceBatchEvent\022<\n"
+    "\007changes\030\001 \003(\0132\".pandora.locator.v1.Pres"
+    "enceChangeR\007changes*\275\001\n\rLocationState\022\036\n"
+    "\032LOCATION_STATE_UNSPECIFIED\020\000\022\032\n\026LOCATIO"
+    "N_STATE_OFFLINE\020\001\022 \n\034LOCATION_STATE_LOGI"
+    "N_PENDING\020\002\022\026\n\022LOCATION_STATE_HUB\020\003\022\033\n\027L"
+    "OCATION_STATE_MATCHING\020\004\022\031\n\025LOCATION_STA"
+    "TE_BATTLE\020\005*\207\001\n\016PresenceStatus\022\037\n\033PRESEN"
+    "CE_STATUS_UNSPECIFIED\020\000\022\033\n\027PRESENCE_STAT"
+    "US_OFFLINE\020\001\022\032\n\026PRESENCE_STATUS_ONLINE\020\002"
+    "\022\033\n\027PRESENCE_STATUS_IN_GAME\020\0032\225\005\n\024Player"
+    "LocatorService\022^\n\013SetLocation\022&.pandora."
+    "locator.v1.SetLocationRequest\032\'.pandora."
+    "locator.v1.SetLocationResponse\022^\n\013GetLoc"
+    "ation\022&.pandora.locator.v1.GetLocationRe"
+    "quest\032\'.pandora.locator.v1.GetLocationRe"
+    "sponse\022m\n\020BatchGetLocation\022+.pandora.loc"
+    "ator.v1.BatchGetLocationRequest\032,.pandor"
+    "a.locator.v1.BatchGetLocationResponse\022p\n"
+    "\021SubscribePresence\022,.pandora.locator.v1."
+    "SubscribePresenceRequest\032-.pandora.locat"
+    "or.v1.SubscribePresenceResponse\022v\n\023Unsub"
+    "scribePresence\022..pandora.locator.v1.Unsu"
+    "bscribePresenceRequest\032/.pandora.locator"
+    ".v1.UnsubscribePresenceResponse\022d\n\rClear"
+    "Location\022(.pandora.locator.v1.ClearLocat"
+    "ionRequest\032).pandora.locator.v1.ClearLoc"
+    "ationResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto_deps[1] = {
@@ -1232,13 +2681,13 @@ static ::absl::once_flag descriptor_table_pandora_2flocator_2fv1_2flocator_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto = {
     false,
     false,
-    1314,
+    2661,
     descriptor_table_protodef_pandora_2flocator_2fv1_2flocator_2eproto,
     "pandora/locator/v1/locator.proto",
     &descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto_once,
     descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto_deps,
     1,
-    7,
+    16,
     schemas,
     file_message_globals,
     TableStruct_pandora_2flocator_2fv1_2flocator_2eproto::offsets,
@@ -1255,6 +2704,13 @@ LocationState_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t LocationState_internal_data_[] = {
     393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PresenceStatus_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2flocator_2fv1_2flocator_2eproto);
+  return file_level_enum_descriptors_pandora_2flocator_2fv1_2flocator_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t PresenceStatus_internal_data_[] = {
+    262144u, 0u, };
 // ===================================================================
 
 Location::Location(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -2489,6 +3945,524 @@ void GetLocationResponse::InternalSwap(GetLocationResponse* PROTOBUF_RESTRICT PR
 }
 // ===================================================================
 
+BatchGetLocationRequest::BatchGetLocationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLocationRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.BatchGetLocationRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLocationRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::BatchGetLocationRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::locator::v1::BatchGetLocationRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationRequest, _impl_.player_ids_)>()
+          , from.player_ids_
+        }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+BatchGetLocationRequest::BatchGetLocationRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchGetLocationRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLocationRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchGetLocationRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.BatchGetLocationRequest)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLocationRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLocationRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+inline void BatchGetLocationRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+BatchGetLocationRequest::~BatchGetLocationRequest() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.BatchGetLocationRequest)
+  SharedDtor(*this);
+}
+inline void BatchGetLocationRequest::SharedDtor(MessageLite& self) {
+  BatchGetLocationRequest& this_ = static_cast<BatchGetLocationRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchGetLocationRequest_class_data_ =
+        BatchGetLocationRequest::InternalGenerateClassData_(BatchGetLocationRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLocationRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLocationRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchGetLocationRequest_class_data_.tc_table);
+  return BatchGetLocationRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLocationRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLocationRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchGetLocationRequest_globals_));
+  return BatchGetLocationRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchGetLocationRequest::ParseTableT_
+    BatchGetLocationRequest::_table_ =
+        BatchGetLocationRequest::InternalGenerateParseTable_(BatchGetLocationRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchGetLocationRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.BatchGetLocationRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.player_ids_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchGetLocationRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchGetLocationRequest& this_ = static_cast<const BatchGetLocationRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchGetLocationRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchGetLocationRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.BatchGetLocationRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            1, this_._internal_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.BatchGetLocationRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchGetLocationRequest::ByteSizeLong(const MessageLite& base) {
+  const BatchGetLocationRequest& this_ = static_cast<const BatchGetLocationRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchGetLocationRequest::ByteSizeLong() const {
+  const BatchGetLocationRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.BatchGetLocationRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated uint64 player_ids = 1 [json_name = "playerIds"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchGetLocationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchGetLocationRequest*>(&to_msg);
+  auto& from = static_cast<const BatchGetLocationRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.BatchGetLocationRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchGetLocationRequest::CopyFrom(const BatchGetLocationRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.BatchGetLocationRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchGetLocationRequest::InternalSwap(BatchGetLocationRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+}
+
+::google::protobuf::Metadata BatchGetLocationRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+BatchGetLocationResponse_LocationsEntry_DoNotUse::BatchGetLocationResponse_LocationsEntry_DoNotUse() : SuperType(BatchGetLocationResponse_LocationsEntry_DoNotUse_get_class_data()) {}
+BatchGetLocationResponse_LocationsEntry_DoNotUse::BatchGetLocationResponse_LocationsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, BatchGetLocationResponse_LocationsEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+BatchGetLocationResponse_LocationsEntry_DoNotUse::BatchGetLocationResponse_LocationsEntry_DoNotUse() : SuperType() {}
+BatchGetLocationResponse_LocationsEntry_DoNotUse::BatchGetLocationResponse_LocationsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_ =
+        BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalGenerateClassData_(BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLocationResponse_LocationsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_.tc_table);
+  return BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLocationResponse_LocationsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_));
+  return BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchGetLocationResponse_LocationsEntry_DoNotUse::ParseTableT_
+    BatchGetLocationResponse_LocationsEntry_DoNotUse::_table_ =
+        BatchGetLocationResponse_LocationsEntry_DoNotUse::InternalGenerateParseTable_(BatchGetLocationResponse_LocationsEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
+BatchGetLocationResponse::BatchGetLocationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLocationResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.BatchGetLocationResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLocationResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::BatchGetLocationResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        locations_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::locator::v1::BatchGetLocationResponse,
+              PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse, _impl_.locations_)>()
+          , from.locations_
+        }
+     {}
+
+BatchGetLocationResponse::BatchGetLocationResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BatchGetLocationResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BatchGetLocationResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BatchGetLocationResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.BatchGetLocationResponse)
+}
+PROTOBUF_NDEBUG_INLINE BatchGetLocationResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        locations_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::BatchGetLocationResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::BatchGetLocationResponse, _impl_.locations_)>()
+         }
+     {}
+
+inline void BatchGetLocationResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+BatchGetLocationResponse::~BatchGetLocationResponse() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.BatchGetLocationResponse)
+  SharedDtor(*this);
+}
+inline void BatchGetLocationResponse::SharedDtor(MessageLite& self) {
+  BatchGetLocationResponse& this_ = static_cast<BatchGetLocationResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BatchGetLocationResponse_class_data_ =
+        BatchGetLocationResponse::InternalGenerateClassData_(BatchGetLocationResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLocationResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLocationResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BatchGetLocationResponse_class_data_.tc_table);
+  return BatchGetLocationResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BatchGetLocationResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BatchGetLocationResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BatchGetLocationResponse_globals_));
+  return BatchGetLocationResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BatchGetLocationResponse::ParseTableT_
+    BatchGetLocationResponse::_table_ =
+        BatchGetLocationResponse::InternalGenerateParseTable_(BatchGetLocationResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BatchGetLocationResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.BatchGetLocationResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    _impl_.code_ = 0;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.locations_.Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BatchGetLocationResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BatchGetLocationResponse& this_ = static_cast<const BatchGetLocationResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BatchGetLocationResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BatchGetLocationResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.BatchGetLocationResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // map<uint64, .pandora.locator.v1.Location> locations = 2 [json_name = "locations"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_locations().empty()) {
+      using MapType = ::google::protobuf::Map<::uint64_t, ::pandora::locator::v1::Location>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint64_t, ::pandora::locator::v1::Location,
+                                     _pbi::WireFormatLite::TYPE_UINT64,
+                                     _pbi::WireFormatLite::TYPE_MESSAGE>;
+      const auto& field = this_._internal_locations();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              2, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              2, entry.first, entry.second, target, stream);
+        }
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.BatchGetLocationResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BatchGetLocationResponse::ByteSizeLong(const MessageLite& base) {
+  const BatchGetLocationResponse& this_ = static_cast<const BatchGetLocationResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BatchGetLocationResponse::ByteSizeLong() const {
+  const BatchGetLocationResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.BatchGetLocationResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+    // map<uint64, .pandora.locator.v1.Location> locations = 2 [json_name = "locations"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_locations_size());
+      for (const auto& entry : this_._internal_locations()) {
+        total_size += _pbi::MapEntryFuncs<::uint64_t, ::pandora::locator::v1::Location,
+                                       _pbi::WireFormatLite::TYPE_UINT64,
+                                       _pbi::WireFormatLite::TYPE_MESSAGE>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BatchGetLocationResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BatchGetLocationResponse*>(&to_msg);
+  auto& from = static_cast<const BatchGetLocationResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.BatchGetLocationResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_impl_.locations_.MergeFrom(from._impl_.locations_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BatchGetLocationResponse::CopyFrom(const BatchGetLocationResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.BatchGetLocationResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BatchGetLocationResponse::InternalSwap(BatchGetLocationResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+  _impl_.locations_.InternalSwap(&other->_impl_.locations_);
+}
+
+::google::protobuf::Metadata BatchGetLocationResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 ClearLocationRequest::ClearLocationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ClearLocationRequest_get_class_data()) {
@@ -2863,6 +4837,1290 @@ void ClearLocationResponse::InternalSwap(ClearLocationResponse* PROTOBUF_RESTRIC
 }
 
 ::google::protobuf::Metadata ClearLocationResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SubscribePresenceRequest::SubscribePresenceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubscribePresenceRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.SubscribePresenceRequest)
+}
+PROTOBUF_NDEBUG_INLINE SubscribePresenceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::SubscribePresenceRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        watched_player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::locator::v1::SubscribePresenceRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceRequest, _impl_.watched_player_ids_)>()
+          , from.watched_player_ids_
+        }
+        ,
+        _watched_player_ids_cached_byte_size_{0} {}
+
+SubscribePresenceRequest::SubscribePresenceRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SubscribePresenceRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubscribePresenceRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SubscribePresenceRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.subscriber_id_ = from._impl_.subscriber_id_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.SubscribePresenceRequest)
+}
+PROTOBUF_NDEBUG_INLINE SubscribePresenceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        watched_player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::SubscribePresenceRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::SubscribePresenceRequest, _impl_.watched_player_ids_)>()
+         }
+        ,
+        _watched_player_ids_cached_byte_size_{0} {}
+
+inline void SubscribePresenceRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.subscriber_id_ = {};
+}
+SubscribePresenceRequest::~SubscribePresenceRequest() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.SubscribePresenceRequest)
+  SharedDtor(*this);
+}
+inline void SubscribePresenceRequest::SharedDtor(MessageLite& self) {
+  SubscribePresenceRequest& this_ = static_cast<SubscribePresenceRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SubscribePresenceRequest_class_data_ =
+        SubscribePresenceRequest::InternalGenerateClassData_(SubscribePresenceRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubscribePresenceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubscribePresenceRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SubscribePresenceRequest_class_data_.tc_table);
+  return SubscribePresenceRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubscribePresenceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubscribePresenceRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SubscribePresenceRequest_globals_));
+  return SubscribePresenceRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SubscribePresenceRequest::ParseTableT_
+    SubscribePresenceRequest::_table_ =
+        SubscribePresenceRequest::InternalGenerateParseTable_(SubscribePresenceRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SubscribePresenceRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.SubscribePresenceRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.watched_player_ids_.Clear();
+  }
+  _impl_.subscriber_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SubscribePresenceRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SubscribePresenceRequest& this_ = static_cast<const SubscribePresenceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SubscribePresenceRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SubscribePresenceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.SubscribePresenceRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_subscriber_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_subscriber_id(), target);
+    }
+  }
+
+  // repeated uint64 watched_player_ids = 2 [json_name = "watchedPlayerIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._watched_player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            2, this_._internal_watched_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.SubscribePresenceRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SubscribePresenceRequest::ByteSizeLong(const MessageLite& base) {
+  const SubscribePresenceRequest& this_ = static_cast<const SubscribePresenceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SubscribePresenceRequest::ByteSizeLong() const {
+  const SubscribePresenceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.SubscribePresenceRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated uint64 watched_player_ids = 2 [json_name = "watchedPlayerIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_watched_player_ids(), 1,
+              this_._impl_._watched_player_ids_cached_byte_size_);
+    }
+    // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_subscriber_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_subscriber_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SubscribePresenceRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SubscribePresenceRequest*>(&to_msg);
+  auto& from = static_cast<const SubscribePresenceRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.SubscribePresenceRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_watched_player_ids()->MergeFrom(from._internal_watched_player_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_subscriber_id() != 0) {
+        _this->_impl_.subscriber_id_ = from._impl_.subscriber_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SubscribePresenceRequest::CopyFrom(const SubscribePresenceRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.SubscribePresenceRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SubscribePresenceRequest::InternalSwap(SubscribePresenceRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.watched_player_ids_.InternalSwap(&other->_impl_.watched_player_ids_);
+  swap(_impl_.subscriber_id_, other->_impl_.subscriber_id_);
+}
+
+::google::protobuf::Metadata SubscribePresenceRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SubscribePresenceResponse::SubscribePresenceResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubscribePresenceResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.SubscribePresenceResponse)
+}
+SubscribePresenceResponse::SubscribePresenceResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SubscribePresenceResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SubscribePresenceResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SubscribePresenceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SubscribePresenceResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+SubscribePresenceResponse::~SubscribePresenceResponse() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.SubscribePresenceResponse)
+  SharedDtor(*this);
+}
+inline void SubscribePresenceResponse::SharedDtor(MessageLite& self) {
+  SubscribePresenceResponse& this_ = static_cast<SubscribePresenceResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SubscribePresenceResponse_class_data_ =
+        SubscribePresenceResponse::InternalGenerateClassData_(SubscribePresenceResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubscribePresenceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubscribePresenceResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SubscribePresenceResponse_class_data_.tc_table);
+  return SubscribePresenceResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SubscribePresenceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SubscribePresenceResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SubscribePresenceResponse_globals_));
+  return SubscribePresenceResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SubscribePresenceResponse::ParseTableT_
+    SubscribePresenceResponse::_table_ =
+        SubscribePresenceResponse::InternalGenerateParseTable_(SubscribePresenceResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SubscribePresenceResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.SubscribePresenceResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SubscribePresenceResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SubscribePresenceResponse& this_ = static_cast<const SubscribePresenceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SubscribePresenceResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SubscribePresenceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.SubscribePresenceResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.SubscribePresenceResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SubscribePresenceResponse::ByteSizeLong(const MessageLite& base) {
+  const SubscribePresenceResponse& this_ = static_cast<const SubscribePresenceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SubscribePresenceResponse::ByteSizeLong() const {
+  const SubscribePresenceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.SubscribePresenceResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SubscribePresenceResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SubscribePresenceResponse*>(&to_msg);
+  auto& from = static_cast<const SubscribePresenceResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.SubscribePresenceResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SubscribePresenceResponse::CopyFrom(const SubscribePresenceResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.SubscribePresenceResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SubscribePresenceResponse::InternalSwap(SubscribePresenceResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata SubscribePresenceResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UnsubscribePresenceRequest::UnsubscribePresenceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsubscribePresenceRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.UnsubscribePresenceRequest)
+}
+UnsubscribePresenceRequest::UnsubscribePresenceRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnsubscribePresenceRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsubscribePresenceRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UnsubscribePresenceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnsubscribePresenceRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.subscriber_id_ = {};
+}
+UnsubscribePresenceRequest::~UnsubscribePresenceRequest() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.UnsubscribePresenceRequest)
+  SharedDtor(*this);
+}
+inline void UnsubscribePresenceRequest::SharedDtor(MessageLite& self) {
+  UnsubscribePresenceRequest& this_ = static_cast<UnsubscribePresenceRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnsubscribePresenceRequest_class_data_ =
+        UnsubscribePresenceRequest::InternalGenerateClassData_(UnsubscribePresenceRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsubscribePresenceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsubscribePresenceRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnsubscribePresenceRequest_class_data_.tc_table);
+  return UnsubscribePresenceRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsubscribePresenceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsubscribePresenceRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnsubscribePresenceRequest_globals_));
+  return UnsubscribePresenceRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnsubscribePresenceRequest::ParseTableT_
+    UnsubscribePresenceRequest::_table_ =
+        UnsubscribePresenceRequest::InternalGenerateParseTable_(UnsubscribePresenceRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnsubscribePresenceRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.UnsubscribePresenceRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.subscriber_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnsubscribePresenceRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnsubscribePresenceRequest& this_ = static_cast<const UnsubscribePresenceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnsubscribePresenceRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnsubscribePresenceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.UnsubscribePresenceRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_subscriber_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_subscriber_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.UnsubscribePresenceRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnsubscribePresenceRequest::ByteSizeLong(const MessageLite& base) {
+  const UnsubscribePresenceRequest& this_ = static_cast<const UnsubscribePresenceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnsubscribePresenceRequest::ByteSizeLong() const {
+  const UnsubscribePresenceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.UnsubscribePresenceRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint64 subscriber_id = 1 [json_name = "subscriberId"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_subscriber_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_subscriber_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnsubscribePresenceRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnsubscribePresenceRequest*>(&to_msg);
+  auto& from = static_cast<const UnsubscribePresenceRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.UnsubscribePresenceRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_subscriber_id() != 0) {
+      _this->_impl_.subscriber_id_ = from._impl_.subscriber_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnsubscribePresenceRequest::CopyFrom(const UnsubscribePresenceRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.UnsubscribePresenceRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnsubscribePresenceRequest::InternalSwap(UnsubscribePresenceRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.subscriber_id_, other->_impl_.subscriber_id_);
+}
+
+::google::protobuf::Metadata UnsubscribePresenceRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UnsubscribePresenceResponse::UnsubscribePresenceResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsubscribePresenceResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.UnsubscribePresenceResponse)
+}
+UnsubscribePresenceResponse::UnsubscribePresenceResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnsubscribePresenceResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnsubscribePresenceResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UnsubscribePresenceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnsubscribePresenceResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+UnsubscribePresenceResponse::~UnsubscribePresenceResponse() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.UnsubscribePresenceResponse)
+  SharedDtor(*this);
+}
+inline void UnsubscribePresenceResponse::SharedDtor(MessageLite& self) {
+  UnsubscribePresenceResponse& this_ = static_cast<UnsubscribePresenceResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnsubscribePresenceResponse_class_data_ =
+        UnsubscribePresenceResponse::InternalGenerateClassData_(UnsubscribePresenceResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsubscribePresenceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsubscribePresenceResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnsubscribePresenceResponse_class_data_.tc_table);
+  return UnsubscribePresenceResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnsubscribePresenceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnsubscribePresenceResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnsubscribePresenceResponse_globals_));
+  return UnsubscribePresenceResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnsubscribePresenceResponse::ParseTableT_
+    UnsubscribePresenceResponse::_table_ =
+        UnsubscribePresenceResponse::InternalGenerateParseTable_(UnsubscribePresenceResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnsubscribePresenceResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.UnsubscribePresenceResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnsubscribePresenceResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnsubscribePresenceResponse& this_ = static_cast<const UnsubscribePresenceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnsubscribePresenceResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnsubscribePresenceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.UnsubscribePresenceResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.UnsubscribePresenceResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnsubscribePresenceResponse::ByteSizeLong(const MessageLite& base) {
+  const UnsubscribePresenceResponse& this_ = static_cast<const UnsubscribePresenceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnsubscribePresenceResponse::ByteSizeLong() const {
+  const UnsubscribePresenceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.UnsubscribePresenceResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnsubscribePresenceResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnsubscribePresenceResponse*>(&to_msg);
+  auto& from = static_cast<const UnsubscribePresenceResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.UnsubscribePresenceResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnsubscribePresenceResponse::CopyFrom(const UnsubscribePresenceResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.UnsubscribePresenceResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnsubscribePresenceResponse::InternalSwap(UnsubscribePresenceResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata UnsubscribePresenceResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PresenceChange::PresenceChange(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PresenceChange_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.PresenceChange)
+}
+PresenceChange::PresenceChange(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PresenceChange& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PresenceChange_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE PresenceChange::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PresenceChange::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, status_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::status_));
+}
+PresenceChange::~PresenceChange() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.PresenceChange)
+  SharedDtor(*this);
+}
+inline void PresenceChange::SharedDtor(MessageLite& self) {
+  PresenceChange& this_ = static_cast<PresenceChange&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PresenceChange_class_data_ =
+        PresenceChange::InternalGenerateClassData_(PresenceChange_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PresenceChange::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PresenceChange_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PresenceChange_class_data_.tc_table);
+  return PresenceChange_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PresenceChange::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PresenceChange_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PresenceChange_globals_));
+  return PresenceChange_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PresenceChange::ParseTableT_
+    PresenceChange::_table_ =
+        PresenceChange::InternalGenerateParseTable_(PresenceChange_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PresenceChange::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.PresenceChange)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.status_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.status_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PresenceChange::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PresenceChange& this_ = static_cast<const PresenceChange&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PresenceChange::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PresenceChange& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.PresenceChange)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // .pandora.locator.v1.PresenceStatus status = 2 [json_name = "status"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_status() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_status(), target);
+    }
+  }
+
+  // int64 ts_ms = 3 [json_name = "tsMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_ts_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
+              stream, this_._internal_ts_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.PresenceChange)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PresenceChange::ByteSizeLong(const MessageLite& base) {
+  const PresenceChange& this_ = static_cast<const PresenceChange&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PresenceChange::ByteSizeLong() const {
+  const PresenceChange& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.PresenceChange)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // int64 ts_ms = 3 [json_name = "tsMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_ts_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_ts_ms());
+      }
+    }
+    // .pandora.locator.v1.PresenceStatus status = 2 [json_name = "status"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_status() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_status());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PresenceChange::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PresenceChange*>(&to_msg);
+  auto& from = static_cast<const PresenceChange&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.PresenceChange)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_ts_ms() != 0) {
+        _this->_impl_.ts_ms_ = from._impl_.ts_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_status() != 0) {
+        _this->_impl_.status_ = from._impl_.status_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PresenceChange::CopyFrom(const PresenceChange& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.PresenceChange)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PresenceChange::InternalSwap(PresenceChange* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.status_)
+      + sizeof(PresenceChange::_impl_.status_)
+      - PROTOBUF_FIELD_OFFSET(PresenceChange, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata PresenceChange::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PresenceBatchEvent::PresenceBatchEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PresenceBatchEvent_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.locator.v1.PresenceBatchEvent)
+}
+PROTOBUF_NDEBUG_INLINE PresenceBatchEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::locator::v1::PresenceBatchEvent& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        changes_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::locator::v1::PresenceBatchEvent,
+              PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceBatchEvent, _impl_.changes_)>()
+          , from.changes_
+        }
+     {}
+
+PresenceBatchEvent::PresenceBatchEvent(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PresenceBatchEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PresenceBatchEvent_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PresenceBatchEvent* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.locator.v1.PresenceBatchEvent)
+}
+PROTOBUF_NDEBUG_INLINE PresenceBatchEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        changes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::locator::v1::PresenceBatchEvent,
+            PROTOBUF_FIELD_OFFSET(::pandora::locator::v1::PresenceBatchEvent, _impl_.changes_)>()
+         }
+     {}
+
+inline void PresenceBatchEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+PresenceBatchEvent::~PresenceBatchEvent() {
+  // @@protoc_insertion_point(destructor:pandora.locator.v1.PresenceBatchEvent)
+  SharedDtor(*this);
+}
+inline void PresenceBatchEvent::SharedDtor(MessageLite& self) {
+  PresenceBatchEvent& this_ = static_cast<PresenceBatchEvent&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PresenceBatchEvent_class_data_ =
+        PresenceBatchEvent::InternalGenerateClassData_(PresenceBatchEvent_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PresenceBatchEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PresenceBatchEvent_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PresenceBatchEvent_class_data_.tc_table);
+  return PresenceBatchEvent_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PresenceBatchEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PresenceBatchEvent_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PresenceBatchEvent_globals_));
+  return PresenceBatchEvent_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PresenceBatchEvent::ParseTableT_
+    PresenceBatchEvent::_table_ =
+        PresenceBatchEvent::InternalGenerateParseTable_(PresenceBatchEvent_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PresenceBatchEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.locator.v1.PresenceBatchEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.changes_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PresenceBatchEvent::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PresenceBatchEvent& this_ = static_cast<const PresenceBatchEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PresenceBatchEvent::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PresenceBatchEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.locator.v1.PresenceBatchEvent)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated .pandora.locator.v1.PresenceChange changes = 1 [json_name = "changes"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_changes_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_changes().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              1, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.locator.v1.PresenceBatchEvent)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PresenceBatchEvent::ByteSizeLong(const MessageLite& base) {
+  const PresenceBatchEvent& this_ = static_cast<const PresenceBatchEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PresenceBatchEvent::ByteSizeLong() const {
+  const PresenceBatchEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.locator.v1.PresenceBatchEvent)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .pandora.locator.v1.PresenceChange changes = 1 [json_name = "changes"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_changes_size();
+      for (const auto& msg : this_._internal_changes()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PresenceBatchEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PresenceBatchEvent*>(&to_msg);
+  auto& from = static_cast<const PresenceBatchEvent&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.locator.v1.PresenceBatchEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_changes()->InternalMergeFromWithArena(
+        ::google::protobuf::MessageLite::internal_visibility(), arena,
+        from._internal_changes());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PresenceBatchEvent::CopyFrom(const PresenceBatchEvent& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.locator.v1.PresenceBatchEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PresenceBatchEvent::InternalSwap(PresenceBatchEvent* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.changes_.InternalSwap(&other->_impl_.changes_);
+}
+
+::google::protobuf::Metadata PresenceBatchEvent::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

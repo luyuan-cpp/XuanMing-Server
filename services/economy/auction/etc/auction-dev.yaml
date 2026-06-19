@@ -49,3 +49,6 @@ auction:
   max_price: 1000000000
   default_list_limit: 50
   max_list_limit: 200
+  # inventory 内网 gRPC 地址(:50015)。配上 → 成交走真实结算(SettleAuctionMatch:
+  # 卖↔买资产原子对转 + match_id 幂等);留空则退回 NoopSettlementLedger 占位。
+  inventory_addr: "127.0.0.1:50015"

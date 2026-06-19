@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `inventory_ledger` (
     `id`                  BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `player_id`           BIGINT UNSIGNED  NOT NULL,
     `idempotency_key`     VARCHAR(64)      NOT NULL COMMENT '防重复入账/扣减(如 drop:<match_id> / use:<uuid>)',
-    `op`                  VARCHAR(16)      NOT NULL COMMENT 'grant | use | sell',
+    `op`                  VARCHAR(16)      NOT NULL COMMENT 'grant | use | sell | auction_sell | auction_buy',
     `request_fingerprint` CHAR(64)         NOT NULL DEFAULT '' COMMENT '请求指纹 sha256(op+item+count+gold);同 key 不同指纹判冲突',
     `result_remaining`    BIGINT           NOT NULL DEFAULT 0 COMMENT '首次执行后剩余数量快照(use/sell 用,回放返回)',
     `result_gold`         BIGINT           NOT NULL DEFAULT 0 COMMENT '首次执行后金币快照(grant/sell 用,回放返回)',

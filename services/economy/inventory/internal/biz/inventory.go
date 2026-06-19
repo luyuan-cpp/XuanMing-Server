@@ -144,6 +144,51 @@ func (u *InventoryUsecase) SellItem(ctx context.Context, playerID uint64, itemCo
 	return remaining, newGold, nil
 }
 
+// SettleAuctionMatch 原子结算一笔拍卖成交(系统驱动,幂等键基于 match_id)。
+//
+// 在 inventory 一个本地事务里完成卖↔买双方资产对转:
+//   - 卖家:扣 quantity 个 itemConfigID,加 quantity*unitPrice 金币;
+//   - 买家:扣 quantity*unitPrice 金币,加 quantity 个 itemConfigID。
+//
+// 幂等键 = "auction:settle:<match_id>",同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
+// 卖家道具不足 / 买家金币不足 → ErrInventoryInsufficient,整笔回滚。
+func (u *InventoryUsecase) SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID uint64, itemConfigID uint32, quantity, unitPrice int64) error {
+	if matchID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "match_id required")
+	}
+	if sellerID == 0 || buyerID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "seller_id / buyer_id required")
+	}
+	if sellerID == buyerID {
+		// 自成交净额为零且会让同一玩家同 key 写两条流水冲突;视为非法,撮合侧应避免自撮合。
+		return errcode.New(errcode.ErrInvalidArg, "seller and buyer must differ: %d", sellerID)
+	}
+	if itemConfigID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "item_config_id required")
+	}
+	if quantity <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "quantity must be positive")
+	}
+	if unitPrice <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "unit_price must be positive")
+	}
+	totalGold, ok := safeMulInt64(unitPrice, quantity)
+	if !ok || totalGold <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "settle amount overflow match=%d price=%d qty=%d", matchID, unitPrice, quantity)
+	}
+	idempotencyKey := fmt.Sprintf("auction:settle:%d", matchID)
+	detail := fmt.Sprintf("auction settle match=%d item=%d qty=%d gold=%d", matchID, itemConfigID, quantity, totalGold)
+	already, err := u.repo.SettleAuctionMatch(ctx, matchID, sellerID, buyerID, itemConfigID, quantity, totalGold, idempotencyKey, detail)
+	if err != nil {
+		return err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "auction_settle_idempotent_hit",
+			"match_id", matchID, "seller_id", sellerID, "buyer_id", buyerID, "item", itemConfigID, "qty", quantity, "gold", totalGold)
+	}
+	return nil
+}
+
 // safeMulInt64 做溢出安全的 int64 乘法(a,b 均已保证为正)。溢出返回 (0, false)。
 func safeMulInt64(a, b int64) (int64, bool) {
 	if a == 0 || b == 0 {
