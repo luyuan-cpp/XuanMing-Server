@@ -2344,3 +2344,119 @@ TiDB 兼容 MySQL 协议，`pkg/mysqlx` + `database/sql` + `go-sql-driver/mysql`
 
 - 未把强随机 Redis 密码写入 `*-prod.yaml`：当前仓库未找到 `services/**/**-prod.yaml`，且真实生产密码不能写入 git 跟踪文件。生产应通过 secret/部署系统注入 `node.redis_client.password`，配置片段继续以占位符记录在 `deploy/redis/README.md`。
 - 生产 6 主 6 从仍按 `deploy/redis/README.md` §4 由 k8s redis-operator/helm 落地；本轮只验证本地 Sentinel 与最小 Cluster。
+
+## W5 ✅ auction 服务上线 — 全服拍卖行 / 跨玩家撮合引擎(2026-06-19)
+
+按 `docs/design/decision-revisit-auction-engine.md`(并行窗口拍板的权威设计文档)实现独立
+`auction` 服务,落在 economy 域(与 trade、inventory 同级)。第 16 个 Go 业务服。
+解决 trade「两阶段点对点交易」覆盖不到的「全服挂单 + 价格撮合」场景。无新第三方依赖。
+
+### 为什么独立服而非塞进 trade
+
+- trade 是「买卖双方先约定再两阶段确认」的点对点模型;拍卖行是「卖方挂单进全服订单簿 →
+  任意买方按价撮合」的交易所模型,撮合循环 / 订单簿 / 价格时间优先级与 trade 状态机正交。
+- 撮合是「每 market 单写者」串行语义,与 trade 的 per-order 乐观锁是不同并发模型,合到一起
+  会互相污染。决策文档拍板拆独立服。
+
+### 端口 / 资源(决策文档固定)
+
+- gRPC **:50016** / HTTP **:51016**(HTTP 仅 `/metrics`,auction.proto 无 google.api.http 注解)
+- proto package `pandora.auction.v1`;errcode 段 **12000-12999**
+- MySQL 库 `pandora_auction`(权威订单 + 成交,ShardSet 按 market_id 分片,W1 单库可跑)
+- kafka topic `pandora.auction.match`(成交事件,key=match_id)+ `pandora.auction.audit`
+  (挂单流转审计,key=order_id)
+- Redis ZSET 订单簿 `pandora:auction:book:{<market_id>}:ask` / `:bid`(hashtag 锁同 slot)
+
+### proto [proto]
+
+`proto/pandora/auction/v1/auction.proto`:`AuctionService` 5 RPC(`PlaceOrder` 卖 /
+`Bid` 买 / `CancelOrder` / `ListMarket` / `ListMyOrders`);enum `OrderSide`(SELL=1/BUY=2)、
+`AuctionOrderStatus`(OPEN=1/PARTIALLY_FILLED=2/FILLED=3/CANCELED=4/EXPIRED=5);客户端可见
+结构 `AuctionOrder`、kafka 结构 `AuctionMatchEvent`。所有写 RPC 带 `idempotency_key`;
+owner/buyer 一律以 JWT ctx 的 player_id 为准(不信客户端请求体)。已 `proto_gen.ps1` 重生
+go pb(37 files,buf lint OK)。cpp pb 待 Codex 同步 UE 仓库。
+
+### errcode(双向同步)
+
+`pkg/errcode/errcode.go` + `proto/pandora/common/v1/errcode.proto` 加段 12000-12999:
+`ERR_AUCTION_ORDER_NOT_FOUND=12001` / `ERR_AUCTION_WRONG_STATE=12002` /
+`ERR_AUCTION_NOT_OWNER=12003` / `ERR_AUCTION_INSUFFICIENT=12004` /
+`ERR_AUCTION_IDEMPOTENCY_CONFLICT=12005`。已 regen。
+
+### MySQL
+
+`deploy/mysql-init/01-create-databases.sql` 加建 `pandora_auction` 库 + GRANT;
+新 `deploy/mysql-init/09-auction-tables.sql`:
+- `auction_orders`(PK order_id,uk `owner_id`+`idempotency_key` 挂单幂等键,idx
+  market/side/status + owner/status)
+- `auction_matches`(PK match_id,idx market/time + sell_order / buy_order)
+- 雪花 ID 用 BIGINT UNSIGNED(§9.11),配置 ID(item_config_id / market_id)用 INT UNSIGNED(§9.12)
+
+### 撮合引擎设计(核心)
+
+- **每 market 单写者串行**:`AuctionUsecase` 持 `locks map[uint32]*sync.Mutex` 条带锁
+  (per-market mutex),`submit` 全程持该 market 锁,撮合 + 落簿原子串行,杜绝超卖。
+  选 mutex 而非 goroutine+channel:功能等价的串行化 + 更易单测;跨实例一致性哈希路由
+  (同 market 落同实例)留扩容后续。
+- **价格时间优先级用 ZSET 编码**:ask 簿 score=price(ZRANGE 升序取最低价)、bid 簿
+  score=-price(ZRANGE 升序取最高价);member = 零填充 20 位 order_id(snowflake 时序 →
+  字典序=时间序),同价取最早单。避开「价格+时间合成单 score」的 float64 精度损失。
+- **撮合价 = 簿上被动单价格**(passive order price,挂单方让价),符合交易所惯例。
+- **两层幂等**(不变量 §2 / §7):① 挂单 `ClaimOrder` 用 `owner_id+idempotency_key` 唯一键,
+  命中重复 → 读回已存在单做指纹比对(market/side/item/quantity/price 一致 → 幂等回放返回
+  原单;不一致 → `ErrAuctionIdempotencyConflict`,防 key 复用);② 结算 `RecordMatch` 用
+  match_id 唯一键,同一撮合只落库一次。
+- **结算解耦**:`SettlementLedger.Settle(match)` 接口(W1 `NoopSettlementLedger` 占位,
+  接 inventory 货币/道具原子扣减后替换);`AuctionEventPusher`(PushMatch+PushAudit)弱依赖,
+  kafka 不通仅 Warn。
+- **存储/客户端结构分离**(§5.10 / §14):`OrderRecord` / `MatchRecord` 是 data 内部 struct
+  (含 idempotency_key 等存储独有字段),不外泄;service 层从 record 组装客户端可见
+  `AuctionOrder`。
+
+### 服务骨架(services/economy/auction/)
+
+- `go.mod`(module `.../services/economy/auction`,replace `../../../{pkg,proto}`;
+  依赖集并自 trade+inventory:redis+kafka+mysql+miniredis,`go mod tidy` 完成)
+- `internal/conf`(AuctionConf:MaxQuantityPerOrder / MaxPrice / DefaultListLimit /
+  MaxListLimit + Defaults 端口 50016/51016)
+- `internal/data/auction_repo.go`(`AuctionRepo` 接口 + `MySQLAuctionRepo`;`DBRouter`
+  抽 `SingleDB`/`ShardedDB` 按 market_id 分片;ClaimOrder INSERT→1062→读回指纹比对)
+- `internal/data/book.go`(`BookStore` 接口 + `RedisBookStore`,ZSET 订单簿)
+- `internal/biz/auction.go`(撮合引擎:submit/match/crosses/opposite,per-market 条带锁)
+- `internal/service/auction.go`(实现 `AuctionServiceServer`,callerID 从 ctx,errcode→proto)
+- `internal/server/{grpc,http}.go`(grpc `pmw.AuthOptional()` + 注册;http 仅 /metrics)
+- `cmd/auction/main.go`(MySQL ShardSet/单库 + Redis 强依赖 Ping + snowflake + kafka 双
+  producer 弱依赖 + NoopSettlementLedger,装配 → Kratos Run)
+- `etc/auction-dev.yaml`(:50016/:51016,mysql pandora_auction:3307,redis 6380,kafka 9093)
+
+### 接线 / 文档登记
+
+- `go.work` 加 `use ./services/economy/auction`
+- `deploy/prometheus/prometheus.yml` 加 auction 51016 target
+- `tools/scripts/run_services.ps1` 加 auction(Port 50016,Profiles all),服务数注释 15→16
+- `deploy/envoy/envoy.yaml` 加 auction jwt_authn rule + route(15s)+ STRICT_DNS h2c cluster
+  (:50016,客户端面 :8443)
+- `docs/design/infra.md`(pandora_auction 库 + 两表 + 两 topic + 端口 + Redis 订单簿键)、
+  `proto-design.md`(errcode 段 12000-12999 + 两 topic)、`pandora-arch.md`(§服务树 +
+  §11 决策行)、`go-services.md`(服务总览第 16 行 + inventory 补登第 15 行 + 计数 14→16)
+
+### 验证
+
+- auction 模块 BUILD=0 / VET=0 / TEST=0:
+  ```pwsh
+  Push-Location services/economy/auction; go build ./...; go vet ./...; go test ./... -count=1; Pop-Location
+  ```
+- biz 7 单测(全内存 fake + miniredis 真 RedisBookStore):无对手挂单落簿 / 全额撮合 /
+  并发不超卖(1000 单序 snowflake)/ 挂单幂等回放 / 价格时间优先级 / 部分成交 / 撤单。
+- `pkg/errcode` + `proto` BUILD=0(errcode 段加常量不破坏其它服务)。
+
+### 待办 / 阶段限制
+
+- **Codex 收尾**:cpp pb 同步 UE 仓库 `Source/Pandora/Generated/Proto/`([proto]);
+  `go mod tidy` 已跑但 go.sum 固化以 Codex 复核为准;git 收尾等用户「帮我 commit」
+  (建议 scope `feat(auction): 全服拍卖行撮合引擎 [proto]`,AGENTS.md §11.1,Claude 不做 git)。
+- **结算占位**:`NoopSettlementLedger` 总成功;接 inventory 货币/道具原子扣减 + 补偿幂等
+  后替换(不变量 §7)。
+- **单实例串行**:per-market 条带锁仅在单实例内成立;多实例部署需一致性哈希把同 market
+  路由到同实例(或换 Redis 单写者 token),留扩容后续。
+- **真 MySQL + Kafka 联调**:环境启停交 Codex / 人(§11.1),本轮单测全内存 fake,未跑真依赖。

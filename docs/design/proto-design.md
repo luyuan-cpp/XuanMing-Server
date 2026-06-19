@@ -284,7 +284,8 @@ message Vector3 { float x = 1; float y = 2; float z = 3; }
 8000-8999   = dialogue
 9000-9999   = chat / friend / locator
 10000-10999 = data_service
-11000+      = 预留
+11000-11999 = 预留
+12000-12999 = auction(全服拍卖行 / 撮合)
 ```
 
 详细错误码清单写到 `pkg/errcode/errors.go`(D2 实现)。
@@ -305,6 +306,8 @@ pandora.dlq.<original_topic> 死信队列
 | `pandora.battle.result` | 战斗结算(at-least-once,消费者幂等落库) |
 | `pandora.player.update` | 玩家档案变更 |
 | `pandora.trade.audit` | 交易审计日志 |
+| `pandora.auction.match` | 拍卖成交事件(key=match_id) |
+| `pandora.auction.audit` | 拍卖挂单流转审计(key=order_id,append-only) |
 | `pandora.chat.world` | 世界聊天 |
 | `pandora.locator.update` | 玩家位置变更 |
 | `pandora.dlq.<topic>` | 死信队列 |

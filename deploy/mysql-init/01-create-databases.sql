@@ -7,6 +7,7 @@
 --   pandora_social   好友 / 黑名单 / 公会(后期)
 --   pandora_battle   战斗结算历史 / 战绩
 --   pandora_trade    交易订单 / 审计
+--   pandora_auction  全服拍卖行挂单 / 成交(按 market_id 分片)
 --   pandora_ops      运营日志 / 封禁 / 客诉
 --
 -- 字符集统一 utf8mb4_0900_ai_ci(MySQL 8.x 默认),禁用 utf8(3 字节)。
@@ -31,6 +32,10 @@ CREATE DATABASE IF NOT EXISTS `pandora_trade`
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_0900_ai_ci;
 
+CREATE DATABASE IF NOT EXISTS `pandora_auction`
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_0900_ai_ci;
+
 CREATE DATABASE IF NOT EXISTS `pandora_ops`
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_0900_ai_ci;
@@ -41,6 +46,7 @@ GRANT ALL PRIVILEGES ON `pandora_player`.*  TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_social`.*  TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_battle`.*  TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_trade`.*   TO 'pandora'@'%';
+GRANT ALL PRIVILEGES ON `pandora_auction`.* TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_ops`.*     TO 'pandora'@'%';
 
 FLUSH PRIVILEGES;

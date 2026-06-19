@@ -1,0 +1,51 @@
+# Pandora auction 服务开发期配置(2026-06-19)。
+#
+# - gRPC :50016 / HTTP :51016(仅 /metrics)
+# - MySQL 强依赖(撮合权威库 pandora_auction:auction_orders + auction_matches)
+#   单库模式用 node.mysql_client.dsn;分库模式填 node.mysql_client.shards(按 market_id 路由)
+# - Redis 强依赖(订单簿 ZSET pandora:auction:book:{market_id}:ask/bid)
+# - Kafka 弱依赖(成交 pandora.auction.match + 流转审计 pandora.auction.audit)
+# - dev: enable_reflection=true 便于 grpcurl 联调
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50016"
+    timeout: "15s"
+    enable_reflection: true     # dev 开;prod 关
+  http:
+    network: tcp
+    addr: ":51016"
+
+node:
+  zone_id: 1
+  mysql_client:
+    # 单库模式(W1):连 pandora_auction。分库时改填 shards 列表(>=2 个 DSN,按 market_id % N 路由)。
+    dsn: "pandora:pandora@tcp(127.0.0.1:3307)/pandora_auction?parseTime=true&charset=utf8mb4&loc=UTC"
+    max_open_conns: 20
+    max_idle_conns: 10
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
+
+# kafka producer 配置(发布 pandora.auction.match + pandora.auction.audit)
+# brokers 9093 = Pandora 端口规划(与 vanilla 9092 区分)
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  dial_timeout: "2s"
+  write_timeout: "5s"
+  idempotent: true
+
+snowflake:
+  epoch: 1773446400
+  node_bits: 17
+  step_bits: 15
+
+auction:
+  max_quantity_per_order: 1000000
+  max_price: 1000000000
+  default_list_limit: 50
+  max_list_limit: 200

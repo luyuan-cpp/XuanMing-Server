@@ -53,6 +53,12 @@ const (
 	// key=player_id;原则 2 例外:强制整合(缩容排空)时把「新分片地址+新 hub 票据+倒计时」
 	// 推给被迁移玩家本人,客户端倒计时到点重连新大厅(与 Hub DS drain 心跳指令双通道)
 	TopicHubMigrate = "pandora.hub.migrate"
+
+	// TopicPresenceUpdate — proto: pandora.locator.v1.PresenceBatchEvent
+	// key=subscriber_id;好友在线态订阅推送(docs/design/friend-distributed-scaling.md §13.4)。
+	// player_locator 的 fan-out worker 去抖+合并后,把「你关注的好友 A/C/F 上线了」
+	// 批量推给订阅者本人;push 服务按 key=subscriber_id 路由到其 stream。
+	TopicPresenceUpdate = "pandora.presence.update"
 )
 
 // 非推送 topic(服务间事件,push 不订阅;W4 ③,2026-06-06)。
@@ -76,6 +82,7 @@ const (
 // 2026-06-15 friend 服务上线,补 friend.event(好友请求 / 接受推送)。
 // 2026-06-16 chat 三频道补全:加 chat.team(队伍)/ chat.world(世界广播),
 // 让队伍聊天和世界聊天也被 push 消费(此前只订阅 chat.private,team/world 消息丢失)。
+// 2026-06-19 presence 订阅推送上线(§13.4),补 pandora.presence.update(好友在线态变更)。
 // 后续 player.update / system.notify Event message 落地后,
 // 在对应业务服 PR 里把常量加进本切片,push etc yaml 同步加 topics。
 var PushTopics = []string{
@@ -86,6 +93,7 @@ var PushTopics = []string{
 	TopicChatWorld,
 	TopicHubMigrate,
 	TopicFriendEvent,
+	TopicPresenceUpdate,
 }
 
 // BroadcastTopics 是「广播类」push topic 集合:这些 topic 的 kafka key 为空(广播语义),

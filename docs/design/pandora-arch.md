@@ -236,6 +236,7 @@ Client A          Hub DS                Client B (在 A 50 米内)
 │   ├── team            :50010
 │   ├── matchmaker      :50011
 │   ├── trade           :50012
+│   ├── auction         :50016 (全服拍卖行 / 撮合)
 │   ├── dialogue        :50013
 │   ├── ds_allocator    :50020
 │   ├── hub_allocator   :50021
@@ -306,4 +307,4 @@ Client A          Hub DS                Client B (在 A 50 米内)
 | friend 扩展 | 2026-06-18 | **全服分片好友图不做跨玩家分布式事务,改为 request 单点权威 CAS + Kafka 异步幂等建边** | 当前 `AcceptFriend` 仅在单 MySQL `pandora_social` 内成立;Redis Cluster / 分片 MySQL 都不能原样承载跨 requester/target 原子事务。好友图权威主存推荐按 owner `player_id` 分片 MySQL,Redis 只做热点缓存。详见 `go-services.md` §2.4 |
 | 存储扩容 | 2026-06-18 | **好友图扩容存储路线选 (A) TiDB 过渡;否决 (B) 分片 MySQL + dtm、(C) 其他分布式 ACID 库** | 阶段 2(千万级早期)TiDB 代码改动最小、保跨人强一致与硬上限;现阶段仍单 MySQL 不提前引入;阶段 3 极限体量再把热路径拆 §5 CAS + Kafka 异步建边卸 2PC。雪花主键热点须 `AUTO_RANDOM` 打散。详见 `friend-distributed-scaling.md` §8 / §14 |
 | 存储扩容 | 2026-06-18 | **人工拍板推翻“不提前引入”:现就把 friend(及同库 chat)切 TiDB** | 项目内已落地:TiDB 版 `pandora_social` DDL(§8.2 热点调优)+ friend TiDB 连接配置;Go 业务零改动(TiDB 兼容 MySQL 协议)。起集群 / 装载 DDL / 数据迁移 = Codex / 人(§11.1)。详见 `friend-distributed-scaling.md` §14 “落地修订” + `deploy/tidb-init/README.md` |
-| 全服扩容 | 2026-06-19 | **DAU 200万全区全服:zone_id 是 snowflake 机器号非选区(不删);单 Redis→Cluster、单 MySQL→分库、nodeID etcd 自动分配、push 横扩、Agones 池化** | 抗压取决于 CCU(~30万)非注册量(1000万)。已落地能力:`pkg/snowflake/etcdnode`(etcd Lease 抢 nodeID)、`redisx.NewUniversalClient`(Cluster)、`mysqlx.ShardSet`(分库),均非破坏式。push 横扩走定向路由(注册表+分区),Agones 走 Ready 池化。社交库仍走 TiDB 不套 ShardSet。详见 `scale-dau-2m.md` |
+| 全服扩容 | 2026-06-19 | **DAU 200万全区全服:zone_id 是 snowflake 机器号非选区(不删);单 Redis→Cluster、单 MySQL→分库、nodeID etcd 自动分配、push 横扩、Agones 池化** | 抗压取决于 CCU(~30万)非注册量(1000万)。已落地能力:`pkg/snowflake/etcdnode`(etcd Lease 抢 nodeID)、`redisx.NewUniversalClient`(Cluster)、`mysqlx.ShardSet`(分库),均非破坏式。push 横扩走定向路由(注册表+分区),Agones 走 Ready 池化。社交库仍走 TiDB 不套 ShardSet。详见 `scale-dau-2m.md` || 拍卖行 | 2026-06-19 | **trade 需要全服拍卖行 / 跨人撮合 → 新增独立 `auction` 服务(economy 域,与 trade 平级),不塞进 trade** | 拍卖是「每 market 单写者」交易所模型:MySQL `pandora_auction` 按 market_id 分片为权威(不跨分片事务,故不需 TiDB),Redis ZSET 订单簿做活跃撮合索引;两层幂等(挂单 idempotency_key + 结算 match_id);进程内 per-market 互斥串行不超卖,跨实例一致性哈希路由留扩容。端口 50016/51016,errcode 12000-12999,topic pandora.auction.match/audit。详见 `decision-revisit-auction-engine.md` |

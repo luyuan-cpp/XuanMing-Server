@@ -146,6 +146,11 @@ static_resources:
                   prefix: "/pandora.trade.v1.TradeService/"
                 requires:
                   provider_name: "pandora_session"
+              # auction 服务所有 RPC 均需 JWT(挂单 / 出价 / 撤单身份以 JWT sub 为准,R5)
+              - match:
+                  prefix: "/pandora.auction.v1.AuctionService/"
+                requires:
+                  provider_name: "pandora_session"
               # 没列到的 path(login.Login / login.VerifyDSTicket / grpc reflection)默认放行。
               # VerifyDSTicket 是 DS → login 的内部调用,不带玩家 JWT;靠 ext_authz 限内网(W3+)。
 
@@ -227,6 +232,14 @@ static_resources:
                   prefix: "/pandora.trade.v1.TradeService/"
                 route:
                   cluster: trade_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+
+              # ----- auction(unary,立即完成型,demo 15s 超时)-----
+              - match:
+                  prefix: "/pandora.auction.v1.AuctionService/"
+                route:
+                  cluster: auction_cluster
                   timeout: 15s
                   idle_timeout: 60s
 
@@ -496,6 +509,27 @@ static_resources:
               socket_address:
                 address: host.docker.internal
                 port_value: 50012
+
+  # ===== auction_cluster(unary,demo 15s 超时)=====
+  - name: auction_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: auction_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50016
 
   # ===========================================================================
   # DS 面内部服务 cluster(供 :8444 pandora_ds_listener 使用,agones-dev.md §5.1)

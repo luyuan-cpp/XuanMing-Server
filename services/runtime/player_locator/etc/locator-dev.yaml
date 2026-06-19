@@ -32,3 +32,20 @@ locator:
   # infra.md §3.2 表中 30s heartbeat。SetLocation 每次刷 TTL,30s 不刷 → 视为离线。
   # W3 ⑥ 起可直接 yaml 写字符串:
   location_ttl: "30s"
+
+# 好友在线态订阅推送 fan-out(docs/design/friend-distributed-scaling.md §13.4 / §13.5)。
+# 2026-06-19:默认 enabled=false(§13.7「先拉后推」)。开启需配 kafka.brokers(往
+# pandora.presence.update 生产 → push 服务投递)。洪峰把 presence/fanout 写进 killswitch 规则即降纯拉。
+kafka:
+  brokers: ["127.0.0.1:9093"]   # Pandora 端口(deploy/docker-compose.dev.yml,与 vanilla 9092 区分)
+  group_id: "pandora-locator"
+  partition_cnt: 4
+  dial_timeout: "2s"
+  write_timeout: "10s"
+  idempotent: true
+
+presence:
+  enabled: false              # dev 默认纯拉;改 true 开订阅推送
+  debounce_window: "8s"       # 上线去抖窗口(§13.4.2)
+  coalesce_tick: "1s"         # 合并/flush 间隔(§13.4.3)
+  kill_switch_key: "presence/fanout"  # 洪峰降级开关 key(§13.5)

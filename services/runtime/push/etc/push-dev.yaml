@@ -46,6 +46,7 @@ push:
   # 2026-06-15 hub_allocator 强制整合上线,补 pandora.hub.migrate(大厅迁移通知)。
   # 2026-06-16 chat 三频道补全,补 pandora.chat.team(队伍)/ pandora.chat.world(世界广播)。
   #   chat.world 是广播类 topic(空 key),push 走 Broadcast(kafkax.IsBroadcastTopic)。
+  # 2026-06-19 presence 订阅推送上线(§13.4),补 pandora.presence.update(key=subscriber_id)。
   topics:
     - "pandora.team.update"
     - "pandora.match.progress"
@@ -54,6 +55,7 @@ push:
     - "pandora.chat.world"
     - "pandora.friend.event"
     - "pandora.hub.migrate"
+    - "pandora.presence.update"
 
   # 离线消息 redis ZSET TTL(每次写入刷新)。
   offline_cache_ttl: "5m"

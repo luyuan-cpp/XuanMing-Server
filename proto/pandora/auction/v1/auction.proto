@@ -1,0 +1,137 @@
+// Pandora AuctionService 协议(2026-06-19)。
+//
+// 职责(docs/design/decision-revisit-auction-engine.md):全服拍卖行 / 跨人撮合。
+//   - 卖家挂单(PlaceOrder)/ 买家出价(Bid)进入按 market_id 分片的订单簿;
+//   - 单写者按价格-时间优先撮合,成交生成 match_id(雪花 uint64);
+//   - 两层幂等:① 挂单 / 出价带 idempotency_key(重试不重复挂单);
+//                ② 成交以 match_id 为幂等键,资产转移只落一次(对齐不变量 §9 #2 / #7)。
+//
+// 与 trade(双方已知的两阶段 P2P 托管交易)是两个领域模型,独立服务,互不影响。
+
+syntax = "proto3";
+
+package pandora.auction.v1;
+
+import "pandora/common/v1/errcode.proto";
+
+service AuctionService {
+  // PlaceOrder 卖家挂单(SELL):把背包道具按单价挂到市场,撮合或挂簿等待买家。
+  rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse);
+  // Bid 买家出价(BUY):按单价买入某市场道具,撮合或挂簿等待卖家。
+  rpc Bid(BidRequest) returns (BidResponse);
+  // CancelOrder 撤单(仅挂单本人,未完全成交前)。
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+  // ListMarket 看某市场订单簿(买 / 卖盘)。
+  rpc ListMarket(ListMarketRequest) returns (ListMarketResponse);
+  // ListMyOrders 看自己的挂单 / 出价。
+  rpc ListMyOrders(ListMyOrdersRequest) returns (ListMyOrdersResponse);
+}
+
+// OrderSide 挂单方向。
+enum OrderSide {
+  ORDER_SIDE_UNSPECIFIED = 0;
+  ORDER_SIDE_SELL        = 1;  // 卖单(挂单出售道具)
+  ORDER_SIDE_BUY         = 2;  // 买单(出价买入道具)
+}
+
+// AuctionOrderStatus 挂单状态。
+enum AuctionOrderStatus {
+  AUCTION_ORDER_STATUS_UNSPECIFIED      = 0;
+  AUCTION_ORDER_STATUS_OPEN             = 1;  // 完全未成交,挂在簿上
+  AUCTION_ORDER_STATUS_PARTIALLY_FILLED = 2;  // 部分成交,剩余挂在簿上
+  AUCTION_ORDER_STATUS_FILLED           = 3;  // 完全成交(终态)
+  AUCTION_ORDER_STATUS_CANCELED         = 4;  // 已撤单(终态)
+  AUCTION_ORDER_STATUS_EXPIRED          = 5;  // 已过期(终态)
+}
+
+// AuctionOrder 是客户端可见的挂单视图(不含 idempotency_key / version 等存储独有字段,不变量 §14)。
+message AuctionOrder {
+  uint64 order_id        = 1;
+  uint32 market_id       = 2;  // 撮合市场(道具品类),分片维度
+  uint64 owner_id        = 3;
+  OrderSide side         = 4;
+  uint32 item_config_id  = 5;
+  int64  quantity        = 6;  // 挂单总量
+  int64  filled_quantity = 7;  // 已成交量
+  int64  price           = 8;  // 单价(金币 / 个)
+  AuctionOrderStatus status = 9;
+  int64  created_at_ms   = 10;
+  int64  updated_at_ms   = 11;
+}
+
+// AuctionMatchEvent 是成交事件(kafka pandora.auction.match,key=match_id;服务内部 + 风控对账)。
+message AuctionMatchEvent {
+  uint64 match_id       = 1;
+  uint32 market_id      = 2;
+  uint64 sell_order_id  = 3;
+  uint64 buy_order_id   = 4;
+  uint64 seller_id      = 5;
+  uint64 buyer_id       = 6;
+  uint32 item_config_id = 7;
+  int64  quantity       = 8;
+  int64  price          = 9;  // 成交单价(被动挂单价)
+  int64  matched_at_ms  = 10;
+}
+
+message PlaceOrderRequest {
+  uint32 market_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  quantity        = 3;
+  int64  price           = 4;  // 卖家期望单价
+  string idempotency_key = 5;  // 客户端生成,重试不重复挂单
+  // seller_id 以 JWT ctx 为准(R5),请求体不传
+}
+
+message PlaceOrderResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint64 order_id        = 2;
+  AuctionOrderStatus status = 3;
+  int64  filled_quantity = 4;  // 本次挂单即时撮合掉的量
+}
+
+message BidRequest {
+  uint32 market_id       = 1;
+  uint32 item_config_id  = 2;
+  int64  quantity        = 3;
+  int64  price           = 4;  // 买家期望单价
+  string idempotency_key = 5;
+  // buyer_id 以 JWT ctx 为准(R5)
+}
+
+message BidResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint64 order_id        = 2;
+  AuctionOrderStatus status = 3;
+  int64  filled_quantity = 4;
+}
+
+message CancelOrderRequest {
+  uint32 market_id = 1;  // 路由到撮合分片 / 订单簿
+  uint64 order_id  = 2;
+  // player_id 以 JWT ctx 为准(R5)
+}
+
+message CancelOrderResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+message ListMarketRequest {
+  uint32 market_id = 1;
+  OrderSide side   = 2;  // SELL=看卖盘 / BUY=看买盘;UNSPECIFIED=两侧
+  int32  limit     = 3;  // 0 = 服务端默认上限
+}
+
+message ListMarketResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated AuctionOrder orders = 2;
+}
+
+message ListMyOrdersRequest {
+  bool active_only = 1;  // true=只看未终态(挂在簿上的)
+  // player_id 以 JWT ctx 为准(R5)
+}
+
+message ListMyOrdersResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated AuctionOrder orders = 2;
+}

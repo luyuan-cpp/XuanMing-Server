@@ -25,9 +25,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlayerLocatorService_SetLocation_FullMethodName   = "/pandora.locator.v1.PlayerLocatorService/SetLocation"
-	PlayerLocatorService_GetLocation_FullMethodName   = "/pandora.locator.v1.PlayerLocatorService/GetLocation"
-	PlayerLocatorService_ClearLocation_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
+	PlayerLocatorService_SetLocation_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/SetLocation"
+	PlayerLocatorService_GetLocation_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/GetLocation"
+	PlayerLocatorService_BatchGetLocation_FullMethodName    = "/pandora.locator.v1.PlayerLocatorService/BatchGetLocation"
+	PlayerLocatorService_SubscribePresence_FullMethodName   = "/pandora.locator.v1.PlayerLocatorService/SubscribePresence"
+	PlayerLocatorService_UnsubscribePresence_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
+	PlayerLocatorService_ClearLocation_FullMethodName       = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
 )
 
 // PlayerLocatorServiceClient is the client API for PlayerLocatorService service.
@@ -36,6 +39,19 @@ const (
 type PlayerLocatorServiceClient interface {
 	SetLocation(ctx context.Context, in *SetLocationRequest, opts ...grpc.CallOption) (*SetLocationResponse, error)
 	GetLocation(ctx context.Context, in *GetLocationRequest, opts ...grpc.CallOption) (*GetLocationResponse, error)
+	// BatchGetLocation 一次查多个玩家的位置(好友列表在线态批量拉,
+	// 见 docs/design/friend-distributed-scaling.md §13.3 BatchGetPresence)。
+	// 服务端用 Redis pipeline 一次往返,替代调用方逐个 GetLocation 的 N 次扇出。
+	BatchGetLocation(ctx context.Context, in *BatchGetLocationRequest, opts ...grpc.CallOption) (*BatchGetLocationResponse, error)
+	// SubscribePresence / UnsubscribePresence 是好友在线态「订阅推送」入口
+	// (docs/design/friend-distributed-scaling.md §13.4)。
+	//   - 客户端打开好友面板 → SubscribePresence(自己 + 关注的好友 id 列表)
+	//   - 关闭面板 → UnsubscribePresence
+	//
+	// 好友上线/下线变更只推给「此刻正订阅(盯着这一行看)的人」,扇出从 N 降到个位数;
+	// 服务端再叠加去抖(吸收抖动)+ 合并(攒批)+ 粗粒度降采样 + killswitch 洪峰降级。
+	SubscribePresence(ctx context.Context, in *SubscribePresenceRequest, opts ...grpc.CallOption) (*SubscribePresenceResponse, error)
+	UnsubscribePresence(ctx context.Context, in *UnsubscribePresenceRequest, opts ...grpc.CallOption) (*UnsubscribePresenceResponse, error)
 	ClearLocation(ctx context.Context, in *ClearLocationRequest, opts ...grpc.CallOption) (*ClearLocationResponse, error)
 }
 
@@ -67,6 +83,36 @@ func (c *playerLocatorServiceClient) GetLocation(ctx context.Context, in *GetLoc
 	return out, nil
 }
 
+func (c *playerLocatorServiceClient) BatchGetLocation(ctx context.Context, in *BatchGetLocationRequest, opts ...grpc.CallOption) (*BatchGetLocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchGetLocationResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_BatchGetLocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) SubscribePresence(ctx context.Context, in *SubscribePresenceRequest, opts ...grpc.CallOption) (*SubscribePresenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubscribePresenceResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_SubscribePresence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) UnsubscribePresence(ctx context.Context, in *UnsubscribePresenceRequest, opts ...grpc.CallOption) (*UnsubscribePresenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnsubscribePresenceResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_UnsubscribePresence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *playerLocatorServiceClient) ClearLocation(ctx context.Context, in *ClearLocationRequest, opts ...grpc.CallOption) (*ClearLocationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClearLocationResponse)
@@ -83,6 +129,19 @@ func (c *playerLocatorServiceClient) ClearLocation(ctx context.Context, in *Clea
 type PlayerLocatorServiceServer interface {
 	SetLocation(context.Context, *SetLocationRequest) (*SetLocationResponse, error)
 	GetLocation(context.Context, *GetLocationRequest) (*GetLocationResponse, error)
+	// BatchGetLocation 一次查多个玩家的位置(好友列表在线态批量拉,
+	// 见 docs/design/friend-distributed-scaling.md §13.3 BatchGetPresence)。
+	// 服务端用 Redis pipeline 一次往返,替代调用方逐个 GetLocation 的 N 次扇出。
+	BatchGetLocation(context.Context, *BatchGetLocationRequest) (*BatchGetLocationResponse, error)
+	// SubscribePresence / UnsubscribePresence 是好友在线态「订阅推送」入口
+	// (docs/design/friend-distributed-scaling.md §13.4)。
+	//   - 客户端打开好友面板 → SubscribePresence(自己 + 关注的好友 id 列表)
+	//   - 关闭面板 → UnsubscribePresence
+	//
+	// 好友上线/下线变更只推给「此刻正订阅(盯着这一行看)的人」,扇出从 N 降到个位数;
+	// 服务端再叠加去抖(吸收抖动)+ 合并(攒批)+ 粗粒度降采样 + killswitch 洪峰降级。
+	SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error)
+	UnsubscribePresence(context.Context, *UnsubscribePresenceRequest) (*UnsubscribePresenceResponse, error)
 	ClearLocation(context.Context, *ClearLocationRequest) (*ClearLocationResponse, error)
 }
 
@@ -98,6 +157,15 @@ func (UnimplementedPlayerLocatorServiceServer) SetLocation(context.Context, *Set
 }
 func (UnimplementedPlayerLocatorServiceServer) GetLocation(context.Context, *GetLocationRequest) (*GetLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLocation not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) BatchGetLocation(context.Context, *BatchGetLocationRequest) (*BatchGetLocationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BatchGetLocation not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubscribePresence not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) UnsubscribePresence(context.Context, *UnsubscribePresenceRequest) (*UnsubscribePresenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnsubscribePresence not implemented")
 }
 func (UnimplementedPlayerLocatorServiceServer) ClearLocation(context.Context, *ClearLocationRequest) (*ClearLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClearLocation not implemented")
@@ -158,6 +226,60 @@ func _PlayerLocatorService_GetLocation_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerLocatorService_BatchGetLocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchGetLocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).BatchGetLocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_BatchGetLocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).BatchGetLocation(ctx, req.(*BatchGetLocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_SubscribePresence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribePresenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).SubscribePresence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_SubscribePresence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).SubscribePresence(ctx, req.(*SubscribePresenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_UnsubscribePresence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnsubscribePresenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).UnsubscribePresence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_UnsubscribePresence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).UnsubscribePresence(ctx, req.(*UnsubscribePresenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlayerLocatorService_ClearLocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClearLocationRequest)
 	if err := dec(in); err != nil {
@@ -190,6 +312,18 @@ var PlayerLocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLocation",
 			Handler:    _PlayerLocatorService_GetLocation_Handler,
+		},
+		{
+			MethodName: "BatchGetLocation",
+			Handler:    _PlayerLocatorService_BatchGetLocation_Handler,
+		},
+		{
+			MethodName: "SubscribePresence",
+			Handler:    _PlayerLocatorService_SubscribePresence_Handler,
+		},
+		{
+			MethodName: "UnsubscribePresence",
+			Handler:    _PlayerLocatorService_UnsubscribePresence_Handler,
 		},
 		{
 			MethodName: "ClearLocation",

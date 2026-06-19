@@ -63,6 +63,44 @@ func (s *LocatorService) GetLocation(ctx context.Context, req *locatorv1.GetLoca
 	}, nil
 }
 
+func (s *LocatorService) BatchGetLocation(ctx context.Context, req *locatorv1.BatchGetLocationRequest) (*locatorv1.BatchGetLocationResponse, error) {
+	outs, err := s.uc.BatchGetLocation(ctx, req.GetPlayerIds())
+	if err != nil {
+		return &locatorv1.BatchGetLocationResponse{Code: toProtoCode(err)}, nil
+	}
+	locations := make(map[uint64]*locatorv1.Location, len(outs))
+	for pid, out := range outs {
+		locations[pid] = &locatorv1.Location{
+			State:       locatorv1.LocationState(out.State),
+			HubPod:      out.HubPod,
+			ShardId:     out.ShardID,
+			MatchId:     out.MatchID,
+			BattlePod:   out.BattlePod,
+			UpdatedAtMs: out.UpdatedAtMs,
+		}
+	}
+	return &locatorv1.BatchGetLocationResponse{
+		Code:      commonv1.ErrCode_OK,
+		Locations: locations,
+	}, nil
+}
+
+// SubscribePresence 客户端打开好友面板 → 订阅这批好友的在线态变更(§13.4.1)。
+func (s *LocatorService) SubscribePresence(ctx context.Context, req *locatorv1.SubscribePresenceRequest) (*locatorv1.SubscribePresenceResponse, error) {
+	if err := s.uc.SubscribePresence(req.GetSubscriberId(), req.GetWatchedPlayerIds()); err != nil {
+		return &locatorv1.SubscribePresenceResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.SubscribePresenceResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// UnsubscribePresence 关闭好友面板 → 退订(§13.4.1)。
+func (s *LocatorService) UnsubscribePresence(ctx context.Context, req *locatorv1.UnsubscribePresenceRequest) (*locatorv1.UnsubscribePresenceResponse, error) {
+	if err := s.uc.UnsubscribePresence(req.GetSubscriberId()); err != nil {
+		return &locatorv1.UnsubscribePresenceResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.UnsubscribePresenceResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
 func (s *LocatorService) ClearLocation(ctx context.Context, req *locatorv1.ClearLocationRequest) (*locatorv1.ClearLocationResponse, error) {
 	if err := s.uc.ClearLocation(ctx, req.GetPlayerId()); err != nil {
 		return &locatorv1.ClearLocationResponse{Code: toProtoCode(err)}, nil

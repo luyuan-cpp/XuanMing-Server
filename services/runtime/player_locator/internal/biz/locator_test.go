@@ -47,6 +47,19 @@ func (s *stubRepo) Get(_ context.Context, playerID uint64) (data.LocationRecord,
 	return rec, true, nil
 }
 
+func (s *stubRepo) BatchGet(_ context.Context, playerIDs []uint64) (map[uint64]data.LocationRecord, error) {
+	out := make(map[uint64]data.LocationRecord, len(playerIDs))
+	for _, pid := range playerIDs {
+		if pid == 0 {
+			continue
+		}
+		if rec, ok := s.store[pid]; ok {
+			out[pid] = rec
+		}
+	}
+	return out, nil
+}
+
 func (s *stubRepo) Delete(_ context.Context, playerID uint64) error {
 	delete(s.store, playerID)
 	return nil
@@ -115,6 +128,52 @@ func TestGetLocation_OfflineWhenMissing(t *testing.T) {
 	}
 	if out.State != LocationStateOffline {
 		t.Errorf("miss should return OFFLINE(%d), got %d", LocationStateOffline, out.State)
+	}
+}
+
+func TestBatchGetLocation(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	ctx := context.Background()
+
+	// 42 在 HUB,7 在 BATTLE,999 不存在(应缺席)。
+	if err := uc.SetLocation(ctx, LocationInput{PlayerID: 42, State: LocationStateHub, HubPod: "hub-1", ShardID: 2}); err != nil {
+		t.Fatalf("SetLocation(42): %v", err)
+	}
+	if err := uc.SetLocation(ctx, LocationInput{PlayerID: 7, State: LocationStateBattle, MatchID: 1001, BattlePod: "bp-9"}); err != nil {
+		t.Fatalf("SetLocation(7): %v", err)
+	}
+
+	// 含 0 与重复 id,验证被跳过 / 去重不报错。
+	got, err := uc.BatchGetLocation(ctx, []uint64{42, 7, 999, 0, 42})
+	if err != nil {
+		t.Fatalf("BatchGetLocation: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 entries (42,7), got %d: %+v", len(got), got)
+	}
+	if _, ok := got[999]; ok {
+		t.Errorf("missing player 999 should be absent (offline), but present")
+	}
+	if _, ok := got[0]; ok {
+		t.Errorf("player_id 0 should be skipped, but present")
+	}
+	if got[42].State != LocationStateHub || got[42].HubPod != "hub-1" || got[42].ShardID != 2 {
+		t.Errorf("player 42 mismatch: %+v", got[42])
+	}
+	if got[7].State != LocationStateBattle || got[7].MatchID != 1001 || got[7].BattlePod != "bp-9" {
+		t.Errorf("player 7 mismatch: %+v", got[7])
+	}
+}
+
+func TestBatchGetLocation_Empty(t *testing.T) {
+	uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
+	got, err := uc.BatchGetLocation(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("BatchGetLocation(nil): %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("empty input should yield empty map, got %d", len(got))
 	}
 }
 

@@ -42,6 +42,12 @@ type LocationRepo interface {
 	// guard 通过则 DEL+HSET+EXPIRE 覆盖式写入。CAS 冲突重试 maxRetry 次。
 	SetGuarded(ctx context.Context, playerID uint64, rec LocationRecord, ttl time.Duration, maxRetry int, guard func(cur LocationRecord, found bool) error) error
 	Get(ctx context.Context, playerID uint64) (LocationRecord, bool, error)
+	// BatchGet 一次读多个玩家的位置(好友列表在线态批量拉,见
+	// docs/design/friend-distributed-scaling.md §13.3)。用 Redis pipeline 一次往返,
+	// 替代逐个 Get 的 N 次网络往返。返回 map 只含命中的玩家;
+	// key 不存在(离线 / TTL 过期)的 player_id 不出现在 map 里(调用方按缺席判离线)。
+	// playerID==0 与重复 id 自动跳过 / 去重。
+	BatchGet(ctx context.Context, playerIDs []uint64) (map[uint64]LocationRecord, error)
 	Delete(ctx context.Context, playerID uint64) error
 }
 
@@ -136,6 +142,44 @@ func (r *RedisLocationRepo) Get(ctx context.Context, playerID uint64) (LocationR
 		return LocationRecord{}, false, errcode.New(errcode.ErrInternal, "redis location get: %v", err)
 	}
 	return rec, found, nil
+}
+
+// BatchGet 用 Redis pipeline 一次往返批量 HGETALL 多个玩家位置。
+//
+// HGETALL 对不存在的 key 返回空 map(不是 redis.Nil),故 pipeline Exec 不会因 miss 报错;
+// 单个命令失败按缺席跳过(map 里没有 → 调用方判离线),不让整批失败。
+// playerID==0 跳过;重复 id 经 cmds map 天然去重。
+func (r *RedisLocationRepo) BatchGet(ctx context.Context, playerIDs []uint64) (map[uint64]LocationRecord, error) {
+	out := make(map[uint64]LocationRecord, len(playerIDs))
+	if len(playerIDs) == 0 {
+		return out, nil
+	}
+	pipe := r.rdb.Pipeline()
+	cmds := make(map[uint64]*redis.MapStringStringCmd, len(playerIDs))
+	for _, pid := range playerIDs {
+		if pid == 0 {
+			continue
+		}
+		if _, dup := cmds[pid]; dup {
+			continue
+		}
+		cmds[pid] = pipe.HGetAll(ctx, locKey(pid))
+	}
+	if len(cmds) == 0 {
+		return out, nil
+	}
+	// Exec 在任一命令出错时返回该错误;HGETALL 不会产生 redis.Nil。
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return nil, errcode.New(errcode.ErrInternal, "redis location batch get: %v", err)
+	}
+	for pid, cmd := range cmds {
+		m, err := cmd.Result()
+		if err != nil || len(m) == 0 {
+			continue // 单命令失败 / key 不存在 → 缺席判离线
+		}
+		out[pid] = parseLocationMap(m)
+	}
+	return out, nil
 }
 
 // readLocation HGETALL 并解析为 LocationRecord。c 可以是 *redis.Client 或 WATCH 内的 *redis.Tx。

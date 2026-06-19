@@ -6,8 +6,8 @@
 //   - main.go 用 pkg/grpcclient.MustDialInsecure 拨号;addr 未配则注入 nil(弱依赖)
 //
 // 调用语义:
-//   - ListFriends 拿到好友 id 列表后,逐个查 GetLocation 填在线状态
-//   - 任一查询失败 / locator 不可达 → 该好友按离线处理,不让 ListFriends 整体失败
+//   - ListFriends 拿到好友 id 列表后,一次 BatchGetLocation 批量查在线状态
+//   - locator 不可达 / 整体失败 → 全部按离线处理,不让 ListFriends 整体失败
 //     (好友列表是只读展示,在线状态可降级)
 package data
 
@@ -47,25 +47,29 @@ func NewGrpcOnlineStatusReader(conn *grpc.ClientConn) *GrpcOnlineStatusReader {
 	}
 }
 
-// BatchOnline 逐个查 GetLocation 填在线状态。
+// BatchOnline 一次 BatchGetLocation 批量查在线状态。
 //
-// 好友列表通常很小(上限 cfg.MaxFriends,默认 200),逐个 unary 即可;
-// 单个查询失败按离线跳过(map 里不放该 id → biz 默认 false)。
+// 服务端用 Redis pipeline 一次往返,替代逐好友 N 次 unary 扇出
+// (见 docs/design/friend-distributed-scaling.md §13.3 BatchGetPresence)。
+// 整批失败 / locator 不可达 → 返回空 map(全部按离线,弱依赖降级)。
+// 响应 map 里缺席的好友按离线处理(biz 默认 false)。
 // state != OFFLINE 且 != UNSPECIFIED 视为在线。
 func (g *GrpcOnlineStatusReader) BatchOnline(ctx context.Context, playerIDs []uint64) map[uint64]OnlineStatus {
 	out := make(map[uint64]OnlineStatus, len(playerIDs))
+	if len(playerIDs) == 0 {
+		return out
+	}
 	h := plog.With(ctx)
-	for _, pid := range playerIDs {
-		resp, err := g.client.GetLocation(ctx, &locatorv1.GetLocationRequest{PlayerId: pid})
-		if err != nil {
-			h.Warnw("msg", "locator_get_location_failed", "friend_id", pid, "err", err)
-			continue
-		}
-		if resp.GetCode() != commonv1.ErrCode_OK {
-			// not found / 离线均走此分支,按离线处理
-			continue
-		}
-		loc := resp.GetLocation()
+	resp, err := g.client.BatchGetLocation(ctx, &locatorv1.BatchGetLocationRequest{PlayerIds: playerIDs})
+	if err != nil {
+		h.Warnw("msg", "locator_batch_get_location_failed", "count", len(playerIDs), "err", err)
+		return out
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		h.Warnw("msg", "locator_batch_get_location_not_ok", "count", len(playerIDs), "code", resp.GetCode())
+		return out
+	}
+	for pid, loc := range resp.GetLocations() {
 		state := loc.GetState()
 		online := state != locatorv1.LocationState_LOCATION_STATE_OFFLINE &&
 			state != locatorv1.LocationState_LOCATION_STATE_UNSPECIFIED

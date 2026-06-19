@@ -65,16 +65,29 @@ type LocationOutput struct {
 
 // LocatorUsecase 实现 SetLocation / GetLocation / ClearLocation。
 type LocatorUsecase struct {
-	repo data.LocationRepo
-	ttl  time.Duration
+	repo     data.LocationRepo
+	ttl      time.Duration
+	presence PresenceNotifier // 可为 nil(presence 订阅推送未开启 → 纯拉模式)
 }
 
-// NewLocatorUsecase 构造用例。
-func NewLocatorUsecase(repo data.LocationRepo, ttl time.Duration) *LocatorUsecase {
+// PresenceNotifier 是 presence fan-out 入口(由 PresenceHub 实现;nil 表示未启用)。
+// 见 docs/design/friend-distributed-scaling.md §13.4。
+type PresenceNotifier interface {
+	Notify(playerID uint64, state int32)
+	Subscribe(subscriberID uint64, watchedIDs []uint64)
+	Unsubscribe(subscriberID uint64)
+}
+
+// NewLocatorUsecase 构造用例。presence 可选(不传 = 未开启订阅推送,走纯拉)。
+func NewLocatorUsecase(repo data.LocationRepo, ttl time.Duration, presence ...PresenceNotifier) *LocatorUsecase {
 	if ttl <= 0 {
 		ttl = 30 * time.Second
 	}
-	return &LocatorUsecase{repo: repo, ttl: ttl}
+	u := &LocatorUsecase{repo: repo, ttl: ttl}
+	if len(presence) > 0 {
+		u.presence = presence[0]
+	}
+	return u
 }
 
 // SetLocation 写入 redis hash。
@@ -123,6 +136,10 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 	}
 	if err := u.repo.SetGuarded(ctx, in.PlayerID, rec, u.ttl, optimisticRetry, guardTransition(in)); err != nil {
 		return err
+	}
+	// presence fan-out(§13.4):写成功后通知 hub,内部转粗粒度 + 去抖 + 合并 + 只推订阅者。
+	if u.presence != nil {
+		u.presence.Notify(in.PlayerID, in.State)
 	}
 	plog.With(ctx).Infow("msg", "location_set",
 		"player_id", in.PlayerID, "state", in.State,
@@ -193,6 +210,34 @@ func (u *LocatorUsecase) GetLocation(ctx context.Context, playerID uint64) (Loca
 	}, nil
 }
 
+// BatchGetLocation 一次查多个玩家位置(好友列表在线态批量拉,
+// 见 docs/design/friend-distributed-scaling.md §13.3 BatchGetPresence)。
+//
+// 语义与 GetLocation 一致但不给 miss 回填 OFFLINE 占位:返回 map 只含在 redis
+// 查到的玩家;未在线 / 不存在的 player_id 不出现在 map 里(调用方按缺席判离线,
+// 避免响应被大量离线占位撞胀)。player_id==0 与重复 id 由 data 层跳过 / 去重。
+func (u *LocatorUsecase) BatchGetLocation(ctx context.Context, playerIDs []uint64) (map[uint64]LocationOutput, error) {
+	if len(playerIDs) == 0 {
+		return map[uint64]LocationOutput{}, nil
+	}
+	recs, err := u.repo.BatchGet(ctx, playerIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uint64]LocationOutput, len(recs))
+	for pid, rec := range recs {
+		out[pid] = LocationOutput{
+			State:       rec.State,
+			HubPod:      rec.HubPod,
+			ShardID:     rec.ShardID,
+			MatchID:     rec.MatchID,
+			BattlePod:   rec.BattlePod,
+			UpdatedAtMs: rec.UpdatedAtMs,
+		}
+	}
+	return out, nil
+}
+
 // ClearLocation Unlink redis hash。
 func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) error {
 	if playerID == 0 {
@@ -201,6 +246,33 @@ func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) err
 	if err := u.repo.Delete(ctx, playerID); err != nil {
 		return err
 	}
+	// presence fan-out(§13.4):清位置等价离线,通知 hub。
+	if u.presence != nil {
+		u.presence.Notify(playerID, LocationStateOffline)
+	}
 	plog.With(ctx).Infow("msg", "location_cleared", "player_id", playerID)
+	return nil
+}
+
+// SubscribePresence 注册订阅者关注的一批好友在线态(§13.4.1)。
+// presence 未启用时为 no-op(纯拉模式),不报错。
+func (u *LocatorUsecase) SubscribePresence(subscriberID uint64, watchedIDs []uint64) error {
+	if subscriberID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "subscriber_id must > 0")
+	}
+	if u.presence != nil {
+		u.presence.Subscribe(subscriberID, watchedIDs)
+	}
+	return nil
+}
+
+// UnsubscribePresence 退订(关闭好友面板时)。presence 未启用时为 no-op。
+func (u *LocatorUsecase) UnsubscribePresence(subscriberID uint64) error {
+	if subscriberID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "subscriber_id must > 0")
+	}
+	if u.presence != nil {
+		u.presence.Unsubscribe(subscriberID)
+	}
 	return nil
 }

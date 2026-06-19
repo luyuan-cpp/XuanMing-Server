@@ -1,6 +1,6 @@
 # Pandora Go 服务清单与契约
 
-> 14 个 go 服务的职责边界、对外接口、关键状态、依赖矩阵。
+> 16 个 go 服务的职责边界、对外接口、关键状态、依赖矩阵。
 >
 > ⚠️ **2026-06-04 架构终版**:
 > - 框架统一 **Kratos**(替代 go-zero,详见 `gateway-decision.md` §4)
@@ -26,6 +26,8 @@
 | 12 | hub_allocator | 50021 | 弱 | redis (+k8s) | (生产 ds.lifecycle) | ✅ W4 ⑤ + 自动扩缩容(2026-06-15:按在线人数控 Agones Fleet 副本) |
 | 13 | battle_result | 50022 | 无 | mysql | battle.result + ds.lifecycle | ✅ W4 ③(幂等落库 + Elo MMR + abandoned 补偿),W4 ⑨(player.update 事务出箱可靠化) |
 | 14 | **push** ⭐ | **50014**(gRPC server stream) | 强(连接索引) | redis(离线消息)| pandora.{team,match,chat,player,friend,system}.* | ✅ W2 ⑤(mock 5s tick,W3 接 kafka) |
+| 15 | inventory | 50015 | 无 | mysql(pandora_trade) | - | ✅ W5 ③(大厅背包:货币+可堆叠道具,用/售/授予,ledger 幂等) |
+| 16 | auction | 50016 | 强(per-market 串行撮合) | redis(订单簿)+ mysql(pandora_auction 权威) | (生产 auction.match/audit) | ✅ 2026-06-19(全服拍卖行/撮合引擎,两层幂等,ZSET 价格-时间优先) |
 
 ⭐ = 2026-06-04 终版新增。push 是 Kratos transport/grpc 暴露的 server stream 服务,客户端通过 Envoy 连过来,详见 `gateway-decision.md` §6。
 

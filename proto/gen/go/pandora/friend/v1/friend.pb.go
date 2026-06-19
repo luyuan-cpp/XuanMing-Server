@@ -518,7 +518,7 @@ func (x *RejectFriendResponse) GetCode() v1.ErrCode {
 }
 
 // FriendRequestInfo 是客户端可见的「收到的待处理好友请求」视图(CLAUDE.md §5.8)。
-// 只暴露 pending 状态的入站请求(target = 查询者);不氄露内部 status 枚举。
+// 只暴露 pending 状态的入站请求(target = 查询者);不暴露内部 status 枚举。
 // from_nickname 留空,由客户端按 from_player_id 向 player 服务解析显示名(§5.8 最小数据单位)。
 type FriendRequestInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`

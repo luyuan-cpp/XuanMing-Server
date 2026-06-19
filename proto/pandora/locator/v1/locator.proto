@@ -13,6 +13,18 @@ import "pandora/common/v1/errcode.proto";
 service PlayerLocatorService {
   rpc SetLocation(SetLocationRequest) returns (SetLocationResponse);
   rpc GetLocation(GetLocationRequest) returns (GetLocationResponse);
+  // BatchGetLocation 一次查多个玩家的位置(好友列表在线态批量拉,
+  // 见 docs/design/friend-distributed-scaling.md §13.3 BatchGetPresence)。
+  // 服务端用 Redis pipeline 一次往返,替代调用方逐个 GetLocation 的 N 次扇出。
+  rpc BatchGetLocation(BatchGetLocationRequest) returns (BatchGetLocationResponse);
+  // SubscribePresence / UnsubscribePresence 是好友在线态「订阅推送」入口
+  // (docs/design/friend-distributed-scaling.md §13.4)。
+  //   - 客户端打开好友面板 → SubscribePresence(自己 + 关注的好友 id 列表)
+  //   - 关闭面板 → UnsubscribePresence
+  // 好友上线/下线变更只推给「此刻正订阅(盯着这一行看)的人」,扇出从 N 降到个位数;
+  // 服务端再叠加去抖(吸收抖动)+ 合并(攒批)+ 粗粒度降采样 + killswitch 洪峰降级。
+  rpc SubscribePresence(SubscribePresenceRequest) returns (SubscribePresenceResponse);
+  rpc UnsubscribePresence(UnsubscribePresenceRequest) returns (UnsubscribePresenceResponse);
   rpc ClearLocation(ClearLocationRequest) returns (ClearLocationResponse);
 }
 
@@ -56,10 +68,64 @@ message GetLocationResponse {
   Location location = 2;
 }
 
+message BatchGetLocationRequest {
+  repeated uint64 player_ids = 1;
+}
+
+message BatchGetLocationResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // locations 只含查到的玩家;未在线 / key 已过期的 player_id 不出现在 map 里,
+  // 等价 OFFLINE(调用方按缺席判离线,避免给每个请求 id 都回填占位)。
+  map<uint64, Location> locations = 2;
+}
+
 message ClearLocationRequest {
   uint64 player_id = 1;
 }
 
 message ClearLocationResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+// PresenceStatus 是好友在线态的「粗粒度降采样」状态(§13.4.4)。
+// 只同步在线/离线/游戏中三档,不外露 hub_pod / shard_id / match_id 等高频细节;
+// 细节由客户端点进详情再单独拉(BatchGetLocation)。
+enum PresenceStatus {
+  PRESENCE_STATUS_UNSPECIFIED = 0;
+  PRESENCE_STATUS_OFFLINE     = 1;  // 不在线
+  PRESENCE_STATUS_ONLINE      = 2;  // 在线(大厅 / 登录确认期)
+  PRESENCE_STATUS_IN_GAME     = 3;  // 游戏中(撮合 / 战斗)
+}
+
+// SubscribePresenceRequest 订阅一批好友的在线态变更。
+// 每次打开 / 刷新好友面板都发全量 watched_player_ids,服务端按「替换」语义覆盖旧订阅。
+message SubscribePresenceRequest {
+  uint64 subscriber_id = 1;            // 订阅者(看面板的玩家)本人
+  repeated uint64 watched_player_ids = 2;  // 关注的好友 id 列表
+}
+
+message SubscribePresenceResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// UnsubscribePresenceRequest 关闭面板时退订该订阅者的全部关注。
+message UnsubscribePresenceRequest {
+  uint64 subscriber_id = 1;
+}
+
+message UnsubscribePresenceResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// PresenceChange 是单个好友的一条粗粒度在线态变更。
+message PresenceChange {
+  uint64 player_id = 1;
+  PresenceStatus status = 2;
+  int64 ts_ms = 3;
+}
+
+// PresenceBatchEvent 是推给订阅者的「合并后」事件:1s 窗口内多个好友的变更攒一条
+// (§13.4.3)。作为 push topic pandora.presence.update 的 payload(key=subscriber_id)。
+message PresenceBatchEvent {
+  repeated PresenceChange changes = 1;
 }

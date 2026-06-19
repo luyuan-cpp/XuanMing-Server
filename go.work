@@ -53,6 +53,8 @@ use ./services/economy/trade
 
 use ./services/economy/inventory
 
+use ./services/economy/auction
+
 use (
 	./pkg/killswitch/etcdkv
 	./pkg/snowflake/etcdnode

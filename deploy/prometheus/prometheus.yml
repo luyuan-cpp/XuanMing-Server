@@ -46,6 +46,8 @@ scrape_configs:
         labels: { service: trade }
       - targets: ['host.docker.internal:51015']
         labels: { service: inventory }
+      - targets: ['host.docker.internal:51016']
+        labels: { service: auction }
       - targets: ['host.docker.internal:51013']
         labels: { service: dialogue }
       # DS 调度 / 结算

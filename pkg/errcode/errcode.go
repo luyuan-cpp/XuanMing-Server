@@ -14,7 +14,8 @@
 //	8000-8999   = dialogue
 //	9000-9999   = chat / friend / locator
 //	10000-10999 = data_service
-//	11000+      = 预留
+//	11000-11999 = 预留
+//	12000-12999 = auction(全服拍卖行 / 撮合)
 //
 // 字段编号永不复用,只 deprecate。
 package errcode
@@ -156,6 +157,15 @@ const (
 	ErrDataVersionMismatch Code = 10001
 	ErrDataLockTimeout     Code = 10002
 	ErrDataMigrate         Code = 10003
+)
+
+// auction(12000-12999,全服拍卖行 / 撮合)
+const (
+	ErrAuctionOrderNotFound       Code = 12001
+	ErrAuctionWrongState          Code = 12002 // 订单已终态 / 不可撤
+	ErrAuctionNotOwner            Code = 12003 // 非挂单本人撤单
+	ErrAuctionInsufficient        Code = 12004 // 结算资源不足(冻结 / 扣减失败)
+	ErrAuctionIdempotencyConflict Code = 12005 // idempotency_key 复用到不同请求(指纹不一致)
 )
 
 // Error 是带错误码的标准错误类型。
