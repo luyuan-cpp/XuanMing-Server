@@ -16,6 +16,7 @@ package biz
 
 import (
 	"context"
+	"math"
 	"sync"
 	"time"
 
@@ -130,6 +131,11 @@ func (u *AuctionUsecase) submit(ctx context.Context, ownerID uint64, side data.S
 	}
 	if price <= 0 || price > u.cfg.MaxPrice {
 		return nil, errcode.New(errcode.ErrInvalidArg, "price out of range: %d (max %d)", price, u.cfg.MaxPrice)
+	}
+	// 防止成交总额(quantity * price)溢出 int64:下游 inventory 结算会算 total = quantity * unitPrice,
+	// 即便单值都在上界内,极端组合仍可能溢出 → 在入口拒绝。
+	if quantity > math.MaxInt64/price {
+		return nil, errcode.New(errcode.ErrInvalidArg, "total value overflow: quantity %d * price %d", quantity, price)
 	}
 	if idemKey == "" {
 		return nil, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")

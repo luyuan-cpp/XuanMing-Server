@@ -16,9 +16,9 @@ import (
 	"fmt"
 	"time"
 
+	klog "github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	klog "github.com/go-kratos/kratos/v2/log"
 )
 
 // 默认 key 前缀,跟 docs/design/infra.md §3.2 命名规范保持一致。
@@ -77,7 +77,8 @@ func (tlr *TryLockResult) IsLocked() bool { return tlr.locked }
 // 返回 (释放成功?, 错误)。锁已过期或被别人接管 → (false, nil)。
 func (tlr *TryLockResult) Release(ctx context.Context) (bool, error) {
 	if !tlr.locked {
-		klog.Errorf("Release lock failed: not holding lock | key=%s", tlr.lockKey)
+		// 未持锁时调 Release 是调用方正常幂等路径,不是错误
+		klog.Debugf("Release lock skipped: not holding lock | key=%s", tlr.lockKey)
 		return false, nil
 	}
 
@@ -102,8 +103,8 @@ func (tlr *TryLockResult) Release(ctx context.Context) (bool, error) {
 		tlr.locked = false
 		return true, nil
 	}
-	// 已过期或被接管
-	klog.Errorf("Release lock failed: lock expired or not owned | key=%s", tlr.lockKey)
+	// 已过期或被接管(TTL 到期 / 被别人重新加锁)是预期内分支,不是错误
+	klog.Debugf("Release lock no-op: lock expired or not owned | key=%s", tlr.lockKey)
 	tlr.locked = false
 	return false, nil
 }
@@ -111,7 +112,8 @@ func (tlr *TryLockResult) Release(ctx context.Context) (bool, error) {
 // Extend 续锁,Lua 校验 owner。锁已过期或被接管 → (false, nil)。
 func (tlr *TryLockResult) Extend(ctx context.Context, extendTTL time.Duration) (bool, error) {
 	if !tlr.locked {
-		klog.Errorf("Extend lock failed: not holding lock | key=%s", tlr.lockKey)
+		// 未持锁时调 Extend 是调用方正常幂等路径,不是错误
+		klog.Debugf("Extend lock skipped: not holding lock | key=%s", tlr.lockKey)
 		return false, nil
 	}
 

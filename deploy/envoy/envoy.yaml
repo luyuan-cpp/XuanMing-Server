@@ -146,9 +146,29 @@ static_resources:
                   prefix: "/pandora.trade.v1.TradeService/"
                 requires:
                   provider_name: "pandora_session"
-              # auction 服务所有 RPC 均需 JWT(挂单 / 出价 / 撤单身份以 JWT sub 为准,R5)
+              # dialogue 服务所有 RPC 均需 JWT(玩家身份以 JWT sub 为准,R5)
+              - match:
+                  prefix: "/pandora.dialogue.v1.DialogueService/"
+                requires:
+                  provider_name: "pandora_session"
+              # auction 服务所有 RPC 均需 JWT(下单 / 出价 / 撤单身份以 JWT sub 为准,R5)
               - match:
                   prefix: "/pandora.auction.v1.AuctionService/"
+                requires:
+                  provider_name: "pandora_session"
+              # ⚠️ inventory:**只暴露 3 个面向客户端的安全方法**,各需 JWT。
+              #    GrantItems(系统发放) / SettleAuctionMatch(拍卖内部结算)绝不挂网关——
+              #    否则客户端可直接调用白嫖道具 / 伪造结算(越权)。它们只走内网裸 gRPC :50015。
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/GetInventory"
+                requires:
+                  provider_name: "pandora_session"
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/UseItem"
+                requires:
+                  provider_name: "pandora_session"
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/SellItem"
                 requires:
                   provider_name: "pandora_session"
               # 没列到的 path(login.Login / login.VerifyDSTicket / grpc reflection)默认放行。
@@ -235,11 +255,40 @@ static_resources:
                   timeout: 15s
                   idle_timeout: 60s
 
+              # ----- dialogue(unary,立即完成型,demo 15s 超时)-----
+              - match:
+                  prefix: "/pandora.dialogue.v1.DialogueService/"
+                route:
+                  cluster: dialogue_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+
               # ----- auction(unary,立即完成型,demo 15s 超时)-----
               - match:
                   prefix: "/pandora.auction.v1.AuctionService/"
                 route:
                   cluster: auction_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+
+              # ----- inventory(unary,**仅 3 个客户端安全方法**精确路由,demo 15s 超时)-----
+              # GrantItems / SettleAuctionMatch 故意不挂网关(内网裸 gRPC :50015),防越权。
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/GetInventory"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/UseItem"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/SellItem"
+                route:
+                  cluster: inventory_cluster
                   timeout: 15s
                   idle_timeout: 60s
 
@@ -510,6 +559,27 @@ static_resources:
                 address: host.docker.internal
                 port_value: 50012
 
+  # ===== dialogue_cluster(unary,demo 15s 超时)=====
+  - name: dialogue_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: dialogue_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50013
+
   # ===== auction_cluster(unary,demo 15s 超时)=====
   - name: auction_cluster
     type: STRICT_DNS
@@ -530,6 +600,27 @@ static_resources:
               socket_address:
                 address: host.docker.internal
                 port_value: 50016
+
+  # ===== inventory_cluster(unary,仅客户端安全方法走网关,demo 15s 超时)=====
+  - name: inventory_cluster
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 1s
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: inventory_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: host.docker.internal
+                port_value: 50015
 
   # ===========================================================================
   # DS 面内部服务 cluster(供 :8444 pandora_ds_listener 使用,agones-dev.md §5.1)

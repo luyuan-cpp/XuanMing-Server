@@ -18,6 +18,7 @@ package biz
 
 import (
 	"context"
+	"math"
 	"sort"
 	"time"
 
@@ -491,6 +492,10 @@ func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, shard 
 // selectTransferTarget:targetHubID!=0 点名 shard_id 匹配的分片;否则同 region 最空「非当前」ready 分片。
 func selectTransferTarget(shards []*hubv1.HubShardStorageRecord, cur *hubv1.HubAssignmentStorageRecord, targetHubID uint64) *hubv1.HubShardStorageRecord {
 	if targetHubID != 0 {
+		if targetHubID > math.MaxUint32 {
+			// shard_id 是 uint32(配置 ID),超出范围必然无匹配,直接返回避免截断误匹配
+			return nil
+		}
 		want := uint32(targetHubID)
 		for _, s := range shards {
 			if s.ShardId == want && s.Region == cur.Region && s.State == stateReady && s.PlayerCount < s.Capacity {
@@ -591,12 +596,15 @@ func (u *HubUsecase) reconcileFleetReplicas(ctx context.Context) error {
 	// 负载所需 ready 分片数(总在线=0 → min)。
 	need := minReplicas
 	if totalPlayers > 0 {
-		need = int32((totalPlayers + int64(playersPerHub) - 1) / int64(playersPerHub))
+		// 在 int64 内先夹紧到 maxReplicas 再转 int32,防止 totalPlayers 极大时
+		// 除法结果超 int32 范围转换回绕成负数
+		needed := (totalPlayers + int64(playersPerHub) - 1) / int64(playersPerHub)
+		if needed > int64(maxReplicas) {
+			needed = int64(maxReplicas)
+		}
+		need = int32(needed)
 		if need < minReplicas {
 			need = minReplicas
-		}
-		if need > maxReplicas {
-			need = maxReplicas
 		}
 	}
 
