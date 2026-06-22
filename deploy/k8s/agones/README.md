@@ -24,7 +24,7 @@ pwsh tools/scripts/e2e_k8s.ps1
 `e2e_k8s.ps1` 自动完成：校验集群/Agones/Fleet 就绪 → 从 Fleet yaml 解析真 DS 镜像精确 tag 并
 `minikube image load` → 起宿主 Envoy 桥接(`k8s_envoy_bridge.ps1`：对 16 个 k8s Service 做
 `kubectl port-forward` + 拉起 docker envoy `:8443`/`:8444`) → 轮询等 `pandora-battle` /
-`pandora-hub` Ready → docker driver 下后台拉起 `udp_relay.ps1` 回程中继 → 打印端到端验收清单与
+`pandora-hub` Ready → docker driver 下拉起容器版 UDP 回程中继 → 打印端到端验收清单与
 实时观察命令。常用开关：`-NoRelay`（自己起中继）、`-SkipImageLoad`（镜像已 load）、
 `-TimeoutSec`（等 Fleet 超时）。
 
@@ -37,9 +37,10 @@ pwsh tools/scripts/e2e_k8s.ps1
 > Windows DS、又没有 Agones 可调,代码只有 local/agones/mock 三种 provider,故 docker 只能落 mock。
 > 要真 DS 用 `-Mode k8s`(本机 Agones,线上等价)或 `-Mode local`(本机直接 exec Windows DS)。
 >
-> **前置**:真 UE Linux DS 镜像须先由 UE 侧 `deploy/ds/build-image.sh` 构建好(tag 见
-> `20-fleet-battle.yaml` / `30-fleet-hub.yaml` 的 `image:`);`e2e_k8s.ps1` 会先校验宿主 docker
-> 有该镜像再 load,缺失会 fail-fast 提示。
+> **前置**:真 UE Linux DS 镜像须先由 UE 侧打包到 `deploy/ds/stage/LinuxServer`。本地可用
+> `deploy/ds/build-image-minikube.ps1` 直接构建到 minikube 内置 Docker daemon（然后跑
+> `e2e_k8s.ps1 -SkipImageLoad`），也可用 `deploy/ds/build-image.sh` 在宿主构建
+> `pandora/battle-ds:dev` / `pandora/hub-ds:dev` 后让 `e2e_k8s.ps1` 执行 `minikube image load`。
 
 详细环境准备 / 手测分配 / 心跳 stub 见下文各节。
 
@@ -81,7 +82,7 @@ pwsh tools/scripts/e2e_k8s.ps1
 ## ☁️ 线上真集群部署(online:测试服 / 生产 kbs)
 
 线上 Fleet 跟本地有两处**必须换掉**,否则远端拉不到镜像、DS 回调打到不存在的宿主地址:
-  1. DS 镜像:本地是 `pandora/battle-ds:dev-*`(只在你机器上),远端要换成 registry 可拉取的完整镜像名
+  1. DS 镜像:本地是 `pandora/battle-ds:dev` / `pandora/hub-ds:dev`(只在你机器上),远端要换成 registry 可拉取的完整镜像名
   2. DS 回调地址:本地是 `host.docker.internal:8444`,远端要换成集群内 Envoy/网关的 DS 面 Service DNS
 
 所以 `-Mode online` **强制要求**这几个参数(缺一即 fail-fast,不会把本地 Fleet 误打到远端):

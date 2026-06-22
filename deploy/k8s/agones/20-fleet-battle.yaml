@@ -41,7 +41,9 @@ spec:
               # Pandora 战斗 DS（UE Linux Dedicated Server）。
               # 由 Tool/Server/Agones/build-linux-ds.ps1 + build-image.sh 产出镜像；push 由人手动执行，按实际 registry 覆盖。
               # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
-              image: pandora/battle-ds:dev-20260619-1036
+              # 用滚动 tag :dev（与 build-image.sh 默认一致）：重建镜像后只需 minikube image load，无需再改本文件，
+              # kubectl apply 也不会回退到过时的固定日期 tag。线上换成 registry 可拉取的完整镜像名（见 README online 节）。
+              image: pandora/battle-ds:dev
               imagePullPolicy: IfNotPresent
               env:
                 - name: PANDORA_DS_PORT

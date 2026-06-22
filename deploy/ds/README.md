@@ -96,7 +96,17 @@ powershell -ExecutionPolicy Bypass -File .\deploy\ds\start-minikube-agones.ps1
 # 若后端在别处，加 -StageDir "<repo>\deploy\ds\stage\LinuxServer"
 ```
 
-### 2. 构建镜像并由人手动推送（有 docker 的 Linux/机器，后端仓库）
+### 2. 构建镜像（后端仓库）
+
+本地 minikube 联调用 PowerShell 直接构建到 minikube 内置 Docker daemon：
+
+```powershell
+pwsh deploy/ds/build-image-minikube.ps1
+# 构建 pandora/battle-ds:dev 和 pandora/hub-ds:dev；之后跑 e2e_k8s.ps1 -SkipImageLoad
+```
+
+需要推到远端 registry 时，用 bash 脚本构建/打 tag，push 仍由人手动执行：
+
 ```bash
 ./deploy/ds/build-image.sh pandora/battle-ds:dev <你的registry>
 ./deploy/ds/build-image.sh pandora/hub-ds:dev    <你的registry>
