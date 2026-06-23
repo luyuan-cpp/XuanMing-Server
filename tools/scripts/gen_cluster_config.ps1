@@ -10,12 +10,24 @@
 # 两边都能用短名解析,所以生成的 endpoint 一致。
 #
 # 用法:
-#   pwsh tools/scripts/gen_cluster_config.ps1                # 生成到 run/cluster/etc
-#   pwsh tools/scripts/gen_cluster_config.ps1 -OutDir <dir>  # 自定义输出目录
+#   pwsh tools/scripts/gen_cluster_config.ps1                                  # 生成到 run/cluster/etc(allocator=mock)
+#   pwsh tools/scripts/gen_cluster_config.ps1 -OutDir <dir>                     # 自定义输出目录
+#   pwsh tools/scripts/gen_cluster_config.ps1 -AllocatorMode agones            # 线上/Agones 链路:真 Linux DS
+#   pwsh tools/scripts/gen_cluster_config.ps1 -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1
+#                                                                              # 本地 minikube(docker driver)+ udp-relay 回程
+#
+# 三条链路与 allocator 模式的对应(由 start.ps1 驱动):
+#   本地 windows (-Mode local)  → dev yaml 原样 mode=local,不过本生成器(宿主 exec Windows DS)
+#   docker        (-Mode docker) → -AllocatorMode mock  (容器内无真 DS,假地址只测后端链路)
+#   线上 k8s     (-Mode online) → -AllocatorMode agones(GameServer status.address 直连真 Linux DS)
+#   本地 k8s     (-Mode k8s)    → -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1 + udp_relay.ps1
 
 [CmdletBinding()]
 param(
-    [string]$OutDir
+    [string]$OutDir,
+    [ValidateSet('mock', 'agones')]
+    [string]$AllocatorMode = 'mock',
+    [string]$AllocatorAdvertiseHost = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,6 +51,7 @@ $Services = @(
     @{ Name = 'dialogue';       Conf = 'services/social/dialogue/etc/dialogue-dev.yaml';           Port = 50013 }
     @{ Name = 'push';           Conf = 'services/runtime/push/etc/push-dev.yaml';                  Port = 50014 }
     @{ Name = 'inventory';      Conf = 'services/economy/inventory/etc/inventory-dev.yaml';        Port = 50015 }
+    @{ Name = 'auction';        Conf = 'services/economy/auction/etc/auction-dev.yaml';            Port = 50016 }
     @{ Name = 'ds-allocator';   Conf = 'services/battle/ds_allocator/etc/ds_allocator-dev.yaml';   Port = 50020 }
     @{ Name = 'hub-allocator';  Conf = 'services/battle/hub_allocator/etc/hub_allocator-dev.yaml'; Port = 50021 }
     @{ Name = 'battle-result';  Conf = 'services/battle/battle_result/etc/battle_result-dev.yaml'; Port = 50022 }
@@ -63,9 +76,50 @@ function Convert-DevToCluster([string]$text) {
         $text = $text.Replace("localhost:$port", "${svc}:$port")
     }
 
-    # 3) allocator 本机 exec 模式 -> mock(容器/集群里没有 Windows PandoraServer.exe)
-    $text = $text -replace '(?m)^(\s*mode:\s*)"local"', '$1"mock"'
+    return $text
+}
 
+# allocator(ds-allocator / hub-allocator)专用改写:根据 -AllocatorMode 把 dev 的
+# mode: "local"(宿主 exec Windows DS)改成集群里能跑的模式。
+#   mock   → mode: "mock"(容器/集群内无 Windows PandoraServer.exe,返回确定性假地址)
+#   agones → mode: "agones" + 把整个 agones: 段替换成 in-cluster 确定性模板(真 Linux DS)
+function Rewrite-Allocator([string]$svcName, [string]$text) {
+    if ($AllocatorMode -eq 'mock') {
+        return ($text -replace '(?m)^(\s*mode:\s*)"local"', '$1"mock"')
+    }
+
+    # agones 模式:mode 改 agones
+    $text = $text -replace '(?m)^(\s*mode:\s*)"local"', '$1"agones"'
+
+    # 按服务选 fleet 与 timeout 键(ds=分配超时,hub=列表超时)
+    if ($svcName -eq 'hub-allocator') {
+        $fleet = 'pandora-hub'
+        $timeoutLine = '  list_timeout: "5s"'
+    } else {
+        $fleet = 'pandora-battle'
+        $timeoutLine = '  allocate_timeout: "5s"'
+    }
+
+    # 组装 in-cluster agones 段(投影 token/ca 自动轮转,allocator 每次请求重读 token 文件)
+    $lines = @(
+        'agones:'
+        '  enabled: true'
+        '  api_server: "https://kubernetes.default.svc"'
+        '  namespace: "default"'
+        "  fleet_name: `"$fleet`""
+        '  token_path: "/var/run/secrets/kubernetes.io/serviceaccount/token"'
+        '  ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"'
+        '  insecure_skip_tls_verify: false'
+    )
+    # advertise_host:本地 minikube(docker driver)用 127.0.0.1 + udp-relay 回程;线上留空用 status.address
+    if (-not [string]::IsNullOrWhiteSpace($AllocatorAdvertiseHost)) {
+        $lines += "  advertise_host: `"$AllocatorAdvertiseHost`""
+    }
+    $lines += $timeoutLine
+    $agonesBlock = ($lines -join "`n") + "`n`n"
+
+    # 把原 dev 的整个 agones: 段(直到下一个顶级注释块「# 本机拉起」)整块替换
+    $text = [regex]::Replace($text, '(?ms)^agones:\r?\n.*?(?=^# 本机拉起)', $agonesBlock)
     return $text
 }
 
@@ -79,10 +133,13 @@ foreach ($s in $Services) {
     }
     $raw = Get-Content $src -Raw
     $out = Convert-DevToCluster $raw
+    if ($s.Name -in @('ds-allocator', 'hub-allocator')) {
+        $out = Rewrite-Allocator $s.Name $out
+    }
     $dst = Join-Path $OutDir "$($s.Name).yaml"
     # 用 UTF8(无 BOM)写出,避免 yaml 解析器吃到 BOM
     [System.IO.File]::WriteAllText($dst, $out, (New-Object System.Text.UTF8Encoding($false)))
     $count++
 }
 
-Write-Host "[ OK ] 生成 $count 个集群版配置 -> $OutDir" -ForegroundColor Green
+Write-Host "[ OK ] 生成 $count 个集群版配置(allocator=$AllocatorMode) -> $OutDir" -ForegroundColor Green

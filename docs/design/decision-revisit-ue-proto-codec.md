@@ -45,10 +45,13 @@
 | 层 | 现状(妥协) | 改为 |
 |---|---|---|
 | 消息序列化 | 手写 `FPandoraProtoWriter` 填字段号 | **生成的 `*.pb.h` `SerializeToArray` / `ParseFromArray`**(libprotobuf) |
-| gRPC-Web 帧(5 字节头 + trailer) | `FPandoraGrpcWeb` | **保留**(走 Envoy 是 HTTP/1.1,本就不需要 grpc-cpp) |
+| gRPC-Web 帧（5 字节头 + trailer） | `FPandoraGrpcWeb` | **保留**（经 Envoy 是 gRPC-Web over HTTP，本就不需要 grpc-cpp） |
 | HTTP 传输 | `FHttpModule` | **保留** |
 
-**关键认知:gRPC-Web 经 Envoy 是普通 HTTP/1.1 请求,根本不需要 grpc-cpp 的传输栈。**
+**关键认知：gRPC-Web 经 Envoy 是普通 HTTP 请求，根本不需要 grpc-cpp 的传输栈。**
+> ⚠️ 2026-06-23 更新：客户端连接②（`PandoraBackendSubsystem`）已显式钉死 **HTTP/2 over TLS**
+> （`SetOption(HttpVersion, VERSION_2TLS)`，ALPN 协商不到 h2 时回落 HTTP/1.1）。早期本文写的
+> “是 HTTP/1.1”已过时；但这不影响本节结论——**无论 h1.1 还是 h2，都不需要 grpc-cpp 传输栈**。
 只有「消息编解码」需要 protobuf 运行时,而 **libprotobuf 比 grpc-cpp 轻一个量级**;
 后续若确认 UE 侧不依赖 descriptor/反射/text format,再评估 `optimize_for=LITE_RUNTIME`
 切到 lite runtime 减体积。
@@ -69,7 +72,7 @@
 |---|---|---|
 | protobuf 版本 | **v35.0**(latest release) | 用最新稳定版;gencode 与运行时同版本钉死 |
 | 二进制来源 | **源码随 UE(UBT)构建**,不用预编译库下发 | UE Linux DS 用自带 clang+libc++,系统预编译 `.a` 链不进(ABI 撕裂);UBT 编译自动匹配工具链,跨平台「免费」跟着编。UE 5.7.4 源码版集成第三方源码本就容易 |
-| 链接范围 | **只链 libprotobuf,不链 grpc-cpp** | gRPC-Web 经 Envoy 是 HTTP/1.1,传输层 `FPandoraGrpcWeb`+`FHttpModule` 足够;grpc-cpp 数十 MB + 跨平台坑,不引 |
+| 链接范围 | **只链 libprotobuf，不链 grpc-cpp** | gRPC-Web 经 Envoy 是普通 HTTP（客户端钉 HTTP/2 over TLS），传输层 `FPandoraGrpcWeb`+`FHttpModule` 足够；grpc-cpp 数十 MB + 跨平台坑，不引 |
 | grpc/cpp 生成插件 | **移除**(buf.gen.cpp.yaml 已删) | `*.grpc.pb.*` include grpc++ 头,UE 侧无该依赖会编不过;只留 `protocolbuffers/cpp` 生成消息 pb |
 | C++ 标准 | **C++17**(protobuf v35.0 要求) | UE 5.7 默认 ≥C++17,满足 |
 

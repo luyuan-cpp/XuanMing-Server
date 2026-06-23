@@ -11,7 +11,7 @@ server:
   grpc:
     network: tcp
     addr: ":50011"
-    timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
+    timeout: "22s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(≈20s 预算)+余量
     enable_reflection: true     # dev 开;prod 关(零值=false)
   http:
     network: tcp

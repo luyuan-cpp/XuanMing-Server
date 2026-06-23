@@ -258,7 +258,8 @@ static_resources:
   # UE DS 走 gRPC-Web(FHttpModule),内部服务(hub :50021 / ds :50020 / locator :50006 /
   # battle_result :50022)裸端口是原生 gRPC(h2c),这里用 grpc_web filter 做协议转换。
   # UE DS `UPandoraDSBackendSubsystem` 的 4 个 Endpoint 经 SetEndpoints / Game.ini 指向
-  # 本监听器(dev: https://host:8444,bUseTls=true),路径按 gRPC 全名路由到各内部服务。
+  # 本地 dev 监听器用 http://host:8444（bUseTls=false），避免 Linux DS 容器无法信任宿主 mkcert 根证书。
+  # 生产期再把 DS 面切回 TLS/mTLS，并配套给 DS 镜像注入受信 CA。
   #
   # ⚠️ 鉴权说明:本监听器**不挂 player jwt_authn**(DS→后端内部调用不带玩家 SessionToken,
   # 内部服务用 pmw.AuthOptional)。DS 身份真正校验发生在 UE NetDriver 层的 DSTicket 校验
@@ -271,18 +272,7 @@ static_resources:
         address: 0.0.0.0
         port_value: 8444
     filter_chains:
-    - transport_socket:
-        name: envoy.transport_sockets.tls
-        typed_config:
-          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
-          common_tls_context:
-            tls_certificates:
-            - certificate_chain:
-                filename: /etc/envoy/cert.pem
-              private_key:
-                filename: /etc/envoy/key.pem
-            alpn_protocols: [ "h2", "http/1.1" ]
-      filters:
+    - filters:
       - name: envoy.filters.network.http_connection_manager
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager

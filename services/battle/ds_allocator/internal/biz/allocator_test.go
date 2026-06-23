@@ -11,19 +11,72 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
+
+// 生产 readyPollInterval 是 1s;单测把它调小,避免每次 AllocateBattle 都等满一个轮询周期。
+func init() { readyPollInterval = 10 * time.Millisecond }
 
 func testCfg() conf.AllocatorConf {
 	return conf.AllocatorConf{
 		HeartbeatTimeout: config.Duration(15 * time.Second),
 		SweepInterval:    config.Duration(5 * time.Second),
 		BattleTTL:        config.Duration(2 * time.Hour),
+		ReadyWaitTimeout: config.Duration(1 * time.Second), // 测试用短超时,避免慢测
 		MockDSAddrHost:   "127.0.0.1",
 		MockDSPortBase:   30000,
 		MockDSPortRange:  1000,
+	}
+}
+
+// allocateReady 模拟正常时序:并发跑 AllocateBattle,待 warming 镜像出现后用对应 pod 上报一次
+// running 心跳,使 DS 进入 running,AllocateBattle 等到 ready 后返回。
+func allocateReady(t *testing.T, uc *AllocatorUsecase, repo *data.RedisBattleRepo, matchID uint64, playerIDs []uint64, mapID uint32, gameMode string) *AllocateResult {
+	t.Helper()
+	ctx := context.Background()
+	type out struct {
+		res *AllocateResult
+		err error
+	}
+	done := make(chan out, 1)
+	go func() {
+		res, err := uc.AllocateBattle(ctx, matchID, playerIDs, mapID, gameMode)
+		done <- out{res, err}
+	}()
+	feedReadyHeartbeat(t, uc, repo, matchID, int32(len(playerIDs)))
+	r := <-done
+	if r.err != nil {
+		t.Fatalf("allocate match %d: %v", matchID, r.err)
+	}
+	return r.res
+}
+
+// feedReadyHeartbeat 等 warming 镜像出现后,用其记录的 pod 上报一次 running 心跳。
+// 上报前确保 wall clock 已越过 AllocatedAtMs,保证 LastHeartbeatMs 严格大于分配时刻(满足 ready 判定)。
+func feedReadyHeartbeat(t *testing.T, uc *AllocatorUsecase, repo *data.RedisBattleRepo, matchID uint64, playerCount int32) {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(3 * time.Second)
+	var rec *dsv1.BattleStorageRecord
+	for {
+		b, found, err := repo.GetBattle(ctx, matchID)
+		if err == nil && found && b.DsPodName != "" {
+			rec = b
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("warming record for match %d never appeared", matchID)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	for time.Now().UnixMilli() <= rec.AllocatedAtMs {
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := uc.Heartbeat(ctx, matchID, rec.DsPodName, playerCount, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("heartbeat match %d: %v", matchID, err)
 	}
 }
 
@@ -90,29 +143,53 @@ func (m *mockLifecycle) PublishLifecycle(_ context.Context, evt *dsv1.DSLifecycl
 }
 
 func TestAllocateBattle(t *testing.T) {
-	ctx := context.Background()
-	uc, _ := newUsecase(t)
+	uc, repo := newUsecase(t)
 
-	res, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20, 30}, 1, "5v5_ranked")
-	if err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20, 30}, 1, "5v5_ranked")
 	if res.DSPodName != "pandora-battle-7" {
 		t.Fatalf("pod = %q, want pandora-battle-7", res.DSPodName)
 	}
 	if res.DSAddr != "127.0.0.1:30007" {
 		t.Fatalf("addr = %q, want 127.0.0.1:30007", res.DSAddr)
 	}
+	// AllocateBattle 返回前 DS 必须已用心跳确认 ready/running
+	got, _, _ := repo.GetBattle(context.Background(), 7)
+	if got.State != stateRunning {
+		t.Fatalf("state = %q, want running", got.State)
+	}
+	if got.LastHeartbeatMs <= got.AllocatedAtMs {
+		t.Fatalf("LastHeartbeatMs %d must be > AllocatedAtMs %d (real heartbeat)", got.LastHeartbeatMs, got.AllocatedAtMs)
+	}
+}
+
+// TestAllocateBattleReadyWaitTimeout:没有 DS 心跳 → 等待超时 → 回收 pod + 删镜像 + 返回分配失败
+// (绝不把 ds_addr 回给 matchmaker)。
+func TestAllocateBattleReadyWaitTimeout(t *testing.T) {
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, _ := newUsecaseWithAlloc(t, alloc)
+
+	_, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	if err == nil {
+		t.Fatal("expected allocation failure on ready wait timeout")
+	}
+	if errcode.As(err) != errcode.ErrDSAllocationFailed {
+		t.Fatalf("err code = %v, want ErrDSAllocationFailed", errcode.As(err))
+	}
+	if _, found, _ := repo.GetBattle(ctx, 7); found {
+		t.Fatal("battle record must be deleted after ready wait timeout")
+	}
+	if alloc.releases != 1 {
+		t.Fatalf("pod released %d times, want exactly 1", alloc.releases)
+	}
 }
 
 func TestAllocateBattleIdempotent(t *testing.T) {
 	ctx := context.Background()
-	uc, _ := newUsecase(t)
+	uc, repo := newUsecase(t)
 
-	first, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked")
-	if err != nil {
-		t.Fatalf("first allocate: %v", err)
-	}
+	first := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	// 幂等:已 ready/running 且有有效心跳 → 第二次直接返回已分配地址(不再等心跳)
 	second, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked")
 	if err != nil {
 		t.Fatalf("second allocate: %v", err)
@@ -126,9 +203,7 @@ func TestReleaseBattleIdempotent(t *testing.T) {
 	ctx := context.Background()
 	uc, repo := newUsecase(t)
 
-	if _, err := uc.AllocateBattle(ctx, 7, []uint64{10}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	allocateReady(t, uc, repo, 7, []uint64{10}, 1, "5v5_ranked")
 	if err := uc.ReleaseBattle(ctx, 7, "completed"); err != nil {
 		t.Fatalf("release: %v", err)
 	}
@@ -145,9 +220,8 @@ func TestHeartbeatUpdatesState(t *testing.T) {
 	ctx := context.Background()
 	uc, repo := newUsecase(t)
 
-	if _, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	// allocateReady 已上报一次 running 心跳;再上报一次刷 player_count=8
+	allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
 	res, err := uc.Heartbeat(ctx, 7, "pandora-battle-7", 8, "running", time.Now().UnixMilli())
 	if err != nil {
 		t.Fatalf("heartbeat: %v", err)
@@ -158,6 +232,33 @@ func TestHeartbeatUpdatesState(t *testing.T) {
 	got, _, _ := repo.GetBattle(ctx, 7)
 	if got.State != "running" || got.PlayerCount != 8 {
 		t.Fatalf("after heartbeat: %+v", got)
+	}
+}
+
+// TestHeartbeatPodMismatchRejected:镜像已绑定某 pod,另一个 pod(旧/孤儿 DS)上报 → 返回 stop
+// 且不写回镜像(不污染新对局的 state/心跳/player_count)。
+func TestHeartbeatPodMismatchRejected(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := newUsecase(t)
+
+	now := time.Now().UnixMilli()
+	rec := &dsv1.BattleStorageRecord{
+		MatchId: 7, DsPodName: "pandora-battle-7", DsAddr: "127.0.0.1:30007",
+		State: stateWarming, AllocatedAtMs: now, LastHeartbeatMs: now, PlayerCount: 2,
+	}
+	if err := repo.CreateBattle(ctx, rec, 2*time.Hour); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	res, err := uc.Heartbeat(ctx, 7, "pandora-battle-OLD", 9, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if res.Command != "stop" {
+		t.Fatalf("command = %q, want stop", res.Command)
+	}
+	got, _, _ := repo.GetBattle(ctx, 7)
+	if got.State != stateWarming || got.PlayerCount == 9 || got.LastHeartbeatMs != now {
+		t.Fatalf("mismatched pod must not update record: %+v", got)
 	}
 }
 
@@ -185,9 +286,7 @@ func TestHeartbeatOnAbandonedReturnsStopNoRefresh(t *testing.T) {
 	life := &mockLifecycle{failFirst: 1000} // 始终投递失败,abandoned 对局保留在 active 重试
 	uc.SetLifecyclePusher(life)
 
-	if _, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
 	backdate(t, repo, 7) // LastHeartbeatMs=1
 
 	// sweep #1:投递失败 → 标记 abandoned、回收 pod、保留在 active 待重试
@@ -251,14 +350,10 @@ func TestHeartbeatOnAbandonedReturnsStopNoRefresh(t *testing.T) {
 
 func TestListBattles(t *testing.T) {
 	ctx := context.Background()
-	uc, _ := newUsecase(t)
+	uc, repo := newUsecase(t)
 
-	if _, err := uc.AllocateBattle(ctx, 1, []uint64{10}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate 1: %v", err)
-	}
-	if _, err := uc.AllocateBattle(ctx, 2, []uint64{20}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate 2: %v", err)
-	}
+	allocateReady(t, uc, repo, 1, []uint64{10}, 1, "5v5_ranked")
+	allocateReady(t, uc, repo, 2, []uint64{20}, 1, "5v5_ranked")
 
 	all, err := uc.ListBattles(ctx, "")
 	if err != nil {
@@ -268,14 +363,14 @@ func TestListBattles(t *testing.T) {
 		t.Fatalf("list all = %d, want 2", len(all))
 	}
 
-	// 状态过滤:ready 全中,running 无
-	ready, _ := uc.ListBattles(ctx, "ready")
-	if len(ready) != 2 {
-		t.Fatalf("list ready = %d, want 2", len(ready))
-	}
+	// 状态过滤:等到 ready 心跳后两局都是 running,ready 无
 	running, _ := uc.ListBattles(ctx, "running")
-	if len(running) != 0 {
-		t.Fatalf("list running = %d, want 0", len(running))
+	if len(running) != 2 {
+		t.Fatalf("list running = %d, want 2", len(running))
+	}
+	ready, _ := uc.ListBattles(ctx, "ready")
+	if len(ready) != 0 {
+		t.Fatalf("list ready = %d, want 0", len(ready))
 	}
 }
 
@@ -283,9 +378,7 @@ func TestSweepMarksAbandoned(t *testing.T) {
 	ctx := context.Background()
 	uc, repo := newUsecase(t)
 
-	if _, err := uc.AllocateBattle(ctx, 7, []uint64{10}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	allocateReady(t, uc, repo, 7, []uint64{10}, 1, "5v5_ranked")
 	// 手动把 last_heartbeat_ms 回拨到远古,模拟心跳超时
 	if err := repo.UpdateBattleWithLock(ctx, 7, 3, func(b *dsv1.BattleStorageRecord) error {
 		b.LastHeartbeatMs = 1
@@ -319,9 +412,7 @@ func TestSweepDeliversAbandonedFirstTry(t *testing.T) {
 	life := &mockLifecycle{}
 	uc.SetLifecyclePusher(life)
 
-	if _, err := uc.AllocateBattle(ctx, 5, []uint64{1, 2}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	allocateReady(t, uc, repo, 5, []uint64{1, 2}, 1, "5v5_ranked")
 	backdate(t, repo, 5)
 
 	if err := uc.sweepOnce(ctx); err != nil {
@@ -347,9 +438,7 @@ func TestSweepReliableCompensation_RetryUntilDelivered(t *testing.T) {
 	life := &mockLifecycle{failFirst: 2} // 前两轮投递失败,第三轮成功
 	uc.SetLifecyclePusher(life)
 
-	if _, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
 	backdate(t, repo, 7)
 
 	// sweep #1:投递失败 → 标记 abandoned、回收 pod、保留在 active 待重试
@@ -404,9 +493,7 @@ func TestSweepReliableCompensation_KeepsTTLOnFailure(t *testing.T) {
 	life := &mockLifecycle{failFirst: 1000} // 始终投递失败
 	uc.SetLifecyclePusher(life)
 
-	if _, err := uc.AllocateBattle(ctx, 7, []uint64{10, 20}, 1, "5v5_ranked"); err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
 	backdate(t, repo, 7)
 
 	// 把 TTL 钉到一个已知的小值,便于检测是否被重试刷新(CreateBattle/backdate 会先设成 BattleTTL 2h)

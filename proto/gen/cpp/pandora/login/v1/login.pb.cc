@@ -879,11 +879,11 @@ constexpr IssueDSTicketResponse::ParseTableT_ IssueDSTicketResponse::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -893,27 +893,35 @@ constexpr IssueDSTicketResponse::ParseTableT_ IssueDSTicketResponse::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::login::v1::IssueDSTicketResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(IssueDSTicketResponse, _impl_.code_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.code_)}},
       // string ticket = 2 [json_name = "ticket"];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.ticket_)}},
-      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(IssueDSTicketResponse, _impl_.code_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.code_)}},
+      // string hub_ds_addr = 3 [json_name = "hubDsAddr"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.hub_ds_addr_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-      {PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string ticket = 2 [json_name = "ticket"];
       {PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.ticket_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_ds_addr = 3 [json_name = "hubDsAddr"];
+      {PROTOBUF_FIELD_OFFSET(IssueDSTicketResponse, _impl_.hub_ds_addr_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\46\0\6\0\0\0\0\0"
+      "\46\0\6\13\0\0\0\0"
       "pandora.login.v1.IssueDSTicketResponse"
       "ticket"
+      "hub_ds_addr"
     }},
   };
 }
@@ -924,6 +932,9 @@ inline constexpr IssueDSTicketResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         ticket_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_ds_addr_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
@@ -1598,11 +1609,13 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::IssueDSTicketResponse, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::IssueDSTicketResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::IssueDSTicketResponse, _impl_.ticket_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::IssueDSTicketResponse, _impl_.hub_ds_addr_),
+        2,
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -1628,8 +1641,8 @@ static const ::_pbi::MigrationSchema
         {38, sizeof(::pandora::login::v1::DSTicket)},
         {53, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
         {62, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
-        {69, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
-        {76, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {71, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
+        {78, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1668,27 +1681,28 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "Type\022\020\n\003jti\030\006 \001(\tR\003jtiJ\004\010\007\020\n\"q\n\024IssueDST"
     "icketRequest\022#\n\rsession_token\030\001 \001(\tR\014ses"
     "sionToken\022\027\n\007ds_type\030\002 \001(\tR\006dsType\022\033\n\tta"
-    "rget_id\030\003 \001(\004R\010targetId\"_\n\025IssueDSTicket"
+    "rget_id\030\003 \001(\004R\010targetId\"\177\n\025IssueDSTicket"
     "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
     "v1.ErrCodeR\004code\022\026\n\006ticket\030\002 \001(\tR\006ticket"
-    "\"O\n\025VerifyDSTicketRequest\022\026\n\006ticket\030\001 \001("
-    "\tR\006ticket\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodNam"
-    "e\"|\n\026VerifyDSTicketResponse\022.\n\004code\030\001 \001("
-    "\0162\032.pandora.common.v1.ErrCodeR\004code\0222\n\006c"
-    "laims\030\002 \001(\0132\032.pandora.login.v1.DSTicketR"
-    "\006claims2\334\003\n\014LoginService\022^\n\005Login\022\036.pand"
-    "ora.login.v1.LoginRequest\032\037.pandora.logi"
-    "n.v1.LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/login:\001*"
-    "\022b\n\006Logout\022\037.pandora.login.v1.LogoutRequ"
-    "est\032 .pandora.login.v1.LogoutResponse\"\025\202"
-    "\323\344\223\002\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTicket\022&"
-    ".pandora.login.v1.IssueDSTicketRequest\032\'"
-    ".pandora.login.v1.IssueDSTicketResponse\""
-    "\036\202\323\344\223\002\030\"\023/v1/ds/ticket/issue:\001*\022\204\001\n\016Veri"
-    "fyDSTicket\022\'.pandora.login.v1.VerifyDSTi"
-    "cketRequest\032(.pandora.login.v1.VerifyDST"
-    "icketResponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/ver"
-    "ify:\001*b\006proto3"
+    "\022\036\n\013hub_ds_addr\030\003 \001(\tR\thubDsAddr\"O\n\025Veri"
+    "fyDSTicketRequest\022\026\n\006ticket\030\001 \001(\tR\006ticke"
+    "t\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\"|\n\026Ver"
+    "ifyDSTicketResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\0222\n\006claims\030\002 "
+    "\001(\0132\032.pandora.login.v1.DSTicketR\006claims2"
+    "\334\003\n\014LoginService\022^\n\005Login\022\036.pandora.logi"
+    "n.v1.LoginRequest\032\037.pandora.login.v1.Log"
+    "inResponse\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006Logo"
+    "ut\022\037.pandora.login.v1.LogoutRequest\032 .pa"
+    "ndora.login.v1.LogoutResponse\"\025\202\323\344\223\002\017\"\n/"
+    "v1/logout:\001*\022\200\001\n\rIssueDSTicket\022&.pandora"
+    ".login.v1.IssueDSTicketRequest\032\'.pandora"
+    ".login.v1.IssueDSTicketResponse\"\036\202\323\344\223\002\030\""
+    "\023/v1/ds/ticket/issue:\001*\022\204\001\n\016VerifyDSTick"
+    "et\022\'.pandora.login.v1.VerifyDSTicketRequ"
+    "est\032(.pandora.login.v1.VerifyDSTicketRes"
+    "ponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/verify:\001*b\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -1699,7 +1713,7 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    1734,
+    1766,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
@@ -3507,7 +3521,8 @@ PROTOBUF_NDEBUG_INLINE IssueDSTicketResponse::Impl_::Impl_(
     [[maybe_unused]] const ::pandora::login::v1::IssueDSTicketResponse& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        ticket_(arena, from.ticket_) {}
+        ticket_(arena, from.ticket_),
+        hub_ds_addr_(arena, from.hub_ds_addr_) {}
 
 IssueDSTicketResponse::IssueDSTicketResponse(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3531,7 +3546,8 @@ PROTOBUF_NDEBUG_INLINE IssueDSTicketResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        ticket_(arena) {}
+        ticket_(arena),
+        hub_ds_addr_(arena) {}
 
 inline void IssueDSTicketResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -3549,6 +3565,7 @@ inline void IssueDSTicketResponse::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.ticket_.Destroy();
+  this_._impl_.hub_ds_addr_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -3586,8 +3603,13 @@ PROTOBUF_NOINLINE void IssueDSTicketResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.ticket_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.ticket_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.hub_ds_addr_.ClearNonDefaultToEmpty();
+    }
   }
   _impl_.code_ = 0;
   _impl_._has_bits_.Clear();
@@ -3614,7 +3636,7 @@ PROTOBUF_NOINLINE void IssueDSTicketResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -3629,6 +3651,16 @@ PROTOBUF_NOINLINE void IssueDSTicketResponse::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.IssueDSTicketResponse.ticket");
       target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string hub_ds_addr = 3 [json_name = "hubDsAddr"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_hub_ds_addr().empty()) {
+      const ::std::string& _s = this_._internal_hub_ds_addr();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.IssueDSTicketResponse.hub_ds_addr");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
 
@@ -3657,7 +3689,7 @@ PROTOBUF_NOINLINE void IssueDSTicketResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string ticket = 2 [json_name = "ticket"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_ticket().empty()) {
@@ -3665,8 +3697,15 @@ PROTOBUF_NOINLINE void IssueDSTicketResponse::Clear() {
                                         this_._internal_ticket());
       }
     }
-    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    // string hub_ds_addr = 3 [json_name = "hubDsAddr"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_hub_ds_addr().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_ds_addr());
+      }
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
@@ -3690,7 +3729,7 @@ void IssueDSTicketResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_ticket().empty()) {
         _this->_internal_set_ticket(from._internal_ticket());
@@ -3701,6 +3740,15 @@ void IssueDSTicketResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_hub_ds_addr().empty()) {
+        _this->_internal_set_hub_ds_addr(from._internal_hub_ds_addr());
+      } else {
+        if (_this->_impl_.hub_ds_addr_.IsDefault()) {
+          _this->_internal_set_hub_ds_addr("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_code() != 0) {
         _this->_impl_.code_ = from._impl_.code_;
       }
@@ -3726,6 +3774,7 @@ void IssueDSTicketResponse::InternalSwap(IssueDSTicketResponse* PROTOBUF_RESTRIC
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ticket_, &other->_impl_.ticket_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_ds_addr_, &other->_impl_.hub_ds_addr_, arena);
   swap(_impl_.code_, other->_impl_.code_);
 }
 

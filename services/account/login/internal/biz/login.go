@@ -247,6 +247,24 @@ func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64) (addr, t
 	return u.hubDSAddr, ticket, expMs, nil
 }
 
+// ResolveHubEndpoint 复用登录时的 hub 分配链路(resolveHub → hub_allocator.AssignHub),
+// 返回"当前有效"的大厅 DS 地址 + 一张全新的一次性 hub 票据。
+//
+// 用途(结算返回大厅):客户端不能复用登录时缓存的 hub_ds_addr / hub_ticket。
+//   - 旧 Hub DS 可能已被 Agones 判 Unhealthy/Deleted/换端口,缓存地址已失效;
+//   - 旧 hub 票据的 jti 已在首次进大厅时被消费,复用会被 DS 判 ticket replay。
+//
+// AssignHub 幂等且自愈:玩家原分片仍 ready → 重签票返回同地址;原分片下线 → 自动改派到
+// 健康分片并返回新地址。两种情况都返回新签的票据(新 jti),不破坏 DS ticket 一次性语义。
+//
+// hubAssigner 未配 / 调用失败时,resolveHub 回退自签票据 + 静态 hubDSAddr(与登录一致,不阻断)。
+func (u *LoginUsecase) ResolveHubEndpoint(ctx context.Context, playerID uint64) (addr, ticket string, expMs int64, err error) {
+	if playerID == 0 {
+		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
+	}
+	return u.resolveHub(ctx, playerID)
+}
+
 // hubTicketExpMs 解析 hub_allocator 签发的 hub 票据,取其 exp(unix ms)给客户端展示。
 //
 // login 与 hub_allocator 共享 JWT secret/issuer/audience,故 verifier 可直接验签。

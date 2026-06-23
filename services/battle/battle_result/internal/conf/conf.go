@@ -30,6 +30,11 @@ type BattleConf struct {
 	// W4 ③ player 未上线,留空;player 上线后填地址接真实当前 MMR。
 	PlayerAddr string `yaml:"player_addr,omitempty" json:"player_addr,omitempty"`
 
+	// MatchmakerAddr matchmaker 服务 gRPC 地址(弱依赖:空 → 不通知 matchmaker 释放撮合状态)。
+	// 用于结算/废弃落库后调 matchmaker.ReleaseMatch,释放残留 player→ticket claim + 票据 +
+	// match 镜像,修复"结算返回 Hub 后玩家无法再次匹配(StartMatch 4002)"。
+	MatchmakerAddr string `yaml:"matchmaker_addr,omitempty" json:"matchmaker_addr,omitempty"`
+
 	// OutboxPublishInterval player.update 出箱发布轮询间隔(W4 ⑨,默认 2s)。
 	OutboxPublishInterval config.Duration `yaml:"outbox_publish_interval,omitempty" json:"outbox_publish_interval,omitempty"`
 

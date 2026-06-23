@@ -299,6 +299,30 @@ spec: { selector: { app: inventory }, ports: [ { port: 50015, targetPort: 50015 
 ---
 apiVersion: apps/v1
 kind: Deployment
+metadata: { name: auction, namespace: pandora, labels: { app: auction } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: auction } }
+  template:
+    metadata: { labels: { app: auction } }
+    spec:
+      containers:
+        - name: auction
+          image: pandora/auction:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50016 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: auction.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: auction, namespace: pandora }
+spec: { selector: { app: auction }, ports: [ { port: 50016, targetPort: 50016 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata: { name: ds-allocator, namespace: pandora, labels: { app: ds-allocator } }
 spec:
   replicas: 1
@@ -306,6 +330,7 @@ spec:
   template:
     metadata: { labels: { app: ds-allocator } }
     spec:
+      serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: ds-allocator
           image: pandora/ds-allocator:dev
@@ -330,6 +355,7 @@ spec:
   template:
     metadata: { labels: { app: hub-allocator } }
     spec:
+      serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: hub-allocator
           image: pandora/hub-allocator:dev

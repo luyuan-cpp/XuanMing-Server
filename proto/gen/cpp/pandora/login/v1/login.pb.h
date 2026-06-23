@@ -1481,6 +1481,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IssueDSTicketResponse final : publi
   // accessors -------------------------------------------------------
   enum : int {
     kTicketFieldNumber = 2,
+    kHubDsAddrFieldNumber = 3,
     kCodeFieldNumber = 1,
   };
   // string ticket = 2 [json_name = "ticket"];
@@ -1498,6 +1499,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IssueDSTicketResponse final : publi
   ::std::string* PROTOBUF_NONNULL _internal_mutable_ticket();
 
   public:
+  // string hub_ds_addr = 3 [json_name = "hubDsAddr"];
+  void clear_hub_ds_addr() ;
+  [[nodiscard]] const ::std::string& hub_ds_addr() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_ds_addr(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_ds_addr();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_ds_addr();
+  void set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_ds_addr() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_ds_addr(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_ds_addr();
+
+  public:
   // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
@@ -1512,8 +1528,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IssueDSTicketResponse final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 53,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 64,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1542,6 +1558,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IssueDSTicketResponse final : publi
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr ticket_;
+    ::google::protobuf::internal::ArenaStringPtr hub_ds_addr_;
     int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3406,7 +3423,7 @@ inline void IssueDSTicketRequest::_internal_set_target_id(::uint64_t value) {
 inline void IssueDSTicketResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::pandora::common::v1::ErrCode IssueDSTicketResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.IssueDSTicketResponse.code)
@@ -3414,7 +3431,7 @@ inline ::pandora::common::v1::ErrCode IssueDSTicketResponse::code() const {
 }
 inline void IssueDSTicketResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.IssueDSTicketResponse.code)
 }
 inline ::pandora::common::v1::ErrCode IssueDSTicketResponse::_internal_code() const {
@@ -3488,6 +3505,70 @@ inline void IssueDSTicketResponse::set_allocated_ticket(::std::string* PROTOBUF_
     _impl_.ticket_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.IssueDSTicketResponse.ticket)
+}
+
+// string hub_ds_addr = 3 [json_name = "hubDsAddr"];
+inline void IssueDSTicketResponse::clear_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ds_addr_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& IssueDSTicketResponse::hub_ds_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.IssueDSTicketResponse.hub_ds_addr)
+  return _internal_hub_ds_addr();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void IssueDSTicketResponse::set_hub_ds_addr(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.hub_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.IssueDSTicketResponse.hub_ds_addr)
+}
+inline ::std::string* PROTOBUF_NONNULL IssueDSTicketResponse::mutable_hub_ds_addr()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_hub_ds_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.IssueDSTicketResponse.hub_ds_addr)
+  return _s;
+}
+inline const ::std::string& IssueDSTicketResponse::_internal_hub_ds_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_ds_addr_.Get();
+}
+inline void IssueDSTicketResponse::_internal_set_hub_ds_addr(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ds_addr_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL IssueDSTicketResponse::_internal_mutable_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_ds_addr_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE IssueDSTicketResponse::release_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.IssueDSTicketResponse.hub_ds_addr)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.hub_ds_addr_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_ds_addr_.Set("", GetArena());
+  }
+  return released;
+}
+inline void IssueDSTicketResponse::set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.hub_ds_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ds_addr_.IsDefault()) {
+    _impl_.hub_ds_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.IssueDSTicketResponse.hub_ds_addr)
 }
 
 // -------------------------------------------------------------------

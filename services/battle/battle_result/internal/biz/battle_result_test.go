@@ -113,7 +113,7 @@ func (e simpleErr) Error() string { return string(e) }
 
 func newTestUsecase(repo *fakeRepo, pusher PlayerUpdatePusher) *BattleResultUsecase {
 	cfg := conf.BattleConf{EloKFactor: 32, BaseMMR: 1500}
-	return NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), pusher, cfg)
+	return NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), pusher, nil, cfg)
 }
 
 // ── Elo ───────────────────────────────────────────────────────────────────────

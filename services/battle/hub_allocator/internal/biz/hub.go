@@ -338,6 +338,9 @@ func (u *HubUsecase) RunHeartbeatSweep(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "hub_heartbeat_sweep_stopped")
 			return
 		case <-ticker.C:
+			if err := u.reconcileShardTopology(ctx); err != nil {
+				plog.With(ctx).Warnw("msg", "hub_reconcile_topology_failed", "err", err)
+			}
 			if err := u.sweepOnce(ctx); err != nil {
 				plog.With(ctx).Warnw("msg", "hub_heartbeat_sweep_failed", "err", err)
 			}
@@ -377,6 +380,8 @@ func (u *HubUsecase) sweepOnce(ctx context.Context) error {
 // ── 内部辅助 ──────────────────────────────────────────────────────────────────
 
 // ensureShards:region 无候选分片时,按 Fleet 拓扑种入 Redis(W4 ⑤ Mock 期 lazy-seed)。
+// 热路径只在该 region 首次无分片时打 Fleet 拉起种子;已有分片直接返回(不打 k8s,保持 AssignHub 轻量)。
+// 拓扑漂移(pod 改名/下线)的对账交后台 reconcileShardTopology 处理,避免每次登录都查 apiserver。
 func (u *HubUsecase) ensureShards(ctx context.Context, region string) error {
 	shards, err := u.repo.ListShards(ctx)
 	if err != nil {
@@ -406,6 +411,89 @@ func (u *HubUsecase) ensureShards(ctx context.Context, region string) error {
 		}
 		if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 			return cerr
+		}
+	}
+	return nil
+}
+
+// reconcileShardTopology 后台按 Fleet 拓扑对账 Redis 分片镜像(每个 sweep tick 一次)。
+// 解决:minikube/Agones 重启后 pod 名/端口变化,旧分片在 Redis 里成为孤儿 —— 心跳超时只会把它
+// 标 draining(无 draining_since_ms),reclaimDrainedShards 跳过、sweep 又每 tick 续期 TTL,导致
+// 永久残留并让重登玩家拿到过期 hub_ds_addr。这里以 Fleet 为权威补齐 live 分片并清理 stale 孤儿。
+// 放后台而非 AssignHub 热路径:避免每次登录都打 k8s apiserver。
+// Fleet 暂不可用或某 region 候选为空时,保留现有镜像作为降级(绝不误删)。
+func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
+	shards, err := u.repo.ListShards(ctx)
+	if err != nil {
+		return err
+	}
+	// 需对账的 region:已存在分片的 region + 默认 region(便于发现首个分片)。
+	regions := map[string]struct{}{u.cfg.DefaultRegion: {}}
+	for _, s := range shards {
+		if s.Region != "" {
+			regions[s.Region] = struct{}{}
+		}
+	}
+	now := time.Now().UnixMilli()
+	for region := range regions {
+		cands, lerr := u.fleet.ListShards(ctx, region)
+		if lerr != nil {
+			plog.With(ctx).Warnw("msg", "reconcile_topology_list_failed", "region", region, "err", lerr)
+			continue // 降级:Fleet 不可用时保留现有镜像
+		}
+		if len(cands) == 0 {
+			continue // 候选为空(Fleet 尚未就绪):不误删现有镜像
+		}
+		live := make(map[string]struct{}, len(cands))
+		for _, c := range cands {
+			live[c.PodName] = struct{}{}
+			_, found, gerr := u.repo.GetShard(ctx, c.PodName)
+			if gerr != nil {
+				plog.With(ctx).Warnw("msg", "reconcile_topology_get_failed", "pod", c.PodName, "err", gerr)
+				continue
+			}
+			if found {
+				// 已有镜像:刷新地址/容量(pod 复用旧名但换端口/扩缩容时同步)。
+				if uerr := u.repo.UpdateShardWithLock(ctx, c.PodName, u.retry(), func(s *hubv1.HubShardStorageRecord) error {
+					s.HubAddr = c.Addr
+					s.Region = c.Region
+					s.ShardId = c.ShardID
+					s.Capacity = c.Capacity
+					return nil
+				}, u.shardTTL()); uerr != nil && errcode.As(uerr) != errcode.ErrHubNoAvailable {
+					plog.With(ctx).Warnw("msg", "reconcile_topology_update_failed", "pod", c.PodName, "err", uerr)
+				}
+				continue
+			}
+			// 新 pod:补齐镜像。
+			rec := &hubv1.HubShardStorageRecord{
+				HubPodName:      c.PodName,
+				HubAddr:         c.Addr,
+				Region:          c.Region,
+				ShardId:         c.ShardID,
+				PlayerCount:     0,
+				Capacity:        c.Capacity,
+				State:           stateReady,
+				LastHeartbeatMs: 0,
+				CreatedAtMs:     now,
+			}
+			if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
+				plog.With(ctx).Warnw("msg", "reconcile_topology_create_failed", "pod", c.PodName, "err", cerr)
+			}
+		}
+		// 清理同 region 的 stale 孤儿(Fleet 已不再返回的 pod):重登玩家命中即自愈重分。
+		for _, s := range shards {
+			if s.Region != region {
+				continue
+			}
+			if _, ok := live[s.HubPodName]; ok {
+				continue
+			}
+			if rerr := u.repo.RemoveShard(ctx, s.HubPodName); rerr != nil {
+				plog.With(ctx).Warnw("msg", "reconcile_topology_remove_stale_failed", "pod", s.HubPodName, "region", region, "err", rerr)
+				continue
+			}
+			plog.With(ctx).Warnw("msg", "reconcile_topology_remove_stale", "pod", s.HubPodName, "region", region)
 		}
 	}
 	return nil

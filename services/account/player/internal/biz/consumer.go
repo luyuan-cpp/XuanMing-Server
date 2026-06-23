@@ -1,8 +1,8 @@
 // consumer.go — kafka 消费 handler(W4 ④,2026-06-06)。
 //
 // player 订阅 pandora.player.update(battle_result 结算后发),解 proto → 幂等 UpdateMMR
-// (idempotency_key=match_id,不变量 §2)。decode 失败返 ErrInvalidArg
-// (W1-D2 简化版 kafkax 当前 log+ack,W2+ 接 retry/DLQ 时此 error 才进重试队列)。
+// (idempotency_key=match_id,不变量 §2)。decode 失败用 kafkax.Poison 包装(毒丸消息)
+// → 消费者直接投 DLQ;业务瞬时错误走重试→耗尽进 DLQ(不丢 MMR 更新)。
 package biz
 
 import (
@@ -23,7 +23,7 @@ func (u *PlayerUsecase) PlayerUpdateHandler() kafkax.Handler {
 	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
 		evt := &playerv1.PlayerUpdateEvent{}
 		if err := proto.Unmarshal(msg.Value, evt); err != nil {
-			return errcode.New(errcode.ErrInvalidArg, "decode player.update offset=%d: %v", msg.Offset, err)
+			return kafkax.Poison(errcode.New(errcode.ErrInvalidArg, "decode player.update offset=%d: %v", msg.Offset, err))
 		}
 		if evt.GetPlayerId() == 0 {
 			plog.With(ctx).Warnw("msg", "player_update_missing_player_id", "offset", msg.Offset)

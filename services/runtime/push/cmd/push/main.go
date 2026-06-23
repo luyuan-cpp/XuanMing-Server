@@ -129,18 +129,19 @@ func main() {
 // 没有 redis 就没有离线缓存,选 fail-fast 而不是假装运行)。
 func mustBuildRedis(cfg *conf.Config, h kratosHelper) redis.UniversalClient {
 	rc := cfg.Node.RedisClient
-	if rc.Host == "" {
-		h.Errorw("msg", "redis_host_empty", "hint", "node.redis_client.host required for push offline cache")
+	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
+	if rc.Host == "" && len(rc.Addrs) == 0 {
+		h.Errorw("msg", "redis_endpoint_empty", "hint", "node.redis_client.host (single) or addrs (cluster) required for push offline cache")
 		os.Exit(1)
 	}
 	rdb := redisx.NewUniversalClient(rc)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		h.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host)
+		h.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host, "addrs", rc.Addrs)
 		os.Exit(1)
 	}
-	h.Infow("msg", "redis_connected", "addr", rc.Host, "db", rc.DB)
+	h.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs, "db", rc.DB)
 	return rdb
 }
 

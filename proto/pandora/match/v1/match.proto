@@ -20,6 +20,12 @@ service MatchService {
   rpc CancelMatch(CancelMatchRequest) returns (CancelMatchResponse);
   rpc ConfirmMatch(ConfirmMatchRequest) returns (ConfirmMatchResponse);
   rpc GetMatchProgress(GetMatchProgressRequest) returns (GetMatchProgressResponse);
+
+  // ReleaseMatch 释放一场已结束(结算 / abandoned)对局的全部撮合状态:
+  // 删每个成员的 player→ticket 归属(SETNX claim)、本局全部排队票据、match 镜像、active 索引。
+  // 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不带玩家 JWT,
+  // 按 match_id(+ 兜底 player_ids)操作,非玩家鉴权路径。幂等:重复调用 / 已释放均安全。
+  rpc ReleaseMatch(ReleaseMatchRequest) returns (ReleaseMatchResponse);
 }
 
 enum MatchStage {
@@ -61,12 +67,27 @@ message ConfirmMatchResponse {
 }
 
 message GetMatchProgressRequest {
+  // 客户端句柄:match_id(已撮合)或 ticket_id(排队中)。
+  // 重新登录 / 换设备丢了句柄时填 0,服务端按 JWT player_id 反查本人当前票据(重连兜底)。
+  // 鉴权以 JWT player_id 为准:仅本局成员可查,match_id 不是授权凭证。
   uint64 match_id = 1;
 }
 
 message GetMatchProgressResponse {
   pandora.common.v1.ErrCode code = 1;
   MatchProgress progress = 2;
+}
+
+// ReleaseMatch:对局结束(结算 / abandoned)后释放撮合状态。
+// player_ids 为兜底:match 镜像若已过 TTL 消失,仍可凭它清掉残留的 player→ticket 归属(SETNX claim),
+// 保证玩家回 Hub 后能立即再次 StartMatch(不被 ErrMatchAlreadyMatching 拒)。
+message ReleaseMatchRequest {
+  uint64 match_id = 1;
+  repeated uint64 player_ids = 2;  // 兜底:match 镜像已过期时据此清 player 归属
+}
+
+message ReleaseMatchResponse {
+  pandora.common.v1.ErrCode code = 1;
 }
 
 message MatchProgress {

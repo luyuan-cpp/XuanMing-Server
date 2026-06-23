@@ -39,6 +39,7 @@ type AgonesGameServerAllocator struct {
 	apiServer       string // 已去尾部 /
 	namespace       string
 	fleetName       string
+	advertiseHost   string
 	tokenPath       string // "" 或 "-" → 不带 Authorization
 	allocateTimeout time.Duration
 	httpClient      *http.Client
@@ -78,6 +79,7 @@ func NewAgonesGameServerAllocator(cfg conf.AgonesConf) (*AgonesGameServerAllocat
 		apiServer:       strings.TrimRight(cfg.APIServer, "/"),
 		namespace:       cfg.Namespace,
 		fleetName:       cfg.FleetName,
+		advertiseHost:   strings.TrimSpace(cfg.AdvertiseHost),
 		tokenPath:       cfg.TokenPath,
 		allocateTimeout: timeout,
 		httpClient: &http.Client{
@@ -173,7 +175,11 @@ func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64
 			matchID, resp.Status.GameServerName, resp.Status.Address, len(resp.Status.Ports))
 	}
 
-	addr := fmt.Sprintf("%s:%d", resp.Status.Address, resp.Status.Ports[0].Port)
+	host := resp.Status.Address
+	if a.advertiseHost != "" {
+		host = a.advertiseHost
+	}
+	addr := fmt.Sprintf("%s:%d", host, resp.Status.Ports[0].Port)
 	return resp.Status.GameServerName, addr, nil
 }
 

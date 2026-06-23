@@ -13,6 +13,8 @@
 // Event message + 把 topic 名加进 etc/push-dev.yaml。
 package kafkax
 
+import "github.com/luyuancpp/pandora/pkg/config"
+
 // Push topic 名常量。
 //
 // 命名规则:`pandora.<domain>.<event_kind>`(小写 + 点分,跟 mysql/redis key 一致)。
@@ -75,6 +77,13 @@ const (
 	// key=match_id;W4 ③ ds_allocator 心跳超时发 ABANDONED → battle_result 写补偿记录(不变量 §4)
 	TopicDSLifecycle = "pandora.ds.lifecycle"
 )
+
+// BuildDLQTopic 构造死信队列 topic(infra.md §4.4),委托 config.BuildDLQTopic。
+//
+//	BuildDLQTopic("pandora.battle.result") → "pandora.dlq.battle.result"
+func BuildDLQTopic(originalTopic string) string {
+	return config.BuildDLQTopic(originalTopic)
+}
 
 // PushTopics 是 push 服务默认订阅的 topic 集合。
 //

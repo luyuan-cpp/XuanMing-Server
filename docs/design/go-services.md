@@ -242,9 +242,11 @@ FORMING → READY(全员 ready)→ MATCHING(进入匹配)→ IN_BATTLE → DISBA
 ```
 StartMatch(team_id) → match_id
 CancelMatch(match_id) → ok
-StreamMatchProgress(match_id) → stream
 ConfirmMatch(player_id, match_id, accept) → ok
+GetMatchProgress(match_id) → MatchProgress   # match_id 可为 0(重连兜底)
 ```
+> 无 `StreamMatchProgress`:go-zero zrpc 不支持 server stream;进度变化经 kafka
+> `pandora.match.progress`(key=player_id)推给 Hub DS 转 UE,客户端按需 `GetMatchProgress` 拉一次。
 
 **核心算法**:
 1. 按 MMR 分段
@@ -256,6 +258,13 @@ ConfirmMatch(player_id, match_id, accept) → ok
 **关键不变量**:
 - 同一玩家只能在一个 match 队列
 - 确认期内有人拒绝 → 其他人退回队列(保留排队时长)
+- **`GetMatchProgress` 鉴权以 JWT player_id 为准,`match_id` 不是授权凭证**
+  (不变量 §14):`match_id`/`ticket_id` 是 Snowflake、非秘密,谁拿到都能传。
+  服务端必须校验 caller 在该 match/ticket 成员里,否则一律按 `ErrMatchNotFound`
+  返回(不暴露他人对局存在性),杜绝外挂用任意 ID 拉别人对局的双方名单 / DS 地址。
+- **重连兜底**:`match_id=0` 时服务端用 JWT player_id 反查本人当前票据
+  (`GetPlayerTicket`),解决重新登录 / 换设备丢句柄后拿不到自己进度;READY 阶段
+  额外为本人现签新 battle DSTicket(新 jti,sub 锁定本人)。
 
 ---
 

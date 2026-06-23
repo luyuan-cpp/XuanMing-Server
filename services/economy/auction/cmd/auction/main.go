@@ -13,7 +13,7 @@
 //  4. Redis + Ping(强依赖:订单簿不可降级)
 //  5. Snowflake(order_id / match_id 生成)
 //  6. kafka producer(pandora.auction.match + pandora.auction.audit)→ pusher(弱依赖)
-//  7. SettlementLedger(配 inventory_addr 走真实结算;留空退回 NoopSettlementLedger 占位)
+//  7. SettlementLedger(配 inventory_addr 走真实结算;留空且 allow_noop_settlement=true 才退 Noop,否则 fail-fast)
 //  8. 装配 AuctionUsecase → AuctionService → gRPC/HTTP server
 //  9. kratos.New(...).Run() 阻塞
 package main
@@ -109,9 +109,11 @@ func main() {
 	}
 
 	// 4. Redis(强依赖:订单簿 ZSET 不可降级)
+	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
 	rc := cfg.Node.RedisClient
-	if rc.Host == "" {
-		helper.Errorw("msg", "redis_host_required")
+	if rc.Host == "" && len(rc.Addrs) == 0 {
+		helper.Errorw("msg", "redis_endpoint_required",
+			"hint", "set node.redis_client.host (single) or node.redis_client.addrs (cluster)")
 		os.Exit(1)
 	}
 	rdb := redisx.NewUniversalClient(rc)
@@ -120,11 +122,11 @@ func main() {
 	pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	if err := rdb.Ping(pingCtx).Err(); err != nil {
 		cancel()
-		helper.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host)
+		helper.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host, "addrs", rc.Addrs)
 		os.Exit(1)
 	}
 	cancel()
-	helper.Infow("msg", "redis_connected", "addr", rc.Host)
+	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
 	// 5. Snowflake(order_id / match_id 生成)
 	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
@@ -157,16 +159,21 @@ func main() {
 	}
 
 	// 7. SettlementLedger:配了 inventory_addr → 走真实结算(inventory 卖↔买资产原子对转 +
-	//    match_id 幂等);留空 → 退回 NoopSettlementLedger 占位(仅无交易联调 / 单测用)。
+	//    match_id 幂等);留空 → 仅当 allow_noop_settlement=true 才退回 NoopSettlementLedger
+	//    占位(无交易联调 / 单测),否则 fail-fast 防生产漏配后静默以「成交不结算」启动。
 	var ledger biz.SettlementLedger
 	if addr := cfg.Auction.InventoryAddr; addr != "" {
 		gl := data.NewGrpcInventoryLedger(addr)
 		defer func() { _ = gl.Close() }()
 		ledger = gl
 		helper.Infow("msg", "settlement_ledger_ready", "mode", "inventory_grpc", "inventory_addr", addr)
-	} else {
+	} else if cfg.Auction.AllowNoopSettlement {
 		ledger = biz.NoopSettlementLedger{}
-		helper.Warnw("msg", "settlement_ledger_noop", "hint", "auction.inventory_addr empty; matches settle as no-op")
+		helper.Warnw("msg", "settlement_ledger_noop", "hint", "auction.inventory_addr empty; matches settle as no-op (allow_noop_settlement=true)")
+	} else {
+		helper.Errorw("msg", "settlement_ledger_missing",
+			"hint", "auction.inventory_addr 必填(真实结算);仅联调/单测可显式设 auction.allow_noop_settlement=true")
+		os.Exit(1)
 	}
 
 	// 8. 装配链

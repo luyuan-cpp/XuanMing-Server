@@ -101,12 +101,12 @@ hub:
 # 集群内运行时 api_server/token_path/ca_path 可留空用 in-cluster 默认。
 agones:
   enabled: false
-  api_server: "https://127.0.0.1:61863"   # in-cluster 默认;minikube 外联填 https://<minikube-ip>:8443
+  api_server: "https://kubernetes.default.svc"  # in-cluster 默认;minikube 外联临时改本地,勿提交
   namespace: "default"
   fleet_name: "pandora-hub"
-  token_path: "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\pandora-allocator.token"  # in-cluster 默认;"-" 禁用 token
-  # ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
-  insecure_skip_tls_verify: true   # 仅 dev(minikube 外联自签证书时可临时开)
+  token_path: "/var/run/secrets/kubernetes.io/serviceaccount/token"  # in-cluster 默认;"-" 禁用 token,本机临时值勿提交
+  ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
+  insecure_skip_tls_verify: false  # in-cluster=false;minikube 外联自签时本地临时置 true,勿提交
   list_timeout: "5s"
 
 # 本机拉起一个常驻 Windows Hub DS 调试模式(mode=local 时生效)。

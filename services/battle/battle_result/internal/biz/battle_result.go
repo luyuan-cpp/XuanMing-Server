@@ -49,6 +49,18 @@ type PlayerUpdatePusher interface {
 	PushPlayerUpdate(ctx context.Context, playerID uint64, payload []byte) error
 }
 
+// MatchReleaser 通知 matchmaker 释放一场已结算/废弃对局的撮合状态(内部 RPC)。
+//
+// 修复:对局走完 READY → 进战斗 → 结算后,matchmaker 故意保留的 player→ticket 归属
+// (SETNX claim)+ 票据 + match 镜像本只能等 30min TTL 自然过期;期间玩家回 Hub 再次
+// StartMatch 会撞上残留 claim 报 ErrMatchAlreadyMatching(4002)。battle_result 落库后
+// 主动调此接口让 matchmaker 彻底释放,玩家回 Hub 即可立刻再次匹配。
+//
+// best-effort 弱依赖:实现可为 nil(matchmaker 地址未配),调用失败仅 Warn 不影响结算落库。
+type MatchReleaser interface {
+	ReleaseMatch(ctx context.Context, matchID uint64, playerIDs []uint64) error
+}
+
 // StaticMMRReader 是固定返回 base 的 MMRReader(player 服务未上线时兜底)。
 type StaticMMRReader struct {
 	base int
@@ -62,19 +74,38 @@ func (s *StaticMMRReader) GetMMR(_ context.Context, _ uint64) (int, error) { ret
 
 // BattleResultUsecase 是 battle_result 业务逻辑核心。
 type BattleResultUsecase struct {
-	repo   data.BattleRepo
-	mmr    MMRReader
-	pusher PlayerUpdatePusher
-	cfg    conf.BattleConf
+	repo     data.BattleRepo
+	mmr      MMRReader
+	pusher   PlayerUpdatePusher
+	releaser MatchReleaser
+	cfg      conf.BattleConf
 }
 
 // NewBattleResultUsecase 构造。pusher 可为 nil:player.update 已写事务出箱,
 // pusher/producer 不可用时出箱积压不丢,等 producer 可用后由发布器补发(当前需重启/重配)。
-func NewBattleResultUsecase(repo data.BattleRepo, mmr MMRReader, pusher PlayerUpdatePusher, cfg conf.BattleConf) *BattleResultUsecase {
+// releaser 可为 nil:matchmaker 地址未配时跳过对局状态释放(best-effort 弱依赖)。
+func NewBattleResultUsecase(repo data.BattleRepo, mmr MMRReader, pusher PlayerUpdatePusher, releaser MatchReleaser, cfg conf.BattleConf) *BattleResultUsecase {
 	if mmr == nil {
 		mmr = NewStaticMMRReader(cfg.BaseMMR)
 	}
-	return &BattleResultUsecase{repo: repo, mmr: mmr, pusher: pusher, cfg: cfg}
+	return &BattleResultUsecase{repo: repo, mmr: mmr, pusher: pusher, releaser: releaser, cfg: cfg}
+}
+
+// releaseMatch 落库成功后通知 matchmaker 释放本局撮合状态。best-effort:实现缺省 / 失败
+// 仅 Warn,绝不影响结算落库(弱依赖,不变量:结算是权威路径,释放只是清残留)。
+func (u *BattleResultUsecase) releaseMatch(ctx context.Context, result *battlev1.BattleResult) {
+	if u.releaser == nil {
+		return
+	}
+	playerIDs := make([]uint64, 0, len(result.GetStats()))
+	for _, s := range result.GetStats() {
+		if pid := s.GetPlayerId(); pid != 0 {
+			playerIDs = append(playerIDs, pid)
+		}
+	}
+	if err := u.releaser.ReleaseMatch(ctx, result.GetMatchId(), playerIDs); err != nil {
+		plog.With(ctx).Warnw("msg", "match_release_failed", "match_id", result.GetMatchId(), "err", err)
+	}
 }
 
 // ── ReportResult:幂等落库 + MMR ─────────────────────────────────────────────
@@ -125,6 +156,9 @@ func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1
 	plog.With(ctx).Infow("msg", "battle_result_recorded",
 		"match_id", result.GetMatchId(), "winner_team", result.GetWinnerTeam(),
 		"outcome", result.GetOutcome().String(), "players", len(result.GetStats()))
+
+	// 结算落库成功 → 通知 matchmaker 释放本局撮合状态(玩家回 Hub 可立刻再匹配)。
+	u.releaseMatch(ctx, result)
 	return false, nil
 }
 
@@ -170,6 +204,9 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 		return nil
 	}
 	plog.With(ctx).Infow("msg", "battle_abandoned_recorded", "match_id", matchID, "players", len(playerIDs))
+
+	// 废弃对局补偿落库成功 → 同样释放撮合状态(玩家可立刻再匹配)。
+	u.releaseMatch(ctx, result)
 	return nil
 }
 

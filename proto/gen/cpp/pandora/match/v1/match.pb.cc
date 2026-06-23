@@ -45,6 +45,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto, /* tracker*/ nullptr,},
         // ::pandora::match::v1::GetMatchProgressResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::match::v1::ReleaseMatchRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::match::v1::ReleaseMatchResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto, /* tracker*/ nullptr,},
         // ::pandora::match::v1::MatchProgress
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto, /* tracker*/ nullptr,},
         // ::pandora::match::v1::MatchProgressEvent
@@ -350,6 +354,300 @@ const ::_pbi::ClassData* StartMatchRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ReleaseMatchResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReleaseMatchResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReleaseMatchResponse, _impl_._has_bits_);
+};
+
+constexpr ReleaseMatchResponse::ParseTableT_ ReleaseMatchResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReleaseMatchResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::match::v1::ReleaseMatchResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReleaseMatchResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseMatchResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseMatchResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ReleaseMatchResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr ReleaseMatchResponse::ReleaseMatchResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReleaseMatchResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReleaseMatchResponse(arena);
+}
+constexpr auto ReleaseMatchResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ReleaseMatchResponse), alignof(ReleaseMatchResponse));
+}
+constexpr auto ReleaseMatchResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReleaseMatchResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReleaseMatchResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReleaseMatchResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReleaseMatchResponse>(), &ReleaseMatchResponse::ByteSizeLong,
+              &ReleaseMatchResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReleaseMatchResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[9],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReleaseMatchResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReleaseMatchResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReleaseMatchResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReleaseMatchResponse::InternalGenerateClassData_(
+            _default, &ReleaseMatchResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReleaseMatchResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReleaseMatchResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReleaseMatchResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReleaseMatchResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReleaseMatchResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReleaseMatchResponseGlobalsTypeInternal ReleaseMatchResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReleaseMatchResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReleaseMatchResponse_globals_.GetClassData();
+#else
+  return ReleaseMatchResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ReleaseMatchRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ReleaseMatchRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_._has_bits_);
+};
+
+constexpr ReleaseMatchRequest::ParseTableT_ ReleaseMatchRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::match::v1::ReleaseMatchRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_.player_ids_)}},
+      // uint64 match_id = 1 [json_name = "matchId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseMatchRequest, _impl_.match_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_.match_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 match_id = 1 [json_name = "matchId"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_.match_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ReleaseMatchRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::match::v1::ReleaseMatchRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0},
+        match_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ReleaseMatchRequest::ReleaseMatchRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ReleaseMatchRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReleaseMatchRequest(arena);
+}
+constexpr auto ReleaseMatchRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ReleaseMatchRequest), alignof(ReleaseMatchRequest));
+}
+constexpr auto ReleaseMatchRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ReleaseMatchRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReleaseMatchRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReleaseMatchRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReleaseMatchRequest>(), &ReleaseMatchRequest::ByteSizeLong,
+              &ReleaseMatchRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReleaseMatchRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[8],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ReleaseMatchRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ReleaseMatchRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ReleaseMatchRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ReleaseMatchRequest::InternalGenerateClassData_(
+            _default, &ReleaseMatchRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ReleaseMatchRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ReleaseMatchRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ReleaseMatchRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ReleaseMatchRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ReleaseMatchRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ReleaseMatchRequestGlobalsTypeInternal ReleaseMatchRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ReleaseMatchRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ReleaseMatchRequest_globals_.GetClassData();
+#else
+  return ReleaseMatchRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class MatchProgress::_Internal {
  public:
   using HasBits = decltype(::std::declval<MatchProgress>()._impl_._has_bits_);
@@ -507,7 +805,7 @@ constexpr auto MatchProgress::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
@@ -685,7 +983,7 @@ constexpr auto MatchMemberStorageRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
@@ -1606,7 +1904,7 @@ constexpr auto MatchTicketStorageRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
@@ -1819,7 +2117,7 @@ constexpr auto MatchStorageRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
@@ -1981,7 +2279,7 @@ constexpr auto MatchProgressEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto,
@@ -2247,6 +2545,18 @@ const ::uint32_t
         1,
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchRequest, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchRequest, _impl_.player_ids_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_._has_bits_),
         11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.match_id_),
@@ -2337,11 +2647,13 @@ static const ::_pbi::MigrationSchema
         {33, sizeof(::pandora::match::v1::ConfirmMatchResponse)},
         {38, sizeof(::pandora::match::v1::GetMatchProgressRequest)},
         {43, sizeof(::pandora::match::v1::GetMatchProgressResponse)},
-        {50, sizeof(::pandora::match::v1::MatchProgress)},
-        {69, sizeof(::pandora::match::v1::MatchProgressEvent)},
-        {78, sizeof(::pandora::match::v1::MatchMemberStorageRecord)},
-        {93, sizeof(::pandora::match::v1::MatchTicketStorageRecord)},
-        {110, sizeof(::pandora::match::v1::MatchStorageRecord)},
+        {50, sizeof(::pandora::match::v1::ReleaseMatchRequest)},
+        {57, sizeof(::pandora::match::v1::ReleaseMatchResponse)},
+        {62, sizeof(::pandora::match::v1::MatchProgress)},
+        {81, sizeof(::pandora::match::v1::MatchProgressEvent)},
+        {90, sizeof(::pandora::match::v1::MatchMemberStorageRecord)},
+        {105, sizeof(::pandora::match::v1::MatchTicketStorageRecord)},
+        {122, sizeof(::pandora::match::v1::MatchStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2353,6 +2665,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::match::v1::ConfirmMatchResponse_globals_,
         &::pandora::match::v1::GetMatchProgressRequest_globals_,
         &::pandora::match::v1::GetMatchProgressResponse_globals_,
+        &::pandora::match::v1::ReleaseMatchRequest_globals_,
+        &::pandora::match::v1::ReleaseMatchResponse_globals_,
         &::pandora::match::v1::MatchProgress_globals_,
         &::pandora::match::v1::MatchProgressEvent_globals_,
         &::pandora::match::v1::MatchMemberStorageRecord_globals_,
@@ -2379,59 +2693,65 @@ const char descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto[] ABSL
     "Id\"\207\001\n\030GetMatchProgressResponse\022.\n\004code\030"
     "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022"
     ";\n\010progress\030\002 \001(\0132\037.pandora.match.v1.Mat"
-    "chProgressR\010progress\"\270\002\n\rMatchProgress\022\031"
-    "\n\010match_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\016"
-    "2\034.pandora.match.v1.MatchStageR\005stage\022#\n"
-    "\rqueue_seconds\030\003 \001(\005R\014queueSeconds\0224\n\026es"
-    "timated_wait_seconds\030\004 \001(\005R\024estimatedWai"
-    "tSeconds\022$\n\016battle_ds_addr\030\005 \001(\tR\014battle"
-    "DsAddr\022#\n\rbattle_ticket\030\006 \001(\tR\014battleTic"
-    "ket\022\025\n\006team_a\030\007 \003(\004R\005teamA\022\025\n\006team_b\030\010 \003"
-    "(\004R\005teamBJ\004\010\t\020\024\"\216\001\n\022MatchProgressEvent\022;"
-    "\n\010progress\030\001 \001(\0132\037.pandora.match.v1.Matc"
-    "hProgressR\010progress\022 \n\014to_player_id\030\002 \001("
-    "\004R\ntoPlayerId\022\023\n\005ts_ms\030\003 \001(\003R\004tsMsJ\004\010\004\020\n"
-    "\"\325\001\n\030MatchMemberStorageRecord\022\033\n\tplayer_"
-    "id\030\001 \001(\004R\010playerId\022\027\n\007team_id\030\002 \001(\004R\006tea"
-    "mId\022\020\n\003mmr\030\003 \001(\005R\003mmr\022\027\n\007hero_id\030\004 \001(\rR\006"
-    "heroId\022\022\n\004side\030\005 \001(\005R\004side\022>\n\007confirm\030\006 "
-    "\001(\0162$.pandora.match.v1.MatchConfirmStatu"
-    "sR\007confirmJ\004\010\007\020\n\"\225\002\n\030MatchTicketStorageR"
-    "ecord\022\033\n\tticket_id\030\001 \001(\004R\010ticketId\022\027\n\007te"
-    "am_id\030\002 \001(\004R\006teamId\022\035\n\ncaptain_id\030\003 \001(\004R"
-    "\tcaptainId\022D\n\007members\030\004 \003(\0132*.pandora.ma"
-    "tch.v1.MatchMemberStorageRecordR\007members"
-    "\022\027\n\007avg_mmr\030\005 \001(\005R\006avgMmr\022$\n\016enqueued_at"
-    "_ms\030\006 \001(\003R\014enqueuedAtMs\022\031\n\010match_id\030\007 \001("
-    "\004R\007matchIdJ\004\010\010\020\n\"\355\002\n\022MatchStorageRecord\022"
-    "\031\n\010match_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001("
-    "\0162\034.pandora.match.v1.MatchStageR\005stage\022D"
-    "\n\007members\030\003 \003(\0132*.pandora.match.v1.Match"
-    "MemberStorageRecordR\007members\022\035\n\nticket_i"
-    "ds\030\004 \003(\004R\tticketIds\022\"\n\rcreated_at_ms\030\005 \001"
-    "(\003R\013createdAtMs\022.\n\023confirm_deadline_ms\030\006"
-    " \001(\003R\021confirmDeadlineMs\022$\n\016battle_ds_add"
-    "r\030\007 \001(\tR\014battleDsAddr\022#\n\rbattle_ticket\030\010"
-    " \001(\tR\014battleTicketJ\004\010\t\020\n*\276\001\n\nMatchStage\022"
-    "\033\n\027MATCH_STAGE_UNSPECIFIED\020\000\022\030\n\024MATCH_ST"
-    "AGE_QUEUEING\020\001\022\025\n\021MATCH_STAGE_FOUND\020\002\022\027\n"
-    "\023MATCH_STAGE_CONFIRM\020\003\022\032\n\026MATCH_STAGE_AL"
-    "LOCATING\020\004\022\025\n\021MATCH_STAGE_READY\020\005\022\026\n\022MAT"
-    "CH_STAGE_FAILED\020\006*\242\001\n\022MatchConfirmStatus"
-    "\022$\n MATCH_CONFIRM_STATUS_UNSPECIFIED\020\000\022 "
-    "\n\034MATCH_CONFIRM_STATUS_PENDING\020\001\022!\n\035MATC"
-    "H_CONFIRM_STATUS_ACCEPTED\020\002\022!\n\035MATCH_CON"
-    "FIRM_STATUS_REJECTED\020\0032\215\003\n\014MatchService\022"
-    "W\n\nStartMatch\022#.pandora.match.v1.StartMa"
-    "tchRequest\032$.pandora.match.v1.StartMatch"
-    "Response\022Z\n\013CancelMatch\022$.pandora.match."
-    "v1.CancelMatchRequest\032%.pandora.match.v1"
-    ".CancelMatchResponse\022]\n\014ConfirmMatch\022%.p"
-    "andora.match.v1.ConfirmMatchRequest\032&.pa"
-    "ndora.match.v1.ConfirmMatchResponse\022i\n\020G"
-    "etMatchProgress\022).pandora.match.v1.GetMa"
-    "tchProgressRequest\032*.pandora.match.v1.Ge"
-    "tMatchProgressResponseb\006proto3"
+    "chProgressR\010progress\"O\n\023ReleaseMatchRequ"
+    "est\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\035\n\nplayer"
+    "_ids\030\002 \003(\004R\tplayerIds\"F\n\024ReleaseMatchRes"
+    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
+    "ErrCodeR\004code\"\270\002\n\rMatchProgress\022\031\n\010match"
+    "_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\0162\034.pand"
+    "ora.match.v1.MatchStageR\005stage\022#\n\rqueue_"
+    "seconds\030\003 \001(\005R\014queueSeconds\0224\n\026estimated"
+    "_wait_seconds\030\004 \001(\005R\024estimatedWaitSecond"
+    "s\022$\n\016battle_ds_addr\030\005 \001(\tR\014battleDsAddr\022"
+    "#\n\rbattle_ticket\030\006 \001(\tR\014battleTicket\022\025\n\006"
+    "team_a\030\007 \003(\004R\005teamA\022\025\n\006team_b\030\010 \003(\004R\005tea"
+    "mBJ\004\010\t\020\024\"\216\001\n\022MatchProgressEvent\022;\n\010progr"
+    "ess\030\001 \001(\0132\037.pandora.match.v1.MatchProgre"
+    "ssR\010progress\022 \n\014to_player_id\030\002 \001(\004R\ntoPl"
+    "ayerId\022\023\n\005ts_ms\030\003 \001(\003R\004tsMsJ\004\010\004\020\n\"\325\001\n\030Ma"
+    "tchMemberStorageRecord\022\033\n\tplayer_id\030\001 \001("
+    "\004R\010playerId\022\027\n\007team_id\030\002 \001(\004R\006teamId\022\020\n\003"
+    "mmr\030\003 \001(\005R\003mmr\022\027\n\007hero_id\030\004 \001(\rR\006heroId\022"
+    "\022\n\004side\030\005 \001(\005R\004side\022>\n\007confirm\030\006 \001(\0162$.p"
+    "andora.match.v1.MatchConfirmStatusR\007conf"
+    "irmJ\004\010\007\020\n\"\225\002\n\030MatchTicketStorageRecord\022\033"
+    "\n\tticket_id\030\001 \001(\004R\010ticketId\022\027\n\007team_id\030\002"
+    " \001(\004R\006teamId\022\035\n\ncaptain_id\030\003 \001(\004R\tcaptai"
+    "nId\022D\n\007members\030\004 \003(\0132*.pandora.match.v1."
+    "MatchMemberStorageRecordR\007members\022\027\n\007avg"
+    "_mmr\030\005 \001(\005R\006avgMmr\022$\n\016enqueued_at_ms\030\006 \001"
+    "(\003R\014enqueuedAtMs\022\031\n\010match_id\030\007 \001(\004R\007matc"
+    "hIdJ\004\010\010\020\n\"\355\002\n\022MatchStorageRecord\022\031\n\010matc"
+    "h_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\0162\034.pan"
+    "dora.match.v1.MatchStageR\005stage\022D\n\007membe"
+    "rs\030\003 \003(\0132*.pandora.match.v1.MatchMemberS"
+    "torageRecordR\007members\022\035\n\nticket_ids\030\004 \003("
+    "\004R\tticketIds\022\"\n\rcreated_at_ms\030\005 \001(\003R\013cre"
+    "atedAtMs\022.\n\023confirm_deadline_ms\030\006 \001(\003R\021c"
+    "onfirmDeadlineMs\022$\n\016battle_ds_addr\030\007 \001(\t"
+    "R\014battleDsAddr\022#\n\rbattle_ticket\030\010 \001(\tR\014b"
+    "attleTicketJ\004\010\t\020\n*\276\001\n\nMatchStage\022\033\n\027MATC"
+    "H_STAGE_UNSPECIFIED\020\000\022\030\n\024MATCH_STAGE_QUE"
+    "UEING\020\001\022\025\n\021MATCH_STAGE_FOUND\020\002\022\027\n\023MATCH_"
+    "STAGE_CONFIRM\020\003\022\032\n\026MATCH_STAGE_ALLOCATIN"
+    "G\020\004\022\025\n\021MATCH_STAGE_READY\020\005\022\026\n\022MATCH_STAG"
+    "E_FAILED\020\006*\242\001\n\022MatchConfirmStatus\022$\n MAT"
+    "CH_CONFIRM_STATUS_UNSPECIFIED\020\000\022 \n\034MATCH"
+    "_CONFIRM_STATUS_PENDING\020\001\022!\n\035MATCH_CONFI"
+    "RM_STATUS_ACCEPTED\020\002\022!\n\035MATCH_CONFIRM_ST"
+    "ATUS_REJECTED\020\0032\354\003\n\014MatchService\022W\n\nStar"
+    "tMatch\022#.pandora.match.v1.StartMatchRequ"
+    "est\032$.pandora.match.v1.StartMatchRespons"
+    "e\022Z\n\013CancelMatch\022$.pandora.match.v1.Canc"
+    "elMatchRequest\032%.pandora.match.v1.Cancel"
+    "MatchResponse\022]\n\014ConfirmMatch\022%.pandora."
+    "match.v1.ConfirmMatchRequest\032&.pandora.m"
+    "atch.v1.ConfirmMatchResponse\022i\n\020GetMatch"
+    "Progress\022).pandora.match.v1.GetMatchProg"
+    "ressRequest\032*.pandora.match.v1.GetMatchP"
+    "rogressResponse\022]\n\014ReleaseMatch\022%.pandor"
+    "a.match.v1.ReleaseMatchRequest\032&.pandora"
+    ".match.v1.ReleaseMatchResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_deps[1] = {
@@ -2441,13 +2761,13 @@ static ::absl::once_flag descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto = {
     false,
     false,
-    2830,
+    3078,
     descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto,
     "pandora/match/v1/match.proto",
     &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_once,
     descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_deps,
     1,
-    13,
+    15,
     schemas,
     file_message_globals,
     TableStruct_pandora_2fmatch_2fv1_2fmatch_2eproto::offsets,
@@ -4176,6 +4496,441 @@ void GetMatchProgressResponse::InternalSwap(GetMatchProgressResponse* PROTOBUF_R
 }
 
 ::google::protobuf::Metadata GetMatchProgressResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ReleaseMatchRequest::ReleaseMatchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseMatchRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.match.v1.ReleaseMatchRequest)
+}
+PROTOBUF_NDEBUG_INLINE ReleaseMatchRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::match::v1::ReleaseMatchRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::match::v1::ReleaseMatchRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchRequest, _impl_.player_ids_)>()
+          , from.player_ids_
+        }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+ReleaseMatchRequest::ReleaseMatchRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ReleaseMatchRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseMatchRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ReleaseMatchRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.match_id_ = from._impl_.match_id_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.match.v1.ReleaseMatchRequest)
+}
+PROTOBUF_NDEBUG_INLINE ReleaseMatchRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::match::v1::ReleaseMatchRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ReleaseMatchRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
+
+inline void ReleaseMatchRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.match_id_ = {};
+}
+ReleaseMatchRequest::~ReleaseMatchRequest() {
+  // @@protoc_insertion_point(destructor:pandora.match.v1.ReleaseMatchRequest)
+  SharedDtor(*this);
+}
+inline void ReleaseMatchRequest::SharedDtor(MessageLite& self) {
+  ReleaseMatchRequest& this_ = static_cast<ReleaseMatchRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReleaseMatchRequest_class_data_ =
+        ReleaseMatchRequest::InternalGenerateClassData_(ReleaseMatchRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseMatchRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseMatchRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReleaseMatchRequest_class_data_.tc_table);
+  return ReleaseMatchRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseMatchRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseMatchRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ReleaseMatchRequest_globals_));
+  return ReleaseMatchRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ReleaseMatchRequest::ParseTableT_
+    ReleaseMatchRequest::_table_ =
+        ReleaseMatchRequest::InternalGenerateParseTable_(ReleaseMatchRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ReleaseMatchRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.match.v1.ReleaseMatchRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.player_ids_.Clear();
+  }
+  _impl_.match_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReleaseMatchRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReleaseMatchRequest& this_ = static_cast<const ReleaseMatchRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReleaseMatchRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReleaseMatchRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.match.v1.ReleaseMatchRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 match_id = 1 [json_name = "matchId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_match_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_match_id(), target);
+    }
+  }
+
+  // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            2, this_._internal_player_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.match.v1.ReleaseMatchRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReleaseMatchRequest::ByteSizeLong(const MessageLite& base) {
+  const ReleaseMatchRequest& this_ = static_cast<const ReleaseMatchRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReleaseMatchRequest::ByteSizeLong() const {
+  const ReleaseMatchRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.match.v1.ReleaseMatchRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
+    // uint64 match_id = 1 [json_name = "matchId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_match_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_match_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReleaseMatchRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ReleaseMatchRequest*>(&to_msg);
+  auto& from = static_cast<const ReleaseMatchRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.match.v1.ReleaseMatchRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_match_id() != 0) {
+        _this->_impl_.match_id_ = from._impl_.match_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReleaseMatchRequest::CopyFrom(const ReleaseMatchRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.match.v1.ReleaseMatchRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReleaseMatchRequest::InternalSwap(ReleaseMatchRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
+  swap(_impl_.match_id_, other->_impl_.match_id_);
+}
+
+::google::protobuf::Metadata ReleaseMatchRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ReleaseMatchResponse::ReleaseMatchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseMatchResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.match.v1.ReleaseMatchResponse)
+}
+ReleaseMatchResponse::ReleaseMatchResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReleaseMatchResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReleaseMatchResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ReleaseMatchResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ReleaseMatchResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+ReleaseMatchResponse::~ReleaseMatchResponse() {
+  // @@protoc_insertion_point(destructor:pandora.match.v1.ReleaseMatchResponse)
+  SharedDtor(*this);
+}
+inline void ReleaseMatchResponse::SharedDtor(MessageLite& self) {
+  ReleaseMatchResponse& this_ = static_cast<ReleaseMatchResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReleaseMatchResponse_class_data_ =
+        ReleaseMatchResponse::InternalGenerateClassData_(ReleaseMatchResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseMatchResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseMatchResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReleaseMatchResponse_class_data_.tc_table);
+  return ReleaseMatchResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReleaseMatchResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReleaseMatchResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ReleaseMatchResponse_globals_));
+  return ReleaseMatchResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ReleaseMatchResponse::ParseTableT_
+    ReleaseMatchResponse::_table_ =
+        ReleaseMatchResponse::InternalGenerateParseTable_(ReleaseMatchResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ReleaseMatchResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.match.v1.ReleaseMatchResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReleaseMatchResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReleaseMatchResponse& this_ = static_cast<const ReleaseMatchResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReleaseMatchResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReleaseMatchResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.match.v1.ReleaseMatchResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.match.v1.ReleaseMatchResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReleaseMatchResponse::ByteSizeLong(const MessageLite& base) {
+  const ReleaseMatchResponse& this_ = static_cast<const ReleaseMatchResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReleaseMatchResponse::ByteSizeLong() const {
+  const ReleaseMatchResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.match.v1.ReleaseMatchResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReleaseMatchResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ReleaseMatchResponse*>(&to_msg);
+  auto& from = static_cast<const ReleaseMatchResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.match.v1.ReleaseMatchResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReleaseMatchResponse::CopyFrom(const ReleaseMatchResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.match.v1.ReleaseMatchResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReleaseMatchResponse::InternalSwap(ReleaseMatchResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata ReleaseMatchResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

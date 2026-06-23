@@ -6,7 +6,13 @@
 //   - sarama ConsumerGroup + per-partition worker
 //   - Handler 接口让业务自己处理消息(不再绑定 DBTask schema)
 //
-// **W1-D2 阶段**:不实现 redis retry queue + DLQ,留 W2 battle_result 时再补。
+// **失败处理策略(per-consumer)**:见 ConsumerConfig.RetryPolicy / DLQ。
+//   - handler 返回 nil          → ack。
+//   - handler 返回 PoisonError   → 直接进 DLQ(解码/毒丸,重试无意义),DLQ 成功后 ack。
+//   - handler 返回其它 error     → 业务瞬时错误,按 RetryPolicy 进程内有限重试;
+//     重试耗尽后进 DLQ。DLQ 投递成功才 ack;DLQ 未配置(loss-tolerant 消费者)则 log 后 ack;
+//     DLQ 投递失败则**不 ack**,结束本次 claim 重新 join 后从未提交 offset 重放(at-least-once,
+//     battle_result / player.update 等不可丢事件靠此不丢)。
 package kafkax
 
 import (
@@ -14,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
 	klog "github.com/go-kratos/kratos/v2/log"
@@ -21,8 +28,44 @@ import (
 
 // Handler 是消息处理函数,由业务实现。
 //
-// 返回 nil → ack。返回非 nil → 当前实现:log + ack(W1-D2 简化版,W2 接入 retry/DLQ 时改)。
+// 返回 nil → ack。返回非 nil → 按消费者 RetryPolicy / DLQ 策略处理(见 package 文档)。
+// 解码失败 / 永久性错误请用 Poison(err) 包装返回,消费者会跳过重试直接进 DLQ。
 type Handler func(ctx context.Context, msg *sarama.ConsumerMessage) error
+
+// PoisonError 标记不可重试的「毒丸」消息(解码失败 / 格式非法等)。
+// handler 返回它(或 Poison(err))→ 消费者跳过重试,直接投 DLQ。
+type PoisonError struct{ Err error }
+
+func (e *PoisonError) Error() string {
+	if e.Err == nil {
+		return "poison message"
+	}
+	return "poison message: " + e.Err.Error()
+}
+
+func (e *PoisonError) Unwrap() error { return e.Err }
+
+// Poison 把 err 包装成不可重试的毒丸错误。
+func Poison(err error) error { return &PoisonError{Err: err} }
+
+func isPoison(err error) bool {
+	var p *PoisonError
+	return errors.As(err, &p)
+}
+
+// RetryPolicy 控制业务瞬时错误的进程内重试。零值 = 不重试(MaxRetries=0)。
+type RetryPolicy struct {
+	// MaxRetries 是业务瞬时错误的进程内重试次数(不含首次)。<=0 表示不重试,首次失败即进 DLQ。
+	MaxRetries int
+	// Backoff 是每次重试前的固定退避。<=0 视为 200ms。
+	Backoff time.Duration
+}
+
+// DLQProducer 是死信队列投递抽象(kafkax.KeyOrderedProducer 直接满足)。
+// key 用原消息 key 保序;payload 为原始 bytes。
+type DLQProducer interface {
+	SendRaw(ctx context.Context, key string, payload []byte) error
+}
 
 // KeyOrderedConsumer 是 Pandora 通用 Kafka 消费者。
 type KeyOrderedConsumer struct {
@@ -31,6 +74,8 @@ type KeyOrderedConsumer struct {
 	groupID        string
 	partitionCount int32
 	handler        Handler
+	retry          RetryPolicy
+	dlq            DLQProducer
 	workers        map[int32]*worker
 	wg             *sync.WaitGroup
 	ctx            context.Context
@@ -44,6 +89,10 @@ type ConsumerConfig struct {
 	GroupID        string
 	PartitionCount int32
 	Version        sarama.KafkaVersion // 默认 V3_6_0_0
+	// RetryPolicy 控制业务瞬时错误的进程内重试。零值 = 不重试。
+	RetryPolicy RetryPolicy
+	// DLQ 非 nil 时,重试耗尽 / 毒丸消息投递到死信队列;为 nil 时退化为「log + ack」(loss-tolerant 消费者)。
+	DLQ DLQProducer
 }
 
 // NewKeyOrderedConsumer 创建消费者。
@@ -77,6 +126,8 @@ func NewKeyOrderedConsumer(cfg ConsumerConfig, handler Handler) (*KeyOrderedCons
 		groupID:        cfg.GroupID,
 		partitionCount: cfg.PartitionCount,
 		handler:        handler,
+		retry:          cfg.RetryPolicy,
+		dlq:            cfg.DLQ,
 		workers:        make(map[int32]*worker),
 		wg:             &sync.WaitGroup{},
 		ctx:            ctx,
@@ -149,16 +200,80 @@ func (k *KeyOrderedConsumer) ConsumeClaim(
 			if !ok {
 				return nil
 			}
-			if err := k.handler(sess.Context(), msg); err != nil {
-				// W1-D2 简化:log + ack。W2 写 battle_result 时改为 retry queue / DLQ。
-				klog.Errorf("[kafkax] handler err topic=%s partition=%d offset=%d key=%s: %v",
-					msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
+			if k.processMessage(sess.Context(), msg) {
+				sess.MarkMessage(msg, "")
+				continue
 			}
-			sess.MarkMessage(msg, "")
+			// 未 ack(DLQ 投递失败 / 无补偿通道且消息不可丢):结束本次 claim,
+			// rejoin 后从未提交 offset 重放(at-least-once)。
+			klog.Errorf("[kafkax] message not acked, rejoin to replay topic=%s partition=%d offset=%d",
+				msg.Topic, msg.Partition, msg.Offset)
+			return nil
 		case <-sess.Context().Done():
 			return nil
 		}
 	}
+}
+
+// processMessage 处理单条消息,返回是否应 ack(MarkMessage)。
+//
+//   - handler 成功            → true(ack)。
+//   - 毒丸(PoisonError)      → 投 DLQ,DLQ 成功 true / 失败 false。
+//   - 业务瞬时错误            → 进程内重试 RetryPolicy.MaxRetries 次;成功 true;耗尽后投 DLQ。
+func (k *KeyOrderedConsumer) processMessage(ctx context.Context, msg *sarama.ConsumerMessage) bool {
+	err := k.handler(ctx, msg)
+	if err == nil {
+		return true
+	}
+	if isPoison(err) {
+		klog.Errorf("[kafkax] poison message → DLQ topic=%s partition=%d offset=%d key=%s: %v",
+			msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
+		return k.toDLQ(ctx, msg)
+	}
+
+	backoff := k.retry.Backoff
+	if backoff <= 0 {
+		backoff = 200 * time.Millisecond
+	}
+	for attempt := 1; attempt <= k.retry.MaxRetries; attempt++ {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(backoff):
+		}
+		err = k.handler(ctx, msg)
+		if err == nil {
+			return true
+		}
+		if isPoison(err) {
+			klog.Errorf("[kafkax] poison on retry %d → DLQ topic=%s partition=%d offset=%d key=%s: %v",
+				attempt, msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
+			return k.toDLQ(ctx, msg)
+		}
+		klog.Warnf("[kafkax] handler retry %d/%d failed topic=%s partition=%d offset=%d key=%s: %v",
+			attempt, k.retry.MaxRetries, msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
+	}
+	klog.Errorf("[kafkax] handler retries exhausted → DLQ topic=%s partition=%d offset=%d key=%s: %v",
+		msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
+	return k.toDLQ(ctx, msg)
+}
+
+// toDLQ 把消息投递到死信队列。返回是否应 ack。
+//   - DLQ 未配置 → log 后 ack(loss-tolerant 消费者沿用旧「log + ack」行为)。
+//   - DLQ 投递成功 → ack。
+//   - DLQ 投递失败 → 不 ack(由 ConsumeClaim 重放,保证不可丢事件不丢)。
+func (k *KeyOrderedConsumer) toDLQ(ctx context.Context, msg *sarama.ConsumerMessage) bool {
+	if k.dlq == nil {
+		return true // 无 DLQ 通道:沿用旧行为 log + ack(已在调用点 log)
+	}
+	if err := k.dlq.SendRaw(ctx, string(msg.Key), msg.Value); err != nil {
+		klog.Errorf("[kafkax] DLQ send failed (will not ack) topic=%s partition=%d offset=%d key=%s: %v",
+			msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
+		return false
+	}
+	klog.Warnf("[kafkax] message moved to DLQ topic=%s partition=%d offset=%d key=%s",
+		msg.Topic, msg.Partition, msg.Offset, string(msg.Key))
+	return true
 }
 
 // worker 占位(W2 实现 per-partition worker 队列时启用)。

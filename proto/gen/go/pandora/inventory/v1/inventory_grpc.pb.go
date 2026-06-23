@@ -53,9 +53,11 @@ type InventoryServiceClient interface {
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(ctx context.Context, in *SellItemRequest, opts ...grpc.CallOption) (*SellItemResponse, error)
 	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
-	//   同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
-	//     卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
-	//     买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	//
+	//	同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
+	//	  卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
+	//	  买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	//
 	// 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
 	// 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
@@ -133,9 +135,11 @@ type InventoryServiceServer interface {
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error)
 	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
-	//   同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
-	//     卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
-	//     买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	//
+	//	同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
+	//	  卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
+	//	  买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	//
 	// 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
 	// 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。

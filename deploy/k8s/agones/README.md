@@ -8,6 +8,117 @@
 
 ---
 
+## 🚀 真 DS 闭环·快速开始（无 mock，线上等价）
+
+想跑「登录 → 大厅 Hub DS → 匹配进战斗 DS → 结算回大厅」的**真 DS 全链路**（用真 UE Linux DS 包，
+不是 mock 假地址），两条命令：
+
+```powershell
+# 1) 起 minikube + 装 Agones + apply RBAC/Fleet + 部署 16 个后端服务(allocator=agones)
+pwsh tools/scripts/start.ps1 -Mode k8s
+
+# 2) load 真 DS 镜像 + 等 Fleet Ready + 后台起 UDP 回程中继 + 打印验收清单
+pwsh tools/scripts/e2e_k8s.ps1
+```
+
+`e2e_k8s.ps1` 自动完成：校验集群/Agones/Fleet 就绪 → 从 Fleet yaml 解析真 DS 镜像精确 tag 并
+`minikube image load` → 起宿主 Envoy 桥接(`k8s_envoy_bridge.ps1`：对 16 个 k8s Service 做
+`kubectl port-forward` + 拉起 docker envoy `:8443`/`:8444`) → 轮询等 `pandora-battle` /
+`pandora-hub` Ready → docker driver 下拉起容器版 UDP 回程中继 → 打印端到端验收清单与
+实时观察命令。常用开关：`-NoRelay`（自己起中继）、`-SkipImageLoad`（镜像已 load）、
+`-TimeoutSec`（等 Fleet 超时）。
+
+> **DS 回调为什么能通**：k8s 模式下 16 个 Go 服务都在 `pandora` ns 的 ClusterIP 后面,而 UE
+> 客户端/DS 只会打宿主 Envoy(`:8443`/`:8444`)。`k8s_envoy_bridge.ps1` 把每个 Service
+> `port-forward` 到 `127.0.0.1:500xx`,正好对上现有 `envoy.yaml` 的 `host.docker.internal:500xx`
+> upstream,所以 DS 的 `host.docker.internal:8444` 回调能真正落到 k8s 服务,闭环不再断。
+
+> **为什么不是 `-Mode docker`**：docker-compose 里 ds_allocator 跑在 Linux 容器内,既不能 exec
+> Windows DS、又没有 Agones 可调,代码只有 local/agones/mock 三种 provider,故 docker 只能落 mock。
+> 要真 DS 用 `-Mode k8s`(本机 Agones,线上等价)或 `-Mode local`(本机直接 exec Windows DS)。
+>
+> **前置**:真 UE Linux DS 镜像须先由 UE 侧打包到 `deploy/ds/stage/LinuxServer`。本地可用
+> `deploy/ds/build-image-minikube.ps1` 直接构建到 minikube 内置 Docker daemon（然后跑
+> `e2e_k8s.ps1 -SkipImageLoad`），也可用 `deploy/ds/build-image.sh` 在宿主构建
+> `pandora/battle-ds:dev` / `pandora/hub-ds:dev` 后让 `e2e_k8s.ps1` 执行 `minikube image load`。
+
+详细环境准备 / 手测分配 / 心跳 stub 见下文各节。
+
+---
+
+## 🔁 电脑重启后 / 一键重置
+
+**电脑重启后**(minikube 容器被停、宿主 go 进程/UDP 中继都没了,但集群状态和已 load 的镜像都还在磁盘上):
+
+```powershell
+pwsh tools/scripts/start.ps1 -Mode k8s -Resume   # minikube start + 等 Pod 自动恢复(不重建镜像)
+pwsh tools/scripts/e2e_k8s.ps1                    # 重新起 UDP 中继 + 校验 Fleet + 打印验收清单
+```
+
+`-Resume` 是**快路径**:只 `minikube start`(集群/镜像都在磁盘,Pod 自动重建)再等关键 Pod 就绪,
+**不重新 build/load 16 个镜像**,几十秒就回到上次状态。其它模式同理:
+
+| 模式 | `-Resume` 做什么 |
+|---|---|
+| `k8s` | `minikube start` + 等 login/ds-allocator/hub-allocator 就绪 |
+| `docker` / `intranet` | `docker compose up -d`(不加 `--build`,不重建镜像) |
+| `local` | 基础设施容器随 Docker 自动恢复 + 重启宿主 go 服务 |
+| `online` | 不适用(远端集群 Pod 自管) |
+
+**环境乱了 / 想从头来**(`-Resume` 报错说找不到镜像或 Fleet,多半是之前 `minikube delete` 过):
+
+```powershell
+pwsh tools/scripts/start.ps1 -Mode k8s -Reset    # minikube delete 后全新部署(会重建+重 load 镜像,较慢)
+pwsh tools/scripts/e2e_k8s.ps1
+```
+
+`-Reset` = 彻底清掉旧状态再全新起(k8s 会 `minikube delete`;docker 会 `down -v` 清卷)。
+线上 `online` 模式**禁用** `-Reset`(不对生产/测试集群做销毁式重置)。
+
+> 经验法则:**正常重启用 `-Resume`(快),状态损坏才用 `-Reset`(慢但干净)。**
+
+---
+
+## ☁️ 线上真集群部署(online:测试服 / 生产 kbs)
+
+线上 Fleet 跟本地有两处**必须换掉**,否则远端拉不到镜像、DS 回调打到不存在的宿主地址:
+  1. DS 镜像:本地是 `pandora/battle-ds:dev` / `pandora/hub-ds:dev`(只在你机器上),远端要换成 registry 可拉取的完整镜像名
+  2. DS 回调地址:本地是 `host.docker.internal:8444`,远端要换成集群内 Envoy/网关的 DS 面 Service DNS
+
+所以 `-Mode online` **强制要求**这几个参数(缺一即 fail-fast,不会把本地 Fleet 误打到远端):
+
+```powershell
+# 测试服集群(-Env test)
+pwsh tools/scripts/start.ps1 -Mode online -Env test `
+  -Registry registry.mycorp.com -Tag v1.2.3 `
+  -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 `
+  -HubDsImage    registry.mycorp.com/pandora/hub-ds:v1.2.3 `
+  -DsGatewayAddr pandora-envoy.pandora.svc:8444
+
+# 生产 kbs 集群(-Env prod,会要求二次输入 kube-context + 大写 PROD 确认)
+pwsh tools/scripts/start.ps1 -Mode online -Env prod `
+  -Registry registry.mycorp.com -Tag v1.2.3 `
+  -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 `
+  -HubDsImage    registry.mycorp.com/pandora/hub-ds:v1.2.3 `
+  -DsGatewayAddr pandora-envoy.pandora.svc:8444
+```
+
+| 参数 | 作用 | 默认 |
+|---|---|---|
+| `-Registry` / `-Tag` | 16 个 Go 服务镜像来源(kustomize overlay 覆盖占位镜像) | 必填 |
+| `-BattleDsImage` / `-HubDsImage` | 远端 Fleet 的真 DS 镜像名(apply 前临时改写 Fleet yaml,**不改仓库文件**) | 必填 |
+| `-DsGatewayAddr` | 改写 Fleet 里 3 个 `host.docker.internal:8444` 回调 env → 集群内 Envoy DS 面 DNS | 必填 |
+| `-DsGatewayTls` | 改写 `PANDORA_DS_ALLOCATOR_TLS`(线上 Envoy 终止 TLS 一般 `1`) | `1` |
+| `-BuildPush` | 本地构建并 push 16 个 Go 服务镜像到 `-Registry`(发布动作,需人工授权) | 关 |
+
+> Fleet 改写是**在临时文件里做再 apply**:`20-fleet-battle.yaml` / `30-fleet-hub.yaml` 仓库原文
+> 保持本地 dev 值,git 不会脏。线上 Agones 须由集群管理员预装(脚本只 apply 业务 RBAC/Fleet,不 helm install)。
+>
+> DS 镜像本身仍由 UE 侧 `deploy/ds/build-image.sh` 构建后,由人手动 `docker push` 到 registry
+> (与 Go 服务镜像分开,脚本不替你 push DS 镜像)。
+
+---
+
 ## 0. 两种 DS 模型（先理解再联调）
 
 | | 战斗 DS（ds_allocator） | 大厅 Hub DS（hub_allocator） |
@@ -71,7 +182,12 @@ kubectl get gameservers -L agones.dev/fleet,pandora.dev/region
 # 期望:pandora-battle 2 个 Ready, pandora-hub 3 个 Ready(region=cn)
 ```
 
-## 3. 让本机 allocator 连 minikube apiserver（Codex 执行 + 给 Claude 复核）
+## 3. 让本机 allocator 连 minikube apiserver
+
+> ⚠️ **提交规范**：两个 allocator 的 `*-dev.yaml` 基线一律保持 `mode: local`、`agones.enabled: false`,
+> 且 `api_server` / `token_path` 用通用 in-cluster 默认值。**不要把本机 minikube 的临时 apiserver 地址、
+> token 路径提交进仓库**。本地切到 Agones 链路靠 `start.ps1 -Mode k8s`(脚本生成 cluster 配置),
+> 见 `tools/scripts/gen_cluster_config.ps1` 的 `-AllocatorMode agones`。
 
 allocator 当前是**本机进程**（docker-compose dev 之外单独跑），需要把它指向 minikube
 apiserver + 提供 `pandora-allocator` ServiceAccount 的 token。
@@ -85,7 +201,7 @@ $token = (kubectl create token pandora-allocator -n default --duration=24h)
 Set-Content -Path "$env:TEMP\pandora-allocator.token" -Value $token -NoNewline
 ```
 
-然后改两个 allocator 的 dev yaml 的 `agones` 段（**Claude 已留好字段，Codex 只填值**）：
+然后**临时**改两个 allocator 的 dev yaml 的 `agones` 段（**只在本机改，验完即还原，勿提交**）：
 
 ```yaml
 # ds_allocator-dev.yaml / hub_allocator-dev.yaml
@@ -97,10 +213,42 @@ agones:
   token_path: "C:\\Users\\<you>\\AppData\\Local\\Temp\\pandora-allocator.token"
   insecure_skip_tls_verify: true           # minikube 自签证书,dev 临时开;或填 ca_path
   # ca_path: "<minikube ca.crt 路径>"      # 与 insecure_skip_tls_verify 二选一
+  advertise_host: "127.0.0.1"              # docker-driver 必填,见 §3.1;真集群留空用 status.address
 ```
 
 > 也可用 `kubectl proxy --port=8001` 起本地代理，然后 `api_server: http://127.0.0.1:8001`
 > + `token_path: "-"`（不带 token，proxy 复用 kubeconfig 凭证），免去 token/TLS 配置。
+
+### 3.1 Windows 客户端 → Linux DS 回程中继（docker driver 必读）
+
+minikube 用 **docker driver** 时，GameServer Pod 的 `status.address` 是集群内网 IP，Windows
+客户端**直连不到**。解决办法两段：
+
+1. allocator 侧把返回地址改写成本机回环：`advertise_host: "127.0.0.1"`（§3 yaml 已含）。
+   `start.ps1 -Mode k8s` 走脚本流程时会自动注入(`gen_cluster_config.ps1 -AllocatorAdvertiseHost 127.0.0.1`)。
+2. 本机起 UDP 中继，把 `127.0.0.1:<port>` 转发到 minikube 节点同端口。**docker driver 下推荐用
+   `e2e_k8s.ps1` 自动起的容器版中继**（`--network pandora-agones`，直连 minikube 节点 IP）；
+   只在调试时才用进程版 `udp_relay.ps1`：
+
+```powershell
+# 容器版(e2e_k8s.ps1 自动做;手动等价命令,挂 pandora-agones 网络):
+docker run -d --name pandora-udp-relay --network pandora-agones `
+  -p 127.0.0.1:7000-8000:7000-8000/udp `
+  -e TARGET_HOST=$(minikube -p pandora-agones ip) -e PORT_RANGE=7000-8000 `
+  pandora/udp-relay:dev
+
+# 进程版(仅调试;默认 profile=pandora-agones,自动解析 minikube -p pandora-agones ip):
+pwsh tools/scripts/udp_relay.ps1
+# 链路:client --UDP--> 127.0.0.1:<port> --[tools/udp-relay]--> <minikube ip>:<port> --> GameServer
+```
+
+> ⚠️ **必须用当前 profile（`pandora-agones` / `192.168.58.x`）的 minikube IP 和 docker network**。
+> 旧的默认 `minikube` profile（`192.168.49.x`）network 重启后可能残留：若用裸 `minikube ip`、
+> `--network minikube` 或 `docker network inspect minikube`，relay 会挂到错误 Docker 网络，
+> **`pandora-udp-relay` 看似启动成功，但 UDP 包进不了 Hub DS——表现为客户端登录成功、却卡在进不去大厅**。
+> `e2e_k8s.ps1` 启动前会校验 `TARGET_HOST` 是否落在该 docker network 的 IPv4 subnet 内，不匹配直接 fail。
+
+> 真集群 / 非 docker-driver 不需要本中继，`advertise_host` 留空直接用 `status.address`。
 
 ---
 

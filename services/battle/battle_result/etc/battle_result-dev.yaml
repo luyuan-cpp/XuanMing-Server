@@ -50,6 +50,10 @@ battle:
   # player_addr: player 服务 gRPC 地址(W4 ④ player 已上线 → 接真实当前 MMR;
   # 弱依赖:gRPC 懒连接,player 未起时调用失败由 biz 回退 base_mmr,不阻断落库)
   player_addr: "127.0.0.1:50002"
+  # matchmaker_addr: matchmaker 服务 gRPC 地址。结算/废弃落库后调 matchmaker.ReleaseMatch
+  # 释放残留撮合状态(player→ticket claim + 票据 + match 镜像),修复"结算返回 Hub 后
+  # 玩家无法再次匹配(StartMatch 4002)"。弱依赖:懒连接,matchmaker 未起时仅 Warn 不阻断落库。
+  matchmaker_addr: "127.0.0.1:50011"
   # W4 ⑨ player.update 事务出箱发布器:落库同事务写出箱 → 后台轮询投递 Kafka(at-least-once 不变量 §4)
   outbox_publish_interval: "2s"
   outbox_batch_size: 128

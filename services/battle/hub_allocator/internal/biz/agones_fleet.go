@@ -56,13 +56,14 @@ var hubReadyStates = map[string]struct{}{
 
 // AgonesHubFleetProvider 经 k8s apiserver REST 查 Agones GameServer 列表发现 Hub 分片拓扑。
 type AgonesHubFleetProvider struct {
-	apiServer   string // 已去尾部 /
-	namespace   string
-	fleetName   string
-	tokenPath   string // "" 或 "-" → 不带 Authorization
-	listTimeout time.Duration
-	capacity    int32
-	httpClient  *http.Client
+	apiServer     string // 已去尾部 /
+	namespace     string
+	fleetName     string
+	advertiseHost string
+	tokenPath     string // "" 或 "-" → 不带 Authorization
+	listTimeout   time.Duration
+	capacity      int32
+	httpClient    *http.Client
 }
 
 // NewAgonesHubFleetProvider 构造真 Agones 分片发现器。
@@ -101,12 +102,13 @@ func NewAgonesHubFleetProvider(cfg conf.Config) (*AgonesHubFleetProvider, error)
 	}
 
 	return &AgonesHubFleetProvider{
-		apiServer:   strings.TrimRight(ag.APIServer, "/"),
-		namespace:   ag.Namespace,
-		fleetName:   ag.FleetName,
-		tokenPath:   ag.TokenPath,
-		listTimeout: timeout,
-		capacity:    capacity,
+		apiServer:     strings.TrimRight(ag.APIServer, "/"),
+		namespace:     ag.Namespace,
+		fleetName:     ag.FleetName,
+		advertiseHost: strings.TrimSpace(ag.AdvertiseHost),
+		tokenPath:     ag.TokenPath,
+		listTimeout:   timeout,
+		capacity:      capacity,
 		httpClient: &http.Client{
 			Timeout:   timeout,
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
@@ -183,9 +185,13 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 		if gs.Status.Address == "" || len(gs.Status.Ports) == 0 {
 			continue // 尚未就绪(无 address/port),跳过
 		}
+		host := gs.Status.Address
+		if a.advertiseHost != "" {
+			host = a.advertiseHost
+		}
 		out = append(out, ShardCandidate{
 			PodName:  gs.Metadata.Name,
-			Addr:     fmt.Sprintf("%s:%d", gs.Status.Address, gs.Status.Ports[0].Port),
+			Addr:     fmt.Sprintf("%s:%d", host, gs.Status.Ports[0].Port),
 			Region:   region,
 			ShardID:  shardIDFor(gs),
 			Capacity: capacityFor(gs, a.capacity),

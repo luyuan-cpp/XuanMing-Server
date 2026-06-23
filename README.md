@@ -45,20 +45,36 @@ Pandora/
 一条命令把后端跑起来,会先检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;确实要让脚本尝试用 winget 安装时,显式追加 `-Install`:
 
 ```powershell
-# 默认 local 模式(基础设施 docker + 15 个 go 服务宿主进程,可断点调试)
+# 默认 local 模式(基础设施 docker + 16 个 go 服务宿主进程,可断点调试)
 pwsh tools/scripts/start.ps1
 
 # 也可双击仓库根的 start.cmd(无参数 = local 模式)
 ```
 
-四种启动方式(`-Mode`):
+五种启动方式(`-Mode`):
 
-| 模式     | 说明                                                         | 命令 |
-|----------|--------------------------------------------------------------|------|
-| `local`  | 基础设施在 docker,go 服务宿主进程(可断点调试,**策划首选**) | `start.ps1 -Mode local -Profile match` |
-| `docker` | 基础设施 + 15 个 go 服务全部容器化                           | `start.ps1 -Mode docker` |
-| `k8s`    | 本地 minikube,贴近线上                                       | `start.ps1 -Mode k8s` |
-| `online` | 部署到远端 k8s(需人工授权并确认 kube-context,谨慎)      | `start.ps1 -Mode online -Registry <仓库> -Tag <版本>` |
+| 模式      | 说明                                                          | DS   | 命令 |
+|-----------|---------------------------------------------------------------|------|------|
+| `local`   | 基础设施在 docker,go 服务宿主进程(可断点调试,**策划首选**)  | local | `start.ps1 -Mode local -Profile match` |
+| `docker`  | 基础设施 + 16 个 go 服务全部容器化                            | mock | `start.ps1 -Mode docker` |
+| `intranet`| 同 docker 全容器,绑内网 IP 供多人联调                         | mock | `start.ps1 -Mode intranet` |
+| `k8s`     | 本机 minikube + Agones,真 Linux DS(线上等价)                | agones | `start.ps1 -Mode k8s` |
+| `online`  | 部署到远端 k8s(需人工授权并确认 kube-context,谨慎)         | agones | 见下方真 DS 参数 |
+
+> **真 DS 闭环(无 mock)**:`docker`/`intranet` 因容器内无真 DS 只能 mock;要真 DS 用 `k8s`
+> (本机 Agones)或 `local`(宿主直接 exec Windows DS)。`k8s` 模式起完后再跑
+> `pwsh tools/scripts/e2e_k8s.ps1`(load DS 镜像 + 起宿主 Envoy 桥接 + 等 Fleet + UDP 中继),
+> 详见 `deploy/k8s/agones/README.md`。
+>
+> **线上真集群**:Fleet 的 DS 镜像与回调地址必须按环境注入,否则远端拉不到镜像/回调打空,
+> 故 `-Mode online` 强制要求 `-BattleDsImage` / `-HubDsImage` / `-DsGatewayAddr`(缺一即 fail-fast):
+>
+> ```powershell
+> start.ps1 -Mode online -Env test -Registry registry.mycorp.com -Tag v1.2.3 `
+>   -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 `
+>   -HubDsImage    registry.mycorp.com/pandora/hub-ds:v1.2.3 `
+>   -DsGatewayAddr pandora-envoy.pandora.svc:8444
+> ```
 
 常用:
 
@@ -67,9 +83,11 @@ pwsh tools/scripts/start.ps1 -Check            # 只检查工具不启动
 pwsh tools/scripts/start.ps1 -Install          # 缺工具时尝试 winget 安装
 pwsh tools/scripts/start.ps1 -Status           # 看状态
 pwsh tools/scripts/start.ps1 -Mode docker -Down # 停
+pwsh tools/scripts/start.ps1 -Mode k8s -Resume  # 电脑重启后快速恢复(不重建镜像)
+pwsh tools/scripts/start.ps1 -Mode k8s -Reset   # 状态损坏时一键重置(minikube delete 后全新部署)
 ```
 
-> 关键产物:`deploy/services/Dockerfile`(15 服务共用)、`deploy/docker-compose.services.yml`、
+> 关键产物:`deploy/services/Dockerfile`(16 服务共用)、`deploy/docker-compose.services.yml`、
 > `deploy/k8s/`(infra + services + online overlay)、`tools/scripts/gen_cluster_config.ps1`
 > (把 `127.0.0.1` 的 dev 配置转成容器服务名的集群版配置)。
 >

@@ -104,6 +104,10 @@ type AgonesConf struct {
 	// Enabled=true 时必填,否则构造失败。
 	FleetName string `yaml:"fleet_name,omitempty" json:"fleet_name,omitempty"`
 
+	// AdvertiseHost 覆盖返回给客户端连接的 host;留空则使用 Agones status.address。
+	// 本机 minikube docker-driver 联调时常设为 127.0.0.1,配合 UDP relay。
+	AdvertiseHost string `yaml:"advertise_host,omitempty" json:"advertise_host,omitempty"`
+
 	// TokenPath ServiceAccount bearer token 文件路径
 	// (默认 /var/run/secrets/kubernetes.io/serviceaccount/token;留 "-" 显式禁用 token)。
 	TokenPath string `yaml:"token_path,omitempty" json:"token_path,omitempty"`

@@ -51,11 +51,14 @@
      - `player_locator` 单 key `pandora:locator:{player}`(HSET/HGETALL/WATCH 同键)。
      - `push` 离线缓存单 key `pandora:push:offline:{player}`。
      - `login` session / ticket-JTI 均单 key。
-     - `team` teamKey / playerKey、`matchmaker` matchKey:各操作单键或同实体,核对后无跨实体事务。
+     - `team` teamKey / playerKey:各操作单键或同实体,核对后无跨实体事务。
      - `trade.UpdateWithLock`:WATCH/MULTI 仅围绕单 orderKey。
+     - `matchmaker.UpdateMatchWithLock` / `ds_allocator` 心跳/状态 `UpdateBattleWithLock`:WATCH/SET 仅围绕单 matchKey/battleKey。
    - **跨 slot 阻塞项(✅ 2026-06 已改造 + 编译测试通过,可上 Cluster)**:碰 `CLAUDE.md` §9 原子性不变量,已逐服务出 decision-revisit 拍板,未静默重写。
      - **`trade.CreateOrder`**(✅ 见 [decision-revisit-trade-crossslot.md](./decision-revisit-trade-crossslot.md)):原 `TxPipeline` 跨 order/seller/buyer 三 slot。改为 **order 单键 `SET` 为权威** + 卖家/买家反查索引各自独立提交(`addPlayerOrderIndex` 用同键 mini-tx 做 SADD+EXPIRE);反查索引漂移由 `ListPlayerOrderIDs` 自愈跳脏成员。资源扣减不变量 #7 落在 biz 层 `ResourceLedger`,本改动不碰,故不破 #7。
      - **`hub_allocator`**(✅ 见 [decision-revisit-hub-crossslot.md](./decision-revisit-hub-crossslot.md)):4 个方法(CreateShard/UpdateShardWithLock/HeartbeatShard/RemoveShard)原把 pod 镜像 `shardKey{pod}` 与全局 `shards-set`/`active-zset` 捆在一事务。改为 **pod 镜像单 slot 事务为权威** + 全局索引拆成独立命令(故障转移/扫描加速器,漂移容忍,`ListShards` 自愈)。
+     - **`matchmaker`**(✅ 2026-06-22):`AddTicket`/`ReserveTicket`/`DeleteTicket` 原 `TxPipeline` 跨 `ticketKey` 与全局 `queue-zset`;`CreateMatch`/`ExpireMatch` 跨 `matchKey{id}` 与全局 `active-zset`。改为 **实体单键 `SET`/`Del`/`Expire` 为权威** + 全局 queue/active 索引拆成独立 ZADD/ZREM 命令(撮合扫描加速器,漂移容忍);`matchOnce` 加载票据 miss 时 best-effort 补清 queue 漂移项,自愈。
+     - **`ds_allocator`**(✅ 2026-06-22):`CreateBattle`/`DeleteBattle`/`ExpireBattle` 及 `updateWithLock` 原把 `battleKey{match}` 与全局 `active-zset` 捆在一事务/管线。改为 **battle 镜像单键写为权威**(`updateWithLock` WATCH/SET 仅围 battleKey,**保留 KeepTTL 语义**不刷新补偿窗口)+ 全局 active 索引拆成独立 ZADD/ZREM 命令(心跳扫描加速器,漂移容忍);`ListBattles` 扫到镜像已过期时 best-effort 补清 active,自愈。
 3. 分片数(✅ 拍板):Redis Cluster 固定 16384 slot,生产 **6 主 6 从**(≥3 物理机/可用区,主从异机),每主 ≤8 GB,合计 48 GB 物理可用,承载 30 万 CCU(在线键 ~30 GB + 50% 余量;峰值写 ~50 万 ops/s,单主 ~8 万安全水位有冗余),触顶在线加主重分 slot。详见 [deploy/redis/README.md](../../deploy/redis/README.md) §4。
 4. **部署配置已就绪(✅,起实例交 Codex/人)**:
    - Sentinel(一主两从 + 三哨兵,立即去单点、零业务改动):[deploy/docker-compose.redis-sentinel.yml](../../deploy/docker-compose.redis-sentinel.yml)。

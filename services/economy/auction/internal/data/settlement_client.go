@@ -3,7 +3,7 @@
 //
 // 接线(对齐 chat/team_reader、friend/locator_client 直连模式):
 //   - main.go 用 pkg/grpcclient.MustDialInsecure 拨号(内网 insecure;无 JWT → inventory 侧 callerID==0,
-//     SettleAuctionMatch 是系统接口只认内网直连);inventory_addr 未配则 main 退回 NoopSettlementLedger。
+//     SettleAuctionMatch 是系统接口只认内网直连);inventory_addr 未配且 allow_noop_settlement=true 时 main 才退回 NoopSettlementLedger,否则 fail-fast。
 //   - 成交价(被动挂单价)= MatchRecord.Price 作为单价传给 inventory,总价由 inventory 端溢出安全乘。
 package data
 

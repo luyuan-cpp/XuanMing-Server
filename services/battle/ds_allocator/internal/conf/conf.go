@@ -103,6 +103,10 @@ type AgonesConf struct {
 	// Enabled=true 时必填,否则构造失败。
 	FleetName string `yaml:"fleet_name,omitempty" json:"fleet_name,omitempty"`
 
+	// AdvertiseHost 覆盖返回给客户端连接的 host;留空则使用 Agones status.address。
+	// 本机 minikube docker-driver 联调时常设为 127.0.0.1,配合 UDP relay。
+	AdvertiseHost string `yaml:"advertise_host,omitempty" json:"advertise_host,omitempty"`
+
 	// TokenPath ServiceAccount bearer token 文件路径
 	// (默认 /var/run/secrets/kubernetes.io/serviceaccount/token;留 "-" 显式禁用 token)。
 	TokenPath string `yaml:"token_path,omitempty" json:"token_path,omitempty"`
@@ -129,6 +133,12 @@ type AllocatorConf struct {
 
 	// BattleTTL 战斗 DS 镜像 Redis key 的 TTL(默认 2h,防僵尸镜像)。
 	BattleTTL config.Duration `yaml:"battle_ttl,omitempty" json:"battle_ttl,omitempty"`
+
+	// ReadyWaitTimeout AllocateBattle 等待战斗 DS 用 Heartbeat 上报 ready 的最长时间(默认 10s)。
+	// Agones Allocated 只说明 pod 被分配,不代表 DS 进程已读到 pandora.dev/match-id;必须等
+	// DS 用正确 match_id/pod 的心跳确认 ready/running,后端才把 ds_addr 回给 matchmaker(否则
+	// 客户端太快连接时 DS 内部 match_id 仍为 0,PreLogin 会拒票)。超时则回收 pod + 删镜像 + 分配失败。
+	ReadyWaitTimeout config.Duration `yaml:"ready_wait_timeout,omitempty" json:"ready_wait_timeout,omitempty"`
 
 	// MockDSAddrHost W4 ② MockGameServerAllocator 返回的假 DS host(默认 127.0.0.1)。
 	// W4 ③ 接 Agones 后此字段废弃,addr 由 GameServerAllocation status 返回。
@@ -164,6 +174,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Allocator.BattleTTL == 0 {
 		c.Allocator.BattleTTL = config.Duration(2 * time.Hour)
+	}
+	if c.Allocator.ReadyWaitTimeout == 0 {
+		c.Allocator.ReadyWaitTimeout = config.Duration(10 * time.Second)
 	}
 	if c.Allocator.MockDSAddrHost == "" {
 		c.Allocator.MockDSAddrHost = "127.0.0.1"

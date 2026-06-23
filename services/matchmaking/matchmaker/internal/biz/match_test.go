@@ -238,6 +238,81 @@ func TestConfirmMatch_AllAccept_Ready(t *testing.T) {
 	}
 }
 
+func TestReleaseMatch_CleansReadyMatchState(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	for i := uint64(1); i <= 10; i++ {
+		f.seedTicket(t, ctx, 100+i, []uint64{i}, 1000)
+	}
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+	for i := uint64(1); i <= 10; i++ {
+		if err := f.uc.ConfirmMatch(ctx, i, 999, true); err != nil {
+			t.Fatalf("confirm player %d: %v", i, err)
+		}
+	}
+
+	if err := f.uc.ReleaseMatch(ctx, 999, nil); err != nil {
+		t.Fatalf("ReleaseMatch: %v", err)
+	}
+	if _, found, err := f.repo.GetMatch(ctx, 999); err != nil || found {
+		t.Fatalf("match after release: found=%v err=%v, want gone", found, err)
+	}
+	for i := uint64(1); i <= 10; i++ {
+		ticketID := 100 + i
+		if _, found, err := f.repo.GetTicket(ctx, ticketID); err != nil || found {
+			t.Fatalf("ticket %d after release: found=%v err=%v, want gone", ticketID, found, err)
+		}
+		if got, found, err := f.repo.GetPlayerTicket(ctx, i); err != nil || found {
+			t.Fatalf("player %d claim after release: ticket=%d found=%v err=%v, want gone", i, got, found, err)
+		}
+	}
+}
+
+func TestReleaseMatch_DoesNotDeleteNewClaim(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	for i := uint64(1); i <= 10; i++ {
+		f.seedTicket(t, ctx, 100+i, []uint64{i}, 1000)
+	}
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+	for i := uint64(1); i <= 10; i++ {
+		if err := f.uc.ConfirmMatch(ctx, i, 999, true); err != nil {
+			t.Fatalf("confirm player %d: %v", i, err)
+		}
+	}
+
+	// 模拟旧局释放与新一局入队竞态:player 1 已经拥有一张不属于旧 match 的新票据。
+	if err := f.repo.DeletePlayerIndex(ctx, 1); err != nil {
+		t.Fatalf("delete old player index: %v", err)
+	}
+	const newTicketID uint64 = 9001
+	if _, ok, err := f.repo.ClaimPlayer(ctx, 1, newTicketID, f.cfg.TicketTTL.Std()); err != nil || !ok {
+		t.Fatalf("claim new ticket: ok=%v err=%v", ok, err)
+	}
+	if err := f.repo.AddTicket(ctx, &matchv1.MatchTicketStorageRecord{
+		TicketId:     newTicketID,
+		TeamId:       newTicketID,
+		CaptainId:    1,
+		Members:      []*matchv1.MatchMemberStorageRecord{{PlayerId: 1, TeamId: newTicketID, Confirm: confirmPending}},
+		AvgMmr:       1000,
+		EnqueuedAtMs: time.Now().UnixMilli(),
+	}, f.cfg.TicketTTL.Std()); err != nil {
+		t.Fatalf("add new ticket: %v", err)
+	}
+
+	if err := f.uc.ReleaseMatch(ctx, 999, nil); err != nil {
+		t.Fatalf("ReleaseMatch: %v", err)
+	}
+	got, found, err := f.repo.GetPlayerTicket(ctx, 1)
+	if err != nil || !found || got != newTicketID {
+		t.Fatalf("player 1 new claim after old release: ticket=%d found=%v err=%v, want %d", got, found, err, newTicketID)
+	}
+}
+
 // 撮合成局 → locator 上报全员 MATCHING(带 match_id);全员确认就绪 → 上报 BATTLE(带 ds_addr)。
 func TestLocatorState_MatchingThenBattle(t *testing.T) {
 	ctx := context.Background()

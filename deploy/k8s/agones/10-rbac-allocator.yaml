@@ -1,16 +1,24 @@
-# pandora-allocator ServiceAccount + RBAC（W4 ⑬，本地 Agones dev 联调）
+# pandora-allocator ServiceAccount + RBAC（W4 ⑬ / 多环境在线部署）
 #
 # 用途：给 ds_allocator / hub_allocator 调用 Agones API 的最小权限。
 #   - ds_allocator：POST GameServerAllocation（allocation.agones.dev）+ DELETE GameServer（agones.dev）
 #   - hub_allocator：LIST GameServer（agones.dev，发现 Hub 分片拓扑）
 #
-# 本地 dev（allocator 作为本机进程连 minikube apiserver）取 token 方式见本目录 README。
-# 集群内运行时把本 ServiceAccount 挂到 allocator Pod 上即可（in-cluster token 自动注入）。
+# 跨 namespace 设计（重要）：
+#   - 两个 allocator 的 Pod 跑在 `pandora` namespace（与其它 go 服务同处），故 SA 建在 `pandora`。
+#   - Agones Fleet / GameServer 建在 `default` namespace（见 20/30-fleet-*.yaml），故 Role +
+#     RoleBinding 建在 `default`，RoleBinding 的 subject 指向 `pandora` 的 SA。
+#     （RoleBinding 可引用其它 namespace 的 ServiceAccount，是 k8s 标准用法。）
+#   - allocator 的 agones.namespace 配 "default"（Fleet 所在），由 gen_cluster_config.ps1 注入。
+#
+# in-cluster：services.yaml 的两个 allocator Deployment 已配 serviceAccountName: pandora-allocator，
+# 投影 token 自动注入并轮转，allocator 每次请求重读 token 文件 → 免手动签 token。
+# 本机 host 进程联调取 token：kubectl create token pandora-allocator -n pandora --duration=24h
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: pandora-allocator
-  namespace: default
+  namespace: pandora
   labels:
     app.kubernetes.io/part-of: pandora
 ---
@@ -30,6 +38,10 @@ rules:
   - apiGroups: ["agones.dev"]
     resources: ["gameservers"]
     verbs: ["get", "list", "delete"]
+  # hub_allocator 自动扩缩容 / 整合时需读写 Fleet spec.replicas
+  - apiGroups: ["agones.dev"]
+    resources: ["fleets"]
+    verbs: ["get", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -41,7 +53,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: pandora-allocator
-    namespace: default
+    namespace: pandora
 roleRef:
   kind: Role
   name: pandora-allocator

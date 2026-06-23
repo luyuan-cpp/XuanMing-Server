@@ -32,6 +32,15 @@ import (
 // 不会刷新 BattleTTL 上界(W4 ⑧ Codex 复审 P1)。
 var errHeartbeatTerminal = errors.New("heartbeat on terminal battle")
 
+// errHeartbeatPodMismatch:Heartbeat 上报的 DsPodName 与镜像里记录的不一致(旧 DS / 孤儿 DS /
+// 重分配后残留的上一个 pod)。从乐观锁回调返回此哨兵 → 不写回该镜像,并令上报方停机,
+// 避免污染新对局的状态(LastHeartbeatMs / state / player_count)。
+var errHeartbeatPodMismatch = errors.New("heartbeat pod mismatch")
+
+// errReadyWaitTimeout:AllocateBattle 等待 DS ready 心跳超时的哨兵,由 waitBattleReady 返回,
+// 调用方据此走回收 pod + 删镜像 + 返回 ErrDSAllocationFailed 的清理路径。
+var errReadyWaitTimeout = errors.New("ready wait timeout")
+
 // 战斗 DS 状态常量(对应 proto string state 字段)。
 const (
 	stateWarming   = "warming"
@@ -49,6 +58,16 @@ const (
 
 // 乐观锁重试次数(心跳/状态更新冲突)。
 const updateMaxRetry = 3
+
+// readyPollInterval 是 AllocateBattle 等待 DS ready 心跳时轮询 Redis 镜像的间隔。
+// 1s 足够:DS 心跳 5s 一跳,ready 等待窗口 10s,1s 轮询既不漏判也不给 Redis 添压。
+// 用 var 而非 const,便于单测把它调小以避免慢测(见 allocator_test.go init)。
+var readyPollInterval = 1 * time.Second
+
+// detachedCleanupTimeout 是 ready 等待失败后回收 pod + 删镜像的独立 ctx 预算。
+// ready 等待失败的常见原因正是入站 ctx 被取消/超时,复用它做 Release/DeleteBattle 会立刻
+// 失败,留下 warming 镜像 + 已分配 pod 泄漏;故清理用一个与入站 ctx 解耦的短超时 ctx。
+const detachedCleanupTimeout = 5 * time.Second
 
 // DSLifecyclePusher 发 pandora.ds.lifecycle 事件(W4 ③,2026-06-06)。
 //
@@ -80,6 +99,9 @@ func (u *AllocatorUsecase) SetLifecyclePusher(p DSLifecyclePusher) { u.lifecycle
 
 func (u *AllocatorUsecase) battleTTL() time.Duration { return u.cfg.BattleTTL.Std() }
 
+// readyWaitTimeout 是 AllocateBattle 等待 DS ready 心跳的最长时间(默认 10s)。
+func (u *AllocatorUsecase) readyWaitTimeout() time.Duration { return u.cfg.ReadyWaitTimeout.Std() }
+
 // ── RPC 1:AllocateBattle ──────────────────────────────────────────────────────
 
 // AllocateResult 是 AllocateBattle 的出参。
@@ -89,18 +111,50 @@ type AllocateResult struct {
 	AllocatedAtMs int64
 }
 
-// AllocateBattle 为 match 申请战斗 DS。幂等:同 match_id 已分配 → 直接返回已有地址。
+// AllocateBattle 为 match 申请战斗 DS。
+//
+// 关键:Agones Allocated(pod 被分配)≠ 战斗 DS Ready。DS 进程要先读到 pandora.dev/match-id
+// 才能在 PreLogin 放行客户端票据。所以这里不再一拿到 pod 就回 ds_addr,而是:
+//
+//	Allocate → CreateBattle(state=warming) → 轮询等 DS Heartbeat 上报正确 match_id/pod 且
+//	进入 ready/running → 回 ds_addr;ReadyWaitTimeout 内没等到 → 回收 pod + 删镜像 + 分配失败。
+//
+// 用 Redis 镜像轮询(而非内存 channel):Heartbeat RPC 可能落到另一个 ds_allocator pod,
+// 只有共享的 Redis 镜像能跨 pod 观察到 DS 的就绪心跳。
+//
+// 幂等:同 match_id 已有镜像时——ready/running 且有有效心跳 → 直接回;warming → 继续等 ready;
+// 终态/不可用 → 返回分配失败(绝不把 ds_addr 回给 matchmaker)。
 func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32, gameMode string) (*AllocateResult, error) {
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 
-	// 幂等:已有镜像直接回(防 matchmaker 重试导致重复拉 DS)
+	// 幂等:已有镜像 → 按状态决定直接回 / 继续等 ready / 判失败(防 matchmaker 重试重复拉 DS)
 	if existing, found, err := u.repo.GetBattle(ctx, matchID); err != nil {
 		return nil, err
 	} else if found {
-		plog.With(ctx).Infow("msg", "allocate_idempotent_hit", "match_id", matchID, "ds_addr", existing.DsAddr)
-		return &AllocateResult{DSAddr: existing.DsAddr, DSPodName: existing.DsPodName, AllocatedAtMs: existing.AllocatedAtMs}, nil
+		switch {
+		case battleReadyForPod(existing, existing.DsPodName, matchID, existing.AllocatedAtMs):
+			// ready/running 且已有分配后的有效心跳 → 直接回已分配地址
+			plog.With(ctx).Infow("msg", "allocate_idempotent_hit", "match_id", matchID, "ds_addr", existing.DsAddr, "state", existing.State)
+			return &AllocateResult{DSAddr: existing.DsAddr, DSPodName: existing.DsPodName, AllocatedAtMs: existing.AllocatedAtMs}, nil
+		case existing.State == stateWarming:
+			// warming:DS 还没用心跳确认 ready,继续等 ready 心跳
+			plog.With(ctx).Infow("msg", "allocate_idempotent_warming", "match_id", matchID, "pod", existing.DsPodName)
+			res, werr := u.waitBattleReady(ctx, matchID, existing.DsPodName, existing.AllocatedAtMs)
+			if werr != nil {
+				if errors.Is(werr, errReadyWaitTimeout) {
+					return nil, u.failReadyWaitTimeout(ctx, matchID, existing.DsPodName)
+				}
+				return nil, werr
+			}
+			plog.With(ctx).Infow("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", existing.DsPodName)
+			return res, nil
+		default:
+			// 终态(ended/abandoned)等不可用状态:不把 ds_addr 回给 matchmaker
+			plog.With(ctx).Warnw("msg", "allocate_idempotent_unusable", "match_id", matchID, "state", existing.State)
+			return nil, errcode.New(errcode.ErrDSAllocationFailed, "battle %d in state %s, not allocatable", matchID, existing.State)
+		}
 	}
 
 	podName, addr, err := u.alloc.Allocate(ctx, matchID, mapID, gameMode)
@@ -114,12 +168,12 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 		MatchId:         matchID,
 		DsPodName:       podName,
 		DsAddr:          addr,
-		State:           stateReady,
+		State:           stateWarming, // 等 DS 心跳确认 ready 才回 matchmaker;不把 Agones Allocated 当成 ready
 		PlayerIds:       playerIDs,
 		MapId:           mapID,
 		GameMode:        gameMode,
 		AllocatedAtMs:   now,
-		LastHeartbeatMs: now, // 视分配时刻为首次心跳,给 DS warming→ready 的宽限窗口
+		LastHeartbeatMs: now, // 仅作 sweep 宽限基准;ready 判定要求 LastHeartbeatMs 严格大于此(即真实心跳)
 		PlayerCount:     int32(len(playerIDs)),
 	}
 	if err := u.repo.CreateBattle(ctx, battle, u.battleTTL()); err != nil {
@@ -130,8 +184,79 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 		return nil, err
 	}
 
-	plog.With(ctx).Infow("msg", "battle_allocated", "match_id", matchID, "pod", podName, "ds_addr", addr, "players", len(playerIDs))
-	return &AllocateResult{DSAddr: addr, DSPodName: podName, AllocatedAtMs: now}, nil
+	plog.With(ctx).Infow("msg", "battle_warming", "match_id", matchID, "pod", podName, "ds_addr", addr, "players", len(playerIDs))
+
+	// 等 DS 用正确 match_id/pod 的心跳上报 ready/running,后端才把 ds_addr 回给 matchmaker。
+	res, werr := u.waitBattleReady(ctx, matchID, podName, now)
+	if werr != nil {
+		if errors.Is(werr, errReadyWaitTimeout) {
+			return nil, u.failReadyWaitTimeout(ctx, matchID, podName)
+		}
+		// 入站 ctx 取消/超时或 repo 出错等非超时失败:本次刚分配的 pod 由本调用持有,
+		// 用独立 cleanup ctx 回收 pod + 删 warming 镜像,避免泄漏(入站 ctx 多半已失效)。
+		u.cleanupAllocatedBattle(ctx, matchID, podName)
+		return nil, werr
+	}
+
+	plog.With(ctx).Infow("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
+	return res, nil
+}
+
+// battleReadyForPod 判定 DS 是否已用 Heartbeat 确认 ready:pod/match 对得上、有分配后的真实心跳
+// (LastHeartbeatMs 严格大于 allocatedAtMs)、状态进入 ready 或 running。
+// 当前 UE 侧上报的是 running(不一定先发 ready),所以后端先把 running 也视为可进入状态。
+func battleReadyForPod(b *dsv1.BattleStorageRecord, podName string, matchID uint64, allocatedAtMs int64) bool {
+	return b != nil &&
+		b.MatchId == matchID &&
+		b.DsPodName == podName &&
+		b.LastHeartbeatMs > allocatedAtMs &&
+		(b.State == stateReady || b.State == stateRunning)
+}
+
+// waitBattleReady 轮询 Redis 镜像直到 DS 心跳确认 ready,或 ReadyWaitTimeout 超时(返回 errReadyWaitTimeout)。
+func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, podName string, allocatedAtMs int64) (*AllocateResult, error) {
+	deadline := time.Now().Add(u.readyWaitTimeout())
+	ticker := time.NewTicker(readyPollInterval)
+	defer ticker.Stop()
+	for {
+		b, found, err := u.repo.GetBattle(ctx, matchID)
+		if err != nil {
+			return nil, err
+		}
+		if found && battleReadyForPod(b, podName, matchID, allocatedAtMs) {
+			return &AllocateResult{DSAddr: b.DsAddr, DSPodName: b.DsPodName, AllocatedAtMs: b.AllocatedAtMs}, nil
+		}
+		if !time.Now().Before(deadline) {
+			return nil, errReadyWaitTimeout
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// failReadyWaitTimeout 处理 ready 等待超时:回收 pod + 删镜像,返回 ErrDSAllocationFailed
+// (绝不把 ds_addr 回给 matchmaker,否则客户端连上 match_id 仍为 0 的 DS 会被 PreLogin 拒)。
+func (u *AllocatorUsecase) failReadyWaitTimeout(ctx context.Context, matchID uint64, podName string) error {
+	plog.With(ctx).Warnw("msg", "battle_ready_wait_timeout", "match_id", matchID, "pod", podName)
+	u.cleanupAllocatedBattle(ctx, matchID, podName)
+	return errcode.New(errcode.ErrDSAllocationFailed, "battle %d ds not ready within wait timeout", matchID)
+}
+
+// cleanupAllocatedBattle 用与入站 ctx 解耦的独立 ctx 回收已分配 pod + 删镜像。
+// 入站 ctx 在 ready 等待失败时多半已被取消/超时,直接复用它做 Release/DeleteBattle 会立刻
+// 失败,从而留下 warming 镜像 + 已分配 pod 泄漏;故这里 detach 出一个短超时 ctx 兜底回收。
+func (u *AllocatorUsecase) cleanupAllocatedBattle(ctx context.Context, matchID uint64, podName string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedCleanupTimeout)
+	defer cancel()
+	if rerr := u.alloc.Release(cleanupCtx, podName); rerr != nil {
+		plog.With(ctx).Warnw("msg", "ready_wait_cleanup_release_failed", "match_id", matchID, "pod", podName, "err", rerr)
+	}
+	if derr := u.repo.DeleteBattle(cleanupCtx, matchID); derr != nil {
+		plog.With(ctx).Warnw("msg", "ready_wait_cleanup_delete_failed", "match_id", matchID, "err", derr)
+	}
 }
 
 // ── RPC 2:ReleaseBattle ───────────────────────────────────────────────────────
@@ -179,15 +304,26 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 	}
 	now := time.Now().UnixMilli()
 
+	var becameReady bool
 	err := u.repo.UpdateBattleWithLock(ctx, matchID, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
 		// 已是终态(ended/abandoned):中止写回(哨兵错误),不刷新 TTL/active,令 DS 停机
 		if b.State == stateEnded || b.State == stateAbandoned {
 			return errHeartbeatTerminal
 		}
+		// podName 校验:镜像已绑定某个 pod,但上报方是另一个 pod(旧 DS / 孤儿 DS / 重分配残留)→
+		// 不写回该镜像,令上报方停机,避免污染新对局(防进错对局的 DS 刷 state/心跳)。
+		if b.DsPodName != "" && podName != "" && b.DsPodName != podName {
+			return errHeartbeatPodMismatch
+		}
+		prevState := b.State
 		b.LastHeartbeatMs = now
 		b.PlayerCount = playerCount
 		if state != "" {
 			b.State = state
+		}
+		// warming → ready/running:DS 首次确认就绪,这一跳让 AllocateBattle 得以放行 matchmaker。
+		if prevState == stateWarming && (b.State == stateReady || b.State == stateRunning) {
+			becameReady = true
 		}
 		return nil
 	}, u.battleTTL())
@@ -198,6 +334,10 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 			// 终态 DS:不写回、通知停机,补偿重试与 TTL 上界不受影响
 			plog.With(ctx).Infow("msg", "heartbeat_terminal_stop", "match_id", matchID, "pod", podName)
 			return &HeartbeatResult{Command: commandStop}, nil
+		case errors.Is(err, errHeartbeatPodMismatch):
+			// pod 不匹配:不写回镜像,令旧/孤儿 DS 停机(防污染新对局)
+			plog.With(ctx).Warnw("msg", "heartbeat_pod_mismatch", "match_id", matchID, "pod", podName)
+			return &HeartbeatResult{Command: commandStop}, nil
 		case errcode.As(err) == errcode.ErrDSPodNotFound:
 			// 孤儿 DS:无镜像,通知停机
 			plog.With(ctx).Warnw("msg", "heartbeat_orphan_ds", "match_id", matchID, "pod", podName)
@@ -205,6 +345,10 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 		default:
 			return nil, err
 		}
+	}
+	if becameReady {
+		// 验收日志:Battle DS heartbeat match_id=<id> pod=<pod> state=running/ready
+		plog.With(ctx).Infow("msg", "battle_ds_heartbeat_ready", "match_id", matchID, "pod", podName, "state", state)
 	}
 	return &HeartbeatResult{Command: commandNone}, nil
 }

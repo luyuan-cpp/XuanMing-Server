@@ -74,9 +74,11 @@ func main() {
 	cfg.Defaults()
 
 	// 3. Redis(强依赖)
+	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
 	rc := cfg.Node.RedisClient
-	if rc.Host == "" {
-		helper.Errorw("msg", "redis_host_required")
+	if rc.Host == "" && len(rc.Addrs) == 0 {
+		helper.Errorw("msg", "redis_endpoint_required",
+			"hint", "set node.redis_client.host (single) or node.redis_client.addrs (cluster)")
 		os.Exit(1)
 	}
 	rdb := redisx.NewUniversalClient(rc)
@@ -85,7 +87,7 @@ func main() {
 	pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	if err := rdb.Ping(pingCtx).Err(); err != nil {
 		cancel()
-		helper.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host)
+		helper.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host, "addrs", rc.Addrs)
 		os.Exit(1)
 	}
 	cancel()

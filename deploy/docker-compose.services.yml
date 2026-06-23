@@ -1,6 +1,6 @@
 # Pandora 全业务服务容器编排(docker 模式)
 #
-# 这是「整套后端跑在容器里」的编排:15 个 go 服务各一个容器,全部接到基础设施所在的
+# 这是「整套后端跑在容器里」的编排:16 个 go 服务各一个容器,全部接到基础设施所在的
 # 外部网络 pandora-net(由 deploy/docker-compose.dev.yml 创建)。
 #
 # 用法(推荐用一键脚本,自动先拉基础设施再起服务):
@@ -145,6 +145,16 @@ services:
     container_name: pandora-inventory
     volumes: [ "../run/cluster/etc/inventory.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "50015:50015" ]
+
+  auction:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/economy/auction, CMD_NAME: auction }
+    image: pandora/auction:dev
+    container_name: pandora-auction
+    volumes: [ "../run/cluster/etc/auction.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50016:50016" ]
 
   ds-allocator:
     <<: *svc-base

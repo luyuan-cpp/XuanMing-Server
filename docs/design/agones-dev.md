@@ -147,7 +147,8 @@
         → battle DSTicket(JWT, 5min, 不变量 §3;DS 不可信,票据由可信后端签 不变量 §6)
 
 ④ ds_allocator biz.AllocateBattle(match_id, ...)           [ds_allocator biz/allocator.go]
-        幂等检查: repo.GetBattle(match_id) 命中 → 直接回已有 ds_addr(防 matchmaker 重试重复拉 DS)
+        幂等检查: repo.GetBattle(match_id) 命中且已有分配后有效心跳(ready/running) → 直接回已有 ds_addr;
+          命中但仍 warming → 继续等 ready 心跳;终态/不可用 → 分配失败(防 matchmaker 重试重复拉 DS)
         未命中 ▼
         podName, addr, err := u.alloc.Allocate(ctx, matchID, mapID, gameMode)  ▼
 
@@ -170,11 +171,16 @@
         addr = "{status.address}:{status.ports[0].port}"
         返回 (gameServerName, addr)  ▲
 
-⑧ ds_allocator biz 写镜像 + 返回
-        repo.CreateBattle(BattleStorageRecord{match_id, ds_pod_name, ds_addr, state=ready,
+⑧ ds_allocator biz 写 warming 镜像 → 等 DS 心跳 ready → 返回
+        ⚠ Agones state=Allocated 只说明 pod 被分配,不代表 DS 进程已读到 pandora.dev/match-id;
+          若此时就把 ds_addr 回给 matchmaker,客户端太快连入时 DS 内部 match_id 仍为 0,PreLogin 会拒票。
+        repo.CreateBattle(BattleStorageRecord{match_id, ds_pod_name, ds_addr, state=warming,
           player_ids, allocated_at_ms, last_heartbeat_ms=now, ...}) → Redis pandora:ds:battle:{match_id}
-        active ZSET 加 match_id(score=last_heartbeat_ms,供心跳超时 sweep,不变量 §4)
-        返回 AllocateResult{DSAddr, DSPodName}  ▲
+        同步登记 active ZSET(score=last_heartbeat_ms,供心跳超时 sweep,不变量 §4)
+        waitBattleReady: 轮询镜像等 DS 用正确 match_id/pod 的 Heartbeat 上报 ready/running
+          (last_heartbeat_ms 严格大于 allocated_at_ms,即真实心跳),最长等 ready_wait_timeout(默认 10s)
+          • 等到 → 心跳已刷新 active score,返回 AllocateResult{DSAddr, DSPodName}  ▲
+          • 超时/ctx 取消 → 用独立 cleanup ctx 回收 pod + 删镜像,返回分配失败(绝不回 ds_addr)
 
 ⑨ 回到 matchmaker biz.onAllConfirmed
         UpdateMatchWithLock: Stage=READY, BattleDsAddr=dsAddr
@@ -241,9 +247,10 @@
 
 #### Linux(Agones)vs 本机 Windows 时序对比
 
-`Allocate` 分叉:Agones 从**预热池占现成 Ready pod**(毫秒级,客户端拿到地址几乎必连得上);
-Local 是**当场 exec 新进程**(`cmd.Start()` 后立刻返回地址,但 UE DS 从启动到真正 `listen`
-端口要几秒 → 存在「地址已下发但 DS 还没起好」窗口,见 §3.3 客户端重试契约)。
+`Allocate` 分叉:Agones 从**预热池占现成 Ready pod**(毫秒级),Local 是**当场 exec 新进程**;
+两路拿到 pod 后 `ds_allocator` 都**先把镜像写 `warming`、阻塞等 DS 上报 `ready` 心跳才回地址**
+(见 §1 流程 ⑧、`ready_wait_timeout` 默认 10s)。所以客户端拿到地址时 DS 一般已 `listen`,
+首连基本成功;§3.3 的退避重试只作边界兜底(Local 冷启动慢时 ready 心跳来得晚,等待窗口更长)。
 
 ```mermaid
 sequenceDiagram
@@ -255,25 +262,26 @@ sequenceDiagram
 
     Note over MM,CLI: ① Linux / Agones —— 占预热好的 Ready pod
     MM->>DA: AllocateBattle(match_id)
-    DA->>DA: 写 Redis 镜像 + active ZSET
+    DA->>DA: 写 Redis 镜像(warming)+ active ZSET
     DA->>K8S: POST GameServerAllocation
     K8S->>POOL: 选一个 Ready GameServer 占用
     POOL-->>K8S: status.address:port（已就绪）
     K8S-->>DA: Allocated（毫秒级）
-    DA-->>MM: (podName, addr)
+    POOL-->>DA: Heartbeat(state=ready, match_id)
+    DA-->>MM: (podName, addr)（等 ready 心跳才回）
     MM->>CLI: match.progress(battle_ds_addr, battle_ticket)
     CLI->>POOL: NetDriver 连入（DS 已 listen，一次连上）
     Note over POOL: Agones 异步补一个新 Ready pod 进池
 
     Note over MM,CLI: ② 本机 Windows —— 当场 exec 新进程
     MM->>DA: AllocateBattle(match_id)
-    DA->>DA: 写 Redis 镜像 + active ZSET
+    DA->>DA: 写 Redis 镜像(warming)+ active ZSET
     DA->>DA: 端口池取空闲 port + exec PandoraServer.exe
-    DA-->>MM: (podName, addr)  立刻返回（进程刚 Start，未 listen）
+    DA->>DA: 轮询等 DS ready 心跳（ready_wait_timeout 内）
+    DA-->>MM: (podName, addr)（DS 已 ready/listen 才回）
     MM->>CLI: match.progress(battle_ds_addr, battle_ticket)
-    CLI--xCLI: NetDriver 首连可能失败（DS 还没 listen）
-    Note over CLI: 退避重试几秒（§3.3）
     CLI->>DA: NetDriver 连入（DS 已 listen）
+    Note over CLI: 偏态边界仍可退避重试（§3.3）
 ```
 
 `Release` 分叉:Agones DELETE pod 后 **Fleet 自动补一个新 Ready pod**(池子恒维持 `replicas`);
@@ -384,9 +392,11 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
 
 ⚠️ **本机 Windows DS 调试模式（§2.4）特有的「地址已下发但 DS 还没 listen」窗口必须靠客户端重试兜底。**
 
-- **背景**:Agones（Linux 生产）下客户端拿到的是**预热好的 Ready pod**,`NetDriver` 首连基本必成功;
-  但本机 Windows 模式 `ds_allocator` 是 `cmd.Start()` 后**立刻**返回地址,UE DS 进程从启动到真正
-  `listen` 端口要数秒 → 客户端首连可能 `ConnectionFailed` / `ConnectionTimeout`。
+- **背景**:`ds_allocator.AllocateBattle` 现在会先把镜像写 `warming`,**阻塞等 DS 用正确 match_id/pod
+  的 Heartbeat 上报 `ready`/`running`** 才把 `battle_ds_addr` 回给 matchmaker(超 `ready_wait_timeout`
+  默认 10s 未就绪 → 回收 pod + 分配失败)。因此客户端拿到地址时 DS 通常已在 `listen`,
+  首连成功率大幅提升;但付压/心跳与 `listen` 就绪间仍可能有毫秒级窗口,重试仍作兜底。
+  (本机 Windows 调试模式、Agones Linux 生产两路径现在都走该 ready 门控,客户端不必分叉。)
 - **客户端契约**(`match.progress` 推到 `MatchStage=READY` 拿到 `battle_ds_addr` + `battle_ticket` 后):
   1. 用 `ClientTravel` / `NetDriver` 连 `battle_ds_addr`,失败不立即报错。
   2. **指数退避重试**:建议初始 0.5s,倍增到上限 2s,**总预算 ≥ 30s**(覆盖本机冷启动 UE DS 的最坏耗时)。
@@ -394,8 +404,9 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
   4. 携带的 `battle_ticket` 不变(5min 有效,重试窗口远小于此,无需重新拿票据)。
 - **生产(Agones)同样建议保留这套重试**:网络抖动 / pod 刚 Ready 的边界仍可能首连失败,重试让两种
   方式客户端代码**一致**,不必为调试/生产分叉(只是 Agones 下几乎一次连上,退避循环基本不触发)。
-- **后端无需改动**:DS 起好后正常每 5s 调 `ds_allocator.Heartbeat`(§3.2);客户端连入前 DS 未上报
-  也不影响 allocator 镜像(镜像在 `Allocate` 时已写好,心跳只续期 + 容量对账)。
+- **后端表现**:DS 起好后正常每 5s 调 `ds_allocator.Heartbeat`(§3.2);镜像先以 `warming` 写入,
+  后端等首个带正确 match_id/pod 的心跳把它翻成 `ready`/`running` 后才下发 `battle_ds_addr`;
+  之后的心跳只续期 + 容量对账。
 
 ---
 
@@ -460,6 +471,13 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
   + roster 名单（battle）+ `jti` 防重放（一张票只进场一次，重连须用新票）+ `PostLogin` 单会话顶号
   （同 player_id 旧连接踢掉，不变量 §1 在单 DS 内落地）。客户端连接时用 `?ticket=<JWT>` 带票。
   落地文件见下表 Auth/GameMode 行。**生产应把 HS256 切 RS256**（DS 只揣公钥，密钥不下放 DS）。
+- **Hub DS 也必须带 DSTicket**：虽然 Hub 只是大厅服，但它仍是 UE Dedicated Server 入口；客户端连入后会
+  创建 `PlayerController` / `PlayerState` / pawn，并通过 Hub DS 驱动 `player_locator.SetLocation(HUB)`、
+  组队/匹配入口等状态。若无票放行，客户端可伪造身份或直连 Hub DS，污染 locator / team / match 状态。
+  Hub 票与 Battle 票强度不同：Hub 票不绑定 `match_id`、不校验 battle roster，只证明“这个客户端是谁”；
+  Battle 票必须绑定 `match_id` + roster，只允许本局玩家进入。两者都保持短期、一次性语义；从 Battle
+  结算回 Hub 时不能复用登录进 Hub 时已消费的 hub 票，必须重新签发新的 `ds_type=hub` DSTicket 再
+  `ClientTravel` 回 Hub。
 - **占位验证**：UE DS 就绪前，先用 `deploy/k8s/agones` 的 simple-game-server 占位 Fleet 验
   Agones 分配链路（见 README §4 第一步）；心跳 / locator 链路用 `tools/scripts/ds_heartbeat_stub.ps1`
   当 stub（grpcurl 周期调 Heartbeat + SetLocation，第二步），真 UE DS 就绪后替换。

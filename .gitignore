@@ -16,6 +16,7 @@ dist/
 
 # Go module 本地缓存
 vendor/
+.gocache/
 
 # 运行时产物
 run/

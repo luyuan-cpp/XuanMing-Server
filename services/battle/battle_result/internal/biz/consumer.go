@@ -1,8 +1,8 @@
 // consumer.go — kafka 消费 handler(W4 ③,2026-06-06)。
 //
 // battle_result 订阅两个 topic,各用一个 kafkax.KeyOrderedConsumer(cmd 层装配),
-// handler 在此定义:解 proto → 调 usecase。decode 失败返 ErrBattleResultDecode
-// (W1-D2 简化版 kafkax 当前 log+ack,W2+ 接 retry/DLQ 时此 error 才进重试队列)。
+// handler 在此定义:解 proto → 调 usecase。decode 失败用 kafkax.Poison 包装
+// (毒丸消息,重试无意义)→ 消费者直接投 DLQ;业务瞬时错误走重试→耗尽进 DLQ。
 package biz
 
 import (
@@ -23,7 +23,7 @@ func (u *BattleResultUsecase) BattleResultHandler() kafkax.Handler {
 	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
 		result := &battlev1.BattleResult{}
 		if err := proto.Unmarshal(msg.Value, result); err != nil {
-			return errcode.New(errcode.ErrBattleResultDecode, "decode battle.result offset=%d: %v", msg.Offset, err)
+			return kafkax.Poison(errcode.New(errcode.ErrBattleResultDecode, "decode battle.result offset=%d: %v", msg.Offset, err))
 		}
 		_, err := u.ReportResult(ctx, result)
 		return err
@@ -36,7 +36,7 @@ func (u *BattleResultUsecase) DSLifecycleHandler() kafkax.Handler {
 	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
 		evt := &dsv1.DSLifecycleEvent{}
 		if err := proto.Unmarshal(msg.Value, evt); err != nil {
-			return errcode.New(errcode.ErrBattleResultDecode, "decode ds.lifecycle offset=%d: %v", msg.Offset, err)
+			return kafkax.Poison(errcode.New(errcode.ErrBattleResultDecode, "decode ds.lifecycle offset=%d: %v", msg.Offset, err))
 		}
 		if evt.GetPhase() != dsv1.DSLifecyclePhase_DS_LIFECYCLE_PHASE_ABANDONED {
 			plog.With(ctx).Debugw("msg", "ds_lifecycle_ignored", "phase", evt.GetPhase().String(), "match_id", evt.GetMatchId())

@@ -86,6 +86,9 @@ spec:
   template:
     metadata: { labels: { app: zookeeper } }
     spec:
+      # 关闭 k8s 注入的 Docker-link 式服务环境变量(ZOOKEEPER_PORT=tcp://ip:2181 等)。
+      # confluent cp 镜像会把 ZOOKEEPER_* 当作配置覆盖,被注入的 URL 值会污染 zookeeper.properties。
+      enableServiceLinks: false
       containers:
         - name: zookeeper
           image: confluentinc/cp-zookeeper:7.9.7
@@ -93,6 +96,10 @@ spec:
             - { name: ZOOKEEPER_CLIENT_PORT, value: "2181" }
             - { name: ZOOKEEPER_TICK_TIME, value: "2000" }
           ports: [ { containerPort: 2181 } ]
+          readinessProbe:
+            tcpSocket: { port: 2181 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -106,19 +113,34 @@ kind: Deployment
 metadata: { name: kafka, namespace: pandora, labels: { app: kafka } }
 spec:
   replicas: 1
+  # 单 broker(BROKER_ID=1):更新时必须先停旧 Pod 再起新 Pod。默认 RollingUpdate 会让新旧
+  # 同时在跑,新 Pod 注册 ZK /brokers/ids/1 时被旧 Pod 占住 -> NodeExistsException -> CrashLoop。
+  strategy: { type: Recreate }
   selector: { matchLabels: { app: kafka } }
   template:
     metadata: { labels: { app: kafka } }
     spec:
+      # ⚠️ 关键:关闭 k8s 注入的 Docker-link 式服务环境变量。
+      #   因为本 namespace 里有名为 kafka 的 Service,k8s 默认会给 kafka Pod 注入
+      #   KAFKA_PORT=tcp://<clusterIP>:9092 等变量;confluent cp-kafka 入口脚本把所有
+      #   KAFKA_* 当成配置覆盖 -> 把 KAFKA_PORT 解析成已废弃的 `port` 属性且值是个 URL,
+      #   于是报 "port is deprecated..." 并 exit 1(CrashLoopBackOff)。关掉链接变量即可。
+      enableServiceLinks: false
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.9.7
           env:
             - { name: KAFKA_BROKER_ID, value: "1" }
             - { name: KAFKA_ZOOKEEPER_CONNECT, value: "zookeeper:2181" }
-            # 集群内单 listener:广播 Service DNS 名 kafka:9092,go 服务直连这个
+            # advertise 本 Pod IP(不是 Service DNS)。minikube/Windows/Docker 下,broker/controller
+            # 若 advertise Service DNS(kafka:9092),会经 ClusterIP 回连自己走 hairpin,本地环境常失败,
+            # 导致 controller 连不上自身、可用 broker 掉到 0(InvalidReplicationFactorException)。
+            # advertise status.podIP 后,集群内(broker 自连 + go 客户端经 metadata)都直连 Pod IP,可达。
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            # 集群内单 listener:广播 Pod IP,Service kafka:9092 仅作 bootstrap 入口
             - { name: KAFKA_LISTENERS, value: "PLAINTEXT://0.0.0.0:9092" }
-            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka:9092" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://$(POD_IP):9092" }
             - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "PLAINTEXT:PLAINTEXT" }
             - { name: KAFKA_INTER_BROKER_LISTENER_NAME, value: "PLAINTEXT" }
             - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
@@ -127,6 +149,12 @@ spec:
             - { name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: "true" }
             - { name: KAFKA_NUM_PARTITIONS, value: "4" }
           ports: [ { containerPort: 9092 } ]
+          # broker 启动较慢(要连 zookeeper);给足初始延迟,让 rollout status / 依赖服务能据此等待
+          readinessProbe:
+            tcpSocket: { port: 9092 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 12
 ---
 apiVersion: v1
 kind: Service

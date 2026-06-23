@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
@@ -42,6 +43,13 @@ import (
 )
 
 const serviceName = "battle_result"
+
+// Kafka 消费失败处理:业务瞬时错误进程内重试 dlqMaxRetries 次(间隔 dlqRetryBackoff)后进 DLQ
+// (infra.md §4.4「失败 3 次进 DLQ」)。
+const (
+	dlqMaxRetries   = 3
+	dlqRetryBackoff = 500 * time.Millisecond
+)
 
 var flagConf string
 
@@ -118,7 +126,22 @@ func main() {
 
 	// 6. 装配链
 	repo := data.NewMySQLBattleRepo(db)
-	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, cfg.Battle)
+
+	// 6.0 matchmaker releaser(弱依赖:MatchmakerAddr 空 → 不通知释放,仅 Warn 不阻断落库)
+	// 用于结算/废弃落库后调 matchmaker.ReleaseMatch 释放残留撮合状态,
+	// 修复"结算返回 Hub 后玩家无法再次匹配(StartMatch 4002)"。
+	var releaser biz.MatchReleaser
+	if cfg.Battle.MatchmakerAddr != "" {
+		mr := data.NewGrpcMatchReleaser(cfg.Battle.MatchmakerAddr)
+		defer func() { _ = mr.Close() }()
+		releaser = mr
+		helper.Infow("msg", "match_releaser_grpc", "matchmaker_addr", cfg.Battle.MatchmakerAddr)
+	} else {
+		helper.Warnw("msg", "match_releaser_disabled",
+			"hint", "matchmaker_addr 未配置 → 结算后不通知 matchmaker 释放撮合状态(玩家可能需等 TTL 才能再次匹配)")
+	}
+
+	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, releaser, cfg.Battle)
 	svc := service.NewBattleResultService(uc)
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
@@ -130,7 +153,7 @@ func main() {
 	go uc.RunOutboxPublisher(pubCtx)
 
 	// 7. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
-	consumers := mustBuildConsumers(&cfg, uc, helper)
+	consumers, dlqProducers := mustBuildConsumers(&cfg, uc, helper)
 	for _, kc := range consumers {
 		kc.Start()
 	}
@@ -139,6 +162,9 @@ func main() {
 			if cerr := kc.Close(); cerr != nil {
 				helper.Warnw("msg", "kafka_consumer_close_failed", "err", cerr)
 			}
+		}
+		for _, dp := range dlqProducers {
+			_ = dp.Close()
 		}
 	}()
 
@@ -168,7 +194,11 @@ func main() {
 
 // mustBuildConsumers 按 cfg.Battle.ConsumeTopics 起 KafkaConsumer,handler 按 topic 路由。
 // brokers / topics 空时致命(battle_result 不可降级:不消费就不结算)。
-func mustBuildConsumers(cfg *conf.Config, uc *biz.BattleResultUsecase, h *klog.Helper) []*kafkax.KeyOrderedConsumer {
+//
+// 每个消费者配一个 DLQ producer(topic=pandora.dlq.<topic>):解码毒丸直接进 DLQ,
+// 业务瞬时错误重试 dlqMaxRetries 次后进 DLQ(infra.md §4.4「失败 3 次进 DLQ」)。
+// DLQ producer 构造失败致命:battle_result 不可静默降级为丢消息模式。
+func mustBuildConsumers(cfg *conf.Config, uc *biz.BattleResultUsecase, h *klog.Helper) ([]*kafkax.KeyOrderedConsumer, []*kafkax.KeyOrderedProducer) {
 	if len(cfg.Kafka.Brokers) == 0 {
 		h.Errorw("msg", "kafka_brokers_empty", "hint", "kafka.brokers required")
 		os.Exit(1)
@@ -179,6 +209,7 @@ func mustBuildConsumers(cfg *conf.Config, uc *biz.BattleResultUsecase, h *klog.H
 	}
 
 	out := make([]*kafkax.KeyOrderedConsumer, 0, len(cfg.Battle.ConsumeTopics))
+	dlqProducers := make([]*kafkax.KeyOrderedProducer, 0, len(cfg.Battle.ConsumeTopics))
 	for _, topic := range cfg.Battle.ConsumeTopics {
 		var handler kafkax.Handler
 		switch topic {
@@ -190,24 +221,34 @@ func mustBuildConsumers(cfg *conf.Config, uc *biz.BattleResultUsecase, h *klog.H
 			h.Warnw("msg", "unknown_consume_topic_skipped", "topic", topic)
 			continue
 		}
+		dlqTopic := kafkax.BuildDLQTopic(topic)
+		dlq, derr := kafkax.NewKeyOrderedProducer(cfg.Kafka, dlqTopic)
+		if derr != nil {
+			h.Errorw("msg", "dlq_producer_init_failed", "topic", topic, "dlq_topic", dlqTopic, "err", derr,
+				"hint", "battle_result 不可静默降级,DLQ 必须可用")
+			os.Exit(1)
+		}
+		dlqProducers = append(dlqProducers, dlq)
 		kc, err := kafkax.NewKeyOrderedConsumer(kafkax.ConsumerConfig{
 			Brokers:        cfg.Kafka.Brokers,
 			Topic:          topic,
 			GroupID:        cfg.Kafka.GroupID,
 			PartitionCount: cfg.Kafka.PartitionCnt,
+			RetryPolicy:    kafkax.RetryPolicy{MaxRetries: dlqMaxRetries, Backoff: dlqRetryBackoff},
+			DLQ:            dlq,
 		}, handler)
 		if err != nil {
 			h.Errorw("msg", "kafka_consumer_new_failed", "topic", topic, "err", err)
 			os.Exit(1)
 		}
 		out = append(out, kc)
-		h.Infow("msg", "kafka_consumer_ready", "topic", topic, "group", cfg.Kafka.GroupID)
+		h.Infow("msg", "kafka_consumer_ready", "topic", topic, "group", cfg.Kafka.GroupID, "dlq_topic", dlqTopic)
 	}
 	if len(out) == 0 {
 		h.Errorw("msg", "no_valid_consumer", "hint", "consume_topics 全部无效")
 		os.Exit(1)
 	}
-	return out
+	return out, dlqProducers
 }
 
 // playerUpdatePusher 把 biz.PlayerUpdatePusher 适配到 kafkax.KeyOrderedProducer。

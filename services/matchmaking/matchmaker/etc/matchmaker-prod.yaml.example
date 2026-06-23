@@ -7,7 +7,10 @@ server:
   grpc:
     network: tcp
     addr: ":50011"
-    timeout: "5s"
+    # 必须 > ds_allocator AllocateBattle 总预算(allocate 5s + ready_wait 10s + 余量 ≈ 20s):
+    # ConfirmMatch 末尾同步调 ds_allocator.AllocateBattle,handler ctx 透传给对端;本端
+    # timeout 小于对端预算会先砍断 ConfirmMatch,既拿不到结果也让对端清理来不及收尾。
+    timeout: "22s"
     # enable_reflection 不写 = false
   http:
     network: tcp

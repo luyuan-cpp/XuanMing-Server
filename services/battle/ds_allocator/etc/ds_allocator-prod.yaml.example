@@ -7,7 +7,10 @@ server:
   grpc:
     network: tcp
     addr: ":50020"
-    timeout: "5s"
+    # 必须 > agones.allocate_timeout(5s) + allocator.ready_wait_timeout(10s) + 余量:
+    # AllocateBattle 先同步 Allocate 一个 pod(≤5s),再阻塞轮询等 DS ready 心跳(≤10s);
+    # server timeout 小于该预算会把 handler ctx 提前砍断,导致等待失败、回收清理路径走不全。
+    timeout: "20s"
     # enable_reflection 不写 = false
   http:
     network: tcp

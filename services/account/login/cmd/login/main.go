@@ -21,6 +21,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -225,10 +226,11 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper, sf *snowflake.Node) 
 }
 
 // mustBuildRedisRepos 按 cfg 决定是否启 Redis Session / JTI repo。
-// host 为空时跳过(测试 / mock 模式)。redis 初始化失败 → panic。
+// host 与 addrs 同时为空时跳过(测试 / mock 模式)。redis 初始化失败 → panic。
 func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, data.TicketJTIRepo, redis.UniversalClient) {
 	rc := cfg.Node.RedisClient
-	if rc.Host == "" {
+	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算关闭。
+	if rc.Host == "" && len(rc.Addrs) == 0 {
 		h.Warnw("msg", "redis_disabled_in_config")
 		return nil, nil, nil
 	}
@@ -236,11 +238,15 @@ func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, da
 	// 启动期 ping 一次,确保 redis 可达;失败致命(login 不可降级)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	redisAddr := rc.Host
+	if redisAddr == "" {
+		redisAddr = strings.Join(rc.Addrs, ",")
+	}
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		h.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host)
+		h.Errorw("msg", "redis_ping_failed", "err", err, "addr", redisAddr)
 		os.Exit(1)
 	}
-	h.Infow("msg", "redis_connected", "addr", rc.Host, "db", rc.DB)
+	h.Infow("msg", "redis_connected", "addr", redisAddr, "db", rc.DB)
 	return data.NewRedisSessionRepo(rdb), data.NewRedisTicketJTIRepo(rdb), rdb
 }
 

@@ -30,6 +30,11 @@ type AuctionConf struct {
 	// 配了 → 成交走真实结算(SettleAuctionMatch:卖↔买资产原子对转 + match_id 幂等);
 	// 留空 → 退回 NoopSettlementLedger(占位,总成功),仅供无交易联调 / 单测环境用。
 	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
+
+	// AllowNoopSettlement 显式允许在 InventoryAddr 为空时退回 NoopSettlementLedger(占位,不真实扣转资产)。
+	// 默认 false:InventoryAddr 缺失即 fail-fast,防止生产漏配 inventory 地址后仍静默以「成交不结算」启动。
+	// 仅无交易联调 / 单测环境显式置 true。
+	AllowNoopSettlement bool `yaml:"allow_noop_settlement,omitempty" json:"allow_noop_settlement,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。

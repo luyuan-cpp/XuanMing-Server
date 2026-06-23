@@ -61,7 +61,7 @@ hub:
 agones:
   enabled: true
   # api_server: 留空 = in-cluster "https://kubernetes.default.svc"
-  namespace: "pandora"
+  namespace: "default"
   fleet_name: "pandora-hub"
   insecure_skip_tls_verify: false
   list_timeout: "5s"

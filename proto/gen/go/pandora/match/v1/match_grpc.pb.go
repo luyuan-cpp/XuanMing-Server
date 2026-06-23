@@ -34,6 +34,7 @@ const (
 	MatchService_CancelMatch_FullMethodName      = "/pandora.match.v1.MatchService/CancelMatch"
 	MatchService_ConfirmMatch_FullMethodName     = "/pandora.match.v1.MatchService/ConfirmMatch"
 	MatchService_GetMatchProgress_FullMethodName = "/pandora.match.v1.MatchService/GetMatchProgress"
+	MatchService_ReleaseMatch_FullMethodName     = "/pandora.match.v1.MatchService/ReleaseMatch"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -44,6 +45,11 @@ type MatchServiceClient interface {
 	CancelMatch(ctx context.Context, in *CancelMatchRequest, opts ...grpc.CallOption) (*CancelMatchResponse, error)
 	ConfirmMatch(ctx context.Context, in *ConfirmMatchRequest, opts ...grpc.CallOption) (*ConfirmMatchResponse, error)
 	GetMatchProgress(ctx context.Context, in *GetMatchProgressRequest, opts ...grpc.CallOption) (*GetMatchProgressResponse, error)
+	// ReleaseMatch 释放一场已结束(结算 / abandoned)对局的全部撮合状态:
+	// 删每个成员的 player→ticket 归属(SETNX claim)、本局全部排队票据、match 镜像、active 索引。
+	// 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不带玩家 JWT,
+	// 按 match_id(+ 兜底 player_ids)操作,非玩家鉴权路径。幂等:重复调用 / 已释放均安全。
+	ReleaseMatch(ctx context.Context, in *ReleaseMatchRequest, opts ...grpc.CallOption) (*ReleaseMatchResponse, error)
 }
 
 type matchServiceClient struct {
@@ -94,6 +100,16 @@ func (c *matchServiceClient) GetMatchProgress(ctx context.Context, in *GetMatchP
 	return out, nil
 }
 
+func (c *matchServiceClient) ReleaseMatch(ctx context.Context, in *ReleaseMatchRequest, opts ...grpc.CallOption) (*ReleaseMatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseMatchResponse)
+	err := c.cc.Invoke(ctx, MatchService_ReleaseMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations should embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -102,6 +118,11 @@ type MatchServiceServer interface {
 	CancelMatch(context.Context, *CancelMatchRequest) (*CancelMatchResponse, error)
 	ConfirmMatch(context.Context, *ConfirmMatchRequest) (*ConfirmMatchResponse, error)
 	GetMatchProgress(context.Context, *GetMatchProgressRequest) (*GetMatchProgressResponse, error)
+	// ReleaseMatch 释放一场已结束(结算 / abandoned)对局的全部撮合状态:
+	// 删每个成员的 player→ticket 归属(SETNX claim)、本局全部排队票据、match 镜像、active 索引。
+	// 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不带玩家 JWT,
+	// 按 match_id(+ 兜底 player_ids)操作,非玩家鉴权路径。幂等:重复调用 / 已释放均安全。
+	ReleaseMatch(context.Context, *ReleaseMatchRequest) (*ReleaseMatchResponse, error)
 }
 
 // UnimplementedMatchServiceServer should be embedded to have
@@ -122,6 +143,9 @@ func (UnimplementedMatchServiceServer) ConfirmMatch(context.Context, *ConfirmMat
 }
 func (UnimplementedMatchServiceServer) GetMatchProgress(context.Context, *GetMatchProgressRequest) (*GetMatchProgressResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMatchProgress not implemented")
+}
+func (UnimplementedMatchServiceServer) ReleaseMatch(context.Context, *ReleaseMatchRequest) (*ReleaseMatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReleaseMatch not implemented")
 }
 func (UnimplementedMatchServiceServer) testEmbeddedByValue() {}
 
@@ -215,6 +239,24 @@ func _MatchService_GetMatchProgress_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_ReleaseMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseMatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ReleaseMatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ReleaseMatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ReleaseMatch(ctx, req.(*ReleaseMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -237,6 +279,10 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMatchProgress",
 			Handler:    _MatchService_GetMatchProgress_Handler,
+		},
+		{
+			MethodName: "ReleaseMatch",
+			Handler:    _MatchService_ReleaseMatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

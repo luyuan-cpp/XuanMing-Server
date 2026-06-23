@@ -150,6 +150,22 @@ extern const ::google::protobuf::internal::ClassDataFull MatchTicketStorageRecor
 #else
 extern const MatchTicketStorageRecordGlobalsTypeInternal MatchTicketStorageRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReleaseMatchRequest;
+struct ReleaseMatchRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReleaseMatchRequestGlobalsTypeInternal ReleaseMatchRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReleaseMatchRequest_class_data_;
+#else
+extern const ReleaseMatchRequestGlobalsTypeInternal ReleaseMatchRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReleaseMatchResponse;
+struct ReleaseMatchResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReleaseMatchResponseGlobalsTypeInternal ReleaseMatchResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReleaseMatchResponse_class_data_;
+#else
+extern const ReleaseMatchResponseGlobalsTypeInternal ReleaseMatchResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class StartMatchRequest;
 struct StartMatchRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -692,6 +708,431 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseMatchResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.match.v1.ReleaseMatchResponse) */ {
+ public:
+  inline ReleaseMatchResponse() : ReleaseMatchResponse(nullptr) {}
+  ~ReleaseMatchResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReleaseMatchResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReleaseMatchResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReleaseMatchResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReleaseMatchResponse(const ReleaseMatchResponse& from) : ReleaseMatchResponse(nullptr, from) {}
+  inline ReleaseMatchResponse(ReleaseMatchResponse&& from) noexcept : ReleaseMatchResponse(nullptr, ::std::move(from)) {}
+  inline ReleaseMatchResponse& operator=(const ReleaseMatchResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReleaseMatchResponse& operator=(ReleaseMatchResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReleaseMatchResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseMatchResponse>(&ReleaseMatchResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(ReleaseMatchResponse& a, ReleaseMatchResponse& b) { a.Swap(&b); }
+  inline void Swap(ReleaseMatchResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReleaseMatchResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReleaseMatchResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReleaseMatchResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReleaseMatchResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReleaseMatchResponse& from) { ReleaseMatchResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReleaseMatchResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.match.v1.ReleaseMatchResponse"; }
+
+  explicit ReleaseMatchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReleaseMatchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReleaseMatchResponse& from);
+  ReleaseMatchResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReleaseMatchResponse&& from) noexcept
+      : ReleaseMatchResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.match.v1.ReleaseMatchResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReleaseMatchResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmatch_2fv1_2fmatch_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseMatchRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.match.v1.ReleaseMatchRequest) */ {
+ public:
+  inline ReleaseMatchRequest() : ReleaseMatchRequest(nullptr) {}
+  ~ReleaseMatchRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReleaseMatchRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReleaseMatchRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReleaseMatchRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReleaseMatchRequest(const ReleaseMatchRequest& from) : ReleaseMatchRequest(nullptr, from) {}
+  inline ReleaseMatchRequest(ReleaseMatchRequest&& from) noexcept : ReleaseMatchRequest(nullptr, ::std::move(from)) {}
+  inline ReleaseMatchRequest& operator=(const ReleaseMatchRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReleaseMatchRequest& operator=(ReleaseMatchRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReleaseMatchRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseMatchRequest>(&ReleaseMatchRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(ReleaseMatchRequest& a, ReleaseMatchRequest& b) { a.Swap(&b); }
+  inline void Swap(ReleaseMatchRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReleaseMatchRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReleaseMatchRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReleaseMatchRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReleaseMatchRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReleaseMatchRequest& from) { ReleaseMatchRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReleaseMatchRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.match.v1.ReleaseMatchRequest"; }
+
+  explicit ReleaseMatchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReleaseMatchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReleaseMatchRequest& from);
+  ReleaseMatchRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReleaseMatchRequest&& from) noexcept
+      : ReleaseMatchRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 2,
+    kMatchIdFieldNumber = 1,
+  };
+  // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+  [[nodiscard]] int player_ids_size()
+      const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  [[nodiscard]] ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.match.v1.ReleaseMatchRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReleaseMatchRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::uint64_t match_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fmatch_2fv1_2fmatch_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchProgress final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.match.v1.MatchProgress) */ {
  public:
@@ -748,7 +1189,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchProgress final : public ::goog
   [[nodiscard]] static const MatchProgress& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchProgress>(&MatchProgress_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(MatchProgress& a, MatchProgress& b) { a.Swap(&b); }
   inline void Swap(MatchProgress* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1065,7 +1506,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchMemberStorageRecord final : pu
   [[nodiscard]] static const MatchMemberStorageRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchMemberStorageRecord>(&MatchMemberStorageRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(MatchMemberStorageRecord& a, MatchMemberStorageRecord& b) { a.Swap(&b); }
   inline void Swap(MatchMemberStorageRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2367,7 +2808,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
   [[nodiscard]] static const MatchTicketStorageRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchTicketStorageRecord>(&MatchTicketStorageRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(MatchTicketStorageRecord& a, MatchTicketStorageRecord& b) { a.Swap(&b); }
   inline void Swap(MatchTicketStorageRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2651,7 +3092,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStorageRecord final : public :
   [[nodiscard]] static const MatchStorageRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchStorageRecord>(&MatchStorageRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(MatchStorageRecord& a, MatchStorageRecord& b) { a.Swap(&b); }
   inline void Swap(MatchStorageRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2968,7 +3409,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchProgressEvent final : public :
   [[nodiscard]] static const MatchProgressEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchProgressEvent>(&MatchProgressEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(MatchProgressEvent& a, MatchProgressEvent& b) { a.Swap(&b); }
   inline void Swap(MatchProgressEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3789,6 +4230,113 @@ inline void GetMatchProgressResponse::set_allocated_progress(::pandora::match::v
 
   _impl_.progress_ = reinterpret_cast<::pandora::match::v1::MatchProgress*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.GetMatchProgressResponse.progress)
+}
+
+// -------------------------------------------------------------------
+
+// ReleaseMatchRequest
+
+// uint64 match_id = 1 [json_name = "matchId"];
+inline void ReleaseMatchRequest::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ReleaseMatchRequest::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.ReleaseMatchRequest.match_id)
+  return _internal_match_id();
+}
+inline void ReleaseMatchRequest::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.ReleaseMatchRequest.match_id)
+}
+inline ::uint64_t ReleaseMatchRequest::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void ReleaseMatchRequest::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// repeated uint64 player_ids = 2 [json_name = "playerIds"];
+inline int ReleaseMatchRequest::_internal_player_ids_size() const {
+  return _internal_player_ids().size();
+}
+inline int ReleaseMatchRequest::player_ids_size() const {
+  return _internal_player_ids_size();
+}
+inline void ReleaseMatchRequest::clear_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ReleaseMatchRequest::player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.ReleaseMatchRequest.player_ids)
+  return _internal_player_ids().Get(index);
+}
+inline void ReleaseMatchRequest::set_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.ReleaseMatchRequest.player_ids)
+}
+inline void ReleaseMatchRequest::add_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.match.v1.ReleaseMatchRequest.player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& ReleaseMatchRequest::player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.match.v1.ReleaseMatchRequest.player_ids)
+  return _internal_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL ReleaseMatchRequest::mutable_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.match.v1.ReleaseMatchRequest.player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+ReleaseMatchRequest::_internal_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+ReleaseMatchRequest::_internal_mutable_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// ReleaseMatchResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ReleaseMatchResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode ReleaseMatchResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.ReleaseMatchResponse.code)
+  return _internal_code();
+}
+inline void ReleaseMatchResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.ReleaseMatchResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ReleaseMatchResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ReleaseMatchResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
 }
 
 // -------------------------------------------------------------------

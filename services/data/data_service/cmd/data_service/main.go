@@ -90,23 +90,24 @@ func main() {
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
 	// 4. Redis(弱依赖:旁路缓存,Ping 失败则降级为直连 MySQL)
+	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
 	var cache data.PlayerCache
-	if rc := cfg.Node.RedisClient; rc.Host != "" {
+	if rc := cfg.Node.RedisClient; rc.Host != "" || len(rc.Addrs) > 0 {
 		rdb := redisx.NewUniversalClient(rc)
 		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		if perr := rdb.Ping(pingCtx).Err(); perr != nil {
 			cancel()
 			_ = rdb.Close()
-			helper.Warnw("msg", "redis_ping_failed", "err", perr, "addr", rc.Host,
+			helper.Warnw("msg", "redis_ping_failed", "err", perr, "addr", rc.Host, "addrs", rc.Addrs,
 				"hint", "degrade to direct MySQL (no cache)")
 		} else {
 			cancel()
 			defer func() { _ = rdb.Close() }()
 			cache = data.NewRedisPlayerCache(rdb)
-			helper.Infow("msg", "redis_connected", "addr", rc.Host, "cache_ttl", cfg.Data.CacheTTL.String())
+			helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs, "cache_ttl", cfg.Data.CacheTTL.String())
 		}
 	} else {
-		helper.Warnw("msg", "redis_host_empty", "hint", "cache disabled (direct MySQL)")
+		helper.Warnw("msg", "redis_endpoint_empty", "hint", "cache disabled (direct MySQL)")
 	}
 
 	// 5. 装配链

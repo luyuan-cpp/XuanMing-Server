@@ -79,6 +79,21 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 		return &loginv1.IssueDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
 
+	// ds_type=hub:复用登录的 hub 分配链路(hub_allocator.AssignHub),返回"当前有效"的大厅地址
+	// + 全新一次性票据。结算返回大厅必须走这条路,以应对 Hub DS 被 Agones 重建/换端口/换分片
+	// (客户端登录时缓存的旧地址会失效)。battle 票据仍由 ticketUC 仅签发(地址来自 matchmaker)。
+	if req.GetDsType() == "hub" {
+		addr, ticket, _, err := s.loginUC.ResolveHubEndpoint(ctx, playerID)
+		if err != nil {
+			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
+		}
+		return &loginv1.IssueDSTicketResponse{
+			Code:      commonv1.ErrCode_OK,
+			Ticket:    ticket,
+			HubDsAddr: addr,
+		}, nil
+	}
+
 	res, err := s.ticketUC.IssueDSTicket(ctx, playerID, req.GetDsType(), req.GetTargetId())
 	if err != nil {
 		return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil

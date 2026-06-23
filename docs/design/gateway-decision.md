@@ -280,6 +280,52 @@ Request->SetOption(HttpRequestOptions::HttpVersion, FHttpConstants::VERSION_1_1)
 
 **升级路径完美**。
 
+### 3.5 实现现状(2026-06-23 落地)
+
+W2/M1.5 期实际跑的是 **HTTP/1.1 + TLS + keep-alive**(`MakeGrpcWebRequest` 未指定 HTTP 版本,
+依赖 libcurl 默认 ALPN,且早期文档误记为"走 Envoy 是 HTTP/1.1")。2026-06-23 已在
+[`PandoraBackendSubsystem::MakeGrpcWebRequest`](../../../Pandora-Client-SVN/Pandora/Source/Pandora/Private/Net/PandoraBackendSubsystem.cpp)
+显式 `SetOption(HttpVersion, VERSION_2TLS)`,**一处覆盖 unary + push stream**(push 也走同一入口)。
+
+- 连接① UE NetDriver / UDP(移动/技能)**不受影响**,与本改动无关。
+- DS 面 `:8444` 是**明文无 TLS**,`VERSION_2TLS` 不适用,**不改**。
+- 服务端早已就绪:Envoy `:8443` listener `alpn_protocols: [ "h2", "http/1.1" ]`。
+- 验证手段:[`tools/scripts/http2_probe.ps1`](../../tools/scripts/http2_probe.ps1)
+  (ALPN 容器探测 + Envoy admin `http.pandora_hcm.downstream_cx_http2_total` 计数)。
+  系统自带 Schannel curl 不支持 `--http2`,须用容器 curl 或 Envoy stats。
+
+### 3.6 HTTP/2 vs 旧 HTTP/1.1 keep-alive:好处与代价(完整权衡)
+
+> 基准是改之前的 **HTTP/1.1 keep-alive**(并发请求会被迫额外开多条 TCP,各自握手),
+> 不是纯 HTTP/1.0 短连。对比只针对客户端连接②(UE → Envoy:8443)。
+
+**好处:**
+
+| 好处 | 原理 | 对 Pandora 的意义 |
+|---|---|---|
+| 多路复用 | 一条 TCP 上 N 个请求并发(各占 stream id) | login/team/match/push 共用一条连接,不再为并发开多条 TCP |
+| 消除应用层队头阻塞 | h1.1 同连接串行,h2 各 stream 独立 | 慢 RPC 不拖住同连接其它 RPC,故障隔离更干净 |
+| 握手只付一次 | 连接复用,不反复 TCP+TLS | 弱网/移动端首字节更快、更省电 |
+| HPACK 头压缩 | 重复 header 增量压缩 | 每请求都带的 `Authorization: Bearer <长JWT>` + grpc-web 头被压掉,省流量 |
+| 连接数下降 | 一条顶旧时多条 | 客户端 FD 少、Envoy 每玩家连接少,500 人大厅规模下 Envoy 内存/FD 压力小 |
+| 协议级 PING 保活 | h2 内置 PING | push 长连防 NAT 超时更省心,少依赖应用层心跳 |
+| server stream 更规范 | stream 是 h2 一等公民 | push server stream 更稳,trailer 语义更标准 |
+
+**代价 / 坏处:**
+
+| 坏处 | 严重度 | 说明 |
+|---|---|---|
+| 强制 TLS + ALPN 协商 | 低 | 已满足;但多一个"会不会回落 1.1"的监控点,故有 `http2_probe.ps1` 盯死 |
+| **TCP 层队头阻塞未消除** | **中(弱网)** | h2 消的是应用层队头阻塞;所有 stream 仍挤一条 TCP,**丢包时 TCP 重传卡住该连接全部 stream**。极端弱网下 h2 单连接可能不如多条 h1.1。**根治需 HTTP/3(QUIC),UE FHttpModule 现阶段不上** |
+| 连接黏边缘实例(sticky) | 低 | Envoy 滚动重启会断该长连、需重连;但 h1.1 keep-alive 本就如此,非 h2 新增 |
+| 调试更难 | 低 | h2 二进制帧不能直接抓明文;Schannel curl 不支持 --http2 |
+| 单连接并发上限 | 极低 | 受 `max_concurrent_streams` 限;单玩家 1~10 req/s 远够用 |
+| 实现/版本敏感 | 低 | 依赖 `VERSION_2TLS` 常量 + libcurl 带 nghttp2;换引擎版本要复验 |
+| 一条连接断影响面更大 | 低~中 | h2 一条连接断 = 其上所有进行中 stream 同断;有 ALPN 回落 + unary 重发兜底 |
+
+**净判断:** 内网/WiFi/有线 → 几乎纯收益;移动弱网 → 大体收益但 TCP 队头阻塞(丢包)是 h2 固有局限,
+要彻底解只能上 HTTP/3。业务服无状态**完全不受影响**(h2 长连到 Envoy 即终止,后端仍是独立 unary)。
+
 ---
 
 ## §4 后端 Kratos 框架

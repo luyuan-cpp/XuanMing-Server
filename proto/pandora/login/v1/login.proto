@@ -111,6 +111,10 @@ message IssueDSTicketRequest {
 message IssueDSTicketResponse {
   pandora.common.v1.ErrCode code = 1;
   string ticket = 2;  // JWT 编码后的字符串
+  // ds_type=hub 时由 hub_allocator.AssignHub 返回的"当前有效"大厅 DS 地址。
+  // 客户端结算返回大厅时必须用此地址(而非登录时缓存的旧地址),以应对 Hub DS 被 Agones
+  // 重建/换端口/换分片。ds_type=battle 时为空(battle 地址来自 matchmaker / match 进度)。
+  string hub_ds_addr = 3;
 }
 
 message VerifyDSTicketRequest {

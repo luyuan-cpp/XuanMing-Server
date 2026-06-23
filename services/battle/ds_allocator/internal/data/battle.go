@@ -68,17 +68,19 @@ func NewRedisBattleRepo(rdb redis.UniversalClient) *RedisBattleRepo {
 	return &RedisBattleRepo{rdb: rdb}
 }
 
+// CreateBattle 写战斗镜像(权威)并登记到全局 active ZSET。
+// Redis Cluster 兼容(同 hub decision-revisit-hub-crossslot.md):battleKey{match} 与全局
+// activeKey 分属不同 slot,不能捆同一事务(否则 CROSSSLOT)。① battleKey 单键 SET 权威落库;
+// ② activeKey 独立 ZADD 登记(必须成功,否则心跳扫描漏这个对局)。两步幂等,失败重试可重入。
 func (r *RedisBattleRepo) CreateBattle(ctx context.Context, battle *dsv1.BattleStorageRecord, battleTTL time.Duration) error {
 	payload, err := marshalBattle(battle)
 	if err != nil {
 		return err
 	}
-	_, err = r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Set(ctx, battleKey(battle.MatchId), payload, battleTTL)
-		pipe.ZAdd(ctx, activeKey, redis.Z{Score: float64(battle.LastHeartbeatMs), Member: battle.MatchId})
-		return nil
-	})
-	return err
+	if err := r.rdb.Set(ctx, battleKey(battle.MatchId), payload, battleTTL).Err(); err != nil {
+		return err
+	}
+	return r.rdb.ZAdd(ctx, activeKey, redis.Z{Score: float64(battle.LastHeartbeatMs), Member: battle.MatchId}).Err()
 }
 
 func (r *RedisBattleRepo) GetBattle(ctx context.Context, matchID uint64) (*dsv1.BattleStorageRecord, bool, error) {
@@ -129,7 +131,10 @@ func (r *RedisBattleRepo) updateWithLock(
 
 	for attempt := 0; attempt <= maxRetry; attempt++ {
 		var fnErr error
+		var lastHeartbeatMs int64
 
+		// Cluster 兼容:WATCH/SET 只围 battleKey 单 slot(权威镜像);全局 activeKey 移出事务,
+		// 事务成功后独立 ZADD(不同 slot)。
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			b, err := tx.Get(ctx, key).Bytes()
 			if err == redis.Nil {
@@ -149,16 +154,18 @@ func (r *RedisBattleRepo) updateWithLock(
 			if err != nil {
 				return err
 			}
+			lastHeartbeatMs = battle.LastHeartbeatMs
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, key, payload, expiration)
-				pipe.ZAdd(ctx, activeKey, redis.Z{Score: float64(battle.LastHeartbeatMs), Member: battle.MatchId})
 				return nil
 			})
 			return err
 		}, key)
 
 		if txErr == nil {
-			return nil
+			// active 索引:与 battleKey 不同 slot,独立 ZADD 刷新 score(last_heartbeat_ms)。
+			// 幂等;失败下一轮心跳/sweep 即补,不影响权威镜像。
+			return r.rdb.ZAdd(ctx, activeKey, redis.Z{Score: float64(lastHeartbeatMs), Member: matchID}).Err()
 		}
 		if txErr == fnErr && fnErr != nil {
 			return fnErr // fn 业务错误,不重试
@@ -179,22 +186,23 @@ func (r *RedisBattleRepo) RemoveActive(ctx context.Context, matchID uint64) erro
 	return r.rdb.ZRem(ctx, activeKey, matchID).Err()
 }
 
+// DeleteBattle 删战斗镜像 record + 移出 active ZSET。
+// Cluster 兼容:battleKey 与 activeKey 不同 slot,拆为独立命令。均幂等;若 ZRem 失败残留 active,
+// 由 sweep / ListBattles 扫到镜像已删时跳过并补清(自愈)。
 func (r *RedisBattleRepo) DeleteBattle(ctx context.Context, matchID uint64) error {
-	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Del(ctx, battleKey(matchID))
-		pipe.ZRem(ctx, activeKey, matchID)
-		return nil
-	})
-	return err
+	if err := r.rdb.Del(ctx, battleKey(matchID)).Err(); err != nil {
+		return err
+	}
+	return r.rdb.ZRem(ctx, activeKey, matchID).Err()
 }
 
+// ExpireBattle 改短 battle key TTL(终态保留供查询)并移出 active。
+// Cluster 兼容:battleKey 与 activeKey 不同 slot,拆为独立命令。
 func (r *RedisBattleRepo) ExpireBattle(ctx context.Context, matchID uint64, ttl time.Duration) error {
-	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Expire(ctx, battleKey(matchID), ttl)
-		pipe.ZRem(ctx, activeKey, matchID)
-		return nil
-	})
-	return err
+	if err := r.rdb.Expire(ctx, battleKey(matchID), ttl).Err(); err != nil {
+		return err
+	}
+	return r.rdb.ZRem(ctx, activeKey, matchID).Err()
 }
 
 func (r *RedisBattleRepo) RangeStaleBattles(ctx context.Context, thresholdMs int64) ([]uint64, error) {
