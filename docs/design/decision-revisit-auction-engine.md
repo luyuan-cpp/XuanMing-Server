@@ -144,3 +144,59 @@
   **MySQL ShardSet 按 market_id 分片(不上 TiDB)**、**两层幂等(idempotency_key + match_id)**。
 - [ ] 实现细节(proto 字段 / 端口 / 库表 / 错误码段最终值)审定后由实现窗口落地,落地时同步更新 §5.4 各文档。
 - [ ] 若实现中发现"必须跨市场强一致"场景(推翻 §2 单写者前提),停下重走 decision-revisit。
+
+---
+
+## 7. 实现增补:四项遗留局限补齐(2026-06-20)
+
+W1 撮合骨架落地后遗留四项局限,本轮全部补齐(代码 + 单测;真实多依赖端到端联调留给环境窗口)。
+
+### 7.1 挂单冻结资产(escrow)—— 限制#1
+
+**问题**:原先只在成交时结算(settle-at-match),挂单到成交之间资产可被它处花掉,导致成交瞬间余额不足而失败。
+
+**方案**:三段式 escrow,资产在挂单时即冻结,成交只从 escrow 消费(永不触碰活跃余额 → 不会因余额不足失败):
+
+- **冻结**:`inventory.FreezeForOrder`(幂等键 `uk(player_id, order_id)`)。卖单冻 `quantity` 个道具、
+  买单冻 `quantity*unit_price` 金币,写入 `auction_escrow` 表并从活跃余额扣减(同库本地事务,原子)。
+  冻结失败(余额不足)→ `auction` 挂单直接置 `CANCELED`,不进簿、不撮合,返回 `ERR_AUCTION_INSUFFICIENT`。
+- **成交**:`inventory.SettleAuctionMatch`(幂等键 `inventory_ledger uk(player_id, "auction:settle:<match_id>")`)
+  从买卖双方 escrow 消费完成对转,按 `player_id` 升序锁行避免死锁。买单按出价冻结、按**成交价**(被动挂单价)
+  消费,价差残留在 escrow。
+- **退还**:`inventory.ReleaseEscrow`(幂等键:escrow 行 `status active→closed`)在撤单 / 过期 / 完全成交后
+  退还残余(买单价差 + 未成交部分)到活跃余额。`auction` 在 `CancelOrder` / 完全成交 / 过期清扫三处调用。
+
+### 7.2 跨实例 per-market 单写者锁 —— 限制#2
+
+**问题**:进程内 striped lock 只在单实例内串行;多实例部署时同一 market 可能落到不同实例并发撮合 → 订单簿与权威库被并发改 → 超卖。
+
+**方案**:`MarketLocker` 接口(`biz`)+ Redis 单写者 token(`pkg/redislock`,TTL ≤ 30s,不变量 §10)。
+`guardMarket` 先取进程内 striped lock,再(若 `cross_instance_lock=true`)叠加 Redis 锁,保证任一时刻同一 market
+全局只有一个实例撮合。抢锁超时返回 `ERR_AUCTION_MARKET_BUSY`(12006,让客户端重试)。
+**推荐再叠一致性哈希路由**(同一 market 固定落同一实例,见 `infra.md`)把锁竞争降到最低;本锁兜底路由抖动 / rebalance。
+
+### 7.3 撮合层主动跳过自撮合 —— 限制#3
+
+**问题**:inventory 结算拒 `seller==buyer`,但撮合层应提前跳过,避免自成交浪费一次结算往返。
+
+**方案**:`match()` 遇到自己挂在对手盘上的单时临时移出簿(防被 `Best` 反复选中死循环),本次撮合结束后 `defer` 原样放回。
+
+### 7.4 过期清扫 sweeper —— 限制#1 补偿
+
+`OrderTTLSeconds > 0` 时后台 ticker 周期扫 `ListExpirableOrders`(创建超 TTL 仍 OPEN/PARTIAL),
+持 market 锁逐单置 `EXPIRED`、移出簿、退还 escrow。保证挂单冻结的资产不会因长期挂单永久锁死。
+
+### 7.5 真依赖端到端联调 —— 限制#4(待环境窗口)
+
+当前单测用内存 fake + miniredis 覆盖 escrow 冻结 / 成交 / 退还 / 价差返还 / 过期 / 自撮合 / 跨实例锁逻辑;
+真实 MySQL(`auction_escrow` 本地事务)+ Kafka + gRPC(auction↔inventory)端到端联调属环境窗口职责(`AGENTS.md` §11.1)。
+联调清单见 `docs/ops/` 待补的 auction-inventory 冒烟步骤。
+
+### 7.6 涉及文件
+
+| 层 | 文件 |
+|---|---|
+| proto | `inventory.proto`(FreezeForOrder / ReleaseEscrow / SettleAuctionMatch+order_id / EscrowSide)、`errcode.proto`(12006) |
+| inventory | `data/inventory_repo.go`(escrow 三方法 + consume 助手)、`biz/inventory.go`、`service/inventory.go`、`08-inventory-tables.sql`(`auction_escrow`) |
+| auction | `biz/auction.go`(SettlementLedger 扩 Freeze/Release、MarketLocker、submit 冻结、match 释放、CancelOrder/expire 释放、ExpireDueOrders)、`data/settlement_client.go`、`data/market_locker.go`、`data/auction_repo.go`(ListExpirableOrders)、`conf/conf.go`、`cmd/auction/main.go`、`etc/auction-dev.yaml`、`09-auction-tables.sql`(`idx_status_created`) |
+| 测试 | `auction_test.go`(冻结失败 / 撤单释放 / 完全成交释放 / 过期清扫)、`inventory_test.go`(冻结充足性 / 幂等 / 退还 / 价差返还) |

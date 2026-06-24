@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS `auction_orders` (
     PRIMARY KEY (`order_id`),
     UNIQUE KEY `uk_owner_idem` (`owner_id`, `idempotency_key`),
     KEY `idx_market_side_status` (`market_id`, `side`, `status`),
-    KEY `idx_owner_status` (`owner_id`, `status`)
+    KEY `idx_owner_status` (`owner_id`, `status`),
+    KEY `idx_status_created` (`status`, `created_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 拍卖行挂单/出价(撮合权威;uk owner+idem 防重复挂单)';
 

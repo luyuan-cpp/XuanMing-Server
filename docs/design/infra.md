@@ -72,13 +72,17 @@ version      INT          NOT NULL  DEFAULT 0                    -- 乐观锁
 |---|---|---|
 | `trade_orders` | 交易订单 | uniq(order_id), idx(seller_id), idx(buyer_id) |
 | `trade_audit` | 审计日志(append-only) | idx(order_id), idx(created_at) |
+| `player_currency` | 玩家货币余额(inventory) | PK(player_id) |
+| `player_items` | 玩家道具持有(inventory) | uk(player_id, item_config_id) |
+| `inventory_ledger` | 资产变动流水 / 幂等键(inventory) | uk(player_id, idempotency_key) |
+| `auction_escrow` | 拍卖挂单冻结(escrow:卖冻道具 / 买冻金币) | uk(player_id, order_id), idx(player_id) |
 
 #### `pandora_auction`
 按 `market_id` 分片(mysqlx ShardSet,shard = market_id % N;W1 单库)。撮合是「每 market 单写者」交易所模型,不跨分片事务,MySQL 分库即可。
 
 | 表 | 用途 | 关键索引 |
 |---|---|---|
-| `auction_orders` | 挂单 / 出价 | PK(order_id), uk(owner_id, idempotency_key), idx(market_id, side, status), idx(owner_id, status) |
+| `auction_orders` | 挂单 / 出价 | PK(order_id), uk(owner_id, idempotency_key), idx(market_id, side, status), idx(owner_id, status), idx(status, created_at_ms) |
 | `auction_matches` | 成交流水(append-only) | PK(match_id), idx(market_id, matched_at_ms), idx(sell_order_id), idx(buy_order_id) |
 
 ### 2.4 字符集 / 引擎

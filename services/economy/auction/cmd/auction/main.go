@@ -180,6 +180,21 @@ func main() {
 	repo := data.NewMySQLAuctionRepo(router)
 	book := data.NewRedisBookStore(rdb)
 	uc := biz.NewAuctionUsecase(repo, book, ledger, events, sf, cfg.Auction)
+
+	// 8a. 跨实例 per-market 单写者锁(限制#2):多实例部署时同一 market 全局只有一个实例撮合。
+	//     单实例(cross_instance_lock=false)仅靠进程内 striped lock。
+	if cfg.Auction.CrossInstanceLock {
+		locker := data.NewRedisMarketLocker(rdb,
+			time.Duration(cfg.Auction.MarketLockTTLSeconds)*time.Second,
+			time.Duration(cfg.Auction.MarketLockMaxWaitMs)*time.Millisecond,
+			0)
+		uc.SetMarketLocker(locker)
+		helper.Infow("msg", "market_locker_ready", "mode", "redis_cross_instance",
+			"ttl_s", cfg.Auction.MarketLockTTLSeconds, "max_wait_ms", cfg.Auction.MarketLockMaxWaitMs)
+	} else {
+		helper.Infow("msg", "market_locker_inproc", "hint", "single-instance striped lock only")
+	}
+
 	svc := service.NewAuctionService(uc)
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
@@ -199,6 +214,33 @@ func main() {
 		kratos.Logger(logger),
 		kratos.Server(grpcSrv, httpSrv),
 	)
+
+	// 9a. 过期清扫(限制#1 补偿):OrderTTLSeconds > 0 时起后台 ticker,周期把超 TTL 仍未成交的
+	//     挂单置 EXPIRED、移出簿、退还 escrow。随 app 生命周期退出(ctx 取消)。
+	if cfg.Auction.OrderTTLSeconds > 0 {
+		sweepCtx, stopSweep := context.WithCancel(context.Background())
+		defer stopSweep()
+		interval := time.Duration(cfg.Auction.ExpirySweepIntervalSeconds) * time.Second
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-sweepCtx.Done():
+					return
+				case <-ticker.C:
+					n, serr := uc.ExpireDueOrders(sweepCtx)
+					if serr != nil {
+						helper.Warnw("msg", "auction_expiry_sweep_failed", "err", serr)
+					} else if n > 0 {
+						helper.Infow("msg", "auction_expiry_sweep", "expired", n)
+					}
+				}
+			}
+		}()
+		helper.Infow("msg", "expiry_sweeper_ready", "ttl_s", cfg.Auction.OrderTTLSeconds, "interval_s", cfg.Auction.ExpirySweepIntervalSeconds)
+	}
+
 	if err := app.Run(); err != nil {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)

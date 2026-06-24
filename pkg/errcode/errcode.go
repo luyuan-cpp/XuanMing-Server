@@ -166,6 +166,7 @@ const (
 	ErrAuctionNotOwner            Code = 12003 // 非挂单本人撤单
 	ErrAuctionInsufficient        Code = 12004 // 结算资源不足(冻结 / 扣减失败)
 	ErrAuctionIdempotencyConflict Code = 12005 // idempotency_key 复用到不同请求(指纹不一致)
+	ErrAuctionMarketBusy          Code = 12006 // market 跨实例单写者锁竞争超时(让客户端稍后重试)
 )
 
 // Error 是带错误码的标准错误类型。
@@ -204,7 +205,7 @@ func As(err error) Code {
 func IsRetryable(code Code) bool {
 	switch code {
 	case ErrTimeout, ErrUnavailable, ErrRateLimited, ErrServiceDisabled,
-		ErrDSAllocationFailed, ErrHubTransferFailed:
+		ErrDSAllocationFailed, ErrHubTransferFailed, ErrAuctionMarketBusy:
 		return true
 	default:
 		return false

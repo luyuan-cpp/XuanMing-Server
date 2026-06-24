@@ -52,3 +52,20 @@ CREATE TABLE IF NOT EXISTS `inventory_ledger` (
     KEY `idx_player_created` (`player_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 背包发放/使用/出售幂等流水(不变量 §9.7;指纹防 key 复用,快照可回放)';
+
+CREATE TABLE IF NOT EXISTS `auction_escrow` (
+    `id`             BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`      BIGINT UNSIGNED  NOT NULL COMMENT '挂单玩家(冻结资产的所有者)',
+    `order_id`       BIGINT UNSIGNED  NOT NULL COMMENT '挂单 order_id(escrow 键 + 冻结幂等键)',
+    `kind`           TINYINT          NOT NULL COMMENT '1=item(卖单冻道具) 2=gold(买单冻金币)',
+    `item_config_id` INT UNSIGNED     NOT NULL DEFAULT 0 COMMENT 'kind=1 时冻结的道具配置 ID',
+    `frozen_qty`     BIGINT           NOT NULL DEFAULT 0 COMMENT 'kind=1 剩余冻结道具数(成交消费 / 退还递减)',
+    `frozen_gold`    BIGINT           NOT NULL DEFAULT 0 COMMENT 'kind=2 剩余冻结金币(成交消费 / 退还递减)',
+    `status`         TINYINT          NOT NULL DEFAULT 1 COMMENT '1=active 2=closed(退还/完结)',
+    `created_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_order` (`player_id`, `order_id`),
+    KEY `idx_player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 拍卖挂单托管(escrow:挂单冻结/成交消费/撤单过期退还,资产不在活跃余额可被双花)';

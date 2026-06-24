@@ -31,14 +31,36 @@ service InventoryService {
   // SellItem 出售道具换金币(原子扣道具 + 加金币)。
   rpc SellItem(SellItemRequest) returns (SellItemResponse);
 
+  // FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
+  //   卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
+  //   买单(BUY):把 quantity*unit_price 金币从活跃余额移入托管,出价期间锁定。
+  // 幂等键 = order_id(挂单雪花),同一挂单重复冻结只生效一次;资产不足 → ERR_INVENTORY_INSUFFICIENT。
+  // 与 SettleAuctionMatch / ReleaseEscrow 配套:成交从 escrow 消费、撤单 / 过期从 escrow 退还。
+  // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+  rpc FreezeForOrder(FreezeForOrderRequest) returns (FreezeForOrderResponse);
+
   // SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
-  //   同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
-  //     卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
-  //     买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+  //   同一 MySQL 本地事务里从双方 escrow 消费完成资产对转 ——
+  //     卖家:从卖单 escrow 消费 quantity 个 item_config_id 交付买家,卖家加 quantity*unit_price 金币;
+  //     买家:从买单 escrow 消费 quantity*unit_price 金币付给卖家,买家加 quantity 个 item_config_id。
+  // 因双方资产已在 FreezeForOrder 阶段冻结,成交不会因余额不足失败。
   // 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
-  // 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
   // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
   rpc SettleAuctionMatch(SettleAuctionMatchRequest) returns (SettleAuctionMatchResponse);
+
+  // ReleaseEscrow 拍卖挂单托管退还(系统接口,仅后端内部直连):
+  //   撤单 / 过期 / 完全成交后把某挂单 escrow 的残余资产退回玩家活跃余额并关闭托管。
+  //   卖单残余 = 未成交道具;买单残余 = 未成交金币 + 成交价优于出价的价差返还。
+  // 幂等键 = order_id,重复退还只生效一次(escrow status=closed 后再调为 no-op)。
+  // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+  rpc ReleaseEscrow(ReleaseEscrowRequest) returns (ReleaseEscrowResponse);
+}
+
+// EscrowSide 冻结方向(对齐 auction OrderSide:SELL=1 冻道具 / BUY=2 冻金币)。
+enum EscrowSide {
+  ESCROW_SIDE_UNSPECIFIED = 0;
+  ESCROW_SIDE_SELL        = 1;  // 卖单:冻结道具
+  ESCROW_SIDE_BUY         = 2;  // 买单:冻结金币
 }
 
 // ItemStack 是背包里某配置道具的持有堆叠(客户端可见结构)。
@@ -120,15 +142,43 @@ message SellItemResponse {
 
 // SettleAuctionMatchRequest 拍卖成交结算(系统接口,后端内部直连)。
 // 幂等键 = match_id;总价 = quantity * unit_price(在 inventory 端做溢出安全乘法)。
+// 资产从双方挂单 escrow 消费,故须带 sell_order_id / buy_order_id 定位 escrow。
 message SettleAuctionMatchRequest {
   uint64 match_id       = 1;  // 成交幂等键(雪花 uint64,§11)
   uint64 seller_id      = 2;  // 卖家 player_id(交付道具 / 收金币)
   uint64 buyer_id       = 3;  // 买家 player_id(付金币 / 收道具)
   uint32 item_config_id = 4;  // 成交道具配置 ID(uint32,§12)
   int64  quantity       = 5;  // 成交数量(> 0)
-  int64  unit_price     = 6;  // 成交单价金币(> 0)
+  int64  unit_price     = 6;  // 成交单价金币(> 0,被动挂单价)
+  uint64 sell_order_id  = 7;  // 卖单 order_id(定位卖家道具 escrow)
+  uint64 buy_order_id   = 8;  // 买单 order_id(定位买家金币 escrow)
 }
 
 message SettleAuctionMatchResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// FreezeForOrderRequest 挂单冻结资产(系统接口,后端内部直连)。
+// 幂等键 = order_id;SELL 冻 quantity 道具,BUY 冻 quantity*unit_price 金币(溢出安全乘)。
+message FreezeForOrderRequest {
+  uint64     player_id      = 1;  // 挂单玩家 player_id
+  uint64     order_id       = 2;  // 挂单 order_id(冻结幂等键 + escrow 键)
+  EscrowSide side           = 3;  // SELL=冻道具 / BUY=冻金币
+  uint32     item_config_id = 4;  // 道具配置 ID(uint32,§12)
+  int64      quantity       = 5;  // 挂单数量(> 0)
+  int64      unit_price     = 6;  // 挂单单价金币(> 0;BUY 冻 quantity*unit_price)
+}
+
+message FreezeForOrderResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// ReleaseEscrowRequest 退还挂单 escrow 残余(系统接口,后端内部直连)。幂等键 = order_id。
+message ReleaseEscrowRequest {
+  uint64 player_id = 1;  // 挂单玩家 player_id
+  uint64 order_id  = 2;  // 挂单 order_id(escrow 键)
+}
+
+message ReleaseEscrowResponse {
   pandora.common.v1.ErrCode code = 1;
 }

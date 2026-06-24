@@ -13,6 +13,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	auctionv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/auction/v1"
 
 	"github.com/luyuancpp/pandora/services/economy/auction/internal/conf"
@@ -36,14 +37,34 @@ func (g *seqGen) Generate() uint64 {
 
 // trackLedger 记录每笔结算(计数 = 成交笔数 + 量,验证不超卖 / 不重复结算)。
 type trackLedger struct {
-	mu      sync.Mutex
-	matches []*data.MatchRecord
+	mu       sync.Mutex
+	matches  []*data.MatchRecord
+	freezes  []uint64        // 冻结过的 order_id
+	releases []uint64        // 退还过的 order_id
+	failFor  map[uint64]bool // 这些 order_id 的 Freeze 返回资产不足
+}
+
+func (l *trackLedger) Freeze(_ context.Context, _, orderID uint64, _ data.Side, _ uint32, _, _ int64) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.failFor[orderID] {
+		return errcode.New(errcode.ErrAuctionInsufficient, "test freeze insufficient order=%d", orderID)
+	}
+	l.freezes = append(l.freezes, orderID)
+	return nil
 }
 
 func (l *trackLedger) Settle(_ context.Context, m *data.MatchRecord) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.matches = append(l.matches, m)
+	return nil
+}
+
+func (l *trackLedger) Release(_ context.Context, _, orderID uint64) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.releases = append(l.releases, orderID)
 	return nil
 }
 
@@ -55,6 +76,12 @@ func (l *trackLedger) totalQty() int64 {
 		sum += m.Quantity
 	}
 	return sum
+}
+
+func (l *trackLedger) releaseCount() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.releases)
 }
 
 // fakeRepo 是内存版 AuctionRepo。
@@ -146,6 +173,25 @@ func (r *fakeRepo) ListOwnerOrders(_ context.Context, ownerID uint64, activeOnly
 			continue
 		}
 		out = append(out, copyOrder(o))
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) ListExpirableOrders(_ context.Context, createdBeforeMs int64, limit int) ([]*data.OrderRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*data.OrderRecord
+	for _, o := range r.orders {
+		if o.CreatedAtMs >= createdBeforeMs {
+			continue
+		}
+		if o.Status != data.StatusOpen && o.Status != data.StatusPartial {
+			continue
+		}
+		out = append(out, copyOrder(o))
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	return out, nil
 }
@@ -312,6 +358,152 @@ func TestCancelOrder(t *testing.T) {
 	bid, _ := uc.Bid(ctx, 2, 100, 200, 10, 100, "b1")
 	if bid.GetFilledQuantity() != 0 {
 		t.Fatalf("bid filled = %d after cancel, want 0", bid.GetFilledQuantity())
+	}
+}
+
+// TestMatch_SkipsSelfOrder 验证自撮合跳过:同一玩家的对手单不与自己成交,
+// 既不结算、也不把自己的挂单清掉(撮合结束后原样留在簿上)。
+func TestMatch_SkipsSelfOrder(t *testing.T) {
+	uc, repo, ledger := newTestUsecase(t)
+	ctx := context.Background()
+
+	// 玩家 1 先挂一个卖单。
+	sell, _ := uc.PlaceOrder(ctx, 1, 100, 200, 10, 100, "s_self")
+	// 同一玩家 1 再下一个能交叉的买单 → 不应自成交。
+	bid, err := uc.Bid(ctx, 1, 100, 200, 10, 100, "b_self")
+	if err != nil {
+		t.Fatalf("self bid: %v", err)
+	}
+	if bid.GetFilledQuantity() != 0 {
+		t.Fatalf("self bid filled = %d, want 0 (self-match skipped)", bid.GetFilledQuantity())
+	}
+	if bid.GetStatus() != auctionv1.AuctionOrderStatus_AUCTION_ORDER_STATUS_OPEN {
+		t.Fatalf("self bid status = %v, want OPEN", bid.GetStatus())
+	}
+	if got := ledger.totalQty(); got != 0 {
+		t.Fatalf("settled qty = %d, want 0 (no self settlement)", got)
+	}
+	// 自己原来的卖单仍未成交,留在簿上。
+	got, _, _ := repo.GetOrder(ctx, 100, sell.GetOrderId())
+	if got.FilledQuantity != 0 || got.Status != data.StatusOpen {
+		t.Fatalf("self sell order changed: filled=%d status=%d, want 0/OPEN", got.FilledQuantity, got.Status)
+	}
+
+	// 此时换别的买家(玩家 2)来吃,应能正常成交卖单 —— 证明自单仍在簿上、未被错误移除。
+	other, err := uc.Bid(ctx, 2, 100, 200, 10, 100, "b_other")
+	if err != nil {
+		t.Fatalf("other bid: %v", err)
+	}
+	if other.GetFilledQuantity() != 10 {
+		t.Fatalf("other bid filled = %d, want 10 (self sell still on book)", other.GetFilledQuantity())
+	}
+	if q := ledger.totalQty(); q != 10 {
+		t.Fatalf("settled qty = %d, want 10", q)
+	}
+}
+
+// TestFreezeFail_OrderRejected 验证挂单冻结失败(资产不足)时:订单作废、不进簿、不撮合。
+func TestFreezeFail_OrderRejected(t *testing.T) {
+	uc, repo, ledger := newTestUsecase(t)
+	ctx := context.Background()
+
+	// 预约:下一个生成的 order_id = 1001(seqGen 从 1000 起,Generate 先自增)。
+	ledger.failFor = map[uint64]bool{1001: true}
+
+	o, err := uc.PlaceOrder(ctx, 1, 100, 200, 10, 100, "s_freeze_fail")
+	if errcode.As(err) != errcode.ErrAuctionInsufficient {
+		t.Fatalf("place with freeze fail should be ErrAuctionInsufficient, got %v (order=%v)", err, o)
+	}
+	// 订单已落库为 CANCELED,不在簿上。
+	got, ok, _ := repo.GetOrder(ctx, 100, 1001)
+	if !ok || got.Status != data.StatusCanceled {
+		t.Fatalf("order after freeze fail should be CANCELED, ok=%v status=%d", ok, got.Status)
+	}
+	// 无任何结算。
+	if q := ledger.totalQty(); q != 0 {
+		t.Fatalf("settled qty = %d, want 0", q)
+	}
+	// 后续买家来吃应吃不到(没进簿)。
+	bid, _ := uc.Bid(ctx, 2, 100, 200, 10, 100, "b_after_fail")
+	if bid.GetFilledQuantity() != 0 {
+		t.Fatalf("bid filled = %d after rejected order, want 0", bid.GetFilledQuantity())
+	}
+}
+
+// TestCancelOrder_ReleasesEscrow 验证撤单会退还 escrow。
+func TestCancelOrder_ReleasesEscrow(t *testing.T) {
+	uc, _, ledger := newTestUsecase(t)
+	ctx := context.Background()
+
+	sell, _ := uc.PlaceOrder(ctx, 1, 100, 200, 10, 100, "s_rel")
+	if err := uc.CancelOrder(ctx, 1, 100, sell.GetOrderId()); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	if n := ledger.releaseCount(); n != 1 {
+		t.Fatalf("release count after cancel = %d, want 1", n)
+	}
+}
+
+// TestMatch_FullFillReleasesBothEscrows 验证完全成交时买卖双方都退还 escrow 残余。
+func TestMatch_FullFillReleasesBothEscrows(t *testing.T) {
+	uc, _, ledger := newTestUsecase(t)
+	ctx := context.Background()
+
+	// 卖单先挂(被动),买单后到(主动)完全吃掉 → 双方都 FILLED,各退一次 escrow。
+	uc.PlaceOrder(ctx, 1, 100, 200, 10, 100, "s_fill")
+	if _, err := uc.Bid(ctx, 2, 100, 200, 10, 100, "b_fill"); err != nil {
+		t.Fatalf("bid: %v", err)
+	}
+	if n := ledger.releaseCount(); n != 2 {
+		t.Fatalf("release count after full fill = %d, want 2 (both sides)", n)
+	}
+}
+
+// TestExpireDueOrders_ExpiresAndReleases 验证过期清扫:超 TTL 的挂单被置 EXPIRED、退还 escrow,
+// 之后买家来吃吃不到(已移出簿)。
+func TestExpireDueOrders_ExpiresAndReleases(t *testing.T) {
+	uc, repo, ledger := newTestUsecase(t)
+	uc.cfg.OrderTTLSeconds = 1 // 1 秒过期
+	ctx := context.Background()
+
+	sell, _ := uc.PlaceOrder(ctx, 1, 100, 200, 10, 100, "s_exp")
+	// 手动把创建时间提前到很久以前,模拟超 TTL。
+	repo.mu.Lock()
+	repo.orders[sell.GetOrderId()].CreatedAtMs = nowMs() - 10_000
+	repo.mu.Unlock()
+
+	n, err := uc.ExpireDueOrders(ctx)
+	if err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expired count = %d, want 1", n)
+	}
+	got, _, _ := repo.GetOrder(ctx, 100, sell.GetOrderId())
+	if got.Status != data.StatusExpired {
+		t.Fatalf("order status = %d, want EXPIRED(5)", got.Status)
+	}
+	if rc := ledger.releaseCount(); rc != 1 {
+		t.Fatalf("release count after expire = %d, want 1", rc)
+	}
+	// 过期后买家来吃吃不到(已移出簿)。
+	bid, _ := uc.Bid(ctx, 2, 100, 200, 10, 100, "b_after_exp")
+	if bid.GetFilledQuantity() != 0 {
+		t.Fatalf("bid filled = %d after expire, want 0", bid.GetFilledQuantity())
+	}
+}
+
+// TestExpireDueOrders_DisabledByDefault 验证 OrderTTLSeconds<=0 时清扫是 no-op。
+func TestExpireDueOrders_DisabledByDefault(t *testing.T) {
+	uc, _, _ := newTestUsecase(t)
+	ctx := context.Background()
+	uc.PlaceOrder(ctx, 1, 100, 200, 10, 100, "s_noexp")
+	n, err := uc.ExpireDueOrders(ctx)
+	if err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expired count = %d, want 0 (TTL disabled)", n)
 	}
 }
 

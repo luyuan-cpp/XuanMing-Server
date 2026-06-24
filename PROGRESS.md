@@ -1444,6 +1444,50 @@ W4 ⑩ 已用 `WATCH/MULTI/EXEC + guardTransition` 挡住 `MATCHING` 被 stale `
 
 ### 验证
 
+---
+
+## auction 拍卖行四项遗留局限补齐(2026-06-20)
+
+W1 撮合骨架落地后遗留四项局限,本轮全部补齐(代码 + 单测全绿;真实多依赖端到端联调留环境窗口)。
+设计与文件清单见 `docs/design/decision-revisit-auction-engine.md` §7。
+
+### 限制#1 挂单冻结资产(escrow)
+
+- 三段式 escrow:挂单 `FreezeForOrder` 冻结(卖冻道具 / 买冻金币)→ 成交 `SettleAuctionMatch` 从双方 escrow 消费对转 → 撤单/过期/完全成交 `ReleaseEscrow` 退还残余(含买单价差返还)。
+- 成交永不触碰活跃余额 → 消除"成交瞬间余额不足而失败"。冻结失败(余额不足)挂单直接 `CANCELED`,不进簿。
+- 幂等:冻结 `uk(player_id, order_id)`;成交 `inventory_ledger uk(player_id, "auction:settle:<match_id>")`;退还 escrow 行 `active→closed`。
+- 同库本地事务,按 `player_id` 升序锁行避免死锁。新增 `auction_escrow` 表。
+
+### 限制#2 跨实例 per-market 单写者锁
+
+- `MarketLocker` 接口 + Redis 单写者 token(`pkg/redislock`,TTL ≤ 30s)。`guardMarket` 进程内 striped lock 上叠 Redis 锁。
+- `cross_instance_lock=true` 启用;抢锁超时返回 `ERR_AUCTION_MARKET_BUSY`(12006)。推荐再叠一致性哈希路由降锁竞争。
+
+### 限制#3 撮合层主动跳过自撮合
+
+- `match()` 遇自己挂对手盘的单临时移出簿、撮合后 `defer` 放回,避免自成交浪费一次结算往返。
+
+### 限制#1 补偿:过期清扫 sweeper
+
+- `OrderTTLSeconds > 0` 时后台 ticker 周期扫超 TTL 仍 OPEN/PARTIAL 的挂单,持锁置 `EXPIRED`、移出簿、退还 escrow。
+
+### 限制#4 真依赖端到端联调(待环境窗口)
+
+- 单测已覆盖 escrow 冻结/成交/退还/价差/过期/自撮合/跨实例锁;真实 MySQL+Kafka+gRPC 端到端联调属环境窗口(`AGENTS.md` §11.1)。
+
+### 改动文件
+
+- proto:`inventory.proto`(FreezeForOrder/ReleaseEscrow/SettleAuctionMatch+order_id/EscrowSide)、`common/v1/errcode.proto`(12006);已 `proto_gen.ps1` 重生。
+- inventory:`data/inventory_repo.go`、`biz/inventory.go`、`service/inventory.go`、`08-inventory-tables.sql`(`auction_escrow`)、`inventory_test.go`。
+- auction:`biz/auction.go`、`data/settlement_client.go`、`data/market_locker.go`(新增)、`data/auction_repo.go`、`conf/conf.go`、`cmd/auction/main.go`、`etc/auction-dev.yaml`、`09-auction-tables.sql`(`idx_status_created`)、`auction_test.go`。
+- 文档:`decision-revisit-auction-engine.md` §7、`infra.md`、`proto-design.md`。
+
+### 验证
+
+- `go build`/`go vet`/`go test` auction + inventory + pkg 模块全 EXIT=0;gofmt 干净。
+- 新增单测:auction 冻结失败拒单、撤单/完全成交/过期释放 escrow、跨实例锁;inventory 冻结充足性/幂等、退还、买单价差返还。
+- 待环境窗口:真实 MySQL/Kafka/gRPC 端到端冒烟(`auction↔inventory`)。
+
 - 10 module BUILD=0。
 - ds_allocator VET=0 / TEST=0。
 

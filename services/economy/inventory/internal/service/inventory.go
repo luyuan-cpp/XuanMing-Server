@@ -129,12 +129,39 @@ func (s *InventoryService) SettleAuctionMatch(ctx context.Context, req *inventor
 		return &inventoryv1.SettleAuctionMatchResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
 	}
 	err := s.uc.SettleAuctionMatch(ctx,
-		req.GetMatchId(), req.GetSellerId(), req.GetBuyerId(),
+		req.GetMatchId(), req.GetSellerId(), req.GetBuyerId(), req.GetSellOrderId(), req.GetBuyOrderId(),
 		req.GetItemConfigId(), req.GetQuantity(), req.GetUnitPrice())
 	if err != nil {
 		return &inventoryv1.SettleAuctionMatchResponse{Code: toProtoCode(err)}, nil
 	}
 	return &inventoryv1.SettleAuctionMatchResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// FreezeForOrder 挂单冻结资产(系统接口,仅后端内部直连)。鉴权同 SettleAuctionMatch:
+// 经 Envoy 的客户端调用(callerID>0)一律拒绝,合法调用者是 auction 服务内网直连。
+func (s *InventoryService) FreezeForOrder(ctx context.Context, req *inventoryv1.FreezeForOrderRequest) (*inventoryv1.FreezeForOrderResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.FreezeForOrderResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	err := s.uc.FreezeForOrder(ctx,
+		req.GetPlayerId(), req.GetOrderId(), biz.EscrowSide(req.GetSide()),
+		req.GetItemConfigId(), req.GetQuantity(), req.GetUnitPrice())
+	if err != nil {
+		return &inventoryv1.FreezeForOrderResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.FreezeForOrderResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// ReleaseEscrow 退还挂单 escrow 残余(系统接口,仅后端内部直连)。鉴权同 SettleAuctionMatch。
+func (s *InventoryService) ReleaseEscrow(ctx context.Context, req *inventoryv1.ReleaseEscrowRequest) (*inventoryv1.ReleaseEscrowResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.ReleaseEscrowResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	err := s.uc.ReleaseEscrow(ctx, req.GetPlayerId(), req.GetOrderId())
+	if err != nil {
+		return &inventoryv1.ReleaseEscrowResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.ReleaseEscrowResponse{Code: commonv1.ErrCode_OK}, nil
 }
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))

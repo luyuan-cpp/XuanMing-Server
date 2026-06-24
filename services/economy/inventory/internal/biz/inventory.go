@@ -146,18 +146,21 @@ func (u *InventoryUsecase) SellItem(ctx context.Context, playerID uint64, itemCo
 
 // SettleAuctionMatch 原子结算一笔拍卖成交(系统驱动,幂等键基于 match_id)。
 //
-// 在 inventory 一个本地事务里完成卖↔买双方资产对转:
-//   - 卖家:扣 quantity 个 itemConfigID,加 quantity*unitPrice 金币;
-//   - 买家:扣 quantity*unitPrice 金币,加 quantity 个 itemConfigID。
+// 在 inventory 一个本地事务里从双方 escrow 消费完成资产对转:
+//   - 卖家:从卖单 escrow 消费 quantity 个 itemConfigID 交付买家,卖家加 quantity*unitPrice 金币;
+//   - 买家:从买单 escrow 消费 quantity*unitPrice 金币付给卖家,买家加 quantity 个 itemConfigID。
 //
+// 资产已在 FreezeForOrder 冻结进 escrow,成交不会因余额不足失败。
 // 幂等键 = "auction:settle:<match_id>",同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
-// 卖家道具不足 / 买家金币不足 → ErrInventoryInsufficient,整笔回滚。
-func (u *InventoryUsecase) SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID uint64, itemConfigID uint32, quantity, unitPrice int64) error {
+func (u *InventoryUsecase) SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID, sellOrderID, buyOrderID uint64, itemConfigID uint32, quantity, unitPrice int64) error {
 	if matchID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	if sellerID == 0 || buyerID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "seller_id / buyer_id required")
+	}
+	if sellOrderID == 0 || buyOrderID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "sell_order_id / buy_order_id required")
 	}
 	if sellerID == buyerID {
 		// 自成交净额为零且会让同一玩家同 key 写两条流水冲突;视为非法,撮合侧应避免自撮合。
@@ -178,7 +181,7 @@ func (u *InventoryUsecase) SettleAuctionMatch(ctx context.Context, matchID, sell
 	}
 	idempotencyKey := fmt.Sprintf("auction:settle:%d", matchID)
 	detail := fmt.Sprintf("auction settle match=%d item=%d qty=%d gold=%d", matchID, itemConfigID, quantity, totalGold)
-	already, err := u.repo.SettleAuctionMatch(ctx, matchID, sellerID, buyerID, itemConfigID, quantity, totalGold, idempotencyKey, detail)
+	already, err := u.repo.SettleAuctionMatch(ctx, matchID, sellerID, buyerID, sellOrderID, buyOrderID, itemConfigID, quantity, totalGold, idempotencyKey, detail)
 	if err != nil {
 		return err
 	}
@@ -188,6 +191,76 @@ func (u *InventoryUsecase) SettleAuctionMatch(ctx context.Context, matchID, sell
 	}
 	return nil
 }
+
+// FreezeForOrder 拍卖挂单冻结资产(系统驱动,幂等键 = order_id)。
+//
+// SELL:冻结 quantity 个 itemConfigID(卖家下架道具);BUY:冻结 quantity*unitPrice 金币(买家锁价)。
+// 资产移入 escrow,挂单期间不可被别处消耗;道具 / 金币不足 → ErrInventoryInsufficient。
+func (u *InventoryUsecase) FreezeForOrder(ctx context.Context, playerID, orderID uint64, side EscrowSide, itemConfigID uint32, quantity, unitPrice int64) error {
+	if playerID == 0 || orderID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "player_id / order_id required")
+	}
+	if itemConfigID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "item_config_id required")
+	}
+	if quantity <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "quantity must be positive")
+	}
+	if unitPrice <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "unit_price must be positive")
+	}
+	var (
+		kind       data.EscrowKind
+		frozenGold int64
+	)
+	switch side {
+	case EscrowSideSell:
+		kind = data.EscrowKindItem
+	case EscrowSideBuy:
+		kind = data.EscrowKindGold
+		g, ok := safeMulInt64(unitPrice, quantity)
+		if !ok || g <= 0 {
+			return errcode.New(errcode.ErrInvalidArg, "freeze amount overflow order=%d price=%d qty=%d", orderID, unitPrice, quantity)
+		}
+		frozenGold = g
+	default:
+		return errcode.New(errcode.ErrInvalidArg, "unknown escrow side %d", side)
+	}
+	already, err := u.repo.FreezeForOrder(ctx, playerID, orderID, kind, itemConfigID, quantity, frozenGold)
+	if err != nil {
+		return err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "auction_freeze_idempotent_hit",
+			"player_id", playerID, "order_id", orderID, "side", side, "item", itemConfigID, "qty", quantity)
+	}
+	return nil
+}
+
+// ReleaseEscrow 退还某挂单 escrow 残余资产到玩家活跃余额(撤单 / 过期 / 完全成交后,幂等键 = order_id)。
+func (u *InventoryUsecase) ReleaseEscrow(ctx context.Context, playerID, orderID uint64) error {
+	if playerID == 0 || orderID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "player_id / order_id required")
+	}
+	already, err := u.repo.ReleaseEscrow(ctx, playerID, orderID)
+	if err != nil {
+		return err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "auction_release_noop", "player_id", playerID, "order_id", orderID)
+	}
+	return nil
+}
+
+// EscrowSide 是 biz 层冻结方向(对齐 proto EscrowSide:SELL=1 / BUY=2)。
+type EscrowSide int32
+
+const (
+	// EscrowSideSell 卖单:冻道具。
+	EscrowSideSell EscrowSide = 1
+	// EscrowSideBuy 买单:冻金币。
+	EscrowSideBuy EscrowSide = 2
+)
 
 // safeMulInt64 做溢出安全的 int64 乘法(a,b 均已保证为正)。溢出返回 (0, false)。
 func safeMulInt64(a, b int64) (int64, bool) {

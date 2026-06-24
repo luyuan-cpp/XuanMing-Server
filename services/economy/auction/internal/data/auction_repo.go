@@ -86,6 +86,9 @@ type AuctionRepo interface {
 	ListMarketOrders(ctx context.Context, marketID uint32, side Side, limit int) ([]*OrderRecord, error)
 	// ListOwnerOrders 列某玩家的挂单 / 出价(跨 market;分库模式广播扫各分片)。
 	ListOwnerOrders(ctx context.Context, ownerID uint64, activeOnly bool) ([]*OrderRecord, error)
+	// ListExpirableOrders 列创建时间早于 createdBeforeMs 且仍活跃(OPEN / PARTIAL)的订单(过期清扫用)。
+	// 分库模式广播扫各分片;limit 限制单批数量,避免一次扫太多。
+	ListExpirableOrders(ctx context.Context, createdBeforeMs int64, limit int) ([]*OrderRecord, error)
 }
 
 // DBRouter 按 market_id 选库:单库模式恒返回同一库,分库模式按 market_id % N 路由。
@@ -229,6 +232,29 @@ func (r *MySQLAuctionRepo) ListOwnerOrders(ctx context.Context, ownerID uint64, 
 		rows, err := db.QueryContext(ctx, q, ownerID)
 		if err != nil {
 			return nil, errcode.New(errcode.ErrInternal, "list owner=%d: %v", ownerID, err)
+		}
+		shardRows, cerr := collectOrders(rows)
+		_ = rows.Close()
+		if cerr != nil {
+			return nil, cerr
+		}
+		out = append(out, shardRows...)
+	}
+	return out, nil
+}
+
+// ListExpirableOrders 列创建早于 createdBeforeMs 且仍活跃的订单(过期清扫用,广播扫各分片)。
+func (r *MySQLAuctionRepo) ListExpirableOrders(ctx context.Context, createdBeforeMs int64, limit int) ([]*OrderRecord, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	q := `SELECT ` + orderCols + ` FROM auction_orders WHERE status IN (` +
+		itoa(StatusOpen) + `, ` + itoa(StatusPartial) + `) AND created_at_ms < ? ORDER BY created_at_ms ASC LIMIT ?`
+	var out []*OrderRecord
+	for _, db := range r.r.All() {
+		rows, err := db.QueryContext(ctx, q, createdBeforeMs, limit)
+		if err != nil {
+			return nil, errcode.New(errcode.ErrInternal, "list expirable before=%d: %v", createdBeforeMs, err)
 		}
 		shardRows, cerr := collectOrders(rows)
 		_ = rows.Close()

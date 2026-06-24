@@ -38,6 +38,36 @@ func (g *GrpcInventoryLedger) Close() error {
 	return nil
 }
 
+// Freeze 调 inventory.FreezeForOrder 在挂单 / 出价时把资产冻进 escrow(幂等键 = order_id)。
+//
+//   - side=SideSell → 冻 quantity 个道具;side=SideBuy → 冻 quantity*price 金币。
+//   - 返回 OK                        → nil(冻结成功 / 幂等回放)
+//   - 返回 ERR_INVENTORY_INSUFFICIENT → ErrAuctionInsufficient(挂单方资产不足,挂单即失败)
+//   - 其它非 OK code                 → 原样透传
+func (g *GrpcInventoryLedger) Freeze(ctx context.Context, playerID, orderID uint64, side Side, itemConfigID uint32, quantity, price int64) error {
+	resp, err := g.cli.FreezeForOrder(ctx, &inventoryv1.FreezeForOrderRequest{
+		PlayerId:     playerID,
+		OrderId:      orderID,
+		Side:         inventoryv1.EscrowSide(side),
+		ItemConfigId: itemConfigID,
+		Quantity:     quantity,
+		UnitPrice:    price,
+	})
+	if err != nil {
+		return err
+	}
+	switch resp.GetCode() {
+	case commonv1.ErrCode_OK:
+		return nil
+	case commonv1.ErrCode_ERR_INVENTORY_INSUFFICIENT:
+		return errcode.New(errcode.ErrAuctionInsufficient,
+			"auction freeze insufficient player=%d order=%d", playerID, orderID)
+	default:
+		return errcode.New(errcode.Code(resp.GetCode()),
+			"auction freeze failed player=%d order=%d code=%d", playerID, orderID, int32(resp.GetCode()))
+	}
+}
+
 // Settle 调 inventory.SettleAuctionMatch 完成本笔成交的资产对转(幂等键 = match_id)。
 //
 //   - inventory 返回 OK              → nil(结算成功 / 幂等回放)
@@ -49,6 +79,8 @@ func (g *GrpcInventoryLedger) Settle(ctx context.Context, m *MatchRecord) error 
 		MatchId:      m.MatchID,
 		SellerId:     m.SellerID,
 		BuyerId:      m.BuyerID,
+		SellOrderId:  m.SellOrderID,
+		BuyOrderId:   m.BuyOrderID,
 		ItemConfigId: m.ItemConfigID,
 		Quantity:     m.Quantity,
 		UnitPrice:    m.Price,
@@ -66,4 +98,23 @@ func (g *GrpcInventoryLedger) Settle(ctx context.Context, m *MatchRecord) error 
 		return errcode.New(errcode.Code(resp.GetCode()),
 			"auction settle failed match=%d code=%d", m.MatchID, int32(resp.GetCode()))
 	}
+}
+
+// Release 调 inventory.ReleaseEscrow 退还某挂单 escrow 残余(撤单 / 过期 / 完全成交后,幂等键 = order_id)。
+//
+//   - 返回 OK         → nil(退还成功 / 幂等回放,已 closed 也算成功)
+//   - 其它非 OK code  → 原样透传(上层记 Error 告警,资产仍冻结待补退)
+func (g *GrpcInventoryLedger) Release(ctx context.Context, playerID, orderID uint64) error {
+	resp, err := g.cli.ReleaseEscrow(ctx, &inventoryv1.ReleaseEscrowRequest{
+		PlayerId: playerID,
+		OrderId:  orderID,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()),
+			"auction release failed player=%d order=%d code=%d", playerID, orderID, int32(resp.GetCode()))
+	}
+	return nil
 }

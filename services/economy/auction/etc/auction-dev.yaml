@@ -52,3 +52,13 @@ auction:
   # inventory 内网 gRPC 地址(:50015)。配上 → 成交走真实结算(SettleAuctionMatch:
   # 卖↔买资产原子对转 + match_id 幂等);仅无交易联调/单测可留空并显式设 allow_noop_settlement=true。
   inventory_addr: "127.0.0.1:50015"
+  # 挂单存活时长(秒)。> 0 启用过期清扫:超 TTL 仍未成交的挂单自动 EXPIRED、移出簿、退还 escrow。
+  # dev 设 7 天;0 = 永不过期。
+  order_ttl_seconds: 604800
+  expiry_sweep_interval_seconds: 60   # 过期清扫扫描间隔
+  expiry_sweep_batch: 200             # 单批最多处理条数
+  # 跨实例 per-market 单写者 Redis 锁(限制#2)。单实例 dev 留 false(仅进程内锁);
+  # 多实例部署置 true,需配合一致性哈希路由(同一 market 固定落同一实例)降低锁竞争。
+  cross_instance_lock: false
+  market_lock_ttl_seconds: 30         # 锁 TTL(≤30s,不变量 §10)
+  market_lock_max_wait_ms: 3000       # 抢锁最大等待,超时返回 ERR_AUCTION_MARKET_BUSY

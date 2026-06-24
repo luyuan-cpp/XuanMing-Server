@@ -35,6 +35,26 @@ type AuctionConf struct {
 	// 默认 false:InventoryAddr 缺失即 fail-fast,防止生产漏配 inventory 地址后仍静默以「成交不结算」启动。
 	// 仅无交易联调 / 单测环境显式置 true。
 	AllowNoopSettlement bool `yaml:"allow_noop_settlement,omitempty" json:"allow_noop_settlement,omitempty"`
+
+	// OrderTTLSeconds 挂单存活时长(秒)。> 0 → 启用过期清扫:创建超过 TTL 仍未成交的挂单
+	// 自动置 EXPIRED、移出订单簿并退还 escrow(限制#1 补偿)。<= 0 → 不过期(永久挂单)。
+	OrderTTLSeconds int64 `yaml:"order_ttl_seconds,omitempty" json:"order_ttl_seconds,omitempty"`
+
+	// ExpirySweepIntervalSeconds 过期清扫扫描间隔(秒,默认 60)。仅 OrderTTLSeconds > 0 时生效。
+	ExpirySweepIntervalSeconds int64 `yaml:"expiry_sweep_interval_seconds,omitempty" json:"expiry_sweep_interval_seconds,omitempty"`
+
+	// ExpirySweepBatch 单次清扫最多处理的过期订单数(默认 200)。防一次扫太多阻塞。
+	ExpirySweepBatch int `yaml:"expiry_sweep_batch,omitempty" json:"expiry_sweep_batch,omitempty"`
+
+	// CrossInstanceLock 启用跨实例 per-market 单写者 Redis 锁(限制#2 多实例一致性)。
+	// 单实例部署留 false(仅进程内 striped lock);多实例部署置 true。需配 Redis(复用订单簿 Redis)。
+	CrossInstanceLock bool `yaml:"cross_instance_lock,omitempty" json:"cross_instance_lock,omitempty"`
+
+	// MarketLockTTLSeconds 跨实例 market 锁 TTL(秒,默认 30,上限 30,不变量 §10)。
+	MarketLockTTLSeconds int64 `yaml:"market_lock_ttl_seconds,omitempty" json:"market_lock_ttl_seconds,omitempty"`
+
+	// MarketLockMaxWaitMs 抢 market 锁最大等待(毫秒,默认 3000);超时返回 ERR_AUCTION_MARKET_BUSY。
+	MarketLockMaxWaitMs int64 `yaml:"market_lock_max_wait_ms,omitempty" json:"market_lock_max_wait_ms,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -50,6 +70,18 @@ func (c *Config) Defaults() {
 	}
 	if c.Auction.MaxListLimit <= 0 {
 		c.Auction.MaxListLimit = 200
+	}
+	if c.Auction.ExpirySweepIntervalSeconds <= 0 {
+		c.Auction.ExpirySweepIntervalSeconds = 60
+	}
+	if c.Auction.ExpirySweepBatch <= 0 {
+		c.Auction.ExpirySweepBatch = 200
+	}
+	if c.Auction.MarketLockTTLSeconds <= 0 || c.Auction.MarketLockTTLSeconds > 30 {
+		c.Auction.MarketLockTTLSeconds = 30 // 不变量 §10:Redis lock TTL ≤ 30s
+	}
+	if c.Auction.MarketLockMaxWaitMs <= 0 {
+		c.Auction.MarketLockMaxWaitMs = 3000
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50016"

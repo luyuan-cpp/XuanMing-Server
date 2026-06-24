@@ -6,6 +6,7 @@ package biz
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -20,11 +21,21 @@ type ledgerEntry struct {
 	snapGold      int64
 }
 
-// fakeRepo 是 data.InventoryRepo 的内存实现(复刻 MySQL 幂等 / 扣减 / 指纹快照语义)。
+// escrowEntry 复刻 MySQL auction_escrow 一行(挂单托管资产)。
+type escrowEntry struct {
+	kind         data.EscrowKind
+	itemConfigID uint32
+	frozenQty    int64
+	frozenGold   int64
+	closed       bool
+}
+
+// fakeRepo 是 data.InventoryRepo 的内存实现(复刻 MySQL 幂等 / 扣减 / 指纹快照 / escrow 语义)。
 type fakeRepo struct {
 	gold   map[uint64]int64
 	items  map[uint64]map[uint32]int64
-	ledger map[string]ledgerEntry // key=playerID|idempotencyKey
+	ledger map[string]ledgerEntry  // key=playerID|idempotencyKey
+	escrow map[string]*escrowEntry // key=playerID|order:<orderID>
 }
 
 func newFakeRepo() *fakeRepo {
@@ -32,11 +43,16 @@ func newFakeRepo() *fakeRepo {
 		gold:   map[uint64]int64{},
 		items:  map[uint64]map[uint32]int64{},
 		ledger: map[string]ledgerEntry{},
+		escrow: map[string]*escrowEntry{},
 	}
 }
 
 func keyOf(pid uint64, k string) string {
 	return string(rune(pid)) + "|" + k
+}
+
+func escrowKeyOf(pid, orderID uint64) string {
+	return keyOf(pid, fmt.Sprintf("order:%d", orderID))
 }
 
 func (f *fakeRepo) GetInventory(_ context.Context, playerID uint64) (int64, []data.ItemStack, error) {
@@ -112,7 +128,7 @@ func (f *fakeRepo) SellItem(_ context.Context, playerID uint64, itemConfigID uin
 	return have - count, f.gold[playerID], false, nil
 }
 
-func (f *fakeRepo) SettleAuctionMatch(_ context.Context, _, sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, _ string) (bool, error) {
+func (f *fakeRepo) SettleAuctionMatch(_ context.Context, _, sellerID, buyerID, sellOrderID, buyOrderID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, _ string) (bool, error) {
 	fp := data.AuctionSettleFingerprint(sellerID, buyerID, itemConfigID, quantity, totalGold)
 	sk := keyOf(sellerID, idempotencyKey)
 	bk := keyOf(buyerID, idempotencyKey)
@@ -129,24 +145,67 @@ func (f *fakeRepo) SettleAuctionMatch(_ context.Context, _, sellerID, buyerID ui
 		}
 		return true, nil
 	}
-	// 卖家道具校验。
-	if f.items[sellerID] == nil || f.items[sellerID][itemConfigID] < quantity {
-		return false, errcode.New(errcode.ErrInventoryInsufficient, "seller item insufficient")
+	// 从双方 escrow 消费(资产已在 FreezeForOrder 冻结)。
+	se := f.escrow[escrowKeyOf(sellerID, sellOrderID)]
+	if se == nil || se.closed || se.kind != data.EscrowKindItem || se.frozenQty < quantity {
+		return false, errcode.New(errcode.ErrInventoryInsufficient, "seller item escrow insufficient")
 	}
-	// 买家金币校验。
-	if f.gold[buyerID] < totalGold {
-		return false, errcode.New(errcode.ErrInventoryInsufficient, "buyer gold insufficient")
+	be := f.escrow[escrowKeyOf(buyerID, buyOrderID)]
+	if be == nil || be.closed || be.kind != data.EscrowKindGold || be.frozenGold < totalGold {
+		return false, errcode.New(errcode.ErrInventoryInsufficient, "buyer gold escrow insufficient")
 	}
-	// 资产对转。
-	f.items[sellerID][itemConfigID] -= quantity
+	se.frozenQty -= quantity
+	be.frozenGold -= totalGold
+	// 入账对手:卖家加金币,买家加道具。
 	f.gold[sellerID] += totalGold
-	f.gold[buyerID] -= totalGold
 	if f.items[buyerID] == nil {
 		f.items[buyerID] = map[uint32]int64{}
 	}
 	f.items[buyerID][itemConfigID] += quantity
 	f.ledger[sk] = ledgerEntry{fingerprint: fp}
 	f.ledger[bk] = ledgerEntry{fingerprint: fp}
+	return false, nil
+}
+
+func (f *fakeRepo) FreezeForOrder(_ context.Context, playerID, orderID uint64, kind data.EscrowKind, itemConfigID uint32, quantity, frozenGold int64) (bool, error) {
+	ek := escrowKeyOf(playerID, orderID)
+	if _, ok := f.escrow[ek]; ok {
+		return true, nil // 幂等:已冻结。
+	}
+	switch kind {
+	case data.EscrowKindItem:
+		if f.items[playerID] == nil || f.items[playerID][itemConfigID] < quantity {
+			return false, errcode.New(errcode.ErrInventoryInsufficient, "freeze item insufficient")
+		}
+		f.items[playerID][itemConfigID] -= quantity
+		f.escrow[ek] = &escrowEntry{kind: kind, itemConfigID: itemConfigID, frozenQty: quantity}
+	case data.EscrowKindGold:
+		if f.gold[playerID] < frozenGold {
+			return false, errcode.New(errcode.ErrInventoryInsufficient, "freeze gold insufficient")
+		}
+		f.gold[playerID] -= frozenGold
+		f.escrow[ek] = &escrowEntry{kind: kind, itemConfigID: itemConfigID, frozenGold: frozenGold}
+	default:
+		return false, errcode.New(errcode.ErrInvalidArg, "unknown escrow kind")
+	}
+	return false, nil
+}
+
+func (f *fakeRepo) ReleaseEscrow(_ context.Context, playerID, orderID uint64) (bool, error) {
+	e := f.escrow[escrowKeyOf(playerID, orderID)]
+	if e == nil || e.closed {
+		return true, nil // 幂等 no-op。
+	}
+	if e.kind == data.EscrowKindItem && e.frozenQty > 0 {
+		if f.items[playerID] == nil {
+			f.items[playerID] = map[uint32]int64{}
+		}
+		f.items[playerID][e.itemConfigID] += e.frozenQty
+	}
+	if e.kind == data.EscrowKindGold && e.frozenGold > 0 {
+		f.gold[playerID] += e.frozenGold
+	}
+	e.frozenQty, e.frozenGold, e.closed = 0, 0, true
 	return false, nil
 }
 
@@ -323,19 +382,31 @@ func TestSellItem_ReplayReturnsSnapshot(t *testing.T) {
 func TestSettleAuctionMatch_Success(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
+	ctx := context.Background()
 	// 卖家(10)持 5 个道具 7001;买家(20)持 1000 金币。
-	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
 		t.Fatalf("seed seller err: %v", err)
 	}
-	if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
+	if _, err := uc.GrantItems(ctx, 20, nil, 1000, "seed-buyer"); err != nil {
 		t.Fatalf("seed buyer err: %v", err)
 	}
-	// 成交:卖家交付 3 个 @ 单价 100 = 300 金币。
-	if err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100); err != nil {
-		t.Fatalf("settle err: %v", err)
+	// 卖家挂单冻结 3 个道具(sell order 501);买家出价冻结 3*100 金币(buy order 601)。
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); err != nil {
+		t.Fatalf("freeze seller err: %v", err)
 	}
+	if err := uc.FreezeForOrder(ctx, 20, 601, EscrowSideBuy, 7001, 3, 100); err != nil {
+		t.Fatalf("freeze buyer err: %v", err)
+	}
+	// 冻结后活跃余额已扣减。
 	if repo.items[10][7001] != 2 {
-		t.Fatalf("seller item want 2, got %d", repo.items[10][7001])
+		t.Fatalf("after freeze seller active item want 2, got %d", repo.items[10][7001])
+	}
+	if repo.gold[20] != 700 {
+		t.Fatalf("after freeze buyer active gold want 700, got %d", repo.gold[20])
+	}
+	// 成交:卖家交付 3 个 @ 单价 100 = 300 金币。
+	if err := uc.SettleAuctionMatch(ctx, 999, 10, 20, 501, 601, 7001, 3, 100); err != nil {
+		t.Fatalf("settle err: %v", err)
 	}
 	if repo.items[20][7001] != 3 {
 		t.Fatalf("buyer item want 3, got %d", repo.items[20][7001])
@@ -343,6 +414,7 @@ func TestSettleAuctionMatch_Success(t *testing.T) {
 	if repo.gold[10] != 300 {
 		t.Fatalf("seller gold want 300, got %d", repo.gold[10])
 	}
+	// 买家金币 = 700(冻结后剩余),300 已从 escrow 付给卖家。
 	if repo.gold[20] != 700 {
 		t.Fatalf("buyer gold want 700, got %d", repo.gold[20])
 	}
@@ -351,67 +423,160 @@ func TestSettleAuctionMatch_Success(t *testing.T) {
 func TestSettleAuctionMatch_Idempotent(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
 		t.Fatalf("seed seller err: %v", err)
 	}
-	if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
+	if _, err := uc.GrantItems(ctx, 20, nil, 1000, "seed-buyer"); err != nil {
 		t.Fatalf("seed buyer err: %v", err)
 	}
-	if err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100); err != nil {
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); err != nil {
+		t.Fatalf("freeze seller err: %v", err)
+	}
+	if err := uc.FreezeForOrder(ctx, 20, 601, EscrowSideBuy, 7001, 3, 100); err != nil {
+		t.Fatalf("freeze buyer err: %v", err)
+	}
+	if err := uc.SettleAuctionMatch(ctx, 999, 10, 20, 501, 601, 7001, 3, 100); err != nil {
 		t.Fatalf("first settle err: %v", err)
 	}
 	// 重复结算同一 match_id:资产不可二次转移。
-	if err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100); err != nil {
+	if err := uc.SettleAuctionMatch(ctx, 999, 10, 20, 501, 601, 7001, 3, 100); err != nil {
 		t.Fatalf("idempotent settle err: %v", err)
 	}
-	if repo.items[10][7001] != 2 || repo.items[20][7001] != 3 || repo.gold[10] != 300 || repo.gold[20] != 700 {
-		t.Fatalf("idempotent settle must not double-transfer: sellerItem=%d buyerItem=%d sellerGold=%d buyerGold=%d",
-			repo.items[10][7001], repo.items[20][7001], repo.gold[10], repo.gold[20])
+	if repo.items[20][7001] != 3 || repo.gold[10] != 300 || repo.gold[20] != 700 {
+		t.Fatalf("idempotent settle must not double-transfer: buyerItem=%d sellerGold=%d buyerGold=%d",
+			repo.items[20][7001], repo.gold[10], repo.gold[20])
 	}
 }
 
-func TestSettleAuctionMatch_SellerItemInsufficient(t *testing.T) {
+func TestFreezeForOrder_ItemInsufficient(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 1}}, 0, "seed-seller"); err != nil {
+	ctx := context.Background()
+	// 卖家只有 1 个,挂 3 个 → 冻结失败(挂单阶段就拦下,不会进簿)。
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 1}}, 0, "seed-seller"); err != nil {
 		t.Fatalf("seed seller err: %v", err)
 	}
-	if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
-		t.Fatalf("seed buyer err: %v", err)
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); errcode.As(err) != errcode.ErrInventoryInsufficient {
+		t.Fatalf("freeze item insufficient should be ErrInventoryInsufficient, got %v", err)
 	}
-	err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100)
-	if errcode.As(err) != errcode.ErrInventoryInsufficient {
-		t.Fatalf("seller item insufficient should be ErrInventoryInsufficient, got %v", err)
+	// 失败后活跃余额未被扣。
+	if repo.items[10][7001] != 1 {
+		t.Fatalf("active item must be untouched on freeze failure, got %d", repo.items[10][7001])
 	}
 }
 
-func TestSettleAuctionMatch_BuyerGoldInsufficient(t *testing.T) {
+func TestFreezeForOrder_GoldInsufficient(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newUC(repo)
-	if _, err := uc.GrantItems(context.Background(), 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
-		t.Fatalf("seed seller err: %v", err)
-	}
-	if _, err := uc.GrantItems(context.Background(), 20, nil, 100, "seed-buyer"); err != nil {
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 20, nil, 100, "seed-buyer"); err != nil {
 		t.Fatalf("seed buyer err: %v", err)
 	}
-	err := uc.SettleAuctionMatch(context.Background(), 999, 10, 20, 7001, 3, 100) // 需要 300,只有 100
-	if errcode.As(err) != errcode.ErrInventoryInsufficient {
-		t.Fatalf("buyer gold insufficient should be ErrInventoryInsufficient, got %v", err)
+	// 出价冻结需要 300,只有 100 → 失败。
+	if err := uc.FreezeForOrder(ctx, 20, 601, EscrowSideBuy, 7001, 3, 100); errcode.As(err) != errcode.ErrInventoryInsufficient {
+		t.Fatalf("freeze gold insufficient should be ErrInventoryInsufficient, got %v", err)
+	}
+	if repo.gold[20] != 100 {
+		t.Fatalf("active gold must be untouched on freeze failure, got %d", repo.gold[20])
+	}
+}
+
+func TestFreezeForOrder_Idempotent(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); err != nil {
+		t.Fatalf("first freeze err: %v", err)
+	}
+	// 重复冻结同一 order:只扣一次。
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); err != nil {
+		t.Fatalf("idempotent freeze err: %v", err)
+	}
+	if repo.items[10][7001] != 2 {
+		t.Fatalf("idempotent freeze must deduct once: active item want 2, got %d", repo.items[10][7001])
+	}
+}
+
+func TestReleaseEscrow_RefundsRemaining(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	// 冻 3 个道具(活跃剩 2)。
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); err != nil {
+		t.Fatalf("freeze err: %v", err)
+	}
+	// 撤单退还 → 活跃恢复 5。
+	if err := uc.ReleaseEscrow(ctx, 10, 501); err != nil {
+		t.Fatalf("release err: %v", err)
+	}
+	if repo.items[10][7001] != 5 {
+		t.Fatalf("after release active item want 5, got %d", repo.items[10][7001])
+	}
+	// 重复退还幂等:不二次返还。
+	if err := uc.ReleaseEscrow(ctx, 10, 501); err != nil {
+		t.Fatalf("idempotent release err: %v", err)
+	}
+	if repo.items[10][7001] != 5 {
+		t.Fatalf("idempotent release must not double-refund, got %d", repo.items[10][7001])
+	}
+}
+
+func TestReleaseEscrow_BuyerPriceImprovement(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller err: %v", err)
+	}
+	if _, err := uc.GrantItems(ctx, 20, nil, 1000, "seed-buyer"); err != nil {
+		t.Fatalf("seed buyer err: %v", err)
+	}
+	// 卖家挂卖单单价 80;买家出价单价 100 冻 3*100=300 金币(活跃剩 700)。
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 3, 80); err != nil {
+		t.Fatalf("freeze seller err: %v", err)
+	}
+	if err := uc.FreezeForOrder(ctx, 20, 601, EscrowSideBuy, 7001, 3, 100); err != nil {
+		t.Fatalf("freeze buyer err: %v", err)
+	}
+	// 成交价 = 被动卖单价 80。买家实付 3*80=240,escrow 残余 300-240=60。
+	if err := uc.SettleAuctionMatch(ctx, 999, 10, 20, 501, 601, 7001, 3, 80); err != nil {
+		t.Fatalf("settle err: %v", err)
+	}
+	if repo.gold[10] != 240 {
+		t.Fatalf("seller gold want 240, got %d", repo.gold[10])
+	}
+	// 买单完全成交后退还价差 60 → 买家活跃金币 700+60=760。
+	if err := uc.ReleaseEscrow(ctx, 20, 601); err != nil {
+		t.Fatalf("release buyer err: %v", err)
+	}
+	if repo.gold[20] != 760 {
+		t.Fatalf("buyer gold after price-improvement refund want 760, got %d", repo.gold[20])
 	}
 }
 
 func TestSettleAuctionMatch_Validation(t *testing.T) {
 	uc := newUC(newFakeRepo())
-	if err := uc.SettleAuctionMatch(context.Background(), 0, 10, 20, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
+	ctx := context.Background()
+	if err := uc.SettleAuctionMatch(ctx, 0, 10, 20, 501, 601, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("zero match_id should be ErrInvalidArg, got %v", err)
 	}
-	if err := uc.SettleAuctionMatch(context.Background(), 1, 10, 10, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
+	if err := uc.SettleAuctionMatch(ctx, 1, 10, 10, 501, 601, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("self-trade should be ErrInvalidArg, got %v", err)
 	}
-	if err := uc.SettleAuctionMatch(context.Background(), 1, 10, 20, 7001, 0, 1); errcode.As(err) != errcode.ErrInvalidArg {
+	if err := uc.SettleAuctionMatch(ctx, 1, 10, 20, 0, 601, 7001, 1, 1); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("zero sell_order_id should be ErrInvalidArg, got %v", err)
+	}
+	if err := uc.SettleAuctionMatch(ctx, 1, 10, 20, 501, 601, 7001, 0, 1); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("zero quantity should be ErrInvalidArg, got %v", err)
 	}
-	if err := uc.SettleAuctionMatch(context.Background(), 1, 10, 20, 7001, 1, 0); errcode.As(err) != errcode.ErrInvalidArg {
+	if err := uc.SettleAuctionMatch(ctx, 1, 10, 20, 501, 601, 7001, 1, 0); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("zero unit_price should be ErrInvalidArg, got %v", err)
 	}
 }

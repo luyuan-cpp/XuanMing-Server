@@ -39,6 +39,22 @@ type ItemGrant struct {
 	Count        int64
 }
 
+// EscrowKind 是拍卖挂单托管的资产类型(对齐 auction_escrow.kind)。
+type EscrowKind int8
+
+const (
+	// EscrowKindItem 卖单冻结道具。
+	EscrowKindItem EscrowKind = 1
+	// EscrowKindGold 买单冻结金币。
+	EscrowKindGold EscrowKind = 2
+)
+
+// escrow 行状态(对齐 auction_escrow.status)。
+const (
+	escrowStatusActive int8 = 1
+	escrowStatusClosed int8 = 2
+)
+
 // InventoryRepo 是 inventory 数据层抽象。biz 只依赖此接口,不依赖 *sql.DB。
 type InventoryRepo interface {
 	// GetInventory 读玩家货币 + 道具堆叠(按 item_config_id 排序;未建档 → gold=0 空道具)。
@@ -55,13 +71,26 @@ type InventoryRepo interface {
 	// SellItem 幂等出售(事务:INSERT ledger;扣道具 + 加 gold)。返回剩余数量 + 出售后 gold。
 	SellItem(ctx context.Context, playerID uint64, itemConfigID uint32, count, gold int64, idempotencyKey, detail string) (remaining, newGold int64, already bool, err error)
 
-	// SettleAuctionMatch 原子结算一笔拍卖成交(一个本地事务内卖↔买双方对转):
-	//   卖家扣 quantity 个 itemConfigID + 加 totalGold 金币;
-	//   买家扣 totalGold 金币 + 加 quantity 个 itemConfigID。
+	// SettleAuctionMatch 原子结算一笔拍卖成交(一个本地事务内卖↔买双方资产对转):
+	//   从卖单 escrow(sellOrderID)消费 quantity 个 itemConfigID 交付买家;
+	//   从买单 escrow(buyOrderID)消费 totalGold 金币付给卖家;
+	//   买家加 quantity 个道具、卖家加 totalGold 金币。
+	// 因双方资产已在 FreezeForOrder 冻结进 escrow,成交不会因余额不足失败。
 	// idempotencyKey(= 业务层基于 match_id 派生)在事务内给买卖双方各记一条流水,
-	// 重复结算命中 uk → already=true(资产只转一次,不变量 §9.2 / §9.7);
-	// 卖家道具不足 / 买家金币不足 → ErrInventoryInsufficient,整笔回滚。
-	SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, detail string) (already bool, err error)
+	// 重复结算命中 uk → already=true(资产只转一次,不变量 §9.2 / §9.7)。
+	SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID, sellOrderID, buyOrderID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, detail string) (already bool, err error)
+
+	// FreezeForOrder 拍卖挂单冻结资产(一个本地事务内把活跃资产移入 escrow):
+	//   EscrowKindItem:扣 quantity 个 itemConfigID,记 item escrow(frozenGold 忽略);
+	//   EscrowKindGold:扣 frozenGold 金币,记 gold escrow(itemConfigID/quantity 仅记录道具上下文)。
+	// 幂等键 = (playerID, orderID),重复冻结命中 uk → already=true(只冻一次)。
+	// 道具 / 金币不足 → ErrInventoryInsufficient,整笔回滚(escrow 行一并回滚)。
+	FreezeForOrder(ctx context.Context, playerID, orderID uint64, kind EscrowKind, itemConfigID uint32, quantity, frozenGold int64) (already bool, err error)
+
+	// ReleaseEscrow 退还某挂单 escrow 残余资产到玩家活跃余额并关闭托管(撤单 / 过期 / 完全成交后)。
+	//   item escrow:退剩余 frozen_qty 道具;gold escrow:退剩余 frozen_gold 金币。
+	// 幂等:escrow 不存在或已 closed → already=true no-op(只退一次)。
+	ReleaseEscrow(ctx context.Context, playerID, orderID uint64) (already bool, err error)
 }
 
 // MySQLInventoryRepo 是基于 database/sql 的 InventoryRepo 实现。
@@ -377,15 +406,15 @@ ON DUPLICATE KEY UPDATE count = count + VALUES(count)`
 	return nil
 }
 
-// SettleAuctionMatch 在一个本地事务里原子完成拍卖成交的卖↔买双方资产对转。
+// SettleAuctionMatch 在一个本地事务里从双方 escrow 消费完成拍卖成交的卖↔买资产对转。
 //
-// 防死锁:对共享资源(inventory_ledger / player_items / player_currency)的行锁全部按
+// 因卖家道具与买家金币已在 FreezeForOrder 冻结进 escrow,本步只做「消费 escrow + 入账对手」,
+// 不再触活跃余额扣减,故成交不会因余额不足失败(escrow 充足由冻结阶段保证)。
 //
-//	player_id 升序、同一玩家内「先 items 表后 currency 表」的总顺序获取,
-//
-// 杜绝并发结算(尤其角色对调的两笔)交叉持锁成环。
-// 幂等:买卖双方各记一条同 idempotency_key 的流水,任一命中 uk → already=true 回放(不重复扣)。
-func (r *MySQLInventoryRepo) SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, detail string) (bool, error) {
+// 防死锁:对 escrow / player_items / player_currency 的行锁全部按 player_id 升序、
+// 同一玩家内「先 escrow 后入账」的总顺序获取,杜绝并发结算(尤其角色对调的两笔)成环。
+// 幂等:买卖双方各记一条同 idempotency_key 的流水,任一命中 uk → already=true 回放(不重复转)。
+func (r *MySQLInventoryRepo) SettleAuctionMatch(ctx context.Context, matchID, sellerID, buyerID, sellOrderID, buyOrderID uint64, itemConfigID uint32, quantity, totalGold int64, idempotencyKey, detail string) (bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
@@ -414,21 +443,19 @@ func (r *MySQLInventoryRepo) SettleAuctionMatch(ctx context.Context, matchID, se
 		return true, nil
 	}
 
-	// 2) 资产对转。两条腿都「先动 items 表、后动 currency 表」,配合 player 升序保证全局锁序一致。
+	// 2) 资产对转。卖家腿:消费卖单道具 escrow + 加金币;买家腿:消费买单金币 escrow + 加道具。
+	//    两条腿都「先 escrow 后入账」,配合 player 升序保证全局锁序一致,防死锁。
 	sellerLeg := func() error {
-		if _, derr := deductItemTx(ctx, tx, sellerID, itemConfigID, quantity); derr != nil {
-			return derr // 卖家道具不足 → ErrInventoryInsufficient
+		if cerr := consumeItemEscrowTx(ctx, tx, sellerID, sellOrderID, itemConfigID, quantity); cerr != nil {
+			return cerr
 		}
 		return addGoldTx(ctx, tx, sellerID, totalGold)
 	}
 	buyerLeg := func() error {
-		if aerr := addItemTx(ctx, tx, buyerID, itemConfigID, quantity); aerr != nil {
-			return aerr
+		if cerr := consumeGoldEscrowTx(ctx, tx, buyerID, buyOrderID, totalGold); cerr != nil {
+			return cerr
 		}
-		if _, derr := deductGoldTx(ctx, tx, buyerID, totalGold); derr != nil {
-			return derr // 买家金币不足 → ErrInventoryInsufficient
-		}
-		return nil
+		return addItemTx(ctx, tx, buyerID, itemConfigID, quantity)
 	}
 	first, second := sellerLeg, buyerLeg
 	if buyerID < sellerID {
@@ -445,6 +472,166 @@ func (r *MySQLInventoryRepo) SettleAuctionMatch(ctx context.Context, matchID, se
 		return false, errcode.New(errcode.ErrInternal, "commit auction settle match=%d: %v", matchID, cerr)
 	}
 	return false, nil
+}
+
+// FreezeForOrder 把挂单资产从活跃余额移入 escrow(一个本地事务)。幂等键 = (playerID, orderID)。
+func (r *MySQLInventoryRepo) FreezeForOrder(ctx context.Context, playerID, orderID uint64, kind EscrowKind, itemConfigID uint32, quantity, frozenGold int64) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// 1) 幂等:插入 escrow 行(uk player+order)。命中 → 已冻结,直接 already(资产已扣,不重复扣)。
+	const ins = `INSERT INTO auction_escrow (player_id, order_id, kind, item_config_id, frozen_qty, frozen_gold, status)
+VALUES (?, ?, ?, ?, ?, ?, ?)`
+	var frozenQty int64
+	if kind == EscrowKindItem {
+		frozenQty = quantity
+	}
+	if _, ierr := tx.ExecContext(ctx, ins, playerID, orderID, int8(kind), itemConfigID, frozenQty, frozenGold, escrowStatusActive); ierr != nil {
+		if isDupErr(ierr) {
+			return true, nil
+		}
+		return false, errcode.New(errcode.ErrInternal, "insert escrow player=%d order=%d: %v", playerID, orderID, ierr)
+	}
+
+	// 2) 从活跃余额扣减(不足 → ErrInventoryInsufficient,整笔回滚含 escrow 行)。
+	switch kind {
+	case EscrowKindItem:
+		if _, derr := deductItemTx(ctx, tx, playerID, itemConfigID, quantity); derr != nil {
+			return false, derr
+		}
+	case EscrowKindGold:
+		if _, derr := deductGoldTx(ctx, tx, playerID, frozenGold); derr != nil {
+			return false, derr
+		}
+	default:
+		return false, errcode.New(errcode.ErrInvalidArg, "unknown escrow kind %d", kind)
+	}
+
+	if cerr := tx.Commit(); cerr != nil {
+		return false, errcode.New(errcode.ErrInternal, "commit freeze player=%d order=%d: %v", playerID, orderID, cerr)
+	}
+	return false, nil
+}
+
+// ReleaseEscrow 退还某挂单 escrow 残余到玩家活跃余额并关闭托管(一个本地事务)。幂等键 = escrow 行状态。
+func (r *MySQLInventoryRepo) ReleaseEscrow(ctx context.Context, playerID, orderID uint64) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		kind         int8
+		itemConfigID uint32
+		frozenQty    int64
+		frozenGold   int64
+		status       int8
+	)
+	qerr := tx.QueryRowContext(ctx,
+		`SELECT kind, item_config_id, frozen_qty, frozen_gold, status FROM auction_escrow WHERE player_id = ? AND order_id = ? FOR UPDATE`,
+		playerID, orderID).Scan(&kind, &itemConfigID, &frozenQty, &frozenGold, &status)
+	if errors.Is(qerr, sql.ErrNoRows) {
+		// 无 escrow(冻结失败的挂单从未建 escrow)→ 无可退,幂等 no-op。
+		return true, nil
+	}
+	if qerr != nil {
+		return false, errcode.New(errcode.ErrInternal, "lock escrow player=%d order=%d: %v", playerID, orderID, qerr)
+	}
+	if status == escrowStatusClosed {
+		return true, nil // 已退还,幂等 no-op。
+	}
+
+	switch EscrowKind(kind) {
+	case EscrowKindItem:
+		if frozenQty > 0 {
+			if aerr := addItemTx(ctx, tx, playerID, itemConfigID, frozenQty); aerr != nil {
+				return false, aerr
+			}
+		}
+	case EscrowKindGold:
+		if frozenGold > 0 {
+			if aerr := addGoldTx(ctx, tx, playerID, frozenGold); aerr != nil {
+				return false, aerr
+			}
+		}
+	}
+
+	if _, uerr := tx.ExecContext(ctx,
+		`UPDATE auction_escrow SET frozen_qty = 0, frozen_gold = 0, status = ? WHERE player_id = ? AND order_id = ?`,
+		escrowStatusClosed, playerID, orderID); uerr != nil {
+		return false, errcode.New(errcode.ErrInternal, "close escrow player=%d order=%d: %v", playerID, orderID, uerr)
+	}
+
+	if cerr := tx.Commit(); cerr != nil {
+		return false, errcode.New(errcode.ErrInternal, "commit release player=%d order=%d: %v", playerID, orderID, cerr)
+	}
+	return false, nil
+}
+
+// consumeItemEscrowTx 在事务里锁卖单道具 escrow 并消费 qty(成交交付)。
+//   - escrow 不存在 / 非 item / 余量不足 → 错误(正常流程不应发生,escrow 充足由冻结保证)。
+func consumeItemEscrowTx(ctx context.Context, tx *sql.Tx, playerID, orderID uint64, itemConfigID uint32, qty int64) error {
+	var (
+		kind      int8
+		itemID    uint32
+		frozenQty int64
+		status    int8
+	)
+	err := tx.QueryRowContext(ctx,
+		`SELECT kind, item_config_id, frozen_qty, status FROM auction_escrow WHERE player_id = ? AND order_id = ? FOR UPDATE`,
+		playerID, orderID).Scan(&kind, &itemID, &frozenQty, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errcode.New(errcode.ErrInventoryInsufficient, "item escrow not found player=%d order=%d", playerID, orderID)
+	}
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "lock item escrow player=%d order=%d: %v", playerID, orderID, err)
+	}
+	if EscrowKind(kind) != EscrowKindItem || itemID != itemConfigID {
+		return errcode.New(errcode.ErrInternal, "escrow kind/item mismatch player=%d order=%d kind=%d item=%d want item=%d", playerID, orderID, kind, itemID, itemConfigID)
+	}
+	if status == escrowStatusClosed || frozenQty < qty {
+		return errcode.New(errcode.ErrInventoryInsufficient, "item escrow short player=%d order=%d frozen=%d need=%d", playerID, orderID, frozenQty, qty)
+	}
+	if _, uerr := tx.ExecContext(ctx,
+		`UPDATE auction_escrow SET frozen_qty = frozen_qty - ? WHERE player_id = ? AND order_id = ?`,
+		qty, playerID, orderID); uerr != nil {
+		return errcode.New(errcode.ErrInternal, "consume item escrow player=%d order=%d: %v", playerID, orderID, uerr)
+	}
+	return nil
+}
+
+// consumeGoldEscrowTx 在事务里锁买单金币 escrow 并消费 gold(成交付款)。
+func consumeGoldEscrowTx(ctx context.Context, tx *sql.Tx, playerID, orderID uint64, gold int64) error {
+	var (
+		kind       int8
+		frozenGold int64
+		status     int8
+	)
+	err := tx.QueryRowContext(ctx,
+		`SELECT kind, frozen_gold, status FROM auction_escrow WHERE player_id = ? AND order_id = ? FOR UPDATE`,
+		playerID, orderID).Scan(&kind, &frozenGold, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errcode.New(errcode.ErrInventoryInsufficient, "gold escrow not found player=%d order=%d", playerID, orderID)
+	}
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "lock gold escrow player=%d order=%d: %v", playerID, orderID, err)
+	}
+	if EscrowKind(kind) != EscrowKindGold {
+		return errcode.New(errcode.ErrInternal, "escrow kind mismatch player=%d order=%d kind=%d want gold", playerID, orderID, kind)
+	}
+	if status == escrowStatusClosed || frozenGold < gold {
+		return errcode.New(errcode.ErrInventoryInsufficient, "gold escrow short player=%d order=%d frozen=%d need=%d", playerID, orderID, frozenGold, gold)
+	}
+	if _, uerr := tx.ExecContext(ctx,
+		`UPDATE auction_escrow SET frozen_gold = frozen_gold - ? WHERE player_id = ? AND order_id = ?`,
+		gold, playerID, orderID); uerr != nil {
+		return errcode.New(errcode.ErrInternal, "consume gold escrow player=%d order=%d: %v", playerID, orderID, uerr)
+	}
+	return nil
 }
 
 // isDupErr 判断是否 MySQL 1062 唯一键冲突(go-sql-driver 错误串含 "Error 1062")。

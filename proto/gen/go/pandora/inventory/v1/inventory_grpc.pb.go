@@ -37,7 +37,9 @@ const (
 	InventoryService_GrantItems_FullMethodName         = "/pandora.inventory.v1.InventoryService/GrantItems"
 	InventoryService_UseItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/UseItem"
 	InventoryService_SellItem_FullMethodName           = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_FreezeForOrder_FullMethodName     = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
 	InventoryService_SettleAuctionMatch_FullMethodName = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
+	InventoryService_ReleaseEscrow_FullMethodName      = "/pandora.inventory.v1.InventoryService/ReleaseEscrow"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -52,16 +54,33 @@ type InventoryServiceClient interface {
 	UseItem(ctx context.Context, in *UseItemRequest, opts ...grpc.CallOption) (*UseItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(ctx context.Context, in *SellItemRequest, opts ...grpc.CallOption) (*SellItemResponse, error)
+	// FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
+	//
+	//	卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
+	//	买单(BUY):把 quantity*unit_price 金币从活跃余额移入托管,出价期间锁定。
+	//
+	// 幂等键 = order_id(挂单雪花),同一挂单重复冻结只生效一次;资产不足 → ERR_INVENTORY_INSUFFICIENT。
+	// 与 SettleAuctionMatch / ReleaseEscrow 配套:成交从 escrow 消费、撤单 / 过期从 escrow 退还。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	FreezeForOrder(ctx context.Context, in *FreezeForOrderRequest, opts ...grpc.CallOption) (*FreezeForOrderResponse, error)
 	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
 	//
-	//	同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
-	//	  卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
-	//	  买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	//	同一 MySQL 本地事务里从双方 escrow 消费完成资产对转 ——
+	//	  卖家:从卖单 escrow 消费 quantity 个 item_config_id 交付买家,卖家加 quantity*unit_price 金币;
+	//	  买家:从买单 escrow 消费 quantity*unit_price 金币付给卖家,买家加 quantity 个 item_config_id。
 	//
+	// 因双方资产已在 FreezeForOrder 阶段冻结,成交不会因余额不足失败。
 	// 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
-	// 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
 	SettleAuctionMatch(ctx context.Context, in *SettleAuctionMatchRequest, opts ...grpc.CallOption) (*SettleAuctionMatchResponse, error)
+	// ReleaseEscrow 拍卖挂单托管退还(系统接口,仅后端内部直连):
+	//
+	//	撤单 / 过期 / 完全成交后把某挂单 escrow 的残余资产退回玩家活跃余额并关闭托管。
+	//	卖单残余 = 未成交道具;买单残余 = 未成交金币 + 成交价优于出价的价差返还。
+	//
+	// 幂等键 = order_id,重复退还只生效一次(escrow status=closed 后再调为 no-op)。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	ReleaseEscrow(ctx context.Context, in *ReleaseEscrowRequest, opts ...grpc.CallOption) (*ReleaseEscrowResponse, error)
 }
 
 type inventoryServiceClient struct {
@@ -112,10 +131,30 @@ func (c *inventoryServiceClient) SellItem(ctx context.Context, in *SellItemReque
 	return out, nil
 }
 
+func (c *inventoryServiceClient) FreezeForOrder(ctx context.Context, in *FreezeForOrderRequest, opts ...grpc.CallOption) (*FreezeForOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FreezeForOrderResponse)
+	err := c.cc.Invoke(ctx, InventoryService_FreezeForOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inventoryServiceClient) SettleAuctionMatch(ctx context.Context, in *SettleAuctionMatchRequest, opts ...grpc.CallOption) (*SettleAuctionMatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SettleAuctionMatchResponse)
 	err := c.cc.Invoke(ctx, InventoryService_SettleAuctionMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ReleaseEscrow(ctx context.Context, in *ReleaseEscrowRequest, opts ...grpc.CallOption) (*ReleaseEscrowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseEscrowResponse)
+	err := c.cc.Invoke(ctx, InventoryService_ReleaseEscrow_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,16 +173,33 @@ type InventoryServiceServer interface {
 	UseItem(context.Context, *UseItemRequest) (*UseItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error)
+	// FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
+	//
+	//	卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
+	//	买单(BUY):把 quantity*unit_price 金币从活跃余额移入托管,出价期间锁定。
+	//
+	// 幂等键 = order_id(挂单雪花),同一挂单重复冻结只生效一次;资产不足 → ERR_INVENTORY_INSUFFICIENT。
+	// 与 SettleAuctionMatch / ReleaseEscrow 配套:成交从 escrow 消费、撤单 / 过期从 escrow 退还。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	FreezeForOrder(context.Context, *FreezeForOrderRequest) (*FreezeForOrderResponse, error)
 	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
 	//
-	//	同一 MySQL 本地事务里完成卖↔买双方资产对转 ——
-	//	  卖家:扣 quantity 个 item_config_id,加 quantity*unit_price 金币;
-	//	  买家:扣 quantity*unit_price 金币,加 quantity 个 item_config_id。
+	//	同一 MySQL 本地事务里从双方 escrow 消费完成资产对转 ——
+	//	  卖家:从卖单 escrow 消费 quantity 个 item_config_id 交付买家,卖家加 quantity*unit_price 金币;
+	//	  买家:从买单 escrow 消费 quantity*unit_price 金币付给卖家,买家加 quantity 个 item_config_id。
 	//
+	// 因双方资产已在 FreezeForOrder 阶段冻结,成交不会因余额不足失败。
 	// 幂等键 = match_id(雪花),同一成交重复结算只生效一次(不变量 §9.2 / §9.7)。
-	// 卖家道具不足 / 买家金币不足 → ERR_INVENTORY_INSUFFICIENT,整笔回滚。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
 	SettleAuctionMatch(context.Context, *SettleAuctionMatchRequest) (*SettleAuctionMatchResponse, error)
+	// ReleaseEscrow 拍卖挂单托管退还(系统接口,仅后端内部直连):
+	//
+	//	撤单 / 过期 / 完全成交后把某挂单 escrow 的残余资产退回玩家活跃余额并关闭托管。
+	//	卖单残余 = 未成交道具;买单残余 = 未成交金币 + 成交价优于出价的价差返还。
+	//
+	// 幂等键 = order_id,重复退还只生效一次(escrow status=closed 后再调为 no-op)。
+	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
+	ReleaseEscrow(context.Context, *ReleaseEscrowRequest) (*ReleaseEscrowResponse, error)
 }
 
 // UnimplementedInventoryServiceServer should be embedded to have
@@ -165,8 +221,14 @@ func (UnimplementedInventoryServiceServer) UseItem(context.Context, *UseItemRequ
 func (UnimplementedInventoryServiceServer) SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SellItem not implemented")
 }
+func (UnimplementedInventoryServiceServer) FreezeForOrder(context.Context, *FreezeForOrderRequest) (*FreezeForOrderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FreezeForOrder not implemented")
+}
 func (UnimplementedInventoryServiceServer) SettleAuctionMatch(context.Context, *SettleAuctionMatchRequest) (*SettleAuctionMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SettleAuctionMatch not implemented")
+}
+func (UnimplementedInventoryServiceServer) ReleaseEscrow(context.Context, *ReleaseEscrowRequest) (*ReleaseEscrowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReleaseEscrow not implemented")
 }
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue() {}
 
@@ -260,6 +322,24 @@ func _InventoryService_SellItem_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_FreezeForOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FreezeForOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).FreezeForOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_FreezeForOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).FreezeForOrder(ctx, req.(*FreezeForOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InventoryService_SettleAuctionMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SettleAuctionMatchRequest)
 	if err := dec(in); err != nil {
@@ -274,6 +354,24 @@ func _InventoryService_SettleAuctionMatch_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InventoryServiceServer).SettleAuctionMatch(ctx, req.(*SettleAuctionMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ReleaseEscrow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseEscrowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ReleaseEscrow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ReleaseEscrow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ReleaseEscrow(ctx, req.(*ReleaseEscrowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -302,8 +400,16 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _InventoryService_SellItem_Handler,
 		},
 		{
+			MethodName: "FreezeForOrder",
+			Handler:    _InventoryService_FreezeForOrder_Handler,
+		},
+		{
 			MethodName: "SettleAuctionMatch",
 			Handler:    _InventoryService_SettleAuctionMatch_Handler,
+		},
+		{
+			MethodName: "ReleaseEscrow",
+			Handler:    _InventoryService_ReleaseEscrow_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
