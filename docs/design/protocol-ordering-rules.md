@@ -328,7 +328,7 @@ rpc StartMatch(StartMatchRequest) returns (StartMatchResponse);
 | trade.ListMyOrders | []Order | 不发 |
 | dialogue.StartDialogue | DialogueState | 不发 |
 | chat.PullHistory | []ChatMessage | 不发 |
-| ds.AllocateBattle | ds_addr + tickets | 不发(matchmaker 内部调) |
+| ds.AllocateBattle | ds_addr + ds_pod_name | 不发(matchmaker 内部调;battle_ticket 由 matchmaker 签后随 match.progress 推送) |
 | hub.AssignHub | hub_ds_addr + ticket | 不发 |
 | Heartbeat(各)| command | 不发(DS 内部用)|
 

@@ -31,21 +31,21 @@
 | 链路段 | 后端 | UE（Pandora-Client，独立仓库）|
 |---|---|---|
 | 登录 gRPC-Web | ✅ login（W3）| ✅ `UPandoraBackendSubsystem.Login`（已通）|
-| 分配 Hub | ✅ hub_allocator.AssignHub（W4 ⑤/⑥）+ **Agones 发现（W4 ⑬）** | ⬜ NetDriver 连 Hub DS（客户端段）|
-| 进大厅 | ✅ login 返真实 hub_ds_addr（agones.enabled=true 后）| ⬜ NetDriver 连 Hub DS |
-| Hub 心跳 | ✅ hub_allocator.Heartbeat | 🟡 `APandoraHubGameMode` 骨架已落（每 5s 调，§3 契约）|
+| 分配 Hub | ✅ hub_allocator.AssignHub（W4 ⑤/⑥）+ **Agones 发现（W4 ⑬）** | ✅ NetDriver 连 Hub DS（`ClientTravel` 带 `hub_ticket`）|
+| 进大厅 | ✅ login 返真实 hub_ds_addr（agones.enabled=true 后）| ✅ 登录后 `ClientTravel` Hub DS（`bConnectHubOnLogin`） |
+| Hub 心跳 | ✅ hub_allocator.Heartbeat | ✅ `APandoraHubGameMode` BeginPlay/EndPlay 驱动 5s `HubHeartbeat` |
 | 组队 | ✅ team（W3 ⑦）| ✅ `UPandoraBackendSubsystem` 7 RPC（CreateTeam/Invite/Accept/Leave/Kick/SetReady/GetTeam，§6）|
 | 匹配 | ✅ matchmaker（W4 ①/⑦）| ✅ `UPandoraBackendSubsystem` 4 RPC（StartMatch/Cancel/Confirm/GetMatchProgress，§6）|
-| 分配 Battle | ✅ ds_allocator.AllocateBattle + **真 Agones（W4 ⑫）** | ⬜ NetDriver 连 Battle DS（客户端段）|
+| 分配 Battle | ✅ ds_allocator.AllocateBattle + **真 Agones（W4 ⑫）** | ✅ NetDriver 连 Battle DS（`ClientTravel` 带 `battle_ticket`）|
 | 进战斗推送 | ✅ kafka match.progress → push stream | ✅ OnPushFrame 已通 |
-| Battle 心跳 | ✅ ds_allocator.Heartbeat | 🟡 `APandoraBattleGameMode` 骨架已落（每 5s 调，§3 契约）|
-| 结算 | ✅ battle_result（W4 ③/⑨）| 🟡 Battle DS 经 `ReportResult` 同步上报（§5，非 kafka）|
-| locator HUB/BATTLE 上报 | ✅ guard + fence（W4 ⑩/⑪）| 🟡 Hub DS `SetLocation(HUB)` 骨架已落（带 fence，§4）|
+| Battle 心跳 | ✅ ds_allocator.Heartbeat | ✅ `APandoraBattleGameMode` BeginPlay/EndPlay 驱动 5s `BattleHeartbeat` |
+| 结算 | ✅ battle_result（W4 ③/⑨）| ✅ Battle DS 经 `ReportResult` 同步上报 + ended 心跳 + 回 Hub 通知 |
+| locator HUB/BATTLE 上报 | ✅ guard + fence（W4 ⑩/⑪）| ✅ Hub DS `PostLogin` 调 `SetLocationHub`（带 `fence_match_id` 回流） |
 
-> **结论**：后端主链路骨架已全部就位；UE DS 后端联调骨架（心跳 / SetLocation / ReportResult）
-> 已在 Pandora-Client 落地（见 §5）。**DS gRPC-Web 入口 wiring（§5.1 方案 A）已在本仓库
-> envoy.yaml 落地**（:8444 独立 DS 面）。剩余是 (a) 本地 Agones 联调让 allocator 返回真实地址，
-> (b) Codex 重启 envoy 容器 + UE DS `SetEndpoints` 指向 :8444，(c) UE NetDriver 连 DS 的客户端段。
+> **结论**：后端主链路骨架已全部就位；UE 客户端 NetDriver 连 Hub/Battle DS 已落地；
+> Hub/Battle DS 业务心跳、`SetLocationHub` 回写与 `ReportResult` 同步结算均已接入。
+> **DS gRPC-Web 入口 wiring（§5.1 方案 A）已在本仓库 envoy.yaml 落地**（:8444 独立 DS 面）。
+> 剩余重点从“功能待接”转为真机 / Agones / UE DS 的端到端联调、观测与边界硬化。
 
 ---
 
@@ -217,6 +217,49 @@
 - **故障补偿**:Battle DS 崩溃/心跳超时(15s)→ `ds_allocator` `RunHeartbeatSweep` 标 `abandoned` +
   `GameServerAllocation` 对应 GameServer Release + 发 `pandora.ds.lifecycle` 给 battle_result 段位
   回滚(不变量 §4,W4 ⑧ at-least-once)。
+
+#### Battle DS 回收生命周期（2026-06-23）
+
+Battle DS 回收分两条主线:正常结算由 **DS 自己收尾并请求 Agones Shutdown**;异常兜底由
+`ds_allocator` 的心跳 sweep 权威回收并补偿。`ReleaseBattle` RPC 仍保留为幂等管理接口,但当前
+代码里没有 matchmaker / battle_result 的生产调用方;所以不要把它理解成正常对局结束的主路径。
+
+1. **正常结算**:
+   - UE Battle DS 在 `APandoraBattleGameMode::RequestFinishBattle`(主动结算)或
+     `NotifyPlayerEntityDeath`(玩家死亡触发)后,调用 `ReportBattleResult` 上报结算。
+   - `HandleReportBattleResultComplete` 成功后发送一次 `state="ended"` 的 `BattleHeartbeat`,
+     随后 `StopBattleHeartbeat`、通知客户端回 Hub,并 `RequestAgonesShutdownAfterDelay(2.0f)`。
+   - 2 秒后 DS 调 `Agones->Shutdown()` 让 Agones 回收 Pod;`ds_allocator` 不主动发
+     `ReleaseBattle`。`ended` 镜像仍会被 active ZSET 扫到,`RunHeartbeatSweep` 看到
+     `state=ended` 只移出 active,不发 abandoned 补偿。
+
+2. **异常兜底 / abandoned**:
+   - `RunHeartbeatSweep` 每 `allocator.sweep_interval` 扫 active ZSET(默认 5s),发现
+     `last_heartbeat_ms` 超过 `allocator.heartbeat_timeout`(默认 15s)即把对局标
+     `abandoned`。
+   - 首次转入 `abandoned` 时调用 `alloc.Release(pod)`(Agones 删除/释放 GameServer;Local 模式
+     `Kill` 进程),并投递 `pandora.ds.lifecycle{phase=ABANDONED}` 给 battle_result 做玩家段位
+     回滚补偿。
+   - `ds.lifecycle` 投递成功后才把 match 移出 active;Kafka 临时失败则下轮继续重试。重试路径使用
+     KEEPTTL,不刷新 battle 镜像 TTL,所以 `allocator.battle_ttl`(默认 2h,从最后一次心跳起算)
+     是补偿重试与僵尸镜像的天然上界。
+
+3. **心跳响应 `command="stop"`**:
+   `ds_allocator.Heartbeat` 在三类场景返回 `stop`:Redis 无对应 match 镜像(孤儿 DS)、上报
+   `ds_pod_name` 与镜像不一致(旧 DS / 重分配残留)、镜像已是终态(`ended` / `abandoned`)却仍在
+   心跳。UE DS 在 `UPandoraDSBackendSubsystem::HandleBattleHeartbeatResponse` 收到后
+   `StopBattleHeartbeat()` + `Agones->Shutdown()`。
+
+4. **分配失败回滚**:
+   `AllocateBattle` 写 `warming` 镜像后必须等 DS 用正确 `match_id`/`ds_pod_name` 上报
+   `ready`/`running` 心跳才把地址返给 matchmaker。若超过 `allocator.ready_wait_timeout`
+   (默认 10s)仍未 ready,或写 Redis 镜像/等待流程失败,`cleanupAllocatedBattle` 会用独立短超时
+   ctx 调 `alloc.Release(pod)` 并删除镜像,绝不把可能尚未可用的 `ds_addr` 下发给客户端。
+
+5. **Local Windows 模式**:
+   Local provider 的 `Release`/abandoned 都是 `Kill` 对应 DS 进程;`ds_allocator` 退出时 `Close()`
+   杀掉全部在管 DS;DS 自己崩溃由 reaper goroutine 清台账并释放端口,Redis 镜像仍靠上述心跳超时
+   sweep 标 `abandoned`,语义与 Agones pod 崩溃一致。
 
 ### 2.4 本机 Windows Battle DS 调试模式（2026-06-16，与 Agones 并列的第二种启动方式）
 
@@ -440,14 +483,14 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
 
 > 仅列后端联调相关的骨架职责；GAS / Iris / Replication 细节见 `ds-arch.md`。
 
-**🟡 已落地（2026-06-09，Pandora-Client `Source/Pandora/`）**：
+**UE 侧当前落地情况（Pandora-Client `Source/Pandora/`）**：
 
 | 文件 | 职责 |
 |---|---|
-| `Public/Net/PandoraDSBackendSubsystem.h` + `Private/Net/...cpp` | DS→后端 4 个 unary（HubHeartbeat / BattleHeartbeat / SetLocationHub / ReportBattleResult），复用 gRPC-Web codec |
+| `Public/Net/PandoraDSBackendSubsystem.h` + `Private/Net/...cpp` | ✅ DS→后端 4 个 unary（HubHeartbeat / BattleHeartbeat / SetLocationHub / ReportBattleResult），复用 gRPC-Web codec |
 | `Public/Server/PandoraAgonesProvider.h` + cpp | Agones 身份/生命周期桩（读 env：`AGONES_GAMESERVER_NAME` / `PANDORA_MATCH_ID` / `PANDORA_REGION`），Ready/Health/Shutdown 占位 |
-| `Public/Server/PandoraHubGameMode.h` + cpp | 大厅 DS：5s 心跳 + PostLogin 落 `SetLocation(HUB)`（带 fence match_id，§4） |
-| `Public/Server/PandoraBattleGameMode.h` + cpp | 战斗 DS：5s 心跳 + `ReportResultAndEndMatch`（结算同步上报，不报 mmr_delta，§6） |
+| `Public/Gameplay/Default/PandoraHubGameMode.h` + cpp | ✅ 大厅 DS：`ds_type=hub` / DSTicket 校验 + 5s `HubHeartbeat` + `PostLogin` 落 `SetLocation(HUB)` |
+| `Public/Gameplay/Default/PandoraBattleGameMode.h` + cpp | ✅ 战斗 DS：5s `BattleHeartbeat` + `ReportBattleResult` + ended 心跳 + 通知客户端回 Hub |
 | `Public/Auth/PandoraDSTicket.h` + `Private/Auth/...cpp` | DS 侧 DSTicket 本地校验器（自带 HMAC-SHA256 零依赖 + base64url + JSON claims，HS256 验签/exp/iss/aud/ds_type/match_id），dev=HS256 生产切 RS256 |
 | `Public/Gameplay/Default/PandoraDSGameModeBase.h` + cpp | DS GameMode 校验基类（派生 `AMyGameMode`）：`PreLogin`/`InitNewPlayer` 验票、`jti` 防重放、`PostLogin` 单会话顶号、roster 名单 |
 | `Public/Gameplay/Default/PandoraBattleGameMode.h` + cpp | 战斗 DS GameMode：`ds_type=battle` + 强制 `match_id` 绑定（从 `UPandoraAgonesSubsystem` 取）+ roster |
@@ -478,9 +521,9 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
   Battle 票必须绑定 `match_id` + roster，只允许本局玩家进入。两者都保持短期、一次性语义；从 Battle
   结算回 Hub 时不能复用登录进 Hub 时已消费的 hub 票，必须重新签发新的 `ds_type=hub` DSTicket 再
   `ClientTravel` 回 Hub。
-- **占位验证**：UE DS 就绪前，先用 `deploy/k8s/agones` 的 simple-game-server 占位 Fleet 验
-  Agones 分配链路（见 README §4 第一步）；心跳 / locator 链路用 `tools/scripts/ds_heartbeat_stub.ps1`
-  当 stub（grpcurl 周期调 Heartbeat + SetLocation，第二步），真 UE DS 就绪后替换。
+- **占位验证**：真机 / Agones / UE DS 端到端联调前，仍可用 `deploy/k8s/agones` 的
+  simple-game-server 占位 Fleet 验 Agones 分配链路（见 README §4 第一步）；Hub 心跳 / locator
+  回流也可用 `tools/scripts/ds_heartbeat_stub.ps1` 做隔离 probe，真 UE Hub DS 路径已能替换 stub。
   战斗结算 → 段位补偿链用 `tools/scripts/battle_result_outbox_probe.ps1`（grpcurl 同步
   ReportResult + GetMatchResult，验事务出箱 → player.update → 段位回写）。
 

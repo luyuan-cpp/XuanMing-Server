@@ -698,9 +698,9 @@ Envoy → matchmaker(unary)
   │ 全确认 → matchmaker.调 ds_allocator.AllocateBattle (gRPC unary)
   │
   │ ds_allocator 通过 Agones 拉起 battle DS pod
-  │ ds_allocator 返回 ds_addr + tickets
+  │ ds_allocator 返回 ds_addr + ds_pod_name
   │
-  │ matchmaker:produce kafka pandora.match.progress
+  │ matchmaker 签 battle_ticket,produce kafka pandora.match.progress
   │   payload=stage=READY,battle_ds_addr=...,battle_ticket=...
   │
   ▼

@@ -438,11 +438,18 @@ Battle DS 战斗结束
    ▼
 Battle DS:
    - kafka 发 pandora.battle.result
+   - 发 state="ended" 的 BattleHeartbeat
    - 给客户端 RPC: BattleEnded{result, hub_ds_addr, hub_ticket}
-   - 留 10s 看战绩
-   - 主动断开
-   - 通知 ds_allocator 释放
+   - 留短暂窗口给客户端回大厅
+   - StopBattleHeartbeat
+   - Agones Shutdown 回收 Pod
 ```
+
+**当前实现补充**:正常结算不走后端主动 `ReleaseBattle`;`ReleaseBattle` RPC 仍保留为幂等管理接口,
+但当前无 matchmaker / battle_result 生产调用方。异常路径由 `ds_allocator` 心跳 sweep 兜底:
+Battle DS 超过 15s 未心跳会标 `abandoned`、释放 pod,并投递 `pandora.ds.lifecycle` 给
+`battle_result` 做段位回滚补偿。完整回收生命周期见 [`agones-dev.md`](agones-dev.md) §2.3
+「Battle DS 回收生命周期」。
 
 ### 6.3 Hub 跨分片切换
 
@@ -528,10 +535,13 @@ pandora_ds_grpc_call_duration_ms_bucket{service,method}
 
 ### 9.1 DS 崩溃
 
-- Agones 检测心跳超时 15s → 标记 Unhealthy → kubectl delete pod → Fleet 自动补充
-- ds_allocator 收到 `pandora.ds.lifecycle{event=crashed}` → 触发补偿:
-  - 战斗 DS:发"未结算战斗"事件 → battle_result 按规则补 / 不算败场
-  - 大厅 DS:player_locator 清玩家 → 客户端收到提示
+- Battle DS 业务心跳超过 15s 未上报 → `ds_allocator.RunHeartbeatSweep` 标 `abandoned`
+  → `alloc.Release(pod)` 回收 Agones GameServer / Local 进程。
+- `ds_allocator` 投递 `pandora.ds.lifecycle{phase=ABANDONED}` → `battle_result` 幂等补偿:
+  - 战斗 DS:写 abandoned 战绩 / 段位回滚补偿,不信任 DS 自报的异常结算。
+  - 大厅 DS:由 `hub_allocator` 的心跳 sweep / draining 机制和 `player_locator` 自愈处理。
+- Agones SDK health 仍用于 GameServer Ready/Unhealthy,但 Pandora 业务补偿以 allocator 的
+  业务 Heartbeat 和 Redis 镜像为准。
 
 ### 9.2 客户端崩溃
 

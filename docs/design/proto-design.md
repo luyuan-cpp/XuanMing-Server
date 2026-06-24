@@ -191,14 +191,14 @@ message MatchProgress {
 service DSAllocatorService {
   rpc AllocateBattle(AllocateBattleRequest) returns (AllocateBattleResponse);
   rpc ReleaseBattle(ReleaseBattleRequest) returns (ReleaseBattleResponse);
-  rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse); // DS 每 5s 单向 unary 主动调
   rpc ListBattles(ListBattlesRequest) returns (ListBattlesResponse);
 }
 
 message AllocateBattleRequest {
   uint64 match_id = 1;
   repeated uint64 player_ids = 2;
-  int32 map_id = 3;
+  uint32 map_id = 3;
   string game_mode = 4;
 }
 
@@ -209,6 +209,11 @@ message AllocateBattleResponse {
   int64 allocated_at_ms = 4;
 }
 
+message ReleaseBattleRequest {
+  uint64 match_id = 1;
+  string reason = 2; // "completed" | "abandoned" | "crash"
+}
+
 message HeartbeatRequest {
   string ds_pod_name = 1;
   uint64 match_id = 2;
@@ -216,8 +221,17 @@ message HeartbeatRequest {
   float cpu_pct = 4;
   float mem_mb = 5;
   string state = 6;             // "warming" | "ready" | "running" | "ended"
+  int64 ts_ms = 7;
+}
+
+message HeartbeatResponse {
+  ErrCode code = 1;
+  string command = 2;           // "" | "stop" | "drain" | "reload_config"
 }
 ```
+
+> 职责切分: `ds_allocator` 只分配/回收 DS,不签 battle ticket;ticket 由 matchmaker 签。当前正常结算
+> 不依赖 `ReleaseBattle` 生产调用,而是 Battle DS 发 `ended` 心跳后自行 `Agones->Shutdown()`。
 
 ### 3.5 battle.proto
 

@@ -318,9 +318,9 @@ EndDialogue(player_id, dialogue_id) → ok
 
 **对外 RPC**:
 ```
-AllocateBattle(match_id, player_ids, map_id) → ds_addr + tickets
-ReleaseBattle(match_id) → ok
-Heartbeat(stream) → bidirectional
+AllocateBattle(match_id, player_ids, map_id, game_mode) → ds_addr + ds_pod_name
+ReleaseBattle(match_id, reason) → ok  # 暴露但当前无生产调用方;正常结算靠 DS ended 心跳 + Agones Shutdown
+Heartbeat(request) → command           # DS 每 5s 单向 unary 主动调
 ListBattles(filter) → []BattleInfo
 ```
 
@@ -328,8 +328,13 @@ ListBattles(filter) → []BattleInfo
 - 调用 Agones K8s API:`GameServerAllocation` CRD。W4 ⑫ 已实现标准库 REST allocator,
   `agones.enabled=true` 时经 k8s apiserver POST `allocation.agones.dev/v1` 分配,
   `enabled=false` 时保留 Mock fallback 供本地无集群联调。
+- `local_ds.enabled=true` 时可直接 exec 本机 Windows Dedicated Server 进程,与 Agones / Mock
+  三种模式互斥,接口仍是同一个 `GameServerAllocator`。
 - 维护 redis 中的 DS 状态镜像
-- 心跳超时 15s → 标记 abandoned + 通知 battle_result(玩家段位回滚)
+- 正常结算:Battle DS 上报 `state=ended` 后自行 `Agones->Shutdown()`,allocator 后台 sweep 只把
+  ended match 移出 active,不发 abandoned 补偿。
+- 心跳超时 15s → 标记 abandoned + `alloc.Release(pod)` + 投递 `pandora.ds.lifecycle`
+  给 battle_result(玩家段位回滚);投递失败留在 active 下轮重试,`BattleTTL` 是重试上界。
 
 ---
 
