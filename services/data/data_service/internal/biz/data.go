@@ -16,6 +16,7 @@ import (
 
 	klog "github.com/go-kratos/kratos/v2/log"
 
+	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	datav1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/data_service/v1"
@@ -30,6 +31,12 @@ type DataUsecase struct {
 	cache data.PlayerCache // 弱依赖,可为 nil(无缓存时直连 MySQL)
 	cfg   conf.DataConf
 	log   *klog.Helper
+
+	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
+	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,blob owner 落点观测退化为不打日志(行为不变)。
+	// 分片部署时由 main 经 SetCellRouter 注入,写(WritePlayer)后额外打一条 blob owner 落点
+	// 观测(供分片上线核对玩家数据落点 == 玩家 owner cell,§4.2 line 142)。nil-safe。
+	router *cellroute.Router
 }
 
 // NewDataUsecase 构造。cache 允许为 nil(缓存未配置时退化为直连 MySQL)。
@@ -40,6 +47,16 @@ func NewDataUsecase(store data.PlayerStore, cache data.PlayerCache, cfg conf.Dat
 		cfg:   cfg,
 		log:   plog.NewHelper(logger),
 	}
+}
+
+// SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
+//
+// nil-safe:不调用 / 传 nil 时(单 Cell / dev / 阶段 1~2),不做 blob owner 落点观测,行为与历史
+// 一致。用 setter 而非构造参数,避免单 Cell 阶段调用点被迫改签名(与 matchmaker / auction /
+// battle_result / friend / chat / trade / dialogue / inventory / locator / push / team / player 一致)。
+// Router 内部读路径无锁,并发安全。
+func (u *DataUsecase) SetCellRouter(r *cellroute.Router) {
+	u.router = r
 }
 
 // ReadPlayer cache-aside 读:缓存命中直返;miss 读 MySQL 并回填缓存。
@@ -90,6 +107,9 @@ func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData) (i
 			u.log.WithContext(ctx).Warnf("cache del after write player %d failed: %v", pd.GetPlayerId(), err)
 		}
 	}
+	// 分片:玩家数据 blob 是 owner 数据,锁定玩家 owner cell(PlayerDataShardKey=player_id,
+	// §4.2 line 142)。router 为 nil(单 Cell)→ 不打,行为与历史一致。
+	u.logPlayerDataPlacement(ctx, pd.GetPlayerId(), "write_player")
 	return newVersion, nil
 }
 
@@ -117,6 +137,7 @@ func (u *DataUsecase) fillCache(ctx context.Context, pd *datav1.PlayerData) {
 		u.log.WithContext(ctx).Warnf("cache set player %d failed: %v", pd.GetPlayerId(), err)
 	}
 }
+
 // errInvalidPlayer 返回 player_id 缺失的参数错误。
 func errInvalidPlayer() error {
 	return errcode.New(errcode.ErrInvalidArg, "player_id required")

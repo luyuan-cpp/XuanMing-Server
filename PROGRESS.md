@@ -2447,6 +2447,80 @@ battle 放置按多数 region 处理。**不改现状队伍存储(redis by team_
   `go test ./internal/biz/... -count=1` = 0(`ok ... internal/biz 0.146s`)。
 - **边界**:真正的队伍 redis 按 owner cell 分片 / battle DS 跨 region 放置属基础设施
   (Codex/人,§11.1);本轮只落纯口径 + 队伍 region 分布观测,现状队伍存储与状态机不动。
+
+## 蜂窝扩容 ⑰ ✅ player 玩家档案 owner cell 锚定(2026-06-26)
+
+落 `scale-cellular-20m.md` §4.2 owner 不变量(line 142「同一 player_id 的所有 owner 数据 —— 档案 /
+背包 / 段位 / 好友 —— 必落同一 region_id 同一 cell_id」)所需的服务内纯逻辑:玩家档案(昵称 / 段位
+mmr / 战绩 / 英雄 / 加点 / 天赋)是最核心 owner 数据,其 MySQL 行 + mmr 幂等记录
+(idempotency_key=match_id,不变量 §2)必须锚定玩家 owner cell;多 Cell 下若档案与背包 / 好友落不同
+cell,会放大跨 cell 读写并让幂等键漂移。统一档案存储分片键口径(= player_id)+ 用 `cellroute.Router`
+解析玩家 owner (region, cell),在核心写 `UpdateMMR` 成功后接观测。**不改现状档案存储(MySQL by
+player_id + EnsureProfile 懒创建)与 mmr 幂等(ApplyMMRChange + mmr_history uk)实现**。
+
+1. **profile_sharding.go(新增)** 纯函数 + nil-safe 接线:
+   - `ProfileShardKey(playerID) string`:canonical = player_id 十进制串(owner cell 决定者,§4.2 line 142)。
+     关键口径:**不取 nickname / hero_id / 任何配置 ID**(与落点无关)。
+   - `ProfileOwner{RegionID, CellID}`;`PlayerUsecase.profileOwner(playerID)`:经 `router.Route` 解析玩家
+     owner 落点;router 为 nil(单 Cell)或路由失败 / player_id=0 → `(ProfileOwner{}, false)`,不阻断。
+   - `logProfilePlacement`:router 注入后打 `profile_placement`(player_id / op / region / cell /
+     shard_key),供分片上线核对「档案落点 == 玩家 owner cell」。
+2. **player.go**:`PlayerUsecase` 加 `router *cellroute.Router` 字段 + `SetCellRouter`(setter,与
+   matchmaker/auction/.../team 一致);`UpdateMMR` 在写应用成功(非幂等命中)后调 `logProfilePlacement`,
+   仅可观测,不改档案路径(router nil → 不打,行为与历史一致;读路径 GetProfile/GetMMR 不走此路径)。
+
+### 验证
+
+- gofmt(新增/改动 3 文件)/ `go build ./...`(BUILD_0)/ `go vet ./internal/biz/`(VET_0)= 0。
+- TEST=0:新增 6 用例(`TestProfileShardKey_IsPlayerID` / `_IndependentOfProfileFields` /
+  `TestProfileOwner_NilRouter` / `_ZeroPlayer` / `_Resolves` / `_SamePlayerStable`),连同既有 player biz
+  用例全绿(`ok ... internal/biz 0.023s`)。
+- **边界**:真正的档案 MySQL 按 owner cell 分库 / 跨 cell 一致性属基础设施(Codex/人,§11.1);本轮只落
+  纯口径 + 档案 owner 落点观测,现状档案存储 + mmr 幂等不动。沿用 ④ 的 §7 阶段纪律偏离声明(用户「先把
+  代码写完」,单 Cell 压测前先写多 Cell 代码)。
+
+## 蜂窝扩容 ⑱ ✅ data_service 玩家数据 blob owner cell 锚定(2026-06-26)
+
+落 `scale-cellular-20m.md` §4.2 owner 不变量(line 142)所需的服务内纯逻辑:data_service 是按
+player_id 的玩家数据 blob(cache-aside:MySQL 事实源 + Redis 旁路缓存),属最核心 owner 数据,其
+MySQL 行 + 缓存键必须锚定玩家 owner cell;多 Cell 下若 blob 与档案 / 背包 / 好友落不同 cell,会放大
+跨 cell 读写并让缓存键漂移。统一玩家数据存储分片键口径(= player_id)+ 用 `cellroute.Router` 解析玩家
+owner (region, cell),在写 `WritePlayer` 成功后接观测。**不改现状 cache-aside 编排(MySQL 乐观锁写
+WHERE version=? + 写后删缓存)实现**。
+
+1. **data_sharding.go(新增)** 纯函数 + nil-safe 接线:
+   - `PlayerDataShardKey(playerID) string`:canonical = player_id 十进制串(owner cell 决定者,§4.2
+     line 142)。关键口径:**不取 version / data 内容 / 任何配置 ID**(与落点无关)。
+   - `PlayerDataOwner{RegionID, CellID}`;`DataUsecase.playerDataOwner(playerID)`:经 `router.Route`
+     解析玩家 owner 落点;router 为 nil(单 Cell)或路由失败 / player_id=0 → `(PlayerDataOwner{}, false)`,
+     不阻断。
+   - `logPlayerDataPlacement`:router 注入后打 `player_data_placement`(player_id / op / region / cell /
+     shard_key),供分片上线核对「玩家数据落点 == 玩家 owner cell」。
+2. **data.go**:`DataUsecase` 加 `router *cellroute.Router` 字段 + `SetCellRouter`(setter,与
+   matchmaker/auction/.../player 一致);`WritePlayer` 在乐观锁写成功 + 删缓存后调
+   `logPlayerDataPlacement`,仅可观测,不改 cache-aside 路径(router nil → 不打,行为与历史一致;
+   ReadPlayer / InvalidateCache 不走此路径)。
+
+### 验证
+
+- gofmt(新增/改动 3 文件)/ `go build ./...`(BUILD_0)/ `go vet ./internal/biz/`(VET_0)= 0。
+- TEST=0:新增 6 用例(`TestPlayerDataShardKey_IsPlayerID` / `_IndependentOfPayload` /
+  `TestPlayerDataOwner_NilRouter` / `_ZeroPlayer` / `_Resolves` / `_SamePlayerStable`),连同既有
+  data_service biz 用例全绿(`ok ... internal/biz 0.019s`)。
+- **边界**:真正的 blob MySQL 按 owner cell 分库 / 缓存按 cell 分区属基础设施(Codex/人,§11.1);本轮
+  只落纯口径 + blob owner 落点观测,现状 cache-aside 编排不动。沿用 ④ 的 §7 阶段纪律偏离声明(用户
+  「先把代码写完」,单 Cell 压测前先写多 Cell 代码)。
+
+### 蜂窝扩容收尾说明(截至 ⑱)
+
+owner 数据 / 面向玩家的服务已全部接入确定性 cellroute owner cell 锚定 / 归属观测(口径统一 + nil-safe,
+单 Cell 行为不变):login / ticket(登录路由 + hub 票据盖 region/cell 戳)、player(档案)、
+data_service(玩家 blob)、friend / chat / dialogue(社交)、trade / inventory / auction(经济,含跨人
+结算 leg 与市场级 market_router)、matchmaker / team(撮合 + 队伍)、battle_result(结算回 owner cell)、
+player_locator(位置)、push(消费者归属守卫)。**剩余未接的 hub_allocator / ds_allocator 属 DS 编排
+(Agones / k8s 放置),是基础设施职责(Codex/人,§11.1),不在服务内 owner cell 锚定范围**。下一阶段
+应转入 §7 阶段 1:单 Cell 压测(~40 万 CCU + 对比表)通过后,再由 Codex/人接多 Cell 部署
+(main 注入 router / peer list、跨实例转发、etcd 表热更、MySQL 分库、缓存按 cell 分区)。
    `docs/ops/service-killswitch.md` 记录单 RPC、整服关停、feature、Envoy、etcd、限流/熔断操作。
 
 ### 验证

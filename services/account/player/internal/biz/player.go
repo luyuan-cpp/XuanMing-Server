@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
@@ -28,6 +29,12 @@ import (
 type PlayerUsecase struct {
 	repo data.PlayerRepo
 	cfg  conf.PlayerConf
+
+	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
+	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,档案 owner 落点观测退化为不打日志(行为不变)。
+	// 分片部署时由 main 经 SetCellRouter 注入,核心写(UpdateMMR)后额外打一条档案 owner 落点
+	// 观测(供分片上线核对档案落点 == 玩家 owner cell,§4.2 line 142)。nil-safe。
+	router *cellroute.Router
 }
 
 // NewPlayerUsecase 构造。
@@ -42,6 +49,16 @@ func NewPlayerUsecase(repo data.PlayerRepo, cfg conf.PlayerConf) *PlayerUsecase 
 		cfg.MaxNicknameLen = 32
 	}
 	return &PlayerUsecase{repo: repo, cfg: cfg}
+}
+
+// SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
+//
+// nil-safe:不调用 / 传 nil 时(单 Cell / dev / 阶段 1~2),不做档案 owner 落点观测,行为与历史
+// 一致。用 setter 而非构造参数,避免单 Cell 阶段调用点被迫改签名(与 matchmaker / auction /
+// battle_result / friend / chat / trade / dialogue / inventory / locator / push / team 一致)。
+// Router 内部读路径无锁,并发安全。
+func (u *PlayerUsecase) SetCellRouter(r *cellroute.Router) {
+	u.router = r
 }
 
 // defaultNickname 给新玩家生成唯一默认昵称(prefix + player_id,保证 uk_nickname 不冲突)。
@@ -169,6 +186,9 @@ func (u *PlayerUsecase) UpdateMMR(ctx context.Context, playerID uint64, delta in
 	}
 	plog.With(ctx).Infow("msg", "update_mmr_applied",
 		"player_id", playerID, "delta", delta, "reason", reason, "new_mmr", newMMR)
+	// 分片:档案(含段位 mmr)是 owner 数据,锁定玩家 owner cell(ProfileShardKey=player_id,
+	// §4.2 line 142)。router 为 nil(单 Cell)→ 不打,行为与历史一致。
+	u.logProfilePlacement(ctx, playerID, "update_mmr")
 	return newMMR, false, nil
 }
 
