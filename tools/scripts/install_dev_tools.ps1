@@ -1,14 +1,19 @@
 ﻿# Pandora 开发环境工具链一键安装(Windows / PowerShell)
 #
+# ⚠️ 适用对象:**后端开发**(要改 proto / 跑 lint / 端到端调 gRPC 的人)。
+#    策划不用跑这个脚本!策划只要装 Docker Desktop,双击仓库根目录的
+#    「策划一键启动.cmd」即可(脚本会自动检测/引导安装 Docker,15 个 go
+#    服务全在容器里编译运行,宿主无需 go / git)。详见 play.ps1。
+#
 # 安装的工具:
 #   - buf       proto 工具(lint / generate / breaking)
 #   - mkcert    自签 TLS 证书(Envoy / 本地 HTTPS 用)
 #   - grpcurl   gRPC 端到端测试(命令行 grpcurl 调 gRPC 服务)
 #
-# 不安装的(用户应已有):
-#   - go        Go 编译器(必需;Kratos `protoc-gen-go-http` 是本地 plugin)
-#   - docker    docker desktop
-#   - git       版本控制
+# 不安装的(开发者应已有;策划不需要):
+#   - go        Go 编译器(后端开发本机编译用;策划走 docker 容器内编译,无需此项)
+#   - docker    Docker Desktop(策划唯一硬依赖,「策划一键启动.cmd」会自动引导安装)
+#   - git       版本控制(开发用;策划经 SVN 拿代码也能跑,版本烙印会回退占位值)
 #
 # 用法:
 #   pwsh tools/scripts/install_dev_tools.ps1            # 装所有工具
