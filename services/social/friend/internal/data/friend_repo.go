@@ -108,7 +108,7 @@ type FriendRepo interface {
 	// RecommendByMutual 返回「好友的好友」候选,按共同好友数降序、同数随机,取 limit 个。
 	// 已排除:自己 / 已是好友 / 任一方向拉黑 / 双方任一方向 pending 请求 / exclude 列表。
 	RecommendByMutual(ctx context.Context, playerID uint64, exclude []uint64, limit int) ([]RecommendRow, error)
-	// RecommendRandom 从好友图里的玩家随机兜底(FOF 不足 limit 时补足),Mutual 恒为 0。
+	// RecommendRandom 从好友图里的玩家随机兜底,返回至多 limit 个候选;尾部不足时可少于 limit。
 	// 排除条件同上。
 	RecommendRandom(ctx context.Context, playerID uint64, exclude []uint64, limit int) ([]RecommendRow, error)
 }
@@ -508,25 +508,28 @@ LIMIT ?`
 }
 
 func (r *MySQLFriendRepo) RecommendRandom(ctx context.Context, playerID uint64, exclude []uint64, limit int) ([]RecommendRow, error) {
-	// 兜底:FOF 不足时补满。不用 ORDER BY RAND()(会全表排序),改随机锚点 + idx_player 区间扫:
-	// 取随机 pivot,沿 player_id 索引正向扫 limit 个;近表尾不足则从头(>0)再补,各自只走索引区间。
-	pivot := uint64(rand.Int63())
-	rows, err := r.recommendAnchor(ctx, playerID, exclude, pivot, limit)
+	// 兜底:FOF 不足时尽量补候选。绝不全表扫,且 pivot 必须落进真实 id 区间。
+	// player_id 是雪花 ID(集中在当前高位窗口),直接 rand.Int63() 大概率落在现有最大 id 之后;
+	// 先用索引 MIN/MAX(MySQL 直接取 idx_player 两端,O(1))取真实区间,
+	// pivot ∈ [min,max] 保证 player_id>=pivot 必有行;尾部不满返回偏少可接受。
+	var minID, maxID sql.Null[uint64]
+	err := r.db.QueryRowContext(ctx,
+		`SELECT MIN(player_id), MAX(player_id) FROM friendships`).Scan(&minID, &maxID)
 	if err != nil {
-		return nil, err
+		return nil, errcode.New(errcode.ErrInternal, "recommend range player=%d: %v", playerID, err)
 	}
-	if len(rows) < limit {
-		ex := append(append([]uint64{}, exclude...), candidateIDs(rows)...)
-		extra, eerr := r.recommendAnchor(ctx, playerID, ex, 0, limit-len(rows))
-		if eerr != nil {
-			return nil, eerr
-		}
-		rows = append(rows, extra...)
+	if !maxID.Valid || maxID.V == 0 {
+		return nil, nil // 空表,无兜底候选
 	}
-	return rows, nil
+	lo, hi := minID.V, maxID.V
+	pivot := lo
+	if hi > lo {
+		pivot = lo + uint64(rand.Int63n(int64(hi-lo+1)))
+	}
+	return r.recommendAnchor(ctx, playerID, exclude, pivot, limit)
 }
 
-// recommendAnchor 沿 player_id 索引从 pivot 正向扫 limit 个候选(走 idx_player 区间,无全表排序)。
+// recommendAnchor 沿 player_id 索引从 pivot 正向扫,LIMIT limit 命中即止(有界索引区间,绝不全表)。
 // 排除:自己 / 已是好友 / 双向拉黑 / 双向 pending / exclude;mutual 恒 0。
 func (r *MySQLFriendRepo) recommendAnchor(ctx context.Context, playerID uint64, exclude []uint64, pivot uint64, limit int) ([]RecommendRow, error) {
 	exCl, exArgs := excludeClause("player_id", exclude)
@@ -549,15 +552,6 @@ LIMIT ?`
 	args = append(args, exArgs...)
 	args = append(args, limit)
 	return r.scanRecommend(ctx, "random", playerID, q, args)
-}
-
-// candidateIDs 抽出候选 ID,供兜底第二趟去重。
-func candidateIDs(rows []RecommendRow) []uint64 {
-	out := make([]uint64, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, r.CandidateID)
-	}
-	return out
 }
 
 func (r *MySQLFriendRepo) scanRecommend(ctx context.Context, kind string, playerID uint64, q string, args []any) ([]RecommendRow, error) {
