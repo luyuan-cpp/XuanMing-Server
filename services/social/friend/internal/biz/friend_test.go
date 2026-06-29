@@ -22,6 +22,11 @@ type fakeRepo struct {
 	requests map[uint64]*data.FriendRequestRow
 	blocks   map[uint64]map[uint64]bool // player → blocked → true
 
+	recommendMutual []data.RecommendRow
+	recommendRandom []data.RecommendRow
+	mutualCalls     int
+	randomCalls     int
+
 	// forceAcceptNotCompleted 模拟「预检后到事务取锁前请求被并发处理」:
 	// AcceptRequest 返回 (false, nil),用于 P1 并发假成功回归测试。
 	forceAcceptNotCompleted bool
@@ -195,12 +200,32 @@ func (f *fakeRepo) ListBlocks(_ context.Context, playerID uint64) ([]data.BlockR
 	return out, nil
 }
 
-func (f *fakeRepo) RecommendByMutual(_ context.Context, _ uint64, _ []uint64, _ int) ([]data.RecommendRow, error) {
-	return nil, nil
+func (f *fakeRepo) RecommendByMutual(_ context.Context, _ uint64, exclude []uint64, limit int) ([]data.RecommendRow, error) {
+	f.mutualCalls++
+	return pickRecommendRows(f.recommendMutual, exclude, limit), nil
 }
 
-func (f *fakeRepo) RecommendRandom(_ context.Context, _ uint64, _ []uint64, _ int) ([]data.RecommendRow, error) {
-	return nil, nil
+func (f *fakeRepo) RecommendRandom(_ context.Context, _ uint64, exclude []uint64, limit int) ([]data.RecommendRow, error) {
+	f.randomCalls++
+	return pickRecommendRows(f.recommendRandom, exclude, limit), nil
+}
+
+func pickRecommendRows(rows []data.RecommendRow, exclude []uint64, limit int) []data.RecommendRow {
+	blocked := map[uint64]bool{}
+	for _, id := range exclude {
+		blocked[id] = true
+	}
+	out := make([]data.RecommendRow, 0, limit)
+	for _, r := range rows {
+		if blocked[r.CandidateID] {
+			continue
+		}
+		out = append(out, r)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
 }
 
 // fakePusher 记录推送事件。
@@ -649,5 +674,79 @@ func TestListBlocks_OK(t *testing.T) {
 	blocks, _ = uc.ListBlocks(context.Background(), 100)
 	if len(blocks) != 1 || blocks[0].GetPlayerId() != 300 {
 		t.Fatalf("want only 300 left, got %+v", blocks)
+	}
+}
+
+// ── RecommendFriends ─────────────────────────────────────────────────────────
+
+func TestRecommendFriends_DefaultStrategyChain_MutualThenRandomNoDup(t *testing.T) {
+	repo := newFakeRepo()
+	repo.recommendMutual = []data.RecommendRow{
+		{CandidateID: 201, Mutual: 2},
+		{CandidateID: 202, Mutual: 1},
+	}
+	repo.recommendRandom = []data.RecommendRow{
+		{CandidateID: 202}, // 已被 mutual 选中,应被后续 exclude 掉
+		{CandidateID: 203},
+		{CandidateID: 204}, // 客户端 exclude,不应出现
+	}
+	online := &fakeOnline{status: map[uint64]data.OnlineStatus{
+		203: {Online: true, LastSeenMs: 7000},
+	}}
+	uc := NewFriendUsecase(repo, nil, online, conf.FriendConf{RecommendLimit: 3})
+
+	recs, err := uc.RecommendFriends(context.Background(), 100, 0, []uint64{204})
+	if err != nil {
+		t.Fatalf("RecommendFriends err: %v", err)
+	}
+	if repo.mutualCalls != 1 || repo.randomCalls != 1 {
+		t.Fatalf("want mutual+random once, got mutual=%d random=%d", repo.mutualCalls, repo.randomCalls)
+	}
+	if len(recs) != 3 {
+		t.Fatalf("want 3 recs, got %d: %+v", len(recs), recs)
+	}
+	wantIDs := []uint64{201, 202, 203}
+	for i, want := range wantIDs {
+		if recs[i].GetPlayerId() != want {
+			t.Fatalf("rec[%d] player_id=%d, want %d", i, recs[i].GetPlayerId(), want)
+		}
+	}
+	if recs[0].GetMutualFriendCount() != 2 || recs[1].GetMutualFriendCount() != 1 {
+		t.Fatalf("mutual counts wrong: %+v", recs)
+	}
+	if !recs[2].GetIsOnline() || recs[2].GetLastSeenMs() != 7000 {
+		t.Fatalf("online status for random fallback wrong: %+v", recs[2])
+	}
+}
+
+func TestRecommendFriends_ConfigAllowsRandomOnly(t *testing.T) {
+	repo := newFakeRepo()
+	repo.recommendMutual = []data.RecommendRow{{CandidateID: 201, Mutual: 2}}
+	repo.recommendRandom = []data.RecommendRow{{CandidateID: 301}, {CandidateID: 302}}
+	uc := NewFriendUsecase(repo, nil, nil, conf.FriendConf{
+		RecommendLimit:      2,
+		RecommendStrategies: []string{"random"},
+	})
+
+	recs, err := uc.RecommendFriends(context.Background(), 100, 0, nil)
+	if err != nil {
+		t.Fatalf("RecommendFriends err: %v", err)
+	}
+	if repo.mutualCalls != 0 || repo.randomCalls != 1 {
+		t.Fatalf("want random only, got mutual=%d random=%d", repo.mutualCalls, repo.randomCalls)
+	}
+	if len(recs) != 2 || recs[0].GetPlayerId() != 301 || recs[1].GetPlayerId() != 302 {
+		t.Fatalf("random-only recs wrong: %+v", recs)
+	}
+}
+
+func TestBuildStrategies_AllUnknownFallsBackToDefault(t *testing.T) {
+	repo := newFakeRepo()
+	strategies := buildStrategies(repo, []string{"same_region", "similar_power"})
+	if len(strategies) != 2 {
+		t.Fatalf("want fallback 2 strategies, got %d", len(strategies))
+	}
+	if strategies[0].Name() != "mutual" || strategies[1].Name() != "random" {
+		t.Fatalf("fallback order wrong: %s, %s", strategies[0].Name(), strategies[1].Name())
 	}
 }

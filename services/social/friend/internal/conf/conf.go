@@ -24,6 +24,11 @@ type FriendConf struct {
 
 	// RecommendLimit 单次推荐好友数量(默认 10,硬上限 20,超界收敛到 20)。
 	RecommendLimit int `yaml:"recommend_limit,omitempty" json:"recommend_limit,omitempty"`
+
+	// RecommendStrategies 推荐策略链(按序召回直到凑够 limit)。空 → ["mutual","random"]。
+	// 已支持:mutual(熟人,共同好友数)/ random(随机兜底)。
+	// 未来扩展:similar_power(实力相当)/ same_region(同区域),待 player 服务接画像后接。
+	RecommendStrategies []string `yaml:"recommend_strategies,omitempty" json:"recommend_strategies,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。

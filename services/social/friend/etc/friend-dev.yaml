@@ -38,3 +38,6 @@ friend:
   locator_addr: "127.0.0.1:50006"
   # recommend_limit: 单次推荐好友数量(默认 10,硬上限 20,超界收敛到 20)
   recommend_limit: 10
+  # recommend_strategies: 推荐策略链,按序召回直到凑够数量;空 → ["mutual","random"]
+  # mutual=熟人(共同好友数) random=随机兜底;未来可加 similar_power / same_region
+  recommend_strategies: ["mutual", "random"]

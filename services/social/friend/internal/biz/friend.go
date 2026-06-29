@@ -39,6 +39,9 @@ type FriendUsecase struct {
 	online data.OnlineStatusReader // 弱依赖,可为 nil
 	cfg    conf.FriendConf
 
+	// strategies 是推荐好友策略链(按序召回直到凑够 limit);conf recommend_strategies 决定顺序。
+	strategies []RecommendStrategy
+
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,好友边分片落点观测退化为不打日志(行为不变)。
 	// 分片部署时由 main 经 SetCellRouter 注入,AcceptFriend 成功后额外打一条好友边分片
@@ -57,7 +60,13 @@ func NewFriendUsecase(repo data.FriendRepo, pusher FriendEventPusher, online dat
 	if cfg.RecommendLimit > recommendMaxLimit {
 		cfg.RecommendLimit = recommendMaxLimit
 	}
-	return &FriendUsecase{repo: repo, pusher: pusher, online: online, cfg: cfg}
+	return &FriendUsecase{
+		repo:       repo,
+		pusher:     pusher,
+		online:     online,
+		cfg:        cfg,
+		strategies: buildStrategies(repo, cfg.RecommendStrategies),
+	}
 }
 
 // SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
@@ -316,7 +325,8 @@ const recommendMaxLimit = 20
 
 // RecommendFriends 推荐好友(客户端可见结构 RecommendedFriendInfo,默认 conf.RecommendLimit 个,可刷新)。
 //
-// 算法:好友的好友(共同好友数降序、同数随机)优先,不足时随机活跃玩家兜底。
+// 按策略链(conf recommend_strategies,默认 mutual→random)依次召回,凑够 limit 即止;
+// 每选中一批就追加到 exclude,后续策略不重复。
 // 排除自己 / 已是好友 / 双向拉黑 / 双向 pending 请求 / exclude(客户端回传已看过的)。
 // 服务端无状态,刷新靠客户端把已展示 id 放进 exclude;nickname 留空由客户端解析(§5.8)。
 // limit<=0 用 conf 默认;超 recommendMaxLimit(20)收敛到 20。
@@ -334,26 +344,24 @@ func (u *FriendUsecase) RecommendFriends(ctx context.Context, playerID uint64, l
 		limit = recommendMaxLimit
 	}
 
-	// FOF 候选优先;exclude 永远带上自己,防止把自己推荐给自己。
-	ex := make([]uint64, 0, len(exclude)+1)
+	// exclude 永远带上自己,防止把自己推荐给自己;每选中一批就追加,避免跨策略重复。
+	ex := make([]uint64, 0, len(exclude)+1+limit)
 	ex = append(ex, exclude...)
 	ex = append(ex, playerID)
 
-	rows, err := u.repo.RecommendByMutual(ctx, playerID, ex, limit)
-	if err != nil {
-		return nil, err
-	}
-
-	// 不足 limit → 随机兜底,排除已选中的,避免重复。
-	if len(rows) < limit {
-		for _, r := range rows {
+	var rows []data.RecommendRow
+	for _, st := range u.strategies {
+		if len(rows) >= limit {
+			break
+		}
+		picked, err := st.Candidates(ctx, playerID, ex, limit-len(rows))
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range picked {
+			rows = append(rows, r)
 			ex = append(ex, r.CandidateID)
 		}
-		extra, eerr := u.repo.RecommendRandom(ctx, playerID, ex, limit-len(rows))
-		if eerr != nil {
-			return nil, eerr
-		}
-		rows = append(rows, extra...)
 	}
 
 	ids := make([]uint64, 0, len(rows))
