@@ -1,5 +1,6 @@
 # Pandora go 服务镜像构建上下文裁剪(构建上下文 = 仓库根)。
-# 只保留 go.work / pkg / proto / services 这些 go 源码,排除产物、缓存、IDE、文档。
+# 保留 go.work 引用到的 Go module 源码(pkg / proto / services / robot/stress),
+# 排除产物、缓存、IDE、文档和压测日志。
 
 .git/
 .github/
@@ -21,7 +22,7 @@ deploy/envoy/key.pem
 
 # 文档 / 杂项
 docs/
-robot/
+robot/logs/
 *.md
 LICENSE
 
