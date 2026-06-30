@@ -284,6 +284,31 @@ func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadout
 	return &playerv1.GetLoadoutResponse{Code: commonv1.ErrCode_OK, Loadout: loadout}, nil
 }
 
+// ── 领奖 ──────────────────────────────────────────────────────────────────────
+
+// ClaimReward 领取一档奖励(客户端权威领取,幂等;已领取返回 ERR_REWARD_ALREADY_CLAIMED)。
+func (s *PlayerService) ClaimReward(ctx context.Context, req *playerv1.ClaimRewardRequest) (*playerv1.ClaimRewardResponse, error) {
+	if req.GetPlayerId() == 0 || req.GetRewardId() == 0 {
+		return &playerv1.ClaimRewardResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	if err := s.uc.ClaimReward(ctx, req.GetPlayerId(), req.GetSourceType(), req.GetSource(), req.GetActivityInstanceId(), req.GetRewardId()); err != nil {
+		return &playerv1.ClaimRewardResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.ClaimRewardResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// GetRewardClaims 查询某来源已领取的奖励配置 ID 列表(客户端可见最小视图)。
+func (s *PlayerService) GetRewardClaims(ctx context.Context, req *playerv1.GetRewardClaimsRequest) (*playerv1.GetRewardClaimsResponse, error) {
+	if req.GetPlayerId() == 0 {
+		return &playerv1.GetRewardClaimsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	ids, err := s.uc.GetRewardClaims(ctx, req.GetPlayerId(), req.GetSourceType(), req.GetSource(), req.GetActivityInstanceId())
+	if err != nil {
+		return &playerv1.GetRewardClaimsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.GetRewardClaimsResponse{Code: commonv1.ErrCode_OK, ClaimedRewardIds: ids}, nil
+}
+
 // toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))

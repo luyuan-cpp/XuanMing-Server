@@ -4230,3 +4230,39 @@ MailService（services/social/mail，:50009/:51009）：系统/公会邮件 chan
 4. 文档订正：go-services.md 18→19，mail 行号 19；本条追加。
 
 验证：mail 模块 BUILD=0 VET=0。Codex 收尾：cpp pb 同步 UE（mail proto 已生成）;git 收尾等用户授权。
+
+## 玩家领奖记录底座 ✅ 位图存储 + player RPC 接线 [proto]（2026-06-30）
+
+本轮补 player 服务的“领奖记录”底座：记录某玩家在永久来源（签到/成就/新手/永久任务等）
+和活动实例中的奖励档位是否已领取，用变长 bitmap 做 O(1) 判重，存储快照落
+`pandora_player.player_reward_claims.record`。
+
+### 改动
+
+1. `pkg/rewardclaim` 新增纯领域工具：永久来源 map + 活动实例 map，支持领取、查询、活动下线清理、
+   Snapshot/Load 往返和业务 ID→bit 位映射入口。
+2. `player.proto` 新增 `RewardClaimStorageRecord`、`RewardSourceType`、`ClaimReward`、
+   `GetRewardClaims`；`errcode.proto` / `pkg/errcode` 新增 `ERR_REWARD_ALREADY_CLAIMED`
+   与 `ERR_REWARD_UNKNOWN_ID`。
+3. player 服务新增 `ClaimReward` / `GetRewardClaims` usecase、repo 乐观锁读写和 service handler。
+4. `deploy/mysql-init/13-reward-claim-tables.sql` 新增 `player_reward_claims` 表。
+5. 已重新生成 Go pb 与 C++ pb（`pwsh tools/scripts/proto_gen.ps1 -Cpp`）。
+
+### 边界
+
+- 当前只记录“已领取状态”，还没有把奖励道具/货币发到 inventory；完整领奖发奖链路后续需接
+  inventory `GrantItems` / 货币变更。
+- 当前直接用 `reward_id` 作为 bit index；奖励配置表落地后可切到 `pkg/rewardclaim.BitIndexMap`
+  的稠密映射，存储格式不变。
+
+### 验证
+
+- `pwsh tools/scripts/proto_gen.ps1 -Cpp`：buf lint / Go pb / C++ pb 全通过。
+- `pkg/rewardclaim`：`go test ./rewardclaim/...` 通过。
+- `services/account/player`：`go test ./...` 通过。
+- `proto`：`go test ./...` 通过。
+- 全 go.work 模块逐个 `go build ./...` 全通过。
+- `go vet ./...` 覆盖 `pkg` / `proto` / `services/account/player` 全通过。
+- `docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env config --quiet` 通过。
+- `docker compose -f deploy/docker-compose.services.yml config --quiet` 通过。
+- 本机 dev MySQL 已补执行 `13-reward-claim-tables.sql`，确认 `player_reward_claims` 表存在。

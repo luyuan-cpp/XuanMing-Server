@@ -68,6 +68,8 @@ const (
 	ErrPlayerHeroAlreadyOwn     Code = 2011
 	ErrPlayerFeatureDisabled    Code = 2020 // 出战养成功能未开启(feature toggle 关闭)
 	ErrPlayerInsufficientPoints Code = 2021 // 属性点不足
+	ErrRewardAlreadyClaimed     Code = 2030 // 该奖励档位已领取(幂等命中)
+	ErrRewardUnknownID          Code = 2031 // 奖励配置 ID 非法 / 不在 bit 索引上界内
 )
 
 // team(3000-3999)

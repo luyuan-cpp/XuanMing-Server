@@ -29,6 +29,11 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
 // @@protoc_insertion_point(includes)
@@ -57,6 +62,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_pand
 namespace pandora {
 namespace player {
 namespace v1 {
+enum RewardSourceType : int;
+extern const uint32_t RewardSourceType_internal_data_[];
 class AllocateAttributePointsRequest;
 struct AllocateAttributePointsRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -80,6 +87,22 @@ extern AttributeAllocationGlobalsTypeInternal AttributeAllocation_globals_;
 extern const ::google::protobuf::internal::ClassDataFull AttributeAllocation_class_data_;
 #else
 extern const AttributeAllocationGlobalsTypeInternal AttributeAllocation_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimRewardRequest;
+struct ClaimRewardRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimRewardRequestGlobalsTypeInternal ClaimRewardRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimRewardRequest_class_data_;
+#else
+extern const ClaimRewardRequestGlobalsTypeInternal ClaimRewardRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimRewardResponse;
+struct ClaimRewardResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimRewardResponseGlobalsTypeInternal ClaimRewardResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimRewardResponse_class_data_;
+#else
+extern const ClaimRewardResponseGlobalsTypeInternal ClaimRewardResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetActiveHeroRequest;
 struct GetActiveHeroRequestGlobalsTypeInternal;
@@ -176,6 +199,22 @@ extern GetProfileResponseGlobalsTypeInternal GetProfileResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull GetProfileResponse_class_data_;
 #else
 extern const GetProfileResponseGlobalsTypeInternal GetProfileResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetRewardClaimsRequest;
+struct GetRewardClaimsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetRewardClaimsRequestGlobalsTypeInternal GetRewardClaimsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetRewardClaimsRequest_class_data_;
+#else
+extern const GetRewardClaimsRequestGlobalsTypeInternal GetRewardClaimsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetRewardClaimsResponse;
+struct GetRewardClaimsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetRewardClaimsResponseGlobalsTypeInternal GetRewardClaimsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetRewardClaimsResponse_class_data_;
+#else
+extern const GetRewardClaimsResponseGlobalsTypeInternal GetRewardClaimsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetTalentsRequest;
 struct GetTalentsRequestGlobalsTypeInternal;
@@ -305,6 +344,30 @@ extern const ::google::protobuf::internal::ClassDataFull ResetTalentsResponse_cl
 #else
 extern const ResetTalentsResponseGlobalsTypeInternal ResetTalentsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RewardClaimStorageRecord;
+struct RewardClaimStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RewardClaimStorageRecordGlobalsTypeInternal RewardClaimStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RewardClaimStorageRecord_class_data_;
+#else
+extern const RewardClaimStorageRecordGlobalsTypeInternal RewardClaimStorageRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RewardClaimStorageRecord_ActivityEntry_DoNotUse;
+struct RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_;
+#else
+extern const RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RewardClaimStorageRecord_PermanentEntry_DoNotUse;
+struct RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_;
+#else
+extern const RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SelectHeroRequest;
 struct SelectHeroRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -414,12 +477,58 @@ extern const UpdateNicknameResponseGlobalsTypeInternal UpdateNicknameResponse_gl
 }  // namespace pandora
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::pandora::player::v1::RewardSourceType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::player::v1::RewardSourceType>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace pandora {
 namespace player {
 namespace v1 {
+enum RewardSourceType : int {
+  REWARD_SOURCE_TYPE_UNSPECIFIED = 0,
+  REWARD_SOURCE_TYPE_PERMANENT = 1,
+  REWARD_SOURCE_TYPE_ACTIVITY = 2,
+  RewardSourceType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  RewardSourceType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t RewardSourceType_internal_data_[];
+inline constexpr RewardSourceType RewardSourceType_MIN =
+    static_cast<RewardSourceType>(0);
+inline constexpr RewardSourceType RewardSourceType_MAX =
+    static_cast<RewardSourceType>(2);
+[[nodiscard]] inline bool RewardSourceType_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int RewardSourceType_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+RewardSourceType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(RewardSourceType) {
+  return RewardSourceType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& RewardSourceType_Name(T value) {
+  static_assert(::std::is_same<T, RewardSourceType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to RewardSourceType_Name().");
+  return RewardSourceType_Name(static_cast<RewardSourceType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& RewardSourceType_Name(RewardSourceType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<RewardSourceType_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool RewardSourceType_Parse(
+    ::absl::string_view name, RewardSourceType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<RewardSourceType>(RewardSourceType_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -2774,6 +2883,104 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectHeroRequest final : public ::
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+};
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardClaimStorageRecord_PermanentEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::std::string, ::std::string,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_BYTES> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::std::string, ::std::string,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_BYTES>;
+  RewardClaimStorageRecord_PermanentEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr RewardClaimStorageRecord_PermanentEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit RewardClaimStorageRecord_PermanentEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 69,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardClaimStorageRecord_ActivityEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint64_t, ::std::string,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT64,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_BYTES> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint64_t, ::std::string,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT64,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_BYTES>;
+  RewardClaimStorageRecord_ActivityEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr RewardClaimStorageRecord_ActivityEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit RewardClaimStorageRecord_ActivityEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
 };
 // -------------------------------------------------------------------
 
@@ -5891,6 +6098,472 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTalentsRequest final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRewardClaimsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.player.v1.GetRewardClaimsResponse) */ {
+ public:
+  inline GetRewardClaimsResponse() : GetRewardClaimsResponse(nullptr) {}
+  ~GetRewardClaimsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetRewardClaimsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetRewardClaimsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetRewardClaimsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetRewardClaimsResponse(const GetRewardClaimsResponse& from) : GetRewardClaimsResponse(nullptr, from) {}
+  inline GetRewardClaimsResponse(GetRewardClaimsResponse&& from) noexcept : GetRewardClaimsResponse(nullptr, ::std::move(from)) {}
+  inline GetRewardClaimsResponse& operator=(const GetRewardClaimsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetRewardClaimsResponse& operator=(GetRewardClaimsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetRewardClaimsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRewardClaimsResponse>(&GetRewardClaimsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 50;
+  friend void swap(GetRewardClaimsResponse& a, GetRewardClaimsResponse& b) { a.Swap(&b); }
+  inline void Swap(GetRewardClaimsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetRewardClaimsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetRewardClaimsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetRewardClaimsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetRewardClaimsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetRewardClaimsResponse& from) { GetRewardClaimsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetRewardClaimsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.player.v1.GetRewardClaimsResponse"; }
+
+  explicit GetRewardClaimsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetRewardClaimsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetRewardClaimsResponse& from);
+  GetRewardClaimsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetRewardClaimsResponse&& from) noexcept
+      : GetRewardClaimsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClaimedRewardIdsFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
+  [[nodiscard]] int claimed_reward_ids_size()
+      const;
+  private:
+  int _internal_claimed_reward_ids_size() const;
+
+  public:
+  void clear_claimed_reward_ids() ;
+  [[nodiscard]] ::uint32_t claimed_reward_ids(int index) const;
+  void set_claimed_reward_ids(int index, ::uint32_t value);
+  void add_claimed_reward_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& claimed_reward_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_claimed_reward_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_claimed_reward_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_claimed_reward_ids();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.player.v1.GetRewardClaimsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetRewardClaimsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> claimed_reward_ids_;
+    ::google::protobuf::internal::CachedSize _claimed_reward_ids_cached_byte_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRewardClaimsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.player.v1.GetRewardClaimsRequest) */ {
+ public:
+  inline GetRewardClaimsRequest() : GetRewardClaimsRequest(nullptr) {}
+  ~GetRewardClaimsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetRewardClaimsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetRewardClaimsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetRewardClaimsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetRewardClaimsRequest(const GetRewardClaimsRequest& from) : GetRewardClaimsRequest(nullptr, from) {}
+  inline GetRewardClaimsRequest(GetRewardClaimsRequest&& from) noexcept : GetRewardClaimsRequest(nullptr, ::std::move(from)) {}
+  inline GetRewardClaimsRequest& operator=(const GetRewardClaimsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetRewardClaimsRequest& operator=(GetRewardClaimsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetRewardClaimsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetRewardClaimsRequest>(&GetRewardClaimsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 49;
+  friend void swap(GetRewardClaimsRequest& a, GetRewardClaimsRequest& b) { a.Swap(&b); }
+  inline void Swap(GetRewardClaimsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetRewardClaimsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetRewardClaimsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetRewardClaimsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetRewardClaimsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetRewardClaimsRequest& from) { GetRewardClaimsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetRewardClaimsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.player.v1.GetRewardClaimsRequest"; }
+
+  explicit GetRewardClaimsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetRewardClaimsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetRewardClaimsRequest& from);
+  GetRewardClaimsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetRewardClaimsRequest&& from) noexcept
+      : GetRewardClaimsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSourceFieldNumber = 3,
+    kPlayerIdFieldNumber = 1,
+    kActivityInstanceIdFieldNumber = 4,
+    kSourceTypeFieldNumber = 2,
+  };
+  // string source = 3 [json_name = "source"];
+  void clear_source() ;
+  [[nodiscard]] const ::std::string& source() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source();
+  void set_allocated_source(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+  void clear_activity_instance_id() ;
+  [[nodiscard]] ::uint64_t activity_instance_id() const;
+  void set_activity_instance_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_activity_instance_id() const;
+  void _internal_set_activity_instance_id(::uint64_t value);
+
+  public:
+  // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+  void clear_source_type() ;
+  [[nodiscard]] ::pandora::player::v1::RewardSourceType source_type() const;
+  void set_source_type(::pandora::player::v1::RewardSourceType value);
+
+  private:
+  ::pandora::player::v1::RewardSourceType _internal_source_type() const;
+  void _internal_set_source_type(::pandora::player::v1::RewardSourceType value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.player.v1.GetRewardClaimsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 55,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetRewardClaimsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr source_;
+    ::uint64_t player_id_;
+    ::uint64_t activity_instance_id_;
+    int source_type_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetProfileRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.player.v1.GetProfileRequest) */ {
  public:
@@ -7523,6 +8196,461 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetActiveHeroRequest final : public
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.player.v1.ClaimRewardResponse) */ {
+ public:
+  inline ClaimRewardResponse() : ClaimRewardResponse(nullptr) {}
+  ~ClaimRewardResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimRewardResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimRewardResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimRewardResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimRewardResponse(const ClaimRewardResponse& from) : ClaimRewardResponse(nullptr, from) {}
+  inline ClaimRewardResponse(ClaimRewardResponse&& from) noexcept : ClaimRewardResponse(nullptr, ::std::move(from)) {}
+  inline ClaimRewardResponse& operator=(const ClaimRewardResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimRewardResponse& operator=(ClaimRewardResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimRewardResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimRewardResponse>(&ClaimRewardResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 48;
+  friend void swap(ClaimRewardResponse& a, ClaimRewardResponse& b) { a.Swap(&b); }
+  inline void Swap(ClaimRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimRewardResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimRewardResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimRewardResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimRewardResponse& from) { ClaimRewardResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimRewardResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.player.v1.ClaimRewardResponse"; }
+
+  explicit ClaimRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimRewardResponse& from);
+  ClaimRewardResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimRewardResponse&& from) noexcept
+      : ClaimRewardResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.player.v1.ClaimRewardResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimRewardResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.player.v1.ClaimRewardRequest) */ {
+ public:
+  inline ClaimRewardRequest() : ClaimRewardRequest(nullptr) {}
+  ~ClaimRewardRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimRewardRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimRewardRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimRewardRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimRewardRequest(const ClaimRewardRequest& from) : ClaimRewardRequest(nullptr, from) {}
+  inline ClaimRewardRequest(ClaimRewardRequest&& from) noexcept : ClaimRewardRequest(nullptr, ::std::move(from)) {}
+  inline ClaimRewardRequest& operator=(const ClaimRewardRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimRewardRequest& operator=(ClaimRewardRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimRewardRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimRewardRequest>(&ClaimRewardRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 47;
+  friend void swap(ClaimRewardRequest& a, ClaimRewardRequest& b) { a.Swap(&b); }
+  inline void Swap(ClaimRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimRewardRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimRewardRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimRewardRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimRewardRequest& from) { ClaimRewardRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimRewardRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.player.v1.ClaimRewardRequest"; }
+
+  explicit ClaimRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimRewardRequest& from);
+  ClaimRewardRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimRewardRequest&& from) noexcept
+      : ClaimRewardRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSourceFieldNumber = 3,
+    kPlayerIdFieldNumber = 1,
+    kSourceTypeFieldNumber = 2,
+    kRewardIdFieldNumber = 5,
+    kActivityInstanceIdFieldNumber = 4,
+  };
+  // string source = 3 [json_name = "source"];
+  void clear_source() ;
+  [[nodiscard]] const ::std::string& source() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source();
+  void set_allocated_source(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+  void clear_source_type() ;
+  [[nodiscard]] ::pandora::player::v1::RewardSourceType source_type() const;
+  void set_source_type(::pandora::player::v1::RewardSourceType value);
+
+  private:
+  ::pandora::player::v1::RewardSourceType _internal_source_type() const;
+  void _internal_set_source_type(::pandora::player::v1::RewardSourceType value);
+
+  public:
+  // uint32 reward_id = 5 [json_name = "rewardId"];
+  void clear_reward_id() ;
+  [[nodiscard]] ::uint32_t reward_id() const;
+  void set_reward_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_id() const;
+  void _internal_set_reward_id(::uint32_t value);
+
+  public:
+  // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+  void clear_activity_instance_id() ;
+  [[nodiscard]] ::uint64_t activity_instance_id() const;
+  void set_activity_instance_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_activity_instance_id() const;
+  void _internal_set_activity_instance_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.player.v1.ClaimRewardRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 51,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimRewardRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr source_;
+    ::uint64_t player_id_;
+    int source_type_;
+    ::uint32_t reward_id_;
+    ::uint64_t activity_instance_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributeAllocation final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.player.v1.AttributeAllocation) */ {
  public:
@@ -8395,6 +9523,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetEquipmentRequest final : public 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::player::v1::LoadoutEquipment > equipment_;
     ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardClaimStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.player.v1.RewardClaimStorageRecord) */ {
+ public:
+  inline RewardClaimStorageRecord() : RewardClaimStorageRecord(nullptr) {}
+  ~RewardClaimStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RewardClaimStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RewardClaimStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RewardClaimStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RewardClaimStorageRecord(const RewardClaimStorageRecord& from) : RewardClaimStorageRecord(nullptr, from) {}
+  inline RewardClaimStorageRecord(RewardClaimStorageRecord&& from) noexcept : RewardClaimStorageRecord(nullptr, ::std::move(from)) {}
+  inline RewardClaimStorageRecord& operator=(const RewardClaimStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RewardClaimStorageRecord& operator=(RewardClaimStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RewardClaimStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RewardClaimStorageRecord>(&RewardClaimStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 46;
+  friend void swap(RewardClaimStorageRecord& a, RewardClaimStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(RewardClaimStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RewardClaimStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RewardClaimStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RewardClaimStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RewardClaimStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RewardClaimStorageRecord& from) { RewardClaimStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RewardClaimStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.player.v1.RewardClaimStorageRecord"; }
+
+  explicit RewardClaimStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RewardClaimStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RewardClaimStorageRecord& from);
+  RewardClaimStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RewardClaimStorageRecord&& from) noexcept
+      : RewardClaimStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPermanentFieldNumber = 1,
+    kActivityFieldNumber = 2,
+  };
+  // map<string, bytes> permanent = 1 [json_name = "permanent"];
+  [[nodiscard]] int permanent_size()
+      const;
+  private:
+  int _internal_permanent_size() const;
+
+  public:
+  void clear_permanent() ;
+  [[nodiscard]] const ::google::protobuf::Map<::std::string, ::std::string>& permanent() const;
+  [[nodiscard]] ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL mutable_permanent();
+
+  private:
+  const ::google::protobuf::Map<::std::string, ::std::string>& _internal_permanent() const;
+  ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL _internal_mutable_permanent();
+
+  public:
+  // map<uint64, bytes> activity = 2 [json_name = "activity"];
+  [[nodiscard]] int activity_size()
+      const;
+  private:
+  int _internal_activity_size() const;
+
+  public:
+  void clear_activity() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint64_t, ::std::string>& activity() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint64_t, ::std::string>* PROTOBUF_NONNULL mutable_activity();
+
+  private:
+  const ::google::protobuf::Map<::uint64_t, ::std::string>& _internal_activity() const;
+  ::google::protobuf::Map<::uint64_t, ::std::string>* PROTOBUF_NONNULL _internal_mutable_activity();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.player.v1.RewardClaimStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 2,
+                          2, 60,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RewardClaimStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::MapField<RewardClaimStorageRecord_PermanentEntry_DoNotUse, ::std::string, ::std::string> permanent_;
+    ::google::protobuf::internal::MapField<RewardClaimStorageRecord_ActivityEntry_DoNotUse, ::uint64_t, ::std::string> activity_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13411,6 +14764,487 @@ inline void GetLoadoutResponse::set_allocated_loadout(::pandora::player::v1::Pla
   // @@protoc_insertion_point(field_set_allocated:pandora.player.v1.GetLoadoutResponse.loadout)
 }
 
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// RewardClaimStorageRecord
+
+// map<string, bytes> permanent = 1 [json_name = "permanent"];
+inline int RewardClaimStorageRecord::_internal_permanent_size() const {
+  return _internal_permanent().size();
+}
+inline int RewardClaimStorageRecord::permanent_size() const {
+  return _internal_permanent_size();
+}
+inline void RewardClaimStorageRecord::clear_permanent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.permanent_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::google::protobuf::Map<::std::string, ::std::string>& RewardClaimStorageRecord::_internal_permanent() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.permanent_.GetMap();
+}
+inline const ::google::protobuf::Map<::std::string, ::std::string>& RewardClaimStorageRecord::permanent() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:pandora.player.v1.RewardClaimStorageRecord.permanent)
+  return _internal_permanent();
+}
+inline ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL RewardClaimStorageRecord::_internal_mutable_permanent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.permanent_.MutableMap();
+}
+inline ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL RewardClaimStorageRecord::mutable_permanent()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_map:pandora.player.v1.RewardClaimStorageRecord.permanent)
+  return _internal_mutable_permanent();
+}
+
+// map<uint64, bytes> activity = 2 [json_name = "activity"];
+inline int RewardClaimStorageRecord::_internal_activity_size() const {
+  return _internal_activity().size();
+}
+inline int RewardClaimStorageRecord::activity_size() const {
+  return _internal_activity_size();
+}
+inline void RewardClaimStorageRecord::clear_activity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::google::protobuf::Map<::uint64_t, ::std::string>& RewardClaimStorageRecord::_internal_activity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint64_t, ::std::string>& RewardClaimStorageRecord::activity() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:pandora.player.v1.RewardClaimStorageRecord.activity)
+  return _internal_activity();
+}
+inline ::google::protobuf::Map<::uint64_t, ::std::string>* PROTOBUF_NONNULL RewardClaimStorageRecord::_internal_mutable_activity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.activity_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint64_t, ::std::string>* PROTOBUF_NONNULL RewardClaimStorageRecord::mutable_activity()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_map:pandora.player.v1.RewardClaimStorageRecord.activity)
+  return _internal_mutable_activity();
+}
+
+// -------------------------------------------------------------------
+
+// ClaimRewardRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void ClaimRewardRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ClaimRewardRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.ClaimRewardRequest.player_id)
+  return _internal_player_id();
+}
+inline void ClaimRewardRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.ClaimRewardRequest.player_id)
+}
+inline ::uint64_t ClaimRewardRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void ClaimRewardRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+inline void ClaimRewardRequest::clear_source_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::pandora::player::v1::RewardSourceType ClaimRewardRequest::source_type() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.ClaimRewardRequest.source_type)
+  return _internal_source_type();
+}
+inline void ClaimRewardRequest::set_source_type(::pandora::player::v1::RewardSourceType value) {
+  _internal_set_source_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.ClaimRewardRequest.source_type)
+}
+inline ::pandora::player::v1::RewardSourceType ClaimRewardRequest::_internal_source_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::player::v1::RewardSourceType>(_impl_.source_type_);
+}
+inline void ClaimRewardRequest::_internal_set_source_type(::pandora::player::v1::RewardSourceType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_type_ = value;
+}
+
+// string source = 3 [json_name = "source"];
+inline void ClaimRewardRequest::clear_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ClaimRewardRequest::source() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.ClaimRewardRequest.source)
+  return _internal_source();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimRewardRequest::set_source(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.source_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.player.v1.ClaimRewardRequest.source)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimRewardRequest::mutable_source()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_source();
+  // @@protoc_insertion_point(field_mutable:pandora.player.v1.ClaimRewardRequest.source)
+  return _s;
+}
+inline const ::std::string& ClaimRewardRequest::_internal_source() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_.Get();
+}
+inline void ClaimRewardRequest::_internal_set_source(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimRewardRequest::_internal_mutable_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimRewardRequest::release_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.player.v1.ClaimRewardRequest.source)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.source_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimRewardRequest::set_allocated_source(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.source_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_.IsDefault()) {
+    _impl_.source_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.player.v1.ClaimRewardRequest.source)
+}
+
+// uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+inline void ClaimRewardRequest::clear_activity_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t ClaimRewardRequest::activity_instance_id() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.ClaimRewardRequest.activity_instance_id)
+  return _internal_activity_instance_id();
+}
+inline void ClaimRewardRequest::set_activity_instance_id(::uint64_t value) {
+  _internal_set_activity_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.ClaimRewardRequest.activity_instance_id)
+}
+inline ::uint64_t ClaimRewardRequest::_internal_activity_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_instance_id_;
+}
+inline void ClaimRewardRequest::_internal_set_activity_instance_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = value;
+}
+
+// uint32 reward_id = 5 [json_name = "rewardId"];
+inline void ClaimRewardRequest::clear_reward_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ClaimRewardRequest::reward_id() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.ClaimRewardRequest.reward_id)
+  return _internal_reward_id();
+}
+inline void ClaimRewardRequest::set_reward_id(::uint32_t value) {
+  _internal_set_reward_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.ClaimRewardRequest.reward_id)
+}
+inline ::uint32_t ClaimRewardRequest::_internal_reward_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_id_;
+}
+inline void ClaimRewardRequest::_internal_set_reward_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClaimRewardResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ClaimRewardResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode ClaimRewardResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.ClaimRewardResponse.code)
+  return _internal_code();
+}
+inline void ClaimRewardResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.ClaimRewardResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ClaimRewardResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ClaimRewardResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetRewardClaimsRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void GetRewardClaimsRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t GetRewardClaimsRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.GetRewardClaimsRequest.player_id)
+  return _internal_player_id();
+}
+inline void GetRewardClaimsRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.GetRewardClaimsRequest.player_id)
+}
+inline ::uint64_t GetRewardClaimsRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GetRewardClaimsRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+inline void GetRewardClaimsRequest::clear_source_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::pandora::player::v1::RewardSourceType GetRewardClaimsRequest::source_type() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.GetRewardClaimsRequest.source_type)
+  return _internal_source_type();
+}
+inline void GetRewardClaimsRequest::set_source_type(::pandora::player::v1::RewardSourceType value) {
+  _internal_set_source_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.GetRewardClaimsRequest.source_type)
+}
+inline ::pandora::player::v1::RewardSourceType GetRewardClaimsRequest::_internal_source_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::player::v1::RewardSourceType>(_impl_.source_type_);
+}
+inline void GetRewardClaimsRequest::_internal_set_source_type(::pandora::player::v1::RewardSourceType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_type_ = value;
+}
+
+// string source = 3 [json_name = "source"];
+inline void GetRewardClaimsRequest::clear_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GetRewardClaimsRequest::source() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.GetRewardClaimsRequest.source)
+  return _internal_source();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetRewardClaimsRequest::set_source(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.source_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.player.v1.GetRewardClaimsRequest.source)
+}
+inline ::std::string* PROTOBUF_NONNULL GetRewardClaimsRequest::mutable_source()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_source();
+  // @@protoc_insertion_point(field_mutable:pandora.player.v1.GetRewardClaimsRequest.source)
+  return _s;
+}
+inline const ::std::string& GetRewardClaimsRequest::_internal_source() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_.Get();
+}
+inline void GetRewardClaimsRequest::_internal_set_source(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetRewardClaimsRequest::_internal_mutable_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetRewardClaimsRequest::release_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.player.v1.GetRewardClaimsRequest.source)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.source_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetRewardClaimsRequest::set_allocated_source(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.source_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_.IsDefault()) {
+    _impl_.source_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.player.v1.GetRewardClaimsRequest.source)
+}
+
+// uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+inline void GetRewardClaimsRequest::clear_activity_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t GetRewardClaimsRequest::activity_instance_id() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.GetRewardClaimsRequest.activity_instance_id)
+  return _internal_activity_instance_id();
+}
+inline void GetRewardClaimsRequest::set_activity_instance_id(::uint64_t value) {
+  _internal_set_activity_instance_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.GetRewardClaimsRequest.activity_instance_id)
+}
+inline ::uint64_t GetRewardClaimsRequest::_internal_activity_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.activity_instance_id_;
+}
+inline void GetRewardClaimsRequest::_internal_set_activity_instance_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.activity_instance_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetRewardClaimsResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void GetRewardClaimsResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode GetRewardClaimsResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.GetRewardClaimsResponse.code)
+  return _internal_code();
+}
+inline void GetRewardClaimsResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.GetRewardClaimsResponse.code)
+}
+inline ::pandora::common::v1::ErrCode GetRewardClaimsResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void GetRewardClaimsResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
+inline int GetRewardClaimsResponse::_internal_claimed_reward_ids_size() const {
+  return _internal_claimed_reward_ids().size();
+}
+inline int GetRewardClaimsResponse::claimed_reward_ids_size() const {
+  return _internal_claimed_reward_ids_size();
+}
+inline void GetRewardClaimsResponse::clear_claimed_reward_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_reward_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t GetRewardClaimsResponse::claimed_reward_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.player.v1.GetRewardClaimsResponse.claimed_reward_ids)
+  return _internal_claimed_reward_ids().Get(index);
+}
+inline void GetRewardClaimsResponse::set_claimed_reward_ids(int index, ::uint32_t value) {
+  _internal_mutable_claimed_reward_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.player.v1.GetRewardClaimsResponse.claimed_reward_ids)
+}
+inline void GetRewardClaimsResponse::add_claimed_reward_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_claimed_reward_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.player.v1.GetRewardClaimsResponse.claimed_reward_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& GetRewardClaimsResponse::claimed_reward_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.player.v1.GetRewardClaimsResponse.claimed_reward_ids)
+  return _internal_claimed_reward_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL GetRewardClaimsResponse::mutable_claimed_reward_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.player.v1.GetRewardClaimsResponse.claimed_reward_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_claimed_reward_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+GetRewardClaimsResponse::_internal_claimed_reward_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_reward_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+GetRewardClaimsResponse::_internal_mutable_claimed_reward_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.claimed_reward_ids_;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -13420,6 +15254,19 @@ inline void GetLoadoutResponse::set_allocated_loadout(::pandora::player::v1::Pla
 }  // namespace player
 }  // namespace pandora
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::pandora::player::v1::RewardSourceType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::player::v1::RewardSourceType>() {
+  return ::pandora::player::v1::RewardSourceType_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

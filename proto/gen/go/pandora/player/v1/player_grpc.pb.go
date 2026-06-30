@@ -45,6 +45,8 @@ const (
 	PlayerService_ResetTalents_FullMethodName            = "/pandora.player.v1.PlayerService/ResetTalents"
 	PlayerService_GetTalents_FullMethodName              = "/pandora.player.v1.PlayerService/GetTalents"
 	PlayerService_GetLoadout_FullMethodName              = "/pandora.player.v1.PlayerService/GetLoadout"
+	PlayerService_ClaimReward_FullMethodName             = "/pandora.player.v1.PlayerService/ClaimReward"
+	PlayerService_GetRewardClaims_FullMethodName         = "/pandora.player.v1.PlayerService/GetRewardClaims"
 )
 
 // PlayerServiceClient is the client API for PlayerService service.
@@ -76,6 +78,12 @@ type PlayerServiceClient interface {
 	ResetTalents(ctx context.Context, in *ResetTalentsRequest, opts ...grpc.CallOption) (*ResetTalentsResponse, error)
 	GetTalents(ctx context.Context, in *GetTalentsRequest, opts ...grpc.CallOption) (*GetTalentsResponse, error)
 	GetLoadout(ctx context.Context, in *GetLoadoutRequest, opts ...grpc.CallOption) (*GetLoadoutResponse, error)
+	// ── 领奖(签到里程碑 / 成就 / 新手 / 永久任务 / 活动)──
+	// 客户端经 Envoy 调用领取奖励档位;服务端权威判重幂等(不变量 §2 / §7),
+	// 永久类与活动类分别落进玩家领奖记录(见 RewardClaimStorageRecord)。
+	// 响应只回客户端可见最小视图(§14),不外露存储位图。
+	ClaimReward(ctx context.Context, in *ClaimRewardRequest, opts ...grpc.CallOption) (*ClaimRewardResponse, error)
+	GetRewardClaims(ctx context.Context, in *GetRewardClaimsRequest, opts ...grpc.CallOption) (*GetRewardClaimsResponse, error)
 }
 
 type playerServiceClient struct {
@@ -276,6 +284,26 @@ func (c *playerServiceClient) GetLoadout(ctx context.Context, in *GetLoadoutRequ
 	return out, nil
 }
 
+func (c *playerServiceClient) ClaimReward(ctx context.Context, in *ClaimRewardRequest, opts ...grpc.CallOption) (*ClaimRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimRewardResponse)
+	err := c.cc.Invoke(ctx, PlayerService_ClaimReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerServiceClient) GetRewardClaims(ctx context.Context, in *GetRewardClaimsRequest, opts ...grpc.CallOption) (*GetRewardClaimsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRewardClaimsResponse)
+	err := c.cc.Invoke(ctx, PlayerService_GetRewardClaims_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerServiceServer is the server API for PlayerService service.
 // All implementations should embed UnimplementedPlayerServiceServer
 // for forward compatibility.
@@ -305,6 +333,12 @@ type PlayerServiceServer interface {
 	ResetTalents(context.Context, *ResetTalentsRequest) (*ResetTalentsResponse, error)
 	GetTalents(context.Context, *GetTalentsRequest) (*GetTalentsResponse, error)
 	GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error)
+	// ── 领奖(签到里程碑 / 成就 / 新手 / 永久任务 / 活动)──
+	// 客户端经 Envoy 调用领取奖励档位;服务端权威判重幂等(不变量 §2 / §7),
+	// 永久类与活动类分别落进玩家领奖记录(见 RewardClaimStorageRecord)。
+	// 响应只回客户端可见最小视图(§14),不外露存储位图。
+	ClaimReward(context.Context, *ClaimRewardRequest) (*ClaimRewardResponse, error)
+	GetRewardClaims(context.Context, *GetRewardClaimsRequest) (*GetRewardClaimsResponse, error)
 }
 
 // UnimplementedPlayerServiceServer should be embedded to have
@@ -370,6 +404,12 @@ func (UnimplementedPlayerServiceServer) GetTalents(context.Context, *GetTalentsR
 }
 func (UnimplementedPlayerServiceServer) GetLoadout(context.Context, *GetLoadoutRequest) (*GetLoadoutResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLoadout not implemented")
+}
+func (UnimplementedPlayerServiceServer) ClaimReward(context.Context, *ClaimRewardRequest) (*ClaimRewardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClaimReward not implemented")
+}
+func (UnimplementedPlayerServiceServer) GetRewardClaims(context.Context, *GetRewardClaimsRequest) (*GetRewardClaimsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRewardClaims not implemented")
 }
 func (UnimplementedPlayerServiceServer) testEmbeddedByValue() {}
 
@@ -733,6 +773,42 @@ func _PlayerService_GetLoadout_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerService_ClaimReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).ClaimReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_ClaimReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).ClaimReward(ctx, req.(*ClaimRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerService_GetRewardClaims_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRewardClaimsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).GetRewardClaims(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_GetRewardClaims_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).GetRewardClaims(ctx, req.(*GetRewardClaimsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerService_ServiceDesc is the grpc.ServiceDesc for PlayerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -815,6 +891,14 @@ var PlayerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLoadout",
 			Handler:    _PlayerService_GetLoadout_Handler,
+		},
+		{
+			MethodName: "ClaimReward",
+			Handler:    _PlayerService_ClaimReward_Handler,
+		},
+		{
+			MethodName: "GetRewardClaims",
+			Handler:    _PlayerService_GetRewardClaims_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

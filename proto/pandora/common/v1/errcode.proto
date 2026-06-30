@@ -60,6 +60,8 @@ enum ErrCode {
   ERR_PLAYER_HERO_ALREADY_OWN  = 2011;
   ERR_PLAYER_FEATURE_DISABLED  = 2020;
   ERR_PLAYER_INSUFFICIENT_POINTS = 2021;
+  ERR_REWARD_ALREADY_CLAIMED   = 2030;  // 该奖励档位已领取(幂等命中)
+  ERR_REWARD_UNKNOWN_ID        = 2031;  // 奖励配置 ID 非法 / 超出 bit 索引上界
 
   // 3000-3999 team
   ERR_TEAM_NOT_FOUND           = 3001;

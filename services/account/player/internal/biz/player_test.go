@@ -34,7 +34,9 @@ type fakeRepo struct {
 	equipment    map[uint64][]data.EquipmentSlot
 	talents      map[uint64]map[uint32]int32
 	talentTotal  map[uint64]int
-	talentGrants map[string]bool // key=playerID|idempotencyKey
+	talentGrants map[string]bool   // key=playerID|idempotencyKey
+	rewardRec    map[uint64][]byte // 领奖记录序列化 bytes
+	rewardVer    map[uint64]int32  // 领奖记录乐观锁版本
 }
 
 func newFakeRepo() *fakeRepo {
@@ -50,6 +52,8 @@ func newFakeRepo() *fakeRepo {
 		talents:      map[uint64]map[uint32]int32{},
 		talentTotal:  map[uint64]int{},
 		talentGrants: map[string]bool{},
+		rewardRec:    map[uint64][]byte{},
+		rewardVer:    map[uint64]int32{},
 	}
 }
 
@@ -258,6 +262,19 @@ func (f *fakeRepo) GetTalents(_ context.Context, playerID uint64) ([]data.Talent
 		out = append(out, data.TalentLevel{TalentID: id, Level: lv})
 	}
 	return out, f.talentTotal[playerID] - f.talentUsed(playerID), nil
+}
+
+func (f *fakeRepo) LoadRewardClaims(_ context.Context, playerID uint64) ([]byte, int32, error) {
+	return f.rewardRec[playerID], f.rewardVer[playerID], nil
+}
+
+func (f *fakeRepo) SaveRewardClaims(_ context.Context, playerID uint64, record []byte, expectVersion int32) error {
+	if f.rewardVer[playerID] != expectVersion {
+		return errcode.New(errcode.ErrPlayerVersionMismatch, "reward claims player=%d version mismatch", playerID)
+	}
+	f.rewardRec[playerID] = record
+	f.rewardVer[playerID] = expectVersion + 1
+	return nil
 }
 
 func newUC(repo data.PlayerRepo) *PlayerUsecase {

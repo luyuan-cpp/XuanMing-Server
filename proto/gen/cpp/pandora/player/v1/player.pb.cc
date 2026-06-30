@@ -117,6 +117,20 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
         // ::pandora::player::v1::GetLoadoutResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::RewardClaimStorageRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::ClaimRewardRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::ClaimRewardResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::GetRewardClaimsRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::player::v1::GetRewardClaimsResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -1759,6 +1773,275 @@ const ::_pbi::ClassData* SelectHeroRequest_get_class_data() {
   return SelectHeroRequest_globals_.GetClassData();
 #else
   return SelectHeroRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr RewardClaimStorageRecord_PermanentEntry_DoNotUse::ParseTableT_ RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bytes value = 2 [json_name = "value"];
+      {::_pbi::TcParser::FastBS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.value_)}},
+      // string key = 1 [json_name = "key"];
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string key = 1 [json_name = "key"];
+      {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bytes value = 2 [json_name = "value"];
+      {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\71\3\0\0\0\0\0\0"
+      "pandora.player.v1.RewardClaimStorageRecord.PermanentEntry"
+      "key"
+    }},
+  };
+}
+
+template <typename>
+constexpr RewardClaimStorageRecord_PermanentEntry_DoNotUse::RewardClaimStorageRecord_PermanentEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : RewardClaimStorageRecord_PermanentEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL RewardClaimStorageRecord_PermanentEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RewardClaimStorageRecord_PermanentEntry_DoNotUse(arena);
+}
+constexpr auto RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RewardClaimStorageRecord_PermanentEntry_DoNotUse), alignof(RewardClaimStorageRecord_PermanentEntry_DoNotUse));
+}
+constexpr auto RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RewardClaimStorageRecord_PermanentEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RewardClaimStorageRecord_PermanentEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RewardClaimStorageRecord_PermanentEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&RewardClaimStorageRecord_PermanentEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[44],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardClaimStorageRecord_PermanentEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RewardClaimStorageRecord_PermanentEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardClaimStorageRecord_PermanentEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardClaimStorageRecord_PermanentEntry_DoNotUseGlobalsTypeInternal RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RewardClaimStorageRecord_PermanentEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_.GetClassData();
+#else
+  return RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr RewardClaimStorageRecord_ActivityEntry_DoNotUse::ParseTableT_ RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bytes value = 2 [json_name = "value"];
+      {::_pbi::TcParser::FastBS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.value_)}},
+      // uint64 key = 1 [json_name = "key"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 key = 1 [json_name = "key"];
+      {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bytes value = 2 [json_name = "value"];
+      {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr RewardClaimStorageRecord_ActivityEntry_DoNotUse::RewardClaimStorageRecord_ActivityEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : RewardClaimStorageRecord_ActivityEntry_DoNotUse::MapEntry(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL RewardClaimStorageRecord_ActivityEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RewardClaimStorageRecord_ActivityEntry_DoNotUse(arena);
+}
+constexpr auto RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RewardClaimStorageRecord_ActivityEntry_DoNotUse), alignof(RewardClaimStorageRecord_ActivityEntry_DoNotUse));
+}
+constexpr auto RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RewardClaimStorageRecord_ActivityEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RewardClaimStorageRecord_ActivityEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RewardClaimStorageRecord_ActivityEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&RewardClaimStorageRecord_ActivityEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[45],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardClaimStorageRecord_ActivityEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RewardClaimStorageRecord_ActivityEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardClaimStorageRecord_ActivityEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardClaimStorageRecord_ActivityEntry_DoNotUseGlobalsTypeInternal RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RewardClaimStorageRecord_ActivityEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_.GetClassData();
+#else
+  return RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3931,6 +4214,326 @@ const ::_pbi::ClassData* GetTalentsRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetRewardClaimsResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetRewardClaimsResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_._has_bits_);
+};
+
+constexpr GetRewardClaimsResponse::ParseTableT_ GetRewardClaimsResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::GetRewardClaimsResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
+      {::_pbi::TcParser::FastV32P1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.claimed_reward_ids_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRewardClaimsResponse, _impl_.code_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
+      {PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_.claimed_reward_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetRewardClaimsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        claimed_reward_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::GetRewardClaimsResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsResponse, _impl_.claimed_reward_ids_)>()
+         }
+        ,
+        _claimed_reward_ids_cached_byte_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr GetRewardClaimsResponse::GetRewardClaimsResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetRewardClaimsResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetRewardClaimsResponse(arena);
+}
+constexpr auto GetRewardClaimsResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetRewardClaimsResponse), alignof(GetRewardClaimsResponse));
+}
+constexpr auto GetRewardClaimsResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetRewardClaimsResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetRewardClaimsResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetRewardClaimsResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetRewardClaimsResponse>(), &GetRewardClaimsResponse::ByteSizeLong,
+              &GetRewardClaimsResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[50],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetRewardClaimsResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetRewardClaimsResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetRewardClaimsResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetRewardClaimsResponse::InternalGenerateClassData_(
+            _default, &GetRewardClaimsResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetRewardClaimsResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetRewardClaimsResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetRewardClaimsResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetRewardClaimsResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetRewardClaimsResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetRewardClaimsResponseGlobalsTypeInternal GetRewardClaimsResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetRewardClaimsResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetRewardClaimsResponse_globals_.GetClassData();
+#else
+  return GetRewardClaimsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetRewardClaimsRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetRewardClaimsRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_._has_bits_);
+};
+
+constexpr GetRewardClaimsRequest::ParseTableT_ GetRewardClaimsRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::GetRewardClaimsRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRewardClaimsRequest, _impl_.activity_instance_id_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.activity_instance_id_)}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetRewardClaimsRequest, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.player_id_)}},
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetRewardClaimsRequest, _impl_.source_type_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_type_)}},
+      // string source = 3 [json_name = "source"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+      {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_type_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string source = 3 [json_name = "source"];
+      {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+      {PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.activity_instance_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\50\0\0\6\0\0\0\0"
+      "pandora.player.v1.GetRewardClaimsRequest"
+      "source"
+    }},
+  };
+}
+
+
+inline constexpr GetRewardClaimsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        source_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        activity_instance_id_{::uint64_t{0u}},
+        source_type_{static_cast< ::pandora::player::v1::RewardSourceType >(0)} {}
+
+template <typename>
+constexpr GetRewardClaimsRequest::GetRewardClaimsRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetRewardClaimsRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetRewardClaimsRequest(arena);
+}
+constexpr auto GetRewardClaimsRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetRewardClaimsRequest), alignof(GetRewardClaimsRequest));
+}
+constexpr auto GetRewardClaimsRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetRewardClaimsRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetRewardClaimsRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetRewardClaimsRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetRewardClaimsRequest>(), &GetRewardClaimsRequest::ByteSizeLong,
+              &GetRewardClaimsRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[49],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetRewardClaimsRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetRewardClaimsRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetRewardClaimsRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetRewardClaimsRequest::InternalGenerateClassData_(
+            _default, &GetRewardClaimsRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetRewardClaimsRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetRewardClaimsRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetRewardClaimsRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetRewardClaimsRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetRewardClaimsRequestGlobalsTypeInternal GetRewardClaimsRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetRewardClaimsRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetRewardClaimsRequest_globals_.GetClassData();
+#else
+  return GetRewardClaimsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetProfileRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetProfileRequest>()._impl_._has_bits_);
@@ -5073,6 +5676,324 @@ const ::_pbi::ClassData* GetActiveHeroRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimRewardResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimRewardResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_._has_bits_);
+};
+
+constexpr ClaimRewardResponse::ParseTableT_ ClaimRewardResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::ClaimRewardResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr ClaimRewardResponse::ClaimRewardResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimRewardResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimRewardResponse(arena);
+}
+constexpr auto ClaimRewardResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimRewardResponse), alignof(ClaimRewardResponse));
+}
+constexpr auto ClaimRewardResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimRewardResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimRewardResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimRewardResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimRewardResponse>(), &ClaimRewardResponse::ByteSizeLong,
+              &ClaimRewardResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimRewardResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[48],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimRewardResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimRewardResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimRewardResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimRewardResponse::InternalGenerateClassData_(
+            _default, &ClaimRewardResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimRewardResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimRewardResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimRewardResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimRewardResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimRewardResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimRewardResponseGlobalsTypeInternal ClaimRewardResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimRewardResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimRewardResponse_globals_.GetClassData();
+#else
+  return ClaimRewardResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimRewardRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimRewardRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_._has_bits_);
+};
+
+constexpr ClaimRewardRequest::ParseTableT_ ClaimRewardRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::ClaimRewardRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardRequest, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.player_id_)}},
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardRequest, _impl_.source_type_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_type_)}},
+      // string source = 3 [json_name = "source"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_)}},
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardRequest, _impl_.activity_instance_id_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.activity_instance_id_)}},
+      // uint32 reward_id = 5 [json_name = "rewardId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardRequest, _impl_.reward_id_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.reward_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string source = 3 [json_name = "source"];
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.source_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.activity_instance_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 reward_id = 5 [json_name = "rewardId"];
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.reward_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+      "\44\0\0\6\0\0\0\0"
+      "pandora.player.v1.ClaimRewardRequest"
+      "source"
+    }},
+  };
+}
+
+
+inline constexpr ClaimRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        source_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        source_type_{static_cast< ::pandora::player::v1::RewardSourceType >(0)},
+        reward_id_{0u},
+        activity_instance_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ClaimRewardRequest::ClaimRewardRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimRewardRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimRewardRequest(arena);
+}
+constexpr auto ClaimRewardRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ClaimRewardRequest), alignof(ClaimRewardRequest));
+}
+constexpr auto ClaimRewardRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimRewardRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimRewardRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimRewardRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimRewardRequest>(), &ClaimRewardRequest::ByteSizeLong,
+              &ClaimRewardRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[47],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimRewardRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimRewardRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimRewardRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimRewardRequest::InternalGenerateClassData_(
+            _default, &ClaimRewardRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimRewardRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimRewardRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimRewardRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimRewardRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimRewardRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimRewardRequestGlobalsTypeInternal ClaimRewardRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimRewardRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimRewardRequest_globals_.GetClassData();
+#else
+  return ClaimRewardRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class AttributeAllocation::_Internal {
  public:
   using HasBits = decltype(::std::declval<AttributeAllocation>()._impl_._has_bits_);
@@ -5686,6 +6607,163 @@ const ::_pbi::ClassData* SetEquipmentRequest_get_class_data() {
   return SetEquipmentRequest_globals_.GetClassData();
 #else
   return SetEquipmentRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class RewardClaimStorageRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RewardClaimStorageRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_._has_bits_);
+};
+
+constexpr RewardClaimStorageRecord::ParseTableT_ RewardClaimStorageRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::player::v1::RewardClaimStorageRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // map<string, bytes> permanent = 1 [json_name = "permanent"];
+      {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_.permanent_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      // map<uint64, bytes> activity = 2 [json_name = "activity"];
+      {PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_.activity_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+    }},
+    {{
+        {::_pbi::TcParser::GetMapAuxInfo(
+            1, 0, 9, 12, 0)},
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 4, 12, 0)},
+    }},
+    {{
+      "\52\11\0\0\0\0\0\0"
+      "pandora.player.v1.RewardClaimStorageRecord"
+      "permanent"
+    }},
+  };
+}
+
+
+inline constexpr RewardClaimStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        permanent_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::RewardClaimStorageRecord,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.permanent_)>()
+         }
+        ,
+        activity_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::RewardClaimStorageRecord,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.activity_)>()
+         }
+     {}
+
+template <typename>
+constexpr RewardClaimStorageRecord::RewardClaimStorageRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RewardClaimStorageRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RewardClaimStorageRecord(arena);
+}
+constexpr auto RewardClaimStorageRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RewardClaimStorageRecord), alignof(RewardClaimStorageRecord));
+}
+constexpr auto RewardClaimStorageRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RewardClaimStorageRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RewardClaimStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RewardClaimStorageRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RewardClaimStorageRecord>(), &RewardClaimStorageRecord::ByteSizeLong,
+              &RewardClaimStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[46],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RewardClaimStorageRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RewardClaimStorageRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RewardClaimStorageRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RewardClaimStorageRecord::InternalGenerateClassData_(
+            _default, &RewardClaimStorageRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardClaimStorageRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RewardClaimStorageRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RewardClaimStorageRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardClaimStorageRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RewardClaimStorageRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardClaimStorageRecordGlobalsTypeInternal RewardClaimStorageRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RewardClaimStorageRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RewardClaimStorageRecord_globals_.GetClassData();
+#else
+  return RewardClaimStorageRecord_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -6861,8 +7939,8 @@ const ::_pbi::ClassData* GetLoadoutResponse_get_class_data() {
 }  // namespace v1
 }  // namespace player
 }  // namespace pandora
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_pandora_2fplayer_2fv1_2fplayer_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_pandora_2fplayer_2fv1_2fplayer_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2fplayer_2fv1_2fplayer_2eproto = nullptr;
 const ::uint32_t
@@ -7192,6 +8270,63 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetLoadoutResponse, _impl_.loadout_),
         1,
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.permanent_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.activity_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardRequest, _impl_.source_type_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardRequest, _impl_.source_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardRequest, _impl_.activity_instance_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardRequest, _impl_.reward_id_),
+        1,
+        2,
+        0,
+        4,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::ClaimRewardResponse, _impl_.code_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsRequest, _impl_.source_type_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsRequest, _impl_.source_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsRequest, _impl_.activity_instance_id_),
+        1,
+        3,
+        0,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsResponse, _impl_.claimed_reward_ids_),
+        1,
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -7240,6 +8375,13 @@ static const ::_pbi::MigrationSchema
         {295, sizeof(::pandora::player::v1::PlayerLoadout)},
         {312, sizeof(::pandora::player::v1::GetLoadoutRequest)},
         {317, sizeof(::pandora::player::v1::GetLoadoutResponse)},
+        {324, sizeof(::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse)},
+        {331, sizeof(::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse)},
+        {338, sizeof(::pandora::player::v1::RewardClaimStorageRecord)},
+        {345, sizeof(::pandora::player::v1::ClaimRewardRequest)},
+        {358, sizeof(::pandora::player::v1::ClaimRewardResponse)},
+        {363, sizeof(::pandora::player::v1::GetRewardClaimsRequest)},
+        {374, sizeof(::pandora::player::v1::GetRewardClaimsResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7287,6 +8429,13 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::player::v1::PlayerLoadout_globals_,
         &::pandora::player::v1::GetLoadoutRequest_globals_,
         &::pandora::player::v1::GetLoadoutResponse_globals_,
+        &::pandora::player::v1::RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_,
+        &::pandora::player::v1::RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_,
+        &::pandora::player::v1::RewardClaimStorageRecord_globals_,
+        &::pandora::player::v1::ClaimRewardRequest_globals_,
+        &::pandora::player::v1::ClaimRewardResponse_globals_,
+        &::pandora::player::v1::GetRewardClaimsRequest_globals_,
+        &::pandora::player::v1::GetRewardClaimsResponse_globals_,
 };
 const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -7408,54 +8557,86 @@ const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] AB
     "\004R\010playerId\"\200\001\n\022GetLoadoutResponse\022.\n\004co"
     "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
     "de\022:\n\007loadout\030\002 \001(\0132 .pandora.player.v1."
-    "PlayerLoadoutR\007loadout2\333\016\n\rPlayerService"
-    "\022Y\n\nGetProfile\022$.pandora.player.v1.GetPr"
-    "ofileRequest\032%.pandora.player.v1.GetProf"
-    "ileResponse\022e\n\016UpdateNickname\022(.pandora."
-    "player.v1.UpdateNicknameRequest\032).pandor"
-    "a.player.v1.UpdateNicknameResponse\022Y\n\nLi"
-    "stHeroes\022$.pandora.player.v1.ListHeroesR"
-    "equest\032%.pandora.player.v1.ListHeroesRes"
-    "ponse\022Y\n\nUnlockHero\022$.pandora.player.v1."
-    "UnlockHeroRequest\032%.pandora.player.v1.Un"
-    "lockHeroResponse\022M\n\006GetMMR\022 .pandora.pla"
-    "yer.v1.GetMMRRequest\032!.pandora.player.v1"
-    ".GetMMRResponse\022V\n\tUpdateMMR\022#.pandora.p"
-    "layer.v1.UpdateMMRRequest\032$.pandora.play"
-    "er.v1.UpdateMMRResponse\022Y\n\nSelectHero\022$."
-    "pandora.player.v1.SelectHeroRequest\032%.pa"
-    "ndora.player.v1.SelectHeroResponse\022b\n\rGe"
-    "tActiveHero\022\'.pandora.player.v1.GetActiv"
-    "eHeroRequest\032(.pandora.player.v1.GetActi"
-    "veHeroResponse\022w\n\024GrantAttributePoints\022."
-    ".pandora.player.v1.GrantAttributePointsR"
-    "equest\032/.pandora.player.v1.GrantAttribut"
-    "ePointsResponse\022\200\001\n\027AllocateAttributePoi"
-    "nts\0221.pandora.player.v1.AllocateAttribut"
-    "ePointsRequest\0322.pandora.player.v1.Alloc"
-    "ateAttributePointsResponse\022h\n\017ResetAttri"
-    "butes\022).pandora.player.v1.ResetAttribute"
-    "sRequest\032*.pandora.player.v1.ResetAttrib"
-    "utesResponse\022b\n\rGetAttributes\022\'.pandora."
-    "player.v1.GetAttributesRequest\032(.pandora"
-    ".player.v1.GetAttributesResponse\022_\n\014SetE"
-    "quipment\022&.pandora.player.v1.SetEquipmen"
-    "tRequest\032\'.pandora.player.v1.SetEquipmen"
-    "tResponse\022_\n\014GetEquipment\022&.pandora.play"
-    "er.v1.GetEquipmentRequest\032\'.pandora.play"
-    "er.v1.GetEquipmentResponse\022n\n\021GrantTalen"
-    "tPoints\022+.pandora.player.v1.GrantTalentP"
-    "ointsRequest\032,.pandora.player.v1.GrantTa"
-    "lentPointsResponse\022Y\n\nSetTalents\022$.pando"
-    "ra.player.v1.SetTalentsRequest\032%.pandora"
-    ".player.v1.SetTalentsResponse\022_\n\014ResetTa"
-    "lents\022&.pandora.player.v1.ResetTalentsRe"
-    "quest\032\'.pandora.player.v1.ResetTalentsRe"
-    "sponse\022Y\n\nGetTalents\022$.pandora.player.v1"
-    ".GetTalentsRequest\032%.pandora.player.v1.G"
-    "etTalentsResponse\022Y\n\nGetLoadout\022$.pandor"
-    "a.player.v1.GetLoadoutRequest\032%.pandora."
-    "player.v1.GetLoadoutResponseb\006proto3"
+    "PlayerLoadoutR\007loadout\"\306\002\n\030RewardClaimSt"
+    "orageRecord\022X\n\tpermanent\030\001 \003(\0132:.pandora"
+    ".player.v1.RewardClaimStorageRecord.Perm"
+    "anentEntryR\tpermanent\022U\n\010activity\030\002 \003(\0132"
+    "9.pandora.player.v1.RewardClaimStorageRe"
+    "cord.ActivityEntryR\010activity\032<\n\016Permanen"
+    "tEntry\022\020\n\003key\030\001 \001(\tR\003key\022\024\n\005value\030\002 \001(\014R"
+    "\005value:\0028\001\032;\n\rActivityEntry\022\020\n\003key\030\001 \001(\004"
+    "R\003key\022\024\n\005value\030\002 \001(\014R\005value:\0028\001\"\336\001\n\022Clai"
+    "mRewardRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playe"
+    "rId\022D\n\013source_type\030\002 \001(\0162#.pandora.playe"
+    "r.v1.RewardSourceTypeR\nsourceType\022\026\n\006sou"
+    "rce\030\003 \001(\tR\006source\0220\n\024activity_instance_i"
+    "d\030\004 \001(\004R\022activityInstanceId\022\033\n\treward_id"
+    "\030\005 \001(\rR\010rewardId\"E\n\023ClaimRewardResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\"\305\001\n\026GetRewardClaimsRequest\022\033\n\tpl"
+    "ayer_id\030\001 \001(\004R\010playerId\022D\n\013source_type\030\002"
+    " \001(\0162#.pandora.player.v1.RewardSourceTyp"
+    "eR\nsourceType\022\026\n\006source\030\003 \001(\tR\006source\0220\n"
+    "\024activity_instance_id\030\004 \001(\004R\022activityIns"
+    "tanceId\"w\n\027GetRewardClaimsResponse\022.\n\004co"
+    "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
+    "de\022,\n\022claimed_reward_ids\030\002 \003(\rR\020claimedR"
+    "ewardIds*y\n\020RewardSourceType\022\"\n\036REWARD_S"
+    "OURCE_TYPE_UNSPECIFIED\020\000\022 \n\034REWARD_SOURC"
+    "E_TYPE_PERMANENT\020\001\022\037\n\033REWARD_SOURCE_TYPE"
+    "_ACTIVITY\020\0022\243\020\n\rPlayerService\022Y\n\nGetProf"
+    "ile\022$.pandora.player.v1.GetProfileReques"
+    "t\032%.pandora.player.v1.GetProfileResponse"
+    "\022e\n\016UpdateNickname\022(.pandora.player.v1.U"
+    "pdateNicknameRequest\032).pandora.player.v1"
+    ".UpdateNicknameResponse\022Y\n\nListHeroes\022$."
+    "pandora.player.v1.ListHeroesRequest\032%.pa"
+    "ndora.player.v1.ListHeroesResponse\022Y\n\nUn"
+    "lockHero\022$.pandora.player.v1.UnlockHeroR"
+    "equest\032%.pandora.player.v1.UnlockHeroRes"
+    "ponse\022M\n\006GetMMR\022 .pandora.player.v1.GetM"
+    "MRRequest\032!.pandora.player.v1.GetMMRResp"
+    "onse\022V\n\tUpdateMMR\022#.pandora.player.v1.Up"
+    "dateMMRRequest\032$.pandora.player.v1.Updat"
+    "eMMRResponse\022Y\n\nSelectHero\022$.pandora.pla"
+    "yer.v1.SelectHeroRequest\032%.pandora.playe"
+    "r.v1.SelectHeroResponse\022b\n\rGetActiveHero"
+    "\022\'.pandora.player.v1.GetActiveHeroReques"
+    "t\032(.pandora.player.v1.GetActiveHeroRespo"
+    "nse\022w\n\024GrantAttributePoints\022..pandora.pl"
+    "ayer.v1.GrantAttributePointsRequest\032/.pa"
+    "ndora.player.v1.GrantAttributePointsResp"
+    "onse\022\200\001\n\027AllocateAttributePoints\0221.pando"
+    "ra.player.v1.AllocateAttributePointsRequ"
+    "est\0322.pandora.player.v1.AllocateAttribut"
+    "ePointsResponse\022h\n\017ResetAttributes\022).pan"
+    "dora.player.v1.ResetAttributesRequest\032*."
+    "pandora.player.v1.ResetAttributesRespons"
+    "e\022b\n\rGetAttributes\022\'.pandora.player.v1.G"
+    "etAttributesRequest\032(.pandora.player.v1."
+    "GetAttributesResponse\022_\n\014SetEquipment\022&."
+    "pandora.player.v1.SetEquipmentRequest\032\'."
+    "pandora.player.v1.SetEquipmentResponse\022_"
+    "\n\014GetEquipment\022&.pandora.player.v1.GetEq"
+    "uipmentRequest\032\'.pandora.player.v1.GetEq"
+    "uipmentResponse\022n\n\021GrantTalentPoints\022+.p"
+    "andora.player.v1.GrantTalentPointsReques"
+    "t\032,.pandora.player.v1.GrantTalentPointsR"
+    "esponse\022Y\n\nSetTalents\022$.pandora.player.v"
+    "1.SetTalentsRequest\032%.pandora.player.v1."
+    "SetTalentsResponse\022_\n\014ResetTalents\022&.pan"
+    "dora.player.v1.ResetTalentsRequest\032\'.pan"
+    "dora.player.v1.ResetTalentsResponse\022Y\n\nG"
+    "etTalents\022$.pandora.player.v1.GetTalents"
+    "Request\032%.pandora.player.v1.GetTalentsRe"
+    "sponse\022Y\n\nGetLoadout\022$.pandora.player.v1"
+    ".GetLoadoutRequest\032%.pandora.player.v1.G"
+    "etLoadoutResponse\022\\\n\013ClaimReward\022%.pando"
+    "ra.player.v1.ClaimRewardRequest\032&.pandor"
+    "a.player.v1.ClaimRewardResponse\022h\n\017GetRe"
+    "wardClaims\022).pandora.player.v1.GetReward"
+    "ClaimsRequest\032*.pandora.player.v1.GetRew"
+    "ardClaimsResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps[1] = {
@@ -7465,13 +8646,13 @@ static ::absl::once_flag descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto = {
     false,
     false,
-    6636,
+    7905,
     descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto,
     "pandora/player/v1/player.proto",
     &descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_once,
     descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto_deps,
     1,
-    44,
+    51,
     schemas,
     file_message_globals,
     TableStruct_pandora_2fplayer_2fv1_2fplayer_2eproto::offsets,
@@ -7481,6 +8662,13 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fplay
 namespace pandora {
 namespace player {
 namespace v1 {
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+RewardSourceType_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fplayer_2fv1_2fplayer_2eproto);
+  return file_level_enum_descriptors_pandora_2fplayer_2fv1_2fplayer_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t RewardSourceType_internal_data_[] = {
+    196608u, 0u, };
 // ===================================================================
 
 PlayerProfile::PlayerProfile(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -17995,6 +19183,1440 @@ void GetLoadoutResponse::InternalSwap(GetLoadoutResponse* PROTOBUF_RESTRICT PROT
 }
 
 ::google::protobuf::Metadata GetLoadoutResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+RewardClaimStorageRecord_PermanentEntry_DoNotUse::RewardClaimStorageRecord_PermanentEntry_DoNotUse() : SuperType(RewardClaimStorageRecord_PermanentEntry_DoNotUse_get_class_data()) {}
+RewardClaimStorageRecord_PermanentEntry_DoNotUse::RewardClaimStorageRecord_PermanentEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, RewardClaimStorageRecord_PermanentEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+RewardClaimStorageRecord_PermanentEntry_DoNotUse::RewardClaimStorageRecord_PermanentEntry_DoNotUse() : SuperType() {}
+RewardClaimStorageRecord_PermanentEntry_DoNotUse::RewardClaimStorageRecord_PermanentEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_ =
+        RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalGenerateClassData_(RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardClaimStorageRecord_PermanentEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_.tc_table);
+  return RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardClaimStorageRecord_PermanentEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_));
+  return RewardClaimStorageRecord_PermanentEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RewardClaimStorageRecord_PermanentEntry_DoNotUse::ParseTableT_
+    RewardClaimStorageRecord_PermanentEntry_DoNotUse::_table_ =
+        RewardClaimStorageRecord_PermanentEntry_DoNotUse::InternalGenerateParseTable_(RewardClaimStorageRecord_PermanentEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+RewardClaimStorageRecord_ActivityEntry_DoNotUse::RewardClaimStorageRecord_ActivityEntry_DoNotUse() : SuperType(RewardClaimStorageRecord_ActivityEntry_DoNotUse_get_class_data()) {}
+RewardClaimStorageRecord_ActivityEntry_DoNotUse::RewardClaimStorageRecord_ActivityEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, RewardClaimStorageRecord_ActivityEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+RewardClaimStorageRecord_ActivityEntry_DoNotUse::RewardClaimStorageRecord_ActivityEntry_DoNotUse() : SuperType() {}
+RewardClaimStorageRecord_ActivityEntry_DoNotUse::RewardClaimStorageRecord_ActivityEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_ =
+        RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalGenerateClassData_(RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardClaimStorageRecord_ActivityEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_.tc_table);
+  return RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardClaimStorageRecord_ActivityEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_));
+  return RewardClaimStorageRecord_ActivityEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RewardClaimStorageRecord_ActivityEntry_DoNotUse::ParseTableT_
+    RewardClaimStorageRecord_ActivityEntry_DoNotUse::_table_ =
+        RewardClaimStorageRecord_ActivityEntry_DoNotUse::InternalGenerateParseTable_(RewardClaimStorageRecord_ActivityEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
+RewardClaimStorageRecord::RewardClaimStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RewardClaimStorageRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.RewardClaimStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE RewardClaimStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::RewardClaimStorageRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        permanent_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::player::v1::RewardClaimStorageRecord,
+              PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.permanent_)>()
+          , from.permanent_
+        }
+        ,
+        activity_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::player::v1::RewardClaimStorageRecord,
+              PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.activity_)>()
+          , from.activity_
+        }
+     {}
+
+RewardClaimStorageRecord::RewardClaimStorageRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RewardClaimStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RewardClaimStorageRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RewardClaimStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.RewardClaimStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE RewardClaimStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        permanent_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::RewardClaimStorageRecord,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.permanent_)>()
+         }
+        ,
+        activity_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::RewardClaimStorageRecord,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::RewardClaimStorageRecord, _impl_.activity_)>()
+         }
+     {}
+
+inline void RewardClaimStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RewardClaimStorageRecord::~RewardClaimStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.RewardClaimStorageRecord)
+  SharedDtor(*this);
+}
+inline void RewardClaimStorageRecord::SharedDtor(MessageLite& self) {
+  RewardClaimStorageRecord& this_ = static_cast<RewardClaimStorageRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RewardClaimStorageRecord_class_data_ =
+        RewardClaimStorageRecord::InternalGenerateClassData_(RewardClaimStorageRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardClaimStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardClaimStorageRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RewardClaimStorageRecord_class_data_.tc_table);
+  return RewardClaimStorageRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardClaimStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardClaimStorageRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RewardClaimStorageRecord_globals_));
+  return RewardClaimStorageRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RewardClaimStorageRecord::ParseTableT_
+    RewardClaimStorageRecord::_table_ =
+        RewardClaimStorageRecord::InternalGenerateParseTable_(RewardClaimStorageRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RewardClaimStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.RewardClaimStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.permanent_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.activity_.Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RewardClaimStorageRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RewardClaimStorageRecord& this_ = static_cast<const RewardClaimStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RewardClaimStorageRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RewardClaimStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.RewardClaimStorageRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // map<string, bytes> permanent = 1 [json_name = "permanent"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_permanent().empty()) {
+      using MapType = ::google::protobuf::Map<::std::string, ::std::string>;
+      using WireHelper = _pbi::MapEntryFuncs<::std::string, ::std::string,
+                                     _pbi::WireFormatLite::TYPE_STRING,
+                                     _pbi::WireFormatLite::TYPE_BYTES>;
+      const auto& field = this_._internal_permanent();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              1, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.RewardClaimStorageRecord.permanent");
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              1, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.RewardClaimStorageRecord.permanent");
+        }
+      }
+    }
+  }
+
+  // map<uint64, bytes> activity = 2 [json_name = "activity"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_activity().empty()) {
+      using MapType = ::google::protobuf::Map<::uint64_t, ::std::string>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint64_t, ::std::string,
+                                     _pbi::WireFormatLite::TYPE_UINT64,
+                                     _pbi::WireFormatLite::TYPE_BYTES>;
+      const auto& field = this_._internal_activity();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              2, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              2, entry.first, entry.second, target, stream);
+        }
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.RewardClaimStorageRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RewardClaimStorageRecord::ByteSizeLong(const MessageLite& base) {
+  const RewardClaimStorageRecord& this_ = static_cast<const RewardClaimStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RewardClaimStorageRecord::ByteSizeLong() const {
+  const RewardClaimStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.RewardClaimStorageRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // map<string, bytes> permanent = 1 [json_name = "permanent"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_permanent_size());
+      for (const auto& entry : this_._internal_permanent()) {
+        total_size += _pbi::MapEntryFuncs<::std::string, ::std::string,
+                                       _pbi::WireFormatLite::TYPE_STRING,
+                                       _pbi::WireFormatLite::TYPE_BYTES>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+    // map<uint64, bytes> activity = 2 [json_name = "activity"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_activity_size());
+      for (const auto& entry : this_._internal_activity()) {
+        total_size += _pbi::MapEntryFuncs<::uint64_t, ::std::string,
+                                       _pbi::WireFormatLite::TYPE_UINT64,
+                                       _pbi::WireFormatLite::TYPE_BYTES>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RewardClaimStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RewardClaimStorageRecord*>(&to_msg);
+  auto& from = static_cast<const RewardClaimStorageRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.RewardClaimStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_impl_.permanent_.MergeFrom(from._impl_.permanent_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_impl_.activity_.MergeFrom(from._impl_.activity_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RewardClaimStorageRecord::CopyFrom(const RewardClaimStorageRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.RewardClaimStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RewardClaimStorageRecord::InternalSwap(RewardClaimStorageRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.permanent_.InternalSwap(&other->_impl_.permanent_);
+  _impl_.activity_.InternalSwap(&other->_impl_.activity_);
+}
+
+::google::protobuf::Metadata RewardClaimStorageRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimRewardRequest::ClaimRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimRewardRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.ClaimRewardRequest)
+}
+PROTOBUF_NDEBUG_INLINE ClaimRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::ClaimRewardRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        source_(arena, from.source_) {}
+
+ClaimRewardRequest::ClaimRewardRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimRewardRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimRewardRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimRewardRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, activity_instance_id_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::activity_instance_id_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.ClaimRewardRequest)
+}
+PROTOBUF_NDEBUG_INLINE ClaimRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        source_(arena) {}
+
+inline void ClaimRewardRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, activity_instance_id_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::activity_instance_id_));
+}
+ClaimRewardRequest::~ClaimRewardRequest() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.ClaimRewardRequest)
+  SharedDtor(*this);
+}
+inline void ClaimRewardRequest::SharedDtor(MessageLite& self) {
+  ClaimRewardRequest& this_ = static_cast<ClaimRewardRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.source_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimRewardRequest_class_data_ =
+        ClaimRewardRequest::InternalGenerateClassData_(ClaimRewardRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimRewardRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimRewardRequest_class_data_.tc_table);
+  return ClaimRewardRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimRewardRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimRewardRequest_globals_));
+  return ClaimRewardRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimRewardRequest::ParseTableT_
+    ClaimRewardRequest::_table_ =
+        ClaimRewardRequest::InternalGenerateParseTable_(ClaimRewardRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimRewardRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.ClaimRewardRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.source_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.activity_instance_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.activity_instance_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimRewardRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimRewardRequest& this_ = static_cast<const ClaimRewardRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimRewardRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimRewardRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.ClaimRewardRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_source_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_source_type(), target);
+    }
+  }
+
+  // string source = 3 [json_name = "source"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_source().empty()) {
+      const ::std::string& _s = this_._internal_source();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.ClaimRewardRequest.source");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_activity_instance_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_activity_instance_id(), target);
+    }
+  }
+
+  // uint32 reward_id = 5 [json_name = "rewardId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_reward_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_reward_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.ClaimRewardRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimRewardRequest::ByteSizeLong(const MessageLite& base) {
+  const ClaimRewardRequest& this_ = static_cast<const ClaimRewardRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimRewardRequest::ByteSizeLong() const {
+  const ClaimRewardRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.ClaimRewardRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string source = 3 [json_name = "source"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_source().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_source());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_source_type() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_source_type());
+      }
+    }
+    // uint32 reward_id = 5 [json_name = "rewardId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_reward_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_reward_id());
+      }
+    }
+    // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_activity_instance_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_activity_instance_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimRewardRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimRewardRequest*>(&to_msg);
+  auto& from = static_cast<const ClaimRewardRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.ClaimRewardRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_source().empty()) {
+        _this->_internal_set_source(from._internal_source());
+      } else {
+        if (_this->_impl_.source_.IsDefault()) {
+          _this->_internal_set_source("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_source_type() != 0) {
+        _this->_impl_.source_type_ = from._impl_.source_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_reward_id() != 0) {
+        _this->_impl_.reward_id_ = from._impl_.reward_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_activity_instance_id() != 0) {
+        _this->_impl_.activity_instance_id_ = from._impl_.activity_instance_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimRewardRequest::CopyFrom(const ClaimRewardRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.ClaimRewardRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimRewardRequest::InternalSwap(ClaimRewardRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.source_, &other->_impl_.source_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.activity_instance_id_)
+      + sizeof(ClaimRewardRequest::_impl_.activity_instance_id_)
+      - PROTOBUF_FIELD_OFFSET(ClaimRewardRequest, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata ClaimRewardRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimRewardResponse::ClaimRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimRewardResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.ClaimRewardResponse)
+}
+ClaimRewardResponse::ClaimRewardResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimRewardResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimRewardResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ClaimRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimRewardResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+ClaimRewardResponse::~ClaimRewardResponse() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.ClaimRewardResponse)
+  SharedDtor(*this);
+}
+inline void ClaimRewardResponse::SharedDtor(MessageLite& self) {
+  ClaimRewardResponse& this_ = static_cast<ClaimRewardResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimRewardResponse_class_data_ =
+        ClaimRewardResponse::InternalGenerateClassData_(ClaimRewardResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimRewardResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimRewardResponse_class_data_.tc_table);
+  return ClaimRewardResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimRewardResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimRewardResponse_globals_));
+  return ClaimRewardResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimRewardResponse::ParseTableT_
+    ClaimRewardResponse::_table_ =
+        ClaimRewardResponse::InternalGenerateParseTable_(ClaimRewardResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimRewardResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.ClaimRewardResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimRewardResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimRewardResponse& this_ = static_cast<const ClaimRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimRewardResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.ClaimRewardResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.ClaimRewardResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimRewardResponse::ByteSizeLong(const MessageLite& base) {
+  const ClaimRewardResponse& this_ = static_cast<const ClaimRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimRewardResponse::ByteSizeLong() const {
+  const ClaimRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.ClaimRewardResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimRewardResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimRewardResponse*>(&to_msg);
+  auto& from = static_cast<const ClaimRewardResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.ClaimRewardResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_code() != 0) {
+      _this->_impl_.code_ = from._impl_.code_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimRewardResponse::CopyFrom(const ClaimRewardResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.ClaimRewardResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimRewardResponse::InternalSwap(ClaimRewardResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata ClaimRewardResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetRewardClaimsRequest::GetRewardClaimsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetRewardClaimsRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.GetRewardClaimsRequest)
+}
+PROTOBUF_NDEBUG_INLINE GetRewardClaimsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::GetRewardClaimsRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        source_(arena, from.source_) {}
+
+GetRewardClaimsRequest::GetRewardClaimsRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetRewardClaimsRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetRewardClaimsRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetRewardClaimsRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, source_type_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::source_type_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.GetRewardClaimsRequest)
+}
+PROTOBUF_NDEBUG_INLINE GetRewardClaimsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        source_(arena) {}
+
+inline void GetRewardClaimsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, source_type_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::source_type_));
+}
+GetRewardClaimsRequest::~GetRewardClaimsRequest() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.GetRewardClaimsRequest)
+  SharedDtor(*this);
+}
+inline void GetRewardClaimsRequest::SharedDtor(MessageLite& self) {
+  GetRewardClaimsRequest& this_ = static_cast<GetRewardClaimsRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.source_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetRewardClaimsRequest_class_data_ =
+        GetRewardClaimsRequest::InternalGenerateClassData_(GetRewardClaimsRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRewardClaimsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRewardClaimsRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetRewardClaimsRequest_class_data_.tc_table);
+  return GetRewardClaimsRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRewardClaimsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRewardClaimsRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetRewardClaimsRequest_globals_));
+  return GetRewardClaimsRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetRewardClaimsRequest::ParseTableT_
+    GetRewardClaimsRequest::_table_ =
+        GetRewardClaimsRequest::InternalGenerateParseTable_(GetRewardClaimsRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetRewardClaimsRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.GetRewardClaimsRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.source_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.source_type_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.source_type_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetRewardClaimsRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetRewardClaimsRequest& this_ = static_cast<const GetRewardClaimsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetRewardClaimsRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetRewardClaimsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.GetRewardClaimsRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_source_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_source_type(), target);
+    }
+  }
+
+  // string source = 3 [json_name = "source"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_source().empty()) {
+      const ::std::string& _s = this_._internal_source();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.player.v1.GetRewardClaimsRequest.source");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_activity_instance_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_activity_instance_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.GetRewardClaimsRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetRewardClaimsRequest::ByteSizeLong(const MessageLite& base) {
+  const GetRewardClaimsRequest& this_ = static_cast<const GetRewardClaimsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetRewardClaimsRequest::ByteSizeLong() const {
+  const GetRewardClaimsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.GetRewardClaimsRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string source = 3 [json_name = "source"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_source().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_source());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 activity_instance_id = 4 [json_name = "activityInstanceId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_activity_instance_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_activity_instance_id());
+      }
+    }
+    // .pandora.player.v1.RewardSourceType source_type = 2 [json_name = "sourceType"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_source_type() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_source_type());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetRewardClaimsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetRewardClaimsRequest*>(&to_msg);
+  auto& from = static_cast<const GetRewardClaimsRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.GetRewardClaimsRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_source().empty()) {
+        _this->_internal_set_source(from._internal_source());
+      } else {
+        if (_this->_impl_.source_.IsDefault()) {
+          _this->_internal_set_source("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_activity_instance_id() != 0) {
+        _this->_impl_.activity_instance_id_ = from._impl_.activity_instance_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_source_type() != 0) {
+        _this->_impl_.source_type_ = from._impl_.source_type_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetRewardClaimsRequest::CopyFrom(const GetRewardClaimsRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.GetRewardClaimsRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetRewardClaimsRequest::InternalSwap(GetRewardClaimsRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.source_, &other->_impl_.source_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.source_type_)
+      + sizeof(GetRewardClaimsRequest::_impl_.source_type_)
+      - PROTOBUF_FIELD_OFFSET(GetRewardClaimsRequest, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata GetRewardClaimsRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetRewardClaimsResponse::GetRewardClaimsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetRewardClaimsResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.player.v1.GetRewardClaimsResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetRewardClaimsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::player::v1::GetRewardClaimsResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        claimed_reward_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::player::v1::GetRewardClaimsResponse,
+              PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsResponse, _impl_.claimed_reward_ids_)>()
+          , from.claimed_reward_ids_
+        }
+        ,
+        _claimed_reward_ids_cached_byte_size_{0} {}
+
+GetRewardClaimsResponse::GetRewardClaimsResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetRewardClaimsResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetRewardClaimsResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetRewardClaimsResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.player.v1.GetRewardClaimsResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetRewardClaimsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        claimed_reward_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::player::v1::GetRewardClaimsResponse,
+            PROTOBUF_FIELD_OFFSET(::pandora::player::v1::GetRewardClaimsResponse, _impl_.claimed_reward_ids_)>()
+         }
+        ,
+        _claimed_reward_ids_cached_byte_size_{0} {}
+
+inline void GetRewardClaimsResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+GetRewardClaimsResponse::~GetRewardClaimsResponse() {
+  // @@protoc_insertion_point(destructor:pandora.player.v1.GetRewardClaimsResponse)
+  SharedDtor(*this);
+}
+inline void GetRewardClaimsResponse::SharedDtor(MessageLite& self) {
+  GetRewardClaimsResponse& this_ = static_cast<GetRewardClaimsResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetRewardClaimsResponse_class_data_ =
+        GetRewardClaimsResponse::InternalGenerateClassData_(GetRewardClaimsResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRewardClaimsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRewardClaimsResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetRewardClaimsResponse_class_data_.tc_table);
+  return GetRewardClaimsResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetRewardClaimsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetRewardClaimsResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetRewardClaimsResponse_globals_));
+  return GetRewardClaimsResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetRewardClaimsResponse::ParseTableT_
+    GetRewardClaimsResponse::_table_ =
+        GetRewardClaimsResponse::InternalGenerateParseTable_(GetRewardClaimsResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetRewardClaimsResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.player.v1.GetRewardClaimsResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.claimed_reward_ids_.Clear();
+  }
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetRewardClaimsResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetRewardClaimsResponse& this_ = static_cast<const GetRewardClaimsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetRewardClaimsResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetRewardClaimsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.player.v1.GetRewardClaimsResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._claimed_reward_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            2, this_._internal_claimed_reward_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.player.v1.GetRewardClaimsResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetRewardClaimsResponse::ByteSizeLong(const MessageLite& base) {
+  const GetRewardClaimsResponse& this_ = static_cast<const GetRewardClaimsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetRewardClaimsResponse::ByteSizeLong() const {
+  const GetRewardClaimsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.player.v1.GetRewardClaimsResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // repeated uint32 claimed_reward_ids = 2 [json_name = "claimedRewardIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_claimed_reward_ids(), 1,
+              this_._impl_._claimed_reward_ids_cached_byte_size_);
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetRewardClaimsResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetRewardClaimsResponse*>(&to_msg);
+  auto& from = static_cast<const GetRewardClaimsResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.player.v1.GetRewardClaimsResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_claimed_reward_ids()->MergeFrom(from._internal_claimed_reward_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetRewardClaimsResponse::CopyFrom(const GetRewardClaimsResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.player.v1.GetRewardClaimsResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetRewardClaimsResponse::InternalSwap(GetRewardClaimsResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.claimed_reward_ids_.InternalSwap(&other->_impl_.claimed_reward_ids_);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata GetRewardClaimsResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

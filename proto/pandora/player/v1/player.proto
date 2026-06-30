@@ -40,6 +40,13 @@ service PlayerService {
   rpc GetTalents(GetTalentsRequest) returns (GetTalentsResponse);
 
   rpc GetLoadout(GetLoadoutRequest) returns (GetLoadoutResponse);
+
+  // ── 领奖(签到里程碑 / 成就 / 新手 / 永久任务 / 活动)──
+  // 客户端经 Envoy 调用领取奖励档位;服务端权威判重幂等(不变量 §2 / §7),
+  // 永久类与活动类分别落进玩家领奖记录(见 RewardClaimStorageRecord)。
+  // 响应只回客户端可见最小视图(§14),不外露存储位图。
+  rpc ClaimReward(ClaimRewardRequest) returns (ClaimRewardResponse);
+  rpc GetRewardClaims(GetRewardClaimsRequest) returns (GetRewardClaimsResponse);
 }
 
 // ===== 玩家档案 =====
@@ -305,4 +312,64 @@ message GetLoadoutRequest {
 message GetLoadoutResponse {
   pandora.common.v1.ErrCode code = 1;
   PlayerLoadout loadout = 2;
+}
+
+// ===== 领奖记录(存储快照)=====
+
+// RewardClaimStorageRecord 是玩家"领奖记录"的服务端存储快照(CLAUDE.md §5.8 四类命名:
+// 存储快照 = <Domain>StorageRecord)。用变长位图(bytes)记录每个奖励档位是否已领取,
+// 判重 O(1)、落地紧凑;由 pkg/rewardclaim 在内存里维护、序列化进本 record 的 bytes。
+//
+// 落地:整条 record 序列化成 bytes 存进 pandora_player.player_reward_claims.record 列
+// (player_id PK + version 乐观锁)。和玩家档案同库同 player_id,回档随库一起恢复、
+// 合服随 player_id 一起迁移,天然原子(不变量 §2 / §7 幂等;§14 不外露)。
+//
+// ⚠️ §5.10 / §5.11 / 不变量 §14:本 record 是存储快照,禁止直接返回 / 推送给客户端。
+// 面向客户端的领奖结果只回最小视图(已领 / 可领布尔、奖励内容),由服务端从本 record 组装。
+//
+// permanent:永久类(签到里程碑 / 成就 / 新手 / 永久任务……),key = 来源名(如 "sign_in"
+//   / "achievement"),只增不删,bit 位永久稳定。
+// activity:活动类,key = 活动实例 ID(每期唯一,含轮次 / 版本);活动下线整条删除回收,
+//   下期新活动用新实例 ID 从零开始,即使复用相同档位 bit 也不串味。
+message RewardClaimStorageRecord {
+  map<string, bytes> permanent = 1;  // 来源名 → 领取位图(变长 bitmap bytes)
+  map<uint64, bytes> activity  = 2;  // 活动实例 ID → 领取位图(变长 bitmap bytes)
+}
+
+// RewardSourceType 区分领奖来源的两类生命周期(对应 RewardClaimStorageRecord 两张 map)。
+enum RewardSourceType {
+  REWARD_SOURCE_TYPE_UNSPECIFIED = 0;
+  REWARD_SOURCE_TYPE_PERMANENT   = 1;  // 永久类:按来源名(sign_in / achievement / ……)
+  REWARD_SOURCE_TYPE_ACTIVITY    = 2;  // 活动类:按活动实例 ID,下线整条回收
+}
+
+// ClaimRewardRequest 领取一档奖励(客户端 → player,经 Envoy 鉴权)。
+// 服务端把 reward_id(配置 ID)映射成 bit 位,判重幂等后置位并持久化(乐观锁)。
+message ClaimRewardRequest {
+  uint64 player_id = 1;
+  RewardSourceType source_type = 2;
+  // 永久类:来源名(如 "sign_in" / "achievement");活动类留空。
+  string source = 3;
+  // 活动类:活动实例 ID(每期唯一,含轮次);永久类填 0。
+  uint64 activity_instance_id = 4;
+  // 奖励档位配置 ID(uint32,§12);服务端映射成 bit 位记录领取。
+  uint32 reward_id = 5;
+}
+
+message ClaimRewardResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// GetRewardClaimsRequest 查询某来源已领取的档位(客户端可见最小视图)。
+message GetRewardClaimsRequest {
+  uint64 player_id = 1;
+  RewardSourceType source_type = 2;
+  string source = 3;                 // 永久类:来源名;活动类留空
+  uint64 activity_instance_id = 4;   // 活动类:活动实例 ID;永久类填 0
+}
+
+// GetRewardClaimsResponse 只回已领取的奖励配置 ID 列表(§14 最小视图,不外露存储位图)。
+message GetRewardClaimsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated uint32 claimed_reward_ids = 2;
 }
