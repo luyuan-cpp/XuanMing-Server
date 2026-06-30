@@ -187,30 +187,104 @@ function Get-LocalDsExePath {
     return $null
 }
 
+# 自动探测本机 Windows DS 可执行文件(策划机场景:配置里写死的盘符不在本机)。
+# 约定:服务器仓与客户端 Client 仓平级(同一父目录),DS 是 Client 仓的
+#   Packages\Server_Win64_*\WindowsServer\PandoraServer.exe(SVN 提交后也在 Packages 下)。
+# 两级探测,命中多个取最新打包的那个,返回 @{ Exe, Root } 或 $null:
+#   ① 固定深度 glob(最快,标准布局直接命中);
+#   ② 兜底:递归扫兄弟目录里的 Packages 子树(构建产物目录,比 UE 资源树小很多,够快),
+#      应对 SVN 提交后 Server_Win64_* / WindowsServer 层级略有出入的情况。
+function Resolve-LocalDsExe {
+    $repoParent = Split-Path $ProjectRoot -Parent
+    if (-not $repoParent -or -not (Test-Path $repoParent)) { return $null }
+    $siblings = Get-ChildItem -Path $repoParent -Directory -ErrorAction SilentlyContinue
+
+    # ① 固定深度:Packages\Server_Win64_*\WindowsServer\PandoraServer.exe
+    $hits = @()
+    foreach ($dir in $siblings) {
+        $glob = Join-Path $dir.FullName 'Packages\Server_Win64_*\WindowsServer\PandoraServer.exe'
+        $hits += Get-ChildItem -Path $glob -ErrorAction SilentlyContinue | ForEach-Object {
+            [pscustomobject]@{ Exe = $_.FullName; Root = $dir.FullName; LastWriteTime = $_.LastWriteTime }
+        }
+    }
+    if ($hits.Count -gt 0) {
+        return $hits | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    }
+
+    # ② 兜底:递归扫兄弟目录的 Packages 子树(只进 Packages,避免遍历 Content 大资源树)
+    foreach ($dir in $siblings) {
+        $pkgRoot = Join-Path $dir.FullName 'Packages'
+        if (-not (Test-Path $pkgRoot)) { continue }
+        $hits += Get-ChildItem -Path $pkgRoot -Recurse -Filter 'PandoraServer.exe' -File -ErrorAction SilentlyContinue | ForEach-Object {
+            [pscustomobject]@{ Exe = $_.FullName; Root = $dir.FullName; LastWriteTime = $_.LastWriteTime }
+        }
+    }
+    if ($hits.Count -eq 0) { return $null }
+    return $hits | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
+
+# 确保 Go 已安装(本地战斗版 go 服务跑宿主进程需要)。没装就 winget 自动装。
+# 返回 $true=已就绪可继续;$false=刚装上但当前终端 PATH 没刷新,需新开终端重跑。
+function Ensure-GoInstalled {
+    if (Test-CommandExists 'go') {
+        Write-Ok 'Go 已就绪'
+        return $true
+    }
+    Write-Warn 'Go 未安装'
+    if (-not (Test-CommandExists 'winget')) {
+        Write-Err '未找到 winget,无法自动安装 Go;请手动装:https://go.dev/dl/ (需 1.26.4+)'
+        return $false
+    }
+    Write-Info '尝试用 winget 安装 Go(GoLang.Go,可能要几分钟)...'
+    winget install --id GoLang.Go --silent --accept-source-agreements --accept-package-agreements | Out-Null
+    if (Test-CommandExists 'go') {
+        Write-Ok 'Go 安装成功'
+        return $true
+    }
+    Write-Warn 'Go 已装好,但当前终端还找不到 go 命令(PATH 未刷新属正常)。'
+    Write-Warn '       请『新开一个终端』(或重新双击本 .cmd)后再运行一次。'
+    return $false
+}
+
 # 本地战斗模式预检:需要 Go(宿主进程)+ 打包好的 Windows DS。返回 $true=可继续。
 function Test-BattlePrerequisites {
     $ok = $true
 
-    if (-not (Test-CommandExists 'go')) {
-        Write-Err 'Go 未安装。本地战斗版用「宿主 go 进程 + Windows DS」,需要装 Go(1.26.4+)。'
-        Write-Host '       手动安装:https://go.dev/dl/    或在能联网时:winget install GoLang.Go' -ForegroundColor Yellow
+    if (-not (Ensure-GoInstalled)) {
         $ok = $false
-    } else {
-        Write-Ok 'Go 已就绪'
+    }
+
+    # 先探测平级 Client 仓:只要探到就自动设 PANDORA_DS_ROOT(策划零操作,
+    # 配置可用 ${PANDORA_DS_ROOT}/Packages/... 拼接;该环境变量仅本进程及其子 go 服务可见)。
+    $detected = Resolve-LocalDsExe
+    if ($detected) {
+        $env:PANDORA_DS_ROOT = $detected.Root
+        Write-Info "已自动解析 PANDORA_DS_ROOT=$($detected.Root)"
     }
 
     $exe = Get-LocalDsExePath
-    if ([string]::IsNullOrEmpty($exe)) {
-        Write-Warn '没在 ds_allocator-dev.yaml 找到 local_ds.executable_path。'
-        Write-Warn '       请让 UE 同学打一个 Windows Server 包,再把 executable_path 指向 PandoraServer.exe。'
-        $ok = $false
-    } elseif (-not (Test-Path $exe)) {
-        Write-Err "找不到 Windows DS 可执行文件:$exe"
-        Write-Warn '       这是 UE 打包产物(PandoraServer.exe),不在本仓库。需要先让 UE 同学打一个 Windows Server 包,'
-        Write-Warn '       并把 ds_allocator-dev.yaml 的 local_ds.executable_path 指到它。没有它,匹配成局后无法拉起战斗 DS。'
-        $ok = $false
-    } else {
+    if ((-not [string]::IsNullOrEmpty($exe)) -and (Test-Path $exe)) {
+        # 配置里的路径在本机存在(开发机场景),直接用。
         Write-Ok "Windows DS 已就绪:$exe"
+    } else {
+        # 配置路径不在本机(策划机场景:Client 目录不在配置写死的盘符)。
+        # 除了上面的 PANDORA_DS_ROOT,再注入精确的 EXE/DIR 给 go 服务(无需改配置)。
+        if ($detected) {
+            $env:PANDORA_DS_EXE = $detected.Exe
+            $env:PANDORA_DS_DIR = Split-Path $detected.Exe -Parent
+            Write-Ok "自动探测到 Windows DS:$($detected.Exe)"
+            Write-Info '       已注入 PANDORA_DS_ROOT / PANDORA_DS_EXE / PANDORA_DS_DIR,go 服务会优先用它(无需改仓库配置)。'
+        } elseif ([string]::IsNullOrEmpty($exe)) {
+            Write-Warn '没在 ds_allocator-dev.yaml 找到 local_ds.executable_path。'
+            Write-Warn '       请让 UE 同学打一个 Windows Server 包,再把 executable_path 指向 PandoraServer.exe。'
+            $ok = $false
+        } else {
+            Write-Err "找不到 Windows DS 可执行文件:$exe"
+            Write-Warn '       这是 UE 打包产物(PandoraServer.exe),不在本仓库;也没在平级 Client 目录探测到。'
+            Write-Warn '       需要先让 UE 同学打一个 Windows Server 包(产出 Packages\Server_Win64_*\WindowsServer\PandoraServer.exe),'
+            Write-Warn '       放到与本服务器仓平级的 Client 目录下;或把 ds_allocator-dev.yaml 的 executable_path 指到它。'
+            $ok = $false
+        }
     }
 
     return $ok

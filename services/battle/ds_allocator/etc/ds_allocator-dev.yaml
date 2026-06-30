@@ -83,8 +83,14 @@ agones:
 # 本机调试步骤:① UE 打包 Windows Server 版(产出 PandoraServer.exe)
 #              ② executable_path 指向该 PandoraServer.exe
 #              ③ 顶部 mode 置 "local"
+# 跨机器移植:下面写死的是本开发机路径;换机器/换盘符无需手改——只要把客户端 Client 仓库放到
+# 与本服务器仓库平级的目录,play.ps1 -Battle 会自动探测 Packages\Server_Win64_*\WindowsServer\
+# PandoraServer.exe 并经 PANDORA_DS_EXE / PANDORA_DS_DIR 注入;此处路径在本机不存在时自动回退到注入值。
 local_ds:
   enabled: true
+  # 策划机可改用 ${PANDORA_DS_ROOT} 拼接(play.ps1 -Battle 启动时自动探测平级 Client 仓并设该变量,策划零操作):
+  #   executable_path: "${PANDORA_DS_ROOT}/Packages/Server_Win64_Shipping/WindowsServer/PandoraServer.exe"
+  # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
   executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
   map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 战斗 DS 加载的关卡(留空用 DS 默认关卡)
   advertise_host: "127.0.0.1"                  # 返回给客户端 NetDriver 连接的 host

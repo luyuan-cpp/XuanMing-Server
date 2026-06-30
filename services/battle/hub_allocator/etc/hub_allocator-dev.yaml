@@ -114,7 +114,13 @@ agones:
 # 把它作为唯一分片返回;进程随 hub_allocator 退出而 Kill。常驻不按对局回收(与战斗 DS 不同)。
 # 与战斗 DS 同一个 staged/cooked PandoraServer.exe,靠 map_name 区分大厅/战斗关卡;端口与战斗 DS(7800+)错开用 7777。
 # 不能指向 Pandora/Binaries/Win64 裸二进制,否则缺 cooked 内容会在加载资产时崩溃。
+# 跨机器移植:下面写死的是本开发机路径;换机器/换盘符无需手改——只要把客户端 Client 仓库放到
+# 与本服务器仓库平级的目录,play.ps1 -Battle 会自动探测 Packages\Server_Win64_*\WindowsServer\
+# PandoraServer.exe 并经 PANDORA_DS_EXE / PANDORA_DS_DIR 注入;此处路径在本机不存在时自动回退到注入值。
 local_hub:
+  # 策划机可改用 ${PANDORA_DS_ROOT} 拼接(play.ps1 -Battle 启动时自动探测平级 Client 仓并设该变量,策划零操作):
+  #   executable_path: "${PANDORA_DS_ROOT}/Packages/Server_Win64_Shipping/WindowsServer/PandoraServer.exe"
+  # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
   executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
   map_name: "/Game/Test/Level/MainCity?game=/Script/Pandora.PandoraHubGameMode" # 大厅关卡(留空用 DS 默认关卡)
   advertise_host: "127.0.0.1"                  # 返回给客户端 NetDriver 连接的 host

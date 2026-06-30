@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -201,6 +203,21 @@ func (c *Config) Defaults() {
 	}
 	if c.Agones.AllocateTimeout == 0 {
 		c.Agones.AllocateTimeout = config.Duration(5 * time.Second)
+	}
+	// 路径字段支持环境变量展开 + 跨机器兜底,便于策划机移植(Client 目录可能不在配置写死的盘符):
+	//  1. 先做 ${VAR}/$VAR 展开(绝对路径不含 $,dev 配置原样保留);
+	//  2. filepath.FromSlash 归一化分隔符:策划在 yaml 里写正斜杠 / (无需 \\ 转义)也能在 Windows 正常工作;
+	//  3. 展开后的路径在本机不存在时,回退到启动脚本按平级 Client 目录探测注入的
+	//     PANDORA_DS_EXE / PANDORA_DS_DIR(play.ps1 自动填充);dev 上 F:\ 路径存在则不覆盖。
+	c.LocalDS.ExecutablePath = filepath.FromSlash(os.ExpandEnv(c.LocalDS.ExecutablePath))
+	c.LocalDS.WorkingDir = filepath.FromSlash(os.ExpandEnv(c.LocalDS.WorkingDir))
+	if envExe := os.Getenv("PANDORA_DS_EXE"); envExe != "" {
+		if _, err := os.Stat(c.LocalDS.ExecutablePath); c.LocalDS.ExecutablePath == "" || err != nil {
+			c.LocalDS.ExecutablePath = filepath.FromSlash(envExe)
+			if envDir := os.Getenv("PANDORA_DS_DIR"); envDir != "" {
+				c.LocalDS.WorkingDir = filepath.FromSlash(envDir)
+			}
+		}
 	}
 	if c.LocalDS.AdvertiseHost == "" {
 		c.LocalDS.AdvertiseHost = "127.0.0.1"
