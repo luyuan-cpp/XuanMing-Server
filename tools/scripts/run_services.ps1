@@ -145,6 +145,86 @@ function Test-PortOpen([int]$port) {
     }
 }
 
+# 清理"占着本服务 gRPC 端口的残留进程"。
+# 背景:上一轮启动没干净退出(或 pidfile 丢了),旧实例还占着端口 → 新实例 app.Run() 直接
+# `listen tcp :5002x: bind: Only one usage of each socket address` 崩溃退出;进程是隐藏窗口,
+# 用户只看到"某服务没起来"却查不到原因。这里在启动前把占端口的进程揪出来:
+#   - 若它就是本服务自己的 exe(BinDir 下同名二进制)→ 视为残留实例,直接 Kill;
+#   - 若是别的程序占了端口 → 只告警不误杀,交由用户处理。
+function Clear-PortSquatter($svc) {
+    $owningPids = @()
+    try {
+        $owningPids = Get-NetTCPConnection -State Listen -LocalPort $svc.Port -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique
+    } catch { $owningPids = @() }
+    if (-not $owningPids) { return }
+
+    $expectedExe = [System.IO.Path]::GetFullPath((Join-Path $BinDir "$($svc.Name).exe"))
+    foreach ($opid in $owningPids) {
+        if (-not $opid -or $opid -eq 0) { continue }
+        $proc = Get-Process -Id $opid -ErrorAction SilentlyContinue
+        if (-not $proc) { continue }
+        $procPath = $null
+        try { $procPath = $proc.Path } catch { $procPath = $null }
+        $isOurs = $false
+        if ($procPath) {
+            $isOurs = ([System.IO.Path]::GetFullPath($procPath) -eq $expectedExe)
+        } elseif ($proc.ProcessName -eq $svc.Name) {
+            # 部分系统进程路径读不到;只在路径不可见时退回按进程名判断。
+            $isOurs = $true
+        }
+        if ($isOurs) {
+            Write-Host "  [kill] $($svc.Name) 端口 :$($svc.Port) 被残留实例 (PID $opid) 占用,先清理" -ForegroundColor Yellow
+            Stop-Process -Id $opid -Force -ErrorAction SilentlyContinue
+            # 等端口真正释放,避免紧接着的 Start 仍撞 bind
+            for ($w = 0; $w -lt 20; $w++) {
+                if (-not (Test-PortOpen $svc.Port)) { break }
+                Start-Sleep -Milliseconds 200
+            }
+        } else {
+            # 端口被非本服务进程占。最常见是 docker 业务容器(经 wslrelay/com.docker.backend 代理端口):
+            # 上一轮跑过 docker/intranet 模式,容器还占着 50001-50022,宿主 go 进程会 bind 失败。
+            $isDockerProxy = $proc.ProcessName -match 'wslrelay|com\.docker'
+            if ($isDockerProxy) {
+                Write-Host "  [WARN] $($svc.Name) 端口 :$($svc.Port) 被 docker 容器占用($($proc.ProcessName));宿主进程起不来。" -ForegroundColor Yellow
+                Write-Host "         先停 docker 业务容器:docker compose -f deploy/docker-compose.services.yml down" -ForegroundColor Yellow
+            } else {
+                Write-Host "  [WARN] $($svc.Name) 端口 :$($svc.Port) 被非本服务进程占用 (PID $opid $($proc.ProcessName)),$($svc.Name) 可能起不来" -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
+# 业务服务启动前的基础设施预检:Redis / MySQL / Kafka / etcd 都是 go 服务的强依赖,
+# 任一不通,服务起来也只会在日志里刷 "dial tcp 127.0.0.1:xxxx: connectex: ... actively refused"
+# 无限重连(进程不退,端口探活还可能"假就绪"),表现成"服务起了但客户端连不上/进不了大厅"。
+# 这里在拉起业务服务前先探基础设施端口,不通就直接拦下并给出明确修复指引,避免静默 crash-loop。
+function Test-InfraReady {
+    $infra = @(
+        @{ Name = 'Redis';  Port = 6380 }
+        @{ Name = 'MySQL';  Port = 3307 }
+        @{ Name = 'Kafka';  Port = 9093 }
+        @{ Name = 'etcd';   Port = 2380 }
+    )
+    $down = @()
+    foreach ($i in $infra) {
+        if (-not (Test-PortOpen $i.Port)) { $down += $i }
+    }
+    if ($down.Count -eq 0) { return $true }
+
+    Write-Host "[ERR] 基础设施未就绪,业务服务无法启动:" -ForegroundColor Red
+    foreach ($d in $down) {
+        Write-Host "  - $($d.Name) 127.0.0.1:$($d.Port) 连不上(容器没起/端口没发布)" -ForegroundColor Red
+    }
+    Write-Host "原因:这些是 go 服务的强依赖;Redis 不通时 hub_allocator 也拉不起大厅 Hub DS,客户端会卡在连大厅。" -ForegroundColor Yellow
+    Write-Host "修复:" -ForegroundColor Yellow
+    Write-Host "  1) 确认 Docker Desktop 已启动(右下角鲸鱼图标变绿);" -ForegroundColor Yellow
+    Write-Host "  2) 起基础设施:   pwsh tools/scripts/dev_up.ps1" -ForegroundColor Yellow
+    Write-Host "  3) 查容器状态:   docker compose -f deploy/docker-compose.dev.yml ps" -ForegroundColor Yellow
+    Write-Host "     Redis 应显示 healthy 且端口映射 0.0.0.0:6380->6379。" -ForegroundColor Yellow
+    return $false
+}
+
 function Build-Service($svc) {
     $svcDir = Join-Path $ProjectRoot $svc.Dir
     $exe = Join-Path $BinDir "$($svc.Name).exe"
@@ -168,6 +248,9 @@ function Start-Service($svc) {
         Write-Host "  [skip] $($svc.Name) 已在运行 (PID $($existing.Id))" -ForegroundColor Yellow
         return
     }
+
+    # 启动前清理占端口的残留实例,避免新进程 bind 端口失败静默崩溃。
+    Clear-PortSquatter $svc
 
     $exe = Join-Path $BinDir "$($svc.Name).exe"
     if (-not $NoBuild -or -not (Test-Path $exe)) {
@@ -255,8 +338,9 @@ switch ($Action) {
     }
 
     'build' {
-        $targets = if ($Service) { @(Get-Service $Service) } else { Get-TargetServices }
-        Write-Host "===== 构建 ($($targets.Count) 个) =====" -ForegroundColor Cyan
+        $targets = if ($Service) { ,(Get-Service $Service) } else { @(Get-TargetServices) }
+        $targetCount = if ($Service) { 1 } else { $targets.Count }
+        Write-Host "===== 构建 ($targetCount 个) =====" -ForegroundColor Cyan
         foreach ($svc in $targets) { Build-Service $svc | Out-Null }
         Write-Host "[done] 构建完成" -ForegroundColor Green
         break
@@ -289,10 +373,17 @@ switch ($Action) {
             break
         }
 
-        $targets = if ($Service) { @(Get-Service $Service) } else { Get-TargetServices }
-        if ($targets.Count -eq 0) { Write-Host "[!] 排除后无服务可启动" -ForegroundColor Yellow; break }
+        $targets = if ($Service) { ,(Get-Service $Service) } else { @(Get-TargetServices) }
+        $targetCount = if ($Service) { 1 } else { $targets.Count }
+        if ($targetCount -eq 0) { Write-Host "[!] 排除后无服务可启动" -ForegroundColor Yellow; break }
 
-        Write-Host "===== 启动业务服务 ($($targets.Count) 个) =====" -ForegroundColor Cyan
+        # 全起前先探基础设施(Redis/MySQL/Kafka/etcd);不通就拦下,别让服务空转 crash-loop。
+        # 单起某个服务(-Service)时不强拦(可能就是要单独调该服务),仅靠日志暴露。
+        if (-not $Service -and -not (Test-InfraReady)) {
+            exit 1
+        }
+
+        Write-Host "===== 启动业务服务 ($targetCount 个) =====" -ForegroundColor Cyan
         if ($Exclude.Count -gt 0) { Write-Host "排除: $($Exclude -join ', ')  (留给 IDE 调试)" -ForegroundColor Yellow }
         Write-Host ""
 

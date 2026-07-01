@@ -214,6 +214,48 @@ function Get-LocalDsExePath {
     return $null
 }
 
+# 起完后端后,主动确认「常驻大厅 Hub DS(PandoraServer.exe,UDP :7777)」真的被 hub_allocator 拉起来了。
+# 为什么要单独确认:Hub DS 是 hub_allocator 首个心跳 sweep(~5s)时懒拉起的独立 Windows 进程,
+# 拉起失败(cooked 内容缺失 / 关卡名错 / 打包不完整)只写日志、不影响后端"已启动",客户端登录后
+# 却拿到一个连不上的 :7777 地址,在 "Game client on port 7777" 处一直卡住。这里探测最多 ~40s,
+# 起不来就把 Hub DS 自己的日志尾部打出来,直接暴露真实崩溃原因,而不是让策划干等。
+function Confirm-HubDsUp {
+    $hubLog = Join-Path $ProjectRoot 'run/dev/logs/ds/pandora-hub-local.log'
+    for ($i = 0; $i -lt 40; $i++) {
+        $proc = Get-Process -Name 'PandoraServer' -ErrorAction SilentlyContinue
+        $udp = $null
+        $udpChecked = $true
+        try {
+            $udp = Get-NetUDPEndpoint -LocalPort 7777 -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 0 }
+        } catch {
+            $udp = $null
+            $udpChecked = $false
+        }
+        if ($udp) {
+            Write-Ok "大厅 Hub DS 已就绪(UDP :7777 已监听)。"
+            return $true
+        }
+        if (-not $udpChecked -and $proc) {
+            Write-Warn '无法检查 UDP :7777,但检测到 PandoraServer 进程在跑;按兼容模式继续。'
+            return $true
+        }
+        Start-Sleep -Seconds 1
+    }
+    Write-Err '等了 40s 仍没检测到大厅 Hub DS(PandoraServer.exe / UDP :7777)进程。'
+    Write-Warn '客户端登录后会拿到 hub 地址但连不上,卡在 "Game client on port 7777"。常见原因:'
+    Write-Warn '  - UE 打的 Windows Server 包不完整 / cooked 内容缺失(不能指向 Binaries 裸 exe);'
+    Write-Warn '  - hub_allocator 没起来或崩溃(端口 :50021 被残留实例占,已在启动阶段自动清理);'
+    Write-Warn '  - local_hub.map_name 关卡名与打包内容不匹配。'
+    if (Test-Path $hubLog) {
+        Write-Info "Hub DS 日志尾部($hubLog):"
+        Get-Content $hubLog -Tail 25 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+    } else {
+        Write-Warn "  没有找到 Hub DS 日志 $hubLog —— 说明 hub_allocator 根本没尝试拉起 DS,优先查 hub_allocator 日志。"
+        Write-Warn '  查:  pwsh tools/scripts/run_services.ps1 -Action logs -Service hub_allocator'
+    }
+    return $false
+}
+
 # 自动探测本机 Windows DS 可执行文件(策划机场景:配置里写死的盘符不在本机)。
 # 约定:服务器仓与客户端 Client 仓平级(同一父目录),DS 是 Client 仓的
 #   Packages\Server_Win64_*\WindowsServer\PandoraServer.exe(SVN 提交后也在 Packages 下)。
@@ -431,6 +473,10 @@ if ($Battle) {
     $rc = $LASTEXITCODE
     Write-Host ''
     if ($rc -eq 0) {
+        # 后端服务起来了,但大厅 Hub DS 是 hub_allocator 懒拉起的独立进程,单独确认它真起来了,
+        # 否则客户端登录后会拿到 hub 地址却连不上(卡在 "Game client on port 7777")。
+        Write-Step '确认大厅 Hub DS 已拉起(PandoraServer.exe / UDP :7777)'
+        $hubOk = Confirm-HubDsUp
         if ($Intranet) {
             Write-Ok "内网战斗版后端已启动!把下面的连接地址发给局域网内策划:"
             Write-Host "  - 客户端后端地址(Envoy TLS): https://${lanIp}:8443" -ForegroundColor Green
@@ -447,6 +493,9 @@ if ($Battle) {
             Write-Host '  - 一键打开:    pwsh tools/scripts/play.ps1 -Battle -OpenEditor  或  -OpenClient' -ForegroundColor DarkGray
             Write-Host '  - 供内网多人进战斗: pwsh tools/scripts/play.ps1 -Battle -Intranet' -ForegroundColor DarkGray
             Write-Host '  - 停止:        pwsh tools/scripts/play.ps1 -Battle -Stop' -ForegroundColor DarkGray
+        }
+        if (-not $hubOk) {
+            Write-Warn '⚠️ 大厅 Hub DS 尚未就绪:客户端现在登录会卡在连大厅,请先按上方 Hub DS 日志排查。'
         }
         Maybe-OpenUeClient
     } else {

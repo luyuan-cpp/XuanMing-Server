@@ -267,6 +267,19 @@ function Invoke-Local {
     }
     Write-Step "local 模式:基础设施(docker) + 19 个 go 服务(宿主进程)"
     Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
+
+    # docker 业务容器会占用同一批端口(50001-50022),与宿主 go 进程互斥。
+    # 若上一轮跑过 docker / intranet(非战斗)模式,业务容器还在跑 → 宿主 hub_allocator 起来即
+    # `listen tcp :50021: bind: 已被占用` 崩溃,进而拉不起本机 Hub DS(PandoraServer.exe),
+    # 客户端登录后卡在连大厅。这里在起宿主进程前,先把 docker 业务容器停掉(与 Invoke-Docker 反向对称)。
+    if (Test-Path $ComposeServices) {
+        $svcContainers = @(docker compose -f $ComposeServices ps --quiet 2>$null | Where-Object { $_ })
+        if ($svcContainers.Count -gt 0) {
+            Write-Info "检测到 docker 业务容器在跑(会抢 50001-50022 端口),先停掉它们..."
+            docker compose -f $ComposeServices down 2>$null | Out-Null
+        }
+    }
+
     & "$ScriptDir/dev_all.ps1"
 }
 
