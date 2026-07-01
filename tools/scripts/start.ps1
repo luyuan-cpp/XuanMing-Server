@@ -242,9 +242,13 @@ function Resolve-Prerequisites([string]$mode) {
         }
         'docker' {
             if (-not (Ensure-Docker)) { $allOk = $false }
+            # mkcert:Envoy 本地 TLS 证书自动签发 / 共享 CA 安装都靠它,缺了 dev_up 起不来 Envoy。
+            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'intranet' {
             if (-not (Ensure-Docker)) { $allOk = $false }
+            # 内网服务器要给局域网策划发 TLS 证书,mkcert 必备(自动签叶子证书 + 装全队共享 CA)。
+            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'k8s' {
             if (-not (Ensure-Docker)) { $allOk = $false }

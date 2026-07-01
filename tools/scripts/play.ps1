@@ -246,6 +246,30 @@ function Ensure-GoInstalled {
     return $false
 }
 
+# 确保 mkcert 已安装(Envoy 本地 TLS 证书的自动签发 / 共享 CA 安装都靠它;
+# 内网服务器要给局域网策划发 TLS 证书,缺了 dev_up 会在 Envoy 证书检查处报错退出)。
+# 没装就 winget 自动装。返回 $true=已就绪;$false=刚装上但当前终端 PATH 没刷新,需新开终端重跑。
+function Ensure-MkcertInstalled {
+    if (Test-CommandExists 'mkcert') {
+        Write-Ok 'mkcert 已就绪'
+        return $true
+    }
+    Write-Warn 'mkcert 未安装(Envoy 本地 TLS 证书需要它)'
+    if (-not (Test-CommandExists 'winget')) {
+        Write-Err '未找到 winget,无法自动安装 mkcert;请手动装:https://github.com/FiloSottile/mkcert#installation'
+        return $false
+    }
+    Write-Info '尝试用 winget 安装 mkcert(FiloSottile.mkcert,可能要几分钟)...'
+    winget install --id FiloSottile.mkcert --silent --accept-source-agreements --accept-package-agreements | Out-Null
+    if (Test-CommandExists 'mkcert') {
+        Write-Ok 'mkcert 安装成功'
+        return $true
+    }
+    Write-Warn 'mkcert 已装好,但当前终端还找不到 mkcert 命令(PATH 未刷新属正常)。'
+    Write-Warn '       请『新开一个终端』(或重新双击本 .cmd)后再运行一次。'
+    return $false
+}
+
 # 本地战斗模式预检:需要 Go(宿主进程)+ 打包好的 Windows DS。返回 $true=可继续。
 function Test-BattlePrerequisites {
     $ok = $true
@@ -375,6 +399,10 @@ if ($Intranet) {
     if (-not (Ensure-DockerInstalled)) { exit 1 }
     if (-not (Ensure-DockerRunning))   { exit 1 }
 
+    # 内网服务器要给局域网策划发 TLS 证书,mkcert 必备(Envoy 证书自动签发 / 共享 CA 安装都靠它)。
+    Write-Step '检查 mkcert(Envoy 本地 TLS 证书)'
+    if (-not (Ensure-MkcertInstalled)) { exit 1 }
+
     # 委托 intranet 模式:同 docker 全容器(DS=mock),但绑 0.0.0.0 并打印内网地址。
     & $StartPs1 -Mode intranet
     $rc = $LASTEXITCODE
@@ -396,6 +424,10 @@ if ($Intranet) {
 Write-Step '检查 Docker'
 if (-not (Ensure-DockerInstalled)) { exit 1 }
 if (-not (Ensure-DockerRunning))   { exit 1 }
+
+# Envoy 本地 TLS 证书需要 mkcert(自动签发 / 校验),没装先自动补上。
+Write-Step '检查 mkcert(Envoy 本地 TLS 证书)'
+if (-not (Ensure-MkcertInstalled)) { exit 1 }
 
 # 委托给已验证的 docker 模式:基础设施 + 19 个 go 服务全容器化
 # (首次会在容器内编译镜像,稍慢;之后复用缓存。策划本机不需要装 Go。)
