@@ -285,6 +285,13 @@ func (c *Config) Defaults() {
 			}
 		}
 	}
+	// AdvertiseHost 是「返回给客户端连接的 Hub DS host」,属每台机器各异的运行期值:内网测试服要用
+	// 局域网 IP(远程策划客户端才连得到大厅 DS),本机自测用 127.0.0.1。启动脚本(play.ps1 -Battle
+	// -Intranet)自动探测本机内网 IPv4 并经 PANDORA_DS_ADVERTISE_HOST 注入,优先级高于 yaml 写死值,
+	// 无需改仓库配置。留空时回退 yaml 值 / 127.0.0.1。
+	if envHost := strings.TrimSpace(os.Getenv("PANDORA_DS_ADVERTISE_HOST")); envHost != "" {
+		c.LocalHub.AdvertiseHost = envHost
+	}
 	if c.LocalHub.AdvertiseHost == "" {
 		c.LocalHub.AdvertiseHost = "127.0.0.1"
 	}

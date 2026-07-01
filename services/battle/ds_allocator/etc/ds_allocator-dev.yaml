@@ -93,7 +93,10 @@ local_ds:
   # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
   executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
   map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 战斗 DS 加载的关卡(留空用 DS 默认关卡)
-  advertise_host: "127.0.0.1"                  # 返回给客户端 NetDriver 连接的 host
+  # advertise_host:返回给客户端 NetDriver 连接的 host。本机自测用 127.0.0.1;
+  # 内网测试服(play.ps1 -Battle -Intranet)会自动探测本机内网 IPv4 并经环境变量
+  # PANDORA_DS_ADVERTISE_HOST 覆盖此值(优先级高于这里的写死值,策划零操作,无需改本文件)。
+  advertise_host: "127.0.0.1"
   port_base: 7800                              # 战斗 DS 端口池基址(与 hub 7777 错开)
   port_range: 100                              # 端口池大小,实际端口在 [base, base+range) 取空闲
   working_dir: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)

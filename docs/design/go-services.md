@@ -499,7 +499,7 @@ W2 开始才正式写业务逻辑,顺序:
 9. ⏭️ login 接 hub_allocator.AssignHub(替换 mock hub_addr),补不变量 §1 的大厅入口闭环
 10. 🟢 可靠补偿 / outbox:W4 ⑧ ds.lifecycle(Redis ZSET 当 outbox)+ W4 ⑨ player.update(MySQL 事务出箱)均已 at-least-once 可靠化;余真 Agones CRD / locator HUB 对账
 11. ⏭️ UE 客户端 grpc-web(FHttpModule 自研解析)+ Envoy 全业务路由接入
-12. ⏭️ UE Hub DS / Battle DS 骨架 + GAS / Iris / Agones 联调,打通登录→进大厅→匹配→进战斗→结算→回大厅
+12. ✅ UE Hub DS / Battle DS 骨架 + Agones SDK 已完成;GAS / Iris 深度玩法联调继续按 UE 主线推进
 13. ⏭️ trade / dialogue / data_service 按 UE 主链路需要补最小版本
 14. 🧊 chat 暂缓到最后：UE 与核心业务全部完成后再做完整实现（friend 已于 2026-06-15 提前上线，见 §2.4）
 

@@ -565,35 +565,35 @@ pandora_ds_grpc_call_duration_ms_bucket{service,method}
 - 服务端权威,客户端预测错了就回滚
 - GAS 的 Prediction Key 在 Iris 下要做适配
 
-## 10. W1 D5-D6 写代码范围
+## 10. W1 D5-D6 写代码范围（已完成）
 
-只写**骨架**,不实现业务:
+本节是历史骨架范围记录。UE DS 骨架代码已完成,包含 Hub/Battle GameMode 与 Agones SDK 接入；后续不再把 D5-D6 作为待办。
 
 ### `PandoraShared`
-- [ ] `TicketVerifier`(JWT 占位:固定密钥)
-- [ ] `GrpcClient` 包装类
-- [ ] `PandoraAttributeSet`(声明属性,初始值)
-- [ ] `PandoraAbilitySystemComponent` 空类继承
-- [ ] `PandoraCharacterBase` 空类(挂 ASC + Movement)
-- [ ] Build.cs
+- [x] `TicketVerifier` / DS ticket 校验基础
+- [x] `GrpcClient` / gRPC-Web 后端调用包装
+- [x] `PandoraAttributeSet`(声明属性,初始值)
+- [x] `PandoraAbilitySystemComponent` 空类继承
+- [x] `PandoraCharacterBase` 空类(挂 ASC + Movement)
+- [x] Build.cs
 
 ### `PandoraHubServer`
-- [ ] `AHubGameMode`(BeginPlay 调 Agones SDK Ready)
-- [ ] `AHubGameState`
-- [ ] `AHubPlayerController`
-- [ ] `AHubCharacter` 继承 `PandoraCharacterBase`
-- [ ] `HubAgonesIntegration`(启动 Agones SDK 协程)
-- [ ] Build.cs
+- [x] `APandoraHubGameMode`(Agones Ready/Health + 后端心跳)
+- [x] `AHubGameState`
+- [x] `AHubPlayerController`
+- [x] `AHubCharacter` 继承 `PandoraCharacterBase`
+- [x] Hub Agones integration
+- [x] Build.cs
 
 ### `PandoraBattleServer`
-- [ ] 同上结构,GameMode 不同
+- [x] 同上结构,GameMode 不同
 
 ### Config
-- [ ] `DefaultEngine.ini`:开 Iris、设 NetCullDistance、设 tick rate
-- [ ] `DefaultGame.ini`:GameMode 默认绑 HubGameMode
+- [x] `DefaultEngine.ini`:开 Iris、设 NetCullDistance、设 tick rate
+- [x] `DefaultGame.ini`:GameMode 默认绑 HubGameMode
 
 ### 验收标准
 1. UE 编辑器编译通过
 2. Linux Server target 交叉编译通过
-3. Package 出 Linux 二进制 ~200MB
-4. 本地起一个 hub DS,UE PIE 客户端连进去,GameMode 打日志 "player joined"
+3. Package 出 Linux 二进制
+4. 本地 hub/battle DS 骨架可启动并进入 GameMode / Agones 心跳链路

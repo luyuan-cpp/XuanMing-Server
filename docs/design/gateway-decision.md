@@ -814,12 +814,11 @@ push 服务 → 推 10 个客户端 stream
 
 ---
 
-## §13 W2 阻塞决策清单
+## §13 历史阻塞清单
 
-- ⏸️ UE 仓库名最终确定(D4 阻塞)
-- ⏸️ k8s 选型:阿里云 ACK / 自建 / 先 minikube(D7 阻塞,Envoy 一起决定)
-- ⏸️ Envoy 跑模式:k8s Ingress / 单独 Pod(D7 决定)
-- ⏸️ JWT 鉴权细节:Envoy filter / login 服务签发 / token 内容(W2 写 login 时定)
+- ✅ 本地 D7 已完成:minikube + Agones dev + 端到端 hello world 已跑通。
+- ✅ JWT 鉴权已落地:login 签发真实 JWT,Envoy `jwt_authn` 校验。
+- ⚠️ 生产 k8s 形态(ACK / 自建 / 其他)仍属发布前部署决策,不再作为 D7 阻塞项。
 
 ---
 

@@ -54,6 +54,15 @@ function Test-CommandExists([string]$cmd) {
     return [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
 }
 
+# 取本机第一个非回环、非 APIPA 的内网 IPv4(优先有默认网关的网卡),供内网机把「返回给
+# 客户端的地址」(Hub/Battle DS advertise_host)自动改成局域网 IP。与 start.ps1 的 Resolve-LanIp 同逻辑。
+function Resolve-LanIp {
+    return Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.PrefixOrigin -ne 'WellKnown' } |
+        Sort-Object -Property SkipAsSource |
+        Select-Object -First 1 -ExpandProperty IPAddress
+}
+
 function Open-UeEditorClient {
     if (-not (Test-Path $UeEditorExe)) {
         Write-Warn "找不到 UE Editor:$UeEditorExe"
@@ -356,7 +365,22 @@ if ($Stop) {
 }
 
 # ===== 本地战斗版:宿主 go 进程 + Windows DS(进 hub → 匹配 → battle 战斗)=====
+# -Battle 单独:本机自测,DS/Hub advertise_host=127.0.0.1(只本机客户端连得到)。
+# -Battle -Intranet:内网测试服,自动探测本机内网 IPv4 并经 PANDORA_DS_ADVERTISE_HOST 注入,
+#   Hub/Battle DS 把返回给客户端的地址改成局域网 IP,局域网内其它策划客户端可连进真实大厅+战斗。
 if ($Battle) {
+    $lanIp = $null
+    if ($Intranet) {
+        Write-Step '内网战斗版(宿主 go 进程 + Windows DS,绑内网 IP 供多人进真实战斗)'
+        $lanIp = Resolve-LanIp
+        if ([string]::IsNullOrWhiteSpace($lanIp)) {
+            Write-Err '未能自动解析本机内网 IPv4;请确认已连内网,或改用 pwsh tools/scripts/start.ps1 -Mode local -AdvertiseHost <IP>。'
+            exit 1
+        }
+        $env:PANDORA_DS_ADVERTISE_HOST = $lanIp
+        Write-Ok "已自动解析内网 IP=$lanIp,Hub/Battle DS 将把连接地址返回为该 IP(策划客户端连得到)。"
+    }
+
     Write-Step '本地战斗版预检(需 Go + Windows DS)'
     Write-Info 'docker 版只跑 19 个后端服务,战斗 DS 是 Windows 程序、跑不进 Linux 容器,'
     Write-Info '所以「本地进战斗」走宿主 go 进程 + 本机 Windows DS。'
@@ -369,19 +393,36 @@ if ($Battle) {
     if (-not (Ensure-DockerInstalled)) { exit 1 }
     if (-not (Ensure-DockerRunning))   { exit 1 }
 
+    # 内网战斗版:Envoy 客户端面(:8443)是 TLS,局域网策划要用同一套证书,mkcert 必备
+    # (证书 SAN 已含本机内网 IP,见 envoy_cert.ps1)。本机自测(非 -Intranet)时 dev_up 内部会自查,这里不强制。
+    if ($Intranet) {
+        Write-Step '检查 mkcert(内网 Envoy TLS 证书,策划客户端要信任同一 CA)'
+        if (-not (Ensure-MkcertInstalled)) { exit 1 }
+    }
+
     # local 模式 + match 档:基础设施(docker) + 完整主链路 go 服务(宿主进程),
     # ds_allocator 走 mode=local,匹配成局后直接 exec 本机 Windows DS。
     & $StartPs1 -Mode local -Profile match
     $rc = $LASTEXITCODE
     Write-Host ''
     if ($rc -eq 0) {
-        Write-Ok '本地战斗版后端已启动!'
-        Write-Host '  - 客户端网关(Envoy): https://127.0.0.1:8443' -ForegroundColor Green
-        Write-Host '  - 可以直接用发行版 UE Editor 当客户端: Play/New Editor Window/Standalone 后登录即可进 Hub DS。' -ForegroundColor Green
-        Write-Host '  - 不必须起已打包 client;打包 client 只用于更接近发行环境的最终验证。' -ForegroundColor Green
-        Write-Host '  - 现在用 UE 客户端登录 → 进大厅 → 匹配,成局后会自动拉起本机 Windows DS 进战斗。' -ForegroundColor Green
-        Write-Host '  - 一键打开:    pwsh tools/scripts/play.ps1 -Battle -OpenEditor  或  -OpenClient' -ForegroundColor DarkGray
-        Write-Host '  - 停止:        pwsh tools/scripts/play.ps1 -Battle -Stop' -ForegroundColor DarkGray
+        if ($Intranet) {
+            Write-Ok "内网战斗版后端已启动!把下面的连接地址发给局域网内策划:"
+            Write-Host "  - 客户端后端地址(Envoy TLS): https://${lanIp}:8443" -ForegroundColor Green
+            Write-Host '  - 策划机不用装 Docker / Go,只要能连内网、并信任同一套 dev CA(mkcert 根证书)。' -ForegroundColor Green
+            Write-Host '  - 登录 → 进大厅 → 匹配,成局后本机自动拉起 Windows DS,策划一起进真实战斗 DS。' -ForegroundColor Green
+            Write-Host '  - 看状态:      pwsh tools/scripts/play.ps1 -Battle -Intranet -Status' -ForegroundColor DarkGray
+            Write-Host '  - 停止:        pwsh tools/scripts/play.ps1 -Battle -Stop' -ForegroundColor DarkGray
+        } else {
+            Write-Ok '本地战斗版后端已启动!'
+            Write-Host '  - 客户端网关(Envoy): https://127.0.0.1:8443' -ForegroundColor Green
+            Write-Host '  - 可以直接用发行版 UE Editor 当客户端: Play/New Editor Window/Standalone 后登录即可进 Hub DS。' -ForegroundColor Green
+            Write-Host '  - 不必须起已打包 client;打包 client 只用于更接近发行环境的最终验证。' -ForegroundColor Green
+            Write-Host '  - 现在用 UE 客户端登录 → 进大厅 → 匹配,成局后会自动拉起本机 Windows DS 进战斗。' -ForegroundColor Green
+            Write-Host '  - 一键打开:    pwsh tools/scripts/play.ps1 -Battle -OpenEditor  或  -OpenClient' -ForegroundColor DarkGray
+            Write-Host '  - 供内网多人进战斗: pwsh tools/scripts/play.ps1 -Battle -Intranet' -ForegroundColor DarkGray
+            Write-Host '  - 停止:        pwsh tools/scripts/play.ps1 -Battle -Stop' -ForegroundColor DarkGray
+        }
         Maybe-OpenUeClient
     } else {
         Write-Err '启动过程中出错了,请把上面的红色 [ERR] 信息发给后端同学。'
