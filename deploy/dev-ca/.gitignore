@@ -13,3 +13,7 @@
 *.key
 *-key.pem
 !pandora-dev-rootCA.pem
+
+# local/ 是「共享 CA 私钥」的本机约定存放目录(启动脚本 Confirm-SharedDevCa 会在此查找
+# rootCA-key.pem 并自动安装)。私钥绝不入库,整目录忽略,双保险。
+local/

@@ -1,4 +1,4 @@
-# Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
+﻿# Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
 #
 # 为什么需要它:
 #   - k8s 模式里 16 个 Go 服务都跑在 pandora namespace 的 ClusterIP Service 后面
@@ -31,6 +31,9 @@ function Write-Info($m) { Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Write-Ok($m)   { Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Write-Warn($m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 function Write-Step($m) { Write-Host "`n===== $m =====" -ForegroundColor Magenta }
+
+# Envoy dev TLS 证书校验 / 自愈(与 dev_up.ps1 复用同一套逻辑)。
+. "$ScriptDir/envoy_cert.ps1"
 
 # Essential = 登录→Hub→匹配→Battle→结算 闭环必需的服务;非必需(社交/拍卖/交易等)
 # 即便 Pod 没起来,也不该让整个 bridge / e2e 直接失败(只 WARN 跳过该 port-forward)。
@@ -178,8 +181,9 @@ Write-Host "============================================" -ForegroundColor Magen
 Ensure-File $ComposeFile
 Ensure-File $EnvFile
 Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
-Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/cert.pem')
-Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/key.pem')
+# cert.pem / key.pem 不止判存在:必须是有效 PEM(key.pem 损坏会让 Envoy 启动直接退出)。
+# 缺失/无效时自动用 mkcert 补齐;mkcert 不在则抛出带修复指引的明确错误。
+Confirm-EnvoyDevCert -EnvoyDir (Join-Path $ProjectRoot 'deploy/envoy')
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 
 Write-Step "[1/2] 启本地 kubectl port-forward"

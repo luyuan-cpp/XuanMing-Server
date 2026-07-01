@@ -1,4 +1,4 @@
-# Pandora 开发环境基础设施一键启动
+﻿# Pandora 开发环境基础设施一键启动
 #
 # 用法:
 #   pwsh tools/scripts/dev_up.ps1
@@ -15,6 +15,9 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Resolve-Path "$PSScriptRoot/../.."
 $ComposeFile = "$ProjectRoot/deploy/docker-compose.dev.yml"
 $EnvFile     = "$ProjectRoot/deploy/env/dev.env"
+
+# Envoy dev TLS 证书校验 / 自愈(缺失或损坏的 cert.pem/key.pem 会让 Envoy 启动直接退出)。
+. "$PSScriptRoot/envoy_cert.ps1"
 
 Write-Host "===== Pandora dev infra up =====" -ForegroundColor Cyan
 Write-Host "Project:      $ProjectRoot"
@@ -36,6 +39,17 @@ Write-Host "[1/4] Validating compose file..." -ForegroundColor Yellow
 docker compose -f $ComposeFile --env-file $EnvFile config --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERR] compose file invalid" -ForegroundColor Red
+    exit 1
+}
+
+# Envoy 起 TLS 监听器前,确保本机 dev 证书存在且有效(缺失/损坏自动用 mkcert 补齐)。
+Write-Host "[1.5/4] Checking Envoy dev TLS cert..." -ForegroundColor Yellow
+try {
+    # 先确保本机 mkcert 用的是「全队共享 dev CA」:私钥就位则自动装,否则仅提示、退回独立 CA。
+    Confirm-SharedDevCa -ProjectRoot $ProjectRoot | Out-Null
+    Confirm-EnvoyDevCert -EnvoyDir (Join-Path $ProjectRoot 'deploy/envoy')
+} catch {
+    Write-Host "[ERR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
 
