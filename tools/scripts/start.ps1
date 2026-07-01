@@ -312,12 +312,28 @@ function Invoke-Docker {
 #   - compose 端口已绑 0.0.0.0,内网其它机器可直接连本机内网 IP
 #   - 打印内网访问地址,客户端把后端指向 <内网IP>:<port> 即可
 function Resolve-LanIp {
-    # 取本机第一个非回环、非 APIPA 的 IPv4(优先有默认网关的网卡)
+    # 取本机对外那张网卡的 IPv4。关键:按默认路由(0.0.0.0/0)选网卡,
+    # 避开 Docker/WSL/Hyper-V 虚拟网卡的 172.*/10.*/192.168.* 地址——否则内网客户端拿到不可达地址。
+    $isUsable = { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.PrefixOrigin -ne 'WellKnown' }
+    # 1) 默认路由所在网卡 = 真正对外那张(按路由跃点 + 接口跃点升序取最优)
+    $best = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Sort-Object -Property RouteMetric, @{ Expression = { (Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).InterfaceMetric } } |
+        Select-Object -First 1
+    if ($best) {
+        $ip = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $best.InterfaceIndex -ErrorAction SilentlyContinue |
+            Where-Object $isUsable | Select-Object -First 1 -ExpandProperty IPAddress
+        if (-not [string]::IsNullOrWhiteSpace($ip)) { return $ip }
+    }
+    # 2) 回退:排除常见虚拟网卡后取第一个
+    $virtual = 'vEthernet|WSL|Hyper-V|Docker|VirtualBox|VMware|Loopback|TAP-|VPN|tun'
     $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-        Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.PrefixOrigin -ne 'WellKnown' } |
-        Sort-Object -Property SkipAsSource |
+        Where-Object $isUsable | Where-Object { $_.InterfaceAlias -notmatch $virtual } |
+        Sort-Object -Property SkipAsSource | Select-Object -First 1 -ExpandProperty IPAddress
+    if (-not [string]::IsNullOrWhiteSpace($ip)) { return $ip }
+    # 3) 最后兜底:旧启发式(至少返回点东西)
+    return Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object $isUsable | Sort-Object -Property SkipAsSource |
         Select-Object -First 1 -ExpandProperty IPAddress
-    return $ip
 }
 
 function Invoke-Intranet {

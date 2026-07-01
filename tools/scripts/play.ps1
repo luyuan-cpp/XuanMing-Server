@@ -54,12 +54,30 @@ function Test-CommandExists([string]$cmd) {
     return [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
 }
 
-# 取本机第一个非回环、非 APIPA 的内网 IPv4(优先有默认网关的网卡),供内网机把「返回给
-# 客户端的地址」(Hub/Battle DS advertise_host)自动改成局域网 IP。与 start.ps1 的 Resolve-LanIp 同逻辑。
+# 取本机对外那张网卡的内网 IPv4,供内网机把「返回给客户端的地址」
+# (Hub/Battle DS advertise_host)自动改成局域网 IP。与 start.ps1 的 Resolve-LanIp 同逻辑。
+# 关键:按默认路由(0.0.0.0/0)选网卡,避开 Docker/WSL/Hyper-V 虚拟网卡的
+# 172.*/10.*/192.168.* 地址——否则局域网策划客户端会拿到不可达的 DS 地址。
 function Resolve-LanIp {
+    $isUsable = { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.PrefixOrigin -ne 'WellKnown' }
+    # 1) 默认路由所在网卡 = 真正对外那张(按路由跃点 + 接口跃点升序取最优)
+    $best = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Sort-Object -Property RouteMetric, @{ Expression = { (Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).InterfaceMetric } } |
+        Select-Object -First 1
+    if ($best) {
+        $ip = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $best.InterfaceIndex -ErrorAction SilentlyContinue |
+            Where-Object $isUsable | Select-Object -First 1 -ExpandProperty IPAddress
+        if (-not [string]::IsNullOrWhiteSpace($ip)) { return $ip }
+    }
+    # 2) 回退:排除常见虚拟网卡后取第一个
+    $virtual = 'vEthernet|WSL|Hyper-V|Docker|VirtualBox|VMware|Loopback|TAP-|VPN|tun'
+    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object $isUsable | Where-Object { $_.InterfaceAlias -notmatch $virtual } |
+        Sort-Object -Property SkipAsSource | Select-Object -First 1 -ExpandProperty IPAddress
+    if (-not [string]::IsNullOrWhiteSpace($ip)) { return $ip }
+    # 3) 最后兜底:旧启发式(至少返回点东西)
     return Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-        Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.PrefixOrigin -ne 'WellKnown' } |
-        Sort-Object -Property SkipAsSource |
+        Where-Object $isUsable | Sort-Object -Property SkipAsSource |
         Select-Object -First 1 -ExpandProperty IPAddress
 }
 
@@ -372,13 +390,20 @@ if ($Battle) {
     $lanIp = $null
     if ($Intranet) {
         Write-Step '内网战斗版(宿主 go 进程 + Windows DS,绑内网 IP 供多人进真实战斗)'
-        $lanIp = Resolve-LanIp
-        if ([string]::IsNullOrWhiteSpace($lanIp)) {
-            Write-Err '未能自动解析本机内网 IPv4;请确认已连内网,或改用 pwsh tools/scripts/start.ps1 -Mode local -AdvertiseHost <IP>。'
-            exit 1
+        # 允许手动覆盖:预先设了 PANDORA_DS_ADVERTISE_HOST 就用它,不再自动探测
+        # (多网卡/自动探测选错网卡时可用 $env:PANDORA_DS_ADVERTISE_HOST=<IP> 兜底)。
+        if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) {
+            $lanIp = $env:PANDORA_DS_ADVERTISE_HOST.Trim()
+            Write-Ok "使用手动指定的内网 IP=$lanIp(来自 PANDORA_DS_ADVERTISE_HOST)。"
+        } else {
+            $lanIp = Resolve-LanIp
+            if ([string]::IsNullOrWhiteSpace($lanIp)) {
+                Write-Err '未能自动解析本机内网 IPv4;请确认已连内网,或用 $env:PANDORA_DS_ADVERTISE_HOST=<IP> 手动指定后重试。'
+                exit 1
+            }
+            $env:PANDORA_DS_ADVERTISE_HOST = $lanIp
+            Write-Ok "已自动解析内网 IP=$lanIp,Hub/Battle DS 将把连接地址返回为该 IP(策划客户端连得到)。"
         }
-        $env:PANDORA_DS_ADVERTISE_HOST = $lanIp
-        Write-Ok "已自动解析内网 IP=$lanIp,Hub/Battle DS 将把连接地址返回为该 IP(策划客户端连得到)。"
     }
 
     Write-Step '本地战斗版预检(需 Go + Windows DS)'

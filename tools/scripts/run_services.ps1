@@ -48,6 +48,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 国内网络拉 Go 依赖:默认 proxy.golang.org / sum.golang.org 在国内基本连不上,
+# 会导致 go build 拉模块超时(dial tcp 142.251.188.141:443 ... connectex: 超时)。
+# 这里在脚本进程内兜底切到 goproxy.cn(不改机器全局 go env,便于一键脚本分发到多台策划机)。
+# 已显式自定义 GOPROXY(且不是默认公有代理)的机器保持不动,尊重企业内网配置。
+if (-not $env:GOPROXY -or $env:GOPROXY -match 'proxy\.golang\.org') {
+    $env:GOPROXY = 'https://goproxy.cn,direct'
+}
+if (-not $env:GOSUMDB -or $env:GOSUMDB -match 'sum\.golang\.org') {
+    $env:GOSUMDB = 'sum.golang.google.cn'
+}
+
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 $RunDir = Join-Path $ProjectRoot 'run/dev'
 $BinDir = Join-Path $RunDir 'bin'
