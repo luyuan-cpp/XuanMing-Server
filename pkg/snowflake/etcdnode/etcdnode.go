@@ -1,6 +1,6 @@
 // Package etcdnode 用 etcd Lease 自动分配 snowflake 的 nodeID。
 //
-// 背景(docs/design/infra.md §8.1):静态 node.zone_id 在单副本 / dev 下够用,但进入
+// 背景(docs/design/infra.md §8.1):静态 node.node_id 在单副本 / dev 下够用,但进入
 // k8s 多副本动态扩缩后,同一服务跑 N 个 pod,人工排号必然撞号 → 发重复 ID。本包用 etcd
 // Lease 在 [0, MaxNodeID) 区间里**抢占一个独占 nodeID**,并以 KeepAlive 续租维持独占权。
 //
@@ -26,7 +26,7 @@
 //	    os.Exit(1) // 停止发号并退出,交给 k8s 重新拉起重新抢号
 //	}()
 //
-// 单副本 / dev 仍走 snowflake.NewNode(cfg.Node.ZoneId),不引入本包。
+// 单副本 / dev 仍走 snowflake.NewNode(cfg.Node.NodeId),不引入本包。
 package etcdnode
 
 import (

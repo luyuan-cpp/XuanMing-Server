@@ -14,7 +14,7 @@ server:
     addr: ":51012"
 
 node:
-  zone_id: 1
+  node_id: 1
   redis_client:
     host: "redis:6379"
     password: "__REPLACE_WITH_SECRET__"

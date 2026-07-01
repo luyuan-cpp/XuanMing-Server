@@ -5,7 +5,7 @@
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
 //  4. Redis client 连通性 Ping(强依赖)
-//  5. Snowflake Node(zone_id 来自 yaml)
+//  5. Snowflake Node(node_id 来自 yaml)
 //  6. kafkax.KeyOrderedProducer(topic=pandora.team.update) → kafkaPusher
 //  7. 装配链:RedisTeamRepo → TeamUsecase → TeamService → gRPC/HTTP server
 //  8. kratos.New(...).Run() 阻塞
@@ -27,7 +27,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/biz"
 	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/conf"
 	"github.com/luyuancpp/pandora/services/matchmaking/team/internal/data"
@@ -92,8 +92,9 @@ func main() {
 	cancel()
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
-	// 4. Snowflake
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 4. Snowflake(node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 5. Kafka producer → kafkaPusher(弱依赖:broker 不通则 warn 并继续,push 会静默 fail)
 	var pusher biz.TeamEventPusher

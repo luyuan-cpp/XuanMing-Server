@@ -5,7 +5,7 @@
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
 //  4. Redis client 连通性 Ping(强依赖)
-//  5. Snowflake Node(zone_id 来自 yaml)
+//  5. Snowflake Node(node_id 来自 yaml)
 //  6. team gRPC reader(team_addr 留空则跳过 team 校验)
 //  7. kafkax.KeyOrderedProducer(topic=pandora.match.progress) → matchPusher
 //  8. 装配链:RedisMatchRepo → MatchUsecase → MatchService → gRPC/HTTP server
@@ -30,7 +30,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/biz"
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
@@ -96,8 +96,9 @@ func main() {
 	cancel()
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
-	// 4. Snowflake
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 4. Snowflake(node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 5. team gRPC reader(弱依赖:team_addr 留空 → 跳过队伍校验)
 	var reader biz.TeamReader

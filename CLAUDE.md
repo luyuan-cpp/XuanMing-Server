@@ -92,6 +92,8 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 13. **proto enum / 状态常量保持 enum/int32 语义**(`TEAM_STATE_*` / `STATE_*` / `*_REASON_*` 等),不准因枚举值非负改成 `uint32`
 14. **客户端只拿客户端可见结构**:任何面向客户端的 response / push 不准直接返回 `*StorageRecord`、数据库整行、Redis value、内部 Kafka envelope 或内部审计字段;必须经服务端组装成最小视图,只包含客户端渲染 / 交互所需字段。
 15. **配置表热更走标准流水线**:**版本号 + checksum + staging 目录 + reload 接口 + 加载成功才切换 + 失败保留旧配置**。新表加载+校验全过才原子替换内存指针,任一步失败保留旧表不影响线上;version 单调递增防回退;发布通知用 etcd version 键(复用 `etcdtable`/`etcdnode`,不存表体),**不引入 Apollo / Nacos**。详见 `docs/design/config-table-hotreload.md`。
+16. **服务必须支持不停服更新(零停机滚动更新)**:go 服务全部 headless、无状态、可水平扩展,权威态在 Redis/MySQL/etcd,进程内只做缓存/Actor 邮箱,收到 `SIGTERM` 先摘流量→排空在途→flush write-behind 脏数据→退出,任意副本可随时被杀被替换。**任何依赖「先停服再启动」才能上线或才能读数据的设计一律拒**。
+17. **Redis 二进制 pb 存储只做兼容演进,支持不停服加玩家数据**:滚动更新期间新旧版本副本同时在线,存储 pb 必须**双向兼容**——只允许**加新字段(新编号)/ 加 enum 值(带 `*_UNSPECIFIED` + fallback)/ `reserved` 删字段**;**禁止**改 field number、改类型、改基数/语义、复用 reserved 编号。**read-modify-write(读 Redis→改→写回)路径禁止 `DiscardUnknown` 丢弃 unknown fields**(否则旧副本回写会静默丢新字段)。加玩家数据 = 加 proto 字段 + 懒迁移(下次改写自然补齐或不停服 backfill),**不停服、不全量刷库**。详见 `docs/design/zero-downtime-update.md`。
 
 ## 10. AI 协作约定
 
@@ -111,8 +113,10 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 - ❌ 不要 import 第三方 GUI 库到 go 服务(go 服务都是 headless gRPC)
 - ❌ 不要把 player_id 当 prometheus label(高基数会爆)
 - ❌ 不要在 W1 写业务逻辑,只搭骨架
-- ❌ 不要混用 `Pandora` / `pandora` / `MOBA` / `moba` 命名 — 见 §2 大小写规则
+- ❌ 不要混用 `Pandora` / `pandora` / `MOBA` / `moba` 命名 — 见 §13 命名大小写规则
+- ❌ **不要做破坏不停服更新的改动**:不要给 Redis pb 存储改字段编号/类型/语义、不要在 read-modify-write 路径丢弃 unknown fields、不要设计「必须停服才能上线/读数据」的方案 — 见 §9 不变量 16/17、`docs/design/zero-downtime-update.md`
 - ❌ **UE 侧不要再用 `Xuanming` / `Xm` 命名任何工程 / 模块 / 类 / 文件 — 一律 `Pandora`**(见 §11.1)
+- ❌ **不要交半成品**(TODO 占位 / 空实现 / “先留个钩子以后接”)— 见 §14 接线完整性铁律
 
 ## 13. 命名大小写规则(强制)
 
@@ -120,3 +124,12 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 - **pandora**(全小写):kafka topic / mysql / redis key / docker 镜像 / go module
 - **`Pandora-Client`**(CapitalCase,带连字符):UE 客户端仓库名。⚠️ **不要和 JWT audience `pandora-client`(全小写)混淆** —— 后者是 envoy / login / auth 配置里的鉴权受众,改仓库名时**绝不能**动它
 - **`Xuanming` / `Xm`**:**已废弃命名**,**代码 / 工程 / 类 / 模块一律不再使用**
+
+## 14. 接线完整性铁律（强制）
+
+新功能 / 新能力接线**一次做到最终可上线版本**，不准留半成品。
+
+1. **不准留 TODO 占位 / 空实现 / “以后再接”**：要么不动，要动就把功能链路全部接完（static 与目标模式两条路径都可用）。
+2. **允许用配置开关默认关闭新行为**（临时开关 / feature flag），但默认值必须保证现有行为不变 / 一键启动不坏；开关打开后的分支必须是**完整可用的真实实现**，不是空壳。
+   - 例：snowflake nodeID 由 `snowflake.node_id_source` 开关驱动：`""`/`static` 静态（默认，单副本/dev），`etcd` 自动抢占（多副本）。两条路径均已在 `etcdnode.MustProvideSnowflake` 内完整实现（含失租 fencing 退出），各服务 main.go 一行接入。
+3. **隔离重依赖的独立 pkg module（如 `pkg/snowflake/etcdnode` / `pkg/killswitch/etcdkv` / `pkg/cellroute/etcdtable`）被服务 import 后**：Claude 负责写代码 + 补 go.mod 的 require/replace；`go mod tidy` 拉依赖生成 go.sum 是 **Codex 的活**（AGENTS.md §11.1）。接线后必须在交接里列出“哪些服务需 tidy”，不准默声留着让下个 AI 碰到 build 红才发现。

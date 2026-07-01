@@ -13,7 +13,7 @@ server:
     addr: ":51010"
 
 node:
-  zone_id: 1
+  node_id: 1
   redis_client:
     host: "__REDIS_HOST__:6379"
     password: "__REDIS_PASSWORD__"

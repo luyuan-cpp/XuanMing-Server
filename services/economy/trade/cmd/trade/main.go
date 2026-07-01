@@ -33,7 +33,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	tradev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/trade/v1"
 
 	"github.com/luyuancpp/pandora/services/economy/trade/internal/biz"
@@ -100,8 +100,9 @@ func main() {
 	cancel()
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
-	// 4. Snowflake(order_id 生成)
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 4. Snowflake(order_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 5. kafka producer → tradeAuditPusher(弱依赖:broker 不通则 warn 并继续,审计静默 fail)
 	auditTopic := config.BuildTopic("trade", "audit") // pandora.trade.audit

@@ -18,7 +18,7 @@ server:
     addr: ":51007"
 
 node:
-  zone_id: 1
+  node_id: 1
   mysql_client:
     # 结算归档库 pandora_leaderboard(单库即可,无分库需求:结算是低频写)。
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_leaderboard?parseTime=true&charset=utf8mb4&loc=UTC"

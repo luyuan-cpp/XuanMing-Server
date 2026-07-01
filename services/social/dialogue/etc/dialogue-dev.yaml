@@ -18,7 +18,7 @@ server:
     addr: ":51013"
 
 node:
-  zone_id: 1
+  node_id: 1
 
 dialogue:
   # session_ttl: 单次对话会话空闲存活时间(默认 5m)

@@ -15,7 +15,7 @@ import (
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/social/mail/internal/biz"
 	"github.com/luyuancpp/pandora/services/social/mail/internal/conf"
@@ -67,7 +67,9 @@ func main() {
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
 	// 系统/公会邮件单节点生成,channel 内 mail_id 严格递增(游标比较零漏拉)
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// node_id_source=static 静态；=etcd 走 etcd 自动抢占独占 nodeID，失租自动退出
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	repo := data.NewMySQLMailRepo(db)
 

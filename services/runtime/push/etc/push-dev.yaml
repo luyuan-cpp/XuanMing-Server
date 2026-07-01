@@ -16,7 +16,7 @@ server:
     addr: ":51014"
 
 node:
-  zone_id: 1
+  node_id: 1
   session_expire_min: 1440
   redis_client:
     host: "127.0.0.1:6380"      # Pandora Redis 端口(deploy/docker-compose.dev.yml)

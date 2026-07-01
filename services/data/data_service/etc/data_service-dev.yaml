@@ -18,7 +18,7 @@ server:
     addr: ":51003"
 
 node:
-  zone_id: 1
+  node_id: 1
   mysql_client:
     # pandora_player 库(player_data 表见 deploy/mysql-init/07-data-tables.sql)
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_player?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"

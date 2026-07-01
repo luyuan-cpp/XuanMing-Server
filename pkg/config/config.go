@@ -97,8 +97,10 @@ type Http struct {
 
 // NodeConfig 节点级配置。
 type NodeConfig struct {
-	// ZoneId 是分服 ID。Pandora 单服模式默认填 1。
-	ZoneId           uint32    `yaml:"zone_id" json:"zone_id"`
+	// NodeId 是 snowflake 发号器的 node 段(机器编号),不是玩家选区。
+	// 同一服务类型的多个副本必须各自唯一(否则发重号,违反 CLAUDE.md §9 不变量 11);
+	// 不同服务类型之间可复用同一值。单副本 / dev 默认填 1;多副本走 snowflake.node_id_source=etcd 自动分配。
+	NodeId           uint32    `yaml:"node_id" json:"node_id"`
 	SessionExpireMin uint32    `yaml:"session_expire_min,omitempty" json:"session_expire_min,omitempty"` // 默认 1440 (24h)
 	RedisClient      RedisConf `yaml:"redis_client" json:"redis_client"`
 	MySQLClient      MySQLConf `yaml:"mysql_client,omitempty" json:"mysql_client,omitempty"`             // W3 ② 起接 mysql 的服务用
@@ -212,10 +214,13 @@ type SnowflakeConf struct {
 	StepBits uint32 `yaml:"step_bits,omitempty" json:"step_bits,omitempty"` // 默认 15
 
 	// NodeIDSource 决定 snowflake nodeID 来源:
-	//   - ""/"static":用 node.zone_id 静态分配(单副本 / dev 默认)。
-	//   - "etcd":进入 k8s 多副本动态扩缩阶段,用 etcd Lease 自动抢占 nodeID。
-	//     需服务在 main 里 import pkg/snowflake/etcdnode,并据 Holder.Lost() 失租退出。
-	//     详见 docs/design/infra.md §8.1 与 docs/design/scale-dau-2m.md。
+	//   - ""/"static":用 node.node_id 静态分配(单副本 / dev 默认)。
+	//   - "etcd":进入 k8s 多副本动态扩缩阶段,用 etcd Lease 自动抢占 nodeID(同服务内唯一、跨服务可复用)。
+	//
+	// 接线只需一行(static / etcd 两态由本字段驱动,fencing 退出已内置):
+	//	sf, sfCloser, err := etcdnode.ProvideSnowflake(ctx, serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	// static 服务不引入 etcd 依赖;改 etcd 时该服务 go.mod 需 Codex 补 etcdnode require + go mod tidy。
+	// 详见 docs/design/infra.md §8.1 与 docs/design/scale-dau-2m.md §3。
 	NodeIDSource string `yaml:"node_id_source,omitempty" json:"node_id_source,omitempty"`
 
 	// Etcd* 给 NodeIDSource="etcd" 用。

@@ -11,7 +11,7 @@
 //  1. 解析 -conf 路径,加载 yaml
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
-//  4. Snowflake Node(dialogue_id 生成,zone_id 来自 yaml)
+//  4. Snowflake Node(dialogue_id 生成,node_id 来自 yaml)
 //  5. 配置对话树 → ConfigTreeProvider;内存会话 → MemorySessionStore
 //  6. 装配 DialogueUsecase → DialogueService → gRPC/HTTP server
 //  7. 启动会话过期清理 goroutine
@@ -33,7 +33,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	plog "github.com/luyuancpp/pandora/pkg/log"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/social/dialogue/internal/biz"
 	"github.com/luyuancpp/pandora/services/social/dialogue/internal/conf"
@@ -82,8 +82,9 @@ func main() {
 	}
 	cfg.Defaults()
 
-	// 3. Snowflake(dialogue_id 生成)
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 3. Snowflake(dialogue_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 4. 对话树:配置 → ConfigTreeProvider(构造时做基本校验,起始节点缺失直接 fatal)
 	trees, err := buildTrees(cfg.Dialogue.Trees)

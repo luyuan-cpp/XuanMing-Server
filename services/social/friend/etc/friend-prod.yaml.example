@@ -14,7 +14,7 @@ server:
     addr: ":51004"
 
 node:
-  zone_id: 1
+  node_id: 1
   mysql_client:
     dsn: "pandora:__REPLACE_WITH_SECRET__@tcp(mysql:3306)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
     max_open_conns: 64

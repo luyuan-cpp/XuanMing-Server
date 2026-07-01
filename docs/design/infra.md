@@ -354,7 +354,7 @@ Envoy 是基础设施组件,**不是 go 服务**。它做:
 
 ### 8.1 Snowflake nodeID 分配决策
 
-**当前阶段不引入中心化发号器,继续使用本地 snowflake + 静态 `node.zone_id`。**
+**当前阶段不引入中心化发号器,继续使用本地 snowflake + 静态 `node.node_id`。**
 
 原因:
 - `pkg/snowflake` 的 ID 生成是本地 CAS 纯内存路径,没有系统调用和网络往返;每个节点吞吐上限由位域设计约束,不是 Redis/数据库吞吐约束。
@@ -364,9 +364,9 @@ Envoy 是基础设施组件,**不是 go 服务**。它做:
 
 **Redis 不用于发业务 ID,也不作为 snowflake nodeID 租约服务。**
 
-未来如果进入 k8s 多副本动态扩缩阶段,同一服务会跑 N 个 pod,静态 `zone_id` 人工规划不再适合,再补一个 etcd Lease 版 nodeID 自动分配:
+未来如果进入 k8s 多副本动态扩缩阶段,同一服务会跑 N 个 pod,静态 `node_id` 人工规划不再适合,再补一个 etcd Lease 版 nodeID 自动分配:
 
-> **2026-06-19 落地**:该方案已实现为独立 module [`pkg/snowflake/etcdnode`](../../pkg/snowflake/etcdnode/etcdnode.go)(`etcdnode.Acquire` → `*Holder`,`Lost()` 失租信号)。单副本 / dev 仍走静态 `node.zone_id`;`SnowflakeConf.node_id_source="etcd"` 时切换。容量背景见 [`scale-dau-2m.md`](./scale-dau-2m.md) §3。
+> **2026-06-19 落地,2026-07-01 接入最终版 helper**:该方案已实现为独立 module [`pkg/snowflake/etcdnode`](../../pkg/snowflake/etcdnode/etcdnode.go)(`etcdnode.Acquire` → `*Holder`,`Lost()` 失租信号;`etcdnode.MustProvideSnowflake` 统一 static / etcd 两态接线)。单副本 / dev 仍走静态 `node.node_id`;`SnowflakeConf.node_id_source="etcd"` 时切换。容量背景见 [`scale-dau-2m.md`](./scale-dau-2m.md) §3。
 
 ```
 启动 -> etcd Grant lease(TTL 15s)

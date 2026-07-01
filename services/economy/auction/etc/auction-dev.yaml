@@ -18,7 +18,7 @@ server:
     addr: ":51016"
 
 node:
-  zone_id: 1
+  node_id: 1
   mysql_client:
     # 单库模式(W1):连 pandora_auction。分库时改填 shards 列表(>=2 个 DSN,按 market_id % N 路由)。
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_auction?parseTime=true&charset=utf8mb4&loc=UTC"

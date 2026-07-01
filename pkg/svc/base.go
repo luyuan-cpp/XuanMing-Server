@@ -43,7 +43,7 @@ type BaseContext struct {
 	// 行为与旧版完全一致。详见 docs/design/scale-dau-2m.md §2。
 	RedisClient redis.UniversalClient
 
-	// Snowflake 是该服务用的 ID 生成器,NodeID 取 config.Node.ZoneId。
+	// Snowflake 是该服务用的 ID 生成器,NodeID 取 config.Node.NodeId。
 	Snowflake *snowflake.Node
 
 	// Locker 是 Redis 分布式锁实例(用 pandora:lock: 前缀)。
@@ -82,7 +82,7 @@ func MustNewBaseContext(c config.Base) *BaseContext {
 	cancel()
 
 	// 2. Snowflake
-	sf := snowflake.NewNode(uint64(c.Node.ZoneId))
+	sf := snowflake.NewNode(uint64(c.Node.NodeId))
 
 	// 3. Locker
 	lk := redislock.NewRedisLocker(rdb)
@@ -90,7 +90,7 @@ func MustNewBaseContext(c config.Base) *BaseContext {
 	// 4. Kill-Switch(RPC 级临时关停)。fail-open:配置缺失 / 源建不起来都不阻断启动。
 	ks := mustSetupKillSwitch(c.KillSwitch)
 
-	klog.Infof("[svc] BaseContext ready zone=%d redis=%s", c.Node.ZoneId, rc.Host)
+	klog.Infof("[svc] BaseContext ready node=%d redis=%s", c.Node.NodeId, rc.Host)
 
 	return &BaseContext{
 		RedisClient: rdb,

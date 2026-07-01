@@ -6,11 +6,11 @@
 
 ---
 
-## 0. 先纠正一个概念:zone_id 不是"选区"
+## 0. 先纠正一个概念:node_id 不是"选区"
 
-- 代码里 `node.zone_id`([pkg/config/config.go](../../pkg/config/config.go) `NodeConfig.ZoneId`)是 **snowflake 发号器的 node 段**(机器编号),不是玩家选区。
+- 代码里 `node.node_id`([pkg/config/config.go](../../pkg/config/config.go) `NodeConfig.NodeId`)是 **snowflake 发号器的 node 段**(机器编号),不是玩家选区。
 - 全区全服是 Pandora 既有架构(`pandora-arch.md` §1:持续在线大厅 + 全局 MMR 撮合,无选区流程),**目标天然满足,不需要为"不分区"改设计**。
-- `zone_id` **不能删**:删了多副本就无法区分发号节点 → 发重号(违反 `CLAUDE.md` §9 不变量 11/§5.5)。要做的不是删,而是从"人工静态"升级为"etcd 自动分配"(见 §3)。
+- `node_id` **不能删**:删了多副本就无法区分发号节点 → 发重号(违反 `CLAUDE.md` §9 不变量 11/§5.5)。要做的不是删,而是从"人工静态"升级为"etcd 自动分配"(见 §3)。历史文档中的 `zone_id` 已在 2026-07-01 改名为 `node_id`,避免和玩家选区混淆。
 
 ---
 
@@ -85,7 +85,7 @@
 ## 3. snowflake nodeID 静态 → etcd 自动分配(#2,已实现)
 
 ### 问题
-`zone_id` 现为 yaml 写死。上 k8s 多副本后同一服务 N 个 pod,人工排号必撞 → 发重号。
+`node_id` 现为 yaml 写死。上 k8s 多副本后同一服务 N 个 pod,人工排号必撞 → 发重号。
 
 ### 已落地(本仓库)
 新增独立 module [pkg/snowflake/etcdnode](../../pkg/snowflake/etcdnode/etcdnode.go)(沿用 `pkg/killswitch/etcdkv` 的"独立 module 隔离重型 etcd 依赖"模式,核心 `pkg` 不背 etcd):
@@ -101,10 +101,10 @@ go func() { <-holder.Lost(); log.Error("nodeID lease lost"); os.Exit(1) }()
 ```
 **收到 Lost 立即停发并退出进程**,交 k8s 重新拉起重新抢号;绝不能只打日志继续 `Generate`,否则与领走同 nodeID 的新 holder 双活发重号。
 
-### 接线清单(进入多副本阶段时)
-1. 服务 `main.go`:当 `cfg.Snowflake.NodeIDSource == "etcd"` 时用 `etcdnode.Acquire` 替代 `snowflake.NewNode(cfg.Node.ZoneId)`,并挂 `Lost()` 退出 goroutine。
-2. 单副本 / dev 仍走 `static`(零改动)。
-3. **Codex 待办**:`use ./pkg/snowflake/etcdnode` 加入根 `go.work`;在该目录 `go mod tidy` 生成 `go.sum`(本 module 引 etcd client,Claude 不跑 tidy,见 `AGENTS.md` §11.1)。
+### 接线现状(2026-07-01)
+1. 需要发 snowflake ID 的 11 个服务已统一调用 `etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)`。
+2. 单副本 / dev 默认 `node_id_source=""|"static"`，行为等同 `snowflake.NewNode(cfg.Node.NodeId)`。
+3. 多副本时设 `node_id_source="etcd"`，helper 内部抢占 etcd Lease 并集中处理 `Lost()` 失租退出 fencing。
 
 ---
 

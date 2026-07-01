@@ -17,7 +17,7 @@ server:
     addr: ":51009"
 
 node:
-  zone_id: 1
+  node_id: 1
   mysql_client:
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
     max_open_conns: 32

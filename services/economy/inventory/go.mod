@@ -15,8 +15,18 @@ go 1.26.4
 
 require (
 	github.com/go-kratos/kratos/v2 v2.9.2
-	github.com/luyuancpp/pandora/pkg v0.0.0-00010101000000-000000000000
+	github.com/luyuancpp/pandora/pkg v0.0.0
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
+)
+
+require (
+	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.16 // indirect
 )
 
 require (
@@ -47,6 +57,7 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
+	github.com/luyuancpp/pandora/pkg/cellroute/etcdtable v0.0.0-00010101000000-000000000000
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
@@ -79,3 +90,5 @@ replace (
 	github.com/luyuancpp/pandora/pkg => ../../../pkg
 	github.com/luyuancpp/pandora/proto => ../../../proto
 )
+
+replace github.com/luyuancpp/pandora/pkg/cellroute/etcdtable => ../../../pkg/cellroute/etcdtable

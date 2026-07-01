@@ -9,7 +9,7 @@
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
 //  4. MySQL client + Ping(强依赖:好友图落库不可降级)
-//  5. Snowflake Node(request_id 生成,zone_id 来自 yaml)
+//  5. Snowflake Node(request_id 生成,node_id 来自 yaml)
 //  6. kafka producer(topic=pandora.friend.event)→ friendEventPusher(弱依赖)
 //  7. player_locator gRPC client → OnlineStatusReader(弱依赖,addr 空则离线)
 //  8. 装配 FriendUsecase → FriendService → gRPC/HTTP server
@@ -32,7 +32,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	friendv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/friend/v1"
 
 	"github.com/luyuancpp/pandora/services/social/friend/internal/biz"
@@ -88,8 +88,9 @@ func main() {
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
-	// 4. Snowflake(request_id 生成)
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 4. Snowflake(request_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 5. kafka producer → friendEventPusher(弱依赖:broker 不通则 warn 并继续,推送静默 fail)
 	var pusher biz.FriendEventPusher

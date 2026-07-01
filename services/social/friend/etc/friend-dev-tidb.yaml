@@ -22,7 +22,7 @@ server:
     addr: ":51004"
 
 node:
-  zone_id: 1
+  node_id: 1
   # TiDB:MySQL 协议兼容,DSN 形态与 MySQL 一致,仅 host:port 指向 TiDB Server。
   # 连接池 max_open_conns 可比单 MySQL 略大(TiDB Server 可横向扩);此处保守沿用。
   mysql_client:

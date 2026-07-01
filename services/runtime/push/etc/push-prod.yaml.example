@@ -12,7 +12,7 @@ server:
     addr: ":51014"
 
 node:
-  zone_id: 1
+  node_id: 1
   session_expire_min: 1440
   redis_client:
     host: "__REDIS_HOST__:6379"

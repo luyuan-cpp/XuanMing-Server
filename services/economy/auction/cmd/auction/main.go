@@ -35,7 +35,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	auctionv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/auction/v1"
 
 	"github.com/luyuancpp/pandora/services/economy/auction/internal/biz"
@@ -128,8 +128,9 @@ func main() {
 	cancel()
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
-	// 5. Snowflake(order_id / match_id 生成)
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 5. Snowflake(order_id / match_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 6. kafka producer → auctionEventPusher(弱依赖:broker 不通则 warn 并继续)
 	var events biz.AuctionEventPusher

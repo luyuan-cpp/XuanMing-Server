@@ -36,7 +36,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	"github.com/luyuancpp/pandora/pkg/snowflake"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
 	"github.com/luyuancpp/pandora/services/account/login/internal/conf"
@@ -82,8 +82,9 @@ func main() {
 	}
 	cfg.Defaults()
 
-	// 3. snowflake
-	sf := snowflake.NewNode(uint64(cfg.Node.ZoneId))
+	// 3. snowflake（node_id_source=static 静态本地发号；=etcd 走 etcd 自动抢占独占 nodeID，失租自动退出）
+	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+	defer func() { _ = sfCloser.Close() }()
 
 	// 4. JWT signer / verifier
 	authCfg := auth.Config{

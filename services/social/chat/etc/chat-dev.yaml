@@ -18,7 +18,7 @@ server:
     addr: ":51005"
 
 node:
-  zone_id: 1
+  node_id: 1
   # MySQL:dev 连本机 docker mysql 的 pandora_social 库(强依赖,DSN 必填)。
   mysql_client:
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"

@@ -33,6 +33,8 @@
 
 遇 §3 禁令、§10 红线,或要装/升级工具、改系统环境、写 secrets、碰生产、push/tag、改 30+ 文件 → **立刻停止报告**,等授权。
 
+**接线做最终版,不留半成品**(细则见 `CLAUDE.md §14`):新功能一次接到可上线版本,不准 TODO 占位 / 空实现;允许配置开关默认关闭(如 `snowflake.node_id_source` 默认 static),但开关打开后的分支必须是完整真实实现。引入隔离重依赖的独立 pkg module(如 `pkg/snowflake/etcdnode` 的 etcd client)到服务时,Claude 写代码 + 补 go.mod 的 require/replace,`go mod tidy` 生成 go.sum 由 Codex 执行(§11.1);接线后必须在交接里**列出需 tidy 的服务清单**,不准默声留着让下个 AI 撞 build 红。
+
 ## 5. 决策记录
 
 - 大决策 → `docs/design/pandora-arch.md` §11
@@ -61,7 +63,7 @@
 
 ## 10. 触碰红线 → 立刻停止 + 报告
 
-任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要改 30+ 文件 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端。
+任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要改 30+ 文件 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线或读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`)。
 
 ## 11. 合作分工
 
