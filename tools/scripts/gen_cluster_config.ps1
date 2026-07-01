@@ -15,10 +15,12 @@
 #   pwsh tools/scripts/gen_cluster_config.ps1 -AllocatorMode agones            # 线上/Agones 链路:真 Linux DS
 #   pwsh tools/scripts/gen_cluster_config.ps1 -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1
 #                                                                              # 本地 minikube(docker driver)+ udp-relay 回程
+#   pwsh tools/scripts/gen_cluster_config.ps1 -HostAllocators                  # 混合模式:容器服务回连宿主 allocator
 #
 # 三条链路与 allocator 模式的对应(由 start.ps1 驱动):
 #   本地 windows (-Mode local)  → dev yaml 原样 mode=local,不过本生成器(宿主 exec Windows DS)
 #   docker        (-Mode docker) → -AllocatorMode mock  (容器内无真 DS,假地址只测后端链路)
+#   battle       (-Mode battle) → -AllocatorMode mock -HostAllocators(17 容器 + 2 宿主 allocator)
 #   线上 k8s     (-Mode online) → -AllocatorMode agones(GameServer status.address 直连真 Linux DS)
 #   本地 k8s     (-Mode k8s)    → -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1 + udp_relay.ps1
 
@@ -27,7 +29,10 @@ param(
     [string]$OutDir,
     [ValidateSet('mock', 'agones')]
     [string]$AllocatorMode = 'mock',
-    [string]$AllocatorAdvertiseHost = ''
+    [string]$AllocatorAdvertiseHost = '',
+    # 混合(含战斗)模式:ds_allocator / hub_allocator 跑在宿主(要 exec Windows DS),
+    # 不进容器。容器里的 matchmaker/login/battle_result 需经 host.docker.internal 回连宿主 allocator。
+    [switch]$HostAllocators
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,6 +68,14 @@ $Services = @(
 # 同伴服务 host 映射:127.0.0.1:<port> -> <svc>:<port>
 $PortToHost = @{}
 foreach ($s in $Services) { $PortToHost[[string]$s.Port] = $s.Name }
+
+# 混合(含战斗)模式:ds/hub allocator 跑宿主而非容器,把它们的同伴地址从 docker 服务名
+# (ds-allocator/hub-allocator)改指 host.docker.internal —— 容器内经该名回连宿主发布端口。
+# 只影响调用方(matchmaker/battle_result→50020、login→50021)的地址改写,不改 allocator 自身。
+if ($HostAllocators) {
+    $PortToHost['50020'] = 'host.docker.internal'
+    $PortToHost['50021'] = 'host.docker.internal'
+}
 
 function Convert-DevToCluster([string]$text) {
     # 1) 基础设施地址(host:port 都变)
@@ -145,4 +158,4 @@ foreach ($s in $Services) {
     $count++
 }
 
-Write-Host "[ OK ] 生成 $count 个集群版配置(allocator=$AllocatorMode) -> $OutDir" -ForegroundColor Green
+Write-Host "[ OK ] 生成 $count 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators) -> $OutDir" -ForegroundColor Green

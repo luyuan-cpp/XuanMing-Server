@@ -30,6 +30,10 @@ param(
     # 全起时排除的服务(留给 IDE 调试);也可配合 restart/logs/foreground 指定单个服务
     [string[]]$Exclude = @(),
 
+    # 只启动指定的几个服务(含战斗混合模式只在宿主起 ds_allocator/hub_allocator)。
+    # 与 -Exclude 互补:先排除再取交集。按 $Services 数组顺序保留依赖启动先后。
+    [string[]]$Only = @(),
+
     # 指定单个服务(logs / restart / -Foreground 时使用)
     [string]$Service,
 
@@ -97,7 +101,10 @@ function Get-Service([string]$name) {
 
 function Get-TargetServices {
     # 全起策略:默认全部服务,仅剔除 -Exclude 指定的(留给 IDE 断点调试)
-    $Services | Where-Object { $Exclude -notcontains $_.Name }
+    $list = $Services | Where-Object { $Exclude -notcontains $_.Name }
+    # -Only 非空时只保留列表内服务(仍按 $Services 数组顺序 = 依赖启动顺序)
+    if ($Only.Count -gt 0) { $list = $list | Where-Object { $Only -contains $_.Name } }
+    return $list
 }
 
 function Get-PidFile($svc) { Join-Path $LogDir "$($svc.Name).pid" }

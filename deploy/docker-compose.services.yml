@@ -35,6 +35,10 @@ services:
     container_name: pandora-login
     volumes: [ "../run/cluster/etc/login.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "50001:50001" ]
+    # 含战斗混合模式:hub_allocator 跑宿主,login 经 host.docker.internal:50021 回连(Linux/WSL 需显式映射)。
+    # 纯 docker 模式下 login 配置用 docker 服务名解析 hub-allocator,不触发此映射,无害。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   player:
     <<: *svc-base
@@ -125,6 +129,9 @@ services:
     container_name: pandora-matchmaker
     volumes: [ "../run/cluster/etc/matchmaker.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "50011:50011" ]
+    # 含战斗混合模式:ds_allocator 跑宿主,matchmaker 经 host.docker.internal:50020 回连(Linux/WSL 需显式映射)。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   trade:
     <<: *svc-base
@@ -215,6 +222,9 @@ services:
     container_name: pandora-battle-result
     volumes: [ "../run/cluster/etc/battle-result.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "50022:50022" ]
+    # 含战斗混合模式:ds_allocator 跑宿主,battle_result 经 host.docker.internal:50020 回连(Linux/WSL 需显式映射)。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
   pandora-net:

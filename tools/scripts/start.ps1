@@ -10,7 +10,9 @@
     online   线上 k8s 集群   —— kustomize 部署到远端 k8s + Agones 真 Linux DS;DS=agones
                              用 -Env test|prod 区分「测试服集群」与「生产 kbs 集群」(不同 kube-context)
 
-  还有一个本地联调辅助模式:
+  还有两个本地联调辅助模式:
+    battle   含战斗混合版 —— 17 个业务服务跑 docker,ds_allocator + hub_allocator 跑宿主(需 exec Windows DS);
+                             进真实 Hub/Battle DS。play.ps1 -Battle[ -Intranet] 走这个;策划机不用起 go 服务。
     k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(advertise 127.0.0.1 + udp_relay.ps1 回程)
 
   启动前会检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;
@@ -40,7 +42,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('local', 'docker', 'intranet', 'k8s', 'online')]
+    [ValidateSet('local', 'docker', 'intranet', 'battle', 'k8s', 'online')]
     [string]$Mode = 'local',
 
     # online 环境:test=测试服集群 / prod=生产 kbs 集群(不同 kube-context,prod 双重确认)
@@ -246,6 +248,13 @@ function Resolve-Prerequisites([string]$mode) {
             # 内网服务器要给局域网策划发 TLS 证书,mkcert 必备(自动签叶子证书 + 装全队共享 CA)。
             if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
+        'battle' {
+            # 含战斗混合版:17 业务服务跑 docker,只有 ds/hub allocator 跑宿主(需 Go build 这 2 个 + exec Windows DS)。
+            if (-not (Ensure-Go))     { $allOk = $false }
+            if (-not (Ensure-Docker)) { $allOk = $false }
+            # Envoy 本地 TLS 证书(客户端面 :8443 / 内网策划连接)靠 mkcert 自动签发 / 装共享 CA。
+            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
+        }
         'k8s' {
             if (-not (Ensure-Docker)) { $allOk = $false }
             if (-not (Ensure-Tool -Name 'kubectl'  -CheckCmd 'kubectl'  -WingetId 'Kubernetes.kubectl'  -ManualUrl 'https://kubernetes.io/docs/tasks/tools/')) { $allOk = $false }
@@ -365,6 +374,59 @@ function Invoke-Intranet {
     }
     Write-Warn "DS=mock(无真实 DS);需真实战斗/大厅 DS 请用 -Mode online(Agones)。"
 }
+
+# ===== battle 模式(含战斗混合版:17 业务服务跑 docker + ds/hub allocator 跑宿主)=====
+# 为什么混合:战斗/大厅 DS 是 Windows PandoraServer.exe,跑不进 Linux 容器;
+# ds_allocator(mode=local)与 hub_allocator 要在本机 exec 这个 .exe,故这 2 个服务必须留宿主,
+# 其余 17 个纯业务服务进 docker(策划服务器机器不用为它们装 Go / 逐个 build)。
+# 网络:Envoy(容器)所有上游本就走 host.docker.internal:500XX,17 个容器把端口发布到宿主、
+# 2 个 allocator 直接绑宿主端口 —— 从 Envoy / 跨边界视角两者等价。容器里的 matchmaker/login/
+# battle_result 经 gen_cluster_config.ps1 -HostAllocators 把 allocator 地址改指 host.docker.internal。
+# DS 广告地址(PANDORA_DS_ADVERTISE_HOST,本机自测=127.0.0.1 / 内网=局域网 IP)由 play.ps1 注入环境变量,
+# 宿主 allocator 子进程继承 —— 与旧 local 战斗链路一致。
+function Invoke-Battle {
+    # compose 服务名(连字符)。这 2 个改跑宿主,不进容器。
+    $hostAllocCompose = @('ds-allocator', 'hub-allocator')
+    $containerSvcs = @((Get-ServiceList | Where-Object { $hostAllocCompose -notcontains $_.Name }).Name)
+
+    if ($Down) {
+        Write-Step "停止含战斗版(宿主 allocator + 业务容器 + 基础设施)"
+        & "$ScriptDir/run_services.ps1" -Action down 2>$null
+        docker compose -f $ComposeServices down
+        & "$ScriptDir/dev_down.ps1"
+        return
+    }
+
+    Write-Step "battle 模式:17 个业务服务(docker) + ds/hub allocator(宿主,exec Windows DS)"
+
+    # 清理可能冲突的残留:上一轮 local 的宿主 go 进程、上一轮 docker 的 allocator 容器(会抢 50020/50021)。
+    Write-Info "先停掉可能残留的宿主 go 服务与业务容器(避免端口冲突)..."
+    & "$ScriptDir/run_services.ps1" -Action down 2>$null
+    docker compose -f $ComposeServices down 2>$null | Out-Null
+
+    Write-Step "[1/5] 基础设施(建 pandora-net)"
+    & "$ScriptDir/dev_up.ps1"
+    if ($LASTEXITCODE -ne 0) { throw "基础设施启动失败" }
+
+    Write-Step "[2/5] 生成集群版配置(allocator 跑宿主:matchmaker/login/battle_result 经 host.docker.internal 回连)"
+    & "$ScriptDir/gen_cluster_config.ps1" -HostAllocators
+
+    Write-Step "[3/5] 构建 17 个业务服务镜像(不含 ds/hub allocator)"
+    Build-AllImages -Only $containerSvcs
+
+    Write-Step "[4/5] 启动 17 个业务服务容器"
+    docker compose -f $ComposeServices up -d @containerSvcs
+    if ($LASTEXITCODE -ne 0) { throw "业务服务容器启动失败" }
+
+    Write-Step "[5/5] 宿主启动 ds_allocator + hub_allocator(mode=local,匹配成局 exec Windows DS)"
+    # run_services 用下划线服务名;mode=local 从 etc/*-dev.yaml 读,DS 广告地址走 play.ps1 注入的环境变量。
+    & "$ScriptDir/run_services.ps1" -Only ds_allocator, hub_allocator
+    if ($LASTEXITCODE -ne 0) { throw "宿主 allocator 启动失败" }
+
+    Write-Host ""
+    Write-Ok "battle 模式已启动:17 业务容器 + 2 宿主 allocator。查看:pwsh tools/scripts/start.ps1 -Mode battle -Status"
+}
+
 
 # ===== 共享:apply Agones(RBAC + Fleet),可选安装 Agones(minikube 本地用)=====
 # 让 agones 链路端到端可用:RBAC 给 allocator in-cluster token 调 Agones API 的权限,
@@ -651,10 +713,14 @@ function Get-VersionInfo {
 }
 
 function Build-AllImages {
+    param([string[]]$Only = @())
     $dockerfile = Join-Path $ProjectRoot 'deploy/services/Dockerfile'
     $v = Get-VersionInfo
     Write-Info "  版本烙印:version=$($v.Version) commit=$($v.Commit) built=$($v.BuildTime)"
-    foreach ($svc in (Get-ServiceList)) {
+    $list = Get-ServiceList
+    # -Only 非空时只构建指定服务(含战斗混合模式不构建 ds/hub allocator 镜像,它们跑宿主)
+    if ($Only.Count -gt 0) { $list = $list | Where-Object { $Only -contains $_.Name } }
+    foreach ($svc in $list) {
         Write-Info "  docker build pandora/$($svc.Name):dev ..."
         docker build -f $dockerfile `
             --build-arg "SERVICE_DIR=$($svc.Dir)" `
@@ -702,6 +768,10 @@ function Invoke-Resume {
             Write-Info "基础设施容器随 Docker Desktop 自动恢复;这里重新拉起宿主 go 服务。"
             Invoke-Local
         }
+        'battle' {
+            Write-Info "含战斗混合版恢复:重新拉起 17 业务容器 + 2 宿主 allocator。"
+            Invoke-Battle
+        }
         { $_ -in 'docker', 'intranet' } {
             Write-Info "重启已停的容器(不加 --build,不重建镜像)..."
             & "$ScriptDir/dev_up.ps1"
@@ -731,6 +801,12 @@ function Invoke-Reset {
             & "$ScriptDir/dev_all.ps1" -Down 2>$null
             Invoke-Local
         }
+        'battle' {
+            & "$ScriptDir/run_services.ps1" -Action down 2>$null
+            docker compose -f $ComposeServices down -v 2>$null
+            & "$ScriptDir/dev_down.ps1" 2>$null
+            Invoke-Battle
+        }
         'docker' {
             docker compose -f $ComposeServices down -v 2>$null
             & "$ScriptDir/dev_down.ps1" 2>$null
@@ -749,6 +825,12 @@ function Invoke-Reset {
 function Show-Status {
     switch ($Mode) {
         'local'  { & "$ScriptDir/run_services.ps1" -Action status }
+        'battle' {
+            Write-Step "业务服务容器(17 个,不含 ds/hub allocator)"
+            docker compose -f $ComposeServices ps
+            Write-Step "宿主 allocator + 其它宿主 go 进程"
+            & "$ScriptDir/run_services.ps1" -Action status
+        }
         { $_ -in 'docker', 'intranet' } {
             Write-Step "docker 业务服务"
             docker compose -f $ComposeServices ps
@@ -789,6 +871,7 @@ switch ($Mode) {
     'local'    { Invoke-Local }
     'docker'   { Invoke-Docker }
     'intranet' { Invoke-Intranet }
+    'battle'   { Invoke-Battle }
     'k8s'      { Invoke-K8s }
     'online'   { Invoke-Online }
 }
