@@ -8,7 +8,8 @@
 //   - 弱依赖:locator 不可用时 biz 仅 Warn,不阻断心跳 / 对局。
 //
 // 状态权属(CLAUDE.md §9.1 不变量 §1):BATTLE 态由 matchmaker 成局时首次写入,ds_allocator
-// 心跳只做"同 match_id 续期"(BATTLE→BATTLE),被 locator guard 放行(guard 只拦 HUB 上报)。
+// 心跳只做"同 match_id 续期"(BATTLE→BATTLE 同 match),被 locator guard 放行;不同 match_id
+// 的迟到心跳(旧 DS / 旧 allocator)会被 locator guard 拒,避免覆盖当前对局位置。
 package data
 
 import (

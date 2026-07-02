@@ -81,8 +81,6 @@ message LoginResponse {
   // 单 Cell / dev 部署为 0。uint32 拓扑维度(非 snowflake 业务 ID,CLAUDE.md §9.12)。
   uint32 region_id = 6;
   uint32 cell_id   = 7;
-  // 8-9 reserved
-  reserved 8 to 9;
   // ===== 断线重连(docs/design/battle-reconnect.md)=====
   // 玩家已在 battle DS 中掉线,重新登录时 login 查 player_locator 发现其处于 BATTLE 态,
   // 直接下发原对局的 battle DS 直连信息(而非把玩家丢回大厅)。三字段"要么全空、要么全填":
@@ -90,9 +88,9 @@ message LoginResponse {
   //   - 非空:客户端应直连 battle_ds_addr 用 battle_ticket 重连原对局;
   //     连接失败(对局已结束 / 票据过期)再回退调 IssueDSTicket 拿 hub 地址回大厅。
   // battle 字段非空时 hub_ds_addr / hub_ticket 为空(login 检测到 BATTLE 不再分配 hub)。
-  string battle_ds_addr = 10; // 直连 battle DS 的 IP:port
-  string battle_ticket  = 11; // battle DS 票据(JWT,新 jti)
-  uint64 match_id       = 12; // 重连对局 ID(Snowflake uint64,CLAUDE.md §9.11)
+  string battle_ds_addr = 8;  // 直连 battle DS 的 IP:port
+  string battle_ticket  = 9;  // battle DS 票据(JWT,新 jti)
+  uint64 match_id       = 10; // 重连对局 ID(Snowflake uint64,CLAUDE.md §9.11)
 }
 
 message LogoutRequest {

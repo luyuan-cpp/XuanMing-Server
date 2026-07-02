@@ -928,12 +928,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     kSessionTokenFieldNumber = 3,
     kHubDsAddrFieldNumber = 4,
     kHubTicketFieldNumber = 5,
-    kBattleDsAddrFieldNumber = 10,
-    kBattleTicketFieldNumber = 11,
     kPlayerIdFieldNumber = 2,
     kCodeFieldNumber = 1,
     kRegionIdFieldNumber = 6,
-    kMatchIdFieldNumber = 12,
     kCellIdFieldNumber = 7,
   };
   // string session_token = 3 [json_name = "sessionToken"];
@@ -981,36 +978,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_ticket();
 
   public:
-  // string battle_ds_addr = 10 [json_name = "battleDsAddr"];
-  void clear_battle_ds_addr() ;
-  [[nodiscard]] const ::std::string& battle_ds_addr() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_battle_ds_addr(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_battle_ds_addr();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_battle_ds_addr();
-  void set_allocated_battle_ds_addr(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_battle_ds_addr() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ds_addr(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_ds_addr();
-
-  public:
-  // string battle_ticket = 11 [json_name = "battleTicket"];
-  void clear_battle_ticket() ;
-  [[nodiscard]] const ::std::string& battle_ticket() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_battle_ticket(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_battle_ticket();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_battle_ticket();
-  void set_allocated_battle_ticket(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_battle_ticket() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_battle_ticket(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_ticket();
-
-  public:
   // uint64 player_id = 2 [json_name = "playerId"];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -1041,16 +1008,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   void _internal_set_region_id(::uint32_t value);
 
   public:
-  // uint64 match_id = 12 [json_name = "matchId"];
-  void clear_match_id() ;
-  [[nodiscard]] ::uint64_t match_id() const;
-  void set_match_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_match_id() const;
-  void _internal_set_match_id(::uint64_t value);
-
-  public:
   // uint32 cell_id = 7 [json_name = "cellId"];
   void clear_cell_id() ;
   [[nodiscard]] ::uint32_t cell_id() const;
@@ -1065,8 +1022,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          0, 108,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 73,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1097,12 +1054,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     ::google::protobuf::internal::ArenaStringPtr session_token_;
     ::google::protobuf::internal::ArenaStringPtr hub_ds_addr_;
     ::google::protobuf::internal::ArenaStringPtr hub_ticket_;
-    ::google::protobuf::internal::ArenaStringPtr battle_ds_addr_;
-    ::google::protobuf::internal::ArenaStringPtr battle_ticket_;
     ::uint64_t player_id_;
     int code_;
     ::uint32_t region_id_;
-    ::uint64_t match_id_;
     ::uint32_t cell_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2793,7 +2747,7 @@ inline void LoginRequest::set_allocated_locale(::std::string* PROTOBUF_NULLABLE 
 inline void LoginResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::pandora::common::v1::ErrCode LoginResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.code)
@@ -2801,7 +2755,7 @@ inline ::pandora::common::v1::ErrCode LoginResponse::code() const {
 }
 inline void LoginResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.code)
 }
 inline ::pandora::common::v1::ErrCode LoginResponse::_internal_code() const {
@@ -2817,7 +2771,7 @@ inline void LoginResponse::_internal_set_code(::pandora::common::v1::ErrCode val
 inline void LoginResponse::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t LoginResponse::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.player_id)
@@ -2825,7 +2779,7 @@ inline ::uint64_t LoginResponse::player_id() const {
 }
 inline void LoginResponse::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.player_id)
 }
 inline ::uint64_t LoginResponse::_internal_player_id() const {
@@ -3033,7 +2987,7 @@ inline void LoginResponse::set_allocated_hub_ticket(::std::string* PROTOBUF_NULL
 inline void LoginResponse::clear_region_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.region_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t LoginResponse::region_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.region_id)
@@ -3041,7 +2995,7 @@ inline ::uint32_t LoginResponse::region_id() const {
 }
 inline void LoginResponse::set_region_id(::uint32_t value) {
   _internal_set_region_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.region_id)
 }
 inline ::uint32_t LoginResponse::_internal_region_id() const {
@@ -3057,7 +3011,7 @@ inline void LoginResponse::_internal_set_region_id(::uint32_t value) {
 inline void LoginResponse::clear_cell_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cell_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t LoginResponse::cell_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.cell_id)
@@ -3065,7 +3019,7 @@ inline ::uint32_t LoginResponse::cell_id() const {
 }
 inline void LoginResponse::set_cell_id(::uint32_t value) {
   _internal_set_cell_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.cell_id)
 }
 inline ::uint32_t LoginResponse::_internal_cell_id() const {
@@ -3075,158 +3029,6 @@ inline ::uint32_t LoginResponse::_internal_cell_id() const {
 inline void LoginResponse::_internal_set_cell_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cell_id_ = value;
-}
-
-// string battle_ds_addr = 10 [json_name = "battleDsAddr"];
-inline void LoginResponse::clear_battle_ds_addr() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.battle_ds_addr_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-}
-inline const ::std::string& LoginResponse::battle_ds_addr() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.battle_ds_addr)
-  return _internal_battle_ds_addr();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void LoginResponse::set_battle_ds_addr(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  _impl_.battle_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.battle_ds_addr)
-}
-inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_battle_ds_addr()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  ::std::string* _s = _internal_mutable_battle_ds_addr();
-  // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.battle_ds_addr)
-  return _s;
-}
-inline const ::std::string& LoginResponse::_internal_battle_ds_addr() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.battle_ds_addr_.Get();
-}
-inline void LoginResponse::_internal_set_battle_ds_addr(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.battle_ds_addr_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_battle_ds_addr() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.battle_ds_addr_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_battle_ds_addr() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.battle_ds_addr)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-  auto* released = _impl_.battle_ds_addr_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.battle_ds_addr_.Set("", GetArena());
-  }
-  return released;
-}
-inline void LoginResponse::set_allocated_battle_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-  }
-  _impl_.battle_ds_addr_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ds_addr_.IsDefault()) {
-    _impl_.battle_ds_addr_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.battle_ds_addr)
-}
-
-// string battle_ticket = 11 [json_name = "battleTicket"];
-inline void LoginResponse::clear_battle_ticket() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.battle_ticket_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
-}
-inline const ::std::string& LoginResponse::battle_ticket() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.battle_ticket)
-  return _internal_battle_ticket();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void LoginResponse::set_battle_ticket(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  _impl_.battle_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.battle_ticket)
-}
-inline ::std::string* PROTOBUF_NONNULL LoginResponse::mutable_battle_ticket()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  ::std::string* _s = _internal_mutable_battle_ticket();
-  // @@protoc_insertion_point(field_mutable:pandora.login.v1.LoginResponse.battle_ticket)
-  return _s;
-}
-inline const ::std::string& LoginResponse::_internal_battle_ticket() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.battle_ticket_.Get();
-}
-inline void LoginResponse::_internal_set_battle_ticket(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.battle_ticket_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL LoginResponse::_internal_mutable_battle_ticket() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.battle_ticket_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE LoginResponse::release_battle_ticket() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:pandora.login.v1.LoginResponse.battle_ticket)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
-  auto* released = _impl_.battle_ticket_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.battle_ticket_.Set("", GetArena());
-  }
-  return released;
-}
-inline void LoginResponse::set_allocated_battle_ticket(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
-  }
-  _impl_.battle_ticket_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_ticket_.IsDefault()) {
-    _impl_.battle_ticket_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.LoginResponse.battle_ticket)
-}
-
-// uint64 match_id = 12 [json_name = "matchId"];
-inline void LoginResponse::clear_match_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
-}
-inline ::uint64_t LoginResponse::match_id() const {
-  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.match_id)
-  return _internal_match_id();
-}
-inline void LoginResponse::set_match_id(::uint64_t value) {
-  _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
-  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.match_id)
-}
-inline ::uint64_t LoginResponse::_internal_match_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.match_id_;
-}
-inline void LoginResponse::_internal_set_match_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.match_id_ = value;
 }
 
 // -------------------------------------------------------------------

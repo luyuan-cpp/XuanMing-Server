@@ -476,7 +476,7 @@ func TestFence_BattleHeartbeatRefreshAllowed(t *testing.T) {
 }
 
 // TestFence_BattleHeartbeatDifferentMatchRejected:旧对局 / 旧 allocator 的迟到心跳不得把
-// 当前 active BATTLE 覆盖成另一个 match_id。
+// 当前 active BATTLE 覆盖成另一个 match_id(否则位置指向已死旧 DS,破 §1)。
 func TestFence_BattleHeartbeatDifferentMatchRejected(t *testing.T) {
 	repo := newStubRepo()
 	uc := NewLocatorUsecase(repo, 30*time.Second)

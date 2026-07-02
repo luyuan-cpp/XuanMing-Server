@@ -181,7 +181,10 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 //
 // 当前 BATTLE(active 战斗,docs/design/battle-reconnect.md §5):只接受两类写,其余一律拒:
 //   - BATTLE 且 match_id 相同:同局心跳续期 / 推进 → 放行。
+//     不同 match_id = 旧 DS / 旧 allocator 的迟到心跳,拒 ErrLocatorConflict,
+//     否则会把当前对局位置覆盖成旧对局(指向已死的旧 battle DS,破 §1)。
 //   - MATCHING:对局生命周期控制面写(下一局撮合决策)→ 放行。
+//     (新对局的首个 BATTLE 恒经 MATCHING 过渡,故不存在合法的 BATTLE→BATTLE 跨 match 直转。)
 //   - HUB 带正确 match_id 令牌(== cur.MatchID 且 != 0):玩家打完回大厅的合法回流(W4⑪)→ 放行。
 //   - 其余写(LOGIN_PENDING 裸登录/断线重登降级、无令牌 HUB)→ 拒 ErrLocatorConflict。
 //     否则客户端反复重登会把 BATTLE 冲成 LOGIN_PENDING,形成抖动窗口,matchmaker 读到
@@ -204,7 +207,8 @@ func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool)
 		case LocationStateBattle:
 			switch in.State {
 			case LocationStateBattle:
-				// 同局心跳续期放行;不同 match_id 视为迟到旧写入。
+				// 同局心跳续期放行;不同 match_id = 旧 DS / 旧 allocator 的迟到心跳,
+				// 拒之以免把当前对局位置覆盖成旧对局(指向已死旧 DS,破 §1)。
 				if in.MatchID != cur.MatchID {
 					return errcode.New(errcode.ErrLocatorConflict,
 						"player %d in BATTLE(match_id=%d), reject BATTLE write for different match_id=%d",
