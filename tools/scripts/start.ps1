@@ -720,6 +720,19 @@ function Build-AllImages {
     $list = Get-ServiceList
     # -Only 非空时只构建指定服务(含战斗混合模式不构建 ds/hub allocator 镜像,它们跑宿主)
     if ($Only.Count -gt 0) { $list = $list | Where-Object { $Only -contains $_.Name } }
+
+    # 国内镜像:基础镜像仓库前缀 + go 模块代理,避免卡在 Docker Hub / proxy.golang.org。
+    # 默认走国内加速;可用 PANDORA_BASE_REGISTRY / PANDORA_GOPROXY 覆盖(官方仓库填 docker.io)。
+    $baseRegistry = $env:PANDORA_BASE_REGISTRY
+    if (-not $baseRegistry) { $baseRegistry = 'docker.m.daocloud.io' }
+    $goproxy = $env:PANDORA_GOPROXY
+    if (-not $goproxy) {
+        if ($env:GOPROXY -and $env:GOPROXY -notmatch 'proxy\.golang\.org') { $goproxy = $env:GOPROXY }
+        else { $goproxy = 'https://goproxy.cn,direct' }
+    }
+    Write-Info "  基础镜像仓库:$baseRegistry(可用 PANDORA_BASE_REGISTRY 覆盖;官方用 docker.io)"
+    Write-Info "  Go 模块代理:$goproxy(可用 PANDORA_GOPROXY 覆盖)"
+
     foreach ($svc in $list) {
         Write-Info "  docker build pandora/$($svc.Name):dev ..."
         docker build -f $dockerfile `
@@ -728,6 +741,8 @@ function Build-AllImages {
             --build-arg "VERSION=$($v.Version)" `
             --build-arg "GIT_COMMIT=$($v.Commit)" `
             --build-arg "BUILD_TIME=$($v.BuildTime)" `
+            --build-arg "BASE_REGISTRY=$baseRegistry" `
+            --build-arg "GOPROXY=$goproxy" `
             -t "pandora/$($svc.Name):dev" $ProjectRoot
         if ($LASTEXITCODE -ne 0) { throw "镜像构建失败:$($svc.Name)" }
     }
