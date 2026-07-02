@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/google/uuid"
+
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 )
@@ -46,8 +48,12 @@ func NewLocalHubFleetProvider(cfg conf.LocalHubConf) (*LocalHubFleetProvider, er
 		return nil, fmt.Errorf("local_hub: executable_path %q not found: %w", cfg.ExecutablePath, err)
 	}
 	return &LocalHubFleetProvider{
-		cfg:     cfg,
-		podName: "pandora-hub-local",
+		cfg: cfg,
+		// 每次进程启动生成唯一实例名(对齐线上 Agones「GameServer 名每次唯一」语义):
+		// 旧进程被杀后残留的 Redis 分片记录会因名字不再匹配而成为「不在 Fleet live 集」的孤儿,
+		// 被 reconcileShardTopology 清理;新进程用新名建一条全新 ready 记录,不复用旧的 draining 状态。
+		// 与 HeartbeatShard 存活复活是双保险:UUID 治「身份复用」,复活治「活 pod 被误判超时」。
+		podName: "pandora-hub-local-" + uuid.NewString()[:8],
 		addr:    fmt.Sprintf("%s:%d", cfg.AdvertiseHost, cfg.Port),
 	}, nil
 }
