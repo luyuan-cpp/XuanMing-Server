@@ -91,9 +91,17 @@ func (f *fakeRepo) HeartbeatShard(_ context.Context, pod string, playerCount int
 		return false, nil
 	}
 	s.PlayerCount = playerCount
-	// 镜像 RedisHubRepo:禁止 DS 上报的 ready 把 allocator 标记的 draining/stopping 降级。
-	if state != "" && !(fakeDrainRank(s.State) > fakeDrainRank(state)) {
+	// 镜像 RedisHubRepo:禁止 DS 上报的 ready 把 allocator 标记的 draining/stopping 降级,
+	// 但心跳超时误标的 draining(DrainingSinceMs==0)可被健康 ready 心跳复位(存活恢复)。
+	switch {
+	case state == "":
+		// 空上报:不动状态。
+	case fakeDrainRank(state) >= fakeDrainRank(s.State):
 		s.State = state
+	case state == "ready" && s.State == "draining" && s.DrainingSinceMs == 0:
+		s.State = "ready"
+	default:
+		// 其余降级(强制整合 draining 被 ready 冲)→ 保持不变。
 	}
 	s.LastHeartbeatMs = tsMs
 	f.active[pod] = tsMs
@@ -759,6 +767,63 @@ func TestHeartbeat_DrainingShardReturnsDrainCommand(t *testing.T) {
 	s, _, _ := repo.GetShard(ctx, "hub-x")
 	if s.State != stateDraining {
 		t.Fatalf("DS ready report must not downgrade draining, got %q", s.State)
+	}
+}
+
+func TestHeartbeat_ReviveLivenessDrainOnHealthyReport(t *testing.T) {
+	uc, repo, _ := newConsolidationUsecase(45)
+	ctx := context.Background()
+	seedShard(repo, "hub-x", 1, 0)
+	// 心跳超时误标的 draining:draining_since_ms==0(非强制整合意图)。
+	_ = repo.UpdateShardWithLock(ctx, "hub-x", 1, func(s *hubv1.HubShardStorageRecord) error {
+		s.State = stateDraining
+		s.DrainingSinceMs = 0
+		return nil
+	}, time.Minute)
+
+	// 健康 DS 上报 ready → 应复位 ready 并回 no command(打断死锁)。
+	res, err := uc.Heartbeat(ctx, "hub-x", 3, "ready", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat err: %v", err)
+	}
+	if res.Command != commandNone {
+		t.Fatalf("revived shard want no command, got %q", res.Command)
+	}
+	s, _, _ := repo.GetShard(ctx, "hub-x")
+	if s.State != stateReady {
+		t.Fatalf("liveness-drain shard should revive to ready, got %q", s.State)
+	}
+}
+
+func TestHeartbeat_ReviveAfterSweepFalsePositive(t *testing.T) {
+	uc, repo, _ := newTestUsecase(500, 3)
+	ctx := context.Background()
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0); err != nil {
+		t.Fatalf("assign err: %v", err)
+	}
+	pod := "pandora-hub-global-1"
+	// ① 一个很旧的心跳时间戳 → sweep 会把它误标 draining(draining_since_ms 保持 0)。
+	staleTs := time.Now().Add(-1 * time.Hour).UnixMilli()
+	if _, err := uc.Heartbeat(ctx, pod, 1, "ready", staleTs); err != nil {
+		t.Fatalf("stale heartbeat err: %v", err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweepOnce err: %v", err)
+	}
+	if s, _, _ := repo.GetShard(ctx, pod); s.State != stateDraining {
+		t.Fatalf("sweep should mark stale shard draining, got %q", s.State)
+	}
+	// ② DS 其实还活着,下一跳按时上报 ready → 应复位 ready 且不再收到 drain。
+	res, err := uc.Heartbeat(ctx, pod, 1, "ready", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("fresh heartbeat err: %v", err)
+	}
+	if res.Command != commandNone {
+		t.Fatalf("revived shard want no command, got %q", res.Command)
+	}
+	s, _, _ := repo.GetShard(ctx, pod)
+	if s.State != stateReady {
+		t.Fatalf("healthy heartbeat should revive shard to ready, got %q", s.State)
 	}
 }
 

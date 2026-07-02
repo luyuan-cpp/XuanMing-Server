@@ -237,8 +237,21 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 		rec.PlayerCount = playerCount
 		// 状态机:允许 DS 上报升级 drain 等级(ready→draining→stopping),
 		// 但禁止把 allocator 强制整合标记的 draining/stopping 被 DS 上报的 ready 冲掉。
-		if state != "" && !(drainRank(rec.State) > drainRank(state)) {
-			rec.State = state
+		//
+		// 存活恢复例外:心跳超时误标的 draining(draining_since_ms==0)不是 allocator 的主动意图,
+		// 只是「DS 可能已死」的推断;一个健康的 ready 心跳就是推断失效的直接证据,允许它把分片复位
+		// ready,打断「活着的 DS 被误判超时后 ready 心跳被忽略、永久卡 draining」的死锁(dev 重启复用
+		// 同名分片 / 线上 hub_allocator 重启后 sweep 误判一批活 pod,都靠这条自愈)。
+		// 强制整合排空的 draining(draining_since_ms>0)仍 sticky,绝不被 ready 冲掉(保留原不变量)。
+		switch {
+		case state == "":
+			// 空上报:不动状态。
+		case drainRank(state) >= drainRank(rec.State):
+			rec.State = state // 升级或同级 drain → 采用 DS 上报
+		case state == "ready" && rec.State == "draining" && rec.DrainingSinceMs == 0:
+			rec.State = "ready" // 存活恢复:心跳超时误标的 draining 被健康心跳复位
+		default:
+			// 其余降级(强制整合 draining 被 ready 冲)→ 保持 rec.State 不变。
 		}
 		rec.LastHeartbeatMs = tsMs
 		payload, merr := marshalShard(rec)
