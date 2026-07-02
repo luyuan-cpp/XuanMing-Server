@@ -191,6 +191,20 @@ func (u *LocatorUsecase) SetLocation(ctx context.Context, in LocationInput) erro
 //     误判空闲 → 一人两处(破 §1)。一次裸登录本就不该有权终止一场进行中的战斗。
 //
 // 控制面写(LOGIN_PENDING / MATCHING / BATTLE 来自 login / matchmaker)在 cur 非 MATCHING/BATTLE 时一律放行。
+//
+// ── 一句话速记(判断分三层)────────────────────────────────────────────
+//   - 玩家原本没记录(!found)→ 首次上线,放行。
+//   - 旧状态不是对局态(OFFLINE / LOGIN_PENDING / HUB)→ switch 不命中,直接放行(普通顶号覆盖)。
+//   - 旧状态是对局态才拦:
+//   - 旧 = MATCHING:只拦 HUB 上报(防 hub DS 把 matchmaker 刚写的确认期冲掉),其余放行。
+//   - 旧 = BATTLE(最严):内层按新状态分类——
+//   - 新 BATTLE 且同 match_id → 放行(心跳续期);不同 match_id → 拒(旧 DS 迟到心跳)。
+//   - 新 MATCHING → 放行(下一局撮合)。
+//   - 新 HUB → 带对的 match_id 令牌才放行(打完回大厅),否则拒(stale hub)。
+//   - 其余(LOGIN_PENDING 等裸登录)→ 一律拒。这就是 §5 修的核心洞:防止断线重登把人从
+//     战斗里顶出去,导致 matchmaker 误判空闲、一人两处。
+//
+// 核心心法:旧状态越"重要"(BATTLE 最重),门卫越挑剔,只放跟这局有关的写进来。
 func guardTransition(in LocationInput) func(cur data.LocationRecord, found bool) error {
 	return func(cur data.LocationRecord, found bool) error {
 		if !found {
