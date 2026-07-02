@@ -51,19 +51,26 @@ RUN test -n "$SERVICE_DIR" || (echo "ERROR: build-arg SERVICE_DIR 必填" && exi
         -o /out/app "./cmd/${CMD_NAME}"
 
 # ===== 运行阶段 =====
-FROM ${BASE_REGISTRY}/library/alpine:3.20
+# 用 scratch 免任何运行基础镜像 / apk 联网:CGO_ENABLED=0 已产出静态二进制,
+# 只需从 builder 拷 TLS 根证书与时区库即可运行。
+# 好处:① 离线可构建(不依赖 alpine:3.20、apk CDN),内网/断网机器也能 build;
+#       ② 镜像极小,docker save/load 跨机传输快;③ 攻击面最小(无 shell/包管理器)。
+FROM scratch
 
 ARG SERVICE_DIR
 
-RUN apk add --no-cache ca-certificates tzdata wget \
-    && adduser -D -u 10001 pandora
+# golang 官方镜像自带 ca 证书与时区库,直接拷贝,无需联网 apk。
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
 WORKDIR /app
 
 COPY --from=builder /out/app /app/app
 # 烘焙该服务的 etc/(killswitch.yaml 等兜底文件);主配置运行期会被集群版覆盖。
-COPY --chown=pandora:pandora ${SERVICE_DIR}/etc/ /app/etc/
+COPY ${SERVICE_DIR}/etc/ /app/etc/
 
-USER pandora
+# 非 root 运行:scratch 无 /etc/passwd,用纯数字 uid:gid(与旧 alpine 版 pandora 用户一致 = 10001)。
+USER 10001:10001
 
 # 约定:集群版主配置统一挂成 /app/etc/cluster.yaml(compose bind-mount / k8s ConfigMap)。
 # compose、k8s 也可显式覆盖 -conf;独立 docker run 时默认读 cluster.yaml。

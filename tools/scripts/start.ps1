@@ -57,6 +57,8 @@ param(
     [switch]$Reset,       # 一键重置:彻底清掉旧状态再全新启动(线上 online 模式禁用)
     [switch]$Status,      # 查看状态
     [switch]$Check,       # 只检查工具链,不启动
+    [switch]$BuildOnly,   # 只构建 17 个业务镜像后退出(供 export_images.ps1 离线打包用)
+    [switch]$Rebuild,     # 强制重新构建镜像,忽略 deploy/offline-images 离线包(开发机改代码后用)
     [switch]$Install,     # 工具缺失时尝试 winget 安装(默认不安装;不含 Docker Desktop)
     [switch]$InstallDocker, # 显式同意用 winget 装 Docker Desktop(装前确认虚拟化;装后仍需重启+手动启动)
     [switch]$NoInstall,   # 兼容旧参数;等同于不传 -Install
@@ -721,10 +723,80 @@ function Build-AllImages {
     # -Only 非空时只构建指定服务(含战斗混合模式不构建 ds/hub allocator 镜像,它们跑宿主)
     if ($Only.Count -gt 0) { $list = $list | Where-Object { $Only -contains $_.Name } }
 
+    # ===== 离线镜像优先(免联网,拉不到 Docker Hub/加速站的机器双击一键脚本即用)=====
+    # deploy/offline-images/pandora-images.tar 由能联网机器 export_images.ps1 -Build 生成并随仓库同步。
+    # 判定:本机缺业务镜像 + 无 golang 构建基础镜像(= 这台机器多半构建不了)→ 自动 docker load 离线包,
+    # 导入后齐全就跳过 docker build 直接起服务。开发机(有 golang 基础镜像)照常构建最新;强制构建加 -Rebuild。
+    $offlineTar = Join-Path $ProjectRoot 'deploy/offline-images/pandora-images.tar'
+
+    # ===== 打包机/运行机专用:强制纯离线,直接用离线包、完全不 docker build =====
+    # 这台机器不改代码(打包机 / 内网运行机),不该每次先试构建、DNS 抖了再兜底。
+    # 设环境变量 PANDORA_OFFLINE=1(打包机一次性 `setx PANDORA_OFFLINE 1`)即走此路径:
+    # 导入离线包 → 校验齐全 → 直接返回,不联网、不构建、不受 Docker DNS 抖动影响。
+    if (($env:PANDORA_OFFLINE -eq '1') -and -not $Rebuild) {
+        if (-not (Test-Path $offlineTar)) {
+            throw "PANDORA_OFFLINE=1 但找不到离线包:$offlineTar(请在能联网机跑 export_images.ps1 -Build 生成并同步过来)。"
+        }
+        Write-Step "纯离线模式(PANDORA_OFFLINE=1):直接导入离线镜像包,跳过所有 docker build"
+        Write-Info "  $offlineTar"
+        docker load -i $offlineTar
+        if ($LASTEXITCODE -ne 0) { throw "离线镜像导入失败:$offlineTar" }
+        $missing = @($list | Where-Object { docker image inspect "pandora/$($_.Name):dev" *> $null; $LASTEXITCODE -ne 0 })
+        if ($missing.Count -gt 0) {
+            Write-Err "离线包导入后仍缺以下镜像:"
+            $missing | ForEach-Object { Write-Err "  - pandora/$($_.Name):dev" }
+            throw "离线包与服务清单不一致,请在能联网机跑 export_images.ps1 -Build 重新生成并同步。"
+        }
+        Write-Ok "已用离线镜像包起服务(纯离线,未构建)。要改代码后重建请在开发机做,或临时 -Rebuild。"
+        return
+    }
+
+    if (-not $Rebuild -and (Test-Path $offlineTar)) {
+        $missing = @($list | Where-Object { docker image inspect "pandora/$($_.Name):dev" *> $null; $LASTEXITCODE -ne 0 })
+        $hasGoBase = [bool](docker images --format '{{.Repository}}' 2>$null | Select-String -Quiet '(^|/)golang$')
+        if ($missing.Count -gt 0 -and -not $hasGoBase) {
+            Write-Step "离线镜像优先:本机缺 $($missing.Count) 个业务镜像且无构建基础镜像,自动导入离线包(免联网)"
+            Write-Info "  $offlineTar"
+            docker load -i $offlineTar
+            if ($LASTEXITCODE -ne 0) { throw "离线镜像导入失败:$offlineTar" }
+            $missing = @($list | Where-Object { docker image inspect "pandora/$($_.Name):dev" *> $null; $LASTEXITCODE -ne 0 })
+        }
+        if (-not $hasGoBase) {
+            if ($missing.Count -eq 0) {
+                Write-Ok "业务镜像已齐全(离线导入/已存在),本机无构建基础镜像,跳过构建直接使用。要强制构建加 -Rebuild。"
+                return
+            }
+            Write-Err "离线导入后仍缺以下镜像,且本机无 golang 基础镜像无法构建:"
+            $missing | ForEach-Object { Write-Err "  - pandora/$($_.Name):dev" }
+            throw "请在能联网的机器跑 export_images.ps1 -Build 重新生成 deploy/offline-images/pandora-images.tar 并同步过来。"
+        }
+    }
+
     # 国内镜像:基础镜像仓库前缀 + go 模块代理,避免卡在 Docker Hub / proxy.golang.org。
     # 默认走国内加速;可用 PANDORA_BASE_REGISTRY / PANDORA_GOPROXY 覆盖(官方仓库填 docker.io)。
     $baseRegistry = $env:PANDORA_BASE_REGISTRY
-    if (-not $baseRegistry) { $baseRegistry = 'docker.m.daocloud.io' }
+    if (-not $baseRegistry) {
+        # 本机已有 golang 基础镜像时,优先用本地(打成 Dockerfile 需要的 docker.io/library/golang:<ver> tag),
+        # 彻底免联网拉基础镜像;本地没有才回退国内加速站(需网络)。
+        $goVer = '1.26.4'
+        $m = Select-String -Path $dockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
+        $wantGo = "docker.io/library/golang:$goVer"
+        docker image inspect $wantGo *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $baseRegistry = 'docker.io'
+        } else {
+            $localGo = (docker images --format '{{.Repository}}:{{.Tag}}' 2>$null | Select-String '(^|/)golang:' | Select-Object -First 1)
+            if ($localGo) {
+                $src = "$localGo".Trim()
+                Write-Info "  本机无 $wantGo,发现 $src,自动打标复用(免联网拉基础镜像)。"
+                docker tag $src $wantGo 2>$null
+                $baseRegistry = 'docker.io'
+            } else {
+                $baseRegistry = 'docker.m.daocloud.io'
+            }
+        }
+    }
     $goproxy = $env:PANDORA_GOPROXY
     if (-not $goproxy) {
         if ($env:GOPROXY -and $env:GOPROXY -notmatch 'proxy\.golang\.org') { $goproxy = $env:GOPROXY }
@@ -733,6 +805,7 @@ function Build-AllImages {
     Write-Info "  基础镜像仓库:$baseRegistry(可用 PANDORA_BASE_REGISTRY 覆盖;官方用 docker.io)"
     Write-Info "  Go 模块代理:$goproxy(可用 PANDORA_GOPROXY 覆盖)"
 
+    $offlineFallbackDone = $false
     foreach ($svc in $list) {
         Write-Info "  docker build pandora/$($svc.Name):dev ..."
         docker build -f $dockerfile `
@@ -744,7 +817,20 @@ function Build-AllImages {
             --build-arg "BASE_REGISTRY=$baseRegistry" `
             --build-arg "GOPROXY=$goproxy" `
             -t "pandora/$($svc.Name):dev" $ProjectRoot
-        if ($LASTEXITCODE -ne 0) { throw "镜像构建失败:$($svc.Name)" }
+        if ($LASTEXITCODE -ne 0) {
+            # 构建失败兜底:有离线包就自动导入(拉不到基础镜像/goproxy 挂时),导入后该镜像存在则继续。
+            # 导入只做一次(offlineFallbackDone),但之后每个失败服务都复查一次 inspect,避免第 2 个服务误报失败。
+            if (-not $Rebuild -and (Test-Path $offlineTar)) {
+                if (-not $offlineFallbackDone) {
+                    Write-Warn "  构建 $($svc.Name) 失败(多半拉不到基础镜像)。检测到离线镜像包,自动导入兜底..."
+                    docker load -i $offlineTar
+                    $offlineFallbackDone = $true
+                }
+                docker image inspect "pandora/$($svc.Name):dev" *> $null
+                if ($LASTEXITCODE -eq 0) { Write-Ok "  使用离线镜像:pandora/$($svc.Name):dev"; continue }
+            }
+            throw "镜像构建失败:$($svc.Name)"
+        }
     }
 }
 
@@ -877,6 +963,13 @@ if ($Check) {
 if (-not $prereqOk) {
     Write-Err "工具未就绪,已中止。装好后重跑(或新开终端刷新 PATH)。"
     exit 1
+}
+
+if ($BuildOnly) {
+    Write-Step "只构建 17 个业务镜像(离线打包用,不启动任何服务)"
+    Build-AllImages
+    Write-Ok "业务镜像构建完成。可用 tools/scripts/export_images.ps1 打包导出。"
+    exit 0
 }
 
 if ($Reset)  { Invoke-Reset;  exit 0 }

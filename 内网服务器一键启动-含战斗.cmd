@@ -17,6 +17,10 @@ rem ============================================================
 setlocal
 cd /d "%~dp0"
 
+rem 这台机器不改代码,只跑离线包:强制纯离线,直接 docker load 离线镜像,跳过所有 docker build,
+rem 不联网、不受 Docker DNS 抖动影响。需要临时构建最新代码时,在开发机做或手动加 -Rebuild。
+set "PANDORA_OFFLINE=1"
+
 where pwsh >nul 2>nul && (set "PS=pwsh") || (set "PS=powershell")
 
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\play.ps1" -Battle -Intranet
