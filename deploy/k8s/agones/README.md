@@ -274,44 +274,20 @@ kubectl create -f deploy/k8s/agones/40-gameserverallocation-example.yaml -o yaml
 #   期望 hub_ds_addr 为真实 GameServer host:port, 日志 fleet_mode=agones
 ```
 
-### 第二步：DS 业务心跳上报（需真 UE DS 或 stub，留后续）
+### 第二步：DS 业务心跳上报（真 UE DS）
 
 占位镜像**不会**向 ds_allocator / hub_allocator 发 Heartbeat（那是 Pandora 业务心跳，
 经 gRPC unary 每 5s，与 Agones SDK health 无关，详见 `docs/design/ds-arch.md` §0.2）。
 
-- 真 UE Pandora Hub DS / Battle DS（独立仓库）按
-  `docs/design/agones-dev.md` 的「DS 心跳上报契约」实现后，心跳链路 + locator HUB/BATTLE
-  上报闭环才能端到端跑通。
-- **UE DS 就绪前用 stub 脚本先验后端心跳 / sweep / locator 闭环**
-  （`tools/scripts/ds_heartbeat_stub.ps1`，grpcurl 周期调 Heartbeat + SetLocation）：
-
-```powershell
-# 起 hub_allocator + player_locator(本机进程, 连 dev redis), 然后:
-# 种子分片 → 持续心跳 → Ctrl+C 停 → 看 hub_allocator sweep 标 draining
-pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role hub -AssignFirst -PlayerId 30907585389428737
-pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role hub -PodName pandora-hub-global-1 -PlayerCount 42
-
-# 战斗 DS: 需先经 matchmaker/AllocateBattle 建镜像(mock 名 pandora-battle-<matchId>)
-pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role battle -PodName pandora-battle-123456 -MatchId 123456
-
-# locator BATTLE→HUB 合法回流(带 fence matchId, W4 ⑪)
-pwsh tools/scripts/ds_heartbeat_stub.ps1 -Role hub -PodName pandora-hub-global-1 `
-    -LocatorPlayerId 30907585389428737 -ShardId 1 -FenceMatchId 123456 -Count 1
-```
-
-- **战斗结算 → 段位回滚补偿链(不变量 §4 第二段)用 `battle_result_outbox_probe.ps1`**
-  (grpcurl 同步 ReportResult → 事务出箱 → `pandora.player.update` → player 段位回写)：
-
-```powershell
-# 启动 player(:50002) + battle_result(:50022)(强依赖 MySQL pandora_battle/pandora_player + kafka),然后:
-# NORMAL: A 队胜, 5v5, 幂等复测(第二次 alreadyRecorded=true), 验 Elo +16/-16 守恒
-pwsh tools/scripts/battle_result_outbox_probe.ps1 -MatchId 987655001 `
-    -BasePlayerId 30907586000000000 -WinnerTeam 0 -Idempotent
-
-# ABANDONED: DS 崩溃补偿, 强制 mmr_delta 全 0(玩家不掉段)
-pwsh tools/scripts/battle_result_outbox_probe.ps1 -MatchId 987655002 `
-    -BasePlayerId 30907586100000000 -Outcome ABANDONED
-```
+- 真 UE Pandora Hub DS / Battle DS（Pandora-Client 独立仓库，DS 侧已接管）按
+  `docs/design/agones-dev.md` 的「DS 心跳上报契约」实现，心跳链路 + locator HUB/BATTLE
+  上报闭环端到端由真 UE DS 跑通。
+- 后端侧需验证的闭环：
+  - **心跳 / sweep / locator**：DS 周期调 Heartbeat + SetLocation；DS 心跳中断后观察
+    hub/ds_allocator sweep 标 draining/abandoned；BATTLE→HUB 带 fence matchId 合法回流（W4 ⑪）。
+  - **战斗结算 → 段位回滚补偿链（不变量 §4 第二段）**：DS 同步 ReportResult → 事务出箱 →
+    `pandora.player.update` → player 段位回写；NORMAL 验 Elo 守恒、ABANDONED 验 mmr_delta 全 0、
+    幂等复测 alreadyRecorded=true、outbox 清零。
 
 ---
 

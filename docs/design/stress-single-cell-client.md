@@ -28,8 +28,8 @@
 
 - ❌ UE Replication / GAS / Iris / NetCullDistance —— 属 §9 第 1、2 层(UE 仓库 StressBotManager /
   无渲染 UE Client Bot),本 Go Robot **不碰**,DS 侧指标(§5 段 5)阶段 1 用 stub/占位或留空。
-- ❌ 真实 UE Battle DS 拉起的端到端时延 —— 阶段 1 本地 Agones 若不开,DS 链路用 `ds_heartbeat_stub.ps1`
-  占位;真 DS 压测留到 §9 第 2 层。
+- ❌ 真实 UE Battle DS 拉起的端到端时延 —— 阶段 1 本地 Agones 若不开,DS 链路留空/占位;
+  真 DS 压测留到 §9 第 2 层。
 - ❌ 客户端渲染带宽 / NetDriver 握手 —— 同上。
 - ❌ Envoy gRPC-Web 转换层极限 —— 见 §4.2,阶段 1 主链路直连 gRPC 端口,Envoy 单列一组对照样本。
 
