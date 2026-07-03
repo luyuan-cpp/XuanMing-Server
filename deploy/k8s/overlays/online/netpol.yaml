@@ -1,0 +1,178 @@
+# Pandora 业务命名空间(pandora)NetworkPolicy —— 分层东西向隔离(生产最低门槛)
+#
+# 设计口径(2026-07-03 修订,回应审核 P1):
+#   把「命名空间内 Pod↔Pod 任意端口全通」收成「分层最小权限」。三条边界:
+#     ① 跨命名空间:默认拒绝(仅带标签的网关命名空间可进业务 gRPC 端口)。
+#     ② 基础设施层(mysql/redis/kafka/etcd/zookeeper):**只接受来自业务层**的入站,
+#        且只开各自服务端口;基础设施之间除「kafka→zookeeper」「etcd 自连 peer」这两条
+#        必要边外互相不可达 → 被攻破的某个基础设施 Pod 无法横向 pivot 到其它存储。
+#     ③ 业务层(19 个 go 服务)之间保持 mesh 全通 —— **这是有意保留的开放面**:
+#        业务调用图复杂(login→data-service、matchmaker→ds-allocator、各服务→push 等)
+#        且尚未逐服务梳理;真正的「业务服之间按调用图收敛 + 身份认证」交给未来的
+#        service mesh sidecar mTLS/AuthorizationPolicy(见 gateway-decision.md §16.2)。
+#
+# ⚠️ 因此本策略的**当前真实收益**是:
+#     - 阻断其它命名空间 → 本命名空间(除标签网关)。
+#     - 把存储层(DB/缓存/etcd/kafka/zk)的入站收敛到「仅业务层 + 必要 infra 对等边」,
+#       封住「任一 Pod 被攻破后随意扫/连所有存储」中「基础设施互连」与「跨 ns」这两类。
+#     - **不声称**已实现业务服之间的横向最小化 —— 那一层仍全通,待 mesh。
+#
+# ⚠️ 只做 Ingress(入站)default-deny,不碰 Egress(出站):
+#     出站全通,不误伤 DNS 解析、连存储、ds-allocator 调 Agones API 等。Egress 收敛列为阶段二。
+#
+# ⚠️ 生效前提(否则「装了但没防」):
+#     集群 CNI 必须支持并强制 NetworkPolicy(Calico / Cilium / Antrea)。
+#     minikube 默认(kindnet/bridge)不强制 → 静默忽略。minikube 需 `--cni=calico`。
+#
+# ⚠️ 只挂 online overlay(生产),不进 dev base:
+#     dev 的 Envoy 在宿主 docker-compose,强制 default-deny 会挡宿主→集群联调。
+#
+# 拓扑依据(2026-07-03 核实):
+#   业务层 19 服务端口 50001~50022(metrics 51001~51022);
+#   基础设施 mysql:3306 / redis:6379 / kafka:9092 / etcd:2379(peer 2380) / zookeeper:2181;
+#   infra→infra 仅 kafka→zookeeper:2181;客户端(:8443)与 DS(:8444)统一经 Envoy 进,不直连业务端口。
+---
+# 1) 默认拒绝:本命名空间所有 Pod 的一切入站(未被下列规则显式放行的都丢弃)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: pandora
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# 2) 业务层 mesh:业务服(app 不属于基础设施集合)之间互通。
+#    —— 有意保留的开放面(调用图复杂,收敛留给 mesh)。同命名空间的 Envoy / Prometheus
+#    若将来落在本命名空间,也属业务层,由本规则覆盖(它们抓 metrics / 转发都走业务层来源)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-mesh
+  namespace: pandora
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+---
+# 3) MySQL:仅业务层可连 :3306。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mysql-ingress
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels: { app: mysql }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+      ports:
+        - { protocol: TCP, port: 3306 }
+---
+# 4) Redis:仅业务层可连 :6379。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-ingress
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels: { app: redis }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+      ports:
+        - { protocol: TCP, port: 6379 }
+---
+# 5) Kafka:仅业务层可连 :9092(broker 广播 Pod IP,go 客户端经 metadata 直连)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kafka-ingress
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels: { app: kafka }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+      ports:
+        - { protocol: TCP, port: 9092 }
+---
+# 6) etcd:业务层连 client :2379(snowflake nodeID / cellroute watch);peer :2380 仅 etcd 自身
+#    (单节点 advertise etcd:2380 经 ClusterIP 回连自己)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-etcd-ingress
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels: { app: etcd }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+      ports:
+        - { protocol: TCP, port: 2379 }
+    - from:
+        - podSelector:
+            matchLabels: { app: etcd }
+      ports:
+        - { protocol: TCP, port: 2380 }
+---
+# 7) ZooKeeper:仅 kafka 可连 :2181(唯一 infra→infra 边;业务层不直连 zk)。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-zookeeper-ingress
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels: { app: zookeeper }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: kafka }
+      ports:
+        - { protocol: TCP, port: 2181 }
+---
+# 8) 外部网关命名空间 → 业务层 gRPC 端口(仅当 Envoy 部署在独立命名空间时才需要)。
+#    给 Envoy 所在命名空间打标签 `pandora.dev/role=ingress-gateway` 即生效;未打标签则天然
+#    inert。目标限业务层(不含基础设施),端口段 50001~50022。Envoy 同命名空间时靠规则 2。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-gateway
+  namespace: pandora
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              pandora.dev/role: ingress-gateway
+      ports:
+        - { protocol: TCP, port: 50001, endPort: 50022 }

@@ -18,8 +18,12 @@ namespace: pandora
 
 resources:
   - ../../services
+  # 生产东西向最小隔离(default-deny-ingress + 同命名空间/网关放行)。
+  # 只在 online 生效;dev base 不含,避免挡掉宿主 docker-compose Envoy 的联调流量。
+  # ⚠️ 需集群 CNI 强制 NetworkPolicy(Calico/Cilium 等),否则被静默忽略(详见 netpol.yaml 头注)。
+  - netpol.yaml
 
-# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(18 个)。
+# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(19 个)。
 images:
   - { name: pandora/login,          newName: registry.example.com/pandora/login,          newTag: latest }
   - { name: pandora/player,         newName: registry.example.com/pandora/player,         newTag: latest }
@@ -27,6 +31,7 @@ images:
   - { name: pandora/friend,         newName: registry.example.com/pandora/friend,         newTag: latest }
   - { name: pandora/chat,           newName: registry.example.com/pandora/chat,           newTag: latest }
   - { name: pandora/guild,          newName: registry.example.com/pandora/guild,          newTag: latest }
+  - { name: pandora/mail,           newName: registry.example.com/pandora/mail,           newTag: latest }
   - { name: pandora/player-locator, newName: registry.example.com/pandora/player-locator, newTag: latest }
   - { name: pandora/leaderboard,    newName: registry.example.com/pandora/leaderboard,    newTag: latest }
   - { name: pandora/team,           newName: registry.example.com/pandora/team,           newTag: latest }

@@ -1098,3 +1098,61 @@ pwsh E:\work\Pandora\tools\scripts\import_dev_ca.ps1
 | 2026-06-15 | 若追求完全无锁,采用"每条 HTTP stream 闭包独占解析器 + 线程安全队列回传帧" | 消除共享解析器成员,让旧流/新流解析器自然隔离 |
 | 2026-06-15 | 当前成品帧回传保持 `AsyncTask(GameThread, ...)`,不引入双缓冲队列 | push stream 是低频事件流,双缓冲吞吐优势用不上;AsyncTask 延迟更直接、维护成本更低 |
 | 2026-06-15 | 仅当单帧 push frame 经常超过几十条或 profiler 显示 task 调度成为可见开销时,再评估 SPSC/double-buffer | 用性能数据触发复杂度升级,避免为非热路径过度设计 |
+
+## §16 内网东西向安全态势(明文 + NetworkPolicy + 未来 mTLS)
+
+> 状态:**已决策(2026-07-03)**。
+> 触发:审查客户端连接是否"还有明文 grpc-web"。结论:**玩家链路(连接 ②)全程 TLS,无明文**;
+> 但集群内业务服之间、业务服→基础设施(mysql/redis/kafka/etcd)是**明文 h2c / 明文 TCP**。
+> 本节记录"内网明文是有意为之 + 用什么兜底"的决策,以及本次落地的 NetworkPolicy。
+
+### 16.1 两类流量的加密边界
+
+| 流量 | 方向 | 加密 | 谁负责 |
+|---|---|---|---|
+| 南北向(玩家) | Client → Envoy `:8443` / DS → Envoy `:8444` | **TLS**(公网 CA,§14) | Envoy 终止 |
+| 东西向(内网) | 业务服 ↔ 业务服、业务服 → mysql/redis/kafka/etcd | **明文**(h2c / 明文 TCP) | 无(靠基础设施兜底) |
+
+**为什么内网不在应用层做 TLS**:这是主流实践。应用代码继续走明文,把"加密 + 身份"责任下沉到基础设施层
+(mesh sidecar / 网络策略),业务零改动、无证书运维负担。客户端 `PandoraDSBackendSubsystem.bUseTls`
+默认 `false`(env `PANDORA_DS_ALLOCATOR_TLS` 可覆盖)、Envoy 头注"mTLS 上行 W3 之后再加",都是这个取向。
+
+### 16.2 兜底三层(成本从低到高)
+
+1. **NetworkPolicy(本次落地,零代码)** — K8s 生产最低门槛。分层最小权限:跨命名空间默认拒绝;
+   存储层(mysql/redis/kafka/etcd/zk)入站收敛到「仅业务层 + 必要 infra 对等边」;业务服之间暂保持全通(调用图复杂,收敛留给 mesh)。
+2. **Service Mesh sidecar mTLS(未来,仍零业务代码)** — Istio/Linkerd 自动 mTLS,业务容器继续 `localhost` 明文 h2c。
+   即 §5.1"(或 mTLS)"、envoy 头注"W3 之后再加"的那一步。届时应用层 `bUseTls` 仍保持 `false`,加密交给 sidecar。
+3. **应用层 TLS(最不推荐)** — 仅在既不上 mesh 又要内网加密时才把 `bUseTls`/Envoy 上行切 TLS,证书负担压回业务。
+
+> 业界趋势(Google BeyondProd / NIST 800-207 零信任)是"不信任内网、东西向也要 mTLS",
+> 但实现方式仍是 **mesh/sidecar 托管,而非每个应用手写 TLS**。Pandora 现有接口(`bUseTls` 开关 + Envoy 终止)已预留正确形状。
+
+### 16.3 本次 NetworkPolicy 落地(deploy/k8s/overlays/online/netpol.yaml)
+
+分层最小权限(8 条策略),**只挂 online overlay(生产),dev base 不含**(dev 的 Envoy 在宿主 docker-compose,强制 default-deny 会挡联调):
+
+| 策略 | 作用 |
+|---|---|
+| `default-deny-ingress` | `pandora` 命名空间所有 Pod 默认拒绝一切入站 |
+| `allow-app-mesh` | 业务层(19 服务)之间全通 —— 有意保留的开放面,业务调用图收敛留给 mesh |
+| `allow-mysql-ingress` / `allow-redis-ingress` / `allow-kafka-ingress` | 各存储仅接受业务层入站,只开各自端口(3306 / 6379 / 9092) |
+| `allow-etcd-ingress` | 业务层连 client :2379;peer :2380 仅 etcd 自身 |
+| `allow-zookeeper-ingress` | 仅 kafka 可连 :2181(唯一 infra→infra 边) |
+| `allow-ingress-gateway` | 若 Envoy 在独立命名空间,给其命名空间打标签 `pandora.dev/role=ingress-gateway` 即放行网关→业务 gRPC `50001-50022`;未打标签则天然 inert |
+
+**当前真实收益(不夸大):** 阻断其它命名空间→本命名空间(除标签网关);把存储层入站收敛到「仅业务层 + 必要 infra 对等边」,封住「基础设施互连」与「跨 ns」两类横向。**业务服之间仍全通**,那一层的横向最小化待 mesh(见 §16.2)。
+
+设计取舍:**只做 Ingress default-deny,不碰 Egress**(出站全通),避免误伤 DNS 解析、连基础设施、ds-allocator 调 Agones API。出站收紧留作阶段二。
+
+**生效前提(否则"装了但没防"):** 集群 CNI 必须支持并强制 NetworkPolicy(Calico/Cilium/Antrea)。
+minikube 默认 kindnet/bridge **不强制** → 策略被静默忽略;minikube 需 `--cni=calico`,云托管集群多数默认支持。
+
+### 16.4 决策行(写入 pandora-arch.md §11)
+
+| 日期 | 决策 | 原因 |
+|---|---|---|
+| 2026-07-03 | 玩家链路(连接 ②)确认**全程 TLS 无明文**;内网东西向**保持明文 h2c** | 内网加密下沉基础设施层是主流实践,应用零改动、无证书运维 |
+| 2026-07-03 | 生产 online overlay 加 **分层 NetworkPolicy**(default-deny-ingress + 业务层 mesh + 存储层按端口收敛 + 网关放行) | K8s 生产最低门槛,收敛「跨 ns」与「存储层」横向;业务服之间暂全通待 mesh;dev 不挂,避免挡宿主 Envoy 联调 |
+| 2026-07-03 | 仅做 **Ingress default-deny,Egress 暂全通** | 避免误伤 DNS/基础设施/Agones API;出站收紧列为阶段二 |
+| 2026-07-03 | 内网加密未来走 **mesh sidecar mTLS**,不在应用层手写 TLS | 业务零改动;`bUseTls` 开关保留作无 mesh 环境后路 |
