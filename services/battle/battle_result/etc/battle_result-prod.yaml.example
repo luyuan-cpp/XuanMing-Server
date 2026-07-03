@@ -39,6 +39,5 @@ battle:
     - "pandora.battle.result"
     - "pandora.ds.lifecycle"
   player_addr: "player.pandora.svc.cluster.local:50002"
-  ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"  # 正常结算后幂等回收战斗 DS 账本(弱依赖)
   outbox_publish_interval: "2s"   # 不变量 §4:player.update 事务出箱 at-least-once
   outbox_batch_size: 128

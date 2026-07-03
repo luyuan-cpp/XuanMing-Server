@@ -142,22 +142,12 @@ func main() {
 			"hint", "matchmaker_addr 未配置 → 结算后不通知 matchmaker 释放撮合状态(玩家可能需等 TTL 才能再次匹配)")
 	}
 
-	// 6.0b ds_allocator releaser(弱依赖:DSAllocatorAddr 空 → 不主动回收战斗 DS 账本,仅 Warn 不阻断落库)
-	// 用于正常结算落库后调 ds_allocator.ReleaseBattle 即时回收战斗 DS 镜像 + 移出 active,
-	// 否则正常局要等 ~15s 心跳超时 sweep 才移出 active、镜像留至 2h TTL。
-	// DS 自身 Agones Shutdown 仍是 pod 优雅下线权威路径,本调用是幂等兜底。
-	var dsReleaser biz.DSReleaser
-	if cfg.Battle.DSAllocatorAddr != "" {
-		dr := data.NewGrpcDSReleaser(cfg.Battle.DSAllocatorAddr)
-		defer func() { _ = dr.Close() }()
-		dsReleaser = dr
-		helper.Infow("msg", "ds_releaser_grpc", "ds_allocator_addr", cfg.Battle.DSAllocatorAddr)
-	} else {
-		helper.Warnw("msg", "ds_releaser_disabled",
-			"hint", "ds_allocator_addr 未配置 → 正常结算后不主动回收战斗 DS 账本(等 ~15s sweep 移出 active、镜像留至 2h TTL)")
-	}
-
-	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, releaser, dsReleaser, cfg.Battle)
+	// 战斗 DS 回收不由 battle_result 主动触发:DS 生命周期归 ds_allocator 与 DS 自身拥有 ——
+	// DS 收到 ReportResult OK 后才 ended 心跳 → 通知客户端回大厅 → 自身 Agones Shutdown;
+	// ds_allocator 凭 ended 心跳(本地 killStrandedDS taskkill / Agones 自停 + Fleet 重建)+
+	// 15s 心跳超时 sweep 兜底回收。历史教训(2026-07-03):battle_result 在结算响应路径同步调
+	// ReleaseBattle=taskkill/DELETE,抢在 DS 通知客户端回大厅之前把 DS 杀了 → 客户端卡战斗态。
+	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, releaser, cfg.Battle)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

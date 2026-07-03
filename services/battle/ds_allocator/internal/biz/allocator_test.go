@@ -344,6 +344,99 @@ func TestHeartbeatOrphanReturnsStop(t *testing.T) {
 	}
 }
 
+// recordingAllocator 记录 Release 的 podName 并经 channel 通知,供异步 kill 断言。
+type recordingAllocator struct {
+	inner    GameServerAllocator
+	released chan string
+}
+
+func (r *recordingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+	return r.inner.Allocate(ctx, matchID, mapID, gameMode)
+}
+
+func (r *recordingAllocator) Release(ctx context.Context, podName string) error {
+	_ = r.inner.Release(ctx, podName)
+	r.released <- podName
+	return nil
+}
+
+// TestHeartbeatOrphanKillsStrandedDS:local 模式(killOrphanOnStop=true)下,orphan 心跳除了回 stop,
+// 还必须主动 Release 幽灵 pod——UE DS 收 stop 不自杀,不主动 kill 会让它占端口污染下一局。
+func TestHeartbeatOrphanKillsStrandedDS(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingAllocator{inner: NewMockGameServerAllocator(testCfg()), released: make(chan string, 1)}
+	uc, _, _ := newUsecaseWithAlloc(t, rec)
+	uc.SetKillOrphanOnStop(true)
+
+	res, err := uc.Heartbeat(ctx, 999, "pandora-battle-999", 1, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if res.Command != commandStop {
+		t.Fatalf("command = %q, want stop", res.Command)
+	}
+	select {
+	case pod := <-rec.released:
+		if pod != "pandora-battle-999" {
+			t.Fatalf("released pod = %q, want pandora-battle-999", pod)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected stranded DS to be released on orphan stop")
+	}
+}
+
+// TestHeartbeatPodMismatchKillsOldDS:local 模式下 pod 不匹配(旧 DS 上报)时,主动 kill 的是**上报方**
+// (旧 DS 的 pod),不动镜像里绑定的新 pod。
+func TestHeartbeatPodMismatchKillsOldDS(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingAllocator{inner: NewMockGameServerAllocator(testCfg()), released: make(chan string, 1)}
+	uc, repo, _ := newUsecaseWithAlloc(t, rec)
+	uc.SetKillOrphanOnStop(true)
+
+	now := time.Now().UnixMilli()
+	b := &dsv1.BattleStorageRecord{
+		MatchId: 7, DsPodName: "pandora-battle-7", DsAddr: "127.0.0.1:30007",
+		State: stateWarming, AllocatedAtMs: now, LastHeartbeatMs: now, PlayerCount: 2,
+	}
+	if err := repo.CreateBattle(ctx, b, 2*time.Hour); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	res, err := uc.Heartbeat(ctx, 7, "pandora-battle-OLD", 9, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if res.Command != commandStop {
+		t.Fatalf("command = %q, want stop", res.Command)
+	}
+	select {
+	case pod := <-rec.released:
+		if pod != "pandora-battle-OLD" {
+			t.Fatalf("released pod = %q, want pandora-battle-OLD (the stale reporter)", pod)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected stale DS to be released on pod_mismatch stop")
+	}
+}
+
+// TestHeartbeatOrphanNoKillWhenDisabled:killOrphanOnStop 关闭(Agones/默认)时,orphan 心跳只回
+// stop,不主动 Release——孤儿 pod 回收交 Agones 生命周期,避免 Redis 抖动误判 orphan 误删正常 pod。
+func TestHeartbeatOrphanNoKillWhenDisabled(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingAllocator{inner: NewMockGameServerAllocator(testCfg()), released: make(chan string, 1)}
+	uc, _, _ := newUsecaseWithAlloc(t, rec)
+	// 不调 SetKillOrphanOnStop → 默认 false
+
+	if _, err := uc.Heartbeat(ctx, 999, "pandora-battle-999", 1, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	select {
+	case pod := <-rec.released:
+		t.Fatalf("must NOT release when killOrphanOnStop disabled, got %q", pod)
+	case <-time.After(200 * time.Millisecond):
+		// 期望:无 Release 发生
+	}
+}
+
 // TestHeartbeatOnAbandonedReturnsStopNoRefresh:abandoned 对局的 DS 若继续心跳(pod release
 // 失败/延迟终止),Heartbeat 必须返回 stop 且**不写回记录**——不刷新 LastHeartbeatMs/TTL,也不
 // 重新 ZAdd active。否则补偿重试会被推迟、BattleTTL 上界被不断刷新(W4 ⑧ Codex 复审 P1)。
@@ -469,6 +562,66 @@ func TestSweepMarksAbandoned(t *testing.T) {
 	ids, _ := repo.RangeActiveBattles(ctx)
 	if len(ids) != 0 {
 		t.Fatalf("active should be empty after sweep, got %v", ids)
+	}
+}
+
+// TestSweepEndedReclaimsLocalDS:local 模式(killOrphanOnStop=true)下,正常结算(ended)且失联的 DS
+// 被扫到时,除了移出 active 还必须主动 Release——battle_result 不再直杀,DS 发完 ended 心跳即停心跳
+// (无第二跳触发终态 kill),local Agones Shutdown 又是 no-op 不自退,不在此兜底 taskkill 就会幽灵占端口。
+func TestSweepEndedReclaimsLocalDS(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingAllocator{inner: NewMockGameServerAllocator(testCfg()), released: make(chan string, 1)}
+	uc, repo, _ := newUsecaseWithAlloc(t, rec)
+	uc.SetKillOrphanOnStop(true)
+
+	res := allocateReady(t, uc, repo, 8, []uint64{11, 22}, 1, "5v5_ranked")
+	// 上报一次 ended 心跳:state → ended(首跳不 kill),仍留在 active 待扫描收尾。
+	if _, err := uc.Heartbeat(ctx, 8, res.DSPodName, 0, "ended", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("ended heartbeat: %v", err)
+	}
+	backdate(t, repo, 8) // 心跳超时,进入 sweep 扫描窗口
+
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	select {
+	case pod := <-rec.released:
+		if pod != res.DSPodName {
+			t.Fatalf("released pod = %q, want %q", pod, res.DSPodName)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected ended DS to be reclaimed on sweep (local ghost-process leak)")
+	}
+	if ids, _ := repo.RangeActiveBattles(ctx); len(ids) != 0 {
+		t.Fatalf("active should be empty after ended sweep, got %v", ids)
+	}
+}
+
+// TestSweepEndedNoReclaimOnAgones:Agones 模式(killOrphanOnStop=false)下,ended 对局扫到只移出
+// active,绝不主动 Release——DS 已自身 Agones Shutdown,pod 回收交 Fleet 生命周期,后端不越权 kill。
+func TestSweepEndedNoReclaimOnAgones(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingAllocator{inner: NewMockGameServerAllocator(testCfg()), released: make(chan string, 1)}
+	uc, repo, _ := newUsecaseWithAlloc(t, rec)
+	// 不调 SetKillOrphanOnStop → 默认 false(Agones 模式)
+
+	res := allocateReady(t, uc, repo, 9, []uint64{33, 44}, 1, "5v5_ranked")
+	if _, err := uc.Heartbeat(ctx, 9, res.DSPodName, 0, "ended", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("ended heartbeat: %v", err)
+	}
+	backdate(t, repo, 9)
+
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	select {
+	case pod := <-rec.released:
+		t.Fatalf("must NOT release ended DS on Agones (killOrphanOnStop off), got %q", pod)
+	case <-time.After(200 * time.Millisecond):
+		// 期望:无 Release 发生
+	}
+	if ids, _ := repo.RangeActiveBattles(ctx); len(ids) != 0 {
+		t.Fatalf("active should be empty after ended sweep, got %v", ids)
 	}
 }
 

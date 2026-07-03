@@ -134,6 +134,11 @@ func main() {
 			"mode", cfg.Mode, "hint", "mode=mock,用确定性假地址(无真实 DS)")
 	}
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
+	if cfg.Mode == conf.ModeLocal {
+		// local 模式 UE DS 无 Agones,收到 stop 指令不会自杀 → 让后端在 orphan/pod_mismatch/终态
+		// 心跳时主动 kill 该 DS,防幽灵进程占端口污染下一局(配合端口 bind 探测双保险)。
+		uc.SetKillOrphanOnStop(true)
+	}
 
 	// 4.1 ds.lifecycle producer(弱依赖:心跳超时 abandoned → 通知 battle_result 段位回滚补偿,不变量 §4)
 	if len(cfg.Kafka.Brokers) > 0 {

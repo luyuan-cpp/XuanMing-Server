@@ -104,6 +104,12 @@ type AllocatorUsecase struct {
 	cfg       conf.AllocatorConf
 	lifecycle DSLifecyclePusher // 可为 nil(kafka 不可用时静默不发 abandoned 事件)
 	locator   LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
+
+	// killOrphanOnStop:心跳判定某 DS 该停机(orphan / pod_mismatch / 终态)时,是否由后端主动
+	// 回收该 pod。local 模式打开——本机 UE DS 没有 Agones,收到 stop 指令不会自杀,残留进程会
+	// 幽灵般占着监听端口污染下一局;打开后 stop 时异步调 alloc.Release kill 掉它。Agones 模式默认
+	// 关闭:孤儿 GameServer 由 Agones 生命周期回收,避免 Redis 抖动误判 orphan 时误删正常 pod。
+	killOrphanOnStop bool
 }
 
 // NewAllocatorUsecase 构造 AllocatorUsecase。
@@ -116,6 +122,28 @@ func (u *AllocatorUsecase) SetLifecyclePusher(p DSLifecyclePusher) { u.lifecycle
 
 // SetLocationRefresher 注入 BATTLE 位置续期器(main 在 locator_addr 已配时调用,弱依赖)。
 func (u *AllocatorUsecase) SetLocationRefresher(r LocationRefresher) { u.locator = r }
+
+// SetKillOrphanOnStop 打开「心跳 stop 时主动回收该 DS」(main 在 mode=local 时调用)。
+// 见 killOrphanOnStop 字段说明:local 模式的 UE DS 收到 stop 不自杀,需后端主动 kill 防幽灵占端口。
+func (u *AllocatorUsecase) SetKillOrphanOnStop(v bool) { u.killOrphanOnStop = v }
+
+// killStrandedDS 在心跳判定某 DS 该停机时,异步回收其 pod(local 模式防幽灵 DS 占端口)。
+// fire-and-forget:用 detached ctx(保留 trace_id 满足不变量 §8)+ 短超时,不给心跳响应加尾延迟。
+// killOrphanOnStop 关闭(Agones 模式)时为 no-op,pod 回收交 Agones 生命周期。
+func (u *AllocatorUsecase) killStrandedDS(ctx context.Context, matchID uint64, podName, reason string) {
+	if !u.killOrphanOnStop || podName == "" {
+		return
+	}
+	go func() {
+		kctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedCleanupTimeout)
+		defer cancel()
+		if err := u.alloc.Release(kctx, podName); err != nil {
+			plog.With(kctx).Warnw("msg", "kill_stranded_ds_failed", "match_id", matchID, "pod", podName, "reason", reason, "err", err)
+			return
+		}
+		plog.With(kctx).Infow("msg", "kill_stranded_ds", "match_id", matchID, "pod", podName, "reason", reason)
+	}()
+}
 
 func (u *AllocatorUsecase) battleTTL() time.Duration { return u.cfg.BattleTTL.Std() }
 
@@ -364,14 +392,17 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 		case errors.Is(err, errHeartbeatTerminal):
 			// 终态 DS:不写回、通知停机,补偿重试与 TTL 上界不受影响
 			plog.With(ctx).Infow("msg", "heartbeat_terminal_stop", "match_id", matchID, "pod", podName)
+			u.killStrandedDS(ctx, matchID, podName, "terminal")
 			return &HeartbeatResult{Command: commandStop}, nil
 		case errors.Is(err, errHeartbeatPodMismatch):
 			// pod 不匹配:不写回镜像,令旧/孤儿 DS 停机(防污染新对局)
 			plog.With(ctx).Warnw("msg", "heartbeat_pod_mismatch", "match_id", matchID, "pod", podName)
+			u.killStrandedDS(ctx, matchID, podName, "pod_mismatch")
 			return &HeartbeatResult{Command: commandStop}, nil
 		case errcode.As(err) == errcode.ErrDSPodNotFound:
 			// 孤儿 DS:无镜像,通知停机
 			plog.With(ctx).Warnw("msg", "heartbeat_orphan_ds", "match_id", matchID, "pod", podName)
+			u.killStrandedDS(ctx, matchID, podName, "orphan")
 			return &HeartbeatResult{Command: commandStop}, nil
 		default:
 			return nil, err
@@ -482,7 +513,8 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 		// KEEPTTL:标记 abandoned / 每轮重试不刷新 battle key TTL,保证 BattleTTL 是补偿重试上界。
 		lerr := u.repo.UpdateBattleKeepTTL(ctx, mid, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
 			if b.State == stateEnded {
-				endedSkip = true // 正常结算,移出 active 不补偿
+				endedSkip = true      // 正常结算,移出 active 不补偿
+				podName = b.DsPodName // 捕获用于 local 幽灵 DS 收尾(见下方 killStrandedDS)
 				return nil
 			}
 			wasAbandoned = b.State == stateAbandoned // 已 abandoned 仅重试投递,不重复回收 pod
@@ -502,6 +534,13 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			continue
 		}
 		if endedSkip {
+			// 正常结算的 DS 收尾回收(2026-07-03):battle_result 不再在结算响应路径直杀 DS(那会抢在
+			// DS 通知客户端回大厅之前把它杀掉),DS 生命周期归此处兜底。DS 发完 ended 心跳后即
+			// StopBattleHeartbeat(无第二跳,心跳终态 killStrandedDS 永不触发),且 local 模式 DS 的
+			// Agones Shutdown 是 no-op → 进程不会自退。故这里在 ended 且失联(≥HeartbeatTimeout 未心跳,
+			// 此时 DS 早已通知客户端回大厅)时主动 taskkill,防幽灵 DS 占端口耗尽端口池。
+			// killOrphanOnStop 门控:仅 local 打开;Agones 关(DS 已自身 Shutdown,pod 交 Fleet 回收)。
+			u.killStrandedDS(ctx, mid, podName, "ended")
 			_ = u.repo.RemoveActive(ctx, mid)
 			continue
 		}

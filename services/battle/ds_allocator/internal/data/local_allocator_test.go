@@ -183,3 +183,30 @@ func TestClose_KillsAll(t *testing.T) {
 		}
 	}
 }
+
+// TestAllocate_ProbeSkipsBusyPort:portProbe 报告某端口被占(幽灵 DS)时,分配跳过它取下一个,
+// 保证返回给 UE DS 的端口就是它能真正绑上的端口(否则 UE 静默 fallback,客户端连错 DS)。
+func TestAllocate_ProbeSkipsBusyPort(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7800, PortRange: 10})
+	l.portProbe = func(port int) bool { return port != 7800 } // 7800 被幽灵进程占用
+	_, addr, err := l.Allocate(context.Background(), 1, 1, "")
+	if err != nil {
+		t.Fatalf("Allocate: %v", err)
+	}
+	if addr != "127.0.0.1:7801" {
+		t.Fatalf("addr=%q, want 127.0.0.1:7801 (7800 probed busy)", addr)
+	}
+}
+
+// TestAllocate_ProbeAllBusy:全部端口都被探测报占用 → ErrDSNoAvailable(不静默发出被占端口)。
+func TestAllocate_ProbeAllBusy(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7800, PortRange: 3})
+	l.portProbe = func(int) bool { return false }
+	_, _, err := l.Allocate(context.Background(), 1, 1, "")
+	if err == nil {
+		t.Fatal("expected ErrDSNoAvailable when all ports probed busy")
+	}
+	if errcode.As(err) != errcode.ErrDSNoAvailable {
+		t.Fatalf("expected ErrDSNoAvailable, got %v", err)
+	}
+}

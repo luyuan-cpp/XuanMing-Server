@@ -16,9 +16,11 @@ package data
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -41,10 +43,19 @@ type execProcess struct {
 }
 
 func (e *execProcess) Kill() error {
-	if e.cmd.Process != nil {
-		return e.cmd.Process.Kill()
+	if e.cmd.Process == nil {
+		return nil
 	}
-	return nil
+	// Windows:UE DS(PandoraServer.exe)可能派生子进程,只 kill 父进程会留下仍占监听端口的
+	// 子进程(幽灵 DS),导致后续对局撞端口。taskkill /T 杀整棵进程树,/F 强制,确保端口真正释放。
+	if runtime.GOOS == "windows" {
+		kc := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(e.cmd.Process.Pid)) //nolint:gosec // pid 来自本进程派生的 DS
+		if err := kc.Run(); err == nil {
+			return nil
+		}
+		// taskkill 不可用/失败 → 回退直接 kill 父进程(至少不泄漏父进程)。
+	}
+	return e.cmd.Process.Kill()
 }
 
 func (e *execProcess) Wait() error {
@@ -72,6 +83,12 @@ type LocalGameServerAllocator struct {
 
 	// startProc 拉起一个 DS 进程;单测注入假实现绕过真 exec。
 	startProc func(podName string, port int, matchID uint64, mapID uint32, gameMode string) (dsProcess, error)
+
+	// portProbe 探测端口在本机是否真的空闲(可绑定)。nil=不探测(单测默认放行)。
+	// 用于挡住「台账已释放但进程未退出(幽灵 DS)」或外部程序占用的端口:否则 allocator 把
+	// -port=X 传给 UE DS,X 被占时 UE 会静默 fallback 到 X+1,导致 allocator 记录/返回的端口(X)
+	// 与 DS 实际监听端口(X+1)不一致,新对局客户端拿新 ticket 却连到 X 上的旧 DS,被 PreLogin 拒。
+	portProbe func(port int) bool
 }
 
 // NewLocalGameServerAllocator 构造本机 DS 拉起器。
@@ -96,6 +113,7 @@ func NewLocalGameServerAllocator(cfg conf.LocalDSConf) (*LocalGameServerAllocato
 		usedPorts: make(map[int]struct{}),
 	}
 	l.startProc = l.defaultStart
+	l.portProbe = defaultPortProbe
 	return l, nil
 }
 
@@ -182,13 +200,36 @@ func (l *LocalGameServerAllocator) reap(podName string, lp *launchedProc) {
 }
 
 // pickPortLocked 在端口池里取一个空闲端口(调用方须持锁)。
+// 除排除本 allocator 已分配的端口(usedPorts)外,还用 portProbe 实际探测端口在本机可绑定,
+// 跳过被幽灵 DS / 外部程序占用的端口,保证发给 UE DS 的 -port 就是它能真正绑上的端口。
 func (l *LocalGameServerAllocator) pickPortLocked() (int, bool) {
 	for p := l.cfg.PortBase; p < l.cfg.PortBase+l.cfg.PortRange; p++ {
-		if _, used := l.usedPorts[p]; !used {
-			return p, true
+		if _, used := l.usedPorts[p]; used {
+			continue
 		}
+		if l.portProbe != nil && !l.portProbe(p) {
+			continue // 端口被占(幽灵 DS / 外部程序)→ 跳过,避免 UE 静默换端口
+		}
+		return p, true
 	}
 	return 0, false
+}
+
+// defaultPortProbe 探测端口在所有网卡上 UDP+TCP 是否可绑定(UE DS NetDriver 用 UDP,保守起见
+// TCP 也探,兼容 TCP/WebSocket 传输)。绑定成功立即释放再交给 UE 启动;探测与 UE 真正绑定之间
+// 有极短 TOCTOU 窗口,但幽灵 DS 是持续占用能被稳定挡住,usedPorts 又已防 allocator 自身重复分配。
+func defaultPortProbe(port int) bool {
+	uc, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
+	if err != nil {
+		return false
+	}
+	_ = uc.Close()
+	tl, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	_ = tl.Close()
+	return true
 }
 
 // defaultStart 是 startProc 的真实现:exec UE Windows DS 并把 stdout/stderr 落盘。

@@ -92,7 +92,7 @@ func TestCrossRegionSettlement_TrueOnMultiRegion(t *testing.T) {
 }
 
 func TestSettlementOwners_NilRouterNotOk(t *testing.T) {
-	u := NewBattleResultUsecase(newFakeRepo(), nil, nil, nil, nil, conf.BattleConf{BaseMMR: 1500})
+	u := NewBattleResultUsecase(newFakeRepo(), nil, nil, nil, conf.BattleConf{BaseMMR: 1500})
 	result := &battlev1.BattleResult{
 		MatchId: 9001,
 		Stats:   []*battlev1.PlayerStats{{PlayerId: playerInRegion1()}, {PlayerId: playerInRegion2()}},
@@ -103,7 +103,7 @@ func TestSettlementOwners_NilRouterNotOk(t *testing.T) {
 }
 
 func TestSettlementOwners_ResolvesPerPlayerAndCrossRegion(t *testing.T) {
-	u := NewBattleResultUsecase(newFakeRepo(), nil, nil, nil, nil, conf.BattleConf{BaseMMR: 1500})
+	u := NewBattleResultUsecase(newFakeRepo(), nil, nil, nil, conf.BattleConf{BaseMMR: 1500})
 	u.SetCellRouter(twoRegionRouter(t, 1, 10, 2, 20))
 
 	result := &battlev1.BattleResult{
@@ -131,7 +131,7 @@ func TestSettlementOwners_ResolvesPerPlayerAndCrossRegion(t *testing.T) {
 }
 
 func TestSettlementOwners_SingleRegionNotCross(t *testing.T) {
-	u := NewBattleResultUsecase(newFakeRepo(), nil, nil, nil, nil, conf.BattleConf{BaseMMR: 1500})
+	u := NewBattleResultUsecase(newFakeRepo(), nil, nil, nil, conf.BattleConf{BaseMMR: 1500})
 	u.SetCellRouter(twoRegionRouter(t, 1, 10, 2, 20))
 
 	// 两名玩家都落前半 → 同 region1

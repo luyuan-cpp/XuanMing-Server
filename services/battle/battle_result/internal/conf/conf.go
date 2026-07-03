@@ -35,14 +35,6 @@ type BattleConf struct {
 	// match 镜像,修复"结算返回 Hub 后玩家无法再次匹配(StartMatch 4002)"。
 	MatchmakerAddr string `yaml:"matchmaker_addr,omitempty" json:"matchmaker_addr,omitempty"`
 
-	// DSAllocatorAddr ds_allocator 服务 gRPC 地址(弱依赖:空 → 不主动回收战斗 DS 账本)。
-	// 用于正常结算落库后调 ds_allocator.ReleaseBattle 幂等回收战斗 DS 镜像 + 移出 active,
-	// 让后端账本与现实即时一致(否则正常局要等 ~15s 心跳超时 sweep 才移出 active、镜像留至 2h TTL)。
-	// DS 自身 Agones Shutdown 仍是 pod 优雅下线的权威路径;本调用是幂等兜底:DS 已自停则 pod
-	// 已不存在、Release 走幂等 no-op,只清账本;DS 结算后崩溃没来得及自停则由它即时回收 pod。
-	// abandoned 不在此调:其 pod 已由 ds_allocator sweep 回收、镜像有意保留供诊断(见 biz.releaseDS)。
-	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
-
 	// OutboxPublishInterval player.update 出箱发布轮询间隔(W4 ⑨,默认 2s)。
 	OutboxPublishInterval config.Duration `yaml:"outbox_publish_interval,omitempty" json:"outbox_publish_interval,omitempty"`
 
