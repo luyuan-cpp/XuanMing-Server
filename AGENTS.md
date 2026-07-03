@@ -33,6 +33,14 @@
 
 PowerShell 优先使用 PowerShell 7。
 
+出离线镜像包(`deploy/offline-images/pandora-images.tar`)前先判断现有包是否过期:若包生成时间之后有 `services/` / `pkg/` / 镜像相关脚本或 Dockerfile 改动,必须重出;否则不要浪费时间重出。需要重出时**优先宿主编译方案**:
+
+```powershell
+pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
+```
+
+该路线由宿主 Go 交叉编译业务二进制,再仅用 Docker 封装/`docker save` 成离线镜像包,不走容器内 `go build` 慢路径。只有宿主 Go 不可用或 host 构建明确失败时,才报告原因并经人确认后改用容器内构建。
+
 遇 §3 禁令、§10 红线,或要装/升级工具、改系统环境、写 secrets、碰生产、push/tag、改 30+ 文件 → **立刻停止报告**,等授权。
 
 **接线做最终版,不留半成品**(细则见 `CLAUDE.md §14`):新功能一次接到可上线版本,不准 TODO 占位 / 空实现;允许配置开关默认关闭(如 `snowflake.node_id_source` 默认 static),但开关打开后的分支必须是完整真实实现。引入隔离重依赖的独立 pkg module(如 `pkg/snowflake/etcdnode` 的 etcd client)到服务时,Claude 写代码 + 补 go.mod 的 require/replace,`go mod tidy` 生成 go.sum 由 Codex 执行(§11.1);接线后必须在交接里**列出需 tidy 的服务清单**,不准默声留着让下个 AI 撞 build 红。
