@@ -18,9 +18,15 @@
 ```powershell
 # 构建 17 个业务镜像并打包到本目录
 pwsh tools/scripts/export_images.ps1 -Build
+
+# 开发机已装 Go 时可用宿主编译方式,增量更快
+pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 ```
 
 生成后把 `pandora-images.tar` 纳入版本控制(`git add` / `svn add`)并提交/同步。
+
+开发机临时只重建某个服务镜像时,可双击仓库根目录的 `重建镜像-选打包方式.cmd`,
+选择宿主编译或容器内编译,再输入服务名(如 `battle-result`)。
 
 ## 使用(拉不到镜像的机器)
 

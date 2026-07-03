@@ -1,0 +1,44 @@
+# Pandora Go 业务服务「预编译打包」镜像(方案 B:宿主编译 → 只打包)。
+#
+# 与 deploy/services/Dockerfile(方案 A:容器内 go build)的区别:
+#   本 Dockerfile **不在容器里编译**,只把宿主已交叉编译好的二进制 + etc/ 塞进 scratch。
+#   编译由 tools/scripts/start.ps1 的 Build-Images-Host 在宿主用 `GOOS=linux CGO_ENABLED=0`
+#   完成,享受宿主 go build 增量缓存 —— 单服务重建从「分钟级(容器冷缓存重下依赖)」降到「秒级」。
+#
+# 构建上下文 = 每个服务的 stage 目录(run/docker-build/prebuilt/<name>/),里面只有:
+#   app        宿主交叉编译产出的 linux/amd64 静态二进制
+#   etc/       该服务的 etc/(killswitch.yaml 等兜底;主配置运行期被集群版覆盖)
+# 上下文极小,docker build 几乎瞬时;stage 目录在 run/ 下(已 gitignore),不污染仓库。
+#
+# 由 Build-Images-Host 自动调用:
+#   docker build -f deploy/services/Dockerfile.prebuilt \
+#     --build-arg BASE_REGISTRY=docker.io \
+#     -t pandora/<name>:dev  run/docker-build/prebuilt/<name>
+
+ARG GO_VERSION=1.26.4
+ARG BASE_REGISTRY=docker.io
+
+# ===== certs 阶段 =====
+# 只为拿 golang 官方镜像自带的 CA 根证书与时区库,不做任何编译(该层构建后一直命中缓存)。
+# 复用宿主已缓存的 golang 基础镜像;这台机器既然能宿主 go build,通常也早已拉过该镜像。
+FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION} AS certs
+
+# ===== 运行阶段 =====
+# 与方案 A 完全一致:scratch + 静态二进制 + CA + 时区,非 root(uid:gid=10001)。
+FROM scratch
+
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=certs /usr/share/zoneinfo /usr/share/zoneinfo
+
+WORKDIR /app
+
+# 上下文根就是该服务的 stage 目录:app = 宿主预编译二进制,etc/ = 该服务兜底配置。
+COPY app /app/app
+COPY etc/ /app/etc/
+
+# 非 root 运行:scratch 无 /etc/passwd,用纯数字 uid:gid(与方案 A 一致 = 10001)。
+USER 10001:10001
+
+# 约定:集群版主配置统一挂成 /app/etc/cluster.yaml(compose bind-mount / k8s ConfigMap)。
+ENTRYPOINT ["/app/app"]
+CMD ["-conf", "etc/cluster.yaml"]

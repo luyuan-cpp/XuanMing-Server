@@ -57,8 +57,15 @@ param(
     [switch]$Reset,       # 一键重置:彻底清掉旧状态再全新启动(线上 online 模式禁用)
     [switch]$Status,      # 查看状态
     [switch]$Check,       # 只检查工具链,不启动
-    [switch]$BuildOnly,   # 只构建 17 个业务镜像后退出(供 export_images.ps1 离线打包用)
+    [switch]$BuildOnly,   # 只构建业务镜像后退出(供 export_images.ps1 离线打包用)
     [switch]$Rebuild,     # 强制重新构建镜像,忽略 deploy/offline-images 离线包(开发机改代码后用)
+
+    # 镜像构建方式(方案 A / 方案 B,可选):
+    #   incontainer 方案A:在 Docker 容器里 go build(环境隔离,无需本机 Go,冷缓存较慢)——默认,保持既有行为
+    #   host        方案B:本机交叉编译 linux 二进制再塞进 scratch 镜像(享受宿主增量缓存,单服务重建秒级,需装 Go)
+    [ValidateSet('incontainer', 'host')]
+    [string]$BuildMode = 'incontainer',
+    [string[]]$Only = @(), # 配合 -BuildOnly:只构建指定服务(连字符名,如 battle-result);留空=全部业务镜像
     [switch]$Install,     # 工具缺失时尝试 winget 安装(默认不安装;不含 Docker Desktop)
     [switch]$InstallDocker, # 显式同意用 winget 装 Docker Desktop(装前确认虚拟化;装后仍需重启+手动启动)
     [switch]$NoInstall,   # 兼容旧参数;等同于不传 -Install
@@ -719,9 +726,17 @@ function Build-AllImages {
     $dockerfile = Join-Path $ProjectRoot 'deploy/services/Dockerfile'
     $v = Get-VersionInfo
     Write-Info "  版本烙印:version=$($v.Version) commit=$($v.Commit) built=$($v.BuildTime)"
+    Write-Info "  构建方式:$BuildMode(incontainer=容器内 go build / host=宿主交叉编译再打包)"
     $list = Get-ServiceList
-    # -Only 非空时只构建指定服务(含战斗混合模式不构建 ds/hub allocator 镜像,它们跑宿主)
-    if ($Only.Count -gt 0) { $list = $list | Where-Object { $Only -contains $_.Name } }
+    # -Only 非空时只构建指定服务(含战斗混合模式不构建 ds/hub allocator 镜像,它们跑宿主)。
+    if ($Only.Count -gt 0) {
+        $known = @($list | ForEach-Object { $_.Name })
+        $unknown = @($Only | Where-Object { $known -notcontains $_ })
+        if ($unknown.Count -gt 0) {
+            throw "未知服务名:$($unknown -join ',')。可选:$($known -join ',')"
+        }
+        $list = @($list | Where-Object { $Only -contains $_.Name })
+    }
 
     # ===== 离线镜像优先(免联网,拉不到 Docker Hub/加速站的机器双击一键脚本即用)=====
     # deploy/offline-images/pandora-images.tar 由能联网机器 export_images.ps1 -Build 生成并随仓库同步。
@@ -751,26 +766,45 @@ function Build-AllImages {
         return
     }
 
+    # 离线镜像优先:本机缺业务镜像 + 无「构建能力」时自动导入离线包(免联网)。
+    # 「构建能力」两种模式判定不同:host 方式需本机装 Go;incontainer 方式需 golang 基础镜像。
     if (-not $Rebuild -and (Test-Path $offlineTar)) {
         $missing = @($list | Where-Object { docker image inspect "pandora/$($_.Name):dev" *> $null; $LASTEXITCODE -ne 0 })
-        $hasGoBase = [bool](docker images --format '{{.Repository}}' 2>$null | Select-String -Quiet '(^|/)golang$')
-        if ($missing.Count -gt 0 -and -not $hasGoBase) {
-            Write-Step "离线镜像优先:本机缺 $($missing.Count) 个业务镜像且无构建基础镜像,自动导入离线包(免联网)"
+        if ($BuildMode -eq 'host') {
+            $canBuild = [bool](Test-CommandExists 'go')
+        } else {
+            $canBuild = [bool](docker images --format '{{.Repository}}' 2>$null | Select-String -Quiet '(^|/)golang$')
+        }
+        if ($missing.Count -gt 0 -and -not $canBuild) {
+            Write-Step "离线镜像优先:本机缺 $($missing.Count) 个业务镜像且无构建能力(host 缺 Go / incontainer 缺 golang 基础镜像),自动导入离线包(免联网)"
             Write-Info "  $offlineTar"
             docker load -i $offlineTar
             if ($LASTEXITCODE -ne 0) { throw "离线镜像导入失败:$offlineTar" }
             $missing = @($list | Where-Object { docker image inspect "pandora/$($_.Name):dev" *> $null; $LASTEXITCODE -ne 0 })
         }
-        if (-not $hasGoBase) {
+        if (-not $canBuild) {
             if ($missing.Count -eq 0) {
-                Write-Ok "业务镜像已齐全(离线导入/已存在),本机无构建基础镜像,跳过构建直接使用。要强制构建加 -Rebuild。"
+                Write-Ok "业务镜像已齐全(离线导入/已存在),本机无构建能力,跳过构建直接使用。要强制构建加 -Rebuild。"
                 return
             }
-            Write-Err "离线导入后仍缺以下镜像,且本机无 golang 基础镜像无法构建:"
+            Write-Err "离线导入后仍缺以下镜像,且本机无构建能力(host 缺 Go / incontainer 缺 golang 基础镜像):"
             $missing | ForEach-Object { Write-Err "  - pandora/$($_.Name):dev" }
             throw "请在能联网的机器跑 export_images.ps1 -Build 重新生成 deploy/offline-images/pandora-images.tar 并同步过来。"
         }
     }
+
+    # 分派:方案 B(宿主编译 → 打包)/ 方案 A(容器内 go build)。
+    if ($BuildMode -eq 'host') {
+        Build-Images-Host -List $list -Version $v
+    } else {
+        Build-Images-InContainer -List $list -Version $v -Dockerfile $dockerfile -OfflineTar $offlineTar
+    }
+}
+
+# ===== 方案 A:容器内 go build(deploy/services/Dockerfile,环境隔离,无需本机 Go)=====
+function Build-Images-InContainer {
+    param([array]$List, $Version, [string]$Dockerfile, [string]$OfflineTar)
+    $v = $Version
 
     # 国内镜像:基础镜像仓库前缀 + go 模块代理,避免卡在 Docker Hub / proxy.golang.org。
     # 默认走国内加速;可用 PANDORA_BASE_REGISTRY / PANDORA_GOPROXY 覆盖(官方仓库填 docker.io)。
@@ -779,7 +813,7 @@ function Build-AllImages {
         # 本机已有 golang 基础镜像时,优先用本地(打成 Dockerfile 需要的 docker.io/library/golang:<ver> tag),
         # 彻底免联网拉基础镜像;本地没有才回退国内加速站(需网络)。
         $goVer = '1.26.4'
-        $m = Select-String -Path $dockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+        $m = Select-String -Path $Dockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
         $wantGo = "docker.io/library/golang:$goVer"
         docker image inspect $wantGo *> $null
@@ -806,9 +840,9 @@ function Build-AllImages {
     Write-Info "  Go 模块代理:$goproxy(可用 PANDORA_GOPROXY 覆盖)"
 
     $offlineFallbackDone = $false
-    foreach ($svc in $list) {
+    foreach ($svc in $List) {
         Write-Info "  docker build pandora/$($svc.Name):dev ..."
-        docker build -f $dockerfile `
+        docker build -f $Dockerfile `
             --build-arg "SERVICE_DIR=$($svc.Dir)" `
             --build-arg "CMD_NAME=$($svc.Cmd)" `
             --build-arg "VERSION=$($v.Version)" `
@@ -820,10 +854,10 @@ function Build-AllImages {
         if ($LASTEXITCODE -ne 0) {
             # 构建失败兜底:有离线包就自动导入(拉不到基础镜像/goproxy 挂时),导入后该镜像存在则继续。
             # 导入只做一次(offlineFallbackDone),但之后每个失败服务都复查一次 inspect,避免第 2 个服务误报失败。
-            if (-not $Rebuild -and (Test-Path $offlineTar)) {
+            if (-not $Rebuild -and (Test-Path $OfflineTar)) {
                 if (-not $offlineFallbackDone) {
                     Write-Warn "  构建 $($svc.Name) 失败(多半拉不到基础镜像)。检测到离线镜像包,自动导入兜底..."
-                    docker load -i $offlineTar
+                    docker load -i $OfflineTar
                     $offlineFallbackDone = $true
                 }
                 docker image inspect "pandora/$($svc.Name):dev" *> $null
@@ -832,6 +866,92 @@ function Build-AllImages {
             throw "镜像构建失败:$($svc.Name)"
         }
     }
+}
+
+# ===== 方案 B:宿主交叉编译 → 只打包(deploy/services/Dockerfile.prebuilt)=====
+# 本机用 GOOS=linux CGO_ENABLED=0 交叉编译 linux/amd64 静态二进制,享受宿主 go build 增量缓存
+# (单服务重建秒级、不重下依赖),再用轻量 Dockerfile.prebuilt 把产物 + etc/ 塞进 scratch 镜像。
+# 与方案 A 产出同名镜像 pandora/<name>:dev,版本烙印一致,可无缝喂给 compose / export_images。
+function Build-Images-Host {
+    param([array]$List, $Version)
+    if (-not (Test-CommandExists 'go')) {
+        throw "host 构建方式需要本机安装 Go(1.26.4+)。装好后重试,或改用 -BuildMode incontainer(容器内编译,无需本机 Go)。"
+    }
+    $v = $Version
+    $prebuiltDockerfile = Join-Path $ProjectRoot 'deploy/services/Dockerfile.prebuilt'
+    $stageRoot = Join-Path $ProjectRoot 'run/docker-build/prebuilt'
+    if (-not (Test-Path $stageRoot)) { New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null }
+
+    # Dockerfile.prebuilt 只用 golang 镜像取 CA 证书 / 时区(不编译,层缓存命中);沿用本地已有基础镜像。
+    $baseRegistry = $env:PANDORA_BASE_REGISTRY
+    if (-not $baseRegistry) {
+        $goVer = '1.26.4'
+        $m = Select-String -Path $prebuiltDockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
+        $wantGo = "docker.io/library/golang:$goVer"
+        docker image inspect $wantGo *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $baseRegistry = 'docker.io'
+        } else {
+            $localGo = (docker images --format '{{.Repository}}:{{.Tag}}' 2>$null | Select-String '(^|/)golang:' | Select-Object -First 1)
+            if ($localGo) {
+                $src = "$localGo".Trim()
+                Write-Info "  本机无 $wantGo,发现 $src,自动打标复用(免联网拉基础镜像)。"
+                docker tag $src $wantGo 2>$null
+                $baseRegistry = 'docker.io'
+            } else {
+                $baseRegistry = 'docker.m.daocloud.io'
+            }
+        }
+    }
+    # 宿主 go build 拉模块用的代理(默认 goproxy.cn;尊重已自定义的非公有 GOPROXY)。
+    $goproxy = $env:PANDORA_GOPROXY
+    if (-not $goproxy) {
+        if ($env:GOPROXY -and $env:GOPROXY -notmatch 'proxy\.golang\.org') { $goproxy = $env:GOPROXY }
+        else { $goproxy = 'https://goproxy.cn,direct' }
+    }
+    Write-Info "  基础镜像仓库:$baseRegistry(仅用于取 CA/时区,不编译)"
+    Write-Info "  Go 模块代理:$goproxy(宿主交叉编译用)"
+
+    $ld = "-s -w " +
+        "-X github.com/luyuancpp/pandora/pkg/version.Version=$($v.Version) " +
+        "-X github.com/luyuancpp/pandora/pkg/version.Commit=$($v.Commit) " +
+        "-X github.com/luyuancpp/pandora/pkg/version.BuildTime=$($v.BuildTime)"
+
+    foreach ($svc in $List) {
+        $stage  = Join-Path $stageRoot $svc.Name
+        $etcSrc = Join-Path $ProjectRoot "$($svc.Dir)/etc"
+        if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+        New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
+        Write-Info "  [host] go build $($svc.Name)(GOOS=linux CGO_ENABLED=0)..."
+        Push-Location (Join-Path $ProjectRoot $svc.Dir)
+        $rc = 1
+        try {
+            $env:GOOS = 'linux'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
+            if ($goproxy) { $env:GOPROXY = $goproxy }
+            & go build -trimpath -ldflags $ld -o (Join-Path $stage 'app') "./cmd/$($svc.Cmd)"
+            $rc = $LASTEXITCODE
+        } finally {
+            Pop-Location
+            Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED -ErrorAction SilentlyContinue
+        }
+        if ($rc -ne 0) { throw "宿主编译失败:$($svc.Name)(可改用 -BuildMode incontainer 在容器内编译)。" }
+
+        # 拷该服务 etc/ 进 stage(镜像 COPY etc/;主配置运行期被集群版覆盖)。
+        if (Test-Path $etcSrc) {
+            Copy-Item -Recurse -Force $etcSrc (Join-Path $stage 'etc')
+        } else {
+            New-Item -ItemType Directory -Path (Join-Path $stage 'etc') -Force | Out-Null
+        }
+
+        Write-Info "  [host] docker build pandora/$($svc.Name):dev(打包预编译产物,秒级)..."
+        docker build -f $prebuiltDockerfile `
+            --build-arg "BASE_REGISTRY=$baseRegistry" `
+            -t "pandora/$($svc.Name):dev" $stage
+        if ($LASTEXITCODE -ne 0) { throw "镜像打包失败:$($svc.Name)" }
+    }
+    Write-Ok "宿主编译 + 打包完成($($List.Count) 个镜像)。"
 }
 
 # ===== 电脑重启后快速恢复(不重建镜像,尽量把上次状态拉回来)=====
@@ -966,8 +1086,8 @@ if (-not $prereqOk) {
 }
 
 if ($BuildOnly) {
-    Write-Step "只构建 17 个业务镜像(离线打包用,不启动任何服务)"
-    Build-AllImages
+    Write-Step "只构建业务镜像(离线打包用,不启动任何服务;构建方式=$BuildMode$(if ($Only.Count -gt 0) { ";只构建 $($Only -join ',')" }))"
+    Build-AllImages -Only $Only
     Write-Ok "业务镜像构建完成。可用 tools/scripts/export_images.ps1 打包导出。"
     exit 0
 }

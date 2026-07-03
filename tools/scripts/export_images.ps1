@@ -18,6 +18,9 @@
   # 本机:先构建再打包(推荐,保证镜像最新)
   pwsh tools/scripts/export_images.ps1 -Build
 
+  # 本机:宿主编译再打包(快,秒级增量,需装 Go)
+  pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
+
   # 本机:只打包(镜像已构建好,不想重建)
   pwsh tools/scripts/export_images.ps1
 
@@ -31,6 +34,8 @@
 param(
     [switch]$Build,          # 打包前先构建业务镜像(复用 start.ps1 的 Build-AllImages)
     [switch]$IncludeInfra,   # 连基础设施镜像一起打包(全新目标机才需要)
+    [ValidateSet('incontainer', 'host')]
+    [string]$BuildMode = 'incontainer', # 配合 -Build:incontainer=容器内编译(默认)/ host=宿主交叉编译再打包(快)
     [string]$Out             # 输出 tar 路径(默认 <仓库根>/deploy/offline-images/pandora-images.tar)
 )
 
@@ -93,7 +98,8 @@ if ($Build) {
     if (-not $env:PANDORA_BASE_REGISTRY) { $env:PANDORA_BASE_REGISTRY = 'docker.io' }
     if (-not $env:PANDORA_GOPROXY)       { $env:PANDORA_GOPROXY       = 'https://goproxy.cn,direct' }
 
-    & (Join-Path $ScriptDir 'start.ps1') -Mode docker -BuildOnly
+    $buildOnlyServices = @($BusinessImages | ForEach-Object { ($_ -replace '^pandora/', '') -replace ':dev$', '' })
+    & (Join-Path $ScriptDir 'start.ps1') -Mode docker -BuildOnly -BuildMode $BuildMode -Only $buildOnlyServices
     if ($LASTEXITCODE -ne 0) { throw "业务镜像构建失败,先解决构建问题再打包。" }
 }
 

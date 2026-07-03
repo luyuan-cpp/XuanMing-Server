@@ -21,7 +21,17 @@ rem 这台机器不改代码,只跑离线包:强制纯离线,直接 docker load 
 rem 不联网、不受 Docker DNS 抖动影响。需要临时构建最新代码时,在开发机做或手动加 -Rebuild。
 set "PANDORA_OFFLINE=1"
 
-where pwsh >nul 2>nul && (set "PS=pwsh") || (set "PS=powershell")
+rem 本项目脚本要求 PowerShell 7(pwsh)。缺失则明确报错退出, 不回退 Windows PowerShell 5.1。
+where pwsh >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo  [ERR] 未找到 PowerShell 7 pwsh。本脚本需要 PowerShell 7。
+  echo        下载安装: https://aka.ms/powershell  或  winget install Microsoft.PowerShell
+  echo.
+  pause
+  exit /b 1
+)
+set "PS=pwsh"
 
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\play.ps1" -Battle -Intranet
 set "RC=%ERRORLEVEL%"
