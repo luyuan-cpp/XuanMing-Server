@@ -19,6 +19,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/luyuancpp/pandora/pkg v0.0.0
 	github.com/luyuancpp/pandora/pkg/cellroute/etcdtable v0.0.0-00010101000000-000000000000
+	github.com/luyuancpp/pandora/pkg/leader/etcdleader v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/pkg/snowflake/etcdnode v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.16.0
@@ -95,3 +96,5 @@ replace (
 )
 
 replace github.com/luyuancpp/pandora/pkg/cellroute/etcdtable => ../../../pkg/cellroute/etcdtable
+
+replace github.com/luyuancpp/pandora/pkg/leader/etcdleader => ../../../pkg/leader/etcdleader

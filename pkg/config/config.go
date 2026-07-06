@@ -126,7 +126,7 @@ type MySQLConf struct {
 	// Shards 是分库 DSN 列表。留空 = 单库(用 DSN)。配置 >=2 个 DSN = 分库模式,
 	// 由 mysqlx.NewShardSet 按 snowflake 业务 ID 路由(shard = id % len(Shards))。
 	// DAU 200万 / 千万注册量级下,单 MySQL 实例的写吞吐与单表行数都会触顶,按 player_id
-	// 水平分库分表;分片数一旦定稿不可随意改(rehash 代价高),详见 docs/design/scale-dau-2m.md。
+	// 水平分库分表;分片数一旦定稿不可随意改(rehash 代价高),详见 docs/design/scale-cellular-20m.md。
 	// 池参数(MaxOpenConns 等)每个分片各自套用本结构的同名字段。
 	Shards []string `yaml:"shards,omitempty" json:"shards,omitempty"`
 }
@@ -148,7 +148,7 @@ type RedisConf struct {
 	// 留空 = 单实例模式(用 Host)。配置 >=1 个地址 = 集群模式,由 redisx.NewUniversalClient
 	// 构造 ClusterClient(go-redis UniversalClient 会按 Addrs 数量与 MasterName 自动选型)。
 	// DAU 200万 / 高 CCU 阶段单 Redis 必然成为吞吐与连接数单点,改配 Addrs 上 Redis Cluster,
-	// 分片键用业务 ID(player_id / team_id);详见 docs/design/scale-dau-2m.md。
+	// 分片键用业务 ID(player_id / team_id);详见 docs/design/scale-cellular-20m.md。
 	Addrs []string `yaml:"addrs,omitempty" json:"addrs,omitempty"`
 
 	// MasterName 非空 = 走 Sentinel 故障转移(FailoverClient);为空且 Addrs 多节点 = Cluster。
@@ -220,7 +220,7 @@ type SnowflakeConf struct {
 	// 接线只需一行(static / etcd 两态由本字段驱动,fencing 退出已内置):
 	//	sf, sfCloser, err := etcdnode.ProvideSnowflake(ctx, serviceName, cfg.Node.NodeId, cfg.Snowflake)
 	// static 服务不引入 etcd 依赖;改 etcd 时该服务 go.mod 需 Codex 补 etcdnode require + go mod tidy。
-	// 详见 docs/design/infra.md §8.1 与 docs/design/scale-dau-2m.md §3。
+	// 详见 docs/design/infra.md §8.1 与 docs/design/scale-cellular-20m.md。
 	NodeIDSource string `yaml:"node_id_source,omitempty" json:"node_id_source,omitempty"`
 
 	// Etcd* 给 NodeIDSource="etcd" 用。

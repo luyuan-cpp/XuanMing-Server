@@ -25,6 +25,8 @@ use ./pkg
 
 use ./pkg/cellroute/etcdtable
 
+use ./pkg/leader/etcdleader
+
 use ./proto
 
 use ./services/account/login

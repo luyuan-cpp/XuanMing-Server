@@ -1,6 +1,6 @@
 # decision-revisit:hub_allocator 跨 slot 事务改造
 
-> 触发:Redis 去单点(`scale-dau-2m.md` §2.1)切 Cluster 后,`hub_allocator` 数据层 4 个方法
+> 触发:Redis 去单点(`scale-cellular-20m.md` 单 Cell 口径)切 Cluster 后,`hub_allocator` 数据层 4 个方法
 > 把 per-pod 镜像键与全局索引键捆进同一事务,跨 slot → `CROSSSLOT`。本文档按 `AGENTS.md` §7
 > 给出旧问题 / 新方案 / 风险 / 迁移成本 / 验收,供人拍板。
 > 决策级别:服务级(hub_allocator);牵涉 §1 一人一 hub 不变量边界,故升级为 decision-revisit。

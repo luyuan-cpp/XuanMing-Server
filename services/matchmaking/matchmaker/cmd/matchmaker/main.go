@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
+	"github.com/luyuancpp/pandora/pkg/leader/etcdleader"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
@@ -128,7 +130,7 @@ func main() {
 	}
 
 	// 7. 装配链
-	repo := data.NewRedisMatchRepo(rdb)
+	repo := data.NewRedisMatchRepo(rdb, cfg.Match.GameMode)
 
 	// DSAllocator:ds_allocator_addr 非空 → 真 gRPC 拉 DS + 签 battle 票据;否则 W4 ① 打桩
 	var allocator biz.DSAllocator
@@ -189,9 +191,35 @@ func main() {
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	// 9. 后台撮合循环(随进程生命周期启停)
+	//
+	// 单写者(见 docs/design/decision-revisit-matchmaker-single-writer.md):撮合循环在共享队列上
+	// 做全局优化,天然是单写者问题。多副本部署时若每个副本都无条件跑,会重复成局(同一玩家进两场
+	// match,违反不变量 §1)。
+	//   - Leader.Enabled=false(默认):本副本直接跑(单副本 / dev 行为不变)。
+	//   - Leader.Enabled=true:经 etcd 选举,仅当选副本跑;失主取消 loop 的 ctx 但进程不退出,继续
+	//     服务 RPC,新 leader 在 lease TTL 内接管(不停机滚动更新,不变量 §16)。
 	loopCtx, loopCancel := context.WithCancel(context.Background())
 	defer loopCancel()
-	go uc.RunMatchLoop(loopCtx)
+	if cfg.Match.Leader.Enabled {
+		// 分片键 = game_mode × region:同一 (mode, region) 的副本竞争同一个 leader。
+		electionName := fmt.Sprintf("matchmaker/%s/r%d", cfg.Match.GameMode, cfg.CellRoute.SelfRegion)
+		go func() {
+			err := etcdleader.Run(loopCtx, etcdleader.Config{
+				Endpoints:   cfg.Match.Leader.EtcdEndpoints,
+				Election:    electionName,
+				Prefix:      cfg.Match.Leader.Prefix,
+				LeaseTTLSec: cfg.Match.Leader.LeaseTTLSec,
+			}, uc.RunMatchLoop)
+			if err != nil && loopCtx.Err() == nil {
+				helper.Errorw("msg", "match_leader_run_failed", "election", electionName, "err", err)
+			}
+		}()
+		helper.Infow("msg", "match_loop_leader_gated", "election", electionName,
+			"etcd_endpoints", cfg.Match.Leader.EtcdEndpoints)
+	} else {
+		go uc.RunMatchLoop(loopCtx)
+		helper.Infow("msg", "match_loop_direct", "hint", "single-replica / leader election disabled")
+	}
 
 	helper.Infow(
 		"msg", "service_ready",

@@ -24,7 +24,7 @@ func newRepo(t *testing.T) (*RedisMatchRepo, *miniredis.Miniredis) {
 	t.Cleanup(mr.Close)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
-	return NewRedisMatchRepo(rdb), mr
+	return NewRedisMatchRepo(rdb, ""), mr
 }
 
 func TestTicketRoundtripAndQueueOrder(t *testing.T) {
@@ -194,6 +194,64 @@ func TestActiveRangeAndExpire(t *testing.T) {
 	}
 	if _, found, _ := repo.GetMatch(ctx, 2); !found {
 		t.Fatal("match 2 record should remain queryable")
+	}
+}
+
+// TestGameModeNamespaceIsolatesQueueAndActive 验证:同一套 Redis 下,不同 game_mode 的
+// queue / active 索引互相隔离(见 decision-revisit-matchmaker-single-writer.md §3.2),
+// 而 ticket / match 记录本体由全局唯一 ID 定址、跨模式可见(不混入对方扫描)。
+func TestGameModeNamespaceIsolatesQueueAndActive(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis run: %v", err)
+	}
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	repoA := NewRedisMatchRepo(rdb, "5v5_ranked")
+	repoB := NewRedisMatchRepo(rdb, "3v3_casual")
+
+	// A 模式入队一张票
+	ticket := &matchv1.MatchTicketStorageRecord{
+		TicketId: 1001, TeamId: 1001, AvgMmr: 1000, EnqueuedAtMs: 1,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 1001, Mmr: 1000}},
+	}
+	if err := repoA.AddTicket(ctx, ticket, testTTL); err != nil {
+		t.Fatalf("A add ticket: %v", err)
+	}
+
+	// A 的 queue 能扫到,B 的 queue 扫不到(索引隔离)
+	if order, _ := repoA.RangeQueueTickets(ctx); len(order) != 1 || order[0] != 1001 {
+		t.Fatalf("A queue = %v, want [1001]", order)
+	}
+	if order, _ := repoB.RangeQueueTickets(ctx); len(order) != 0 {
+		t.Fatalf("B queue = %v, want [] (isolated)", order)
+	}
+
+	// 记录本体全局可见:B 也能按全局 ticketID 读到 record
+	if _, found, _ := repoB.GetTicket(ctx, 1001); !found {
+		t.Fatal("ticket record should be globally addressable across modes")
+	}
+
+	// active 同理隔离
+	now := time.Now().UnixMilli()
+	match := &matchv1.MatchStorageRecord{MatchId: 2002, ConfirmDeadlineMs: now - 1}
+	if err := repoA.CreateMatch(ctx, match, testTTL); err != nil {
+		t.Fatalf("A create match: %v", err)
+	}
+	if expired, _ := repoA.RangeExpiredMatches(ctx, now); len(expired) != 1 || expired[0] != 2002 {
+		t.Fatalf("A expired = %v, want [2002]", expired)
+	}
+	if expired, _ := repoB.RangeExpiredMatches(ctx, now); len(expired) != 0 {
+		t.Fatalf("B expired = %v, want [] (isolated)", expired)
+	}
+
+	// 空 namespace 走旧全局 key,与带 namespace 的池互不干扰
+	repoLegacy := NewRedisMatchRepo(rdb, "")
+	if order, _ := repoLegacy.RangeQueueTickets(ctx); len(order) != 0 {
+		t.Fatalf("legacy queue = %v, want [] (separate from namespaced)", order)
 	}
 }
 

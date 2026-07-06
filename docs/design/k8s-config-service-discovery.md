@@ -2,7 +2,7 @@
 
 > **状态**:规范说明(2026-06-30 记录)
 > **本文档地位**:回答「这么多 yaml,线上 k8s 每个都要改自己 IP 吗 / 中间件是集群怎么办」。配置寻址的统一口径。
-> **关联**:`infra.md`(资源命名)、`scale-dau-2m.md`(Redis Cluster / MySQL 分库)、`pandora-arch.md §11`(决策行)、`deploy/k8s/overlays/online/`(线上 overlay)。
+> **关联**:`infra.md`(资源命名)、`scale-cellular-20m.md`(Redis Cluster / MySQL 分库)、`pandora-arch.md §11`(决策行)、`deploy/k8s/overlays/online/`(线上 overlay)。
 > **一句话**:**线上不是「每个 yaml 填自己 IP」,而是「写服务名 + 靠 service discovery」**;Pod 是不是集群、有几个副本,对配置完全透明。
 
 ## §1 核心结论

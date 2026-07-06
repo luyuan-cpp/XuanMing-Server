@@ -54,11 +54,11 @@ func resolveMaintMode(s string) maintnotifications.Mode {
 //
 // 返回的 redis.UniversalClient 接口与 *redis.Client 同名方法兼容,业务 repo 只依赖接口即可
 // 在"单实例 → Cluster"之间切换而不改业务代码。DAU 200万 / 高 CCU 阶段把单 Redis 换成
-// Redis Cluster 时,只需在 yaml 填 addrs 列表,无需改 data 层。详见 docs/design/scale-dau-2m.md。
+// Redis Cluster 时,只需在 yaml 填 addrs 列表,无需改 data 层。详见 docs/design/scale-cellular-20m.md。
 //
 // ⚠️ Cluster 模式下跨 slot 的多键操作 / 事务 / Lua 受限:同一原子操作涉及的 key 必须落同一
 // slot(用 {hash_tag} 把同一玩家的相关 key 绑定到同一 slot,如 lock:{player:123})。
-// redislock / 多键 ZSET 等改造前必须核对 hash tag,详见 scale-dau-2m.md §Redis。
+// redislock / 多键 ZSET 等改造前必须核对 hash tag,详见 scale-cellular-20m.md 的单 Cell Redis 口径。
 func NewUniversalClient(c config.RedisConf) redis.UniversalClient {
 	addrs := c.Addrs
 	if len(addrs) == 0 {

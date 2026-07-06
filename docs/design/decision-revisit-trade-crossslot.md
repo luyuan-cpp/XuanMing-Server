@@ -1,6 +1,6 @@
 # decision-revisit:trade.CreateOrder 跨 slot 事务改造
 
-> 触发:Redis 去单点(`scale-dau-2m.md` §2.1)切 Cluster 后,`trade.CreateOrder` 的
+> 触发:Redis 去单点(`scale-cellular-20m.md` 单 Cell 口径)切 Cluster 后,`trade.CreateOrder` 的
 > `TxPipeline` 跨 3 个 slot,Cluster 下报 `CROSSSLOT`。本文档按 `AGENTS.md` §7 给出旧问题 /
 > 新方案 / 风险 / 迁移成本 / 验收,供人拍板。
 > 决策级别:服务级(trade);牵涉 `CLAUDE.md` §9 不变量 #7,故升级为 decision-revisit。

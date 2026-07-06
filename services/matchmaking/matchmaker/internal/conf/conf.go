@@ -90,6 +90,29 @@ type MatchConf struct {
 	// OptimisticRetry WATCH/MULTI/EXEC 乐观锁冲突时最大重试次数。
 	// 耗尽后返回 ErrMatchConcurrent(4006)。
 	OptimisticRetry int `yaml:"optimistic_retry,omitempty" json:"optimistic_retry,omitempty"`
+
+	// Leader 控制后台撮合循环的单写者选举(见
+	// docs/design/decision-revisit-matchmaker-single-writer.md)。
+	Leader LeaderConf `yaml:"leader,omitempty" json:"leader,omitempty"`
+}
+
+// LeaderConf 控制后台撮合循环的单写者选举。
+//
+// 背景:撮合循环在共享队列上做全局优化,天然是单写者问题。多副本部署时,若每个副本都无条件
+// 跑循环,会重复成局(同一玩家进两场 match,违反不变量 §1)。
+//
+//   - Enabled=false(默认):本副本直接跑 RunMatchLoop(单副本 / dev 行为不变)。
+//   - Enabled=true:经 etcd 选举,仅当选副本跑撮合循环,其余副本只服务 RPC + 热备;
+//     失主自动交棒,满足不停机滚动更新(不变量 §16)。
+type LeaderConf struct {
+	// Enabled 是否启用选举门禁(多副本部署必开)。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// EtcdEndpoints etcd 地址(Enabled=true 时必填)。
+	EtcdEndpoints []string `yaml:"etcd_endpoints,omitempty" json:"etcd_endpoints,omitempty"`
+	// Prefix 选举 key 前缀,留空用 etcdleader 默认(/pandora/leader/)。
+	Prefix string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
+	// LeaseTTLSec session lease TTL(秒),留空用 etcdleader 默认(15);失主检测粒度 ≈ 此值。
+	LeaseTTLSec int `yaml:"lease_ttl_sec,omitempty" json:"lease_ttl_sec,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。

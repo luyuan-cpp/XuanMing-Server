@@ -27,10 +27,29 @@ import (
 
 // ── key 模板 ─────────────────────────────────────────────────────────────────
 
-const (
-	queueKey  = "pandora:match:queue"
-	activeKey = "pandora:match:active"
-)
+// queue / active 两个索引 ZSET 按 game_mode 命名空间化(见
+// docs/design/decision-revisit-matchmaker-single-writer.md §3.2):同一 Cell 内多个
+// game_mode 的 matchmaker 共享同一套 Redis 时,不能让不同模式的票混进同一 queue / active。
+// 空 namespace 保留旧全局 key(单测 / 兼容路径)。
+//
+//	pandora:match:<mode>:queue    pandora:match:<mode>:active
+//	空 namespace → pandora:match:queue    pandora:match:active
+//
+// 注意:ticketKey / matchKey(记录本体)保持全局——由全局唯一 snowflake ID 定址,不跨模式碰撞;
+// playerKey(玩家归属 claim)也保持全局——落实"一人同一时刻只在一个队列(跨所有模式)"(不变量 §1)。
+func queueKeyFor(namespace string) string {
+	if namespace == "" {
+		return "pandora:match:queue"
+	}
+	return "pandora:match:" + namespace + ":queue"
+}
+
+func activeKeyFor(namespace string) string {
+	if namespace == "" {
+		return "pandora:match:active"
+	}
+	return "pandora:match:" + namespace + ":active"
+}
 
 // CreateMatch 中 activeKey ZADD 的有界重试参数:matchKey 已 SET 成功后,ZADD 幂等,
 // 用短退避吸收 Redis 瞬时抖动,耗尽才删 matchKey 回滚(见 CreateMatch 注释)。
@@ -88,12 +107,21 @@ type MatchRepo interface {
 
 // RedisMatchRepo 是基于 go-redis/v9 的 MatchRepo 实现。
 type RedisMatchRepo struct {
-	rdb redis.UniversalClient
+	rdb       redis.UniversalClient
+	queueKey  string // 按 game_mode 命名空间化的 queue 索引 ZSET
+	activeKey string // 按 game_mode 命名空间化的 active 索引 ZSET
 }
 
 // NewRedisMatchRepo 构造 RedisMatchRepo。
-func NewRedisMatchRepo(rdb redis.UniversalClient) *RedisMatchRepo {
-	return &RedisMatchRepo{rdb: rdb}
+//
+// namespace 通常传服务的 game_mode(如 "5v5_ranked");空串保留旧全局 key(单测 / 兼容路径)。
+// 仅影响 queue / active 两个扫描索引;ticketKey / matchKey / playerKey 仍全局(见 key 模板注释)。
+func NewRedisMatchRepo(rdb redis.UniversalClient, namespace string) *RedisMatchRepo {
+	return &RedisMatchRepo{
+		rdb:       rdb,
+		queueKey:  queueKeyFor(namespace),
+		activeKey: activeKeyFor(namespace),
+	}
 }
 
 // --- player index ---
@@ -156,7 +184,7 @@ func (r *RedisMatchRepo) AddTicket(ctx context.Context, ticket *matchv1.MatchTic
 	if err := r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, ticketTTL).Err(); err != nil {
 		return err
 	}
-	return r.rdb.ZAdd(ctx, queueKey, redis.Z{Score: float64(ticket.AvgMmr), Member: ticket.TicketId}).Err()
+	return r.rdb.ZAdd(ctx, r.queueKey, redis.Z{Score: float64(ticket.AvgMmr), Member: ticket.TicketId}).Err()
 }
 
 func (r *RedisMatchRepo) GetTicket(ctx context.Context, ticketID uint64) (*matchv1.MatchTicketStorageRecord, bool, error) {
@@ -184,7 +212,7 @@ func (r *RedisMatchRepo) ReserveTicket(ctx context.Context, ticket *matchv1.Matc
 	if err := r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, ticketTTL).Err(); err != nil {
 		return err
 	}
-	return r.rdb.ZRem(ctx, queueKey, ticket.TicketId).Err()
+	return r.rdb.ZRem(ctx, r.queueKey, ticket.TicketId).Err()
 }
 
 func (r *RedisMatchRepo) RequeueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error {
@@ -197,11 +225,11 @@ func (r *RedisMatchRepo) DeleteTicket(ctx context.Context, ticketID uint64) erro
 	if err := r.rdb.Del(ctx, ticketKey(ticketID)).Err(); err != nil {
 		return err
 	}
-	return r.rdb.ZRem(ctx, queueKey, ticketID).Err()
+	return r.rdb.ZRem(ctx, r.queueKey, ticketID).Err()
 }
 
 func (r *RedisMatchRepo) RangeQueueTickets(ctx context.Context) ([]uint64, error) {
-	vals, err := r.rdb.ZRange(ctx, queueKey, 0, -1).Result()
+	vals, err := r.rdb.ZRange(ctx, r.queueKey, 0, -1).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +262,7 @@ func (r *RedisMatchRepo) CreateMatch(ctx context.Context, match *matchv1.MatchSt
 	zadd := redis.Z{Score: float64(match.ConfirmDeadlineMs), Member: match.MatchId}
 	var zerr error
 	for attempt := 0; attempt < createMatchZAddRetry; attempt++ {
-		if zerr = r.rdb.ZAdd(ctx, activeKey, zadd).Err(); zerr == nil {
+		if zerr = r.rdb.ZAdd(ctx, r.activeKey, zadd).Err(); zerr == nil {
 			return nil
 		}
 		select {
@@ -318,7 +346,7 @@ func (r *RedisMatchRepo) UpdateMatchWithLock(
 }
 
 func (r *RedisMatchRepo) RemoveActive(ctx context.Context, matchID uint64) error {
-	return r.rdb.ZRem(ctx, activeKey, matchID).Err()
+	return r.rdb.ZRem(ctx, r.activeKey, matchID).Err()
 }
 
 func (r *RedisMatchRepo) ExpireMatch(ctx context.Context, matchID uint64, ttl time.Duration) error {
@@ -326,7 +354,7 @@ func (r *RedisMatchRepo) ExpireMatch(ctx context.Context, matchID uint64, ttl ti
 	if err := r.rdb.Expire(ctx, matchKey(matchID), ttl).Err(); err != nil {
 		return err
 	}
-	return r.rdb.ZRem(ctx, activeKey, matchID).Err()
+	return r.rdb.ZRem(ctx, r.activeKey, matchID).Err()
 }
 
 func (r *RedisMatchRepo) DeleteMatch(ctx context.Context, matchID uint64) error {
@@ -334,13 +362,13 @@ func (r *RedisMatchRepo) DeleteMatch(ctx context.Context, matchID uint64) error 
 	// 先 ZRem 把 match 移出确认期扫描索引(避免删了镜像后 RangeExpiredMatches 仍命中已空的
 	// match_id),再 Del 镜像;两步都执行(不在前一步失败时 early-return,否则会残留另一半),
 	// 用 errors.Join 聚合上报。任一步残留均可由 RangeExpiredMatches→GetMatch miss 自愈。
-	zerr := r.rdb.ZRem(ctx, activeKey, matchID).Err()
+	zerr := r.rdb.ZRem(ctx, r.activeKey, matchID).Err()
 	derr := r.rdb.Del(ctx, matchKey(matchID)).Err()
 	return errors.Join(zerr, derr)
 }
 
 func (r *RedisMatchRepo) RangeExpiredMatches(ctx context.Context, nowMs int64) ([]uint64, error) {
-	vals, err := r.rdb.ZRangeByScore(ctx, activeKey, &redis.ZRangeBy{
+	vals, err := r.rdb.ZRangeByScore(ctx, r.activeKey, &redis.ZRangeBy{
 		Min: "-inf",
 		Max: strconv.FormatInt(nowMs, 10),
 	}).Result()

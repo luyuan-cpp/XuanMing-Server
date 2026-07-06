@@ -1,12 +1,12 @@
 // 本文件实现 ShardSet:按 snowflake 业务 ID 水平分库的只读路由器。
 //
-// 背景(docs/design/scale-dau-2m.md):DAU 200万 / 千万注册量级下,单 MySQL 实例的写吞吐
+// 背景(docs/design/scale-cellular-20m.md):单 Cell 扩容口径下,单 MySQL 实例的写吞吐
 // 和单表行数都会触顶。Pandora 的业务 ID 已统一 uint64 snowflake(CLAUDE.md §5.5),天然
 // 自带均匀分布的分片键,按 player_id 水平分库分表即可。
 //
 // ShardSet 只做"按 ID 选库",不做跨库聚合 / 分布式事务 / 重均衡:
 //   - 选库公式固定 shard = id % N,N 一旦定稿不可随意改(改 N 会让历史数据 rehash,代价极高);
-//     扩容走"翻倍 + 双写迁移"或预分配逻辑分片,详见 scale-dau-2m.md §MySQL。
+//     扩容走"翻倍 + 双写迁移"或预分配逻辑分片,详见 scale-cellular-20m.md。
 //   - 同一业务实体的相关行必须用同一分片键(player_id),避免单次业务跨库。
 //   - 跨玩家的聚合查询(排行榜等)不要打散到分库扫描,走单独的离线/缓存路径。
 package mysqlx

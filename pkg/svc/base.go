@@ -40,7 +40,7 @@ type BaseContext struct {
 	//
 	// 类型为 redis.UniversalClient 接口(非 *redis.Client),按 config.RedisConf 的
 	// addrs / master_name 自动选型:单实例 / Sentinel 主从 / Cluster 分片。留空 = 单实例,
-	// 行为与旧版完全一致。详见 docs/design/scale-dau-2m.md §2。
+	// 行为与旧版完全一致。详见 docs/design/scale-cellular-20m.md 的单 Cell 扩容口径。
 	RedisClient redis.UniversalClient
 
 	// Snowflake 是该服务用的 ID 生成器,NodeID 取 config.Node.NodeId。

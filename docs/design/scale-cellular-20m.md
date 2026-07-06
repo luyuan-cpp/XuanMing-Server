@@ -9,7 +9,7 @@
 
 ## 0. 一句话结论
 
-- `scale-dau-2m.md` 的四项改造只把**单一逻辑集群**推到 ~40 万 CCU 天花板。
+- 原 200 万 DAU 单集群方案的四项改造只把**单一逻辑集群**推到 ~40 万 CCU 天花板。
 - **Cell(单元)化**把"一整套 infra"打包成积木,可线性复制到 ~300 万 CCU(8~10 Cell)+ **单一全局协调层**。这是 2000 万的**第一层骨架**。
 - **600 万 CCU 时,Cell 仍能线性堆(16~20 Cell),但"单一全局协调层"(全局 matchmaker / 跨 Cell 消息总线 / social TiDB)会先到顶** —— N×N 跨 Cell 扇出、全局撮合 QPS、好友图谱写放大,单点扛不住。
 - 解法:**在 Cell 之上再抬一层 Region(大区)**,形成 **Region → Cell → Cell 内分片** 三层。全局协调层**按 region 分片**,同 region 内 N×N、跨 region 几乎不交互,把全局压力从"全网 N×N"压成"每 region 内 N×N + region 间极少量"。
@@ -19,7 +19,7 @@
 
 ## 1. 容量基线:2000 万 DAU 到底要扛多少
 
-沿用 `scale-dau-2m.md` §1 口径,**CCU 系数取上界 30%(全区全服爆款 MOBA,不低球)**:
+沿用原 200 万 DAU 单集群方案口径,**CCU 系数取上界 30%(全区全服爆款 MOBA,不低球)**:
 
 | 指标 | 含义 | 2000 万 DAU 估算 | 说明 |
 |---|---|---|---|
@@ -30,7 +30,7 @@
 | 在战斗 | battle DS 容量 | ~200 万 | 10 人/局 → **~20 万个并发 battle DS pod** |
 | 登录峰值 QPS | login | ~十万级/s | 早晚高峰 + 重连风暴放大 |
 
-**关键数字:600 万 CCU、~20 万 battle pod、~8000 hub 实例,是 `scale-dau-2m.md`(30~40 万 CCU)的 ~15 倍、1000 万版方案的 2 倍。**
+**关键数字:600 万 CCU、~20 万 battle pod、~8000 hub 实例,是原 200 万 DAU 单集群方案(30~40 万 CCU)的 ~15 倍、1000 万版方案的 2 倍。**
 
 ---
 
@@ -38,7 +38,7 @@
 
 ### 2.1 第一道墙 —— 单逻辑集群(~40 万 CCU 触顶)
 
-`scale-dau-2m.md` 前提是"**一个逻辑集群**":一个 Redis Cluster、一组 MySQL ShardSet、一个 Kafka、一个 k8s。到 ~40 万 CCU 即触顶:
+原 200 万 DAU 单集群方案前提是"**一个逻辑集群**":一个 Redis Cluster、一组 MySQL ShardSet、一个 Kafka、一个 k8s。到 ~40 万 CCU 即触顶:
 
 | 组件 | 现方案(单逻辑集群) | 为何到顶 |
 |---|---|---|
@@ -80,11 +80,11 @@ Cell-k = {
   全套无状态 go 服务(login / player / matchmaker / team / trade / push / ...)
   独立 snowflake nodeID 命名空间
 }
-单 Cell 容量目标 ≈ 30~40 万 CCU(= scale-dau-2m.md 的天花板)
+单 Cell 容量目标 ≈ 30~40 万 CCU(= 原 200 万 DAU 单集群方案的天花板)
 ```
 
 - 600 万 CCU → **16~20 个 Cell**;留首日尖峰 + 故障冗余 → **部署 20~24 个 Cell**(分布在 3 个 Region,每 region ~5~6 Cell)。
-- 每个 Cell 内部**就是 `scale-dau-2m.md` 已设计好的那套**,几乎零新设计——价值在"把已验证的单集群当积木复制"。
+- 每个 Cell 内部**就是原 200 万 DAU 单集群方案已设计好的那套**,几乎零新设计——价值在"把已验证的单集群当积木复制"。
 
 ### 3.2 玩家 → Cell 路由(确定性,不查表)
 
@@ -200,7 +200,7 @@ redis_slot   / mysql_shard                      // 第 3 层:Cell 内分片
 | 阶段 | CCU | 形态 | 动作 |
 |---|---|---|---|
 | 现状 | < 5 万 | 单实例 infra | 当前 dev/小规模,零改动 |
-| 阶段 1 | ~40 万 | **单 Cell** | 落地 `scale-dau-2m.md` 四项 + 压测验证一个 Cell 满载 |
+| 阶段 1 | ~40 万 | **单 Cell** | 落地单 Cell 四项扩容 + 压测验证一个 Cell 满载 |
 | 阶段 2 | ~300 万 | **单 Region 多 Cell + 单一全局层** | Cell 切分 + cell_route + 全局 matchmaker/auction/social + 多 k8s |
 | 阶段 3 | ~600 万 | **多 Region + 区域全局层** | 本文新增:region_route + 全局层按 region 分片 + 最小跨 region 桥 |
 | 阶段 4 | 更高 | 自动扩缩 + 多地理 region | logical 映射平滑迁移自动化 + 跨地域部署 |

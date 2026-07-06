@@ -148,7 +148,7 @@ func newFixtureWith(t *testing.T, firstMatchID uint64, mutate func(*conf.MatchCo
 	if mutate != nil {
 		mutate(&c.Match)
 	}
-	repo := data.NewRedisMatchRepo(rdb)
+	repo := data.NewRedisMatchRepo(rdb, "")
 	pusher := &mockPusher{}
 	locator := newMockLocator()
 	idGen := &fakeIDGen{next: firstMatchID}

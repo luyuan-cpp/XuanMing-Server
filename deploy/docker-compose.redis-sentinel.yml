@@ -1,6 +1,6 @@
 # Pandora Redis 高可用部署【Sentinel 三哨兵 + 一主两从】
 #
-# 用途:解决 scale-dau-2m.md §2.1 的"单 Redis 单点"——先上 Sentinel 拿到
+# 用途:解决 scale-cellular-20m.md 单 Cell 内的"单 Redis 单点"——先上 Sentinel 拿到
 #   ① 主从故障自动转移(可用性)② 读副本扩展,且 **多键事务/Lua 不受限**
 #   (单 slot 命名空间),作为切 Redis Cluster 前的过渡(两个跨 slot 服务
 #   trade/hub_allocator 已按 decision-revisit-*-crossslot.md 改造完毕,

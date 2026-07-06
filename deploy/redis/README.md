@@ -1,6 +1,6 @@
 # Pandora Redis 高可用 / 扩展部署
 
-> 解决 [`scale-dau-2m.md`](../../docs/design/scale-dau-2m.md) §2.1「单 Redis 单点」。
+> 解决 [`scale-cellular-20m.md`](../../docs/design/scale-cellular-20m.md) 中单 Cell「单 Redis 单点」。
 > 两个跨 slot 服务(trade、hub_allocator)已按
 > [`decision-revisit-trade-crossslot.md`](../../docs/design/decision-revisit-trade-crossslot.md)、
 > [`decision-revisit-hub-crossslot.md`](../../docs/design/decision-revisit-hub-crossslot.md)
@@ -75,7 +75,7 @@ node:
 
 ## 4. 生产分片数决策(6 主 6 从)
 
-详见 [`scale-dau-2m.md`](../../docs/design/scale-dau-2m.md) §2.1。摘要:
+详见 [`scale-cellular-20m.md`](../../docs/design/scale-cellular-20m.md) 单 Cell 扩容口径。摘要:
 
 - **6 主 6 从**:6 主分摊写,每主 1 从做故障转移 + 读分流。16384 slot / 6 ≈ 2731 slot/主。
 - **容量测算(30 万 CCU)**:在线态键(session / player_locator / hub assign / 队列 / 交易索引)

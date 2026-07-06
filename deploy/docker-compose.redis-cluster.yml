@@ -2,7 +2,7 @@
 #
 # 用途:本地验证 hash tag / CROSSSLOT 改造(trade、hub_allocator 已按
 #   decision-revisit-*-crossslot.md 改完),最小可用集群 = 3 主 3 从。
-#   **生产按 scale-dau-2m.md §2.1 决策起 6 主 6 从**(k8s redis-operator/helm
+#   **生产按 scale-cellular-20m.md 的单 Cell 口径起 6 主 6 从**(k8s redis-operator/helm
 #   负责 announce-ip 与扩缩容,本 compose 仅供本机功能验证,不是生产拓扑)。
 #
 # 为什么用静态 IP:Redis Cluster gossip 用 IP 而非主机名互联,docker 桥接网络下
