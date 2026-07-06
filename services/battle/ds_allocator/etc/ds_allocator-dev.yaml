@@ -102,6 +102,11 @@ local_ds:
   # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
   executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
   map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 默认/兜底关卡:map_id 未在下方 maps 命中时用它(留空则用 DS 默认关卡)
+  # loader_map:填了它就切到「填表即用」权威路径——DS 统一启到这张加载/分发关卡,不再直接启到目标图;
+  # 目标副本由 UE 侧 Loader GameMode 在 BeginPlay 读 PANDORA_MAP_ID(已注入)→ 查 g_关卡.xlsx → ServerTravel。
+  # 之后策划新增副本只改表 + 重打 DS 内容,本 yaml 的 maps 桥可退休。启用前提:UE 已交付 Loader 关卡 + GameMode
+  # (见 Doc/服务器/副本选择_UE侧交接_Codex.md)。留空(默认)= 走下面 maps 直接启到目标图的 dev 桥。
+  # loader_map: "/Game/Test/Level/Lvl_DS_Loader?game=/Script/Pandora.PandoraDSLoaderGameMode"
   # 选副本表:客户端选择的 map_id 经 matchmaker 透传到 AllocateBattle,命中则起对应关卡,
   # 未命中回退上面的 map_name。同一个 ds_allocator 进程凭 map_id 起不同副本(PVP / PVE 共存)。
   # map_id 对齐策划 g_关卡.xlsx 的关卡 id(下面的示例值需按实际表填)。

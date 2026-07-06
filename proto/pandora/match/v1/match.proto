@@ -40,6 +40,10 @@ enum MatchStage {
 
 message StartMatchRequest {
   uint64 team_id = 1;
+  // map_id:玩家选择的副本编号(对齐策划 g_关卡.xlsx 的关卡 id)。0 = 用服务端默认副本
+  // (向后兼容:老客户端不填 → matchmaker 回退 cfg.Match.MapId)。同一 game_mode 内不同
+  // map_id 的票据分池撮合(不会被凑进同一局),透传到 AllocateBattle 决定 DS 加载哪张图。
+  uint32 map_id = 2;
 }
 
 message StartMatchResponse {
@@ -164,6 +168,7 @@ message MatchTicketStorageRecord {
   uint64                            match_id      = 7;  // 被撮合进的 match;未撮合时为 0
   // 8-9 reserved
   reserved 8 to 9;
+  uint32                            map_id        = 10;  // 选择的副本编号(g_关卡.xlsx),0=默认;同 game_mode 内按此分池撮合
 }
 
 // MatchStorageRecord 是一场已撮合 match 的存储快照。
@@ -178,4 +183,5 @@ message MatchStorageRecord {
   string                            battle_ticket       = 8;  // 同上
   // 9 reserved
   reserved 9;
+  uint32                            map_id              = 10;  // 本局副本编号(从票据继承),透传到 AllocateBattle 选 DS 关卡
 }

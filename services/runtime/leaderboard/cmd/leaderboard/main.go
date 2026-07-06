@@ -152,6 +152,12 @@ func main() {
 	uc := biz.NewLeaderboardUsecase(repo, board, granter, events, sf, cfg.Leaderboard)
 	svc := service.NewLeaderboardService(uc)
 
+	// 8.5 发奖补扫:周期重试 FAILED / PENDING(崩残)的奖励,消除「inventory 抖动 →
+	// 奖励漏发直到人工介入」。Grant 幂等(grant_idempotency_key),多副本并发补扫安全。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go runRewardRetrySweep(sweepCtx, uc)
+
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
 
@@ -180,6 +186,28 @@ func main() {
 //   - 结算 → pandora.leaderboard.settle,kafka key = settlement_id(同一结算保序,不变量 §9)
 type settleEventPusher struct {
 	settle *kafkax.KeyOrderedProducer
+}
+
+// 发奖补扫参数:每 rewardSweepInterval 扫一次,只碰 updated_at_ms 早于
+// rewardSweepGrace 的未发成记录(把刚结算还在同步发的批次挡在外),单轮上限 rewardSweepLimit。
+const (
+	rewardSweepInterval = time.Minute
+	rewardSweepGrace    = 2 * time.Minute
+	rewardSweepLimit    = 200
+)
+
+// runRewardRetrySweep 周期补发 FAILED / PENDING(崩残)的结算奖励(对齐 dialogue runSessionSweep 模式)。
+func runRewardRetrySweep(ctx context.Context, uc *biz.LeaderboardUsecase) {
+	ticker := time.NewTicker(rewardSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			uc.RetryUngrantedRewards(ctx, rewardSweepGrace, rewardSweepLimit)
+		}
+	}
 }
 
 func (k *settleEventPusher) PushSettle(ctx context.Context, settlementID uint64, b data.BoardKey, winners []*leaderboardv1.LeaderboardEntry) error {

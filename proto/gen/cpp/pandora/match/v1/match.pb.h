@@ -656,6 +656,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kTeamIdFieldNumber = 1,
+    kMapIdFieldNumber = 2,
   };
   // uint64 team_id = 1 [json_name = "teamId"];
   void clear_team_id() ;
@@ -667,11 +668,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
   void _internal_set_team_id(::uint64_t value);
 
   public:
+  // uint32 map_id = 2 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.StartMatchRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -701,6 +712,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartMatchRequest final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2907,6 +2919,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
     kEnqueuedAtMsFieldNumber = 6,
     kMatchIdFieldNumber = 7,
     kAvgMmrFieldNumber = 5,
+    kMapIdFieldNumber = 10,
   };
   // repeated .pandora.match.v1.MatchMemberStorageRecord members = 4 [json_name = "members"];
   [[nodiscard]] int members_size()
@@ -2989,11 +3002,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
   void _internal_set_avg_mmr(::int32_t value);
 
   public:
+  // uint32 map_id = 10 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchTicketStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<4, 8,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3029,6 +3052,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketStorageRecord final : pu
     ::int64_t enqueued_at_ms_;
     ::uint64_t match_id_;
     ::int32_t avg_mmr_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3192,6 +3216,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStorageRecord final : public :
     kCreatedAtMsFieldNumber = 5,
     kConfirmDeadlineMsFieldNumber = 6,
     kStageFieldNumber = 2,
+    kMapIdFieldNumber = 10,
   };
   // repeated .pandora.match.v1.MatchMemberStorageRecord members = 3 [json_name = "members"];
   [[nodiscard]] int members_size()
@@ -3304,11 +3329,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStorageRecord final : public :
   void _internal_set_stage(::pandora::match::v1::MatchStage value);
 
   public:
+  // uint32 map_id = 10 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           1, 79,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3346,6 +3381,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchStorageRecord final : public :
     ::int64_t created_at_ms_;
     ::int64_t confirm_deadline_ms_;
     int stage_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3840,6 +3876,30 @@ inline ::uint64_t StartMatchRequest::_internal_team_id() const {
 inline void StartMatchRequest::_internal_set_team_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = value;
+}
+
+// uint32 map_id = 2 [json_name = "mapId"];
+inline void StartMatchRequest::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t StartMatchRequest::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.StartMatchRequest.map_id)
+  return _internal_map_id();
+}
+inline void StartMatchRequest::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.StartMatchRequest.map_id)
+}
+inline ::uint32_t StartMatchRequest::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void StartMatchRequest::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -5170,6 +5230,30 @@ inline void MatchTicketStorageRecord::_internal_set_match_id(::uint64_t value) {
   _impl_.match_id_ = value;
 }
 
+// uint32 map_id = 10 [json_name = "mapId"];
+inline void MatchTicketStorageRecord::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t MatchTicketStorageRecord::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchTicketStorageRecord.map_id)
+  return _internal_map_id();
+}
+inline void MatchTicketStorageRecord::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchTicketStorageRecord.map_id)
+}
+inline ::uint32_t MatchTicketStorageRecord::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void MatchTicketStorageRecord::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // MatchStorageRecord
@@ -5502,6 +5586,30 @@ inline void MatchStorageRecord::set_allocated_battle_ticket(::std::string* PROTO
     _impl_.battle_ticket_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.MatchStorageRecord.battle_ticket)
+}
+
+// uint32 map_id = 10 [json_name = "mapId"];
+inline void MatchStorageRecord::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t MatchStorageRecord::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchStorageRecord.map_id)
+  return _internal_map_id();
+}
+inline void MatchStorageRecord::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchStorageRecord.map_id)
+}
+inline ::uint32_t MatchStorageRecord::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void MatchStorageRecord::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
 }
 
 #ifdef __GNUC__

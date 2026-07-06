@@ -261,10 +261,11 @@ func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchI
 }
 
 // buildArgs 拼 UE DS 命令行:关卡 + -server -log -port=<port> + 额外参数。
-// 关卡按请求 map_id 从 cfg.Maps 选副本(未命中回退 cfg.MapName),实现「一个 allocator 起多副本」。
+// 首个加载关卡由 cfg.ResolveStartupMap(mapID) 决定:配了 LoaderMap 则统一启到加载/分发关卡(UE 侧
+// 读 PANDORA_MAP_ID → 查表 → ServerTravel);否则按 map_id 从 Maps 直接选副本图(未命中回退 MapName)。
 func (l *LocalGameServerAllocator) buildArgs(port int, mapID uint32) []string {
 	args := make([]string, 0, 4+len(l.cfg.ExtraArgs))
-	if mapName := l.cfg.ResolveMapName(mapID); mapName != "" {
+	if mapName := l.cfg.ResolveStartupMap(mapID); mapName != "" {
 		args = append(args, mapName)
 	}
 	args = append(args, "-server", "-log", fmt.Sprintf("-port=%d", port))

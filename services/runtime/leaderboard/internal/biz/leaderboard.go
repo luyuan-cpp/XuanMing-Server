@@ -354,6 +354,47 @@ func (u *LeaderboardUsecase) grantRewards(ctx context.Context, settlementID uint
 	}
 }
 
+// RetryUngrantedRewards 补发未成的结算奖励(后台周期调,main.go 起 ticker)。
+//
+// 覆盖两类漏发:FAILED(inventory 拒绝 / 不可达)和 PENDING(ClaimReward 后、
+// MarkReward 前进程崩残留)。olderThan 把「刚结算还在同步发」的批次挡在扫描外;
+// Grant 以 grant_idempotency_key 幂等,多副本并发补扫 / 与同步路径重叠都不会双发。
+// 返回本轮补发成功 / 仍失败的条数。
+func (u *LeaderboardUsecase) RetryUngrantedRewards(ctx context.Context, olderThan time.Duration, limit int) (granted, failed int) {
+	rows, err := u.repo.ListUngrantedRewards(ctx, nowMs()-olderThan.Milliseconds(), limit)
+	if err != nil {
+		plog.With(ctx).Errorw("msg", "lb_reward_retry_list_failed", "err", err)
+		return 0, 0
+	}
+	for _, rec := range rows {
+		var items []data.RewardGrant
+		if uerr := json.Unmarshal([]byte(rec.RewardJSON), &items); uerr != nil || len(items) == 0 {
+			// 脏数据:标 FAILED 不再重扫死循环,靠 Errorw 告警人工介入。
+			plog.With(ctx).Errorw("msg", "lb_reward_retry_bad_json",
+				"key", rec.GrantIdemKey, "json", rec.RewardJSON, "err", uerr)
+			_ = u.repo.MarkReward(ctx, rec.GrantIdemKey, data.RewardFailed, nowMs())
+			failed++
+			continue
+		}
+		if gerr := u.granter.Grant(ctx, rec.EntityID, rec.GrantIdemKey, items); gerr != nil {
+			plog.With(ctx).Warnw("msg", "lb_reward_retry_grant_failed",
+				"key", rec.GrantIdemKey, "entity", rec.EntityID, "err", gerr)
+			_ = u.repo.MarkReward(ctx, rec.GrantIdemKey, data.RewardFailed, nowMs())
+			failed++
+			continue
+		}
+		if merr := u.repo.MarkReward(ctx, rec.GrantIdemKey, data.RewardGranted, nowMs()); merr != nil {
+			// 已发成但没标上:下轮补扫会再 Grant(幂等 no-op)后重标,自愈。
+			plog.With(ctx).Warnw("msg", "lb_reward_retry_mark_failed", "key", rec.GrantIdemKey, "err", merr)
+		}
+		granted++
+	}
+	if granted > 0 || failed > 0 {
+		plog.With(ctx).Infow("msg", "lb_reward_retry_done", "granted", granted, "failed", failed)
+	}
+	return granted, failed
+}
+
 // rewardsForRank 返回某名次命中的奖励(取第一个匹配区间)。
 func rewardsForRank(table *leaderboardv1.RewardTable, rank int64) []data.RewardGrant {
 	for _, tier := range table.GetTiers() {

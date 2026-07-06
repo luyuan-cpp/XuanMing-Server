@@ -197,7 +197,7 @@ func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
 	f.locator.inBattle[captain] = true
 	f.locator.mu.Unlock()
 
-	if _, err := f.uc.StartMatch(ctx, 7001, 7001, captain); err == nil {
+	if _, err := f.uc.StartMatch(ctx, 7001, 7001, captain, 0); err == nil {
 		t.Fatalf("StartMatch: expected error, got nil")
 	} else if code := errcode.As(err); code != errcode.ErrMatchInBattle {
 		t.Fatalf("StartMatch code = %d, want ErrMatchInBattle(%d)", code, errcode.ErrMatchInBattle)
@@ -224,7 +224,7 @@ func TestStartMatch_FailClosedWhenLocatorUnavailable(t *testing.T) {
 	f.locator.queryErr = errors.New("locator down")
 	f.locator.mu.Unlock()
 
-	if _, err := f.uc.StartMatch(ctx, 7002, 7002, captain); err == nil {
+	if _, err := f.uc.StartMatch(ctx, 7002, 7002, captain, 0); err == nil {
 		t.Fatalf("StartMatch: expected fail-closed error, got nil")
 	} else if code := errcode.As(err); code != errcode.ErrUnavailable {
 		t.Fatalf("StartMatch code = %d, want ErrUnavailable(%d)", code, errcode.ErrUnavailable)
@@ -249,7 +249,7 @@ func TestStartMatch_FailOpenWhenLocatorUnavailable(t *testing.T) {
 	f.locator.queryErr = errors.New("locator down")
 	f.locator.mu.Unlock()
 
-	id, err := f.uc.StartMatch(ctx, 7003, 7003, captain)
+	id, err := f.uc.StartMatch(ctx, 7003, 7003, captain, 0)
 	if err != nil {
 		t.Fatalf("StartMatch fail-open: unexpected error: %v", err)
 	}
@@ -796,7 +796,7 @@ func TestStartMatch_HealsStaleClaim(t *testing.T) {
 		t.Fatalf("seed stale claim: ok=%v err=%v", ok, err)
 	}
 
-	id, err := f.uc.StartMatch(ctx, 7010, 7010, captain)
+	id, err := f.uc.StartMatch(ctx, 7010, 7010, captain, 0)
 	if err != nil {
 		t.Fatalf("StartMatch should heal stale claim: %v", err)
 	}
@@ -814,7 +814,7 @@ func TestStartMatch_LiveClaimStillRejected(t *testing.T) {
 	f := newFixture(t, 999)
 	f.seedTicket(t, ctx, 100, []uint64{60}, 1000)
 
-	_, err := f.uc.StartMatch(ctx, 7011, 7011, 60)
+	_, err := f.uc.StartMatch(ctx, 7011, 7011, 60, 0)
 	if code := errcode.As(err); code != errcode.ErrMatchAlreadyMatching {
 		t.Fatalf("code = %d, want ErrMatchAlreadyMatching(%d)", code, errcode.ErrMatchAlreadyMatching)
 	}

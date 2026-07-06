@@ -53,11 +53,17 @@ func (g *GrpcDSAllocator) Close() error {
 }
 
 // AllocateBattle 调 ds_allocator.AllocateBattle 拉战斗 DS,再为每个玩家签 battle DSTicket。
-func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64) (string, map[uint64]string, error) {
+// mapID 为本局副本编号(来自 match 记录):非 0 时按局透传给 ds_allocator 选副本地图;
+// 为 0(旧客户端 / 未选)时回退到静态默认 g.mapID,保持向后兼容。
+func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32) (string, map[uint64]string, error) {
+	effectiveMapID := mapID
+	if effectiveMapID == 0 {
+		effectiveMapID = g.mapID
+	}
 	resp, err := g.cli.AllocateBattle(ctx, &dsv1.AllocateBattleRequest{
 		MatchId:   matchID,
 		PlayerIds: playerIDs,
-		MapId:     g.mapID,
+		MapId:     effectiveMapID,
 		GameMode:  g.gameMode,
 	})
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -78,6 +79,21 @@ func (r *fakeRepo) MarkReward(_ context.Context, grantIdemKey string, status int
 		rec.UpdatedAtMs = updatedAtMs
 	}
 	return nil
+}
+
+func (r *fakeRepo) ListUngrantedRewards(_ context.Context, olderThanMs int64, limit int) ([]data.RewardLogRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []data.RewardLogRecord
+	for _, rec := range r.rewards {
+		if rec.Status != data.RewardGranted && rec.UpdatedAtMs < olderThanMs {
+			out = append(out, *rec)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 func (r *fakeRepo) grantCount() int {
@@ -174,6 +190,48 @@ func rewardTable3() *leaderboardv1.RewardTable {
 }
 
 // ── 用例 ──────────────────────────────────────────────────────────────────────
+
+// TestRetryUngrantedRewards_RegrantsFailed 补扫把 FAILED 记录重发成功并标 GRANTED;
+// grace 内(updated_at_ms 新于阈值)的记录不动。
+func TestRetryUngrantedRewards_RegrantsFailed(t *testing.T) {
+	uc, repo, granter, _ := newTestUsecase(t)
+	ctx := context.Background()
+
+	old := nowMs() - 10*60_000 // 10 分钟前:超出 grace,应被补扫
+	fresh := nowMs()           // 刚失败:在 grace 内,本轮不碰
+	seed := []*data.RewardLogRecord{
+		{SettlementID: 1, EntityID: 11, Rank: 1, GrantIdemKey: "lb:1:11",
+			Status: data.RewardFailed, RewardJSON: `[{"ItemConfigID":1001,"Count":100}]`, UpdatedAtMs: old},
+		{SettlementID: 1, EntityID: 12, Rank: 2, GrantIdemKey: "lb:1:12",
+			Status: data.RewardPending, RewardJSON: `[{"ItemConfigID":1002,"Count":50}]`, UpdatedAtMs: old},
+		{SettlementID: 2, EntityID: 13, Rank: 1, GrantIdemKey: "lb:2:13",
+			Status: data.RewardFailed, RewardJSON: `[{"ItemConfigID":1001,"Count":100}]`, UpdatedAtMs: fresh},
+	}
+	for _, rec := range seed {
+		if already, err := repo.ClaimReward(ctx, rec); err != nil || already {
+			t.Fatalf("seed reward %s: already=%v err=%v", rec.GrantIdemKey, already, err)
+		}
+	}
+
+	granted, failed := uc.RetryUngrantedRewards(ctx, 2*time.Minute, 100)
+	if granted != 2 || failed != 0 {
+		t.Fatalf("want granted=2 failed=0, got granted=%d failed=%d", granted, failed)
+	}
+	if granter.total() != 2 {
+		t.Fatalf("want 2 grant calls, got %d", granter.total())
+	}
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if s := repo.rewards["lb:1:11"].Status; s != data.RewardGranted {
+		t.Fatalf("lb:1:11 want GRANTED, got %d", s)
+	}
+	if s := repo.rewards["lb:1:12"].Status; s != data.RewardGranted {
+		t.Fatalf("lb:1:12 want GRANTED, got %d", s)
+	}
+	if s := repo.rewards["lb:2:13"].Status; s != data.RewardFailed {
+		t.Fatalf("lb:2:13 in grace window must stay FAILED, got %d", s)
+	}
+}
 
 func TestSubmitAndRange(t *testing.T) {
 	uc, _, _, _ := newTestUsecase(t)

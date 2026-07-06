@@ -55,6 +55,12 @@ spec:
                 # 防 battle_abandoned_heartbeat_timeout）。优先级高于地图 WorldSettings，无需改地图资产。
                 - name: PANDORA_DS_GAMEMODE
                   value: "/Script/Pandora.PandoraBattleGameMode"
+                # 「填表即用」权威路径（UE 交付 Loader 关卡 + PandoraDSLoaderGameMode 后启用）：把上面两行改成
+                # 加载/分发关卡 + Loader GameMode，DS 起来后由 Loader::BeginPlay 读 PANDORA_MAP_ID
+                # （ds_allocator 已按局注入 map-id label / env）→ 查 g_关卡.xlsx → ServerTravel 到目标副本。
+                # 之后策划新增副本只改表 + 重打 DS 内容，本 Fleet 无需改。见 Doc/服务器/副本选择_UE侧交接_Codex.md。
+                #   value: "/Game/Test/Level/Lvl_DS_Loader"            # ← PANDORA_DS_MAP
+                #   value: "/Script/Pandora.PandoraDSLoaderGameMode"   # ← PANDORA_DS_GAMEMODE
                 # ds_allocator 的 grpc-web 入口。DS 走 grpc-web（FHttpModule），不能直连裸 gRPC :50020，
                 # 必须打到 Envoy 的「DS 面」grpc-web 监听器 :8444（TLS 终止 + grpc-web→gRPC 转换，
                 # 按 /pandora.ds.v1.DSAllocatorService/ 路由到 ds_allocator，见 deploy/envoy/envoy.yaml）。

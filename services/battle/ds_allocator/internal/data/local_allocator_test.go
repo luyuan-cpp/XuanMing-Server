@@ -232,3 +232,24 @@ func TestBuildArgs_ResolvesMapByID(t *testing.T) {
 		t.Fatalf("unknown map_id should fallback to default map, args=%v", args)
 	}
 }
+
+// LoaderMap 一旦配置,DS 一律启到加载/分发关卡(忽略 map_id 直选),目标副本改由 UE Loader
+// 读 PANDORA_MAP_ID → 查表 → ServerTravel 决定(「填表即用」权威路径)。map_id 仍经 env 注入,不影响本参数。
+func TestBuildArgs_LoaderMapOverridesDirectSelect(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
+		MapName:   "/Game/Maps/Default",
+		LoaderMap: "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode",
+		PortBase:  7777,
+		PortRange: 10,
+		Maps: []conf.MapEntry{
+			{MapID: 1, MapName: "/Game/Maps/PVP"},
+			{MapID: 2, MapName: "/Game/Maps/PVE"},
+		},
+	})
+
+	// 即便 map_id=2 在 Maps 命中 PVE,配了 LoaderMap 也一律启 Loader 关卡。
+	args := l.buildArgs(7788, 2)
+	if len(args) == 0 || args[0] != "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode" {
+		t.Fatalf("loader_map should override direct map select, args=%v", args)
+	}
+}

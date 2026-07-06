@@ -1051,11 +1051,11 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1106,7 +1106,10 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleStorageRecord, _impl_.player_count_), 8>(),
        {80, 8, 0,
         PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_count_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleStorageRecord, _impl_.empty_since_ms_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.empty_since_ms_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1134,6 +1137,8 @@ constexpr BattleStorageRecord::ParseTableT_ BattleStorageRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.last_heartbeat_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // int32 player_count = 10 [json_name = "playerCount"];
       {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.player_count_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+      {PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.empty_since_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
     {{
@@ -1174,7 +1179,8 @@ inline constexpr BattleStorageRecord::Impl_::Impl_(
         allocated_at_ms_{::int64_t{0}},
         map_id_{0u},
         player_count_{0},
-        last_heartbeat_ms_{::int64_t{0}} {}
+        last_heartbeat_ms_{::int64_t{0}},
+        empty_since_ms_{::int64_t{0}} {}
 
 template <typename>
 constexpr BattleStorageRecord::BattleStorageRecord(::_pbi::ConstantInitialized,
@@ -2054,7 +2060,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.ds_addr_),
@@ -2065,6 +2071,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.allocated_at_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.last_heartbeat_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.player_count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::BattleStorageRecord, _impl_.empty_since_ms_),
         5,
         1,
         2,
@@ -2075,6 +2082,7 @@ const ::uint32_t
         6,
         9,
         8,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::DSLifecycleEvent, _impl_._has_bits_),
         10, // hasbit index offset
@@ -2106,7 +2114,7 @@ static const ::_pbi::MigrationSchema
         {73, sizeof(::pandora::ds::v1::ListBattlesRequest)},
         {78, sizeof(::pandora::ds::v1::ListBattlesResponse)},
         {85, sizeof(::pandora::ds::v1::BattleStorageRecord)},
-        {108, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
+        {110, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2154,7 +2162,7 @@ const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABS
     "e_filter\030\001 \001(\tR\013stateFilter\"z\n\023ListBattl"
     "esResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
     "n.v1.ErrCodeR\004code\0223\n\007battles\030\002 \003(\0132\031.pa"
-    "ndora.ds.v1.BattleInfoR\007battles\"\311\002\n\023Batt"
+    "ndora.ds.v1.BattleInfoR\007battles\"\357\002\n\023Batt"
     "leStorageRecord\022\031\n\010match_id\030\001 \001(\004R\007match"
     "Id\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\022\027\n\007ds"
     "_addr\030\003 \001(\tR\006dsAddr\022\024\n\005state\030\004 \001(\tR\005stat"
@@ -2163,26 +2171,27 @@ const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABS
     "Mode\022&\n\017allocated_at_ms\030\010 \001(\003R\rallocated"
     "AtMs\022*\n\021last_heartbeat_ms\030\t \001(\003R\017lastHea"
     "rtbeatMs\022!\n\014player_count\030\n \001(\005R\013playerCo"
-    "unt\"\354\001\n\020DSLifecycleEvent\022\031\n\010match_id\030\001 \001"
-    "(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodN"
-    "ame\0225\n\005phase\030\003 \001(\0162\037.pandora.ds.v1.DSLif"
-    "ecyclePhaseR\005phase\022\035\n\nplayer_ids\030\004 \003(\004R\t"
-    "playerIds\022\025\n\006map_id\030\005 \001(\rR\005mapId\022\033\n\tgame"
-    "_mode\030\006 \001(\tR\010gameMode\022\023\n\005ts_ms\030\007 \001(\003R\004ts"
-    "Ms*\233\001\n\020DSLifecyclePhase\022\"\n\036DS_LIFECYCLE_"
-    "PHASE_UNSPECIFIED\020\000\022 \n\034DS_LIFECYCLE_PHAS"
-    "E_ALLOCATED\020\001\022\037\n\033DS_LIFECYCLE_PHASE_RELE"
-    "ASED\020\002\022 \n\034DS_LIFECYCLE_PHASE_ABANDONED\020\003"
-    "2\365\002\n\022DSAllocatorService\022]\n\016AllocateBattl"
-    "e\022$.pandora.ds.v1.AllocateBattleRequest\032"
-    "%.pandora.ds.v1.AllocateBattleResponse\022Z"
-    "\n\rReleaseBattle\022#.pandora.ds.v1.ReleaseB"
-    "attleRequest\032$.pandora.ds.v1.ReleaseBatt"
-    "leResponse\022N\n\tHeartbeat\022\037.pandora.ds.v1."
-    "HeartbeatRequest\032 .pandora.ds.v1.Heartbe"
-    "atResponse\022T\n\013ListBattles\022!.pandora.ds.v"
-    "1.ListBattlesRequest\032\".pandora.ds.v1.Lis"
-    "tBattlesResponseb\006proto3"
+    "unt\022$\n\016empty_since_ms\030\013 \001(\003R\014emptySinceM"
+    "s\"\354\001\n\020DSLifecycleEvent\022\031\n\010match_id\030\001 \001(\004"
+    "R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodNam"
+    "e\0225\n\005phase\030\003 \001(\0162\037.pandora.ds.v1.DSLifec"
+    "yclePhaseR\005phase\022\035\n\nplayer_ids\030\004 \003(\004R\tpl"
+    "ayerIds\022\025\n\006map_id\030\005 \001(\rR\005mapId\022\033\n\tgame_m"
+    "ode\030\006 \001(\tR\010gameMode\022\023\n\005ts_ms\030\007 \001(\003R\004tsMs"
+    "*\233\001\n\020DSLifecyclePhase\022\"\n\036DS_LIFECYCLE_PH"
+    "ASE_UNSPECIFIED\020\000\022 \n\034DS_LIFECYCLE_PHASE_"
+    "ALLOCATED\020\001\022\037\n\033DS_LIFECYCLE_PHASE_RELEAS"
+    "ED\020\002\022 \n\034DS_LIFECYCLE_PHASE_ABANDONED\020\0032\365"
+    "\002\n\022DSAllocatorService\022]\n\016AllocateBattle\022"
+    "$.pandora.ds.v1.AllocateBattleRequest\032%."
+    "pandora.ds.v1.AllocateBattleResponse\022Z\n\r"
+    "ReleaseBattle\022#.pandora.ds.v1.ReleaseBat"
+    "tleRequest\032$.pandora.ds.v1.ReleaseBattle"
+    "Response\022N\n\tHeartbeat\022\037.pandora.ds.v1.He"
+    "artbeatRequest\032 .pandora.ds.v1.Heartbeat"
+    "Response\022T\n\013ListBattles\022!.pandora.ds.v1."
+    "ListBattlesRequest\032\".pandora.ds.v1.ListB"
+    "attlesResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps[1] = {
@@ -2192,7 +2201,7 @@ static ::absl::once_flag descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto = {
     false,
     false,
-    2344,
+    2382,
     descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto,
     "pandora/ds/v1/allocator.proto",
     &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_once,
@@ -4792,9 +4801,9 @@ BattleStorageRecord::BattleStorageRecord(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, last_heartbeat_ms_) -
+           offsetof(Impl_, empty_since_ms_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::last_heartbeat_ms_));
+               sizeof(Impl_::empty_since_ms_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.BattleStorageRecord)
 }
@@ -4818,9 +4827,9 @@ inline void BattleStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, last_heartbeat_ms_) -
+           offsetof(Impl_, empty_since_ms_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::last_heartbeat_ms_));
+               sizeof(Impl_::empty_since_ms_));
 }
 BattleStorageRecord::~BattleStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.ds.v1.BattleStorageRecord)
@@ -4896,10 +4905,10 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.map_id_) -
         reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.map_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     ::memset(&_impl_.player_count_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.last_heartbeat_ms_) -
-        reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.last_heartbeat_ms_));
+        reinterpret_cast<char*>(&_impl_.empty_since_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.empty_since_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5020,6 +5029,15 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
     }
   }
 
+  // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_empty_since_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<11>(
+              stream, this_._internal_empty_since_ms(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -5103,7 +5121,7 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // int32 player_count = 10 [json_name = "playerCount"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_player_count() != 0) {
@@ -5116,6 +5134,13 @@ PROTOBUF_NOINLINE void BattleStorageRecord::Clear() {
       if (this_._internal_last_heartbeat_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_last_heartbeat_ms());
+      }
+    }
+    // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_empty_since_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_empty_since_ms());
       }
     }
   }
@@ -5192,7 +5217,7 @@ void BattleStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_player_count() != 0) {
         _this->_impl_.player_count_ = from._impl_.player_count_;
@@ -5201,6 +5226,11 @@ void BattleStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_last_heartbeat_ms() != 0) {
         _this->_impl_.last_heartbeat_ms_ = from._impl_.last_heartbeat_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_empty_since_ms() != 0) {
+        _this->_impl_.empty_since_ms_ = from._impl_.empty_since_ms_;
       }
     }
   }
@@ -5229,8 +5259,8 @@ void BattleStorageRecord::InternalSwap(BattleStorageRecord* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.state_, &other->_impl_.state_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.last_heartbeat_ms_)
-      + sizeof(BattleStorageRecord::_impl_.last_heartbeat_ms_)
+      PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.empty_since_ms_)
+      + sizeof(BattleStorageRecord::_impl_.empty_since_ms_)
       - PROTOBUF_FIELD_OFFSET(BattleStorageRecord, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

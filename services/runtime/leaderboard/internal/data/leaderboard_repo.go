@@ -72,6 +72,10 @@ type LeaderboardRepo interface {
 	ClaimReward(ctx context.Context, rec *RewardLogRecord) (already bool, err error)
 	// MarkReward 更新发奖状态(GRANTED / FAILED)。
 	MarkReward(ctx context.Context, grantIdemKey string, status int8, updatedAtMs int64) error
+	// ListUngrantedRewards 列出未发成的奖励(PENDING / FAILED)且 updated_at_ms < olderThanMs,
+	// 供后台补发扫描重试(PENDING = 发奖中进程崩残留下;FAILED = inventory 拒绝/不可达)。
+	// olderThanMs 把刚结算还在发的批次挡在扫描外,避免与同步发奖路径双重发起(Grant 幂等,重叠也不双发)。
+	ListUngrantedRewards(ctx context.Context, olderThanMs int64, limit int) ([]RewardLogRecord, error)
 }
 
 // MySQLLeaderboardRepo 是基于 database/sql 的 LeaderboardRepo 实现(单库)。
@@ -185,6 +189,32 @@ func (r *MySQLLeaderboardRepo) MarkReward(ctx context.Context, grantIdemKey stri
 		return errcode.New(errcode.ErrInternal, "mark reward key=%s: %v", grantIdemKey, err)
 	}
 	return nil
+}
+
+func (r *MySQLLeaderboardRepo) ListUngrantedRewards(ctx context.Context, olderThanMs int64, limit int) ([]RewardLogRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	const q = "SELECT settlement_id, entity_id, `rank`, grant_idempotency_key, status, reward_json, created_at_ms, updated_at_ms" +
+		" FROM leaderboard_reward_log WHERE status <> ? AND updated_at_ms < ? ORDER BY updated_at_ms ASC LIMIT ?"
+	rows, err := r.db.QueryContext(ctx, q, RewardGranted, olderThanMs, limit)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "list ungranted rewards: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []RewardLogRecord
+	for rows.Next() {
+		var rec RewardLogRecord
+		if err := rows.Scan(&rec.SettlementID, &rec.EntityID, &rec.Rank, &rec.GrantIdemKey,
+			&rec.Status, &rec.RewardJSON, &rec.CreatedAtMs, &rec.UpdatedAtMs); err != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan reward_log: %v", err)
+		}
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iter reward_log: %v", err)
+	}
+	return out, nil
 }
 
 // isDupErr 判断是否 MySQL 唯一键冲突(Error 1062)。

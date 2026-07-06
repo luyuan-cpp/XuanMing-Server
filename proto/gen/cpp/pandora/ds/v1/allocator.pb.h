@@ -1790,6 +1790,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kMapIdFieldNumber = 6,
     kPlayerCountFieldNumber = 10,
     kLastHeartbeatMsFieldNumber = 9,
+    kEmptySinceMsFieldNumber = 11,
   };
   // repeated uint64 player_ids = 5 [json_name = "playerIds"];
   [[nodiscard]] int player_ids_size()
@@ -1921,11 +1922,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_last_heartbeat_ms(::int64_t value);
 
   public:
+  // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+  void clear_empty_since_ms() ;
+  [[nodiscard]] ::int64_t empty_since_ms() const;
+  void set_empty_since_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_empty_since_ms() const;
+  void _internal_set_empty_since_ms(::int64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 82,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1965,6 +1976,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     ::uint32_t map_id_;
     ::int32_t player_count_;
     ::int64_t last_heartbeat_ms_;
+    ::int64_t empty_since_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4642,6 +4654,30 @@ inline ::int32_t BattleStorageRecord::_internal_player_count() const {
 inline void BattleStorageRecord::_internal_set_player_count(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = value;
+}
+
+// int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+inline void BattleStorageRecord::clear_empty_since_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.empty_since_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::int64_t BattleStorageRecord::empty_since_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
+  return _internal_empty_since_ms();
+}
+inline void BattleStorageRecord::set_empty_since_ms(::int64_t value) {
+  _internal_set_empty_since_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
+}
+inline ::int64_t BattleStorageRecord::_internal_empty_since_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.empty_since_ms_;
+}
+inline void BattleStorageRecord::_internal_set_empty_since_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.empty_since_ms_ = value;
 }
 
 // -------------------------------------------------------------------

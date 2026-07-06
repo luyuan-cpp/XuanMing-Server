@@ -49,7 +49,7 @@ func (s *MatchService) StartMatch(ctx context.Context, req *matchv1.StartMatchRe
 	}
 
 	ticketID := s.sf.Generate()
-	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID)
+	id, err := s.uc.StartMatch(ctx, ticketID, req.GetTeamId(), captainID, req.GetMapId())
 	if err != nil {
 		return &matchv1.StartMatchResponse{Code: toProtoCode(err)}, nil
 	}

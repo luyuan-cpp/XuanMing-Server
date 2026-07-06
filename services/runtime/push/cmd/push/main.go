@@ -41,6 +41,13 @@ import (
 
 const serviceName = "push"
 
+// Kafka 消费失败处理:业务瞬时错误(offline.Append 撞 redis 抖动)进程内重试
+// dlqMaxRetries 次(间隔 dlqRetryBackoff)后投 DLQ(infra.md §4.4,对齐 battle_result)。
+const (
+	dlqMaxRetries   = 3
+	dlqRetryBackoff = 500 * time.Millisecond
+)
+
 var flagConf string
 
 func init() {
@@ -86,9 +93,8 @@ func main() {
 	uc := biz.NewPushUsecase(conns, offline)
 	svc := service.NewPushService(uc)
 
-	// 5. KafkaConsumer:每 topic 一个,共享 GroupID;每个消费者配 DLQ producer
-	//    (业务瞬时错误重试后进 DLQ,DLQ 投递失败不 ack 重放,不丢帧)。
-	consumers, dlqProducers := mustBuildConsumers(&cfg, conns, offline, helper)
+	// 5. KafkaConsumer:每 topic 一个,共享 GroupID
+	consumers := mustBuildConsumers(&cfg, conns, offline, helper)
 	// 蜂窝扩容:多 Cell 时注入归属守卫(本 cell 消费者只应交付 owner==本 cell 的玩家,
 	// 否则告警暴露漂移;单 Cell mode 空 → router=nil,行为不变)。
 	if router, closeCell, e := etcdtable.BuildRouter(context.Background(), cfg.CellRoute); e != nil {
@@ -110,11 +116,6 @@ func main() {
 		for _, kc := range consumers {
 			if err := kc.Close(); err != nil {
 				helper.Warnw("msg", "kafka_consumer_close_failed", "err", err)
-			}
-		}
-		for _, dp := range dlqProducers {
-			if err := dp.Close(); err != nil {
-				helper.Warnw("msg", "dlq_producer_close_failed", "err", err)
 			}
 		}
 	}()
@@ -169,15 +170,16 @@ func mustBuildRedis(cfg *conf.Config, h kratosHelper) redis.UniversalClient {
 
 // mustBuildConsumers 按 cfg.Push.Topics 列表,每 topic 起一个 KafkaConsumer。
 // brokers 空 / topics 空 时 panic(W3 ④ push 不可降级)。
-// 每个消费者配一个 DLQ producer(topic=pandora.dlq.<topic>):毒丸 key 直接进 DLQ,
-// 业务瞬时错误(offline append 失败)重试后进 DLQ;DLQ 构造失败致命
-// (push 不可静默降级为丢帧模式,与 battle_result 同策略)。
+//
+// 每个消费者配 RetryPolicy + DLQ(topic=pandora.dlq.<topic>,对齐 battle_result 模式):
+// offline.Append 瞬时失败进程内重试,耗尽后投 DLQ 可回放,不再“首败即 ack 丢帧”。
+// DLQ producer 构造失败致命:不可静默降级为丢消息模式。
 func mustBuildConsumers(
 	cfg *conf.Config,
 	cm biz.FrameRouter,
 	offline data.OfflineCacheRepo,
 	h kratosHelper,
-) ([]*biz.KafkaConsumer, []*kafkax.KeyOrderedProducer) {
+) []*biz.KafkaConsumer {
 	if len(cfg.Kafka.Brokers) == 0 {
 		h.Errorw("msg", "kafka_brokers_empty", "hint", "kafka.brokers required")
 		os.Exit(1)
@@ -188,16 +190,14 @@ func mustBuildConsumers(
 	}
 
 	out := make([]*biz.KafkaConsumer, 0, len(cfg.Push.Topics))
-	dlqProducers := make([]*kafkax.KeyOrderedProducer, 0, len(cfg.Push.Topics))
 	for _, topic := range cfg.Push.Topics {
 		dlqTopic := kafkax.BuildDLQTopic(topic)
 		dlq, derr := kafkax.NewKeyOrderedProducer(cfg.Kafka, dlqTopic)
 		if derr != nil {
 			h.Errorw("msg", "dlq_producer_init_failed", "topic", topic, "dlq_topic", dlqTopic, "err", derr,
-				"hint", "push 不可静默降级为丢帧模式,DLQ 必须可用")
+				"hint", "push 离线信箱不可静默降级,DLQ 必须可用")
 			os.Exit(1)
 		}
-		dlqProducers = append(dlqProducers, dlq)
 		kc, err := biz.NewKafkaConsumer(
 			cfg.Kafka.Brokers,
 			cfg.Kafka.GroupID,
@@ -205,6 +205,7 @@ func mustBuildConsumers(
 			cfg.Kafka.PartitionCnt,
 			cm,
 			offline,
+			kafkax.RetryPolicy{MaxRetries: dlqMaxRetries, Backoff: dlqRetryBackoff},
 			dlq,
 		)
 		if err != nil {
@@ -214,7 +215,7 @@ func mustBuildConsumers(
 		out = append(out, kc)
 		h.Infow("msg", "kafka_consumer_ready", "topic", topic, "group", cfg.Kafka.GroupID, "dlq_topic", dlqTopic)
 	}
-	return out, dlqProducers
+	return out
 }
 
 // kratosHelper 是 *klog.Helper 的简化接口(对齐 login main.go)。

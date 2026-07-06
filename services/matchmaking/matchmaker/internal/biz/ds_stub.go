@@ -25,8 +25,8 @@ func NewStubDSAllocator(addr string) *StubDSAllocator {
 	return &StubDSAllocator{MockAddr: addr}
 }
 
-// AllocateBattle 返回固定地址 + 每个玩家一个 mock 票据(matchID-playerID)。
-func (s *StubDSAllocator) AllocateBattle(_ context.Context, matchID uint64, playerIDs []uint64) (string, map[uint64]string, error) {
+// AllocateBattle 返回固定地址 + 每个玩家一个 mock 票据(matchID-playerID)。mapID 桩里忽略。
+func (s *StubDSAllocator) AllocateBattle(_ context.Context, matchID uint64, playerIDs []uint64, _ uint32) (string, map[uint64]string, error) {
 	tickets := make(map[uint64]string, len(playerIDs))
 	for _, pid := range playerIDs {
 		tickets[pid] = fmt.Sprintf("mock-ticket-%d-%d", matchID, pid)

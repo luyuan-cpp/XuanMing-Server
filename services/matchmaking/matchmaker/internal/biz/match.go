@@ -53,7 +53,9 @@ type MatchEventPusher interface {
 // DSAllocator 申请战斗 DS（W4 ① 打桩，W4 ② 接 ds_allocator gRPC）。
 type DSAllocator interface {
 	// AllocateBattle 为 match 申请战斗 DS，返回 ds 地址 + 每个玩家的入场票据。
-	AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64) (dsAddr string, tickets map[uint64]string, err error)
+	// mapID 是本局副本编号（客户端选择、经票据继承到 match），透传给 ds_allocator 决定 DS 加载哪张关卡；
+	// 0 = 让 ds_allocator 用其默认关卡（向后兼容旧客户端 / 未选副本）。
+	AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32) (dsAddr string, tickets map[uint64]string, err error)
 
 	// SignBattleTicket 给（重连 / 换设备的）玩家现签一张新的 battle DSTicket（新 jti、sub=playerID）。
 	// GetMatchProgress 在 READY 阶段调用它下发票据：每次新 jti，避免复用同一张票撞 DS 侧 jti
@@ -262,7 +264,7 @@ func (u *MatchUsecase) removeActive(ctx context.Context, matchID uint64) {
 // 返回的 ticketID 同时作为客户端 QUEUEING 阶段的 match 句柄(CancelMatch/GetMatchProgress 用)。
 //
 // 前置(reader 非 nil 时):team 必须存在、state=READY、captainID 为队长、成员数 ≤ 一方人数。
-func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64) (uint64, error) {
+func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32) (uint64, error) {
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID)
 	if err != nil {
 		return 0, err
@@ -297,6 +299,7 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		AvgMmr:       avgMMR,
 		EnqueuedAtMs: time.Now().UnixMilli(),
 		MatchId:      0,
+		MapId:        mapID,
 	}
 	if err := u.repo.AddTicket(ctx, ticket, u.ticketTTL()); err != nil {
 		u.rollbackClaims(ctx, ticketID, claimed)
@@ -307,7 +310,7 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 	u.pushProgress(ctx, ticketID, stageQueueing, members, "", "")
 
 	plog.With(ctx).Infow("msg", "match_start", "ticket_id", ticketID, "team_id", teamID,
-		"captain_id", captainID, "members", len(members), "avg_mmr", avgMMR)
+		"captain_id", captainID, "members", len(members), "avg_mmr", avgMMR, "map_id", mapID)
 	return ticketID, nil
 }
 
@@ -731,7 +734,7 @@ func (u *MatchUsecase) onAllConfirmed(ctx context.Context, m *matchv1.MatchStora
 			"players", len(playerIDs))
 	}
 
-	dsAddr, tickets, err := u.allocator.AllocateBattle(ctx, m.MatchId, playerIDs)
+	dsAddr, tickets, err := u.allocator.AllocateBattle(ctx, m.MatchId, playerIDs, m.MapId)
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "ds_allocate_failed", "match_id", m.MatchId, "err", err)
 		// 分配失败:整场失败,票据退回队列
@@ -920,14 +923,27 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 		return nil
 	}
 
-	need := 2 * u.cfg.TeamSize
 	now := time.Now().UnixMilli()
+
+	// 按 map_id 分组:同一 game_mode 下不同副本(map_id)各自独立撮合,
+	// 避免不同副本的玩家被凑进同一局。「策划填表即用」——新增副本(新 map_id)
+	// 自然形成新组,matchmaker 无需改代码;组内仍走原 单桶 / 两级 region 撮合。
+	for _, group := range partitionTicketsByMap(tickets) {
+		u.formMatchesInPool(ctx, group, now)
+	}
+	return nil
+}
+
+// formMatchesInPool 在「同一副本(map_id)」的票据组内撮合:单 Cell/dev 走单桶贪心,
+// 多 Region 走两级(region 内优先 + 跨 region 溢出兜底)。从 matchOnce 抽出,便于按 map_id 分组复用。
+func (u *MatchUsecase) formMatchesInPool(ctx context.Context, tickets []*matchv1.MatchTicketStorageRecord, now int64) {
+	need := 2 * u.cfg.TeamSize
 	used := make(map[uint64]bool)
 
 	// 单 Cell / dev / 阶段 1~2(router 未配)→ 单桶贪心(历史行为,零分区开销)。
 	if u.router == nil {
 		u.greedyFormMatches(ctx, tickets, used, now, nil)
-		return nil
+		return
 	}
 
 	// 多 Region(阶段 3)两级撮合(scale-cellular-20m.md §4.4):
@@ -953,7 +969,6 @@ func (u *MatchUsecase) matchOnce(ctx context.Context) error {
 	if len(overflow) > 0 {
 		u.greedyFormMatches(ctx, overflow, used, now, u.withinCrossRegionCap)
 	}
-	return nil
 }
 
 // withinCrossRegionCap 是跨 region 溢出贪心的成局守卫:一局玩家的 region 分布须满足
@@ -976,6 +991,39 @@ func (u *MatchUsecase) withinCrossRegionCap(group []*matchv1.MatchTicketStorageR
 //
 // 这是原 matchOnce 主循环抽出的可复用核(单桶 / 各 region 桶 / 跨 region 溢出桶共用),
 // 行为与抽取前完全一致(validate=nil 时)。
+// partitionTicketsByMap 按 map_id(副本编号)把票据分组,保持各组内原有的 MMR 升序。
+// 返回顺序按 map_id 升序,保证撮合确定性。同一 game_mode 下不同副本各自成局,互不串池。
+func partitionTicketsByMap(tickets []*matchv1.MatchTicketStorageRecord) [][]*matchv1.MatchTicketStorageRecord {
+	buckets := make(map[uint32][]*matchv1.MatchTicketStorageRecord)
+	order := make([]uint32, 0)
+	for _, t := range tickets {
+		mid := t.GetMapId()
+		if _, ok := buckets[mid]; !ok {
+			order = append(order, mid)
+		}
+		buckets[mid] = append(buckets[mid], t)
+	}
+	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
+	groups := make([][]*matchv1.MatchTicketStorageRecord, 0, len(order))
+	for _, mid := range order {
+		groups = append(groups, buckets[mid])
+	}
+	return groups
+}
+
+// matchMapID 取一场 match 的副本编号:同一局的票据来自同一 map_id 分组(partitionTicketsByMap),
+// 故取任一非空票据的 map_id 即可;全空则回退 0(默认副本)。
+func matchMapID(sides ...[]*matchv1.MatchTicketStorageRecord) uint32 {
+	for _, side := range sides {
+		for _, t := range side {
+			if t != nil {
+				return t.GetMapId()
+			}
+		}
+	}
+	return 0
+}
+
 func (u *MatchUsecase) greedyFormMatches(
 	ctx context.Context,
 	tickets []*matchv1.MatchTicketStorageRecord,
@@ -1046,6 +1094,7 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 		TicketIds:         []uint64{ticket.TicketId},
 		CreatedAtMs:       now,
 		ConfirmDeadlineMs: now,
+		MapId:             ticket.MapId,
 	}
 
 	// 一致性顺序(先建 match 再预留,与 formMatch 一致):match 先落库并进 active ZSET,
@@ -1109,6 +1158,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 		TicketIds:         ticketIDs,
 		CreatedAtMs:       now,
 		ConfirmDeadlineMs: deadline,
+		MapId:             matchMapID(sideA, sideB),
 	}
 
 	// 一致性流程(先建 match,再预留票据):

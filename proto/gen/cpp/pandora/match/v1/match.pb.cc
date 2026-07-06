@@ -225,11 +225,11 @@ constexpr StartMatchRequest::ParseTableT_ StartMatchRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(StartMatchRequest, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -239,6 +239,10 @@ constexpr StartMatchRequest::ParseTableT_ StartMatchRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::pandora::match::v1::StartMatchRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // uint32 map_id = 2 [json_name = "mapId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(StartMatchRequest, _impl_.map_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(StartMatchRequest, _impl_.map_id_)}},
       // uint64 team_id = 1 [json_name = "teamId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(StartMatchRequest, _impl_.team_id_), 0>(),
        {8, 0, 0,
@@ -248,6 +252,8 @@ constexpr StartMatchRequest::ParseTableT_ StartMatchRequest::InternalGeneratePar
     }}, {{
       // uint64 team_id = 1 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(StartMatchRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 map_id = 2 [json_name = "mapId"];
+      {PROTOBUF_FIELD_OFFSET(StartMatchRequest, _impl_.map_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -260,7 +266,8 @@ inline constexpr StartMatchRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        team_id_{::uint64_t{0u}} {}
+        team_id_{::uint64_t{0u}},
+        map_id_{0u} {}
 
 template <typename>
 constexpr StartMatchRequest::StartMatchRequest(::_pbi::ConstantInitialized,
@@ -1773,11 +1780,11 @@ constexpr MatchTicketStorageRecord::ParseTableT_ MatchTicketStorageRecord::Inter
     {
       PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966656,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1816,6 +1823,17 @@ constexpr MatchTicketStorageRecord::ParseTableT_ MatchTicketStorageRecord::Inter
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTicketStorageRecord, _impl_.match_id_), 5>(),
        {56, 5, 0,
         PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.match_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 map_id = 10 [json_name = "mapId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketStorageRecord, _impl_.map_id_), 7>(),
+       {80, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.map_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1833,6 +1851,8 @@ constexpr MatchTicketStorageRecord::ParseTableT_ MatchTicketStorageRecord::Inter
       {PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.enqueued_at_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // uint64 match_id = 7 [json_name = "matchId"];
       {PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.match_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 map_id = 10 [json_name = "mapId"];
+      {PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.map_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1861,7 +1881,8 @@ inline constexpr MatchTicketStorageRecord::Impl_::Impl_(
         captain_id_{::uint64_t{0u}},
         enqueued_at_ms_{::int64_t{0}},
         match_id_{::uint64_t{0u}},
-        avg_mmr_{0} {}
+        avg_mmr_{0},
+        map_id_{0u} {}
 
 template <typename>
 constexpr MatchTicketStorageRecord::MatchTicketStorageRecord(::_pbi::ConstantInitialized,
@@ -1967,11 +1988,11 @@ constexpr MatchStorageRecord::ParseTableT_ MatchStorageRecord::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1981,10 +2002,7 @@ constexpr MatchStorageRecord::ParseTableT_ MatchStorageRecord::InternalGenerateP
       ::_pbi::TcParser::GetTable<::pandora::match::v1::MatchStorageRecord>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string battle_ticket = 8 [json_name = "battleTicket"];
-      {::_pbi::TcParser::FastUS1,
-       {66, 3, 0,
-        PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.battle_ticket_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 match_id = 1 [json_name = "matchId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchStorageRecord, _impl_.match_id_), 4>(),
        {8, 4, 0,
@@ -2013,6 +2031,20 @@ constexpr MatchStorageRecord::ParseTableT_ MatchStorageRecord::InternalGenerateP
       {::_pbi::TcParser::FastUS1,
        {58, 2, 0,
         PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.battle_ds_addr_)}},
+      // string battle_ticket = 8 [json_name = "battleTicket"];
+      {::_pbi::TcParser::FastUS1,
+       {66, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.battle_ticket_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 map_id = 10 [json_name = "mapId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchStorageRecord, _impl_.map_id_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.map_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2032,6 +2064,8 @@ constexpr MatchStorageRecord::ParseTableT_ MatchStorageRecord::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.battle_ds_addr_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string battle_ticket = 8 [json_name = "battleTicket"];
       {PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.battle_ticket_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 map_id = 10 [json_name = "mapId"];
+      {PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.map_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2074,7 +2108,8 @@ inline constexpr MatchStorageRecord::Impl_::Impl_(
         match_id_{::uint64_t{0u}},
         created_at_ms_{::int64_t{0}},
         confirm_deadline_ms_{::int64_t{0}},
-        stage_{static_cast< ::pandora::match::v1::MatchStage >(0)} {}
+        stage_{static_cast< ::pandora::match::v1::MatchStage >(0)},
+        map_id_{0u} {}
 
 template <typename>
 constexpr MatchStorageRecord::MatchStorageRecord(::_pbi::ConstantInitialized,
@@ -2496,9 +2531,11 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::StartMatchRequest, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::StartMatchRequest, _impl_.team_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::StartMatchRequest, _impl_.map_id_),
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::StartMatchResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -2601,7 +2638,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.ticket_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.captain_id_),
@@ -2609,6 +2646,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.avg_mmr_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.enqueued_at_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchTicketStorageRecord, _impl_.map_id_),
         1,
         2,
         3,
@@ -2616,9 +2654,10 @@ const ::uint32_t
         6,
         4,
         5,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.stage_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.members_),
@@ -2627,6 +2666,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.confirm_deadline_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.battle_ds_addr_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.battle_ticket_),
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchStorageRecord, _impl_.map_id_),
         4,
         7,
         0,
@@ -2635,25 +2675,26 @@ const ::uint32_t
         6,
         2,
         3,
+        8,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::match::v1::StartMatchRequest)},
-        {5, sizeof(::pandora::match::v1::StartMatchResponse)},
-        {12, sizeof(::pandora::match::v1::CancelMatchRequest)},
-        {19, sizeof(::pandora::match::v1::CancelMatchResponse)},
-        {24, sizeof(::pandora::match::v1::ConfirmMatchRequest)},
-        {33, sizeof(::pandora::match::v1::ConfirmMatchResponse)},
-        {38, sizeof(::pandora::match::v1::GetMatchProgressRequest)},
-        {43, sizeof(::pandora::match::v1::GetMatchProgressResponse)},
-        {50, sizeof(::pandora::match::v1::ReleaseMatchRequest)},
-        {57, sizeof(::pandora::match::v1::ReleaseMatchResponse)},
-        {62, sizeof(::pandora::match::v1::MatchProgress)},
-        {81, sizeof(::pandora::match::v1::MatchProgressEvent)},
-        {90, sizeof(::pandora::match::v1::MatchMemberStorageRecord)},
-        {105, sizeof(::pandora::match::v1::MatchTicketStorageRecord)},
-        {122, sizeof(::pandora::match::v1::MatchStorageRecord)},
+        {7, sizeof(::pandora::match::v1::StartMatchResponse)},
+        {14, sizeof(::pandora::match::v1::CancelMatchRequest)},
+        {21, sizeof(::pandora::match::v1::CancelMatchResponse)},
+        {26, sizeof(::pandora::match::v1::ConfirmMatchRequest)},
+        {35, sizeof(::pandora::match::v1::ConfirmMatchResponse)},
+        {40, sizeof(::pandora::match::v1::GetMatchProgressRequest)},
+        {45, sizeof(::pandora::match::v1::GetMatchProgressResponse)},
+        {52, sizeof(::pandora::match::v1::ReleaseMatchRequest)},
+        {59, sizeof(::pandora::match::v1::ReleaseMatchResponse)},
+        {64, sizeof(::pandora::match::v1::MatchProgress)},
+        {83, sizeof(::pandora::match::v1::MatchProgressEvent)},
+        {92, sizeof(::pandora::match::v1::MatchMemberStorageRecord)},
+        {107, sizeof(::pandora::match::v1::MatchTicketStorageRecord)},
+        {126, sizeof(::pandora::match::v1::MatchStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2677,81 +2718,83 @@ const char descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto[] ABSL
     protodesc_cold) = {
     "\n\034pandora/match/v1/match.proto\022\020pandora."
     "match.v1\032\037pandora/common/v1/errcode.prot"
-    "o\",\n\021StartMatchRequest\022\027\n\007team_id\030\001 \001(\004R"
-    "\006teamId\"_\n\022StartMatchResponse\022.\n\004code\030\001 "
-    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\031\n"
-    "\010match_id\030\002 \001(\004R\007matchId\"L\n\022CancelMatchR"
-    "equest\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\033\n\tpla"
-    "yer_id\030\002 \001(\004R\010playerId\"E\n\023CancelMatchRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\"e\n\023ConfirmMatchRequest\022\033\n\t"
-    "player_id\030\001 \001(\004R\010playerId\022\031\n\010match_id\030\002 "
-    "\001(\004R\007matchId\022\026\n\006accept\030\003 \001(\010R\006accept\"F\n\024"
-    "ConfirmMatchResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\"4\n\027GetMatch"
-    "ProgressRequest\022\031\n\010match_id\030\001 \001(\004R\007match"
-    "Id\"\207\001\n\030GetMatchProgressResponse\022.\n\004code\030"
-    "\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022"
-    ";\n\010progress\030\002 \001(\0132\037.pandora.match.v1.Mat"
-    "chProgressR\010progress\"O\n\023ReleaseMatchRequ"
-    "est\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\035\n\nplayer"
-    "_ids\030\002 \003(\004R\tplayerIds\"F\n\024ReleaseMatchRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\"\270\002\n\rMatchProgress\022\031\n\010match"
-    "_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\0162\034.pand"
-    "ora.match.v1.MatchStageR\005stage\022#\n\rqueue_"
-    "seconds\030\003 \001(\005R\014queueSeconds\0224\n\026estimated"
-    "_wait_seconds\030\004 \001(\005R\024estimatedWaitSecond"
-    "s\022$\n\016battle_ds_addr\030\005 \001(\tR\014battleDsAddr\022"
-    "#\n\rbattle_ticket\030\006 \001(\tR\014battleTicket\022\025\n\006"
-    "team_a\030\007 \003(\004R\005teamA\022\025\n\006team_b\030\010 \003(\004R\005tea"
-    "mBJ\004\010\t\020\024\"\216\001\n\022MatchProgressEvent\022;\n\010progr"
-    "ess\030\001 \001(\0132\037.pandora.match.v1.MatchProgre"
-    "ssR\010progress\022 \n\014to_player_id\030\002 \001(\004R\ntoPl"
-    "ayerId\022\023\n\005ts_ms\030\003 \001(\003R\004tsMsJ\004\010\004\020\n\"\325\001\n\030Ma"
-    "tchMemberStorageRecord\022\033\n\tplayer_id\030\001 \001("
-    "\004R\010playerId\022\027\n\007team_id\030\002 \001(\004R\006teamId\022\020\n\003"
-    "mmr\030\003 \001(\005R\003mmr\022\027\n\007hero_id\030\004 \001(\rR\006heroId\022"
-    "\022\n\004side\030\005 \001(\005R\004side\022>\n\007confirm\030\006 \001(\0162$.p"
-    "andora.match.v1.MatchConfirmStatusR\007conf"
-    "irmJ\004\010\007\020\n\"\225\002\n\030MatchTicketStorageRecord\022\033"
-    "\n\tticket_id\030\001 \001(\004R\010ticketId\022\027\n\007team_id\030\002"
-    " \001(\004R\006teamId\022\035\n\ncaptain_id\030\003 \001(\004R\tcaptai"
-    "nId\022D\n\007members\030\004 \003(\0132*.pandora.match.v1."
-    "MatchMemberStorageRecordR\007members\022\027\n\007avg"
-    "_mmr\030\005 \001(\005R\006avgMmr\022$\n\016enqueued_at_ms\030\006 \001"
-    "(\003R\014enqueuedAtMs\022\031\n\010match_id\030\007 \001(\004R\007matc"
-    "hIdJ\004\010\010\020\n\"\355\002\n\022MatchStorageRecord\022\031\n\010matc"
-    "h_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\0162\034.pan"
-    "dora.match.v1.MatchStageR\005stage\022D\n\007membe"
-    "rs\030\003 \003(\0132*.pandora.match.v1.MatchMemberS"
-    "torageRecordR\007members\022\035\n\nticket_ids\030\004 \003("
-    "\004R\tticketIds\022\"\n\rcreated_at_ms\030\005 \001(\003R\013cre"
-    "atedAtMs\022.\n\023confirm_deadline_ms\030\006 \001(\003R\021c"
-    "onfirmDeadlineMs\022$\n\016battle_ds_addr\030\007 \001(\t"
-    "R\014battleDsAddr\022#\n\rbattle_ticket\030\010 \001(\tR\014b"
-    "attleTicketJ\004\010\t\020\n*\276\001\n\nMatchStage\022\033\n\027MATC"
-    "H_STAGE_UNSPECIFIED\020\000\022\030\n\024MATCH_STAGE_QUE"
-    "UEING\020\001\022\025\n\021MATCH_STAGE_FOUND\020\002\022\027\n\023MATCH_"
-    "STAGE_CONFIRM\020\003\022\032\n\026MATCH_STAGE_ALLOCATIN"
-    "G\020\004\022\025\n\021MATCH_STAGE_READY\020\005\022\026\n\022MATCH_STAG"
-    "E_FAILED\020\006*\242\001\n\022MatchConfirmStatus\022$\n MAT"
-    "CH_CONFIRM_STATUS_UNSPECIFIED\020\000\022 \n\034MATCH"
-    "_CONFIRM_STATUS_PENDING\020\001\022!\n\035MATCH_CONFI"
-    "RM_STATUS_ACCEPTED\020\002\022!\n\035MATCH_CONFIRM_ST"
-    "ATUS_REJECTED\020\0032\354\003\n\014MatchService\022W\n\nStar"
-    "tMatch\022#.pandora.match.v1.StartMatchRequ"
-    "est\032$.pandora.match.v1.StartMatchRespons"
-    "e\022Z\n\013CancelMatch\022$.pandora.match.v1.Canc"
-    "elMatchRequest\032%.pandora.match.v1.Cancel"
-    "MatchResponse\022]\n\014ConfirmMatch\022%.pandora."
-    "match.v1.ConfirmMatchRequest\032&.pandora.m"
-    "atch.v1.ConfirmMatchResponse\022i\n\020GetMatch"
-    "Progress\022).pandora.match.v1.GetMatchProg"
-    "ressRequest\032*.pandora.match.v1.GetMatchP"
-    "rogressResponse\022]\n\014ReleaseMatch\022%.pandor"
-    "a.match.v1.ReleaseMatchRequest\032&.pandora"
-    ".match.v1.ReleaseMatchResponseb\006proto3"
+    "o\"C\n\021StartMatchRequest\022\027\n\007team_id\030\001 \001(\004R"
+    "\006teamId\022\025\n\006map_id\030\002 \001(\rR\005mapId\"_\n\022StartM"
+    "atchResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
+    "mon.v1.ErrCodeR\004code\022\031\n\010match_id\030\002 \001(\004R\007"
+    "matchId\"L\n\022CancelMatchRequest\022\031\n\010match_i"
+    "d\030\001 \001(\004R\007matchId\022\033\n\tplayer_id\030\002 \001(\004R\010pla"
+    "yerId\"E\n\023CancelMatchResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\"e\n\023"
+    "ConfirmMatchRequest\022\033\n\tplayer_id\030\001 \001(\004R\010"
+    "playerId\022\031\n\010match_id\030\002 \001(\004R\007matchId\022\026\n\006a"
+    "ccept\030\003 \001(\010R\006accept\"F\n\024ConfirmMatchRespo"
+    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
+    "rCodeR\004code\"4\n\027GetMatchProgressRequest\022\031"
+    "\n\010match_id\030\001 \001(\004R\007matchId\"\207\001\n\030GetMatchPr"
+    "ogressResponse\022.\n\004code\030\001 \001(\0162\032.pandora.c"
+    "ommon.v1.ErrCodeR\004code\022;\n\010progress\030\002 \001(\013"
+    "2\037.pandora.match.v1.MatchProgressR\010progr"
+    "ess\"O\n\023ReleaseMatchRequest\022\031\n\010match_id\030\001"
+    " \001(\004R\007matchId\022\035\n\nplayer_ids\030\002 \003(\004R\tplaye"
+    "rIds\"F\n\024ReleaseMatchResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\"\270\002\n"
+    "\rMatchProgress\022\031\n\010match_id\030\001 \001(\004R\007matchI"
+    "d\0222\n\005stage\030\002 \001(\0162\034.pandora.match.v1.Matc"
+    "hStageR\005stage\022#\n\rqueue_seconds\030\003 \001(\005R\014qu"
+    "eueSeconds\0224\n\026estimated_wait_seconds\030\004 \001"
+    "(\005R\024estimatedWaitSeconds\022$\n\016battle_ds_ad"
+    "dr\030\005 \001(\tR\014battleDsAddr\022#\n\rbattle_ticket\030"
+    "\006 \001(\tR\014battleTicket\022\025\n\006team_a\030\007 \003(\004R\005tea"
+    "mA\022\025\n\006team_b\030\010 \003(\004R\005teamBJ\004\010\t\020\024\"\216\001\n\022Matc"
+    "hProgressEvent\022;\n\010progress\030\001 \001(\0132\037.pando"
+    "ra.match.v1.MatchProgressR\010progress\022 \n\014t"
+    "o_player_id\030\002 \001(\004R\ntoPlayerId\022\023\n\005ts_ms\030\003"
+    " \001(\003R\004tsMsJ\004\010\004\020\n\"\325\001\n\030MatchMemberStorageR"
+    "ecord\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\027\n\007te"
+    "am_id\030\002 \001(\004R\006teamId\022\020\n\003mmr\030\003 \001(\005R\003mmr\022\027\n"
+    "\007hero_id\030\004 \001(\rR\006heroId\022\022\n\004side\030\005 \001(\005R\004si"
+    "de\022>\n\007confirm\030\006 \001(\0162$.pandora.match.v1.M"
+    "atchConfirmStatusR\007confirmJ\004\010\007\020\n\"\254\002\n\030Mat"
+    "chTicketStorageRecord\022\033\n\tticket_id\030\001 \001(\004"
+    "R\010ticketId\022\027\n\007team_id\030\002 \001(\004R\006teamId\022\035\n\nc"
+    "aptain_id\030\003 \001(\004R\tcaptainId\022D\n\007members\030\004 "
+    "\003(\0132*.pandora.match.v1.MatchMemberStorag"
+    "eRecordR\007members\022\027\n\007avg_mmr\030\005 \001(\005R\006avgMm"
+    "r\022$\n\016enqueued_at_ms\030\006 \001(\003R\014enqueuedAtMs\022"
+    "\031\n\010match_id\030\007 \001(\004R\007matchId\022\025\n\006map_id\030\n \001"
+    "(\rR\005mapIdJ\004\010\010\020\n\"\204\003\n\022MatchStorageRecord\022\031"
+    "\n\010match_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\016"
+    "2\034.pandora.match.v1.MatchStageR\005stage\022D\n"
+    "\007members\030\003 \003(\0132*.pandora.match.v1.MatchM"
+    "emberStorageRecordR\007members\022\035\n\nticket_id"
+    "s\030\004 \003(\004R\tticketIds\022\"\n\rcreated_at_ms\030\005 \001("
+    "\003R\013createdAtMs\022.\n\023confirm_deadline_ms\030\006 "
+    "\001(\003R\021confirmDeadlineMs\022$\n\016battle_ds_addr"
+    "\030\007 \001(\tR\014battleDsAddr\022#\n\rbattle_ticket\030\010 "
+    "\001(\tR\014battleTicket\022\025\n\006map_id\030\n \001(\rR\005mapId"
+    "J\004\010\t\020\n*\276\001\n\nMatchStage\022\033\n\027MATCH_STAGE_UNS"
+    "PECIFIED\020\000\022\030\n\024MATCH_STAGE_QUEUEING\020\001\022\025\n\021"
+    "MATCH_STAGE_FOUND\020\002\022\027\n\023MATCH_STAGE_CONFI"
+    "RM\020\003\022\032\n\026MATCH_STAGE_ALLOCATING\020\004\022\025\n\021MATC"
+    "H_STAGE_READY\020\005\022\026\n\022MATCH_STAGE_FAILED\020\006*"
+    "\242\001\n\022MatchConfirmStatus\022$\n MATCH_CONFIRM_"
+    "STATUS_UNSPECIFIED\020\000\022 \n\034MATCH_CONFIRM_ST"
+    "ATUS_PENDING\020\001\022!\n\035MATCH_CONFIRM_STATUS_A"
+    "CCEPTED\020\002\022!\n\035MATCH_CONFIRM_STATUS_REJECT"
+    "ED\020\0032\354\003\n\014MatchService\022W\n\nStartMatch\022#.pa"
+    "ndora.match.v1.StartMatchRequest\032$.pando"
+    "ra.match.v1.StartMatchResponse\022Z\n\013Cancel"
+    "Match\022$.pandora.match.v1.CancelMatchRequ"
+    "est\032%.pandora.match.v1.CancelMatchRespon"
+    "se\022]\n\014ConfirmMatch\022%.pandora.match.v1.Co"
+    "nfirmMatchRequest\032&.pandora.match.v1.Con"
+    "firmMatchResponse\022i\n\020GetMatchProgress\022)."
+    "pandora.match.v1.GetMatchProgressRequest"
+    "\032*.pandora.match.v1.GetMatchProgressResp"
+    "onse\022]\n\014ReleaseMatch\022%.pandora.match.v1."
+    "ReleaseMatchRequest\032&.pandora.match.v1.R"
+    "eleaseMatchResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_deps[1] = {
@@ -2761,7 +2804,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto = {
     false,
     false,
-    3078,
+    3147,
     descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto,
     "pandora/match/v1/match.proto",
     &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_once,
@@ -2820,7 +2863,12 @@ PROTOBUF_NDEBUG_INLINE StartMatchRequest::Impl_::Impl_(
 
 inline void StartMatchRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.team_id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, team_id_),
+           0,
+           offsetof(Impl_, map_id_) -
+               offsetof(Impl_, team_id_) +
+               sizeof(Impl_::map_id_));
 }
 StartMatchRequest::~StartMatchRequest() {
   // @@protoc_insertion_point(destructor:pandora.match.v1.StartMatchRequest)
@@ -2869,7 +2917,12 @@ PROTOBUF_NOINLINE void StartMatchRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.team_id_ = ::uint64_t{0u};
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.map_id_) -
+        reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.map_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2902,6 +2955,15 @@ PROTOBUF_NOINLINE void StartMatchRequest::Clear() {
     }
   }
 
+  // uint32 map_id = 2 [json_name = "mapId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_map_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_map_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2925,13 +2987,21 @@ PROTOBUF_NOINLINE void StartMatchRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 team_id = 1 [json_name = "teamId"];
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_team_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_team_id());
+      }
+    }
+    // uint32 map_id = 2 [json_name = "mapId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_map_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_map_id());
       }
     }
   }
@@ -2952,9 +3022,16 @@ void StartMatchRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_team_id() != 0) {
-      _this->_impl_.team_id_ = from._impl_.team_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_team_id() != 0) {
+        _this->_impl_.team_id_ = from._impl_.team_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_map_id() != 0) {
+        _this->_impl_.map_id_ = from._impl_.map_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2974,7 +3051,12 @@ void StartMatchRequest::InternalSwap(StartMatchRequest* PROTOBUF_RESTRICT PROTOB
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.team_id_, other->_impl_.team_id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(StartMatchRequest, _impl_.map_id_)
+      + sizeof(StartMatchRequest::_impl_.map_id_)
+      - PROTOBUF_FIELD_OFFSET(StartMatchRequest, _impl_.team_id_)>(
+          reinterpret_cast<char*>(&_impl_.team_id_),
+          reinterpret_cast<char*>(&other->_impl_.team_id_));
 }
 
 ::google::protobuf::Metadata StartMatchRequest::GetMetadata() const {
@@ -6004,9 +6086,9 @@ MatchTicketStorageRecord::MatchTicketStorageRecord(
                offsetof(Impl_, ticket_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, ticket_id_),
-           offsetof(Impl_, avg_mmr_) -
+           offsetof(Impl_, map_id_) -
                offsetof(Impl_, ticket_id_) +
-               sizeof(Impl_::avg_mmr_));
+               sizeof(Impl_::map_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.match.v1.MatchTicketStorageRecord)
 }
@@ -6025,9 +6107,9 @@ inline void MatchTicketStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, ticket_id_),
            0,
-           offsetof(Impl_, avg_mmr_) -
+           offsetof(Impl_, map_id_) -
                offsetof(Impl_, ticket_id_) +
-               sizeof(Impl_::avg_mmr_));
+               sizeof(Impl_::map_id_));
 }
 MatchTicketStorageRecord::~MatchTicketStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.match.v1.MatchTicketStorageRecord)
@@ -6080,10 +6162,10 @@ PROTOBUF_NOINLINE void MatchTicketStorageRecord::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.members_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.ticket_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.avg_mmr_) -
-        reinterpret_cast<char*>(&_impl_.ticket_id_)) + sizeof(_impl_.avg_mmr_));
+        reinterpret_cast<char*>(&_impl_.map_id_) -
+        reinterpret_cast<char*>(&_impl_.ticket_id_)) + sizeof(_impl_.map_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6175,6 +6257,15 @@ PROTOBUF_NOINLINE void MatchTicketStorageRecord::Clear() {
     }
   }
 
+  // uint32 map_id = 10 [json_name = "mapId"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_map_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_map_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6200,7 +6291,7 @@ PROTOBUF_NOINLINE void MatchTicketStorageRecord::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated .pandora.match.v1.MatchMemberStorageRecord members = 4 [json_name = "members"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_members_size();
@@ -6250,6 +6341,13 @@ PROTOBUF_NOINLINE void MatchTicketStorageRecord::Clear() {
             this_._internal_avg_mmr());
       }
     }
+    // uint32 map_id = 10 [json_name = "mapId"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_map_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_map_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -6269,7 +6367,7 @@ void MatchTicketStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_members()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -6305,6 +6403,11 @@ void MatchTicketStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg
         _this->_impl_.avg_mmr_ = from._impl_.avg_mmr_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_map_id() != 0) {
+        _this->_impl_.map_id_ = from._impl_.map_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -6325,8 +6428,8 @@ void MatchTicketStorageRecord::InternalSwap(MatchTicketStorageRecord* PROTOBUF_R
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.members_.InternalSwap(&other->_impl_.members_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.avg_mmr_)
-      + sizeof(MatchTicketStorageRecord::_impl_.avg_mmr_)
+      PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.map_id_)
+      + sizeof(MatchTicketStorageRecord::_impl_.map_id_)
       - PROTOBUF_FIELD_OFFSET(MatchTicketStorageRecord, _impl_.ticket_id_)>(
           reinterpret_cast<char*>(&_impl_.ticket_id_),
           reinterpret_cast<char*>(&other->_impl_.ticket_id_));
@@ -6388,9 +6491,9 @@ MatchStorageRecord::MatchStorageRecord(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, stage_) -
+           offsetof(Impl_, map_id_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::stage_));
+               sizeof(Impl_::map_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.match.v1.MatchStorageRecord)
 }
@@ -6417,9 +6520,9 @@ inline void MatchStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, stage_) -
+           offsetof(Impl_, map_id_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::stage_));
+               sizeof(Impl_::map_id_));
 }
 MatchStorageRecord::~MatchStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.match.v1.MatchStorageRecord)
@@ -6490,6 +6593,7 @@ PROTOBUF_NOINLINE void MatchStorageRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.stage_) -
         reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.stage_));
   }
+  _impl_.map_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -6593,6 +6697,15 @@ PROTOBUF_NOINLINE void MatchStorageRecord::Clear() {
     }
   }
 
+  // uint32 map_id = 10 [json_name = "mapId"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_map_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_map_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6676,6 +6789,15 @@ PROTOBUF_NOINLINE void MatchStorageRecord::Clear() {
       }
     }
   }
+   {
+    // uint32 map_id = 10 [json_name = "mapId"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_map_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_map_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -6742,6 +6864,11 @@ void MatchStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_map_id() != 0) {
+      _this->_impl_.map_id_ = from._impl_.map_id_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -6766,8 +6893,8 @@ void MatchStorageRecord::InternalSwap(MatchStorageRecord* PROTOBUF_RESTRICT PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ds_addr_, &other->_impl_.battle_ds_addr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ticket_, &other->_impl_.battle_ticket_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.stage_)
-      + sizeof(MatchStorageRecord::_impl_.stage_)
+      PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.map_id_)
+      + sizeof(MatchStorageRecord::_impl_.map_id_)
       - PROTOBUF_FIELD_OFFSET(MatchStorageRecord, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

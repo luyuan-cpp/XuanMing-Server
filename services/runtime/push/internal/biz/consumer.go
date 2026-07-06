@@ -8,7 +8,7 @@
 //   - kafka key 必须是 strconv.FormatUint(player_id, 10)(不变量 §9);非数字 key 作为毒丸进 DLQ 留证,
 //     避免单条脏数据静默丢失或阻塞整个 partition
 //   - trace_id 从 sarama.Headers["trace_id"] 取(业务 producer 没塞则空,允许)
-//   - Handler 返回 nil → ack;返回 error 时按 kafkax RetryPolicy / DLQ 处理
+//   - Handler 返回非 nil → kafkax 按 RetryPolicy 重试,耗尽后投 DLQ(main.go 装配,2026-07-06)
 //
 // 不变量 §1 落地:同 player_id 多 partition 路由不会发生(一致性哈希),
 // 同时 ConnectionManager.Register 已自动顶号(W2 ⑤),所以 SendTo 永远落到当前唯一 stream。
@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"time"
 
 	"github.com/IBM/sarama"
 
@@ -48,13 +47,6 @@ type FrameRouter interface {
 	FrameBroadcaster
 }
 
-// Kafka 消费失败处理:业务瞬时错误(offline.Append 失败等)进程内重试
-// retryMaxAttempts 次(间隔 retryBackoff)后进 DLQ,与 battle_result 同策略。
-const (
-	retryMaxAttempts = 3
-	retryBackoff     = 500 * time.Millisecond
-)
-
 // KafkaConsumer 包装一个 topic 的消费循环。
 type KafkaConsumer struct {
 	topic     string
@@ -75,8 +67,8 @@ type KafkaConsumer struct {
 //
 // brokers / groupID / partitionCnt 由 cfg.Kafka 提供。
 // 广播类 topic(kafkax.IsBroadcastTopic)在 handle 里走 cm.Broadcast,不依赖 player_id key。
-// dlq 非 nil 时:业务瞬时错误(如 offline.Append 失败)重试 retryMaxAttempts 次后投 DLQ,
-// DLQ 投递失败不 ack 重放(at-least-once,不丢帧);毒丸 key 直接进 DLQ 留证。
+// retry / dlq:业务瞬时错误(典型是 offline.Append 碰到 redis 抖动)进程内重试,
+// 耗尽后投 DLQ(可回放,不再静默丢帧);dlq 为 nil 时退化为 log+ack(仅供单测/联调)。
 func NewKafkaConsumer(
 	brokers []string,
 	groupID string,
@@ -84,6 +76,7 @@ func NewKafkaConsumer(
 	partitionCnt int32,
 	cm FrameRouter,
 	offline data.OfflineCacheRepo,
+	retry kafkax.RetryPolicy,
 	dlq kafkax.DLQProducer,
 ) (*KafkaConsumer, error) {
 	if cm == nil {
@@ -103,7 +96,7 @@ func NewKafkaConsumer(
 		Topic:          topic,
 		GroupID:        groupID,
 		PartitionCount: partitionCnt,
-		RetryPolicy:    kafkax.RetryPolicy{MaxRetries: retryMaxAttempts, Backoff: retryBackoff},
+		RetryPolicy:    retry,
 		DLQ:            dlq,
 	}, kc.handle)
 	if err != nil {
@@ -121,12 +114,15 @@ func (k *KafkaConsumer) Close() error { return k.consumer.Close() }
 
 // handle 是单条 kafka 消息的处理逻辑;暴露为方法便于单测直接调。
 //
-// 返回值约定(配合 kafkax RetryPolicy + DLQ):
-//   - nil → ack(常规路径:在线发送成功、离线写入成功)
+// 返回值约定:
+//   - nil → kafkax 走 ack(常规路径:在线发送成功、离线写入成功)
 //   - kafkax.Poison(err) → key 非 player_id 数字(毒丸,重试无意义)直接投 DLQ 留证
 //   - errcode.ErrPushOfflineCorrupted (9301) → offline.Append 失败(redis 不可达)。
-//     kafkax 按 RetryPolicy 进程内重试,耗尽后投 DLQ;DLQ 投递失败不 ack 重放
-//     (at-least-once,不再是有损推送)。pandora_push_offline_append_failed_total 仍计数告警。
+//     kafkax 按 RetryPolicy 进程内重试(瞬时抖动自愈),耗尽后投 DLQ 可回放;
+//     同时 pandora_push_offline_append_failed_total 计数器触发告警。
+//
+// W3 ④ 二次修复(Opus 审查 R2):offline.Append 失败由“只 log”升级为“metric 计数 + 返 errcode”。
+// 2026-07-06 三次修复:接入 kafkax RetryPolicy + DLQ,彻底消除“redis down → ack 丢帧”。
 func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	h := plog.With(ctx)
 
@@ -158,7 +154,6 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 			"key", string(msg.Key),
 			"err", err,
 		)
-		// 毒丸:key 不是 player_id,重试无意义 → 投 DLQ 留证(配了 DLQ 时),不静默丢。
 		return kafkax.Poison(err)
 	}
 

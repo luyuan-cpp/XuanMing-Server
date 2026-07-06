@@ -69,6 +69,16 @@ type LocalDSConf struct {
 	// 因此 MapName 语义 = 「默认关卡 / 未知 map_id 的兜底」(通常配 PVP 主图)。
 	MapName string `yaml:"map_name,omitempty" json:"map_name,omitempty"`
 
+	// LoaderMap 非空时,DS 统一启动到这张「加载 / 分发关卡」,而不是直接启到目标副本图。
+	// 目标副本由 UE 侧 Loader GameMode 在 BeginPlay 读 PANDORA_MAP_ID(本 allocator 已经注入)→
+	// 查 g_关卡.xlsx → ServerTravel 过去(见 Doc/服务器/副本选择_UE侧交接_Codex.md)。
+	// 这是「策划填表即用」的生产权威路径:allocator 只传数字 map_id(env),不再把 umap 路径写进命令行,
+	// 策划新增副本 = 改表 + 重打 DS 内容,服务端零改动。留空(默认)= 沿用 Maps/MapName 直接启到目标图的
+	// dev 桥(仍要求每加副本改 yaml),向后兼容。启用前提:UE 侧已交付 Loader 关卡 + Loader GameMode。
+	//
+	// 例:"/Game/Test/Level/Lvl_DS_Loader?game=/Script/Pandora.PandoraDSLoaderGameMode"。
+	LoaderMap string `yaml:"loader_map,omitempty" json:"loader_map,omitempty"`
+
 	// Maps 是「副本选择」表:把请求里的 map_id 映射到具体要加载的 UE 关卡 URL。
 	// 选副本链路的服务端落点——同一个 ds_allocator 进程凭请求 map_id 起不同副本(PVP MobaLevel /
 	// PVE SonglinTown …),而非一进程一张死图。map_id 由客户端选择、经 matchmaker 透传到
@@ -117,6 +127,19 @@ func (c LocalDSConf) ResolveMapName(mapID uint32) string {
 		}
 	}
 	return c.MapName
+}
+
+// ResolveStartupMap 返回 DS 进程「首个加载」的关卡 URL(命令行位置参数)。
+//   - LoaderMap 非空 → 统一启到加载 / 分发关卡,目标副本由 UE Loader GameMode 读 PANDORA_MAP_ID
+//     查 g_关卡.xlsx 后 ServerTravel 决定(生产权威路径,allocator 只传数字 map_id,策划填表即用)。
+//   - LoaderMap 空(默认)→ 按 map_id 直接启到目标图(Maps/MapName 的 dev 桥),向后兼容。
+//
+// 无论走哪条,PANDORA_MAP_ID env 都已注入(见 buildEnv),故切换只影响「首个加载哪张图」。
+func (c LocalDSConf) ResolveStartupMap(mapID uint32) string {
+	if c.LoaderMap != "" {
+		return c.LoaderMap
+	}
+	return c.ResolveMapName(mapID)
 }
 
 // AgonesConf 是真 Agones GameServerAllocation 后端配置(W4 ⑫)。
