@@ -6,6 +6,8 @@
 //   - Heartbeat:DS 每 5s 主动上报(单向 unary,架构决策 2026-06-03),刷新 last_heartbeat_ms
 //   - ListBattles:运维/调试查询当前战斗实例
 //   - RunHeartbeatSweep:后台扫描 active ZSET,15s 没心跳 → 标记 abandoned + 回收(不变量 §4)
+//   - 空场兜底:Heartbeat 内检测对局活跃但 player_count==0 持续超 EmptyBattleTimeout →
+//     标记 abandoned + 回收(全员掉线未归/客户端从未连入,防 DS 空转;2026-07-06)
 //
 // 关键不变量:
 //   - AllocateBattle 幂等(同 match_id 已有镜像 → 直接回已分配地址,不重复 Allocate)
@@ -358,7 +360,19 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 	var refreshActive bool
 	var refreshAddr string
 	var refreshPlayers []uint64
+	// 空场兜底(2026-07-06):对局活跃但 player_count==0 持续超过 EmptyBattleTimeout → 判 abandoned
+	// (全员掉线未归 / 客户端从未连入,DS 空转烧资源)。主路径是 DS 侧空场计时器自结算
+	// (agones-dev.md §2.4),这里是后端保险;阈值必须远大于断线重连窗口(~30s),默认 5m。
+	var emptyAbandoned bool
+	var abandonPod string
+	var abandonPlayers []uint64
+	var abandonMapID uint32
+	var abandonGameMode string
+	emptyTimeoutMs := u.cfg.EmptyBattleTimeout.Std().Milliseconds()
 	err := u.repo.UpdateBattleWithLock(ctx, matchID, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
+		// CAS 冲突重跑时以最后一轮为准,每轮重置出参标记
+		refreshActive = false
+		emptyAbandoned = false
 		// 已是终态(ended/abandoned):中止写回(哨兵错误),不刷新 TTL/active,令 DS 停机
 		if b.State == stateEnded || b.State == stateAbandoned {
 			return errHeartbeatTerminal
@@ -378,7 +392,24 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 		if prevState == stateWarming && (b.State == stateReady || b.State == stateRunning) {
 			becameReady = true
 		}
-		// 对局活跃(ready/running):记下玩家名单 + ds_addr,供心跳后续期 BATTLE 位置。
+		// 空场跟踪:活跃对局无人 → 盖 EmptySinceMs 起计时;有人回来 → 清零;
+		// 持续空场超阈值 → 同一 CAS 内直接写 abandoned(与心跳写回原子,无额外竞态窗口)。
+		if b.State == stateReady || b.State == stateRunning {
+			switch {
+			case playerCount > 0:
+				b.EmptySinceMs = 0
+			case b.EmptySinceMs == 0:
+				b.EmptySinceMs = now
+			case emptyTimeoutMs > 0 && now-b.EmptySinceMs >= emptyTimeoutMs:
+				b.State = stateAbandoned
+				emptyAbandoned = true
+				abandonPod = b.DsPodName
+				abandonPlayers = append([]uint64(nil), b.PlayerIds...)
+				abandonMapID = b.MapId
+				abandonGameMode = b.GameMode
+			}
+		}
+		// 对局活跃(ready/running,且未被空场超时判弃):记下玩家名单 + ds_addr,供心跳后续期 BATTLE 位置。
 		if b.State == stateReady || b.State == stateRunning {
 			refreshActive = true
 			refreshAddr = b.DsAddr
@@ -412,12 +443,37 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 		// 验收日志:Battle DS heartbeat match_id=<id> pod=<pod> state=running/ready
 		plog.With(ctx).Infow("msg", "battle_ds_heartbeat_ready", "match_id", matchID, "pod", podName, "state", state)
 	}
+	if emptyAbandoned {
+		// 空场超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
+		return u.finishEmptyAbandon(ctx, matchID, abandonPod, abandonPlayers, abandonMapID, abandonGameMode), nil
+	}
 	// 断线重连(docs/design/battle-reconnect.md §2.2):对局活跃时续期玩家 BATTLE 位置 TTL,
 	// 使玩家整局在线期间 login 都能检测到"在战斗中",支持中途掉线重登直连回原 battle DS。
 	if u.locator != nil && refreshActive && refreshAddr != "" && len(refreshPlayers) > 0 {
 		u.refreshBattleLocations(ctx, refreshPlayers, matchID, refreshAddr)
 	}
 	return &HeartbeatResult{Command: commandNone}, nil
+}
+
+// finishEmptyAbandon 完成空场超时判弃的收尾(abandoned 已在心跳 CAS 内写入镜像):
+// 回收 pod + 投递 ds.lifecycle{ABANDONED} 补偿事件 + 移出 active,并令 DS 停机。
+//
+// 投递失败的重试闭环(不变量 §4 可靠补偿):投递失败时对局保留在 active;DS 收 stop 后
+// 停跳(或继续心跳但终态不刷新 active score),超过 HeartbeatTimeout 后 sweepOnce 以
+// wasAbandoned 路径重试投递(不重复回收 pod),直到成功或镜像 TTL 过期。
+func (u *AllocatorUsecase) finishEmptyAbandon(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) *HeartbeatResult {
+	plog.With(ctx).Warnw("msg", "battle_abandoned_empty_timeout",
+		"match_id", matchID, "pod", podName, "empty_timeout", u.cfg.EmptyBattleTimeout.String())
+	if rerr := u.alloc.Release(ctx, podName); rerr != nil {
+		plog.With(ctx).Warnw("msg", "empty_abandon_release_failed", "match_id", matchID, "pod", podName, "err", rerr)
+	}
+	if u.deliverAbandoned(ctx, matchID, podName, playerIDs, mapID, gameMode) {
+		// 终态镜像保留一段供查询,移出 active 不再扫描(同 sweepOnce 投递成功路径)
+		if eerr := u.repo.ExpireBattle(ctx, matchID, u.battleTTL()); eerr != nil {
+			plog.With(ctx).Warnw("msg", "empty_abandon_expire_failed", "match_id", matchID, "err", eerr)
+		}
+	}
+	return &HeartbeatResult{Command: commandStop}
 }
 
 // refreshBattleLocations 异步续期一批玩家的 BATTLE 位置 TTL(断线重连,弱依赖)。

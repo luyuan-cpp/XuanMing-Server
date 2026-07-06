@@ -40,6 +40,7 @@ allocator:
   heartbeat_timeout: "15s"        # 不变量 §4
   sweep_interval: "5s"
   battle_ttl: "2h"
+  empty_battle_timeout: "5m"      # 空场兜底:对局活跃但 player_count==0 持续超时 → abandoned + 回收(须 > DS 侧空场计时器 > 重连窗口)
   # prod 用真 Agones(下方 agones.enabled: true),不再需要 mock_* 字段
 
 # 生产接真 Agones GameServerAllocation。in-cluster 运行时 api_server/token_path/ca_path 留空用默认。

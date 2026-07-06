@@ -1,12 +1,12 @@
 // Package data 是 matchmaker 服务的数据层。
 //
-// Redis key 模板(所有业务 ID 用 uint64,%d 格式化):
+// Redis key 模板(所有业务 ID 用 uint64,%d 格式化;<mode> = game_mode,空则退回无模式段的旧全局 key):
 //
-//	pandora:match:queue          → ZSET(score=avg_mmr,member=ticket_id),撮合池
+//	pandora:match:<mode>:queue   → ZSET(score=avg_mmr,member=ticket_id),撮合池(按 game_mode 隔离)
 //	pandora:match:ticket:%d      → MatchTicketStorageRecord proto bytes,TTL=TicketTTL
 //	pandora:match:{%d}           → MatchStorageRecord proto bytes(hashtag 锁 cluster slot)
-//	pandora:match:player:%d      → ticket_id(string,SETNX),落"一人只在一个队列"
-//	pandora:match:active         → ZSET(score=confirm_deadline_ms,member=match_id),确认期超时扫描
+//	pandora:match:player:%d      → ticket_id(string,SETNX),落"一人只在一个队列"(故意全局不分模式)
+//	pandora:match:<mode>:active  → ZSET(score=confirm_deadline_ms,member=match_id),确认期超时扫描
 //
 // match 状态写用 WATCH/MULTI/EXEC 乐观锁(同 team 服务),冲突重试耗尽返 ErrMatchConcurrent(4006)。
 package data
@@ -56,6 +56,10 @@ func activeKeyFor(namespace string) string {
 const (
 	createMatchZAddRetry   = 3
 	createMatchZAddBackoff = 20 * time.Millisecond
+
+	// ticketCASRetry 是 ReserveTicket / DeleteTicketIfUnmatched 的 WATCH CAS 冲突重试上限。
+	// 票据键的并发写只有"撮合循环预留"与"玩家取消删除"两方,冲突极短暂,3 次足够。
+	ticketCASRetry = 3
 )
 
 func ticketKey(ticketID uint64) string { return fmt.Sprintf("pandora:match:ticket:%d", ticketID) }
@@ -73,17 +77,27 @@ type MatchRepo interface {
 	GetPlayerTicket(ctx context.Context, playerID uint64) (uint64, bool, error)
 	// DeletePlayerIndex 删除 player→ticketID 映射。
 	DeletePlayerIndex(ctx context.Context, playerID uint64) error
+	// RefreshPlayerClaim 仅当 claim 仍指向 ticketID 时刷新其 TTL(Lua 原子比较后 PEXPIRE)。
+	// 票据每次 Requeue 会刷新自身 TTL;claim 不跟着续期的话会先于票据过期,玩家即可再开
+	// 新票据 → 同一玩家两张在队票据 → 可能被撮进两场 match(违反不变量 §1)。
+	RefreshPlayerClaim(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) error
 
 	// AddTicket 写票据 proto bytes(TTL=ticketTTL)并 ZADD 进 queue(score=avg_mmr)。
 	AddTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
 	// GetTicket 读票据。not found 返 (nil, false, nil)。
 	GetTicket(ctx context.Context, ticketID uint64) (*matchv1.MatchTicketStorageRecord, bool, error)
 	// ReserveTicket 把票据从 queue 移出并持久化(撮合命中:caller 已写好 ticket.match_id)。
+	// WATCH CAS:票据已被 CancelMatch 并发删除 → 返 ErrMatchNotFound;已被并发预留进其他
+	// match(leader 交接重叠等)→ 返 ErrMatchConcurrent。调用方按失败回滚本组预留。
 	ReserveTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
 	// RequeueTicket 把票据重新写回 queue(确认失败退回,保留 enqueued_at_ms 排队时长)。
 	RequeueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
 	// DeleteTicket 删票据 record + 移出 queue。
 	DeleteTicket(ctx context.Context, ticketID uint64) error
+	// DeleteTicketIfUnmatched 仅当票据仍未被撮合(match_id==0)时原子删除(WATCH CAS)并移出 queue。
+	// 防 CancelMatch"读到未撮合→删票"与撮合循环 ReserveTicket 之间的竞态窗口。
+	// 返回:(true,0) 已删除;(false,matchID) 已被撮合进 match;(false,0) 票据已不存在。
+	DeleteTicketIfUnmatched(ctx context.Context, ticketID uint64) (deleted bool, matchID uint64, err error)
 	// RangeQueueTickets 按 avg_mmr 升序返回 queue 中全部 ticket_id。
 	RangeQueueTickets(ctx context.Context) ([]uint64, error)
 
@@ -157,6 +171,19 @@ func (r *RedisMatchRepo) DeletePlayerIndex(ctx context.Context, playerID uint64)
 	return r.rdb.Del(ctx, playerKey(playerID)).Err()
 }
 
+// refreshClaimScript 仅当 claim 当前值仍是本票据时才续期(原子比较,防误续玩家新一局的 claim)。
+var refreshClaimScript = redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0`)
+
+func (r *RedisMatchRepo) RefreshPlayerClaim(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) error {
+	return refreshClaimScript.Run(ctx, r.rdb,
+		[]string{playerKey(playerID)},
+		strconv.FormatUint(ticketID, 10), ttl.Milliseconds()).Err()
+}
+
 func (r *RedisMatchRepo) GetPlayerTicket(ctx context.Context, playerID uint64) (uint64, bool, error) {
 	val, err := r.rdb.Get(ctx, playerKey(playerID)).Result()
 	if err == redis.Nil {
@@ -207,12 +234,56 @@ func (r *RedisMatchRepo) ReserveTicket(ctx context.Context, ticket *matchv1.Matc
 	if err != nil {
 		return err
 	}
-	// Cluster 兼容:① ticketKey 单键 SET 写回带 match_id 的权威状态;② queueKey 独立 ZREM 移出池。
-	// 若 ZREM 失败残留队列项,matchOnce 加载时 t.MatchId != 0 会跳过(防重复撞合),不影响正确性。
-	if err := r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, ticketTTL).Err(); err != nil {
-		return err
+	key := ticketKey(ticket.TicketId)
+	// WATCH CAS(修复无锁盲 SET 的双向竞态):
+	//   - CancelMatch 并发 CAS 删票后,盲 SET 会把票据"复活"进 match,而成员 claim 已释放
+	//     → 玩家可再排队,同人两场(违反不变量 §1)。CAS 下票据已消失 → 返错,由 formMatch 回滚本组。
+	//   - leader 交接重叠(旧 leader 失租瞬间新 leader 已跑)时,两个循环可能同时预留同一张票;
+	//     CAS 下后到者读到 match_id 已被占 → 返错,不会重复成局。
+	for attempt := 0; attempt < ticketCASRetry; attempt++ {
+		var gone bool
+		var conflictMatch uint64
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			gone, conflictMatch = false, 0
+			b, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				gone = true
+				return nil
+			}
+			if gerr != nil {
+				return gerr
+			}
+			cur, uerr := unmarshalTicket(ticket.TicketId, b)
+			if uerr != nil {
+				return uerr
+			}
+			if cur.MatchId != 0 && cur.MatchId != ticket.MatchId {
+				conflictMatch = cur.MatchId
+				return nil
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, key, payload, ticketTTL)
+				return nil
+			})
+			return perr
+		}, key)
+		if txErr == redis.TxFailedErr {
+			continue // 并发写(取消/另一预留),重读再判
+		}
+		if txErr != nil {
+			return txErr
+		}
+		if gone {
+			return errcode.New(errcode.ErrMatchNotFound, "ticket %d gone (cancelled)", ticket.TicketId)
+		}
+		if conflictMatch != 0 {
+			return errcode.New(errcode.ErrMatchConcurrent, "ticket %d already reserved by match %d", ticket.TicketId, conflictMatch)
+		}
+		// Cluster 兼容:queueKey 与 ticketKey 不同 slot,独立 ZREM 移出池。
+		// 若 ZREM 失败残留队列项,matchOnce 加载时 t.MatchId != 0 会跳过(防重复撞合),不影响正确性。
+		return r.rdb.ZRem(ctx, r.queueKey, ticket.TicketId).Err()
 	}
-	return r.rdb.ZRem(ctx, r.queueKey, ticket.TicketId).Err()
+	return errcode.New(errcode.ErrMatchConcurrent, "reserve ticket %d concurrent retry exhausted", ticket.TicketId)
 }
 
 func (r *RedisMatchRepo) RequeueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error {
@@ -226,6 +297,54 @@ func (r *RedisMatchRepo) DeleteTicket(ctx context.Context, ticketID uint64) erro
 		return err
 	}
 	return r.rdb.ZRem(ctx, r.queueKey, ticketID).Err()
+}
+
+func (r *RedisMatchRepo) DeleteTicketIfUnmatched(ctx context.Context, ticketID uint64) (bool, uint64, error) {
+	key := ticketKey(ticketID)
+	for attempt := 0; attempt < ticketCASRetry; attempt++ {
+		var missing bool
+		var reserved uint64
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			missing, reserved = false, 0
+			b, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				missing = true
+				return nil
+			}
+			if gerr != nil {
+				return gerr
+			}
+			rec, uerr := unmarshalTicket(ticketID, b)
+			if uerr != nil {
+				return uerr
+			}
+			if rec.MatchId != 0 {
+				reserved = rec.MatchId
+				return nil
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(ctx, key)
+				return nil
+			})
+			return perr
+		}, key)
+		if txErr == redis.TxFailedErr {
+			continue // 撮合循环并发预留了票据 → 重读再判
+		}
+		if txErr != nil {
+			return false, 0, txErr
+		}
+		if missing {
+			return false, 0, nil
+		}
+		if reserved != 0 {
+			return false, reserved, nil
+		}
+		// 删除已提交,queue ZREM best-effort(不同 slot);失败由 matchOnce miss 自愈补清。
+		_ = r.rdb.ZRem(ctx, r.queueKey, ticketID).Err()
+		return true, 0, nil
+	}
+	return false, 0, errcode.New(errcode.ErrMatchConcurrent, "delete ticket %d concurrent retry exhausted", ticketID)
 }
 
 func (r *RedisMatchRepo) RangeQueueTickets(ctx context.Context) ([]uint64, error) {

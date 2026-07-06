@@ -283,3 +283,115 @@ func TestDeleteMatchRemovesRecordAndActive(t *testing.T) {
 		t.Fatalf("expired after delete = %v, want []", expired)
 	}
 }
+
+// TestDeleteTicketIfUnmatched_CAS 验证 CancelMatch 与撮合循环 ReserveTicket 的竞态防护:
+// 未撮合可删;已被预留(match_id!=0)拒删并返回其 match_id;不存在返回 (false, 0)。
+func TestDeleteTicketIfUnmatched_CAS(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+
+	seed := func(id, matchID uint64) {
+		ticket := &matchv1.MatchTicketStorageRecord{
+			TicketId: id, TeamId: id, MatchId: matchID, EnqueuedAtMs: 1,
+			Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: id}},
+		}
+		if err := repo.AddTicket(ctx, ticket, testTTL); err != nil {
+			t.Fatalf("add ticket %d: %v", id, err)
+		}
+	}
+
+	// 未撮合 → 删除成功,record + queue 均清
+	seed(10, 0)
+	deleted, mid, err := repo.DeleteTicketIfUnmatched(ctx, 10)
+	if err != nil || !deleted || mid != 0 {
+		t.Fatalf("unmatched delete: deleted=%v mid=%d err=%v", deleted, mid, err)
+	}
+	if _, found, _ := repo.GetTicket(ctx, 10); found {
+		t.Fatal("ticket 10 should be deleted")
+	}
+	if order, _ := repo.RangeQueueTickets(ctx); len(order) != 0 {
+		t.Fatalf("queue should be empty, got %v", order)
+	}
+
+	// 已被撮合(match_id=99)→ 拒删,返回占用 match
+	seed(20, 99)
+	deleted, mid, err = repo.DeleteTicketIfUnmatched(ctx, 20)
+	if err != nil || deleted || mid != 99 {
+		t.Fatalf("reserved delete: deleted=%v mid=%d err=%v", deleted, mid, err)
+	}
+	if _, found, _ := repo.GetTicket(ctx, 20); !found {
+		t.Fatal("reserved ticket 20 must survive")
+	}
+
+	// 不存在 → (false, 0, nil)
+	deleted, mid, err = repo.DeleteTicketIfUnmatched(ctx, 404)
+	if err != nil || deleted || mid != 0 {
+		t.Fatalf("missing delete: deleted=%v mid=%d err=%v", deleted, mid, err)
+	}
+}
+
+// TestReserveTicket_CAS 验证预留 CAS:票据已被取消删除 → ErrMatchNotFound;
+// 已被并发预留进其他 match → ErrMatchConcurrent;幂等重预留同一 match 放行。
+func TestReserveTicket_CAS(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+
+	ticket := &matchv1.MatchTicketStorageRecord{
+		TicketId: 1, TeamId: 1, EnqueuedAtMs: 1,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 1}},
+	}
+	if err := repo.AddTicket(ctx, ticket, testTTL); err != nil {
+		t.Fatalf("add ticket: %v", err)
+	}
+
+	// 正常预留
+	ticket.MatchId = 100
+	if err := repo.ReserveTicket(ctx, ticket, testTTL); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if order, _ := repo.RangeQueueTickets(ctx); len(order) != 0 {
+		t.Fatalf("queue should be empty after reserve, got %v", order)
+	}
+	// 幂等重预留同一 match → 放行
+	if err := repo.ReserveTicket(ctx, ticket, testTTL); err != nil {
+		t.Fatalf("idempotent re-reserve: %v", err)
+	}
+	// 另一 match 抢同一张票(leader 交接重叠)→ ErrMatchConcurrent
+	other := &matchv1.MatchTicketStorageRecord{TicketId: 1, TeamId: 1, MatchId: 200,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 1}}}
+	if err := repo.ReserveTicket(ctx, other, testTTL); errcode.As(err) != errcode.ErrMatchConcurrent {
+		t.Fatalf("conflict reserve err = %v, want ErrMatchConcurrent", err)
+	}
+
+	// 票据已被取消删除 → ErrMatchNotFound
+	if err := repo.DeleteTicket(ctx, 1); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if err := repo.ReserveTicket(ctx, ticket, testTTL); errcode.As(err) != errcode.ErrMatchNotFound {
+		t.Fatalf("gone reserve err = %v, want ErrMatchNotFound", err)
+	}
+}
+
+// TestRefreshPlayerClaim 验证 claim 续期只在仍指向本票据时生效(Lua 原子比较)。
+func TestRefreshPlayerClaim(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+
+	if _, ok, err := repo.ClaimPlayer(ctx, 1, 100, time.Minute); err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	// 指向本票据 → 续期到 30min
+	if err := repo.RefreshPlayerClaim(ctx, 1, 100, testTTL); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if ttl := mr.TTL(playerKey(1)); ttl < 20*time.Minute {
+		t.Fatalf("ttl = %v, want ~30min", ttl)
+	}
+	// 指向别的票据 → 不动(防误续玩家新一局 claim)
+	if err := repo.RefreshPlayerClaim(ctx, 1, 999, time.Hour); err != nil {
+		t.Fatalf("refresh other: %v", err)
+	}
+	if ttl := mr.TTL(playerKey(1)); ttl > 31*time.Minute {
+		t.Fatalf("ttl = %v, should not be extended by wrong ticket", ttl)
+	}
+}

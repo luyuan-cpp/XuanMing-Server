@@ -108,6 +108,10 @@ message BattleStorageRecord {
   int64  allocated_at_ms   = 8;
   int64  last_heartbeat_ms = 9;  // 最近一次 DS Heartbeat 时刻(心跳超时扫描用,不变量 §4)
   int32  player_count      = 10;
+  // 空场起始时刻:对局活跃(ready/running)且 DS 上报 player_count==0 时盖章,有人回来清零。
+  // 持续空场超过 allocator.empty_battle_timeout → 后端兜底判 abandoned(全员掉线未归 /
+  // 客户端从未连入,DS 空转烧资源)。主路径是 DS 侧空场计时器自结算(agones-dev.md §2.4)。
+  int64  empty_since_ms    = 11;
 }
 
 // ===== 生命周期事件(kafka pandora.ds.lifecycle)=====

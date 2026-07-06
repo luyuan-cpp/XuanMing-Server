@@ -32,6 +32,11 @@ type TeamConf struct {
 	// OptimisticRetry WATCH/MULTI/EXEC 乐观锁冲突时最大重试次数。
 	// 耗尽后返回 ErrTeamConcurrent(3007)。
 	OptimisticRetry int `yaml:"optimistic_retry,omitempty" json:"optimistic_retry,omitempty"`
+
+	// MatchmakerAddr matchmaker 服务 gRPC 直连地址(host:port,内网 insecure)。
+	// 成员离队/被踢时联动撤销其所在的匹配票据(弱依赖):留空 → 不联动,
+	// 行为与历史一致(本机不起 matchmaker 的骨架联调路径)。
+	MatchmakerAddr string `yaml:"matchmaker_addr,omitempty" json:"matchmaker_addr,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。

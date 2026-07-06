@@ -366,6 +366,10 @@ ListBattles(filter) → []BattleInfo
   ended match 移出 active,不发 abandoned 补偿。
 - 心跳超时 15s → 标记 abandoned + `alloc.Release(pod)` + 投递 `pandora.ds.lifecycle`
   给 battle_result(玩家段位回滚);投递失败留在 active 下轮重试,`BattleTTL` 是重试上界。
+- 空场兜底(2026-07-06):对局活跃(ready/running)但 DS 上报 `player_count==0` 持续超过
+  `empty_battle_timeout`(默认 5m,须 > 断线重连窗口 ~30s)→ 心跳内判 abandoned + 回收 +
+  `command="stop"` + 同链路补偿(全员掉线未归 / 客户端从未连入,防 DS 空转烧资源)。
+  主路径是 DS 侧空场计时器自结算(UE 仓库,建议 2~3 分钟),契约见 `agones-dev.md` §3.2。
 
 ---
 

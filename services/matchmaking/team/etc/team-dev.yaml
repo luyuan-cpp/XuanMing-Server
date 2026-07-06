@@ -49,3 +49,6 @@ team:
   max_members: 5
   # optimistic_retry: WATCH/MULTI/EXEC 冲突时最大重试次数
   optimistic_retry: 3
+  # matchmaker_addr: matchmaker gRPC 直连地址——成员离队/被踢时联动撤销其匹配票据
+  # (弱依赖,留空则不联动)
+  matchmaker_addr: "127.0.0.1:50011"

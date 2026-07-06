@@ -574,3 +574,86 @@ func TestConcurrentRetrySucceeds(t *testing.T) {
 		t.Error("expected ready=false after second SetReady")
 	}
 }
+
+// ── 匹配联动(离队/踢人 → 撤销 matchmaker 票据)────────────────────────────────
+
+// mockCanceler 记录 CancelMatch 调用,可注入返回错误。
+type mockCanceler struct {
+	calls []uint64
+	err   error
+}
+
+func (m *mockCanceler) CancelMatch(_ context.Context, playerID uint64) error {
+	m.calls = append(m.calls, playerID)
+	return m.err
+}
+
+// makeTwoMemberTeam 建 2 人队(队长 2001 + 成员 3001)。
+func makeTwoMemberTeam(t *testing.T, uc *TeamUsecase, ctx context.Context) {
+	t.Helper()
+	if _, err := uc.CreateTeam(ctx, 1001, 2001); err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	if _, err := uc.Invite(ctx, 9001, 1001, 2001, 3001); err != nil {
+		t.Fatalf("Invite: %v", err)
+	}
+	if _, err := uc.AcceptInvite(ctx, 9001, 1001, 3001); err != nil {
+		t.Fatalf("AcceptInvite: %v", err)
+	}
+}
+
+// TestLeaveTeamCancelsMatchmaking 验证成员离队后按离队者 player_id 联动撤销匹配票据。
+func TestLeaveTeamCancelsMatchmaking(t *testing.T) {
+	uc, _, cleanup := newTestUsecase(t)
+	defer cleanup()
+	ctx := context.Background()
+	makeTwoMemberTeam(t, uc, ctx)
+
+	canceler := &mockCanceler{}
+	uc.SetMatchCanceler(canceler)
+
+	if _, err := uc.LeaveTeam(ctx, 1001, 3001); err != nil {
+		t.Fatalf("LeaveTeam: %v", err)
+	}
+	if len(canceler.calls) != 1 || canceler.calls[0] != 3001 {
+		t.Errorf("expected CancelMatch(3001) once, got %v", canceler.calls)
+	}
+}
+
+// TestKickCancelsMatchmaking 验证踢人后按被踢者 player_id 联动撤销匹配票据(而非队长)。
+func TestKickCancelsMatchmaking(t *testing.T) {
+	uc, _, cleanup := newTestUsecase(t)
+	defer cleanup()
+	ctx := context.Background()
+	makeTwoMemberTeam(t, uc, ctx)
+
+	canceler := &mockCanceler{}
+	uc.SetMatchCanceler(canceler)
+
+	if _, err := uc.Kick(ctx, 1001, 2001, 3001); err != nil {
+		t.Fatalf("Kick: %v", err)
+	}
+	if len(canceler.calls) != 1 || canceler.calls[0] != 3001 {
+		t.Errorf("expected CancelMatch(3001) once, got %v", canceler.calls)
+	}
+}
+
+// TestLeaveTeamCancelMatchmakingNotFoundIgnored 验证离队者本没在排队(matchmaker 返 4004)
+// 时按常态忽略,离队本身照常成功;其余错误也不阻断离队(弱依赖)。
+func TestLeaveTeamCancelMatchmakingNotFoundIgnored(t *testing.T) {
+	uc, _, cleanup := newTestUsecase(t)
+	defer cleanup()
+	ctx := context.Background()
+	makeTwoMemberTeam(t, uc, ctx)
+
+	canceler := &mockCanceler{err: errcode.New(errcode.ErrMatchNotFound, "not queueing")}
+	uc.SetMatchCanceler(canceler)
+
+	result, err := uc.LeaveTeam(ctx, 1001, 3001)
+	if err != nil {
+		t.Fatalf("LeaveTeam should not fail on canceler 4004: %v", err)
+	}
+	if len(result.Members) != 1 {
+		t.Errorf("expected 1 member left, got %d", len(result.Members))
+	}
+}

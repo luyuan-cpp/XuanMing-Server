@@ -147,6 +147,13 @@ type AllocatorConf struct {
 	// 客户端太快连接时 DS 内部 match_id 仍为 0,PreLogin 会拒票)。超时则回收 pod + 删镜像 + 分配失败。
 	ReadyWaitTimeout config.Duration `yaml:"ready_wait_timeout,omitempty" json:"ready_wait_timeout,omitempty"`
 
+	// EmptyBattleTimeout 空场超时(默认 5m):对局活跃(ready/running)但 DS 上报 player_count==0
+	// 持续超过此时长 → 后端兜底判 abandoned(全员掉线未归 / 客户端从未连入,DS 空转烧资源)。
+	// 主路径是 DS 侧空场计时器自结算 + Shutdown(agones-dev.md §2.4),此阈值应大于 DS 侧计时器,
+	// 且必须远大于战斗断线重连窗口(~30s,battle-reconnect.md),避免误杀「全员短暂掉线正在重连」的局。
+	// 设为负值禁用(0 = 用默认 5m)。
+	EmptyBattleTimeout config.Duration `yaml:"empty_battle_timeout,omitempty" json:"empty_battle_timeout,omitempty"`
+
 	// MockDSAddrHost W4 ② MockGameServerAllocator 返回的假 DS host(默认 127.0.0.1)。
 	// W4 ③ 接 Agones 后此字段废弃,addr 由 GameServerAllocation status 返回。
 	MockDSAddrHost string `yaml:"mock_ds_addr_host,omitempty" json:"mock_ds_addr_host,omitempty"`
@@ -184,6 +191,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Allocator.ReadyWaitTimeout == 0 {
 		c.Allocator.ReadyWaitTimeout = config.Duration(10 * time.Second)
+	}
+	if c.Allocator.EmptyBattleTimeout == 0 {
+		c.Allocator.EmptyBattleTimeout = config.Duration(5 * time.Minute)
 	}
 	if c.Allocator.MockDSAddrHost == "" {
 		c.Allocator.MockDSAddrHost = "127.0.0.1"

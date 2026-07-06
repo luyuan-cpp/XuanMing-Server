@@ -77,6 +77,15 @@ match:
   mmr_max_window: 2000
   # optimistic_retry: WATCH/MULTI/EXEC 冲突时最大重试次数
   optimistic_retry: 3
+  # leader: 后台撮合循环单写者选举(多副本部署必开,防重复成局;
+  # 见 docs/design/decision-revisit-matchmaker-single-writer.md)
+  #   enabled=false(默认):本副本直接跑撮合循环(单副本 / dev 行为不变)
+  #   enabled=true:经 etcd 选举,仅当选副本跑循环,其余副本服务 RPC + 热备
+  # leader:
+  #   enabled: true
+  #   etcd_endpoints: ["127.0.0.1:2379"]
+  #   prefix: "/pandora/dev/leader/"
+  #   lease_ttl_sec: 15
 
 # jwt: 给战斗 DS 票据签名(battle DSTicket,不变量 §3 短时效 5min)
 # secret/issuer/audience 必须与 login 服务 + Envoy jwt_authn provider 完全一致

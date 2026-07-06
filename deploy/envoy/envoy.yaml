@@ -244,6 +244,14 @@ static_resources:
 
               # ----- matchmaker(unary,立即受理型,demo 15s 超时)-----
               # 撮合进度由 pandora.match.progress push 驱动,这里只是受理 RPC,不是长连。
+              # ⚠️ ReleaseMatch 是后端内部接口(battle_result 结算落库后直连调用),绝不对客户端
+              #    开放:精确 path 直接 403(服务层还有 callerID!=0 拒绝兜底,双保险)。
+              - match:
+                  path: "/pandora.match.v1.MatchService/ReleaseMatch"
+                direct_response:
+                  status: 403
+                  body:
+                    inline_string: "internal rpc"
               - match:
                   prefix: "/pandora.match.v1.MatchService/"
                 route:

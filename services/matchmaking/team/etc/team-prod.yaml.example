@@ -39,3 +39,5 @@ team:
   active_ttl: "60m"
   max_members: 5
   optimistic_retry: 3
+  # 离队/踢人联动撤销匹配票据(弱依赖,留空则不联动)
+  matchmaker_addr: "matchmaker.pandora.svc.cluster.local:50011"

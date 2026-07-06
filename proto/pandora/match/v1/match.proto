@@ -126,12 +126,12 @@ message MatchProgressEvent {
 // CLAUDE.md §5.8/§5.10:存储快照用 <Domain>StorageRecord,与客户端可见结构
 // (MatchProgress)分开,禁止值拷贝 proto message(克隆用 proto.Clone)。
 //
-// Redis key 模板(uint64 用 %d):
-//   pandora:match:queue          → ZSET(score=avg_mmr,member=ticket_id),撮合池
+// Redis key 模板(uint64 用 %d;<mode> = game_mode,空则退回无模式段的旧全局 key):
+//   pandora:match:<mode>:queue   → ZSET(score=avg_mmr,member=ticket_id),撮合池(按 game_mode 隔离)
 //   pandora:match:ticket:%d      → MatchTicketStorageRecord proto bytes
 //   pandora:match:{%d}           → MatchStorageRecord proto bytes(hashtag 锁 cluster slot)
-//   pandora:match:player:%d      → ticket_id(string,SETNX,落"一人只在一个队列")
-//   pandora:match:active         → ZSET(score=confirm_deadline_ms,member=match_id),确认期超时扫描
+//   pandora:match:player:%d      → ticket_id(string,SETNX,落"一人只在一个队列";故意全局不分模式)
+//   pandora:match:<mode>:active  → ZSET(score=confirm_deadline_ms,member=match_id),确认期超时扫描
 
 // MatchConfirmStatus 是确认期内单个玩家的确认状态。
 enum MatchConfirmStatus {

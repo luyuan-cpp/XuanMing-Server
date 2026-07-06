@@ -37,6 +37,15 @@ type TeamEventPusher interface {
 	PushTeamUpdate(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte) (sent int, err error)
 }
 
+// MatchCanceler 是“离队/踢人 → 撤销 matchmaker 匹配票据”联动的抽象接口。
+// 实现由 main 装配时注入(data.GrpcMatchCanceler,直连 matchmaker 内网 gRPC)。
+// 可为 nil:本机不起 matchmaker 的骨架联调 / 未配 matchmaker_addr 时跳过联动。
+type MatchCanceler interface {
+	// CancelMatch 撤销 playerID 当前所在的匹配票据(整张票据,含全体队友)。
+	// 玩家未在排队时返回 ErrMatchNotFound(4004),调用方按常态忽略。
+	CancelMatch(ctx context.Context, playerID uint64) error
+}
+
 // ── 常量 ─────────────────────────────────────────────────────────────────────
 
 const (
@@ -60,6 +69,10 @@ type TeamUsecase struct {
 	// 分片部署时由 main 经 SetCellRouter 注入,成员变更(建队 / 入队)后额外打一条队伍
 	// 跨 region 组队观测(供撮合 / battle 放置评估跨 region 组队占比)。nil-safe。
 	router *cellroute.Router
+
+	// matchCanceler 是“离队/踢人 → 撤销 matchmaker 票据”联动。可为 nil(未配
+	// matchmaker_addr / 骨架联调)→ 不联动,行为与历史一致。nil-safe。
+	matchCanceler MatchCanceler
 }
 
 // NewTeamUsecase 构造 TeamUsecase。
@@ -74,6 +87,15 @@ func NewTeamUsecase(repo data.TeamRepo, pusher TeamEventPusher, cfg conf.TeamCon
 // battle_result / friend / chat / trade / dialogue / inventory / locator / push 一致)。Router 内部读路径无锁,并发安全。
 func (u *TeamUsecase) SetCellRouter(r *cellroute.Router) {
 	u.router = r
+}
+
+// SetMatchCanceler 注入“离队/踢人 → 撤销 matchmaker 匹配票据”联动。
+//
+// nil-safe:不调用 / 传 nil 时(未配 matchmaker_addr / 骨架联调),离队不联动撤票,
+// 行为与历史一致。用 setter 而非构造参数,避免现有调用点/测试被迫改签名(与
+// SetCellRouter 一致)。
+func (u *TeamUsecase) SetMatchCanceler(c MatchCanceler) {
+	u.matchCanceler = c
 }
 
 // InviteTTLMs 返回邀请令牌 TTL 的毫秒数,供 service 层计算 expires_at_ms。
@@ -237,8 +259,9 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 
 // LeaveTeam 玩家主动离队。
 //
-// TODO(W3 ⑧ matchmaker): 当前 MATCHING/IN_BATTLE 状态下也允许离队,离队后状态不回退,
-// 可能留下"匹配中但人数不足"的不一致。matchmaker 上线后需定义"匹配中离队 → 取消匹配"语义。
+// 匹配联动:若该成员正在排队/确认期(matchmaker 持有其 claim),离队后 best-effort
+// 撤销整张匹配票据(队伍人数已变,票据快照不再成立):排队中 → 全队退出队列;
+// 确认期 → 等价该玩家拒绝确认(match 失败,其余票据退回队列)。见 cancelMatchmaking。
 func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
 	disbandedTTL := u.cfg.DisbandedRetention.Std()
@@ -279,6 +302,9 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 		plog.With(ctx).Warnw("msg", "team_leave_delete_player_index_failed", "player_id", playerID, "err", err)
 	}
 
+	// 匹配联动:离队成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断离队)
+	u.cancelMatchmaking(ctx, teamID, playerID)
+
 	// 解散时用短 TTL 刷新 key
 	if result.State == stateDisbanded {
 		u.refreshDisbandedTTL(ctx, teamID, disbandedTTL)
@@ -296,8 +322,8 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 
 // Kick 队长踢人。
 //
-// TODO(W3 ⑧ matchmaker): 同 LeaveTeam,MATCHING/IN_BATTLE 状态下踢人不回退状态,
-// matchmaker 上线后需明确匹配中踢人的语义。
+// 匹配联动:同 LeaveTeam——被踢成员若正在排队/确认期,踢人后 best-effort 撤销其所在
+// 的整张匹配票据。见 cancelMatchmaking。
 func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerID uint64) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
 	var result *teamv1.TeamStorageRecord
@@ -333,6 +359,9 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 	if err := u.repo.DeletePlayerIndex(ctx, targetPlayerID); err != nil {
 		plog.With(ctx).Warnw("msg", "team_kick_delete_player_index_failed", "player_id", targetPlayerID, "err", err)
 	}
+
+	// 匹配联动:被踢成员若正在排队/确认期 → 撤销整张票据(best-effort,不阻断踢人)
+	u.cancelMatchmaking(ctx, teamID, targetPlayerID)
 
 	// push 给剩余成员 + 被踢者(不发给 captain — 原则 2)
 	recipients := append(memberIDs(result), targetPlayerID)
@@ -432,6 +461,33 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 		return nil, false, nil
 	}
 	return team, true, nil
+}
+
+// ── 匹配联动辅助 ──────────────────────────────────────────────────────────────
+
+// cancelMatchmaking 成员离开队伍(主动离队 / 被踢)后,best-effort 撤销其所在的
+// matchmaker 匹配票据。修复原 TODO"排队中离队不取消票据"的跨服务不一致:
+// 不撤销时票据里仍含已离队成员,成局会把他拉进战斗;其残留 claim 也会阻塞他加入的
+// 新队伍 StartMatch(4002)。
+//
+// 弱依赖语义:
+//   - matchCanceler 为 nil(未配 matchmaker_addr / 骨架联调)→ 跳过,行为与历史一致;
+//   - ErrMatchNotFound(4004)= 该成员本就没在排队,常态,静默;
+//   - 其余错误仅 Warn 不阻断离队(残留票据由确认期超时 / TTL 兜底回收)。
+func (u *TeamUsecase) cancelMatchmaking(ctx context.Context, teamID, playerID uint64) {
+	if u.matchCanceler == nil {
+		return
+	}
+	if err := u.matchCanceler.CancelMatch(ctx, playerID); err != nil {
+		if errcode.As(err) == errcode.ErrMatchNotFound {
+			return // 未在排队,常态
+		}
+		plog.With(ctx).Warnw("msg", "team_cancel_matchmaking_failed",
+			"team_id", teamID, "player_id", playerID, "err", err)
+		return
+	}
+	plog.With(ctx).Infow("msg", "team_matchmaking_cancelled_on_leave",
+		"team_id", teamID, "player_id", playerID)
 }
 
 // ── push 辅助 ─────────────────────────────────────────────────────────────────

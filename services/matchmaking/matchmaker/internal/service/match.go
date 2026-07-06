@@ -57,8 +57,15 @@ func (s *MatchService) StartMatch(ctx context.Context, req *matchv1.StartMatchRe
 }
 
 // CancelMatch 取消匹配。player_id 以 JWT ctx 为准。
-func (s *MatchService) CancelMatch(ctx context.Context, _ *matchv1.CancelMatchRequest) (*matchv1.CancelMatchResponse, error) {
+//   - 客户端路径:Envoy jwt_authn 注入 callerID(!=0),req.player_id 被忽略——客户端伪造
+//     请求体里的 player_id 无效,只能取消自己的排队。
+//   - 内部路径(callerID==0,不经 Envoy):team 服务离队/踢人联动撤票时按 req.player_id
+//     取消(该成员所在整张票据)。信任模型与 ReleaseMatch 相同:内网直连才可能 callerID==0。
+func (s *MatchService) CancelMatch(ctx context.Context, req *matchv1.CancelMatchRequest) (*matchv1.CancelMatchResponse, error) {
 	playerID := callerID(ctx)
+	if playerID == 0 {
+		playerID = req.GetPlayerId()
+	}
 	if playerID == 0 {
 		return &matchv1.CancelMatchResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
@@ -101,8 +108,14 @@ func (s *MatchService) GetMatchProgress(ctx context.Context, req *matchv1.GetMat
 
 // ReleaseMatch 释放一场已结束(结算 / abandoned)对局的撮合状态。
 //   - 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不取 JWT player_id。
+//   - 系统接口拒绝玩家 JWT(镜像 leaderboard.SubmitScore 模式):经 Envoy 进来的客户端请求
+//     一定带 jwt_authn 注入的 x-pandora-player-id(callerID!=0),直接拒——否则任何登录玩家
+//     可用任意 match_id 摧毁他人在局撮合状态(删票据/claim/match,griefing + 绕过不变量 §1)。
 //   - 按 match_id(+ 兜底 player_ids)操作;幂等,重复调用 / 已释放均返回 OK。
 func (s *MatchService) ReleaseMatch(ctx context.Context, req *matchv1.ReleaseMatchRequest) (*matchv1.ReleaseMatchResponse, error) {
+	if callerID(ctx) != 0 {
+		return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
 	if req.GetMatchId() == 0 {
 		return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}

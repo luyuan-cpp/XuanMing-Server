@@ -58,6 +58,11 @@ allocator:
   sweep_interval: "5s"
   # battle_ttl: 战斗 DS 镜像 Redis key TTL(防僵尸镜像)
   battle_ttl: "2h"
+  # empty_battle_timeout: 空场超时兜底(默认 5m)。对局活跃(ready/running)但 DS 上报
+  # player_count==0 持续超过此时长 → 判 abandoned + 回收(全员掉线未归/客户端从未连入,
+  # DS 空转烧资源)。主路径是 DS 侧空场计时器自结算(agones-dev.md §2.4),此阈值应大于
+  # DS 侧计时器,且必须远大于战斗断线重连窗口(~30s)。设负值禁用。
+  empty_battle_timeout: "5m"
   # mock_ds_addr_host: W4 ② MockGameServerAllocator 返回的假 DS host
   mock_ds_addr_host: "127.0.0.1"
   # mock_ds_port_base: Mock 端口基址(每场 port = base + match_id % range)

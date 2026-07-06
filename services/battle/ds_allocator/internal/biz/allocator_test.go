@@ -22,13 +22,14 @@ func init() { readyPollInterval = 10 * time.Millisecond }
 
 func testCfg() conf.AllocatorConf {
 	return conf.AllocatorConf{
-		HeartbeatTimeout: config.Duration(15 * time.Second),
-		SweepInterval:    config.Duration(5 * time.Second),
-		BattleTTL:        config.Duration(2 * time.Hour),
-		ReadyWaitTimeout: config.Duration(1 * time.Second), // 测试用短超时,避免慢测
-		MockDSAddrHost:   "127.0.0.1",
-		MockDSPortBase:   30000,
-		MockDSPortRange:  1000,
+		HeartbeatTimeout:   config.Duration(15 * time.Second),
+		SweepInterval:      config.Duration(5 * time.Second),
+		BattleTTL:          config.Duration(2 * time.Hour),
+		ReadyWaitTimeout:   config.Duration(1 * time.Second), // 测试用短超时,避免慢测
+		EmptyBattleTimeout: config.Duration(5 * time.Minute),
+		MockDSAddrHost:     "127.0.0.1",
+		MockDSPortBase:     30000,
+		MockDSPortRange:    1000,
 	}
 }
 
@@ -694,6 +695,163 @@ func TestSweepReliableCompensation_RetryUntilDelivered(t *testing.T) {
 	}
 	if life.calls != 3 {
 		t.Fatalf("publish called %d times, want 3 (2 fail + 1 success)", life.calls)
+	}
+	if len(life.delivered) != 1 || life.delivered[0] != 7 {
+		t.Fatalf("delivered = %v, want [7]", life.delivered)
+	}
+}
+
+// ── 空场超时兜底(2026-07-06,全员掉线/从未连入的 DS 防空转)──────────────────────
+
+// backdateEmptySince 把 EmptySinceMs 回拨到远古,模拟空场已持续超过 EmptyBattleTimeout。
+func backdateEmptySince(t *testing.T, repo *data.RedisBattleRepo, matchID uint64) {
+	t.Helper()
+	if err := repo.UpdateBattleWithLock(context.Background(), matchID, 3, func(b *dsv1.BattleStorageRecord) error {
+		b.EmptySinceMs = 1
+		return nil
+	}, 2*time.Hour); err != nil {
+		t.Fatalf("backdate empty_since: %v", err)
+	}
+}
+
+// TestHeartbeatEmptyBattleTimeout:running 对局 player_count==0 持续超 EmptyBattleTimeout →
+// 心跳内判 abandoned + 回 stop + 回收 pod + 投递补偿事件 + 移出 active(空场兜底)。
+func TestHeartbeatEmptyBattleTimeout(t *testing.T) {
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, _ := newUsecaseWithAlloc(t, alloc)
+	life := &mockLifecycle{}
+	uc.SetLifecyclePusher(life)
+
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+
+	// 第一跳空场:只盖 EmptySinceMs 起计时,不判弃
+	hb, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if hb.Command != commandNone {
+		t.Fatalf("command = %q, want none (first empty beat only starts timer)", hb.Command)
+	}
+	got, _, _ := repo.GetBattle(ctx, 7)
+	if got.EmptySinceMs == 0 {
+		t.Fatal("EmptySinceMs should be set on first empty heartbeat")
+	}
+	if got.State != stateRunning {
+		t.Fatalf("state = %q, want still running", got.State)
+	}
+
+	// 空场持续超时(回拨 EmptySinceMs)→ 下一跳判 abandoned
+	backdateEmptySince(t, repo, 7)
+	hb2, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat2: %v", err)
+	}
+	if hb2.Command != commandStop {
+		t.Fatalf("command = %q, want stop", hb2.Command)
+	}
+	got2, _, _ := repo.GetBattle(ctx, 7)
+	if got2.State != stateAbandoned {
+		t.Fatalf("state = %q, want abandoned", got2.State)
+	}
+	if alloc.releases != 1 {
+		t.Fatalf("releases = %d, want 1", alloc.releases)
+	}
+	if len(life.delivered) != 1 || life.delivered[0] != 7 {
+		t.Fatalf("delivered = %v, want [7] (段位回滚补偿事件)", life.delivered)
+	}
+	if ids, _ := repo.RangeActiveBattles(ctx); len(ids) != 0 {
+		t.Fatalf("active = %v, want empty after empty-timeout abandon", ids)
+	}
+}
+
+// TestHeartbeatEmptyResetWhenPlayersReturn:空场计时后有人重连回来 → EmptySinceMs 清零,不判弃
+// (全员短暂掉线正在重连的局绝不能被误杀,阈值语义是「持续空场」)。
+func TestHeartbeatEmptyResetWhenPlayersReturn(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := newUsecase(t)
+
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	if _, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("empty heartbeat: %v", err)
+	}
+	if got, _, _ := repo.GetBattle(ctx, 7); got.EmptySinceMs == 0 {
+		t.Fatal("EmptySinceMs should be set")
+	}
+	// 玩家重连回来 → 清零
+	if _, err := uc.Heartbeat(ctx, 7, res.DSPodName, 2, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("rejoin heartbeat: %v", err)
+	}
+	got, _, _ := repo.GetBattle(ctx, 7)
+	if got.EmptySinceMs != 0 {
+		t.Fatalf("EmptySinceMs = %d, want 0 after players return", got.EmptySinceMs)
+	}
+	if got.State != stateRunning {
+		t.Fatalf("state = %q, want running", got.State)
+	}
+}
+
+// TestHeartbeatEmptyTimeoutDisabled:EmptyBattleTimeout 配负值 → 空场只计时不判弃(显式禁用)。
+func TestHeartbeatEmptyTimeoutDisabled(t *testing.T) {
+	ctx := context.Background()
+	uc, repo := newUsecase(t)
+	cfg := testCfg()
+	cfg.EmptyBattleTimeout = config.Duration(-1) // 显式禁用
+	ucDisabled := NewAllocatorUsecase(repo, NewMockGameServerAllocator(cfg), cfg)
+
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	if _, err := ucDisabled.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("empty heartbeat: %v", err)
+	}
+	backdateEmptySince(t, repo, 7)
+	hb, err := ucDisabled.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if hb.Command != commandNone {
+		t.Fatalf("command = %q, want none (empty timeout disabled)", hb.Command)
+	}
+	if got, _, _ := repo.GetBattle(ctx, 7); got.State != stateRunning {
+		t.Fatalf("state = %q, want running (disabled must not abandon)", got.State)
+	}
+}
+
+// TestHeartbeatEmptyTimeoutDeliveryRetry:空场判弃时 Kafka 不可用 → 保留在 active;
+// 后续 sweep 以 wasAbandoned 路径重试投递(不重复回收 pod),闭环同心跳超时补偿(不变量 §4)。
+func TestHeartbeatEmptyTimeoutDeliveryRetry(t *testing.T) {
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, _ := newUsecaseWithAlloc(t, alloc)
+	life := &mockLifecycle{failFirst: 1} // 心跳内首投失败,sweep 重试成功
+	uc.SetLifecyclePusher(life)
+
+	res := allocateReady(t, uc, repo, 7, []uint64{10, 20}, 1, "5v5_ranked")
+	if _, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli()); err != nil {
+		t.Fatalf("empty heartbeat: %v", err)
+	}
+	backdateEmptySince(t, repo, 7)
+	hb, err := uc.Heartbeat(ctx, 7, res.DSPodName, 0, "running", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	if hb.Command != commandStop {
+		t.Fatalf("command = %q, want stop", hb.Command)
+	}
+	// 投递失败 → 保留在 active 等 sweep 重试
+	if ids, _ := repo.RangeActiveBattles(ctx); len(ids) != 1 {
+		t.Fatalf("active = %v, want still 1 (delivery retry pending)", ids)
+	}
+
+	// DS 收 stop 停跳 → 心跳超时后 sweep 扫到,wasAbandoned 路径重试投递成功
+	backdate(t, repo, 7)
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if ids, _ := repo.RangeActiveBattles(ctx); len(ids) != 0 {
+		t.Fatalf("active = %v, want empty after retry delivered", ids)
+	}
+	if alloc.releases != 1 {
+		t.Fatalf("releases = %d, want exactly 1 (no re-release on retry)", alloc.releases)
 	}
 	if len(life.delivered) != 1 || life.delivered[0] != 7 {
 		t.Fatalf("delivered = %v, want [7]", life.delivered)

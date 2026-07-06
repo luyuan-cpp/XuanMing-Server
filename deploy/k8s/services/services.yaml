@@ -229,6 +229,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: matchmaker, namespace: pandora, labels: { app: matchmaker } }
 spec:
+  # ⚠️ 扩到 >1 副本前必须在 matchmaker.yaml 开 match.leader.enabled=true(etcd 选举单写者),
+  # 否则每个副本都跑撮合循环 → 重复成局(见 docs/design/decision-revisit-matchmaker-single-writer.md)
   replicas: 1
   selector: { matchLabels: { app: matchmaker } }
   template:

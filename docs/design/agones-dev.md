@@ -377,7 +377,10 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
 | `state` | `"warming"` / `"ready"` / `"running"` / `"ended"` |
 | `ts_ms` | `now` 毫秒 |
 
-响应 `command`：`""`=继续；`"stop"`=自行停机（孤儿 DS）。
+响应 `command`：`""`=继续；`"stop"`=自行停机（孤儿 DS / 终态 / 空场超时判弃）。
+
+> ⚠️ **`player_count` 必须上报「当前实际连入的活跃玩家连接数」**(NetDriver 在线连接),不是
+> 分配名单人数——后端空场兜底(见下)以此判断 DS 是否空转,常报错值会导致误杀或漏收。
 
 > **心跳超时（默认 15s）→ allocator sweep 标记 abandoned/draining**，Battle DS abandoned 经
 > `pandora.ds.lifecycle` 触发 battle_result 段位回滚补偿（W4 ⑧ at-least-once 闭环）。
@@ -387,6 +390,23 @@ Installed Build 不是天然不兼容。它从源码版引擎产出,默认会继
 >   abandoned + `ds_lifecycle_published`。
 > - 第二段（battle_result 事务出箱 → `player.update` → player 段位回滚）：DS 同步 ReportResult
 >   后验 NORMAL Elo 守恒 / ABANDONED delta 全 0 / 幂等 / outbox 清零（见 W4 ⑨）。
+
+#### 空场回收(全员掉线/从未连入,2026-07-06,双层)
+
+对局 DS 里一个玩家都没有(全员掉线不归、或客户端从未连入)时**必须回收**,不许空转到
+`battle_ttl`(2h)烧资源。业界标准 empty-server-timeout 模式,两层:
+
+- **主路径(UE 仓库,Battle DS 侧,待实现)**:DS 追踪活跃连接数,归零起「空场计时器」
+  (**建议 2~3 分钟**,必须 > 客户端重连总窗口 ~30s + 余量,见 battle-reconnect.md §6);
+  有人重连回来即取消;到点 → 按 abandoned 语义走正常结束流程(发 `state="ended"` 心跳前
+  先 ReportResult abandoned,或直接停跳交后端兜底)→ `SDK::Shutdown()`。
+- **后端兜底(本仓库,已实现)**:`ds_allocator.Heartbeat` 检测对局活跃(ready/running)但
+  `player_count==0` 持续超过 `allocator.empty_battle_timeout`(**默认 5m**,须大于 DS 侧
+  计时器)→ 判 abandoned + 回收 pod + 回 `command="stop"` + 发 `ds.lifecycle{ABANDONED}`
+  段位回滚补偿(与心跳超时补偿同链路,at-least-once 闭环)。存储侧用
+  `BattleStorageRecord.empty_since_ms` 盖章跟踪,有人回来清零;从未连入(ready 后无人进)
+  同样覆盖。设负值禁用。
+
 ### 3.3 客户端连入 Battle DS 的重试契约（UE 客户端侧实现）
 
 ⚠️ **本机 Windows DS 调试模式（§2.4）特有的「地址已下发但 DS 还没 listen」窗口必须靠客户端重试兜底。**

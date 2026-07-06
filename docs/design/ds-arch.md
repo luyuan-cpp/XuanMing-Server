@@ -548,6 +548,9 @@ pandora_ds_grpc_call_duration_ms_bucket{service,method}
 
 - Battle DS 业务心跳超过 15s 未上报 → `ds_allocator.RunHeartbeatSweep` 标 `abandoned`
   → `alloc.Release(pod)` 回收 Agones GameServer / Local 进程。
+- **空场回收(2026-07-06)**:对局活跃但全员掉线不归 / 客户端从未连入 → 双层回收,
+  DS 侧空场计时器自结算为主(UE 仓库,2~3min)、`ds_allocator` 按 `player_count==0` 持续超
+  `empty_battle_timeout`(默认 5m)判 abandoned 兜底;契约见 [`agones-dev.md`](agones-dev.md) §3.2。
 - `ds_allocator` 投递 `pandora.ds.lifecycle{phase=ABANDONED}` → `battle_result` 幂等补偿:
   - 战斗 DS:写 abandoned 战绩 / 段位回滚补偿,不信任 DS 自报的异常结算。
   - 大厅 DS:由 `hub_allocator` 的心跳 sweep / draining 机制和 `player_locator` 自愈处理。

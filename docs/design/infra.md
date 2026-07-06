@@ -138,9 +138,11 @@ pandora:<domain>:<entity>:<id>[:<field>]
 #### Match
 | Key | 类型 | TTL | 用途 |
 |---|---|---|---|
-| `pandora:match:queue:<bracket>:<region>` | sorted set | - | 匹配队列 |
-| `pandora:match:<match_id>` | hash | 30min | 匹配实例状态机 |
-| `pandora:match:player:<player_id>` | string | 30min | 玩家所在 match_id |
+| `pandora:match:<game_mode>:queue` | sorted set | - | 撮合池(score=avg_mmr,member=ticket_id;按 game_mode 隔离,防同 Cell 多模式串池) |
+| `pandora:match:<game_mode>:active` | sorted set | - | 确认期超时扫描(score=confirm_deadline_ms,member=match_id) |
+| `pandora:match:ticket:<ticket_id>` | string(pb) | 30min | 排队票据 MatchTicketStorageRecord(全局唯一 ID,不分模式) |
+| `pandora:match:{<match_id>}` | string(pb) | 30min | MatchStorageRecord(hashtag 锁 cluster slot) |
+| `pandora:match:player:<player_id>` | string | 30min | 玩家所在 ticket_id(SETNX;**故意全局不分模式**,落"一人同一时刻只在一个队列") |
 
 #### DS Allocator
 | Key | 类型 | TTL | 用途 |
@@ -258,11 +260,16 @@ pandora.dlq.<original_topic>     # 死信队列
 /pandora/dev/config/global                         → 全局通用(MMR 公式参数等)
 ```
 
-#### Leader Election(只 ds_allocator / hub_allocator 需要)
+#### Leader Election
 ```
 /pandora/dev/leader/ds_allocator
 /pandora/dev/leader/hub_allocator
+/pandora/leader/matchmaker/<game_mode>/r<region>   # 撮合循环单写者(pkg/leader/etcdleader)
 ```
+
+matchmaker 撮合循环多副本部署时经 etcd 选举保证单写者(防重复成局,见
+`decision-revisit-matchmaker-single-writer.md`);选举 key = `<prefix>matchmaker/<game_mode>/r<region>`,
+prefix 默认 `/pandora/leader/`,可经 `match.leader.prefix` 按环境配成 `/pandora/<env>/leader/`。
 
 ### 5.3 TTL / lease
 

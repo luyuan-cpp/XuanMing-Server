@@ -45,6 +45,7 @@ matchmaker 设计为 **headless 无状态、可水平扩展**(不变量 §16)。
 
 - **feature flag 默认关闭**(不变量 §16 / CLAUDE.md §14):`match.leader.enabled=false`(默认)→ 本副本直接 `RunMatchLoop`(单副本 / dev 行为**逐字节不变**)。多副本部署置 `true` → 经选举单写者。开关打开后的分支是**完整真实实现**,非空壳。
 - 池按 `game_mode` 命名空间化**始终生效**(默认 `game_mode=5v5_ranked`);记录本体与 player claim 仍全局,现有单测(构造 repo 传空 namespace)行为不变。
+- **一次性 key 迁移注意**:升级后 queue/active 索引从旧全局 key(`pandora:match:queue|active`)切到带模式段的新 key,**旧 ZSET 里的存量条目会被搁浅**(不再被扫描;ticket/match record 本体带 TTL 自然过期,但旧 ZSET 无 TTL 会残留)。dev / 压测环境按压测纪律本就清空 Redis,无影响;未来对**有在途排队数据的线上环境**升级时,须先排空队列(停入队→等 queue 清零)再滚动,或一次性 `ZUNIONSTORE` 迁移 + `DEL` 旧 key。
 
 ## 5. 风险与缓解
 

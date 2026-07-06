@@ -539,6 +539,157 @@ func TestExpireOnce_Timeout_Fails(t *testing.T) {
 	}
 }
 
+// seedAllocatingMatch 造一场 ALLOCATING 阶段的 match(票据已预留、deadline 可指定)。
+func seedAllocatingMatch(t *testing.T, ctx context.Context, f *fixture, matchID uint64, deadlineMs int64) {
+	t.Helper()
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+	f.seedTicket(t, ctx, 200, []uint64{6, 7, 8, 9, 10}, 1000)
+	ta, _, _ := f.repo.GetTicket(ctx, 100)
+	tb, _, _ := f.repo.GetTicket(ctx, 200)
+	members := make([]*matchv1.MatchMemberStorageRecord, 0, 10)
+	for _, m := range ta.Members {
+		members = append(members, &matchv1.MatchMemberStorageRecord{PlayerId: m.PlayerId, TeamId: m.TeamId, Side: 0, Confirm: confirmAccepted})
+	}
+	for _, m := range tb.Members {
+		members = append(members, &matchv1.MatchMemberStorageRecord{PlayerId: m.PlayerId, TeamId: m.TeamId, Side: 1, Confirm: confirmAccepted})
+	}
+	match := &matchv1.MatchStorageRecord{
+		MatchId:           matchID,
+		Stage:             stageAllocating,
+		Members:           members,
+		TicketIds:         []uint64{100, 200},
+		CreatedAtMs:       deadlineMs - 15000,
+		ConfirmDeadlineMs: deadlineMs,
+	}
+	ta.MatchId = matchID
+	tb.MatchId = matchID
+	_ = f.repo.ReserveTicket(ctx, ta, f.cfg.TicketTTL.Std())
+	_ = f.repo.ReserveTicket(ctx, tb, f.cfg.TicketTTL.Std())
+	if err := f.repo.CreateMatch(ctx, match, f.cfg.MatchTTL.Std()); err != nil {
+		t.Fatalf("create match: %v", err)
+	}
+}
+
+// ALLOCATING 在宽限期内 → expireOnce 不动它(留在 active 继续观察,不判失败)。
+func TestExpireOnce_AllocatingWithinGrace_Kept(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	// deadline 刚过 1s,仍在 allocatingGrace(60s)内
+	seedAllocatingMatch(t, ctx, f, 999, time.Now().UnixMilli()-1000)
+
+	if err := f.uc.expireOnce(ctx); err != nil {
+		t.Fatalf("expireOnce: %v", err)
+	}
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageAllocating {
+		t.Fatalf("stage = %v found=%v, want ALLOCATING kept", m.GetStage(), found)
+	}
+	// 仍在 active(留观),下一轮还能扫到
+	expired, _ := f.repo.RangeExpiredMatches(ctx, time.Now().UnixMilli())
+	if len(expired) != 1 || expired[0] != 999 {
+		t.Fatalf("active = %v, want [999] kept for observation", expired)
+	}
+}
+
+// ALLOCATING 超宽限期(分配副本崩溃)→ 判失败,票据退回队列,玩家不再卡死。
+func TestExpireOnce_AllocatingBeyondGrace_Fails(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	// deadline 已过 61s > allocatingGrace(60s)
+	seedAllocatingMatch(t, ctx, f, 999, time.Now().UnixMilli()-61_000)
+
+	if err := f.uc.expireOnce(ctx); err != nil {
+		t.Fatalf("expireOnce: %v", err)
+	}
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageFailed {
+		t.Fatalf("stage = %v found=%v, want FAILED", m.GetStage(), found)
+	}
+	left, _ := f.repo.RangeQueueTickets(ctx)
+	if len(left) != 2 {
+		t.Fatalf("queue = %v, want 2 tickets requeued", left)
+	}
+}
+
+// 卡死回归:超宽限判失败后 set-ready 迟到(分配副本没死只是慢)→ stage 守卫拒绝
+// FAILED→READY 回流,已退队票据不被"拉进战斗"。
+func TestOnAllConfirmed_LateReady_DoesNotOverrideFailed(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	seedAllocatingMatch(t, ctx, f, 999, time.Now().UnixMilli()-61_000)
+	if err := f.uc.expireOnce(ctx); err != nil {
+		t.Fatalf("expireOnce: %v", err)
+	}
+	m, _, _ := f.repo.GetMatch(ctx, 999)
+
+	// 迟到的 onAllConfirmed(拿的是失败前的 ALLOCATING 快照)
+	stale := cloneMatch(m)
+	stale.Stage = stageAllocating
+	f.uc.onAllConfirmed(ctx, stale)
+
+	got, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || got.Stage != stageFailed {
+		t.Fatalf("stage = %v, want FAILED preserved (no READY override)", got.GetStage())
+	}
+}
+
+// CancelMatch 与撮合循环竞态:票据已被 ReserveTicket 抢先(match_id 已写)时,
+// 排队取消路径必须转"拒绝确认"(match 失败),绝不盲删已进 match 的票据。
+func TestCancelMatch_TicketJustReserved_TurnsIntoReject(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+	f.seedTicket(t, ctx, 200, []uint64{6, 7, 8, 9, 10}, 1000)
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+
+	// player 1 取消:其票据已被撮进 match 999 → 应等价拒绝,match 失败、对方票退回队列
+	if err := f.uc.CancelMatch(ctx, 1); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageFailed {
+		t.Fatalf("stage = %v found=%v, want FAILED", m.GetStage(), found)
+	}
+	left, _ := f.repo.RangeQueueTickets(ctx)
+	if len(left) != 1 || left[0] != 200 {
+		t.Fatalf("queue = %v, want [200]", left)
+	}
+}
+
+// 排队路径取消(未撮合)后必须给票据全体成员补推 FAILED:取消可能不是本人发起
+// (队长取消 / team 离队联动撤票),其余队友的客户端不能一直停在 QUEUEING。
+func TestCancelMatch_QueuePath_PushesFailedToAllMembers(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+
+	if err := f.uc.CancelMatch(ctx, 1); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	// 票据已删、队列已空
+	if _, found, _ := f.repo.GetTicket(ctx, 100); found {
+		t.Fatal("ticket should be deleted")
+	}
+	left, _ := f.repo.RangeQueueTickets(ctx)
+	if len(left) != 0 {
+		t.Fatalf("queue = %v, want empty", left)
+	}
+	// 全体成员(含发起者)收到 FAILED
+	for pid := uint64(1); pid <= 5; pid++ {
+		if got := f.pusher.lastStageFor(pid); got != stageFailed {
+			t.Errorf("player %d last stage = %v, want FAILED", pid, got)
+		}
+	}
+	// claim 已释放:全员可立即重新排队
+	for pid := uint64(1); pid <= 5; pid++ {
+		if _, ok, err := f.repo.ClaimPlayer(ctx, pid, 300, f.cfg.TicketTTL.Std()); err != nil || !ok {
+			t.Fatalf("player %d should be claimable again: ok=%v err=%v", pid, ok, err)
+		}
+	}
+}
+
 // ── ReserveTicket 失败一致性 ──────────────────────────────────────────────────
 
 // faultyReserveRepo 包装真实 repo,在第 failOnCall 次 ReserveTicket 调用上注入失败,

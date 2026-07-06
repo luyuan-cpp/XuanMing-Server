@@ -115,6 +115,15 @@ func main() {
 	// 6. 装配链
 	repo := data.NewRedisTeamRepo(rdb)
 	uc := biz.NewTeamUsecase(repo, pusher, cfg.Team)
+	// matchmaker 联动(弱依赖:matchmaker_addr 留空 → 离队/踢人不撤匹配票据)
+	if cfg.Team.MatchmakerAddr != "" {
+		canceler := data.NewGrpcMatchCanceler(cfg.Team.MatchmakerAddr)
+		defer func() { _ = canceler.Close() }()
+		uc.SetMatchCanceler(canceler)
+		helper.Infow("msg", "match_canceler_ready", "matchmaker_addr", cfg.Team.MatchmakerAddr)
+	} else {
+		helper.Warnw("msg", "matchmaker_addr_empty", "hint", "leave/kick will not cancel matchmaking tickets")
+	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

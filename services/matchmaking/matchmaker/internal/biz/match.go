@@ -353,8 +353,12 @@ func (u *MatchUsecase) resolveMembers(ctx context.Context, teamID, captainID uin
 // ── RPC 2:CancelMatch ────────────────────────────────────────────────────────
 
 // CancelMatch 取消匹配。以 playerID 为准定位其当前票据:
-//   - 票据仍在排队(未撮合)→ 删票据 + 释放成员归属
+//   - 票据仍在排队(未撮合)→ CAS 条件删票据 + 释放成员归属
 //   - 票据已进 match(确认期)→ 等价于该玩家拒绝确认,走 match 失败流程
+//
+// 排队路径用 DeleteTicketIfUnmatched(WATCH CAS)而非"读到 match_id==0 就盲删":
+// 否则在读与删之间撮合循环可能刚好 ReserveTicket,盲删会把已进 match 的票据删掉并释放
+// 成员 claim → 玩家可再排队,同人两场(违反不变量 §1)。CAS 撞上并发预留时按拒绝确认处理。
 func (u *MatchUsecase) CancelMatch(ctx context.Context, playerID uint64) error {
 	ticketID, found, err := u.repo.GetPlayerTicket(ctx, playerID)
 	if err != nil {
@@ -378,11 +382,24 @@ func (u *MatchUsecase) CancelMatch(ctx context.Context, playerID uint64) error {
 		return u.ConfirmMatch(ctx, playerID, ticket.MatchId, false)
 	}
 
-	// 仍在排队 → 删票据 + 释放全体成员归属
-	if err := u.repo.DeleteTicket(ctx, ticketID); err != nil {
-		return err
+	// 仍在排队 → CAS 条件删票(仅当仍未撮合)+ 释放全体成员归属
+	deleted, reservedMatch, derr := u.repo.DeleteTicketIfUnmatched(ctx, ticketID)
+	if derr != nil {
+		return derr
+	}
+	if !deleted {
+		if reservedMatch != 0 {
+			// 读后被撮合循环抢先预留 → 转拒绝确认路径(match 失败,其余票据退回队列)
+			return u.ConfirmMatch(ctx, playerID, reservedMatch, false)
+		}
+		// 票据刚好过期/被他处删除:清理残留 player index,幂等返回
+		_ = u.repo.DeletePlayerIndex(ctx, playerID)
+		return errcode.New(errcode.ErrMatchNotFound, "ticket %d gone", ticketID)
 	}
 	u.rollbackClaims(ctx, memberPlayerIDs(ticket.Members))
+	// FAILED 补推给票据全体成员:取消可能不是本人发起(队长取消 / team 离队联动撤票),
+	// 其余队友的客户端仍停在 QUEUEING,不推会一直转圈直到 GetMatchProgress 兜底轮询。
+	u.pushProgress(ctx, ticket.TicketId, stageFailed, ticket.Members, "", "")
 	plog.With(ctx).Infow("msg", "match_cancel", "ticket_id", ticketID, "player_id", playerID)
 	return nil
 }
@@ -573,7 +590,14 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 		ticket.MatchId = 0
 		if err := u.repo.RequeueTicket(ctx, ticket, u.ticketTTL()); err != nil {
 			plog.With(ctx).Warnw("msg", "match_requeue_failed", "ticket_id", tid, "err", err)
+			continue
 		}
+		// 退回队列会刷新票据 TTL,claim 必须同步续期(否则 claim 先于票据过期,
+		// 玩家可再开新票 → 双票双局,违反不变量 §1)。
+		u.refreshClaims(ctx, ticket)
+		// 补推 QUEUEING:客户端刚收到 FAILED,若不告知"你已自动回到队列",其再点匹配
+		// 会撞 ErrMatchAlreadyMatching(4002) 卡死在"匹配不了"。句柄仍是 ticket_id。
+		u.pushProgress(ctx, ticket.TicketId, stageQueueing, ticket.Members, "", "")
 	}
 
 	u.removeActive(ctx, m.MatchId)
@@ -606,9 +630,14 @@ func (u *MatchUsecase) onAllConfirmed(ctx context.Context, m *matchv1.MatchStora
 		return
 	}
 
-	// 写 match → READY
+	// 写 match → READY。stage 守卫:仅 ALLOCATING 可推进到 READY——若本 match 在分配期间
+	// 已被 expireOnce 判 FAILED(票据已退回队列),盲写会把 FAILED 翻成 READY,
+	// 造成"票在队列里但人被拉进战斗"的脏状态。已分配的 DS 由 battle 心跳超时补偿回收(不变量 §4)。
 	var ready *matchv1.MatchStorageRecord
 	werr := u.repo.UpdateMatchWithLock(ctx, m.MatchId, u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
+		if rec.Stage != stageAllocating {
+			return errcode.New(errcode.ErrMatchDeclined, "match %d stage=%d not allocating, skip ready", m.MatchId, rec.Stage)
+		}
 		rec.Stage = stageReady
 		rec.BattleDsAddr = dsAddr
 		ready = cloneMatch(rec)
@@ -955,9 +984,15 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	collect(sideA, 0)
 	collect(sideB, 1)
 
+	// AutoConfirmMatch(dev 联调)下成员已全员 accepted,match 直接以 ALLOCATING 落库:
+	// onAllConfirmed 的 set-ready stage 守卫只认 ALLOCATING,且语义上确认期已跳过。
+	initialStage := stageConfirm
+	if u.cfg.AutoConfirmMatch {
+		initialStage = stageAllocating
+	}
 	match := &matchv1.MatchStorageRecord{
 		MatchId:           matchID,
-		Stage:             stageConfirm,
+		Stage:             initialStage,
 		Members:           members,
 		TicketIds:         ticketIDs,
 		CreatedAtMs:       now,
@@ -1009,11 +1044,33 @@ func (u *MatchUsecase) rollbackReservations(ctx context.Context, reserved []*mat
 		t.MatchId = 0
 		if err := u.repo.RequeueTicket(ctx, t, u.ticketTTL()); err != nil {
 			plog.With(ctx).Warnw("msg", "rollback_reservation_failed", "ticket_id", t.TicketId, "err", err)
+			continue
+		}
+		u.refreshClaims(ctx, t) // 票据 TTL 已刷新,claim 同步续期(见 onMatchFailed 注释)
+	}
+}
+
+// refreshClaims 续期一张票据全体成员的 player→ticket 归属 TTL(仅当 claim 仍指向本票据,
+// data 层 Lua 原子比较,防误续玩家新一局的 claim)。失败仅 Warn:claim 短缺由 StartMatch
+// 的 SETNX + locator 战斗态前置检查兜底。
+func (u *MatchUsecase) refreshClaims(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord) {
+	for _, m := range ticket.Members {
+		if err := u.repo.RefreshPlayerClaim(ctx, m.PlayerId, ticket.TicketId, u.ticketTTL()); err != nil {
+			plog.With(ctx).Warnw("msg", "refresh_claim_failed", "player_id", m.PlayerId, "ticket_id", ticket.TicketId, "err", err)
 		}
 	}
 }
 
+// allocatingGrace 是 ALLOCATING 阶段的额外宽限期(确认期截止后再等这么久)。
+// DS 分配的同步预算约 20s(grpc server timeout 22s),60s 足够覆盖;超过则视为
+// "分配副本已崩溃"(进程死在 stage=ALLOCATING 与写 READY 之间),判失败退票,
+// 否则 match 永远卡在 ALLOCATING、成员 claim 残留到 TTL(30min)才能再匹配。
+const allocatingGrace = 60 * time.Second
+
 // expireOnce 扫描 active ZSET,把确认期已超时的 match 标记失败。
+//
+// ALLOCATING 特殊处理:确认期截止但仍在分配 DS 属正常(最后一人踩点确认),给 allocatingGrace
+// 宽限期并保留在 active ZSET 里继续观察;超宽限仍未到 READY → 判失败(分配方已崩溃)。
 func (u *MatchUsecase) expireOnce(ctx context.Context) error {
 	now := time.Now().UnixMilli()
 	matchIDs, err := u.repo.RangeExpiredMatches(ctx, now)
@@ -1022,10 +1079,18 @@ func (u *MatchUsecase) expireOnce(ctx context.Context) error {
 	}
 	for _, mid := range matchIDs {
 		var snapshot *matchv1.MatchStorageRecord
+		var keepActive bool
 		lerr := u.repo.UpdateMatchWithLock(ctx, mid, u.cfg.OptimisticRetry, func(m *matchv1.MatchStorageRecord) error {
-			if m.Stage == stageReady || m.Stage == stageFailed || m.Stage == stageAllocating {
-				snapshot = nil
-				return nil // 已结算,无需超时处理
+			snapshot, keepActive = nil, false
+			switch m.Stage {
+			case stageReady, stageFailed:
+				return nil // 已终态/就绪:仅移出 active
+			case stageAllocating:
+				if now < m.ConfirmDeadlineMs+allocatingGrace.Milliseconds() {
+					keepActive = true // 分配进行中,留在 active 等宽限期
+					return nil
+				}
+				// 超宽限仍 ALLOCATING:分配副本崩溃,落入下方失败处理
 			}
 			m.Stage = stageFailed
 			snapshot = cloneMatch(m)
@@ -1034,6 +1099,9 @@ func (u *MatchUsecase) expireOnce(ctx context.Context) error {
 		if lerr != nil {
 			plog.With(ctx).Warnw("msg", "expire_lock_failed", "match_id", mid, "err", lerr)
 			u.removeActive(ctx, mid)
+			continue
+		}
+		if keepActive {
 			continue
 		}
 		if snapshot == nil {
