@@ -268,13 +268,19 @@ WHERE (player_id = ? AND blocked_id = ?) OR (player_id = ? AND blocked_id = ?) L
 	}
 
 	// 好友上限原子校验:在 accept 事务内对双方分别统计已建立的好友边。
-	// 请求行 FOR UPDATE 串行化了「同一请求」的并发 accept;统计在锁内进行,
-	// 与同一请求的重复 accept 互斥。残留极窄竞态见 AcceptRequest 接口注释。
+	// 用锁定读(FOR UPDATE):InnoDB 对 player_id 索引区间加 next-key 锁,
+	// 阻塞其他并发 accept 对同一玩家的建边插入 → 消除「两个不同请求同时被接受,
+	// 都读到 cnt=max-1 都通过、实际超上限」的幻读竞态。
+	// 锁序按 player_id 升序,避免 A→B 与 B→A 两笔并发 accept 交叉加锁成环死锁。
 	if maxFriends > 0 {
-		for _, pid := range [...]uint64{requesterID, targetID} {
+		loID, hiID := requesterID, targetID
+		if hiID < loID {
+			loID, hiID = hiID, loID
+		}
+		for _, pid := range [...]uint64{loID, hiID} {
 			var cnt int
 			if cerr := tx.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM friendships WHERE player_id = ?`, pid).Scan(&cnt); cerr != nil {
+				`SELECT COUNT(*) FROM friendships WHERE player_id = ? FOR UPDATE`, pid).Scan(&cnt); cerr != nil {
 				return false, errcode.New(errcode.ErrInternal, "count friends %d: %v", pid, cerr)
 			}
 			if cnt >= maxFriends {

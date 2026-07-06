@@ -412,6 +412,27 @@ func TestReleaseMatch_DoesNotDeleteNewClaim(t *testing.T) {
 	}
 }
 
+// 僵尸 claim 清理 / 回滚必须 CAS:claim 已指向新一局票据时,旧票据的清理路径不准误删。
+func TestRollbackClaims_DoesNotDeleteNewClaim(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+
+	// player 1 的 claim 指向新票据 300
+	if _, ok, err := f.repo.ClaimPlayer(ctx, 1, 300, f.cfg.TicketTTL.Std()); err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	// 旧票据 100 的回滚(模拟「读到旧 claim → 过期 → 新 claim 写入 → 回滚执行」竞态)
+	f.uc.rollbackClaims(ctx, 100, []uint64{1})
+	if got, found, _ := f.repo.GetPlayerTicket(ctx, 1); !found || got != 300 {
+		t.Fatalf("new claim after stale rollback: ticket=%d found=%v, want 300", got, found)
+	}
+	// 本票据 300 的回滚 → 正常删除
+	f.uc.rollbackClaims(ctx, 300, []uint64{1})
+	if _, found, _ := f.repo.GetPlayerTicket(ctx, 1); found {
+		t.Fatal("claim should be gone after matching rollback")
+	}
+}
+
 // 撮合成局 → locator 上报全员 MATCHING(带 match_id);全员确认就绪 → 上报 BATTLE(带 ds_addr)。
 func TestLocatorState_MatchingThenBattle(t *testing.T) {
 	ctx := context.Background()
@@ -489,7 +510,8 @@ func TestConfirmMatch_Reject_FailsAndRequeues(t *testing.T) {
 	}
 }
 
-// 确认期超时 → expireOnce 标记 FAILED,票据退回队列。
+// 确认期超时 → expireOnce 标记 FAILED;含未确认(AFK)成员的票据被删除并释放归属,
+// 不退回队列(否则同一批人 + 同一挂机者会无限重凑同一场 → 再超时)。
 func TestExpireOnce_Timeout_Fails(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 999)
@@ -532,10 +554,83 @@ func TestExpireOnce_Timeout_Fails(t *testing.T) {
 	if !found || m.Stage != stageFailed {
 		t.Fatalf("stage = %v found=%v, want FAILED", m.GetStage(), found)
 	}
-	// 无明确拒绝者(rejecterID=0)→ 两张票均退回队列
+	// 超时且全员未确认(PENDING)→ 两张票均判责:删票、释放归属、不退回队列
 	left, _ := f.repo.RangeQueueTickets(ctx)
-	if len(left) != 2 {
-		t.Fatalf("queue = %v, want 2 tickets requeued", left)
+	if len(left) != 0 {
+		t.Fatalf("queue = %v, want empty (AFK tickets dropped, not requeued)", left)
+	}
+	for _, tid := range []uint64{100, 200} {
+		if _, found, _ := f.repo.GetTicket(ctx, tid); found {
+			t.Fatalf("ticket %d should be deleted", tid)
+		}
+	}
+	for pid := uint64(1); pid <= 10; pid++ {
+		if _, ok, _ := f.repo.GetPlayerTicket(ctx, pid); ok {
+			t.Fatalf("player %d claim should be released", pid)
+		}
+		if got := f.pusher.lastStageFor(pid); got != stageFailed {
+			t.Fatalf("player %d last stage = %v, want FAILED", pid, got)
+		}
+	}
+}
+
+// 超时时已全员接受的票据退回队列(不能连坐),含未确认成员的票据判责删除。
+func TestExpireOnce_Timeout_MixedConfirm_RequeuesInnocentDropsAFK(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+	f.seedTicket(t, ctx, 200, []uint64{6, 7, 8, 9, 10}, 1000)
+
+	ta, _, _ := f.repo.GetTicket(ctx, 100)
+	tb, _, _ := f.repo.GetTicket(ctx, 200)
+	members := make([]*matchv1.MatchMemberStorageRecord, 0, 10)
+	for _, m := range ta.Members { // ticket 100 全员已接受
+		members = append(members, &matchv1.MatchMemberStorageRecord{PlayerId: m.PlayerId, TeamId: m.TeamId, Side: 0, Confirm: confirmAccepted})
+	}
+	for _, m := range tb.Members { // ticket 200 全员未确认(AFK)
+		members = append(members, &matchv1.MatchMemberStorageRecord{PlayerId: m.PlayerId, TeamId: m.TeamId, Side: 1, Confirm: confirmPending})
+	}
+	now := time.Now().UnixMilli()
+	match := &matchv1.MatchStorageRecord{
+		MatchId:           999,
+		Stage:             stageConfirm,
+		Members:           members,
+		TicketIds:         []uint64{100, 200},
+		CreatedAtMs:       now - 60000,
+		ConfirmDeadlineMs: now - 1000,
+	}
+	ta.MatchId = 999
+	tb.MatchId = 999
+	_ = f.repo.ReserveTicket(ctx, ta, f.cfg.TicketTTL.Std())
+	_ = f.repo.ReserveTicket(ctx, tb, f.cfg.TicketTTL.Std())
+	if err := f.repo.CreateMatch(ctx, match, f.cfg.MatchTTL.Std()); err != nil {
+		t.Fatalf("create match: %v", err)
+	}
+
+	if err := f.uc.expireOnce(ctx); err != nil {
+		t.Fatalf("expireOnce: %v", err)
+	}
+
+	// ticket 100(无过错)退回队列且 match_id 清零;ticket 200(AFK)被删除
+	left, _ := f.repo.RangeQueueTickets(ctx)
+	if len(left) != 1 || left[0] != 100 {
+		t.Fatalf("queue = %v, want [100]", left)
+	}
+	rq, found, _ := f.repo.GetTicket(ctx, 100)
+	if !found || rq.MatchId != 0 {
+		t.Fatalf("requeued ticket bad: found=%v match_id=%d", found, rq.GetMatchId())
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 200); found {
+		t.Fatal("AFK ticket 200 should be deleted")
+	}
+	for pid := uint64(6); pid <= 10; pid++ {
+		if _, ok, _ := f.repo.GetPlayerTicket(ctx, pid); ok {
+			t.Fatalf("AFK player %d claim should be released", pid)
+		}
+	}
+	// 无过错方收到“已回到队列”补推
+	if got := f.pusher.lastStageFor(1); got != stageQueueing {
+		t.Fatalf("innocent player last stage = %v, want QUEUEING", got)
 	}
 }
 
@@ -690,6 +785,97 @@ func TestCancelMatch_QueuePath_PushesFailedToAllMembers(t *testing.T) {
 	}
 }
 
+// claim 指向已消失票据(崩溃残留)→ StartMatch 自愈清理后正常入队,不再卡 4002 半小时。
+func TestStartMatch_HealsStaleClaim(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+
+	const captain = uint64(50)
+	// 残留形态:claim 活着但票据 8888 不存在(onMatchFailed 删票后、释放 claim 前崩溃)
+	if _, ok, err := f.repo.ClaimPlayer(ctx, captain, 8888, f.cfg.TicketTTL.Std()); err != nil || !ok {
+		t.Fatalf("seed stale claim: ok=%v err=%v", ok, err)
+	}
+
+	id, err := f.uc.StartMatch(ctx, 7010, 7010, captain)
+	if err != nil {
+		t.Fatalf("StartMatch should heal stale claim: %v", err)
+	}
+	if id != 7010 {
+		t.Fatalf("ticket = %d, want 7010", id)
+	}
+	if got, found, _ := f.repo.GetPlayerTicket(ctx, captain); !found || got != 7010 {
+		t.Fatalf("claim = %d found=%v, want 7010", got, found)
+	}
+}
+
+// claim 指向仍存活的票据 → StartMatch 绝不自愈误删,照常拒绝 4002(真占用)。
+func TestStartMatch_LiveClaimStillRejected(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	f.seedTicket(t, ctx, 100, []uint64{60}, 1000)
+
+	_, err := f.uc.StartMatch(ctx, 7011, 7011, 60)
+	if code := errcode.As(err); code != errcode.ErrMatchAlreadyMatching {
+		t.Fatalf("code = %d, want ErrMatchAlreadyMatching(%d)", code, errcode.ErrMatchAlreadyMatching)
+	}
+	// 原票据与 claim 原样保留
+	if got, found, _ := f.repo.GetPlayerTicket(ctx, 60); !found || got != 100 {
+		t.Fatalf("claim = %d found=%v, want 100", got, found)
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 100); !found {
+		t.Fatal("live ticket 100 must survive")
+	}
+}
+
+// 票据 match_id 指向已不存在的 match(崩溃残留孤儿)→ CancelMatch 收割:删票 + 释放归属 + 推 FAILED。
+func TestCancelMatch_OrphanTicket_CleansUp(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+
+	tk, _, _ := f.repo.GetTicket(ctx, 100)
+	tk.MatchId = 4242 // match 4242 从未创建(回滚中途崩溃的残留形态)
+	if err := f.repo.ReserveTicket(ctx, tk, f.cfg.TicketTTL.Std()); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+
+	if err := f.uc.CancelMatch(ctx, 1); err != nil {
+		t.Fatalf("cancel orphan ticket: %v", err)
+	}
+
+	if _, found, _ := f.repo.GetTicket(ctx, 100); found {
+		t.Fatal("orphan ticket should be deleted")
+	}
+	for pid := uint64(1); pid <= 5; pid++ {
+		if _, ok, _ := f.repo.GetPlayerTicket(ctx, pid); ok {
+			t.Fatalf("player %d claim should be released", pid)
+		}
+		if got := f.pusher.lastStageFor(pid); got != stageFailed {
+			t.Errorf("player %d last stage = %v, want FAILED", pid, got)
+		}
+	}
+}
+
+// ALLOCATING(全员已确认、分配中)阶段拒绝 → 诚实报错 ErrInvalidState,match 不受影响;
+// accept 仍幂等成功。防止"取消成功却被拉进战斗"的假成功。
+func TestConfirmMatch_RejectWhileAllocating_ReturnsError(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	seedAllocatingMatch(t, ctx, f, 999, time.Now().UnixMilli()+15000)
+
+	err := f.uc.ConfirmMatch(ctx, 1, 999, false)
+	if code := errcode.As(err); code != errcode.ErrInvalidState {
+		t.Fatalf("reject while allocating: code = %d err=%v, want ErrInvalidState(%d)", code, err, errcode.ErrInvalidState)
+	}
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageAllocating {
+		t.Fatalf("stage = %v found=%v, want ALLOCATING unchanged", m.GetStage(), found)
+	}
+	if err := f.uc.ConfirmMatch(ctx, 1, 999, true); err != nil {
+		t.Fatalf("accept while allocating should stay idempotent-success: %v", err)
+	}
+}
+
 // ── ReserveTicket 失败一致性 ──────────────────────────────────────────────────
 
 // faultyReserveRepo 包装真实 repo,在第 failOnCall 次 ReserveTicket 调用上注入失败,
@@ -738,7 +924,8 @@ func TestFormMatch_ReserveFailsMidway_RollsBackNoMatch(t *testing.T) {
 		t.Fatal("formMatch should fail when ReserveTicket fails")
 	}
 
-	// match 不应被创建(预留失败发生在 CreateMatch 之前)
+	// match 已先建后回滚:预留失败时必须把 match 删干净(否则 expireOnce 会把
+	// 已退回队列的票据当成本局成员重复处理)
 	if _, found, _ := f.repo.GetMatch(ctx, 999); found {
 		t.Fatal("match 999 should not exist after reserve failure")
 	}

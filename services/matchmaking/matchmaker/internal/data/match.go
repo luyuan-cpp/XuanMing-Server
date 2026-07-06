@@ -75,8 +75,11 @@ type MatchRepo interface {
 	ClaimPlayer(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) (uint64, bool, error)
 	// GetPlayerTicket 查玩家当前所在票据 ID。not found 返 (0, false, nil)。
 	GetPlayerTicket(ctx context.Context, playerID uint64) (uint64, bool, error)
-	// DeletePlayerIndex 删除 player→ticketID 映射。
-	DeletePlayerIndex(ctx context.Context, playerID uint64) error
+	// DeletePlayerIndexIfMatches 仅当 claim 仍指向 ticketID 时才删除 player→ticketID 映射
+	// (Lua 原子比较后 DEL)。僵尸 claim 清理 / 回滚一律用此接口:无条件 DEL 在「读到旧 claim →
+	// 旧 claim 自然过期 → 同一玩家新 claim 写入 → 删」的窗口会误删新一局 claim,新票据失去
+	// 归属后玩家可再开第二张票(违反不变量 §1)。幂等:值不匹配/已不存在时不动、不报错。
+	DeletePlayerIndexIfMatches(ctx context.Context, playerID, ticketID uint64) error
 	// RefreshPlayerClaim 仅当 claim 仍指向 ticketID 时刷新其 TTL(Lua 原子比较后 PEXPIRE)。
 	// 票据每次 Requeue 会刷新自身 TTL;claim 不跟着续期的话会先于票据过期,玩家即可再开
 	// 新票据 → 同一玩家两张在队票据 → 可能被撮进两场 match(违反不变量 §1)。
@@ -167,8 +170,24 @@ func (r *RedisMatchRepo) ClaimPlayer(ctx context.Context, playerID, ticketID uin
 	return 0, false, errcode.New(errcode.ErrMatchConcurrent, "claim player %d concurrent", playerID)
 }
 
+// DeletePlayerIndex 无条件删除 player→ticket 映射。不在 MatchRepo 接口内:biz 清理路径一律用
+// DeletePlayerIndexIfMatches(CAS),无条件删存在误删并发新 claim 的窗口;仅供测试造数据用。
 func (r *RedisMatchRepo) DeletePlayerIndex(ctx context.Context, playerID uint64) error {
 	return r.rdb.Del(ctx, playerKey(playerID)).Err()
+}
+
+// deleteClaimScript 仅当 claim 当前值仍指向待清理的旧票据时才 DEL(原子比较,
+// 防「读旧 claim → 过期 → 新 claim 写入 → 误删」的并发窗口)。
+var deleteClaimScript = redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0`)
+
+func (r *RedisMatchRepo) DeletePlayerIndexIfMatches(ctx context.Context, playerID, ticketID uint64) error {
+	return deleteClaimScript.Run(ctx, r.rdb,
+		[]string{playerKey(playerID)},
+		strconv.FormatUint(ticketID, 10)).Err()
 }
 
 // refreshClaimScript 仅当 claim 当前值仍是本票据时才续期(原子比较,防误续玩家新一局的 claim)。

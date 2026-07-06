@@ -7,6 +7,7 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -97,9 +98,13 @@ func (f *fakeGroup) GetGroupMembers(_ context.Context, groupID uint64) ([]uint64
 
 type fakeTeam struct {
 	members map[uint64][]uint64
+	err     error
 }
 
 func (f *fakeTeam) GetTeamMembers(_ context.Context, teamID uint64) ([]uint64, bool, error) {
+	if f.err != nil {
+		return nil, false, f.err
+	}
 	m, ok := f.members[teamID]
 	return m, ok, nil
 }
@@ -242,6 +247,14 @@ func TestSendTeam_DegradedNoDeps(t *testing.T) {
 	if id != 100 {
 		t.Fatalf("want 100, got %d", id)
 	}
+}
+
+func TestSendTeam_ResolveError(t *testing.T) {
+	// team 已接入但运行期解析失败:必须诚实报错(不假成功静默丢消息)。
+	team := &fakeTeam{err: errors.New("team rpc down")}
+	uc := newUC(&fakeRepo{}, &fakePusher{}, team)
+	_, err := uc.SendMessage(context.Background(), 1, chatv1.ChatChannel_CHAT_CHANNEL_TEAM, 77, "hi", 100)
+	wantCode(t, err, errcode.ErrUnavailable)
 }
 
 // ── 公会 / 群频道 fan-out(2026-06-27 群聊上线)────────────────────────────────

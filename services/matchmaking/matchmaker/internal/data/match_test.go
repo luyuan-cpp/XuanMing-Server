@@ -107,6 +107,36 @@ func TestClaimPlayerSETNX(t *testing.T) {
 	}
 }
 
+func TestDeletePlayerIndexIfMatches(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+
+	if _, ok, err := repo.ClaimPlayer(ctx, 1, 100, testTTL); err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+
+	// 值不匹配(claim 已被新一局 200 替换的场景)→ 不删除
+	if err := repo.DeletePlayerIndexIfMatches(ctx, 1, 999); err != nil {
+		t.Fatalf("cas delete mismatch err: %v", err)
+	}
+	if tid, found, _ := repo.GetPlayerTicket(ctx, 1); !found || tid != 100 {
+		t.Fatalf("claim should survive mismatch delete: tid=%d found=%v", tid, found)
+	}
+
+	// 值匹配 → 删除
+	if err := repo.DeletePlayerIndexIfMatches(ctx, 1, 100); err != nil {
+		t.Fatalf("cas delete match err: %v", err)
+	}
+	if _, found, _ := repo.GetPlayerTicket(ctx, 1); found {
+		t.Fatal("claim should be deleted when ticketID matches")
+	}
+
+	// key 不存在时幂等不报错
+	if err := repo.DeletePlayerIndexIfMatches(ctx, 1, 100); err != nil {
+		t.Fatalf("cas delete on missing key err: %v", err)
+	}
+}
+
 func TestUpdateMatchWithLock(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := newRepo(t)

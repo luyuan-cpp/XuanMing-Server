@@ -210,12 +210,16 @@ func (u *TradeUsecase) ConfirmOrder(ctx context.Context, playerID, orderID uint6
 
 	// 结算失败(余额 / 物品不足):把订单从 BUYER_CONFIRMED 推到 FAILED 终态并 audit。
 	if err != nil && errcode.As(err) == errcode.ErrTradeInsufficient {
-		_ = u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
+		if ferr := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
 			if o.GetState() == tradev1.OrderState_ORDER_STATE_BUYER_CONFIRMED {
 				o.State = tradev1.OrderState_ORDER_STATE_FAILED
 			}
 			return nil
-		}, u.cfg.OrderTTL.Std())
+		}, u.cfg.OrderTTL.Std()); ferr != nil {
+			// 置 FAILED 失败(乐观锁耗尽/redis 抖动):订单暂留 BUYER_CONFIRMED,
+			// 卖方重试 Confirm 会重走结算→再次到达这里,可自愈;必须留 Error 便于告警。
+			plog.With(ctx).Errorw("msg", "trade_mark_failed_state_failed", "order_id", orderID, "err", ferr)
+		}
 		if o, ok, gerr := u.repo.GetOrder(ctx, orderID); gerr == nil && ok {
 			u.pushAudit(ctx, o)
 		}

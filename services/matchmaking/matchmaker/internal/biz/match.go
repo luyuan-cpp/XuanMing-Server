@@ -277,11 +277,13 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 	// 原子声明每个成员归属(SETNX),落不变量"一人只在一个队列";任一冲突则回滚已声明的。
 	claimed := make([]uint64, 0, len(members))
 	for _, m := range members {
-		if _, ok, cerr := u.repo.ClaimPlayer(ctx, m.PlayerId, ticketID, u.ticketTTL()); cerr != nil {
-			u.rollbackClaims(ctx, claimed)
+		ok, cerr := u.claimPlayer(ctx, m.PlayerId, ticketID)
+		if cerr != nil {
+			u.rollbackClaims(ctx, ticketID, claimed)
 			return 0, cerr
-		} else if !ok {
-			u.rollbackClaims(ctx, claimed)
+		}
+		if !ok {
+			u.rollbackClaims(ctx, ticketID, claimed)
 			return 0, errcode.New(errcode.ErrMatchAlreadyMatching, "player %d already matching", m.PlayerId)
 		}
 		claimed = append(claimed, m.PlayerId)
@@ -297,7 +299,7 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		MatchId:      0,
 	}
 	if err := u.repo.AddTicket(ctx, ticket, u.ticketTTL()); err != nil {
-		u.rollbackClaims(ctx, claimed)
+		u.rollbackClaims(ctx, ticketID, claimed)
 		return 0, err
 	}
 
@@ -307,6 +309,34 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 	plog.With(ctx).Infow("msg", "match_start", "ticket_id", ticketID, "team_id", teamID,
 		"captain_id", captainID, "members", len(members), "avg_mmr", avgMMR)
 	return ticketID, nil
+}
+
+// claimPlayer 原子声明 player→ticket 归属;撞上"指向已消失票据的僵尸 claim"时清理后重试一次。
+//
+// 僵尸 claim 来源:onMatchFailed 删拒绝者票据后、释放 claim 前崩溃等残留——claim 活着但
+// 票据已不存在,不自愈则玩家要等 claim TTL(30min)才能再匹配(典型"匹配不了")。
+// 安全性:票据存在 → 真占用,绝不碰;票据查询失败 → 保守按占用处理(fail-closed)。
+func (u *MatchUsecase) claimPlayer(ctx context.Context, playerID, ticketID uint64) (bool, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		existTID, ok, err := u.repo.ClaimPlayer(ctx, playerID, ticketID, u.ticketTTL())
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+		if _, found, gerr := u.repo.GetTicket(ctx, existTID); gerr != nil || found {
+			return false, gerr // 占用票据仍在(或查询失败):真占用,不自愈
+		}
+		plog.With(ctx).Warnw("msg", "start_match_reap_stale_claim",
+			"player_id", playerID, "stale_ticket_id", existTID)
+		// CAS 删:仅当 claim 仍指向这张已消失的旧票据才删。无条件删在「旧 claim 自然过期 →
+		// 并发请求写入新 claim」的窗口会误删新一局 claim(违反不变量 §1)。
+		if derr := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, existTID); derr != nil {
+			return false, derr
+		}
+	}
+	return false, nil
 }
 
 // resolveMembers 根据 team 快照构造 match 成员列表 + 计算平均 MMR。
@@ -372,14 +402,14 @@ func (u *MatchUsecase) CancelMatch(ctx context.Context, playerID uint64) error {
 		return err
 	}
 	if !found {
-		// 票据已消失(过期),清理残留 player index
-		_ = u.repo.DeletePlayerIndex(ctx, playerID)
+		// 票据已消失(过期),清理残留 player index(CAS:仅当仍指向这张旧票,防误删并发新 claim)
+		_ = u.repo.DeletePlayerIndexIfMatches(ctx, playerID, ticketID)
 		return errcode.New(errcode.ErrMatchNotFound, "ticket %d gone", ticketID)
 	}
 
-	// 已被撮合进 match → 视为拒绝确认
+	// 已被撮合进 match → 视为拒绝确认;match 已死(记录消失/已失败)则清理孤儿票据
 	if ticket.MatchId != 0 {
-		return u.ConfirmMatch(ctx, playerID, ticket.MatchId, false)
+		return u.rejectOrReapOrphan(ctx, playerID, ticket.MatchId)
 	}
 
 	// 仍在排队 → CAS 条件删票(仅当仍未撮合)+ 释放全体成员归属
@@ -390,17 +420,59 @@ func (u *MatchUsecase) CancelMatch(ctx context.Context, playerID uint64) error {
 	if !deleted {
 		if reservedMatch != 0 {
 			// 读后被撮合循环抢先预留 → 转拒绝确认路径(match 失败,其余票据退回队列)
-			return u.ConfirmMatch(ctx, playerID, reservedMatch, false)
+			return u.rejectOrReapOrphan(ctx, playerID, reservedMatch)
 		}
-		// 票据刚好过期/被他处删除:清理残留 player index,幂等返回
-		_ = u.repo.DeletePlayerIndex(ctx, playerID)
+		// 票据刚好过期/被他处删除:清理残留 player index(CAS 同上),幂等返回
+		_ = u.repo.DeletePlayerIndexIfMatches(ctx, playerID, ticketID)
 		return errcode.New(errcode.ErrMatchNotFound, "ticket %d gone", ticketID)
 	}
-	u.rollbackClaims(ctx, memberPlayerIDs(ticket.Members))
+	u.rollbackClaims(ctx, ticketID, memberPlayerIDs(ticket.Members))
 	// FAILED 补推给票据全体成员:取消可能不是本人发起(队长取消 / team 离队联动撤票),
 	// 其余队友的客户端仍停在 QUEUEING,不推会一直转圈直到 GetMatchProgress 兜底轮询。
 	u.pushProgress(ctx, ticket.TicketId, stageFailed, ticket.Members, "", "")
 	plog.With(ctx).Infow("msg", "match_cancel", "ticket_id", ticketID, "player_id", playerID)
+	return nil
+}
+
+// rejectOrReapOrphan 把"已被 match 预留的票据"的取消转成拒绝确认;若 match 已死则收割孤儿票据。
+//
+// match 已死的两种形态(都是崩溃残留,正常流程不会出现):
+//   - ErrMatchNotFound:match 记录不存在——formMatch 已改为「先建 match 再预留票据」,
+//     只有回滚中途崩溃 / match 被释放但票据残留才会走到;
+//   - ErrMatchDeclined:match 已 FAILED——写 FAILED 后、onMatchFailed 退票完成前崩溃,
+//     本票据错过了退回队列。
+//
+// 两种情况下票据都既不在队列也不受超时扫描,成员 claim 卡到 TTL(30min);玩家意图
+// 本就是取消,直接删票 + 释放归属 + 推 FAILED,让全员立刻可再匹配。
+// 安全守卫:重读票据,仅当其仍归属该 match 才收割,并发变化时原样返错不误删。
+func (u *MatchUsecase) rejectOrReapOrphan(ctx context.Context, playerID, matchID uint64) error {
+	err := u.ConfirmMatch(ctx, playerID, matchID, false)
+	code := errcode.As(err)
+	if err == nil || (code != errcode.ErrMatchNotFound && code != errcode.ErrMatchDeclined) {
+		return err
+	}
+	tid, found, gerr := u.repo.GetPlayerTicket(ctx, playerID)
+	if gerr != nil || !found {
+		return err // 已无归属可清理,原样返回
+	}
+	ticket, found, gerr := u.repo.GetTicket(ctx, tid)
+	if gerr != nil {
+		return gerr
+	}
+	if !found {
+		_ = u.repo.DeletePlayerIndexIfMatches(ctx, playerID, tid)
+		return nil // claim 指向已消失的票据:顺手清理(CAS 防误删并发新 claim),取消语义成立
+	}
+	if ticket.MatchId != matchID {
+		return err // 票据已归属他处(并发变化),不误删
+	}
+	if derr := u.repo.DeleteTicket(ctx, tid); derr != nil {
+		return derr
+	}
+	u.rollbackClaims(ctx, tid, memberPlayerIDs(ticket.Members))
+	u.pushProgress(ctx, tid, stageFailed, ticket.Members, "", "")
+	plog.With(ctx).Warnw("msg", "match_cancel_reaped_orphan_ticket",
+		"ticket_id", tid, "match_id", matchID, "player_id", playerID)
 	return nil
 }
 
@@ -492,7 +564,8 @@ func (u *MatchUsecase) releasePlayerClaim(ctx context.Context, matchID, playerID
 		plog.With(ctx).Infow("msg", "release_skip_stale_claim", "match_id", matchID, "player_id", playerID, "current_ticket", tid)
 		return
 	}
-	if err := u.repo.DeletePlayerIndex(ctx, playerID); err != nil {
+	// CAS 删:读 belongs 判定与删之间 claim 仍可能被替换(过期后新一局写入),仅当仍指向 tid 才删。
+	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, tid); err != nil {
 		plog.With(ctx).Warnw("msg", "release_delete_player_index_failed", "match_id", matchID, "player_id", playerID, "err", err)
 	}
 }
@@ -512,11 +585,16 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 	var snapshot *matchv1.MatchStorageRecord
 
 	err := u.repo.UpdateMatchWithLock(ctx, matchID, u.cfg.OptimisticRetry, func(m *matchv1.MatchStorageRecord) error {
-		// 终态幂等:已失败返回 declined;已分配/就绪直接成功返回
+		// 终态幂等:已失败返回 declined。已锁定(分配中/就绪):accept 幂等成功;
+		// reject 诚实报错——全员已确认后不可再反悔,若假装成功,客户端以为已取消,
+		// 随后却收到 READY 推送被拉进战斗,UI 状态机错乱。
 		if m.Stage == stageFailed {
 			return errcode.New(errcode.ErrMatchDeclined, "match %d already failed", matchID)
 		}
 		if m.Stage == stageAllocating || m.Stage == stageReady {
+			if !accept {
+				return errcode.New(errcode.ErrInvalidState, "match %d locked (stage=%d), cannot reject", matchID, m.Stage)
+			}
 			snapshot = cloneMatch(m)
 			outcome = outcomePending
 			return nil
@@ -565,14 +643,31 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 	return nil
 }
 
-// onMatchFailed 处理确认失败:其余票据退回队列,拒绝者票据删除,推 FAILED 进度。
+// onMatchFailed 处理确认失败:无过错票据退回队列,过错票据(拒绝者 / 超时未确认者)
+// 删除并释放归属,推 FAILED 进度。
+//
+// 定责规则:
+//   - 显式拒绝(rejecterID!=0):仅拒绝者所在票据过错,其余(含尚未点确认的)退回队列。
+//   - 超时(rejecterID==0):含未确认(AFK)成员的票据过错,否则低在线时段同一批人 +
+//     同一个挂机者会立刻重新凑成同一场 → 15s 超时 → 再凑,无限循环,其余 9 人被永远
+//     劫持在“FOUND→超时”里(典型“匹配不了”)。被判责成员收到 FAILED 后可自行再排。
+//
+// 守卫:只处理仍归属本 match 的票据(match_id 相等)。已被并发退回/归属他局的票据盲写
+// 会把他局在进票据抽回队列(违反不变量 §1),一律跳过;也使本函数可幂等重跑
+// (expireOnce 对 FAILED 残留的补偿依赖此性质)。
 func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorageRecord, rejecterID uint64) {
 	// 推 FAILED 给全体(含拒绝者)
 	u.pushProgress(ctx, m.MatchId, stageFailed, m.Members, "", "")
 
 	rejecterTicket := uint64(0)
-	if tid, ok, _ := u.repo.GetPlayerTicket(ctx, rejecterID); ok {
-		rejecterTicket = tid
+	if rejecterID != 0 {
+		if tid, ok, _ := u.repo.GetPlayerTicket(ctx, rejecterID); ok {
+			rejecterTicket = tid
+		}
+	}
+	confirmOf := make(map[uint64]matchv1.MatchConfirmStatus, len(m.Members))
+	for _, mem := range m.Members {
+		confirmOf[mem.PlayerId] = mem.Confirm
 	}
 
 	for _, tid := range m.TicketIds {
@@ -580,10 +675,13 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 		if err != nil || !found {
 			continue
 		}
-		if tid == rejecterTicket {
-			// 拒绝者整队删除并释放归属(不退回队列)
+		if ticket.MatchId != m.MatchId {
+			continue // 已退回队列(0)/已归属他局:绝不盲写
+		}
+		if tid == rejecterTicket || (rejecterID == 0 && !ticketAllAccepted(ticket, confirmOf)) {
+			// 过错票据:整队删除并释放归属(不退回队列)
 			_ = u.repo.DeleteTicket(ctx, tid)
-			u.rollbackClaims(ctx, memberPlayerIDs(ticket.Members))
+			u.rollbackClaims(ctx, tid, memberPlayerIDs(ticket.Members))
 			continue
 		}
 		// 其余票据退回队列,保留 enqueued_at_ms(排队时长),清掉 match_id
@@ -605,6 +703,17 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 		plog.With(ctx).Warnw("msg", "match_expire_failed", "match_id", m.MatchId, "err", err)
 	}
 	plog.With(ctx).Infow("msg", "match_failed", "match_id", m.MatchId, "rejecter_id", rejecterID)
+}
+
+// ticketAllAccepted 判断一张票据的全体成员在 match 里是否都已确认接受。
+// 成员不在 confirm 表中按未确认处理(保守判责,行为确定)。
+func ticketAllAccepted(ticket *matchv1.MatchTicketStorageRecord, confirmOf map[uint64]matchv1.MatchConfirmStatus) bool {
+	for _, m := range ticket.Members {
+		if confirmOf[m.PlayerId] != confirmAccepted {
+			return false
+		}
+	}
+	return true
 }
 
 // onAllConfirmed 处理全员确认:拉 DS → 写 match READY → 推 READY 进度 → 清理票据归属。
@@ -939,14 +1048,17 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 		ConfirmDeadlineMs: now,
 	}
 
+	// 一致性顺序(先建 match 再预留,与 formMatch 一致):match 先落库并进 active ZSET,
+	// 预留后崩溃也能被 expireOnce 兼带清理,不留“match_id 指向不存在 match”的孤儿票据。
+	if err := u.repo.CreateMatch(ctx, match, u.matchTTL()); err != nil {
+		return err // 票据未动,仍在队列,下轮重试
+	}
 	ticket.MatchId = matchID
 	if err := u.repo.ReserveTicket(ctx, ticket, u.ticketTTL()); err != nil {
+		_ = u.repo.DeleteMatch(ctx, matchID) // 票据未预留成功,删空 match 即可
 		return fmt.Errorf("reserve solo ticket %d: %w", ticket.TicketId, err)
 	}
-	if err := u.repo.CreateMatch(ctx, match, u.matchTTL()); err != nil {
-		u.rollbackReservations(ctx, []*matchv1.MatchTicketStorageRecord{ticket})
-		return err
-	}
+	u.refreshClaims(ctx, ticket) // 票据 TTL 已刷新,claim 同步续期,防 claim 先于票据过期
 
 	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
 	plog.With(ctx).Infow("msg", "solo_match_found", "match_id", matchID, "ticket_id", ticket.TicketId, "players", len(members))
@@ -999,30 +1111,33 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 		ConfirmDeadlineMs: deadline,
 	}
 
-	// 一致性流程(先预留票据,再建 match):
-	//   1. 逐张预留票据(移出队列 + 写 match_id),防止下一轮 matchOnce 重复撮合
-	//   2. 任一票据预留失败 → 把已预留的票据全部退回队列(补偿),不建 match,返回错误
-	//   3. 全部预留成功后才 CreateMatch;若 CreateMatch 仍失败 → 同样回滚全部预留
-	// 终态只有两种:票据全在 match 里且已出队,或全部退回队列且无残留 match——
-	// 不会出现"match 已建但部分票据仍在 queue"的不一致。
+	// 一致性流程(先建 match,再预留票据):
+	//   1. 先 CreateMatch(含写入 active ZSET)。失败则票据未动、全在队列,下轮重试。
+	//   2. 逐张预留票据(移出队列 + 写 match_id + 续 claim),防下一轮重复撮合。
+	//   3. 任一预留失败 → 先把已预留票据退回队列,再删 match(顺序不可倒:先删 match
+	//      会让并发的孤儿清理路径误删即将退回的票据)。
+	// 为什么先建 match:若先预留后建 match,两步之间崩溃会留下“match_id 指向不存在
+	// match”的孤儿票据——不在队列、不在 active ZSET、matchOnce/expireOnce 都看不见,
+	// 成员 claim 卡死 30min。现在任意点崩溃:match 在 active ZSET 里,到期由 expireOnce
+	// 判失败退票自愈;未预留的票据仍在队列可重撮(onMatchFailed 只碰 match_id 相符的票)。
+	if err := u.repo.CreateMatch(ctx, match, u.matchTTL()); err != nil {
+		plog.With(ctx).Errorw("msg", "create_match_failed", "match_id", matchID, "err", err)
+		return err
+	}
 	reserved := make([]*matchv1.MatchTicketStorageRecord, 0, len(sideA)+len(sideB))
 	for _, side := range [][]*matchv1.MatchTicketStorageRecord{sideA, sideB} {
 		for _, t := range side {
 			t.MatchId = matchID
 			if err := u.repo.ReserveTicket(ctx, t, u.ticketTTL()); err != nil {
 				u.rollbackReservations(ctx, reserved)
+				_ = u.repo.DeleteMatch(ctx, matchID)
 				plog.With(ctx).Errorw("msg", "reserve_ticket_failed", "match_id", matchID,
 					"ticket_id", t.TicketId, "err", err)
 				return fmt.Errorf("reserve ticket %d: %w", t.TicketId, err)
 			}
+			u.refreshClaims(ctx, t) // 票据 TTL 已刷新,claim 同步续期,防确认/分配期间 claim 先到期
 			reserved = append(reserved, t)
 		}
-	}
-
-	if err := u.repo.CreateMatch(ctx, match, u.matchTTL()); err != nil {
-		u.rollbackReservations(ctx, reserved)
-		plog.With(ctx).Errorw("msg", "create_match_failed", "match_id", matchID, "err", err)
-		return err
 	}
 	// 撮合成局，成员进入确认期：上报 locator MATCHING（不变量 §1，弱依赖）
 	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
@@ -1039,6 +1154,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 
 // rollbackReservations 把一批已预留的票据退回队列(清掉 match_id,保留 enqueued_at_ms),
 // 用于 formMatch 中途失败时的补偿,避免票据停留在"已出队但无 match"的悬空状态。
+// 调用方须在本函数之后才删 match(先退票再删 match)。
 func (u *MatchUsecase) rollbackReservations(ctx context.Context, reserved []*matchv1.MatchTicketStorageRecord) {
 	for _, t := range reserved {
 		t.MatchId = 0
@@ -1155,11 +1271,12 @@ func (u *MatchUsecase) pushOneProgress(ctx context.Context, playerID uint64, pro
 	}
 }
 
-// rollbackClaims 释放一批玩家的队列归属(SETNX 回滚)。
-func (u *MatchUsecase) rollbackClaims(ctx context.Context, playerIDs []uint64) {
+// rollbackClaims 释放一批玩家的队列归属(SETNX 回滚)。CAS 删:仅当 claim 仍指向本票据
+// (ticketID)才删,防在「旧 claim 过期 → 同一玩家新一局 claim 写入」窗口误删新 claim。
+func (u *MatchUsecase) rollbackClaims(ctx context.Context, ticketID uint64, playerIDs []uint64) {
 	for _, pid := range playerIDs {
-		if err := u.repo.DeletePlayerIndex(ctx, pid); err != nil {
-			plog.With(ctx).Warnw("msg", "rollback_claim_failed", "player_id", pid, "err", err)
+		if err := u.repo.DeletePlayerIndexIfMatches(ctx, pid, ticketID); err != nil {
+			plog.With(ctx).Warnw("msg", "rollback_claim_failed", "player_id", pid, "ticket_id", ticketID, "err", err)
 		}
 	}
 }

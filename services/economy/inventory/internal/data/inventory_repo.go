@@ -543,44 +543,54 @@ func (r *MySQLInventoryRepo) SettlePlayerTrade(ctx context.Context, orderID, sel
 		return true, nil
 	}
 
-	// 2) 资产对转。道具按 item_config_id 升序处理,保证并发结算触同一行时锁序一致。
+	// 2) 资产对转。腿内锁序必须全局一致:同一玩家的道具行按 item_config_id 升序
+	//    「扣/加合并成一趟」处理(同 ID 先扣后加),金币行统一放腿尾。
+	//    若像旧实现那样「先扣完再加」,两笔买卖方向对调的并发交易
+	//    (A 卖 item1 换 item2 vs A 卖 item2 换 item1)会在同一玩家的行上
+	//    以相反顺序加锁 → InnoDB 死锁(1213)。
 	sortedSeller := append([]ItemGrant(nil), sellerItems...)
 	sort.Slice(sortedSeller, func(i, j int) bool { return sortedSeller[i].ItemConfigID < sortedSeller[j].ItemConfigID })
 	sortedBuyer := append([]ItemGrant(nil), buyerItems...)
 	sort.Slice(sortedBuyer, func(i, j int) bool { return sortedBuyer[i].ItemConfigID < sortedBuyer[j].ItemConfigID })
 
-	// 卖家腿:交付 sellerItems(扣) + 收 buyerItems(加) + 收 price 金币(加)。
-	sellerLeg := func() error {
-		for _, it := range sortedSeller {
-			if _, derr := deductItemTx(ctx, tx, sellerID, it.ItemConfigID, it.Count); derr != nil {
-				return derr
+	// itemOps 对同一玩家把「扣 deducts + 加 adds」按 item_config_id 升序归并成单趟;
+	// 同一 ID 同时出现在两边时先扣后加(保守:先过余额校验)。
+	itemOps := func(playerID uint64, deducts, adds []ItemGrant) error {
+		di, ai := 0, 0
+		for di < len(deducts) || ai < len(adds) {
+			if ai >= len(adds) || (di < len(deducts) && deducts[di].ItemConfigID <= adds[ai].ItemConfigID) {
+				if _, derr := deductItemTx(ctx, tx, playerID, deducts[di].ItemConfigID, deducts[di].Count); derr != nil {
+					return derr
+				}
+				di++
+				continue
 			}
-		}
-		for _, it := range sortedBuyer {
-			if aerr := addItemTx(ctx, tx, sellerID, it.ItemConfigID, it.Count); aerr != nil {
+			if aerr := addItemTx(ctx, tx, playerID, adds[ai].ItemConfigID, adds[ai].Count); aerr != nil {
 				return aerr
 			}
+			ai++
+		}
+		return nil
+	}
+
+	// 卖家腿:交付 sellerItems(扣) + 收 buyerItems(加),金币(加)收尾。
+	sellerLeg := func() error {
+		if oerr := itemOps(sellerID, sortedSeller, sortedBuyer); oerr != nil {
+			return oerr
 		}
 		if price > 0 {
 			return addGoldTx(ctx, tx, sellerID, price)
 		}
 		return nil
 	}
-	// 买家腿:交付 buyerItems(扣) + 付 price 金币(扣) + 收 sellerItems(加)。
+	// 买家腿:交付 buyerItems(扣) + 收 sellerItems(加),金币(扣)收尾(与卖家腿同序防死锁)。
 	buyerLeg := func() error {
-		for _, it := range sortedBuyer {
-			if _, derr := deductItemTx(ctx, tx, buyerID, it.ItemConfigID, it.Count); derr != nil {
-				return derr
-			}
+		if oerr := itemOps(buyerID, sortedBuyer, sortedSeller); oerr != nil {
+			return oerr
 		}
 		if price > 0 {
 			if _, derr := deductGoldTx(ctx, tx, buyerID, price); derr != nil {
 				return derr
-			}
-		}
-		for _, it := range sortedSeller {
-			if aerr := addItemTx(ctx, tx, buyerID, it.ItemConfigID, it.Count); aerr != nil {
-				return aerr
 			}
 		}
 		return nil

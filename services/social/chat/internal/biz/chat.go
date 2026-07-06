@@ -196,9 +196,11 @@ func (u *ChatUsecase) sendTeam(ctx context.Context, senderID uint64, msg *chatv1
 
 	members, ok, err := u.team.GetTeamMembers(ctx, teamID)
 	if err != nil {
-		// team 服务暂时不可达:弱依赖降级,不阻断发送。
+		// team 服务暂时不可达:诚实报错让客户端重试。不能假成功——成员无法解析则
+		// 没有任何人收到消息,返回 message_id 会让发送者以为已送达(消息静默丢失),
+		// 且成员身份校验被跳过。
 		plog.With(ctx).Warnw("msg", "chat_team_resolve_failed", "team_id", teamID, "err", err)
-		return msg.GetMessageId(), nil
+		return 0, errcode.New(errcode.ErrUnavailable, "team %d members unavailable, retry later", teamID)
 	}
 	if !ok {
 		return 0, errcode.New(errcode.ErrChatChannelInvalid, "team %d not found", teamID)
@@ -245,9 +247,9 @@ func (u *ChatUsecase) sendGuild(ctx context.Context, senderID uint64, msg *chatv
 
 	members, ok, err := u.guild.GetGuildMembers(ctx, guildID)
 	if err != nil {
-		// guild 服务暂时不可达:弱依赖降级,不阻断发送。
+		// guild 服务暂时不可达:诚实报错让客户端重试(同 sendTeam:假成功 = 消息静默丢失 + 跳过成员校验)。
 		plog.With(ctx).Warnw("msg", "chat_guild_resolve_failed", "guild_id", guildID, "err", err)
-		return msg.GetMessageId(), nil
+		return 0, errcode.New(errcode.ErrUnavailable, "guild %d members unavailable, retry later", guildID)
 	}
 	if !ok {
 		return 0, errcode.New(errcode.ErrChatChannelInvalid, "guild %d not found", guildID)
@@ -294,9 +296,9 @@ func (u *ChatUsecase) sendGroup(ctx context.Context, senderID uint64, msg *chatv
 
 	members, ok, err := u.group.GetGroupMembers(ctx, groupID)
 	if err != nil {
-		// group 服务暂时不可达:弱依赖降级,不阻断发送。
+		// group 服务暂时不可达:诚实报错让客户端重试(同 sendTeam:假成功 = 消息静默丢失 + 跳过成员校验)。
 		plog.With(ctx).Warnw("msg", "chat_group_resolve_failed", "group_id", groupID, "err", err)
-		return msg.GetMessageId(), nil
+		return 0, errcode.New(errcode.ErrUnavailable, "group %d members unavailable, retry later", groupID)
 	}
 	if !ok {
 		return 0, errcode.New(errcode.ErrChatChannelInvalid, "group %d not found", groupID)

@@ -318,9 +318,14 @@ func (r *MySQLGuildRepo) ApproveJoin(ctx context.Context, requestID, approverID 
 		}
 
 		// 5. 插成员 + 申请 approved + member_count++。
+		// player_id 是主键(单归属硬约束):并发被另一个公会先批时 dup → 翻译成
+		// 「已在公会」业务错误(步骤 3 的快照读拦不住这种竞态,靠 PK 兑底)。
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO guild_members (player_id, guild_id, role) VALUES (?, ?, ?)`,
 			applicantID, guildID, GuildRoleMember); err != nil {
+			if isDupEntry(err) {
+				return errcode.New(errcode.ErrGuildAlreadyInGuild, "applicant %d already in a guild", applicantID)
+			}
 			return errcode.New(errcode.ErrInternal, "insert member %d: %v", applicantID, err)
 		}
 		if _, err := tx.ExecContext(ctx,

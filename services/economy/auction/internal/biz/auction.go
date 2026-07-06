@@ -270,13 +270,18 @@ func (u *AuctionUsecase) submit(ctx context.Context, ownerID uint64, side data.S
 			rec.Status = data.StatusPartial
 		}
 	} else {
-		// 完全成交:退还 escrow 残余(买单成交价优于出价的价差;卖单残余为 0,no-op)。
+		// 完全成交:先持久化终态,再退 escrow 残余(买单价差返还;卖单残余 0,no-op)。
+		// 顺序不可倒:若先释放后 UpdateOrder 失败,库里订单停在非终态而 escrow 已没,
+		// 后续撤单/过期清扫会再对它操作;反之 UpdateOrder 成功后释放失败只是残余
+		// 暂冻(幂等键=orderID,过期清扫/人工补退可恢复),严格更安全。
 		rec.Status = data.StatusFilled
-		u.releaseEscrow(ctx, rec.OwnerID, rec.OrderID)
 	}
 	rec.UpdatedAtMs = nowMs()
 	if err := u.repo.UpdateOrder(ctx, rec); err != nil {
 		return nil, err
+	}
+	if rec.Status == data.StatusFilled {
+		u.releaseEscrow(ctx, rec.OwnerID, rec.OrderID)
 	}
 	u.pushAudit(ctx, toProtoOrder(rec))
 	return toProtoOrder(rec), nil
@@ -354,13 +359,17 @@ func (u *AuctionUsecase) match(ctx context.Context, incoming *data.OrderRecord) 
 			if rerr := u.book.Remove(ctx, incoming.MarketID, opp, resting.OrderID); rerr != nil {
 				return rerr
 			}
-			// 被动单完全成交:退还 escrow 残余(买单价差返还;卖单残余 0,no-op)。
-			u.releaseEscrow(ctx, resting.OwnerID, resting.OrderID)
 		} else {
 			resting.Status = data.StatusPartial
 		}
 		if uerr := u.repo.UpdateOrder(ctx, resting); uerr != nil {
 			return uerr
+		}
+		// 被动单完全成交:终态已持久化,再退 escrow 残余(买单价差返还;卖单 no-op)。
+		// 顺序同 Submit:先 UpdateOrder 再释放,避免释放后持久化失败留下
+		// 「库里非终态但 escrow 已清」的不一致窗口。
+		if resting.Status == data.StatusFilled {
+			u.releaseEscrow(ctx, resting.OwnerID, resting.OrderID)
 		}
 
 		if incoming.Remaining() == 0 {
