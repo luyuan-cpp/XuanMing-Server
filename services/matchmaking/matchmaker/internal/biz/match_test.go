@@ -67,10 +67,11 @@ type mockLocator struct {
 	mu       sync.Mutex
 	matching map[uint64]uint64 // playerID -> matchID
 	battle   map[uint64]string // playerID -> battlePod
+	inBattle map[uint64]bool   // playerID -> 强制 IsInBattle 返回值(拦截测试用)
 }
 
 func newMockLocator() *mockLocator {
-	return &mockLocator{matching: map[uint64]uint64{}, battle: map[uint64]string{}}
+	return &mockLocator{matching: map[uint64]uint64{}, battle: map[uint64]string{}, inBattle: map[uint64]bool{}}
 }
 
 func (m *mockLocator) NotifyMatching(_ context.Context, ids []uint64, matchID uint64) error {
@@ -89,6 +90,12 @@ func (m *mockLocator) NotifyBattle(_ context.Context, ids []uint64, matchID uint
 		m.battle[id] = pod
 	}
 	return nil
+}
+
+func (m *mockLocator) IsInBattle(_ context.Context, id uint64) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.inBattle[id], nil
 }
 
 func (m *mockLocator) matchingOf(id uint64) (uint64, bool) {

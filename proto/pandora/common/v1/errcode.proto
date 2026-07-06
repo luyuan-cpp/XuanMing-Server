@@ -79,6 +79,7 @@ enum ErrCode {
   ERR_MATCH_DECLINED           = 4004;
   ERR_MATCH_TEAM_NOT_READY     = 4005;
   ERR_MATCH_CONCURRENT         = 4006;  // WATCH/MULTI/EXEC 乐观锁重试耗尽
+  ERR_MATCH_ALREADY_IN_BATTLE  = 4007;  // 玩家正在 DS 战斗中,禁止重复匹配(不变量 §1)
 
   // 5000-5999 DS / Hub allocator
   ERR_DS_NO_AVAILABLE          = 5001;

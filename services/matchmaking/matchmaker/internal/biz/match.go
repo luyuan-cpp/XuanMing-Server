@@ -71,6 +71,9 @@ type LocationNotifier interface {
 	NotifyMatching(ctx context.Context, playerIDs []uint64, matchID uint64) error
 	// NotifyBattle 全员确认 + DS 就绪 → 把成员标记为 BATTLE（带 match_id + battle_pod）。
 	NotifyBattle(ctx context.Context, playerIDs []uint64, matchID uint64, battlePod string) error
+	// IsInBattle 查询玩家当前是否正处于 battle DS 中（战斗中禁止重复匹配，不变量 §1）。
+	// 弱依赖：locator 不可用 / 玩家不在战斗 → 返回 false（绝不误伤正常匹配）。
+	IsInBattle(ctx context.Context, playerID uint64) (bool, error)
 }
 
 // IDGenerator 生成唯一 match_id(snowflake)。
@@ -207,6 +210,30 @@ func (u *MatchUsecase) notifyBattle(ctx context.Context, playerIDs []uint64, mat
 	}
 }
 
+// ensureNoneInBattle 拦截"战斗中还点匹配"：任一成员正处于 BATTLE 状态则拒绝整队入队。
+//
+// 权威来源是 player_locator（不变量 §1）。弱依赖处理：
+//   - locator 未注入（nil）→ 跳过（本机不起 player_locator 的骨架联调路径）。
+//   - locator 查询失败 → 仅 Warn 不阻断（不因位置服务抖动误伤正常匹配；
+//     真正的"一人一队列"兜底仍由后续 ClaimPlayer 的 SETNX 保证）。
+//   - 仅当明确查到某成员 state==BATTLE 时，返回 ErrMatchInBattle。
+func (u *MatchUsecase) ensureNoneInBattle(ctx context.Context, members []*matchv1.MatchMemberStorageRecord) error {
+	if u.locator == nil {
+		return nil
+	}
+	for _, m := range members {
+		inBattle, err := u.locator.IsInBattle(ctx, m.PlayerId)
+		if err != nil {
+			plog.With(ctx).Warnw("msg", "locator_is_in_battle_failed", "player_id", m.PlayerId, "err", err)
+			continue
+		}
+		if inBattle {
+			return errcode.New(errcode.ErrMatchInBattle, "player %d in battle", m.PlayerId)
+		}
+	}
+	return nil
+}
+
 func (u *MatchUsecase) ticketTTL() time.Duration { return u.cfg.TicketTTL.Std() }
 func (u *MatchUsecase) matchTTL() time.Duration  { return u.cfg.MatchTTL.Std() }
 
@@ -226,6 +253,12 @@ func (u *MatchUsecase) removeActive(ctx context.Context, matchID uint64) {
 func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64) (uint64, error) {
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID)
 	if err != nil {
+		return 0, err
+	}
+
+	// 战斗中禁止重复匹配（不变量 §1：玩家同一时刻只能在一个 Location）。
+	// 权威态在 player_locator：任一成员正处于 BATTLE → 整队拒绝入队。
+	if err := u.ensureNoneInBattle(ctx, members); err != nil {
 		return 0, err
 	}
 

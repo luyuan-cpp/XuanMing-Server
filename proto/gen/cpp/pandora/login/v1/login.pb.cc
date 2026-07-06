@@ -508,11 +508,11 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -524,12 +524,12 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.code_), 4>(),
-       {8, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.code_), 6>(),
+       {8, 6, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.code_)}},
       // uint64 player_id = 2 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoginResponse, _impl_.player_id_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoginResponse, _impl_.player_id_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.player_id_)}},
       // string session_token = 3 [json_name = "sessionToken"];
       {::_pbi::TcParser::FastUS1,
@@ -544,20 +544,37 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
        {42, 2, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.hub_ticket_)}},
       // uint32 region_id = 6 [json_name = "regionId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.region_id_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.region_id_), 7>(),
+       {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.region_id_)}},
       // uint32 cell_id = 7 [json_name = "cellId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.cell_id_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.cell_id_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_)}},
+      // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
+      {::_pbi::TcParser::FastUS1,
+       {66, 3, 0,
+        PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ds_addr_)}},
+      // string battle_ticket = 9 [json_name = "battleTicket"];
+      {::_pbi::TcParser::FastUS1,
+       {74, 4, 0,
+        PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ticket_)}},
+      // uint64 match_id = 10 [json_name = "matchId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoginResponse, _impl_.match_id_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.code_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.code_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 player_id = 2 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string session_token = 3 [json_name = "sessionToken"];
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.session_token_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string hub_ds_addr = 4 [json_name = "hubDsAddr"];
@@ -565,17 +582,25 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
       // string hub_ticket = 5 [json_name = "hubTicket"];
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.hub_ticket_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 region_id = 6 [json_name = "regionId"];
-      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.region_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.region_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cell_id = 7 [json_name = "cellId"];
-      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ds_addr_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string battle_ticket = 9 [json_name = "battleTicket"];
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ticket_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 match_id = 10 [json_name = "matchId"];
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
-      "\36\0\0\15\13\12\0\0"
+      "\36\0\0\15\13\12\0\0\16\15\0\0\0\0\0\0"
       "pandora.login.v1.LoginResponse"
       "session_token"
       "hub_ds_addr"
       "hub_ticket"
+      "battle_ds_addr"
+      "battle_ticket"
     }},
   };
 }
@@ -594,9 +619,16 @@ inline constexpr LoginResponse::Impl_::Impl_(
         hub_ticket_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        battle_ds_addr_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        battle_ticket_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
         region_id_{0u},
+        match_id_{::uint64_t{0u}},
         cell_id_{0u} {}
 
 template <typename>
@@ -1586,7 +1618,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_._has_bits_),
-        10, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.session_token_),
@@ -1594,13 +1626,19 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.hub_ticket_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.region_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.cell_id_),
-        4,
-        3,
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.battle_ds_addr_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.battle_ticket_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.match_id_),
+        6,
+        5,
         0,
         1,
         2,
-        5,
-        6,
+        7,
+        9,
+        3,
+        4,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LogoutRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1668,13 +1706,13 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::login::v1::LoginRequest)},
         {15, sizeof(::pandora::login::v1::LoginResponse)},
-        {32, sizeof(::pandora::login::v1::LogoutRequest)},
-        {37, sizeof(::pandora::login::v1::LogoutResponse)},
-        {42, sizeof(::pandora::login::v1::DSTicket)},
-        {61, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
-        {70, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
-        {79, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
-        {86, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {38, sizeof(::pandora::login::v1::LogoutRequest)},
+        {43, sizeof(::pandora::login::v1::LogoutResponse)},
+        {48, sizeof(::pandora::login::v1::DSTicket)},
+        {67, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
+        {76, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
+        {85, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
+        {92, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1698,45 +1736,48 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "e_id\030\003 \001(\tR\010deviceId\022%\n\016client_version\030\004"
     " \001(\tR\rclientVersion\022\026\n\006region\030\n \001(\tR\006reg"
     "ion\022\026\n\006locale\030\013 \001(\tR\006localeJ\004\010\005\020\nJ\004\010\014\0202\""
-    "\374\001\n\rLoginResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "\334\002\n\rLoginResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
     "a.common.v1.ErrCodeR\004code\022\033\n\tplayer_id\030\002"
     " \001(\004R\010playerId\022#\n\rsession_token\030\003 \001(\tR\014s"
     "essionToken\022\036\n\013hub_ds_addr\030\004 \001(\tR\thubDsA"
     "ddr\022\035\n\nhub_ticket\030\005 \001(\tR\thubTicket\022\033\n\tre"
     "gion_id\030\006 \001(\rR\010regionId\022\027\n\007cell_id\030\007 \001(\r"
-    "R\006cellIdJ\004\010\010\020\n\"4\n\rLogoutRequest\022#\n\rsessi"
-    "on_token\030\001 \001(\tR\014sessionToken\"@\n\016LogoutRe"
-    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
-    ".ErrCodeR\004code\"\357\001\n\010DSTicket\022\033\n\tplayer_id"
-    "\030\001 \001(\004R\010playerId\022\031\n\010match_id\030\002 \001(\004R\007matc"
-    "hId\022 \n\014issued_at_ms\030\003 \001(\003R\nissuedAtMs\022\"\n"
-    "\rexpires_at_ms\030\004 \001(\003R\013expiresAtMs\022\027\n\007ds_"
-    "type\030\005 \001(\tR\006dsType\022\020\n\003jti\030\006 \001(\tR\003jti\022\033\n\t"
-    "region_id\030\007 \001(\rR\010regionId\022\027\n\007cell_id\030\010 \001"
-    "(\rR\006cellIdJ\004\010\t\020\n\"q\n\024IssueDSTicketRequest"
-    "\022#\n\rsession_token\030\001 \001(\tR\014sessionToken\022\027\n"
-    "\007ds_type\030\002 \001(\tR\006dsType\022\033\n\ttarget_id\030\003 \001("
-    "\004R\010targetId\"\177\n\025IssueDSTicketResponse\022.\n\004"
-    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
-    "code\022\026\n\006ticket\030\002 \001(\tR\006ticket\022\036\n\013hub_ds_a"
-    "ddr\030\003 \001(\tR\thubDsAddr\"O\n\025VerifyDSTicketRe"
-    "quest\022\026\n\006ticket\030\001 \001(\tR\006ticket\022\036\n\013ds_pod_"
-    "name\030\002 \001(\tR\tdsPodName\"|\n\026VerifyDSTicketR"
-    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
-    "1.ErrCodeR\004code\0222\n\006claims\030\002 \001(\0132\032.pandor"
-    "a.login.v1.DSTicketR\006claims2\334\003\n\014LoginSer"
-    "vice\022^\n\005Login\022\036.pandora.login.v1.LoginRe"
-    "quest\032\037.pandora.login.v1.LoginResponse\"\024"
-    "\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006Logout\022\037.pandora"
-    ".login.v1.LogoutRequest\032 .pandora.login."
-    "v1.LogoutResponse\"\025\202\323\344\223\002\017\"\n/v1/logout:\001*"
-    "\022\200\001\n\rIssueDSTicket\022&.pandora.login.v1.Is"
-    "sueDSTicketRequest\032\'.pandora.login.v1.Is"
-    "sueDSTicketResponse\"\036\202\323\344\223\002\030\"\023/v1/ds/tick"
-    "et/issue:\001*\022\204\001\n\016VerifyDSTicket\022\'.pandora"
-    ".login.v1.VerifyDSTicketRequest\032(.pandor"
-    "a.login.v1.VerifyDSTicketResponse\"\037\202\323\344\223\002"
-    "\031\"\024/v1/ds/ticket/verify:\001*b\006proto3"
+    "R\006cellId\022$\n\016battle_ds_addr\030\010 \001(\tR\014battle"
+    "DsAddr\022#\n\rbattle_ticket\030\t \001(\tR\014battleTic"
+    "ket\022\031\n\010match_id\030\n \001(\004R\007matchId\"4\n\rLogout"
+    "Request\022#\n\rsession_token\030\001 \001(\tR\014sessionT"
+    "oken\"@\n\016LogoutResponse\022.\n\004code\030\001 \001(\0162\032.p"
+    "andora.common.v1.ErrCodeR\004code\"\357\001\n\010DSTic"
+    "ket\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010matc"
+    "h_id\030\002 \001(\004R\007matchId\022 \n\014issued_at_ms\030\003 \001("
+    "\003R\nissuedAtMs\022\"\n\rexpires_at_ms\030\004 \001(\003R\013ex"
+    "piresAtMs\022\027\n\007ds_type\030\005 \001(\tR\006dsType\022\020\n\003jt"
+    "i\030\006 \001(\tR\003jti\022\033\n\tregion_id\030\007 \001(\rR\010regionI"
+    "d\022\027\n\007cell_id\030\010 \001(\rR\006cellIdJ\004\010\t\020\n\"q\n\024Issu"
+    "eDSTicketRequest\022#\n\rsession_token\030\001 \001(\tR"
+    "\014sessionToken\022\027\n\007ds_type\030\002 \001(\tR\006dsType\022\033"
+    "\n\ttarget_id\030\003 \001(\004R\010targetId\"\177\n\025IssueDSTi"
+    "cketResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
+    "mon.v1.ErrCodeR\004code\022\026\n\006ticket\030\002 \001(\tR\006ti"
+    "cket\022\036\n\013hub_ds_addr\030\003 \001(\tR\thubDsAddr\"O\n\025"
+    "VerifyDSTicketRequest\022\026\n\006ticket\030\001 \001(\tR\006t"
+    "icket\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\"|\n"
+    "\026VerifyDSTicketResponse\022.\n\004code\030\001 \001(\0162\032."
+    "pandora.common.v1.ErrCodeR\004code\0222\n\006claim"
+    "s\030\002 \001(\0132\032.pandora.login.v1.DSTicketR\006cla"
+    "ims2\334\003\n\014LoginService\022^\n\005Login\022\036.pandora."
+    "login.v1.LoginRequest\032\037.pandora.login.v1"
+    ".LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006"
+    "Logout\022\037.pandora.login.v1.LogoutRequest\032"
+    " .pandora.login.v1.LogoutResponse\"\025\202\323\344\223\002"
+    "\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTicket\022&.pan"
+    "dora.login.v1.IssueDSTicketRequest\032\'.pan"
+    "dora.login.v1.IssueDSTicketResponse\"\036\202\323\344"
+    "\223\002\030\"\023/v1/ds/ticket/issue:\001*\022\204\001\n\016VerifyDS"
+    "Ticket\022\'.pandora.login.v1.VerifyDSTicket"
+    "Request\032(.pandora.login.v1.VerifyDSTicke"
+    "tResponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/verify:"
+    "\001*b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -1747,7 +1788,7 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    1874,
+    1970,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
@@ -2166,7 +2207,9 @@ PROTOBUF_NDEBUG_INLINE LoginResponse::Impl_::Impl_(
         _cached_size_{0},
         session_token_(arena, from.session_token_),
         hub_ds_addr_(arena, from.hub_ds_addr_),
-        hub_ticket_(arena, from.hub_ticket_) {}
+        hub_ticket_(arena, from.hub_ticket_),
+        battle_ds_addr_(arena, from.battle_ds_addr_),
+        battle_ticket_(arena, from.battle_ticket_) {}
 
 LoginResponse::LoginResponse(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2198,7 +2241,9 @@ PROTOBUF_NDEBUG_INLINE LoginResponse::Impl_::Impl_(
       : _cached_size_{0},
         session_token_(arena),
         hub_ds_addr_(arena),
-        hub_ticket_(arena) {}
+        hub_ticket_(arena),
+        battle_ds_addr_(arena),
+        battle_ticket_(arena) {}
 
 inline void LoginResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2223,6 +2268,8 @@ inline void LoginResponse::SharedDtor(MessageLite& self) {
   this_._impl_.session_token_.Destroy();
   this_._impl_.hub_ds_addr_.Destroy();
   this_._impl_.hub_ticket_.Destroy();
+  this_._impl_.battle_ds_addr_.Destroy();
+  this_._impl_.battle_ticket_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -2260,7 +2307,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.session_token_.ClearNonDefaultToEmpty();
     }
@@ -2270,11 +2317,22 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.hub_ticket_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.battle_ds_addr_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.battle_ticket_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.region_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.region_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.cell_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.cell_id_));
+        reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.cell_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2300,7 +2358,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_code() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2309,7 +2367,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
   }
 
   // uint64 player_id = 2 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2348,7 +2406,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
   }
 
   // uint32 region_id = 6 [json_name = "regionId"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_region_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2357,11 +2415,40 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
   }
 
   // uint32 cell_id = 7 [json_name = "cellId"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_cell_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           7, this_._internal_cell_id(), target);
+    }
+  }
+
+  // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_battle_ds_addr().empty()) {
+      const ::std::string& _s = this_._internal_battle_ds_addr();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.LoginResponse.battle_ds_addr");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // string battle_ticket = 9 [json_name = "battleTicket"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_battle_ticket().empty()) {
+      const ::std::string& _s = this_._internal_battle_ticket();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.LoginResponse.battle_ticket");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // uint64 match_id = 10 [json_name = "matchId"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_match_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_match_id(), target);
     }
   }
 
@@ -2390,7 +2477,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string session_token = 3 [json_name = "sessionToken"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_session_token().empty()) {
@@ -2412,29 +2499,52 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
                                         this_._internal_hub_ticket());
       }
     }
-    // uint64 player_id = 2 [json_name = "playerId"];
+    // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_battle_ds_addr().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_battle_ds_addr());
+      }
+    }
+    // string battle_ticket = 9 [json_name = "battleTicket"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_battle_ticket().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_battle_ticket());
+      }
+    }
+    // uint64 player_id = 2 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
       }
     }
     // uint32 region_id = 6 [json_name = "regionId"];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_region_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_region_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 match_id = 10 [json_name = "matchId"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_match_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_match_id());
+      }
+    }
     // uint32 cell_id = 7 [json_name = "cellId"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_cell_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cell_id());
@@ -2458,7 +2568,7 @@ void LoginResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_session_token().empty()) {
         _this->_internal_set_session_token(from._internal_session_token());
@@ -2487,21 +2597,46 @@ void LoginResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_battle_ds_addr().empty()) {
+        _this->_internal_set_battle_ds_addr(from._internal_battle_ds_addr());
+      } else {
+        if (_this->_impl_.battle_ds_addr_.IsDefault()) {
+          _this->_internal_set_battle_ds_addr("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_battle_ticket().empty()) {
+        _this->_internal_set_battle_ticket(from._internal_battle_ticket());
+      } else {
+        if (_this->_impl_.battle_ticket_.IsDefault()) {
+          _this->_internal_set_battle_ticket("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_code() != 0) {
         _this->_impl_.code_ = from._impl_.code_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_region_id() != 0) {
         _this->_impl_.region_id_ = from._impl_.region_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_match_id() != 0) {
+        _this->_impl_.match_id_ = from._impl_.match_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_cell_id() != 0) {
         _this->_impl_.cell_id_ = from._impl_.cell_id_;
       }
@@ -2529,6 +2664,8 @@ void LoginResponse::InternalSwap(LoginResponse* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_token_, &other->_impl_.session_token_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_ds_addr_, &other->_impl_.hub_ds_addr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_ticket_, &other->_impl_.hub_ticket_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ds_addr_, &other->_impl_.battle_ds_addr_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ticket_, &other->_impl_.battle_ticket_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_)
       + sizeof(LoginResponse::_impl_.cell_id_)

@@ -91,6 +91,7 @@ const (
 	ErrMatchDeclined        Code = 4004
 	ErrMatchTeamNotReady    Code = 4005
 	ErrMatchConcurrent      Code = 4006 // WATCH/MULTI/EXEC 乐观锁重试耗尽
+	ErrMatchInBattle        Code = 4007 // 玩家正在 DS 战斗中,禁止重复匹配(不变量 §1)
 )
 
 // ds_allocator / hub_allocator(5000-5999)

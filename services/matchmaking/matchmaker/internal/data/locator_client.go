@@ -74,6 +74,26 @@ func (n *GrpcLocationNotifier) NotifyBattle(ctx context.Context, playerIDs []uin
 	return firstErr
 }
 
+// IsInBattle 调 PlayerLocatorService.GetLocation,判断玩家当前是否正处于 battle DS 中。
+//
+// 战斗中禁止重复匹配(CLAUDE.md §9 不变量 §1:玩家同一时刻只能在一个 Location)。
+// 只有 state==BATTLE 且 match_id!=0 且 battle_pod!="" 才认定"在战斗中";其余一律 false。
+func (n *GrpcLocationNotifier) IsInBattle(ctx context.Context, playerID uint64) (bool, error) {
+	resp, err := n.client.GetLocation(ctx, &locatorv1.GetLocationRequest{PlayerId: playerID})
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "locator GetLocation rpc player=%d: %v", playerID, err)
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return false, errcode.New(errcode.Code(resp.GetCode()), "locator GetLocation player=%d code=%d", playerID, resp.GetCode())
+	}
+	loc := resp.GetLocation()
+	if loc.GetState() != locatorv1.LocationState_LOCATION_STATE_BATTLE ||
+		loc.GetMatchId() == 0 || loc.GetBattlePod() == "" {
+		return false, nil
+	}
+	return true, nil
+}
+
 // setLocation 调 PlayerLocatorService.SetLocation 并把 ErrCode 转回 error。
 func (n *GrpcLocationNotifier) setLocation(ctx context.Context, playerID uint64, loc *locatorv1.Location) error {
 	resp, err := n.client.SetLocation(ctx, &locatorv1.SetLocationRequest{
