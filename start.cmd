@@ -1,19 +1,20 @@
 @echo off
 chcp 65001 >nul
 rem ============================================================
-rem  Pandora 后端一键启动器(双击即用)
+rem  Pandora backend one-click launcher (double-click to run)
 rem ------------------------------------------------------------
-rem  双击本文件:默认本机 local 模式(基础设施 docker + go 服务宿主进程),
-rem             策划本地联调首选,可在 VS Code 断点调试。
+rem  Double-click: default local mode (infra in docker + go services as host
+rem                processes), preferred for local dev, supports VS Code
+rem                breakpoint debugging.
 rem
-rem  5 套环境(DS 分配模式随环境变):
-rem     local    本地 windows 调试    DS=local(宿主 exec Windows DS)
-rem     docker   本地全容器           DS=mock
-rem     intranet 内网测试服(绑内网IP) DS=mock
-rem     k8s      本机 minikube+Agones  DS=agones(真 Linux DS,线上等价)
-rem     online   线上 k8s 集群         DS=agones(-Env test 测试服 / prod 生产 kbs)
+rem  5 environments (DS allocation mode varies per env):
+rem     local    local windows debug      DS=local (host exec Windows DS)
+rem     docker   all-in-docker            DS=mock
+rem     intranet intranet test (bind LAN IP) DS=mock
+rem     k8s      local minikube+Agones    DS=agones (real Linux DS, prod-equivalent)
+rem     online   online k8s cluster       DS=agones (-Env test / prod)
 rem
-rem  命令行用法(可传参,转发给 start.ps1):
+rem  CLI usage (args forwarded to start.ps1):
 rem     start.cmd -Mode docker
 rem     start.cmd -Mode k8s
 rem     start.cmd -Mode local
@@ -21,15 +22,15 @@ rem     start.cmd -Status
 rem     start.cmd -Check
 rem     start.cmd -Mode docker -Down
 rem
-rem  电脑重启后快速恢复 / 一键重置(见 deploy/k8s/agones/README.md):
-rem     start.cmd -Mode k8s -Resume      rem 不重建镜像,拉回上次状态
-rem     start.cmd -Mode k8s -Reset       rem minikube delete 后全新部署
+rem  Quick resume / reset after reboot (see deploy/k8s/agones/README.md):
+rem     start.cmd -Mode k8s -Resume      rem no rebuild, restore last state
+rem     start.cmd -Mode k8s -Reset       rem minikube delete then fresh deploy
 rem
-rem  本机真 DS 闭环(minikube+Agones,无 mock):
-rem     start.cmd -Mode k8s              rem 起集群+Agones+Fleet+16 服务
-rem     pwsh tools\scripts\e2e_k8s.ps1   rem load DS 镜像+Envoy 桥接+等 Fleet+UDP 中继
+rem  Real DS loop on this machine (minikube+Agones, no mock):
+rem     start.cmd -Mode k8s              rem cluster+Agones+Fleet+16 services
+rem     pwsh tools\scripts\e2e_k8s.ps1   rem load DS image + Envoy bridge + wait Fleet + UDP relay
 rem
-rem  线上真集群(Fleet 镜像/回调必须按环境注入,缺参直接 fail-fast):
+rem  Online real cluster (Fleet image/callbacks must be injected per env, fail-fast if missing):
 rem     start.cmd -Mode online -Env test -Registry registry.mycorp.com -Tag v1.2.3 ^
 rem        -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 ^
 rem        -HubDsImage    registry.mycorp.com/pandora/hub-ds:v1.2.3 ^
@@ -38,12 +39,12 @@ rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-rem 优先 PowerShell 7(pwsh),没有则回退 Windows PowerShell
+rem Prefer PowerShell 7 (pwsh), fall back to Windows PowerShell if missing
 where pwsh >nul 2>nul && (set "PS=pwsh") || (set "PS=powershell")
 
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\scripts\start.ps1" %*
 set "RC=%ERRORLEVEL%"
 
-rem 双击(无参数)时停住窗口,方便看输出
+rem When double-clicked (no args) keep the window open to read output
 if "%~1"=="" pause
 exit /b %RC%

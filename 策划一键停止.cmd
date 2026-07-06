@@ -1,20 +1,22 @@
 @echo off
 chcp 65001 >nul
 rem ============================================================
-rem  Pandora 后端  策划一键停止(双击即用)
+rem  Pandora backend  planner one-click stop (double-click to run)
 rem ------------------------------------------------------------
-rem  停止由「策划一键启动-含战斗.cmd」拉起的整套后端(17 业务容器 + 2 个宿主 allocator + 本机 Windows DS)。
-rem  数据卷(MySQL/Redis 等)会保留,下次启动数据还在。
+rem  Stops the whole backend started by the planner one-click start .cmd
+rem  (17 business containers + 2 host allocators + local Windows DS).
+rem  Data volumes (MySQL/Redis etc.) are kept; data persists for next start.
 rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-rem 本项目脚本要求 PowerShell 7(pwsh)。缺失则明确报错退出, 不回退 Windows PowerShell 5.1。
+rem This project requires PowerShell 7 (pwsh). If missing, error out clearly; do
+rem not fall back to Windows PowerShell 5.1.
 where pwsh >nul 2>nul
 if errorlevel 1 (
   echo.
-  echo  [ERR] 未找到 PowerShell 7 pwsh。本脚本需要 PowerShell 7。
-  echo        下载安装: https://aka.ms/powershell  或  winget install Microsoft.PowerShell
+  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
+  echo        Install: https://aka.ms/powershell  or  winget install Microsoft.PowerShell
   echo.
   pause
   exit /b 1

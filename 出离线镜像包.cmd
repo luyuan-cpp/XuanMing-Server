@@ -1,26 +1,28 @@
 @echo off
 chcp 65001 >nul
 rem ============================================================
-rem  Pandora 后端  出离线镜像包(在「能联网的开发机」上双击即用)
+rem  Pandora backend  export offline image package (run on an online dev machine)
 rem ------------------------------------------------------------
-rem  重新构建最新的 17 个业务镜像,并打包成:
+rem  Rebuilds the latest 17 business images and packs them into:
 rem      deploy\offline-images\pandora-images.tar
-rem  (覆盖同名文件)。
+rem  (overwrites the same-named file).
 rem
-rem  出完包后:svn commit 代码 + 这个 tar,内网机 svn update 后
-rem  双击「内网服务器一键启动-含战斗.cmd」即用上新镜像(纯离线,不再联网构建)。
+rem  After exporting: svn commit the code + this tar; on the intranet machine run
+rem  svn update, then double-click the intranet one-click start .cmd to use the
+rem  new images (fully offline, no network build).
 rem
-rem  前置:这台机器能联网(拉得到基础镜像 / go 模块)+ 装了 Docker。
+rem  Prerequisite: this machine has network (can pull base images / go modules) + Docker.
 rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-rem 本项目脚本要求 PowerShell 7(pwsh)。缺失则明确报错退出, 不回退 Windows PowerShell 5.1。
+rem This project requires PowerShell 7 (pwsh). If missing, error out clearly; do
+rem not fall back to Windows PowerShell 5.1.
 where pwsh >nul 2>nul
 if errorlevel 1 (
   echo.
-  echo  [ERR] 未找到 PowerShell 7 pwsh。本脚本需要 PowerShell 7。
-  echo        下载安装: https://aka.ms/powershell  或  winget install Microsoft.PowerShell
+  echo  [ERR] PowerShell 7 pwsh not found. This script requires PowerShell 7.
+  echo        Install: https://aka.ms/powershell  or  winget install Microsoft.PowerShell
   echo.
   pause
   exit /b 1
