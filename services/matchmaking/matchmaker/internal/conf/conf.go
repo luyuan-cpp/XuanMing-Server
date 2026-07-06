@@ -42,6 +42,13 @@ type MatchConf struct {
 	// LocatorAddr 是 player_locator 服务 gRPC 直连地址（撮合状态机上报玩家位置：
 	// 成局→MATCHING、就绪→BATTLE，不变量 §1）。留空则不上报（本机不起 locator 也能跑撮合）。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
+
+	// BattleGateFailOpen 控制 StartMatch 前置"战斗中禁止匹配"检查在 player_locator 查询失败时的行为。
+	//   - false（默认，生产安全 / fail-closed）：locator 查询失败时拒绝入队（返回 ERR_UNAVAILABLE 让客户端重试），
+	//     只有明确查到成员非 BATTLE 才放行；避免 locator 短暂抖动 + 旧 claim 过期时绕过保护，把战斗中玩家二次塞进队列。
+	//   - true（仅 dev / 弱依赖联调）：locator 查询失败时仅 Warn 后放行，兜底仍由 ClaimPlayer 的 SETNX 保证一人一队列。
+	// 注意：locator 完全未配置（LocatorAddr 为空 → 注入 nil）时此开关不生效，直接跳过检查。
+	BattleGateFailOpen bool `yaml:"battle_gate_fail_open,omitempty" json:"battle_gate_fail_open,omitempty"`
 	// MapId 撮合成局后请求的战斗地图配置 ID(配置表 ID,uint32)。
 	MapId uint32 `yaml:"map_id,omitempty" json:"map_id,omitempty"`
 

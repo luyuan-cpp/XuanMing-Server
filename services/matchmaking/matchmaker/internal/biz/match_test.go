@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
@@ -68,6 +69,7 @@ type mockLocator struct {
 	matching map[uint64]uint64 // playerID -> matchID
 	battle   map[uint64]string // playerID -> battlePod
 	inBattle map[uint64]bool   // playerID -> 强制 IsInBattle 返回值(拦截测试用)
+	queryErr error             // 非 nil 时 IsInBattle 一律返回该错误(模拟 locator 抖动 / fail-closed 测试用)
 }
 
 func newMockLocator() *mockLocator {
@@ -95,6 +97,9 @@ func (m *mockLocator) NotifyBattle(_ context.Context, ids []uint64, matchID uint
 func (m *mockLocator) IsInBattle(_ context.Context, id uint64) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.queryErr != nil {
+		return false, m.queryErr
+	}
 	return m.inBattle[id], nil
 }
 
@@ -123,6 +128,11 @@ type fixture struct {
 }
 
 func newFixture(t *testing.T, firstMatchID uint64) *fixture {
+	return newFixtureWith(t, firstMatchID, nil)
+}
+
+// newFixtureWith 与 newFixture 相同，但允许在构造 usecase 前修改 MatchConf（如打开 BattleGateFailOpen）。
+func newFixtureWith(t *testing.T, firstMatchID uint64, mutate func(*conf.MatchConf)) *fixture {
 	t.Helper()
 	mr, err := miniredis.Run()
 	if err != nil {
@@ -135,6 +145,9 @@ func newFixture(t *testing.T, firstMatchID uint64) *fixture {
 
 	var c conf.Config
 	c.Defaults()
+	if mutate != nil {
+		mutate(&c.Match)
+	}
 	repo := data.NewRedisMatchRepo(rdb)
 	pusher := &mockPusher{}
 	locator := newMockLocator()
@@ -172,6 +185,84 @@ func (f *fixture) seedTicket(t *testing.T, ctx context.Context, ticketID uint64,
 }
 
 // ── 用例 ──────────────────────────────────────────────────────────────────────
+
+// TestStartMatch_RejectsPlayerInBattle 验证本提交核心：队伍成员正处于 BATTLE 时，
+// StartMatch 返回 ErrMatchInBattle，且不写票据 / 不声明 claim（战斗中禁止重复匹配，不变量 §1）。
+func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+
+	const captain = uint64(42)
+	f.locator.mu.Lock()
+	f.locator.inBattle[captain] = true
+	f.locator.mu.Unlock()
+
+	if _, err := f.uc.StartMatch(ctx, 7001, 7001, captain); err == nil {
+		t.Fatalf("StartMatch: expected error, got nil")
+	} else if code := errcode.As(err); code != errcode.ErrMatchInBattle {
+		t.Fatalf("StartMatch code = %d, want ErrMatchInBattle(%d)", code, errcode.ErrMatchInBattle)
+	}
+
+	// 拦截必须发生在写入之前：既无 player claim，也无 ticket。
+	if _, found, _ := f.repo.GetPlayerTicket(ctx, captain); found {
+		t.Fatalf("player %d claim written despite in-battle rejection", captain)
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 7001); found {
+		t.Fatalf("ticket written despite in-battle rejection")
+	}
+}
+
+// TestStartMatch_FailClosedWhenLocatorUnavailable 验证 fail-closed 生产路径：
+// player_locator 查询失败时（默认 BattleGateFailOpen=false），StartMatch 拒绝入队并返回
+// ErrUnavailable，且不写票据 / claim，避免 locator 抖动叠加旧 claim 过期时绕过保护。
+func TestStartMatch_FailClosedWhenLocatorUnavailable(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+
+	const captain = uint64(43)
+	f.locator.mu.Lock()
+	f.locator.queryErr = errors.New("locator down")
+	f.locator.mu.Unlock()
+
+	if _, err := f.uc.StartMatch(ctx, 7002, 7002, captain); err == nil {
+		t.Fatalf("StartMatch: expected fail-closed error, got nil")
+	} else if code := errcode.As(err); code != errcode.ErrUnavailable {
+		t.Fatalf("StartMatch code = %d, want ErrUnavailable(%d)", code, errcode.ErrUnavailable)
+	}
+
+	if _, found, _ := f.repo.GetPlayerTicket(ctx, captain); found {
+		t.Fatalf("player %d claim written despite fail-closed rejection", captain)
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 7002); found {
+		t.Fatalf("ticket written despite fail-closed rejection")
+	}
+}
+
+// TestStartMatch_FailOpenWhenLocatorUnavailable 验证 dev 弱依赖开关：
+// 显式打开 BattleGateFailOpen 后，locator 查询失败仅告警并放行，票据 / claim 正常写入。
+func TestStartMatch_FailOpenWhenLocatorUnavailable(t *testing.T) {
+	ctx := context.Background()
+	f := newFixtureWith(t, 999, func(m *conf.MatchConf) { m.BattleGateFailOpen = true })
+
+	const captain = uint64(44)
+	f.locator.mu.Lock()
+	f.locator.queryErr = errors.New("locator down")
+	f.locator.mu.Unlock()
+
+	id, err := f.uc.StartMatch(ctx, 7003, 7003, captain)
+	if err != nil {
+		t.Fatalf("StartMatch fail-open: unexpected error: %v", err)
+	}
+	if id != 7003 {
+		t.Fatalf("StartMatch returned ticket %d, want 7003", id)
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 7003); !found {
+		t.Fatalf("ticket not written under fail-open")
+	}
+	if got, found, _ := f.repo.GetPlayerTicket(ctx, captain); !found || got != 7003 {
+		t.Fatalf("player claim = %d found=%v, want ticket 7003", got, found)
+	}
+}
 
 // 10 张单人票据 → matchOnce 凑成一场 5+5,进确认期。
 func TestMatchOnce_FormsMatch(t *testing.T) {

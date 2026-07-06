@@ -212,11 +212,13 @@ func (u *MatchUsecase) notifyBattle(ctx context.Context, playerIDs []uint64, mat
 
 // ensureNoneInBattle 拦截"战斗中还点匹配"：任一成员正处于 BATTLE 状态则拒绝整队入队。
 //
-// 权威来源是 player_locator（不变量 §1）。弱依赖处理：
+// 权威来源是 player_locator（不变量 §1）。处理规则：
 //   - locator 未注入（nil）→ 跳过（本机不起 player_locator 的骨架联调路径）。
-//   - locator 查询失败 → 仅 Warn 不阻断（不因位置服务抖动误伤正常匹配；
-//     真正的"一人一队列"兜底仍由后续 ClaimPlayer 的 SETNX 保证）。
-//   - 仅当明确查到某成员 state==BATTLE 时，返回 ErrMatchInBattle。
+//   - 明确查到某成员 state==BATTLE → 返回 ErrMatchInBattle。
+//   - locator 查询失败 → 默认 fail-closed（生产安全）：拒绝入队并返回 ErrUnavailable 让客户端重试，
+//     只对明确非 BATTLE 的成员放行。避免 locator 短暂抖动叠加旧 claim 过期时，把战斗中玩家二次塞进队列。
+//     仅当显式配置 BattleGateFailOpen=true（dev 弱依赖）时，才降级为 Warn 后放行
+//     （兜底仍由后续 ClaimPlayer 的 SETNX 保证"一人一队列"）。
 func (u *MatchUsecase) ensureNoneInBattle(ctx context.Context, members []*matchv1.MatchMemberStorageRecord) error {
 	if u.locator == nil {
 		return nil
@@ -224,8 +226,12 @@ func (u *MatchUsecase) ensureNoneInBattle(ctx context.Context, members []*matchv
 	for _, m := range members {
 		inBattle, err := u.locator.IsInBattle(ctx, m.PlayerId)
 		if err != nil {
-			plog.With(ctx).Warnw("msg", "locator_is_in_battle_failed", "player_id", m.PlayerId, "err", err)
-			continue
+			if u.cfg.BattleGateFailOpen {
+				plog.With(ctx).Warnw("msg", "locator_is_in_battle_failed_fail_open", "player_id", m.PlayerId, "err", err)
+				continue
+			}
+			plog.With(ctx).Errorw("msg", "locator_is_in_battle_failed_fail_closed", "player_id", m.PlayerId, "err", err)
+			return errcode.New(errcode.ErrUnavailable, "locator unavailable, cannot verify battle state for player %d: %v", m.PlayerId, err)
 		}
 		if inBattle {
 			return errcode.New(errcode.ErrMatchInBattle, "player %d in battle", m.PlayerId)
