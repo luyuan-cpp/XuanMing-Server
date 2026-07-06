@@ -65,14 +65,20 @@ type DSAllocator interface {
 //
 // 状态权属：matchmaker 是 MATCHING / BATTLE 两个状态的权威（它掌握撮合生命周期）；
 // HUB 状态由 hub DS 上报，故撮合失败 / 取消时 matchmaker 不回写 HUB（交回 hub DS）。
-// 弱依赖：addr 未配 → main 注入 nil，biz 检查 nil 跳过；调用失败仅 Warn 不阻断撮合。
+// 依赖强度分两类：
+//   - 位置上报 NotifyMatching / NotifyBattle：弱依赖，addr 未配 → main 注入 nil，biz 检查 nil 跳过；
+//     调用失败仅 Warn 不阻断撮合（上报晚一拍不影响撮合正确性）。
+//   - 前置查询 IsInBattle：默认 fail-closed（生产安全），见 ensureNoneInBattle；
+//     locator 未注入（nil）仍跳过，但 locator 已注入却查询失败时默认拒绝入队，
+//     只有显式 BattleGateFailOpen=true（dev 弱依赖）才降级为 Warn 后放行。
 type LocationNotifier interface {
 	// NotifyMatching 撮合成局（进入确认期）→ 把成员标记为 MATCHING（带 match_id）。
 	NotifyMatching(ctx context.Context, playerIDs []uint64, matchID uint64) error
 	// NotifyBattle 全员确认 + DS 就绪 → 把成员标记为 BATTLE（带 match_id + battle_pod）。
 	NotifyBattle(ctx context.Context, playerIDs []uint64, matchID uint64, battlePod string) error
 	// IsInBattle 查询玩家当前是否正处于 battle DS 中（战斗中禁止重复匹配，不变量 §1）。
-	// 弱依赖：locator 不可用 / 玩家不在战斗 → 返回 false（绝不误伤正常匹配）。
+	// state==BATTLE 返回 true；非 BATTLE 返回 false；查询失败返回 error（由 ensureNoneInBattle
+	// 按 BattleGateFailOpen 决定 fail-closed 拒绝还是 fail-open 放行，此处不吞错误）。
 	IsInBattle(ctx context.Context, playerID uint64) (bool, error)
 }
 

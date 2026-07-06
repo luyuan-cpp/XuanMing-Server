@@ -1,9 +1,11 @@
 // locator_client.go — matchmaker → player_locator gRPC 客户端封装(W4 ⑦,2026-06-06)。
 //
 // 设计:
-//   - 实现 biz.LocationNotifier:撮合成局 → MATCHING、全员确认就绪 → BATTLE
+//   - 实现 biz.LocationNotifier:撮合成局 → MATCHING、全员确认就绪 → BATTLE、StartMatch 前置查 IsInBattle
 //   - main.go 用 pkg/grpcclient.MustDialInsecure 拨号;locator_addr 留空则 main 注入 nil
-//   - 弱依赖:locator 不可用时 biz 仅 Warn,不阻断撮合(不变量 §1 由 locator 落地)
+//   - 依赖强度:位置上报(Notify*)是弱依赖,失败仅 Warn 不阻断;而 StartMatch 前置
+//     IsInBattle 检查默认 fail-closed(biz.ensureNoneInBattle,locator 已配却查询失败则拒绝入队),
+//     只有 dev 显式 battle_gate_fail_open=true 才降级放行。本文件只负责透传结果/错误,不吞错误。
 //
 // 状态权属(CLAUDE.md §9.1 不变量 §1):
 //   - matchmaker 是 MATCHING / BATTLE 两态的权威(掌握撮合生命周期)

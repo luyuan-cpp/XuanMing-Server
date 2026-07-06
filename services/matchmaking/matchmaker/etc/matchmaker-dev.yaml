@@ -43,8 +43,15 @@ match:
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
-  ds_allocator_addr: "127.0.0.1:50020"  # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报）;留空不上报
-  locator_addr: "127.0.0.1:50006"  # map_id: 战斗地图配置 ID(配置表 ID,uint32)
+  ds_allocator_addr: "127.0.0.1:50020"
+  # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报 + StartMatch 前置查战斗态）;留空不上报也不拦截
+  locator_addr: "127.0.0.1:50006"
+  # battle_gate_fail_open: locator 查询失败时"战斗中禁止匹配"检查的降级策略
+  #   false（默认，生产安全 / fail-closed）：locator 查询失败则拒绝入队(ERR_UNAVAILABLE)，避免抖动时绕过保护
+  #   true（仅本地单服务联调）：只跑 matchmaker、不起 player_locator 时，locator 查询失败仅告警后放行
+  # 注意：若本地只单独跑 matchmaker，要么清空上面 locator_addr，要么把此项设为 true，否则 StartMatch 会返回 ERR_UNAVAILABLE
+  battle_gate_fail_open: false
+  # map_id: 战斗地图配置 ID(配置表 ID,uint32)
   map_id: 1
   # game_mode: 战斗模式标识,透传给 ds_allocator
   game_mode: "5v5_ranked"
