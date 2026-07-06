@@ -55,10 +55,10 @@ type LocationRepo interface {
 	// 多续一次 30s TTL 无害(对局态由战斗链路自己刷 TTL,且后续写会重置)。
 	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl time.Duration) (int, error)
 	// ShrinkHubTTL 快速断线上报:把玩家 HUB 位置的剩余 TTL 缩短到 grace(只缩不涨,
-	// EXPIRE LT)。守卫同 RefreshHubLocations:仅「state==HUB 且 hub_pod 匹配」才缩;
+	// PEXPIRE LT)。守卫同 RefreshHubLocations:仅「state==HUB 且 hub_pod 匹配」才缩;
 	// MATCHING/BATTLE/其它 pod/剩余 TTL 已更短 → 不动,返 false(均属正常路径)。
-	// 非事务(同上):窗口内状态切到对局态后误缩一次无害——对局态由战斗链路
-	// 自己写入/续期,下一次写会重置 TTL。
+	// Lua 原子(单 key):校验与缩 TTL 同脚本执行,不存在「读到旧 HUB → 并发写成
+	// MATCHING/BATTLE → 误缩新状态 TTL」的窗口(Codex 复审 2026-07-06)。
 	ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error)
 	Delete(ctx context.Context, playerID uint64) error
 }
@@ -253,37 +253,31 @@ func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod stri
 	return refreshed, nil
 }
 
+// shrinkHubTTLScript 原子完成「守卫校验 + 缩 TTL」(单 key,Lua 内无并发写插入的窗口):
+// state==HUB('3') 且 hub_pod 匹配才 PEXPIRE LT;否则返 0 不动。
+// 若非原子(先 HMGET 再 EXPIRE),窗口内状态被并发写成 MATCHING/BATTLE 会误缩新状态
+// 的 TTL 到 grace,与「不误伤对局态」的设计目标冲突(Codex 复审 2026-07-06)。
+var shrinkHubTTLScript = redis.NewScript(`
+if redis.call('HGET', KEYS[1], 'state') ~= '3' then return 0 end
+if redis.call('HGET', KEYS[1], 'hub_pod') ~= ARGV[1] then return 0 end
+return redis.call('PEXPIRE', KEYS[1], ARGV[2], 'LT')`)
+
 // ShrinkHubTTL 快速断线上报:守卫通过后把剩余 TTL 缩到 grace。
 //
-// EXPIRE LT 语义(Redis 7):仅当新 TTL 小于当前剩余 TTL 才生效——只缩不涨,
+// PEXPIRE LT 语义(Redis 7):仅当新 TTL 小于当前剩余 TTL 才生效——只缩不涨,
 // 重复上报/迟到报文天然幂等。守卫失败(非 HUB / pod 不匹配 / key 已过期)返
 // (false, nil):玩家 travel 去战斗、切线后旧 pod 迟到报文等均属正常路径,不是错误。
 func (r *RedisLocationRepo) ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error) {
 	if hubPod == "" || playerID == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "hub_pod and player_id required")
 	}
-	key := locKey(playerID)
-	vals, err := r.rdb.HMGet(ctx, key, "state", "hub_pod").Result()
+	shrunk, err := shrinkHubTTLScript.Run(ctx, r.rdb,
+		[]string{locKey(playerID)},
+		hubPod, grace.Milliseconds()).Int()
 	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl read: %v", err)
+		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl: %v", err)
 	}
-	if len(vals) != 2 {
-		return false, nil
-	}
-	stateStr, ok1 := vals[0].(string)
-	podStr, ok2 := vals[1].(string)
-	if !ok1 || !ok2 {
-		return false, nil // key 不存在(已过期)/字段缺失 → 已离线,无需缩
-	}
-	state, perr := strconv.ParseInt(stateStr, 10, 32)
-	if perr != nil || int32(state) != 3 /* LOCATION_STATE_HUB */ || podStr != hubPod {
-		return false, nil // 非 HUB 态 / 别的 pod 的记录不动(不变量 §1)
-	}
-	shrunk, err := r.rdb.ExpireLT(ctx, key, grace).Result()
-	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl expire: %v", err)
-	}
-	return shrunk, nil
+	return shrunk == 1, nil
 }
 
 // readLocation HGETALL 并解析为 LocationRecord。c 可以是 *redis.Client 或 WATCH 内的 *redis.Tx。
