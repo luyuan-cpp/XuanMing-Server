@@ -97,6 +97,9 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	if err != nil {
 		return &hubv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
 	}
+	// 在线保活:把心跳捎带的在场 player_ids 转发 locator 续 HUB 位置 TTL
+	// (biz 内 goroutine 异步 + 独立超时,locator 抖动不拖慢心跳响应)。
+	s.uc.RefreshHubPresence(ctx, req.GetHubPodName(), req.GetPlayerIds())
 	return &hubv1.HeartbeatResponse{
 		Code:         commonv1.ErrCode_OK,
 		Command:      res.Command,

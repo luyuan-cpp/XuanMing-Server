@@ -299,6 +299,53 @@ func (u *LocatorUsecase) BatchGetLocation(ctx context.Context, playerIDs []uint6
 	return out, nil
 }
 
+// RefreshHubLocations 批量续期一批玩家的 HUB 位置 TTL(在线保活)。
+//
+// 调用链:Hub DS Heartbeat(每 5s,捎带在场 player_ids)→ hub_allocator → 本方法。
+// 只有「state==HUB 且 hub_pod==本次上报 pod」的记录才续期(data 层校验),
+// MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,对局态由战斗链路权威维护)。
+// 玩家掉线/拔线 → Hub DS 停报该 id → key 30s 自然过期 = 好友视角离线。
+// 不触发 presence 通知(续期不是状态变更)。
+func (u *LocatorUsecase) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64) (int, error) {
+	if hubPod == "" {
+		return 0, errcode.New(errcode.ErrInvalidArg, "hub_pod must not be empty")
+	}
+	if len(playerIDs) == 0 {
+		return 0, nil
+	}
+	refreshed, err := u.repo.RefreshHubLocations(ctx, hubPod, playerIDs, u.ttl)
+	if err != nil {
+		return 0, err
+	}
+	return refreshed, nil
+}
+
+// disconnectGrace 是快速断线上报后的宽限期:真退出的玩家 ~10s 内判离线(不等满 30s
+// 心跳 TTL);窗口内重连 → PostLogin SetLocationHub 重写记录,状态自愈。
+// 绝不即时置 OFFLINE:玩家 travel 去战斗也触发 Hub Logout,靠 grace + 守卫免疫误判。
+const disconnectGrace = 10 * time.Second
+
+// ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
+// 把该玩家 HUB 位置的 TTL 缩短到 disconnectGrace。守卫在 data 层:只缩
+// 「state==HUB 且 hub_pod 匹配」且只缩不涨(EXPIRE LT)。
+// 不触发 presence 通知——缩 TTL 不是状态变更,真离线由 key 过期体现。
+func (u *LocatorUsecase) ReportDisconnect(ctx context.Context, hubPod string, playerID uint64) (bool, error) {
+	if hubPod == "" {
+		return false, errcode.New(errcode.ErrInvalidArg, "hub_pod must not be empty")
+	}
+	if playerID == 0 {
+		return false, errcode.New(errcode.ErrInvalidArg, "player_id must > 0")
+	}
+	shrunk, err := u.repo.ShrinkHubTTL(ctx, hubPod, playerID, disconnectGrace)
+	if err != nil {
+		return false, err
+	}
+	plog.With(ctx).Infow("msg", "location_disconnect_reported",
+		"player_id", playerID, "hub_pod", hubPod, "shrunk", shrunk,
+		"grace_ms", disconnectGrace.Milliseconds())
+	return shrunk, nil
+}
+
 // ClearLocation Unlink redis hash。
 func (u *LocatorUsecase) ClearLocation(ctx context.Context, playerID uint64) error {
 	if playerID == 0 {

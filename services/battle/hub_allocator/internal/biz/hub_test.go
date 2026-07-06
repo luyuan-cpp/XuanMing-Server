@@ -905,10 +905,22 @@ func TestReconcile_ZeroPlayersDrainsEmptySurplusForReclaim(t *testing.T) {
 type fakeLocator struct {
 	blocked bool
 	err     error
+
+	refreshedPod string   // 最近一次 RefreshHubLocations 的 pod
+	refreshedIDs []uint64 // 最近一次 RefreshHubLocations 的 player_ids
 }
 
 func (f *fakeLocator) InBattleOrMatching(context.Context, uint64) (bool, error) {
 	return f.blocked, f.err
+}
+
+func (f *fakeLocator) RefreshHubLocations(_ context.Context, hubPod string, playerIDs []uint64) (int, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	f.refreshedPod = hubPod
+	f.refreshedIDs = playerIDs
+	return len(playerIDs), nil
 }
 
 var _ data.HubLocationChecker = (*fakeLocator)(nil)

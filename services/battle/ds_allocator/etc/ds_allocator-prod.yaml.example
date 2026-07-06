@@ -36,6 +36,12 @@ kafka:
   group_id: "pandora-ds-allocator"
   partition_cnt: 4
 
+# locator_addr: player_locator gRPC 地址(断线重连关键:心跳时把活跃对局全 roster 的 BATTLE
+# 位置续期,使玩家整局期间重登都能被 login 检测到"在战斗中"并直连回原 battle DS)。
+# ⚠️ 留空 = 不续期 → BATTLE 位置 30s TTL 过期,玩家切后台/杀进程 >30s 重登会被路由回大厅,
+#    进行中的对局回不去。生产必配。
+locator_addr: "player-locator:50006"
+
 allocator:
   heartbeat_timeout: "15s"        # 不变量 §4
   sweep_interval: "5s"

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   在「能联网」的机器上把 Pandora 业务镜像(+可选基础设施镜像)打包成 tar,
   拷到「拉不到镜像」的机器上用 import_images.ps1 离线导入。
@@ -49,12 +49,12 @@ function Write-Warn($m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 function Write-Err($m)  { Write-Host "[ERR ] $m" -ForegroundColor Red }
 function Write-Step($m) { Write-Host "`n===== $m =====" -ForegroundColor Magenta }
 
-# 17 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
+# 18 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
 $BusinessImages = @(
     'pandora/login:dev','pandora/player:dev','pandora/data-service:dev',
     'pandora/friend:dev','pandora/chat:dev','pandora/guild:dev','pandora/mail:dev',
     'pandora/player-locator:dev','pandora/leaderboard:dev','pandora/team:dev',
-    'pandora/matchmaker:dev','pandora/trade:dev','pandora/dialogue:dev',
+    'pandora/matchmaker:dev','pandora/matchmaker-pve:dev','pandora/trade:dev','pandora/dialogue:dev',
     'pandora/push:dev','pandora/inventory:dev','pandora/auction:dev',
     'pandora/battle-result:dev'
 )

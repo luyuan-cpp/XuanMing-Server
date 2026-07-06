@@ -146,6 +146,38 @@ extern const ::google::protobuf::internal::ClassDataFull PresenceChange_class_da
 #else
 extern const PresenceChangeGlobalsTypeInternal PresenceChange_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RefreshHubLocationsRequest;
+struct RefreshHubLocationsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RefreshHubLocationsRequestGlobalsTypeInternal RefreshHubLocationsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RefreshHubLocationsRequest_class_data_;
+#else
+extern const RefreshHubLocationsRequestGlobalsTypeInternal RefreshHubLocationsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RefreshHubLocationsResponse;
+struct RefreshHubLocationsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RefreshHubLocationsResponseGlobalsTypeInternal RefreshHubLocationsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RefreshHubLocationsResponse_class_data_;
+#else
+extern const RefreshHubLocationsResponseGlobalsTypeInternal RefreshHubLocationsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReportDisconnectRequest;
+struct ReportDisconnectRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReportDisconnectRequestGlobalsTypeInternal ReportDisconnectRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReportDisconnectRequest_class_data_;
+#else
+extern const ReportDisconnectRequestGlobalsTypeInternal ReportDisconnectRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReportDisconnectResponse;
+struct ReportDisconnectResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReportDisconnectResponseGlobalsTypeInternal ReportDisconnectResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReportDisconnectResponse_class_data_;
+#else
+extern const ReportDisconnectResponseGlobalsTypeInternal ReportDisconnectResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SetLocationRequest;
 struct SetLocationRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -361,7 +393,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceResponse final :
   [[nodiscard]] static const UnsubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceResponse>(&UnsubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(UnsubscribePresenceResponse& a, UnsubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -562,7 +594,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceRequest final : 
   [[nodiscard]] static const UnsubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceRequest>(&UnsubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(UnsubscribePresenceRequest& a, UnsubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -763,7 +795,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceResponse final : p
   [[nodiscard]] static const SubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceResponse>(&SubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(SubscribePresenceResponse& a, SubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -964,7 +996,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceRequest final : pu
   [[nodiscard]] static const SubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceRequest>(&SubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(SubscribePresenceRequest& a, SubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1333,6 +1365,879 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationResponse final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportDisconnectResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.ReportDisconnectResponse) */ {
+ public:
+  inline ReportDisconnectResponse() : ReportDisconnectResponse(nullptr) {}
+  ~ReportDisconnectResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReportDisconnectResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReportDisconnectResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReportDisconnectResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReportDisconnectResponse(const ReportDisconnectResponse& from) : ReportDisconnectResponse(nullptr, from) {}
+  inline ReportDisconnectResponse(ReportDisconnectResponse&& from) noexcept : ReportDisconnectResponse(nullptr, ::std::move(from)) {}
+  inline ReportDisconnectResponse& operator=(const ReportDisconnectResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReportDisconnectResponse& operator=(ReportDisconnectResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReportDisconnectResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportDisconnectResponse>(&ReportDisconnectResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(ReportDisconnectResponse& a, ReportDisconnectResponse& b) { a.Swap(&b); }
+  inline void Swap(ReportDisconnectResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReportDisconnectResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReportDisconnectResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReportDisconnectResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReportDisconnectResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReportDisconnectResponse& from) { ReportDisconnectResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReportDisconnectResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.ReportDisconnectResponse"; }
+
+  explicit ReportDisconnectResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReportDisconnectResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReportDisconnectResponse& from);
+  ReportDisconnectResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReportDisconnectResponse&& from) noexcept
+      : ReportDisconnectResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+    kShrunkFieldNumber = 2,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool shrunk = 2 [json_name = "shrunk"];
+  void clear_shrunk() ;
+  [[nodiscard]] bool shrunk() const;
+  void set_shrunk(bool value);
+
+  private:
+  bool _internal_shrunk() const;
+  void _internal_set_shrunk(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.ReportDisconnectResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReportDisconnectResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    bool shrunk_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportDisconnectRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.ReportDisconnectRequest) */ {
+ public:
+  inline ReportDisconnectRequest() : ReportDisconnectRequest(nullptr) {}
+  ~ReportDisconnectRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReportDisconnectRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReportDisconnectRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReportDisconnectRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReportDisconnectRequest(const ReportDisconnectRequest& from) : ReportDisconnectRequest(nullptr, from) {}
+  inline ReportDisconnectRequest(ReportDisconnectRequest&& from) noexcept : ReportDisconnectRequest(nullptr, ::std::move(from)) {}
+  inline ReportDisconnectRequest& operator=(const ReportDisconnectRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReportDisconnectRequest& operator=(ReportDisconnectRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReportDisconnectRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportDisconnectRequest>(&ReportDisconnectRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(ReportDisconnectRequest& a, ReportDisconnectRequest& b) { a.Swap(&b); }
+  inline void Swap(ReportDisconnectRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReportDisconnectRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReportDisconnectRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReportDisconnectRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReportDisconnectRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReportDisconnectRequest& from) { ReportDisconnectRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReportDisconnectRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.ReportDisconnectRequest"; }
+
+  explicit ReportDisconnectRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReportDisconnectRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReportDisconnectRequest& from);
+  ReportDisconnectRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReportDisconnectRequest&& from) noexcept
+      : ReportDisconnectRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHubPodFieldNumber = 1,
+    kPlayerIdFieldNumber = 2,
+  };
+  // string hub_pod = 1 [json_name = "hubPod"];
+  void clear_hub_pod() ;
+  [[nodiscard]] const ::std::string& hub_pod() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_pod(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_pod();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_pod();
+  void set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_pod() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_pod();
+
+  public:
+  // uint64 player_id = 2 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.ReportDisconnectRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 58,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReportDisconnectRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr hub_pod_;
+    ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RefreshHubLocationsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.RefreshHubLocationsResponse) */ {
+ public:
+  inline RefreshHubLocationsResponse() : RefreshHubLocationsResponse(nullptr) {}
+  ~RefreshHubLocationsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RefreshHubLocationsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RefreshHubLocationsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RefreshHubLocationsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RefreshHubLocationsResponse(const RefreshHubLocationsResponse& from) : RefreshHubLocationsResponse(nullptr, from) {}
+  inline RefreshHubLocationsResponse(RefreshHubLocationsResponse&& from) noexcept : RefreshHubLocationsResponse(nullptr, ::std::move(from)) {}
+  inline RefreshHubLocationsResponse& operator=(const RefreshHubLocationsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RefreshHubLocationsResponse& operator=(RefreshHubLocationsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RefreshHubLocationsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RefreshHubLocationsResponse>(&RefreshHubLocationsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(RefreshHubLocationsResponse& a, RefreshHubLocationsResponse& b) { a.Swap(&b); }
+  inline void Swap(RefreshHubLocationsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RefreshHubLocationsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RefreshHubLocationsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RefreshHubLocationsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RefreshHubLocationsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RefreshHubLocationsResponse& from) { RefreshHubLocationsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RefreshHubLocationsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.RefreshHubLocationsResponse"; }
+
+  explicit RefreshHubLocationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RefreshHubLocationsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RefreshHubLocationsResponse& from);
+  RefreshHubLocationsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RefreshHubLocationsResponse&& from) noexcept
+      : RefreshHubLocationsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+    kRefreshedFieldNumber = 2,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // int32 refreshed = 2 [json_name = "refreshed"];
+  void clear_refreshed() ;
+  [[nodiscard]] ::int32_t refreshed() const;
+  void set_refreshed(::int32_t value);
+
+  private:
+  ::int32_t _internal_refreshed() const;
+  void _internal_set_refreshed(::int32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.RefreshHubLocationsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RefreshHubLocationsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    ::int32_t refreshed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RefreshHubLocationsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.RefreshHubLocationsRequest) */ {
+ public:
+  inline RefreshHubLocationsRequest() : RefreshHubLocationsRequest(nullptr) {}
+  ~RefreshHubLocationsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RefreshHubLocationsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RefreshHubLocationsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RefreshHubLocationsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RefreshHubLocationsRequest(const RefreshHubLocationsRequest& from) : RefreshHubLocationsRequest(nullptr, from) {}
+  inline RefreshHubLocationsRequest(RefreshHubLocationsRequest&& from) noexcept : RefreshHubLocationsRequest(nullptr, ::std::move(from)) {}
+  inline RefreshHubLocationsRequest& operator=(const RefreshHubLocationsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RefreshHubLocationsRequest& operator=(RefreshHubLocationsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RefreshHubLocationsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RefreshHubLocationsRequest>(&RefreshHubLocationsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(RefreshHubLocationsRequest& a, RefreshHubLocationsRequest& b) { a.Swap(&b); }
+  inline void Swap(RefreshHubLocationsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RefreshHubLocationsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RefreshHubLocationsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RefreshHubLocationsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RefreshHubLocationsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RefreshHubLocationsRequest& from) { RefreshHubLocationsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RefreshHubLocationsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.RefreshHubLocationsRequest"; }
+
+  explicit RefreshHubLocationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RefreshHubLocationsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RefreshHubLocationsRequest& from);
+  RefreshHubLocationsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RefreshHubLocationsRequest&& from) noexcept
+      : RefreshHubLocationsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 2,
+    kHubPodFieldNumber = 1,
+  };
+  // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+  [[nodiscard]] int player_ids_size()
+      const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  [[nodiscard]] ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
+
+  public:
+  // string hub_pod = 1 [json_name = "hubPod"];
+  void clear_hub_pod() ;
+  [[nodiscard]] const ::std::string& hub_pod() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_pod(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_pod();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_pod();
+  void set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_pod() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_pod(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_pod();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.RefreshHubLocationsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 61,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RefreshHubLocationsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr hub_pod_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceChange final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.PresenceChange) */ {
  public:
@@ -1389,7 +2294,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceChange final : public ::goo
   [[nodiscard]] static const PresenceChange& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceChange>(&PresenceChange_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(PresenceChange& a, PresenceChange& b) { a.Swap(&b); }
   inline void Swap(PresenceChange* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2919,7 +3824,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public :
   [[nodiscard]] static const PresenceBatchEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceBatchEvent>(&PresenceBatchEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(PresenceBatchEvent& a, PresenceBatchEvent& b) { a.Swap(&b); }
   inline void Swap(PresenceBatchEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4279,6 +5184,321 @@ inline ::pandora::common::v1::ErrCode ClearLocationResponse::_internal_code() co
 inline void ClearLocationResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RefreshHubLocationsRequest
+
+// string hub_pod = 1 [json_name = "hubPod"];
+inline void RefreshHubLocationsRequest::clear_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& RefreshHubLocationsRequest::hub_pod() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RefreshHubLocationsRequest.hub_pod)
+  return _internal_hub_pod();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RefreshHubLocationsRequest::set_hub_pod(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.hub_pod_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RefreshHubLocationsRequest.hub_pod)
+}
+inline ::std::string* PROTOBUF_NONNULL RefreshHubLocationsRequest::mutable_hub_pod()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_hub_pod();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RefreshHubLocationsRequest.hub_pod)
+  return _s;
+}
+inline const ::std::string& RefreshHubLocationsRequest::_internal_hub_pod() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_pod_.Get();
+}
+inline void RefreshHubLocationsRequest::_internal_set_hub_pod(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RefreshHubLocationsRequest::_internal_mutable_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_pod_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RefreshHubLocationsRequest::release_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RefreshHubLocationsRequest.hub_pod)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.hub_pod_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_pod_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RefreshHubLocationsRequest::set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.hub_pod_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_pod_.IsDefault()) {
+    _impl_.hub_pod_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RefreshHubLocationsRequest.hub_pod)
+}
+
+// repeated uint64 player_ids = 2 [json_name = "playerIds"];
+inline int RefreshHubLocationsRequest::_internal_player_ids_size() const {
+  return _internal_player_ids().size();
+}
+inline int RefreshHubLocationsRequest::player_ids_size() const {
+  return _internal_player_ids_size();
+}
+inline void RefreshHubLocationsRequest::clear_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t RefreshHubLocationsRequest::player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RefreshHubLocationsRequest.player_ids)
+  return _internal_player_ids().Get(index);
+}
+inline void RefreshHubLocationsRequest::set_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RefreshHubLocationsRequest.player_ids)
+}
+inline void RefreshHubLocationsRequest::add_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.locator.v1.RefreshHubLocationsRequest.player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& RefreshHubLocationsRequest::player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.locator.v1.RefreshHubLocationsRequest.player_ids)
+  return _internal_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL RefreshHubLocationsRequest::mutable_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.locator.v1.RefreshHubLocationsRequest.player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+RefreshHubLocationsRequest::_internal_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+RefreshHubLocationsRequest::_internal_mutable_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// RefreshHubLocationsResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void RefreshHubLocationsResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode RefreshHubLocationsResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RefreshHubLocationsResponse.code)
+  return _internal_code();
+}
+inline void RefreshHubLocationsResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RefreshHubLocationsResponse.code)
+}
+inline ::pandora::common::v1::ErrCode RefreshHubLocationsResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void RefreshHubLocationsResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// int32 refreshed = 2 [json_name = "refreshed"];
+inline void RefreshHubLocationsResponse::clear_refreshed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.refreshed_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::int32_t RefreshHubLocationsResponse::refreshed() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RefreshHubLocationsResponse.refreshed)
+  return _internal_refreshed();
+}
+inline void RefreshHubLocationsResponse::set_refreshed(::int32_t value) {
+  _internal_set_refreshed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RefreshHubLocationsResponse.refreshed)
+}
+inline ::int32_t RefreshHubLocationsResponse::_internal_refreshed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.refreshed_;
+}
+inline void RefreshHubLocationsResponse::_internal_set_refreshed(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.refreshed_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ReportDisconnectRequest
+
+// string hub_pod = 1 [json_name = "hubPod"];
+inline void ReportDisconnectRequest::clear_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ReportDisconnectRequest::hub_pod() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ReportDisconnectRequest.hub_pod)
+  return _internal_hub_pod();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ReportDisconnectRequest::set_hub_pod(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.hub_pod_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ReportDisconnectRequest.hub_pod)
+}
+inline ::std::string* PROTOBUF_NONNULL ReportDisconnectRequest::mutable_hub_pod()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_hub_pod();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ReportDisconnectRequest.hub_pod)
+  return _s;
+}
+inline const ::std::string& ReportDisconnectRequest::_internal_hub_pod() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_pod_.Get();
+}
+inline void ReportDisconnectRequest::_internal_set_hub_pod(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_pod_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ReportDisconnectRequest::_internal_mutable_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_pod_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ReportDisconnectRequest::release_hub_pod() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ReportDisconnectRequest.hub_pod)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.hub_pod_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_pod_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ReportDisconnectRequest::set_allocated_hub_pod(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.hub_pod_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_pod_.IsDefault()) {
+    _impl_.hub_pod_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ReportDisconnectRequest.hub_pod)
+}
+
+// uint64 player_id = 2 [json_name = "playerId"];
+inline void ReportDisconnectRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ReportDisconnectRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ReportDisconnectRequest.player_id)
+  return _internal_player_id();
+}
+inline void ReportDisconnectRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ReportDisconnectRequest.player_id)
+}
+inline ::uint64_t ReportDisconnectRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void ReportDisconnectRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ReportDisconnectResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ReportDisconnectResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode ReportDisconnectResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ReportDisconnectResponse.code)
+  return _internal_code();
+}
+inline void ReportDisconnectResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ReportDisconnectResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ReportDisconnectResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ReportDisconnectResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// bool shrunk = 2 [json_name = "shrunk"];
+inline void ReportDisconnectResponse::clear_shrunk() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shrunk_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool ReportDisconnectResponse::shrunk() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ReportDisconnectResponse.shrunk)
+  return _internal_shrunk();
+}
+inline void ReportDisconnectResponse::set_shrunk(bool value) {
+  _internal_set_shrunk(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ReportDisconnectResponse.shrunk)
+}
+inline bool ReportDisconnectResponse::_internal_shrunk() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.shrunk_;
+}
+inline void ReportDisconnectResponse::_internal_set_shrunk(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shrunk_ = value;
 }
 
 // -------------------------------------------------------------------

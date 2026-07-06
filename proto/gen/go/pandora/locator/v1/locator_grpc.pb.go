@@ -31,6 +31,8 @@ const (
 	PlayerLocatorService_SubscribePresence_FullMethodName   = "/pandora.locator.v1.PlayerLocatorService/SubscribePresence"
 	PlayerLocatorService_UnsubscribePresence_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
 	PlayerLocatorService_ClearLocation_FullMethodName       = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
+	PlayerLocatorService_RefreshHubLocations_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/RefreshHubLocations"
+	PlayerLocatorService_ReportDisconnect_FullMethodName    = "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
 )
 
 // PlayerLocatorServiceClient is the client API for PlayerLocatorService service.
@@ -53,6 +55,19 @@ type PlayerLocatorServiceClient interface {
 	SubscribePresence(ctx context.Context, in *SubscribePresenceRequest, opts ...grpc.CallOption) (*SubscribePresenceResponse, error)
 	UnsubscribePresence(ctx context.Context, in *UnsubscribePresenceRequest, opts ...grpc.CallOption) (*UnsubscribePresenceResponse, error)
 	ClearLocation(ctx context.Context, in *ClearLocationRequest, opts ...grpc.CallOption) (*ClearLocationResponse, error)
+	// RefreshHubLocations 批量续期一批玩家的 HUB 位置 TTL(在线保活)。
+	// 调用方:hub_allocator 收到 Hub DS Heartbeat(捎带在场 player_ids)后转发。
+	// 服务端逐个校验「state==HUB 且 hub_pod 匹配」才 EXPIRE 续期;
+	// MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,战斗态由战斗链路权威维护)。
+	// 玩家掉线/拔线 → Hub DS 不再上报该 id → locator key 30s 自然过期 = OFFLINE。
+	RefreshHubLocations(ctx context.Context, in *RefreshHubLocationsRequest, opts ...grpc.CallOption) (*RefreshHubLocationsResponse, error)
+	// ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
+	// 把该玩家 HUB 位置的 TTL 缩短到 grace(~10s)——真退出的玩家 10s 内判离线,
+	// 不用等满 30s 心跳 TTL。守卫:只缩「state==HUB 且 hub_pod 匹配」的记录;
+	// MATCHING/BATTLE 不动(玩家 travel 去战斗也触发 Hub Logout,靠此守卫 + grace 免疫误判);
+	// 只缩不涨(记录剩余 TTL 已小于 grace 时不动)。绝不立即置 OFFLINE:
+	// grace 窗口内玩家重连 → PostLogin SetLocationHub 重写记录,状态自愈。
+	ReportDisconnect(ctx context.Context, in *ReportDisconnectRequest, opts ...grpc.CallOption) (*ReportDisconnectResponse, error)
 }
 
 type playerLocatorServiceClient struct {
@@ -123,6 +138,26 @@ func (c *playerLocatorServiceClient) ClearLocation(ctx context.Context, in *Clea
 	return out, nil
 }
 
+func (c *playerLocatorServiceClient) RefreshHubLocations(ctx context.Context, in *RefreshHubLocationsRequest, opts ...grpc.CallOption) (*RefreshHubLocationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshHubLocationsResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_RefreshHubLocations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) ReportDisconnect(ctx context.Context, in *ReportDisconnectRequest, opts ...grpc.CallOption) (*ReportDisconnectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportDisconnectResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_ReportDisconnect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerLocatorServiceServer is the server API for PlayerLocatorService service.
 // All implementations should embed UnimplementedPlayerLocatorServiceServer
 // for forward compatibility.
@@ -143,6 +178,19 @@ type PlayerLocatorServiceServer interface {
 	SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error)
 	UnsubscribePresence(context.Context, *UnsubscribePresenceRequest) (*UnsubscribePresenceResponse, error)
 	ClearLocation(context.Context, *ClearLocationRequest) (*ClearLocationResponse, error)
+	// RefreshHubLocations 批量续期一批玩家的 HUB 位置 TTL(在线保活)。
+	// 调用方:hub_allocator 收到 Hub DS Heartbeat(捎带在场 player_ids)后转发。
+	// 服务端逐个校验「state==HUB 且 hub_pod 匹配」才 EXPIRE 续期;
+	// MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,战斗态由战斗链路权威维护)。
+	// 玩家掉线/拔线 → Hub DS 不再上报该 id → locator key 30s 自然过期 = OFFLINE。
+	RefreshHubLocations(context.Context, *RefreshHubLocationsRequest) (*RefreshHubLocationsResponse, error)
+	// ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
+	// 把该玩家 HUB 位置的 TTL 缩短到 grace(~10s)——真退出的玩家 10s 内判离线,
+	// 不用等满 30s 心跳 TTL。守卫:只缩「state==HUB 且 hub_pod 匹配」的记录;
+	// MATCHING/BATTLE 不动(玩家 travel 去战斗也触发 Hub Logout,靠此守卫 + grace 免疫误判);
+	// 只缩不涨(记录剩余 TTL 已小于 grace 时不动)。绝不立即置 OFFLINE:
+	// grace 窗口内玩家重连 → PostLogin SetLocationHub 重写记录,状态自愈。
+	ReportDisconnect(context.Context, *ReportDisconnectRequest) (*ReportDisconnectResponse, error)
 }
 
 // UnimplementedPlayerLocatorServiceServer should be embedded to have
@@ -169,6 +217,12 @@ func (UnimplementedPlayerLocatorServiceServer) UnsubscribePresence(context.Conte
 }
 func (UnimplementedPlayerLocatorServiceServer) ClearLocation(context.Context, *ClearLocationRequest) (*ClearLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClearLocation not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) RefreshHubLocations(context.Context, *RefreshHubLocationsRequest) (*RefreshHubLocationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshHubLocations not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) ReportDisconnect(context.Context, *ReportDisconnectRequest) (*ReportDisconnectResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReportDisconnect not implemented")
 }
 func (UnimplementedPlayerLocatorServiceServer) testEmbeddedByValue() {}
 
@@ -298,6 +352,42 @@ func _PlayerLocatorService_ClearLocation_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerLocatorService_RefreshHubLocations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshHubLocationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).RefreshHubLocations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_RefreshHubLocations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).RefreshHubLocations(ctx, req.(*RefreshHubLocationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_ReportDisconnect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportDisconnectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).ReportDisconnect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_ReportDisconnect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).ReportDisconnect(ctx, req.(*ReportDisconnectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerLocatorService_ServiceDesc is the grpc.ServiceDesc for PlayerLocatorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -328,6 +418,14 @@ var PlayerLocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClearLocation",
 			Handler:    _PlayerLocatorService_ClearLocation_Handler,
+		},
+		{
+			MethodName: "RefreshHubLocations",
+			Handler:    _PlayerLocatorService_RefreshHubLocations_Handler,
+		},
+		{
+			MethodName: "ReportDisconnect",
+			Handler:    _PlayerLocatorService_ReportDisconnect_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

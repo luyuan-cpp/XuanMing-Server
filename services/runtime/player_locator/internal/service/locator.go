@@ -101,6 +101,32 @@ func (s *LocatorService) UnsubscribePresence(ctx context.Context, req *locatorv1
 	return &locatorv1.UnsubscribePresenceResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+// RefreshHubLocations Hub DS 心跳捎带的在线保活:批量续期 HUB 位置 TTL
+// (hub_allocator 转发,只续 state==HUB 且 hub_pod 匹配的记录)。
+func (s *LocatorService) RefreshHubLocations(ctx context.Context, req *locatorv1.RefreshHubLocationsRequest) (*locatorv1.RefreshHubLocationsResponse, error) {
+	refreshed, err := s.uc.RefreshHubLocations(ctx, req.GetHubPod(), req.GetPlayerIds())
+	if err != nil {
+		return &locatorv1.RefreshHubLocationsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.RefreshHubLocationsResponse{
+		Code:      commonv1.ErrCode_OK,
+		Refreshed: int32(refreshed),
+	}, nil
+}
+
+// ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时时调用,
+// 把 HUB 位置 TTL 缩到 grace(只缩 state==HUB 且 hub_pod 匹配的记录,只缩不涨)。
+func (s *LocatorService) ReportDisconnect(ctx context.Context, req *locatorv1.ReportDisconnectRequest) (*locatorv1.ReportDisconnectResponse, error) {
+	shrunk, err := s.uc.ReportDisconnect(ctx, req.GetHubPod(), req.GetPlayerId())
+	if err != nil {
+		return &locatorv1.ReportDisconnectResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.ReportDisconnectResponse{
+		Code:   commonv1.ErrCode_OK,
+		Shrunk: shrunk,
+	}, nil
+}
+
 func (s *LocatorService) ClearLocation(ctx context.Context, req *locatorv1.ClearLocationRequest) (*locatorv1.ClearLocationResponse, error) {
 	if err := s.uc.ClearLocation(ctx, req.GetPlayerId()); err != nil {
 		return &locatorv1.ClearLocationResponse{Code: toProtoCode(err)}, nil

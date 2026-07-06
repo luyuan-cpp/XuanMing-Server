@@ -4,8 +4,8 @@
 
 .DESCRIPTION
   一条命令把后端跑起来,覆盖 5 套环境(DS 分配模式随环境变):
-    local    本地 windows 调试 —— 基础设施在 docker,19 个 go 服务以宿主进程跑(可断点);DS=local(Windows PandoraServer.exe)
-    docker   本地 docker 启动   —— 基础设施 + 19 个 go 服务全跑在本机 docker;DS=mock(容器内无真 DS)
+    local    本地 windows 调试 —— 基础设施在 docker,20 个 go 服务以宿主进程跑(可断点);DS=local(Windows PandoraServer.exe)
+    docker   本地 docker 启动   —— 基础设施 + 20 个 go 服务全跑在本机 docker;DS=mock(容器内无真 DS)
     intranet 内网测试服     —— 同 docker 全容器,但绑定内网 IP 供多人联调;DS=mock
     online   线上 k8s 集群   —— kustomize 部署到远端 k8s + Agones 真 Linux DS;DS=agones
                              用 -Env test|prod 区分「测试服集群」与「生产 kbs 集群」(不同 kube-context)
@@ -78,7 +78,7 @@ param(
     [string]$DsGatewayAddr, # online:DS 回调入口(如 pandora-envoy.pandora.svc:8444)
     [ValidateSet('0', '1')]
     [string]$DsGatewayTls = '1', # online:DS 回调是否 TLS(线上默认 1)
-    [switch]$BuildPush    # online:本地构建并推送 19 个镜像到 -Registry(远端发布动作,需人工授权)
+    [switch]$BuildPush    # online:本地构建并推送 20 个镜像到 -Registry(远端发布动作,需人工授权)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -283,7 +283,7 @@ function Invoke-Local {
         & "$ScriptDir/dev_all.ps1" -Down
         return
     }
-    Write-Step "local 模式:基础设施(docker) + 19 个 go 服务(宿主进程)"
+    Write-Step "local 模式:基础设施(docker) + 20 个 go 服务(宿主进程)"
     Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
 
     # docker 业务容器会占用同一批端口(50001-50022),与宿主 go 进程互斥。
@@ -310,7 +310,7 @@ function Invoke-Docker {
         & "$ScriptDir/dev_down.ps1"
         return
     }
-    Write-Step "docker 模式:基础设施 + 19 个 go 服务全部容器化"
+    Write-Step "docker 模式:基础设施 + 20 个 go 服务全部容器化"
 
     # local 宿主进程会抢同一批端口,先停掉
     Write-Info "先停掉可能在跑的宿主 go 服务(避免端口冲突)..."
@@ -335,7 +335,7 @@ function Invoke-Docker {
 }
 
 # ===== intranet 模式(内网测试服:全容器,绑内网 IP 供多人联调)=====
-# 与 docker 一致(基础设施 + 19 服务全容器,DS=mock),区别只是面向局域网:
+# 与 docker 一致(基础设施 + 20 服务全容器,DS=mock),区别只是面向局域网:
 #   - compose 端口已绑 0.0.0.0,内网其它机器可直接连本机内网 IP
 #   - 打印内网访问地址,客户端把后端指向 <内网IP>:<port> 即可
 function Resolve-LanIp {
@@ -384,11 +384,11 @@ function Invoke-Intranet {
     Write-Warn "DS=mock(无真实 DS);需真实战斗/大厅 DS 请用 -Mode online(Agones)。"
 }
 
-# ===== battle 模式(含战斗混合版:17 业务服务跑 docker + ds/hub allocator 跑宿主)=====
+# ===== battle 模式(含战斗混合版:18 业务服务跑 docker + ds/hub allocator 跑宿主)=====
 # 为什么混合:战斗/大厅 DS 是 Windows PandoraServer.exe,跑不进 Linux 容器;
 # ds_allocator(mode=local)与 hub_allocator 要在本机 exec 这个 .exe,故这 2 个服务必须留宿主,
-# 其余 17 个纯业务服务进 docker(策划服务器机器不用为它们装 Go / 逐个 build)。
-# 网络:Envoy(容器)所有上游本就走 host.docker.internal:500XX,17 个容器把端口发布到宿主、
+# 其余 18 个纯业务服务进 docker(策划服务器机器不用为它们装 Go / 逐个 build)。
+# 网络:Envoy(容器)所有上游本就走 host.docker.internal:500XX,18 个容器把端口发布到宿主、
 # 2 个 allocator 直接绑宿主端口 —— 从 Envoy / 跨边界视角两者等价。容器里的 matchmaker/login/
 # battle_result 经 gen_cluster_config.ps1 -HostAllocators 把 allocator 地址改指 host.docker.internal。
 # DS 广告地址(PANDORA_DS_ADVERTISE_HOST,本机自测=127.0.0.1 / 内网=局域网 IP)由 play.ps1 注入环境变量,
@@ -406,7 +406,7 @@ function Invoke-Battle {
         return
     }
 
-    Write-Step "battle 模式:17 个业务服务(docker) + ds/hub allocator(宿主,exec Windows DS)"
+    Write-Step "battle 模式:18 个业务服务(docker) + ds/hub allocator(宿主,exec Windows DS)"
 
     # 清理可能冲突的残留:上一轮 local 的宿主 go 进程、上一轮 docker 的 allocator 容器(会抢 50020/50021)。
     Write-Info "先停掉可能残留的宿主 go 服务与业务容器(避免端口冲突)..."
@@ -420,10 +420,10 @@ function Invoke-Battle {
     Write-Step "[2/5] 生成集群版配置(allocator 跑宿主:matchmaker/login/battle_result 经 host.docker.internal 回连)"
     & "$ScriptDir/gen_cluster_config.ps1" -HostAllocators
 
-    Write-Step "[3/5] 构建 17 个业务服务镜像(不含 ds/hub allocator)"
+    Write-Step "[3/5] 构建 18 个业务服务镜像(不含 ds/hub allocator)"
     Build-AllImages -Only $containerSvcs
 
-    Write-Step "[4/5] 启动 17 个业务服务容器"
+    Write-Step "[4/5] 启动 18 个业务服务容器"
     docker compose -f $ComposeServices up -d @containerSvcs
     if ($LASTEXITCODE -ne 0) { throw "业务服务容器启动失败" }
 
@@ -433,7 +433,7 @@ function Invoke-Battle {
     if ($LASTEXITCODE -ne 0) { throw "宿主 allocator 启动失败" }
 
     Write-Host ""
-    Write-Ok "battle 模式已启动:17 业务容器 + 2 宿主 allocator。查看:pwsh tools/scripts/start.ps1 -Mode battle -Status"
+    Write-Ok "battle 模式已启动:18 业务容器 + 2 宿主 allocator。查看:pwsh tools/scripts/start.ps1 -Mode battle -Status"
 }
 
 
@@ -566,7 +566,7 @@ function Invoke-K8s {
     Write-Step "[4/7] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Apply-AgonesManifests -InstallAgones
 
-    Write-Step "[5/7] 构建 19 个服务镜像"
+    Write-Step "[5/7] 构建 20 个服务镜像"
     Build-AllImages
 
     Write-Step "[6/7] 把镜像 load 进 minikube"
@@ -580,7 +580,7 @@ function Invoke-K8s {
     kubectl apply -k $servicesDir
     Assert-LastExit 'kubectl apply -k services'
     # 镜像 tag 固定为 :dev,重建/重 load 后 image 字符串不变 -> apply 报 unchanged,旧 Pod 不会换。
-    # 按名强制滚动重启这 19 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
+    # 按名强制滚动重启这 20 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
     # 确保跑的是刚 build 的新二进制。
     Write-Info "rollout restart 业务 Deployment(同 :dev tag 重建后强制换 Pod)..."
     foreach ($svc in (Get-ServiceList)) {
@@ -631,7 +631,7 @@ function Invoke-Online {
     }
 
     if ($BuildPush) {
-        Write-Step "构建并推送 19 个 Go 服务镜像到 $Registry"
+        Write-Step "构建并推送 20 个 Go 服务镜像到 $Registry"
         Build-AllImages
         foreach ($svc in (Get-ServiceList)) {
             $local  = "pandora/$($svc.Name):dev"
@@ -686,6 +686,9 @@ function Get-ServiceList {
         @{ Name = 'leaderboard';    Dir = 'services/runtime/leaderboard';      Cmd = 'leaderboard' }
         @{ Name = 'team';           Dir = 'services/matchmaking/team';         Cmd = 'team' }
         @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';   Cmd = 'matchmaker' }
+        # PVE 直进匹配实例:与 matchmaker 同目录同二进制(镜像层全缓存,构建零成本),
+        # 仅配置不同(etc/matchmaker-pve.yaml,gen_cluster_config.ps1 生成 matchmaker-pve.yaml)。
+        @{ Name = 'matchmaker-pve'; Dir = 'services/matchmaking/matchmaker';   Cmd = 'matchmaker' }
         @{ Name = 'trade';          Dir = 'services/economy/trade';            Cmd = 'trade' }
         @{ Name = 'dialogue';       Dir = 'services/social/dialogue';          Cmd = 'dialogue' }
         @{ Name = 'push';           Dir = 'services/runtime/push';             Cmd = 'push' }

@@ -817,7 +817,7 @@ func TestHeartbeatEmptyTimeoutDisabled(t *testing.T) {
 }
 
 // TestHeartbeatEmptyTimeoutDeliveryRetry:空场判弃时 Kafka 不可用 → 保留在 active;
-// 后续 sweep 以 wasAbandoned 路径重试投递(不重复回收 pod),闭环同心跳超时补偿(不变量 §4)。
+// 后续 sweep 以 firstAbandon=false 路径重试投递(不重复回收 pod),闭环同心跳超时补偿(不变量 §4)。
 func TestHeartbeatEmptyTimeoutDeliveryRetry(t *testing.T) {
 	ctx := context.Background()
 	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
@@ -842,7 +842,7 @@ func TestHeartbeatEmptyTimeoutDeliveryRetry(t *testing.T) {
 		t.Fatalf("active = %v, want still 1 (delivery retry pending)", ids)
 	}
 
-	// DS 收 stop 停跳 → 心跳超时后 sweep 扫到,wasAbandoned 路径重试投递成功
+	// DS 收 stop 停跳 → 心跳超时后 sweep 扫到,firstAbandon=false 路径重试投递成功
 	backdate(t, repo, 7)
 	if err := uc.sweepOnce(ctx); err != nil {
 		t.Fatalf("sweep: %v", err)

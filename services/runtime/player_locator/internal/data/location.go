@@ -48,6 +48,18 @@ type LocationRepo interface {
 	// key 不存在(离线 / TTL 过期)的 player_id 不出现在 map 里(调用方按缺席判离线)。
 	// playerID==0 与重复 id 自动跳过 / 去重。
 	BatchGet(ctx context.Context, playerIDs []uint64) (map[uint64]LocationRecord, error)
+	// RefreshHubLocations 批量续期 HUB 位置 TTL(在线保活,Hub DS 心跳捎带链路)。
+	// 逐个校验「state==HUB 且 hub_pod 匹配」才 EXPIRE;MATCHING/BATTLE/其它 pod
+	// 的记录不动(不变量 §1)。返实际续期成功条数。
+	// 非事务(校验→EXPIRE 两次 pipeline 往返):竞争窗口内状态若切到 MATCHING/BATTLE,
+	// 多续一次 30s TTL 无害(对局态由战斗链路自己刷 TTL,且后续写会重置)。
+	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl time.Duration) (int, error)
+	// ShrinkHubTTL 快速断线上报:把玩家 HUB 位置的剩余 TTL 缩短到 grace(只缩不涨,
+	// EXPIRE LT)。守卫同 RefreshHubLocations:仅「state==HUB 且 hub_pod 匹配」才缩;
+	// MATCHING/BATTLE/其它 pod/剩余 TTL 已更短 → 不动,返 false(均属正常路径)。
+	// 非事务(同上):窗口内状态切到对局态后误缩一次无害——对局态由战斗链路
+	// 自己写入/续期,下一次写会重置 TTL。
+	ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error)
 	Delete(ctx context.Context, playerID uint64) error
 }
 
@@ -180,6 +192,98 @@ func (r *RedisLocationRepo) BatchGet(ctx context.Context, playerIDs []uint64) (m
 		out[pid] = parseLocationMap(m)
 	}
 	return out, nil
+}
+
+// RefreshHubLocations 批量续期 HUB 位置 TTL。
+//
+// 两轮 pipeline:
+//  1. HMGET state,hub_pod 批量读(一次往返)
+//  2. 对「state==HUB 且 hub_pod 匹配」的 key 批量 EXPIRE(一次往返)
+//
+// 非事务:步骤 1→2 之间状态若被并发写成 MATCHING/BATTLE,EXPIRE 只多续一次
+// 30s TTL(无害:对局态由战斗链路持续刷新,且下次写会重置 TTL),不值得上 WATCH。
+// 单 key miss / 解析失败直接跳过(玩家刚离线属正常路径),不让整批失败。
+func (r *RedisLocationRepo) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, ttl time.Duration) (int, error) {
+	if hubPod == "" || len(playerIDs) == 0 {
+		return 0, nil
+	}
+	readPipe := r.rdb.Pipeline()
+	cmds := make(map[uint64]*redis.SliceCmd, len(playerIDs))
+	for _, pid := range playerIDs {
+		if pid == 0 {
+			continue
+		}
+		if _, dup := cmds[pid]; dup {
+			continue
+		}
+		cmds[pid] = readPipe.HMGet(ctx, locKey(pid), "state", "hub_pod")
+	}
+	if len(cmds) == 0 {
+		return 0, nil
+	}
+	if _, err := readPipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return 0, errcode.New(errcode.ErrInternal, "redis hub refresh read: %v", err)
+	}
+
+	expirePipe := r.rdb.Pipeline()
+	refreshed := 0
+	for pid, cmd := range cmds {
+		vals, err := cmd.Result()
+		if err != nil || len(vals) != 2 {
+			continue
+		}
+		stateStr, ok1 := vals[0].(string)
+		podStr, ok2 := vals[1].(string)
+		if !ok1 || !ok2 {
+			continue // key 不存在(HMGET 回 nil)/ 字段缺失 → 跳过
+		}
+		state, err := strconv.ParseInt(stateStr, 10, 32)
+		if err != nil || int32(state) != 3 /* LOCATION_STATE_HUB */ || podStr != hubPod {
+			continue // 非 HUB 态 / 别的 pod 的记录不动(不变量 §1)
+		}
+		expirePipe.Expire(ctx, locKey(pid), ttl)
+		refreshed++
+	}
+	if refreshed == 0 {
+		return 0, nil
+	}
+	if _, err := expirePipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		return 0, errcode.New(errcode.ErrInternal, "redis hub refresh expire: %v", err)
+	}
+	return refreshed, nil
+}
+
+// ShrinkHubTTL 快速断线上报:守卫通过后把剩余 TTL 缩到 grace。
+//
+// EXPIRE LT 语义(Redis 7):仅当新 TTL 小于当前剩余 TTL 才生效——只缩不涨,
+// 重复上报/迟到报文天然幂等。守卫失败(非 HUB / pod 不匹配 / key 已过期)返
+// (false, nil):玩家 travel 去战斗、切线后旧 pod 迟到报文等均属正常路径,不是错误。
+func (r *RedisLocationRepo) ShrinkHubTTL(ctx context.Context, hubPod string, playerID uint64, grace time.Duration) (bool, error) {
+	if hubPod == "" || playerID == 0 {
+		return false, errcode.New(errcode.ErrInvalidArg, "hub_pod and player_id required")
+	}
+	key := locKey(playerID)
+	vals, err := r.rdb.HMGet(ctx, key, "state", "hub_pod").Result()
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl read: %v", err)
+	}
+	if len(vals) != 2 {
+		return false, nil
+	}
+	stateStr, ok1 := vals[0].(string)
+	podStr, ok2 := vals[1].(string)
+	if !ok1 || !ok2 {
+		return false, nil // key 不存在(已过期)/字段缺失 → 已离线,无需缩
+	}
+	state, perr := strconv.ParseInt(stateStr, 10, 32)
+	if perr != nil || int32(state) != 3 /* LOCATION_STATE_HUB */ || podStr != hubPod {
+		return false, nil // 非 HUB 态 / 别的 pod 的记录不动(不变量 §1)
+	}
+	shrunk, err := r.rdb.ExpireLT(ctx, key, grace).Result()
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "redis shrink hub ttl expire: %v", err)
+	}
+	return shrunk, nil
 }
 
 // readLocation HGETALL 并解析为 LocationRecord。c 可以是 *redis.Client 或 WATCH 内的 *redis.Tx。

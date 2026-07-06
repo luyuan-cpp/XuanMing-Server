@@ -100,6 +100,11 @@ type TeamRepo interface {
 	// ExpireTeam 单独刷新 team key 的 TTL(不读改写 value),供解散后改短 TTL 用。
 	ExpireTeam(ctx context.Context, teamID uint64, ttl time.Duration) error
 
+	// TouchTeam 同时续期队伍 key 与玩家索引 key 的 TTL(不动 value)。
+	// 在线心跳保活:玩家仍在轮询 GetMyTeam → 队伍不因 active_ttl 被误回收;
+	// 停止轮询(退出/掉线)后 TTL 自然倒计时,保留僵尸队伍 GC 语义。best-effort。
+	TouchTeam(ctx context.Context, teamID, playerID uint64, ttl time.Duration) error
+
 	// SetInvite 存储邀请令牌,TTL=inviteTTL。
 	SetInvite(ctx context.Context, inviteID, teamID, targetPlayerID uint64, ttl time.Duration) error
 
@@ -275,6 +280,15 @@ func (r *RedisTeamRepo) DeletePlayerIndex(ctx context.Context, playerID uint64) 
 // ExpireTeam 单独刷新 team key 的 TTL(单条 EXPIRE,不读改写 value)。
 func (r *RedisTeamRepo) ExpireTeam(ctx context.Context, teamID uint64, ttl time.Duration) error {
 	return r.rdb.Expire(ctx, teamKey(teamID), ttl).Err()
+}
+
+// TouchTeam 一次 pipeline 同时 EXPIRE 队伍 key + 玩家索引 key(在线心跳保活)。
+func (r *RedisTeamRepo) TouchTeam(ctx context.Context, teamID, playerID uint64, ttl time.Duration) error {
+	pipe := r.rdb.Pipeline()
+	pipe.Expire(ctx, teamKey(teamID), ttl)
+	pipe.Expire(ctx, playerKey(playerID), ttl)
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 // --- Invite ---

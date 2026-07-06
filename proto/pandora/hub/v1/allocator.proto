@@ -137,6 +137,10 @@ message ListHubsResponse {
   int64  ts_ms        = 6;
   // 7-9 reserved
   reserved 7 to 9;
+  // player_ids: 当前连着本 Hub DS 的可信玩家 id(InitNewPlayer 落的映射)。
+  // hub_allocator 转发给 player_locator 做 HUB 位置 TTL 续期(在线保活);
+  // DS 崩溃/玩家拔线 → 停报 → locator 30s 自然过期 = 好友视角离线。
+  repeated uint64 player_ids = 10;
 }
 
  message HeartbeatResponse {

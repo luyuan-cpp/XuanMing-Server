@@ -460,7 +460,7 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 //
 // 投递失败的重试闭环(不变量 §4 可靠补偿):投递失败时对局保留在 active;DS 收 stop 后
 // 停跳(或继续心跳但终态不刷新 active score),超过 HeartbeatTimeout 后 sweepOnce 以
-// wasAbandoned 路径重试投递(不重复回收 pod),直到成功或镜像 TTL 过期。
+// firstAbandon=false 路径重试投递(不重复回收 pod),直到成功或镜像 TTL 过期。
 func (u *AllocatorUsecase) finishEmptyAbandon(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) *HeartbeatResult {
 	plog.With(ctx).Warnw("msg", "battle_abandoned_empty_timeout",
 		"match_id", matchID, "pod", podName, "empty_timeout", u.cfg.EmptyBattleTimeout.String())
@@ -562,18 +562,26 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 	for _, mid := range stale {
 		var podName string
 		var endedSkip bool
-		var wasAbandoned bool
+		var firstAbandon bool // 本次成功事务是否执行了 →abandoned 的首次迁移(全局恰好一次,见闭包内注释)
 		var playerIDs []uint64
 		var mapID uint32
 		var gameMode string
 		// KEEPTTL:标记 abandoned / 每轮重试不刷新 battle key TTL,保证 BattleTTL 是补偿重试上界。
 		lerr := u.repo.UpdateBattleKeepTTL(ctx, mid, updateMaxRetry, func(b *dsv1.BattleStorageRecord) error {
+			// 出参每轮重置:CAS 冲突时闭包基于重新 GET 的最新镜像整体重跑,以最后一次成功事务为准
+			// (BattleRepo.UpdateBattleWithLock 的 fn 重跑契约)。
+			endedSkip = false
+			firstAbandon = false
 			if b.State == stateEnded {
 				endedSkip = true      // 正常结算,移出 active 不补偿
 				podName = b.DsPodName // 捕获用于 local 幽灵 DS 收尾(见下方 killStrandedDS)
 				return nil
 			}
-			wasAbandoned = b.State == stateAbandoned // 已 abandoned 仅重试投递,不重复回收 pod
+			// firstAbandon 仅在本事务把状态从非 abandoned 首次写成 abandoned 时为 true。
+			// WATCH CAS 保证该迁移跨副本/跨 sweep 轮次全局只成功一次:并发副本撞 TxFailedErr
+			// 重跑后读到 abandoned → false;补偿重试轮次读到 abandoned → false。
+			// 因此下方 Release 恰好执行一次,不存在 double-release。
+			firstAbandon = b.State != stateAbandoned
 			b.State = stateAbandoned
 			podName = b.DsPodName
 			playerIDs = b.PlayerIds
@@ -600,8 +608,9 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			_ = u.repo.RemoveActive(ctx, mid)
 			continue
 		}
-		// 仅首次转入 abandoned 时回收 pod(避免补偿重试期间对同一 pod 重复 Release)
-		if !wasAbandoned {
+		// 仅首次迁移 abandoned 的赢家事务回收 pod(并发副本 / 补偿重试轮次 firstAbandon=false 跳过,
+		// 不会重复 Release;Release 本身对已消失的 GameServer 幂等,双重保险)。
+		if firstAbandon {
 			if rerr := u.alloc.Release(ctx, podName); rerr != nil {
 				plog.With(ctx).Warnw("msg", "sweep_release_failed", "match_id", mid, "pod", podName, "err", rerr)
 			}

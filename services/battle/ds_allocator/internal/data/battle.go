@@ -37,6 +37,12 @@ type BattleRepo interface {
 	GetBattle(ctx context.Context, matchID uint64) (*dsv1.BattleStorageRecord, bool, error)
 	// UpdateBattleWithLock WATCH/MULTI/EXEC 读-改-写;CAS 失败重试 maxRetry 次,耗尽返 ErrDSAllocationFailed。
 	// SET 刷新 battle key TTL=battleTTL(心跳 / 正常状态更新用,续命活对局)。
+	//
+	// ⚠️ fn 重跑契约(UpdateBattleKeepTTL 同):CAS 冲突(并发副本改了同一 key)时 fn 会**基于重新
+	// GET 的最新镜像整体重跑**,故 fn 必须无副作用——只准改 *b 和写调用方捕获的出参变量,且出参
+	// 必须在 fn 开头重置(以最后一次成功事务为准,失败轮次的残值会被覆盖)。由此,「读到旧状态 X
+	// 才置位」的出参标记天然具备跨副本恰好一次语义:状态迁移 X→Y 全局只有一个 EXEC 能成功,
+	// 输家重跑后读到 Y 不再置位(sweepOnce 的 firstAbandon 防 double-release 即靠这一条)。
 	UpdateBattleWithLock(ctx context.Context, matchID uint64, maxRetry int, fn func(*dsv1.BattleStorageRecord) error, battleTTL time.Duration) error
 	// UpdateBattleKeepTTL 同 UpdateBattleWithLock,但 SET 用 redis.KeepTTL 保留 battle key 原 TTL **不刷新**。
 	// sweep abandoned 标记 + 补偿重试路径专用:保证 BattleTTL(从最后一次心跳起算)是补偿重试的天然上界,

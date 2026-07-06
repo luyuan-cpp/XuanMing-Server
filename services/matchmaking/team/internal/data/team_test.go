@@ -264,3 +264,39 @@ func TestExpireTeam(t *testing.T) {
 		t.Error("team should be gone after TTL expired")
 	}
 }
+
+// TestTouchTeam 验证 TouchTeam 同时把队伍 key 与玩家索引 key 的 TTL 拉回 ttl(在线保活)。
+func TestTouchTeam(t *testing.T) {
+	repo, mr := newTestRepo(t)
+	ctx := context.Background()
+	team := sampleTeam(1001, 2001)
+
+	if err := repo.Create(ctx, team, 5*time.Second); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := repo.SetPlayerIndex(ctx, 2001, 1001, 5*time.Second); err != nil {
+		t.Fatalf("SetPlayerIndex: %v", err)
+	}
+
+	// 快进 4s:两 key 仅剩 1s 寿命
+	mr.FastForward(4 * time.Second)
+
+	if err := repo.TouchTeam(ctx, 1001, 2001, 60*time.Second); err != nil {
+		t.Fatalf("TouchTeam: %v", err)
+	}
+
+	// 再快进 30s:若未续期早已过期;续期后应仍存活
+	mr.FastForward(30 * time.Second)
+	if _, found, _ := repo.Get(ctx, 1001); !found {
+		t.Error("team key should survive after TouchTeam renewal")
+	}
+	if _, found, _ := repo.GetPlayerTeamID(ctx, 2001); !found {
+		t.Error("player index should survive after TouchTeam renewal")
+	}
+
+	// 续期不动 value
+	got, _, err := repo.Get(ctx, 1001)
+	if err != nil || got.CaptainId != 2001 {
+		t.Errorf("TouchTeam must not modify value: %+v err=%v", got, err)
+	}
+}

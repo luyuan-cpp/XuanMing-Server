@@ -15,6 +15,8 @@ package biz
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -73,6 +75,17 @@ type TeamUsecase struct {
 	// matchCanceler 是“离队/踢人 → 撤销 matchmaker 票据”联动。可为 nil(未配
 	// matchmaker_addr / 骨架联调)→ 不联动,行为与历史一致。nil-safe。
 	matchCanceler MatchCanceler
+
+	// lastTouch 记录每个玩家上次 GetMyTeam 续期队伍 TTL 的时刻(节流,避免每次
+	// 轮询都敲 Redis EXPIRE)。key=playerID(uint64) value=time.Time。
+	// 多实例部署下各实例独立节流,最坏情况多几次 EXPIRE,无正确性影响。
+	// 内存上限:maybeSweepLastTouch 每 touchInterval 清一次过期条目(见下),
+	// 常驻规模 ≈ 最近 2×touchInterval 内轮询过 GetMyTeam 的活跃玩家数,不随 DAU 永久增长。
+	lastTouch sync.Map
+
+	// lastTouchSweepAtNs 是上次清扫 lastTouch 的时刻(UnixNano)。CAS 抢占保证
+	// 同一时刻至多一个 goroutine 执行清扫,其余直接返回。
+	lastTouchSweepAtNs atomic.Int64
 }
 
 // NewTeamUsecase 构造 TeamUsecase。
@@ -106,6 +119,48 @@ func (u *TeamUsecase) InviteTTLMs() int64 {
 // activeTTL 返回活跃队伍 Redis key 的生命周期。
 func (u *TeamUsecase) activeTTL() time.Duration {
 	return u.cfg.ActiveTTL.Std()
+}
+
+// touchInterval 是 GetMyTeam 在线续期的节流间隔:同一玩家至多每 15 分钟续一次。
+// 客户端轮询周期(秒级)远小于它,active_ttl(60 分钟)远大于它,续期不会断流。
+const touchInterval = 15 * time.Minute
+
+// maybeTouchTeam 在线心跳保活:玩家仍在轮询自己的队伍 → 续期队伍与索引 TTL,
+// 避免在线队伍被 active_ttl 误回收;停止轮询后 TTL 自然到期,僵尸队伍 GC 仍在。
+// 15 分钟节流 + best-effort:失败只告警,不影响读返回。
+func (u *TeamUsecase) maybeTouchTeam(ctx context.Context, teamID, playerID uint64) {
+	now := time.Now()
+	if v, ok := u.lastTouch.Load(playerID); ok {
+		if last, ok2 := v.(time.Time); ok2 && now.Sub(last) < touchInterval {
+			return
+		}
+	}
+	u.lastTouch.Store(playerID, now)
+	u.maybeSweepLastTouch(now)
+	if err := u.repo.TouchTeam(ctx, teamID, playerID, u.activeTTL()); err != nil {
+		plog.With(ctx).Warnw("msg", "team_touch_failed",
+			"player_id", playerID, "team_id", teamID, "err", err)
+	}
+}
+
+// maybeSweepLastTouch 惰性清扫 lastTouch 里已过节流窗口的条目,防止长跑进程内存
+// 随历史活跃玩家数无界增长。清扫间隔 = touchInterval;删除“距上次续期 ≥ touchInterval”
+// 的条目与直接不存在等价(下次 Load 反正会放行续期),行为不变。CAS 抢占单 goroutine
+// 执行,Range 全量扫描 O(活跃玩家数),每 15 分钟一次可忽略。
+func (u *TeamUsecase) maybeSweepLastTouch(now time.Time) {
+	last := u.lastTouchSweepAtNs.Load()
+	if now.UnixNano()-last < int64(touchInterval) {
+		return
+	}
+	if !u.lastTouchSweepAtNs.CompareAndSwap(last, now.UnixNano()) {
+		return // 其他 goroutine 已在清扫
+	}
+	u.lastTouch.Range(func(k, v any) bool {
+		if t, ok := v.(time.Time); !ok || now.Sub(t) >= touchInterval {
+			u.lastTouch.Delete(k)
+		}
+		return true
+	})
 }
 
 // ── 8 RPC ──────────────────────────────────────────────────────────────────
@@ -460,6 +515,10 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 		}
 		return nil, false, nil
 	}
+	// 在线心跳:玩家仍在轮询自己的队伍 → 续期(15s 节流,best-effort)。
+	// 只在 GetMyTeam(本人+索引校验过)续,GetTeam(任意 teamID)绝不续,
+	// 防旁人反复读把已抛弃队伍永久续命;disbanded 分支已在上方 return,不续。
+	u.maybeTouchTeam(ctx, teamID, playerID)
 	return team, true, nil
 }
 

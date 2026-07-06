@@ -110,3 +110,30 @@ func (n *GrpcLocationNotifier) setLocation(ctx context.Context, playerID uint64,
 	}
 	return nil
 }
+
+// FindOfflinePlayers 批量找出已离线的玩家(成局前在线校验,不变量 §1 配套在线保活)。
+//
+// 判定:BatchGetLocation 响应 map 里缺席(key 已过期 = 在线保活断报 ≥30s)或
+// state==OFFLINE → 离线;LOGIN_PENDING/HUB/MATCHING/BATTLE 均算在线。
+// 查询失败返 error 不吞,调用方(biz)按弱依赖跳过校验。
+func (n *GrpcLocationNotifier) FindOfflinePlayers(ctx context.Context, playerIDs []uint64) ([]uint64, error) {
+	if len(playerIDs) == 0 {
+		return nil, nil
+	}
+	resp, err := n.client.BatchGetLocation(ctx, &locatorv1.BatchGetLocationRequest{PlayerIds: playerIDs})
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "locator BatchGetLocation rpc: %v", err)
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return nil, errcode.New(errcode.Code(resp.GetCode()), "locator BatchGetLocation code=%d", resp.GetCode())
+	}
+	locations := resp.GetLocations()
+	var offline []uint64
+	for _, pid := range playerIDs {
+		loc, ok := locations[pid]
+		if !ok || loc.GetState() == locatorv1.LocationState_LOCATION_STATE_OFFLINE {
+			offline = append(offline, pid)
+		}
+	}
+	return offline, nil
+}

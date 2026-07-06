@@ -55,6 +55,8 @@ $Services = @(
     @{ Name = 'mail';           Conf = 'services/social/mail/etc/mail-dev.yaml';                   Port = 50009 }
     @{ Name = 'team';           Conf = 'services/matchmaking/team/etc/team-dev.yaml';              Port = 50010 }
     @{ Name = 'matchmaker';     Conf = 'services/matchmaking/matchmaker/etc/matchmaker-dev.yaml';  Port = 50011 }
+    # PVE 直进匹配实例:同 matchmaker 二进制、不同配置(game_mode=pve_coop + enable_solo_match)。
+    @{ Name = 'matchmaker-pve'; Conf = 'services/matchmaking/matchmaker/etc/matchmaker-pve.yaml';  Port = 50018 }
     @{ Name = 'trade';          Conf = 'services/economy/trade/etc/trade-dev.yaml';                Port = 50012 }
     @{ Name = 'dialogue';       Conf = 'services/social/dialogue/etc/dialogue-dev.yaml';           Port = 50013 }
     @{ Name = 'push';           Conf = 'services/runtime/push/etc/push-dev.yaml';                  Port = 50014 }

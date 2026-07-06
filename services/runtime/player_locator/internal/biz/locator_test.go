@@ -65,6 +65,29 @@ func (s *stubRepo) Delete(_ context.Context, playerID uint64) error {
 	return nil
 }
 
+func (s *stubRepo) ShrinkHubTTL(_ context.Context, hubPod string, playerID uint64, _ time.Duration) (bool, error) {
+	rec, ok := s.store[playerID]
+	if !ok || rec.State != LocationStateHub || rec.HubPod != hubPod {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *stubRepo) RefreshHubLocations(_ context.Context, hubPod string, playerIDs []uint64, _ time.Duration) (int, error) {
+	refreshed := 0
+	seen := map[uint64]bool{}
+	for _, pid := range playerIDs {
+		if pid == 0 || seen[pid] {
+			continue
+		}
+		seen[pid] = true
+		if rec, ok := s.store[pid]; ok && rec.State == LocationStateHub && rec.HubPod == hubPod {
+			refreshed++
+		}
+	}
+	return refreshed, nil
+}
+
 func TestSetLocation_InvalidInput(t *testing.T) {
 	uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
 
@@ -211,6 +234,82 @@ func TestClearLocation_InvalidPlayerID(t *testing.T) {
 	// 确认有错误就行,具体 code 不在本测试范围
 	if errors.Is(err, nil) {
 		t.Fatal("err should not be nil")
+	}
+}
+
+// TestRefreshHubLocations 验证 Hub DS 心跳捎带的在线保活:只有「state==HUB 且
+// hub_pod 匹配」的记录被续期计数,MATCHING/BATTLE/别的 pod/不存在的玩家一律不动。
+func TestRefreshHubLocations(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	ctx := context.Background()
+
+	// p1: HUB@hub-a → 续;p2: HUB@hub-b → 不续(别的 pod);p3: MATCHING → 不续;p4: 不存在
+	mustSet := func(in LocationInput) {
+		t.Helper()
+		if err := uc.SetLocation(ctx, in); err != nil {
+			t.Fatalf("SetLocation(%+v): %v", in, err)
+		}
+	}
+	mustSet(LocationInput{PlayerID: 1, State: LocationStateHub, HubPod: "hub-a"})
+	mustSet(LocationInput{PlayerID: 2, State: LocationStateHub, HubPod: "hub-b"})
+	mustSet(LocationInput{PlayerID: 3, State: LocationStateMatching, MatchID: 900})
+
+	refreshed, err := uc.RefreshHubLocations(ctx, "hub-a", []uint64{1, 2, 3, 4, 0, 1})
+	if err != nil {
+		t.Fatalf("RefreshHubLocations: %v", err)
+	}
+	if refreshed != 1 {
+		t.Errorf("expected refreshed=1 (only p1 HUB@hub-a), got %d", refreshed)
+	}
+}
+
+func TestRefreshHubLocations_InvalidArgs(t *testing.T) {
+	uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
+	ctx := context.Background()
+
+	if _, err := uc.RefreshHubLocations(ctx, "", []uint64{1}); err == nil {
+		t.Error("expected error for empty hub_pod")
+	}
+	if n, err := uc.RefreshHubLocations(ctx, "hub-a", nil); err != nil || n != 0 {
+		t.Errorf("empty player_ids should be no-op, got n=%d err=%v", n, err)
+	}
+}
+
+// TestReportDisconnect:只缩「state==HUB 且 hub_pod 匹配」的记录;
+// 别的 pod / MATCHING / 不存在 → shrunk=false 且不报错(正常路径)。
+func TestReportDisconnect(t *testing.T) {
+	repo := newStubRepo()
+	uc := NewLocatorUsecase(repo, 30*time.Second)
+	ctx := context.Background()
+
+	repo.store[1] = data.LocationRecord{State: LocationStateHub, HubPod: "hub-a"}
+	repo.store[2] = data.LocationRecord{State: LocationStateHub, HubPod: "hub-b"}
+	repo.store[3] = data.LocationRecord{State: LocationStateMatching, MatchID: 99}
+
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 1); err != nil || !shrunk {
+		t.Errorf("p1 HUB@hub-a expected shrunk=true, got shrunk=%v err=%v", shrunk, err)
+	}
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 2); err != nil || shrunk {
+		t.Errorf("p2 on hub-b: stale pod report must not shrink, got shrunk=%v err=%v", shrunk, err)
+	}
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 3); err != nil || shrunk {
+		t.Errorf("p3 MATCHING must not shrink (travel-to-battle immunity), got shrunk=%v err=%v", shrunk, err)
+	}
+	if shrunk, err := uc.ReportDisconnect(ctx, "hub-a", 4); err != nil || shrunk {
+		t.Errorf("missing player: no-op expected, got shrunk=%v err=%v", shrunk, err)
+	}
+}
+
+func TestReportDisconnect_InvalidArgs(t *testing.T) {
+	uc := NewLocatorUsecase(newStubRepo(), 30*time.Second)
+	ctx := context.Background()
+
+	if _, err := uc.ReportDisconnect(ctx, "", 1); err == nil {
+		t.Error("expected error for empty hub_pod")
+	}
+	if _, err := uc.ReportDisconnect(ctx, "hub-a", 0); err == nil {
+		t.Error("expected error for player_id=0")
 	}
 }
 

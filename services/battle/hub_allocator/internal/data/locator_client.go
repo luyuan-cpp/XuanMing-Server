@@ -16,6 +16,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
+
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 )
@@ -25,6 +27,10 @@ type HubLocationChecker interface {
 	// InBattleOrMatching 返回 true 表示玩家在匹配/战斗中(应拒绝切线)。
 	// locator 不可达 / 查询失败 → 返回 (false, err),biz 据 err 决定是否放行。
 	InBattleOrMatching(ctx context.Context, playerID uint64) (bool, error)
+	// RefreshHubLocations 把 Hub DS 心跳捎带的在场 player_ids 转发给 locator 批量
+	// 续期 HUB 位置 TTL(在线保活)。locator 侧只续 state==HUB 且 hub_pod 匹配的记录。
+	// 返实际续期成功条数;失败由调用方 best-effort 处理(不影响心跳主流程)。
+	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64) (int, error)
 }
 
 // GrpcHubLocationChecker 实现 HubLocationChecker,内嵌 locator gRPC client。
@@ -54,4 +60,19 @@ func (g *GrpcHubLocationChecker) InBattleOrMatching(ctx context.Context, playerI
 	state := resp.GetLocation().GetState()
 	return state == locatorv1.LocationState_LOCATION_STATE_MATCHING ||
 		state == locatorv1.LocationState_LOCATION_STATE_BATTLE, nil
+}
+
+// RefreshHubLocations 转发 Hub DS 心跳捎带的在场玩家列表,批量续期 HUB 位置 TTL。
+func (g *GrpcHubLocationChecker) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64) (int, error) {
+	resp, err := g.client.RefreshHubLocations(ctx, &locatorv1.RefreshHubLocationsRequest{
+		HubPod:    hubPod,
+		PlayerIds: playerIDs,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return 0, errcode.New(errcode.ErrInternal, "locator refresh hub locations code=%d", resp.GetCode())
+	}
+	return int(resp.GetRefreshed()), nil
 }

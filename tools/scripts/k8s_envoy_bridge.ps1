@@ -1,7 +1,7 @@
 ﻿# Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
 #
 # 为什么需要它:
-#   - k8s 模式里 16 个 Go 服务都跑在 pandora namespace 的 ClusterIP Service 后面
+#   - k8s 模式里 17 个 Go 服务都跑在 pandora namespace 的 ClusterIP Service 后面
 #   - UE 客户端 / Linux DS 仍然只会打宿主机 Envoy(:8443 / :8444)
 #   - 现有 deploy/envoy/envoy.yaml 的 upstream 全指向 host.docker.internal:500xx
 #
@@ -46,6 +46,9 @@ $Forwards = @(
     @{ Name = 'player-locator'; Port = 50006; Essential = $true  }
     @{ Name = 'team';           Port = 50010; Essential = $true  }
     @{ Name = 'matchmaker';     Port = 50011; Essential = $true  }
+    # PVE 直进匹配实例(Envoy 按 x-pandora-game-mode: pve 分流到 host 50018);
+    # 不在 PVP 闭环必需链路上,Pod 没起来只 WARN 不阻断 e2e。
+    @{ Name = 'matchmaker-pve'; Port = 50018; Essential = $false }
     @{ Name = 'trade';          Port = 50012; Essential = $false }
     @{ Name = 'dialogue';       Port = 50013; Essential = $false }
     @{ Name = 'push';           Port = 50014; Essential = $true  }

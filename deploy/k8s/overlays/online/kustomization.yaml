@@ -23,7 +23,7 @@ resources:
   # ⚠️ 需集群 CNI 强制 NetworkPolicy(Calico/Cilium 等),否则被静默忽略(详见 netpol.yaml 头注)。
   - netpol.yaml
 
-# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(19 个)。
+# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(20 个)。
 images:
   - { name: pandora/login,          newName: registry.example.com/pandora/login,          newTag: latest }
   - { name: pandora/player,         newName: registry.example.com/pandora/player,         newTag: latest }
@@ -36,6 +36,7 @@ images:
   - { name: pandora/leaderboard,    newName: registry.example.com/pandora/leaderboard,    newTag: latest }
   - { name: pandora/team,           newName: registry.example.com/pandora/team,           newTag: latest }
   - { name: pandora/matchmaker,     newName: registry.example.com/pandora/matchmaker,     newTag: latest }
+  - { name: pandora/matchmaker-pve, newName: registry.example.com/pandora/matchmaker-pve, newTag: latest }
   - { name: pandora/trade,          newName: registry.example.com/pandora/trade,          newTag: latest }
   - { name: pandora/dialogue,       newName: registry.example.com/pandora/dialogue,       newTag: latest }
   - { name: pandora/push,           newName: registry.example.com/pandora/push,           newTag: latest }

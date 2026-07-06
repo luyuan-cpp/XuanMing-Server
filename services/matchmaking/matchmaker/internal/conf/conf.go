@@ -49,6 +49,15 @@ type MatchConf struct {
 	//   - true（仅 dev / 弱依赖联调）：locator 查询失败时仅 Warn 后放行，兜底仍由 ClaimPlayer 的 SETNX 保证一人一队列。
 	// 注意：locator 完全未配置（LocatorAddr 为空 → 注入 nil）时此开关不生效，直接跳过检查。
 	BattleGateFailOpen bool `yaml:"battle_gate_fail_open,omitempty" json:"battle_gate_fail_open,omitempty"`
+
+	// LivenessGateEnabled 是否启用 locator 在线保活的两道离线判定门（默认 false，关闭）：
+	//   - 成局最终门（onAllConfirmed）：全员确认后、拉 DS 前批量校验在线，掉线者所在票据判责删除；
+	//   - 队列在线扫除（livenessSweepOnce）：周期清扫队列里掉线玩家的死票。
+	// 两道门把「locator 无 HUB 位置记录」判为离线，而 HUB 位置续期依赖 Hub DS 心跳捎带的
+	// player_ids 字段（hub/v1/allocator.proto HeartbeatRequest.player_ids）。UE Hub DS 生产端
+	// 尚未上报该字段前开启，会把全部在线玩家在 locator TTL（30s）后误判离线、扫掉排队票据。
+	// 必须等 Hub DS 侧联发后才可开启；关闭时行为与旧版一致（仅靠票据 TTL / 确认超时兜底）。
+	LivenessGateEnabled bool `yaml:"liveness_gate_enabled,omitempty" json:"liveness_gate_enabled,omitempty"`
 	// MapId 撮合成局后请求的战斗地图配置 ID(配置表 ID,uint32)。
 	MapId uint32 `yaml:"map_id,omitempty" json:"map_id,omitempty"`
 

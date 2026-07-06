@@ -490,6 +490,56 @@ func TestGetMyTeamDisbandedTreatedAsNoTeam(t *testing.T) {
 	}
 }
 
+// TestGetMyTeamTouchRefreshesTTL 验证在线轮询 GetMyTeam 命中活跃队伍时把队伍 key 与
+// 玩家索引 key 的 TTL 拉回 active_ttl(在线心跳保活,防挂机队伍被 active_ttl 误回收)。
+func TestGetMyTeamTouchRefreshesTTL(t *testing.T) {
+	uc, _, mr := newTestUsecaseWithMR(t)
+	ctx := context.Background()
+
+	if _, err := uc.CreateTeam(ctx, 1001, 2001); err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	// 快进 30m:两 key 剩余 TTL 只剩一半(默认 active_ttl=60m)
+	mr.FastForward(30 * time.Minute)
+
+	if _, hasTeam, err := uc.GetMyTeam(ctx, 2001); err != nil || !hasTeam {
+		t.Fatalf("GetMyTeam: hasTeam=%v err=%v", hasTeam, err)
+	}
+
+	// touch 后 TTL 应回到接近 active_ttl(60m)
+	if ttl := mr.TTL("pandora:team:{1001}"); ttl < 50*time.Minute {
+		t.Errorf("team key TTL not refreshed by GetMyTeam: %v", ttl)
+	}
+	if ttl := mr.TTL("pandora:team:player:2001"); ttl < 50*time.Minute {
+		t.Errorf("player index TTL not refreshed by GetMyTeam: %v", ttl)
+	}
+}
+
+// TestGetMyTeamTouchThrottled 验证续期节流:同一玩家 15 分钟(真实时钟)内的第二次
+// GetMyTeam 不再重复续期(TTL 不被再次拉满)。
+func TestGetMyTeamTouchThrottled(t *testing.T) {
+	uc, _, mr := newTestUsecaseWithMR(t)
+	ctx := context.Background()
+
+	if _, err := uc.CreateTeam(ctx, 1001, 2001); err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	// 第一次 GetMyTeam:触发 touch(TTL 满 60m),并记录节流时刻
+	if _, hasTeam, err := uc.GetMyTeam(ctx, 2001); err != nil || !hasTeam {
+		t.Fatalf("GetMyTeam#1: hasTeam=%v err=%v", hasTeam, err)
+	}
+	// 快进 20m(仅 miniredis 时钟;真实时钟仍在节流窗口内)
+	mr.FastForward(20 * time.Minute)
+
+	if _, hasTeam, err := uc.GetMyTeam(ctx, 2001); err != nil || !hasTeam {
+		t.Fatalf("GetMyTeam#2: hasTeam=%v err=%v", hasTeam, err)
+	}
+	// 节流生效:第二次不 touch,TTL 应停留在 ~40m 而不是被拉回 60m
+	if ttl := mr.TTL("pandora:team:{1001}"); ttl > 45*time.Minute {
+		t.Errorf("second GetMyTeam within throttle window should not re-touch, TTL=%v", ttl)
+	}
+}
+
 // TestSetReadyPartialStillForming 验证部分 ready 时仍是 FORMING。
 func TestSetReadyPartialStillForming(t *testing.T) {
 	uc, _, cleanup := newTestUsecase(t)

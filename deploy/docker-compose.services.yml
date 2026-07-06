@@ -1,6 +1,6 @@
 # Pandora 全业务服务容器编排(docker 模式)
 #
-# 这是「整套后端跑在容器里」的编排：19 个 go 服务各一个容器，全部接到基础设施所在的
+# 这是「整套后端跑在容器里」的编排：20 个 go 服务各一个容器，全部接到基础设施所在的
 # 外部网络 pandora-net(由 deploy/docker-compose.dev.yml 创建)。
 #
 # 用法(推荐用一键脚本,自动先拉基础设施再起服务):
@@ -130,6 +130,22 @@ services:
     volumes: [ "../run/cluster/etc/matchmaker.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "50011:50011" ]
     # 含战斗混合模式:ds_allocator 跑宿主,matchmaker 经 host.docker.internal:50020 回连(Linux/WSL 需显式映射)。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # PVE 直进匹配实例:与 matchmaker 同一份源码/同构建参数(镜像层全缓存),仅配置不同——
+  # game_mode=pve_coop + enable_solo_match=true(单人/整队直进副本,不排队)。
+  # Envoy 按 header `x-pandora-game-mode: pve` 分流到本实例(host.docker.internal:50018)。
+  matchmaker-pve:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/matchmaking/matchmaker, CMD_NAME: matchmaker }
+    image: pandora/matchmaker-pve:dev
+    container_name: pandora-matchmaker-pve
+    volumes: [ "../run/cluster/etc/matchmaker-pve.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "50018:50018" ]
+    # 含战斗混合模式:同 matchmaker,经 host.docker.internal:50020 回连宿主 ds_allocator。
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

@@ -49,6 +49,9 @@ const (
 // 迁移原因常量(HubMigrateEvent.reason)。
 const migrateReasonConsolidation = "consolidation"
 
+// presenceRefreshTimeout 是心跳后异步续期在场玩家 HUB 位置的独立 ctx 预算(在线保活,弱依赖)。
+const presenceRefreshTimeout = 3 * time.Second
+
 // TicketSigner 抽象 hub DSTicket 签发(biz 不依赖 pkg/auth 具体实现,便于测试)。
 type TicketSigner interface {
 	// SignHubTicket 给 playerID 签一张 hub DSTicket,返回 token + 过期毫秒。
@@ -501,6 +504,30 @@ func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int3
 		}
 	}
 	return &HeartbeatResult{Command: commandNone}, nil
+}
+
+// RefreshHubPresence 把 Hub DS 心跳捎带的在场 player_ids 转发给 player_locator
+// 批量续期 HUB 位置 TTL(在线保活链路:DS 每 5s 上报,locator TTL 30s,
+// 玩家掉线 → DS 停报该 id → 30s 自然过期 = 好友视角离线)。
+//
+// fire-and-forget(同 ds_allocator.refreshBattleLocations):goroutine + detached ctx
+// (context.WithoutCancel 保留 trace_id 满足不变量 §8,脱离心跳 RPC 取消)+ 独立短超时,
+// locator 抖动/卡死既不拖慢心跳响应尾延迟,也不泄漏 goroutine。
+// best-effort 弱依赖:locator 未配(nil)/ 转发失败只记 Warn,绝不影响心跳主流程
+// (心跳是分片存活信号,不能因旁路观测链路抖动而失败)。
+func (u *HubUsecase) RefreshHubPresence(ctx context.Context, pod string, playerIDs []uint64) {
+	if u.locator == nil || pod == "" || len(playerIDs) == 0 {
+		return
+	}
+	players := append([]uint64(nil), playerIDs...) // 拷贝,脱离调用方切片复用
+	go func() {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), presenceRefreshTimeout)
+		defer cancel()
+		if _, err := u.locator.RefreshHubLocations(rctx, pod, players); err != nil {
+			plog.With(rctx).Warnw("msg", "hub_presence_refresh_failed",
+				"pod", pod, "players", len(players), "err", err)
+		}
+	}()
 }
 
 // ── 后台心跳超时扫描 ──────────────────────────────────────────────────────────

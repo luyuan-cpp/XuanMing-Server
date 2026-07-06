@@ -2463,11 +2463,11 @@ constexpr HeartbeatRequest::ParseTableT_ HeartbeatRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      10, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294966720,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2518,6 +2518,8 @@ constexpr HeartbeatRequest::ParseTableT_ HeartbeatRequest::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.state_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int64 ts_ms = 6 [json_name = "tsMs"];
       {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.ts_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // repeated uint64 player_ids = 10 [json_name = "playerIds"];
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
     }},
     // no aux_entries
     {{
@@ -2543,7 +2545,13 @@ inline constexpr HeartbeatRequest::Impl_::Impl_(
         player_count_{0},
         cpu_pct_{0},
         ts_ms_{::int64_t{0}},
-        mem_mb_{0} {}
+        mem_mb_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::hub::v1::HeartbeatRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
 
 template <typename>
 constexpr HeartbeatRequest::HeartbeatRequest(::_pbi::ConstantInitialized,
@@ -3429,19 +3437,21 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.hub_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_count_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.cpu_pct_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.mem_mb_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.state_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.ts_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_),
         0,
         2,
         3,
         5,
         1,
         4,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -3531,10 +3541,10 @@ static const ::_pbi::MigrationSchema
         {108, sizeof(::pandora::hub::v1::ListHubsRequest)},
         {113, sizeof(::pandora::hub::v1::ListHubsResponse)},
         {120, sizeof(::pandora::hub::v1::HeartbeatRequest)},
-        {135, sizeof(::pandora::hub::v1::HeartbeatResponse)},
-        {144, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
-        {167, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
-        {184, sizeof(::pandora::hub::v1::HubMigrateEvent)},
+        {137, sizeof(::pandora::hub::v1::HeartbeatResponse)},
+        {146, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
+        {169, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
+        {186, sizeof(::pandora::hub::v1::HubMigrateEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3602,53 +3612,54 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "egion\030\001 \001(\tR\006region\"o\n\020ListHubsResponse\022"
     ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
     "eR\004code\022+\n\004hubs\030\002 \003(\0132\027.pandora.hub.v1.H"
-    "ubInfoR\004hubs\"\270\001\n\020HeartbeatRequest\022 \n\014hub"
+    "ubInfoR\004hubs\"\327\001\n\020HeartbeatRequest\022 \n\014hub"
     "_pod_name\030\001 \001(\tR\nhubPodName\022!\n\014player_co"
     "unt\030\002 \001(\005R\013playerCount\022\027\n\007cpu_pct\030\003 \001(\002R"
     "\006cpuPct\022\025\n\006mem_mb\030\004 \001(\002R\005memMb\022\024\n\005state\030"
-    "\005 \001(\tR\005state\022\023\n\005ts_ms\030\006 \001(\003R\004tsMsJ\004\010\007\020\n\""
-    "\210\001\n\021HeartbeatResponse\022.\n\004code\030\001 \001(\0162\032.pa"
-    "ndora.common.v1.ErrCodeR\004code\022\030\n\007command"
-    "\030\002 \001(\tR\007command\022#\n\rgrace_seconds\030\003 \001(\005R\014"
-    "graceSecondsJ\004\010\004\020\n\"\330\002\n\025HubShardStorageRe"
-    "cord\022 \n\014hub_pod_name\030\001 \001(\tR\nhubPodName\022\031"
-    "\n\010hub_addr\030\002 \001(\tR\007hubAddr\022\026\n\006region\030\003 \001("
-    "\tR\006region\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022!\n\014"
-    "player_count\030\005 \001(\005R\013playerCount\022\032\n\010capac"
-    "ity\030\006 \001(\005R\010capacity\022\024\n\005state\030\007 \001(\tR\005stat"
-    "e\022*\n\021last_heartbeat_ms\030\010 \001(\003R\017lastHeartb"
-    "eatMs\022\"\n\rcreated_at_ms\030\t \001(\003R\013createdAtM"
-    "s\022*\n\021draining_since_ms\030\n \001(\003R\017drainingSi"
-    "nceMs\"\350\001\n\032HubAssignmentStorageRecord\022\033\n\t"
-    "player_id\030\001 \001(\004R\010playerId\022 \n\014hub_pod_nam"
-    "e\030\002 \001(\tR\nhubPodName\022\031\n\010hub_addr\030\003 \001(\tR\007h"
-    "ubAddr\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022\026\n\006reg"
-    "ion\030\005 \001(\tR\006region\022\027\n\007team_id\030\006 \001(\004R\006team"
-    "Id\022$\n\016assigned_at_ms\030\007 \001(\003R\014assignedAtMs"
-    "\"\262\002\n\017HubMigrateEvent\022\033\n\tplayer_id\030\001 \001(\004R"
-    "\010playerId\022 \n\014from_hub_pod\030\002 \001(\tR\nfromHub"
-    "Pod\022#\n\016to_hub_ds_addr\030\003 \001(\tR\013toHubDsAddr"
-    "\022\"\n\rto_hub_ticket\030\004 \001(\tR\013toHubTicket\022%\n\017"
-    "to_hub_pod_name\030\005 \001(\tR\014toHubPodName\022\036\n\013t"
-    "o_shard_id\030\006 \001(\rR\ttoShardId\022#\n\rgrace_sec"
-    "onds\030\007 \001(\005R\014graceSeconds\022\026\n\006reason\030\010 \001(\t"
-    "R\006reason\022\023\n\005ts_ms\030\t \001(\003R\004tsMs2\361\004\n\023HubAll"
-    "ocatorService\022P\n\tAssignHub\022 .pandora.hub"
-    ".v1.AssignHubRequest\032!.pandora.hub.v1.As"
-    "signHubResponse\022S\n\nReleaseHub\022!.pandora."
-    "hub.v1.ReleaseHubRequest\032\".pandora.hub.v"
-    "1.ReleaseHubResponse\022V\n\013TransferHub\022\".pa"
-    "ndora.hub.v1.TransferHubRequest\032#.pandor"
-    "a.hub.v1.TransferHubResponse\022M\n\010ListHubs"
-    "\022\037.pandora.hub.v1.ListHubsRequest\032 .pand"
-    "ora.hub.v1.ListHubsResponse\022P\n\tHeartbeat"
-    "\022 .pandora.hub.v1.HeartbeatRequest\032!.pan"
-    "dora.hub.v1.HeartbeatResponse\022Y\n\014ListHub"
-    "Lines\022#.pandora.hub.v1.ListHubLinesReque"
-    "st\032$.pandora.hub.v1.ListHubLinesResponse"
-    "\022_\n\016TransferToLine\022%.pandora.hub.v1.Tran"
-    "sferToLineRequest\032&.pandora.hub.v1.Trans"
-    "ferToLineResponseb\006proto3"
+    "\005 \001(\tR\005state\022\023\n\005ts_ms\030\006 \001(\003R\004tsMs\022\035\n\npla"
+    "yer_ids\030\n \003(\004R\tplayerIdsJ\004\010\007\020\n\"\210\001\n\021Heart"
+    "beatResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
+    "mon.v1.ErrCodeR\004code\022\030\n\007command\030\002 \001(\tR\007c"
+    "ommand\022#\n\rgrace_seconds\030\003 \001(\005R\014graceSeco"
+    "ndsJ\004\010\004\020\n\"\330\002\n\025HubShardStorageRecord\022 \n\014h"
+    "ub_pod_name\030\001 \001(\tR\nhubPodName\022\031\n\010hub_add"
+    "r\030\002 \001(\tR\007hubAddr\022\026\n\006region\030\003 \001(\tR\006region"
+    "\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022!\n\014player_co"
+    "unt\030\005 \001(\005R\013playerCount\022\032\n\010capacity\030\006 \001(\005"
+    "R\010capacity\022\024\n\005state\030\007 \001(\tR\005state\022*\n\021last"
+    "_heartbeat_ms\030\010 \001(\003R\017lastHeartbeatMs\022\"\n\r"
+    "created_at_ms\030\t \001(\003R\013createdAtMs\022*\n\021drai"
+    "ning_since_ms\030\n \001(\003R\017drainingSinceMs\"\350\001\n"
+    "\032HubAssignmentStorageRecord\022\033\n\tplayer_id"
+    "\030\001 \001(\004R\010playerId\022 \n\014hub_pod_name\030\002 \001(\tR\n"
+    "hubPodName\022\031\n\010hub_addr\030\003 \001(\tR\007hubAddr\022\031\n"
+    "\010shard_id\030\004 \001(\rR\007shardId\022\026\n\006region\030\005 \001(\t"
+    "R\006region\022\027\n\007team_id\030\006 \001(\004R\006teamId\022$\n\016ass"
+    "igned_at_ms\030\007 \001(\003R\014assignedAtMs\"\262\002\n\017HubM"
+    "igrateEvent\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
+    "\022 \n\014from_hub_pod\030\002 \001(\tR\nfromHubPod\022#\n\016to"
+    "_hub_ds_addr\030\003 \001(\tR\013toHubDsAddr\022\"\n\rto_hu"
+    "b_ticket\030\004 \001(\tR\013toHubTicket\022%\n\017to_hub_po"
+    "d_name\030\005 \001(\tR\014toHubPodName\022\036\n\013to_shard_i"
+    "d\030\006 \001(\rR\ttoShardId\022#\n\rgrace_seconds\030\007 \001("
+    "\005R\014graceSeconds\022\026\n\006reason\030\010 \001(\tR\006reason\022"
+    "\023\n\005ts_ms\030\t \001(\003R\004tsMs2\361\004\n\023HubAllocatorSer"
+    "vice\022P\n\tAssignHub\022 .pandora.hub.v1.Assig"
+    "nHubRequest\032!.pandora.hub.v1.AssignHubRe"
+    "sponse\022S\n\nReleaseHub\022!.pandora.hub.v1.Re"
+    "leaseHubRequest\032\".pandora.hub.v1.Release"
+    "HubResponse\022V\n\013TransferHub\022\".pandora.hub"
+    ".v1.TransferHubRequest\032#.pandora.hub.v1."
+    "TransferHubResponse\022M\n\010ListHubs\022\037.pandor"
+    "a.hub.v1.ListHubsRequest\032 .pandora.hub.v"
+    "1.ListHubsResponse\022P\n\tHeartbeat\022 .pandor"
+    "a.hub.v1.HeartbeatRequest\032!.pandora.hub."
+    "v1.HeartbeatResponse\022Y\n\014ListHubLines\022#.p"
+    "andora.hub.v1.ListHubLinesRequest\032$.pand"
+    "ora.hub.v1.ListHubLinesResponse\022_\n\016Trans"
+    "ferToLine\022%.pandora.hub.v1.TransferToLin"
+    "eRequest\032&.pandora.hub.v1.TransferToLine"
+    "Responseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps[1] = {
@@ -3658,7 +3669,7 @@ static ::absl::once_flag descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto = {
     false,
     false,
-    3545,
+    3576,
     descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto,
     "pandora/hub/v1/allocator.proto",
     &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_once,
@@ -7357,7 +7368,15 @@ PROTOBUF_NDEBUG_INLINE HeartbeatRequest::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         hub_pod_name_(arena, from.hub_pod_name_),
-        state_(arena, from.state_) {}
+        state_(arena, from.state_),
+        player_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::hub::v1::HeartbeatRequest,
+              PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_)>()
+          , from.player_ids_
+        }
+        ,
+        _player_ids_cached_byte_size_{0} {}
 
 HeartbeatRequest::HeartbeatRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -7388,7 +7407,13 @@ PROTOBUF_NDEBUG_INLINE HeartbeatRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         hub_pod_name_(arena),
-        state_(arena) {}
+        state_(arena),
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::hub::v1::HeartbeatRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0} {}
 
 inline void HeartbeatRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -7457,10 +7482,13 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
       _impl_.state_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
     ::memset(&_impl_.player_count_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.mem_mb_) -
         reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.mem_mb_));
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.player_ids_.Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -7541,6 +7569,17 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
     }
   }
 
+  // repeated uint64 player_ids = 10 [json_name = "playerIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    {
+      int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            10, this_._internal_player_ids(), byte_size, target);
+      }
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7566,7 +7605,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // string hub_pod_name = 1 [json_name = "hubPodName"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_hub_pod_name().empty()) {
@@ -7607,6 +7646,13 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
         total_size += 5;
       }
     }
+    // repeated uint64 player_ids = 10 [json_name = "playerIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -7625,7 +7671,7 @@ void HeartbeatRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_hub_pod_name().empty()) {
         _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
@@ -7664,6 +7710,9 @@ void HeartbeatRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.mem_mb_ = from._impl_.mem_mb_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -7692,6 +7741,7 @@ void HeartbeatRequest::InternalSwap(HeartbeatRequest* PROTOBUF_RESTRICT PROTOBUF
       - PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_count_)>(
           reinterpret_cast<char*>(&_impl_.player_count_),
           reinterpret_cast<char*>(&other->_impl_.player_count_));
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
 }
 
 ::google::protobuf::Metadata HeartbeatRequest::GetMetadata() const {

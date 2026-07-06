@@ -1,0 +1,87 @@
+# Pandora matchmaker **PVE 实例**配置(选副本 / PVP+PVE 两种匹配,2026-07-06)。
+#
+# 与 matchmaker-dev.yaml(PVP 实例)是**同一个二进制、不同部署**:
+# 设计既定「一个 game_mode 一个 matchmaker 部署」(decision-revisit-matchmaker-single-writer.md),
+# 撮合池按 game_mode 命名空间隔离(pandora:match:<mode>:queue),两实例共用同一 Redis 互不串池。
+#
+# PVE 入口语义 = 「组好队 / 单人直接进副本」(大厂标准 walk-in 路径):
+#   enable_solo_match: true → 每张票(单人或整队)立即成局、跳过确认、直接拉 Battle DS,
+#   不与陌生人撮合。副本由客户端 StartMatchRequest.map_id 选(经票→局→DS PANDORA_MAP_ID)。
+#   以后若要「PVE 匹配补人」,另开撮合式实例或加单边成局逻辑,不影响本实例。
+#
+# 客户端路由:Envoy 按 header `x-pandora-game-mode: pve` 把 MatchService 请求路由到本实例
+# (deploy/envoy/envoy.yaml match_pve_cluster :50018);不带该头 = 默认 PVP 实例(:50011)。
+#
+# - gRPC :50018 / HTTP :51018(仅 /metrics)(50017 已被 campaign 设计稿预留)
+# - node_id 必须与 PVP 实例(1)不同:两实例都产 match_id 流入同一 battle 结算链路,snowflake 防撞
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50018"
+    timeout: "22s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(≈20s 预算)+余量
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+  http:
+    network: tcp
+    addr: ":51018"
+
+node:
+  node_id: 2                    # ⚠️ 与 PVP matchmaker(node_id=1)错开,match_id 全局唯一
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
+
+# kafka producer 配置(发布 pandora.match.progress,push 服务订阅消费)
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  dial_timeout: "2s"
+  write_timeout: "5s"
+  idempotent: true
+
+snowflake:
+  epoch: 1773446400
+  node_bits: 17
+  step_bits: 15
+
+match:
+  # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
+  team_addr: "127.0.0.1:50010"
+  # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator
+  ds_allocator_addr: "127.0.0.1:50020"
+  # locator_addr: player_locator 服务 gRPC 直连地址(位置上报 + StartMatch 前置查战斗态)
+  locator_addr: "127.0.0.1:50006"
+  battle_gate_fail_open: false
+  # map_id: PVE 默认副本(客户端 StartMatchRequest.map_id=0 时的兜底;对齐 g_关卡.xlsx,2=SonglinTown)
+  map_id: 2
+  # game_mode: PVE 撮合池命名空间 + 透传 ds_allocator(DS env PANDORA_GAME_MODE / Agones label)
+  game_mode: "pve_coop"
+  # confirm_timeout: solo 直进路径跳过确认期,此值不生效;保留默认防误用
+  confirm_timeout: "15s"
+  # match_interval: 后台循环扫描间隔(solo 路径也由它驱动开局)
+  match_interval: "2s"
+  ticket_ttl: "30m"
+  match_ttl: "30m"
+  # team_size: PVE 单队人数上限(1~5 人整队直进;StartMatch 拒绝超编队伍)
+  team_size: 5
+  # enable_solo_match: PVE 核心开关——每张票(单人/整队)立即成局直接拉 DS,不撮合不确认。
+  # 「组好队直接进副本」的 walk-in 标准路径;PVP 实例保持 false 走撮合。
+  enable_solo_match: true
+  # auto_confirm_match: solo 路径本就跳过确认,此值不生效;保留 true 防误配
+  auto_confirm_match: true
+  # MMR 窗口参数:solo 直进不撮合,不生效;保留默认
+  mmr_base_window: 200
+  mmr_widen_per_sec: 20
+  mmr_max_window: 2000
+  optimistic_retry: 3
+
+# jwt: 给战斗 DS 票据签名(battle DSTicket,不变量 §3 短时效 5min)
+# secret/issuer/audience 必须与 login 服务 + Envoy jwt_authn provider 完全一致
+jwt:
+  issuer: "pandora-login"
+  audience: "pandora-client"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  session_ttl: "24h"
+  ds_ticket_ttl: "5m"

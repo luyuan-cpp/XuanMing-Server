@@ -253,6 +253,32 @@ spec: { selector: { app: matchmaker }, ports: [ { port: 50011, targetPort: 50011
 ---
 apiVersion: apps/v1
 kind: Deployment
+metadata: { name: matchmaker-pve, namespace: pandora, labels: { app: matchmaker-pve } }
+spec:
+  # PVE 直进匹配实例:与 matchmaker 同二进制、不同配置(game_mode=pve_coop + enable_solo_match)。
+  # 每张票据独立成局不跑共享池撮合循环,但扩 >1 副本前同样建议开 match.leader.enabled。
+  replicas: 1
+  selector: { matchLabels: { app: matchmaker-pve } }
+  template:
+    metadata: { labels: { app: matchmaker-pve } }
+    spec:
+      containers:
+        - name: matchmaker-pve
+          image: pandora/matchmaker-pve:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50018 } ]
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker-pve.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: matchmaker-pve, namespace: pandora }
+spec: { selector: { app: matchmaker-pve }, ports: [ { port: 50018, targetPort: 50018 } ] }
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata: { name: trade, namespace: pandora, labels: { app: trade } }
 spec:
   replicas: 1

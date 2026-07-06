@@ -70,10 +70,11 @@ type mockLocator struct {
 	battle   map[uint64]string // playerID -> battlePod
 	inBattle map[uint64]bool   // playerID -> 强制 IsInBattle 返回值(拦截测试用)
 	queryErr error             // 非 nil 时 IsInBattle 一律返回该错误(模拟 locator 抖动 / fail-closed 测试用)
+	offline  map[uint64]bool   // playerID -> 强制 FindOfflinePlayers 判离线(成局前在线校验测试用)
 }
 
 func newMockLocator() *mockLocator {
-	return &mockLocator{matching: map[uint64]uint64{}, battle: map[uint64]string{}, inBattle: map[uint64]bool{}}
+	return &mockLocator{matching: map[uint64]uint64{}, battle: map[uint64]string{}, inBattle: map[uint64]bool{}, offline: map[uint64]bool{}}
 }
 
 func (m *mockLocator) NotifyMatching(_ context.Context, ids []uint64, matchID uint64) error {
@@ -101,6 +102,21 @@ func (m *mockLocator) IsInBattle(_ context.Context, id uint64) (bool, error) {
 		return false, m.queryErr
 	}
 	return m.inBattle[id], nil
+}
+
+func (m *mockLocator) FindOfflinePlayers(_ context.Context, ids []uint64) ([]uint64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.queryErr != nil {
+		return nil, m.queryErr
+	}
+	var out []uint64
+	for _, id := range ids {
+		if m.offline[id] {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 func (m *mockLocator) matchingOf(id uint64) (uint64, bool) {
@@ -507,6 +523,169 @@ func TestConfirmMatch_Reject_FailsAndRequeues(t *testing.T) {
 	rq, found, _ := f.repo.GetTicket(ctx, 200)
 	if !found || rq.MatchId != 0 || rq.EnqueuedAtMs == 0 {
 		t.Fatalf("requeued ticket bad: found=%v match_id=%d enq=%d", found, rq.GetMatchId(), rq.GetEnqueuedAtMs())
+	}
+}
+
+// 成局最终门:全员确认后、分配 DS 前发现有人掉线(locator 判 OFFLINE)→
+// match FAILED,掉线者所在票据删除,其余票据退回队列,不上报 BATTLE。
+func TestConfirmMatch_OfflineMember_FailsAndRequeues(t *testing.T) {
+	ctx := context.Background()
+	f := newFixtureWith(t, 999, func(c *conf.MatchConf) { c.LivenessGateEnabled = true })
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+	f.seedTicket(t, ctx, 200, []uint64{6, 7, 8, 9, 10}, 1000)
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+
+	// player 6(属 ticket 200)在确认期内掉线(断报 ≥30s,locator key 过期)
+	f.locator.mu.Lock()
+	f.locator.offline[6] = true
+	f.locator.mu.Unlock()
+
+	for i := uint64(1); i <= 10; i++ {
+		if err := f.uc.ConfirmMatch(ctx, i, 999, true); err != nil {
+			t.Fatalf("confirm player %d: %v", i, err)
+		}
+	}
+
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageFailed {
+		t.Fatalf("match stage = %v found=%v, want FAILED", m.GetStage(), found)
+	}
+	// 掉线者所在 ticket 200 删除,无辜 ticket 100 退回队列
+	if _, found, _ := f.repo.GetTicket(ctx, 200); found {
+		t.Fatal("offline member ticket 200 should be deleted")
+	}
+	left, _ := f.repo.RangeQueueTickets(ctx)
+	if len(left) != 1 || left[0] != 100 {
+		t.Fatalf("queue = %v, want [100]", left)
+	}
+	// 不应有任何 BATTLE 上报(未进分配)
+	for i := uint64(1); i <= 10; i++ {
+		if _, ok := f.locator.battleOf(i); ok {
+			t.Fatalf("player %d unexpectedly notified BATTLE for liveness-failed match", i)
+		}
+	}
+}
+
+// 成局最终门弱依赖:locator 查询失败 → 跳过在线校验,照常成局(不误杀正常对局)。
+func TestConfirmMatch_LivenessQueryError_ProceedsReady(t *testing.T) {
+	ctx := context.Background()
+	f := newFixtureWith(t, 999, func(c *conf.MatchConf) { c.LivenessGateEnabled = true })
+	for i := uint64(1); i <= 10; i++ {
+		f.seedTicket(t, ctx, 100+i, []uint64{i}, 1000)
+	}
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+
+	// locator 抖动:FindOfflinePlayers 一律报错 → 应跳过校验继续成局
+	f.locator.mu.Lock()
+	f.locator.queryErr = errcode.New(errcode.ErrInternal, "locator down")
+	f.locator.mu.Unlock()
+
+	for i := uint64(1); i <= 10; i++ {
+		if err := f.uc.ConfirmMatch(ctx, i, 999, true); err != nil {
+			t.Fatalf("confirm player %d: %v", i, err)
+		}
+	}
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageReady {
+		t.Fatalf("match stage = %v found=%v, want READY (liveness check skipped on error)", m.GetStage(), found)
+	}
+}
+
+// 队列在线扫除:掉线玩家的死票被主动删除并释放归属,在线票据不受影响。
+func TestLivenessSweep_ReapsOfflineTickets(t *testing.T) {
+	ctx := context.Background()
+	f := newFixtureWith(t, 999, func(c *conf.MatchConf) { c.LivenessGateEnabled = true })
+	// ticket 100(player 1-5 组队,player 3 掉线)、ticket 200(player 6 单排,在线)
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+	f.seedTicket(t, ctx, 200, []uint64{6}, 1000)
+
+	f.locator.mu.Lock()
+	f.locator.offline[3] = true
+	f.locator.mu.Unlock()
+
+	if err := f.uc.livenessSweepOnce(ctx); err != nil {
+		t.Fatalf("livenessSweepOnce: %v", err)
+	}
+
+	// 死票 100 删除 + 全体成员归属释放(可立刻再排)
+	if _, found, _ := f.repo.GetTicket(ctx, 100); found {
+		t.Fatal("dead ticket 100 should be reaped")
+	}
+	for i := uint64(1); i <= 5; i++ {
+		if _, found, _ := f.repo.GetPlayerTicket(ctx, i); found {
+			t.Fatalf("player %d claim should be released after reap", i)
+		}
+	}
+	// 在线票据 200 原样保留在队列
+	left, _ := f.repo.RangeQueueTickets(ctx)
+	if len(left) != 1 || left[0] != 200 {
+		t.Fatalf("queue = %v, want [200]", left)
+	}
+	// 同票在线队友(player 1)收到 FAILED 推送
+	if got := f.pusher.lastStageFor(1); got != stageFailed {
+		t.Fatalf("player 1 last push stage = %v, want FAILED", got)
+	}
+}
+
+// 队列在线扫除弱依赖:locator 查询失败 → 本轮不删任何票。
+func TestLivenessSweep_QueryError_NoReap(t *testing.T) {
+	ctx := context.Background()
+	f := newFixtureWith(t, 999, func(c *conf.MatchConf) { c.LivenessGateEnabled = true })
+	f.seedTicket(t, ctx, 100, []uint64{1}, 1000)
+
+	f.locator.mu.Lock()
+	f.locator.offline[1] = true
+	f.locator.queryErr = errcode.New(errcode.ErrInternal, "locator down")
+	f.locator.mu.Unlock()
+
+	if err := f.uc.livenessSweepOnce(ctx); err != nil {
+		t.Fatalf("livenessSweepOnce: %v", err)
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 100); !found {
+		t.Fatal("ticket must survive when locator query fails (weak dependency)")
+	}
+}
+
+// 开关默认关闭(LivenessGateEnabled=false):Hub DS player_ids 心跳未联发前,
+// locator 判离线不生效——队列扫除不删票,成局最终门放行照常 READY
+// (否则旧 Hub DS 发空 player_ids 时在线玩家 30s 后会被误判离线、票据被扫)。
+func TestLivenessGate_DisabledByDefault_NoOfflineJudgement(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999) // 默认配置:开关关闭
+	f.seedTicket(t, ctx, 100, []uint64{1, 2, 3, 4, 5}, 1000)
+	f.seedTicket(t, ctx, 200, []uint64{6, 7, 8, 9, 10}, 1000)
+
+	// locator 把全员判离线(模拟旧 Hub DS 发空 player_ids → 位置过期)
+	f.locator.mu.Lock()
+	for i := uint64(1); i <= 10; i++ {
+		f.locator.offline[i] = true
+	}
+	f.locator.mu.Unlock()
+
+	// 队列扫除:不删任何票
+	if err := f.uc.livenessSweepOnce(ctx); err != nil {
+		t.Fatalf("livenessSweepOnce: %v", err)
+	}
+	if left, _ := f.repo.RangeQueueTickets(ctx); len(left) != 2 {
+		t.Fatalf("queue = %v, want both tickets intact when gate disabled", left)
+	}
+
+	// 成局最终门:照常成局 READY
+	if err := f.uc.matchOnce(ctx); err != nil {
+		t.Fatalf("matchOnce: %v", err)
+	}
+	for i := uint64(1); i <= 10; i++ {
+		if err := f.uc.ConfirmMatch(ctx, i, 999, true); err != nil {
+			t.Fatalf("confirm player %d: %v", i, err)
+		}
+	}
+	m, found, _ := f.repo.GetMatch(ctx, 999)
+	if !found || m.Stage != stageReady {
+		t.Fatalf("match stage = %v found=%v, want READY (liveness gate disabled)", m.GetStage(), found)
 	}
 }
 

@@ -64,7 +64,7 @@ $LogDir = Join-Path $RunDir 'logs'
 New-Item -ItemType Directory -Force -Path $BinDir, $LogDir | Out-Null
 
 # ===== 服务清单(数组顺序 = 依赖启动顺序:leaf 依赖在前,login 最后)=====
-# 全部 19 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
+# 全部 20 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
 # data/data_service、economy/trade、economy/inventory、economy/auction、runtime/leaderboard 等)。
 # 启动策略:要么全起(默认),要么用 -Service 单起某一个,不做分档启动。
 $Services = @(
@@ -86,6 +86,9 @@ $Services = @(
     @{ Name = 'auction';        Dir = 'services/economy/auction';           Cmd = 'auction';        Conf = 'etc/auction-dev.yaml';        Port = 50016 }
     @{ Name = 'battle_result';  Dir = 'services/battle/battle_result';      Cmd = 'battle_result';  Conf = 'etc/battle_result-dev.yaml';  Port = 50022 }
     @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-dev.yaml';     Port = 50011 }
+    # PVE 匹配实例:同一 matchmaker 二进制、不同配置(game_mode=pve_coop + enable_solo_match=true,
+    # 单人/整队直进副本,副本由 StartMatchRequest.map_id 选)。Envoy 按 header x-pandora-game-mode: pve 分流。
+    @{ Name = 'matchmaker_pve'; Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-pve.yaml';     Port = 50018 }
     @{ Name = 'login';          Dir = 'services/account/login';             Cmd = 'login';          Conf = 'etc/login-dev.yaml';          Port = 50001 }
 )
 

@@ -26,6 +26,19 @@ service PlayerLocatorService {
   rpc SubscribePresence(SubscribePresenceRequest) returns (SubscribePresenceResponse);
   rpc UnsubscribePresence(UnsubscribePresenceRequest) returns (UnsubscribePresenceResponse);
   rpc ClearLocation(ClearLocationRequest) returns (ClearLocationResponse);
+  // RefreshHubLocations 批量续期一批玩家的 HUB 位置 TTL(在线保活)。
+  // 调用方:hub_allocator 收到 Hub DS Heartbeat(捎带在场 player_ids)后转发。
+  // 服务端逐个校验「state==HUB 且 hub_pod 匹配」才 EXPIRE 续期;
+  // MATCHING/BATTLE/其它 pod 的记录一律不动(不变量 §1,战斗态由战斗链路权威维护)。
+  // 玩家掉线/拔线 → Hub DS 不再上报该 id → locator key 30s 自然过期 = OFFLINE。
+  rpc RefreshHubLocations(RefreshHubLocationsRequest) returns (RefreshHubLocationsResponse);
+  // ReportDisconnect 快速断线上报:Hub DS 在玩家 Logout / 连接超时断开时调用,
+  // 把该玩家 HUB 位置的 TTL 缩短到 grace(~10s)——真退出的玩家 10s 内判离线,
+  // 不用等满 30s 心跳 TTL。守卫:只缩「state==HUB 且 hub_pod 匹配」的记录;
+  // MATCHING/BATTLE 不动(玩家 travel 去战斗也触发 Hub Logout,靠此守卫 + grace 免疫误判);
+  // 只缩不涨(记录剩余 TTL 已小于 grace 时不动)。绝不立即置 OFFLINE:
+  // grace 窗口内玩家重连 → PostLogin SetLocationHub 重写记录,状态自愈。
+  rpc ReportDisconnect(ReportDisconnectRequest) returns (ReportDisconnectResponse);
 }
 
 enum LocationState {
@@ -85,6 +98,33 @@ message ClearLocationRequest {
 
 message ClearLocationResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+message RefreshHubLocationsRequest {
+  // hub_pod: 上报心跳的 Hub DS pod 名;只有 locator 记录里 hub_pod 一致才续期,
+  // 防止跨分片迁移后旧 pod 的迟到心跳给新分片记录乱续。
+  string hub_pod = 1;
+  repeated uint64 player_ids = 2;
+}
+
+message RefreshHubLocationsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // refreshed: 实际续期成功的玩家数(state==HUB 且 hub_pod 匹配的条数);仅观测用。
+  int32 refreshed = 2;
+}
+
+message ReportDisconnectRequest {
+  // hub_pod: 上报断线的 Hub DS pod 名;只有 locator 记录里 hub_pod 一致才缩 TTL,
+  // 防跨分片切线后旧 pod 的迟到断线报文误缩新分片记录。
+  string hub_pod   = 1;
+  uint64 player_id = 2;
+}
+
+message ReportDisconnectResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // shrunk: 是否实际缩短了 TTL(false = 记录不存在 / 非 HUB 态 / pod 不匹配 /
+  // 剩余 TTL 已更短,均属正常路径);仅观测用。
+  bool shrunk = 2;
 }
 
 // PresenceStatus 是好友在线态的「粗粒度降采样」状态(§13.4.4)。
