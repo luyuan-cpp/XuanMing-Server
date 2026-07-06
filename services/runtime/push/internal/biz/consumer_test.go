@@ -15,6 +15,7 @@ import (
 	"github.com/IBM/sarama"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/kafkax"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/data"
@@ -164,7 +165,8 @@ func TestKafkaConsumer_HandleOffline(t *testing.T) {
 	}
 }
 
-// 用例 3:key 非数字 → log + ack,SendTo 和 offline 都没动。
+// 用例 3:key 非数字 → 返回毒丸错误(kafkax 会投 DLQ 留证,不静默丢),
+// SendTo 和 offline 都没动。
 func TestKafkaConsumer_HandleInvalidKey(t *testing.T) {
 	sender := newMockSender()
 	sender.online[1] = true
@@ -172,8 +174,13 @@ func TestKafkaConsumer_HandleInvalidKey(t *testing.T) {
 	kc := makeConsumer(t, sender, offline)
 
 	msg := makeMsg("pandora.team.update", "not-a-number", []byte("x"), "")
-	if err := kc.handle(context.Background(), msg); err != nil {
-		t.Fatalf("handle should return nil to ack, got=%v", err)
+	err := kc.handle(context.Background(), msg)
+	if err == nil {
+		t.Fatal("invalid key should return poison error (routed to DLQ), got nil")
+	}
+	var poison *kafkax.PoisonError
+	if !errors.As(err, &poison) {
+		t.Fatalf("invalid key should be PoisonError, got=%v", err)
 	}
 	if len(sender.frames) != 0 || len(offline.appended) != 0 {
 		t.Fatal("invalid key should not invoke sender or offline")

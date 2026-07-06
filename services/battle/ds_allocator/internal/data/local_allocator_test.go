@@ -210,3 +210,25 @@ func TestAllocate_ProbeAllBusy(t *testing.T) {
 		t.Fatalf("expected ErrDSNoAvailable, got %v", err)
 	}
 }
+
+func TestBuildArgs_ResolvesMapByID(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
+		MapName:   "/Game/Maps/Default",
+		PortBase:  7777,
+		PortRange: 10,
+		Maps: []conf.MapEntry{
+			{MapID: 1, MapName: "/Game/Maps/PVP"},
+			{MapID: 2, MapName: "/Game/Maps/PVE"},
+		},
+	})
+
+	args := l.buildArgs(7788, 2)
+	if len(args) == 0 || args[0] != "/Game/Maps/PVE" {
+		t.Fatalf("map_id=2 should select PVE map, args=%v", args)
+	}
+
+	args = l.buildArgs(7789, 99)
+	if len(args) == 0 || args[0] != "/Game/Maps/Default" {
+		t.Fatalf("unknown map_id should fallback to default map, args=%v", args)
+	}
+}

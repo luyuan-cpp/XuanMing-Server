@@ -64,7 +64,17 @@ type LocalDSConf struct {
 
 	// MapName 启动时加载的 UE 关卡(DS 命令行首个位置参数,例如 /Game/Maps/BattleMap)。
 	// 留空则不带关卡参数,由 DS 自身默认关卡决定。
+	//
+	// 当请求携带的 map_id 在 Maps 里命中时,用命中的关卡覆盖本字段;未命中(或 Maps 为空)才回退本字段。
+	// 因此 MapName 语义 = 「默认关卡 / 未知 map_id 的兜底」(通常配 PVP 主图)。
 	MapName string `yaml:"map_name,omitempty" json:"map_name,omitempty"`
+
+	// Maps 是「副本选择」表:把请求里的 map_id 映射到具体要加载的 UE 关卡 URL。
+	// 选副本链路的服务端落点——同一个 ds_allocator 进程凭请求 map_id 起不同副本(PVP MobaLevel /
+	// PVE SonglinTown …),而非一进程一张死图。map_id 由客户端选择、经 matchmaker 透传到
+	// AllocateBattle(见 proto AllocateBattleRequest.map_id)。命中则用条目的 map_name 起 DS;
+	// 未命中回退顶层 MapName。留空 = 不启用选副本,永远用 MapName(向后兼容,老配置零改动)。
+	Maps []MapEntry `yaml:"maps,omitempty" json:"maps,omitempty"`
 
 	// AdvertiseHost 返回给客户端的可连接 host(默认 127.0.0.1,本机联调)。
 	AdvertiseHost string `yaml:"advertise_host,omitempty" json:"advertise_host,omitempty"`
@@ -86,6 +96,27 @@ type LocalDSConf struct {
 
 	// ExtraEnv 注入 DS 进程的额外环境变量(在 PANDORA_MATCH_ID 等内置变量之后追加)。
 	ExtraEnv map[string]string `yaml:"extra_env,omitempty" json:"extra_env,omitempty"`
+}
+
+// MapEntry 是「选副本」表的一行:把请求 map_id 映射到具体的 UE 关卡 URL(见 LocalDSConf.Maps)。
+type MapEntry struct {
+	// MapID 客户端选择、经 matchmaker 透传到 AllocateBattle 的副本编号(对齐策划 g_关卡.xlsx 的关卡 id)。
+	MapID uint32 `yaml:"map_id" json:"map_id"`
+
+	// MapName 该 map_id 对应要加载的 UE 关卡 URL(含可选 ?game= GameMode),例如
+	// "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode"。
+	MapName string `yaml:"map_name" json:"map_name"`
+}
+
+// ResolveMapName 按请求 map_id 返回要加载的 UE 关卡 URL:命中 Maps 用命中项,否则回退顶层 MapName。
+// 未启用选副本(Maps 空)或 map_id 未配置时,行为与旧版一致(永远用 MapName),保证向后兼容。
+func (c LocalDSConf) ResolveMapName(mapID uint32) string {
+	for _, m := range c.Maps {
+		if m.MapID == mapID && m.MapName != "" {
+			return m.MapName
+		}
+	}
+	return c.MapName
 }
 
 // AgonesConf 是真 Agones GameServerAllocation 后端配置(W4 ⑫)。

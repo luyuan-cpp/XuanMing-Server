@@ -234,7 +234,7 @@ func defaultPortProbe(port int) bool {
 
 // defaultStart 是 startProc 的真实现:exec UE Windows DS 并把 stdout/stderr 落盘。
 func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchID uint64, mapID uint32, gameMode string) (dsProcess, error) {
-	cmd := exec.Command(l.cfg.ExecutablePath, l.buildArgs(port, gameMode)...) //nolint:gosec // 路径来自受信本机配置
+	cmd := exec.Command(l.cfg.ExecutablePath, l.buildArgs(port, mapID)...) //nolint:gosec // 路径来自受信本机配置
 	if l.cfg.WorkingDir != "" {
 		cmd.Dir = l.cfg.WorkingDir
 	}
@@ -261,10 +261,11 @@ func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchI
 }
 
 // buildArgs 拼 UE DS 命令行:关卡 + -server -log -port=<port> + 额外参数。
-func (l *LocalGameServerAllocator) buildArgs(port int, _ string) []string {
+// 关卡按请求 map_id 从 cfg.Maps 选副本(未命中回退 cfg.MapName),实现「一个 allocator 起多副本」。
+func (l *LocalGameServerAllocator) buildArgs(port int, mapID uint32) []string {
 	args := make([]string, 0, 4+len(l.cfg.ExtraArgs))
-	if l.cfg.MapName != "" {
-		args = append(args, l.cfg.MapName)
+	if mapName := l.cfg.ResolveMapName(mapID); mapName != "" {
+		args = append(args, mapName)
 	}
 	args = append(args, "-server", "-log", fmt.Sprintf("-port=%d", port))
 	args = append(args, l.cfg.ExtraArgs...)

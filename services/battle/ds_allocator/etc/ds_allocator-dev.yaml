@@ -101,7 +101,16 @@ local_ds:
   #   executable_path: "${PANDORA_DS_ROOT}/Packages/Server_Win64_Shipping/WindowsServer/PandoraServer.exe"
   # 路径分隔符正斜杠 / 反斜杠都行(go 侧 filepath.FromSlash 归一化);下面是本开发机绝对路径。
   executable_path: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer\\PandoraServer.exe"
-  map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 战斗 DS 加载的关卡(留空用 DS 默认关卡)
+  map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 默认/兜底关卡:map_id 未在下方 maps 命中时用它(留空则用 DS 默认关卡)
+  # 选副本表:客户端选择的 map_id 经 matchmaker 透传到 AllocateBattle,命中则起对应关卡,
+  # 未命中回退上面的 map_name。同一个 ds_allocator 进程凭 map_id 起不同副本(PVP / PVE 共存)。
+  # map_id 对齐策划 g_关卡.xlsx 的关卡 id(下面的示例值需按实际表填)。
+  maps:
+    - map_id: 1                                # PVP 5v5(MobaLevel)
+      map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode"
+    - map_id: 2                                # PVE 副本(松林镇 SonglinTown)
+      map_name: "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraBattleGameMode"
+
   # advertise_host:返回给客户端 NetDriver 连接的 host。本机自测用 127.0.0.1;
   # 内网测试服(play.ps1 -Battle -Intranet)会自动探测本机内网 IPv4 并经环境变量
   # PANDORA_DS_ADVERTISE_HOST 覆盖此值(优先级高于这里的写死值,策划零操作,无需改本文件)。
