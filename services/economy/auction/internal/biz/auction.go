@@ -101,9 +101,15 @@ type AuctionUsecase struct {
 	// 正确性仍由 marketLocker 兜底,不阻断业务(转发属基础设施,见 market_router.go 头注释)。
 	marketRouter *MarketRouter
 
-	mu    sync.Mutex             // 保护 locks map 本身
-	locks map[uint32]*sync.Mutex // per-market 单写者锁(惰性建)
+	// locks 是固定容量的条带锁(striped lock):marketID % len 取条带。
+	// 不用「map 惰性建永不删」——market_id 是客户端请求字段,入口只校验非 0,
+	// 恶意刷不同 marketID 会让 map 无界增长(内存 DoS)。条带碰撞只是不同
+	// market 偶尔串行,跨实例正确性仍由 marketLocker(per-market Redis 锁)兜底。
+	locks [marketLockStripes]sync.Mutex
 }
+
+// marketLockStripes 是进程内 market 条带锁数量(内存恒定,与 market 基数无关)。
+const marketLockStripes = 256
 
 // NewAuctionUsecase 构造。ledger 为 nil 时退化为 Noop;events 允许 nil。
 func NewAuctionUsecase(repo data.AuctionRepo, book data.BookStore, ledger SettlementLedger, events AuctionEventPusher, sf snowflakeGen, cfg conf.AuctionConf) *AuctionUsecase {
@@ -129,20 +135,12 @@ func NewAuctionUsecase(repo data.AuctionRepo, book data.BookStore, ledger Settle
 		events: events,
 		sf:     sf,
 		cfg:    cfg,
-		locks:  make(map[uint32]*sync.Mutex),
 	}
 }
 
-// lockMarket 取 market 的单写者锁(惰性建)。
+// lockMarket 取 market 所在条带的单写者锁(固定数组,无分配无增长)。
 func (u *AuctionUsecase) lockMarket(marketID uint32) *sync.Mutex {
-	u.mu.Lock()
-	m, ok := u.locks[marketID]
-	if !ok {
-		m = &sync.Mutex{}
-		u.locks[marketID] = m
-	}
-	u.mu.Unlock()
-	return m
+	return &u.locks[marketID%marketLockStripes]
 }
 
 // SetMarketLocker 注入跨实例单写者锁(main.go 配 Redis 后调用)。nil 保持单实例进程内串行。
