@@ -2295,7 +2295,7 @@ inline ::pandora::gm::v1::AddItemCommand* PROTOBUF_NONNULL GmCommand::_internal_
   if (payload_case() != kAddItem) {
     clear_payload();
     set_has_add_item();
-    _impl_.payload_.add_item_ = 
+    _impl_.payload_.add_item_ =
         ::google::protobuf::Message::DefaultConstruct<::pandora::gm::v1::AddItemCommand>(GetArena());
   }
   return _impl_.payload_.add_item_;
@@ -2414,7 +2414,7 @@ inline ::pandora::gm::v1::AddItemCommand* PROTOBUF_NONNULL SendCommandRequest::_
   if (payload_case() != kAddItem) {
     clear_payload();
     set_has_add_item();
-    _impl_.payload_.add_item_ = 
+    _impl_.payload_.add_item_ =
         ::google::protobuf::Message::DefaultConstruct<::pandora::gm::v1::AddItemCommand>(GetArena());
   }
   return _impl_.payload_.add_item_;

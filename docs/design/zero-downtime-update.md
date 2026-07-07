@@ -84,3 +84,74 @@ Pandora 后端**目标就是不停服更新**,分两层保障,缺一不可:
 - 改 field number / 改类型 / 复用 reserved 编号 → 拒(见 §2.2)。
 - 新版本上线要求「先停服再启动」才能读数据 → 拒(违背本文核心目标)。
 - 服务持有不可重建的进程内权威状态,导致副本不可随意重启 → 拒。
+
+---
+
+## 6. 流量切换与灰度发布(新流量怎么走到新副本)
+
+> 2026-07-07 补充。回答「灰度升级时,新的流量应该往新的服务上去吧?」——对,核心机制就是
+> **新副本 Ready 才接流量、旧副本摘除后不再接新请求、在途请求排空后退出**。
+
+### 6.1 滚动更新的流量切换时序(k8s 默认路径)
+
+```
+发布新版本 image
+  → k8s 起 1 个新 Pod(旧的还在跑,继续服务)
+  → 新 Pod readinessProbe 通过 → 加入 Service Endpoints → 开始接【新】流量
+  → k8s 给 1 个旧 Pod 发 SIGTERM,同时把它从 Endpoints 摘除 → 不再接新请求
+  → 旧 Pod 优雅退出:healthz 转 not-serving → 排空在途 → flush write-behind → exit
+  → 重复,直到所有副本换完;任意时刻都有 Ready 副本在服务
+```
+
+关键点:
+
+- **Ready 门槛**:新 Pod 必须 readinessProbe(gRPC health check)通过才进 Endpoints;
+  起不来/配置错的新版本**不会接到任何流量**,发布自动卡住,旧版本继续服务 —— 这本身就是
+  最基本的一层灰度保护(`maxUnavailable=0, maxSurge=1` 时严格「先起新、再杀旧」)。
+- **摘流量先于杀进程**:SIGTERM 与 Endpoints 摘除同时发生,所以优雅退出期间只需处理
+  「在途请求」,不会有新请求进来(§1 优雅退出行)。
+
+### 6.2 gRPC 长连接的坑:L4 均衡切不动,必须 L7
+
+gRPC 是 HTTP/2 **长连接多路复用**:连接建立后所有请求走同一条连接。k8s Service(kube-proxy)
+是 **L4 按连接**均衡 —— 老连接不断,新版本 Pod 就分不到流量,滚动更新会出现「新 Pod 空闲、
+旧 Pod 迟迟排不空」。Pandora 的对策(缺一不可):
+
+1. **k8s Service 用 headless**(`clusterIP: None`)+ 客户端侧(服务间 grpcclient / Envoy)做
+   **per-request L7 均衡**:Envoy 对 upstream cluster 本来就是按请求选后端,天然支持。
+2. **服务端设置 `MAX_CONNECTION_AGE`(grpc keepalive)**:让长连接定期(如 5~10min)优雅
+   GOAWAY 重建,旧连接自然滚到新副本;这是兜底,保证任何客户端行为下连接都会轮换。
+3. **push 的 server-stream 长流**:滚动更新时旧副本发 GOAWAY,客户端(UE FHttpModule 通道)
+   按重连协议重新订阅到新副本;离线补发窗口(Redis ZSET 5min)覆盖重连间隙,不丢推送。
+4. **入口层**:UE 客户端只连 Envoy(:8443/:8444),Envoy 与后端之间按请求路由 —— 客户端
+   连接不需要因后端发布而断开。
+
+### 6.3 灰度(金丝雀)发布:比滚动更新多一层「按比例/按人群」
+
+滚动更新解决「不停服」;**灰度解决「先让一小撮流量验证新版本」**。标准做法(大厂通行,
+Pandora 按此演进,当前 dev 单副本暂不需要):
+
+| 阶段 | 做法 | 载体 |
+|---|---|---|
+| 1. 按比例 | stable / canary 两个 Deployment(同一 Service label,副本数 9:1)→ 天然 ~10% 流量进新版本 | 纯 k8s,零新组件 |
+| 2. 按权重 | Envoy weighted_clusters:stable 95% / canary 5%,权重热调 | 已有 Envoy,加路由配置 |
+| 3. 按人群 | Envoy 按 header 分流(内部账号/白名单玩家带 `x-pandora-canary: 1` 进 canary)| Envoy header 路由 + login 侧标记 |
+| 4. 观测与回滚 | 盯 canary 的 error rate / P99(prometheus 按 version label 分组);异常 → 权重归零即回滚,秒级 | 已有 metrics 体系 |
+
+前提约束与 §1/§2 完全一致:**新旧版本必须双向兼容**(RPC + 存储 pb),因为灰度期间新旧
+副本长时间共存 —— 这正是 §2 硬规则存在的原因,灰度只是把「共存窗口」从分钟拉长到小时/天。
+
+有状态语义的注意点:同一玩家的请求可能一会儿打到 stable、一会儿打到 canary(除非按人群
+粘住)。所以**行为变更类灰度必须按人群(阶段 3)**,按比例灰度只适合纯技术升级(依赖库/
+性能优化/重构)。
+
+### 6.4 澄清:dev compose 的 restart 策略与本文无关
+
+2026-07-07 把 `deploy/docker-compose.services.yml` 业务容器 `restart` 从 `unless-stopped`
+改为 `"no"`(根治重启电脑后旧容器复活抢 500xx 端口、劫持 Envoy → k8s 流量的问题)。
+**这不影响不停服更新**:
+
+- `restart:` 只管 Docker daemon 的**崩溃自愈 / 开机自启**,不提供任何升级能力;
+  docker compose 本身没有滚动更新(`compose up` 重建容器 = 单实例先停后起,必断)。
+- 灰度/滚动更新的载体自始至终是 **k8s Deployment**(生产形态);compose 只是本地 dev
+  联调便利环境。k8s 模式下 Pod `restartPolicy: Always` 照常自愈,不受影响。
