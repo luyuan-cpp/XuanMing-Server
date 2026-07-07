@@ -39,6 +39,11 @@ type MatchConf struct {
 	// DSAllocatorAddr 是 ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS)。
 	// 留空则用 StubDSAllocator(W4 ① 行为,返回固定 mock 地址 + mock 票据)。
 	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
+	// DSAllocateTimeout 是调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
+	// 该 RPC 在 ds_allocator 侧阻塞等 DS ready 心跳(agones allocate 5s + ready_wait 45s + 余量),
+	// 必须覆盖 ds_allocator 的 server.grpc.timeout(60s);不可用 grpcclient.DefaultTimeout(15s),
+	// 否则 k8s 真 Linux DS 冷加载大图时 matchmaker 先超时,客户端拿不到 ds_addr。
+	DSAllocateTimeout config.Duration `yaml:"ds_allocate_timeout,omitempty" json:"ds_allocate_timeout,omitempty"`
 	// LocatorAddr 是 player_locator 服务 gRPC 直连地址（撮合状态机上报玩家位置：
 	// 成局→MATCHING、就绪→BATTLE，不变量 §1）。留空则不上报（本机不起 locator 也能跑撮合）。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
@@ -126,6 +131,9 @@ type LeaderConf struct {
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。
 func (c *Config) Defaults() {
+	if c.Match.DSAllocateTimeout == 0 {
+		c.Match.DSAllocateTimeout = config.Duration(60 * time.Second)
+	}
 	if c.Match.ConfirmTimeout == 0 {
 		c.Match.ConfirmTimeout = config.Duration(15 * time.Second)
 	}

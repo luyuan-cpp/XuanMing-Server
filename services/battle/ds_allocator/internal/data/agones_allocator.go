@@ -39,6 +39,7 @@ type AgonesGameServerAllocator struct {
 	apiServer       string // 已去尾部 /
 	namespace       string
 	fleetName       string
+	mapFleets       map[uint32]string // map_id → 专属预热 Fleet(可选;命中时作首选 selector)
 	advertiseHost   string
 	tokenPath       string // "" 或 "-" → 不带 Authorization
 	allocateTimeout time.Duration
@@ -75,10 +76,18 @@ func NewAgonesGameServerAllocator(cfg conf.AgonesConf) (*AgonesGameServerAllocat
 		timeout = 5 * time.Second
 	}
 
+	mapFleets := make(map[uint32]string, len(cfg.MapFleets))
+	for _, mf := range cfg.MapFleets {
+		if mf.MapID > 0 && mf.FleetName != "" {
+			mapFleets[mf.MapID] = mf.FleetName
+		}
+	}
+
 	return &AgonesGameServerAllocator{
 		apiServer:       strings.TrimRight(cfg.APIServer, "/"),
 		namespace:       cfg.Namespace,
 		fleetName:       cfg.FleetName,
+		mapFleets:       mapFleets,
 		advertiseHost:   strings.TrimSpace(cfg.AdvertiseHost),
 		tokenPath:       cfg.TokenPath,
 		allocateTimeout: timeout,
@@ -127,14 +136,22 @@ type gsaResponse struct {
 }
 
 // Allocate POST 一个 GameServerAllocation,返回 (gameServerName, address:port)。
+//
+// selectors 有序(Agones 按顺序尝试,选中首个有空闲 GameServer 的):
+//  1. 若 mapID 配了专属预热 Fleet(map_fleets)→ 首选它(Pod 已预加载目标图,分配即可玩);
+//  2. 通用 Fleet(Loader 模式,分配后按 map-id label travel)作兜底。
 func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+	selectors := make([]gsaSelector, 0, 2)
+	if dedicated := a.mapFleets[mapID]; dedicated != "" && dedicated != a.fleetName {
+		selectors = append(selectors, gsaSelector{MatchLabels: map[string]string{fleetLabelKey: dedicated}})
+	}
+	selectors = append(selectors, gsaSelector{MatchLabels: map[string]string{fleetLabelKey: a.fleetName}})
+
 	reqBody := gsaRequest{
 		APIVersion: "allocation.agones.dev/v1",
 		Kind:       "GameServerAllocation",
 		Spec: gsaSpec{
-			Selectors: []gsaSelector{
-				{MatchLabels: map[string]string{fleetLabelKey: a.fleetName}},
-			},
+			Selectors: selectors,
 			// 把业务标识打到被分配的 GameServer 上,便于运维 / 排障关联对局。
 			Metadata: &gsaMetadata{Labels: map[string]string{
 				"pandora.dev/match-id":  fmt.Sprintf("%d", matchID),

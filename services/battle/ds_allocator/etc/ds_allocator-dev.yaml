@@ -10,7 +10,7 @@ server:
   grpc:
     network: tcp
     addr: ":50020"
-    timeout: "20s"              # AllocateBattle 阻塞等 allocate(5s)+ready_wait(10s)+余量;勿低于 20s
+    timeout: "60s"              # AllocateBattle 阻塞等 allocate(5s)+ready_wait(45s)+余量;勿低于 55s
     enable_reflection: true     # dev 开;prod 关(零值=false)
   http:
     network: tcp
@@ -52,6 +52,12 @@ kafka:
 locator_addr: "127.0.0.1:50006"
 
 allocator:
+  # ready_wait_timeout: AllocateBattle 等 DS 心跳 ready 的最长时间(代码默认 10s)。
+  # k8s/minikube 真 Linux DS 冷启动 = Loader GameMode 等 Agones Allocated label → ServerTravel
+  # 加载目标地图(松林镇等大图可远超 10s)→ BattleGameMode BeginPlay 才发 ready 心跳,
+  # 10s 必超时;调到 45s 覆盖冷加载。配套:上方 server.grpc.timeout=60s、
+  # matchmaker ds_allocate_timeout=60s、matchmaker server.grpc.timeout=60s,四处一起改。
+  ready_wait_timeout: "45s"
   # heartbeat_timeout: DS 心跳超时阈值(不变量 §4),超过没收到 Heartbeat → abandoned
   heartbeat_timeout: "15s"
   # sweep_interval: 后台心跳超时扫描间隔
@@ -86,6 +92,15 @@ agones:
   ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
   insecure_skip_tls_verify: false  # in-cluster=false;minikube 外联自签时本地临时置 true,勿提交
   allocate_timeout: "5s"
+  # map_fleets(可选,标准混合形态):按 map_id 路由到「专属预热 Fleet」——该 Fleet 的 env
+  # 烤死目标 umap + 战斗 GameMode,Pod 预热时已加载好图,分配即可玩(零 ServerTravel 延迟)。
+  # 分配请求生成有序 selectors:[专属 Fleet, 上面的 fleet_name],Agones 按序尝试:
+  # 专属池无空闲自动回落通用 Loader 池(同一次 allocation,无额外 RTT)。
+  # 适合热门图;长尾/新副本不配,走通用池填表即用。专属 Fleet 需另建(克隆 20-fleet-battle.yaml,
+  # 改 metadata.name + PANDORA_DS_MAP/PANDORA_DS_GAMEMODE 为目标图直启)。
+  # map_fleets:
+  #   - map_id: 7                       # SonglinTown(g_关卡.xlsx Id=7)
+  #     fleet_name: "pandora-battle-songlin"
 
 # 本机拉起 Windows Dedicated Server 调试模式(mode=local 时生效)。
 # 匹配成局后 ds_allocator 直接 exec 打包好的 UE Windows DS,分配本机端口返回真实地址。
@@ -104,17 +119,18 @@ local_ds:
   map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode" # 默认/兜底关卡:map_id 未在下方 maps 命中时用它(留空则用 DS 默认关卡)
   # loader_map:填了它就切到「填表即用」权威路径——DS 统一启到这张加载/分发关卡,不再直接启到目标图;
   # 目标副本由 UE 侧 Loader GameMode 在 BeginPlay 读 PANDORA_MAP_ID(已注入)→ 查 g_关卡.xlsx → ServerTravel。
-  # 之后策划新增副本只改表 + 重打 DS 内容,本 yaml 的 maps 桥可退休。启用前提:UE 已交付 Loader 关卡 + GameMode
-  # (见 Doc/服务器/副本选择_UE侧交接_Codex.md)。留空(默认)= 走下面 maps 直接启到目标图的 dev 桥。
-  # loader_map: "/Game/Test/Level/Lvl_DS_Loader?game=/Script/Pandora.PandoraDSLoaderGameMode"
+  # 之后策划新增副本只改表 + 重打 DS 内容,本 yaml 的 maps 桥可退休。Loader 复用已在包内的空入口图
+  # Lvl_Server_Entry(无需新建 Lvl_DS_Loader 资产),GameMode 由 ?game= 覆盖。启用前提:DS 包含
+  # APandoraDSLoaderGameMode + 关卡上下文修复(2026-07-07)的重新编译产物。留空(默认)= 走下面 maps 直接启到目标图的 dev 桥。
+  # loader_map: "/Game/Entry/Level/Lvl_Server_Entry?game=/Script/Pandora.PandoraDSLoaderGameMode"
   # 选副本表:客户端选择的 map_id 经 matchmaker 透传到 AllocateBattle,命中则起对应关卡,
   # 未命中回退上面的 map_name。同一个 ds_allocator 进程凭 map_id 起不同副本(PVP / PVE 共存)。
-  # map_id 对齐策划 g_关卡.xlsx 的关卡 id(下面的示例值需按实际表填)。
+  # map_id 对齐策划 g_关卡.xlsx 的关卡 id(权威:6=MobaLevel MOBA战斗,7=SonglinTown 松林镇副本)。
   maps:
-    - map_id: 1                                # PVP 5v5(MobaLevel)
+    - map_id: 6                                # PVP 5v5(MobaLevel,对齐 g_关卡.xlsx Id=6)
       map_name: "/Game/Test/Level/MobaLevel?game=/Script/Pandora.PandoraBattleGameMode"
-    - map_id: 2                                # PVE 副本(松林镇 SonglinTown)
-      map_name: "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraBattleGameMode"
+    - map_id: 7                                # PVE 副本(松林镇 SonglinTown,对齐 g_关卡.xlsx Id=7)
+      map_name: "/Game/Test/Level/SonglinTown?game=/Script/Pandora.PandoraPveGameMode"
 
   # advertise_host:返回给客户端 NetDriver 连接的 host。本机自测用 127.0.0.1;
   # 内网测试服(play.ps1 -Battle -Intranet)会自动探测本机内网 IPv4 并经环境变量

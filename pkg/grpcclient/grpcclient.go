@@ -44,22 +44,34 @@ func init() {
 //
 // 默认挂载 Trace + Metrics middleware,默认 15s 超时。
 func MustDial(endpoint string, customMW ...middleware.Middleware) *grpc.ClientConn {
-	return mustDial(false, endpoint, nil, customMW...)
+	return mustDial(false, endpoint, nil, DefaultTimeout, customMW...)
 }
 
 // MustDialDiscovery 经服务发现连接(target 形如 "discovery:///pandora.login")。
 // reg 是 Kratos registry.Discovery 实现(etcd / consul / nacos)。
 func MustDialDiscovery(endpoint string, reg registry.Discovery, customMW ...middleware.Middleware) *grpc.ClientConn {
-	return mustDial(false, endpoint, reg, customMW...)
+	return mustDial(false, endpoint, reg, DefaultTimeout, customMW...)
 }
 
 // MustDialInsecure 同 MustDial,但显式声明 insecure(不强制 TLS)。
 // 内网服务间通信用这个;Envoy 入站才用 TLS。
 func MustDialInsecure(endpoint string, customMW ...middleware.Middleware) *grpc.ClientConn {
-	return mustDial(true, endpoint, nil, customMW...)
+	return mustDial(true, endpoint, nil, DefaultTimeout, customMW...)
 }
 
-func mustDial(insecure bool, endpoint string, reg registry.Discovery, customMW ...middleware.Middleware) *grpc.ClientConn {
+// MustDialInsecureTimeout 同 MustDialInsecure,但单次 RPC 默认超时用 timeout 而非 DefaultTimeout(15s)。
+// 用于服务端会长时间阻塞的 RPC(如 matchmaker→ds_allocator.AllocateBattle 同步等 DS ready
+// 心跳,agones allocate 5s + ready_wait 45s + 余量 ≈ 60s):kratos client 的 WithTimeout 是
+// 每次调用都生效的中间件上限,不改拨号就算业务 ctx 给更长 deadline 也会被 15s 截断。
+// timeout ≤ 0 时回退 DefaultTimeout。
+func MustDialInsecureTimeout(endpoint string, timeout time.Duration, customMW ...middleware.Middleware) *grpc.ClientConn {
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	return mustDial(true, endpoint, nil, timeout, customMW...)
+}
+
+func mustDial(insecure bool, endpoint string, reg registry.Discovery, timeout time.Duration, customMW ...middleware.Middleware) *grpc.ClientConn {
 	// 默认 client middleware:Trace 透传 + Metrics + 第 4 层熔断(SRE breaker)。
 	// 熔断挂在 client 侧:下游故障时快速失败,避免雪崩拖垮调用方。
 	mws := append([]middleware.Middleware{
@@ -70,7 +82,7 @@ func mustDial(insecure bool, endpoint string, reg registry.Discovery, customMW .
 
 	opts := []kgrpc.ClientOption{
 		kgrpc.WithEndpoint(endpoint),
-		kgrpc.WithTimeout(DefaultTimeout),
+		kgrpc.WithTimeout(timeout),
 		kgrpc.WithMiddleware(mws...),
 	}
 	if reg != nil {

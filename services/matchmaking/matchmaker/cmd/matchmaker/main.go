@@ -148,7 +148,7 @@ func main() {
 				"hint", "jwt.secret must be >=32 bytes and match login/envoy")
 			os.Exit(1)
 		}
-		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, signer, cfg.Match.MapId, cfg.Match.GameMode)
+		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, signer, cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
 		defer func() { _ = ga.Close() }()
 		allocator = ga
 		helper.Infow("msg", "ds_allocator_grpc_ready", "ds_allocator_addr", cfg.Match.DSAllocatorAddr,

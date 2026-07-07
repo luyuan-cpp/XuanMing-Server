@@ -10,6 +10,7 @@ package data
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -33,8 +34,10 @@ type GrpcDSAllocator struct {
 
 // NewGrpcDSAllocator 直连 ds_allocator 服务 endpoint(host:port,内网 insecure)。
 // signer 用于给每个玩家签 battle DSTicket;mapID / gameMode 透传给 ds_allocator。
-func NewGrpcDSAllocator(dsAllocatorAddr string, signer *auth.Signer, mapID uint32, gameMode string) *GrpcDSAllocator {
-	conn := grpcclient.MustDialInsecure(dsAllocatorAddr)
+// allocateTimeout 是 AllocateBattle 的客户端超时(服务端阻塞等 DS ready 心跳,
+// 需覆盖 agones allocate + ready_wait 预算,不能用 15s 默认值);≤0 时用 grpcclient 默认。
+func NewGrpcDSAllocator(dsAllocatorAddr string, signer *auth.Signer, mapID uint32, gameMode string, allocateTimeout time.Duration) *GrpcDSAllocator {
+	conn := grpcclient.MustDialInsecureTimeout(dsAllocatorAddr, allocateTimeout)
 	return &GrpcDSAllocator{
 		conn:     conn,
 		cli:      dsv1.NewDSAllocatorServiceClient(conn),

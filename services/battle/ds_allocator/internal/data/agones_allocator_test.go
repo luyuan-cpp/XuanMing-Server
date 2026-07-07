@@ -96,6 +96,75 @@ func TestAgonesAllocate_NoAvailable(t *testing.T) {
 	}
 }
 
+// TestAgonesAllocate_MapFleetSelectorOrder 校验混合形态路由:
+//   - map_id 命中 map_fleets → selectors 有序 [专属预热 Fleet, 通用 Fleet](Agones 按序尝试);
+//   - 未命中 → 仅通用 Fleet 一个 selector(行为与未配置 map_fleets 完全一致)。
+func TestAgonesAllocate_MapFleetSelectorOrder(t *testing.T) {
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": map[string]any{
+				"state":          "Allocated",
+				"gameServerName": "songlin-fleet-x1",
+				"address":        "10.0.0.9",
+				"ports":          []map[string]any{{"name": "default", "port": 7788}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: srv.URL,
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+
+	// 命中 map_id=7:两个 selector,专属在前、通用兜底在后。
+	if _, _, err := a.Allocate(context.Background(), 1, 7, "pve_coop"); err != nil {
+		t.Fatalf("Allocate(map 7): %v", err)
+	}
+	var req struct {
+		Spec struct {
+			Selectors []struct {
+				MatchLabels map[string]string `json:"matchLabels"`
+			} `json:"selectors"`
+		} `json:"spec"`
+	}
+	if err := json.Unmarshal(gotBody, &req); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
+	if len(req.Spec.Selectors) != 2 {
+		t.Fatalf("selectors: got %d want 2 (dedicated first, generic fallback)", len(req.Spec.Selectors))
+	}
+	if got := req.Spec.Selectors[0].MatchLabels["agones.dev/fleet"]; got != "songlin-fleet" {
+		t.Errorf("selector[0]: got %q want songlin-fleet", got)
+	}
+	if got := req.Spec.Selectors[1].MatchLabels["agones.dev/fleet"]; got != "battle-fleet" {
+		t.Errorf("selector[1]: got %q want battle-fleet", got)
+	}
+
+	// 未命中 map_id=6:只有通用 selector。
+	if _, _, err := a.Allocate(context.Background(), 2, 6, "pvp_5v5"); err != nil {
+		t.Fatalf("Allocate(map 6): %v", err)
+	}
+	if err := json.Unmarshal(gotBody, &req); err != nil {
+		t.Fatalf("unmarshal request body: %v", err)
+	}
+	if len(req.Spec.Selectors) != 1 {
+		t.Fatalf("selectors: got %d want 1 (generic only)", len(req.Spec.Selectors))
+	}
+	if got := req.Spec.Selectors[0].MatchLabels["agones.dev/fleet"]; got != "battle-fleet" {
+		t.Errorf("selector[0]: got %q want battle-fleet", got)
+	}
+}
+
 func TestAgonesAllocate_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)

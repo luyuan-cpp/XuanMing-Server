@@ -1,4 +1,4 @@
-# Pandora 本地「线上等价」真 DS 闭环一键编排(minikube + Agones,无 mock)
+﻿# Pandora 本地「线上等价」真 DS 闭环一键编排(minikube + Agones,无 mock)
 #
 # 串起 -Mode k8s 之后剩余的手工步骤,让 codex 一条命令把真 DS 链路准备好:
 #   1) 校验 minikube / Agones / Fleet / 后端 allocator 就绪
@@ -90,6 +90,33 @@ function Get-FleetImage([string]$yamlRelPath) {
     return $line.Matches[0].Groups[1].Value
 }
 
+# ── minikube 镜像一致性校验(与 start.ps1 的 Sync-ImagesToMinikube 同思路)──────
+# 复用 :dev 等滚动 tag 时,`minikube image load` 在 minikube 侧已有同名 tag 时可能静默
+# 不生效(残留旧镜像)→ Fleet 起的 DS Pod 跑旧包。load 后必须比对「宿主 docker 镜像 ID ==
+# minikube 内镜像 ID」,不一致就 rm 旧 tag 重 load,仍不一致直接失败,绝不带旧镜像继续。
+
+# 返回 hashtable:镜像名(去 docker.io/ 前缀) -> 镜像 ID;minikube 太旧不支持 json 时返回 $null。
+function Get-MinikubeImageIds() {
+    $json = (minikube -p $MinikubeProfile image ls --format json 2>$null | Out-String)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) { return $null }
+    try { $list = $json | ConvertFrom-Json } catch { return $null }
+    $map = @{}
+    foreach ($entry in $list) {
+        foreach ($tag in @($entry.repoTags)) {
+            if ([string]::IsNullOrWhiteSpace($tag)) { continue }
+            $map[($tag -replace '^docker\.io/', '')] = [string]$entry.id
+        }
+    }
+    return $map
+}
+
+function Test-ImageIdMatch([string]$hostId, [string]$mkId) {
+    if ([string]::IsNullOrWhiteSpace($hostId) -or [string]::IsNullOrWhiteSpace($mkId)) { return $false }
+    $h = $hostId.Trim().ToLowerInvariant()
+    $m = $mkId.Trim().ToLowerInvariant()
+    return ($h -eq $m) -or $h.StartsWith($m) -or $m.StartsWith($h)
+}
+
 function Start-K8sEnvoyBridge {
     $bridgeScript = Join-Path $ScriptDir 'k8s_envoy_bridge.ps1'
     if (-not (Test-Path $bridgeScript)) { throw "缺少桥接脚本: $bridgeScript" }
@@ -153,18 +180,48 @@ Write-Info "hub:    $hubImg"
 if ($SkipImageLoad) {
     Write-Warn "已传 -SkipImageLoad,跳过 image load"
 } else {
+    $hostIds = @{}
     foreach ($img in @($battleImg, $hubImg)) {
-        # 校验宿主 docker 里有该镜像(否则 minikube image load 会失败)
-        docker image inspect $img *> $null
-        if ($LASTEXITCODE -ne 0) {
+        # 校验宿主 docker 里有该镜像(否则 minikube image load 会失败),并记录宿主镜像 ID
+        $hostId = (docker image inspect -f '{{.Id}}' $img 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $hostId) {
             Write-Err "宿主 docker 没有镜像 $img"
             Write-Warn "  该镜像由 UE 侧 Linux DS 包构建(deploy/ds/build-image.sh)。"
             Write-Warn "  构建后重跑;或若 tag 不同,改 Fleet yaml 的 image: 再重试。"
             exit 1
         }
+        $hostIds[$img] = $hostId
         Write-Info "  minikube -p $MinikubeProfile image load $img ..."
         minikube -p $MinikubeProfile image load $img
         if ($LASTEXITCODE -ne 0) { Write-Err "load 失败: $img"; exit 1 }
+    }
+
+    # 一致性校验:minikube 内镜像 ID 必须 == 宿主(复用滚动 tag 时 load 可能静默不生效)
+    $mkIds = Get-MinikubeImageIds
+    if ($null -eq $mkIds) {
+        Write-Warn "minikube image ls --format json 不可用,跳过镜像一致性校验(建议升级 minikube)。"
+    } else {
+        $stale = @(@($battleImg, $hubImg) | Where-Object { -not (Test-ImageIdMatch $hostIds[$_] $mkIds[$_]) })
+        foreach ($img in $stale) {
+            Write-Warn "minikube 内 $img 为旧镜像(宿主=$($hostIds[$img]) minikube=$($mkIds[$img])),强制刷新..."
+            minikube -p $MinikubeProfile image rm $img 2>$null | Out-Null
+            minikube -p $MinikubeProfile image load $img
+            if ($LASTEXITCODE -ne 0) { Write-Err "强制刷新 load 失败: $img"; exit 1 }
+        }
+        if ($stale.Count -gt 0) {
+            $mkIds = Get-MinikubeImageIds
+            foreach ($img in $stale) {
+                if (-not (Test-ImageIdMatch $hostIds[$img] $mkIds[$img])) {
+                    Write-Err "镜像 $img 强制刷新后 minikube 内 ID 仍与宿主不一致,中止(避免 Fleet 起旧 DS)。"
+                    Write-Warn "  可尝试:minikube -p $MinikubeProfile image rm $img 后重跑。"
+                    exit 1
+                }
+            }
+            # tag 指向变了,已 Ready 的旧 GameServer 仍是旧包:删掉让 Fleet 用新镜像重建
+            Write-Warn "已强制刷新 DS 镜像,删除现存 GameServer 让 Fleet 重建(新 Pod 才会用新镜像)..."
+            kubectl delete gameservers --all -n $FleetNamespace 2>$null | Out-Null
+        }
+        Write-Ok "DS 镜像一致性校验通过(宿主 ID == minikube 内 ID)"
     }
     Write-Ok "两个 DS 镜像已 load"
 }

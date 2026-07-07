@@ -51,8 +51,8 @@ match:
   #   true（仅本地单服务联调）：只跑 matchmaker、不起 player_locator 时，locator 查询失败仅告警后放行
   # 注意：若本地只单独跑 matchmaker，要么清空上面 locator_addr，要么把此项设为 true，否则 StartMatch 会返回 ERR_UNAVAILABLE
   battle_gate_fail_open: false
-  # map_id: 战斗地图配置 ID(配置表 ID,uint32)
-  map_id: 1
+  # map_id: 战斗地图配置 ID(对齐 g_关卡.xlsx,6=MobaLevel MOBA战斗)
+  map_id: 6
   # game_mode: 战斗模式标识,透传给 ds_allocator
   game_mode: "5v5_ranked"
   # confirm_timeout: 凑齐 10 人后的确认期时长

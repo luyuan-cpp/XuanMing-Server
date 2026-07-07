@@ -19,7 +19,7 @@ server:
   grpc:
     network: tcp
     addr: ":50018"
-    timeout: "22s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(≈20s 预算)+余量
+    timeout: "60s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(allocate 5s+ready_wait 45s ≈55s 预算)+余量
     enable_reflection: true     # dev 开;prod 关(零值=false)
   http:
     network: tcp
@@ -51,11 +51,15 @@ match:
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:50020"
+  # ds_allocate_timeout: 调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
+  # 该 RPC 服务端阻塞等 DS ready 心跳(agones allocate 5s + ready_wait 45s + 余量),
+  # 必须 ≥ ds_allocator 侧 server.grpc.timeout(60s),否则客户端先超时白等
+  ds_allocate_timeout: "60s"
   # locator_addr: player_locator 服务 gRPC 直连地址(位置上报 + StartMatch 前置查战斗态)
   locator_addr: "127.0.0.1:50006"
   battle_gate_fail_open: false
-  # map_id: PVE 默认副本(客户端 StartMatchRequest.map_id=0 时的兜底;对齐 g_关卡.xlsx,2=SonglinTown)
-  map_id: 2
+  # map_id: PVE 默认副本(客户端 StartMatchRequest.map_id=0 时的兜底;对齐 g_关卡.xlsx,7=SonglinTown 松林镇副本)
+  map_id: 7
   # game_mode: PVE 撮合池命名空间 + 透传 ds_allocator(DS env PANDORA_GAME_MODE / Agones label)
   game_mode: "pve_coop"
   # confirm_timeout: solo 直进路径跳过确认期,此值不生效;保留默认防误用

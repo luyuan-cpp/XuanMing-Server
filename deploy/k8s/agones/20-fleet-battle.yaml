@@ -48,19 +48,27 @@ spec:
               env:
                 - name: PANDORA_DS_PORT
                   value: "7777"
+                # 「填表即用」权威路径(2026-07-07 启用):DS 统一启到空入口图 Lvl_Server_Entry(包内已有,
+                # 无需新建 Lvl_DS_Loader),由 PandoraDSLoaderGameMode 等 Agones Allocated + pandora.dev/map-id
+                # label 就绪后查 g_关卡.xlsx → ServerTravel 到目标副本(GameModeClass 也由表行决定)。
+                # 之后策划新增副本只改表 + 重打 DS 内容,本 Fleet 无需改。见 Doc/服务器/副本选择_UE侧交接_Codex.md。
+                # 前提:镜像必须是含 APandoraDSLoaderGameMode + 关卡上下文修复(2026-07-07)的新构建。
                 - name: PANDORA_DS_MAP
-                  value: "/Game/Test/Level/MobaLevel"
-                # 指定战斗 GameMode（UE 标准 ?game= URL option，entrypoint.sh 拼到地图 URL）。
-                # APandoraBattleGameMode::BeginPlay 起 Pandora 业务心跳（DS→ds_allocator.Heartbeat，每 5s，
-                # 防 battle_abandoned_heartbeat_timeout）。优先级高于地图 WorldSettings，无需改地图资产。
+                  value: "/Game/Entry/Level/Lvl_Server_Entry"
                 - name: PANDORA_DS_GAMEMODE
-                  value: "/Script/Pandora.PandoraBattleGameMode"
-                # 「填表即用」权威路径（UE 交付 Loader 关卡 + PandoraDSLoaderGameMode 后启用）：把上面两行改成
-                # 加载/分发关卡 + Loader GameMode，DS 起来后由 Loader::BeginPlay 读 PANDORA_MAP_ID
-                # （ds_allocator 已按局注入 map-id label / env）→ 查 g_关卡.xlsx → ServerTravel 到目标副本。
-                # 之后策划新增副本只改表 + 重打 DS 内容，本 Fleet 无需改。见 Doc/服务器/副本选择_UE侧交接_Codex.md。
-                #   value: "/Game/Test/Level/Lvl_DS_Loader"            # ← PANDORA_DS_MAP
-                #   value: "/Script/Pandora.PandoraDSLoaderGameMode"   # ← PANDORA_DS_GAMEMODE
+                  value: "/Script/Pandora.PandoraDSLoaderGameMode"
+                # 旧直启路径(回退用,仅当 Loader 镜像未就绪时换回):直接启到固定战斗图 + 战斗 GameMode。
+                # APandoraBattleGameMode::BeginPlay 起 Pandora 业务心跳(DS→ds_allocator.Heartbeat,每 5s,
+                # 防 battle_abandoned_heartbeat_timeout)。直启会绕过按 map_id 选图,所有局都进同一张图。
+                #   value: "/Game/Test/Level/MobaLevel"               # ← PANDORA_DS_MAP
+                #   value: "/Script/Pandora.PandoraBattleGameMode"    # ← PANDORA_DS_GAMEMODE
+                #
+                # 进阶(热门图零加载延迟,标准混合形态):可为单张热门图克隆本 Fleet 建「专属预热 Fleet」——
+                # 改 metadata.name(如 pandora-battle-songlin)+ 上面两行 env 直启该图与其 GameMode
+                # (如 /Game/Test/Level/SonglinTown + /Script/Pandora.PandoraPveGameMode),
+                # 并在 ds_allocator agones.map_fleets 配 map_id→该 Fleet。分配时 Agones 有序 selectors
+                # 先选专属池(Pod 已预载目标图,分配即可玩),无空闲自动回落本通用 Loader 池。
+                # 长尾/新副本不建专属 Fleet,走本池填表即用。
                 # ds_allocator 的 grpc-web 入口。DS 走 grpc-web（FHttpModule），不能直连裸 gRPC :50020，
                 # 必须打到 Envoy 的「DS 面」grpc-web 监听器 :8444（TLS 终止 + grpc-web→gRPC 转换，
                 # 按 /pandora.ds.v1.DSAllocatorService/ 路由到 ds_allocator，见 deploy/envoy/envoy.yaml）。

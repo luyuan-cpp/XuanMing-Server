@@ -161,8 +161,16 @@ type AgonesConf struct {
 	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// FleetName 选择 GameServer 的 Fleet 名(selector agones.dev/fleet=<FleetName>)。
-	// Enabled=true 时必填,否则构造失败。
+	// Enabled=true 时必填,否则构造失败。它是「通用池」/兜底池:未命中 MapFleets 的 map_id
+	// 或专属池无空闲时都落到它(通常是 Loader 模式的 Fleet,分配后按 label travel)。
 	FleetName string `yaml:"fleet_name,omitempty" json:"fleet_name,omitempty"`
+
+	// MapFleets 按 map_id 路由到专属预热 Fleet(可选,标准混合形态)。
+	// 专属 Fleet 的 env 烤死目标 umap,Pod 预热时就已加载好目标图 → 分配即可玩,零 travel 延迟。
+	// 分配时生成有序 selectors:[专属 Fleet, 通用 FleetName],Agones 按顺序尝试——
+	// 专属池有空闲用专属,没有自动回落通用 Loader 池(同一次 allocation 调用,无额外 RTT)。
+	// 未配置(默认)= 全部走通用池,行为不变。
+	MapFleets []AgonesMapFleet `yaml:"map_fleets,omitempty" json:"map_fleets,omitempty"`
 
 	// AdvertiseHost 覆盖返回给客户端连接的 host;留空则使用 Agones status.address。
 	// 本机 minikube docker-driver 联调时常设为 127.0.0.1,配合 UDP relay。
@@ -181,6 +189,27 @@ type AgonesConf struct {
 
 	// AllocateTimeout 单次 allocate / release REST 调用超时(默认 5s)。
 	AllocateTimeout config.Duration `yaml:"allocate_timeout,omitempty" json:"allocate_timeout,omitempty"`
+}
+
+// AgonesMapFleet 是 map_id → 专属预热 Fleet 的一条路由。
+type AgonesMapFleet struct {
+	// MapID 对齐 g_关卡.xlsx 的关卡 id。
+	MapID uint32 `yaml:"map_id" json:"map_id"`
+	// FleetName 该副本的专属 Fleet 名(其 env 烤死对应 umap + 战斗 GameMode)。
+	FleetName string `yaml:"fleet_name" json:"fleet_name"`
+}
+
+// DedicatedFleetFor 返回 mapID 的专属 Fleet 名;未配置返空串(= 只走通用池)。
+func (c AgonesConf) DedicatedFleetFor(mapID uint32) string {
+	if mapID == 0 {
+		return ""
+	}
+	for _, mf := range c.MapFleets {
+		if mf.MapID == mapID && mf.FleetName != "" {
+			return mf.FleetName
+		}
+	}
+	return ""
 }
 
 // AllocatorConf 是 ds_allocator 服务私有配置。
