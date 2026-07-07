@@ -298,3 +298,73 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 
 先读 AGENTS.md / CLAUDE.md,然后从第 1 步(只读核对 InstalledEngineBuild.xml 的开关)开始。
 ```
+---
+
+## §8 GM 指令链路交接(2026-07-07)
+
+### 8.1 已完成代码范围
+
+服务端 `XuanMing-Server`:
+
+- 新增 `proto/pandora/gm/v1/gm.proto`,并同步生成 Go/C++ 产物到 `proto/gen/go/pandora/gm/` 与 `proto/gen/cpp/pandora/gm/`。
+- 新增 `services/battle/ds_allocator/internal/gm/`,实现 GmService 与单测。
+- 修改 `services/battle/ds_allocator/internal/server/grpc.go` 注册 GmService。
+- 修改 `services/battle/ds_allocator/cmd/ds_allocator/main.go` 构造 gmSvc。
+- 新增 `services/battle/ds_allocator/cmd/gmctl/`,作为 `SendCommand` 运维 CLI。
+- 修改 `services/battle/ds_allocator/go.mod`,将 `github.com/google/uuid` 提为直接依赖。
+
+UE `Pandora-Client-SVN`:
+
+- 同步 `Source/PandoraProto/Public/Generated/Proto/pandora/gm/v1/gm.pb.h`。
+- 同步 `Source/ThirdParty/PandoraProtoGenerated/pandora/gm/v1/gm.pb.cc`。
+- 新增 `Source/PandoraProto/Private/Generated/Proto/PandoraGeneratedProto_0026.cpp`,聚合 include `gm.pb.cc`。
+- 修改 `Source/PandoraProto/Public/Codec/PandoraWireTypes.h` 与 `PandoraMessageCodec.h`,增加 GM wire 结构与声明。
+- 新增 `Source/PandoraProto/Private/Codec/PandoraMessageCodec_Gm.cpp`。
+- 修改 `Source/Pandora/Public/Net/PandoraDSBackendSubsystem.h` 与 `Private/Net/PandoraDSBackendSubsystem.cpp`,实现轮询、执行与 Ack。
+- 修改 `Source/Pandora/Public/Gameplay/Default/PandoraDSGmCVars.h` 与 `.cpp`,让 `AddItem` 返回 bool。
+
+### 8.2 Codex 已完成验证
+
+2026-07-07 已在 `services/battle/ds_allocator` 执行:
+
+```powershell
+go mod tidy
+go build ./...
+go vet ./...
+go test ./internal/gm/...
+go build ./cmd/gmctl
+```
+
+结果:全部通过。`go mod tidy` 后 `go.sum` 无新增变化;`go.mod` 的预期差异是 `github.com/google/uuid v1.6.0` 从 indirect 变为直接依赖。
+
+### 8.3 剩余必须由 UE/编辑器侧完成
+
+1. 重新生成 UE 工程文件,让 UBT 识别新增 `.cpp`。
+2. 编译 `PandoraProto` 与 `Pandora` 两个 module。
+3. 同一份源码同时重打 Client 与 Linux DS 包,避免 `NetChecksumMismatch`。
+4. 按既有流程替换 `XuanMing-Server/run/ue-ds-archive*` 中的 DS 归档,并部署到 dev DS。
+5. 起 ds_allocator 与一局战斗 DS 后,使用真实在线玩家执行端到端冒烟:
+
+```powershell
+cd f:\work\XuanMing-Server\services\battle\ds_allocator
+go run ./cmd/gmctl additem --match <matchID> --player <playerID> --config <真实道具ID> --count 1
+```
+
+期望:
+
+- gmctl 输出 `已入队:... idempotency_key=<UUID>`。
+- ds_allocator 日志出现 `gm_command_enqueued` -> `gm_commands_delivered` -> `gm_command_acked`。
+- DS 日志出现 `[DS][GM] 已添加道具...` 与 `GM command handled: ... ok=1`。
+- 玩家背包实际到账。
+
+边界验证:
+
+- 错误 `--config` 应返回 Ack `ok=0` / `add-item-failed`,队列不阻塞。
+- `gmctl` 每次都会生成新的 `idempotency_key`;重复运行命令会发两条真实指令。DS 去重只用于防止同一条指令被重复投递。
+
+### 8.4 语义和部署约束
+
+- GM 指令送达语义是 at-most-once:Redis `RPOP` 取出即出队,DS 拉取后宕机会丢,不自动重投。
+- gmctl 是内网运维 CLI,直连 ds_allocator,不经 Envoy,不能暴露给玩家客户端。
+- gmctl 默认地址是 `127.0.0.1:50020`;远程使用 `--addr host:50020` 或环境变量 `PANDORA_DS_ALLOCATOR_ADDR`。
+- `PandoraProto` module 仍需保持 RTTI/异常/无 unity/NoPCHs 约束;protobuf 头只应在 codec `.cpp` 中出现,不要外泄到普通 UE 业务头。

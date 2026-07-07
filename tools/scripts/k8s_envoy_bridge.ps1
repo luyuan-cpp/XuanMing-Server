@@ -1,4 +1,4 @@
-﻿# Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
+# Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
 #
 # 为什么需要它:
 #   - k8s 模式里 17 个 Go 服务都跑在 pandora namespace 的 ClusterIP Service 后面
@@ -13,6 +13,13 @@
 #   若 127.0.0.1:500xx 被别的进程占用(本地 go 服务 / docker-compose 业务服务),会让 Envoy
 #   连到旧后端而不是 k8s Service,导致 e2e「假通过」—— 此时默认 fail-fast,
 #   或加 -Force 由本脚本杀掉占用者后重建。
+#
+# 旧 compose 业务容器预检(P1,2026-07-07):docker 发布端口监听在 0.0.0.0(owner 是
+#   com.docker.backend),按 127.0.0.1 查监听根本看不到;kubectl port-forward 照样绑
+#   127.0.0.1 成功 → 两个监听并存,Envoy host.docker.internal 流量去向不确定(时好时坏)。
+#   重启电脑后 Docker Desktop 还会把上次 running 的业务容器自动复活再抢回端口。
+#   所以 bridge 启动前先扫 `docker ps`:发布了 bridge 端口的 pandora-* 业务容器自动 stop
+#   (幂等、可再手动 up 回来);非 pandora 容器默认 fail-fast,-Force 才 stop。
 
 [CmdletBinding()]
 param(
@@ -47,8 +54,8 @@ $Forwards = @(
     @{ Name = 'team';           Port = 50010; Essential = $true  }
     @{ Name = 'matchmaker';     Port = 50011; Essential = $true  }
     # PVE 直进匹配实例(Envoy 按 x-pandora-game-mode: pve 分流到 host 50018);
-    # 不在 PVP 闭环必需链路上,Pod 没起来只 WARN 不阻断 e2e。
-    @{ Name = 'matchmaker-pve'; Port = 50018; Essential = $false }
+    # 副本测试主链路依赖它,必须 fail-fast,避免客户端点击开局后才报 Envoy 503。
+    @{ Name = 'matchmaker-pve'; Port = 50018; Essential = $true  }
     @{ Name = 'trade';          Port = 50012; Essential = $false }
     @{ Name = 'dialogue';       Port = 50013; Essential = $false }
     @{ Name = 'push';           Port = 50014; Essential = $true  }
@@ -67,15 +74,25 @@ function Ensure-File([string]$path) {
 
 function Get-PidFile([string]$name) { Join-Path $StateDir "$name.pid" }
 
-# 返回 127.0.0.1:$port LISTEN 的占用进程 PID(无则 $null)
+# 返回 $port 上 LISTEN 的占用进程 PID(无则 $null)。
+# 不只查 127.0.0.1:绑 0.0.0.0/:: 的监听(宿主 go 服务、docker 发布端口)同样会截走
+# Envoy host.docker.internal 的流量,必须一并检出;127.0.0.1 精确监听优先返回。
 function Get-PortListenerPid([int]$port) {
-    try {
-        $conn = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $port -State Listen -ErrorAction Stop |
-            Select-Object -First 1
-        return $conn.OwningProcess
-    } catch {
-        return $null
-    }
+    $conns = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalAddress -in @('127.0.0.1', '0.0.0.0', '::', '::1') })
+    if ($conns.Count -eq 0) { return $null }
+    $exact = $conns | Where-Object { $_.LocalAddress -eq '127.0.0.1' } | Select-Object -First 1
+    if ($exact) { return $exact.OwningProcess }
+    return $conns[0].OwningProcess
+}
+
+# Docker Desktop 自身的转发进程:它替容器持有发布端口的 0.0.0.0 监听,
+# 杀它 = 杀整个 Docker。这类占用只能 docker stop 对应容器,绝不 Stop-Process。
+function Test-IsDockerBackendProc([int]$processId) {
+    if (-not $processId) { return $false }
+    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if (-not $proc) { return $false }
+    return ($proc.ProcessName -match '^(com\.docker\..*|docker|dockerd|vpnkit.*|wslrelay)$')
 }
 
 function Get-ProcCommandLine([int]$processId) {
@@ -102,6 +119,36 @@ function Test-IsBridgePortForward([int]$processId, [string]$name, [int]$port) {
     return ($cmd -like '*port-forward*' -and $cmd -like "*svc/$name*" -and $cmd -like "*${port}:${port}*")
 }
 
+# 预检:停掉仍在发布 bridge 端口的旧 docker compose 业务容器。
+# 场景:上次跑过 docker/battle 模式没 down,或重启电脑后 Docker Desktop 按 restart 策略
+# 自动复活业务容器 → 它们经 com.docker.backend 持有 0.0.0.0:500xx,抢走 Envoy 流量。
+# pandora-* 是本仓库 compose 固定 container_name,自动 stop 安全幂等;其它容器不越权。
+function Stop-StaleComposeContainers {
+    $bridgePorts = @($Forwards | ForEach-Object { [string]$_.Port })
+    $lines = @(docker ps --format '{{.ID}}|{{.Names}}|{{.Ports}}' 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) { return }
+    $stopped = 0
+    foreach ($line in $lines) {
+        $parts = "$line".Split('|', 3)
+        if ($parts.Count -lt 3) { continue }
+        $cid = $parts[0]; $cname = $parts[1]; $portsDesc = $parts[2]
+        $hit = $bridgePorts | Where-Object { $portsDesc -match ":$([regex]::Escape($_))->" } | Select-Object -First 1
+        if (-not $hit) { continue }
+        if ($cname -like 'pandora-*') {
+            Write-Warn "旧 compose 业务容器 $cname 仍发布宿主端口 $hit(会截走 Envoy → k8s 的流量),自动停掉"
+        } elseif ($Force) {
+            Write-Warn "容器 $cname 发布 bridge 端口 $hit,-Force 停掉"
+        } else {
+            throw "容器 $cname 发布了 bridge 需要的宿主端口 $hit(非本仓库 pandora-* 容器,不自动处理);请手动 docker stop,或加 -Force"
+        }
+        docker stop $cid | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "docker stop $cname 失败,请手动处理后重试" }
+        Write-Ok "已停 $cname"
+        $stopped++
+    }
+    if ($stopped -eq 0) { Write-Ok '无旧业务容器占用 bridge 端口' }
+}
+
 function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) {
     $ownerPid = Get-PortListenerPid $port
     if ($ownerPid) {
@@ -113,6 +160,13 @@ function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) 
 
         # 端口被「非 bridge」进程占用 —— 会让 Envoy 连到旧后端,必须处理
         $desc = Get-ProcDesc $ownerPid
+        if (Test-IsDockerBackendProc $ownerPid) {
+            throw @"
+端口 $port 的监听属于 Docker Desktop 转发进程($desc),说明还有容器在发布这个宿主端口
+(预检 Stop-StaleComposeContainers 没拦到,可能是非 pandora-* 容器)。
+不能杀该进程(会杀掉整个 Docker),请 `docker ps` 找到发布 $port 的容器手动 stop 后重试。
+"@
+        }
         if (-not $Force) {
             throw @"
 端口 $port 已被非 bridge 进程占用:$desc
@@ -189,12 +243,15 @@ Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
 Confirm-EnvoyDevCert -EnvoyDir (Join-Path $ProjectRoot 'deploy/envoy')
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 
-Write-Step "[1/2] 启本地 kubectl port-forward"
+Write-Step "[1/3] 预检:停掉发布 500xx 端口的旧 compose 业务容器"
+Stop-StaleComposeContainers
+
+Write-Step "[2/3] 启本地 kubectl port-forward"
 foreach ($forward in $Forwards) {
     Start-PortForward $forward.Name $forward.Port $forward.Essential
 }
 
-Write-Step "[2/2] 启 docker envoy(:8443 / :8444)"
+Write-Step "[3/3] 启 docker envoy(:8443 / :8444)"
 docker compose -f $ComposeFile --env-file $EnvFile up -d envoy
 if ($LASTEXITCODE -ne 0) { throw 'envoy 容器启动失败' }
 

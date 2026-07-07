@@ -437,6 +437,22 @@ static_resources:
                   cluster: ds_allocator_cluster
                   timeout: 15s
                   idle_timeout: 60s
+              # ----- Battle DS → gm.GmService(GM 指令拉取/回执,复用 ds_allocator 同进程)-----
+              # ⚠️ 只放 DS 侧发起的两个精确 method:PollCommands(拉队列) + AckCommand(回执)。
+              #    SendCommand(运维下发)**绝不**经任一 Envoy 监听器暴露,只内网直连 ds_allocator
+              #    :50020(gmctl / 运维跳板机),防 DS 或玩家侧越权下发道具(§14 闭环 + 最小暴露)。
+              - match:
+                  path: "/pandora.gm.v1.GmService/PollCommands"
+                route:
+                  cluster: ds_allocator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.gm.v1.GmService/AckCommand"
+                route:
+                  cluster: ds_allocator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
               # ----- Hub DS → player_locator.SetLocation(HUB 上报)-----
               - match:
                   prefix: "/pandora.locator.v1.PlayerLocatorService/"

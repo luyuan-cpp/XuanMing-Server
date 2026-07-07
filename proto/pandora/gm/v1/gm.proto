@@ -1,0 +1,113 @@
+// Pandora GmService 协议(GM / 运维指令下发,2026-07-07)。
+//
+// 职责:把 GM 调试指令(如「给战斗内某玩家发道具」)从运维 / GM 工具下发到目标
+//   战斗 Dedicated Server 进程去执行。等价于「远程触发 DS 本地命令 My.DS.GM.AddItem」。
+//
+// 为什么要这个服务:
+//   DS 本地 GM(PandoraDSGmCVars 的 My.DS.GM.AddItem)只能在 DS 黑窗手输;连上 DS 的
+//   客户端 / 运维无法远程触发。本服务用 gRPC 把指令排队 → DS 主动拉取执行,补上远程通道。
+//
+// 送达模型(关键约束):
+//   UE DS 是 gRPC **客户端**,没有入站服务端,无法被直接 push。因此采用「队列 + 轮询」:
+//     1. 运维 / GM 工具调 SendCommand,指令按 match_id 入 Redis 队列;
+//     2. 战斗 DS 复用心跳节奏,每隔几秒调 PollCommands 拉取自己这局的待执行指令;
+//     3. DS 本地执行(与 My.DS.GM.AddItem 同一套背包逻辑),再调 AckCommand 回报结果(审计)。
+//
+// 送达语义(诚实标注):队列用 RPOP「取即出队」,属 **at-most-once(尽力而为)**——
+//   DS 拉取后若在执行前宕机,该指令会丢失,不会自动重投。GM 调试指令可容忍偶发丢失,
+//   失败 / 未生效由运维重新 SendCommand 即可。**不承诺** at-least-once / exactly-once。
+//   idempotency_key(服务端每次 SendCommand 现生成的 UUID,非业务 ID)只用于 DS 侧去重
+//   **同一条已入队指令被重复投递 / 重复拉取**的场景(令 DS 端执行恰好一次)。
+//   ⚠️ 它**不能**防「运维重复下发」:每次调 SendCommand 都会生成一个新的 idempotency_key,
+//   即入队一条**全新**指令 —— 运维把 additem 跑两遍 = 两条不同 key 的指令 = 发两次道具。
+//   要防重复发放,必须靠运维自身不重复下发(或上层工具做业务幂等),本服务不代劳。
+//
+// 定位:与现有 DS 命令一致 —— match_id 定位目标 DS,player_id 定位目标玩家。
+//
+// 部署:内部接口,**不经 Envoy 暴露给玩家客户端**。GmService 与 ds_allocator 同进程
+//   (ds_allocator 已持有 match_id→战斗 DS 的注册表,且 DS 已与之心跳直连),复用其 gRPC 端口。
+
+syntax = "proto3";
+
+package pandora.gm.v1;
+
+import "pandora/common/v1/errcode.proto";
+
+service GmService {
+  // SendCommand 运维 / GM 工具下发一条 GM 指令到指定战斗 DS(内部接口,不经 Envoy)。
+  // 立即完成型:指令入 Redis 队列后即返回 idempotency_key,不阻塞等待 DS 执行。
+  // ⚠️ 非业务幂等:重复调用会入队多条(各自新 key),即重复发放,详见文件头「送达语义」。
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+
+  // PollCommands 战斗 DS 拉取自己这局待执行的 GM 指令队列(短轮询,复用心跳节奏)。
+  // 取即出队(RPOP,at-most-once:拉取后宕机即丢失,不自动重投);
+  // DS 须按 idempotency_key 幂等执行,避免重复投递导致重复发放。
+  rpc PollCommands(PollCommandsRequest) returns (PollCommandsResponse);
+
+  // AckCommand 战斗 DS 回报一条 GM 指令的执行结果(审计 + 排障);不影响队列消费。
+  rpc AckCommand(AckCommandRequest) returns (AckCommandResponse);
+}
+
+// ===== 指令载荷 =====
+
+// AddItemCommand「给指定玩家发道具」载荷,对齐 DS 本地命令 My.DS.GM.AddItem。
+message AddItemCommand {
+  uint64 player_id = 1;  // 目标玩家业务 id(Snowflake uint64,项目硬规则:业务 ID 一律 uint64)
+  uint32 config_id = 2;  // 道具配置 id(对应 Table/道具/d_道具.xlsx 的 ID 列)
+  int32  count     = 3;  // 发放数量(必须 > 0)
+  int32  bag_type  = 4;  // 背包类型(0=人物背包 1=仓库 2=装备栏 3=临时格)
+}
+
+// GmCommand 一条待执行的 GM 指令(oneof 载荷,后续可扩展更多指令类型)。
+message GmCommand {
+  string idempotency_key = 1;  // 幂等键(服务端每次 SendCommand 现生成的 UUID,非雪花业务 ID);DS 按此去重防「同一条指令」被重复投递,不防运维重复下发
+  uint64 match_id        = 2;  // 目标战斗 DS 所在对局
+  int64  created_at_ms   = 3;  // 入队时刻(unix ms)
+  oneof payload {
+    AddItemCommand add_item = 10;
+  }
+  // 11-19 reserved(后续指令类型)
+  reserved 11 to 19;
+}
+
+// ===== SendCommand =====
+
+message SendCommandRequest {
+  uint64 match_id = 1;  // 目标对局(必填,>0)
+  oneof payload {
+    AddItemCommand add_item = 10;
+  }
+  // 11-19 reserved
+  reserved 11 to 19;
+}
+
+message SendCommandResponse {
+  pandora.common.v1.ErrCode code = 1;
+  string idempotency_key = 2;  // 入队成功返回的幂等键 UUID(可用于对账 / 追踪 Ack)
+}
+
+// ===== PollCommands =====
+
+message PollCommandsRequest {
+  uint64 match_id    = 1;  // DS 自己这局的 match_id(必填,>0)
+  string ds_pod_name = 2;  // DS 实例名(审计用,可空)
+  int32  max         = 3;  // 单次最多拉取条数(0 → 服务端默认,上限有服务端夹取)
+}
+
+message PollCommandsResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated GmCommand commands = 2;  // 待执行指令(可能为空);已从队列出队
+}
+
+// ===== AckCommand =====
+
+message AckCommandRequest {
+  uint64 match_id        = 1;  // 目标对局
+  string idempotency_key = 2;  // 被执行指令的幂等键 UUID(与 GmCommand.idempotency_key 对应)
+  bool   ok              = 3;  // 执行是否成功
+  string message         = 4;  // 失败原因 / 备注(排障用)
+}
+
+message AckCommandResponse {
+  pandora.common.v1.ErrCode code = 1;
+}

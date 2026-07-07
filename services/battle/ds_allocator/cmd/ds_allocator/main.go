@@ -35,6 +35,7 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/gm"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/server"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/service"
 )
@@ -169,8 +170,16 @@ func main() {
 
 	svc := service.NewAllocatorService(uc)
 
+	// GmService(GM / 运维指令下发):与 ds_allocator 同进程复用 gRPC 端口。
+	// 运维 GM 工具 SendCommand 入 Redis 队列 → 战斗 DS 轮询 PollCommands 拉取执行(如给玩家发道具)。
+	// 内部接口,不经 Envoy 暴露给玩家客户端。
+	gmSvc := gm.NewService(rdb, logger)
+	// SendCommand 前置校验目标对局是否有活跃战斗镜像:typo / 已结束的 match_id 立即拒,
+	// 避免静默入僵尸队列(repo 天然满足 BattleLivenessChecker,复用同一 Redis)。
+	gmSvc.SetBattleChecker(repo)
+
 	// 5. gRPC + HTTP
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	grpcSrv := server.NewGRPCServer(&cfg, svc, gmSvc)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	// 6. 后台心跳超时扫描(随进程生命周期启停)

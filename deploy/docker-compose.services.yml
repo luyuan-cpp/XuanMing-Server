@@ -17,7 +17,11 @@
 # 容器入口 `-conf etc/cluster.yaml`(地址已是容器服务名,见 gen_cluster_config.ps1)。
 
 x-svc-base: &svc-base
-  restart: unless-stopped
+  # "no":业务容器不随 Docker Desktop 开机自启。unless-stopped 会在重启电脑后把上次
+  # running 的业务容器全部复活、重新抢占 0.0.0.0:500xx,与 k8s port-forward / local 宿主
+  # 进程打架(Envoy host.docker.internal 流量被旧容器截走)。业务容器的生命周期一律由
+  # 一键脚本显式管理;基础设施(dev.yml 的 mysql/redis 等)保留 unless-stopped 不受影响。
+  restart: "no"
   networks: [pandora-net]
   command: ["-conf", "etc/cluster.yaml"]
 
