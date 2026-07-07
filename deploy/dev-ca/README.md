@@ -13,6 +13,10 @@
 > ⚠️ 仅限**开发期**。生产环境 Envoy 用公网 CA(Let's Encrypt / 商业)签的真实域名证书,
 > 玩家设备零配置即可校验,**不需要也不应该**导入这个 dev CA。见 [release-checklist.md](../../docs/ops/release-checklist.md) §3。
 
+> 📦 本页机制(`DebuggingCertificatePath`)覆盖**编辑器 / PIE**。**打包客户端**(分发给其它测试机)
+> 走另一套零配置机制:打包时合并 CA 进 pak,见
+> [client-packaged-dev-tls.md](../../docs/ops/client-packaged-dev-tls.md)。
+
 ## 开发者怎么用(一次性)
 
 新开发者克隆仓库后,跑一次导入脚本:
