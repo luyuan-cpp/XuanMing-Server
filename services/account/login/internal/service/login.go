@@ -60,6 +60,29 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		BattleDsAddr: res.BattleDSAddr,
 		BattleTicket: res.BattleTicket,
 		MatchId:      res.MatchID,
+		// 选角权威化(2026-07-08):玩家当前已选角色(0=从未选过),客户端选角界面预选中用。
+		SelectedRoleId: res.SelectedRoleID,
+	}, nil
+}
+
+// SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。
+//
+// player_id 从 ctx 读(Envoy jwt_authn 验 session 后注入 x-pandora-player-id,
+// middleware/auth 提进 ctx,与 IssueDSTicket 同纪律),请求体不信任自报 player_id。
+func (s *LoginService) SelectRole(ctx context.Context, req *loginv1.SelectRoleRequest) (*loginv1.SelectRoleResponse, error) {
+	playerID, _ := ctx.Value(plog.CtxKeyPlayerID).(uint64)
+	if playerID == 0 {
+		plog.With(ctx).Warnw("msg", "select_role_no_player_id")
+		return &loginv1.SelectRoleResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	addr, ticket, _, err := s.loginUC.SelectRole(ctx, playerID, req.GetRoleId())
+	if err != nil {
+		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
+	}
+	return &loginv1.SelectRoleResponse{
+		Code:      commonv1.ErrCode_OK,
+		HubDsAddr: addr,
+		HubTicket: ticket,
 	}, nil
 }
 
@@ -131,6 +154,7 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 			Jti:         claims.JTI,
 			RegionId:    claims.RegionID,
 			CellId:      claims.CellID,
+			RoleId:      claims.RoleID,
 		},
 	}, nil
 }

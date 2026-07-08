@@ -16,6 +16,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
@@ -24,6 +25,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/biz"
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/conf"
@@ -87,6 +89,26 @@ func main() {
 	// 4. 装配链
 	repo := data.NewMySQLInventoryRepo(db)
 	uc := biz.NewInventoryUsecase(repo, cfg.Inventory)
+
+	// Snowflake(instance_id 生成,W5 ④):仅在启用实例背包(capacity>0)时装配。
+	// node_id_source=static 静态,=etcd 走 etcd 自动抢占,失租自动退出。
+	if cfg.Inventory.Capacity > 0 {
+		// 启动期 schema 检查(2026-07-08):player_item_instance 是后补的表,既有 MySQL
+		// volume / PVC 不会自动重放 init SQL;缺表时实例背包全链路必炸。fail-fast 并指向迁移 SQL。
+		// 未启用(capacity<=0)不检也不读该表(biz.GetInventoryFull 同步跳过),旧库升级不受影响。
+		schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/08-inventory-tables.sql", "player_item_instance"); serr != nil {
+			cancel()
+			helper.Errorw("msg", "mysql_schema_check_failed", "err", serr)
+			os.Exit(1)
+		}
+		cancel()
+
+		sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
+		defer func() { _ = sfCloser.Close() }()
+		uc.SetSnowflake(sf)
+		helper.Infow("msg", "instance_bag_enabled", "capacity", cfg.Inventory.Capacity, "identify_rules", len(cfg.Inventory.IdentifyRules))
+	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)

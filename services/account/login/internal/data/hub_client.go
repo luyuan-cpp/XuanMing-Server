@@ -32,8 +32,11 @@ type HubAssignment struct {
 
 // HubAssigner 给 login.biz 分配大厅 DS 分片。
 // addr 未配 → main 注入 nil,biz 检查 nil 回退自签 hub 票据 + 静态 addr。
+//
+// roleID(选角权威化 2026-07-08):玩家已选角色配置 ID。>0 时 allocator 把它签进
+// hub 票据 claim 并更新归属镜像;0 = 未选角/保留 allocator 已存值。
 type HubAssigner interface {
-	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64) (*HubAssignment, error)
+	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*HubAssignment, error)
 }
 
 // GrpcHubAssigner 实现 HubAssigner,内嵌 grpc client。
@@ -55,11 +58,12 @@ func NewGrpcHubAssigner(conn *grpc.ClientConn) *GrpcHubAssigner {
 // AssignHub 调 HubAllocatorService.AssignHub,返回分片地址 + hub 票据。
 //
 // 登录时玩家尚未组队,teamID 一般为 0;region 由 login 配置给出(空 = 让 allocator 选最空分片)。
-func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64) (*HubAssignment, error) {
+func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*HubAssignment, error) {
 	req := &hubv1.AssignHubRequest{
 		PlayerId: playerID,
 		Region:   region,
 		TeamId:   teamID,
+		RoleId:   roleID,
 	}
 	resp, err := a.client.AssignHub(ctx, req)
 	if err != nil {

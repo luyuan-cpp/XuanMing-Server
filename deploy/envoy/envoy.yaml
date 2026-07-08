@@ -132,6 +132,12 @@ static_resources:
                   path: "/pandora.login.v1.LoginService/IssueDSTicket"
                 requires:
                   provider_name: "pandora_session"
+              # login.SelectRole 选角(选角权威化 2026-07-08):需要 SessionToken,
+              # player_id 从 sub claim 注入 x-pandora-player-id,请求体不信任自报 player_id
+              - match:
+                  path: "/pandora.login.v1.LoginService/SelectRole"
+                requires:
+                  provider_name: "pandora_session"
               # push.Subscribe 必须带 SessionToken(玩家长连接订阅,W3 ④ kafka 路由依赖 player_id)
               - match:
                   prefix: "/pandora.push.v1.PushService/"

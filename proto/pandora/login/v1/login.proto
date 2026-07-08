@@ -44,6 +44,20 @@ service LoginService {
     };
   }
 
+  // SelectRole 立即完成型,选角(2026-07-08)。
+  // 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
+  //   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
+  // 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
+  // Hub DS 从票据 claim 读 role_id 生成角色(不再信任 URL ?role= 自报)。
+  // player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含 player_id。
+  // 幂等:重复调用/换角色重选都是覆盖式 upsert。
+  rpc SelectRole(SelectRoleRequest) returns (SelectRoleResponse) {
+    option (google.api.http) = {
+      post: "/v1/role/select"
+      body: "*"
+    };
+  }
+
   // VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
   // ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
   rpc VerifyDSTicket(VerifyDSTicketRequest) returns (VerifyDSTicketResponse) {
@@ -91,6 +105,11 @@ message LoginResponse {
   string battle_ds_addr = 8;  // 直连 battle DS 的 IP:port
   string battle_ticket  = 9;  // battle DS 票据(JWT,新 jti)
   uint64 match_id       = 10; // 重连对局 ID(Snowflake uint64,CLAUDE.md §9.11)
+  // ===== 选角(2026-07-08)=====
+  // 玩家当前已选角色(player_roles 表,服务端权威)。0 = 从未选过角。
+  // 客户端登录后进选角界面,用此值预选中上次角色;确认后调 SelectRole。
+  // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
+  uint32 selected_role_id = 11;
 }
 
 message LogoutRequest {
@@ -119,6 +138,11 @@ message DSTicket {
   uint32 cell_id        = 8;
   // 9 reserved
   reserved 9;
+  // [proto] 选角权威化(2026-07-08):玩家已选角色签进 hub 票据(与 region_id/cell_id 同一
+  // 套路:权威数据以 JWT claim 下发,DS 本地验签即得,不可伪造)。0 = 票据未携带(旧票兼容 /
+  // battle 票走 match roster)。DS 侧 ResolveRoleIdForPlayer 优先取此值 spawn。
+  // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
+  uint32 role_id        = 10;
 }
 
 message IssueDSTicketRequest {
@@ -144,4 +168,22 @@ message VerifyDSTicketRequest {
 message VerifyDSTicketResponse {
   pandora.common.v1.ErrCode code = 1;
   DSTicket claims = 2;
+}
+
+// ===== 选角(2026-07-08)=====
+
+message SelectRoleRequest {
+  // role_id: 玩家选中的角色配置 ID(CfgRole.Id)。必须 >0 且在服务端白名单
+  // (login 配置 allowed_role_ids;白名单为空 = fail-closed 拒绝,
+  //  仅 dev_allow_any_role=true 时放宽为只校验非 0,严禁上生产)。
+  // player_id 不在请求体,取自 JWT sub(服务端从 ctx 读,同 TransferToLineRequest 纪律)。
+  uint32 role_id = 1;
+}
+
+message SelectRoleResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // hub_ds_addr / hub_ticket: 选角确认后进大厅的"当前有效"地址 + 全新一次性票据
+  // (票据 claim 含 role_id;经 hub_allocator.AssignHub,幂等自愈,同 IssueDSTicketResponse.hub_ds_addr 语义)。
+  string hub_ds_addr = 2;
+  string hub_ticket  = 3;
 }

@@ -68,6 +68,16 @@ type LoginConf struct {
 	// Hub W4 ⑥ 联动:登录成功后调 HubAllocatorService.AssignHub 拿真实 hub_ds_addr + hub_ticket。
 	// addr 为空 → 不调,回退自签 hub 票据 + MockHubDSAddr(便于本机不起 hub_allocator 也能跑通 login)。
 	Hub HubClientConf `yaml:"hub,omitempty" json:"hub,omitempty"`
+
+	// AllowedRoleIDs 是选角白名单(选角权威化 2026-07-08,SelectRole RPC 服务端校验)。
+	// 对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
+	// 非空 = 严格白名单;空 = fail-closed,SelectRole 一律拒绝(防改包客户端签任意 role_id
+	// 进 hub 票据)。dev 宽松(空白名单只校非 0)需显式开 DevAllowAnyRole。
+	AllowedRoleIDs []uint32 `yaml:"allowed_role_ids,omitempty" json:"allowed_role_ids,omitempty"`
+
+	// DevAllowAnyRole 开发期选角宽松开关(默认 false,⚠️ 严禁上生产)。
+	// 为 true 且 AllowedRoleIDs 为空时,SelectRole 只校验 role_id 非 0(配合客户端配置表快速迭代)。
+	DevAllowAnyRole bool `yaml:"dev_allow_any_role,omitempty" json:"dev_allow_any_role,omitempty"`
 }
 
 // LocatorClientConf 是 login 调 player_locator 的客户端参数。

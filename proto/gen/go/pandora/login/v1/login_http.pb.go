@@ -22,6 +22,7 @@ const _ = http.SupportPackageIsVersion1
 const OperationLoginServiceIssueDSTicket = "/pandora.login.v1.LoginService/IssueDSTicket"
 const OperationLoginServiceLogin = "/pandora.login.v1.LoginService/Login"
 const OperationLoginServiceLogout = "/pandora.login.v1.LoginService/Logout"
+const OperationLoginServiceSelectRole = "/pandora.login.v1.LoginService/SelectRole"
 const OperationLoginServiceVerifyDSTicket = "/pandora.login.v1.LoginService/VerifyDSTicket"
 
 type LoginServiceHTTPServer interface {
@@ -32,6 +33,14 @@ type LoginServiceHTTPServer interface {
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	// Logout Logout 立即完成型,清 session
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	// SelectRole SelectRole 立即完成型,选角(2026-07-08)。
+	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
+	//   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
+	// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
+	// Hub DS 从票据 claim 读 role_id 生成角色(不再信任 URL ?role= 自报)。
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含 player_id。
+	// 幂等:重复调用/换角色重选都是覆盖式 upsert。
+	SelectRole(context.Context, *SelectRoleRequest) (*SelectRoleResponse, error)
 	// VerifyDSTicket VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
 	// ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
 	VerifyDSTicket(context.Context, *VerifyDSTicketRequest) (*VerifyDSTicketResponse, error)
@@ -42,6 +51,7 @@ func RegisterLoginServiceHTTPServer(s *http.Server, srv LoginServiceHTTPServer) 
 	r.POST("/v1/login", _LoginService_Login0_HTTP_Handler(srv))
 	r.POST("/v1/logout", _LoginService_Logout0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/issue", _LoginService_IssueDSTicket0_HTTP_Handler(srv))
+	r.POST("/v1/role/select", _LoginService_SelectRole0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/verify", _LoginService_VerifyDSTicket0_HTTP_Handler(srv))
 }
 
@@ -111,6 +121,28 @@ func _LoginService_IssueDSTicket0_HTTP_Handler(srv LoginServiceHTTPServer) func(
 	}
 }
 
+func _LoginService_SelectRole0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SelectRoleRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationLoginServiceSelectRole)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SelectRole(ctx, req.(*SelectRoleRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*SelectRoleResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _LoginService_VerifyDSTicket0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in VerifyDSTicketRequest
@@ -141,6 +173,14 @@ type LoginServiceHTTPClient interface {
 	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *LoginResponse, err error)
 	// Logout Logout 立即完成型,清 session
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
+	// SelectRole SelectRole 立即完成型,选角(2026-07-08)。
+	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
+	//   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
+	// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
+	// Hub DS 从票据 claim 读 role_id 生成角色(不再信任 URL ?role= 自报)。
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含 player_id。
+	// 幂等:重复调用/换角色重选都是覆盖式 upsert。
+	SelectRole(ctx context.Context, req *SelectRoleRequest, opts ...http.CallOption) (rsp *SelectRoleResponse, err error)
 	// VerifyDSTicket VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
 	// ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
 	VerifyDSTicket(ctx context.Context, req *VerifyDSTicketRequest, opts ...http.CallOption) (rsp *VerifyDSTicketResponse, err error)
@@ -189,6 +229,26 @@ func (c *LoginServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReque
 	pattern := "/v1/logout"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationLoginServiceLogout))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SelectRole SelectRole 立即完成型,选角(2026-07-08)。
+// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
+//   → 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
+// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
+// Hub DS 从票据 claim 读 role_id 生成角色(不再信任 URL ?role= 自报)。
+// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含 player_id。
+// 幂等:重复调用/换角色重选都是覆盖式 upsert。
+func (c *LoginServiceHTTPClientImpl) SelectRole(ctx context.Context, in *SelectRoleRequest, opts ...http.CallOption) (*SelectRoleResponse, error) {
+	var out SelectRoleResponse
+	pattern := "/v1/role/select"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationLoginServiceSelectRole))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {

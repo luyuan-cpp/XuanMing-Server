@@ -3294,8 +3294,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     kRegionFieldNumber = 5,
     kPlayerIdFieldNumber = 1,
     kTeamIdFieldNumber = 6,
-    kAssignedAtMsFieldNumber = 7,
     kShardIdFieldNumber = 4,
+    kRoleIdFieldNumber = 8,
+    kAssignedAtMsFieldNumber = 7,
   };
   // string hub_pod_name = 2 [json_name = "hubPodName"];
   void clear_hub_pod_name() ;
@@ -3362,16 +3363,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   void _internal_set_team_id(::uint64_t value);
 
   public:
-  // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-  void clear_assigned_at_ms() ;
-  [[nodiscard]] ::int64_t assigned_at_ms() const;
-  void set_assigned_at_ms(::int64_t value);
-
-  private:
-  ::int64_t _internal_assigned_at_ms() const;
-  void _internal_set_assigned_at_ms(::int64_t value);
-
-  public:
   // uint32 shard_id = 4 [json_name = "shardId"];
   void clear_shard_id() ;
   [[nodiscard]] ::uint32_t shard_id() const;
@@ -3382,12 +3373,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   void _internal_set_shard_id(::uint32_t value);
 
   public:
+  // uint32 role_id = 8 [json_name = "roleId"];
+  void clear_role_id() ;
+  [[nodiscard]] ::uint32_t role_id() const;
+  void set_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_role_id() const;
+  void _internal_set_role_id(::uint32_t value);
+
+  public:
+  // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+  void clear_assigned_at_ms() ;
+  [[nodiscard]] ::int64_t assigned_at_ms() const;
+  void set_assigned_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_assigned_at_ms() const;
+  void _internal_set_assigned_at_ms(::int64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubAssignmentStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 76,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 84,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3420,8 +3431,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     ::google::protobuf::internal::ArenaStringPtr region_;
     ::uint64_t player_id_;
     ::uint64_t team_id_;
-    ::int64_t assigned_at_ms_;
     ::uint32_t shard_id_;
+    ::uint32_t role_id_;
+    ::int64_t assigned_at_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4368,6 +4380,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
     kRegionFieldNumber = 2,
     kPlayerIdFieldNumber = 1,
     kTeamIdFieldNumber = 3,
+    kRoleIdFieldNumber = 4,
   };
   // string region = 2 [json_name = "region"];
   void clear_region() ;
@@ -4404,11 +4417,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
   void _internal_set_team_id(::uint64_t value);
 
   public:
+  // uint32 role_id = 4 [json_name = "roleId"];
+  void clear_role_id() ;
+  [[nodiscard]] ::uint32_t role_id() const;
+  void set_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_role_id() const;
+  void _internal_set_role_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.AssignHubRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 46,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4440,6 +4463,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AssignHubRequest final : public ::g
     ::google::protobuf::internal::ArenaStringPtr region_;
     ::uint64_t player_id_;
     ::uint64_t team_id_;
+    ::uint32_t role_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5020,6 +5044,30 @@ inline ::uint64_t AssignHubRequest::_internal_team_id() const {
 inline void AssignHubRequest::_internal_set_team_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = value;
+}
+
+// uint32 role_id = 4 [json_name = "roleId"];
+inline void AssignHubRequest::clear_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t AssignHubRequest::role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.AssignHubRequest.role_id)
+  return _internal_role_id();
+}
+inline void AssignHubRequest::set_role_id(::uint32_t value) {
+  _internal_set_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.AssignHubRequest.role_id)
+}
+inline ::uint32_t AssignHubRequest::_internal_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.role_id_;
+}
+inline void AssignHubRequest::_internal_set_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -7479,7 +7527,7 @@ inline void HubAssignmentStorageRecord::set_allocated_hub_addr(::std::string* PR
 inline void HubAssignmentStorageRecord::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
@@ -7487,7 +7535,7 @@ inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
 }
 inline void HubAssignmentStorageRecord::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_shard_id() const {
@@ -7591,7 +7639,7 @@ inline void HubAssignmentStorageRecord::_internal_set_team_id(::uint64_t value) 
 inline void HubAssignmentStorageRecord::clear_assigned_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.assigned_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
@@ -7599,7 +7647,7 @@ inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
 }
 inline void HubAssignmentStorageRecord::set_assigned_at_ms(::int64_t value) {
   _internal_set_assigned_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
 }
 inline ::int64_t HubAssignmentStorageRecord::_internal_assigned_at_ms() const {
@@ -7609,6 +7657,30 @@ inline ::int64_t HubAssignmentStorageRecord::_internal_assigned_at_ms() const {
 inline void HubAssignmentStorageRecord::_internal_set_assigned_at_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.assigned_at_ms_ = value;
+}
+
+// uint32 role_id = 8 [json_name = "roleId"];
+inline void HubAssignmentStorageRecord::clear_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t HubAssignmentStorageRecord::role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.role_id)
+  return _internal_role_id();
+}
+inline void HubAssignmentStorageRecord::set_role_id(::uint32_t value) {
+  _internal_set_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.role_id)
+}
+inline ::uint32_t HubAssignmentStorageRecord::_internal_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.role_id_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -69,6 +69,15 @@ login:
   #   false → 账号不存在直接报 ErrLoginAccountNotFound
   dev_auto_register: true
 
+  # 选角白名单(选角权威化 2026-07-08):非空 = 严格白名单;空 = fail-closed 拒绝 SelectRole。
+  # dev 宽松(空白名单只校 role_id 非 0)需显式开下面的 dev_allow_any_role。
+  # allowed_role_ids: [1, 2, 3]
+
+  # 开发期选角宽松开关(⚠️ 仅本机 / 联调,严禁上生产):
+  #   true  → allowed_role_ids 为空时 SelectRole 只校验 role_id 非 0(配合客户端配置表快速迭代)
+  #   false → allowed_role_ids 为空时 SelectRole 一律拒绝(fail-closed,prod 语义)
+  dev_allow_any_role: true
+
   # JWT(W3 ①,2026-06-05):HS256 共享密钥模式。
   # ⚠️ secret 跟 deploy/envoy/envoy.yaml jwt_authn provider 必须一致(envoy 那边
   #    放的是 base64url(secret) 的 JWKS)。可用以下命令算出 base64url:

@@ -114,6 +114,22 @@ extern const ::google::protobuf::internal::ClassDataFull LogoutResponse_class_da
 #else
 extern const LogoutResponseGlobalsTypeInternal LogoutResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SelectRoleRequest;
+struct SelectRoleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SelectRoleRequestGlobalsTypeInternal SelectRoleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SelectRoleRequest_class_data_;
+#else
+extern const SelectRoleRequestGlobalsTypeInternal SelectRoleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SelectRoleResponse;
+struct SelectRoleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SelectRoleResponseGlobalsTypeInternal SelectRoleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SelectRoleResponse_class_data_;
+#else
+extern const SelectRoleResponseGlobalsTypeInternal SelectRoleResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class VerifyDSTicketRequest;
 struct VerifyDSTicketRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -363,6 +379,442 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketRequest final : publi
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr ticket_;
     ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.SelectRoleResponse) */ {
+ public:
+  inline SelectRoleResponse() : SelectRoleResponse(nullptr) {}
+  ~SelectRoleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SelectRoleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SelectRoleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SelectRoleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SelectRoleResponse(const SelectRoleResponse& from) : SelectRoleResponse(nullptr, from) {}
+  inline SelectRoleResponse(SelectRoleResponse&& from) noexcept : SelectRoleResponse(nullptr, ::std::move(from)) {}
+  inline SelectRoleResponse& operator=(const SelectRoleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SelectRoleResponse& operator=(SelectRoleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SelectRoleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleResponse>(&SelectRoleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(SelectRoleResponse& a, SelectRoleResponse& b) { a.Swap(&b); }
+  inline void Swap(SelectRoleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SelectRoleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SelectRoleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SelectRoleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SelectRoleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SelectRoleResponse& from) { SelectRoleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SelectRoleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.SelectRoleResponse"; }
+
+  explicit SelectRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SelectRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelectRoleResponse& from);
+  SelectRoleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SelectRoleResponse&& from) noexcept
+      : SelectRoleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHubDsAddrFieldNumber = 2,
+    kHubTicketFieldNumber = 3,
+    kCodeFieldNumber = 1,
+  };
+  // string hub_ds_addr = 2 [json_name = "hubDsAddr"];
+  void clear_hub_ds_addr() ;
+  [[nodiscard]] const ::std::string& hub_ds_addr() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_ds_addr(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_ds_addr();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_ds_addr();
+  void set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_ds_addr() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_ds_addr(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_ds_addr();
+
+  public:
+  // string hub_ticket = 3 [json_name = "hubTicket"];
+  void clear_hub_ticket() ;
+  [[nodiscard]] const ::std::string& hub_ticket() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_ticket(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_ticket();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_ticket();
+  void set_allocated_hub_ticket(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_ticket() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_ticket(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_ticket();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.SelectRoleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 65,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SelectRoleResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr hub_ds_addr_;
+    ::google::protobuf::internal::ArenaStringPtr hub_ticket_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flogin_2fv1_2flogin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectRoleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.login.v1.SelectRoleRequest) */ {
+ public:
+  inline SelectRoleRequest() : SelectRoleRequest(nullptr) {}
+  ~SelectRoleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SelectRoleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SelectRoleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SelectRoleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SelectRoleRequest(const SelectRoleRequest& from) : SelectRoleRequest(nullptr, from) {}
+  inline SelectRoleRequest(SelectRoleRequest&& from) noexcept : SelectRoleRequest(nullptr, ::std::move(from)) {}
+  inline SelectRoleRequest& operator=(const SelectRoleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SelectRoleRequest& operator=(SelectRoleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SelectRoleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectRoleRequest>(&SelectRoleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(SelectRoleRequest& a, SelectRoleRequest& b) { a.Swap(&b); }
+  inline void Swap(SelectRoleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SelectRoleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SelectRoleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SelectRoleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SelectRoleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SelectRoleRequest& from) { SelectRoleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SelectRoleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.login.v1.SelectRoleRequest"; }
+
+  explicit SelectRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SelectRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelectRoleRequest& from);
+  SelectRoleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SelectRoleRequest&& from) noexcept
+      : SelectRoleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRoleIdFieldNumber = 1,
+  };
+  // uint32 role_id = 1 [json_name = "roleId"];
+  void clear_role_id() ;
+  [[nodiscard]] ::uint32_t role_id() const;
+  void set_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_role_id() const;
+  void _internal_set_role_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.login.v1.SelectRoleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SelectRoleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t role_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -933,8 +1385,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     kPlayerIdFieldNumber = 2,
     kCodeFieldNumber = 1,
     kRegionIdFieldNumber = 6,
-    kMatchIdFieldNumber = 10,
     kCellIdFieldNumber = 7,
+    kSelectedRoleIdFieldNumber = 11,
+    kMatchIdFieldNumber = 10,
   };
   // string session_token = 3 [json_name = "sessionToken"];
   void clear_session_token() ;
@@ -1041,16 +1494,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   void _internal_set_region_id(::uint32_t value);
 
   public:
-  // uint64 match_id = 10 [json_name = "matchId"];
-  void clear_match_id() ;
-  [[nodiscard]] ::uint64_t match_id() const;
-  void set_match_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_match_id() const;
-  void _internal_set_match_id(::uint64_t value);
-
-  public:
   // uint32 cell_id = 7 [json_name = "cellId"];
   void clear_cell_id() ;
   [[nodiscard]] ::uint32_t cell_id() const;
@@ -1061,11 +1504,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
   void _internal_set_cell_id(::uint32_t value);
 
   public:
+  // uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+  void clear_selected_role_id() ;
+  [[nodiscard]] ::uint32_t selected_role_id() const;
+  void set_selected_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_selected_role_id() const;
+  void _internal_set_selected_role_id(::uint32_t value);
+
+  public:
+  // uint64 match_id = 10 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.LoginResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 108,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1102,8 +1565,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LoginResponse final : public ::goog
     ::uint64_t player_id_;
     int code_;
     ::uint32_t region_id_;
-    ::uint64_t match_id_;
     ::uint32_t cell_id_;
+    ::uint32_t selected_role_id_;
+    ::uint64_t match_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2028,6 +2492,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
     kExpiresAtMsFieldNumber = 4,
     kRegionIdFieldNumber = 7,
     kCellIdFieldNumber = 8,
+    kRoleIdFieldNumber = 10,
   };
   // string ds_type = 5 [json_name = "dsType"];
   void clear_ds_type() ;
@@ -2119,11 +2584,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
   void _internal_set_cell_id(::uint32_t value);
 
   public:
+  // uint32 role_id = 10 [json_name = "roleId"];
+  void clear_role_id() ;
+  [[nodiscard]] ::uint32_t role_id() const;
+  void set_role_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_role_id() const;
+  void _internal_set_role_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.DSTicket)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 52,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2160,6 +2635,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
     ::int64_t expires_at_ms_;
     ::uint32_t region_id_;
     ::uint32_t cell_id_;
+    ::uint32_t role_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3057,7 +3533,7 @@ inline void LoginResponse::_internal_set_region_id(::uint32_t value) {
 inline void LoginResponse::clear_cell_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cell_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t LoginResponse::cell_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.cell_id)
@@ -3065,7 +3541,7 @@ inline ::uint32_t LoginResponse::cell_id() const {
 }
 inline void LoginResponse::set_cell_id(::uint32_t value) {
   _internal_set_cell_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.cell_id)
 }
 inline ::uint32_t LoginResponse::_internal_cell_id() const {
@@ -3209,7 +3685,7 @@ inline void LoginResponse::set_allocated_battle_ticket(::std::string* PROTOBUF_N
 inline void LoginResponse::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t LoginResponse::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.match_id)
@@ -3217,7 +3693,7 @@ inline ::uint64_t LoginResponse::match_id() const {
 }
 inline void LoginResponse::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.match_id)
 }
 inline ::uint64_t LoginResponse::_internal_match_id() const {
@@ -3227,6 +3703,30 @@ inline ::uint64_t LoginResponse::_internal_match_id() const {
 inline void LoginResponse::_internal_set_match_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = value;
+}
+
+// uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+inline void LoginResponse::clear_selected_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t LoginResponse::selected_role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.LoginResponse.selected_role_id)
+  return _internal_selected_role_id();
+}
+inline void LoginResponse::set_selected_role_id(::uint32_t value) {
+  _internal_set_selected_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.LoginResponse.selected_role_id)
+}
+inline ::uint32_t LoginResponse::_internal_selected_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_role_id_;
+}
+inline void LoginResponse::_internal_set_selected_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_role_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -3599,6 +4099,30 @@ inline ::uint32_t DSTicket::_internal_cell_id() const {
 inline void DSTicket::_internal_set_cell_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cell_id_ = value;
+}
+
+// uint32 role_id = 10 [json_name = "roleId"];
+inline void DSTicket::clear_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t DSTicket::role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.role_id)
+  return _internal_role_id();
+}
+inline void DSTicket::set_role_id(::uint32_t value) {
+  _internal_set_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.role_id)
+}
+inline ::uint32_t DSTicket::_internal_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.role_id_;
+}
+inline void DSTicket::_internal_set_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4169,6 +4693,190 @@ inline void VerifyDSTicketResponse::set_allocated_claims(::pandora::login::v1::D
 
   _impl_.claims_ = reinterpret_cast<::pandora::login::v1::DSTicket*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.VerifyDSTicketResponse.claims)
+}
+
+// -------------------------------------------------------------------
+
+// SelectRoleRequest
+
+// uint32 role_id = 1 [json_name = "roleId"];
+inline void SelectRoleRequest::clear_role_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t SelectRoleRequest::role_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.SelectRoleRequest.role_id)
+  return _internal_role_id();
+}
+inline void SelectRoleRequest::set_role_id(::uint32_t value) {
+  _internal_set_role_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.SelectRoleRequest.role_id)
+}
+inline ::uint32_t SelectRoleRequest::_internal_role_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.role_id_;
+}
+inline void SelectRoleRequest::_internal_set_role_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SelectRoleResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void SelectRoleResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::pandora::common::v1::ErrCode SelectRoleResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.SelectRoleResponse.code)
+  return _internal_code();
+}
+inline void SelectRoleResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.SelectRoleResponse.code)
+}
+inline ::pandora::common::v1::ErrCode SelectRoleResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void SelectRoleResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// string hub_ds_addr = 2 [json_name = "hubDsAddr"];
+inline void SelectRoleResponse::clear_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ds_addr_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SelectRoleResponse::hub_ds_addr() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.SelectRoleResponse.hub_ds_addr)
+  return _internal_hub_ds_addr();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SelectRoleResponse::set_hub_ds_addr(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.hub_ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.SelectRoleResponse.hub_ds_addr)
+}
+inline ::std::string* PROTOBUF_NONNULL SelectRoleResponse::mutable_hub_ds_addr()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_hub_ds_addr();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.SelectRoleResponse.hub_ds_addr)
+  return _s;
+}
+inline const ::std::string& SelectRoleResponse::_internal_hub_ds_addr() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_ds_addr_.Get();
+}
+inline void SelectRoleResponse::_internal_set_hub_ds_addr(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ds_addr_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SelectRoleResponse::_internal_mutable_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_ds_addr_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SelectRoleResponse::release_hub_ds_addr() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.SelectRoleResponse.hub_ds_addr)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.hub_ds_addr_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_ds_addr_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SelectRoleResponse::set_allocated_hub_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.hub_ds_addr_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ds_addr_.IsDefault()) {
+    _impl_.hub_ds_addr_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.SelectRoleResponse.hub_ds_addr)
+}
+
+// string hub_ticket = 3 [json_name = "hubTicket"];
+inline void SelectRoleResponse::clear_hub_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ticket_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SelectRoleResponse::hub_ticket() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.SelectRoleResponse.hub_ticket)
+  return _internal_hub_ticket();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SelectRoleResponse::set_hub_ticket(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.hub_ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.SelectRoleResponse.hub_ticket)
+}
+inline ::std::string* PROTOBUF_NONNULL SelectRoleResponse::mutable_hub_ticket()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_hub_ticket();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.SelectRoleResponse.hub_ticket)
+  return _s;
+}
+inline const ::std::string& SelectRoleResponse::_internal_hub_ticket() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_ticket_.Get();
+}
+inline void SelectRoleResponse::_internal_set_hub_ticket(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_ticket_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SelectRoleResponse::_internal_mutable_hub_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_ticket_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SelectRoleResponse::release_hub_ticket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.SelectRoleResponse.hub_ticket)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.hub_ticket_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_ticket_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SelectRoleResponse::set_allocated_hub_ticket(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.hub_ticket_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_ticket_.IsDefault()) {
+    _impl_.hub_ticket_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.SelectRoleResponse.hub_ticket)
 }
 
 #ifdef __GNUC__

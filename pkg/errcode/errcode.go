@@ -131,6 +131,8 @@ const (
 	// ErrInventoryIdempotencyConflict 同一 idempotency_key 复用到不同请求(op/item/count/gold 指纹不一致),
 	// 拒绝静默当 no-op;相同指纹的重放返回首次执行的结果快照(不变量 §9.7)。
 	ErrInventoryIdempotencyConflict Code = 7015
+	ErrInventoryCapacityFull        Code = 7016 // 背包格子已满(装备实例数达 capacity 上限)
+	ErrInventorySlotOccupied        Code = 7017 // 目标格子已被占用 / 越界(移动实例)
 )
 
 // dialogue(8000-8999)

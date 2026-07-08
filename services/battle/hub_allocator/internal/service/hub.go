@@ -39,7 +39,7 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 	if req.GetPlayerId() == 0 {
 		return &hubv1.AssignHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId())
+	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId())
 	if err != nil {
 		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
 	}

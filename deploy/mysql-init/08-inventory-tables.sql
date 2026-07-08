@@ -69,3 +69,29 @@ CREATE TABLE IF NOT EXISTS `auction_escrow` (
     KEY `idx_player` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 拍卖挂单托管(escrow:挂单冻结/成交消费/撤单过期退还,资产不在活跃余额可被双花)';
+
+-- W5 ④ 装备实例背包(2026-07-08)
+--
+--   player_item_instance  装备类道具唯一实例(每件独立 + 鉴定后随机属性),不可堆叠。
+--   与 player_items(可堆叠消耗品计数)并存:消耗品走计数,装备走实例(ds-arch §0.5 大厅态持久化)。
+--   instance_id 由 inventory 服务 snowflake 生成(BIGINT UNSIGNED,§11)。
+--   attributes 存鉴定后 roll 的随机属性 JSON([{"attr_id":n,"value":m},...]);未鉴定为 NULL。
+--   幂等发放沿用 inventory_ledger(op=grant_inst,记 instance_id 列表指纹);
+--   鉴定天然幂等(identified=1 后不再 roll,回放已落定属性)。
+--   slot_index 未分配格 = NULL(MySQL 唯一键允许多个 NULL,故多件未分配格不冲突);
+--   分配到具体格后为 [0,capacity),(player_id,slot_index) 唯一,防两件叠同格。
+CREATE TABLE IF NOT EXISTS `player_item_instance` (
+    `instance_id`    BIGINT UNSIGNED  NOT NULL COMMENT '装备实例唯一 ID(snowflake,§11)',
+    `player_id`      BIGINT UNSIGNED  NOT NULL COMMENT '持有玩家',
+    `item_config_id` INT UNSIGNED     NOT NULL COMMENT '配置表道具 ID(uint32,§12)',
+    `identified`     TINYINT          NOT NULL DEFAULT 0 COMMENT '0=未鉴定 1=已鉴定(鉴定后 attributes 落定)',
+    `attributes`     JSON             NULL COMMENT '鉴定后随机属性 [{"attr_id":n,"value":m}];未鉴定为 NULL',
+    `slot_index`     INT              NULL     DEFAULT NULL COMMENT '背包格子索引([0,capacity);NULL=未分配格)',
+    `bound`          TINYINT          NOT NULL DEFAULT 0 COMMENT '0=未绑定 1=绑定(绑定后不可交易/出售)',
+    `created_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`instance_id`),
+    KEY `idx_player` (`player_id`),
+    UNIQUE KEY `uk_player_slot` (`player_id`, `slot_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家装备类道具唯一实例(实例化背包;每件独立 + 鉴定后随机属性)';

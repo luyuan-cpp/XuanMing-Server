@@ -35,6 +35,7 @@ const (
 	LoginService_Login_FullMethodName          = "/pandora.login.v1.LoginService/Login"
 	LoginService_Logout_FullMethodName         = "/pandora.login.v1.LoginService/Logout"
 	LoginService_IssueDSTicket_FullMethodName  = "/pandora.login.v1.LoginService/IssueDSTicket"
+	LoginService_SelectRole_FullMethodName     = "/pandora.login.v1.LoginService/SelectRole"
 	LoginService_VerifyDSTicket_FullMethodName = "/pandora.login.v1.LoginService/VerifyDSTicket"
 )
 
@@ -49,6 +50,16 @@ type LoginServiceClient interface {
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	// IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(ctx context.Context, in *IssueDSTicketRequest, opts ...grpc.CallOption) (*IssueDSTicketResponse, error)
+	// SelectRole 立即完成型,选角(2026-07-08)。
+	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
+	//
+	//	→ 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
+	//
+	// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
+	// Hub DS 从票据 claim 读 role_id 生成角色(不再信任 URL ?role= 自报)。
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含 player_id。
+	// 幂等:重复调用/换角色重选都是覆盖式 upsert。
+	SelectRole(ctx context.Context, in *SelectRoleRequest, opts ...grpc.CallOption) (*SelectRoleResponse, error)
 	// VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
 	// ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
 	VerifyDSTicket(ctx context.Context, in *VerifyDSTicketRequest, opts ...grpc.CallOption) (*VerifyDSTicketResponse, error)
@@ -92,6 +103,16 @@ func (c *loginServiceClient) IssueDSTicket(ctx context.Context, in *IssueDSTicke
 	return out, nil
 }
 
+func (c *loginServiceClient) SelectRole(ctx context.Context, in *SelectRoleRequest, opts ...grpc.CallOption) (*SelectRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelectRoleResponse)
+	err := c.cc.Invoke(ctx, LoginService_SelectRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *loginServiceClient) VerifyDSTicket(ctx context.Context, in *VerifyDSTicketRequest, opts ...grpc.CallOption) (*VerifyDSTicketResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyDSTicketResponse)
@@ -113,6 +134,16 @@ type LoginServiceServer interface {
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	// IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(context.Context, *IssueDSTicketRequest) (*IssueDSTicketResponse, error)
+	// SelectRole 立即完成型,选角(2026-07-08)。
+	// 玩家在选角界面确认角色后调用:服务端校验 role_id 合法 → 落库(player_roles,权威源)
+	//
+	//	→ 经 hub_allocator.AssignHub 拿"当前有效"大厅地址 + 把 role_id 签进全新 hub 票据。
+	//
+	// 客户端凭 response 的 hub_ds_addr + hub_ticket ClientTravel 进大厅;
+	// Hub DS 从票据 claim 读 role_id 生成角色(不再信任 URL ?role= 自报)。
+	// player_id 取自 JWT sub(Envoy jwt_authn 注入 x-pandora-player-id),请求体不含 player_id。
+	// 幂等:重复调用/换角色重选都是覆盖式 upsert。
+	SelectRole(context.Context, *SelectRoleRequest) (*SelectRoleResponse, error)
 	// VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
 	// ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
 	VerifyDSTicket(context.Context, *VerifyDSTicketRequest) (*VerifyDSTicketResponse, error)
@@ -133,6 +164,9 @@ func (UnimplementedLoginServiceServer) Logout(context.Context, *LogoutRequest) (
 }
 func (UnimplementedLoginServiceServer) IssueDSTicket(context.Context, *IssueDSTicketRequest) (*IssueDSTicketResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IssueDSTicket not implemented")
+}
+func (UnimplementedLoginServiceServer) SelectRole(context.Context, *SelectRoleRequest) (*SelectRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SelectRole not implemented")
 }
 func (UnimplementedLoginServiceServer) VerifyDSTicket(context.Context, *VerifyDSTicketRequest) (*VerifyDSTicketResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyDSTicket not implemented")
@@ -211,6 +245,24 @@ func _LoginService_IssueDSTicket_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginService_SelectRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SelectRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).SelectRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_SelectRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).SelectRole(ctx, req.(*SelectRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LoginService_VerifyDSTicket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyDSTicketRequest)
 	if err := dec(in); err != nil {
@@ -247,6 +299,10 @@ var LoginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IssueDSTicket",
 			Handler:    _LoginService_IssueDSTicket_Handler,
+		},
+		{
+			MethodName: "SelectRole",
+			Handler:    _LoginService_SelectRole_Handler,
 		},
 		{
 			MethodName: "VerifyDSTicket",

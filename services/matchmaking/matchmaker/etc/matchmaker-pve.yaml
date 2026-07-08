@@ -58,6 +58,9 @@ match:
   # locator_addr: player_locator 服务 gRPC 直连地址(位置上报 + StartMatch 前置查战斗态)
   locator_addr: "127.0.0.1:50006"
   battle_gate_fail_open: false
+  # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 + 成局最终门)。
+  # UE Hub DS player_ids 保活链 2026-07-08 已实机联调验证,故开启;回归失败先关再排查(见 matchmaker-dev.yaml)。
+  liveness_gate_enabled: true
   # map_id: PVE 默认副本(客户端 StartMatchRequest.map_id=0 时的兜底;对齐 g_关卡.xlsx,7=SonglinTown 松林镇副本)
   map_id: 7
   # game_mode: PVE 撮合池命名空间 + 透传 ds_allocator(DS env PANDORA_GAME_MODE / Agones label)

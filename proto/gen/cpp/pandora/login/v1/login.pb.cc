@@ -47,6 +47,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
         // ::pandora::login::v1::VerifyDSTicketResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::login::v1::SelectRoleRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::login::v1::SelectRoleResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -205,6 +209,311 @@ const ::_pbi::ClassData* VerifyDSTicketRequest_get_class_data() {
   return VerifyDSTicketRequest_globals_.GetClassData();
 #else
   return VerifyDSTicketRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SelectRoleResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SelectRoleResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_._has_bits_);
+};
+
+constexpr SelectRoleResponse::ParseTableT_ SelectRoleResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::login::v1::SelectRoleResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SelectRoleResponse, _impl_.code_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_.code_)}},
+      // string hub_ds_addr = 2 [json_name = "hubDsAddr"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_.hub_ds_addr_)}},
+      // string hub_ticket = 3 [json_name = "hubTicket"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_.hub_ticket_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_.code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string hub_ds_addr = 2 [json_name = "hubDsAddr"];
+      {PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_.hub_ds_addr_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_ticket = 3 [json_name = "hubTicket"];
+      {PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_.hub_ticket_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\43\0\13\12\0\0\0\0"
+      "pandora.login.v1.SelectRoleResponse"
+      "hub_ds_addr"
+      "hub_ticket"
+    }},
+  };
+}
+
+
+inline constexpr SelectRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        hub_ds_addr_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_ticket_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+
+template <typename>
+constexpr SelectRoleResponse::SelectRoleResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SelectRoleResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SelectRoleResponse(arena);
+}
+constexpr auto SelectRoleResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SelectRoleResponse), alignof(SelectRoleResponse));
+}
+constexpr auto SelectRoleResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SelectRoleResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SelectRoleResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SelectRoleResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SelectRoleResponse>(), &SelectRoleResponse::ByteSizeLong,
+              &SelectRoleResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SelectRoleResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SelectRoleResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SelectRoleResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SelectRoleResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SelectRoleResponse::InternalGenerateClassData_(
+            _default, &SelectRoleResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SelectRoleResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SelectRoleResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SelectRoleResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SelectRoleResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SelectRoleResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SelectRoleResponseGlobalsTypeInternal SelectRoleResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SelectRoleResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SelectRoleResponse_globals_.GetClassData();
+#else
+  return SelectRoleResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SelectRoleRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SelectRoleRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SelectRoleRequest, _impl_._has_bits_);
+};
+
+constexpr SelectRoleRequest::ParseTableT_ SelectRoleRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SelectRoleRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::login::v1::SelectRoleRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 role_id = 1 [json_name = "roleId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SelectRoleRequest, _impl_.role_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SelectRoleRequest, _impl_.role_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 role_id = 1 [json_name = "roleId"];
+      {PROTOBUF_FIELD_OFFSET(SelectRoleRequest, _impl_.role_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SelectRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        role_id_{0u} {}
+
+template <typename>
+constexpr SelectRoleRequest::SelectRoleRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SelectRoleRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SelectRoleRequest(arena);
+}
+constexpr auto SelectRoleRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SelectRoleRequest), alignof(SelectRoleRequest));
+}
+constexpr auto SelectRoleRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SelectRoleRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SelectRoleRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SelectRoleRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SelectRoleRequest>(), &SelectRoleRequest::ByteSizeLong,
+              &SelectRoleRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SelectRoleRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[9],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SelectRoleRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SelectRoleRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SelectRoleRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SelectRoleRequest::InternalGenerateClassData_(
+            _default, &SelectRoleRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SelectRoleRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SelectRoleRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SelectRoleRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SelectRoleRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SelectRoleRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SelectRoleRequestGlobalsTypeInternal SelectRoleRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SelectRoleRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SelectRoleRequest_globals_.GetClassData();
+#else
+  return SelectRoleRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -508,11 +817,11 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -548,8 +857,8 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
        {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.region_id_)}},
       // uint32 cell_id = 7 [json_name = "cellId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.cell_id_), 9>(),
-       {56, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.cell_id_), 8>(),
+       {56, 8, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_)}},
       // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
       {::_pbi::TcParser::FastUS1,
@@ -560,10 +869,13 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
        {74, 4, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ticket_)}},
       // uint64 match_id = 10 [json_name = "matchId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoginResponse, _impl_.match_id_), 8>(),
-       {80, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LoginResponse, _impl_.match_id_), 10>(),
+       {80, 10, 0,
         PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LoginResponse, _impl_.selected_role_id_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.selected_role_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -584,13 +896,15 @@ constexpr LoginResponse::ParseTableT_ LoginResponse::InternalGenerateParseTable_
       // uint32 region_id = 6 [json_name = "regionId"];
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.region_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cell_id = 7 [json_name = "cellId"];
-      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string battle_ds_addr = 8 [json_name = "battleDsAddr"];
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ds_addr_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string battle_ticket = 9 [json_name = "battleTicket"];
       {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.battle_ticket_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 match_id = 10 [json_name = "matchId"];
-      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+      {PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.selected_role_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -628,8 +942,9 @@ inline constexpr LoginResponse::Impl_::Impl_(
         player_id_{::uint64_t{0u}},
         code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
         region_id_{0u},
-        match_id_{::uint64_t{0u}},
-        cell_id_{0u} {}
+        cell_id_{0u},
+        selected_role_id_{0u},
+        match_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr LoginResponse::LoginResponse(::_pbi::ConstantInitialized,
@@ -1251,11 +1566,11 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(DSTicket, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1265,10 +1580,7 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
       ::_pbi::TcParser::GetTable<::pandora::login::v1::DSTicket>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 cell_id = 8 [json_name = "cellId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.cell_id_), 7>(),
-       {64, 7, 0,
-        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.player_id_), 2>(),
        {8, 2, 0,
@@ -1297,6 +1609,20 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.region_id_), 6>(),
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.region_id_)}},
+      // uint32 cell_id = 8 [json_name = "cellId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.cell_id_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 role_id = 10 [json_name = "roleId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.role_id_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1316,6 +1642,8 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
       {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.region_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cell_id = 8 [json_name = "cellId"];
       {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 role_id = 10 [json_name = "roleId"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1343,7 +1671,8 @@ inline constexpr DSTicket::Impl_::Impl_(
         issued_at_ms_{::int64_t{0}},
         expires_at_ms_{::int64_t{0}},
         region_id_{0u},
-        cell_id_{0u} {}
+        cell_id_{0u},
+        role_id_{0u} {}
 
 template <typename>
 constexpr DSTicket::DSTicket(::_pbi::ConstantInitialized,
@@ -1618,7 +1947,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.session_token_),
@@ -1629,16 +1958,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.battle_ds_addr_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.battle_ticket_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LoginResponse, _impl_.selected_role_id_),
         6,
         5,
         0,
         1,
         2,
         7,
-        9,
+        8,
         3,
         4,
-        8,
+        10,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::LogoutRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1651,7 +1982,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.issued_at_ms_),
@@ -1660,6 +1991,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.jti_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.region_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.cell_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.role_id_),
         2,
         3,
         4,
@@ -1668,6 +2000,7 @@ const ::uint32_t
         1,
         6,
         7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::IssueDSTicketRequest, _impl_._has_bits_),
         6, // hasbit index offset
@@ -1700,19 +2033,35 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketResponse, _impl_.claims_),
         1,
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleRequest, _impl_.role_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleResponse, _impl_.hub_ds_addr_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::SelectRoleResponse, _impl_.hub_ticket_),
+        2,
+        0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::login::v1::LoginRequest)},
         {15, sizeof(::pandora::login::v1::LoginResponse)},
-        {38, sizeof(::pandora::login::v1::LogoutRequest)},
-        {43, sizeof(::pandora::login::v1::LogoutResponse)},
-        {48, sizeof(::pandora::login::v1::DSTicket)},
-        {67, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
-        {76, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
-        {85, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
-        {92, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {40, sizeof(::pandora::login::v1::LogoutRequest)},
+        {45, sizeof(::pandora::login::v1::LogoutResponse)},
+        {50, sizeof(::pandora::login::v1::DSTicket)},
+        {71, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
+        {80, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
+        {89, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
+        {96, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {103, sizeof(::pandora::login::v1::SelectRoleRequest)},
+        {108, sizeof(::pandora::login::v1::SelectRoleResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1725,6 +2074,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::login::v1::IssueDSTicketResponse_globals_,
         &::pandora::login::v1::VerifyDSTicketRequest_globals_,
         &::pandora::login::v1::VerifyDSTicketResponse_globals_,
+        &::pandora::login::v1::SelectRoleRequest_globals_,
+        &::pandora::login::v1::SelectRoleResponse_globals_,
 };
 const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1736,7 +2087,7 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "e_id\030\003 \001(\tR\010deviceId\022%\n\016client_version\030\004"
     " \001(\tR\rclientVersion\022\026\n\006region\030\n \001(\tR\006reg"
     "ion\022\026\n\006locale\030\013 \001(\tR\006localeJ\004\010\005\020\nJ\004\010\014\0202\""
-    "\334\002\n\rLoginResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "\206\003\n\rLoginResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
     "a.common.v1.ErrCodeR\004code\022\033\n\tplayer_id\030\002"
     " \001(\004R\010playerId\022#\n\rsession_token\030\003 \001(\tR\014s"
     "essionToken\022\036\n\013hub_ds_addr\030\004 \001(\tR\thubDsA"
@@ -1744,40 +2095,49 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "gion_id\030\006 \001(\rR\010regionId\022\027\n\007cell_id\030\007 \001(\r"
     "R\006cellId\022$\n\016battle_ds_addr\030\010 \001(\tR\014battle"
     "DsAddr\022#\n\rbattle_ticket\030\t \001(\tR\014battleTic"
-    "ket\022\031\n\010match_id\030\n \001(\004R\007matchId\"4\n\rLogout"
-    "Request\022#\n\rsession_token\030\001 \001(\tR\014sessionT"
-    "oken\"@\n\016LogoutResponse\022.\n\004code\030\001 \001(\0162\032.p"
-    "andora.common.v1.ErrCodeR\004code\"\357\001\n\010DSTic"
-    "ket\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010matc"
-    "h_id\030\002 \001(\004R\007matchId\022 \n\014issued_at_ms\030\003 \001("
-    "\003R\nissuedAtMs\022\"\n\rexpires_at_ms\030\004 \001(\003R\013ex"
-    "piresAtMs\022\027\n\007ds_type\030\005 \001(\tR\006dsType\022\020\n\003jt"
-    "i\030\006 \001(\tR\003jti\022\033\n\tregion_id\030\007 \001(\rR\010regionI"
-    "d\022\027\n\007cell_id\030\010 \001(\rR\006cellIdJ\004\010\t\020\n\"q\n\024Issu"
-    "eDSTicketRequest\022#\n\rsession_token\030\001 \001(\tR"
-    "\014sessionToken\022\027\n\007ds_type\030\002 \001(\tR\006dsType\022\033"
-    "\n\ttarget_id\030\003 \001(\004R\010targetId\"\177\n\025IssueDSTi"
-    "cketResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCodeR\004code\022\026\n\006ticket\030\002 \001(\tR\006ti"
-    "cket\022\036\n\013hub_ds_addr\030\003 \001(\tR\thubDsAddr\"O\n\025"
-    "VerifyDSTicketRequest\022\026\n\006ticket\030\001 \001(\tR\006t"
-    "icket\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\"|\n"
-    "\026VerifyDSTicketResponse\022.\n\004code\030\001 \001(\0162\032."
-    "pandora.common.v1.ErrCodeR\004code\0222\n\006claim"
-    "s\030\002 \001(\0132\032.pandora.login.v1.DSTicketR\006cla"
-    "ims2\334\003\n\014LoginService\022^\n\005Login\022\036.pandora."
-    "login.v1.LoginRequest\032\037.pandora.login.v1"
-    ".LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/login:\001*\022b\n\006"
-    "Logout\022\037.pandora.login.v1.LogoutRequest\032"
-    " .pandora.login.v1.LogoutResponse\"\025\202\323\344\223\002"
-    "\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTicket\022&.pan"
-    "dora.login.v1.IssueDSTicketRequest\032\'.pan"
-    "dora.login.v1.IssueDSTicketResponse\"\036\202\323\344"
-    "\223\002\030\"\023/v1/ds/ticket/issue:\001*\022\204\001\n\016VerifyDS"
-    "Ticket\022\'.pandora.login.v1.VerifyDSTicket"
-    "Request\032(.pandora.login.v1.VerifyDSTicke"
-    "tResponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/verify:"
-    "\001*b\006proto3"
+    "ket\022\031\n\010match_id\030\n \001(\004R\007matchId\022(\n\020select"
+    "ed_role_id\030\013 \001(\rR\016selectedRoleId\"4\n\rLogo"
+    "utRequest\022#\n\rsession_token\030\001 \001(\tR\014sessio"
+    "nToken\"@\n\016LogoutResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\"\210\002\n\010DST"
+    "icket\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010ma"
+    "tch_id\030\002 \001(\004R\007matchId\022 \n\014issued_at_ms\030\003 "
+    "\001(\003R\nissuedAtMs\022\"\n\rexpires_at_ms\030\004 \001(\003R\013"
+    "expiresAtMs\022\027\n\007ds_type\030\005 \001(\tR\006dsType\022\020\n\003"
+    "jti\030\006 \001(\tR\003jti\022\033\n\tregion_id\030\007 \001(\rR\010regio"
+    "nId\022\027\n\007cell_id\030\010 \001(\rR\006cellId\022\027\n\007role_id\030"
+    "\n \001(\rR\006roleIdJ\004\010\t\020\n\"q\n\024IssueDSTicketRequ"
+    "est\022#\n\rsession_token\030\001 \001(\tR\014sessionToken"
+    "\022\027\n\007ds_type\030\002 \001(\tR\006dsType\022\033\n\ttarget_id\030\003"
+    " \001(\004R\010targetId\"\177\n\025IssueDSTicketResponse\022"
+    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
+    "eR\004code\022\026\n\006ticket\030\002 \001(\tR\006ticket\022\036\n\013hub_d"
+    "s_addr\030\003 \001(\tR\thubDsAddr\"O\n\025VerifyDSTicke"
+    "tRequest\022\026\n\006ticket\030\001 \001(\tR\006ticket\022\036\n\013ds_p"
+    "od_name\030\002 \001(\tR\tdsPodName\"|\n\026VerifyDSTick"
+    "etResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
+    "n.v1.ErrCodeR\004code\0222\n\006claims\030\002 \001(\0132\032.pan"
+    "dora.login.v1.DSTicketR\006claims\",\n\021Select"
+    "RoleRequest\022\027\n\007role_id\030\001 \001(\rR\006roleId\"\203\001\n"
+    "\022SelectRoleResponse\022.\n\004code\030\001 \001(\0162\032.pand"
+    "ora.common.v1.ErrCodeR\004code\022\036\n\013hub_ds_ad"
+    "dr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_ticket\030\003 \001(\tR"
+    "\thubTicket2\321\004\n\014LoginService\022^\n\005Login\022\036.p"
+    "andora.login.v1.LoginRequest\032\037.pandora.l"
+    "ogin.v1.LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/login"
+    ":\001*\022b\n\006Logout\022\037.pandora.login.v1.LogoutR"
+    "equest\032 .pandora.login.v1.LogoutResponse"
+    "\"\025\202\323\344\223\002\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTicke"
+    "t\022&.pandora.login.v1.IssueDSTicketReques"
+    "t\032\'.pandora.login.v1.IssueDSTicketRespon"
+    "se\"\036\202\323\344\223\002\030\"\023/v1/ds/ticket/issue:\001*\022s\n\nSe"
+    "lectRole\022#.pandora.login.v1.SelectRoleRe"
+    "quest\032$.pandora.login.v1.SelectRoleRespo"
+    "nse\"\032\202\323\344\223\002\024\"\017/v1/role/select:\001*\022\204\001\n\016Veri"
+    "fyDSTicket\022\'.pandora.login.v1.VerifyDSTi"
+    "cketRequest\032(.pandora.login.v1.VerifyDST"
+    "icketResponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/ver"
+    "ify:\001*b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -1788,13 +2148,13 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    1970,
+    2334,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps,
     2,
-    9,
+    11,
     schemas,
     file_message_globals,
     TableStruct_pandora_2flogin_2fv1_2flogin_2eproto::offsets,
@@ -2229,9 +2589,9 @@ LoginResponse::LoginResponse(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, cell_id_) -
+           offsetof(Impl_, match_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::cell_id_));
+               sizeof(Impl_::match_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.login.v1.LoginResponse)
 }
@@ -2250,9 +2610,9 @@ inline void LoginResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, cell_id_) -
+           offsetof(Impl_, match_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::cell_id_));
+               sizeof(Impl_::match_id_));
 }
 LoginResponse::~LoginResponse() {
   // @@protoc_insertion_point(destructor:pandora.login.v1.LoginResponse)
@@ -2329,10 +2689,10 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
         reinterpret_cast<char*>(&_impl_.region_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.region_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cell_id_) -
-        reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.cell_id_));
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.cell_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.match_id_) -
+        reinterpret_cast<char*>(&_impl_.cell_id_)) + sizeof(_impl_.match_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2415,7 +2775,7 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
   }
 
   // uint32 cell_id = 7 [json_name = "cellId"];
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_cell_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2444,11 +2804,20 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
   }
 
   // uint64 match_id = 10 [json_name = "matchId"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_match_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           10, this_._internal_match_id(), target);
+    }
+  }
+
+  // uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_selected_role_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_selected_role_id(), target);
     }
   }
 
@@ -2535,19 +2904,26 @@ PROTOBUF_NOINLINE void LoginResponse::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    // uint64 match_id = 10 [json_name = "matchId"];
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_match_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_match_id());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 cell_id = 7 [json_name = "cellId"];
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_cell_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cell_id());
+      }
+    }
+    // uint32 selected_role_id = 11 [json_name = "selectedRoleId"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_selected_role_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_selected_role_id());
+      }
+    }
+    // uint64 match_id = 10 [json_name = "matchId"];
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_match_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_match_id());
       }
     }
   }
@@ -2630,15 +3006,20 @@ void LoginResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_match_id() != 0) {
-        _this->_impl_.match_id_ = from._impl_.match_id_;
+      if (from._internal_cell_id() != 0) {
+        _this->_impl_.cell_id_ = from._impl_.cell_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_cell_id() != 0) {
-        _this->_impl_.cell_id_ = from._impl_.cell_id_;
+      if (from._internal_selected_role_id() != 0) {
+        _this->_impl_.selected_role_id_ = from._impl_.selected_role_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_match_id() != 0) {
+        _this->_impl_.match_id_ = from._impl_.match_id_;
       }
     }
   }
@@ -2667,8 +3048,8 @@ void LoginResponse::InternalSwap(LoginResponse* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ds_addr_, &other->_impl_.battle_ds_addr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ticket_, &other->_impl_.battle_ticket_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.cell_id_)
-      + sizeof(LoginResponse::_impl_.cell_id_)
+      PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.match_id_)
+      + sizeof(LoginResponse::_impl_.match_id_)
       - PROTOBUF_FIELD_OFFSET(LoginResponse, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -3118,9 +3499,9 @@ DSTicket::DSTicket(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, cell_id_) -
+           offsetof(Impl_, role_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::cell_id_));
+               sizeof(Impl_::role_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.login.v1.DSTicket)
 }
@@ -3136,9 +3517,9 @@ inline void DSTicket::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, cell_id_) -
+           offsetof(Impl_, role_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::cell_id_));
+               sizeof(Impl_::role_id_));
 }
 DSTicket::~DSTicket() {
   // @@protoc_insertion_point(destructor:pandora.login.v1.DSTicket)
@@ -3203,6 +3584,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
         reinterpret_cast<char*>(&_impl_.cell_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.cell_id_));
   }
+  _impl_.role_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -3300,6 +3682,15 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
     }
   }
 
+  // uint32 role_id = 10 [json_name = "roleId"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_role_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_role_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3383,6 +3774,15 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
       }
     }
   }
+   {
+    // uint32 role_id = 10 [json_name = "roleId"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_role_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_role_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -3450,6 +3850,11 @@ void DSTicket::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_role_id() != 0) {
+      _this->_impl_.role_id_ = from._impl_.role_id_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -3472,8 +3877,8 @@ void DSTicket::InternalSwap(DSTicket* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_type_, &other->_impl_.ds_type_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.jti_, &other->_impl_.jti_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_)
-      + sizeof(DSTicket::_impl_.cell_id_)
+      PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_)
+      + sizeof(DSTicket::_impl_.role_id_)
       - PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -4533,6 +4938,472 @@ void VerifyDSTicketResponse::InternalSwap(VerifyDSTicketResponse* PROTOBUF_RESTR
 }
 
 ::google::protobuf::Metadata VerifyDSTicketResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SelectRoleRequest::SelectRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SelectRoleRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.login.v1.SelectRoleRequest)
+}
+SelectRoleRequest::SelectRoleRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelectRoleRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SelectRoleRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SelectRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SelectRoleRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.role_id_ = {};
+}
+SelectRoleRequest::~SelectRoleRequest() {
+  // @@protoc_insertion_point(destructor:pandora.login.v1.SelectRoleRequest)
+  SharedDtor(*this);
+}
+inline void SelectRoleRequest::SharedDtor(MessageLite& self) {
+  SelectRoleRequest& this_ = static_cast<SelectRoleRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SelectRoleRequest_class_data_ =
+        SelectRoleRequest::InternalGenerateClassData_(SelectRoleRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SelectRoleRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SelectRoleRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SelectRoleRequest_class_data_.tc_table);
+  return SelectRoleRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SelectRoleRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SelectRoleRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SelectRoleRequest_globals_));
+  return SelectRoleRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SelectRoleRequest::ParseTableT_
+    SelectRoleRequest::_table_ =
+        SelectRoleRequest::InternalGenerateParseTable_(SelectRoleRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SelectRoleRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.login.v1.SelectRoleRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.role_id_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SelectRoleRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SelectRoleRequest& this_ = static_cast<const SelectRoleRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SelectRoleRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SelectRoleRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.login.v1.SelectRoleRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 role_id = 1 [json_name = "roleId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_role_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_role_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.login.v1.SelectRoleRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SelectRoleRequest::ByteSizeLong(const MessageLite& base) {
+  const SelectRoleRequest& this_ = static_cast<const SelectRoleRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SelectRoleRequest::ByteSizeLong() const {
+  const SelectRoleRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.login.v1.SelectRoleRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 role_id = 1 [json_name = "roleId"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_role_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_role_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SelectRoleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SelectRoleRequest*>(&to_msg);
+  auto& from = static_cast<const SelectRoleRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.login.v1.SelectRoleRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_role_id() != 0) {
+      _this->_impl_.role_id_ = from._impl_.role_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SelectRoleRequest::CopyFrom(const SelectRoleRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.login.v1.SelectRoleRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SelectRoleRequest::InternalSwap(SelectRoleRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.role_id_, other->_impl_.role_id_);
+}
+
+::google::protobuf::Metadata SelectRoleRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SelectRoleResponse::SelectRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SelectRoleResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.login.v1.SelectRoleResponse)
+}
+PROTOBUF_NDEBUG_INLINE SelectRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::login::v1::SelectRoleResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        hub_ds_addr_(arena, from.hub_ds_addr_),
+        hub_ticket_(arena, from.hub_ticket_) {}
+
+SelectRoleResponse::SelectRoleResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SelectRoleResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SelectRoleResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SelectRoleResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.code_ = from._impl_.code_;
+
+  // @@protoc_insertion_point(copy_constructor:pandora.login.v1.SelectRoleResponse)
+}
+PROTOBUF_NDEBUG_INLINE SelectRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        hub_ds_addr_(arena),
+        hub_ticket_(arena) {}
+
+inline void SelectRoleResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.code_ = {};
+}
+SelectRoleResponse::~SelectRoleResponse() {
+  // @@protoc_insertion_point(destructor:pandora.login.v1.SelectRoleResponse)
+  SharedDtor(*this);
+}
+inline void SelectRoleResponse::SharedDtor(MessageLite& self) {
+  SelectRoleResponse& this_ = static_cast<SelectRoleResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.hub_ds_addr_.Destroy();
+  this_._impl_.hub_ticket_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SelectRoleResponse_class_data_ =
+        SelectRoleResponse::InternalGenerateClassData_(SelectRoleResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SelectRoleResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SelectRoleResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SelectRoleResponse_class_data_.tc_table);
+  return SelectRoleResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SelectRoleResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SelectRoleResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SelectRoleResponse_globals_));
+  return SelectRoleResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SelectRoleResponse::ParseTableT_
+    SelectRoleResponse::_table_ =
+        SelectRoleResponse::InternalGenerateParseTable_(SelectRoleResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SelectRoleResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.login.v1.SelectRoleResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.hub_ds_addr_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.hub_ticket_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.code_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SelectRoleResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SelectRoleResponse& this_ = static_cast<const SelectRoleResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SelectRoleResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SelectRoleResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.login.v1.SelectRoleResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // string hub_ds_addr = 2 [json_name = "hubDsAddr"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_hub_ds_addr().empty()) {
+      const ::std::string& _s = this_._internal_hub_ds_addr();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.SelectRoleResponse.hub_ds_addr");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string hub_ticket = 3 [json_name = "hubTicket"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_hub_ticket().empty()) {
+      const ::std::string& _s = this_._internal_hub_ticket();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.SelectRoleResponse.hub_ticket");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.login.v1.SelectRoleResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SelectRoleResponse::ByteSizeLong(const MessageLite& base) {
+  const SelectRoleResponse& this_ = static_cast<const SelectRoleResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SelectRoleResponse::ByteSizeLong() const {
+  const SelectRoleResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.login.v1.SelectRoleResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string hub_ds_addr = 2 [json_name = "hubDsAddr"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_hub_ds_addr().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_ds_addr());
+      }
+    }
+    // string hub_ticket = 3 [json_name = "hubTicket"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_hub_ticket().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_ticket());
+      }
+    }
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SelectRoleResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SelectRoleResponse*>(&to_msg);
+  auto& from = static_cast<const SelectRoleResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.login.v1.SelectRoleResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_hub_ds_addr().empty()) {
+        _this->_internal_set_hub_ds_addr(from._internal_hub_ds_addr());
+      } else {
+        if (_this->_impl_.hub_ds_addr_.IsDefault()) {
+          _this->_internal_set_hub_ds_addr("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_hub_ticket().empty()) {
+        _this->_internal_set_hub_ticket(from._internal_hub_ticket());
+      } else {
+        if (_this->_impl_.hub_ticket_.IsDefault()) {
+          _this->_internal_set_hub_ticket("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SelectRoleResponse::CopyFrom(const SelectRoleResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.login.v1.SelectRoleResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SelectRoleResponse::InternalSwap(SelectRoleResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_ds_addr_, &other->_impl_.hub_ds_addr_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_ticket_, &other->_impl_.hub_ticket_, arena);
+  swap(_impl_.code_, other->_impl_.code_);
+}
+
+::google::protobuf::Metadata SelectRoleResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

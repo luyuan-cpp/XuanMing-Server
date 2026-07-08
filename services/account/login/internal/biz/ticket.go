@@ -48,6 +48,8 @@ type DSTicketClaims struct {
 	// 单 Cell / dev 票据为 0。DS 侧据此校验票据 Cell == 本 DS 所在 Cell,防跨单元串号。
 	RegionID uint32
 	CellID   uint32
+	// RoleID 是票据携带的玩家已选角色(选角权威化 2026-07-08)。0 = 未携带。
+	RoleID uint32
 }
 
 // TicketUsecase 处理 DSTicket 的签发 / 校验。
@@ -171,6 +173,7 @@ func (u *TicketUsecase) VerifyDSTicket(ctx context.Context, ticket, dsPodName st
 		JTI:      claims.ID,
 		RegionID: claims.RegionID,
 		CellID:   claims.CellID,
+		RoleID:   claims.RoleID,
 	}
 	if claims.IssuedAt != nil {
 		out.IssuedAtMs = claims.IssuedAt.UnixMilli()

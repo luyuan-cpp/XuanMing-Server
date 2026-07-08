@@ -101,6 +101,32 @@ type InventoryRepo interface {
 	//   item escrow:退剩余 frozen_qty 道具;gold escrow:退剩余 frozen_gold 金币。
 	// 幂等:escrow 不存在或已 closed → already=true no-op(只退一次)。
 	ReleaseEscrow(ctx context.Context, playerID, orderID uint64) (already bool, err error)
+
+	// ── 装备实例(W5 ④ 实例化背包)──
+
+	// ListInstances 读玩家全部装备实例(按 instance_id 升序;未建档 → 空)。
+	ListInstances(ctx context.Context, playerID uint64) ([]ItemInstance, error)
+
+	// GrantInstances 幂等发放装备实例(事务:INSERT ledger 命中 uk → 回放已发实例;
+	// 否则锁玩家实例行校验 count+n<=capacity,给每件分配最低空闲格并 INSERT)。
+	// instanceIDs 由 biz 用 snowflake 预生成(与 itemConfigIDs 等长一一对应)。
+	// 格子已满 → ErrInventoryCapacityFull。返回本次(或回放)发放的实例。
+	GrantInstances(ctx context.Context, playerID uint64, instanceIDs []uint64, itemConfigIDs []uint32, capacity int32, idempotencyKey, detail string) (instances []ItemInstance, already bool, err error)
+
+	// IdentifyInstance 鉴定一件装备实例(事务:SELECT ... FOR UPDATE)。
+	//   实例不存在 / 非本人 → ErrInventoryItemNotFound;
+	//   已鉴定 → already=true,返回已落定属性(不用传入 attrs,幂等回放);
+	//   未鉴定 → 落 identified=1 + attrs(biz 已 roll)。返回最终实例。
+	IdentifyInstance(ctx context.Context, playerID, instanceID uint64, attrs []ItemAttribute) (inst ItemInstance, already bool, err error)
+
+	// MoveInstance 移动实例到新格子(事务)。toSlot 须 [0,capacity);
+	//   实例不存在 / 非本人 → ErrInventoryItemNotFound;目标格越界 / 被别的实例占用 → ErrInventorySlotOccupied;
+	//   已在该格 → no-op。返回最终实例。
+	MoveInstance(ctx context.Context, playerID, instanceID uint64, toSlot, capacity int32) (inst ItemInstance, err error)
+
+	// DiscardInstance 丢弃实例(DELETE WHERE instance_id AND player_id)。
+	// 幂等:不存在(已丢弃)→ OK no-op(auth 已保证只能删自己的)。
+	DiscardInstance(ctx context.Context, playerID, instanceID uint64) error
 }
 
 // MySQLInventoryRepo 是基于 database/sql 的 InventoryRepo 实现。

@@ -106,7 +106,7 @@ func main() {
 	}
 
 	// 5. data 层装配
-	accountRepo, mode, db := mustBuildAccountRepo(&cfg, helper)
+	accountRepo, roleRepo, mode, db := mustBuildAccountRepo(&cfg, helper)
 	defer func() {
 		if db != nil {
 			_ = db.Close()
@@ -137,7 +137,7 @@ func main() {
 	}()
 
 	// 6. biz + service 装配
-	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister)
+	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
 			"warn", "password verification disabled + unknown accounts auto-provisioned; NEVER enable in prod")
@@ -145,6 +145,13 @@ func main() {
 	if cfg.Login.DevAutoRegister {
 		helper.Warnw("msg", "DEV_AUTO_REGISTER_ENABLED",
 			"warn", "unknown accounts auto-registered on first login; NEVER enable in prod")
+	}
+	if cfg.Login.DevAllowAnyRole {
+		helper.Warnw("msg", "DEV_ALLOW_ANY_ROLE_ENABLED",
+			"warn", "SelectRole accepts any non-zero role_id when allowed_role_ids empty; NEVER enable in prod")
+	} else if len(cfg.Login.AllowedRoleIDs) == 0 {
+		helper.Warnw("msg", "select_role_fail_closed",
+			"warn", "login.allowed_role_ids empty and dev_allow_any_role false: SelectRole will reject all requests")
 	}
 	ticketUC := biz.NewTicketUsecase(signer, verifier, jtiRepo)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, func(r *cellroute.Router) {
@@ -193,9 +200,10 @@ func main() {
 }
 
 // mustBuildAccountRepo 连 MySQL 构造账号仓储,失败致命退出。
-// 返回 (repo, "mysql", *sql.DB)。dev 免密 / 首登自动注册由 biz 层的
+// 返回 (accountRepo, roleRepo, "mysql", *sql.DB)。dev 免密 / 首登自动注册由 biz 层的
 // dev_skip_password / dev_auto_register 负责,不再种子固定 mock 账号。
-func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, string, sqlDBLike) {
+// roleRepo(选角权威化 2026-07-08):player_roles 表仓储,与账号表共库共连接池。
+func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, data.PlayerRoleRepo, string, sqlDBLike) {
 	if cfg.Node.MySQLClient.DSN == "" {
 		h.Errorw("msg", "mysql_dsn_required", "hint", "set node.mysql_client.dsn to pandora_account DSN")
 		os.Exit(1)
@@ -208,7 +216,16 @@ func mustBuildAccountRepo(cfg *conf.Config, h kratosHelper) (data.AccountRepo, s
 	}
 
 	h.Infow("msg", "account_repo_mysql", "dsn_masked", maskDSN(cfg.Node.MySQLClient.DSN))
-	return data.NewMySQLAccountRepo(db), "mysql", db
+
+	// 启动期 schema 检查(2026-07-08):player_roles 是后补的表,既有 MySQL volume / PVC 不会
+	// 自动重放 init SQL;缺表时 SelectRole 落库必炸、Login 读已选角持续告警。fail-fast 并指向迁移 SQL。
+	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/02-account-tables.sql", "player_roles"); serr != nil {
+		h.Errorw("msg", "mysql_schema_check_failed", "err", serr)
+		os.Exit(1)
+	}
+	return data.NewMySQLAccountRepo(db), data.NewMySQLPlayerRoleRepo(db), "mysql", db
 }
 
 // mustBuildRedisRepos 按 cfg 决定是否启 Redis Session / JTI repo。

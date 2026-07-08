@@ -53,6 +53,10 @@ type LoginResult struct {
 	// 客户端 / 边缘网关据此连到正确 Region 的正确 Cell 接入入口。
 	RegionID uint32
 	CellID   uint32
+
+	// SelectedRoleID 是玩家当前已选角色(player_roles 表,选角权威化 2026-07-08)。
+	// 0 = 从未选过角。客户端登录后进选角界面用此值预选中;确认后调 SelectRole。
+	SelectedRoleID uint32
 }
 
 // LoginUsecase 是 Login / Logout 用例。
@@ -60,7 +64,8 @@ type LoginUsecase struct {
 	repo        data.AccountRepo
 	sessions    data.SessionRepo
 	notifier    data.LocationNotifier
-	hubAssigner data.HubAssigner // W4 ⑥:hub_allocator 客户端,可为 nil(回退自签)
+	hubAssigner data.HubAssigner    // W4 ⑥:hub_allocator 客户端,可为 nil(回退自签)
+	roleRepo    data.PlayerRoleRepo // 选角权威化(2026-07-08):player_roles 仓储,可为 nil(降级无选角)
 	sf          *snowflake.Node
 	hubDSAddr   string // 回退用静态 hub DS 地址(hub_allocator 未配 / 调用失败时)
 	hubRegion   string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
@@ -79,6 +84,15 @@ type LoginUsecase struct {
 	// devAutoRegister 开发期“假注册”(conf.LoginConf.DevAutoRegister)。
 	// 为 true 时账号不存在则首登自动注册(存入本次密码 bcrypt 哈希)。
 	devAutoRegister bool
+
+	// allowedRoleIDs 是选角白名单(conf.LoginConf.AllowedRoleIDs,对齐客户端 CfgMisc.DefaultRoleIDs)。
+	// 非空 = 严格白名单;空 = fail-closed 拒绝 SelectRole(除非 devAllowAnyRole=true)。
+	allowedRoleIDs map[uint32]struct{}
+
+	// devAllowAnyRole 开发期选角宽松开关(conf.LoginConf.DevAllowAnyRole)。
+	// 为 true 且白名单为空时,SelectRole 只校验 roleID 非 0(配合客户端配置表快速迭代)。
+	// 默认 false:白名单为空 → SelectRole 一律拒绝(fail-closed,防改包客户端签任意 role_id 进 hub 票据)。
+	devAllowAnyRole bool
 }
 
 // NewLoginUsecase 构造 LoginUsecase。
@@ -88,11 +102,16 @@ type LoginUsecase struct {
 //
 // W4 ⑥:新增 hubAssigner + hubRegion。hubAssigner 非 nil 时,Login 调 hub_allocator.AssignHub
 // 拿真实 hub_ds_addr + hub_ticket;nil 或调用失败时回退到自签票据 + 静态 hubDSAddr。
+//
+// 选角权威化(2026-07-08):新增 roleRepo(可 nil,降级无选角) + allowedRoleIDs(选角白名单)
+// + devAllowAnyRole(dev 宽松开关)。白名单空且未开 devAllowAnyRole → SelectRole fail-closed 拒绝。
+// Login 读已选角透传给 AssignHub / 自签票;SelectRole 落库后重发 hub 票。
 func NewLoginUsecase(
 	repo data.AccountRepo,
 	sessions data.SessionRepo,
 	notifier data.LocationNotifier,
 	hubAssigner data.HubAssigner,
+	roleRepo data.PlayerRoleRepo,
 	sf *snowflake.Node,
 	hubDSAddr string,
 	hubRegion string,
@@ -100,12 +119,22 @@ func NewLoginUsecase(
 	verifier *auth.Verifier,
 	devSkipPassword bool,
 	devAutoRegister bool,
+	allowedRoleIDs []uint32,
+	devAllowAnyRole bool,
 ) *LoginUsecase {
+	var allowed map[uint32]struct{}
+	if len(allowedRoleIDs) > 0 {
+		allowed = make(map[uint32]struct{}, len(allowedRoleIDs))
+		for _, id := range allowedRoleIDs {
+			allowed[id] = struct{}{}
+		}
+	}
 	return &LoginUsecase{
 		repo:            repo,
 		sessions:        sessions,
 		notifier:        notifier,
 		hubAssigner:     hubAssigner,
+		roleRepo:        roleRepo,
 		sf:              sf,
 		hubDSAddr:       hubDSAddr,
 		hubRegion:       hubRegion,
@@ -113,6 +142,8 @@ func NewLoginUsecase(
 		verifier:        verifier,
 		devSkipPassword: devSkipPassword,
 		devAutoRegister: devAutoRegister,
+		allowedRoleIDs:  allowed,
+		devAllowAnyRole: devAllowAnyRole,
 	}
 }
 
@@ -200,10 +231,14 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		}
 	}
 
+	// 读玩家已选角色(选角权威化 2026-07-08):弱依赖,读失败按 0(未选角)处理不阻断登录。
+	// 透传给 resolveHub → hub 票据 claim;同时回给客户端选角界面预选中。
+	selectedRoleID := u.loadSelectedRole(ctx, playerID)
+
 	// 解析 hub 分片 + hub 票据(W4 ⑥):
 	// hub_allocator 是 hub 票据权威,优先调 AssignHub 拿真实地址 + 票据;
 	// 未配 / 调用失败 → 回退自签票据(盖 region/cell 戳) + 静态 hubDSAddr(弱依赖,不阻断登录)。
-	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID)
+	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID, selectedRoleID)
 	if err != nil {
 		h.Errorw("msg", "resolve_hub_failed", "err", err, "player_id", playerID)
 		return nil, err
@@ -236,6 +271,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		HubTicketExpMs: hubExpMs,
 		RegionID:       regionID,
 		CellID:         cellID,
+		SelectedRoleID: selectedRoleID,
 	}, nil
 }
 
@@ -369,11 +405,14 @@ func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash 
 // regionID / cellID 是玩家确定性路由落点(由 Login / ResolveHubEndpoint 一次算好传入)。
 // 回退自签分支把落点盖进 hub 票据(scale-cellular-20m.md §3.3 防跨单元串号);单 Cell / dev 为 0。
 // hub_allocator 路径的票据由其自身签发(其内部落点绑定属 Codex/hub_allocator 职责)。
-func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID, cellID uint32) (addr, ticket string, expMs int64, err error) {
+//
+// roleID(选角权威化 2026-07-08):玩家已选角色。两条路径都把它盖进 hub 票据 claim:
+// AssignHub 透传给 allocator 签;回退自签用 SignDSTicketFull。0 = 未选角(claim 不序列化)。
+func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID, cellID, roleID uint32) (addr, ticket string, expMs int64, err error) {
 	h := plog.With(ctx)
 
 	if u.hubAssigner != nil {
-		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0)
+		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0, roleID)
 		if aerr == nil {
 			expMs = u.hubTicketExpMs(assign.HubTicket)
 			h.Infow("msg", "hub_assigned", "player_id", playerID,
@@ -384,7 +423,7 @@ func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID
 		h.Warnw("msg", "hub_assign_failed_fallback_self_sign", "err", aerr, "player_id", playerID)
 	}
 
-	ticket, expMs, err = u.signer.SignDSTicketWithCell(playerID, auth.DSTypeHub, 0, regionID, cellID, uuid.NewString())
+	ticket, expMs, err = u.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, regionID, cellID, roleID, uuid.NewString())
 	if err != nil {
 		return "", "", 0, errcode.New(errcode.ErrInternal, "sign hub ticket failed: %v", err)
 	}
@@ -423,7 +462,72 @@ func (u *LoginUsecase) ResolveHubEndpoint(ctx context.Context, playerID uint64) 
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
 	}
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
-	return u.resolveHub(ctx, playerID, regionID, cellID)
+	// 选角权威化:返回大厅路径也把已选角盖进新票(与登录同语义,DS 重入时同样能 spawn 对角色)。
+	return u.resolveHub(ctx, playerID, regionID, cellID, u.loadSelectedRole(ctx, playerID))
+}
+
+// loadSelectedRole 读玩家已选角色(player_roles)。弱依赖:roleRepo 未配 / 读失败 → 0
+// (未选角语义,仅告警不阻断)。只用于读路径;写路径(SelectRole)失败必须报错。
+func (u *LoginUsecase) loadSelectedRole(ctx context.Context, playerID uint64) uint32 {
+	if u.roleRepo == nil {
+		return 0
+	}
+	roleID, err := u.roleRepo.GetRole(ctx, playerID)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "load_selected_role_failed", "err", err, "player_id", playerID)
+		return 0
+	}
+	return roleID
+}
+
+// SelectRole 选角用例(选角权威化 2026-07-08,docs 综述见 login.proto SelectRole 注释)。
+//
+// 流程:
+//  1. 校验 roleID:必须 >0;allowedRoleIDs 非空时必须在白名单;白名单为空时 fail-closed
+//     一律拒绝(防改包客户端签任意 role_id 进 hub 票据),仅 devAllowAnyRole=true 放宽为只校非 0。
+//  2. roleRepo.SetRole 落库(权威数据,失败必须报错——没落库就不能发票,否则重登后角色回退)。
+//  3. resolveHub(带 roleID) → hub_allocator 把 role_id 签进全新 hub 票据 + 返回当前有效地址。
+//
+// 幂等:重复选同角 / 换角重选都是覆盖式 upsert + 重签新票(新 jti),不破坏票据一次性语义。
+// roleRepo 未配(dev 裸跑)时跳过落库只签票,Warn 提示。
+func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID uint32) (addr, ticket string, expMs int64, err error) {
+	h := plog.With(ctx)
+	if playerID == 0 {
+		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
+	}
+	if roleID == 0 {
+		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "roleID must be > 0")
+	}
+	if len(u.allowedRoleIDs) > 0 {
+		if _, ok := u.allowedRoleIDs[roleID]; !ok {
+			h.Warnw("msg", "select_role_not_allowed", "player_id", playerID, "role_id", roleID)
+			return "", "", 0, errcode.New(errcode.ErrInvalidArg, "role_id=%d not allowed", roleID)
+		}
+	} else if !u.devAllowAnyRole {
+		// fail-closed:白名单没配就放行任意 role_id = 改包客户端可把任意角色配置 ID 签进 hub 票据
+		// (hub_allocator 无二次校验)。生产必须配 allowed_role_ids;dev 宽松需显式开 dev_allow_any_role。
+		h.Errorw("msg", "select_role_rejected_no_whitelist", "player_id", playerID, "role_id", roleID,
+			"hint", "configure login.allowed_role_ids (prod) or enable login.dev_allow_any_role (dev only)")
+		return "", "", 0, errcode.New(errcode.ErrInvalidState, "role selection disabled: allowed_role_ids not configured")
+	}
+
+	if u.roleRepo != nil {
+		if serr := u.roleRepo.SetRole(ctx, playerID, roleID); serr != nil {
+			h.Errorw("msg", "select_role_persist_failed", "err", serr, "player_id", playerID, "role_id", roleID)
+			return "", "", 0, serr
+		}
+	} else {
+		h.Warnw("msg", "select_role_repo_nil_skip_persist", "player_id", playerID, "role_id", roleID)
+	}
+
+	regionID, cellID := u.routeRegionCell(ctx, playerID)
+	addr, ticket, expMs, err = u.resolveHub(ctx, playerID, regionID, cellID, roleID)
+	if err != nil {
+		h.Errorw("msg", "select_role_resolve_hub_failed", "err", err, "player_id", playerID, "role_id", roleID)
+		return "", "", 0, err
+	}
+	h.Infow("msg", "select_role_ok", "player_id", playerID, "role_id", roleID, "hub_ds_addr", addr)
+	return addr, ticket, expMs, nil
 }
 
 // hubTicketExpMs 解析 hub_allocator 签发的 hub 票据,取其 exp(unix ms)给客户端展示。

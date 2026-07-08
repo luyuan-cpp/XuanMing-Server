@@ -51,6 +51,11 @@ match:
   #   true（仅本地单服务联调）：只跑 matchmaker、不起 player_locator 时，locator 查询失败仅告警后放行
   # 注意：若本地只单独跑 matchmaker，要么清空上面 locator_addr，要么把此项设为 true，否则 StartMatch 会返回 ERR_UNAVAILABLE
   battle_gate_fail_open: false
+  # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
+  # 前提:UE Hub DS 心跳捎带 player_ids 续期 locator HUB 位置——2026-07-08 已实机联调验证
+  # (两真实客户端,locator TTL 稳定 25~30s 回升),故开启。若保活链回归失败(在线玩家 TTL
+  # 单调掉 0),先关此开关再排查,否则会误判在线玩家离线、扫掉排队票据。
+  liveness_gate_enabled: true
   # map_id: 战斗地图配置 ID(对齐 g_关卡.xlsx,6=MobaLevel MOBA战斗)
   map_id: 6
   # game_mode: 战斗模式标识,透传给 ds_allocator

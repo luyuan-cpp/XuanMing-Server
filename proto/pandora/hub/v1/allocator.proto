@@ -37,6 +37,12 @@ message AssignHubRequest {
   uint64 player_id = 1;
   string region    = 2;
   uint64 team_id   = 3;  // 可选,优先选队友所在 hub
+  // role_id: 玩家已选角色(选角权威化,2026-07-08)。login 从 player_roles 表读出后透传;
+  // hub_allocator 把它盖进自己签的 hub DSTicket 的 role_id claim(票据单一签发权威),
+  // 并存进归属镜像(HubAssignmentStorageRecord.role_id) 供 Transfer 重签时取用。
+  // >0 时覆盖已存归属的 role_id(换角色重进);0 = 调用方不知角色,保留已存值。
+  // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
+  uint32 role_id   = 4;
 }
 
 message AssignHubResponse {
@@ -188,6 +194,10 @@ message HubAssignmentStorageRecord {
   string region         = 5;
   uint64 team_id        = 6;   // 0=无队伍
   int64  assigned_at_ms = 7;
+  // role_id: 玩家已选角色(AssignHubRequest.role_id 落库镜像,选角权威化 2026-07-08)。
+  // Transfer/TransferToLine/强制整合重签 hub 票据时从这里取 role_id 盖进新票
+  // (这些路径 login 不在环上,必须有本地镜像)。0 = 未选角/旧记录。
+  uint32 role_id        = 8;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====

@@ -37,6 +37,10 @@ const (
 	InventoryService_GrantItems_FullMethodName         = "/pandora.inventory.v1.InventoryService/GrantItems"
 	InventoryService_UseItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/UseItem"
 	InventoryService_SellItem_FullMethodName           = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_GrantInstances_FullMethodName     = "/pandora.inventory.v1.InventoryService/GrantInstances"
+	InventoryService_IdentifyItem_FullMethodName       = "/pandora.inventory.v1.InventoryService/IdentifyItem"
+	InventoryService_DiscardInstance_FullMethodName    = "/pandora.inventory.v1.InventoryService/DiscardInstance"
+	InventoryService_MoveInstance_FullMethodName       = "/pandora.inventory.v1.InventoryService/MoveInstance"
 	InventoryService_FreezeForOrder_FullMethodName     = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
 	InventoryService_SettleAuctionMatch_FullMethodName = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
 	InventoryService_SettlePlayerTrade_FullMethodName  = "/pandora.inventory.v1.InventoryService/SettlePlayerTrade"
@@ -55,6 +59,20 @@ type InventoryServiceClient interface {
 	UseItem(ctx context.Context, in *UseItemRequest, opts ...grpc.CallOption) (*UseItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(ctx context.Context, in *SellItemRequest, opts ...grpc.CallOption) (*SellItemResponse, error)
+	// GrantInstances 幂等发放装备实例(系统驱动:掉落 / 活动 / 购买到账)。
+	// 每件生成一个雪花 instance_id,默认未鉴定(identified=false,无随机属性);
+	// 幂等键防重复入账(同 drop:<match_id> 重放只生效一次)。不在 Envoy 暴露(同 GrantItems)。
+	GrantInstances(ctx context.Context, in *GrantInstancesRequest, opts ...grpc.CallOption) (*GrantInstancesResponse, error)
+	// IdentifyItem 鉴定一件未鉴定装备实例:服务端权威 roll 随机属性(反作弊,不变量 §6)后落库。
+	// 幂等:instance_id 已鉴定 → 直接回放已有属性(不重复 roll);实例不存在 / 非本人 → 拒。
+	// 客户端 RPC:以 Envoy 注入身份为准,不信任请求体 player_id(同 GetInventory)。
+	IdentifyItem(ctx context.Context, in *IdentifyItemRequest, opts ...grpc.CallOption) (*IdentifyItemResponse, error)
+	// DiscardInstance 丢弃一件装备实例(从背包永久删除;客户端 RPC,以调用者身份为准)。
+	// 幂等:实例不存在(已丢弃)→ OK no-op;非本人持有 → 拒。
+	DiscardInstance(ctx context.Context, in *DiscardInstanceRequest, opts ...grpc.CallOption) (*DiscardInstanceResponse, error)
+	// MoveInstance 移动一件装备实例到新格子(改 slot_index;客户端 RPC,以调用者身份为准)。
+	// 目标格越界(>= capacity)/ 已被占用 → 拒。纯大厅整理操作,不影响属性。
+	MoveInstance(ctx context.Context, in *MoveInstanceRequest, opts ...grpc.CallOption) (*MoveInstanceResponse, error)
 	// FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
 	//
 	//	卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
@@ -142,6 +160,46 @@ func (c *inventoryServiceClient) SellItem(ctx context.Context, in *SellItemReque
 	return out, nil
 }
 
+func (c *inventoryServiceClient) GrantInstances(ctx context.Context, in *GrantInstancesRequest, opts ...grpc.CallOption) (*GrantInstancesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GrantInstancesResponse)
+	err := c.cc.Invoke(ctx, InventoryService_GrantInstances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) IdentifyItem(ctx context.Context, in *IdentifyItemRequest, opts ...grpc.CallOption) (*IdentifyItemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentifyItemResponse)
+	err := c.cc.Invoke(ctx, InventoryService_IdentifyItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) DiscardInstance(ctx context.Context, in *DiscardInstanceRequest, opts ...grpc.CallOption) (*DiscardInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardInstanceResponse)
+	err := c.cc.Invoke(ctx, InventoryService_DiscardInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) MoveInstance(ctx context.Context, in *MoveInstanceRequest, opts ...grpc.CallOption) (*MoveInstanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MoveInstanceResponse)
+	err := c.cc.Invoke(ctx, InventoryService_MoveInstance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inventoryServiceClient) FreezeForOrder(ctx context.Context, in *FreezeForOrderRequest, opts ...grpc.CallOption) (*FreezeForOrderResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FreezeForOrderResponse)
@@ -194,6 +252,20 @@ type InventoryServiceServer interface {
 	UseItem(context.Context, *UseItemRequest) (*UseItemResponse, error)
 	// SellItem 出售道具换金币(原子扣道具 + 加金币)。
 	SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error)
+	// GrantInstances 幂等发放装备实例(系统驱动:掉落 / 活动 / 购买到账)。
+	// 每件生成一个雪花 instance_id,默认未鉴定(identified=false,无随机属性);
+	// 幂等键防重复入账(同 drop:<match_id> 重放只生效一次)。不在 Envoy 暴露(同 GrantItems)。
+	GrantInstances(context.Context, *GrantInstancesRequest) (*GrantInstancesResponse, error)
+	// IdentifyItem 鉴定一件未鉴定装备实例:服务端权威 roll 随机属性(反作弊,不变量 §6)后落库。
+	// 幂等:instance_id 已鉴定 → 直接回放已有属性(不重复 roll);实例不存在 / 非本人 → 拒。
+	// 客户端 RPC:以 Envoy 注入身份为准,不信任请求体 player_id(同 GetInventory)。
+	IdentifyItem(context.Context, *IdentifyItemRequest) (*IdentifyItemResponse, error)
+	// DiscardInstance 丢弃一件装备实例(从背包永久删除;客户端 RPC,以调用者身份为准)。
+	// 幂等:实例不存在(已丢弃)→ OK no-op;非本人持有 → 拒。
+	DiscardInstance(context.Context, *DiscardInstanceRequest) (*DiscardInstanceResponse, error)
+	// MoveInstance 移动一件装备实例到新格子(改 slot_index;客户端 RPC,以调用者身份为准)。
+	// 目标格越界(>= capacity)/ 已被占用 → 拒。纯大厅整理操作,不影响属性。
+	MoveInstance(context.Context, *MoveInstanceRequest) (*MoveInstanceResponse, error)
 	// FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
 	//
 	//	卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
@@ -251,6 +323,18 @@ func (UnimplementedInventoryServiceServer) UseItem(context.Context, *UseItemRequ
 }
 func (UnimplementedInventoryServiceServer) SellItem(context.Context, *SellItemRequest) (*SellItemResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SellItem not implemented")
+}
+func (UnimplementedInventoryServiceServer) GrantInstances(context.Context, *GrantInstancesRequest) (*GrantInstancesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GrantInstances not implemented")
+}
+func (UnimplementedInventoryServiceServer) IdentifyItem(context.Context, *IdentifyItemRequest) (*IdentifyItemResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IdentifyItem not implemented")
+}
+func (UnimplementedInventoryServiceServer) DiscardInstance(context.Context, *DiscardInstanceRequest) (*DiscardInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DiscardInstance not implemented")
+}
+func (UnimplementedInventoryServiceServer) MoveInstance(context.Context, *MoveInstanceRequest) (*MoveInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MoveInstance not implemented")
 }
 func (UnimplementedInventoryServiceServer) FreezeForOrder(context.Context, *FreezeForOrderRequest) (*FreezeForOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FreezeForOrder not implemented")
@@ -356,6 +440,78 @@ func _InventoryService_SellItem_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_GrantInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GrantInstancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).GrantInstances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_GrantInstances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).GrantInstances(ctx, req.(*GrantInstancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_IdentifyItem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentifyItemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).IdentifyItem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_IdentifyItem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).IdentifyItem(ctx, req.(*IdentifyItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_DiscardInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).DiscardInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_DiscardInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).DiscardInstance(ctx, req.(*DiscardInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_MoveInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveInstanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).MoveInstance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_MoveInstance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).MoveInstance(ctx, req.(*MoveInstanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InventoryService_FreezeForOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(FreezeForOrderRequest)
 	if err := dec(in); err != nil {
@@ -450,6 +606,22 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SellItem",
 			Handler:    _InventoryService_SellItem_Handler,
+		},
+		{
+			MethodName: "GrantInstances",
+			Handler:    _InventoryService_GrantInstances_Handler,
+		},
+		{
+			MethodName: "IdentifyItem",
+			Handler:    _InventoryService_IdentifyItem_Handler,
+		},
+		{
+			MethodName: "DiscardInstance",
+			Handler:    _InventoryService_DiscardInstance_Handler,
+		},
+		{
+			MethodName: "MoveInstance",
+			Handler:    _InventoryService_MoveInstance_Handler,
 		},
 		{
 			MethodName: "FreezeForOrder",

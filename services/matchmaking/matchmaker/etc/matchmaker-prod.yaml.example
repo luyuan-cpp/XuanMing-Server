@@ -41,6 +41,11 @@ match:
   team_addr: "team.pandora.svc.cluster.local:50010"
   ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"
   locator_addr: "player-locator.pandora.svc.cluster.local:50006"
+  # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
+  # ❗ 前提：UE Hub DS 心跳捎带 player_ids 续期 locator HUB 位置，且 hub_allocator 必须配 locator_addr
+  # (转发续期的必经一环)，否则在线玩家 30s 后会被误判离线、扫掉排队票据。
+  # 2026-07-08 dev 实机联调 + 端到端验收通过后默认开启；回归异常(在线玩家 locator TTL 单调掉 0)先关此开关再排查。
+  liveness_gate_enabled: true
   map_id: 1
   game_mode: "5v5_ranked"
   confirm_timeout: "15s"

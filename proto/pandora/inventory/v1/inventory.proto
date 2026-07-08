@@ -31,6 +31,30 @@ service InventoryService {
   // SellItem 出售道具换金币(原子扣道具 + 加金币)。
   rpc SellItem(SellItemRequest) returns (SellItemResponse);
 
+  // ── 装备实例 / 鉴定(W5 ④ 实例化背包,ds-arch §0.5 大厅态持久化)──
+  //
+  // 背景:可堆叠消耗品仍走上面的 player_items 计数(GrantItems/UseItem/SellItem);
+  // 装备类道具需要"每件唯一 + 鉴定后属性随机",走独立的 item_instance 实例模型。
+  // 战斗内出装/换装仍走 UE GAS(ds-arch §0.1);本组 RPC 只管大厅态持久化。
+
+  // GrantInstances 幂等发放装备实例(系统驱动:掉落 / 活动 / 购买到账)。
+  // 每件生成一个雪花 instance_id,默认未鉴定(identified=false,无随机属性);
+  // 幂等键防重复入账(同 drop:<match_id> 重放只生效一次)。不在 Envoy 暴露(同 GrantItems)。
+  rpc GrantInstances(GrantInstancesRequest) returns (GrantInstancesResponse);
+
+  // IdentifyItem 鉴定一件未鉴定装备实例:服务端权威 roll 随机属性(反作弊,不变量 §6)后落库。
+  // 幂等:instance_id 已鉴定 → 直接回放已有属性(不重复 roll);实例不存在 / 非本人 → 拒。
+  // 客户端 RPC:以 Envoy 注入身份为准,不信任请求体 player_id(同 GetInventory)。
+  rpc IdentifyItem(IdentifyItemRequest) returns (IdentifyItemResponse);
+
+  // DiscardInstance 丢弃一件装备实例(从背包永久删除;客户端 RPC,以调用者身份为准)。
+  // 幂等:实例不存在(已丢弃)→ OK no-op;非本人持有 → 拒。
+  rpc DiscardInstance(DiscardInstanceRequest) returns (DiscardInstanceResponse);
+
+  // MoveInstance 移动一件装备实例到新格子(改 slot_index;客户端 RPC,以调用者身份为准)。
+  // 目标格越界(>= capacity)/ 已被占用 → 拒。纯大厅整理操作,不影响属性。
+  rpc MoveInstance(MoveInstanceRequest) returns (MoveInstanceResponse);
+
   // FreezeForOrder 拍卖挂单冻结资产(系统接口,仅后端内部直连):
   //   卖单(SELL):把 quantity 个 item_config_id 从活跃背包移入托管(escrow),挂单期间不可被别处消耗;
   //   买单(BUY):把 quantity*unit_price 金币从活跃余额移入托管,出价期间锁定。
@@ -96,6 +120,30 @@ message Inventory {
   uint64 player_id = 1;
   int64  gold      = 2;  // 金币余额
   repeated ItemStack items = 3;
+  int32  capacity  = 4;              // 背包格子容量(装备实例上限;<=0 表示未启用实例背包)
+  repeated ItemInstance instances = 5;  // 装备类实例(每件唯一 + 鉴定后随机属性)
+}
+
+// ItemAttribute 是装备实例鉴定后的一条随机属性(attr_id 属性配置 ID,§12;value 数值)。
+message ItemAttribute {
+  uint32 attr_id = 1;
+  int64  value   = 2;
+}
+
+// ItemInstance 是一件装备类道具的唯一实例(不可堆叠;客户端可见结构,不下发存储字段 §14)。
+//
+//   instance_id  雪花唯一 ID(uint64,§11),背包内定位 / 移动 / 丢弃 / 鉴定的键;
+//   identified   是否已鉴定:false=未鉴定(attributes 为空,客户端显示"未鉴定");
+//   attributes   鉴定后服务端 roll 的随机属性(identified=true 才非空,不变量 §6);
+//   slot_index   背包格子索引([0,capacity),客户端拼格子布局用);
+//   bound        是否绑定(绑定后不可交易 / 出售,规则由配置裁决)。
+message ItemInstance {
+  uint64 instance_id   = 1;
+  uint32 item_config_id = 2;
+  bool   identified    = 3;
+  repeated ItemAttribute attributes = 4;
+  int32  slot_index    = 5;
+  bool   bound         = 6;
 }
 
 message GetInventoryRequest {
@@ -204,5 +252,52 @@ message ReleaseEscrowRequest {
 }
 
 message ReleaseEscrowResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// ── 装备实例 / 鉴定消息(W5 ④)──
+
+// GrantInstancesRequest 幂等发放装备实例(系统接口,后端内部直连)。
+// 每个 item_config_id 生成一件独立实例(默认未鉴定);幂等键防重复入账。
+message GrantInstancesRequest {
+  uint64 player_id       = 1;
+  repeated uint32 item_config_ids = 2;  // 每个元素发一件实例(> 0)
+  string idempotency_key = 3;
+}
+
+message GrantInstancesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated ItemInstance instances = 2;  // 本次发放的实例(含新生成 instance_id)
+}
+
+// IdentifyItemRequest 鉴定一件未鉴定装备实例(客户端 RPC,以调用者身份为准)。
+message IdentifyItemRequest {
+  uint64 player_id   = 1;
+  uint64 instance_id = 2;
+}
+
+message IdentifyItemResponse {
+  pandora.common.v1.ErrCode code = 1;
+  ItemInstance instance = 2;  // 鉴定后(或幂等回放的)实例,含随机属性
+}
+
+// DiscardInstanceRequest 丢弃一件装备实例(客户端 RPC,以调用者身份为准)。
+message DiscardInstanceRequest {
+  uint64 player_id   = 1;
+  uint64 instance_id = 2;
+}
+
+message DiscardInstanceResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// MoveInstanceRequest 移动一件装备实例到新格子(客户端 RPC,以调用者身份为准)。
+message MoveInstanceRequest {
+  uint64 player_id     = 1;
+  uint64 instance_id   = 2;
+  int32  to_slot_index = 3;  // 目标格子([0,capacity),须空闲)
+}
+
+message MoveInstanceResponse {
   pandora.common.v1.ErrCode code = 1;
 }

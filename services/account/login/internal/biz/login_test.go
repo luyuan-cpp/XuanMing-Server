@@ -63,12 +63,14 @@ type fakeHubAssigner struct {
 	gotPlayerID uint64
 	gotRegion   string
 	gotTeamID   uint64
+	gotRoleID   uint32
 }
 
-func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region string, teamID uint64) (*data.HubAssignment, error) {
+func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*data.HubAssignment, error) {
 	f.gotPlayerID = playerID
 	f.gotRegion = region
 	f.gotTeamID = teamID
+	f.gotRoleID = roleID
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -126,7 +128,7 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	hash := mustBcrypt(t, "pw")
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
 	sf := snowflake.NewNode(1)
-	return NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false, nil, false)
 }
 
 func TestLogin_HubAssignerSuccess(t *testing.T) {
@@ -381,7 +383,7 @@ func newDevSkipUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 	}
 	sf := snowflake.NewNode(1)
 	// hubAssigner=nil 走自签回退;devSkipPassword=true。
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, true, false)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, true, false, nil, false)
 }
 
 // newDevAutoRegUsecase 构造 devAutoRegister=true 、 devSkipPassword=false 的用例。
@@ -397,7 +399,62 @@ func newDevAutoRegUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 	sf := snowflake.NewNode(1)
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, true)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, true, nil, false)
+}
+
+// newSelectRoleUsecase 构造选角测试用例(hubAssigner=nil 走自签回退;roleRepo=nil 跳过落库)。
+func newSelectRoleUsecase(t *testing.T, allowedRoleIDs []uint32, devAllowAnyRole bool) *LoginUsecase {
+	t.Helper()
+	cfg := auth.Config{Secret: []byte(testSecret)}
+	signer, err := auth.NewSigner(cfg)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	verifier, err := auth.NewVerifier(cfg)
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	sf := snowflake.NewNode(1)
+	repo := &fakeAccountRepo{playerID: 42, passwordHash: mustBcrypt(t, "pw")}
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false, allowedRoleIDs, devAllowAnyRole)
+}
+
+// TestSelectRole_EmptyWhitelistFailClosed 验证:白名单为空且未开 dev_allow_any_role 时,
+// SelectRole 一律拒绝(fail-closed,防改包客户端签任意 role_id 进 hub 票据)。
+func TestSelectRole_EmptyWhitelistFailClosed(t *testing.T) {
+	uc := newSelectRoleUsecase(t, nil, false)
+	_, _, _, err := uc.SelectRole(context.Background(), 42, 7)
+	if errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("empty whitelist should fail-closed with ErrInvalidState, got %v", err)
+	}
+}
+
+// TestSelectRole_EmptyWhitelistDevAllowAnyRole 验证:dev_allow_any_role=true 时空白名单
+// 只校验非 0(dev 宽松语义,回退自签票据路径)。
+func TestSelectRole_EmptyWhitelistDevAllowAnyRole(t *testing.T) {
+	uc := newSelectRoleUsecase(t, nil, true)
+	addr, ticket, _, err := uc.SelectRole(context.Background(), 42, 7)
+	if err != nil {
+		t.Fatalf("dev_allow_any_role should accept non-zero role_id, got %v", err)
+	}
+	if addr == "" || ticket == "" {
+		t.Fatalf("want fallback addr+ticket, got addr=%q ticket=%q", addr, ticket)
+	}
+	if _, _, _, err := uc.SelectRole(context.Background(), 42, 0); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("role_id=0 should be ErrInvalidArg, got %v", err)
+	}
+}
+
+// TestSelectRole_Whitelist 验证:非空白名单严格校验(命中放行 / 未命中拒绝,
+// 与 dev_allow_any_role 无关——开关只对空白名单生效)。
+func TestSelectRole_Whitelist(t *testing.T) {
+	uc := newSelectRoleUsecase(t, []uint32{1, 2}, true)
+	if _, _, _, err := uc.SelectRole(context.Background(), 42, 2); err != nil {
+		t.Fatalf("whitelisted role should pass, got %v", err)
+	}
+	if _, _, _, err := uc.SelectRole(context.Background(), 42, 9); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("non-whitelisted role should be ErrInvalidArg, got %v", err)
+	}
 }
 
 // TestLogin_DevSkipPassword_AutoProvision 验证:免密模式下任意新账号自动建号,

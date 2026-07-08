@@ -81,6 +81,11 @@ type DSTicketClaims struct {
 	MatchID  uint64 `json:"match_id,omitempty"`
 	RegionID uint32 `json:"region_id,omitempty"`
 	CellID   uint32 `json:"cell_id,omitempty"`
+	// RoleID:玩家已选角色配置 ID(CfgRole.Id,选角权威化 2026-07-08)。hub 票据携带,
+	// DS 验签后直接用它 spawn 角色,不再信任客户端 URL ?role= 自报。
+	// omitempty:0(未选角 / battle 票走 roster)时不序列化,与历史票据兼容。
+	// uint32 配置表 ID(非 snowflake 业务 ID,CLAUDE.md §9.12)。
+	RoleID uint32 `json:"role_id,omitempty"`
 }
 
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
@@ -236,6 +241,16 @@ func (s *Signer) SignDSTicket(playerID uint64, dsType DSType, matchID uint64, jt
 //
 // 不变量 §3:默认 TTL=5min。
 func (s *Signer) SignDSTicketWithCell(playerID uint64, dsType DSType, matchID uint64, regionID, cellID uint32, jti string) (token string, expiresAtMs int64, err error) {
+	return s.SignDSTicketFull(playerID, dsType, matchID, regionID, cellID, 0, jti)
+}
+
+// SignDSTicketFull 签发携带全部可选 claim(region/cell/role)的 DS 票据。
+//
+// roleID:玩家已选角色(选角权威化 2026-07-08)。hub 票据传已选角;battle 票据传 0
+// (对局角色走 match roster,不走票据)。0 时 claim 不序列化(omitempty),与旧票完全兼容。
+//
+// 其余语义同 SignDSTicketWithCell。不变量 §3:默认 TTL=5min。
+func (s *Signer) SignDSTicketFull(playerID uint64, dsType DSType, matchID uint64, regionID, cellID, roleID uint32, jti string) (token string, expiresAtMs int64, err error) {
 	if playerID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: playerID must be > 0")
 	}
@@ -263,6 +278,7 @@ func (s *Signer) SignDSTicketWithCell(playerID uint64, dsType DSType, matchID ui
 		MatchID:  matchID,
 		RegionID: regionID,
 		CellID:   cellID,
+		RoleID:   roleID,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	str, err := t.SignedString(s.cfg.Secret)

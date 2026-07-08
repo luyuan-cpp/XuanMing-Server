@@ -49,6 +49,9 @@ login:
   session_token_ttl: "24h"
   ds_ticket_ttl: "5m"               # 不变量 §3:DS 票据短时效
   dev_skip_password: false          # ⚠️ 必须 false:走正常 bcrypt 密码校验
+  # 选角白名单(⚠️ prod 必填):对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
+  # 留空 = fail-closed,SelectRole 全部拒绝(dev_allow_any_role 默认 false,严禁上生产)。
+  allowed_role_ids: [__ROLE_ID_1__, __ROLE_ID_2__]
   jwt:
     issuer: "pandora-login"
     audience: "pandora-client"

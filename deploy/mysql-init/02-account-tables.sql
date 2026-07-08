@@ -52,5 +52,17 @@ CREATE TABLE IF NOT EXISTS `account_bans` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 账号 / 设备 封禁记录';
 
+-- 选角权威化(2026-07-08):玩家已选角色,login 服务是数据权威。
+--   - 登录时读出 → LoginResponse.selected_role_id(客户端选角界面预选中)。
+--   - SelectRole RPC upsert → 再经 hub_allocator 把 role_id 签进 hub 票据。
+--   - role_id 是配置表 ID(CfgRole.Id,uint32,CLAUDE.md §9.12),非 snowflake。
+CREATE TABLE IF NOT EXISTS `player_roles` (
+    `player_id`  BIGINT UNSIGNED NOT NULL,
+    `role_id`    INT UNSIGNED    NOT NULL COMMENT 'CfgRole.Id,配置表角色 ID',
+    `updated_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家已选角色(选角权威数据)';
+
 -- 注:开发期账号不在此 init.sql 写入(bcrypt cost 不固定,且需要应用层 hash)。
 -- login 开 dev_skip_password / dev_auto_register 时,客户端首次登录即自动懒注册账号。

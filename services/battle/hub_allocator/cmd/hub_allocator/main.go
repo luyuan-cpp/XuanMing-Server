@@ -225,12 +225,14 @@ func main() {
 
 // hubTicketSigner 把 biz.TicketSigner 适配到 pkg/auth.Signer。
 // hub DSTicket:ds_type=hub,match_id=0(不变量 §3 短时效 5min;jti=uuid v4 防重放)。
+// roleID(选角权威化 2026-07-08):>0 时盖进票据 role_id claim;region/cell 仍为 0
+// (hub_allocator 不做 cell 路由,与历史行为一致)。
 type hubTicketSigner struct {
 	signer *auth.Signer
 }
 
-func (h *hubTicketSigner) SignHubTicket(playerID uint64) (string, int64, error) {
-	return h.signer.SignDSTicket(playerID, auth.DSTypeHub, 0, uuid.NewString())
+func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32) (string, int64, error) {
+	return h.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, 0, 0, roleID, uuid.NewString())
 }
 
 // kafkaMigratePusher 把 biz.HubMigratePusher 适配到 kafkax.KeyOrderedProducer。

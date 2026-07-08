@@ -111,6 +111,8 @@ enum ErrCode {
   ERR_INVENTORY_NOT_SELLABLE   = 7013;
   ERR_INVENTORY_LOCK_FAILED    = 7014;
   ERR_INVENTORY_IDEMPOTENCY_CONFLICT = 7015; // idempotency_key 复用到不同请求(指纹不一致)
+  ERR_INVENTORY_CAPACITY_FULL  = 7016; // 背包格子已满(装备实例数达上限)
+  ERR_INVENTORY_SLOT_OCCUPIED  = 7017; // 目标格子已被占用 / 越界(移动实例)
 
   // 8000-8999 dialogue
   ERR_DIALOGUE_NOT_FOUND       = 8001;

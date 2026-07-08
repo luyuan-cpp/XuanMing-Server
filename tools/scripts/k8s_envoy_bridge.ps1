@@ -51,6 +51,9 @@ $Forwards = @(
     @{ Name = 'friend';         Port = 50004; Essential = $false }
     @{ Name = 'chat';           Port = 50005; Essential = $false }
     @{ Name = 'player-locator'; Port = 50006; Essential = $true  }
+    @{ Name = 'leaderboard';    Port = 50007; Essential = $false }
+    @{ Name = 'guild';          Port = 50008; Essential = $false }
+    @{ Name = 'mail';           Port = 50009; Essential = $false }
     @{ Name = 'team';           Port = 50010; Essential = $true  }
     @{ Name = 'matchmaker';     Port = 50011; Essential = $true  }
     # PVE 直进匹配实例(Envoy 按 x-pandora-game-mode: pve 分流到 host 50018);

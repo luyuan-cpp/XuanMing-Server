@@ -7,6 +7,7 @@ package biz
 import (
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -36,14 +37,26 @@ type fakeRepo struct {
 	items  map[uint64]map[uint32]int64
 	ledger map[string]ledgerEntry  // key=playerID|idempotencyKey
 	escrow map[string]*escrowEntry // key=playerID|order:<orderID>
+
+	// 装备实例(W5 ④):instances[playerID][instanceID]=inst;instGrant 复刻 grant_inst 幂等。
+	instances map[uint64]map[uint64]*data.ItemInstance
+	instGrant map[string]instGrantEntry // key=playerID|idempotencyKey
+}
+
+// instGrantEntry 复刻 grant_inst 幂等流水:指纹 + 首次发放的 instance_id 列表(回放用)。
+type instGrantEntry struct {
+	fingerprint string
+	ids         []uint64
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		gold:   map[uint64]int64{},
-		items:  map[uint64]map[uint32]int64{},
-		ledger: map[string]ledgerEntry{},
-		escrow: map[string]*escrowEntry{},
+		gold:      map[uint64]int64{},
+		items:     map[uint64]map[uint32]int64{},
+		ledger:    map[string]ledgerEntry{},
+		escrow:    map[string]*escrowEntry{},
+		instances: map[uint64]map[uint64]*data.ItemInstance{},
+		instGrant: map[string]instGrantEntry{},
 	}
 }
 
@@ -261,6 +274,125 @@ func (f *fakeRepo) ReleaseEscrow(_ context.Context, playerID, orderID uint64) (b
 	}
 	e.frozenQty, e.frozenGold, e.closed = 0, 0, true
 	return false, nil
+}
+
+// ── 装备实例(W5 ④)内存实现,复刻 player_item_instance 语义 ──
+
+func (f *fakeRepo) instMap(playerID uint64) map[uint64]*data.ItemInstance {
+	if f.instances[playerID] == nil {
+		f.instances[playerID] = map[uint64]*data.ItemInstance{}
+	}
+	return f.instances[playerID]
+}
+
+func (f *fakeRepo) ListInstances(_ context.Context, playerID uint64) ([]data.ItemInstance, error) {
+	m := f.instances[playerID]
+	ids := make([]uint64, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	out := make([]data.ItemInstance, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, *m[id])
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) instancesByIDs(playerID uint64, ids []uint64) []data.ItemInstance {
+	m := f.instances[playerID]
+	sorted := append([]uint64(nil), ids...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	out := make([]data.ItemInstance, 0, len(sorted))
+	for _, id := range sorted {
+		if inst, ok := m[id]; ok {
+			out = append(out, *inst)
+		}
+	}
+	return out
+}
+
+func (f *fakeRepo) lowestFreeSlot(playerID uint64, capacity int32) (int32, bool) {
+	occ := map[int32]struct{}{}
+	for _, inst := range f.instances[playerID] {
+		if inst.SlotIndex >= 0 {
+			occ[inst.SlotIndex] = struct{}{}
+		}
+	}
+	for s := int32(0); s < capacity; s++ {
+		if _, taken := occ[s]; !taken {
+			return s, true
+		}
+	}
+	return -1, false
+}
+
+func (f *fakeRepo) GrantInstances(_ context.Context, playerID uint64, instanceIDs []uint64, itemConfigIDs []uint32, capacity int32, idempotencyKey, _ string) ([]data.ItemInstance, bool, error) {
+	gk := keyOf(playerID, idempotencyKey)
+	fp := data.GrantInstancesFingerprint(itemConfigIDs)
+	if e, ok := f.instGrant[gk]; ok {
+		if e.fingerprint != fp {
+			return nil, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return f.instancesByIDs(playerID, e.ids), true, nil
+	}
+	if capacity <= 0 {
+		return nil, false, errcode.New(errcode.ErrInventoryCapacityFull, "instance inventory disabled")
+	}
+	m := f.instMap(playerID)
+	if len(m)+len(instanceIDs) > int(capacity) {
+		return nil, false, errcode.New(errcode.ErrInventoryCapacityFull, "capacity full")
+	}
+	out := make([]data.ItemInstance, 0, len(instanceIDs))
+	for i, id := range instanceIDs {
+		slot, ok := f.lowestFreeSlot(playerID, capacity)
+		if !ok {
+			return nil, false, errcode.New(errcode.ErrInventoryCapacityFull, "no free slot")
+		}
+		inst := &data.ItemInstance{InstanceID: id, ItemConfigID: itemConfigIDs[i], SlotIndex: slot}
+		m[id] = inst
+		out = append(out, *inst)
+	}
+	f.instGrant[gk] = instGrantEntry{fingerprint: fp, ids: append([]uint64(nil), instanceIDs...)}
+	return out, false, nil
+}
+
+func (f *fakeRepo) IdentifyInstance(_ context.Context, playerID, instanceID uint64, attrs []data.ItemAttribute) (data.ItemInstance, bool, error) {
+	inst, ok := f.instances[playerID][instanceID]
+	if !ok {
+		return data.ItemInstance{}, false, errcode.New(errcode.ErrInventoryItemNotFound, "instance not found")
+	}
+	if inst.Identified {
+		return *inst, true, nil
+	}
+	inst.Identified = true
+	inst.Attributes = attrs
+	return *inst, false, nil
+}
+
+func (f *fakeRepo) MoveInstance(_ context.Context, playerID, instanceID uint64, toSlot, capacity int32) (data.ItemInstance, error) {
+	if toSlot < 0 || toSlot >= capacity {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInventorySlotOccupied, "slot out of range")
+	}
+	inst, ok := f.instances[playerID][instanceID]
+	if !ok {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInventoryItemNotFound, "instance not found")
+	}
+	if inst.SlotIndex == toSlot {
+		return *inst, nil
+	}
+	for id, other := range f.instances[playerID] {
+		if id != instanceID && other.SlotIndex == toSlot {
+			return data.ItemInstance{}, errcode.New(errcode.ErrInventorySlotOccupied, "slot occupied")
+		}
+	}
+	inst.SlotIndex = toSlot
+	return *inst, nil
+}
+
+func (f *fakeRepo) DiscardInstance(_ context.Context, playerID, instanceID uint64) error {
+	delete(f.instances[playerID], instanceID)
+	return nil
 }
 
 func newUC(repo data.InventoryRepo) *InventoryUsecase {
@@ -653,6 +785,161 @@ func TestReleaseEscrow_RefundsRemaining(t *testing.T) {
 	}
 	if repo.items[10][7001] != 5 {
 		t.Fatalf("idempotent release must not double-refund, got %d", repo.items[10][7001])
+	}
+}
+
+// ── 装备实例 / 鉴定单测(W5 ④)──
+
+// seqGen 是确定性 instance_id 生成器(测试用,从 base 递增)。
+type seqGen struct{ next uint64 }
+
+func (g *seqGen) Generate() uint64 { g.next++; return g.next }
+
+// newInstanceUC 构造带实例背包(容量 4)+ 鉴定规则(道具 5001 从 3 属性池抽 2 条)的 usecase,
+// 注入确定性 snowflake + 确定性随机源(randIntn 恒返 0 → 洗牌不变、每条取区间下界),便于断言。
+func newInstanceUC() *InventoryUsecase {
+	uc := NewInventoryUsecase(newFakeRepo(), conf.InventoryConf{
+		Capacity: 4,
+		IdentifyRules: []conf.IdentifyRule{{
+			ItemConfigID: 5001,
+			AttrCount:    2,
+			Pool: []conf.IdentifyAttrRoll{
+				{AttrID: 101, Min: 10, Max: 20},
+				{AttrID: 102, Min: 5, Max: 5},
+				{AttrID: 103, Min: 1, Max: 100},
+			},
+		}},
+	})
+	uc.SetSnowflake(&seqGen{})
+	uc.SetRandSource(func(int64) int64 { return 0 })
+	return uc
+}
+
+func TestGrantInstances_AssignsSlotsAndCapacity(t *testing.T) {
+	uc := newInstanceUC()
+	ctx := context.Background()
+	insts, err := uc.GrantInstances(ctx, 100, []uint32{5001, 5002}, "drop-m1")
+	if err != nil {
+		t.Fatalf("grant instances err: %v", err)
+	}
+	if len(insts) != 2 {
+		t.Fatalf("want 2 instances, got %d", len(insts))
+	}
+	if insts[0].SlotIndex != 0 || insts[1].SlotIndex != 1 {
+		t.Fatalf("want slots 0,1, got %d,%d", insts[0].SlotIndex, insts[1].SlotIndex)
+	}
+	if insts[0].Identified {
+		t.Fatalf("newly granted instance must be unidentified")
+	}
+	// 容量 4:再发 3 件 → 超容量拒。
+	if _, err := uc.GrantInstances(ctx, 100, []uint32{5001, 5001, 5001}, "drop-m2"); errcode.As(err) != errcode.ErrInventoryCapacityFull {
+		t.Fatalf("over-capacity grant should be ErrInventoryCapacityFull, got %v", err)
+	}
+}
+
+func TestGrantInstances_Idempotent(t *testing.T) {
+	uc := newInstanceUC()
+	ctx := context.Background()
+	first, err := uc.GrantInstances(ctx, 100, []uint32{5001}, "drop-m1")
+	if err != nil {
+		t.Fatalf("first grant err: %v", err)
+	}
+	second, err := uc.GrantInstances(ctx, 100, []uint32{5001}, "drop-m1")
+	if err != nil {
+		t.Fatalf("replay grant err: %v", err)
+	}
+	if len(second) != 1 || second[0].InstanceID != first[0].InstanceID {
+		t.Fatalf("idempotent grant must replay same instance, first=%d second=%v", first[0].InstanceID, second)
+	}
+	// 只发一件,不重复创建。
+	_, _, capacity, instances, _ := uc.GetInventoryFull(ctx, 100)
+	if capacity != 4 || len(instances) != 1 {
+		t.Fatalf("want capacity 4 and 1 instance, got cap=%d n=%d", capacity, len(instances))
+	}
+}
+
+func TestIdentifyItem_RollsAttributesAndIdempotent(t *testing.T) {
+	uc := newInstanceUC()
+	ctx := context.Background()
+	insts, err := uc.GrantInstances(ctx, 100, []uint32{5001}, "drop-m1")
+	if err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	id := insts[0].InstanceID
+	got, err := uc.IdentifyItem(ctx, 100, id)
+	if err != nil {
+		t.Fatalf("identify err: %v", err)
+	}
+	if !got.Identified {
+		t.Fatalf("identified flag must be set")
+	}
+	// randIntn 恒 0:Fisher-Yates 对 [0,1,2] 洗成 [1,2,0],取前 2 条 → pool[1]{102},pool[2]{103};
+	// 每条取区间下界(102→5,103→1)。
+	if len(got.Attributes) != 2 {
+		t.Fatalf("want 2 rolled attrs, got %d", len(got.Attributes))
+	}
+	if got.Attributes[0].AttrID != 102 || got.Attributes[0].Value != 5 {
+		t.Fatalf("attr0 want {102,5}, got %+v", got.Attributes[0])
+	}
+	if got.Attributes[1].AttrID != 103 || got.Attributes[1].Value != 1 {
+		t.Fatalf("attr1 want {103,1}, got %+v", got.Attributes[1])
+	}
+	// 幂等:再次鉴定回放同属性,不 re-roll。
+	again, err := uc.IdentifyItem(ctx, 100, id)
+	if err != nil {
+		t.Fatalf("re-identify err: %v", err)
+	}
+	if len(again.Attributes) != 2 || again.Attributes[0].Value != 5 {
+		t.Fatalf("re-identify must replay, got %+v", again.Attributes)
+	}
+}
+
+func TestIdentifyItem_NotFound(t *testing.T) {
+	uc := newInstanceUC()
+	if _, err := uc.IdentifyItem(context.Background(), 100, 99999); errcode.As(err) != errcode.ErrInventoryItemNotFound {
+		t.Fatalf("identify missing instance should be ErrInventoryItemNotFound, got %v", err)
+	}
+}
+
+func TestMoveInstance_SlotOccupied(t *testing.T) {
+	uc := newInstanceUC()
+	ctx := context.Background()
+	insts, err := uc.GrantInstances(ctx, 100, []uint32{5001, 5002}, "drop-m1")
+	if err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	// insts[0] 在格 0,insts[1] 在格 1。把 insts[1] 移到格 0(被占)→ 拒。
+	if _, err := uc.MoveInstance(ctx, 100, insts[1].InstanceID, 0); errcode.As(err) != errcode.ErrInventorySlotOccupied {
+		t.Fatalf("move onto occupied slot should be ErrInventorySlotOccupied, got %v", err)
+	}
+	// 移到空格 2 → OK。
+	moved, err := uc.MoveInstance(ctx, 100, insts[1].InstanceID, 2)
+	if err != nil {
+		t.Fatalf("move to free slot err: %v", err)
+	}
+	if moved.SlotIndex != 2 {
+		t.Fatalf("want slot 2, got %d", moved.SlotIndex)
+	}
+}
+
+func TestDiscardInstance_Idempotent(t *testing.T) {
+	uc := newInstanceUC()
+	ctx := context.Background()
+	insts, err := uc.GrantInstances(ctx, 100, []uint32{5001}, "drop-m1")
+	if err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	id := insts[0].InstanceID
+	if err := uc.DiscardInstance(ctx, 100, id); err != nil {
+		t.Fatalf("discard err: %v", err)
+	}
+	// 再次丢弃 no-op。
+	if err := uc.DiscardInstance(ctx, 100, id); err != nil {
+		t.Fatalf("idempotent discard err: %v", err)
+	}
+	_, _, _, instances, _ := uc.GetInventoryFull(ctx, 100)
+	if len(instances) != 0 {
+		t.Fatalf("want 0 instances after discard, got %d", len(instances))
 	}
 }
 

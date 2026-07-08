@@ -2107,11 +2107,11 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
     {
       PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2121,7 +2121,10 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
       ::_pbi::TcParser::GetTable<::pandora::hub::v1::HubAssignmentStorageRecord>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 role_id = 8 [json_name = "roleId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.role_id_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.role_id_)}},
       // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.player_id_), 3>(),
        {8, 3, 0,
@@ -2135,8 +2138,8 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_addr_)}},
       // uint32 shard_id = 4 [json_name = "shardId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.shard_id_), 6>(),
-       {32, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.shard_id_), 5>(),
+       {32, 5, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_)}},
       // string region = 5 [json_name = "region"];
       {::_pbi::TcParser::FastUS1,
@@ -2147,8 +2150,8 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
        {48, 4, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_)}},
       // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), 5>(),
-       {56, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_)}},
     }}, {{
       65535, 65535
@@ -2160,17 +2163,19 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
       // string hub_addr = 3 [json_name = "hubAddr"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_addr_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 shard_id = 4 [json_name = "shardId"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string region = 5 [json_name = "region"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.region_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 team_id = 6 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // uint32 role_id = 8 [json_name = "roleId"];
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.role_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\51\0\14\10\0\6\0\0"
+      "\51\0\14\10\0\6\0\0\0\0\0\0\0\0\0\0"
       "pandora.hub.v1.HubAssignmentStorageRecord"
       "hub_pod_name"
       "hub_addr"
@@ -2195,8 +2200,9 @@ inline constexpr HubAssignmentStorageRecord::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         team_id_{::uint64_t{0u}},
-        assigned_at_ms_{::int64_t{0}},
-        shard_id_{0u} {}
+        shard_id_{0u},
+        role_id_{0u},
+        assigned_at_ms_{::int64_t{0}} {}
 
 template <typename>
 constexpr HubAssignmentStorageRecord::HubAssignmentStorageRecord(::_pbi::ConstantInitialized,
@@ -2840,11 +2846,11 @@ constexpr AssignHubRequest::ParseTableT_ AssignHubRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2854,7 +2860,10 @@ constexpr AssignHubRequest::ParseTableT_ AssignHubRequest::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::pandora::hub::v1::AssignHubRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 role_id = 4 [json_name = "roleId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AssignHubRequest, _impl_.role_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_)}},
       // uint64 player_id = 1 [json_name = "playerId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AssignHubRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
@@ -2876,6 +2885,8 @@ constexpr AssignHubRequest::ParseTableT_ AssignHubRequest::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.region_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 team_id = 3 [json_name = "teamId"];
       {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.team_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 role_id = 4 [json_name = "roleId"];
+      {PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -2895,7 +2906,8 @@ inline constexpr AssignHubRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
-        team_id_{::uint64_t{0u}} {}
+        team_id_{::uint64_t{0u}},
+        role_id_{0u} {}
 
 template <typename>
 constexpr AssignHubRequest::AssignHubRequest(::_pbi::ConstantInitialized,
@@ -3317,13 +3329,15 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.region_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.team_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubRequest, _impl_.role_id_),
         1,
         0,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AssignHubResponse, _impl_._has_bits_),
         8, // hasbit index offset
@@ -3486,7 +3500,7 @@ const ::uint32_t
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.hub_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.hub_addr_),
@@ -3494,13 +3508,15 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.region_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.team_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.assigned_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.role_id_),
         3,
         0,
         1,
-        6,
+        5,
         2,
         4,
-        5,
+        7,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubMigrateEvent, _impl_._has_bits_),
         12, // hasbit index offset
@@ -3527,24 +3543,24 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::hub::v1::AssignHubRequest)},
-        {9, sizeof(::pandora::hub::v1::AssignHubResponse)},
-        {22, sizeof(::pandora::hub::v1::ReleaseHubRequest)},
-        {27, sizeof(::pandora::hub::v1::ReleaseHubResponse)},
-        {32, sizeof(::pandora::hub::v1::TransferHubRequest)},
-        {39, sizeof(::pandora::hub::v1::TransferHubResponse)},
-        {48, sizeof(::pandora::hub::v1::HubLine)},
-        {63, sizeof(::pandora::hub::v1::ListHubLinesRequest)},
-        {68, sizeof(::pandora::hub::v1::ListHubLinesResponse)},
-        {75, sizeof(::pandora::hub::v1::TransferToLineRequest)},
-        {80, sizeof(::pandora::hub::v1::TransferToLineResponse)},
-        {93, sizeof(::pandora::hub::v1::HubInfo)},
-        {108, sizeof(::pandora::hub::v1::ListHubsRequest)},
-        {113, sizeof(::pandora::hub::v1::ListHubsResponse)},
-        {120, sizeof(::pandora::hub::v1::HeartbeatRequest)},
-        {137, sizeof(::pandora::hub::v1::HeartbeatResponse)},
-        {146, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
-        {169, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
-        {186, sizeof(::pandora::hub::v1::HubMigrateEvent)},
+        {11, sizeof(::pandora::hub::v1::AssignHubResponse)},
+        {24, sizeof(::pandora::hub::v1::ReleaseHubRequest)},
+        {29, sizeof(::pandora::hub::v1::ReleaseHubResponse)},
+        {34, sizeof(::pandora::hub::v1::TransferHubRequest)},
+        {41, sizeof(::pandora::hub::v1::TransferHubResponse)},
+        {50, sizeof(::pandora::hub::v1::HubLine)},
+        {65, sizeof(::pandora::hub::v1::ListHubLinesRequest)},
+        {70, sizeof(::pandora::hub::v1::ListHubLinesResponse)},
+        {77, sizeof(::pandora::hub::v1::TransferToLineRequest)},
+        {82, sizeof(::pandora::hub::v1::TransferToLineResponse)},
+        {95, sizeof(::pandora::hub::v1::HubInfo)},
+        {110, sizeof(::pandora::hub::v1::ListHubsRequest)},
+        {115, sizeof(::pandora::hub::v1::ListHubsResponse)},
+        {122, sizeof(::pandora::hub::v1::HeartbeatRequest)},
+        {139, sizeof(::pandora::hub::v1::HeartbeatResponse)},
+        {148, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
+        {171, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
+        {190, sizeof(::pandora::hub::v1::HubMigrateEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3572,94 +3588,95 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     protodesc_cold) = {
     "\n\036pandora/hub/v1/allocator.proto\022\016pandor"
     "a.hub.v1\032\037pandora/common/v1/errcode.prot"
-    "o\"`\n\020AssignHubRequest\022\033\n\tplayer_id\030\001 \001(\004"
+    "o\"y\n\020AssignHubRequest\022\033\n\tplayer_id\030\001 \001(\004"
     "R\010playerId\022\026\n\006region\030\002 \001(\tR\006region\022\027\n\007te"
-    "am_id\030\003 \001(\004R\006teamId\"\277\001\n\021AssignHubRespons"
-    "e\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrC"
-    "odeR\004code\022\036\n\013hub_ds_addr\030\002 \001(\tR\thubDsAdd"
-    "r\022\035\n\nhub_ticket\030\003 \001(\tR\thubTicket\022 \n\014hub_"
-    "pod_name\030\004 \001(\tR\nhubPodName\022\031\n\010shard_id\030\005"
-    " \001(\rR\007shardId\"0\n\021ReleaseHubRequest\022\033\n\tpl"
-    "ayer_id\030\001 \001(\004R\010playerId\"D\n\022ReleaseHubRes"
-    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
-    "ErrCodeR\004code\"U\n\022TransferHubRequest\022\033\n\tp"
-    "layer_id\030\001 \001(\004R\010playerId\022\"\n\rtarget_hub_i"
-    "d\030\002 \001(\004R\013targetHubId\"\222\001\n\023TransferHubResp"
-    "onse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.E"
-    "rrCodeR\004code\022%\n\017new_hub_ds_addr\030\002 \001(\tR\014n"
-    "ewHubDsAddr\022$\n\016new_hub_ticket\030\003 \001(\tR\014new"
-    "HubTicket\"\264\001\n\007HubLine\022\027\n\007line_no\030\001 \001(\rR\006"
-    "lineNo\022\031\n\010shard_id\030\002 \001(\rR\007shardId\022!\n\014pla"
-    "yer_count\030\003 \001(\005R\013playerCount\022\032\n\010capacity"
-    "\030\004 \001(\005R\010capacity\022\027\n\007is_full\030\005 \001(\010R\006isFul"
-    "l\022\035\n\nis_current\030\006 \001(\010R\tisCurrent\"-\n\023List"
-    "HubLinesRequest\022\026\n\006region\030\001 \001(\tR\006region\""
-    "u\n\024ListHubLinesResponse\022.\n\004code\030\001 \001(\0162\032."
-    "pandora.common.v1.ErrCodeR\004code\022-\n\005lines"
-    "\030\002 \003(\0132\027.pandora.hub.v1.HubLineR\005lines\"\?"
-    "\n\025TransferToLineRequest\022&\n\017target_shard_"
-    "id\030\001 \001(\rR\rtargetShardId\"\320\001\n\026TransferToLi"
-    "neResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCodeR\004code\022%\n\017new_hub_ds_addr\030\002 "
-    "\001(\tR\014newHubDsAddr\022$\n\016new_hub_ticket\030\003 \001("
-    "\tR\014newHubTicket\022 \n\014new_shard_id\030\004 \001(\rR\nn"
-    "ewShardId\022\027\n\007line_no\030\005 \001(\rR\006lineNo\"\263\001\n\007H"
-    "ubInfo\022 \n\014hub_pod_name\030\001 \001(\tR\nhubPodName"
-    "\022\031\n\010hub_addr\030\002 \001(\tR\007hubAddr\022\026\n\006region\030\003 "
-    "\001(\tR\006region\022!\n\014player_count\030\004 \001(\005R\013playe"
-    "rCount\022\032\n\010capacity\030\005 \001(\005R\010capacity\022\024\n\005st"
-    "ate\030\006 \001(\tR\005state\")\n\017ListHubsRequest\022\026\n\006r"
-    "egion\030\001 \001(\tR\006region\"o\n\020ListHubsResponse\022"
-    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\022+\n\004hubs\030\002 \003(\0132\027.pandora.hub.v1.H"
-    "ubInfoR\004hubs\"\327\001\n\020HeartbeatRequest\022 \n\014hub"
-    "_pod_name\030\001 \001(\tR\nhubPodName\022!\n\014player_co"
-    "unt\030\002 \001(\005R\013playerCount\022\027\n\007cpu_pct\030\003 \001(\002R"
-    "\006cpuPct\022\025\n\006mem_mb\030\004 \001(\002R\005memMb\022\024\n\005state\030"
-    "\005 \001(\tR\005state\022\023\n\005ts_ms\030\006 \001(\003R\004tsMs\022\035\n\npla"
-    "yer_ids\030\n \003(\004R\tplayerIdsJ\004\010\007\020\n\"\210\001\n\021Heart"
-    "beatResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCodeR\004code\022\030\n\007command\030\002 \001(\tR\007c"
-    "ommand\022#\n\rgrace_seconds\030\003 \001(\005R\014graceSeco"
-    "ndsJ\004\010\004\020\n\"\330\002\n\025HubShardStorageRecord\022 \n\014h"
-    "ub_pod_name\030\001 \001(\tR\nhubPodName\022\031\n\010hub_add"
-    "r\030\002 \001(\tR\007hubAddr\022\026\n\006region\030\003 \001(\tR\006region"
-    "\022\031\n\010shard_id\030\004 \001(\rR\007shardId\022!\n\014player_co"
-    "unt\030\005 \001(\005R\013playerCount\022\032\n\010capacity\030\006 \001(\005"
-    "R\010capacity\022\024\n\005state\030\007 \001(\tR\005state\022*\n\021last"
-    "_heartbeat_ms\030\010 \001(\003R\017lastHeartbeatMs\022\"\n\r"
-    "created_at_ms\030\t \001(\003R\013createdAtMs\022*\n\021drai"
-    "ning_since_ms\030\n \001(\003R\017drainingSinceMs\"\350\001\n"
-    "\032HubAssignmentStorageRecord\022\033\n\tplayer_id"
-    "\030\001 \001(\004R\010playerId\022 \n\014hub_pod_name\030\002 \001(\tR\n"
-    "hubPodName\022\031\n\010hub_addr\030\003 \001(\tR\007hubAddr\022\031\n"
-    "\010shard_id\030\004 \001(\rR\007shardId\022\026\n\006region\030\005 \001(\t"
-    "R\006region\022\027\n\007team_id\030\006 \001(\004R\006teamId\022$\n\016ass"
-    "igned_at_ms\030\007 \001(\003R\014assignedAtMs\"\262\002\n\017HubM"
-    "igrateEvent\022\033\n\tplayer_id\030\001 \001(\004R\010playerId"
-    "\022 \n\014from_hub_pod\030\002 \001(\tR\nfromHubPod\022#\n\016to"
-    "_hub_ds_addr\030\003 \001(\tR\013toHubDsAddr\022\"\n\rto_hu"
-    "b_ticket\030\004 \001(\tR\013toHubTicket\022%\n\017to_hub_po"
-    "d_name\030\005 \001(\tR\014toHubPodName\022\036\n\013to_shard_i"
-    "d\030\006 \001(\rR\ttoShardId\022#\n\rgrace_seconds\030\007 \001("
-    "\005R\014graceSeconds\022\026\n\006reason\030\010 \001(\tR\006reason\022"
-    "\023\n\005ts_ms\030\t \001(\003R\004tsMs2\361\004\n\023HubAllocatorSer"
-    "vice\022P\n\tAssignHub\022 .pandora.hub.v1.Assig"
-    "nHubRequest\032!.pandora.hub.v1.AssignHubRe"
-    "sponse\022S\n\nReleaseHub\022!.pandora.hub.v1.Re"
-    "leaseHubRequest\032\".pandora.hub.v1.Release"
-    "HubResponse\022V\n\013TransferHub\022\".pandora.hub"
-    ".v1.TransferHubRequest\032#.pandora.hub.v1."
-    "TransferHubResponse\022M\n\010ListHubs\022\037.pandor"
-    "a.hub.v1.ListHubsRequest\032 .pandora.hub.v"
-    "1.ListHubsResponse\022P\n\tHeartbeat\022 .pandor"
-    "a.hub.v1.HeartbeatRequest\032!.pandora.hub."
-    "v1.HeartbeatResponse\022Y\n\014ListHubLines\022#.p"
-    "andora.hub.v1.ListHubLinesRequest\032$.pand"
-    "ora.hub.v1.ListHubLinesResponse\022_\n\016Trans"
-    "ferToLine\022%.pandora.hub.v1.TransferToLin"
-    "eRequest\032&.pandora.hub.v1.TransferToLine"
-    "Responseb\006proto3"
+    "am_id\030\003 \001(\004R\006teamId\022\027\n\007role_id\030\004 \001(\rR\006ro"
+    "leId\"\277\001\n\021AssignHubResponse\022.\n\004code\030\001 \001(\016"
+    "2\032.pandora.common.v1.ErrCodeR\004code\022\036\n\013hu"
+    "b_ds_addr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_ticket"
+    "\030\003 \001(\tR\thubTicket\022 \n\014hub_pod_name\030\004 \001(\tR"
+    "\nhubPodName\022\031\n\010shard_id\030\005 \001(\rR\007shardId\"0"
+    "\n\021ReleaseHubRequest\022\033\n\tplayer_id\030\001 \001(\004R\010"
+    "playerId\"D\n\022ReleaseHubResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\"U"
+    "\n\022TransferHubRequest\022\033\n\tplayer_id\030\001 \001(\004R"
+    "\010playerId\022\"\n\rtarget_hub_id\030\002 \001(\004R\013target"
+    "HubId\"\222\001\n\023TransferHubResponse\022.\n\004code\030\001 "
+    "\001(\0162\032.pandora.common.v1.ErrCodeR\004code\022%\n"
+    "\017new_hub_ds_addr\030\002 \001(\tR\014newHubDsAddr\022$\n\016"
+    "new_hub_ticket\030\003 \001(\tR\014newHubTicket\"\264\001\n\007H"
+    "ubLine\022\027\n\007line_no\030\001 \001(\rR\006lineNo\022\031\n\010shard"
+    "_id\030\002 \001(\rR\007shardId\022!\n\014player_count\030\003 \001(\005"
+    "R\013playerCount\022\032\n\010capacity\030\004 \001(\005R\010capacit"
+    "y\022\027\n\007is_full\030\005 \001(\010R\006isFull\022\035\n\nis_current"
+    "\030\006 \001(\010R\tisCurrent\"-\n\023ListHubLinesRequest"
+    "\022\026\n\006region\030\001 \001(\tR\006region\"u\n\024ListHubLines"
+    "Response\022.\n\004code\030\001 \001(\0162\032.pandora.common."
+    "v1.ErrCodeR\004code\022-\n\005lines\030\002 \003(\0132\027.pandor"
+    "a.hub.v1.HubLineR\005lines\"\?\n\025TransferToLin"
+    "eRequest\022&\n\017target_shard_id\030\001 \001(\rR\rtarge"
+    "tShardId\"\320\001\n\026TransferToLineResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\022%\n\017new_hub_ds_addr\030\002 \001(\tR\014newHubDsAd"
+    "dr\022$\n\016new_hub_ticket\030\003 \001(\tR\014newHubTicket"
+    "\022 \n\014new_shard_id\030\004 \001(\rR\nnewShardId\022\027\n\007li"
+    "ne_no\030\005 \001(\rR\006lineNo\"\263\001\n\007HubInfo\022 \n\014hub_p"
+    "od_name\030\001 \001(\tR\nhubPodName\022\031\n\010hub_addr\030\002 "
+    "\001(\tR\007hubAddr\022\026\n\006region\030\003 \001(\tR\006region\022!\n\014"
+    "player_count\030\004 \001(\005R\013playerCount\022\032\n\010capac"
+    "ity\030\005 \001(\005R\010capacity\022\024\n\005state\030\006 \001(\tR\005stat"
+    "e\")\n\017ListHubsRequest\022\026\n\006region\030\001 \001(\tR\006re"
+    "gion\"o\n\020ListHubsResponse\022.\n\004code\030\001 \001(\0162\032"
+    ".pandora.common.v1.ErrCodeR\004code\022+\n\004hubs"
+    "\030\002 \003(\0132\027.pandora.hub.v1.HubInfoR\004hubs\"\327\001"
+    "\n\020HeartbeatRequest\022 \n\014hub_pod_name\030\001 \001(\t"
+    "R\nhubPodName\022!\n\014player_count\030\002 \001(\005R\013play"
+    "erCount\022\027\n\007cpu_pct\030\003 \001(\002R\006cpuPct\022\025\n\006mem_"
+    "mb\030\004 \001(\002R\005memMb\022\024\n\005state\030\005 \001(\tR\005state\022\023\n"
+    "\005ts_ms\030\006 \001(\003R\004tsMs\022\035\n\nplayer_ids\030\n \003(\004R\t"
+    "playerIdsJ\004\010\007\020\n\"\210\001\n\021HeartbeatResponse\022.\n"
+    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
+    "\004code\022\030\n\007command\030\002 \001(\tR\007command\022#\n\rgrace"
+    "_seconds\030\003 \001(\005R\014graceSecondsJ\004\010\004\020\n\"\330\002\n\025H"
+    "ubShardStorageRecord\022 \n\014hub_pod_name\030\001 \001"
+    "(\tR\nhubPodName\022\031\n\010hub_addr\030\002 \001(\tR\007hubAdd"
+    "r\022\026\n\006region\030\003 \001(\tR\006region\022\031\n\010shard_id\030\004 "
+    "\001(\rR\007shardId\022!\n\014player_count\030\005 \001(\005R\013play"
+    "erCount\022\032\n\010capacity\030\006 \001(\005R\010capacity\022\024\n\005s"
+    "tate\030\007 \001(\tR\005state\022*\n\021last_heartbeat_ms\030\010"
+    " \001(\003R\017lastHeartbeatMs\022\"\n\rcreated_at_ms\030\t"
+    " \001(\003R\013createdAtMs\022*\n\021draining_since_ms\030\n"
+    " \001(\003R\017drainingSinceMs\"\201\002\n\032HubAssignmentS"
+    "torageRecord\022\033\n\tplayer_id\030\001 \001(\004R\010playerI"
+    "d\022 \n\014hub_pod_name\030\002 \001(\tR\nhubPodName\022\031\n\010h"
+    "ub_addr\030\003 \001(\tR\007hubAddr\022\031\n\010shard_id\030\004 \001(\r"
+    "R\007shardId\022\026\n\006region\030\005 \001(\tR\006region\022\027\n\007tea"
+    "m_id\030\006 \001(\004R\006teamId\022$\n\016assigned_at_ms\030\007 \001"
+    "(\003R\014assignedAtMs\022\027\n\007role_id\030\010 \001(\rR\006roleI"
+    "d\"\262\002\n\017HubMigrateEvent\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\022 \n\014from_hub_pod\030\002 \001(\tR\nfromHu"
+    "bPod\022#\n\016to_hub_ds_addr\030\003 \001(\tR\013toHubDsAdd"
+    "r\022\"\n\rto_hub_ticket\030\004 \001(\tR\013toHubTicket\022%\n"
+    "\017to_hub_pod_name\030\005 \001(\tR\014toHubPodName\022\036\n\013"
+    "to_shard_id\030\006 \001(\rR\ttoShardId\022#\n\rgrace_se"
+    "conds\030\007 \001(\005R\014graceSeconds\022\026\n\006reason\030\010 \001("
+    "\tR\006reason\022\023\n\005ts_ms\030\t \001(\003R\004tsMs2\361\004\n\023HubAl"
+    "locatorService\022P\n\tAssignHub\022 .pandora.hu"
+    "b.v1.AssignHubRequest\032!.pandora.hub.v1.A"
+    "ssignHubResponse\022S\n\nReleaseHub\022!.pandora"
+    ".hub.v1.ReleaseHubRequest\032\".pandora.hub."
+    "v1.ReleaseHubResponse\022V\n\013TransferHub\022\".p"
+    "andora.hub.v1.TransferHubRequest\032#.pando"
+    "ra.hub.v1.TransferHubResponse\022M\n\010ListHub"
+    "s\022\037.pandora.hub.v1.ListHubsRequest\032 .pan"
+    "dora.hub.v1.ListHubsResponse\022P\n\tHeartbea"
+    "t\022 .pandora.hub.v1.HeartbeatRequest\032!.pa"
+    "ndora.hub.v1.HeartbeatResponse\022Y\n\014ListHu"
+    "bLines\022#.pandora.hub.v1.ListHubLinesRequ"
+    "est\032$.pandora.hub.v1.ListHubLinesRespons"
+    "e\022_\n\016TransferToLine\022%.pandora.hub.v1.Tra"
+    "nsferToLineRequest\032&.pandora.hub.v1.Tran"
+    "sferToLineResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps[1] = {
@@ -3669,7 +3686,7 @@ static ::absl::once_flag descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto = {
     false,
     false,
-    3576,
+    3626,
     descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto,
     "pandora/hub/v1/allocator.proto",
     &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_once,
@@ -3722,9 +3739,9 @@ AssignHubRequest::AssignHubRequest(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, team_id_) -
+           offsetof(Impl_, role_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::team_id_));
+               sizeof(Impl_::role_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.AssignHubRequest)
 }
@@ -3739,9 +3756,9 @@ inline void AssignHubRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, team_id_) -
+           offsetof(Impl_, role_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::team_id_));
+               sizeof(Impl_::role_id_));
 }
 AssignHubRequest::~AssignHubRequest() {
   // @@protoc_insertion_point(destructor:pandora.hub.v1.AssignHubRequest)
@@ -3795,10 +3812,10 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.region_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.team_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.team_id_));
+        reinterpret_cast<char*>(&_impl_.role_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.role_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3851,6 +3868,15 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
     }
   }
 
+  // uint32 role_id = 4 [json_name = "roleId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_role_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_role_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3876,7 +3902,7 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // string region = 2 [json_name = "region"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_region().empty()) {
@@ -3898,6 +3924,13 @@ PROTOBUF_NOINLINE void AssignHubRequest::Clear() {
             this_._internal_team_id());
       }
     }
+    // uint32 role_id = 4 [json_name = "roleId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_role_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_role_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -3916,7 +3949,7 @@ void AssignHubRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_region().empty()) {
         _this->_internal_set_region(from._internal_region());
@@ -3934,6 +3967,11 @@ void AssignHubRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_role_id() != 0) {
+        _this->_impl_.role_id_ = from._impl_.role_id_;
       }
     }
   }
@@ -3958,8 +3996,8 @@ void AssignHubRequest::InternalSwap(AssignHubRequest* PROTOBUF_RESTRICT PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.region_, &other->_impl_.region_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.team_id_)
-      + sizeof(AssignHubRequest::_impl_.team_id_)
+      PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.role_id_)
+      + sizeof(AssignHubRequest::_impl_.role_id_)
       - PROTOBUF_FIELD_OFFSET(AssignHubRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -8546,9 +8584,9 @@ HubAssignmentStorageRecord::HubAssignmentStorageRecord(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, shard_id_) -
+           offsetof(Impl_, assigned_at_ms_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::shard_id_));
+               sizeof(Impl_::assigned_at_ms_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HubAssignmentStorageRecord)
 }
@@ -8565,9 +8603,9 @@ inline void HubAssignmentStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLAB
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, shard_id_) -
+           offsetof(Impl_, assigned_at_ms_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::shard_id_));
+               sizeof(Impl_::assigned_at_ms_));
 }
 HubAssignmentStorageRecord::~HubAssignmentStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.hub.v1.HubAssignmentStorageRecord)
@@ -8631,10 +8669,10 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
       _impl_.region_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.shard_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.shard_id_));
+        reinterpret_cast<char*>(&_impl_.assigned_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.assigned_at_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -8689,7 +8727,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint32 shard_id = 4 [json_name = "shardId"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_shard_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -8717,11 +8755,20 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_assigned_at_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<7>(
               stream, this_._internal_assigned_at_ms(), target);
+    }
+  }
+
+  // uint32 role_id = 8 [json_name = "roleId"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_role_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_role_id(), target);
     }
   }
 
@@ -8750,7 +8797,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string hub_pod_name = 2 [json_name = "hubPodName"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_hub_pod_name().empty()) {
@@ -8786,18 +8833,25 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
             this_._internal_team_id());
       }
     }
-    // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (this_._internal_assigned_at_ms() != 0) {
-        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
-            this_._internal_assigned_at_ms());
-      }
-    }
     // uint32 shard_id = 4 [json_name = "shardId"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_shard_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_shard_id());
+      }
+    }
+    // uint32 role_id = 8 [json_name = "roleId"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_role_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_role_id());
+      }
+    }
+    // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_assigned_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_assigned_at_ms());
       }
     }
   }
@@ -8818,7 +8872,7 @@ void HubAssignmentStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_m
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_hub_pod_name().empty()) {
         _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
@@ -8857,13 +8911,18 @@ void HubAssignmentStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_m
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (from._internal_assigned_at_ms() != 0) {
-        _this->_impl_.assigned_at_ms_ = from._impl_.assigned_at_ms_;
+      if (from._internal_shard_id() != 0) {
+        _this->_impl_.shard_id_ = from._impl_.shard_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_shard_id() != 0) {
-        _this->_impl_.shard_id_ = from._impl_.shard_id_;
+      if (from._internal_role_id() != 0) {
+        _this->_impl_.role_id_ = from._impl_.role_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_assigned_at_ms() != 0) {
+        _this->_impl_.assigned_at_ms_ = from._impl_.assigned_at_ms_;
       }
     }
   }
@@ -8890,8 +8949,8 @@ void HubAssignmentStorageRecord::InternalSwap(HubAssignmentStorageRecord* PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_addr_, &other->_impl_.hub_addr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.region_, &other->_impl_.region_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_)
-      + sizeof(HubAssignmentStorageRecord::_impl_.shard_id_)
+      PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_)
+      + sizeof(HubAssignmentStorageRecord::_impl_.assigned_at_ms_)
       - PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));

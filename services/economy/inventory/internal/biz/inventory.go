@@ -14,6 +14,7 @@ package biz
 import (
 	"context"
 	"fmt"
+	"math/rand"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -22,6 +23,11 @@ import (
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/conf"
 	"github.com/luyuancpp/pandora/services/economy/inventory/internal/data"
 )
+
+// snowflakeGen 是 snowflake.Node 的最小接口(生成装备实例 instance_id,W5 ④)。
+type snowflakeGen interface {
+	Generate() uint64
+}
 
 // InventoryUsecase 是 inventory 服务业务逻辑核心。
 type InventoryUsecase struct {
@@ -33,11 +39,42 @@ type InventoryUsecase struct {
 	// (行为不变)。分片部署时由 main 经 SetCellRouter 注入,SettleAuctionMatch 成功后额外打一条
 	// 跨分片对转落点观测(买卖双方跨 Cell → 拆 Kafka 结算出箱幂等消费)。nil-safe。
 	router *cellroute.Router
+
+	// sf 生成装备实例 instance_id(W5 ④)。可为 nil:未装配时 GrantInstances 返回
+	// ErrInvalidArg(实例背包未启用),不影响堆叠计数背包(GrantItems/UseItem/SellItem)。
+	// 由 main 经 SetSnowflake 注入(与 SetCellRouter 一致,避免旧调用点被迫改签名)。
+	sf snowflakeGen
+
+	// randIntn 返回 [0,n) 的随机整数(装备鉴定 roll 随机属性用,W5 ④)。
+	// 默认全局 math/rand;测试经 SetRandSource 注入确定性序列。n<=0 时约定返回 0。
+	randIntn func(n int64) int64
 }
 
 // NewInventoryUsecase 构造。
 func NewInventoryUsecase(repo data.InventoryRepo, cfg conf.InventoryConf) *InventoryUsecase {
-	return &InventoryUsecase{repo: repo, cfg: cfg}
+	return &InventoryUsecase{
+		repo:     repo,
+		cfg:      cfg,
+		randIntn: defaultRandIntn,
+	}
+}
+
+// defaultRandIntn 是默认随机源(全局 math/rand;n<=0 返回 0)。
+func defaultRandIntn(n int64) int64 {
+	if n <= 0 {
+		return 0
+	}
+	return rand.Int63n(n)
+}
+
+// SetSnowflake 注入装备实例 ID 生成器(W5 ④)。nil-safe:不调用时实例背包禁用。
+func (u *InventoryUsecase) SetSnowflake(sf snowflakeGen) { u.sf = sf }
+
+// SetRandSource 注入鉴定 roll 随机源(测试用确定性序列;不调用则用默认 math/rand)。
+func (u *InventoryUsecase) SetRandSource(fn func(n int64) int64) {
+	if fn != nil {
+		u.randIntn = fn
+	}
 }
 
 // SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
@@ -55,6 +92,164 @@ func (u *InventoryUsecase) GetInventory(ctx context.Context, playerID uint64) (i
 		return 0, nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
 	return u.repo.GetInventory(ctx, playerID)
+}
+
+// GetInventoryFull 读玩家完整背包(货币 + 堆叠道具 + 容量 + 装备实例,W5 ④)。
+// capacity 来自服务配置(所有玩家同一基础容量;<=0 表示未启用实例背包)。
+// 未启用实例背包时不读 player_item_instance 表(既有库可能尚未迁移出该表,
+// 避免 GetInventory 全量报内部错;启用时 main 启动期已做 schema 检查)。
+func (u *InventoryUsecase) GetInventoryFull(ctx context.Context, playerID uint64) (int64, []data.ItemStack, int32, []data.ItemInstance, error) {
+	if playerID == 0 {
+		return 0, nil, 0, nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	gold, items, err := u.repo.GetInventory(ctx, playerID)
+	if err != nil {
+		return 0, nil, 0, nil, err
+	}
+	if u.cfg.Capacity <= 0 {
+		return gold, items, 0, nil, nil
+	}
+	instances, ierr := u.repo.ListInstances(ctx, playerID)
+	if ierr != nil {
+		return 0, nil, 0, nil, ierr
+	}
+	return gold, items, u.cfg.Capacity, instances, nil
+}
+
+// GrantInstances 幂等发放装备实例(系统驱动:掉落 / 活动 / 购买到账,W5 ④)。
+// 为每个 itemConfigID 用 snowflake 生成一件独立实例(默认未鉴定);容量满 → ErrInventoryCapacityFull。
+func (u *InventoryUsecase) GrantInstances(ctx context.Context, playerID uint64, itemConfigIDs []uint32, idempotencyKey string) ([]data.ItemInstance, error) {
+	if playerID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if idempotencyKey == "" {
+		return nil, errcode.New(errcode.ErrInvalidArg, "idempotency_key required")
+	}
+	if len(itemConfigIDs) == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "nothing to grant")
+	}
+	for _, id := range itemConfigIDs {
+		if id == 0 {
+			return nil, errcode.New(errcode.ErrInvalidArg, "item_config_id required")
+		}
+	}
+	if u.sf == nil {
+		return nil, errcode.New(errcode.ErrInvalidArg, "instance inventory not enabled (no id generator)")
+	}
+	instanceIDs := make([]uint64, len(itemConfigIDs))
+	for i := range itemConfigIDs {
+		instanceIDs[i] = u.sf.Generate()
+	}
+	detail := fmt.Sprintf("grant_inst n=%d", len(itemConfigIDs))
+	insts, already, err := u.repo.GrantInstances(ctx, playerID, instanceIDs, itemConfigIDs, u.cfg.Capacity, idempotencyKey, detail)
+	if err != nil {
+		return nil, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "grant_instances_idempotent_hit",
+			"player_id", playerID, "idempotency_key", idempotencyKey, "count", len(insts))
+	}
+	return insts, nil
+}
+
+// IdentifyItem 鉴定一件未鉴定装备实例:服务端权威 roll 随机属性(反作弊,不变量 §6)后落库。
+// 幂等:已鉴定 → 回放已落定属性(不重复 roll)。无鉴定规则 → 只置 identified 无属性(不阻断)。
+func (u *InventoryUsecase) IdentifyItem(ctx context.Context, playerID, instanceID uint64) (data.ItemInstance, error) {
+	if playerID == 0 {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if instanceID == 0 {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInvalidArg, "instance_id required")
+	}
+	// 先锁读实例拿到 item_config_id 才能查规则 roll —— 但为避免两次读,直接把 roll 结果传给
+	// 数据层,由数据层在 FOR UPDATE 里裁决"已鉴定则回放、否则落定"。roll 依赖 item_config_id,
+	// 而此处尚未读到实例。折中:数据层先读实例;若已鉴定回放,否则回调 roll。这里改为两段式:
+	// 1) 读实例(不锁)拿 config_id 预 roll;2) 数据层 FOR UPDATE 再判(已鉴定则忽略预 roll)。
+	// 由于 roll 结果只在"未鉴定→落定"分支被采用,预读到 config 变更的概率为零(实例 config 不可变)。
+	insts, lerr := u.repo.ListInstances(ctx, playerID)
+	if lerr != nil {
+		return data.ItemInstance{}, lerr
+	}
+	var configID uint32
+	found := false
+	for i := range insts {
+		if insts[i].InstanceID == instanceID {
+			configID = insts[i].ItemConfigID
+			found = true
+			break
+		}
+	}
+	if !found {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInventoryItemNotFound, "instance not found player=%d id=%d", playerID, instanceID)
+	}
+	attrs := u.rollIdentifyAttrs(configID)
+	inst, already, err := u.repo.IdentifyInstance(ctx, playerID, instanceID, attrs)
+	if err != nil {
+		return data.ItemInstance{}, err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "identify_item_idempotent_hit",
+			"player_id", playerID, "instance_id", instanceID)
+	}
+	return inst, nil
+}
+
+// rollIdentifyAttrs 按配置从属性池不放回抽 AttrCount 条,每条在 [Min,Max] 均匀 roll 数值。
+// 无规则 / 空池 → 返回 nil(鉴定只置 identified 无属性)。
+func (u *InventoryUsecase) rollIdentifyAttrs(itemConfigID uint32) []data.ItemAttribute {
+	rule := u.cfg.IdentifyRuleOf(itemConfigID)
+	if rule == nil || len(rule.Pool) == 0 || rule.AttrCount <= 0 {
+		return nil
+	}
+	// 洗牌 pool 下标(Fisher-Yates,用注入随机源),取前 min(AttrCount,len(pool)) 条。
+	idx := make([]int, len(rule.Pool))
+	for i := range idx {
+		idx[i] = i
+	}
+	for i := len(idx) - 1; i > 0; i-- {
+		j := int(u.randIntn(int64(i + 1)))
+		idx[i], idx[j] = idx[j], idx[i]
+	}
+	pick := rule.AttrCount
+	if pick > len(idx) {
+		pick = len(idx)
+	}
+	out := make([]data.ItemAttribute, 0, pick)
+	for k := 0; k < pick; k++ {
+		p := rule.Pool[idx[k]]
+		span := p.Max - p.Min + 1 // 闭区间
+		value := p.Min
+		if span > 0 {
+			value = p.Min + u.randIntn(span)
+		}
+		out = append(out, data.ItemAttribute{AttrID: p.AttrID, Value: value})
+	}
+	return out
+}
+
+// MoveInstance 移动一件装备实例到新格子(纯大厅整理,不影响属性,W5 ④)。
+func (u *InventoryUsecase) MoveInstance(ctx context.Context, playerID, instanceID uint64, toSlot int32) (data.ItemInstance, error) {
+	if playerID == 0 {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if instanceID == 0 {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInvalidArg, "instance_id required")
+	}
+	if u.cfg.Capacity <= 0 {
+		return data.ItemInstance{}, errcode.New(errcode.ErrInventorySlotOccupied, "instance inventory disabled")
+	}
+	return u.repo.MoveInstance(ctx, playerID, instanceID, toSlot, u.cfg.Capacity)
+}
+
+// DiscardInstance 丢弃一件装备实例(从背包永久删除,W5 ④)。幂等:已丢弃 → OK no-op。
+func (u *InventoryUsecase) DiscardInstance(ctx context.Context, playerID, instanceID uint64) error {
+	if playerID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "player_id required")
+	}
+	if instanceID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "instance_id required")
+	}
+	return u.repo.DiscardInstance(ctx, playerID, instanceID)
 }
 
 // GrantItems 幂等发放道具 + 货币(系统驱动,idempotency_key 防重复入账)。

@@ -55,7 +55,9 @@ const presenceRefreshTimeout = 3 * time.Second
 // TicketSigner 抽象 hub DSTicket 签发(biz 不依赖 pkg/auth 具体实现,便于测试)。
 type TicketSigner interface {
 	// SignHubTicket 给 playerID 签一张 hub DSTicket,返回 token + 过期毫秒。
-	SignHubTicket(playerID uint64) (token string, expiresAtMs int64, err error)
+	// roleID(选角权威化 2026-07-08):玩家已选角色,>0 时盖进票据 role_id claim
+	// (DS 验签后直接用它 spawn);0 = 未选角,claim 不序列化(与旧票兼容)。
+	SignHubTicket(playerID uint64, roleID uint32) (token string, expiresAtMs int64, err error)
 }
 
 // HubMigratePusher 抽象强制整合迁移通知推送(走 Kafka topic pandora.hub.migrate,key=player_id)。
@@ -108,7 +110,12 @@ type AssignResult struct {
 }
 
 // AssignHub 为玩家分配一个大厅 DS 分片。幂等:已分配且分片可用 → 重签票返回。
-func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64) (*AssignResult, error) {
+//
+// roleID(选角权威化 2026-07-08):玩家已选角色(login 从 player_roles 读出透传)。
+// >0 时覆盖归属镜像里的 role_id(login 是角色数据权威,换角重选以新值为准);
+// 0 = 调用方不知角色,保留已存镜像值(Transfer/重签路径不丢角色)。
+// 最终生效的 role 盖进本次签发的 hub 票据 claim(票据单一签发权威在本服务)。
+func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*AssignResult, error) {
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
@@ -122,9 +129,18 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 	} else if found {
 		if shard, ok, gerr := u.repo.GetShard(ctx, existing.HubPodName); gerr == nil && ok && shard.State == stateReady {
 			u.addShardMember(ctx, existing.HubPodName, playerID) // 自愈成员反向索引 + 刷 TTL
-			return u.signResult(ctx, playerID, shard)
+			// 选角同步:roleID>0 且与镜像不一致 → 刷新镜像(换角重选);刷失败仅 Warn
+			// (票据 claim 已用新值,镜像旧值下次 Assign 会再刷,不阻断)。
+			if roleID > 0 && existing.RoleId != roleID {
+				existing.RoleId = roleID
+				if serr := u.repo.SetAssignment(ctx, existing, u.assignTTL()); serr != nil {
+					plog.With(ctx).Warnw("msg", "assign_update_role_failed", "player_id", playerID, "role_id", roleID, "err", serr)
+				}
+			}
+			return u.signResult(ctx, playerID, effectiveRoleID(roleID, existing.RoleId), shard)
 		}
-		// 旧分片下线/漂移:退旧占位后重新分配
+		// 旧分片下线/漂移:退旧占位后重新分配;保留已存角色(roleID=0 时不丢)
+		roleID = effectiveRoleID(roleID, existing.RoleId)
 		u.releaseFromShard(ctx, existing.HubPodName)
 		u.removeShardMember(ctx, existing.HubPodName, playerID)
 	}
@@ -158,6 +174,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		Region:       region,
 		TeamId:       teamID,
 		AssignedAtMs: now,
+		RoleId:       roleID, // 选角镜像:Transfer/重签路径从这里取角色盖进新票
 	}
 	if serr := u.repo.SetAssignment(ctx, assignment, u.assignTTL()); serr != nil {
 		u.releaseFromShard(ctx, target.HubPodName) // 回滚占位避免泄漏
@@ -172,7 +189,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 
 	plog.With(ctx).Infow("msg", "hub_assigned",
 		"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId, "region", region)
-	return u.signResult(ctx, playerID, target)
+	return u.signResult(ctx, playerID, roleID, target)
 }
 
 // ── RPC 2:ReleaseHub ──────────────────────────────────────────────────────────
@@ -231,9 +248,9 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 			"no ready target shard for player %d (target_hub_id=%d)", playerID, targetHubID)
 	}
 
-	// 已在目标分片 → 仅重签票
+	// 已在目标分片 → 仅重签票(角色从归属镜像取,Transfer 路径不丢选角)
 	if target.HubPodName == assignment.HubPodName {
-		return u.transferResult(ctx, playerID, target)
+		return u.transferResult(ctx, playerID, assignment.RoleId, target)
 	}
 
 	// 先占新分片(失败不动旧分片)
@@ -251,6 +268,7 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 		Region:       target.Region,
 		TeamId:       assignment.TeamId,
 		AssignedAtMs: now,
+		RoleId:       assignment.RoleId, // 选角镜像随归属搬迁,新票 claim 不丢角色
 	}
 	// 在退旧分片之前先把归属切到新分片(顺序:reserve 新 → SetAssignment → release 旧)。
 	// 这样 SetAssignment 失败时只需回滚新占位,旧分片 player_count 与旧 assignment 仍一致,
@@ -266,7 +284,7 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 
 	plog.With(ctx).Infow("msg", "hub_transferred",
 		"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
-	return u.transferResult(ctx, playerID, target)
+	return u.transferResult(ctx, playerID, assignment.RoleId, target)
 }
 
 // ── 玩家侧:线路列表 + 主动切线 ────────────────────────────────────────────────
@@ -754,8 +772,17 @@ func (u *HubUsecase) releaseFromShard(ctx context.Context, pod string) {
 	}
 }
 
-func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, shard *hubv1.HubShardStorageRecord) (*AssignResult, error) {
-	token, expMs, err := u.signer.SignHubTicket(playerID)
+// effectiveRoleID 选角生效值:调用方显式传的 roleID(>0)优先(login 是角色数据权威),
+// 否则回退归属镜像已存值(Transfer/重签路径不丢角色)。
+func effectiveRoleID(requested, stored uint32) uint32 {
+	if requested > 0 {
+		return requested
+	}
+	return stored
+}
+
+func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, shard *hubv1.HubShardStorageRecord) (*AssignResult, error) {
+	token, expMs, err := u.signer.SignHubTicket(playerID, roleID)
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
 		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
@@ -769,8 +796,8 @@ func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, shard *hub
 	}, nil
 }
 
-func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, shard *hubv1.HubShardStorageRecord) (*TransferResult, error) {
-	token, expMs, err := u.signer.SignHubTicket(playerID)
+func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, shard *hubv1.HubShardStorageRecord) (*TransferResult, error) {
+	token, expMs, err := u.signer.SignHubTicket(playerID, roleID)
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
 		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
@@ -1102,6 +1129,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		Region:       target.Region,
 		TeamId:       assign.TeamId,
 		AssignedAtMs: now,
+		RoleId:       assign.RoleId, // 选角镜像随强制整合搬迁
 	}
 	if serr := u.repo.SetAssignment(ctx, newAssign, u.assignTTL()); serr != nil {
 		u.releaseFromShard(ctx, target.HubPodName) // 回滚新占位,旧分片不动
@@ -1113,7 +1141,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 
 	// 重签新分片票据 + 推送迁移通知(best-effort:失败不回滚已切换的归属,
 	// Hub DS drain 心跳指令会兜底让客户端重连,AssignHub 幂等返回新分片)。
-	token, _, terr := u.signer.SignHubTicket(playerID)
+	token, _, terr := u.signer.SignHubTicket(playerID, assign.RoleId)
 	if terr != nil {
 		plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", terr)
 		return true
