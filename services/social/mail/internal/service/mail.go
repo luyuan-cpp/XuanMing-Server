@@ -3,7 +3,8 @@
 // 职责:
 //   - 实现 mailv1.MailServiceServer
 //   - 玩家 RPC 从 ctx 取 JWT player_id(R5:override request 字段)
-//   - 运营 RPC(SendSystemMail/SendGuildMail/SendPersonalMail)内网调用,不经 Envoy
+//   - 运营 RPC(SendSystemMail/SendGuildMail/SendPersonalMail)内网调用,不经 Envoy;
+//     systemOnly 兜底拒绝客户端(Envoy 侧还有精确 path 403,双保险)
 //   - errcode.Code → commonv1.ErrCode 1:1 映射
 package service
 
@@ -88,8 +89,11 @@ func (s *MailService) DeleteMail(ctx context.Context, req *mailv1.DeleteMailRequ
 	return &mailv1.DeleteMailResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// SendSystemMail 运营群发(内网)。
+// SendSystemMail 运营群发(内网,系统接口:客户端一律拒)。
 func (s *MailService) SendSystemMail(ctx context.Context, req *mailv1.SendSystemMailRequest) (*mailv1.SendSystemMailResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &mailv1.SendSystemMailResponse{Code: code}, nil
+	}
 	id, err := s.uc.SendSystemMail(ctx, s.sf.Generate(), req.GetTitle(), req.GetBody(), req.GetAttachments(), req.GetStartMs(), req.GetEndMs(), nowMs())
 	if err != nil {
 		return &mailv1.SendSystemMailResponse{Code: toProtoCode(err)}, nil
@@ -97,8 +101,11 @@ func (s *MailService) SendSystemMail(ctx context.Context, req *mailv1.SendSystem
 	return &mailv1.SendSystemMailResponse{Code: commonv1.ErrCode_OK, MailId: id}, nil
 }
 
-// SendGuildMail 公会群发(内网)。
+// SendGuildMail 公会群发(内网,系统接口:客户端一律拒)。
 func (s *MailService) SendGuildMail(ctx context.Context, req *mailv1.SendGuildMailRequest) (*mailv1.SendGuildMailResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &mailv1.SendGuildMailResponse{Code: code}, nil
+	}
 	id, err := s.uc.SendGuildMail(ctx, s.sf.Generate(), req.GetGuildId(), req.GetTitle(), req.GetBody(), req.GetAttachments(), req.GetStartMs(), req.GetEndMs(), nowMs())
 	if err != nil {
 		return &mailv1.SendGuildMailResponse{Code: toProtoCode(err)}, nil
@@ -106,9 +113,12 @@ func (s *MailService) SendGuildMail(ctx context.Context, req *mailv1.SendGuildMa
 	return &mailv1.SendGuildMailResponse{Code: commonv1.ErrCode_OK, MailId: id}, nil
 }
 
-// SendPersonalMail 定点发个人邮件(离线可达)。
+// SendPersonalMail 定点发个人邮件(离线可达;内网系统接口:客户端一律拒,防自助发带附件邮件)。
 func (s *MailService) SendPersonalMail(ctx context.Context, req *mailv1.SendPersonalMailRequest) (*mailv1.SendPersonalMailResponse, error) {
-	id, err := s.uc.SendPersonalMail(ctx, s.sf.Generate(), req.GetToPlayerId(), req.GetTitle(), req.GetBody(), req.GetAttachments(), req.GetExpireMs())
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &mailv1.SendPersonalMailResponse{Code: code}, nil
+	}
+	id, err := s.uc.SendPersonalMail(ctx, s.sf.Generate(), req.GetToPlayerId(), req.GetTitle(), req.GetBody(), req.GetAttachments(), req.GetExpireMs(), req.GetInstanceGrantKey())
 	if err != nil {
 		return &mailv1.SendPersonalMailResponse{Code: toProtoCode(err)}, nil
 	}
@@ -120,6 +130,16 @@ func (s *MailService) SendPersonalMail(ctx context.Context, req *mailv1.SendPers
 func callerID(ctx context.Context) uint64 {
 	id, _ := ctx.Value(plog.CtxKeyPlayerID).(uint64)
 	return id
+}
+
+// systemOnly 系统接口鉴权:经 Envoy 的客户端(callerID>0)一律拒,合法调用者是后端内部直连
+// (运营工具 / battle_result 背包满转邮件,无 JWT 注入 → callerID==0)。
+// Envoy 侧对三个 Send* 精确 path 直接 403,此处是服务层兜底(双保险,对齐 player 服务模式)。
+func systemOnly(ctx context.Context) commonv1.ErrCode {
+	if callerID(ctx) != 0 {
+		return commonv1.ErrCode_ERR_PERMISSION_DENY
+	}
+	return commonv1.ErrCode_OK
 }
 
 func toProtoCode(err error) commonv1.ErrCode {

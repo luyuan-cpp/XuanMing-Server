@@ -154,6 +154,32 @@ func main() {
 	} else if closeCell != nil {
 		defer func() { _ = closeCell() }()
 	}
+
+	// 6.2 inventory 装备掉落发放器(W5 ④,弱依赖:InventoryAddr 空 → 不发放战斗装备掉落,
+	// drop 出箱积压不丢,等地址配好重启补发)。GrantInstances 是系统接口,走内网 insecure 直连。
+	if cfg.Battle.InventoryAddr != "" {
+		granter := data.NewGrpcInstanceGranter(cfg.Battle.InventoryAddr)
+		defer func() { _ = granter.Close() }()
+		uc.SetInstanceGranter(granter)
+		helper.Infow("msg", "drop_granter_grpc", "inventory_addr", cfg.Battle.InventoryAddr,
+			"drop_whitelist", len(cfg.Battle.DropWhitelist))
+	} else {
+		helper.Warnw("msg", "drop_granter_disabled",
+			"hint", "inventory_addr 未配置 → 战斗装备掉落不发放(drop 出箱积压不丢,配好地址重启补发)")
+	}
+
+	// 6.2.1 背包满溢出转邮件发送器(弱依赖:MailAddr 空 → 背包满掉落留在出箱轮询重试,退化为历史行为)。
+	// 传源键 battle_drop:{match}:{player} 至 mail,领取时 GrantInstances 同键去重(直发与邮件链至多一次)。
+	if cfg.Battle.MailAddr != "" {
+		mailSender := data.NewGrpcMailSender(cfg.Battle.MailAddr)
+		defer func() { _ = mailSender.Close() }()
+		uc.SetMailSender(mailSender)
+		helper.Infow("msg", "drop_overflow_mail_grpc", "mail_addr", cfg.Battle.MailAddr)
+	} else {
+		helper.Warnw("msg", "drop_overflow_mail_disabled",
+			"hint", "mail_addr 未配置 → 背包满掉落留在出箱轮询重试(不丢,不转邮件)")
+	}
+
 	svc := service.NewBattleResultService(uc)
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
@@ -163,6 +189,10 @@ func main() {
 	pubCtx, pubCancel := context.WithCancel(context.Background())
 	defer pubCancel()
 	go uc.RunOutboxPublisher(pubCtx)
+
+	// 6.3 后台战斗装备掉落出箱发布器(W5 ④,at-least-once + GrantInstances 幂等)。
+	// granter==nil(inventory_addr 未配)时内部直接返回,不空转。
+	go uc.RunDropPublisher(pubCtx)
 
 	// 7. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
 	consumers, dlqProducers := mustBuildConsumers(&cfg, uc, helper)

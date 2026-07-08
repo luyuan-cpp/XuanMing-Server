@@ -33,6 +33,10 @@ message PlayerStats {
   int32 mmr_delta     = 11;  // 段位变化(后端算,DS 不可信)
   // 12-19 reserved
   reserved 12 to 19;
+  // 本局该玩家获得、需持久化落库的装备实例配置 ID(DS 上报的战斗掉落,W5 ④)。
+  // ⚠️ DS 不可信:后端按 drop 白名单(drop_whitelist)过滤后才幂等发放(GrantInstances),
+  // DS 只能触发白名单内装备落库,不能凭空发放任意道具 / 货币。每个元素发一件独立实例(未鉴定)。
+  repeated uint32 dropped_item_config_ids = 20;
 }
 
 message BattleResult {

@@ -55,6 +55,10 @@ enum MailStatus {
 message MailAttachment {
   uint32 item_config_id = 1;
   uint32 count          = 2;
+  // as_instance=true:该附件是"装备实例"型,领取时按 count 份逐件铸造独立实例
+  //(inventory.GrantInstances,含随机词条),而非可堆叠计数(GrantItems)。
+  // 战斗装备掉落背包满转邮件用此路径,保持装备实例语义(不变量:装备=唯一实例)。
+  bool   as_instance    = 3;
 }
 
 // Mail 是客户端可见的邮件视图(CLAUDE.md §5.8 / §14)。
@@ -143,6 +147,10 @@ message SendPersonalMailRequest {
   string                  body         = 3;
   repeated MailAttachment attachments  = 4;
   int64                   expire_ms    = 5;  // 0 = 永不过期
+  // instance_grant_key 装备实例发放幂等键(可选):非空时领取 as_instance 附件走
+  // GrantInstances 用此键去重。战斗装备掉落背包满转邮件时传与直发相同的源键
+  //(battle_drop:{match}:{player}),使直发与邮件领取两条发放链共享幂等键 → 至多一次。
+  string                  instance_grant_key = 6;
 }
 
 message SendPersonalMailResponse {
@@ -155,4 +163,7 @@ message MailContentStorageRecord {
   string                  title       = 1;
   string                  body        = 2;
   repeated MailAttachment attachments = 3;
+  // instance_grant_key 领取 as_instance 附件时 GrantInstances 的幂等键(空=默认 mail_inst:{mail}:{player})。
+  // 战斗装备掉落转邮件时存源键 battle_drop:{match}:{player},与直发链共享 → 至多一次。
+  string                  instance_grant_key = 4;
 }

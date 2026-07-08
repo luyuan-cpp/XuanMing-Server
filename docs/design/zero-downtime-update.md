@@ -155,3 +155,21 @@ Pandora 按此演进,当前 dev 单副本暂不需要):
   docker compose 本身没有滚动更新(`compose up` 重建容器 = 单实例先停后起,必断)。
 - 灰度/滚动更新的载体自始至终是 **k8s Deployment**(生产形态);compose 只是本地 dev
   联调便利环境。k8s 模式下 Pod `restartPolicy: Always` 照常自愈,不受影响。
+
+### 6.5 现状差距清单(2026-07-08 审计;升多副本前必须补齐)
+
+§6.1~§6.2 描述的是目标机制;对照当前代码/部署,**已兑现**与**未兑现**如下。
+单副本 dev 不受影响,但**扩多副本 / 启用真滚动更新前必须先补齐未兑现项**,否则会
+出现「新 Pod 没 listen 就接流量」「长连接粘死旧副本」。
+
+| 机制 | 现状 | 状态 |
+|---|---|---|
+| SIGTERM 优雅退出 | Kratos `app.Run()` 默认拦 SIGTERM → GracefulStop | ✅ 已兑现 |
+| Envoy 入口 per-request 路由 | Envoy upstream cluster 天然按请求选后端 | ✅ 已兑现 |
+| readinessProbe 才进 Endpoints | 2026-07-08 已落地:`services.yaml` 20 个 Deployment 全部加原生 gRPC readinessProbe(k8s ≥1.24;Kratos 默认注册 grpc_health_v1,Stop 时自动转 NOT_SERVING) | ✅ 已兑现 |
+| `MAX_CONNECTION_AGE` 连接轮换 | 2026-07-08 已落地:`pkg/config` 加 `max_conn_age`/`max_conn_age_grace`,`pkg/grpcserver` 按配置挂 `keepalive.ServerParameters`;20 个服务 dev yaml 全量开 15m(grace 默认 30s;ds_allocator 显式 90s 盖过 AllocateBattle 同步等 DS ready 的 ~60s);不配(零值)= 关 | ✅ 已兑现 |
+| 服务间 L7 均衡 | Service 全是普通 ClusterIP,服务间 `grpcclient.MustDial` 直连 DNS 名 → kube-proxy L4 按连接 | ❌ 待补:Service 改 headless + client 走 dns resolver per-request 均衡(grpcclient 已有 WRR selector 底座),或服务间也过 Envoy。MaxConnAge 15m 已作为兜底(多副本时连接最迟 15m 重平衡) |
+| RollingUpdate 策略显式化 | Deployment 未写 `strategy`(k8s 默认 25%/25%) | ⚠️ 建议:关键服务显式 `maxUnavailable=0, maxSurge=1` |
+| 金丝雀(§6.3 四阶段) | 未搭 stable/canary 双 Deployment / Envoy weighted_clusters | ⏸ 按需:多副本稳定后再上,当前不需要 |
+
+补齐顺序建议:~~readinessProbe → MAX_CONNECTION_AGE~~(已完成)→ headless/L7 →(需要时)金丝雀。

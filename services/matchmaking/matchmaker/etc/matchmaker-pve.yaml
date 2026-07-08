@@ -21,6 +21,7 @@ server:
     addr: ":50018"
     timeout: "60s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(allocate 5s+ready_wait 45s ≈55s 预算)+余量
     enable_reflection: true     # dev 开;prod 关(零值=false)
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
     addr: ":51018"

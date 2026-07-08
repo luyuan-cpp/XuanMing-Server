@@ -75,10 +75,12 @@ func main() {
 
 	// inventory 客户端:领附件入库用。地址缺省且非测试空领 → 拒启,防裸奔丢奖
 	var granter biz.ItemGranter
+	var instGranter biz.InstanceGranter
 	if cfg.Mail.InventoryAddr != "" {
 		g := data.NewGrpcItemGranter(cfg.Mail.InventoryAddr)
 		defer func() { _ = g.Close() }()
 		granter = g
+		instGranter = g // 同一连接:装备实例型附件领取走 GrantInstances
 		helper.Infow("msg", "inventory_client_ready", "addr", cfg.Mail.InventoryAddr)
 	} else if !cfg.Mail.AllowNoopGrant {
 		helper.Errorw("msg", "inventory_addr_required", "hint", "mail.inventory_addr required, or set mail.allow_noop_grant for test")
@@ -88,6 +90,9 @@ func main() {
 	}
 
 	uc := biz.NewMailUsecase(repo, cfg.Mail, granter)
+	if instGranter != nil {
+		uc.SetInstanceGranter(instGranter)
+	}
 	mailSvc := service.NewMailService(uc, sf)
 
 	grpcSrv := server.NewGRPCServer(&cfg, mailSvc)

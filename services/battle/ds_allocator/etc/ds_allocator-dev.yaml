@@ -12,6 +12,8 @@ server:
     addr: ":50020"
     timeout: "60s"              # AllocateBattle 阻塞等 allocate(5s)+ready_wait(45s)+余量;勿低于 55s
     enable_reflection: true     # dev 开;prod 关(零值=false)
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
+    max_conn_age_grace: "90s"   # AllocateBattle 同步等 DS ready 最长 ~60s,宽限须盖过它(默认 30s 会砍断在途分配)
   http:
     network: tcp
     addr: ":51020"

@@ -22,6 +22,7 @@ package biz
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
@@ -62,6 +63,24 @@ type MatchReleaser interface {
 	ReleaseMatch(ctx context.Context, matchID uint64, playerIDs []uint64) error
 }
 
+// InstanceGranter 把战斗装备掉落幂等发放到 inventory(GrantInstances,W5 ④)。
+//
+// 由后台 RunDropPublisher 调用:发放失败 → 返回 error → drop 出箱行保留下轮重试
+// (at-least-once,配合 GrantInstances 幂等键去重)。实现可为 nil:inventory_addr 未配
+// → 不启动掉落发布器,掉落出箱积压不丢(等 inventory 地址配好重启后补发)。
+type InstanceGranter interface {
+	GrantInstances(ctx context.Context, playerID uint64, itemConfigIDs []uint32, idempotencyKey string) error
+}
+
+// MailSender 把背包满溢出的战斗装备掉落转个人邮件(mail.SendPersonalMail,幂等键防重发)。
+//
+// 由 RunDropPublisher 调用:GrantInstances 返回 ErrInventoryCapacityFull(背包满)时,
+// 改调此接口把溢出装备转邮件,成功后删出箱行(不再无休止重试)。实现可为 nil:mail_addr 未配
+// → 背包满掉落留在出箱轮询重试(退化为历史行为,at-least-once 不丢)。
+type MailSender interface {
+	SendOverflowMail(ctx context.Context, playerID uint64, itemConfigIDs []uint32, idempotencyKey string) error
+}
+
 // StaticMMRReader 是固定返回 base 的 MMRReader(player 服务未上线时兜底)。
 type StaticMMRReader struct {
 	base int
@@ -80,6 +99,15 @@ type BattleResultUsecase struct {
 	pusher   PlayerUpdatePusher
 	releaser MatchReleaser
 	cfg      conf.BattleConf
+
+	// granter 把战斗装备掉落幂等发放到 inventory(W5 ④,nil-safe)。
+	// nil = inventory_addr 未配 → 不启动 RunDropPublisher,掉落出箱积压不丢。
+	// 用 setter 注入(SetInstanceGranter),避免构造签名被迫改(与 SetCellRouter 一致)。
+	granter InstanceGranter
+
+	// mailSender 把背包满溢出的战斗装备掉落转个人邮件(W5 ④+,nil-safe)。
+	// nil = mail_addr 未配 → 背包满掉落留在出箱轮询重试(退化为历史行为,不丢)。
+	mailSender MailSender
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分区,结算回流落点观测退化为不打日志(行为不变)。
@@ -105,6 +133,22 @@ func NewBattleResultUsecase(repo data.BattleRepo, mmr MMRReader, pusher PlayerUp
 // auction 一致)。Router 内部读路径无锁,并发安全。
 func (u *BattleResultUsecase) SetCellRouter(r *cellroute.Router) {
 	u.router = r
+}
+
+// SetInstanceGranter 注入 inventory 装备掉落发放器(W5 ④,nil-safe)。
+//
+// 用 setter 而非构造参数,保持 NewBattleResultUsecase 签名不变(与 SetCellRouter 一致)。
+// nil / 不调用 = inventory_addr 未配 → RunDropPublisher 不启动,掉落出箱积压不丢。
+func (u *BattleResultUsecase) SetInstanceGranter(g InstanceGranter) {
+	u.granter = g
+}
+
+// SetMailSender 注入背包满溢出转邮件发送器(W5 ④+,nil-safe)。
+//
+// nil / 不调用 = mail_addr 未配 → 背包满掉落留在出箱轮询重试(退化为历史行为,不丢)。
+// 用 setter 而非构造参数,保持 NewBattleResultUsecase 签名不变(与 SetInstanceGranter 一致)。
+func (u *BattleResultUsecase) SetMailSender(m MailSender) {
+	u.mailSender = m
 }
 
 // releaseMatch 落库成功后通知 matchmaker 释放本局撮合状态。best-effort:实现缺省 / 失败
@@ -160,7 +204,14 @@ func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1
 		return false, err
 	}
 
-	already, err := u.repo.SaveResult(ctx, result, outbox)
+	// 战斗装备掉落出箱(W5 ④):正常结算才发放;ABANDONED(DS 崩溃补偿)不产出掉落。
+	// DS 上报的 dropped_item_config_ids 按 drop 白名单过滤(DS 不可信),与落库同事务提交。
+	var dropOutbox []data.DropOutboxRecord
+	if !abandoned {
+		dropOutbox = u.buildDropOutbox(result)
+	}
+
+	already, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox)
 	if err != nil {
 		return false, err
 	}
@@ -221,7 +272,7 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 		return err
 	}
 
-	already, err := u.repo.SaveResult(ctx, result, outbox)
+	already, err := u.repo.SaveResult(ctx, result, outbox, nil)
 	if err != nil {
 		return err
 	}
@@ -321,6 +372,35 @@ func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandon
 	return recs, nil
 }
 
+// buildDropOutbox 把一场结算里每个玩家的战斗装备掉落组装成 drop 出箱记录(与落库同事务,W5 ④)。
+//
+// DS 不可信:逐条按 cfg.IsDroppable(drop 白名单)过滤 DS 上报的 dropped_item_config_ids,
+// 只有落在白名单内的 item_config_id 才入出箱发放;白名单为空 → 全过滤掉(不发放,安全默认)。
+// 无任何白名单内掉落的玩家不产出出箱行。
+func (u *BattleResultUsecase) buildDropOutbox(result *battlev1.BattleResult) []data.DropOutboxRecord {
+	recs := make([]data.DropOutboxRecord, 0, len(result.GetStats()))
+	for _, s := range result.GetStats() {
+		reported := s.GetDroppedItemConfigIds()
+		if len(reported) == 0 {
+			continue
+		}
+		allowed := make([]uint32, 0, len(reported))
+		for _, id := range reported {
+			if id != 0 && u.cfg.IsDroppable(id) {
+				allowed = append(allowed, id)
+			}
+		}
+		if len(allowed) == 0 {
+			// DS 上报了掉落但全不在白名单 → 记一条 Warn(可能是配置漏项或 DS 越权尝试)。
+			plog.With(context.Background()).Warnw("msg", "battle_drop_all_filtered",
+				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(), "reported", len(reported))
+			continue
+		}
+		recs = append(recs, data.DropOutboxRecord{PlayerID: s.GetPlayerId(), ItemConfigIDs: allowed})
+	}
+	return recs
+}
+
 // ── player.update 事务出箱发布器(W4 ⑨,不变量 §4)─────────────────────────────
 
 // RunOutboxPublisher 启动后台 player.update 出箱发布循环,直到 ctx 取消。
@@ -382,4 +462,98 @@ func (u *BattleResultUsecase) outboxBatchSize() int {
 		return u.cfg.OutboxBatchSize
 	}
 	return 128
+}
+
+// ── 战斗装备掉落事务出箱发布器(W5 ④,at-least-once + GrantInstances 幂等)──────────
+
+// RunDropPublisher 启动后台战斗装备掉落出箱发放循环,直到 ctx 取消。
+//
+// 每轮取一批 drop 出箱行,逐行调 inventory.GrantInstances(幂等键 battle_drop:{match_id}:{player_id}),
+// 成功才删行。与 player.update 出箱不同:掉落无跨玩家保序需求 → 单行失败不中断本轮(continue),
+// 只把失败行留到下轮重试(避免某玩家背包满时阻塞其他玩家)。配合 GrantInstances 幂等,
+// 整条掉落写链是 at-least-once 可靠闭环,可穿越 inventory 临时不可用。
+//
+// granter==nil(inventory_addr 未配)→ 直接返回不启动;drop 出箱积压不丢,等地址配好重启补发。
+func (u *BattleResultUsecase) RunDropPublisher(ctx context.Context) {
+	if u.granter == nil {
+		plog.With(ctx).Infow("msg", "drop_publisher_disabled", "hint", "inventory_addr 未配置 → 战斗装备掉落不发放(出箱积压不丢)")
+		return
+	}
+	interval := u.cfg.DropPublishInterval.Std()
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	plog.With(ctx).Infow("msg", "drop_publisher_started", "interval", interval.String(), "batch", u.dropBatchSize())
+	for {
+		select {
+		case <-ctx.Done():
+			plog.With(ctx).Infow("msg", "drop_publisher_stopped")
+			return
+		case <-ticker.C:
+			if n, err := u.publishDropBatch(ctx); err != nil {
+				plog.With(ctx).Warnw("msg", "drop_publish_batch_failed", "granted", n, "err", err)
+			}
+		}
+	}
+}
+
+// publishDropBatch 取一批掉落出箱行发放,返回本轮成功发放并删除的条数。
+// 单行发放失败仅记录并 continue(保留出箱行下轮重试),不阻塞其他玩家掉落。
+func (u *BattleResultUsecase) publishDropBatch(ctx context.Context) (int, error) {
+	if u.granter == nil {
+		return 0, nil
+	}
+	recs, err := u.repo.FetchDropOutbox(ctx, u.dropBatchSize())
+	if err != nil {
+		return 0, err
+	}
+	granted := 0
+	for _, r := range recs {
+		key := dropIdempotencyKey(r.MatchID, r.PlayerID)
+		gerr := u.granter.GrantInstances(ctx, r.PlayerID, r.ItemConfigIDs, key)
+		if gerr != nil {
+			// 背包满且已配 mail:转个人邮件溢出(传相同源键 key,领取时 GrantInstances 同键去重
+			// → 直发链与邮件链至多一次),成功后删出箱行,不再无休止重试。
+			if u.mailSender != nil && errcode.As(gerr) == errcode.ErrInventoryCapacityFull {
+				if merr := u.mailSender.SendOverflowMail(ctx, r.PlayerID, r.ItemConfigIDs, key); merr != nil {
+					// 转邮件失败 → 保留出箱行下轮重试(不丢),不阻塞其他玩家。
+					plog.With(ctx).Warnw("msg", "drop_overflow_mail_failed", "player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", merr)
+					continue
+				}
+				plog.With(ctx).Infow("msg", "drop_overflow_mailed", "player_id", r.PlayerID, "items", len(r.ItemConfigIDs))
+				if derr := u.repo.DeleteDropOutbox(ctx, r.ID); derr != nil {
+					return granted, derr
+				}
+				granted++
+				continue
+			}
+			// 其他失败(inventory 临时不可用等)/ 未配 mail 的背包满 → 保留出箱行下轮重试,不阻塞其他玩家。
+			plog.With(ctx).Warnw("msg", "drop_grant_failed", "player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", gerr)
+			continue
+		}
+		if derr := u.repo.DeleteDropOutbox(ctx, r.ID); derr != nil {
+			return granted, derr
+		}
+		granted++
+	}
+	if granted > 0 {
+		plog.With(ctx).Infow("msg", "drop_outbox_granted", "count", granted)
+	}
+	return granted, nil
+}
+
+// dropBatchSize 返回每轮掉落发放批大小(配置缺省 128)。
+func (u *BattleResultUsecase) dropBatchSize() int {
+	if u.cfg.DropBatchSize > 0 {
+		return u.cfg.DropBatchSize
+	}
+	return 128
+}
+
+// dropIdempotencyKey 组装战斗装备掉落幂等键:battle_drop:{match_id}:{player_id}。
+// 同对局同玩家的掉落只入账一次(GrantInstances 幂等去重,资产不变量)。
+func dropIdempotencyKey(matchID, playerID uint64) string {
+	return "battle_drop:" + strconv.FormatUint(matchID, 10) + ":" + strconv.FormatUint(playerID, 10)
 }

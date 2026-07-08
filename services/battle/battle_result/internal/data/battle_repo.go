@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,12 +31,26 @@ type OutboxRecord struct {
 	Payload  []byte // player.v1.PlayerUpdateEvent proto bytes
 }
 
+// DropOutboxRecord 是一条待发放的战斗装备掉落事务出箱记录(W5 ④)。
+//
+// 与 battles + battle_player_stats 同一事务写入(原子提交);后台 RunDropPublisher
+// 轮询本表,逐行调 inventory.GrantInstances(幂等键 battle_drop:{match_id}:{player_id}),
+// 成功才删行。ItemConfigIDs 已由 biz 层按 drop 白名单过滤(DS 不可信)。
+// ID 仅 FetchDropOutbox 返回时填充。
+type DropOutboxRecord struct {
+	ID            int64    // 出箱行主键(SaveResult 入参时忽略,FetchDropOutbox 返回时填充)
+	MatchID       uint64   // 对局 ID(SaveResult 入参时忽略,取 result.MatchId;FetchDropOutbox 返回时填充,组幂等键用)
+	PlayerID      uint64   // 受益玩家
+	ItemConfigIDs []uint32 // 本局该玩家所获白名单内装备 config id(每个发一件实例)
+}
+
 // BattleRepo 是 battle_result 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type BattleRepo interface {
-	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox。
-	// 三者原子提交(不变量 §4:落库与待发布段位事件不会半成功)。
-	// 幂等:match_id 已存在 → 返回 (true, nil),不重复写(出箱也不写)。
-	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord) (alreadyRecorded bool, err error)
+	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox + battle_drop_outbox。
+	// 四者原子提交(不变量 §4:落库、待发布段位事件、待发放装备掉落不会半成功)。
+	// 幂等:match_id 已存在 → 返回 (true, nil),不重复写(两路出箱也不写)。
+	// dropOutbox 可为空(无掉落 / ABANDONED)。
+	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord) (alreadyRecorded bool, err error)
 	// GetResult 读一场对局结算(含全部玩家战绩)。not found → (nil, false, nil)。
 	GetResult(ctx context.Context, matchID uint64) (*battlev1.BattleResult, bool, error)
 	// ListPlayerHistory 倒序列出玩家参与的对局(ended_at_ms < beforeMs,最多 limit 条)。
@@ -45,6 +60,10 @@ type BattleRepo interface {
 	FetchOutbox(ctx context.Context, limit int) ([]OutboxRecord, error)
 	// DeleteOutbox 删除已成功投递的出箱行。
 	DeleteOutbox(ctx context.Context, id int64) error
+	// FetchDropOutbox 按 id 升序取最多 limit 条待发放掉落出箱记录(W5 ④)。
+	FetchDropOutbox(ctx context.Context, limit int) ([]DropOutboxRecord, error)
+	// DeleteDropOutbox 删除已成功发放的掉落出箱行。
+	DeleteDropOutbox(ctx context.Context, id int64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -57,7 +76,7 @@ func NewMySQLBattleRepo(db *sql.DB) *MySQLBattleRepo {
 	return &MySQLBattleRepo{db: db}
 }
 
-func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord) (bool, error) {
+func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord) (bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "begin tx: %v", err)
@@ -123,6 +142,22 @@ VALUES (?, ?, ?, ?)`
 		}
 	}
 
+	// 同事务写战斗装备掉落出箱(W5 ④):落库与待发放装备掉落原子提交(不变量 §4)。
+	const insDropOutbox = `INSERT INTO battle_drop_outbox
+(match_id, player_id, item_config_ids, created_at_ms)
+VALUES (?, ?, ?, ?)`
+	for _, d := range dropOutbox {
+		if len(d.ItemConfigIDs) == 0 {
+			continue
+		}
+		if _, derr := tx.ExecContext(ctx, insDropOutbox,
+			result.GetMatchId(), d.PlayerID, encodeConfigIDs(d.ItemConfigIDs), nowMs,
+		); derr != nil {
+			return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert drop outbox match=%d player=%d: %v",
+				result.GetMatchId(), d.PlayerID, derr)
+		}
+	}
+
 	if cerr := tx.Commit(); cerr != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
 	}
@@ -161,6 +196,72 @@ func (r *MySQLBattleRepo) DeleteOutbox(ctx context.Context, id int64) error {
 		return errcode.New(errcode.ErrInternal, "delete outbox id=%d: %v", id, err)
 	}
 	return nil
+}
+
+// FetchDropOutbox 按 id 升序取最多 limit 条待发放装备掉落出箱记录(W5 ④)。
+func (r *MySQLBattleRepo) FetchDropOutbox(ctx context.Context, limit int) ([]DropOutboxRecord, error) {
+	if limit <= 0 {
+		limit = 128
+	}
+	const q = `SELECT id, match_id, player_id, item_config_ids FROM battle_drop_outbox ORDER BY id ASC LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "query drop outbox: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]DropOutboxRecord, 0, limit)
+	for rows.Next() {
+		var (
+			rec DropOutboxRecord
+			csv string
+		)
+		if serr := rows.Scan(&rec.ID, &rec.MatchID, &rec.PlayerID, &csv); serr != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan drop outbox: %v", serr)
+		}
+		rec.ItemConfigIDs = decodeConfigIDs(csv)
+		out = append(out, rec)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate drop outbox: %v", rerr)
+	}
+	return out, nil
+}
+
+// DeleteDropOutbox 删除已成功发放的掉落出箱行。
+func (r *MySQLBattleRepo) DeleteDropOutbox(ctx context.Context, id int64) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM battle_drop_outbox WHERE id = ?`, id); err != nil {
+		return errcode.New(errcode.ErrInternal, "delete drop outbox id=%d: %v", id, err)
+	}
+	return nil
+}
+
+// encodeConfigIDs 把 item_config_id 列表编码成 CSV(如 "5001,5002"),存 drop 出箱。
+func encodeConfigIDs(ids []uint32) string {
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parts = append(parts, strconv.FormatUint(uint64(id), 10))
+	}
+	return strings.Join(parts, ",")
+}
+
+// decodeConfigIDs 解析 CSV item_config_id(非法/空段跳过,防御性)。
+func decodeConfigIDs(csv string) []uint32 {
+	if csv == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	ids := make([]uint32, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if v, err := strconv.ParseUint(p, 10, 32); err == nil && v != 0 {
+			ids = append(ids, uint32(v))
+		}
+	}
+	return ids
 }
 
 func (r *MySQLBattleRepo) GetResult(ctx context.Context, matchID uint64) (*battlev1.BattleResult, bool, error) {

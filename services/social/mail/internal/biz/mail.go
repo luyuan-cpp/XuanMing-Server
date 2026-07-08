@@ -32,16 +32,31 @@ type ItemGranter interface {
 	Grant(ctx context.Context, playerID uint64, atts []*mailv1.MailAttachment, idempotencyKey string) error
 }
 
+// InstanceGranter 把"装备实例型"附件(as_instance=true)按 count 逐件铸造为独立实例
+// (inventory.GrantInstances,含随机词条),幂等键防重发。战斗装备掉落背包满转邮件用此路径,
+// 保持装备=唯一实例语义。实现可为 nil:未配 inventory 时装备型附件领取直接报错(不误发成堆叠)。
+type InstanceGranter interface {
+	GrantInstances(ctx context.Context, playerID uint64, itemConfigIDs []uint32, idempotencyKey string) error
+}
+
 // MailUsecase 是 mail 服务业务逻辑核心。
 type MailUsecase struct {
-	repo    data.MailRepo
-	cfg     conf.MailConf
-	granter ItemGranter
+	repo        data.MailRepo
+	cfg         conf.MailConf
+	granter     ItemGranter
+	instGranter InstanceGranter
 }
 
 // NewMailUsecase 构造。granter 为 nil 时仅允许 AllowNoopGrant 配置下空领(测试用)。
+// instGranter 用 setter 注入(SetInstanceGranter),保持构造签名不变。
 func NewMailUsecase(repo data.MailRepo, cfg conf.MailConf, granter ItemGranter) *MailUsecase {
 	return &MailUsecase{repo: repo, cfg: cfg, granter: granter}
+}
+
+// SetInstanceGranter 注入装备实例发放器(领取 as_instance 附件用,nil-safe)。
+// nil / 不调用 = 装备型附件领取报错(不会误发成可堆叠计数,守住装备实例不变量)。
+func (u *MailUsecase) SetInstanceGranter(g InstanceGranter) {
+	u.instGranter = g
 }
 
 // 分页上限(决策:docs/design/decision-revisit-list-pagination.md)。
@@ -155,14 +170,32 @@ func (u *MailUsecase) ClaimMail(ctx context.Context, playerID, mailID uint64, no
 	} else if claimed {
 		return rec.GetAttachments(), errcode.New(errcode.ErrMailAlreadyClaimed, "mail %d already claimed", mailID)
 	}
-	// 入库:幂等键保证重复领取/重试不重发(资产不变量 §7)
-	key := fmt.Sprintf("mail:%d:%d", mailID, playerID)
-	if u.granter != nil {
-		if err := u.granter.Grant(ctx, playerID, rec.GetAttachments(), key); err != nil {
-			return nil, err
+	// 入库:幂等键保证重复领取/重试不重发(资产不变量 §7)。
+	// 附件分两类:可堆叠(as_instance=false → GrantItems)+ 装备实例(as_instance=true → GrantInstances)。
+	// 各用独立幂等键,重领/重试各自去重;先发可堆叠再铸实例,任一步失败下次重领靠幂等去重不重发。
+	stackAtts, instAtts := partitionAttachments(rec.GetAttachments())
+	if len(stackAtts) > 0 {
+		key := fmt.Sprintf("mail:%d:%d", mailID, playerID)
+		if u.granter != nil {
+			if err := u.granter.Grant(ctx, playerID, stackAtts, key); err != nil {
+				return nil, err
+			}
+		} else if !u.cfg.AllowNoopGrant {
+			return nil, errcode.New(errcode.ErrInternal, "inventory granter unavailable")
 		}
-	} else if !u.cfg.AllowNoopGrant {
-		return nil, errcode.New(errcode.ErrInternal, "inventory granter unavailable")
+	}
+	if len(instAtts) > 0 {
+		key := rec.GetInstanceGrantKey()
+		if key == "" {
+			key = fmt.Sprintf("mail_inst:%d:%d", mailID, playerID)
+		}
+		if u.instGranter != nil {
+			if err := u.instGranter.GrantInstances(ctx, playerID, expandInstanceConfigIDs(instAtts), key); err != nil {
+				return nil, err
+			}
+		} else if !u.cfg.AllowNoopGrant {
+			return nil, errcode.New(errcode.ErrInternal, "instance granter unavailable")
+		}
 	}
 	// 入库成功后再记 claim;此处即便失败,下次重领被 inventory 幂等去重,不会重发
 	if _, err := u.repo.RecordClaim(ctx, playerID, mailID); err != nil {
@@ -180,7 +213,7 @@ func (u *MailUsecase) DeleteMail(ctx context.Context, playerID, mailID uint64) e
 
 // SendSystemMail 插一行系统邮件,返回 mail_id。
 func (u *MailUsecase) SendSystemMail(ctx context.Context, mailID uint64, title, body string, atts []*mailv1.MailAttachment, startMs, endMs, nowMs int64) (uint64, error) {
-	payload, err := u.buildPayload(title, body, atts)
+	payload, err := u.buildPayload(title, body, atts, "")
 	if err != nil {
 		return 0, err
 	}
@@ -196,7 +229,7 @@ func (u *MailUsecase) SendGuildMail(ctx context.Context, mailID, guildID uint64,
 	if guildID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "guild_id required")
 	}
-	payload, err := u.buildPayload(title, body, atts)
+	payload, err := u.buildPayload(title, body, atts, "")
 	if err != nil {
 		return 0, err
 	}
@@ -207,12 +240,13 @@ func (u *MailUsecase) SendGuildMail(ctx context.Context, mailID, guildID uint64,
 	return mailID, nil
 }
 
-// SendPersonalMail 写收件人收件箱(离线可达)。
-func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID uint64, title, body string, atts []*mailv1.MailAttachment, expireMs int64) (uint64, error) {
+// SendPersonalMail 写收件人收件箱(离线可达)。instanceGrantKey 非空时存入 payload,
+// 领取 as_instance 附件走 GrantInstances 用此键去重(战斗掉落转邮件与直发共享源键 → 至多一次)。
+func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID uint64, title, body string, atts []*mailv1.MailAttachment, expireMs int64, instanceGrantKey string) (uint64, error) {
 	if toPlayerID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "to_player_id required")
 	}
-	payload, err := u.buildPayload(title, body, atts)
+	payload, err := u.buildPayload(title, body, atts, instanceGrantKey)
 	if err != nil {
 		return 0, err
 	}
@@ -220,6 +254,34 @@ func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID u
 		return 0, err
 	}
 	return mailID, nil
+}
+
+// partitionAttachments 把附件按 as_instance 分成可堆叠(stack)与装备实例(inst)两组。
+func partitionAttachments(atts []*mailv1.MailAttachment) (stack, inst []*mailv1.MailAttachment) {
+	for _, a := range atts {
+		if a.GetAsInstance() {
+			inst = append(inst, a)
+		} else {
+			stack = append(stack, a)
+		}
+	}
+	return stack, inst
+}
+
+// expandInstanceConfigIDs 把装备实例型附件按 count 逐件展开成配置 ID 列表(count 份 → count 个元素)。
+// count<=1 视为 1 件;供 inventory.GrantInstances 逐件铸造独立实例。
+func expandInstanceConfigIDs(atts []*mailv1.MailAttachment) []uint32 {
+	out := make([]uint32, 0, len(atts))
+	for _, a := range atts {
+		n := a.GetCount()
+		if n == 0 {
+			n = 1
+		}
+		for i := uint32(0); i < n; i++ {
+			out = append(out, a.GetItemConfigId())
+		}
+	}
+	return out
 }
 
 func (u *MailUsecase) defaultEnd(startMs, endMs, nowMs int64) int64 {
@@ -233,7 +295,7 @@ func (u *MailUsecase) defaultEnd(startMs, endMs, nowMs int64) int64 {
 	return base + int64(u.cfg.DefaultSysTtlDays)*86400_000
 }
 
-func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttachment) ([]byte, error) {
+func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttachment, instanceGrantKey string) ([]byte, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return nil, errcode.New(errcode.ErrInvalidArg, "title required")
@@ -247,7 +309,7 @@ func (u *MailUsecase) buildPayload(title, body string, atts []*mailv1.MailAttach
 	if len(atts) > u.cfg.MaxAttachments {
 		return nil, errcode.New(errcode.ErrInvalidArg, "too many attachments")
 	}
-	rec := &mailv1.MailContentStorageRecord{Title: title, Body: body, Attachments: atts}
+	rec := &mailv1.MailContentStorageRecord{Title: title, Body: body, Attachments: atts, InstanceGrantKey: instanceGrantKey}
 	return proto.Marshal(rec)
 }
 

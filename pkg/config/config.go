@@ -86,6 +86,11 @@ type Grpc struct {
 	Timeout          Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`                     // 默认 1s
 	EnableReflection bool     `yaml:"enable_reflection,omitempty" json:"enable_reflection,omitempty"` // dev:true; prod:false(默认)
 	EnableRateLimit  bool     `yaml:"enable_rate_limit,omitempty" json:"enable_rate_limit,omitempty"` // 第4层 BBR 自适应限流;dev:false; prod:true
+	// MaxConnAge > 0 时开启 gRPC 服务端连接轮换(keepalive MaxConnectionAge):
+	// 长连接达龄后优雅 GOAWAY,客户端重拨自然滚到新副本 —— 滚动更新/扩容时流量能
+	// 切到新 Pod的关键兜底(zero-downtime-update.md §6.2)。0(不写)= 关,行为不变。
+	MaxConnAge      Duration `yaml:"max_conn_age,omitempty" json:"max_conn_age,omitempty"`             // 建议 15m
+	MaxConnAgeGrace Duration `yaml:"max_conn_age_grace,omitempty" json:"max_conn_age_grace,omitempty"` // GOAWAY 后在途 RPC 排空宽限;不写默认 30s
 }
 
 // Http HTTP server 监听(给 protoc-gen-go-http 生成的 handler 用)。

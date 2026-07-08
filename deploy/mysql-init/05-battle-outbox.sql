@@ -30,3 +30,31 @@ CREATE TABLE IF NOT EXISTS `player_update_outbox` (
     UNIQUE KEY `uk_match_player` (`match_id`, `player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora player.update 事务出箱(at-least-once 可靠补偿,不变量 §4)';
+
+-- ── 战斗装备掉落事务出箱 W5 ④(2026-07-08)────────────────────────────────────
+--
+-- 背景:DS 上报的战斗装备掉落(BattleResult.PlayerStats.dropped_item_config_ids)
+--   必须可靠、幂等地落进 inventory(装备实例,不可丢也不可重复)。沿用 player.update
+--   同款「事务出箱」:落 battles + battle_player_stats 的同一事务里,对每个有掉落的玩家
+--   再写一行 drop 出箱记录(原子提交);后台 RunDropPublisher 轮询本表,逐行调
+--   inventory.GrantInstances(幂等键 battle_drop:{match_id}:{player_id}),成功才删行。
+--
+-- 与 player.update 出箱的差异:
+--   - 掉落无跨玩家保序需求 → 发布器按行独立重试(单行失败不阻塞其他玩家)。
+--   - item_config_ids 存 CSV(如 "5001,5002");GrantInstances 幂等,重放安全。
+--   - DS 不可信:写入本表前 battle_result 已按 drop_whitelist 过滤,非白名单 ID 不入表。
+--
+-- 约定:
+--   - uk_match_player:同对局同玩家只入一行(落库按 match_id 幂等,uk 为防御性兜底)。
+--   - 投递成功即 DELETE,本表只保留待发放掉落,不会无限增长(容量满除外,见服务文档)。
+
+CREATE TABLE IF NOT EXISTS `battle_drop_outbox` (
+    `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `match_id`        BIGINT UNSIGNED  NOT NULL,
+    `player_id`       BIGINT UNSIGNED  NOT NULL,
+    `item_config_ids` VARCHAR(512)     NOT NULL COMMENT 'CSV of dropped item_config_id, e.g. 5001,5002',
+    `created_at_ms`   BIGINT           NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_match_player` (`match_id`, `player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 战斗装备掉落事务出箱(at-least-once 幂等发放 GrantInstances,W5 ④)';

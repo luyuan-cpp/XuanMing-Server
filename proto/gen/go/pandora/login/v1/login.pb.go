@@ -694,7 +694,10 @@ func (x *VerifyDSTicketResponse) GetClaims() *DSTicket {
 type SelectRoleRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// role_id: 玩家选中的角色配置 ID(CfgRole.Id)。必须 >0 且在服务端白名单
-	// (login 配置 allowed_role_ids;空白名单 = 只校验非 0,dev 宽松语义)。
+	// (login 配置 allowed_role_ids;白名单为空 = fail-closed 拒绝,
+	//
+	//	仅 dev_allow_any_role=true 时放宽为只校验非 0,严禁上生产)。
+	//
 	// player_id 不在请求体,取自 JWT sub(服务端从 ctx 读,同 TransferToLineRequest 纪律)。
 	RoleId        uint32 `protobuf:"varint,1,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
 	unknownFields protoimpl.UnknownFields

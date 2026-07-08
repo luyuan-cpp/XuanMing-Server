@@ -12,8 +12,12 @@
 package grpcserver
 
 import (
+	"time"
+
 	"github.com/go-kratos/kratos/v2/middleware"
 	kgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/luyuancpp/pandora/pkg/config"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
@@ -66,6 +70,21 @@ func MustNewServer(c config.Server, customMW ...middleware.Middleware) *kgrpc.Se
 	}
 	if c.Grpc.Timeout > 0 {
 		opts = append(opts, kgrpc.Timeout(c.Grpc.Timeout.Std()))
+	}
+
+	// 连接轮换(2026-07-08,zero-downtime-update.md §6.2):gRPC 是 HTTP/2 长连接,
+	// k8s Service 的 L4 均衡按连接分配 —— 老连接不断,滚动更新时新副本分不到流量。
+	// MaxConnectionAge 让达龄连接优雅 GOAWAY(在途 RPC 有 Grace 宽限排空),客户端
+	// 透明重拨到新副本。dev yaml 已全量开 15m;不配(零值)= 关,行为不变。
+	if c.Grpc.MaxConnAge > 0 {
+		grace := c.Grpc.MaxConnAgeGrace.Std()
+		if grace <= 0 {
+			grace = 30 * time.Second
+		}
+		opts = append(opts, kgrpc.Options(grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionAge:      c.Grpc.MaxConnAge.Std(),
+			MaxConnectionAgeGrace: grace,
+		})))
 	}
 
 	// gRPC reflection 开关化(W3 ③,2026-06-05):

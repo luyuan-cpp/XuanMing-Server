@@ -55,3 +55,20 @@ func (g *GrpcItemGranter) Grant(ctx context.Context, playerID uint64, atts []*ma
 	}
 	return nil
 }
+
+// GrantInstances 调 inventory.GrantInstances 幂等铸造装备实例(装备型附件领取用)。
+// itemConfigIDs 为逐件展开的配置 ID(count 份 → count 个元素);inventory 侧按幂等键去重。
+func (g *GrpcItemGranter) GrantInstances(ctx context.Context, playerID uint64, itemConfigIDs []uint32, idempotencyKey string) error {
+	resp, err := g.cli.GrantInstances(ctx, &inventoryv1.GrantInstancesRequest{
+		PlayerId:       playerID,
+		ItemConfigIds:  itemConfigIDs,
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "inventory grant instances code=%d", resp.GetCode())
+	}
+	return nil
+}

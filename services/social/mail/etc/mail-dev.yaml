@@ -12,6 +12,7 @@ server:
     addr: ":50009"
     timeout: "15s"
     enable_reflection: true
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
     addr: ":51009"

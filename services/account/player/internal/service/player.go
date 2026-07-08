@@ -5,20 +5,74 @@
 //   - proto Request/Response ↔ biz 入参/出参互转
 //   - errcode.Code → commonv1.ErrCode 1:1 映射
 //
-// 说明:调用方为后端内部(battle_result GetMMR)/ 经 Envoy 的客户端(GetProfile 等),
-// player_id 由 proto 字段显式传入(不从 ctx 取),鉴权由 Envoy jwt_authn 完成。
+// 鉴权边界(2026-07-08 安全审查:开放客户端入口前修 IDOR,对齐 inventory 服务):
+//   - 客户端自助写 RPC(改昵称 / 选英雄 / 加点 / 洗点 / 出装 / 天赋 / 领奖):以 Envoy jwt_authn
+//     注入的调用者身份为准(selfPlayerID,pmw.PlayerIDFromContext),**不信任请求体 player_id**;
+//     未鉴权直连或请求体 player_id 与调用者不一致直接拒,防止伪造 player_id 改他人存档。
+//   - 客户端读 RPC(档案 / 属性 / 出装 / 天赋 / 出战快照 / 领奖记录):双模(resolvePlayerID)——
+//     内部直连(callerID==0,如 battle_result reader / 开局快照注入)信任请求体;
+//     经 Envoy 的客户端(callerID>0)强制只能查自己,不得读他人存档。
+//   - 系统 RPC(UpdateMMR / UnlockHero / GrantAttributePoints / GrantTalentPoints):只允许后端
+//     内部直连(callerID==0);带玩家 JWT 的客户端调用一律拒绝,并且不在 Envoy 暴露这些路由。
 package service
 
 import (
 	"context"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 
 	"github.com/luyuancpp/pandora/services/account/player/internal/biz"
 	"github.com/luyuancpp/pandora/services/account/player/internal/data"
 )
+
+// selfPlayerID 取经鉴权的调用者身份并校验请求体 player_id 一致性(客户端自助写 RPC 用)。
+//
+//	未鉴权(callerID==0,直连内网无网关注入) → ERR_UNAUTHORIZED
+//	请求体 player_id 与调用者不一致           → ERR_PERMISSION_DENY
+//
+// 返回权威 player_id(= 调用者身份),后续业务一律用它,不信任 req.PlayerId。
+// 写接口不该被后端内部直连(那类操作走系统 RPC),故未鉴权一律拒。
+func selfPlayerID(ctx context.Context, reqPlayerID uint64) (uint64, commonv1.ErrCode) {
+	callerID := pmw.PlayerIDFromContext(ctx)
+	if callerID == 0 {
+		return 0, commonv1.ErrCode_ERR_UNAUTHORIZED
+	}
+	if reqPlayerID != 0 && reqPlayerID != callerID {
+		return 0, commonv1.ErrCode_ERR_PERMISSION_DENY
+	}
+	return callerID, commonv1.ErrCode_OK
+}
+
+// resolvePlayerID 读接口双模取权威 player_id:
+//
+//	内部直连(callerID==0):信任请求体 player_id(内部 reader / 开局快照注入),body==0 → ERR_INVALID_ARG
+//	客户端(callerID>0):强制只能查自己,body 与调用者不一致 → ERR_PERMISSION_DENY
+//
+// 既不破坏未来内部 reader / 快照注入调用,又杜绝客户端读他人存档。
+func resolvePlayerID(ctx context.Context, reqPlayerID uint64) (uint64, commonv1.ErrCode) {
+	callerID := pmw.PlayerIDFromContext(ctx)
+	if callerID == 0 {
+		if reqPlayerID == 0 {
+			return 0, commonv1.ErrCode_ERR_INVALID_ARG
+		}
+		return reqPlayerID, commonv1.ErrCode_OK
+	}
+	if reqPlayerID != 0 && reqPlayerID != callerID {
+		return 0, commonv1.ErrCode_ERR_PERMISSION_DENY
+	}
+	return callerID, commonv1.ErrCode_OK
+}
+
+// systemOnly 系统接口鉴权:经 Envoy 的客户端(callerID>0)一律拒,合法调用者是后端内部直连。
+func systemOnly(ctx context.Context) commonv1.ErrCode {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return commonv1.ErrCode_ERR_PERMISSION_DENY
+	}
+	return commonv1.ErrCode_OK
+}
 
 // PlayerService 实现 playerv1.PlayerServiceServer。
 type PlayerService struct {
@@ -31,43 +85,49 @@ func NewPlayerService(uc *biz.PlayerUsecase) *PlayerService {
 	return &PlayerService{uc: uc}
 }
 
-// GetProfile 读玩家档案(懒创建)。
+// GetProfile 读玩家档案(懒创建)。客户端只能读自己;内部直连信任请求体。
 func (s *PlayerService) GetProfile(ctx context.Context, req *playerv1.GetProfileRequest) (*playerv1.GetProfileResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetProfileResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetProfileResponse{Code: code}, nil
 	}
-	profile, err := s.uc.GetProfile(ctx, req.GetPlayerId())
+	profile, err := s.uc.GetProfile(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetProfileResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.GetProfileResponse{Code: commonv1.ErrCode_OK, Profile: profile}, nil
 }
 
-// UpdateNickname 改昵称。
+// UpdateNickname 改昵称。以调用者身份为准。
 func (s *PlayerService) UpdateNickname(ctx context.Context, req *playerv1.UpdateNicknameRequest) (*playerv1.UpdateNicknameResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.UpdateNicknameResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.UpdateNicknameResponse{Code: code}, nil
 	}
-	if err := s.uc.UpdateNickname(ctx, req.GetPlayerId(), req.GetNickname()); err != nil {
+	if err := s.uc.UpdateNickname(ctx, playerID, req.GetNickname()); err != nil {
 		return &playerv1.UpdateNicknameResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.UpdateNicknameResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// ListHeroes 列出玩家已解锁英雄。
+// ListHeroes 列出玩家已解锁英雄。客户端只能读自己。
 func (s *PlayerService) ListHeroes(ctx context.Context, req *playerv1.ListHeroesRequest) (*playerv1.ListHeroesResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.ListHeroesResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.ListHeroesResponse{Code: code}, nil
 	}
-	heroes, err := s.uc.ListHeroes(ctx, req.GetPlayerId())
+	heroes, err := s.uc.ListHeroes(ctx, playerID)
 	if err != nil {
 		return &playerv1.ListHeroesResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.ListHeroesResponse{Code: commonv1.ErrCode_OK, HeroIds: heroes}, nil
 }
 
-// UnlockHero 解锁英雄。
+// UnlockHero 解锁英雄(系统接口:购买 / 奖励到账后后端内部调;客户端不得自助解锁)。
 func (s *PlayerService) UnlockHero(ctx context.Context, req *playerv1.UnlockHeroRequest) (*playerv1.UnlockHeroResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.UnlockHeroResponse{Code: code}, nil
+	}
 	if req.GetPlayerId() == 0 || req.GetHeroId() == 0 {
 		return &playerv1.UnlockHeroResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
@@ -77,20 +137,24 @@ func (s *PlayerService) UnlockHero(ctx context.Context, req *playerv1.UnlockHero
 	return &playerv1.UnlockHeroResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// GetMMR 读玩家当前 MMR(供 battle_result 当 reader)。
+// GetMMR 读玩家当前 MMR(供 battle_result 当 reader;客户端只能读自己)。
 func (s *PlayerService) GetMMR(ctx context.Context, req *playerv1.GetMMRRequest) (*playerv1.GetMMRResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetMMRResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetMMRResponse{Code: code}, nil
 	}
-	mmr, err := s.uc.GetMMR(ctx, req.GetPlayerId())
+	mmr, err := s.uc.GetMMR(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetMMRResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.GetMMRResponse{Code: commonv1.ErrCode_OK, Mmr: int32(mmr)}, nil
 }
 
-// UpdateMMR 幂等改 MMR(同步兜底;正常链路走 kafka 消费 player.update)。
+// UpdateMMR 幂等改 MMR(系统接口;同步兜底,正常链路走 kafka 消费 player.update)。
 func (s *PlayerService) UpdateMMR(ctx context.Context, req *playerv1.UpdateMMRRequest) (*playerv1.UpdateMMRResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.UpdateMMRResponse{Code: code}, nil
+	}
 	if req.GetPlayerId() == 0 {
 		return &playerv1.UpdateMMRResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
@@ -106,31 +170,39 @@ func (s *PlayerService) UpdateMMR(ctx context.Context, req *playerv1.UpdateMMRRe
 
 // ── 出战养成 ──────────────────────────────────────────────────────────────────
 
-// SelectHero 设定出战英雄。
+// SelectHero 设定出战英雄。以调用者身份为准。
 func (s *PlayerService) SelectHero(ctx context.Context, req *playerv1.SelectHeroRequest) (*playerv1.SelectHeroResponse, error) {
-	if req.GetPlayerId() == 0 || req.GetHeroId() == 0 {
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.SelectHeroResponse{Code: code}, nil
+	}
+	if req.GetHeroId() == 0 {
 		return &playerv1.SelectHeroResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	if err := s.uc.SelectHero(ctx, req.GetPlayerId(), req.GetHeroId()); err != nil {
+	if err := s.uc.SelectHero(ctx, playerID, req.GetHeroId()); err != nil {
 		return &playerv1.SelectHeroResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.SelectHeroResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// GetActiveHero 读出战英雄(未选定返回 hero_id=0)。
+// GetActiveHero 读出战英雄(未选定返回 hero_id=0)。客户端只能读自己。
 func (s *PlayerService) GetActiveHero(ctx context.Context, req *playerv1.GetActiveHeroRequest) (*playerv1.GetActiveHeroResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetActiveHeroResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetActiveHeroResponse{Code: code}, nil
 	}
-	heroID, err := s.uc.GetActiveHero(ctx, req.GetPlayerId())
+	heroID, err := s.uc.GetActiveHero(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetActiveHeroResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.GetActiveHeroResponse{Code: commonv1.ErrCode_OK, HeroId: heroID}, nil
 }
 
-// GrantAttributePoints 幂等授予可分配点。
+// GrantAttributePoints 幂等授予可分配点(系统接口:升级 / 活动授予;客户端不得自助)。
 func (s *PlayerService) GrantAttributePoints(ctx context.Context, req *playerv1.GrantAttributePointsRequest) (*playerv1.GrantAttributePointsResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.GrantAttributePointsResponse{Code: code}, nil
+	}
 	if req.GetPlayerId() == 0 {
 		return &playerv1.GrantAttributePointsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
@@ -141,40 +213,43 @@ func (s *PlayerService) GrantAttributePoints(ctx context.Context, req *playerv1.
 	return &playerv1.GrantAttributePointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
-// AllocateAttributePoints 分配属性点。
+// AllocateAttributePoints 分配属性点。以调用者身份为准。
 func (s *PlayerService) AllocateAttributePoints(ctx context.Context, req *playerv1.AllocateAttributePointsRequest) (*playerv1.AllocateAttributePointsResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.AllocateAttributePointsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.AllocateAttributePointsResponse{Code: code}, nil
 	}
 	allocs := make([]data.AttrAllocation, 0, len(req.GetAllocations()))
 	for _, a := range req.GetAllocations() {
 		allocs = append(allocs, data.AttrAllocation{Key: a.GetAttrKey(), Points: a.GetPoints()})
 	}
-	unspent, err := s.uc.AllocateAttributePoints(ctx, req.GetPlayerId(), allocs)
+	unspent, err := s.uc.AllocateAttributePoints(ctx, playerID, allocs)
 	if err != nil {
 		return &playerv1.AllocateAttributePointsResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.AllocateAttributePointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
-// ResetAttributes 洗点。
+// ResetAttributes 洗点。以调用者身份为准。
 func (s *PlayerService) ResetAttributes(ctx context.Context, req *playerv1.ResetAttributesRequest) (*playerv1.ResetAttributesResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.ResetAttributesResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.ResetAttributesResponse{Code: code}, nil
 	}
-	unspent, err := s.uc.ResetAttributes(ctx, req.GetPlayerId())
+	unspent, err := s.uc.ResetAttributes(ctx, playerID)
 	if err != nil {
 		return &playerv1.ResetAttributesResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.ResetAttributesResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
-// GetAttributes 读已分配属性点 + 未分配点。
+// GetAttributes 读已分配属性点 + 未分配点。客户端只能读自己。
 func (s *PlayerService) GetAttributes(ctx context.Context, req *playerv1.GetAttributesRequest) (*playerv1.GetAttributesResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetAttributesResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetAttributesResponse{Code: code}, nil
 	}
-	attrs, unspent, err := s.uc.GetAttributes(ctx, req.GetPlayerId())
+	attrs, unspent, err := s.uc.GetAttributes(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetAttributesResponse{Code: toProtoCode(err)}, nil
 	}
@@ -185,27 +260,29 @@ func (s *PlayerService) GetAttributes(ctx context.Context, req *playerv1.GetAttr
 	return &playerv1.GetAttributesResponse{Code: commonv1.ErrCode_OK, Attributes: out, UnspentPoints: int32(unspent)}, nil
 }
 
-// SetEquipment 全量替换出战装备预设。
+// SetEquipment 全量替换出战装备预设。以调用者身份为准。
 func (s *PlayerService) SetEquipment(ctx context.Context, req *playerv1.SetEquipmentRequest) (*playerv1.SetEquipmentResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.SetEquipmentResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.SetEquipmentResponse{Code: code}, nil
 	}
 	slots := make([]data.EquipmentSlot, 0, len(req.GetEquipment()))
 	for _, e := range req.GetEquipment() {
 		slots = append(slots, data.EquipmentSlot{Slot: e.GetSlot(), ItemConfigID: e.GetItemConfigId()})
 	}
-	if err := s.uc.SetEquipment(ctx, req.GetPlayerId(), slots); err != nil {
+	if err := s.uc.SetEquipment(ctx, playerID, slots); err != nil {
 		return &playerv1.SetEquipmentResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.SetEquipmentResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// GetEquipment 读出战装备预设。
+// GetEquipment 读出战装备预设。客户端只能读自己。
 func (s *PlayerService) GetEquipment(ctx context.Context, req *playerv1.GetEquipmentRequest) (*playerv1.GetEquipmentResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetEquipmentResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetEquipmentResponse{Code: code}, nil
 	}
-	slots, err := s.uc.GetEquipment(ctx, req.GetPlayerId())
+	slots, err := s.uc.GetEquipment(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetEquipmentResponse{Code: toProtoCode(err)}, nil
 	}
@@ -216,8 +293,11 @@ func (s *PlayerService) GetEquipment(ctx context.Context, req *playerv1.GetEquip
 	return &playerv1.GetEquipmentResponse{Code: commonv1.ErrCode_OK, Equipment: out}, nil
 }
 
-// GrantTalentPoints 幂等授予天赋点。
+// GrantTalentPoints 幂等授予天赋点(系统接口:升级 / 活动授予;客户端不得自助)。
 func (s *PlayerService) GrantTalentPoints(ctx context.Context, req *playerv1.GrantTalentPointsRequest) (*playerv1.GrantTalentPointsResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.GrantTalentPointsResponse{Code: code}, nil
+	}
 	if req.GetPlayerId() == 0 {
 		return &playerv1.GrantTalentPointsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
@@ -228,40 +308,43 @@ func (s *PlayerService) GrantTalentPoints(ctx context.Context, req *playerv1.Gra
 	return &playerv1.GrantTalentPointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
-// SetTalents 全量重置天赋分配。
+// SetTalents 全量重置天赋分配。以调用者身份为准。
 func (s *PlayerService) SetTalents(ctx context.Context, req *playerv1.SetTalentsRequest) (*playerv1.SetTalentsResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.SetTalentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.SetTalentsResponse{Code: code}, nil
 	}
 	talents := make([]data.TalentLevel, 0, len(req.GetTalents()))
 	for _, t := range req.GetTalents() {
 		talents = append(talents, data.TalentLevel{TalentID: t.GetTalentId(), Level: t.GetLevel()})
 	}
-	unspent, err := s.uc.SetTalents(ctx, req.GetPlayerId(), talents)
+	unspent, err := s.uc.SetTalents(ctx, playerID, talents)
 	if err != nil {
 		return &playerv1.SetTalentsResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.SetTalentsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
-// ResetTalents 清空天赋分配。
+// ResetTalents 清空天赋分配。以调用者身份为准。
 func (s *PlayerService) ResetTalents(ctx context.Context, req *playerv1.ResetTalentsRequest) (*playerv1.ResetTalentsResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.ResetTalentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.ResetTalentsResponse{Code: code}, nil
 	}
-	unspent, err := s.uc.ResetTalents(ctx, req.GetPlayerId())
+	unspent, err := s.uc.ResetTalents(ctx, playerID)
 	if err != nil {
 		return &playerv1.ResetTalentsResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.ResetTalentsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
-// GetTalents 读已点天赋 + 可点天赋点。
+// GetTalents 读已点天赋 + 可点天赋点。客户端只能读自己。
 func (s *PlayerService) GetTalents(ctx context.Context, req *playerv1.GetTalentsRequest) (*playerv1.GetTalentsResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetTalentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetTalentsResponse{Code: code}, nil
 	}
-	talents, unspent, err := s.uc.GetTalents(ctx, req.GetPlayerId())
+	talents, unspent, err := s.uc.GetTalents(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetTalentsResponse{Code: toProtoCode(err)}, nil
 	}
@@ -273,11 +356,13 @@ func (s *PlayerService) GetTalents(ctx context.Context, req *playerv1.GetTalents
 }
 
 // GetLoadout 组装开战前快照(出战英雄 + 属性点 + 装备预设 + 天赋)。
+// 双模:内部(matchmaker/DS 开局快照注入,callerID==0)信请求体;客户端只能读自己。
 func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadoutRequest) (*playerv1.GetLoadoutResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetLoadoutResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetLoadoutResponse{Code: code}, nil
 	}
-	loadout, err := s.uc.GetLoadout(ctx, req.GetPlayerId())
+	loadout, err := s.uc.GetLoadout(ctx, playerID)
 	if err != nil {
 		return &playerv1.GetLoadoutResponse{Code: toProtoCode(err)}, nil
 	}
@@ -286,23 +371,28 @@ func (s *PlayerService) GetLoadout(ctx context.Context, req *playerv1.GetLoadout
 
 // ── 领奖 ──────────────────────────────────────────────────────────────────────
 
-// ClaimReward 领取一档奖励(客户端权威领取,幂等;已领取返回 ERR_REWARD_ALREADY_CLAIMED)。
+// ClaimReward 领取一档奖励(客户端权威领取,幂等;已领取返回 ERR_REWARD_ALREADY_CLAIMED)。以调用者身份为准。
 func (s *PlayerService) ClaimReward(ctx context.Context, req *playerv1.ClaimRewardRequest) (*playerv1.ClaimRewardResponse, error) {
-	if req.GetPlayerId() == 0 || req.GetRewardId() == 0 {
+	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.ClaimRewardResponse{Code: code}, nil
+	}
+	if req.GetRewardId() == 0 {
 		return &playerv1.ClaimRewardResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	if err := s.uc.ClaimReward(ctx, req.GetPlayerId(), req.GetSourceType(), req.GetSource(), req.GetActivityInstanceId(), req.GetRewardId()); err != nil {
+	if err := s.uc.ClaimReward(ctx, playerID, req.GetSourceType(), req.GetSource(), req.GetActivityInstanceId(), req.GetRewardId()); err != nil {
 		return &playerv1.ClaimRewardResponse{Code: toProtoCode(err)}, nil
 	}
 	return &playerv1.ClaimRewardResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// GetRewardClaims 查询某来源已领取的奖励配置 ID 列表(客户端可见最小视图)。
+// GetRewardClaims 查询某来源已领取的奖励配置 ID 列表(客户端可见最小视图)。客户端只能读自己。
 func (s *PlayerService) GetRewardClaims(ctx context.Context, req *playerv1.GetRewardClaimsRequest) (*playerv1.GetRewardClaimsResponse, error) {
-	if req.GetPlayerId() == 0 {
-		return &playerv1.GetRewardClaimsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	playerID, code := resolvePlayerID(ctx, req.GetPlayerId())
+	if code != commonv1.ErrCode_OK {
+		return &playerv1.GetRewardClaimsResponse{Code: code}, nil
 	}
-	ids, err := s.uc.GetRewardClaims(ctx, req.GetPlayerId(), req.GetSourceType(), req.GetSource(), req.GetActivityInstanceId())
+	ids, err := s.uc.GetRewardClaims(ctx, playerID, req.GetSourceType(), req.GetSource(), req.GetActivityInstanceId())
 	if err != nil {
 		return &playerv1.GetRewardClaimsResponse{Code: toProtoCode(err)}, nil
 	}

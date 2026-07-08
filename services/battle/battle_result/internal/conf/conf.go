@@ -40,6 +40,28 @@ type BattleConf struct {
 
 	// OutboxBatchSize 每轮发布取多少条出箱记录(默认 128)。
 	OutboxBatchSize int `yaml:"outbox_batch_size,omitempty" json:"outbox_batch_size,omitempty"`
+
+	// ── 战斗装备掉落回写 W5 ④ ──
+
+	// InventoryAddr inventory 服务 gRPC 地址(弱依赖:空 → 关闭掉落回写,不发放战斗装备掉落)。
+	// 内网 insecure 直连(系统接口,无 JWT)。RunDropPublisher 用它调 GrantInstances。
+	InventoryAddr string `yaml:"inventory_addr,omitempty" json:"inventory_addr,omitempty"`
+
+	// DropWhitelist 允许作为战斗掉落落库的装备 item_config_id 白名单(DS 不可信,§12)。
+	// 空 = 不放行任何掉落(安全默认:DS 上报的 dropped_item_config_ids 全被过滤掉,不发放)。
+	// battle_result 写 drop 出箱前按此过滤,DS 只能触发白名单内装备落库。
+	DropWhitelist []uint32 `yaml:"drop_whitelist,omitempty" json:"drop_whitelist,omitempty"`
+
+	// DropPublishInterval 战斗掉落出箱发布轮询间隔(默认 2s)。
+	DropPublishInterval config.Duration `yaml:"drop_publish_interval,omitempty" json:"drop_publish_interval,omitempty"`
+
+	// DropBatchSize 每轮发布取多少条掉落出箱记录(默认 128)。
+	DropBatchSize int `yaml:"drop_batch_size,omitempty" json:"drop_batch_size,omitempty"`
+
+	// MailAddr mail 服务 gRPC 地址(弱依赖:空 → 背包满掉落留在出箱轮询重试,不转邮件)。
+	// 内网 insecure 直连(系统接口,无 JWT)。发放遇 ErrInventoryCapacityFull(背包满)时,
+	// RunDropPublisher 用它调 SendPersonalMail 把溢出装备转个人邮件(幂等键防重发),再删出箱行。
+	MailAddr string `yaml:"mail_addr,omitempty" json:"mail_addr,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -59,10 +81,27 @@ func (c *Config) Defaults() {
 	if c.Battle.OutboxBatchSize <= 0 {
 		c.Battle.OutboxBatchSize = 128
 	}
+	if c.Battle.DropPublishInterval.Std() <= 0 {
+		c.Battle.DropPublishInterval = config.Duration(2 * time.Second)
+	}
+	if c.Battle.DropBatchSize <= 0 {
+		c.Battle.DropBatchSize = 128
+	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50022"
 	}
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51022"
 	}
+}
+
+// IsDroppable 判断某 item_config_id 是否在战斗掉落白名单内(DS 不可信过滤,W5 ④)。
+// 白名单为空 → 恒 false(安全默认:不放行任何掉落)。
+func (b *BattleConf) IsDroppable(itemConfigID uint32) bool {
+	for _, id := range b.DropWhitelist {
+		if id == itemConfigID {
+			return true
+		}
+	}
+	return false
 }

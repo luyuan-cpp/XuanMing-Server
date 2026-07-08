@@ -11,6 +11,7 @@ server:
     network: tcp
     addr: ":50014"
     enable_reflection: true     # dev:开 reflection 便于 grpcurl 联调
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
     network: tcp
     addr: ":51014"

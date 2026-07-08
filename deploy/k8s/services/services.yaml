@@ -7,7 +7,11 @@
 #
 # Service 短名 = 服务名,同 namespace 内 <svc>:<port> 直连(与 docker/compose 对齐)。
 #
-# 这个文件很长但全是同构片段;新增服务照抄一段、改 4 处(name/image/configKey/port)即可。
+# readinessProbe(2026-07-08,zero-downtime-update.md §6.5):原生 gRPC probe(k8s ≥1.24),
+# 打服务自身端口的 grpc_health_v1(Kratos 默认注册,Stop 时自动转 NOT_SERVING)。
+# 新 Pod 必须 health SERVING 才进 Service Endpoints 接流量;滚动更新时旧 Pod 摘除即不再接新请求。
+#
+# 这个文件很长但全是同构片段;新增服务照抄一段、改 5 处(name/image/configKey/port/probe port)即可。
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -24,6 +28,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50001 } ]
+          readinessProbe: { grpc: { port: 50001 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: login.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -48,6 +53,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50002 } ]
+          readinessProbe: { grpc: { port: 50002 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -72,6 +78,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50003 } ]
+          readinessProbe: { grpc: { port: 50003 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: data-service.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -96,6 +103,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50004 } ]
+          readinessProbe: { grpc: { port: 50004 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: friend.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -120,6 +128,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50005 } ]
+          readinessProbe: { grpc: { port: 50005 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: chat.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -144,6 +153,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50008 } ]
+          readinessProbe: { grpc: { port: 50008 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: guild.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -168,6 +178,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50009 } ]
+          readinessProbe: { grpc: { port: 50009 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: mail.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -192,6 +203,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50006 } ]
+          readinessProbe: { grpc: { port: 50006 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player-locator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -216,6 +228,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50010 } ]
+          readinessProbe: { grpc: { port: 50010 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: team.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -242,6 +255,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50011 } ]
+          readinessProbe: { grpc: { port: 50011 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -268,6 +282,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50018 } ]
+          readinessProbe: { grpc: { port: 50018 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker-pve.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -292,6 +307,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50012 } ]
+          readinessProbe: { grpc: { port: 50012 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: trade.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -316,6 +332,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50013 } ]
+          readinessProbe: { grpc: { port: 50013 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: dialogue.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -340,6 +357,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50014 } ]
+          readinessProbe: { grpc: { port: 50014 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: push.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -364,6 +382,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50007 } ]
+          readinessProbe: { grpc: { port: 50007 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: leaderboard.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -388,6 +407,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50015 } ]
+          readinessProbe: { grpc: { port: 50015 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: inventory.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -412,6 +432,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50016 } ]
+          readinessProbe: { grpc: { port: 50016 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: auction.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -437,6 +458,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50020 } ]
+          readinessProbe: { grpc: { port: 50020 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -462,6 +484,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50021 } ]
+          readinessProbe: { grpc: { port: 50021 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: hub-allocator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]
@@ -486,6 +509,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50022 } ]
+          readinessProbe: { grpc: { port: 50022 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: battle-result.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
       volumes: [ { name: conf, configMap: { name: pandora-config } } ]

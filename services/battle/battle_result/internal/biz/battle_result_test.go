@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -23,27 +24,39 @@ import (
 
 // fakeRepo 是内存版 data.BattleRepo,按 match_id 唯一(模拟 unique 幂等)+内存出箱。
 type fakeRepo struct {
-	store   map[uint64]*battlev1.BattleResult
-	saveErr error
-	saveCnt int
-	outbox  []data.OutboxRecord // 待发布,按 ID 升序
-	nextID  int64
+	store      map[uint64]*battlev1.BattleResult
+	saveErr    error
+	saveCnt    int
+	outbox     []data.OutboxRecord     // player.update 待发布,按 ID 升序
+	dropOutbox []data.DropOutboxRecord // 装备掉落待发放,按 ID 升序(W5 ④)
+	nextID     int64
+	nextDropID int64
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{store: map[uint64]*battlev1.BattleResult{}} }
 
-func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, outbox []data.OutboxRecord) (bool, error) {
+func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, outbox []data.OutboxRecord, dropOutbox []data.DropOutboxRecord) (bool, error) {
 	r.saveCnt++
 	if r.saveErr != nil {
 		return false, r.saveErr
 	}
 	if _, ok := r.store[result.GetMatchId()]; ok {
-		return true, nil // 幂等命中(出箱不写)
+		return true, nil // 幂等命中(两路出箱都不写)
 	}
 	r.store[result.GetMatchId()] = proto.Clone(result).(*battlev1.BattleResult)
 	for _, o := range outbox {
 		r.nextID++
 		r.outbox = append(r.outbox, data.OutboxRecord{ID: r.nextID, PlayerID: o.PlayerID, Payload: o.Payload})
+	}
+	for _, d := range dropOutbox {
+		if len(d.ItemConfigIDs) == 0 {
+			continue
+		}
+		r.nextDropID++
+		r.dropOutbox = append(r.dropOutbox, data.DropOutboxRecord{
+			ID: r.nextDropID, MatchID: result.GetMatchId(), PlayerID: d.PlayerID,
+			ItemConfigIDs: append([]uint32(nil), d.ItemConfigIDs...),
+		})
 	}
 	return false, nil
 }
@@ -83,6 +96,25 @@ func (r *fakeRepo) DeleteOutbox(_ context.Context, id int64) error {
 	return nil
 }
 
+func (r *fakeRepo) FetchDropOutbox(_ context.Context, limit int) ([]data.DropOutboxRecord, error) {
+	if limit <= 0 || limit > len(r.dropOutbox) {
+		limit = len(r.dropOutbox)
+	}
+	out := make([]data.DropOutboxRecord, limit)
+	copy(out, r.dropOutbox[:limit])
+	return out, nil
+}
+
+func (r *fakeRepo) DeleteDropOutbox(_ context.Context, id int64) error {
+	for i, d := range r.dropOutbox {
+		if d.ID == id {
+			r.dropOutbox = append(r.dropOutbox[:i], r.dropOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
 // fakePusher 捕获 player.update 事件;failFirst>0 时前 failFirst 次推送返错(模拟 Kafka 不可用),
 // failAt>0 时第 failAt 次调用单次返错(模拟一批中途失败)。
 type fakePusher struct {
@@ -103,6 +135,45 @@ func (p *fakePusher) PushPlayerUpdate(_ context.Context, playerID uint64, payloa
 		return simpleErr("kafka down")
 	}
 	p.events = append(p.events, capturedPush{playerID: playerID, payload: payload})
+	return nil
+}
+
+// fakeGranter 捕获 GrantInstances 调用;failPlayer!=0 时对该玩家恒返错(模拟背包满,验证不阻塞其他玩家)。
+// capacityFull=true 时所有玩家返 ErrInventoryCapacityFull(验证背包满转邮件路径)。
+type fakeGranter struct {
+	calls        []grantCall
+	failPlayer   uint64
+	capacityFull bool
+}
+
+type grantCall struct {
+	playerID uint64
+	items    []uint32
+	key      string
+}
+
+func (g *fakeGranter) GrantInstances(_ context.Context, playerID uint64, itemConfigIDs []uint32, key string) error {
+	if g.capacityFull {
+		return errcode.New(errcode.ErrInventoryCapacityFull, "bag full")
+	}
+	if g.failPlayer != 0 && playerID == g.failPlayer {
+		return simpleErr("bag full")
+	}
+	g.calls = append(g.calls, grantCall{playerID: playerID, items: append([]uint32(nil), itemConfigIDs...), key: key})
+	return nil
+}
+
+// fakeMailSender 捕获 SendOverflowMail 调用;failAll=true 时恒返错(验证转邮件失败保留出箱行)。
+type fakeMailSender struct {
+	calls   []grantCall
+	failAll bool
+}
+
+func (m *fakeMailSender) SendOverflowMail(_ context.Context, playerID uint64, itemConfigIDs []uint32, key string) error {
+	if m.failAll {
+		return simpleErr("mail down")
+	}
+	m.calls = append(m.calls, grantCall{playerID: playerID, items: append([]uint32(nil), itemConfigIDs...), key: key})
 	return nil
 }
 
@@ -503,5 +574,267 @@ func TestOutboxNilPusherNoLoss(t *testing.T) {
 	}
 	if len(repo.outbox) != 4 {
 		t.Fatalf("nil pusher must not lose outbox, got %d", len(repo.outbox))
+	}
+}
+
+// ── 战斗装备掉落回写(W5 ④,drop 白名单过滤 + 事务出箱 + GrantInstances 幂等)──────────
+
+// newDropUsecase 构造带 drop 白名单 + granter 的 usecase。whitelist 决定哪些 item_config_id 可落库。
+func newDropUsecase(repo *fakeRepo, granter InstanceGranter, whitelist []uint32) *BattleResultUsecase {
+	cfg := conf.BattleConf{EloKFactor: 32, BaseMMR: 1500, DropWhitelist: whitelist}
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), &fakePusher{}, nil, cfg)
+	if granter != nil {
+		uc.SetInstanceGranter(granter)
+	}
+	return uc
+}
+
+// dropResult 组一场 2 人正常结算,player 1 掉落 drop1,player 2 掉落 drop2。
+func dropResult(matchID uint64, drop1, drop2 []uint32) *battlev1.BattleResult {
+	return &battlev1.BattleResult{
+		MatchId:    matchID,
+		WinnerTeam: winnerTeamA,
+		EndedAtMs:  9999,
+		Stats: []*battlev1.PlayerStats{
+			{PlayerId: 1, Team: 0, DroppedItemConfigIds: drop1},
+			{PlayerId: 2, Team: 1, DroppedItemConfigIds: drop2},
+		},
+	}
+}
+
+// TestDropWhitelistFilter DS 上报的掉落只有白名单内 ID 入 drop 出箱(DS 不可信)。
+func TestDropWhitelistFilter(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newDropUsecase(repo, &fakeGranter{}, []uint32{5001, 5002})
+	// player 1 报 [5001(白), 9999(非白)];player 2 报 [8888(非白)]。
+	if _, err := uc.ReportResult(context.Background(), dropResult(600, []uint32{5001, 9999}, []uint32{8888})); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	// 只 player 1 有白名单内掉落 → drop 出箱 1 行,内容仅 [5001]。
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("expected 1 drop outbox row, got %d", len(repo.dropOutbox))
+	}
+	d := repo.dropOutbox[0]
+	if d.PlayerID != 1 || len(d.ItemConfigIDs) != 1 || d.ItemConfigIDs[0] != 5001 {
+		t.Fatalf("drop outbox filtered wrong: player=%d items=%v", d.PlayerID, d.ItemConfigIDs)
+	}
+	if d.MatchID != 600 {
+		t.Fatalf("drop outbox match_id got %d want 600", d.MatchID)
+	}
+}
+
+// TestDropEmptyWhitelistBlocksAll 白名单为空 → 任何掉落都不入库(安全默认)。
+func TestDropEmptyWhitelistBlocksAll(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newDropUsecase(repo, &fakeGranter{}, nil)
+	if _, err := uc.ReportResult(context.Background(), dropResult(601, []uint32{5001}, []uint32{5002})); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	if len(repo.dropOutbox) != 0 {
+		t.Fatalf("empty whitelist must block all drops, got %d rows", len(repo.dropOutbox))
+	}
+}
+
+// TestDropAbandonedNoDrops ABANDONED(DS 崩溃补偿)不产出任何掉落,即使 DS 上报了白名单内 ID。
+func TestDropAbandonedNoDrops(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newDropUsecase(repo, &fakeGranter{}, []uint32{5001})
+	res := dropResult(602, []uint32{5001}, []uint32{5001})
+	res.Outcome = battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED
+	if _, err := uc.ReportResult(context.Background(), res); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	if len(repo.dropOutbox) != 0 {
+		t.Fatalf("abandoned must produce no drops, got %d rows", len(repo.dropOutbox))
+	}
+}
+
+// TestDropPublisherGrantsAndDrains 掉落出箱经发布器发放:调 GrantInstances(幂等键正确)并清空出箱。
+func TestDropPublisherGrantsAndDrains(t *testing.T) {
+	repo := newFakeRepo()
+	granter := &fakeGranter{}
+	uc := newDropUsecase(repo, granter, []uint32{5001, 5002})
+	if _, err := uc.ReportResult(context.Background(), dropResult(603, []uint32{5001}, []uint32{5002})); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	if len(repo.dropOutbox) != 2 {
+		t.Fatalf("expected 2 drop outbox rows, got %d", len(repo.dropOutbox))
+	}
+	n, err := uc.publishDropBatch(context.Background())
+	if err != nil || n != 2 {
+		t.Fatalf("publishDropBatch expect 2 granted, got n=%d err=%v", n, err)
+	}
+	if len(repo.dropOutbox) != 0 {
+		t.Fatalf("drop outbox should drain, got %d", len(repo.dropOutbox))
+	}
+	if len(granter.calls) != 2 {
+		t.Fatalf("expected 2 grant calls, got %d", len(granter.calls))
+	}
+	// 幂等键 = battle_drop:{match_id}:{player_id}
+	if granter.calls[0].key != "battle_drop:603:1" {
+		t.Fatalf("idempotency key wrong: %s", granter.calls[0].key)
+	}
+}
+
+// TestDropPublisherPerRowRetry 单玩家背包满(granter 恒返错)不阻塞其他玩家:失败行保留,成功行清空。
+func TestDropPublisherPerRowRetry(t *testing.T) {
+	repo := newFakeRepo()
+	granter := &fakeGranter{failPlayer: 2} // player 2 背包满
+	uc := newDropUsecase(repo, granter, []uint32{5001, 5002})
+	if _, err := uc.ReportResult(context.Background(), dropResult(604, []uint32{5001}, []uint32{5002})); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	n, err := uc.publishDropBatch(context.Background())
+	if err != nil {
+		t.Fatalf("publishDropBatch err: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 granted (player 1), got %d", n)
+	}
+	// player 2 失败行保留下轮重试;player 1 已发放清空。
+	if len(repo.dropOutbox) != 1 || repo.dropOutbox[0].PlayerID != 2 {
+		t.Fatalf("failed row for player 2 must be retained, got %+v", repo.dropOutbox)
+	}
+}
+
+// TestDropIdempotentReplay 幂等命中(同 match 再报)不重复写 drop 出箱。
+func TestDropIdempotentReplay(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newDropUsecase(repo, &fakeGranter{}, []uint32{5001})
+	res := dropResult(605, []uint32{5001}, nil)
+	if _, err := uc.ReportResult(context.Background(), res); err != nil {
+		t.Fatalf("first ReportResult err: %v", err)
+	}
+	if already, err := uc.ReportResult(context.Background(), dropResult(605, []uint32{5001}, nil)); err != nil || !already {
+		t.Fatalf("second report expect alreadyRecorded, got already=%v err=%v", already, err)
+	}
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("idempotent replay must not duplicate drop outbox, got %d rows", len(repo.dropOutbox))
+	}
+}
+
+// TestDropNilGranterNoLoss granter 为 nil(inventory_addr 未配)→ 发布器不发放,但出箱行不丢。
+func TestDropNilGranterNoLoss(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newDropUsecase(repo, nil, []uint32{5001})
+	if _, err := uc.ReportResult(context.Background(), dropResult(606, []uint32{5001}, nil)); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	if n, err := uc.publishDropBatch(context.Background()); err != nil || n != 0 {
+		t.Fatalf("nil granter expect 0 granted no error, got n=%d err=%v", n, err)
+	}
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("nil granter must not lose drop outbox, got %d", len(repo.dropOutbox))
+	}
+}
+
+// ── 背包满溢出转邮件(W5 ④+,ErrInventoryCapacityFull → mail.SendOverflowMail)──────
+
+// newDropUsecaseWithMail 在 newDropUsecase 基础上再注入 mailSender。
+func newDropUsecaseWithMail(repo *fakeRepo, granter InstanceGranter, mail MailSender, whitelist []uint32) *BattleResultUsecase {
+	uc := newDropUsecase(repo, granter, whitelist)
+	if mail != nil {
+		uc.SetMailSender(mail)
+	}
+	return uc
+}
+
+// TestDropOverflowToMailOnCapacityFull 背包满 + 已配 mail:掉落转个人邮件(源键传递正确),出箱行清空。
+func TestDropOverflowToMailOnCapacityFull(t *testing.T) {
+	repo := newFakeRepo()
+	granter := &fakeGranter{capacityFull: true}
+	mail := &fakeMailSender{}
+	uc := newDropUsecaseWithMail(repo, granter, mail, []uint32{5001, 5002})
+	if _, err := uc.ReportResult(context.Background(), dropResult(700, []uint32{5001}, []uint32{5002})); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	n, err := uc.publishDropBatch(context.Background())
+	if err != nil {
+		t.Fatalf("publishDropBatch err: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2 rows overflow-mailed+drained, got %d", n)
+	}
+	if len(repo.dropOutbox) != 0 {
+		t.Fatalf("drop outbox should drain after overflow-mail, got %d", len(repo.dropOutbox))
+	}
+	if len(mail.calls) != 2 {
+		t.Fatalf("expected 2 overflow mail calls, got %d", len(mail.calls))
+	}
+	// 直发 granter 应无成功入账(全 capacity-full),掉落全部走邮件。
+	if len(granter.calls) != 0 {
+		t.Fatalf("expected 0 direct grant calls on capacity-full, got %d", len(granter.calls))
+	}
+	// 溢出邮件必须传与直发相同的源键 battle_drop:{match}:{player}(领取时同键去重)。
+	if mail.calls[0].key != "battle_drop:700:1" {
+		t.Fatalf("overflow mail key wrong: %s", mail.calls[0].key)
+	}
+	if len(mail.calls[0].items) != 1 || mail.calls[0].items[0] != 5001 {
+		t.Fatalf("overflow mail items wrong: %v", mail.calls[0].items)
+	}
+}
+
+// TestDropOverflowMailFailureKeepsRow 转邮件失败 → 出箱行保留下轮重试(不丢),granted=0。
+func TestDropOverflowMailFailureKeepsRow(t *testing.T) {
+	repo := newFakeRepo()
+	granter := &fakeGranter{capacityFull: true}
+	mail := &fakeMailSender{failAll: true}
+	uc := newDropUsecaseWithMail(repo, granter, mail, []uint32{5001})
+	if _, err := uc.ReportResult(context.Background(), dropResult(701, []uint32{5001}, nil)); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	n, err := uc.publishDropBatch(context.Background())
+	if err != nil {
+		t.Fatalf("publishDropBatch err: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("mail failure must not drain, got granted=%d", n)
+	}
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("mail failure must retain drop outbox row, got %d", len(repo.dropOutbox))
+	}
+}
+
+// TestDropCapacityFullNoMailSenderKeepsRow 背包满但未配 mail → 退化为历史行为:保留出箱行重试(不丢)。
+func TestDropCapacityFullNoMailSenderKeepsRow(t *testing.T) {
+	repo := newFakeRepo()
+	granter := &fakeGranter{capacityFull: true}
+	uc := newDropUsecase(repo, granter, []uint32{5001}) // 无 mailSender
+	if _, err := uc.ReportResult(context.Background(), dropResult(702, []uint32{5001}, nil)); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	n, err := uc.publishDropBatch(context.Background())
+	if err != nil {
+		t.Fatalf("publishDropBatch err: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("no mail sender: capacity-full must not drain, got granted=%d", n)
+	}
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("no mail sender: capacity-full must retain row, got %d", len(repo.dropOutbox))
+	}
+}
+
+// TestDropTransientErrNoMailOverflow 非背包满错误(inventory 临时不可用)不触发转邮件,保留出箱行重试。
+func TestDropTransientErrNoMailOverflow(t *testing.T) {
+	repo := newFakeRepo()
+	granter := &fakeGranter{failPlayer: 1} // 返回普通 error(非 capacity-full)
+	mail := &fakeMailSender{}
+	uc := newDropUsecaseWithMail(repo, granter, mail, []uint32{5001})
+	if _, err := uc.ReportResult(context.Background(), dropResult(703, []uint32{5001}, nil)); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	n, err := uc.publishDropBatch(context.Background())
+	if err != nil {
+		t.Fatalf("publishDropBatch err: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("transient err must not drain, got granted=%d", n)
+	}
+	if len(mail.calls) != 0 {
+		t.Fatalf("transient err must NOT trigger overflow mail, got %d calls", len(mail.calls))
+	}
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("transient err must retain row, got %d", len(repo.dropOutbox))
 	}
 }
