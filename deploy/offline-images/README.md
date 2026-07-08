@@ -4,7 +4,7 @@
 
 ## 里面放什么
 
-- `pandora-images.tar` —— 17 个业务镜像(`pandora/*:dev`)打包,约 150 MB。
+- `pandora-images.tar` —— 20 个业务镜像(`pandora/*:dev`)打包,约 150 MB。
   由能联网的机器用 `tools/scripts/export_images.ps1 -Build` 生成后放到这里,
   随仓库(git / svn)同步到其它机器,**不用 U 盘、不用联网拷贝**。
 
@@ -16,7 +16,7 @@
 ## 生成(能联网的机器)
 
 ```powershell
-# 构建 17 个业务镜像并打包到本目录
+# 构建 20 个业务镜像并打包到本目录
 pwsh tools/scripts/export_images.ps1 -Build
 
 # 开发机已装 Go 时可用宿主编译方式,增量更快
