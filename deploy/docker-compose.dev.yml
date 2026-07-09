@@ -169,8 +169,49 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
+      # 数据源自动注入(Prometheus / Loki / Loki-k8s),不用手动在 UI 里加
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    extra_hosts:
+      # 让 "Loki (k8s)" 数据源能通过 host.docker.internal 访宿主的 kubectl port-forward
+      - "host.docker.internal:host-gateway"
     depends_on:
       - prometheus
+      - loki
+    networks: [pandora-net]
+
+  # ===== Loki 3.x 日志存储(infra.md §11.2)=====
+  # 全部服务 JSON stdout 经 Alloy 采集入 Loki,Grafana Explore 用 LogQL 查。
+  loki:
+    image: grafana/loki:3.4.1
+    container_name: pandora-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"   # 宿主直查 API(logcli / curl);Grafana 走内网 loki:3100
+    command:
+      - -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    networks: [pandora-net]
+
+  # ===== Alloy 日志采集(docker 容器 stdout + 宿主 run/logs 文件)=====
+  # docker/battle 模式:采 pandora-* 容器;local/battle 模式:采 run/logs/*.log 宿主进程日志。
+  alloy:
+    image: grafana/alloy:v1.7.1
+    container_name: pandora-alloy
+    restart: unless-stopped
+    user: root   # 读 docker.sock 需要
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../run/logs:/hostlogs:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      - loki
     networks: [pandora-net]
 
   # ===== Envoy v1.38 边缘网关(W2 ④,2026-06-05)=====
@@ -220,3 +261,5 @@ volumes:
   etcd-data:  { name: pandora-etcd-data }
   prom-data:  { name: pandora-prom-data }
   grafana-data: { name: pandora-grafana-data }
+  loki-data:  { name: pandora-loki-data }
+  alloy-data: { name: pandora-alloy-data }

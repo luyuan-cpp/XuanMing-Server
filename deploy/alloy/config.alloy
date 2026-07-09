@@ -1,0 +1,97 @@
+// Alloy 日志采集配置(docker compose 本地栈)
+//
+// 两路来源,全部送进 Loki(loki:3100):
+//   1. docker 容器:凡 pandora-* 容器的 stdout/stderr(docker/battle 模式的业务容器 +
+//      基础设施 mysql/redis/kafka/envoy 等),label: service=<去掉 pandora- 前缀>, source=docker
+//   2. 宿主 go 进程:local/battle 模式 run_services.ps1 起的宿主进程日志文件
+//      run/logs/*.log(compose 里挂载到 /hostlogs),label: service=<文件名>, source=host
+//
+// label 纪律:只打 service / level / source 低基数 label;
+// trace_id / player_id 等高基数字段留在 JSON 日志体,查询时用 LogQL `| json` 过滤。
+
+// ── 1. docker 容器日志 ────────────────────────────────────────────────────────
+
+discovery.docker "pandora" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "pandora" {
+  targets = discovery.docker.pandora.targets
+
+  // 只采 pandora-* 容器(避免把宿主上无关容器日志也吸进来)
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/pandora-.*"
+    action        = "keep"
+  }
+
+  // service label = 容器名去掉 "pandora-" 前缀(login / matchmaker / mysql / envoy ...)
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/pandora-(.*)"
+    target_label  = "service"
+  }
+
+  rule {
+    target_label = "source"
+    replacement  = "docker"
+  }
+}
+
+loki.source.docker "pandora" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.pandora.output
+  forward_to = [loki.process.extract_level.receiver]
+}
+
+// ── 2. 宿主 go 进程日志(local / battle 模式,run/logs/*.log)──────────────────
+
+local.file_match "hostlogs" {
+  path_targets = [{ "__path__" = "/hostlogs/*.log" }]
+}
+
+discovery.relabel "hostlogs" {
+  targets = local.file_match.hostlogs.targets
+
+  // service label = 文件名(login.log → login;login.err.log → login.err)
+  rule {
+    source_labels = ["__path__"]
+    regex         = ".*/([^/]+)\\.log"
+    target_label  = "service"
+  }
+
+  rule {
+    target_label = "source"
+    replacement  = "host"
+  }
+}
+
+loki.source.file "hostlogs" {
+  targets    = discovery.relabel.hostlogs.output
+  forward_to = [loki.process.extract_level.receiver]
+}
+
+// ── 3. 公共处理:JSON 日志提取 level 进 label ─────────────────────────────────
+
+loki.process "extract_level" {
+  forward_to = [loki.write.local.receiver]
+
+  // 业务日志是 zap JSON({"level":"info",...});非 JSON 行(mysql/envoy/stderr)
+  // 解析失败会原样透传,不丢日志。
+  stage.json {
+    expressions = { level = "level" }
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+}
+
+// ── 4. 写入 Loki ─────────────────────────────────────────────────────────────
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

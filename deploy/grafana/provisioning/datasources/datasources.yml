@@ -1,0 +1,38 @@
+# Grafana 数据源自动注入(provisioning)
+#
+# 容器启动即自动挂好数据源,不用手动在 UI 里点。
+#   - Loki:compose 栈里的日志存储(docker/battle/local 模式日志都在这)
+#   - Loki (k8s):k8s 集群内 Loki,需先手动 port-forward:
+#       kubectl -n pandora port-forward svc/loki 3101:3100
+#     不跑 k8s 模式时该数据源查询会报错,属正常(不影响其它数据源)。
+#   - Prometheus:compose 栈指标(如 UI 里已手动加过同名数据源,删掉手动那份即可)。
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    uid: pandora-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      maxLines: 1000
+
+  - name: Loki (k8s)
+    uid: pandora-loki-k8s
+    type: loki
+    access: proxy
+    url: http://host.docker.internal:3101
+    isDefault: false
+    editable: false
+    jsonData:
+      maxLines: 1000
+
+  - name: Prometheus
+    uid: pandora-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

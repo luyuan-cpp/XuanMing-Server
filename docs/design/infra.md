@@ -456,6 +456,44 @@ pandora_kafka_consumer_lag{topic="pandora.battle.result",group="battle_result"}
 - **周期任务日志**:定时 sweep / 上报类日志只在"有事发生"时打(如 `expired > 0`),空转窗口不准刷屏。
 - **业务日志规范**:统一 `plog.With(ctx).Infow("msg", "<snake_case_event>", k, v, ...)`;`msg` 用稳定的事件名(便于日志系统按 `msg` 聚合告警),Warn/Error 必带相关业务 ID(team_id / match_id / player_id)与 `err`。
 
-### 11.2 日志采集(规划)
+### 11.2 日志采集(Loki + Alloy,2026-07-09 已落地)
 
-统一 stdout JSON,采集链路选型 **Grafana Loki + Alloy(k8s DaemonSet 采集 stdout)+ Grafana 查询**,与现有 Prometheus/Grafana 栈同生态;按 `{service, level}` 打 label,`trace_id/player_id` 用 LogQL json 过滤,不进 label(高基数)。
+统一 stdout JSON,采集链路 **Grafana Loki(存储/LogQL 查询)+ Grafana Alloy(采集)+ Grafana(UI)**,与 Prometheus/Grafana 同生态。
+
+**label 纪律**:只有低基数字段进 label —— `service` / `level` / `source`(docker|host|k8s)/ `namespace`;`trace_id` / `player_id` 等高基数字段留在 JSON 日志体,查询时用 LogQL `| json | trace_id="xxx"` 过滤,**严禁进 label**(同 §"player_id 不当 Prometheus label" 纪律)。
+
+**部署形态**:
+
+| 模式 | 采集路径 | 配置 |
+|---|---|---|
+| docker / battle(容器) | Alloy 经 docker.sock 采 `pandora-*` 容器 stdout | `deploy/alloy/config.alloy` |
+| local / battle(宿主 go 进程) | Alloy tail `run/logs/*.log` | 同上(compose 挂载 `../run/logs`) |
+| k8s(minikube) | 集群内 Alloy 经 kubelet API 采全部 Pod(业务 + Agones DS UE log) | `deploy/k8s/infra/loki.yaml`(start.ps1 -Mode k8s 自动 apply) |
+
+Loki 端口 **3100**(compose 宿主直查),保留 7 天,filesystem 存储(volume `pandora-loki-data`)。Grafana 数据源经 provisioning 自动注入(`deploy/grafana/provisioning/`):`Loki`(compose)/ `Loki (k8s)`(需 `kubectl -n pandora port-forward svc/loki 3101:3100`)/ `Prometheus`。
+
+**本地 dev 默认凭据**:仅用于本机/内网开发,生产/预发必须经 `.env` 或 k8s Secret 覆盖,强密码不进 git。
+
+| 入口 | 地址 | 账号 | 密码来源 |
+|---|---|---|---|
+| Grafana | `http://localhost:3001` | `${GRAFANA_USER:-admin}` | `${GRAFANA_PASSWORD:-pandora_dev_admin}` |
+| MySQL 普通用户 | `localhost:3307` | `${MYSQL_USER:-pandora}` | `${MYSQL_PASSWORD:-pandora_dev_pwd}` |
+| MySQL root(仅本地排障) | `localhost:3307` | `root` | `${MYSQL_ROOT_PASSWORD:-pandora_dev_root}` |
+
+**操作入口**:
+
+1. docker / battle 容器模式:启动 dev 栈后打开 `http://localhost:3001`,Explore → 选 `Loki`。
+2. local / battle 宿主进程模式:Go 进程日志写入 `run/logs/*.log`,Alloy 会自动采集,仍在 Grafana 的 `Loki` 数据源查询。
+3. k8s(minikube)模式:`pwsh tools/scripts/start.ps1 -Mode k8s` 会自动 apply `deploy/k8s/infra/loki.yaml`;查看前先执行 `kubectl -n pandora port-forward svc/loki 3101:3100`,Grafana Explore → 选 `Loki (k8s)`。
+4. 快速健康检查:`curl.exe http://localhost:3100/ready`;Grafana 数据源检查可调用 `curl.exe -u "$env:GRAFANA_USER`:$env:GRAFANA_PASSWORD" http://localhost:3001/api/datasources`。
+
+常用 LogQL:
+
+```logql
+{service="matchmaker"}                                  # 单服务全部日志
+{source="docker", level="error"}                        # 全服务错误日志
+{service="login"} | json | player_id="1234"             # 按玩家过滤
+{service=~".+"} | json | trace_id="abc123"              # 全链路按 trace_id 追一次请求
+{service="matchmaker"} | json | msg="rpc_slow"          # 慢请求
+{service="team"} | json | latency_ms > 200              # 按数值字段过滤
+```

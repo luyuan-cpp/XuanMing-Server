@@ -601,11 +601,13 @@ function Build-DsImagesForMinikube {
 function Invoke-K8s {
     $servicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
+    $lokiYaml    = Join-Path $ProjectRoot 'deploy/k8s/infra/loki.yaml'
     $mysqlInit   = Join-Path $ProjectRoot 'deploy/mysql-init'
 
     if ($Down) {
         Write-Step "删除 k8s 业务服务 + 基础设施"
         kubectl delete -k $servicesDir --ignore-not-found 2>$null
+        kubectl delete -f $lokiYaml --ignore-not-found 2>$null
         kubectl delete -f $infraYaml --ignore-not-found 2>$null
         Write-Info "minikube 仍在运行;彻底关:minikube stop"
         return
@@ -637,9 +639,13 @@ function Invoke-K8s {
         --dry-run=client -o yaml | kubectl apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-mysql-init'
 
-    Write-Step "[3/7] 基础设施(mysql/redis/zookeeper/kafka/etcd)"
+    Write-Step "[3/7] 基础设施(mysql/redis/zookeeper/kafka/etcd + loki/alloy 日志)"
     kubectl apply -f $infraYaml
     Assert-LastExit 'kubectl apply infra'
+    # 日志采集(Loki + Alloy,infra.md §11.2):非关键路径,apply 失败只告警不阻断启动;
+    # 也不等它 rollout(日志栈晚几十秒就绪不影响业务链路)。
+    kubectl apply -f $lokiYaml
+    if ($LASTEXITCODE -ne 0) { Write-Warn "loki/alloy 日志栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/loki.yaml" }
     Write-Info "等待基础设施就绪(最多 180s)..."
     kubectl rollout status deploy/mysql     -n $K8sNamespace --timeout=180s; Assert-LastExit 'mysql 就绪'
     kubectl rollout status deploy/redis     -n $K8sNamespace --timeout=120s; Assert-LastExit 'redis 就绪'

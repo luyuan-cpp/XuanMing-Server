@@ -1,0 +1,51 @@
+# Loki 3.x 单进程(monolithic)开发配置
+#
+# 定位:本地/内网日志存储(docs/design/infra.md §11.2)。
+#   - filesystem 存储(数据在 docker volume pandora-loki-data)
+#   - 保留 7 天(与 Prometheus retention 对齐),compactor 自动清理
+#   - 无鉴权(auth_enabled=false,仅限内网 dev;生产要加租户/网关)
+#
+# 查询入口:Grafana(localhost:3001)→ Explore → Loki 数据源。
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # label 纪律(infra.md §11.2):只有 service/level/source 等低基数字段进 label,
+  # trace_id/player_id 用 LogQL `| json | trace_id="xxx"` 过滤,严禁进 label。
+  retention_period: 168h # 7d
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # 首启 Alloy 会回灌存量容器日志,默认 4MB/s 会刷 429;调大避免回灌卡住
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem

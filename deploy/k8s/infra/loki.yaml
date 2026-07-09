@@ -1,0 +1,206 @@
+# Pandora 日志采集(k8s dev-grade,minikube 用)— Loki + Alloy
+#
+# 与 infra.yaml 同级别的开发配置:单副本、emptyDir(Pod 重建丢日志)、无鉴权。
+# 由 tools/scripts/start.ps1 -Mode k8s 自动 apply(infra 之后)。
+#
+# 采集范围:除 kube-system / kube-public / kube-node-lease 外全部 Pod stdout
+# (业务 20 服务 + Agones GameServer DS 的 UE log 都能进 Loki)。
+#
+# 宿主查看(Grafana 数据源 "Loki (k8s)" 已在 compose Grafana 预配):
+#   kubectl -n pandora port-forward svc/loki 3101:3100
+#   浏览器 http://localhost:3001 → Explore → Loki (k8s)
+---
+# ── Loki 配置 ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: loki-config, namespace: pandora }
+data:
+  loki.yml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9096
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /loki
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    limits_config:
+      retention_period: 168h
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      ingestion_rate_mb: 16
+      ingestion_burst_size_mb: 32
+    compactor:
+      working_directory: /loki/compactor
+      retention_enabled: true
+      delete_request_store: filesystem
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: loki, namespace: pandora, labels: { app: loki } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: loki } }
+  template:
+    metadata: { labels: { app: loki } }
+    spec:
+      containers:
+        - name: loki
+          image: grafana/loki:3.4.1
+          args: ["-config.file=/etc/loki/loki.yml"]
+          ports: [ { containerPort: 3100 } ]
+          volumeMounts:
+            - { name: config, mountPath: /etc/loki, readOnly: true }
+            - { name: data, mountPath: /loki }
+          readinessProbe:
+            httpGet: { path: /ready, port: 3100 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap: { name: loki-config }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: loki, namespace: pandora }
+spec:
+  selector: { app: loki }
+  ports:
+    - { name: http, port: 3100, targetPort: 3100 }
+---
+# ── Alloy(采集端,经 kubelet API tail 全集群 Pod 日志)────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: alloy, namespace: pandora }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: pandora-alloy-logs }
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: pandora-alloy-logs }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pandora-alloy-logs
+subjects:
+  - { kind: ServiceAccount, name: alloy, namespace: pandora }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: alloy-config, namespace: pandora }
+data:
+  config.alloy: |
+    // 发现全集群 Pod,排除系统 namespace
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    discovery.relabel "pods" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        regex         = "kube-system|kube-public|kube-node-lease"
+        action        = "drop"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+
+      // 业务 Deployment 都有 app label;GameServer Pod 无 app 时 service 留空,靠 pod label 查
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app"]
+        target_label  = "service"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      rule {
+        target_label = "source"
+        replacement  = "k8s"
+      }
+    }
+
+    // 经 kubelet API tail Pod 日志(不挂 hostPath,minikube 单节点 Deployment 即可)
+    loki.source.kubernetes "pods" {
+      targets    = discovery.relabel.pods.output
+      forward_to = [loki.process.extract_level.receiver]
+    }
+
+    // zap JSON 日志提取 level 进 label;非 JSON 行原样透传
+    loki.process "extract_level" {
+      forward_to = [loki.write.local.receiver]
+
+      stage.json {
+        expressions = { level = "level" }
+      }
+
+      stage.labels {
+        values = { level = "" }
+      }
+    }
+
+    loki.write "local" {
+      endpoint {
+        url = "http://loki.pandora.svc:3100/loki/api/v1/push"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: alloy, namespace: pandora, labels: { app: alloy } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: alloy } }
+  template:
+    metadata: { labels: { app: alloy } }
+    spec:
+      serviceAccountName: alloy
+      containers:
+        - name: alloy
+          image: grafana/alloy:v1.7.1
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --storage.path=/var/lib/alloy/data
+          ports: [ { containerPort: 12345 } ]
+          volumeMounts:
+            - { name: config, mountPath: /etc/alloy, readOnly: true }
+            - { name: data, mountPath: /var/lib/alloy/data }
+      volumes:
+        - name: config
+          configMap: { name: alloy-config }
+        - name: data
+          emptyDir: {}
