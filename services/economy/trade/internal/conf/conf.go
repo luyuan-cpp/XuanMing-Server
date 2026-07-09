@@ -31,6 +31,12 @@ type TradeConf struct {
 	// MaxItemsPerOrder 单订单最大物品条目数(默认 20)。
 	MaxItemsPerOrder int `yaml:"max_items_per_order,omitempty" json:"max_items_per_order,omitempty"`
 
+	// MaxOrdersPerPlayer 单玩家同时参与(买方或卖方)的订单总数上限(默认 200,不变量 §18)。
+	// 写入侧硬上限:CreateOrder 用 Lua 原子预留双方反查索引名额,满 → 先清理已过期/已终态
+	// 的死成员重试一次,仍满返 ERR_TRADE_ORDER_LIMIT(7006)。同时把 ListMyOrders 的 SMEMBERS
+	// 全量读兕定在几百以内(读取侧单次返回上限达标)。
+	MaxOrdersPerPlayer int `yaml:"max_orders_per_player,omitempty" json:"max_orders_per_player,omitempty"`
+
 	// InventoryAddr inventory 服务 gRPC 直连地址(host:port,内网 insecure)。
 	// 配置后 trade 结算走真实 inventory P2P 原子对转(GrpcResourceLedger);
 	// 留空 + allow_noop_ledger=true 才退回 NoopResourceLedger,否则 fail-fast。
@@ -55,6 +61,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Trade.MaxItemsPerOrder <= 0 {
 		c.Trade.MaxItemsPerOrder = 20
+	}
+	if c.Trade.MaxOrdersPerPlayer <= 0 {
+		c.Trade.MaxOrdersPerPlayer = 200
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50012"

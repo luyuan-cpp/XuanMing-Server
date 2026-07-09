@@ -121,6 +121,8 @@ const (
 	ErrTradeWrongState    Code = 7003
 	ErrTradeInsufficient  Code = 7004
 	ErrTradeLockFailed    Code = 7005
+	// ErrTradeOrderLimit 单玩家参与订单数达上限(写入侧总量上限,不变量 §18)。
+	ErrTradeOrderLimit Code = 7006
 
 	// inventory(背包,同属 economy 域,复用 7000 段)
 	ErrInventoryItemNotFound  Code = 7010 // 道具实例不存在 / 不属于该玩家

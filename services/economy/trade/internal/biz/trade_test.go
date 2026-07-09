@@ -36,10 +36,27 @@ func (f *fakeRepo) addIndex(playerID, orderID uint64) {
 
 func (f *fakeRepo) CreateOrder(_ context.Context, order *tradev1.Order, _ time.Duration) error {
 	f.orders[order.GetOrderId()] = order
-	f.addIndex(order.GetSellerId(), order.GetOrderId())
-	if order.GetBuyerId() != 0 {
-		f.addIndex(order.GetBuyerId(), order.GetOrderId())
+	return nil
+}
+
+func (f *fakeRepo) DeleteOrder(_ context.Context, orderID uint64) error {
+	delete(f.orders, orderID)
+	return nil
+}
+
+func (f *fakeRepo) ReserveOrderSlot(_ context.Context, playerID, orderID uint64, maxOrders int, _ time.Duration) (bool, error) {
+	if f.players[playerID][orderID] {
+		return true, nil // 幂等
 	}
+	if len(f.players[playerID]) >= maxOrders {
+		return false, nil
+	}
+	f.addIndex(playerID, orderID)
+	return true, nil
+}
+
+func (f *fakeRepo) ReleaseOrderSlot(_ context.Context, playerID, orderID uint64) error {
+	delete(f.players[playerID], orderID)
 	return nil
 }
 
@@ -271,4 +288,69 @@ func TestConfirm_NotFound(t *testing.T) {
 	uc, _ := newUC(newFakeRepo(), &fakeLedger{})
 	_, err := uc.ConfirmOrder(context.Background(), 1, 999)
 	wantCode(t, err, errcode.ErrTradeOrderNotFound)
+}
+
+// ── 订单配额上限(不变量 §18)────────────────────────────────────────────────
+
+// newCappedUC 构造小配额 UC,便于测上限。
+func newCappedUC(repo *fakeRepo, maxOrders int) *TradeUsecase {
+	cfg := conf.TradeConf{
+		OrderTTL:           config.Duration(10 * time.Minute),
+		OrderExpire:        config.Duration(5 * time.Minute),
+		OptimisticRetry:    3,
+		MaxItemsPerOrder:   20,
+		MaxOrdersPerPlayer: maxOrders,
+	}
+	uc := NewTradeUsecase(repo, &fakeLedger{}, &fakeAudit{}, &seqSF{}, cfg)
+	return uc
+}
+
+// 受害者(买方)配额被恶意刷满 → 后续对其挂单被拒 7006;发起方自身名额同步回滚,主体不残留。
+func TestCreateOrder_BuyerQuotaExceeded(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newCappedUC(repo, 2)
+	ctx := context.Background()
+
+	// 攻击者 10、11 各对受害者 2 挂一单,占满受害者配额(max=2)。
+	if _, err := uc.CreateOrder(ctx, 10, 2, items(), nil, 1); err != nil {
+		t.Fatalf("order 1: %v", err)
+	}
+	if _, err := uc.CreateOrder(ctx, 11, 2, items(), nil, 1); err != nil {
+		t.Fatalf("order 2: %v", err)
+	}
+
+	// 第三单必须被拒(受害者活跃订单全在,清理不出名额)。
+	_, err := uc.CreateOrder(ctx, 12, 2, items(), nil, 1)
+	wantCode(t, err, errcode.ErrTradeOrderLimit)
+	// 回滚断言:发起方 12 的名额已释放、失败订单主体已删。
+	if len(repo.players[12]) != 0 {
+		t.Fatalf("seller 12 slot must be rolled back, got %v", repo.players[12])
+	}
+	if len(repo.orders) != 2 {
+		t.Fatalf("aborted order body must be deleted, got %d orders", len(repo.orders))
+	}
+}
+
+// 配额满但成员是终态/已回收订单 → 惰性清理后放行(受害者取消恶意单即可自愈)。
+func TestCreateOrder_QuotaPrunesDeadSlots(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newCappedUC(repo, 2)
+	ctx := context.Background()
+
+	id1, _ := uc.CreateOrder(ctx, 10, 2, items(), nil, 1)
+	id2, _ := uc.CreateOrder(ctx, 11, 2, items(), nil, 1)
+	_ = uc.CancelOrder(ctx, 2, id1)  // 终态(受害者取消恶意单)
+	delete(repo.orders, id2)         // 主体被 Redis TTL 回收的残留成员
+
+	// 配额名义上已满(2 个成员),但全是死成员 → 清理后成功。
+	id3, err := uc.CreateOrder(ctx, 12, 2, items(), nil, 1)
+	if err != nil {
+		t.Fatalf("expected prune to free quota: %v", err)
+	}
+	if !repo.players[2][id3] {
+		t.Fatal("new order must occupy buyer slot after prune")
+	}
+	if repo.players[2][id2] {
+		t.Fatal("reclaimed order slot must be pruned")
+	}
 }

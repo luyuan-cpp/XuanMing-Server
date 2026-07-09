@@ -194,11 +194,23 @@ func TestAssignment_Roundtrip(t *testing.T) {
 		t.Fatalf("assignment mismatch: %+v", got)
 	}
 
-	if err := repo.DeleteAssignment(ctx, 1001); err != nil {
-		t.Fatalf("delete: %v", err)
+	// pod 不匹配 → 不删(并发新归属保护)。
+	if deleted, err := repo.DeleteAssignmentIfPodMatches(ctx, 1001, "pandora-hub-global-9"); err != nil || deleted {
+		t.Fatalf("mismatched pod must not delete: deleted=%v err=%v", deleted, err)
+	}
+	if _, found, _ := repo.GetAssignment(ctx, 1001); !found {
+		t.Fatal("assignment must survive mismatched delete")
+	}
+
+	if deleted, err := repo.DeleteAssignmentIfPodMatches(ctx, 1001, "pandora-hub-global-1"); err != nil || !deleted {
+		t.Fatalf("delete: deleted=%v err=%v", deleted, err)
 	}
 	if _, found, _ := repo.GetAssignment(ctx, 1001); found {
 		t.Fatal("assignment should be deleted")
+	}
+	// 已不存在 → (false, nil) 幂等。
+	if deleted, err := repo.DeleteAssignmentIfPodMatches(ctx, 1001, "pandora-hub-global-1"); err != nil || deleted {
+		t.Fatalf("missing assignment: deleted=%v err=%v", deleted, err)
 	}
 }
 

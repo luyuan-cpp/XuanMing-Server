@@ -90,6 +90,9 @@ func NewTradeUsecase(repo data.TradeRepo, ledger ResourceLedger, audit TradeAudi
 	if cfg.MaxItemsPerOrder <= 0 {
 		cfg.MaxItemsPerOrder = 20
 	}
+	if cfg.MaxOrdersPerPlayer <= 0 {
+		cfg.MaxOrdersPerPlayer = 200
+	}
 	return &TradeUsecase{repo: repo, ledger: ledger, audit: audit, sf: sf, cfg: cfg}
 }
 
@@ -149,11 +152,91 @@ func (u *TradeUsecase) CreateOrder(ctx context.Context, sellerID, buyerID uint64
 		CreatedAtMs: now,
 		ExpiresAtMs: now + int64(u.cfg.OrderExpire.Std()/time.Millisecond),
 	}
+	// 写序铁律(镜像 team/matchmaker):① 先写订单主体(orderID 新发、无人引用)→
+	// ② 原子预留双方反查索引配额(不变量 §18 写入侧总量上限)。主体先落地保证
+	// 「索引成员无主体 ≡ 真死成员」,配额清理绝不误删 in-flight 预留。
+	// 任一步失败 → 回滚已预留名额 + 删主体,无残留。
 	if err := u.repo.CreateOrder(ctx, order, u.cfg.OrderTTL.Std()); err != nil {
+		return 0, err
+	}
+	if err := u.reserveSlotPruning(ctx, sellerID, order.GetOrderId()); err != nil {
+		u.rollbackCreate(ctx, order.GetOrderId())
+		return 0, err
+	}
+	if err := u.reserveSlotPruning(ctx, buyerID, order.GetOrderId()); err != nil {
+		if rerr := u.repo.ReleaseOrderSlot(ctx, sellerID, order.GetOrderId()); rerr != nil {
+			plog.With(ctx).Warnw("msg", "trade_release_slot_failed", "player_id", sellerID, "order_id", order.GetOrderId(), "err", rerr)
+		}
+		u.rollbackCreate(ctx, order.GetOrderId())
 		return 0, err
 	}
 	u.pushAudit(ctx, order)
 	return order.GetOrderId(), nil
+}
+
+// rollbackCreate 删掉刚写入、尚未对外返回的订单主体(创建失败回滚)。
+// 失败仅 Warn:残留主体无索引指向、TTL 到期自收,无业务影响。
+func (u *TradeUsecase) rollbackCreate(ctx context.Context, orderID uint64) {
+	if derr := u.repo.DeleteOrder(ctx, orderID); derr != nil {
+		plog.With(ctx).Warnw("msg", "trade_rollback_order_failed", "order_id", orderID, "err", derr)
+	}
+}
+
+// reserveSlotPruning 为 playerID 预留一个反查索引名额;首次满员时先清理死成员
+// (订单主体已被 Redis 回收 / 已进终态)再重试一次,仍满返 ErrTradeOrderLimit。
+// 死成员来源:终态/过期订单不实时移除索引(保留历史供 ListMyOrders 回看),
+// 配额满时才惰性回收 —— 正常玩家永远碰不到,遭恶意刷单的受害者取消后也能自愈。
+func (u *TradeUsecase) reserveSlotPruning(ctx context.Context, playerID, orderID uint64) error {
+	for attempt := 0; attempt < 2; attempt++ {
+		ok, err := u.repo.ReserveOrderSlot(ctx, playerID, orderID, u.cfg.MaxOrdersPerPlayer, u.cfg.OrderTTL.Std())
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
+		if attempt == 0 {
+			pruned, perr := u.pruneDeadOrderSlots(ctx, playerID)
+			if perr != nil {
+				return perr
+			}
+			if pruned > 0 {
+				continue // 清出了名额,重试一次
+			}
+		}
+		break
+	}
+	return errcode.New(errcode.ErrTradeOrderLimit,
+		"player %d has too many orders (max %d)", playerID, u.cfg.MaxOrdersPerPlayer)
+}
+
+// pruneDeadOrderSlots 扫描玩家反查索引,移除「主体已被 Redis 回收」或「已进终态」的
+// 死成员,返回清理数。仅在配额满时调用,遍历规模被 max 硬上限兕定(默认 200)。
+// 安全性:CreateOrder 先写主体后预留,in-flight 预留必有存活主体(PENDING),不会被误判。
+func (u *TradeUsecase) pruneDeadOrderSlots(ctx context.Context, playerID uint64) (int, error) {
+	ids, err := u.repo.ListPlayerOrderIDs(ctx, playerID)
+	if err != nil {
+		return 0, err
+	}
+	pruned := 0
+	for _, id := range ids {
+		o, ok, gerr := u.repo.GetOrder(ctx, id)
+		if gerr != nil {
+			continue // 单条读失败不阻断扫描(fail-closed:查不到状态不清理)
+		}
+		if ok && !isTerminal(o.GetState()) && !(o.GetExpiresAtMs() > 0 && nowMs() >= o.GetExpiresAtMs()) {
+			continue // 存活非终态且未过期 → 真占用
+		}
+		if rerr := u.repo.ReleaseOrderSlot(ctx, playerID, id); rerr != nil {
+			plog.With(ctx).Warnw("msg", "trade_prune_slot_failed", "player_id", playerID, "order_id", id, "err", rerr)
+			continue
+		}
+		pruned++
+	}
+	if pruned > 0 {
+		plog.With(ctx).Infow("msg", "trade_pruned_dead_order_slots", "player_id", playerID, "pruned", pruned)
+	}
+	return pruned, nil
 }
 
 // ConfirmOrder 买方 / 卖方确认。两阶段:

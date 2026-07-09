@@ -103,6 +103,7 @@ enum ErrCode {
   ERR_TRADE_WRONG_STATE        = 7003;
   ERR_TRADE_INSUFFICIENT       = 7004;
   ERR_TRADE_LOCK_FAILED        = 7005;
+  ERR_TRADE_ORDER_LIMIT        = 7006; // 单玩家参与订单数达上限(不变量 §18)
 
   // 7010-7019 inventory(背包,同属 economy 域)
   ERR_INVENTORY_ITEM_NOT_FOUND = 7010;

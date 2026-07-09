@@ -208,8 +208,15 @@ func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
 	}
 	u.releaseFromShard(ctx, assignment.HubPodName)
 	u.removeShardMember(ctx, assignment.HubPodName, playerID)
-	if derr := u.repo.DeleteAssignment(ctx, playerID); derr != nil {
+	deleted, derr := u.repo.DeleteAssignmentIfPodMatches(ctx, playerID, assignment.HubPodName)
+	if derr != nil {
 		return derr
+	}
+	if !deleted {
+		// 并发 Assign/Transfer 已把归属指向新分片(或已被删):不动新归属,旧分片占位
+		// 已退(座位计数由心跳 PlayerCount 对账自愈),视为幂等成功。
+		plog.With(ctx).Infow("msg", "hub_release_assignment_changed", "player_id", playerID, "old_pod", assignment.HubPodName)
+		return nil
 	}
 	plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID, "pod", assignment.HubPodName)
 	return nil

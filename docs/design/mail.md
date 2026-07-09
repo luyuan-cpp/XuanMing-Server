@@ -64,7 +64,7 @@ ListMail(player_id) → []Mail            # 个人邮件 + 命中的有效系统
 ReadMail(player_id, mail_id) → ok        # 个人邮件标记已读 / 推进系统游标
 ClaimMail(player_id, mail_id) → ItemDelta # 领附件,走 inventory 幂等
 DeleteMail(player_id, mail_id) → ok
-# 运营 / 内网(鉴权,不经 Envoy)
+# 运营 / 内网(系统接口,绝不对客户端开放:Envoy 精确 path 403 + 服务层 systemOnly 双保险,2026-07-08)
 SendSystemMail(SystemMail) → mail_id     # 插一行,定向条件 + 生效区间
 SendPersonalMail(player_id, Mail) → mail_id
 ```

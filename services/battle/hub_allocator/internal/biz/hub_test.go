@@ -167,11 +167,15 @@ func (f *fakeRepo) SetAssignment(_ context.Context, rec *hubv1.HubAssignmentStor
 	return nil
 }
 
-func (f *fakeRepo) DeleteAssignment(_ context.Context, playerID uint64) error {
+func (f *fakeRepo) DeleteAssignmentIfPodMatches(_ context.Context, playerID uint64, pod string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	a, ok := f.assignments[playerID]
+	if !ok || a.HubPodName != pod {
+		return false, nil
+	}
 	delete(f.assignments, playerID)
-	return nil
+	return true, nil
 }
 
 func (f *fakeRepo) GetTeamShard(_ context.Context, teamID uint64) (string, bool, error) {

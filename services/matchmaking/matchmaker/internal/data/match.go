@@ -86,7 +86,18 @@ type MatchRepo interface {
 	RefreshPlayerClaim(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) error
 
 	// AddTicket 写票据 proto bytes(TTL=ticketTTL)并 ZADD 进 queue(score=avg_mmr)。
+	// 仅供 Requeue / 测试造数据;StartMatch 入队路径必须走 CreateTicketRecord → claims →
+	// EnqueueTicket 三步写序(见 CreateTicketRecord 注释),不准直接 AddTicket。
 	AddTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
+	// CreateTicketRecord 只写票据主体(SET,不入 queue)。
+	//
+	// 写序铁律(镜像 team CreateTeam 的结论):StartMatch 必须**先写票据主体、再 ClaimPlayer、
+	// 最后 EnqueueTicket 入队**。claimPlayer 的僵尸自愈以「票据主体不存在」为判据 —— 若先 claim
+	// 后写主体,并发的另一次 StartMatch 会把 in-flight claim 误判僵尸并 CAS 删掉,同批玩家
+	// 两张票同时入队(违反不变量 §1)。主体先落地时 ticketID 尚未入队、无人引用,天然安全。
+	CreateTicketRecord(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
+	// EnqueueTicket 把已写好主体的票据 ZADD 进 queue(score=avg_mmr),撮合循环自此可见。
+	EnqueueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord) error
 	// GetTicket 读票据。not found 返 (nil, false, nil)。
 	GetTicket(ctx context.Context, ticketID uint64) (*matchv1.MatchTicketStorageRecord, bool, error)
 	// ReserveTicket 把票据从 queue 移出并持久化(撮合命中:caller 已写好 ticket.match_id)。
@@ -221,15 +232,25 @@ func (r *RedisMatchRepo) GetPlayerTicket(ctx context.Context, playerID uint64) (
 // --- ticket ---
 
 func (r *RedisMatchRepo) AddTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error {
+	// Cluster 兼容(同 trade decision-revisit-trade-crossslot.md):ticketKey 与全局 queueKey 分属不同 slot,
+	// 不能捆同一事务(否则 CROSSSLOT)。① ticketKey 单键 SET 权威落库;② queueKey 独立 ZADD 入池。均幂等。
+	if err := r.CreateTicketRecord(ctx, ticket, ticketTTL); err != nil {
+		return err
+	}
+	return r.EnqueueTicket(ctx, ticket)
+}
+
+// CreateTicketRecord 见接口注释:只 SET 票据主体,不入 queue(StartMatch 三步写序第 1 步)。
+func (r *RedisMatchRepo) CreateTicketRecord(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error {
 	payload, err := marshalTicket(ticket)
 	if err != nil {
 		return err
 	}
-	// Cluster 兼容(同 trade decision-revisit-trade-crossslot.md):ticketKey 与全局 queueKey 分属不同 slot,
-	// 不能捆同一事务(否则 CROSSSLOT)。① ticketKey 单键 SET 权威落库;② queueKey 独立 ZADD 入池。均幂等。
-	if err := r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, ticketTTL).Err(); err != nil {
-		return err
-	}
+	return r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, ticketTTL).Err()
+}
+
+// EnqueueTicket 见接口注释:ZADD 入 queue(StartMatch 三步写序第 3 步)。幂等。
+func (r *RedisMatchRepo) EnqueueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord) error {
 	return r.rdb.ZAdd(ctx, r.queueKey, redis.Z{Score: float64(ticket.AvgMmr), Member: ticket.TicketId}).Err()
 }
 

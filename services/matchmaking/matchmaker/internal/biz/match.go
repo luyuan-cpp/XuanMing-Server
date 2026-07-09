@@ -285,21 +285,6 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		return 0, err
 	}
 
-	// 原子声明每个成员归属(SETNX),落不变量"一人只在一个队列";任一冲突则回滚已声明的。
-	claimed := make([]uint64, 0, len(members))
-	for _, m := range members {
-		ok, cerr := u.claimPlayer(ctx, m.PlayerId, ticketID)
-		if cerr != nil {
-			u.rollbackClaims(ctx, ticketID, claimed)
-			return 0, cerr
-		}
-		if !ok {
-			u.rollbackClaims(ctx, ticketID, claimed)
-			return 0, errcode.New(errcode.ErrMatchAlreadyMatching, "player %d already matching", m.PlayerId)
-		}
-		claimed = append(claimed, m.PlayerId)
-	}
-
 	ticket := &matchv1.MatchTicketStorageRecord{
 		TicketId:     ticketID,
 		TeamId:       teamID,
@@ -310,8 +295,42 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		MatchId:      0,
 		MapId:        mapID,
 	}
-	if err := u.repo.AddTicket(ctx, ticket, u.ticketTTL()); err != nil {
+
+	// 写序铁律(镜像 team CreateTeam 的结论,勿改回「先 claim 后写主体」):
+	// ① 先写票据主体(不入队)→ ② ClaimPlayer 声明归属 → ③ ZADD 入队。
+	// claimPlayer 的僵尸自愈以「票据主体不存在」为判据;若先 claim 后写主体,并发的第二次
+	// StartMatch(双击/重试,不同 ticketID)会把第一次的 in-flight claim 误判僵尸并 CAS 删掉,
+	// 同一批玩家两张票同时入队 → 可能撮出两场(违反不变量 §1)。主体先落地时 ticketID 尚未
+	// 入队、无人引用,天然安全;任一后续步骤失败 → DeleteTicket 回滚主体(ZREM 幂等空转)。
+	if err := u.repo.CreateTicketRecord(ctx, ticket, u.ticketTTL()); err != nil {
+		return 0, err
+	}
+
+	// 原子声明每个成员归属(SETNX),落不变量"一人只在一个队列";任一冲突则回滚已声明的 + 票据主体。
+	claimed := make([]uint64, 0, len(members))
+	rollback := func() {
 		u.rollbackClaims(ctx, ticketID, claimed)
+		if derr := u.repo.DeleteTicket(ctx, ticketID); derr != nil {
+			plog.With(ctx).Warnw("msg", "start_match_rollback_ticket_failed", "ticket_id", ticketID, "err", derr)
+		}
+	}
+	for _, m := range members {
+		ok, cerr := u.claimPlayer(ctx, m.PlayerId, ticketID)
+		if cerr != nil {
+			rollback()
+			return 0, cerr
+		}
+		if !ok {
+			rollback()
+			return 0, errcode.New(errcode.ErrMatchAlreadyMatching, "player %d already matching", m.PlayerId)
+		}
+		claimed = append(claimed, m.PlayerId)
+	}
+
+	// ③ 全员归属就绪后才入队,撮合循环此刻起可见。失败 → 回滚 claims + 主体
+	// (崩溃残留的「主体在但未入队」票据由 TTL 兜底,且玩家可 CancelMatch 主动清)。
+	if err := u.repo.EnqueueTicket(ctx, ticket); err != nil {
+		rollback()
 		return 0, err
 	}
 
@@ -328,6 +347,9 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 // 僵尸 claim 来源:onMatchFailed 删拒绝者票据后、释放 claim 前崩溃等残留——claim 活着但
 // 票据已不存在,不自愈则玩家要等 claim TTL(30min)才能再匹配(典型"匹配不了")。
 // 安全性:票据存在 → 真占用,绝不碰;票据查询失败 → 保守按占用处理(fail-closed)。
+// 判据可靠的前提是 StartMatch 的写序铁律(先写票据主体再 claim):由此「claim 指向 X 而
+// X 主体不在」⇔ 真僵尸,绝无 in-flight 误判。若有人改回「先 claim 后写主体」,这里的
+// 自愈会把并发 StartMatch 的 in-flight claim 删掉 → 同批玩家双票入队(违反不变量 §1)。
 func (u *MatchUsecase) claimPlayer(ctx context.Context, playerID, ticketID uint64) (bool, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		existTID, ok, err := u.repo.ClaimPlayer(ctx, playerID, ticketID, u.ticketTTL())

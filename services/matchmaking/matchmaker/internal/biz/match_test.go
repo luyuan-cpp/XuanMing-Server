@@ -1004,6 +1004,49 @@ func TestStartMatch_LiveClaimStillRejected(t *testing.T) {
 	if _, found, _ := f.repo.GetTicket(ctx, 100); !found {
 		t.Fatal("live ticket 100 must survive")
 	}
+	// 写序铁律回滚断言:失败的 StartMatch 必须删掉自己先落地的票据主体,不残留孤儿记录。
+	if _, found, _ := f.repo.GetTicket(ctx, 7011); found {
+		t.Fatal("aborted ticket 7011 record must be rolled back")
+	}
+}
+
+// 写序铁律回归(镜像 team TestCreateTeamRealCollisionStillRejected 的结论):
+// 并发 StartMatch 的 in-flight 形态 =「票据主体已写、claim 已占、尚未入队」。
+// 第二次 StartMatch 撞上该 claim 时,GetTicket 能看到主体 → 判真占用拒绝,
+// 绝不把 in-flight claim 当僵尸 CAS 删掉(否则同批玩家双票入队,违反不变量 §1)。
+func TestStartMatch_InFlightClaimNotHealed(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+
+	const player = uint64(70)
+	// 模拟请求 A 的 in-flight 中间态:主体已落地(未入队)+ claim 已占。
+	inflight := &matchv1.MatchTicketStorageRecord{
+		TicketId:  8100,
+		TeamId:    8100,
+		CaptainId: player,
+		Members:   []*matchv1.MatchMemberStorageRecord{{PlayerId: player, TeamId: 8100, Confirm: confirmPending}},
+	}
+	if err := f.repo.CreateTicketRecord(ctx, inflight, f.cfg.TicketTTL.Std()); err != nil {
+		t.Fatalf("seed inflight record: %v", err)
+	}
+	if _, ok, err := f.repo.ClaimPlayer(ctx, player, 8100, f.cfg.TicketTTL.Std()); err != nil || !ok {
+		t.Fatalf("seed inflight claim: ok=%v err=%v", ok, err)
+	}
+
+	// 请求 B(同玩家、新 ticketID)必须被拒,且 A 的 claim / 主体原样保留。
+	_, err := f.uc.StartMatch(ctx, 8200, 8200, player, 0)
+	if code := errcode.As(err); code != errcode.ErrMatchAlreadyMatching {
+		t.Fatalf("code = %d, want ErrMatchAlreadyMatching(%d)", code, errcode.ErrMatchAlreadyMatching)
+	}
+	if got, found, _ := f.repo.GetPlayerTicket(ctx, player); !found || got != 8100 {
+		t.Fatalf("inflight claim = %d found=%v, want 8100 intact", got, found)
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 8100); !found {
+		t.Fatal("inflight ticket 8100 record must survive")
+	}
+	if _, found, _ := f.repo.GetTicket(ctx, 8200); found {
+		t.Fatal("aborted ticket 8200 record must be rolled back")
+	}
 }
 
 // 票据 match_id 指向已不存在的 match(崩溃残留孤儿)→ CancelMatch 收割:删票 + 释放归属 + 推 FAILED。

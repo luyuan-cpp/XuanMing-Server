@@ -4,7 +4,8 @@
 //
 //	pandora:trade:order:{%d}   → protobuf bytes(trade/v1.Order)
 //	                             hashtag {} 确保同订单的 key 落同一 redis cluster slot(兜底)
-//	pandora:trade:player:%d    → set(成员是 order_id,uint64 文本),供 ListMyOrders 反查
+//	pandora:trade:player:%d    → set(成员是 order_id,uint64 文本),供 ListMyOrders 反查;
+//	                             写入经 ReserveOrderSlot(Lua SCARD+SADD)限额,不变量 §18
 //
 // 订单主体直接使用 proto trade/v1.Order 序列化为 bytes 存 Redis value:
 //   - Order 已是完整的客户端可见结构,且无服务端独有隐藏字段,故存储 / 视图同构,
@@ -42,8 +43,23 @@ func playerKey(playerID uint64) string {
 
 // TradeRepo 是 trade 数据层抽象。biz 只依赖此接口,不依赖 redis。
 type TradeRepo interface {
-	// CreateOrder 写订单 proto value(TTL=orderTTL)+ 把 order_id 加入买卖双方的 player set。
+	// CreateOrder 只写订单主体 proto value(TTL=orderTTL),**不写反查索引**。
+	// 写序铁律(镜像 team/matchmaker 的结论):先写主体、后 ReserveOrderSlot 预留索引名额。
+	// 主体先落地时 orderID 是新发 snowflake、无人引用,天然安全;由此「索引成员指向 X 而 X
+	// 主体不在」≡ 真死成员,配额清理(pruneDeadOrderSlots)绝不会误删 in-flight 预留。
 	CreateOrder(ctx context.Context, order *tradev1.Order, orderTTL time.Duration) error
+
+	// DeleteOrder 无条件删订单主体。仅供 CreateOrder 回滚(配额预留失败)使用:
+	// 回滚时 orderID 尚未对外返回、反查索引未建,无条件 DEL 安全(镜像 team DeleteTeam)。
+	DeleteOrder(ctx context.Context, orderID uint64) error
+
+	// ReserveOrderSlot 原子预留玩家反查索引名额(Lua:SCARD < max 才 SADD+EXPIRE)。
+	// 返 (false, nil) = 已满(不变量 §18 写入侧总量上限)。幂等:成员已在 → 直接成功。
+	ReserveOrderSlot(ctx context.Context, playerID, orderID uint64, maxOrders int, ttl time.Duration) (bool, error)
+
+	// ReleaseOrderSlot 从玩家反查索引里移除一个 order_id(SREM,幂等)。
+	// 用于:① CreateOrder 失败回滚预留;② 配额满时清理已过期/已终态的死成员。
+	ReleaseOrderSlot(ctx context.Context, playerID, orderID uint64) error
 
 	// GetOrder 读订单。not found → (nil, false, nil)。
 	GetOrder(ctx context.Context, orderID uint64) (*tradev1.Order, bool, error)
@@ -53,6 +69,7 @@ type TradeRepo interface {
 	UpdateWithLock(ctx context.Context, orderID uint64, maxRetry int, fn func(*tradev1.Order) error, orderTTL time.Duration) error
 
 	// ListPlayerOrderIDs 读玩家 order set 里的全部 order_id。
+	// 集合大小被 ReserveOrderSlot 的 max 硬上限兕定(默认 200),全量读安全。
 	ListPlayerOrderIDs(ctx context.Context, playerID uint64) ([]uint64, error)
 }
 
@@ -66,46 +83,53 @@ func NewRedisTradeRepo(rdb redis.UniversalClient) *RedisTradeRepo {
 	return &RedisTradeRepo{rdb: rdb}
 }
 
-// CreateOrder 写订单主体(权威单键)+ 买卖双方反查索引。
-//
-// Redis Cluster 兼容(decision-revisit-trade-crossslot.md):订单、卖家、买家分属 3 个 slot,
-// 不能捆同一 TxPipeline(否则 CROSSSLOT)。改为:① orderKey 单键 SET 权威落库(原子);
-// ② 各 playerKey 索引各自独立维护(SADD+EXPIRE 同 key 同 slot 一个 mini-tx)。
-// 任一步失败返回 error,调用方重试全幂等(SET 覆盖 / SADD 成员 / EXPIRE 刷新);
-// 订单主体写成功后即可经 GetOrder 直接访问,索引短暂缺失由重试 + TTL 对齐收敛。
+// CreateOrder 只写订单主体(权威单键,单 slot 原子)。反查索引由 biz 层在主体落地后
+// 经 ReserveOrderSlot 原子预留(含配额上限,不变量 §18),不在本方法内写。
 // 注:资源扣减原子性(CLAUDE.md §9 #7)在 biz 层 ResourceLedger,不在本方法。
 func (r *RedisTradeRepo) CreateOrder(ctx context.Context, order *tradev1.Order, orderTTL time.Duration) error {
 	payload, err := proto.Marshal(order)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "marshal order %d: %v", order.GetOrderId(), err)
 	}
-	// 1. 权威:订单主体单键 SET(单 slot 原子)。失败 → 整体失败,无残留。
 	if err := r.rdb.Set(ctx, orderKey(order.GetOrderId()), payload, orderTTL).Err(); err != nil {
 		return errcode.New(errcode.ErrInternal, "create order %d: %v", order.GetOrderId(), err)
-	}
-	// 2. 反查索引:与订单不同 slot,各自独立维护,不与权威写捆事务。
-	idStr := strconv.FormatUint(order.GetOrderId(), 10)
-	if err := r.addPlayerOrderIndex(ctx, order.GetSellerId(), idStr, orderTTL); err != nil {
-		return errcode.New(errcode.ErrInternal, "index seller %d order %d: %v", order.GetSellerId(), order.GetOrderId(), err)
-	}
-	if order.GetBuyerId() != 0 {
-		if err := r.addPlayerOrderIndex(ctx, order.GetBuyerId(), idStr, orderTTL); err != nil {
-			return errcode.New(errcode.ErrInternal, "index buyer %d order %d: %v", order.GetBuyerId(), order.GetOrderId(), err)
-		}
 	}
 	return nil
 }
 
-// addPlayerOrderIndex 把 order_id 加入单个玩家的反查 SET 并刷新 TTL。
-// SADD + EXPIRE 同 key 同 slot,用一个 mini-TxPipeline(Cluster 合法,单玩家不跨 slot)。幂等。
-func (r *RedisTradeRepo) addPlayerOrderIndex(ctx context.Context, playerID uint64, idStr string, orderTTL time.Duration) error {
-	key := playerKey(playerID)
-	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.SAdd(ctx, key, idStr)
-		pipe.Expire(ctx, key, orderTTL)
-		return nil
-	})
-	return err
+// DeleteOrder 见接口注释:仅供创建回滚,无条件 DEL。
+func (r *RedisTradeRepo) DeleteOrder(ctx context.Context, orderID uint64) error {
+	return r.rdb.Del(ctx, orderKey(orderID)).Err()
+}
+
+// reserveOrderSlotScript 配额预留:成员已在 → 刷 TTL 幂等成功;SCARD 达上限 → 拒;
+// 否则 SADD + PEXPIRE。单 key 单 slot,Cluster 安全。
+var reserveOrderSlotScript = redis.NewScript(`
+if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[3])
+  return 1
+end
+if redis.call('SCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+  return 0
+end
+redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+return 1`)
+
+// ReserveOrderSlot 见接口注释。
+func (r *RedisTradeRepo) ReserveOrderSlot(ctx context.Context, playerID, orderID uint64, maxOrders int, ttl time.Duration) (bool, error) {
+	res, err := reserveOrderSlotScript.Run(ctx, r.rdb,
+		[]string{playerKey(playerID)},
+		strconv.FormatUint(orderID, 10), maxOrders, ttl.Milliseconds()).Int64()
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "reserve order slot player %d order %d: %v", playerID, orderID, err)
+	}
+	return res == 1, nil
+}
+
+// ReleaseOrderSlot 见接口注释。SREM 幂等。
+func (r *RedisTradeRepo) ReleaseOrderSlot(ctx context.Context, playerID, orderID uint64) error {
+	return r.rdb.SRem(ctx, playerKey(playerID), strconv.FormatUint(orderID, 10)).Err()
 }
 
 func (r *RedisTradeRepo) GetOrder(ctx context.Context, orderID uint64) (*tradev1.Order, bool, error) {

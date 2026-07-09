@@ -73,8 +73,11 @@ type HubRepo interface {
 	GetAssignment(ctx context.Context, playerID uint64) (*hubv1.HubAssignmentStorageRecord, bool, error)
 	// SetAssignment 写玩家归属(TTL=assignmentTTL)。
 	SetAssignment(ctx context.Context, rec *hubv1.HubAssignmentStorageRecord, assignmentTTL time.Duration) error
-	// DeleteAssignment 删玩家归属。
-	DeleteAssignment(ctx context.Context, playerID uint64) error
+	// DeleteAssignmentIfPodMatches CAS 删玩家归属:仅当当前归属仍指向 pod 才删。
+	// 防止 ReleaseHub 读到旧归属后、并发 Assign/Transfer 已写入新归属时无条件 DEL 误删新归属
+	// (同 team 孤儿索引修复的写序铁律:删除必须带前置校验)。
+	// 已不存在或已指向其它分片 → (false, nil) 不删;删成功 → (true, nil)。
+	DeleteAssignmentIfPodMatches(ctx context.Context, playerID uint64, pod string) (bool, error)
 
 	// GetTeamShard 读队伍同分片提示。not found 返 ("", false, nil)。
 	GetTeamShard(ctx context.Context, teamID uint64) (string, bool, error)
@@ -336,8 +339,45 @@ func (r *RedisHubRepo) SetAssignment(ctx context.Context, rec *hubv1.HubAssignme
 	return r.rdb.Set(ctx, assignKey(rec.PlayerId), payload, assignmentTTL).Err()
 }
 
-func (r *RedisHubRepo) DeleteAssignment(ctx context.Context, playerID uint64) error {
-	return r.rdb.Del(ctx, assignKey(playerID)).Err()
+func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerID uint64, pod string) (bool, error) {
+	key := assignKey(playerID)
+	const casMaxRetry = 3
+	for i := 0; i < casMaxRetry; i++ {
+		deleted := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			b, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil // 已不存在,幂等视为无需删
+			}
+			if gerr != nil {
+				return gerr
+			}
+			rec := &hubv1.HubAssignmentStorageRecord{}
+			if uerr := proto.Unmarshal(b, rec); uerr != nil {
+				return fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
+			}
+			if rec.HubPodName != pod {
+				return nil // 并发 Assign/Transfer 已指向新分片,不能删
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(ctx, key)
+				return nil
+			})
+			if perr == nil {
+				deleted = true
+			}
+			return perr
+		}, key)
+		if err == redis.TxFailedErr {
+			continue // WATCH 期间归属被改写,重读再判
+		}
+		if err != nil {
+			return false, err
+		}
+		return deleted, nil
+	}
+	// 重试耗尽:归属正被并发频繁改写,安全侧不删(新归属为准)。
+	return false, nil
 }
 
 func (r *RedisHubRepo) GetTeamShard(ctx context.Context, teamID uint64) (string, bool, error) {
