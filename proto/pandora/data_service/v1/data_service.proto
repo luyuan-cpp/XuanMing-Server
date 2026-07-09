@@ -20,14 +20,28 @@ service DataService {
   rpc InvalidateCache(InvalidateCacheRequest) returns (InvalidateCacheResponse);
 }
 
-// PlayerData 是 player 数据的中性容器(不依赖 player.v1 类型,避免循环依赖)。
-// fields 是 KV 形式,业务 W2 写代码时再决定是否升级为强 schema。
+// PlayerData 玩家数据(强 schema),同时是 MySQL player_data 表的 schema 唯一来源:
+// data_service 启动时按本 message 经 proto2mysql CreateOrUpdateTable 建表/同步表结构,
+// 每个标量字段即一列(MySQL 直接可见、可查询)。
+//
+// 设计约束:
+//   - 字段镜像 player.v1.PlayerProfile 的档案字段,但不 import player.v1(避免循环依赖;
+//     且嵌套 message 在 proto2mysql 中会退化成 MEDIUMBLOB 列,失去列可见性)
+//   - 本 message 兼作存储快照与内网 RPC 载荷(data_service 仅内网,不经 Envoy 对客户端开放)
+//   - 改字段只允许加新编号字段 / reserved 删字段(CLAUDE.md §9 不变量 17)
+//   - 2026-06-20 开发期重构:原 `bytes data = 3` 删除,编号 3-10 复用为强类型字段
+//     (开发期允许,已全量重生 proto;dev 环境需清空 player_data 表与 Redis 缓存)
 message PlayerData {
-  uint64 player_id = 1;
-  int32 version   = 2;  // 乐观锁
-  bytes data      = 3;  // 序列化的 PlayerProfile bytes
-  // 4-9 reserved
-  reserved 4 to 9;
+  uint64 player_id = 1;      // Snowflake
+  uint32 version = 2;        // 乐观锁(每次写 +1;写请求带 0 = 新建)
+  string nickname = 3;
+  uint32 level = 4;
+  uint32 mmr = 5;
+  string avatar = 6;
+  uint64 created_at_ms = 7;
+  uint64 last_seen_ms = 8;
+  uint32 total_battles = 9;
+  uint32 total_wins = 10;
 }
 
 message ReadPlayerRequest {
@@ -45,7 +59,7 @@ message WritePlayerRequest {
 
 message WritePlayerResponse {
   pandora.common.v1.ErrCode code = 1;
-  int32 new_version = 2;
+  uint32 new_version = 2;
 }
 
 message InvalidateCacheRequest {

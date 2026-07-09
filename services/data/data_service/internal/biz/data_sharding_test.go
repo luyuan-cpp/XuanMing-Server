@@ -1,8 +1,8 @@
-// data_sharding_test.go — 玩家数据 blob owner cell 锚定单测(2026-06-26)。
+// data_sharding_test.go — 玩家数据 owner cell 锚定单测(2026-06-26)。
 //
 // 覆盖:PlayerDataShardKey canonical 口径(= player_id,与 version/data 无关)、playerDataOwner
 // nil-router 退化 / 零 player_id / 正常解析 / 同一玩家落点稳定。验证 router 为 nil(单 Cell)时
-// 行为不变,注入后 blob 锚定到玩家 owner cell(§4.2 line 142)。
+// 行为不变,注入后 PlayerData 行锚定到玩家 owner cell(§4.2 line 142)。
 package biz
 
 import (

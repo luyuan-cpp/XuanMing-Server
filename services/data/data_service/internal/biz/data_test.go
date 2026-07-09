@@ -21,8 +21,8 @@ import (
 // ── fakes ─────────────────────────────────────────────────────────────────────
 
 type row struct {
-	version int32
-	data    []byte
+	version  uint32
+	nickname string
 }
 
 type fakeStore struct {
@@ -38,23 +38,23 @@ func (s *fakeStore) Read(_ context.Context, playerID uint64) (*datav1.PlayerData
 	if !ok {
 		return nil, false, nil
 	}
-	return &datav1.PlayerData{PlayerId: playerID, Version: r.version, Data: r.data}, true, nil
+	return &datav1.PlayerData{PlayerId: playerID, Version: r.version, Nickname: r.nickname}, true, nil
 }
 
-func (s *fakeStore) Write(_ context.Context, playerID uint64, expectVersion int32, data []byte) (int32, error) {
-	r, ok := s.rows[playerID]
-	if expectVersion == 0 {
+func (s *fakeStore) Write(_ context.Context, pd *datav1.PlayerData) (uint32, error) {
+	r, ok := s.rows[pd.GetPlayerId()]
+	if pd.GetVersion() == 0 {
 		if ok {
 			return 0, errcode.New(errcode.ErrDataVersionMismatch, "exists")
 		}
-		s.rows[playerID] = &row{version: 1, data: data}
+		s.rows[pd.GetPlayerId()] = &row{version: 1, nickname: pd.GetNickname()}
 		return 1, nil
 	}
-	if !ok || r.version != expectVersion {
+	if !ok || r.version != pd.GetVersion() {
 		return 0, errcode.New(errcode.ErrDataVersionMismatch, "mismatch")
 	}
 	r.version++
-	r.data = data
+	r.nickname = pd.GetNickname()
 	return r.version, nil
 }
 
@@ -107,15 +107,15 @@ func wantCode(t *testing.T, err error, code errcode.Code) {
 func TestRead_CacheHit(t *testing.T) {
 	store := newFakeStore()
 	cache := newFakeCache()
-	cache.m[1] = &datav1.PlayerData{PlayerId: 1, Version: 3, Data: []byte("cached")}
+	cache.m[1] = &datav1.PlayerData{PlayerId: 1, Version: 3, Nickname: "cached"}
 	uc := newUC(store, cache)
 
 	pd, found, err := uc.ReadPlayer(context.Background(), 1)
 	if err != nil || !found {
 		t.Fatalf("want hit, got found=%v err=%v", found, err)
 	}
-	if string(pd.GetData()) != "cached" {
-		t.Fatalf("want cached data, got %q", pd.GetData())
+	if pd.GetNickname() != "cached" {
+		t.Fatalf("want cached nickname, got %q", pd.GetNickname())
 	}
 	if store.readCalls != 0 {
 		t.Fatalf("cache hit should not touch store, readCalls=%d", store.readCalls)
@@ -124,7 +124,7 @@ func TestRead_CacheHit(t *testing.T) {
 
 func TestRead_MissBackfill(t *testing.T) {
 	store := newFakeStore()
-	store.rows[1] = &row{version: 2, data: []byte("db")}
+	store.rows[1] = &row{version: 2, nickname: "db"}
 	cache := newFakeCache()
 	uc := newUC(store, cache)
 
@@ -159,7 +159,7 @@ func TestWrite_NewPlayer(t *testing.T) {
 	cache := newFakeCache()
 	uc := newUC(store, cache)
 
-	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 0, Data: []byte("v1")})
+	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 0, Nickname: "v1"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -170,12 +170,12 @@ func TestWrite_NewPlayer(t *testing.T) {
 
 func TestWrite_OptimisticOK(t *testing.T) {
 	store := newFakeStore()
-	store.rows[1] = &row{version: 5, data: []byte("old")}
+	store.rows[1] = &row{version: 5, nickname: "old"}
 	cache := newFakeCache()
-	cache.m[1] = &datav1.PlayerData{PlayerId: 1, Version: 5, Data: []byte("old")}
+	cache.m[1] = &datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "old"}
 	uc := newUC(store, cache)
 
-	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 5, Data: []byte("new")})
+	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "new"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -193,10 +193,10 @@ func TestWrite_OptimisticOK(t *testing.T) {
 
 func TestWrite_VersionMismatch(t *testing.T) {
 	store := newFakeStore()
-	store.rows[1] = &row{version: 5, data: []byte("old")}
+	store.rows[1] = &row{version: 5, nickname: "old"}
 	uc := newUC(store, newFakeCache())
 
-	_, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 3, Data: []byte("stale")})
+	_, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 3, Nickname: "stale"})
 	wantCode(t, err, errcode.ErrDataVersionMismatch)
 }
 
@@ -221,14 +221,14 @@ func TestInvalidateCache(t *testing.T) {
 
 func TestRead_NoCache_DirectStore(t *testing.T) {
 	store := newFakeStore()
-	store.rows[1] = &row{version: 1, data: []byte("db")}
+	store.rows[1] = &row{version: 1, nickname: "db"}
 	uc := NewDataUsecase(store, nil, conf.DataConf{CacheTTL: config.Duration(time.Minute)}, klog.DefaultLogger)
 
 	pd, found, err := uc.ReadPlayer(context.Background(), 1)
 	if err != nil || !found {
 		t.Fatalf("want found, got found=%v err=%v", found, err)
 	}
-	if string(pd.GetData()) != "db" {
-		t.Fatalf("want db data, got %q", pd.GetData())
+	if pd.GetNickname() != "db" {
+		t.Fatalf("want db nickname, got %q", pd.GetNickname())
 	}
 }

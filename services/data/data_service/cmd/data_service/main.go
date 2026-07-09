@@ -111,8 +111,12 @@ func main() {
 		helper.Warnw("msg", "redis_endpoint_empty", "hint", "cache disabled (direct MySQL)")
 	}
 
-	// 5. 装配链
-	store := data.NewMySQLPlayerStore(db)
+	// 5. 装配链(store 启动时按 pb 定义 CreateOrUpdateTable 建表/同步表结构)
+	store, err := data.NewMySQLPlayerStore(db)
+	if err != nil {
+		helper.Errorw("msg", "player_store_init_failed", "err", err)
+		os.Exit(1)
+	}
 	uc := biz.NewDataUsecase(store, cache, cfg.Data, logger)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)

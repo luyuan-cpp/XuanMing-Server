@@ -33,8 +33,8 @@ type DataUsecase struct {
 	log   *klog.Helper
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
-	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,blob owner 落点观测退化为不打日志(行为不变)。
-	// 分片部署时由 main 经 SetCellRouter 注入,写(WritePlayer)后额外打一条 blob owner 落点
+	// 可为 nil:单 Cell / dev / 阶段 1~2 不分片,玩家数据 owner 落点观测退化为不打日志(行为不变)。
+	// 分片部署时由 main 经 SetCellRouter 注入,写(WritePlayer)后额外打一条玩家数据 owner 落点
 	// 观测(供分片上线核对玩家数据落点 == 玩家 owner cell,§4.2 line 142)。nil-safe。
 	router *cellroute.Router
 }
@@ -51,7 +51,7 @@ func NewDataUsecase(store data.PlayerStore, cache data.PlayerCache, cfg conf.Dat
 
 // SetCellRouter 注入确定性 region/cell 路由器(scale-cellular-20m.md §4.2 两级架构)。
 //
-// nil-safe:不调用 / 传 nil 时(单 Cell / dev / 阶段 1~2),不做 blob owner 落点观测,行为与历史
+// nil-safe:不调用 / 传 nil 时(单 Cell / dev / 阶段 1~2),不做玩家数据 owner 落点观测,行为与历史
 // 一致。用 setter 而非构造参数,避免单 Cell 阶段调用点被迫改签名(与 matchmaker / auction /
 // battle_result / friend / chat / trade / dialogue / inventory / locator / push / team / player 一致)。
 // Router 内部读路径无锁,并发安全。
@@ -91,12 +91,12 @@ func (u *DataUsecase) ReadPlayer(ctx context.Context, playerID uint64) (*datav1.
 
 // WritePlayer 乐观锁写 MySQL,成功后删缓存(cache-aside 先写库后删缓存)。
 // 返回写入后的新版本号。版本不匹配 → ErrDataVersionMismatch。
-func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData) (int32, error) {
+func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData) (uint32, error) {
 	if pd.GetPlayerId() == 0 {
 		return 0, errInvalidPlayer()
 	}
 
-	newVersion, err := u.store.Write(ctx, pd.GetPlayerId(), pd.GetVersion(), pd.GetData())
+	newVersion, err := u.store.Write(ctx, pd)
 	if err != nil {
 		return 0, err
 	}
@@ -107,7 +107,7 @@ func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData) (i
 			u.log.WithContext(ctx).Warnw("msg", "cache_del_after_write_failed", "player_id", pd.GetPlayerId(), "err", err)
 		}
 	}
-	// 分片:玩家数据 blob 是 owner 数据,锁定玩家 owner cell(PlayerDataShardKey=player_id,
+	// 分片:PlayerData 行是 owner 数据,锁定玩家 owner cell(PlayerDataShardKey=player_id,
 	// §4.2 line 142)。router 为 nil(单 Cell)→ 不打,行为与历史一致。
 	u.logPlayerDataPlacement(ctx, pd.GetPlayerId(), "write_player")
 	return newVersion, nil

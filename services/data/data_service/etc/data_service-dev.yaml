@@ -2,7 +2,8 @@
 #
 # - gRPC :50003 / HTTP :51003(仅 /metrics)
 # - 内网数据网关(不经 Envoy,不直接暴露给玩家)
-# - MySQL 强依赖(pandora_player 库 player_data 版本化 blob,事实源)
+# - MySQL 强依赖(pandora_player 库 player_data 强 schema 列,事实源;
+#   表由服务启动时按 PlayerData proto 经 proto2mysql CreateOrUpdateTable 自动建/同步)
 # - Redis 弱依赖(cache-aside 旁路缓存,Ping 失败降级直连 MySQL)
 # - 不接 kafka
 # - dev: enable_reflection=true 便于 grpcurl 联调
@@ -21,7 +22,7 @@ server:
 node:
   node_id: 1
   mysql_client:
-    # pandora_player 库(player_data 表见 deploy/mysql-init/07-data-tables.sql)
+    # pandora_player 库(player_data 表由服务启动时按 pb 自动建,不走 mysql-init DDL)
     dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_player?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
     max_open_conns: 32
     max_idle_conns: 8

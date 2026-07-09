@@ -13,7 +13,7 @@ go 1.26.5
 //   - pkg/ (公共框架,go.work use)
 //   - proto/gen/go/pandora/data_service/v1 (DataService 协议)
 //   - proto/gen/go/pandora/common/v1 (错误码)
-//   - go-redis/v9(缓存)/ go-sql-driver/mysql(pandora_player 版本化 blob)
+//   - go-redis/v9(缓存)/ go-sql-driver/mysql(pandora_player 强 schema PlayerData)
 //   - 不接 Kafka(避免与 player.update 语义重复)
 
 require (

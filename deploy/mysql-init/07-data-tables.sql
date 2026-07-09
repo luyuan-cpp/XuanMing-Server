@@ -1,25 +1,16 @@
--- Pandora data_service 数据网关表结构(2026-06-16)
+-- Pandora data_service 数据网关表结构(2026-06-16;2026-06-20 移交服务自管)
 --
--- 装载方式:容器 entrypoint 自动扫 /docker-entrypoint-initdb.d/*.sql 顺序执行
--- (01-create-databases.sql 先建库 + grant,本文件接着建表)。
+-- ⚠️ 本文件不再建表:player_data 的 schema 唯一来源是
+--    proto/pandora/data_service/v1/data_service.proto 的 PlayerData message,
+--    data_service 启动时经 proto2mysql CreateOrUpdateTable 按 pb 字段自动
+--    建表/同步表结构(表不存在则 CREATE,存在则补缺列/对齐类型,不删多余列)。
 --
--- 表清单(对齐 docs/design/go-services.md §2.3 data_service):
---   player_data  玩家数据统一读写网关的版本化 blob(player_id PK,乐观锁 version)
---
--- 约定:
+-- 约定(不变):
 --   - data_service 是内网数据网关,MySQL 是事实源,Redis 仅旁路缓存(cache-aside)
---   - data 列是上层业务序列化好的不透明 bytes(PlayerProfile 等),data_service 不解释内容
---   - 乐观锁:WritePlayer 走 UPDATE ... WHERE player_id=? AND version=? SET version=version+1
---     受影响行 0 → ErrDataVersionMismatch(10001);version=0 视为新建走 INSERT
---   - 与 04-player-tables.sql 的 players 表互补:players 是结构化档案列,
---     player_data 是整块序列化快照(给 data_service cache-aside 网关用)
+--   - 乐观锁:WritePlayer 走 version CAS(UpdateFieldsIfVersion),失配 →
+--     ErrDataVersionMismatch(10001);version=0 视为新建走 INSERT
+--   - 与 04-player-tables.sql 的 players 表互补:players 归 player 服务,
+--     player_data 归 data_service 网关
+--   - 改 PlayerData 字段只允许加新编号字段 / reserved 删字段(CLAUDE.md §9 不变量 17)
 
-USE `pandora_player`;
-
-CREATE TABLE IF NOT EXISTS `player_data` (
-    `player_id`  BIGINT UNSIGNED NOT NULL,
-    `version`    INT             NOT NULL DEFAULT 1 COMMENT '乐观锁版本号,每次写 +1',
-    `data`       BLOB            NOT NULL COMMENT '序列化的玩家数据 bytes(不透明)',
-    `updated_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`player_id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'data_service 玩家数据版本化 blob';
+-- 库由 01-create-databases.sql 创建;此处仅保留占位说明,无 DDL。
