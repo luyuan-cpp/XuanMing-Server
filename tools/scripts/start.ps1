@@ -13,7 +13,7 @@
   还有两个本地联调辅助模式:
     battle   含战斗混合版 —— 17 个业务服务跑 docker,ds_allocator + hub_allocator 跑宿主(需 exec Windows DS);
                              进真实 Hub/Battle DS。play.ps1 -Battle[ -Intranet] 走这个;策划机不用起 go 服务。
-    k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(advertise 127.0.0.1 + udp_relay.ps1 回程)
+    k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(advertise 127.0.0.1 + 自动宿主桥接/UDP 中继)
 
   启动前会检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;
   只有显式传 -Install 才会尝试用 winget 安装。-Check 只检查不启动。
@@ -32,7 +32,7 @@
 
 .EXAMPLE
   # 电脑重启后『快速恢复』上次的环境(不重建镜像,把停掉的集群/容器拉回来):
-  pwsh tools/scripts/start.ps1 -Mode k8s    -Resume   # minikube start + 等 Pod;之后再跑 e2e_k8s.ps1
+  pwsh tools/scripts/start.ps1 -Mode k8s    -Resume   # minikube start + 等 Pod + 自动重建宿主桥接/UDP 中继
   pwsh tools/scripts/start.ps1 -Mode docker -Resume   # docker compose up -d(不 --build)
   pwsh tools/scripts/start.ps1 -Mode local  -Resume   # 基础设施随 Docker 恢复 + 重起宿主 go 服务
 
@@ -598,6 +598,48 @@ function Build-DsImagesForMinikube {
     Write-Ok "DS 镜像已就绪(pandora/battle-ds:dev / pandora/hub-ds:dev 已在 minikube)"
 }
 
+# ===== k8s 模式:宿主侧桥接/中继清理(与启动末尾自动跑的 e2e_k8s.ps1 对称)=====
+# 启动会在宿主留下三类长驻资源:kubectl port-forward(pid 记录在 run/k8s-envoy-bridge/)、
+# docker envoy(:8443/:8444)、pandora-udp-relay 容器。-Down 必须一并清掉,否则残留的
+# port-forward/端口监听会让下次启动或其它模式(local/docker/battle)的流量走向不确定。
+function Stop-K8sHostBridge {
+    Write-Step "清理宿主 Envoy 桥接 + UDP 中继"
+
+    # 1) 杀 bridge 起的 kubectl port-forward(pid 文件 + 进程名双重校验,防误杀)
+    $stateDir = Join-Path $ProjectRoot 'run/k8s-envoy-bridge'
+    if (Test-Path $stateDir) {
+        foreach ($pidFile in @(Get-ChildItem $stateDir -Filter '*.pid' -ErrorAction SilentlyContinue)) {
+            $procId = (Get-Content $pidFile.FullName -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if ("$procId" -match '^\d+$') {
+                $proc = Get-Process -Id ([int]$procId) -ErrorAction SilentlyContinue
+                if ($proc -and $proc.ProcessName -eq 'kubectl') {
+                    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                    Write-Info "  已停 port-forward $($pidFile.BaseName)(PID=$procId)"
+                }
+            }
+            Remove-Item $pidFile.FullName -ErrorAction SilentlyContinue
+        }
+    }
+    # 兜底:pid 文件丢失/陈旧时,按命令行签名扫残留的「kubectl port-forward --namespace pandora」
+    $strays = @(Get-CimInstance Win32_Process -Filter "Name='kubectl.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match 'port-forward' -and $_.CommandLine -match "--namespace\s+$K8sNamespace" })
+    foreach ($p in $strays) {
+        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+        Write-Info "  已停残留 port-forward PID=$($p.ProcessId)"
+    }
+
+    # 2) 停并删宿主 docker envoy(bridge 用 compose 单起的 envoy,不碰其它基础设施容器)
+    docker compose -f $ComposeInfra --env-file $EnvFile rm -sf envoy *> $null
+    if ($LASTEXITCODE -eq 0) { Write-Info "  已停 envoy 容器(:8443/:8444)" }
+    else { Write-Warn "  envoy 容器停止失败或不存在(可忽略)" }
+
+    # 3) 删 UDP 回程中继容器(e2e_k8s.ps1 起的 dockerized relay)
+    docker rm -f pandora-udp-relay *> $null
+    if ($LASTEXITCODE -eq 0) { Write-Info "  已删 pandora-udp-relay 容器" }
+
+    Write-Ok "宿主侧桥接/中继已清理"
+}
+
 function Invoke-K8s {
     $servicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
@@ -605,7 +647,12 @@ function Invoke-K8s {
     $mysqlInit   = Join-Path $ProjectRoot 'deploy/mysql-init'
 
     if ($Down) {
+        # 先清宿主侧(port-forward 指向的 Service 马上要删,先杀避免报错刷屏)
+        Stop-K8sHostBridge
         Write-Step "删除 k8s 业务服务 + 基础设施"
+        # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)
+        kubectl delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/30-fleet-hub.yaml') --ignore-not-found 2>$null
+        kubectl delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/20-fleet-battle.yaml') --ignore-not-found 2>$null
         kubectl delete -k $servicesDir --ignore-not-found 2>$null
         kubectl delete -f $lokiYaml --ignore-not-found 2>$null
         kubectl delete -f $infraYaml --ignore-not-found 2>$null
@@ -625,12 +672,12 @@ function Invoke-K8s {
         Write-Ok "minikube 已在运行"
     }
 
-    Write-Step "[1/7] namespace"
+    Write-Step "[1/8] namespace"
     kubectl apply -f (Join-Path $servicesDir '00-namespace.yaml')
     Assert-LastExit 'kubectl apply namespace'
 
-    Write-Step "[2/7] 生成集群版配置 + ConfigMap(allocator=agones,advertise 127.0.0.1)"
-    # 本地 minikube docker driver:Pod IP 客户端连不到,advertise 127.0.0.1 + udp_relay.ps1 回程
+    Write-Step "[2/8] 生成集群版配置 + ConfigMap(allocator=agones,advertise 127.0.0.1)"
+    # 本地 minikube docker driver:Pod IP 客户端连不到,advertise 127.0.0.1 + 容器版 UDP 中继回程
     & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1
     kubectl create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
         --dry-run=client -o yaml | kubectl apply -f -
@@ -639,7 +686,7 @@ function Invoke-K8s {
         --dry-run=client -o yaml | kubectl apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-mysql-init'
 
-    Write-Step "[3/7] 基础设施(mysql/redis/zookeeper/kafka/etcd + loki/alloy 日志)"
+    Write-Step "[3/8] 基础设施(mysql/redis/zookeeper/kafka/etcd + loki/alloy 日志)"
     kubectl apply -f $infraYaml
     Assert-LastExit 'kubectl apply infra'
     # 日志采集(Loki + Alloy,infra.md §11.2):非关键路径,apply 失败只告警不阻断启动;
@@ -654,17 +701,17 @@ function Invoke-K8s {
     kubectl rollout status deploy/zookeeper -n $K8sNamespace --timeout=120s; Assert-LastExit 'zookeeper 就绪'
     kubectl rollout status deploy/kafka     -n $K8sNamespace --timeout=180s; Assert-LastExit 'kafka 就绪'
 
-    Write-Step "[4/7] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
+    Write-Step "[4/8] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Build-DsImagesForMinikube
     Apply-AgonesManifests -InstallAgones
 
-    Write-Step "[5/7] 构建 20 个服务镜像"
+    Write-Step "[5/8] 构建 20 个服务镜像"
     Build-AllImages
 
-    Write-Step "[6/7] 把镜像 load 进 minikube(强制刷新固定 :dev tag)"
+    Write-Step "[6/8] 把镜像 load 进 minikube(强制刷新固定 :dev tag)"
     Sync-ImagesToMinikube -Images (Get-ServiceImages)
 
-    Write-Step "[7/7] 部署业务服务"
+    Write-Step "[7/8] 部署业务服务"
     kubectl apply -k $servicesDir
     Assert-LastExit 'kubectl apply -k services'
     # 镜像 tag 固定为 :dev,重建/重 load 后 image 字符串不变 -> apply 报 unchanged,旧 Pod 不会换。
@@ -686,7 +733,19 @@ function Invoke-K8s {
 
     Write-Host ""
     Write-Ok "k8s 模式已部署。查看:kubectl get pods -n $K8sNamespace"
-    Write-Warn "真 DS 闭环还需起宿主 Envoy 桥接 + UDP 中继:pwsh tools/scripts/e2e_k8s.ps1"
+
+    Write-Step "[8/8] 宿主 Envoy 桥接 + UDP 中继(e2e_k8s.ps1)"
+    # 真 DS 闭环剩余的宿主侧步骤(port-forward 桥接 + docker envoy + udp-relay)直接接进一键启动。
+    # DS 镜像已由 [4/8] Build-DsImagesForMinikube 直接构建进 minikube(宿主 docker 无该 tag),
+    # 故传 -SkipImageLoad 跳过 e2e 的宿主->minikube image load。
+    # 用独立子进程跑,与 DS 镜像构建同一隔离理由;profile 跟随当前 active profile。
+    $mkProfile = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($mkProfile)) { $mkProfile = 'minikube' }
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile
+    Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
+
+    Write-Host ""
+    Write-Ok "真 DS 闭环就绪:客户端连 127.0.0.1:8443(TLS)即可登录进 Hub/战斗。"
 }
 
 # ===== online 模式(远端 k8s:-Env test 测试服集群 / prod 生产 kbs 集群)=====
@@ -1077,7 +1136,14 @@ function Resume-K8s {
         exit 1
     }
     Write-Host ""
-    Write-Ok "集群已恢复。接着跑真 DS 闭环:pwsh tools/scripts/e2e_k8s.ps1"
+    Write-Ok "集群已恢复。"
+    Write-Step "宿主 Envoy 桥接 + UDP 中继(e2e_k8s.ps1)"
+    # 重启后宿主 port-forward/envoy/relay 必然全丢,自动重建(DS 镜像还在 minikube 磁盘,跳过 load)。
+    $mkProfile = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($mkProfile)) { $mkProfile = 'minikube' }
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile
+    Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
+    Write-Ok "真 DS 闭环已恢复:客户端连 127.0.0.1:8443 即可。"
 }
 
 function Invoke-Resume {
