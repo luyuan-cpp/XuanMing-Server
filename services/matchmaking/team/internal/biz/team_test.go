@@ -112,6 +112,59 @@ func TestCreateTeamAlreadyInTeam(t *testing.T) {
 	}
 }
 
+// TestCreateTeamHealsOrphanIndex 复现线上死锁:player 索引残留指向已消失的队伍主体
+// (孤儿索引)时,CreateTeam 不该被 3004 拦死,而应清脏索引后成功建队。
+func TestCreateTeamHealsOrphanIndex(t *testing.T) {
+	uc, _, mr := newTestUsecaseWithMR(t)
+	ctx := context.Background()
+
+	if _, err := uc.CreateTeam(ctx, 1001, 2001); err != nil {
+		t.Fatalf("first CreateTeam: %v", err)
+	}
+	// 队伍主体 TTL 到期被回收,player 索引仍残留(孤儿索引)。
+	mr.Del("pandora:team:{1001}")
+	if !mr.Exists("pandora:team:player:2001") {
+		t.Fatal("precondition: orphan player index should still exist")
+	}
+
+	team, err := uc.CreateTeam(ctx, 1002, 2001)
+	if err != nil {
+		t.Fatalf("CreateTeam with orphan index should heal and succeed, got: %v", err)
+	}
+	if team.TeamId != 1002 || team.CaptainId != 2001 {
+		t.Errorf("unexpected healed team: %+v", team)
+	}
+	// 索引已改指向新队伍。
+	if got, _ := mr.Get("pandora:team:player:2001"); got != "1002" {
+		t.Errorf("expected index -> 1002 after heal, got %q", got)
+	}
+}
+
+// TestCreateTeamRealCollisionStillRejected 验证自愈不放水:玩家真实在活跃队伍中时,
+// CreateTeam 仍必须被 ERR_TEAM_ALREADY_IN_TEAM 拦下(不变量 §1)。
+func TestCreateTeamRealCollisionStillRejected(t *testing.T) {
+	uc, _, mr := newTestUsecaseWithMR(t)
+	ctx := context.Background()
+
+	if _, err := uc.CreateTeam(ctx, 1001, 2001); err != nil {
+		t.Fatalf("first CreateTeam: %v", err)
+	}
+	// 队伍主体仍在(真实活跃)。
+	_, err := uc.CreateTeam(ctx, 1002, 2001)
+	if errcode.As(err) != errcode.ErrTeamAlreadyInTeam {
+		t.Errorf("expected ErrTeamAlreadyInTeam for live team, got: %v", err)
+	}
+	// 索引未被误清,仍指向原队伍。
+	if got, _ := mr.Get("pandora:team:player:2001"); got != "1001" {
+		t.Errorf("expected index unchanged -> 1001, got %q", got)
+	}
+	// 写序反转后:失败的 CreateTeam 已先写过主体 1002,claim 失败必须回滚删掉,
+	// 不留无主队伍主体。
+	if mr.Exists("pandora:team:{1002}") {
+		t.Error("expected rolled-back team body 1002 deleted")
+	}
+}
+
 // ── Invite ────────────────────────────────────────────────────────────────────
 
 // TestInvitePushOnlyTarget 验证 Invite push 只发给 target,不发给 inviter(协议原则 2)。

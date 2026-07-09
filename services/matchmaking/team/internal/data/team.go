@@ -94,8 +94,14 @@ type TeamRepo interface {
 	// SetPlayerIndex 设置或覆盖 player→teamID 映射。
 	SetPlayerIndex(ctx context.Context, playerID, teamID uint64, ttl time.Duration) error
 
-	// DeletePlayerIndex 删除 player→teamID 映射。
-	DeletePlayerIndex(ctx context.Context, playerID uint64) error
+	// DeletePlayerIndexIfMatches 仅当索引当前值仍指向 teamID 时才删除(原子 CAS)。
+	// biz 层所有索引清理路径一律用它:无条件 DEL 存在「读旧索引 → 玩家并发声明新归属
+	// → 误删新 claim」的窗口(镜像 matchmaker DeletePlayerIndexIfMatches 的结论)。
+	DeletePlayerIndexIfMatches(ctx context.Context, playerID, teamID uint64) error
+
+	// DeleteTeam 删除队伍主体 key。仅供 CreateTeam 声明失败时回滚自己刚写的主体:
+	// teamID 是 Snowflake 新发、返回前仅创建者可见,无条件 DEL 安全。
+	DeleteTeam(ctx context.Context, teamID uint64) error
 
 	// ExpireTeam 单独刷新 team key 的 TTL(不读改写 value),供解散后改短 TTL 用。
 	ExpireTeam(ctx context.Context, teamID uint64, ttl time.Duration) error
@@ -273,8 +279,31 @@ func (r *RedisTeamRepo) ClaimPlayer(ctx context.Context, playerID, teamID uint64
 	return 0, false, errcode.New(errcode.ErrTeamConcurrent, "claim player %d concurrent", playerID)
 }
 
+// DeletePlayerIndex 无条件删除 player→teamID 映射。不在 TeamRepo 接口内:biz 清理路径
+// 一律用 DeletePlayerIndexIfMatches(CAS),无条件删存在误删并发新 claim 的窗口;
+// 仅供测试造数据用(镜像 matchmaker RedisMatchRepo.DeletePlayerIndex)。
 func (r *RedisTeamRepo) DeletePlayerIndex(ctx context.Context, playerID uint64) error {
 	return r.rdb.Del(ctx, playerKey(playerID)).Err()
+}
+
+// DeleteTeam 见接口注释。删队伍主体 key(CreateTeam 声明失败回滚专用)。
+func (r *RedisTeamRepo) DeleteTeam(ctx context.Context, teamID uint64) error {
+	return r.rdb.Del(ctx, teamKey(teamID)).Err()
+}
+
+// deletePlayerIndexScript 仅当索引当前值仍是待清理的旧 teamID 时才 DEL(原子比较,
+// 防「读旧索引 → 队伍已没 → 玩家新 SETNX 写入 → 误删新索引」的并发窗口)。
+var deletePlayerIndexScript = redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0`)
+
+// DeletePlayerIndexIfMatches 见接口注释。CAS 删除孤儿索引。
+func (r *RedisTeamRepo) DeletePlayerIndexIfMatches(ctx context.Context, playerID, teamID uint64) error {
+	return deletePlayerIndexScript.Run(ctx, r.rdb,
+		[]string{playerKey(playerID)},
+		strconv.FormatUint(teamID, 10)).Err()
 }
 
 // ExpireTeam 单独刷新 team key 的 TTL(单条 EXPIRE,不读改写 value)。

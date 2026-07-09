@@ -167,15 +167,15 @@ func (u *TeamUsecase) maybeSweepLastTouch(now time.Time) {
 
 // CreateTeam 创建队伍,playerID 为队长。
 // 前置条件:playerID 不在任何队伍中。
+//
+// 写序铁律:**先写队伍主体,后 ClaimPlayer 声明归属**。主体先落地时索引尚未指向它
+// (teamID 是 Snowflake 新发,返回前无人可见),故不存在「索引已指向、主体还没写」的
+// in-flight 窗口 —— 这是 claimPlayerHealingOrphan 把「主体不存在」判为真孤儿的安全前提。
+// 若倒过来先 claim 后写主体,并发的 heal 会把 in-flight claim 误判孤儿并 CAS 删掉,
+// 同一玩家可能同时出现在两支队伍(违反不变量 §1)。
+// claim 失败 → 回滚删掉自己刚写的主体;中途崩溃残留的无主主体(无索引指向)由 TTL 自然回收。
 func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (*teamv1.TeamStorageRecord, error) {
 	ttl := u.activeTTL()
-
-	// 1. 原子声明玩家归属(SETNX),保证不变量 §1:一人只能在一个队
-	if existTeamID, claimed, err := u.repo.ClaimPlayer(ctx, playerID, teamID, ttl); err != nil {
-		return nil, err
-	} else if !claimed {
-		return nil, errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, existTeamID)
-	}
 
 	now := time.Now().UnixMilli()
 	team := &teamv1.TeamStorageRecord{
@@ -188,13 +188,20 @@ func (u *TeamUsecase) CreateTeam(ctx context.Context, teamID, playerID uint64) (
 		MaxSize:     int32(u.cfg.MaxMembers),
 	}
 
+	// 1. 先写队伍主体(此时索引不指向它,对全世界不可见)。
 	if err := u.repo.Create(ctx, team, ttl); err != nil {
-		// 回滚 claim,避免玩家被永久锁在不存在的队伍
-		_ = u.repo.DeletePlayerIndex(ctx, playerID)
 		return nil, err
 	}
 
-	// 2. push 给队长自己(创建者收到快照确认)
+	// 2. 原子声明玩家归属(SETNX),保证不变量 §1:一人只能在一个队。
+	//    孤儿索引(索引指向的队伍主体已过期/解散)会自愈,不误拦成 3004。
+	if err := u.claimPlayerHealingOrphan(ctx, playerID, teamID, ttl); err != nil {
+		// 声明失败(玩家真在其他队) → 回滚删掉自己刚写的主体,避免残留无主队伍。
+		_ = u.repo.DeleteTeam(ctx, teamID)
+		return nil, err
+	}
+
+	// 3. push 给队长自己(创建者收到快照确认)
 	u.pushUpdate(ctx, 0, []uint64{playerID}, team,
 		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_MEMBER_JOINED, 0)
 
@@ -260,11 +267,10 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 
 	// 2. 原子声明 playerID 归属(SETNX),保证不变量 §1:一人只能在一个队。
 	//    必须在改成员列表前声明,杜绝两个并发 AcceptInvite 把同一玩家加进两个队的 TOCTOU。
+	//    孤儿索引(索引指向的队伍主体已过期/解散)会自愈,不误拦成 3004。
 	ttl := u.activeTTL()
-	if existTeamID, claimed, err := u.repo.ClaimPlayer(ctx, playerID, teamID, ttl); err != nil {
+	if err := u.claimPlayerHealingOrphan(ctx, playerID, teamID, ttl); err != nil {
 		return nil, err
-	} else if !claimed {
-		return nil, errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, existTeamID)
 	}
 
 	var result *teamv1.TeamStorageRecord
@@ -290,8 +296,9 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 		result = cloneTeam(team)
 		return nil
 	}, ttl); err != nil {
-		// 入队失败(满员/解散/冲突),回滚 claim 释放玩家
-		_ = u.repo.DeletePlayerIndex(ctx, playerID)
+		// 入队失败(满员/解散/冲突),回滚 claim 释放玩家。CAS:仅当索引仍指向本队才删,
+		// 防误删并发路径刚写入的新归属。
+		_ = u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID)
 		return nil, err
 	}
 
@@ -352,8 +359,8 @@ func (u *TeamUsecase) LeaveTeam(ctx context.Context, teamID, playerID uint64) (*
 		return nil, err
 	}
 
-	// 删 player index
-	if err := u.repo.DeletePlayerIndex(ctx, playerID); err != nil {
+	// 删 player index。CAS:仅当索引仍指向本队才删,防误删玩家并发加入新队的归属。
+	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
 		plog.With(ctx).Warnw("msg", "team_leave_delete_player_index_failed", "player_id", playerID, "err", err)
 	}
 
@@ -410,8 +417,8 @@ func (u *TeamUsecase) Kick(ctx context.Context, teamID, captainID, targetPlayerI
 		return nil, err
 	}
 
-	// 删 target player index
-	if err := u.repo.DeletePlayerIndex(ctx, targetPlayerID); err != nil {
+	// 删 target player index。CAS:仅当索引仍指向本队才删,防误删被踢者并发加入新队的归属。
+	if err := u.repo.DeletePlayerIndexIfMatches(ctx, targetPlayerID, teamID); err != nil {
 		plog.With(ctx).Warnw("msg", "team_kick_delete_player_index_failed", "player_id", targetPlayerID, "err", err)
 	}
 
@@ -509,7 +516,8 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	}
 	if !found || team.State == stateDisbanded {
 		// TTL 竞态残留:索引还在但队伍已没/已解散 → 按无队伍处理并清索引。
-		if err := u.repo.DeletePlayerIndex(ctx, playerID); err != nil {
+		// CAS:仅当索引仍指向该孤儿 teamID 才删,防误删玩家并发建队/入队刚写入的新归属。
+		if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, teamID); err != nil {
 			plog.With(ctx).Warnw("msg", "team_stale_player_index_cleanup_failed",
 				"player_id", playerID, "team_id", teamID, "err", err)
 		}
@@ -520,6 +528,62 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	// 防旁人反复读把已抛弃队伍永久续命;disbanded 分支已在上方 return,不续。
 	u.maybeTouchTeam(ctx, teamID, playerID)
 	return team, true, nil
+}
+
+// claimPlayerHealingOrphan 原子声明 player→teamID 归属(SETNX,不变量 §1),并对
+// 孤儿索引自愈:索引虽在但其指向的队伍主体已过期/解散(TTL 竞态 / 解散后删索引
+// 失败的悬挂残留)时,不该把玩家永久锁在不存在的队伍里,而应清掉脏索引后重新声明。
+//
+// 判孤儿安全前提(缺一不可):**所有写路径都先写队伍主体、后写/改索引**——
+//   - CreateTeam:先 Create 主体再 claim(本函数),因此「索引指向 X 但 X 主体不在」
+//     永远不会是另一个 CreateTeam 的 in-flight 中间态;
+//   - AcceptInvite:claim 时目标队伍主体必已存在(邀请的前提)。
+//
+// 若有人改成「先 claim 后写主体」,本函数会把 in-flight claim 误判孤儿并删掉,
+// 造成同一玩家进两支队伍 —— 违反不变量 §1,绝对禁止。
+//
+// 并发安全:
+//   - SETNX 成功 → 直接返回(常态)。
+//   - 声明失败且现有队伍真实存在且未解散 → 真冲突,返回 3004。
+//   - 声明失败但现有队伍主体已没/已解散 → 孤儿:用 DeletePlayerIndexIfMatches(CAS)
+//     仅当索引仍指向该孤儿 teamID 时才删(防误删其他请求刚写入的新 claim),再重试一次
+//     SETNX;若重试仍撞占用(他人抢先真建队)→ 诚实返回 3004。
+func (u *TeamUsecase) claimPlayerHealingOrphan(ctx context.Context, playerID, teamID uint64, ttl time.Duration) error {
+	existTeamID, claimed, err := u.repo.ClaimPlayer(ctx, playerID, teamID, ttl)
+	if err != nil {
+		return err
+	}
+	if claimed {
+		return nil
+	}
+
+	// 声明失败:核对现有队伍是否真实存在。存在且未解散 = 真冲突。
+	existTeam, found, err := u.repo.Get(ctx, existTeamID)
+	if err != nil {
+		return err
+	}
+	if found && existTeam.State != stateDisbanded {
+		return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, existTeamID)
+	}
+
+	// 孤儿索引:队伍主体已没/已解散。CAS 清掉脏索引(仅当仍指向该 teamID)后重试一次声明。
+	if err := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, existTeamID); err != nil {
+		plog.With(ctx).Warnw("msg", "team_orphan_player_index_cleanup_failed",
+			"player_id", playerID, "team_id", existTeamID, "err", err)
+		return err
+	}
+	plog.With(ctx).Infow("msg", "team_orphan_player_index_healed",
+		"player_id", playerID, "stale_team_id", existTeamID)
+
+	retryTeamID, claimed, err := u.repo.ClaimPlayer(ctx, playerID, teamID, ttl)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		// 清理与重试之间有人抢先真建队 → 诚实报冲突。
+		return errcode.New(errcode.ErrTeamAlreadyInTeam, "player %d already in team %d", playerID, retryTeamID)
+	}
+	return nil
 }
 
 // ── 匹配联动辅助 ──────────────────────────────────────────────────────────────
