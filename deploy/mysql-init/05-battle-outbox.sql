@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS `player_update_outbox` (
 -- 与 player.update 出箱的差异:
 --   - 掉落无跨玩家保序需求 → 发布器按行独立重试(单行失败不阻塞其他玩家)。
 --   - item_config_ids 存 CSV(如 "5001,5002");GrantInstances 幂等,重放安全。
---   - DS 不可信:写入本表前 battle_result 已按 drop_whitelist 过滤,非白名单 ID 不入表。
+--   - DS 不可信:写入本表前 battle_result 已按 drop_whitelist 过滤,非白名单 ID 不入表;
+--     且每玩家按 max_drop_per_player 截断(默认 32,硬上限 46 = VARCHAR(512) 可容纳的
+--     最大条数:46 个 10 位 uint32 + 45 逗号 = 505 字符),防超长 CSV 打失败整场结算。
 --
 -- 约定:
 --   - uk_match_player:同对局同玩家只入一行(落库按 match_id 幂等,uk 为防御性兜底)。

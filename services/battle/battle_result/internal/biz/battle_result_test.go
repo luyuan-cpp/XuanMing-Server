@@ -623,6 +623,40 @@ func TestDropWhitelistFilter(t *testing.T) {
 	}
 }
 
+// TestDropPerPlayerCap 恶意/异常 DS 重复上报海量白名单 ID → 每玩家按上限截断,
+// 结算正常落库不回滚(防撑爆 battle_drop_outbox.item_config_ids VARCHAR(512))。
+func TestDropPerPlayerCap(t *testing.T) {
+	repo := newFakeRepo()
+	cfg := conf.BattleConf{EloKFactor: 32, BaseMMR: 1500, DropWhitelist: []uint32{5001}, MaxDropPerPlayer: 3}
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), &fakePusher{}, nil, cfg)
+	uc.SetInstanceGranter(&fakeGranter{})
+	flood := make([]uint32, 500)
+	for i := range flood {
+		flood[i] = 5001
+	}
+	if _, err := uc.ReportResult(context.Background(), dropResult(610, flood, nil)); err != nil {
+		t.Fatalf("ReportResult err: %v", err)
+	}
+	if len(repo.dropOutbox) != 1 {
+		t.Fatalf("expected 1 drop outbox row, got %d", len(repo.dropOutbox))
+	}
+	if got := len(repo.dropOutbox[0].ItemConfigIDs); got != 3 {
+		t.Fatalf("per-player cap 3 not enforced, kept %d", got)
+	}
+}
+
+// TestDropCapDefaults 未配置 → 默认 32;配置超硬上限 → 钳制到 46(VARCHAR(512) 安全上限)。
+func TestDropCapDefaults(t *testing.T) {
+	b := conf.BattleConf{}
+	if got := b.MaxDropsPerPlayer(); got != 32 {
+		t.Fatalf("default cap got %d want 32", got)
+	}
+	b.MaxDropPerPlayer = 100
+	if got := b.MaxDropsPerPlayer(); got != 46 {
+		t.Fatalf("hard cap got %d want 46", got)
+	}
+}
+
 // TestDropEmptyWhitelistBlocksAll 白名单为空 → 任何掉落都不入库(安全默认)。
 func TestDropEmptyWhitelistBlocksAll(t *testing.T) {
 	repo := newFakeRepo()

@@ -20,6 +20,13 @@ rem  镜像构建使用宿主 Go 交叉编译 linux/amd64 静态二进制,再封
 rem  pandora/<svc>:dev scratch 镜像并加载到 minikube。该路径不是离线
 rem  docker load 导入包路径。
 rem
+rem  UE 战斗/大厅 DS(Linux)镜像会自动构建:脚本从【同级客户端仓库】的
+rem  Packages\Server_Linux_Development\LinuxServer 取 UE Linux 打包产物
+rem  (不写死路径,优先匹配同级 Pandora-Client* 仓库),同步进 deploy/ds/stage
+rem  后构建 pandora/battle-ds:dev / pandora/hub-ds:dev 到 minikube。
+rem  DS 起来后看 UE 日志: kubectl get gameservers; kubectl logs -f <pod>。
+rem  想手动指定 DS 包路径,先设 环境变量 PANDORA_DS_LINUX_PKG 再双击本脚本。
+rem
 rem  注意:minikube docker driver 下 Pod IP 默认不能被其它内网机器直接访问;
 rem  本入口用于在这台机器上验证真实 k8s + Agones DS 链路。面向内网/生产
 rem  客户端的公开集群仍走 online 模式,由人负责 k8s 侧操作。

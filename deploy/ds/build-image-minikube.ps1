@@ -16,6 +16,15 @@
 #   pwsh deploy/ds/build-image-minikube.ps1 -Tag dev             # 自定义 tag（默认 dev，与 Fleet yaml 一致）
 #   pwsh deploy/ds/build-image-minikube.ps1 -Image battle        # 只建 battle
 #   pwsh deploy/ds/build-image-minikube.ps1 -Profile pandora-agones # 指定 minikube profile
+#   pwsh deploy/ds/build-image-minikube.ps1 -SourcePkg <客户端>\Packages\Server_Linux_Development\LinuxServer  # 显式指定 UE Linux 包
+#
+# UE Linux DS 包来源（不写死路径，按下列优先级解析）：
+#   1) 显式 -SourcePkg 参数
+#   2) 环境变量 PANDORA_DS_LINUX_PKG
+#   3) 后端仓库【同级目录】下的客户端仓库：<sibling>\Packages\Server_Linux_Development\LinuxServer
+#      （优先名字匹配 Pandora-Client* 的同级仓库）
+# 解析到就 robocopy /MIR 同步进 stage\LinuxServer（docker build 只能 COPY 构建上下文内的目录）；
+# 没解析到则沿用已暂存的 stage\LinuxServer。
 #
 # 构建完镜像已在 minikube 里，Fleet yaml 的 imagePullPolicy=IfNotPresent 直接命中；
 # 跑 e2e_k8s.ps1 时加 -SkipImageLoad 跳过 minikube image load。
@@ -25,7 +34,9 @@ param(
     [string]$Image = 'both',
     [string]$Tag = 'dev',
     [string]$Profile = '',
-    [string]$BaseImage = 'ubuntu:22.04'
+    [string]$BaseImage = 'ubuntu:22.04',
+    # UE Linux DS 包路径（留空则按上面注释的优先级自动解析同级客户端仓库）
+    [string]$SourcePkg = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,9 +44,44 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = $PSScriptRoot
 $StageDir = Join-Path $ScriptDir 'stage\LinuxServer'
 $Dockerfile = Join-Path $ScriptDir 'Dockerfile'
+$RepoRoot = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
+
+# 解析 UE Linux DS 包（不写死路径）：显式 -SourcePkg > 环境变量 > 同级客户端仓库。
+function Resolve-LinuxPkg {
+    if (-not [string]::IsNullOrWhiteSpace($SourcePkg)) {
+        if (-not (Test-Path -LiteralPath $SourcePkg)) { throw "指定的 -SourcePkg 不存在：$SourcePkg" }
+        return (Resolve-Path -LiteralPath $SourcePkg).Path
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_LINUX_PKG) -and (Test-Path -LiteralPath $env:PANDORA_DS_LINUX_PKG)) {
+        return (Resolve-Path -LiteralPath $env:PANDORA_DS_LINUX_PKG).Path
+    }
+    # 后端仓库同级目录里找客户端仓库（含 Packages\Server_Linux_Development\LinuxServer）
+    $rel = 'Packages\Server_Linux_Development\LinuxServer'
+    $parent = Split-Path $RepoRoot -Parent
+    $cands = Get-ChildItem -LiteralPath $parent -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName $rel) }
+    if (-not $cands) { return $null }
+    # 优先名字匹配 Pandora-Client* 的同级仓库，其次任意命中
+    $pref = $cands | Where-Object { $_.Name -like 'Pandora-Client*' } | Select-Object -First 1
+    $repo = if ($pref) { $pref } else { ($cands | Select-Object -First 1) }
+    return (Join-Path $repo.FullName $rel)
+}
+
+# 若解析到客户端 Linux 包，就 robocopy /MIR 同步进 stage\LinuxServer（build 上下文内才能被 docker COPY）。
+$srcPkg = Resolve-LinuxPkg
+if ($srcPkg) {
+    Write-Host "[build-image-minikube] 同步客户端 Linux DS 包 -> stage：$srcPkg" -ForegroundColor Cyan
+    if (-not (Test-Path -LiteralPath $StageDir)) { New-Item -ItemType Directory -Path $StageDir -Force | Out-Null }
+    & robocopy $srcPkg $StageDir /MIR /NFL /NDL /NJH /NJS /NP *> $null
+    # robocopy 退出码 < 8 视为成功（0=无变化,1=有复制,3=复制+额外等）
+    if ($LASTEXITCODE -ge 8) { throw "robocopy 同步 Linux DS 包失败（exit=$LASTEXITCODE）：$srcPkg" }
+    $global:LASTEXITCODE = 0
+} else {
+    Write-Host "[build-image-minikube] 未发现同级客户端仓库的 Linux DS 包，沿用已暂存的 stage\LinuxServer" -ForegroundColor Yellow
+}
 
 if (-not (Test-Path $StageDir)) {
-    throw "缺少 $StageDir，请先在客户端仓库跑 Tool/Server/Agones/build-linux-ds.ps1。"
+    throw "缺少 $StageDir，且未解析到客户端 Linux DS 包。请传 -SourcePkg，或先在客户端仓库跑 Tool/Server/Agones/build-linux-ds.ps1。"
 }
 if (-not (Test-Path $Dockerfile)) {
     throw "找不到 Dockerfile：$Dockerfile"

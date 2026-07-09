@@ -376,19 +376,37 @@ func (u *BattleResultUsecase) buildOutbox(result *battlev1.BattleResult, abandon
 //
 // DS 不可信:逐条按 cfg.IsDroppable(drop 白名单)过滤 DS 上报的 dropped_item_config_ids,
 // 只有落在白名单内的 item_config_id 才入出箱发放;白名单为空 → 全过滤掉(不发放,安全默认)。
+// 每玩家最多保留 cfg.MaxDropsPerPlayer() 条(超限截断记 Warn):防异常/恶意 DS 重复上报
+// 海量白名单 ID 撑爆 battle_drop_outbox.item_config_ids VARCHAR(512) 导致整场结算回滚。
 // 无任何白名单内掉落的玩家不产出出箱行。
 func (u *BattleResultUsecase) buildDropOutbox(result *battlev1.BattleResult) []data.DropOutboxRecord {
+	maxDrops := u.cfg.MaxDropsPerPlayer()
 	recs := make([]data.DropOutboxRecord, 0, len(result.GetStats()))
 	for _, s := range result.GetStats() {
 		reported := s.GetDroppedItemConfigIds()
 		if len(reported) == 0 {
 			continue
 		}
-		allowed := make([]uint32, 0, len(reported))
+		capHint := len(reported)
+		if capHint > maxDrops {
+			capHint = maxDrops
+		}
+		allowed := make([]uint32, 0, capHint)
+		truncated := false
 		for _, id := range reported {
 			if id != 0 && u.cfg.IsDroppable(id) {
+				if len(allowed) >= maxDrops {
+					truncated = true
+					break
+				}
 				allowed = append(allowed, id)
 			}
+		}
+		if truncated {
+			// 超过每玩家上限 → 截断丢弃并 Warn(大概率是异常/恶意 DS,不能让它打失败整场结算)。
+			plog.With(context.Background()).Warnw("msg", "battle_drop_truncated",
+				"match_id", result.GetMatchId(), "player_id", s.GetPlayerId(),
+				"reported", len(reported), "kept", len(allowed), "max", maxDrops)
 		}
 		if len(allowed) == 0 {
 			// DS 上报了掉落但全不在白名单 → 记一条 Warn(可能是配置漏项或 DS 越权尝试)。

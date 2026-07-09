@@ -600,6 +600,24 @@ function Sync-ImagesToMinikube {
 }
 
 # ===== k8s 模式(本地 minikube)=====
+# ===== k8s 模式:把 UE Linux DS 打成镜像并落进 minikube =====
+# DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 20 个 go 业务镜像的一部分,
+# 由本函数从【同级客户端仓库】的 Linux 打包产物构建。build-image-minikube.ps1 会:
+#   1) 自动解析同级客户端仓库 <sibling>\Packages\Server_Linux_Development\LinuxServer(不写死路径),
+#      robocopy /MIR 同步进 deploy/ds/stage/LinuxServer;
+#   2) 把 docker daemon 指到 minikube 内置 daemon 后 docker build,镜像直接落在 minikube 里。
+# 用独立子进程跑:build-image-minikube 会改本会话 docker env(指向 minikube),子进程隔离可避免
+# 污染当前会话(后续 Build-AllImages/Sync-ImagesToMinikube 仍要用宿主 docker + minikube image load)。
+function Build-DsImagesForMinikube {
+    $dsBuild = Join-Path $ProjectRoot 'deploy/ds/build-image-minikube.ps1'
+    if (-not (Test-Path $dsBuild)) { throw "找不到 DS 镜像构建脚本:$dsBuild" }
+    Write-Info "构建 Battle/Hub DS 镜像到 minikube(从同级客户端仓库取 Linux 包)..."
+    # Invoke-K8s 用默认 minikube profile(minikube start 无 -p),显式传 -Profile 保持一致。
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -Profile 'minikube'
+    Assert-LastExit 'DS 镜像构建(build-image-minikube.ps1)'
+    Write-Ok "DS 镜像已就绪(pandora/battle-ds:dev / pandora/hub-ds:dev 已在 minikube)"
+}
+
 function Invoke-K8s {
     $servicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     $infraYaml   = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
@@ -651,6 +669,7 @@ function Invoke-K8s {
     kubectl rollout status deploy/kafka     -n $K8sNamespace --timeout=180s; Assert-LastExit 'kafka 就绪'
 
     Write-Step "[4/7] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
+    Build-DsImagesForMinikube
     Apply-AgonesManifests -InstallAgones
 
     Write-Step "[5/7] 构建 20 个服务镜像"

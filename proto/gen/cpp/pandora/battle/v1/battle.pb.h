@@ -559,6 +559,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerStats final : public ::google
     kMmrDeltaFieldNumber = 11,
     kHealingFieldNumber = 9,
     kGoldFieldNumber = 10,
+    kDroppedItemConfigIdsFieldNumber = 20,
   };
   // uint64 player_id = 1 [json_name = "playerId"];
   void clear_player_id() ;
@@ -670,11 +671,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerStats final : public ::google
   void _internal_set_gold(::int64_t value);
 
   public:
+  // repeated uint32 dropped_item_config_ids = 20 [json_name = "droppedItemConfigIds"];
+  [[nodiscard]] int dropped_item_config_ids_size()
+      const;
+  private:
+  int _internal_dropped_item_config_ids_size() const;
+
+  public:
+  void clear_dropped_item_config_ids() ;
+  [[nodiscard]] ::uint32_t dropped_item_config_ids(int index) const;
+  void set_dropped_item_config_ids(int index, ::uint32_t value);
+  void add_dropped_item_config_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& dropped_item_config_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_dropped_item_config_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_dropped_item_config_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_dropped_item_config_ids();
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.battle.v1.PlayerStats)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -714,6 +735,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerStats final : public ::google
     ::int32_t mmr_delta_;
     ::int64_t healing_;
     ::int64_t gold_;
+    ::google::protobuf::RepeatedField<::uint32_t> dropped_item_config_ids_;
+    ::google::protobuf::internal::CachedSize _dropped_item_config_ids_cached_byte_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2392,6 +2415,57 @@ inline ::int32_t PlayerStats::_internal_mmr_delta() const {
 inline void PlayerStats::_internal_set_mmr_delta(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mmr_delta_ = value;
+}
+
+// repeated uint32 dropped_item_config_ids = 20 [json_name = "droppedItemConfigIds"];
+inline int PlayerStats::_internal_dropped_item_config_ids_size() const {
+  return _internal_dropped_item_config_ids().size();
+}
+inline int PlayerStats::dropped_item_config_ids_size() const {
+  return _internal_dropped_item_config_ids_size();
+}
+inline void PlayerStats::clear_dropped_item_config_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dropped_item_config_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t PlayerStats::dropped_item_config_ids(int index) const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.PlayerStats.dropped_item_config_ids)
+  return _internal_dropped_item_config_ids().Get(index);
+}
+inline void PlayerStats::set_dropped_item_config_ids(int index, ::uint32_t value) {
+  _internal_mutable_dropped_item_config_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.PlayerStats.dropped_item_config_ids)
+}
+inline void PlayerStats::add_dropped_item_config_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_dropped_item_config_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_add:pandora.battle.v1.PlayerStats.dropped_item_config_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& PlayerStats::dropped_item_config_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.battle.v1.PlayerStats.dropped_item_config_ids)
+  return _internal_dropped_item_config_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL PlayerStats::mutable_dropped_item_config_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.battle.v1.PlayerStats.dropped_item_config_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_dropped_item_config_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+PlayerStats::_internal_dropped_item_config_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.dropped_item_config_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+PlayerStats::_internal_mutable_dropped_item_config_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.dropped_item_config_ids_;
 }
 
 // -------------------------------------------------------------------

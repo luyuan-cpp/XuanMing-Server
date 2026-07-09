@@ -814,11 +814,11 @@ constexpr MailAttachment::ParseTableT_ MailAttachment::InternalGenerateParseTabl
     {
       PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -828,14 +828,19 @@ constexpr MailAttachment::ParseTableT_ MailAttachment::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::pandora::mail::v1::MailAttachment>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 count = 2 [json_name = "count"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MailAttachment, _impl_.count_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 item_config_id = 1 [json_name = "itemConfigId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MailAttachment, _impl_.item_config_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.item_config_id_)}},
+      // uint32 count = 2 [json_name = "count"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MailAttachment, _impl_.count_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.count_)}},
+      // bool as_instance = 3 [json_name = "asInstance"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(MailAttachment, _impl_.as_instance_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.as_instance_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -843,6 +848,8 @@ constexpr MailAttachment::ParseTableT_ MailAttachment::InternalGenerateParseTabl
       {PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.item_config_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 count = 2 [json_name = "count"];
       {PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.count_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool as_instance = 3 [json_name = "asInstance"];
+      {PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.as_instance_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -856,7 +863,8 @@ inline constexpr MailAttachment::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         item_config_id_{0u},
-        count_{0u} {}
+        count_{0u},
+        as_instance_{false} {}
 
 template <typename>
 constexpr MailAttachment::MailAttachment(::_pbi::ConstantInitialized,
@@ -1745,11 +1753,11 @@ constexpr SendPersonalMailRequest::ParseTableT_ SendPersonalMailRequest::Interna
     {
       PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1761,8 +1769,8 @@ constexpr SendPersonalMailRequest::ParseTableT_ SendPersonalMailRequest::Interna
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 to_player_id = 1 [json_name = "toPlayerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendPersonalMailRequest, _impl_.to_player_id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendPersonalMailRequest, _impl_.to_player_id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.to_player_id_)}},
       // string title = 2 [json_name = "title"];
       {::_pbi::TcParser::FastUS1,
@@ -1777,16 +1785,19 @@ constexpr SendPersonalMailRequest::ParseTableT_ SendPersonalMailRequest::Interna
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.attachments_)}},
       // int64 expire_ms = 5 [json_name = "expireMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendPersonalMailRequest, _impl_.expire_ms_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendPersonalMailRequest, _impl_.expire_ms_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.expire_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string instance_grant_key = 6 [json_name = "instanceGrantKey"];
+      {::_pbi::TcParser::FastUS1,
+       {50, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.instance_grant_key_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 to_player_id = 1 [json_name = "toPlayerId"];
-      {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string title = 2 [json_name = "title"];
       {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.title_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string body = 3 [json_name = "body"];
@@ -1794,7 +1805,9 @@ constexpr SendPersonalMailRequest::ParseTableT_ SendPersonalMailRequest::Interna
       // repeated .pandora.mail.v1.MailAttachment attachments = 4 [json_name = "attachments"];
       {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.attachments_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // int64 expire_ms = 5 [json_name = "expireMs"];
-      {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.expire_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.expire_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // string instance_grant_key = 6 [json_name = "instanceGrantKey"];
+      {PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.instance_grant_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1804,10 +1817,11 @@ constexpr SendPersonalMailRequest::ParseTableT_ SendPersonalMailRequest::Interna
         #endif
     }},
     {{
-      "\47\0\5\4\0\0\0\0"
+      "\47\0\5\4\0\0\22\0"
       "pandora.mail.v1.SendPersonalMailRequest"
       "title"
       "body"
+      "instance_grant_key"
     }},
   };
 }
@@ -1826,6 +1840,9 @@ inline constexpr SendPersonalMailRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         body_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        instance_grant_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         to_player_id_{::uint64_t{0u}},
@@ -2131,11 +2148,11 @@ constexpr MailContentStorageRecord::ParseTableT_ MailContentStorageRecord::Inter
     {
       PROTOBUF_FIELD_OFFSET(MailContentStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2145,7 +2162,10 @@ constexpr MailContentStorageRecord::ParseTableT_ MailContentStorageRecord::Inter
       ::_pbi::TcParser::GetTable<::pandora::mail::v1::MailContentStorageRecord>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // string instance_grant_key = 4 [json_name = "instanceGrantKey"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MailContentStorageRecord, _impl_.instance_grant_key_)}},
       // string title = 1 [json_name = "title"];
       {::_pbi::TcParser::FastUS1,
        {10, 1, 0,
@@ -2167,6 +2187,8 @@ constexpr MailContentStorageRecord::ParseTableT_ MailContentStorageRecord::Inter
       {PROTOBUF_FIELD_OFFSET(MailContentStorageRecord, _impl_.body_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated .pandora.mail.v1.MailAttachment attachments = 3 [json_name = "attachments"];
       {PROTOBUF_FIELD_OFFSET(MailContentStorageRecord, _impl_.attachments_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string instance_grant_key = 4 [json_name = "instanceGrantKey"];
+      {PROTOBUF_FIELD_OFFSET(MailContentStorageRecord, _impl_.instance_grant_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2176,10 +2198,11 @@ constexpr MailContentStorageRecord::ParseTableT_ MailContentStorageRecord::Inter
         #endif
     }},
     {{
-      "\50\5\4\0\0\0\0\0"
+      "\50\5\4\0\22\0\0\0"
       "pandora.mail.v1.MailContentStorageRecord"
       "title"
       "body"
+      "instance_grant_key"
     }},
   };
 }
@@ -2198,6 +2221,9 @@ inline constexpr MailContentStorageRecord::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         body_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        instance_grant_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()) {}
 
@@ -2851,11 +2877,13 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailAttachment, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailAttachment, _impl_.item_config_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailAttachment, _impl_.count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailAttachment, _impl_.as_instance_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::Mail, _impl_._has_bits_),
         12, // hasbit index offset
@@ -2977,17 +3005,19 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_.to_player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_.title_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_.body_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_.attachments_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_.expire_ms_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailRequest, _impl_.instance_grant_key_),
+        4,
         1,
         2,
         0,
-        4,
+        5,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::SendPersonalMailResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -2997,34 +3027,36 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailContentStorageRecord, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailContentStorageRecord, _impl_.title_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailContentStorageRecord, _impl_.body_),
         PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailContentStorageRecord, _impl_.attachments_),
+        PROTOBUF_FIELD_OFFSET(::pandora::mail::v1::MailContentStorageRecord, _impl_.instance_grant_key_),
         1,
         2,
         0,
+        3,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::mail::v1::MailAttachment)},
-        {7, sizeof(::pandora::mail::v1::Mail)},
-        {28, sizeof(::pandora::mail::v1::ListMailRequest)},
-        {37, sizeof(::pandora::mail::v1::ListMailResponse)},
-        {46, sizeof(::pandora::mail::v1::ReadMailRequest)},
-        {53, sizeof(::pandora::mail::v1::ReadMailResponse)},
-        {58, sizeof(::pandora::mail::v1::ClaimMailRequest)},
-        {65, sizeof(::pandora::mail::v1::ClaimMailResponse)},
-        {72, sizeof(::pandora::mail::v1::DeleteMailRequest)},
-        {79, sizeof(::pandora::mail::v1::DeleteMailResponse)},
-        {84, sizeof(::pandora::mail::v1::SendSystemMailRequest)},
-        {97, sizeof(::pandora::mail::v1::SendSystemMailResponse)},
-        {104, sizeof(::pandora::mail::v1::SendGuildMailRequest)},
-        {119, sizeof(::pandora::mail::v1::SendGuildMailResponse)},
-        {126, sizeof(::pandora::mail::v1::SendPersonalMailRequest)},
-        {139, sizeof(::pandora::mail::v1::SendPersonalMailResponse)},
-        {146, sizeof(::pandora::mail::v1::MailContentStorageRecord)},
+        {9, sizeof(::pandora::mail::v1::Mail)},
+        {30, sizeof(::pandora::mail::v1::ListMailRequest)},
+        {39, sizeof(::pandora::mail::v1::ListMailResponse)},
+        {48, sizeof(::pandora::mail::v1::ReadMailRequest)},
+        {55, sizeof(::pandora::mail::v1::ReadMailResponse)},
+        {60, sizeof(::pandora::mail::v1::ClaimMailRequest)},
+        {67, sizeof(::pandora::mail::v1::ClaimMailResponse)},
+        {74, sizeof(::pandora::mail::v1::DeleteMailRequest)},
+        {81, sizeof(::pandora::mail::v1::DeleteMailResponse)},
+        {86, sizeof(::pandora::mail::v1::SendSystemMailRequest)},
+        {99, sizeof(::pandora::mail::v1::SendSystemMailResponse)},
+        {106, sizeof(::pandora::mail::v1::SendGuildMailRequest)},
+        {121, sizeof(::pandora::mail::v1::SendGuildMailResponse)},
+        {128, sizeof(::pandora::mail::v1::SendPersonalMailRequest)},
+        {143, sizeof(::pandora::mail::v1::SendPersonalMailResponse)},
+        {150, sizeof(::pandora::mail::v1::MailContentStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3049,84 +3081,88 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_pandora_2fmail_2fv1_2fmail_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\032pandora/mail/v1/mail.proto\022\017pandora.ma"
-    "il.v1\032\037pandora/common/v1/errcode.proto\"L"
+    "il.v1\032\037pandora/common/v1/errcode.proto\"m"
     "\n\016MailAttachment\022$\n\016item_config_id\030\001 \001(\r"
-    "R\014itemConfigId\022\024\n\005count\030\002 \001(\rR\005count\"\317\002\n"
-    "\004Mail\022\027\n\007mail_id\030\001 \001(\004R\006mailId\0226\n\007channe"
-    "l\030\002 \001(\0162\034.pandora.mail.v1.MailChannelR\007c"
-    "hannel\022\024\n\005title\030\003 \001(\tR\005title\022\022\n\004body\030\004 \001"
-    "(\tR\004body\022A\n\013attachments\030\005 \003(\0132\037.pandora."
-    "mail.v1.MailAttachmentR\013attachments\0223\n\006s"
-    "tatus\030\006 \001(\0162\033.pandora.mail.v1.MailStatus"
-    "R\006status\022\030\n\007claimed\030\007 \001(\010R\007claimed\022\035\n\ncr"
-    "eated_ms\030\010 \001(\003R\tcreatedMs\022\033\n\texpire_ms\030\t"
-    " \001(\003R\010expireMs\"\\\n\017ListMailRequest\022\033\n\tpla"
-    "yer_id\030\001 \001(\004R\010playerId\022\026\n\006cursor\030\002 \001(\004R\006"
-    "cursor\022\024\n\005limit\030\003 \001(\005R\005limit\"\220\001\n\020ListMai"
-    "lResponse\022.\n\004code\030\001 \001(\0162\032.pandora.common"
-    ".v1.ErrCodeR\004code\022+\n\005mails\030\002 \003(\0132\025.pando"
-    "ra.mail.v1.MailR\005mails\022\037\n\013next_cursor\030\003 "
-    "\001(\004R\nnextCursor\"G\n\017ReadMailRequest\022\033\n\tpl"
-    "ayer_id\030\001 \001(\004R\010playerId\022\027\n\007mail_id\030\002 \001(\004"
-    "R\006mailId\"B\n\020ReadMailResponse\022.\n\004code\030\001 \001"
-    "(\0162\032.pandora.common.v1.ErrCodeR\004code\"H\n\020"
-    "ClaimMailRequest\022\033\n\tplayer_id\030\001 \001(\004R\010pla"
-    "yerId\022\027\n\007mail_id\030\002 \001(\004R\006mailId\"\206\001\n\021Claim"
+    "R\014itemConfigId\022\024\n\005count\030\002 \001(\rR\005count\022\037\n\013"
+    "as_instance\030\003 \001(\010R\nasInstance\"\317\002\n\004Mail\022\027"
+    "\n\007mail_id\030\001 \001(\004R\006mailId\0226\n\007channel\030\002 \001(\016"
+    "2\034.pandora.mail.v1.MailChannelR\007channel\022"
+    "\024\n\005title\030\003 \001(\tR\005title\022\022\n\004body\030\004 \001(\tR\004bod"
+    "y\022A\n\013attachments\030\005 \003(\0132\037.pandora.mail.v1"
+    ".MailAttachmentR\013attachments\0223\n\006status\030\006"
+    " \001(\0162\033.pandora.mail.v1.MailStatusR\006statu"
+    "s\022\030\n\007claimed\030\007 \001(\010R\007claimed\022\035\n\ncreated_m"
+    "s\030\010 \001(\003R\tcreatedMs\022\033\n\texpire_ms\030\t \001(\003R\010e"
+    "xpireMs\"\\\n\017ListMailRequest\022\033\n\tplayer_id\030"
+    "\001 \001(\004R\010playerId\022\026\n\006cursor\030\002 \001(\004R\006cursor\022"
+    "\024\n\005limit\030\003 \001(\005R\005limit\"\220\001\n\020ListMailRespon"
+    "se\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Err"
+    "CodeR\004code\022+\n\005mails\030\002 \003(\0132\025.pandora.mail"
+    ".v1.MailR\005mails\022\037\n\013next_cursor\030\003 \001(\004R\nne"
+    "xtCursor\"G\n\017ReadMailRequest\022\033\n\tplayer_id"
+    "\030\001 \001(\004R\010playerId\022\027\n\007mail_id\030\002 \001(\004R\006mailI"
+    "d\"B\n\020ReadMailResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\"H\n\020ClaimMa"
+    "ilRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\027"
+    "\n\007mail_id\030\002 \001(\004R\006mailId\"\206\001\n\021ClaimMailRes"
+    "ponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1."
+    "ErrCodeR\004code\022A\n\013attachments\030\002 \003(\0132\037.pan"
+    "dora.mail.v1.MailAttachmentR\013attachments"
+    "\"I\n\021DeleteMailRequest\022\033\n\tplayer_id\030\001 \001(\004"
+    "R\010playerId\022\027\n\007mail_id\030\002 \001(\004R\006mailId\"D\n\022D"
+    "eleteMailResponse\022.\n\004code\030\001 \001(\0162\032.pandor"
+    "a.common.v1.ErrCodeR\004code\"\266\001\n\025SendSystem"
+    "MailRequest\022\024\n\005title\030\001 \001(\tR\005title\022\022\n\004bod"
+    "y\030\002 \001(\tR\004body\022A\n\013attachments\030\003 \003(\0132\037.pan"
+    "dora.mail.v1.MailAttachmentR\013attachments"
+    "\022\031\n\010start_ms\030\004 \001(\003R\007startMs\022\025\n\006end_ms\030\005 "
+    "\001(\003R\005endMs\"a\n\026SendSystemMailResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022\027\n\007mail_id\030\002 \001(\004R\006mailId\"\320\001\n\024SendGu"
+    "ildMailRequest\022\031\n\010guild_id\030\001 \001(\004R\007guildI"
+    "d\022\024\n\005title\030\002 \001(\tR\005title\022\022\n\004body\030\003 \001(\tR\004b"
+    "ody\022A\n\013attachments\030\004 \003(\0132\037.pandora.mail."
+    "v1.MailAttachmentR\013attachments\022\031\n\010start_"
+    "ms\030\005 \001(\003R\007startMs\022\025\n\006end_ms\030\006 \001(\003R\005endMs"
+    "\"`\n\025SendGuildMailResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\022\027\n\007mai"
+    "l_id\030\002 \001(\004R\006mailId\"\363\001\n\027SendPersonalMailR"
+    "equest\022 \n\014to_player_id\030\001 \001(\004R\ntoPlayerId"
+    "\022\024\n\005title\030\002 \001(\tR\005title\022\022\n\004body\030\003 \001(\tR\004bo"
+    "dy\022A\n\013attachments\030\004 \003(\0132\037.pandora.mail.v"
+    "1.MailAttachmentR\013attachments\022\033\n\texpire_"
+    "ms\030\005 \001(\003R\010expireMs\022,\n\022instance_grant_key"
+    "\030\006 \001(\tR\020instanceGrantKey\"c\n\030SendPersonal"
     "MailResponse\022.\n\004code\030\001 \001(\0162\032.pandora.com"
-    "mon.v1.ErrCodeR\004code\022A\n\013attachments\030\002 \003("
-    "\0132\037.pandora.mail.v1.MailAttachmentR\013atta"
-    "chments\"I\n\021DeleteMailRequest\022\033\n\tplayer_i"
-    "d\030\001 \001(\004R\010playerId\022\027\n\007mail_id\030\002 \001(\004R\006mail"
-    "Id\"D\n\022DeleteMailResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\"\266\001\n\025Sen"
-    "dSystemMailRequest\022\024\n\005title\030\001 \001(\tR\005title"
-    "\022\022\n\004body\030\002 \001(\tR\004body\022A\n\013attachments\030\003 \003("
-    "\0132\037.pandora.mail.v1.MailAttachmentR\013atta"
-    "chments\022\031\n\010start_ms\030\004 \001(\003R\007startMs\022\025\n\006en"
-    "d_ms\030\005 \001(\003R\005endMs\"a\n\026SendSystemMailRespo"
-    "nse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1.Er"
-    "rCodeR\004code\022\027\n\007mail_id\030\002 \001(\004R\006mailId\"\320\001\n"
-    "\024SendGuildMailRequest\022\031\n\010guild_id\030\001 \001(\004R"
-    "\007guildId\022\024\n\005title\030\002 \001(\tR\005title\022\022\n\004body\030\003"
-    " \001(\tR\004body\022A\n\013attachments\030\004 \003(\0132\037.pandor"
-    "a.mail.v1.MailAttachmentR\013attachments\022\031\n"
-    "\010start_ms\030\005 \001(\003R\007startMs\022\025\n\006end_ms\030\006 \001(\003"
-    "R\005endMs\"`\n\025SendGuildMailResponse\022.\n\004code"
-    "\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004code"
-    "\022\027\n\007mail_id\030\002 \001(\004R\006mailId\"\305\001\n\027SendPerson"
-    "alMailRequest\022 \n\014to_player_id\030\001 \001(\004R\ntoP"
-    "layerId\022\024\n\005title\030\002 \001(\tR\005title\022\022\n\004body\030\003 "
-    "\001(\tR\004body\022A\n\013attachments\030\004 \003(\0132\037.pandora"
-    ".mail.v1.MailAttachmentR\013attachments\022\033\n\t"
-    "expire_ms\030\005 \001(\003R\010expireMs\"c\n\030SendPersona"
-    "lMailResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
-    "mmon.v1.ErrCodeR\004code\022\027\n\007mail_id\030\002 \001(\004R\006"
-    "mailId\"\207\001\n\030MailContentStorageRecord\022\024\n\005t"
-    "itle\030\001 \001(\tR\005title\022\022\n\004body\030\002 \001(\tR\004body\022A\n"
-    "\013attachments\030\003 \003(\0132\037.pandora.mail.v1.Mai"
-    "lAttachmentR\013attachments*w\n\013MailChannel\022"
-    "\034\n\030MAIL_CHANNEL_UNSPECIFIED\020\000\022\027\n\023MAIL_CH"
-    "ANNEL_SYSTEM\020\001\022\026\n\022MAIL_CHANNEL_GUILD\020\002\022\031"
-    "\n\025MAIL_CHANNEL_PERSONAL\020\003*p\n\nMailStatus\022"
-    "\033\n\027MAIL_STATUS_UNSPECIFIED\020\000\022\026\n\022MAIL_STA"
-    "TUS_UNREAD\020\001\022\024\n\020MAIL_STATUS_READ\020\002\022\027\n\023MA"
-    "IL_STATUS_CLAIMED\020\0032\206\005\n\013MailService\022O\n\010L"
-    "istMail\022 .pandora.mail.v1.ListMailReques"
-    "t\032!.pandora.mail.v1.ListMailResponse\022O\n\010"
-    "ReadMail\022 .pandora.mail.v1.ReadMailReque"
-    "st\032!.pandora.mail.v1.ReadMailResponse\022R\n"
-    "\tClaimMail\022!.pandora.mail.v1.ClaimMailRe"
-    "quest\032\".pandora.mail.v1.ClaimMailRespons"
-    "e\022U\n\nDeleteMail\022\".pandora.mail.v1.Delete"
-    "MailRequest\032#.pandora.mail.v1.DeleteMail"
-    "Response\022a\n\016SendSystemMail\022&.pandora.mai"
-    "l.v1.SendSystemMailRequest\032\'.pandora.mai"
-    "l.v1.SendSystemMailResponse\022^\n\rSendGuild"
-    "Mail\022%.pandora.mail.v1.SendGuildMailRequ"
-    "est\032&.pandora.mail.v1.SendGuildMailRespo"
-    "nse\022g\n\020SendPersonalMail\022(.pandora.mail.v"
-    "1.SendPersonalMailRequest\032).pandora.mail"
-    ".v1.SendPersonalMailResponseb\006proto3"
+    "mon.v1.ErrCodeR\004code\022\027\n\007mail_id\030\002 \001(\004R\006m"
+    "ailId\"\265\001\n\030MailContentStorageRecord\022\024\n\005ti"
+    "tle\030\001 \001(\tR\005title\022\022\n\004body\030\002 \001(\tR\004body\022A\n\013"
+    "attachments\030\003 \003(\0132\037.pandora.mail.v1.Mail"
+    "AttachmentR\013attachments\022,\n\022instance_gran"
+    "t_key\030\004 \001(\tR\020instanceGrantKey*w\n\013MailCha"
+    "nnel\022\034\n\030MAIL_CHANNEL_UNSPECIFIED\020\000\022\027\n\023MA"
+    "IL_CHANNEL_SYSTEM\020\001\022\026\n\022MAIL_CHANNEL_GUIL"
+    "D\020\002\022\031\n\025MAIL_CHANNEL_PERSONAL\020\003*p\n\nMailSt"
+    "atus\022\033\n\027MAIL_STATUS_UNSPECIFIED\020\000\022\026\n\022MAI"
+    "L_STATUS_UNREAD\020\001\022\024\n\020MAIL_STATUS_READ\020\002\022"
+    "\027\n\023MAIL_STATUS_CLAIMED\020\0032\206\005\n\013MailService"
+    "\022O\n\010ListMail\022 .pandora.mail.v1.ListMailR"
+    "equest\032!.pandora.mail.v1.ListMailRespons"
+    "e\022O\n\010ReadMail\022 .pandora.mail.v1.ReadMail"
+    "Request\032!.pandora.mail.v1.ReadMailRespon"
+    "se\022R\n\tClaimMail\022!.pandora.mail.v1.ClaimM"
+    "ailRequest\032\".pandora.mail.v1.ClaimMailRe"
+    "sponse\022U\n\nDeleteMail\022\".pandora.mail.v1.D"
+    "eleteMailRequest\032#.pandora.mail.v1.Delet"
+    "eMailResponse\022a\n\016SendSystemMail\022&.pandor"
+    "a.mail.v1.SendSystemMailRequest\032\'.pandor"
+    "a.mail.v1.SendSystemMailResponse\022^\n\rSend"
+    "GuildMail\022%.pandora.mail.v1.SendGuildMai"
+    "lRequest\032&.pandora.mail.v1.SendGuildMail"
+    "Response\022g\n\020SendPersonalMail\022(.pandora.m"
+    "ail.v1.SendPersonalMailRequest\032).pandora"
+    ".mail.v1.SendPersonalMailResponseb\006proto"
+    "3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto_deps[1] = {
@@ -3136,7 +3172,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto = {
     false,
     false,
-    3156,
+    3281,
     descriptor_table_protodef_pandora_2fmail_2fv1_2fmail_2eproto,
     "pandora/mail/v1/mail.proto",
     &descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto_once,
@@ -3198,9 +3234,9 @@ inline void MailAttachment::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, item_config_id_),
            0,
-           offsetof(Impl_, count_) -
+           offsetof(Impl_, as_instance_) -
                offsetof(Impl_, item_config_id_) +
-               sizeof(Impl_::count_));
+               sizeof(Impl_::as_instance_));
 }
 MailAttachment::~MailAttachment() {
   // @@protoc_insertion_point(destructor:pandora.mail.v1.MailAttachment)
@@ -3250,10 +3286,10 @@ PROTOBUF_NOINLINE void MailAttachment::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.item_config_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.count_) -
-        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.count_));
+        reinterpret_cast<char*>(&_impl_.as_instance_) -
+        reinterpret_cast<char*>(&_impl_.item_config_id_)) + sizeof(_impl_.as_instance_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3296,6 +3332,15 @@ PROTOBUF_NOINLINE void MailAttachment::Clear() {
     }
   }
 
+  // bool as_instance = 3 [json_name = "asInstance"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_as_instance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_as_instance(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3321,7 +3366,7 @@ PROTOBUF_NOINLINE void MailAttachment::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint32 item_config_id = 1 [json_name = "itemConfigId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_item_config_id() != 0) {
@@ -3334,6 +3379,12 @@ PROTOBUF_NOINLINE void MailAttachment::Clear() {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_count());
+      }
+    }
+    // bool as_instance = 3 [json_name = "asInstance"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_as_instance() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -3354,7 +3405,7 @@ void MailAttachment::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_item_config_id() != 0) {
         _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
@@ -3363,6 +3414,11 @@ void MailAttachment::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_count() != 0) {
         _this->_impl_.count_ = from._impl_.count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_as_instance() != 0) {
+        _this->_impl_.as_instance_ = from._impl_.as_instance_;
       }
     }
   }
@@ -3384,8 +3440,8 @@ void MailAttachment::InternalSwap(MailAttachment* PROTOBUF_RESTRICT PROTOBUF_NON
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.count_)
-      + sizeof(MailAttachment::_impl_.count_)
+      PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.as_instance_)
+      + sizeof(MailAttachment::_impl_.as_instance_)
       - PROTOBUF_FIELD_OFFSET(MailAttachment, _impl_.item_config_id_)>(
           reinterpret_cast<char*>(&_impl_.item_config_id_),
           reinterpret_cast<char*>(&other->_impl_.item_config_id_));
@@ -6912,7 +6968,8 @@ PROTOBUF_NDEBUG_INLINE SendPersonalMailRequest::Impl_::Impl_(
         }
         ,
         title_(arena, from.title_),
-        body_(arena, from.body_) {}
+        body_(arena, from.body_),
+        instance_grant_key_(arena, from.instance_grant_key_) {}
 
 SendPersonalMailRequest::SendPersonalMailRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -6948,7 +7005,8 @@ PROTOBUF_NDEBUG_INLINE SendPersonalMailRequest::Impl_::Impl_(
          }
         ,
         title_(arena),
-        body_(arena) {}
+        body_(arena),
+        instance_grant_key_(arena) {}
 
 inline void SendPersonalMailRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -6972,6 +7030,7 @@ inline void SendPersonalMailRequest::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.title_.Destroy();
   this_._impl_.body_.Destroy();
+  this_._impl_.instance_grant_key_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -7009,7 +7068,7 @@ PROTOBUF_NOINLINE void SendPersonalMailRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.attachments_.Clear();
     }
@@ -7019,8 +7078,11 @@ PROTOBUF_NOINLINE void SendPersonalMailRequest::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.body_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.instance_grant_key_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000030U)) {
     ::memset(&_impl_.to_player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.expire_ms_) -
         reinterpret_cast<char*>(&_impl_.to_player_id_)) + sizeof(_impl_.expire_ms_));
@@ -7049,7 +7111,7 @@ PROTOBUF_NOINLINE void SendPersonalMailRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 to_player_id = 1 [json_name = "toPlayerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_to_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -7091,11 +7153,21 @@ PROTOBUF_NOINLINE void SendPersonalMailRequest::Clear() {
   }
 
   // int64 expire_ms = 5 [json_name = "expireMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_expire_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
               stream, this_._internal_expire_ms(), target);
+    }
+  }
+
+  // string instance_grant_key = 6 [json_name = "instanceGrantKey"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_instance_grant_key().empty()) {
+      const ::std::string& _s = this_._internal_instance_grant_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.mail.v1.SendPersonalMailRequest.instance_grant_key");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
     }
   }
 
@@ -7124,7 +7196,7 @@ PROTOBUF_NOINLINE void SendPersonalMailRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // repeated .pandora.mail.v1.MailAttachment attachments = 4 [json_name = "attachments"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attachments_size();
@@ -7146,15 +7218,22 @@ PROTOBUF_NOINLINE void SendPersonalMailRequest::Clear() {
                                         this_._internal_body());
       }
     }
-    // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+    // string instance_grant_key = 6 [json_name = "instanceGrantKey"];
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_instance_grant_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_instance_grant_key());
+      }
+    }
+    // uint64 to_player_id = 1 [json_name = "toPlayerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_to_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_to_player_id());
       }
     }
     // int64 expire_ms = 5 [json_name = "expireMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_expire_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_expire_ms());
@@ -7179,7 +7258,7 @@ void SendPersonalMailRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_attachments()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -7204,11 +7283,20 @@ void SendPersonalMailRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_instance_grant_key().empty()) {
+        _this->_internal_set_instance_grant_key(from._internal_instance_grant_key());
+      } else {
+        if (_this->_impl_.instance_grant_key_.IsDefault()) {
+          _this->_internal_set_instance_grant_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_to_player_id() != 0) {
         _this->_impl_.to_player_id_ = from._impl_.to_player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_expire_ms() != 0) {
         _this->_impl_.expire_ms_ = from._impl_.expire_ms_;
       }
@@ -7236,6 +7324,7 @@ void SendPersonalMailRequest::InternalSwap(SendPersonalMailRequest* PROTOBUF_RES
   _impl_.attachments_.InternalSwap(&other->_impl_.attachments_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.title_, &other->_impl_.title_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.body_, &other->_impl_.body_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.instance_grant_key_, &other->_impl_.instance_grant_key_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SendPersonalMailRequest, _impl_.expire_ms_)
       + sizeof(SendPersonalMailRequest::_impl_.expire_ms_)
@@ -7500,7 +7589,8 @@ PROTOBUF_NDEBUG_INLINE MailContentStorageRecord::Impl_::Impl_(
         }
         ,
         title_(arena, from.title_),
-        body_(arena, from.body_) {}
+        body_(arena, from.body_),
+        instance_grant_key_(arena, from.instance_grant_key_) {}
 
 MailContentStorageRecord::MailContentStorageRecord(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -7529,7 +7619,8 @@ PROTOBUF_NDEBUG_INLINE MailContentStorageRecord::Impl_::Impl_(
          }
         ,
         title_(arena),
-        body_(arena) {}
+        body_(arena),
+        instance_grant_key_(arena) {}
 
 inline void MailContentStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -7547,6 +7638,7 @@ inline void MailContentStorageRecord::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.title_.Destroy();
   this_._impl_.body_.Destroy();
+  this_._impl_.instance_grant_key_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -7584,7 +7676,7 @@ PROTOBUF_NOINLINE void MailContentStorageRecord::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.attachments_.Clear();
     }
@@ -7593,6 +7685,9 @@ PROTOBUF_NOINLINE void MailContentStorageRecord::Clear() {
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.body_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.instance_grant_key_.ClearNonDefaultToEmpty();
     }
   }
   _impl_._has_bits_.Clear();
@@ -7651,6 +7746,16 @@ PROTOBUF_NOINLINE void MailContentStorageRecord::Clear() {
     }
   }
 
+  // string instance_grant_key = 4 [json_name = "instanceGrantKey"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_instance_grant_key().empty()) {
+      const ::std::string& _s = this_._internal_instance_grant_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.mail.v1.MailContentStorageRecord.instance_grant_key");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7676,7 +7781,7 @@ PROTOBUF_NOINLINE void MailContentStorageRecord::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .pandora.mail.v1.MailAttachment attachments = 3 [json_name = "attachments"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_attachments_size();
@@ -7698,6 +7803,13 @@ PROTOBUF_NOINLINE void MailContentStorageRecord::Clear() {
                                         this_._internal_body());
       }
     }
+    // string instance_grant_key = 4 [json_name = "instanceGrantKey"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_instance_grant_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_instance_grant_key());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -7717,7 +7829,7 @@ void MailContentStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_attachments()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -7738,6 +7850,15 @@ void MailContentStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg
       } else {
         if (_this->_impl_.body_.IsDefault()) {
           _this->_internal_set_body("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_instance_grant_key().empty()) {
+        _this->_internal_set_instance_grant_key(from._internal_instance_grant_key());
+      } else {
+        if (_this->_impl_.instance_grant_key_.IsDefault()) {
+          _this->_internal_set_instance_grant_key("");
         }
       }
     }
@@ -7764,6 +7885,7 @@ void MailContentStorageRecord::InternalSwap(MailContentStorageRecord* PROTOBUF_R
   _impl_.attachments_.InternalSwap(&other->_impl_.attachments_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.title_, &other->_impl_.title_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.body_, &other->_impl_.body_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.instance_grant_key_, &other->_impl_.instance_grant_key_, arena);
 }
 
 ::google::protobuf::Metadata MailContentStorageRecord::GetMetadata() const {

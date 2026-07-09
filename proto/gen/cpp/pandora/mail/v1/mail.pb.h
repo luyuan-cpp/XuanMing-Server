@@ -1510,6 +1510,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
   enum : int {
     kItemConfigIdFieldNumber = 1,
     kCountFieldNumber = 2,
+    kAsInstanceFieldNumber = 3,
   };
   // uint32 item_config_id = 1 [json_name = "itemConfigId"];
   void clear_item_config_id() ;
@@ -1531,11 +1532,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
   void _internal_set_count(::uint32_t value);
 
   public:
+  // bool as_instance = 3 [json_name = "asInstance"];
+  void clear_as_instance() ;
+  [[nodiscard]] bool as_instance() const;
+  void set_as_instance(bool value);
+
+  private:
+  bool _internal_as_instance() const;
+  void _internal_set_as_instance(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.mail.v1.MailAttachment)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1566,6 +1577,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAttachment final : public ::goo
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t item_config_id_;
     ::uint32_t count_;
+    bool as_instance_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2846,6 +2858,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendPersonalMailRequest final : pub
     kAttachmentsFieldNumber = 4,
     kTitleFieldNumber = 2,
     kBodyFieldNumber = 3,
+    kInstanceGrantKeyFieldNumber = 6,
     kToPlayerIdFieldNumber = 1,
     kExpireMsFieldNumber = 5,
   };
@@ -2900,6 +2913,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendPersonalMailRequest final : pub
   ::std::string* PROTOBUF_NONNULL _internal_mutable_body();
 
   public:
+  // string instance_grant_key = 6 [json_name = "instanceGrantKey"];
+  void clear_instance_grant_key() ;
+  [[nodiscard]] const ::std::string& instance_grant_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_instance_grant_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_instance_grant_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_instance_grant_key();
+  void set_allocated_instance_grant_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_instance_grant_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_instance_grant_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_instance_grant_key();
+
+  public:
   // uint64 to_player_id = 1 [json_name = "toPlayerId"];
   void clear_to_player_id() ;
   [[nodiscard]] ::uint64_t to_player_id() const;
@@ -2924,8 +2952,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendPersonalMailRequest final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          1, 57,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          1, 75,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2956,6 +2984,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendPersonalMailRequest final : pub
     ::google::protobuf::RepeatedPtrField< ::pandora::mail::v1::MailAttachment > attachments_;
     ::google::protobuf::internal::ArenaStringPtr title_;
     ::google::protobuf::internal::ArenaStringPtr body_;
+    ::google::protobuf::internal::ArenaStringPtr instance_grant_key_;
     ::uint64_t to_player_id_;
     ::int64_t expire_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3398,6 +3427,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailContentStorageRecord final : pu
     kAttachmentsFieldNumber = 3,
     kTitleFieldNumber = 1,
     kBodyFieldNumber = 2,
+    kInstanceGrantKeyFieldNumber = 4,
   };
   // repeated .pandora.mail.v1.MailAttachment attachments = 3 [json_name = "attachments"];
   [[nodiscard]] int attachments_size()
@@ -3450,12 +3480,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailContentStorageRecord final : pu
   ::std::string* PROTOBUF_NONNULL _internal_mutable_body();
 
   public:
+  // string instance_grant_key = 4 [json_name = "instanceGrantKey"];
+  void clear_instance_grant_key() ;
+  [[nodiscard]] const ::std::string& instance_grant_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_instance_grant_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_instance_grant_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_instance_grant_key();
+  void set_allocated_instance_grant_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_instance_grant_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_instance_grant_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_instance_grant_key();
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.mail.v1.MailContentStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
-                          1, 58,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 76,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3486,6 +3531,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailContentStorageRecord final : pu
     ::google::protobuf::RepeatedPtrField< ::pandora::mail::v1::MailAttachment > attachments_;
     ::google::protobuf::internal::ArenaStringPtr title_;
     ::google::protobuf::internal::ArenaStringPtr body_;
+    ::google::protobuf::internal::ArenaStringPtr instance_grant_key_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4332,6 +4378,30 @@ inline ::uint32_t MailAttachment::_internal_count() const {
 inline void MailAttachment::_internal_set_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = value;
+}
+
+// bool as_instance = 3 [json_name = "asInstance"];
+inline void MailAttachment::clear_as_instance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.as_instance_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool MailAttachment::as_instance() const {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailAttachment.as_instance)
+  return _internal_as_instance();
+}
+inline void MailAttachment::set_as_instance(bool value) {
+  _internal_set_as_instance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.MailAttachment.as_instance)
+}
+inline bool MailAttachment::_internal_as_instance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.as_instance_;
+}
+inline void MailAttachment::_internal_set_as_instance(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.as_instance_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -5749,7 +5819,7 @@ inline void SendGuildMailResponse::_internal_set_mail_id(::uint64_t value) {
 inline void SendPersonalMailRequest::clear_to_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t SendPersonalMailRequest::to_player_id() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.SendPersonalMailRequest.to_player_id)
@@ -5757,7 +5827,7 @@ inline ::uint64_t SendPersonalMailRequest::to_player_id() const {
 }
 inline void SendPersonalMailRequest::set_to_player_id(::uint64_t value) {
   _internal_set_to_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.SendPersonalMailRequest.to_player_id)
 }
 inline ::uint64_t SendPersonalMailRequest::_internal_to_player_id() const {
@@ -5956,7 +6026,7 @@ SendPersonalMailRequest::_internal_mutable_attachments() {
 inline void SendPersonalMailRequest::clear_expire_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expire_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::int64_t SendPersonalMailRequest::expire_ms() const {
   // @@protoc_insertion_point(field_get:pandora.mail.v1.SendPersonalMailRequest.expire_ms)
@@ -5964,7 +6034,7 @@ inline ::int64_t SendPersonalMailRequest::expire_ms() const {
 }
 inline void SendPersonalMailRequest::set_expire_ms(::int64_t value) {
   _internal_set_expire_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:pandora.mail.v1.SendPersonalMailRequest.expire_ms)
 }
 inline ::int64_t SendPersonalMailRequest::_internal_expire_ms() const {
@@ -5974,6 +6044,70 @@ inline ::int64_t SendPersonalMailRequest::_internal_expire_ms() const {
 inline void SendPersonalMailRequest::_internal_set_expire_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expire_ms_ = value;
+}
+
+// string instance_grant_key = 6 [json_name = "instanceGrantKey"];
+inline void SendPersonalMailRequest::clear_instance_grant_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_grant_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& SendPersonalMailRequest::instance_grant_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.SendPersonalMailRequest.instance_grant_key)
+  return _internal_instance_grant_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SendPersonalMailRequest::set_instance_grant_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.instance_grant_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.SendPersonalMailRequest.instance_grant_key)
+}
+inline ::std::string* PROTOBUF_NONNULL SendPersonalMailRequest::mutable_instance_grant_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_instance_grant_key();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.SendPersonalMailRequest.instance_grant_key)
+  return _s;
+}
+inline const ::std::string& SendPersonalMailRequest::_internal_instance_grant_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_grant_key_.Get();
+}
+inline void SendPersonalMailRequest::_internal_set_instance_grant_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_grant_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SendPersonalMailRequest::_internal_mutable_instance_grant_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.instance_grant_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SendPersonalMailRequest::release_instance_grant_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.SendPersonalMailRequest.instance_grant_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.instance_grant_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.instance_grant_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SendPersonalMailRequest::set_allocated_instance_grant_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.instance_grant_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_grant_key_.IsDefault()) {
+    _impl_.instance_grant_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.mail.v1.SendPersonalMailRequest.instance_grant_key)
 }
 
 // -------------------------------------------------------------------
@@ -6213,6 +6347,70 @@ inline ::google::protobuf::RepeatedPtrField<::pandora::mail::v1::MailAttachment>
 MailContentStorageRecord::_internal_mutable_attachments() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.attachments_;
+}
+
+// string instance_grant_key = 4 [json_name = "instanceGrantKey"];
+inline void MailContentStorageRecord::clear_instance_grant_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_grant_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& MailContentStorageRecord::instance_grant_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.mail.v1.MailContentStorageRecord.instance_grant_key)
+  return _internal_instance_grant_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MailContentStorageRecord::set_instance_grant_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.instance_grant_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.mail.v1.MailContentStorageRecord.instance_grant_key)
+}
+inline ::std::string* PROTOBUF_NONNULL MailContentStorageRecord::mutable_instance_grant_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_instance_grant_key();
+  // @@protoc_insertion_point(field_mutable:pandora.mail.v1.MailContentStorageRecord.instance_grant_key)
+  return _s;
+}
+inline const ::std::string& MailContentStorageRecord::_internal_instance_grant_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_grant_key_.Get();
+}
+inline void MailContentStorageRecord::_internal_set_instance_grant_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_grant_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MailContentStorageRecord::_internal_mutable_instance_grant_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.instance_grant_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MailContentStorageRecord::release_instance_grant_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.mail.v1.MailContentStorageRecord.instance_grant_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.instance_grant_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.instance_grant_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MailContentStorageRecord::set_allocated_instance_grant_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.instance_grant_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_grant_key_.IsDefault()) {
+    _impl_.instance_grant_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.mail.v1.MailContentStorageRecord.instance_grant_key)
 }
 
 #ifdef __GNUC__

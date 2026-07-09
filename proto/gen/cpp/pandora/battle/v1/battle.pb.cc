@@ -211,11 +211,11 @@ constexpr PlayerStats::ParseTableT_ PlayerStats::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(PlayerStats, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      20, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4294440960,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -299,6 +299,8 @@ constexpr PlayerStats::ParseTableT_ PlayerStats::InternalGenerateParseTable_(con
       {PROTOBUF_FIELD_OFFSET(PlayerStats, _impl_.gold_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // int32 mmr_delta = 11 [json_name = "mmrDelta"];
       {PROTOBUF_FIELD_OFFSET(PlayerStats, _impl_.mmr_delta_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      // repeated uint32 dropped_item_config_ids = 20 [json_name = "droppedItemConfigIds"];
+      {PROTOBUF_FIELD_OFFSET(PlayerStats, _impl_.dropped_item_config_ids_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
     {{
@@ -321,7 +323,13 @@ inline constexpr PlayerStats::Impl_::Impl_(
         assists_{0},
         mmr_delta_{0},
         healing_{::int64_t{0}},
-        gold_{::int64_t{0}} {}
+        gold_{::int64_t{0}},
+        dropped_item_config_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::battle::v1::PlayerStats,
+            PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.dropped_item_config_ids_)>()
+         }
+        ,
+        _dropped_item_config_ids_cached_byte_size_{0} {}
 
 template <typename>
 constexpr PlayerStats::PlayerStats(::_pbi::ConstantInitialized,
@@ -339,7 +347,7 @@ inline void* PROTOBUF_NONNULL PlayerStats::PlacementNew_(
   return ::new (mem) PlayerStats(arena);
 }
 constexpr auto PlayerStats::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PlayerStats), alignof(PlayerStats));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerStats), alignof(PlayerStats));
 }
 constexpr auto PlayerStats::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -1405,7 +1413,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_._has_bits_),
-        14, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.hero_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.team_),
@@ -1417,6 +1425,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.healing_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.gold_),
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.mmr_delta_),
+        PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.dropped_item_config_ids_),
         0,
         1,
         2,
@@ -1428,6 +1437,7 @@ const ::uint32_t
         9,
         10,
         8,
+        11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::BattleResult, _impl_._has_bits_),
         12, // hasbit index offset
@@ -1494,13 +1504,13 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::pandora::battle::v1::PlayerStats)},
-        {25, sizeof(::pandora::battle::v1::BattleResult)},
-        {46, sizeof(::pandora::battle::v1::ReportResultRequest)},
-        {51, sizeof(::pandora::battle::v1::ReportResultResponse)},
-        {58, sizeof(::pandora::battle::v1::GetMatchResultRequest)},
-        {63, sizeof(::pandora::battle::v1::GetMatchResultResponse)},
-        {70, sizeof(::pandora::battle::v1::ListPlayerHistoryRequest)},
-        {79, sizeof(::pandora::battle::v1::ListPlayerHistoryResponse)},
+        {27, sizeof(::pandora::battle::v1::BattleResult)},
+        {48, sizeof(::pandora::battle::v1::ReportResultRequest)},
+        {53, sizeof(::pandora::battle::v1::ReportResultResponse)},
+        {60, sizeof(::pandora::battle::v1::GetMatchResultRequest)},
+        {65, sizeof(::pandora::battle::v1::GetMatchResultResponse)},
+        {72, sizeof(::pandora::battle::v1::ListPlayerHistoryRequest)},
+        {81, sizeof(::pandora::battle::v1::ListPlayerHistoryResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1517,50 +1527,51 @@ const char descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto[] AB
     protodesc_cold) = {
     "\n\036pandora/battle/v1/battle.proto\022\021pandor"
     "a.battle.v1\032\037pandora/common/v1/errcode.p"
-    "roto\"\266\002\n\013PlayerStats\022\033\n\tplayer_id\030\001 \001(\004R"
+    "roto\"\355\002\n\013PlayerStats\022\033\n\tplayer_id\030\001 \001(\004R"
     "\010playerId\022\027\n\007hero_id\030\002 \001(\rR\006heroId\022\022\n\004te"
     "am\030\003 \001(\005R\004team\022\024\n\005kills\030\004 \001(\005R\005kills\022\026\n\006"
     "deaths\030\005 \001(\005R\006deaths\022\030\n\007assists\030\006 \001(\005R\007a"
     "ssists\022!\n\014damage_dealt\030\007 \001(\003R\013damageDeal"
     "t\022!\n\014damage_taken\030\010 \001(\003R\013damageTaken\022\030\n\007"
     "healing\030\t \001(\003R\007healing\022\022\n\004gold\030\n \001(\003R\004go"
-    "ld\022\033\n\tmmr_delta\030\013 \001(\005R\010mmrDeltaJ\004\010\014\020\024\"\332\002"
-    "\n\014BattleResult\022\031\n\010match_id\030\001 \001(\004R\007matchI"
-    "d\022\"\n\rstarted_at_ms\030\002 \001(\003R\013startedAtMs\022\036\n"
-    "\013ended_at_ms\030\003 \001(\003R\tendedAtMs\022\037\n\013winner_"
-    "team\030\004 \001(\005R\nwinnerTeam\0224\n\005stats\030\005 \003(\0132\036."
-    "pandora.battle.v1.PlayerStatsR\005stats\022\036\n\013"
-    "ds_pod_name\030\006 \001(\tR\tdsPodName\022\033\n\tgame_mod"
-    "e\030\007 \001(\tR\010gameMode\022\025\n\006map_id\030\010 \001(\rR\005mapId"
-    "\022:\n\007outcome\030\n \001(\0162 .pandora.battle.v1.Ba"
-    "ttleOutcomeR\007outcomeJ\004\010\t\020\n\"N\n\023ReportResu"
-    "ltRequest\0227\n\006result\030\001 \001(\0132\037.pandora.batt"
-    "le.v1.BattleResultR\006result\"q\n\024ReportResu"
-    "ltResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCodeR\004code\022)\n\020already_recorded\030\002"
-    " \001(\010R\017alreadyRecorded\"2\n\025GetMatchResultR"
-    "equest\022\031\n\010match_id\030\001 \001(\004R\007matchId\"\201\001\n\026Ge"
-    "tMatchResultResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\0227\n\006result\030\002"
-    " \001(\0132\037.pandora.battle.v1.BattleResultR\006r"
-    "esult\"j\n\030ListPlayerHistoryRequest\022\033\n\tpla"
-    "yer_id\030\001 \001(\004R\010playerId\022\024\n\005limit\030\002 \001(\005R\005l"
-    "imit\022\033\n\tbefore_ms\030\003 \001(\003R\010beforeMs\"\206\001\n\031Li"
-    "stPlayerHistoryResponse\022.\n\004code\030\001 \001(\0162\032."
-    "pandora.common.v1.ErrCodeR\004code\0229\n\007resul"
-    "ts\030\002 \003(\0132\037.pandora.battle.v1.BattleResul"
-    "tR\007results*h\n\rBattleOutcome\022\036\n\032BATTLE_OU"
-    "TCOME_UNSPECIFIED\020\000\022\031\n\025BATTLE_OUTCOME_NO"
-    "RMAL\020\001\022\034\n\030BATTLE_OUTCOME_ABANDONED\020\0022\315\002\n"
-    "\023BattleResultService\022_\n\014ReportResult\022&.p"
-    "andora.battle.v1.ReportResultRequest\032\'.p"
-    "andora.battle.v1.ReportResultResponse\022e\n"
-    "\016GetMatchResult\022(.pandora.battle.v1.GetM"
-    "atchResultRequest\032).pandora.battle.v1.Ge"
-    "tMatchResultResponse\022n\n\021ListPlayerHistor"
-    "y\022+.pandora.battle.v1.ListPlayerHistoryR"
-    "equest\032,.pandora.battle.v1.ListPlayerHis"
-    "toryResponseb\006proto3"
+    "ld\022\033\n\tmmr_delta\030\013 \001(\005R\010mmrDelta\0225\n\027dropp"
+    "ed_item_config_ids\030\024 \003(\rR\024droppedItemCon"
+    "figIdsJ\004\010\014\020\024\"\332\002\n\014BattleResult\022\031\n\010match_i"
+    "d\030\001 \001(\004R\007matchId\022\"\n\rstarted_at_ms\030\002 \001(\003R"
+    "\013startedAtMs\022\036\n\013ended_at_ms\030\003 \001(\003R\tended"
+    "AtMs\022\037\n\013winner_team\030\004 \001(\005R\nwinnerTeam\0224\n"
+    "\005stats\030\005 \003(\0132\036.pandora.battle.v1.PlayerS"
+    "tatsR\005stats\022\036\n\013ds_pod_name\030\006 \001(\tR\tdsPodN"
+    "ame\022\033\n\tgame_mode\030\007 \001(\tR\010gameMode\022\025\n\006map_"
+    "id\030\010 \001(\rR\005mapId\022:\n\007outcome\030\n \001(\0162 .pando"
+    "ra.battle.v1.BattleOutcomeR\007outcomeJ\004\010\t\020"
+    "\n\"N\n\023ReportResultRequest\0227\n\006result\030\001 \001(\013"
+    "2\037.pandora.battle.v1.BattleResultR\006resul"
+    "t\"q\n\024ReportResultResponse\022.\n\004code\030\001 \001(\0162"
+    "\032.pandora.common.v1.ErrCodeR\004code\022)\n\020alr"
+    "eady_recorded\030\002 \001(\010R\017alreadyRecorded\"2\n\025"
+    "GetMatchResultRequest\022\031\n\010match_id\030\001 \001(\004R"
+    "\007matchId\"\201\001\n\026GetMatchResultResponse\022.\n\004c"
+    "ode\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004c"
+    "ode\0227\n\006result\030\002 \001(\0132\037.pandora.battle.v1."
+    "BattleResultR\006result\"j\n\030ListPlayerHistor"
+    "yRequest\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\024\n"
+    "\005limit\030\002 \001(\005R\005limit\022\033\n\tbefore_ms\030\003 \001(\003R\010"
+    "beforeMs\"\206\001\n\031ListPlayerHistoryResponse\022."
+    "\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCode"
+    "R\004code\0229\n\007results\030\002 \003(\0132\037.pandora.battle"
+    ".v1.BattleResultR\007results*h\n\rBattleOutco"
+    "me\022\036\n\032BATTLE_OUTCOME_UNSPECIFIED\020\000\022\031\n\025BA"
+    "TTLE_OUTCOME_NORMAL\020\001\022\034\n\030BATTLE_OUTCOME_"
+    "ABANDONED\020\0022\315\002\n\023BattleResultService\022_\n\014R"
+    "eportResult\022&.pandora.battle.v1.ReportRe"
+    "sultRequest\032\'.pandora.battle.v1.ReportRe"
+    "sultResponse\022e\n\016GetMatchResult\022(.pandora"
+    ".battle.v1.GetMatchResultRequest\032).pando"
+    "ra.battle.v1.GetMatchResultResponse\022n\n\021L"
+    "istPlayerHistory\022+.pandora.battle.v1.Lis"
+    "tPlayerHistoryRequest\032,.pandora.battle.v"
+    "1.ListPlayerHistoryResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_deps[1] = {
@@ -1570,7 +1581,7 @@ static ::absl::once_flag descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto = {
     false,
     false,
-    1820,
+    1875,
     descriptor_table_protodef_pandora_2fbattle_2fv1_2fbattle_2eproto,
     "pandora/battle/v1/battle.proto",
     &descriptor_table_pandora_2fbattle_2fv1_2fbattle_2eproto_once,
@@ -1604,21 +1615,55 @@ PlayerStats::PlayerStats(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:pandora.battle.v1.PlayerStats)
 }
+PROTOBUF_NDEBUG_INLINE PlayerStats::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::battle::v1::PlayerStats& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        dropped_item_config_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::pandora::battle::v1::PlayerStats,
+              PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.dropped_item_config_ids_)>()
+          , from.dropped_item_config_ids_
+        }
+        ,
+        _dropped_item_config_ids_cached_byte_size_{0} {}
+
 PlayerStats::PlayerStats(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerStats& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerStats& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, PlayerStats_get_class_data()),
+    : ::google::protobuf::Message(arena, PlayerStats_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  PlayerStats* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, gold_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::gold_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.battle.v1.PlayerStats)
 }
 PROTOBUF_NDEBUG_INLINE PlayerStats::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        dropped_item_config_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::battle::v1::PlayerStats,
+            PROTOBUF_FIELD_OFFSET(::pandora::battle::v1::PlayerStats, _impl_.dropped_item_config_ids_)>()
+         }
+        ,
+        _dropped_item_config_ids_cached_byte_size_{0} {}
 
 inline void PlayerStats::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -1682,10 +1727,13 @@ PROTOBUF_NOINLINE void PlayerStats::Clear() {
         reinterpret_cast<char*>(&_impl_.assists_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.assists_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     ::memset(&_impl_.mmr_delta_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.gold_) -
         reinterpret_cast<char*>(&_impl_.mmr_delta_)) + sizeof(_impl_.gold_));
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      _impl_.dropped_item_config_ids_.Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1809,6 +1857,17 @@ PROTOBUF_NOINLINE void PlayerStats::Clear() {
     }
   }
 
+  // repeated uint32 dropped_item_config_ids = 20 [json_name = "droppedItemConfigIds"];
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    {
+      int byte_size = this_._impl_._dropped_item_config_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            20, this_._internal_dropped_item_config_ids(), byte_size, target);
+      }
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1892,7 +1951,7 @@ PROTOBUF_NOINLINE void PlayerStats::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // int32 mmr_delta = 11 [json_name = "mmrDelta"];
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_mmr_delta() != 0) {
@@ -1913,6 +1972,13 @@ PROTOBUF_NOINLINE void PlayerStats::Clear() {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_gold());
       }
+    }
+    // repeated uint32 dropped_item_config_ids = 20 [json_name = "droppedItemConfigIds"];
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_dropped_item_config_ids(), 2,
+              this_._impl_._dropped_item_config_ids_cached_byte_size_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -1974,7 +2040,7 @@ void PlayerStats::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_mmr_delta() != 0) {
         _this->_impl_.mmr_delta_ = from._impl_.mmr_delta_;
@@ -1989,6 +2055,9 @@ void PlayerStats::MergeImpl(::google::protobuf::MessageLite& to_msg,
       if (from._internal_gold() != 0) {
         _this->_impl_.gold_ = from._impl_.gold_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      _this->_internal_mutable_dropped_item_config_ids()->MergeFrom(from._internal_dropped_item_config_ids());
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2014,6 +2083,7 @@ void PlayerStats::InternalSwap(PlayerStats* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
       - PROTOBUF_FIELD_OFFSET(PlayerStats, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
+  _impl_.dropped_item_config_ids_.InternalSwap(&other->_impl_.dropped_item_config_ids_);
 }
 
 ::google::protobuf::Metadata PlayerStats::GetMetadata() const {

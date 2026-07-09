@@ -52,6 +52,12 @@ type BattleConf struct {
 	// battle_result 写 drop 出箱前按此过滤,DS 只能触发白名单内装备落库。
 	DropWhitelist []uint32 `yaml:"drop_whitelist,omitempty" json:"drop_whitelist,omitempty"`
 
+	// MaxDropPerPlayer 单场结算里单个玩家最多入库的掉落条数(DS 不可信:防异常/恶意 DS
+	// 重复上报海量白名单 ID 撑爆 battle_drop_outbox.item_config_ids VARCHAR(512),导致整场
+	// 结算 insert 回滚)。默认 32;硬上限 46(46 个 10 位 uint32 + 逗号 = 505 字符,再多必超列宽)。
+	// 超限部分被截断丢弃并记 Warn(battle_drop_truncated),不影响结算落库。
+	MaxDropPerPlayer int `yaml:"max_drop_per_player,omitempty" json:"max_drop_per_player,omitempty"`
+
 	// DropPublishInterval 战斗掉落出箱发布轮询间隔(默认 2s)。
 	DropPublishInterval config.Duration `yaml:"drop_publish_interval,omitempty" json:"drop_publish_interval,omitempty"`
 
@@ -104,4 +110,21 @@ func (b *BattleConf) IsDroppable(itemConfigID uint32) bool {
 		}
 	}
 	return false
+}
+
+// maxDropPerPlayerHardCap 每玩家掉落条数硬上限:battle_drop_outbox.item_config_ids 为
+// VARCHAR(512),46 个 10 位 uint32 + 45 个逗号 = 505 字符,是不超列宽的最大条数。
+const maxDropPerPlayerHardCap = 46
+
+// MaxDropsPerPlayer 返回生效的每玩家最大掉落条数(未配置/非法 → 默认 32;超硬上限 → 46)。
+// 放访问器而非 Defaults,保证任何构造路径(含测试直建 BattleConf)都有安全上限。
+func (b *BattleConf) MaxDropsPerPlayer() int {
+	n := b.MaxDropPerPlayer
+	if n <= 0 {
+		n = 32
+	}
+	if n > maxDropPerPlayerHardCap {
+		n = maxDropPerPlayerHardCap
+	}
+	return n
 }
