@@ -69,7 +69,7 @@ func (u *DataUsecase) ReadPlayer(ctx context.Context, playerID uint64) (*datav1.
 	// 1) 查缓存。读失败只告警,继续回落 MySQL。
 	if u.cache != nil {
 		if pd, hit, err := u.cache.Get(ctx, playerID); err != nil {
-			u.log.WithContext(ctx).Warnf("cache get player %d failed: %v", playerID, err)
+			u.log.WithContext(ctx).Warnw("msg", "cache_get_failed", "player_id", playerID, "err", err)
 		} else if hit {
 			return pd, true, nil
 		}
@@ -104,7 +104,7 @@ func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData) (i
 	// 写后删缓存(避免读到旧版本)。删失败只告警,缓存随 TTL 自然失效。
 	if u.cache != nil {
 		if err := u.cache.Del(ctx, pd.GetPlayerId()); err != nil {
-			u.log.WithContext(ctx).Warnf("cache del after write player %d failed: %v", pd.GetPlayerId(), err)
+			u.log.WithContext(ctx).Warnw("msg", "cache_del_after_write_failed", "player_id", pd.GetPlayerId(), "err", err)
 		}
 	}
 	// 分片:玩家数据 blob 是 owner 数据,锁定玩家 owner cell(PlayerDataShardKey=player_id,
@@ -122,7 +122,7 @@ func (u *DataUsecase) InvalidateCache(ctx context.Context, playerID uint64) erro
 		return nil
 	}
 	if err := u.cache.Del(ctx, playerID); err != nil {
-		u.log.WithContext(ctx).Warnf("invalidate cache player %d failed: %v", playerID, err)
+		u.log.WithContext(ctx).Warnw("msg", "cache_invalidate_failed", "player_id", playerID, "err", err)
 		return err
 	}
 	return nil
@@ -134,7 +134,7 @@ func (u *DataUsecase) fillCache(ctx context.Context, pd *datav1.PlayerData) {
 		return
 	}
 	if err := u.cache.Set(ctx, pd, u.cfg.CacheTTL.Std()); err != nil {
-		u.log.WithContext(ctx).Warnf("cache set player %d failed: %v", pd.GetPlayerId(), err)
+		u.log.WithContext(ctx).Warnw("msg", "cache_set_failed", "player_id", pd.GetPlayerId(), "err", err)
 	}
 }
 

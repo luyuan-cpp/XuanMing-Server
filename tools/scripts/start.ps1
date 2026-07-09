@@ -512,13 +512,14 @@ function Apply-AgonesManifests {
     Write-Warn "  这些镜像由 UE 侧 Tool/Server/Agones 构建;minikube 需先 minikube image load,线上需 push 到 -Registry。"
 }
 
-# ===== 共享:宿主镜像同步进 minikube + 一致性校验(强制刷新旧 tag)=====
+# ===== 共享:宿主镜像同步进 minikube + 固定 tag 强制刷新 =====
 # 背景(2026-07-07 实锤 bug):本地 dev 固定复用 :dev tag,`minikube image load` 在 minikube
 # 侧已有同名 tag 时可能静默不生效(残留旧镜像),导致「宿主 docker 已是新 build,k8s Pod 却
 # 还在跑旧 image」—— 例:ds-allocator 新版“等 DS ready 心跳才回地址”逻辑没生效,matchmaker
 # 提前把地址发给客户端,客户端 UDP 握手 20s 超时被踢回登录。
-# 所以 load 后必须校验「宿主 docker 镜像 ID == minikube 内镜像 ID」;不一致就强制刷新
-# (minikube image rm 旧 tag → 重新 load → 再校验),仍不一致直接抛错,绝不带旧镜像继续部署。
+# Docker buildx / desktop-linux 下宿主 .Id 可能是 manifest-list digest,而 minikube 节点内
+# 看到的是镜像 config digest,二者不能直接相等比较。当前策略:先强制解绑旧 tag,再从宿主
+# docker daemon 覆盖 load,最后确认 tag 存在;随后 rollout restart 让新 Pod 重新解析该 tag。
 
 # 读 minikube 内镜像清单,返回 hashtable:镜像名(去 docker.io/ 前缀) -> 镜像 ID(sha256:config digest)。
 # 该 ID 与宿主 `docker image inspect -f '{{.Id}}'` 同为镜像 config digest,可直接比对。
@@ -538,65 +539,42 @@ function Get-MinikubeImageIds([string[]]$MinikubeArgs = @()) {
     return $map
 }
 
-# 宿主/ minikube 两侧镜像 ID 比对(容忍一侧被截断:前缀匹配即视为一致)。
-function Test-ImageIdMatch([string]$hostId, [string]$mkId) {
-    if ([string]::IsNullOrWhiteSpace($hostId) -or [string]::IsNullOrWhiteSpace($mkId)) { return $false }
-    $h = $hostId.Trim().ToLowerInvariant()
-    $m = $mkId.Trim().ToLowerInvariant()
-    return ($h -eq $m) -or $h.StartsWith($m) -or $m.StartsWith($h)
-}
-
-# 把一组宿主镜像 load 进 minikube 并强一致性校验;不一致自动 rm+重 load,再不一致抛错中止。
+# 把一组宿主镜像 load 进 minikube。
+# Docker buildx/desktop-linux 下宿主 .Id 可能是 manifest-list digest,而 minikube docker daemon 里
+# 看到的是镜像 config digest,二者不能直接相等比较。这里用「强制解绑旧 tag + 从宿主 daemon 覆盖 load」
+# 保证 :dev tag 指向最新构建;随后 rollout restart 会让新 Pod 重新解析该 tag。
 function Sync-ImagesToMinikube {
     param(
         [string[]]$Images,
         [string[]]$MinikubeArgs = @()
     )
 
-    # 1) 记录宿主侧镜像 ID(宿主没有该镜像 → 直接 fail-fast)
-    $hostIds = @{}
+    # 1) 宿主没有该镜像 → 直接 fail-fast
     foreach ($img in $Images) {
         $id = (docker image inspect -f '{{.Id}}' $img 2>$null | Out-String).Trim()
         if ($LASTEXITCODE -ne 0 -or -not $id) { throw "宿主 docker 缺少镜像 $img(先构建再部署)" }
-        $hostIds[$img] = $id
     }
 
-    # 2) 逐个 load
+    # 2) 逐个强制刷新同名 tag。旧 Pod 正在用旧镜像时,minikube image rm 会失败;节点内 docker rmi -f
+    # 可以只 untag,不影响运行中容器,再 load 最新 tag。
     foreach ($img in $Images) {
-        Write-Info "  minikube image load $img"
-        minikube @MinikubeArgs image load $img
+        Write-Info "  minikube image load --daemon=true --overwrite=true $img"
+        minikube @MinikubeArgs ssh -- docker rmi -f $img 2>$null | Out-Null
+        minikube @MinikubeArgs image load --daemon=true --overwrite=true $img
         Assert-LastExit "minikube image load $img"
     }
 
-    # 3) 校验 minikube 内 ID == 宿主 ID
+    # 3) 校验 minikube 内 tag 存在。新 Pod 是否换新镜像由后续 rollout restart + rollout status 兜住。
     $mkIds = Get-MinikubeImageIds $MinikubeArgs
     if ($null -eq $mkIds) {
-        Write-Warn "minikube image ls --format json 不可用,无法校验镜像一致性(建议升级 minikube)。"
-        Write-Warn "  若怀疑 Pod 跑旧镜像:minikube image rm <img> 后重跑本脚本。"
+        Write-Warn "minikube image ls --format json 不可用,无法校验 tag(建议升级 minikube)。"
         return
     }
-    $stale = @($Images | Where-Object { -not (Test-ImageIdMatch $hostIds[$_] $mkIds[$_]) })
-    if ($stale.Count -eq 0) {
-        Write-Ok "镜像一致性校验通过($($Images.Count) 个:宿主 ID == minikube 内 ID)"
-        return
+    $missing = @($Images | Where-Object { -not $mkIds.ContainsKey($_) })
+    if ($missing.Count -gt 0) {
+        throw "以下镜像 load 后 minikube 内仍未找到 tag:$($missing -join ', ')"
     }
-
-    # 4) 强制刷新:删 minikube 旧 tag → 重新 load → 复检
-    Write-Warn "检测到 minikube 内旧镜像残留(image load 未生效),强制刷新 $($stale.Count) 个:"
-    foreach ($img in $stale) { Write-Warn "  $img 宿主=$($hostIds[$img]) minikube=$($mkIds[$img])" }
-    foreach ($img in $stale) {
-        minikube @MinikubeArgs image rm $img 2>$null | Out-Null   # 删失败(被旧容器引用等)不中止,重 load 顶上
-        minikube @MinikubeArgs image load $img
-        Assert-LastExit "minikube image load(强制刷新)$img"
-    }
-    $mkIds = Get-MinikubeImageIds $MinikubeArgs
-    foreach ($img in $stale) {
-        if (-not (Test-ImageIdMatch $hostIds[$img] $mkIds[$img])) {
-            throw ("镜像 $img 强制刷新后 minikube 内 ID 仍与宿主不一致(宿主=$($hostIds[$img]) minikube=$($mkIds[$img]));" +
-                "拒绝继续部署,避免 Pod 跑旧代码。可尝试:minikube image rm $img 后重跑;仍不行用 -Reset 重建集群。")
-        }
-    }
-    Write-Ok "旧镜像已强制刷新,一致性校验通过"
+    Write-Ok "镜像 tag 已刷新到 minikube($($Images.Count) 个)。"
 }
 
 # ===== k8s 模式(本地 minikube)=====
@@ -612,8 +590,10 @@ function Build-DsImagesForMinikube {
     $dsBuild = Join-Path $ProjectRoot 'deploy/ds/build-image-minikube.ps1'
     if (-not (Test-Path $dsBuild)) { throw "找不到 DS 镜像构建脚本:$dsBuild" }
     Write-Info "构建 Battle/Hub DS 镜像到 minikube(从同级客户端仓库取 Linux 包)..."
-    # Invoke-K8s 用默认 minikube profile(minikube start 无 -p),显式传 -Profile 保持一致。
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -Profile 'minikube'
+    # 跟随当前 active profile,避免本机同时存在旧 minikube 与 pandora-agones 时把 DS 镜像构建到停用集群。
+    $profile = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($profile)) { $profile = 'minikube' }
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -Profile $profile
     Assert-LastExit 'DS 镜像构建(build-image-minikube.ps1)'
     Write-Ok "DS 镜像已就绪(pandora/battle-ds:dev / pandora/hub-ds:dev 已在 minikube)"
 }
@@ -675,7 +655,7 @@ function Invoke-K8s {
     Write-Step "[5/7] 构建 20 个服务镜像"
     Build-AllImages
 
-    Write-Step "[6/7] 把镜像 load 进 minikube(含宿主↔minikube 镜像 ID 一致性校验)"
+    Write-Step "[6/7] 把镜像 load 进 minikube(强制刷新固定 :dev tag)"
     Sync-ImagesToMinikube -Images (Get-ServiceImages)
 
     Write-Step "[7/7] 部署业务服务"

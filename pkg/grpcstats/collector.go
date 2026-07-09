@@ -279,7 +279,7 @@ func (c *Collector) reportOnce() {
 	})
 
 	if len(snapshots) == 0 {
-		klog.Infof("[grpcstats] window=%v no traffic", c.reportInterval)
+		// 无流量不打日志:该报告是周期性的,空窗口刷 "no traffic" 只会淹没有效日志
 		return
 	}
 

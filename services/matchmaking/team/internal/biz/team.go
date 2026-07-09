@@ -647,12 +647,14 @@ func (u *TeamUsecase) pushUpdate(
 		}
 		payload, err := proto.Marshal(event)
 		if err != nil {
-			plog.With(ctx).Warnw("msg", "team_push_marshal_failed", "err", err, "to_player_id", pid)
+			plog.With(ctx).Warnw("msg", "team_push_marshal_failed",
+				"team_id", team.GetTeamId(), "to_player_id", pid, "reason", reason.String(), "err", err)
 			continue
 		}
 		// PushToPlayers 内部跳过 callerPlayerID == pid 的情况(原则 2)
 		if _, err := u.pusher.PushTeamUpdate(ctx, callerPlayerID, []uint64{pid}, payload); err != nil {
-			plog.With(ctx).Warnw("msg", "team_push_failed", "to_player_id", pid, "err", err)
+			plog.With(ctx).Warnw("msg", "team_push_failed",
+				"team_id", team.GetTeamId(), "to_player_id", pid, "reason", reason.String(), "err", err)
 		}
 	}
 }

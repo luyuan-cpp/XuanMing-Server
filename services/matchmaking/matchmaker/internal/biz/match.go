@@ -1296,9 +1296,9 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	// 推 FOUND → CONFIRM 进度给全体(原则 3 例外:含发起方)
 	u.pushProgress(ctx, matchID, stageFound, members, "", "")
 	u.pushProgress(ctx, matchID, stageConfirm, members, "", "")
-	plog.With(ctx).Infow("msg", "match_found", "match_id", matchID, "players", len(members))
+	plog.With(ctx).Infow("msg", "match_found", "match_id", matchID, "players", len(members),
+		"auto_confirm", u.cfg.AutoConfirmMatch)
 	if u.cfg.AutoConfirmMatch {
-		plog.With(ctx).Infow("msg", "match_auto_confirm", "match_id", matchID, "players", len(members))
 		u.onAllConfirmed(ctx, match)
 	}
 	return nil

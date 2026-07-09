@@ -443,4 +443,19 @@ pandora_kafka_consumer_lag{topic="pandora.battle.result",group="battle_result"}
 
 **强制字段**:`ts` / `level` / `service` / `msg`
 **业务字段**:`trace_id`, `player_id`, `match_id`, `team_id`, `error`
-**禁止**:`fmt.Sprintf` 拼字符串到 msg(用 zap field)
+**禁止**:`fmt.Sprintf` 拼字符串到 msg(用 zap field);printf 风格 `Infof/Warnf/Errorf`(日志系统无法按字段索引,一律 `Infow/Warnw/Errorw` 结构化 kv)
+
+### 11.1 日志级别与降噪约定(2026-07-09)
+
+- **级别环境变量**:`LOG_LEVEL=debug|info|warn|error`(默认 info),排障时对单个 pod 临时开 debug,不用重编。
+- **gRPC access log**(`pkg/middleware/logging.go`):
+  - 成功请求 `rpc_ok` → **DEBUG**(生产 info 级下不输出,高 QPS 噪音主源已消除);
+  - 慢请求 `rpc_slow` → **WARN**(阈值 `LOG_SLOW_RPC_MS`,默认 500ms);
+  - 失败请求 `rpc_failed` → **ERROR**(带 code/reason/err)。
+  - 请求量/延迟统计看 Prometheus(`middleware.Metrics()`),不靠数日志行。
+- **周期任务日志**:定时 sweep / 上报类日志只在"有事发生"时打(如 `expired > 0`),空转窗口不准刷屏。
+- **业务日志规范**:统一 `plog.With(ctx).Infow("msg", "<snake_case_event>", k, v, ...)`;`msg` 用稳定的事件名(便于日志系统按 `msg` 聚合告警),Warn/Error 必带相关业务 ID(team_id / match_id / player_id)与 `err`。
+
+### 11.2 日志采集(规划)
+
+统一 stdout JSON,采集链路选型 **Grafana Loki + Alloy(k8s DaemonSet 采集 stdout)+ Grafana 查询**,与现有 Prometheus/Grafana 栈同生态;按 `{service, level}` 打 label,`trace_id/player_id` 用 LogQL json 过滤,不进 label(高基数)。

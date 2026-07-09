@@ -13,6 +13,7 @@ package log
 import (
 	"context"
 	"os"
+	"strings"
 
 	klog "github.com/go-kratos/kratos/v2/log"
 	"go.uber.org/zap"
@@ -33,7 +34,8 @@ const (
 
 // Setup 初始化日志系统,所有服务在 main() 开始处调用一次。
 //
-// 默认输出 JSON 到 stdout,Level=info。
+// 默认输出 JSON 到 stdout,Level=info;可用环境变量 LOG_LEVEL=debug|info|warn|error
+// 覆盖(线上排障临时开 debug,不用重编)。
 //
 // 用法:
 //
@@ -58,7 +60,7 @@ func Setup(serviceName string) klog.Logger {
 	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderCfg),
 		zapcore.Lock(os.Stdout),
-		zap.NewAtomicLevelAt(zap.InfoLevel),
+		zap.NewAtomicLevelAt(levelFromEnv()),
 	)
 
 	zl := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(3))
@@ -83,6 +85,20 @@ func Setup(serviceName string) klog.Logger {
 	)
 
 	return logger
+}
+
+// levelFromEnv 从 LOG_LEVEL 环境变量解析日志级别,空/非法值一律回落 info。
+func levelFromEnv() zapcore.Level {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL"))) {
+	case "debug":
+		return zap.DebugLevel
+	case "warn":
+		return zap.WarnLevel
+	case "error":
+		return zap.ErrorLevel
+	default:
+		return zap.InfoLevel
+	}
 }
 
 // NewHelper 是 klog.NewHelper 的别名,业务侧用它拿 Helper。
