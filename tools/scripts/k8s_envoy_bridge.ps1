@@ -166,11 +166,10 @@ function Get-GrpcurlPath {
         if ($cmd) {
             $script:GrpcurlPath = $cmd.Source
         } else {
-            foreach ($c in @(
-                (Join-Path $ProjectRoot 'tools/bin/grpcurl.exe'),
-                (Join-Path $env:USERPROFILE 'go/bin/grpcurl.exe'),
-                (Join-Path "$env:GOPATH" 'bin/grpcurl.exe')
-            )) {
+            $candidates = @((Join-Path $ProjectRoot 'tools/bin/grpcurl.exe'))
+            if ($env:USERPROFILE) { $candidates += (Join-Path $env:USERPROFILE 'go/bin/grpcurl.exe') }
+            if ($env:GOPATH) { $candidates += (Join-Path $env:GOPATH 'bin/grpcurl.exe') }
+            foreach ($c in $candidates) {
                 if ($c -and (Test-Path $c)) { $script:GrpcurlPath = $c; break }
             }
         }
