@@ -169,6 +169,9 @@ Profiler 方向:
 > Release DS 也能 profile。关键是构建时保留 frame pointer 和符号归档,
 > 否则 profiler 只能看到一堆地址,很难定位真实函数。
 
+> 压测打流量工具、Go/UE DS 的函数热点(火焰图)工具选型与落地路线,
+> 见 `docs/ops/perf-profiling-toolchain.md`。
+
 ---
 
 ## 6. 上线前检查项

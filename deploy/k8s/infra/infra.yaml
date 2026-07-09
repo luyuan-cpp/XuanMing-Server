@@ -15,6 +15,10 @@ kind: Deployment
 metadata: { name: mysql, namespace: pandora, labels: { app: mysql } }
 spec:
   replicas: 1
+  # 首次在 minikube 内冷拉 mysql:8.4(~812MB)可达 10 分钟+;Deployment 默认
+  # progressDeadlineSeconds=600s 会在拉镜像期间就把 rollout 判失败(ProgressDeadlineExceeded),
+  # 令 kubectl rollout status 报错。放宽到 30 分钟覆盖首次冷拉,缓存后不影响。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: mysql } }
   template:
     metadata: { labels: { app: mysql } }
@@ -82,6 +86,8 @@ kind: Deployment
 metadata: { name: zookeeper, namespace: pandora, labels: { app: zookeeper } }
 spec:
   replicas: 1
+  # confluent cp-zookeeper 镜像 ~1GB,首次冷拉常超默认 600s progress deadline。放宽到 30 分钟。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: zookeeper } }
   template:
     metadata: { labels: { app: zookeeper } }
@@ -116,6 +122,8 @@ spec:
   # 单 broker(BROKER_ID=1):更新时必须先停旧 Pod 再起新 Pod。默认 RollingUpdate 会让新旧
   # 同时在跑,新 Pod 注册 ZK /brokers/ids/1 时被旧 Pod 占住 -> NodeExistsException -> CrashLoop。
   strategy: { type: Recreate }
+  # confluent cp-kafka 镜像 ~1GB,首次冷拉常超默认 600s progress deadline。放宽到 30 分钟。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: kafka } }
   template:
     metadata: { labels: { app: kafka } }
