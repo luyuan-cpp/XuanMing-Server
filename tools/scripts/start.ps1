@@ -13,7 +13,7 @@
   还有两个本地联调辅助模式:
     battle   含战斗混合版 —— 17 个业务服务跑 docker,ds_allocator + hub_allocator 跑宿主(需 exec Windows DS);
                              进真实 Hub/Battle DS。play.ps1 -Battle[ -Intranet] 走这个;策划机不用起 go 服务。
-    k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(advertise 127.0.0.1 + 自动宿主桥接/UDP 中继)
+    k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(默认 advertise 本机局域网 IP + 自动宿主桥接/UDP 中继)
 
   启动前会检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;
   只有显式传 -Install 才会尝试用 winget 安装。-Check 只检查不启动。
@@ -676,9 +676,26 @@ function Invoke-K8s {
     kubectl apply -f (Join-Path $servicesDir '00-namespace.yaml')
     Assert-LastExit 'kubectl apply namespace'
 
-    Write-Step "[2/8] 生成集群版配置 + ConfigMap(allocator=agones,advertise 127.0.0.1)"
-    # 本地 minikube docker driver:Pod IP 客户端连不到,advertise 127.0.0.1 + 容器版 UDP 中继回程
-    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1
+    # DS advertise 地址:默认取本机局域网 IP,让内网其它机器的客户端能连到本机 DS(经容器版 UDP 中继回程)。
+    # minikube docker driver 下 Pod IP 局域网不可达,但「advertise=本机局域网 IP + UDP 中继监听 0.0.0.0」
+    # 这条回程链路可达:client(内网) -> 本机:<port>(UDP) -[Docker publish 0.0.0.0]-> relay 容器 -> minikube 节点 -> DS。
+    # 覆盖优先级:-AdvertiseHost > $env:PANDORA_DS_ADVERTISE_HOST > Resolve-LanIp;都拿不到才回退 127.0.0.1(仅本机自测)。
+    $k8sAdvHost =
+        if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { $AdvertiseHost.Trim() }
+        elseif (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) { $env:PANDORA_DS_ADVERTISE_HOST.Trim() }
+        else { Resolve-LanIp }
+    if ([string]::IsNullOrWhiteSpace($k8sAdvHost)) {
+        $k8sAdvHost = '127.0.0.1'
+        Write-Warn "未解析到局域网 IPv4,DS advertise 回退 127.0.0.1(只有本机客户端连得到)。内网多机联调请用 -AdvertiseHost <本机内网IP> 重跑。"
+    }
+    # advertise 非回环 => UDP 中继必须对局域网开放(publish 到 0.0.0.0),否则其它机器的 UDP 到不了本机中继。
+    $script:K8sRelayBindHost = if ($k8sAdvHost -eq '127.0.0.1') { '127.0.0.1' } else { '0.0.0.0' }
+    Write-Step "[2/8] 生成集群版配置 + ConfigMap(allocator=agones,DS advertise=$k8sAdvHost)"
+    if ($script:K8sRelayBindHost -eq '0.0.0.0') {
+        Write-Info "DS advertise=$k8sAdvHost(局域网),UDP 中继将监听 0.0.0.0。"
+        Write-Warn "内网多机联调前置:请确认本机防火墙已放行【入站 TCP 8443/8444 + 入站 UDP 7000-8000】,否则其它机器连不进 DS。"
+    }
+    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost $k8sAdvHost
     kubectl create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
         --dry-run=client -o yaml | kubectl apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-config'
@@ -741,11 +758,17 @@ function Invoke-K8s {
     # 用独立子进程跑,与 DS 镜像构建同一隔离理由;profile 跟随当前 active profile。
     $mkProfile = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
     if ([string]::IsNullOrWhiteSpace($mkProfile)) { $mkProfile = 'minikube' }
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile
+    $relayBind = if ($script:K8sRelayBindHost) { $script:K8sRelayBindHost } else { '127.0.0.1' }
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -RelayBindHost $relayBind
     Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
 
     Write-Host ""
-    Write-Ok "真 DS 闭环就绪:客户端连 127.0.0.1:8443(TLS)即可登录进 Hub/战斗。"
+    if ($relayBind -eq '0.0.0.0') {
+        Write-Ok "真 DS 闭环就绪(局域网):内网其它机器客户端连 ${k8sAdvHost}:8443(TLS)即可登录进 Hub/战斗。"
+        Write-Info "若其它机器连不进,先查本机防火墙是否放行 入站 TCP 8443/8444 + 入站 UDP 7000-8000。"
+    } else {
+        Write-Ok "真 DS 闭环就绪:客户端连 127.0.0.1:8443(TLS)即可登录进 Hub/战斗(仅本机)。"
+    }
 }
 
 # ===== online 模式(远端 k8s:-Env test 测试服集群 / prod 生产 kbs 集群)=====
@@ -1141,9 +1164,19 @@ function Resume-K8s {
     # 重启后宿主 port-forward/envoy/relay 必然全丢,自动重建(DS 镜像还在 minikube 磁盘,跳过 load)。
     $mkProfile = ((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '').Trim()
     if ([string]::IsNullOrWhiteSpace($mkProfile)) { $mkProfile = 'minikube' }
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile
+    # advertise 已在初次部署时写进 ConfigMap;这里按同样规则重解析局域网 IP 决定中继绑定,保持一致。
+    $resumeAdvHost =
+        if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { $AdvertiseHost.Trim() }
+        elseif (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) { $env:PANDORA_DS_ADVERTISE_HOST.Trim() }
+        else { Resolve-LanIp }
+    $relayBind = if (-not [string]::IsNullOrWhiteSpace($resumeAdvHost) -and $resumeAdvHost -ne '127.0.0.1') { '0.0.0.0' } else { '127.0.0.1' }
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -RelayBindHost $relayBind
     Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
-    Write-Ok "真 DS 闭环已恢复:客户端连 127.0.0.1:8443 即可。"
+    if ($relayBind -eq '0.0.0.0') {
+        Write-Ok "真 DS 闭环已恢复(局域网):内网其它机器客户端连 ${resumeAdvHost}:8443 即可(需防火墙放行 TCP 8443/8444 + UDP 7000-8000)。"
+    } else {
+        Write-Ok "真 DS 闭环已恢复:客户端连 127.0.0.1:8443 即可(仅本机)。"
+    }
 }
 
 function Invoke-Resume {

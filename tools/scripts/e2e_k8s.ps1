@@ -27,6 +27,7 @@ param(
     [switch]$BridgeForce,    # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
     [Alias('Profile')]
     [string]$MinikubeProfile = 'pandora-agones', # minikube profile;docker driver 下通常同名 docker network
+    [string]$RelayBindHost = '127.0.0.1', # UDP 中继 docker publish 绑定地址;内网多机联调传 0.0.0.0 对局域网开放
     [int]$TimeoutSec = 240   # 等 Fleet Ready 超时秒
 )
 
@@ -259,8 +260,8 @@ if (-not $bOk -or -not $hOk) {
 #   Linux VM 里的容器,IP 在 profile 对应 docker 网络(如 pandora-agones / 192.168.58.0/24)。Windows 宿主进程的
 #   UDP 直发 192.168.49.2:<port> 不可路由 —— relay 收到包但 minikube 节点 hostPort DNAT 不增长,
 #   DS 收不到连接。把 relay 跑成容器并 `--network <profile>`,它才能直连 minikube 节点 IP;再用
-#   `-p 127.0.0.1:7000-8000:.../udp` 让 Docker Desktop 把宿主 127.0.0.1 的 UDP 转进容器。
-#     client -> 127.0.0.1:<port>(Win) -[Docker Desktop]-> relay 容器 -[minikube net]-> <minikube ip>:<port> -> DS
+#   `-p <RelayBindHost>:7000-8000:.../udp` 让 Docker Desktop 把宿主 UDP 转进容器。
+#     client -> <RelayBindHost>:<port>(Win) -[Docker Desktop]-> relay 容器 -[minikube net]-> <minikube ip>:<port> -> DS
 Write-Step "[4/6] UDP 回程中继(dockerized,--network $MinikubeDockerNetwork)"
 
 function Stop-HostUdpRelay {
@@ -278,7 +279,7 @@ function Stop-HostUdpRelay {
 if ($NoRelay) {
     Write-Warn "已传 -NoRelay,未自动起中继。需手动起【容器版】中继(挂 $MinikubeDockerNetwork 网络):"
     Write-Warn "  docker build -t pandora/udp-relay:dev tools/udp-relay"
-    Write-Warn "  docker run -d --name pandora-udp-relay --network $MinikubeDockerNetwork -p 127.0.0.1:7000-8000:7000-8000/udp -e TARGET_HOST=`$(minikube -p $MinikubeProfile ip) -e PORT_RANGE=7000-8000 pandora/udp-relay:dev"
+    Write-Warn "  docker run -d --name pandora-udp-relay --network $MinikubeDockerNetwork -p ${RelayBindHost}:7000-8000:7000-8000/udp -e TARGET_HOST=`$(minikube -p $MinikubeProfile ip) -e PORT_RANGE=7000-8000 pandora/udp-relay:dev"
 } else {
     $relayImage = 'pandora/udp-relay:dev'
     $relayName  = 'pandora-udp-relay'
@@ -329,10 +330,11 @@ if ($NoRelay) {
     docker build -t $relayImage $relayDir
     if ($LASTEXITCODE -ne 0) { Write-Err "中继镜像构建失败"; exit 1 }
 
-    # 4.5 起容器:挂 profile 对应 docker 网络 + 发布宿主 127.0.0.1:7000-8000/udp
-    Write-Info "  docker run --network $MinikubeDockerNetwork -p 127.0.0.1:${relayRange}:${relayRange}/udp(发布 1001 个 UDP 端口,稍慢)..."
+    # 4.5 起容器:挂 profile 对应 docker 网络 + 发布宿主 $RelayBindHost:7000-8000/udp
+    #     RelayBindHost=127.0.0.1 仅本机自测;=0.0.0.0 时对局域网开放(内网多机联调,需宿主防火墙放行 UDP 7000-8000)。
+    Write-Info "  docker run --network $MinikubeDockerNetwork -p ${RelayBindHost}:${relayRange}:${relayRange}/udp(发布 1001 个 UDP 端口,稍慢)..."
     docker run -d --name $relayName --network $MinikubeDockerNetwork `
-        -p "127.0.0.1:${relayRange}:${relayRange}/udp" `
+        -p "${RelayBindHost}:${relayRange}:${relayRange}/udp" `
         -e "TARGET_HOST=$relayTarget" `
         -e "PORT_RANGE=$relayRange" `
         $relayImage *> $null
@@ -348,9 +350,10 @@ if ($NoRelay) {
         docker logs $relayName 2>$null
         exit 1
     }
-    Write-Ok "UDP 中继(dockerized)已启动:容器 $relayName,--network $MinikubeDockerNetwork,转发 127.0.0.1:$relayRange/udp -> ${relayTarget}:$relayRange"
+    Write-Ok "UDP 中继(dockerized)已启动:容器 $relayName,--network $MinikubeDockerNetwork,转发 ${RelayBindHost}:$relayRange/udp -> ${relayTarget}:$relayRange"
     Write-Info "  停止:docker rm -f $relayName    查看:docker logs -f $relayName"
-    Write-Info "  验证:发 UDP 到 127.0.0.1:<port> 后,minikube ssh 里 'sudo iptables -t nat -L -n -v | grep dpt:<port>' 的 DNAT 计数应增长。"
+    $verifyHost = if ($RelayBindHost -eq '0.0.0.0') { '<本机局域网IP>' } else { $RelayBindHost }
+    Write-Info "  验证:发 UDP 到 ${verifyHost}:<port> 后,minikube ssh 里 'sudo iptables -t nat -L -n -v | grep dpt:<port>' 的 DNAT 计数应增长。"
 }
 
 # ── 5) 现状打印 ────────────────────────────────────────────────────────
@@ -360,8 +363,9 @@ kubectl get gameservers -n $FleetNamespace -L agones.dev/fleet,pandora.dev/regio
 
 # ── 6) 端到端验收清单 ──────────────────────────────────────────────────
 Write-Step "[6/6] 真 DS 闭环验收(用真 UE 客户端)"
+$clientHost = if ($RelayBindHost -eq '0.0.0.0') { '<本机局域网IP>' } else { $RelayBindHost }
 Write-Host @"
-  后端入口(Envoy):客户端面 127.0.0.1:8443 / DS 面 127.0.0.1:8444
+  后端入口(Envoy):客户端面 ${clientHost}:8443 / DS 面 ${clientHost}:8444
   确认客户端 DefaultGame.ini 后端指向本机 Envoy,然后:
 
   [ ] 登录 -> AssignHub 返回真 hub-ds 地址 -> ClientTravel 进大厅地图(MainCity)
