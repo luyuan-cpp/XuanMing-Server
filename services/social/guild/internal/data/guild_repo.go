@@ -85,7 +85,9 @@ type GuildRepo interface {
 	// ListMembers 列公会成员(按 player_id 升序游标分页;cursor=0 首页,limit>0 限量)。
 	ListMembers(ctx context.Context, guildID, cursor uint64, limit int) ([]GuildMemberRow, error)
 	// CreateJoinRequest 创建 / 复用加入申请(pending);已 pending → 复用既有 request_id。
-	CreateJoinRequest(ctx context.Context, newRequestID, guildID, playerID uint64) (requestID uint64, reused bool, err error)
+	// maxPending>0 时:事务内校验该公会 pending 申请数,新增 / 复开一条会超限则回
+	// ErrGuildRequestLimit(不变量 §9.18)。
+	CreateJoinRequest(ctx context.Context, newRequestID, guildID, playerID uint64, maxPending int) (requestID uint64, reused bool, err error)
 	// GetRequest 读申请;not found → (nil, false, nil)。
 	GetRequest(ctx context.Context, requestID uint64) (*GuildJoinRequestRow, bool, error)
 	// ApproveJoin 在事务里审批通过:锁申请行 → 校验审批人在该公会且为 leader/officer →
@@ -218,34 +220,76 @@ func (r *MySQLGuildRepo) ListMembers(ctx context.Context, guildID, cursor uint64
 	return out, rows.Err()
 }
 
-func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, guildID, playerID uint64) (uint64, bool, error) {
+func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, guildID, playerID uint64, maxPending int) (uint64, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var existingID uint64
 	var status int32
-	err := r.db.QueryRowContext(ctx,
-		`SELECT request_id, status FROM guild_join_requests WHERE guild_id = ? AND player_id = ?`,
+	qerr := tx.QueryRowContext(ctx,
+		`SELECT request_id, status FROM guild_join_requests WHERE guild_id = ? AND player_id = ? FOR UPDATE`,
 		guildID, playerID).Scan(&existingID, &status)
 	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		if _, ierr := r.db.ExecContext(ctx,
+	case errors.Is(qerr, sql.ErrNoRows):
+		// 新增一条 pending 前,先校验该公会 pending 申请未满(不变量 §9.18)。
+		if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
+			return 0, false, cerr
+		}
+		if _, ierr := tx.ExecContext(ctx,
 			`INSERT INTO guild_join_requests (request_id, guild_id, player_id, status) VALUES (?, ?, ?, ?)`,
 			newRequestID, guildID, playerID, joinStatusPending); ierr != nil {
 			return 0, false, errcode.New(errcode.ErrInternal, "insert join request: %v", ierr)
 		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", commitErr)
+		}
 		return newRequestID, false, nil
-	case err != nil:
-		return 0, false, errcode.New(errcode.ErrInternal, "query join request: %v", err)
+	case qerr != nil:
+		return 0, false, errcode.New(errcode.ErrInternal, "query join request: %v", qerr)
 	}
 
 	if status == joinStatusPending {
+		if commitErr := tx.Commit(); commitErr != nil {
+			return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", commitErr)
+		}
 		return existingID, true, nil
 	}
-	// 历史 rejected → 复位 pending,复用 request_id。
-	if _, uerr := r.db.ExecContext(ctx,
+	// 历史 rejected → 复位 pending,复用 request_id;从非 pending 转 pending 同样占用一格,先校验上限。
+	if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
+		return 0, false, cerr
+	}
+	if _, uerr := tx.ExecContext(ctx,
 		`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
 		joinStatusPending, existingID); uerr != nil {
 		return 0, false, errcode.New(errcode.ErrInternal, "reopen join request: %v", uerr)
 	}
+	if commitErr := tx.Commit(); commitErr != nil {
+		return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", commitErr)
+	}
 	return existingID, false, nil
+}
+
+// checkGuildPendingLimit 在事务内锁定读该公会的 pending 申请数,达到上限回 ErrGuildRequestLimit
+// (不变量 §9.18)。maxPending<=0 关闭校验。FOR UPDATE 对 guild_id 索引区间加锁,消除并发新增
+// pending 的幻读竞态。
+func checkGuildPendingLimit(ctx context.Context, tx *sql.Tx, guildID uint64, maxPending int) error {
+	if maxPending <= 0 {
+		return nil
+	}
+	var cnt int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = ? FOR UPDATE`,
+		guildID, joinStatusPending).Scan(&cnt); err != nil {
+		return errcode.New(errcode.ErrInternal, "count pending requests guild=%d: %v", guildID, err)
+	}
+	if cnt >= maxPending {
+		return errcode.New(errcode.ErrGuildRequestLimit,
+			"pending join request limit reached for guild %d (max %d)", guildID, maxPending)
+	}
+	return nil
 }
 
 func (r *MySQLGuildRepo) GetRequest(ctx context.Context, requestID uint64) (*GuildJoinRequestRow, bool, error) {

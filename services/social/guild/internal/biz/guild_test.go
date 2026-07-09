@@ -79,11 +79,18 @@ func (f *fakeGuildRepo) ListMembers(_ context.Context, guildID, cursor uint64, l
 	return out, nil
 }
 
-func (f *fakeGuildRepo) CreateJoinRequest(_ context.Context, newRequestID, guildID, playerID uint64) (uint64, bool, error) {
+func (f *fakeGuildRepo) CreateJoinRequest(_ context.Context, newRequestID, guildID, playerID uint64, maxPending int) (uint64, bool, error) {
+	pending := 0
 	for _, rq := range f.requests {
 		if rq.GuildID == guildID && rq.PlayerID == playerID && rq.Status == 1 {
 			return rq.RequestID, true, nil
 		}
+		if rq.GuildID == guildID && rq.Status == 1 {
+			pending++
+		}
+	}
+	if maxPending > 0 && pending >= maxPending {
+		return 0, false, errcode.New(errcode.ErrGuildRequestLimit, "pending limit")
 	}
 	f.requests[newRequestID] = &data.GuildJoinRequestRow{RequestID: newRequestID, GuildID: guildID, PlayerID: playerID, Status: 1}
 	return newRequestID, false, nil

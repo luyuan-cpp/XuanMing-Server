@@ -152,15 +152,86 @@ function Stop-StaleComposeContainers {
     if ($stopped -eq 0) { Write-Ok '无旧业务容器占用 bridge 端口' }
 }
 
+# ---- gRPC 健康探测(修复"旧 port-forward 端口还 LISTEN 但底层 Pod 已消失"的假健康)----
+# 背景:Go 服务滚动更新后,老 kubectl port-forward svc/<name> 仍占着 127.0.0.1:port 的
+# LISTEN,但它绑定的 Pod/容器已被替换。端口层面看"就绪",可第一次真实 gRPC 请求进来才报
+# "No such container / lost connection to pod",Envoy 于是回 503(HTTP 503 without gRPC
+# trailer)。只查端口占用不足以证明后端可用,必须做真实 grpc.health.v1.Health/Check。
+$script:GrpcurlResolved = $false
+$script:GrpcurlPath = $null
+function Get-GrpcurlPath {
+    if (-not $script:GrpcurlResolved) {
+        $script:GrpcurlResolved = $true
+        $cmd = Get-Command grpcurl -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $script:GrpcurlPath = $cmd.Source
+        } else {
+            foreach ($c in @(
+                (Join-Path $ProjectRoot 'tools/bin/grpcurl.exe'),
+                (Join-Path $env:USERPROFILE 'go/bin/grpcurl.exe'),
+                (Join-Path "$env:GOPATH" 'bin/grpcurl.exe')
+            )) {
+                if ($c -and (Test-Path $c)) { $script:GrpcurlPath = $c; break }
+            }
+        }
+    }
+    return $script:GrpcurlPath
+}
+
+# 单次 gRPC 健康探测。返回 'serving' | 'unhealthy' | 'nogrpcurl'。
+# 'nogrpcurl' 表示环境里没有 grpcurl,调用方据此决定保守策略(不盲目复用旧 port-forward)。
+function Test-PortForwardServing([int]$port) {
+    $grpcurl = Get-GrpcurlPath
+    if (-not $grpcurl) { return 'nogrpcurl' }
+    try {
+        $out = & $grpcurl '-plaintext' '-max-time' '2' '-d' '{}' "127.0.0.1:$port" 'grpc.health.v1.Health/Check' 2>&1
+    } catch {
+        return 'unhealthy'
+    }
+    if ("$out" -match 'SERVING') { return 'serving' }
+    return 'unhealthy'
+}
+
+# 带重试的健康探测(端口刚 LISTEN 到后端 SERVING 之间有窗口期)。
+# grpcurl 不存在时立刻返回 'nogrpcurl',不做无谓重试。
+function Wait-PortForwardServing([int]$port, [int]$retries = 3, [int]$delayMs = 500) {
+    for ($i = 0; $i -lt $retries; $i++) {
+        $status = Test-PortForwardServing $port
+        if ($status -eq 'serving' -or $status -eq 'nogrpcurl') { return $status }
+        if ($i -lt $retries - 1) { Start-Sleep -Milliseconds $delayMs }
+    }
+    return 'unhealthy'
+}
+
 function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) {
     $ownerPid = Get-PortListenerPid $port
-    if ($ownerPid) {
-        if (Test-IsBridgePortForward $ownerPid $name $port) {
-            Write-Ok "port-forward 已在(bridge 自身)$name :127.0.0.1:$port (PID=$ownerPid)"
+    if ($ownerPid -and (Test-IsBridgePortForward $ownerPid $name $port)) {
+        # 端口在 LISTEN 且命令行像 bridge 自己起的 port-forward —— 但"还在 LISTEN"不代表健康。
+        # 滚动更新后旧 kubectl port-forward 会残留:端口照 LISTEN,底层 Pod/容器已被替换,
+        # 第一次真实请求才报 "No such container / lost connection to pod" → Envoy 503。
+        # 必须真实 gRPC 探活,SERVING 才复用;否则杀掉旧 port-forward 重建。
+        $health = Wait-PortForwardServing $port 3 400
+        if ($health -eq 'serving') {
+            Write-Ok "port-forward 已在且 SERVING(bridge 自身)$name :127.0.0.1:$port (PID=$ownerPid)"
             Set-Content -Path (Get-PidFile $name) -Value $ownerPid -Encoding ASCII
             return
         }
-
+        if ($health -eq 'nogrpcurl') {
+            Write-Warn "未找到 grpcurl,无法确认 $name :127.0.0.1:$port 是否 SERVING;保守起见杀掉旧 port-forward 重建"
+        } else {
+            Write-Warn "$name :127.0.0.1:$port 端口在 LISTEN 但 gRPC 未 SERVING(旧 Pod 已失效),杀掉旧 port-forward 重建"
+        }
+        Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
+        for ($i = 0; $i -lt 10 -and (Get-PortListenerPid $port); $i++) { Start-Sleep -Milliseconds 300 }
+        Remove-Item (Get-PidFile $name) -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $StateDir "$name.log") -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $StateDir "$name.err.log") -ErrorAction SilentlyContinue
+        if (Get-PortListenerPid $port) {
+            throw "端口 $port 释放失败(旧 bridge port-forward PID=$ownerPid),请手动停掉后重试"
+        }
+        $ownerPid = $null   # 已释放,落到下面重建
+    }
+    if ($ownerPid) {
         # 端口被「非 bridge」进程占用 —— 会让 Envoy 连到旧后端,必须处理
         $desc = Get-ProcDesc $ownerPid
         if (Test-IsDockerBackendProc $ownerPid) {
@@ -215,7 +286,23 @@ function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) 
         # 确认占用 $port 的就是我们刚起的这个进程(而不是别的进程抢先 LISTEN)
         $nowPid = Get-PortListenerPid $port
         if ($nowPid -eq $proc.Id) {
-            Write-Ok "port-forward 就绪 $name :127.0.0.1:$port (PID=$($proc.Id))"
+            # 端口绑定成功还不够:port-forward 刚连上时后端可能还没 SERVING,
+            # 且要防"端口在但底层 Pod 已失效"的假就绪。补真实 gRPC 健康探测。
+            $health = Wait-PortForwardServing $port 3 500
+            if ($health -eq 'serving') {
+                Write-Ok "port-forward 就绪且 SERVING $name :127.0.0.1:$port (PID=$($proc.Id))"
+                return
+            }
+            if ($health -eq 'nogrpcurl') {
+                Write-Warn "port-forward 就绪 $name :127.0.0.1:$port (PID=$($proc.Id)),但无 grpcurl 无法确认 SERVING(建议 go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest)"
+                return
+            }
+            # 端口绑上了但 gRPC 一直不 SERVING —— 必需服务失败,非必需只 WARN
+            $hmsg = "port-forward 已绑定端口但 gRPC 未 SERVING svc/${name}:$port"
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item (Get-PidFile $name) -ErrorAction SilentlyContinue
+            if ($essential) { throw $hmsg }
+            Write-Warn "非必需服务 $name 不可用,跳过(不影响登录/Hub/匹配/Battle/结算闭环):$hmsg"
             return
         }
         if ($nowPid -and -not (Test-IsBridgePortForward $nowPid $name $port)) {
@@ -233,6 +320,33 @@ function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) 
     Write-Warn "非必需服务 $name 不可用,跳过其 port-forward(不影响登录/Hub/匹配/Battle/结算闭环):$msg"
 }
 
+# 全量 gRPC 健康校验(末尾兜底):对所有已建立 port-forward 的服务再打一次 Health/Check。
+# 必需服务任一未 SERVING → 整个 bridge 失败(避免客户端点开局才吃 Envoy 503);
+# 非必需服务未 SERVING → 只 WARN。缺 grpcurl 时跳过(前面已尽量保守重建)。
+function Invoke-BridgeHealthSweep {
+    if (-not (Get-GrpcurlPath)) {
+        Write-Warn "未找到 grpcurl,跳过 bridge 全量健康校验(建议 go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest)"
+        return
+    }
+    $failed = @()
+    foreach ($f in $Forwards) {
+        # 没有 pid 文件 = 该(非必需)服务被跳过,必需服务缺失早已 throw,这里不再校验
+        if (-not (Test-Path (Get-PidFile $f.Name))) { continue }
+        $health = Wait-PortForwardServing $f.Port 3 500
+        if ($health -eq 'serving') {
+            Write-Ok "健康校验 SERVING $($f.Name) :127.0.0.1:$($f.Port)"
+        } elseif ($f.Essential) {
+            Write-Warn "健康校验失败(必需)$($f.Name) :127.0.0.1:$($f.Port) 未 SERVING"
+            $failed += "$($f.Name):$($f.Port)"
+        } else {
+            Write-Warn "健康校验失败(非必需,忽略)$($f.Name) :127.0.0.1:$($f.Port) 未 SERVING"
+        }
+    }
+    if ($failed.Count -gt 0) {
+        throw "bridge 全量健康校验失败,以下必需服务未 SERVING:$($failed -join ', ')"
+    }
+}
+
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Magenta
 Write-Host " Pandora k8s Envoy bridge" -ForegroundColor Magenta
@@ -246,15 +360,18 @@ Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
 Confirm-EnvoyDevCert -EnvoyDir (Join-Path $ProjectRoot 'deploy/envoy')
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 
-Write-Step "[1/3] 预检:停掉发布 500xx 端口的旧 compose 业务容器"
+Write-Step "[1/4] 预检:停掉发布 500xx 端口的旧 compose 业务容器"
 Stop-StaleComposeContainers
 
-Write-Step "[2/3] 启本地 kubectl port-forward"
+Write-Step "[2/4] 启本地 kubectl port-forward"
 foreach ($forward in $Forwards) {
     Start-PortForward $forward.Name $forward.Port $forward.Essential
 }
 
-Write-Step "[3/3] 启 docker envoy(:8443 / :8444)"
+Write-Step "[3/4] 全量 gRPC 健康校验(必需服务须 SERVING,否则 fail-fast)"
+Invoke-BridgeHealthSweep
+
+Write-Step "[4/4] 启 docker envoy(:8443 / :8444)"
 docker compose -f $ComposeFile --env-file $EnvFile up -d envoy
 if ($LASTEXITCODE -ne 0) { throw 'envoy 容器启动失败' }
 

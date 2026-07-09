@@ -94,6 +94,19 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 15. **配置表热更走标准流水线**:**版本号 + checksum + staging 目录 + reload 接口 + 加载成功才切换 + 失败保留旧配置**。新表加载+校验全过才原子替换内存指针,任一步失败保留旧表不影响线上;version 单调递增防回退;发布通知用 etcd version 键(复用 `etcdtable`/`etcdnode`,不存表体),**不引入 Apollo / Nacos**。详见 `docs/design/config-table-hotreload.md`。
 16. **服务必须支持不停服更新(零停机滚动更新)**:go 服务全部 headless、无状态、可水平扩展,权威态在 Redis/MySQL/etcd,进程内只做缓存/Actor 邮箱,收到 `SIGTERM` 先摘流量→排空在途→flush write-behind 脏数据→退出,任意副本可随时被杀被替换。**任何依赖「先停服再启动」才能上线或才能读数据的设计一律拒**。
 17. **Redis 二进制 pb 存储只做兼容演进,支持不停服加玩家数据**:滚动更新期间新旧版本副本同时在线,存储 pb 必须**双向兼容**——只允许**加新字段(新编号)/ 加 enum 值(带 `*_UNSPECIFIED` + fallback)/ `reserved` 删字段**;**禁止**改 field number、改类型、改基数/语义、复用 reserved 编号。**read-modify-write(读 Redis→改→写回)路径禁止 `DiscardUnknown` 丢弃 unknown fields**(否则旧副本回写会静默丢新字段)。加玩家数据 = 加 proto 字段 + 懒迁移(下次改写自然补齐或不停服 backfill),**不停服、不全量刷库**。详见 `docs/design/zero-downtime-update.md`。
+18. **客户端可写入的累积列表必须有上限**:凡客户端能主动新增、可长期堆积、又会被客户端拉取展示的列表,必须同时具备**写入侧总量上限**和**读取侧分页 / 单次返回上限**。包括但不限于:好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、订阅 / 关注 / 待处理队列。只做唯一键防重复不够;只做列表分页也不够。新增此类功能时必须在服务端事务 / 原子写路径里校验单玩家、单目标或单实体的 pending / active 数量上限,配置有默认值,超限返回明确业务错误,并在 proto 列表接口提供 `cursor+limit+next_cursor` 或等价分页(列表被写入侧硬上限兜住到几百内时,单次全量返回 + 服务端 `SQL LIMIT` 兜底即算「单次返回上限」达标)。没有上限的方案一律拒。
+
+    **现存受管列表清单**(新增同类列表照此登记 + 落上限):
+
+    | 列表 | 写入侧总量上限 | 读取侧上限 | 超限错误码 |
+    |---|---|---|---|
+    | 好友列表 | `max_friends` 默认 200(AcceptFriend 事务原子校验) | `ListFriends` SQL LIMIT | `ERR_FRIEND_LIMIT` |
+    | 好友申请(收件箱) | `max_incoming_requests` 默认 200(CreateRequest 事务校验 target pending 数) | `ListFriendRequests` SQL LIMIT | `ERR_FRIEND_REQUEST_LIMIT` |
+    | 黑名单 | `max_blocks` 默认 200(Block 事务校验) | `ListBlocks` SQL LIMIT | `ERR_FRIEND_BLOCK_LIMIT` |
+    | 公会成员 | `max_guild_members` 默认 100(ApproveJoin 事务原子校验) | `ListMembers` cursor 分页 | `ERR_GUILD_FULL` |
+    | 公会申请(每公会 pending) | `max_pending_requests_per_guild` 默认 200(CreateJoinRequest 事务校验) | `ListJoinRequests` cursor 分页 | `ERR_GUILD_REQUEST_LIMIT` |
+    | 临时群成员 | `max_group_members` 默认 50(建群 / AddMember 事务原子校验) | `ListGroupMembers` SQL LIMIT | `ERR_GROUP_FULL` |
+    | 我所在的群 | `max_groups_per_player` 默认 50(建群 / AddMember 事务校验) | `ListMyGroups` SQL LIMIT | `ERR_GROUP_JOIN_LIMIT` |
 
 ## 10. AI 协作约定
 

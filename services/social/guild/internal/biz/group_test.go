@@ -32,10 +32,17 @@ func newFakeGroupRepo() *fakeGroupRepo {
 	}
 }
 
-func (f *fakeGroupRepo) CreateGroup(_ context.Context, newGroupID, ownerID uint64, name string, memberIDs []uint64, maxMembers int) error {
+func (f *fakeGroupRepo) CreateGroup(_ context.Context, newGroupID, ownerID uint64, name string, memberIDs []uint64, maxMembers, maxGroups int) error {
 	count := 1 + len(memberIDs)
 	if count > maxMembers {
 		return errcode.New(errcode.ErrGroupFull, "full")
+	}
+	if maxGroups > 0 {
+		for _, p := range append([]uint64{ownerID}, memberIDs...) {
+			if f.countPlayerGroups(p) >= maxGroups {
+				return errcode.New(errcode.ErrGroupJoinLimit, "group join limit")
+			}
+		}
 	}
 	f.groups[newGroupID] = &data.GroupRow{GroupID: newGroupID, Name: name, OwnerID: ownerID, MemberCount: int32(count), MaxMembers: int32(maxMembers)}
 	f.members[memberKey{newGroupID, ownerID}] = &data.GroupMemberRow{GroupID: newGroupID, PlayerID: ownerID, Role: data.GroupRoleOwner}
@@ -43,6 +50,16 @@ func (f *fakeGroupRepo) CreateGroup(_ context.Context, newGroupID, ownerID uint6
 		f.members[memberKey{newGroupID, m}] = &data.GroupMemberRow{GroupID: newGroupID, PlayerID: m, Role: data.GroupRoleMember}
 	}
 	return nil
+}
+
+func (f *fakeGroupRepo) countPlayerGroups(playerID uint64) int {
+	n := 0
+	for k := range f.members {
+		if k.player == playerID {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *fakeGroupRepo) GetGroup(_ context.Context, groupID uint64) (*data.GroupRow, bool, error) {
@@ -77,7 +94,7 @@ func (f *fakeGroupRepo) ListMyGroups(_ context.Context, playerID uint64) ([]data
 	return out, nil
 }
 
-func (f *fakeGroupRepo) AddMember(_ context.Context, groupID, playerID uint64, maxMembers int) (bool, error) {
+func (f *fakeGroupRepo) AddMember(_ context.Context, groupID, playerID uint64, maxMembers, maxGroups int) (bool, error) {
 	if _, ok := f.members[memberKey{groupID, playerID}]; ok {
 		return true, nil
 	}
@@ -87,6 +104,9 @@ func (f *fakeGroupRepo) AddMember(_ context.Context, groupID, playerID uint64, m
 	}
 	if int(g.MemberCount) >= maxMembers {
 		return false, errcode.New(errcode.ErrGroupFull, "full")
+	}
+	if maxGroups > 0 && f.countPlayerGroups(playerID) >= maxGroups {
+		return false, errcode.New(errcode.ErrGroupJoinLimit, "group join limit")
 	}
 	f.members[memberKey{groupID, playerID}] = &data.GroupMemberRow{GroupID: groupID, PlayerID: playerID, Role: data.GroupRoleMember}
 	g.MemberCount++

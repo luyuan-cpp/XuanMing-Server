@@ -79,7 +79,7 @@ func (u *GuildUsecase) ApplyJoin(ctx context.Context, playerID, guildID, newRequ
 		return 0, errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
 	}
 
-	requestID, _, err := u.repo.CreateJoinRequest(ctx, newRequestID, guildID, playerID)
+	requestID, _, err := u.repo.CreateJoinRequest(ctx, newRequestID, guildID, playerID, u.cfg.MaxPendingRequestsPerGuild)
 	if err != nil {
 		return 0, err
 	}

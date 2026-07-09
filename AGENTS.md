@@ -73,7 +73,7 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 ## 10. 触碰红线 → 立刻停止 + 报告
 
-任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要改 30+ 文件 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线或读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`)。
+任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要改 30+ 文件 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线或读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`) / **新增客户端可写入的累积列表却没有写入侧总量上限和读取侧分页 / 单次返回上限**(好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、待处理队列等;必须在事务 / 原子写路径校验单玩家 / 单实体的 pending / active 数量,超限回明确业务错误,读取侧走 cursor 分页或 SQL LIMIT 兜底;登记到 `CLAUDE.md` §9 不变量 18 的「现存受管列表清单」)。
 
 ## 11. 合作分工
 

@@ -28,6 +28,11 @@ const (
 	requestStatusRejected = 3
 )
 
+// listReadHardLimit 是好友 / 好友申请 / 黑名单列表单次返回的防御性 SQL 上限(不变量 §9.18
+// 读取侧「单次返回上限」兜底)。写入侧上限默认 200,正常列表远低于此值;此处取更宽松的硬上限,
+// 仅防历史脏数据 / 极端场景下的无界扫描与返回。
+const listReadHardLimit = 1000
+
 // FriendRequestRow 是一行好友请求(data → biz 内部结构,不外泄客户端)。
 type FriendRequestRow struct {
 	RequestID   uint64
@@ -74,7 +79,9 @@ type FriendRepo interface {
 	//   - 无历史 → 用 newRequestID 插入 pending,返回 (newRequestID, false)
 	//   - 已有 pending → 复用,返回 (已存在 request_id, true)
 	//   - 已有 rejected/expired → 重置为 pending,返回 (已存在 request_id, false)
-	CreateRequest(ctx context.Context, newRequestID, requesterID, targetID uint64) (requestID uint64, reused bool, err error)
+	// maxIncoming>0 时:在事务内校验 target 的 pending 收件箱数量,新增一条 pending 会超限则
+	// 回 ErrFriendRequestLimit(不变量 §9.18,防好友申请收件箱被刷爆)。
+	CreateRequest(ctx context.Context, newRequestID, requesterID, targetID uint64, maxIncoming int) (requestID uint64, reused bool, err error)
 	// GetRequest 读好友请求;not found → (nil, false, nil)。
 	GetRequest(ctx context.Context, requestID uint64) (*FriendRequestRow, bool, error)
 	// AcceptRequest 在一个事务里完成「接受好友请求」的全部权威校验与写入:
@@ -100,7 +107,8 @@ type FriendRepo interface {
 	// RemoveFriend 删双向好友边(幂等:不存在也不报错)。不动黑名单 / 请求。
 	RemoveFriend(ctx context.Context, playerID, targetID uint64) error
 	// Block 在一个事务里:写黑名单 + 删双向好友边 + 取消两人之间的 pending 请求。
-	Block(ctx context.Context, playerID, targetID uint64) error
+	// maxBlocks>0 时:事务内校验 playerID 当前黑名单数量,新增会超限则回 ErrFriendBlockLimit(不变量 §9.18)。
+	Block(ctx context.Context, playerID, targetID uint64, maxBlocks int) error
 	// Unblock 从黑名单移除(幂等:不存在也不报错)。不自动恢复好友关系。
 	Unblock(ctx context.Context, playerID, targetID uint64) error
 	// ListBlocks 列出玩家拉黑的人(blocked_id + since_ms)。
@@ -159,7 +167,7 @@ func (r *MySQLFriendRepo) CountFriends(ctx context.Context, playerID uint64) (in
 	return n, nil
 }
 
-func (r *MySQLFriendRepo) CreateRequest(ctx context.Context, newRequestID, requesterID, targetID uint64) (uint64, bool, error) {
+func (r *MySQLFriendRepo) CreateRequest(ctx context.Context, newRequestID, requesterID, targetID uint64, maxIncoming int) (uint64, bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
@@ -174,7 +182,10 @@ WHERE requester_id = ? AND target_id = ? FOR UPDATE`, requesterID, targetID).Sca
 
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		// 无历史请求 → 插入新 pending
+		// 无历史请求 → 新增一条 pending 前,先校验 target 收件箱未满(不变量 §9.18)。
+		if ierr := checkIncomingLimit(ctx, tx, targetID, maxIncoming); ierr != nil {
+			return 0, false, ierr
+		}
 		if _, ierr := tx.ExecContext(ctx,
 			`INSERT INTO friend_requests (request_id, requester_id, target_id, status)
 VALUES (?, ?, ?, ?)`, newRequestID, requesterID, targetID, requestStatusPending); ierr != nil {
@@ -197,7 +208,12 @@ VALUES (?, ?, ?, ?)`, newRequestID, requesterID, targetID, requestStatusPending)
 			}
 			return existingID, true, nil
 		}
-		// rejected/expired/accepted → 重置为 pending 再发起
+		// rejected/expired/accepted → 重置为 pending 再发起。
+		// 复用旧行(request_id 不变),从非 pending 转 pending 也会占用 target 收件箱一格,
+		// 故同样校验上限(不变量 §9.18)。
+		if ierr := checkIncomingLimit(ctx, tx, targetID, maxIncoming); ierr != nil {
+			return 0, false, ierr
+		}
 		if _, uerr := tx.ExecContext(ctx,
 			`UPDATE friend_requests SET status = ?, updated_at = NOW() WHERE request_id = ?`,
 			requestStatusPending, existingID); uerr != nil {
@@ -352,8 +368,8 @@ WHERE request_id = ? FOR UPDATE`, requestID).Scan(&targetID, &status)
 
 func (r *MySQLFriendRepo) ListIncomingRequests(ctx context.Context, playerID uint64) ([]IncomingRequestRow, error) {
 	const q = `SELECT request_id, requester_id, UNIX_TIMESTAMP(created_at)*1000
-FROM friend_requests WHERE target_id = ? AND status = ? ORDER BY created_at DESC`
-	rows, err := r.db.QueryContext(ctx, q, playerID, requestStatusPending)
+FROM friend_requests WHERE target_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, q, playerID, requestStatusPending, listReadHardLimit)
 	if err != nil {
 		return nil, errcode.New(errcode.ErrInternal, "query incoming requests player=%d: %v", playerID, err)
 	}
@@ -375,8 +391,8 @@ FROM friend_requests WHERE target_id = ? AND status = ? ORDER BY created_at DESC
 
 func (r *MySQLFriendRepo) ListFriends(ctx context.Context, playerID uint64) ([]FriendRow, error) {
 	const q = `SELECT friend_id, UNIX_TIMESTAMP(created_at)*1000
-FROM friendships WHERE player_id = ? ORDER BY created_at DESC`
-	rows, err := r.db.QueryContext(ctx, q, playerID)
+FROM friendships WHERE player_id = ? ORDER BY created_at DESC LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, q, playerID, listReadHardLimit)
 	if err != nil {
 		return nil, errcode.New(errcode.ErrInternal, "query friends player=%d: %v", playerID, err)
 	}
@@ -396,12 +412,34 @@ FROM friendships WHERE player_id = ? ORDER BY created_at DESC`
 	return out, nil
 }
 
-func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64) error {
+func (r *MySQLFriendRepo) Block(ctx context.Context, playerID, targetID uint64, maxBlocks int) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "begin tx: %v", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// 0. 黑名单上限校验(不变量 §9.18):先确认未重复拉黑(幂等命中不占新名额)再校量。
+	if maxBlocks > 0 {
+		var existsX int
+		eerr := tx.QueryRowContext(ctx,
+			`SELECT 1 FROM blocks WHERE player_id = ? AND blocked_id = ? LIMIT 1`, playerID, targetID).Scan(&existsX)
+		if eerr != nil && !errors.Is(eerr, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrInternal, "check block %d->%d: %v", playerID, targetID, eerr)
+		}
+		if errors.Is(eerr, sql.ErrNoRows) {
+			// 新拉黑 → 事务内锁定读本玩家黑名单行数,防并发超限。
+			var cnt int
+			if cerr := tx.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM blocks WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); cerr != nil {
+				return errcode.New(errcode.ErrInternal, "count blocks %d: %v", playerID, cerr)
+			}
+			if cnt >= maxBlocks {
+				return errcode.New(errcode.ErrFriendBlockLimit,
+					"block limit reached for %d (max %d)", playerID, maxBlocks)
+			}
+		}
+	}
 
 	// 1. 写黑名单(幂等)
 	if _, berr := tx.ExecContext(ctx,
@@ -451,8 +489,8 @@ func (r *MySQLFriendRepo) Unblock(ctx context.Context, playerID, targetID uint64
 
 func (r *MySQLFriendRepo) ListBlocks(ctx context.Context, playerID uint64) ([]BlockRow, error) {
 	const q = `SELECT blocked_id, UNIX_TIMESTAMP(created_at)*1000
-FROM blocks WHERE player_id = ? ORDER BY created_at DESC`
-	rows, err := r.db.QueryContext(ctx, q, playerID)
+FROM blocks WHERE player_id = ? ORDER BY created_at DESC LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, q, playerID, listReadHardLimit)
 	if err != nil {
 		return nil, errcode.New(errcode.ErrInternal, "query blocks player=%d: %v", playerID, err)
 	}
@@ -470,6 +508,27 @@ FROM blocks WHERE player_id = ? ORDER BY created_at DESC`
 		return nil, errcode.New(errcode.ErrInternal, "iterate blocks player=%d: %v", playerID, rerr)
 	}
 	return out, nil
+}
+
+// checkIncomingLimit 在 CreateRequest 事务内校验 target 的「收到的待处理好友申请」数量上限
+// (不变量 §9.18)。maxIncoming<=0 关闭校验;否则锁定读 target 的 pending 计数,达到上限回
+// ErrFriendRequestLimit。FOR UPDATE 对 target_id 索引区间加 next-key 锁,阻塞并发新增 pending,
+// 消除「多个 requester 同时通过校验致收件箱超限」的幻读竞态。
+func checkIncomingLimit(ctx context.Context, tx *sql.Tx, targetID uint64, maxIncoming int) error {
+	if maxIncoming <= 0 {
+		return nil
+	}
+	var cnt int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM friend_requests WHERE target_id = ? AND status = ? FOR UPDATE`,
+		targetID, requestStatusPending).Scan(&cnt); err != nil {
+		return errcode.New(errcode.ErrInternal, "count incoming requests %d: %v", targetID, err)
+	}
+	if cnt >= maxIncoming {
+		return errcode.New(errcode.ErrFriendRequestLimit,
+			"incoming friend request limit reached for %d (max %d)", targetID, maxIncoming)
+	}
+	return nil
 }
 
 // excludeClause 把 exclude 列表拼成 ` AND <col> NOT IN (?,?,...)`,并返回对应参数。

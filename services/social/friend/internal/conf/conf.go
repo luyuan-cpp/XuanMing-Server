@@ -18,6 +18,15 @@ type FriendConf struct {
 	// AddFriend 时对 requester 提前失败;权威校验在 AcceptFriend 事务内对双方原子执行。
 	MaxFriends int `yaml:"max_friends,omitempty" json:"max_friends,omitempty"`
 
+	// MaxIncomingRequests 单玩家「收到的待处理好友申请」上限(默认 200,不变量 §9.18)。
+	// AddFriend 时在 CreateRequest 事务内校验 target 的 pending 收件箱数量,超限回 ErrFriendRequestLimit,
+	// 防止被恶意刷爆好友申请收件箱(客户端可写入的累积列表须有写入侧总量上限)。
+	MaxIncomingRequests int `yaml:"max_incoming_requests,omitempty" json:"max_incoming_requests,omitempty"`
+
+	// MaxBlocks 单玩家黑名单上限(默认 200,不变量 §9.18)。
+	// Block 时在事务内校验拉黑数量,超限回 ErrFriendBlockLimit。
+	MaxBlocks int `yaml:"max_blocks,omitempty" json:"max_blocks,omitempty"`
+
 	// LocatorAddr player_locator gRPC 地址(host:port)。
 	// 空 → ListFriends 不查在线状态(is_online 全 false,弱依赖)。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
@@ -35,6 +44,12 @@ type FriendConf struct {
 func (c *Config) Defaults() {
 	if c.Friend.MaxFriends <= 0 {
 		c.Friend.MaxFriends = 200
+	}
+	if c.Friend.MaxIncomingRequests <= 0 {
+		c.Friend.MaxIncomingRequests = 200
+	}
+	if c.Friend.MaxBlocks <= 0 {
+		c.Friend.MaxBlocks = 200
 	}
 	if c.Friend.RecommendLimit <= 0 {
 		c.Friend.RecommendLimit = 10

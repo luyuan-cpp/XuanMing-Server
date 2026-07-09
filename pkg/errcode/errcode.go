@@ -151,6 +151,8 @@ const (
 	ErrFriendAlreadyAdded Code = 9102
 	ErrFriendBlocked      Code = 9103
 	ErrFriendLimit        Code = 9104 // 好友数已达上限(AcceptFriend 接受时原子校验)
+	ErrFriendRequestLimit Code = 9105 // 收到的好友申请已达上限(target 待处理收件箱满,§9 不变量 18)
+	ErrFriendBlockLimit   Code = 9106 // 黑名单已达上限(§9 不变量 18)
 
 	ErrLocatorNotFound Code = 9201
 	ErrLocatorConflict Code = 9202 // 玩家同时在两个 DS
@@ -169,6 +171,7 @@ const (
 	ErrGuildNameTaken      Code = 9406 // 公会名已被占用
 	ErrGuildRequestInvalid Code = 9407 // 加入申请不存在 / 非 pending
 	ErrGuildNotMember      Code = 9408 // 目标不在本公会
+	ErrGuildRequestLimit   Code = 9409 // 该公会挂起的加入申请已达上限(§9 不变量 18)
 
 	// group 临时群(9500-9599,2026-06-27)
 	ErrGroupNotFound  Code = 9501 // 群不存在
@@ -176,6 +179,7 @@ const (
 	ErrGroupNotOwner  Code = 9503 // 操作需群主权限(解散 / 转让 / 踢人)
 	ErrGroupNotMember Code = 9504 // 玩家不在群内
 	ErrGroupAlreadyIn Code = 9505 // 玩家已在群内(拉人幂等命中)
+	ErrGroupJoinLimit Code = 9506 // 玩家加入的群数量已达上限(§9 不变量 18)
 
 	// mail 邮件(9600-9699,2026-06-29)
 	ErrMailNotFound       Code = 9601 // 邮件不存在 / 已删除

@@ -54,6 +54,12 @@ func NewFriendUsecase(repo data.FriendRepo, pusher FriendEventPusher, online dat
 	if cfg.MaxFriends <= 0 {
 		cfg.MaxFriends = 200
 	}
+	if cfg.MaxIncomingRequests <= 0 {
+		cfg.MaxIncomingRequests = 200
+	}
+	if cfg.MaxBlocks <= 0 {
+		cfg.MaxBlocks = 200
+	}
 	if cfg.RecommendLimit <= 0 {
 		cfg.RecommendLimit = 10
 	}
@@ -119,7 +125,7 @@ func (u *FriendUsecase) AddFriend(ctx context.Context, requesterID, targetID, ne
 		}
 	}
 
-	requestID, _, err := u.repo.CreateRequest(ctx, newRequestID, requesterID, targetID)
+	requestID, _, err := u.repo.CreateRequest(ctx, newRequestID, requesterID, targetID, u.cfg.MaxIncomingRequests)
 	if err != nil {
 		return 0, err
 	}
@@ -275,7 +281,7 @@ func (u *FriendUsecase) Block(ctx context.Context, playerID, targetID uint64) er
 	if playerID == targetID {
 		return errcode.New(errcode.ErrInvalidArg, "cannot block self")
 	}
-	return u.repo.Block(ctx, playerID, targetID)
+	return u.repo.Block(ctx, playerID, targetID, u.cfg.MaxBlocks)
 }
 
 // RemoveFriend 删好友(双向边,幂等)。不动黑名单。

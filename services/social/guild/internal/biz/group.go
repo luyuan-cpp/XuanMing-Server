@@ -46,7 +46,7 @@ func (u *GroupUsecase) CreateGroup(ctx context.Context, ownerID uint64, name str
 		return 0, errcode.New(errcode.ErrInvalidArg, "group name too long")
 	}
 	members := dedupExclude(memberIDs, ownerID)
-	if err := u.repo.CreateGroup(ctx, newGroupID, ownerID, name, members, u.cfg.MaxGroupMembers); err != nil {
+	if err := u.repo.CreateGroup(ctx, newGroupID, ownerID, name, members, u.cfg.MaxGroupMembers, u.cfg.MaxGroupsPerPlayer); err != nil {
 		return 0, err
 	}
 	return newGroupID, nil
@@ -63,7 +63,7 @@ func (u *GroupUsecase) InviteToGroup(ctx context.Context, operatorID, groupID, t
 	} else if !ok {
 		return errcode.New(errcode.ErrGroupNotMember, "operator %d not in group %d", operatorID, groupID)
 	}
-	_, err := u.repo.AddMember(ctx, groupID, targetID, u.cfg.MaxGroupMembers)
+	_, err := u.repo.AddMember(ctx, groupID, targetID, u.cfg.MaxGroupMembers, u.cfg.MaxGroupsPerPlayer)
 	return err
 }
 

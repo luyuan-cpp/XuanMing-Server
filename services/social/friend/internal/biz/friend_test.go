@@ -62,13 +62,19 @@ func (f *fakeRepo) findByPair(requester, target uint64) *data.FriendRequestRow {
 	return nil
 }
 
-func (f *fakeRepo) CreateRequest(_ context.Context, newRequestID, requesterID, targetID uint64) (uint64, bool, error) {
+func (f *fakeRepo) CreateRequest(_ context.Context, newRequestID, requesterID, targetID uint64, maxIncoming int) (uint64, bool, error) {
 	if existing := f.findByPair(requesterID, targetID); existing != nil {
 		if existing.Status == requestStatusPending {
 			return existing.RequestID, true, nil
 		}
+		if maxIncoming > 0 && f.countIncomingPending(targetID) >= maxIncoming {
+			return 0, false, errcode.New(errcode.ErrFriendRequestLimit, "incoming limit")
+		}
 		existing.Status = requestStatusPending
 		return existing.RequestID, false, nil
+	}
+	if maxIncoming > 0 && f.countIncomingPending(targetID) >= maxIncoming {
+		return 0, false, errcode.New(errcode.ErrFriendRequestLimit, "incoming limit")
 	}
 	f.requests[newRequestID] = &data.FriendRequestRow{
 		RequestID:   newRequestID,
@@ -77,6 +83,16 @@ func (f *fakeRepo) CreateRequest(_ context.Context, newRequestID, requesterID, t
 		Status:      requestStatusPending,
 	}
 	return newRequestID, false, nil
+}
+
+func (f *fakeRepo) countIncomingPending(targetID uint64) int {
+	n := 0
+	for _, r := range f.requests {
+		if r.TargetID == targetID && r.Status == requestStatusPending {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *fakeRepo) GetRequest(_ context.Context, requestID uint64) (*data.FriendRequestRow, bool, error) {
@@ -134,9 +150,12 @@ func (f *fakeRepo) ListFriends(_ context.Context, playerID uint64) ([]data.Frien
 	return out, nil
 }
 
-func (f *fakeRepo) Block(_ context.Context, playerID, targetID uint64) error {
+func (f *fakeRepo) Block(_ context.Context, playerID, targetID uint64, maxBlocks int) error {
 	if f.blocks[playerID] == nil {
 		f.blocks[playerID] = map[uint64]bool{}
+	}
+	if maxBlocks > 0 && !f.blocks[playerID][targetID] && len(f.blocks[playerID]) >= maxBlocks {
+		return errcode.New(errcode.ErrFriendBlockLimit, "block limit")
 	}
 	f.blocks[playerID][targetID] = true
 	delete(f.friends[playerID], targetID)
@@ -294,7 +313,7 @@ func TestAddFriend_Self(t *testing.T) {
 
 func TestAddFriend_Blocked(t *testing.T) {
 	repo := newFakeRepo()
-	_ = repo.Block(context.Background(), 200, 100) // 200 拉黑了 100
+	_ = repo.Block(context.Background(), 200, 100, 0) // 200 拉黑了 100
 	uc := newUC(repo, &fakePusher{}, nil)
 	_, err := uc.AddFriend(context.Background(), 100, 200, 1)
 	if errcode.As(err) != errcode.ErrFriendBlocked {
