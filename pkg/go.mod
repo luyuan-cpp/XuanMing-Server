@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/pkg
 
-go 1.26.4
+go 1.26.5
 
 // Pandora 公共框架依赖
 //

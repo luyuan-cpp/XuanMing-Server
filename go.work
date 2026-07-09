@@ -1,4 +1,4 @@
-go 1.26.4
+go 1.26.5
 
 // Pandora Go workspace
 //
@@ -16,10 +16,10 @@ go 1.26.4
 //
 // Go module 路径示例:github.com/luyuancpp/pandora/services/account/login
 //
-// Go 版本:跟 HANDOFF.md "Go 版本 go1.26.4" 锁定一致。
+// Go 版本:跟 HANDOFF.md "Go 版本 go1.26.5" 锁定一致。
 // 历史背景:W1 PROGRESS.md 写目标 1.23,W2 依赖(Kratos v2.9.2 / sarama 1.43.1 等)
 // 自动要求 1.24.0;W3 ① 升 1.25(jwt/v5、go-redis/v9 链路);W3 ⑥(2026-06-05 Codex 审查)
-// 统一到本机 toolchain 1.26.4,避免文档与工程冲突。再升级须同步 HANDOFF.md。
+// 统一到本机 toolchain 1.26.5,避免文档与工程冲突。再升级须同步 HANDOFF.md。
 
 use ./pkg
 

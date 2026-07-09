@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/battle/battle_result
 
-go 1.26.4
+go 1.26.5
 
 // W4 ③ battle_result 服务(Pandora 第 7 个 Kratos 业务服,2026-06-06)。
 //

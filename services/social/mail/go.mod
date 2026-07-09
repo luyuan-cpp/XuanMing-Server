@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/social/mail
 
-go 1.26.4
+go 1.26.5
 
 // mail 服务(Pandora 社交域邮件,2026-06-29)。
 //

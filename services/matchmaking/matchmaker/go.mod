@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/matchmaking/matchmaker
 
-go 1.26.4
+go 1.26.5
 
 // W4 ① matchmaker 服务(Pandora 第 5 个 Kratos 业务服,2026-06-06)。
 //

@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/account/login
 
-go 1.26.4
+go 1.26.5
 
 // W2 ③ login 服务(Pandora 第一个 Kratos 业务服)。
 //

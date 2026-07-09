@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/runtime/leaderboard
 
-go 1.26.4
+go 1.26.5
 
 // leaderboard 服务(Pandora 运行时域通用排行榜,2026-06-27)。
 //

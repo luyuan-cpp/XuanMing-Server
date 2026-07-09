@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/economy/inventory
 
-go 1.26.4
+go 1.26.5
 
 // W5 ③ inventory 服务(Pandora 背包 / 经济,economy 域,2026-06-18)。
 //

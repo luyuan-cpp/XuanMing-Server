@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/pkg/cellroute/etcdtable
 
-go 1.26.4
+go 1.26.5
 
 // cellroute 映射表的 etcd watch 热更新器(opt-in,独立 module 隔离重型 etcd client 依赖)。
 //

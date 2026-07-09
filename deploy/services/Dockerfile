@@ -13,7 +13,7 @@
 # 在容器里不可用 —— compose 用 bind-mount、k8s 用 ConfigMap 覆盖主配置为「集群版」
 # (mysql/redis/kafka/etcd 改容器服务名,见 tools/scripts/gen_cluster_config.ps1)。
 
-ARG GO_VERSION=1.26.4
+ARG GO_VERSION=1.26.5
 # 基础镜像仓库前缀:默认官方 docker.io;国内机器由 start.ps1 传 docker.m.daocloud.io 等加速镜像。
 ARG BASE_REGISTRY=docker.io
 

@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/social/guild
 
-go 1.26.4
+go 1.26.5
 
 // guild 服务(Pandora 社交域公会 + 临时群,2026-06-27)。
 //

@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/economy/trade
 
-go 1.26.4
+go 1.26.5
 
 // trade 服务(Pandora 经济域玩家交易,2026-06-16)。
 //

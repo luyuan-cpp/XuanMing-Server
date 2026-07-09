@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/economy/auction
 
-go 1.26.4
+go 1.26.5
 
 // auction 服务(Pandora 经济域全服拍卖行 / 撮合,2026-06-19)。
 //

@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/pkg/snowflake/etcdnode
 
-go 1.26.4
+go 1.26.5
 
 // Snowflake nodeID 的 etcd Lease 自动分配器(opt-in,独立 module 隔离重型 etcd client 依赖)。
 //

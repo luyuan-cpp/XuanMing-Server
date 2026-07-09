@@ -27,7 +27,7 @@ Client(UE 5.7)
 | 项 | 锁定值 |
 |---|---|
 | Go 框架 | **Kratos v2.9.2** |
-| Go 版本 | go1.26.4 |
+| Go 版本 | go1.26.5 |
 | Log | Kratos log + **zap** 实现 |
 | Config | yaml + file source(W3+ 接 etcd) |
 | Edge Gateway | **Envoy v1.38.0**(grpc-web filter) |

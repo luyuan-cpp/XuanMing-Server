@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/account/player
 
-go 1.26.4
+go 1.26.5
 
 // W4 ④ player 服务(Pandora 第 8 个 Kratos 业务服,2026-06-06)。
 //

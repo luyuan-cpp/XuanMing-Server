@@ -15,7 +15,7 @@
 #     --build-arg BASE_REGISTRY=docker.io \
 #     -t pandora/<name>:dev  run/docker-build/prebuilt/<name>
 
-ARG GO_VERSION=1.26.4
+ARG GO_VERSION=1.26.5
 ARG BASE_REGISTRY=docker.io
 
 # ===== certs 阶段 =====

@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/data/data_service
 
-go 1.26.4
+go 1.26.5
 
 // data_service —— 玩家数据统一读写网关(2026-06-16)。
 //

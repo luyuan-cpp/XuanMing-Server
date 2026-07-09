@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/robot/stress
 
-go 1.26.4
+go 1.26.5
 
 // robot/stress —— 阶段 1 单 Cell ~40 万 CCU 压测客户端机群(stressbot)。
 //

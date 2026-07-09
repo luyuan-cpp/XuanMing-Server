@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/social/friend
 
-go 1.26.4
+go 1.26.5
 
 // friend 服务(Pandora 社交域好友 / 黑名单,2026-06-15)。
 //

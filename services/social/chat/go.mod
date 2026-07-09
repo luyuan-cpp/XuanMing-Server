@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/social/chat
 
-go 1.26.4
+go 1.26.5
 
 // chat 服务(Pandora 社交域聊天,2026-06-16)。
 //

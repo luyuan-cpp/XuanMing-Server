@@ -300,7 +300,7 @@ function Ensure-GoInstalled {
     }
     Write-Warn 'Go 未安装'
     if (-not (Test-CommandExists 'winget')) {
-        Write-Err '未找到 winget,无法自动安装 Go;请手动装:https://go.dev/dl/ (需 1.26.4+)'
+        Write-Err '未找到 winget,无法自动安装 Go;请手动装:https://go.dev/dl/ (需 1.26.5+)'
         return $false
     }
     Write-Info '尝试用 winget 安装 Go(GoLang.Go,可能要几分钟)...'

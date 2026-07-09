@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/services/battle/hub_allocator
 
-go 1.26.4
+go 1.26.5
 
 // W4 ⑤ hub_allocator 服务(Pandora 第 9 个 Kratos 业务服,2026-06-06)。
 //

@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/pkg/killswitch/etcdkv
 
-go 1.26.4
+go 1.26.5
 
 // Kill-Switch 的 etcd 开关源(opt-in,独立 module 隔离重型 etcd client 依赖)。
 //

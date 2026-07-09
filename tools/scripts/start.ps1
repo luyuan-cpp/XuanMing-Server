@@ -235,7 +235,7 @@ function Ensure-Docker {
 }
 
 function Ensure-Go {
-    return (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/ (需 1.26.4+)')
+    return (Ensure-Tool -Name 'Go' -CheckCmd 'go' -WingetId 'GoLang.Go' -ManualUrl 'https://go.dev/dl/ (需 1.26.5+)')
 }
 
 # 检查给定模式需要的工具;返回 $true=全就绪
@@ -993,7 +993,7 @@ function Build-Images-InContainer {
     if (-not $baseRegistry) {
         # 本机已有 golang 基础镜像时,优先用本地(打成 Dockerfile 需要的 docker.io/library/golang:<ver> tag),
         # 彻底免联网拉基础镜像;本地没有才回退国内加速站(需网络)。
-        $goVer = '1.26.4'
+        $goVer = '1.26.5'
         $m = Select-String -Path $Dockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
         $wantGo = "docker.io/library/golang:$goVer"
@@ -1056,7 +1056,7 @@ function Build-Images-InContainer {
 function Build-Images-Host {
     param([array]$List, $Version)
     if (-not (Test-CommandExists 'go')) {
-        throw "host 构建方式需要本机安装 Go(1.26.4+)。装好后重试,或改用 -BuildMode incontainer(容器内编译,无需本机 Go)。"
+        throw "host 构建方式需要本机安装 Go(1.26.5+)。装好后重试,或改用 -BuildMode incontainer(容器内编译,无需本机 Go)。"
     }
     $v = $Version
     $prebuiltDockerfile = Join-Path $ProjectRoot 'deploy/services/Dockerfile.prebuilt'
@@ -1066,7 +1066,7 @@ function Build-Images-Host {
     # Dockerfile.prebuilt 只用 golang 镜像取 CA 证书 / 时区(不编译,层缓存命中);沿用本地已有基础镜像。
     $baseRegistry = $env:PANDORA_BASE_REGISTRY
     if (-not $baseRegistry) {
-        $goVer = '1.26.4'
+        $goVer = '1.26.5'
         $m = Select-String -Path $prebuiltDockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
         $wantGo = "docker.io/library/golang:$goVer"

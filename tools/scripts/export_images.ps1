@@ -154,9 +154,9 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 if ($Build) {
     Write-Step "构建 20 个业务镜像(离线优先:本地 golang 基础镜像 + docker.io 源)"
 
-    # Dockerfile 编译阶段用 golang:${GO_VERSION}(默认 1.26.4),运行阶段是 scratch(不需 alpine)。
+    # Dockerfile 编译阶段用 golang:${GO_VERSION}(默认 1.26.5),运行阶段是 scratch(不需 alpine)。
     # 离线机器拉不到 golang 时,若本地已有等价的 golang 镜像,自动打成所需 tag 直接复用。
-    $wantGo = 'golang:1.26.4'
+    $wantGo = 'golang:1.26.5'
     docker image inspect $wantGo *> $null
     if ($LASTEXITCODE -ne 0) {
         $localGo = (docker images --format '{{.Repository}}:{{.Tag}}' | Select-String '^golang:' | Select-Object -First 1)
@@ -164,12 +164,12 @@ if ($Build) {
             $src = "$localGo".Trim()
             Write-Warn "本地无 $wantGo,发现 $src,自动打标 $wantGo 复用(避免联网拉取)。"
             docker tag $src $wantGo
-            docker tag $src "docker.io/library/golang:1.26.4"
+            docker tag $src "docker.io/library/golang:1.26.5"
         } else {
-            Write-Warn "本地无任何 golang 基础镜像,构建时需联网拉取 golang:1.26.4;若网络受限会失败。"
+            Write-Warn "本地无任何 golang 基础镜像,构建时需联网拉取 golang:1.26.5;若网络受限会失败。"
         }
     } else {
-        docker tag $wantGo "docker.io/library/golang:1.26.4" 2>$null
+        docker tag $wantGo "docker.io/library/golang:1.26.5" 2>$null
     }
 
     # 用本地 golang(docker.io 源,已在本地不会真的联网)+ goproxy.cn 拉 go 模块。

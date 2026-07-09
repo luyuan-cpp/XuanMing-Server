@@ -51,7 +51,7 @@ func Get() Info {
 
 // String 返回单行可读版本串,适合启动日志。
 //
-//	version=v1.2.3 commit=abc1234 built=2026-06-21T10:00:00Z go=go1.26.4
+//	version=v1.2.3 commit=abc1234 built=2026-06-21T10:00:00Z go=go1.26.5
 func String() string {
 	i := Get()
 	return fmt.Sprintf("version=%s commit=%s built=%s go=%s",

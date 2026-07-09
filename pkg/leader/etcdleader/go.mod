@@ -1,6 +1,6 @@
 module github.com/luyuancpp/pandora/pkg/leader/etcdleader
 
-go 1.26.4
+go 1.26.5
 
 // 后台单例任务的 etcd 选举器(opt-in,独立 module 隔离重型 etcd client 依赖)。
 //
