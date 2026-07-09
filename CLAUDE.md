@@ -55,6 +55,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 9. 第 8 条的"快照用 proto bytes"**只针对快照/blob 场景**(Redis value、Kafka payload、MySQL blob 列):关系型 MySQL 表(结构化列)不强制 proto 化,列直接映射 proto 字段;临时小令牌(如 invite,2~3 字段、短 TTL)允许继续用 redis hash。核心是"消灭与 proto 漂移的并行 struct",不是"一切序列化成 bytes"
 10. proto message 直接当存储 record 时:**禁止值拷贝**(`a := *rec` 会复制 state/mu/sizeCache),克隆一律 `proto.Clone`;存储与客户端结构**分两个 message**,存储侧独有字段(如 `updated_at_ms`)不外露
 11. **禁止把存储快照原样返回/推送给客户端**。RPC response / push 只能用"客户端可见结构",由服务端从 `StorageRecord`/MySQL 行/Redis 状态按**最小数据单位**填充,必要时重算派生字段(ready、queue_seconds、mmr_delta、显示昵称)。例外只能是写入设计文档的运维/调试 RPC,且须鉴权、脱敏、不经 Envoy 对客户端开放。
+12. **非负整型字段默认用无符号类型**:语义上不可能为负的整数(数量、计数、时长毫秒、容量、索引、金额、版本号、时间戳 ms、序号等)默认用 `uint32` / `uint64`,不用 `int32` / `int64`。选型:预期不超过 ~42 亿用 `uint32`,可能更大或属 Snowflake 业务 ID 用 `uint64`(遵循第 5、6 条)。**例外(仍用有符号)**:①语义上可能为负的差值 / 增量(如 `mmr_delta`、坐标偏移、余额变动 `delta`);②参与减法且可能下溢的字段(用有符号避免无符号回绕);③已属枚举 / 状态 / 原因(见第 7 条,保持 int32 语义)。跨语言注意:JSON / JS 场景 `uint64` 仍按字符串编码,与现有 ID 规则一致。
 
 ## 6. 服务命名 / 端口规范
 

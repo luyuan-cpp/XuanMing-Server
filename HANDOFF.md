@@ -141,7 +141,7 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 - 不做 git 收尾,把验证结果交给 ChatGPT / Codex。
 - ChatGPT / Codex 做完环境 / 文档 / git 收尾后,Claude 必须审核相关产物和验证结果。
 - 非代码任务,或项目分析 / 逻辑细节任务中需要执行的辅助部分,由 Claude 生成执行操作信息,用户复制给 ChatGPT / Codex 执行。
-- 涉及安装工具、改系统环境、写 secrets、生产集群、push / tag、30+ 文件大改等红线时必须停止并等人授权。
+- 涉及安装工具、改系统环境、写 secrets、生产集群、push / tag 等红线时必须停止并等人授权;大范围改动不设文件数硬上限(方向标准/正确/更优即可放手做,完成后列出改动范围与验证)。
 
 ### 4.3 跨 AI 分工
 
@@ -187,7 +187,7 @@ Module 路径:`github.com/luyuancpp/pandora/services/<域>/<服务>`
 - 不假装成功。
 - 不跳过失败。
 - 不绕过测试。
-- 发现要改 30+ 文件、写 secret、push 远端、规范冲突时立即停止报告。
+- 发现要写 secret、push 远端、规范冲突时立即停止报告。
 
 ---
 

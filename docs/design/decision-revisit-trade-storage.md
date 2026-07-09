@@ -199,10 +199,10 @@ PENDING ──买方确认──▶ BUYER_CONFIRMED ──卖方确认+结算─
 
 ---
 
-## 9. 迁移成本(拍板后,预估按 AGENTS §10 分批)
+## 9. 迁移成本(拍板后,预估分批实施)
 
 这是一个**新功能域**,不是 `trade` 微调。预估改动面较大(proto + 新表 + 撮合 biz + 结算出箱 + 检索),
-按 AGENTS §10「30+ 文件先评估」**必须分批**,不在本提案一次实现。粗分批:
+AGENTS §4 大范围改动虽不设文件数硬上限,但此新功能域跨 proto + 表 + 多服务且含不可逆上线风险,**仍建议分批**,不在本提案一次实现。粗分批:
 
 1. **Batch A — proto + 挂单大表 + 挂单/撤单**:`AuctionService`(ListItem/CancelListing/SearchMarket/GetListing),
    挂单托管事务,客户端可见 `Listing` vs `ListingStorageRecord`,幂等键唯一索引。

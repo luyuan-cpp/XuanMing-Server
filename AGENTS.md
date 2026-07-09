@@ -41,7 +41,9 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 该路线由宿主 Go 交叉编译业务二进制,再仅用 Docker 封装/`docker save` 成离线镜像包,不走容器内 `go build` 慢路径。只有宿主 Go 不可用或 host 构建明确失败时,才报告原因并经人确认后改用容器内构建。
 
-遇 §3 禁令、§10 红线,或要装/升级工具、改系统环境、写 secrets、碰生产、push/tag、改 30+ 文件 → **立刻停止报告**,等授权。
+遇 §3 禁令、§10 红线,或要装/升级工具、改系统环境、写 secrets、碰生产、push/tag → **立刻停止报告**,等授权。
+
+**大范围改动不设文件数硬上限**:只要方向标准、正确、比原方案更好,可放手做大范围重构 / 批量改动,不必因文件数多而停手;但完成后须在汇报里如实列出改动范围、动机与验证结果,方便 review。若属于推翻既有设计决策,仍按 §7 先写 `decision-revisit` 文档等人拍板。
 
 **接线做最终版,不留半成品**(细则见 `CLAUDE.md §14`):新功能一次接到可上线版本,不准 TODO 占位 / 空实现;允许配置开关默认关闭(如 `snowflake.node_id_source` 默认 static),但开关打开后的分支必须是完整真实实现。引入隔离重依赖的独立 pkg module(如 `pkg/snowflake/etcdnode` 的 etcd client)到服务时,Claude 写代码 + 补 go.mod 的 require/replace,`go mod tidy` 生成 go.sum 由 Codex 执行(§11.1);接线后必须在交接里**列出需 tidy 的服务清单**,不准默声留着让下个 AI 撞 build 红。
 
@@ -56,7 +58,7 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 ## 6. proto 同步
 
-以 `CLAUDE.md §5`(尤其 §5.8-§5.10)和 `docs/design/proto-design.md` 为准,本文件不重复细则。
+以 `CLAUDE.md §5`(尤其 §5.8-§5.10、§5.12)和 `docs/design/proto-design.md` 为准,本文件不重复细则。**非负整型字段默认用无符号类型**(`uint32` / `uint64`),仅差值 / 增量、可能下溢的减法字段、枚举 / 状态例外——细则见 `CLAUDE.md §5` 第 12 条。
 
 ## 7. 跨 AI 冲突解决
 
@@ -73,7 +75,7 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 ## 10. 触碰红线 → 立刻停止 + 报告
 
-任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要改 30+ 文件 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线或读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`) / **新增客户端可写入的累积列表却没有写入侧总量上限和读取侧分页 / 单次返回上限**(好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、待处理队列等;必须在事务 / 原子写路径校验单玩家 / 单实体的 pending / active 数量,超限回明确业务错误,读取侧走 cursor 分页或 SQL LIMIT 兜底;登记到 `CLAUDE.md` §9 不变量 18 的「现存受管列表清单」)。
+任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线或读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`) / **新增客户端可写入的累积列表却没有写入侧总量上限和读取侧分页 / 单次返回上限**(好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、待处理队列等;必须在事务 / 原子写路径校验单玩家 / 单实体的 pending / active 数量,超限回明确业务错误,读取侧走 cursor 分页或 SQL LIMIT 兜底;登记到 `CLAUDE.md` §9 不变量 18 的「现存受管列表清单」)。
 
 ## 11. 合作分工
 
