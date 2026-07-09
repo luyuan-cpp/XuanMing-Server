@@ -20,6 +20,7 @@ require (
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/luyuancpp/pandora/pkg v0.0.0
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
+	github.com/luyuancpp/proto2mysql v0.0.22
 	github.com/redis/go-redis/v9 v9.16.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -31,6 +32,8 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
 	github.com/shirou/gopsutil/v3 v3.23.6 // indirect
@@ -41,6 +44,7 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.16 // indirect
+	gorm.io/gorm v1.30.0 // indirect
 )
 
 require (

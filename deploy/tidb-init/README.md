@@ -56,6 +56,14 @@ friend --conf services/social/friend/etc/friend-dev-tidb.yaml   # friend 连 TiD
 4. （如已有单 MySQL 数据）用 Dumpling + Lightning（或 DM）迁移，在线双写灰度。
 5. friend 服务改用 `friend-dev-tidb.yaml` 启动验证。
 
+## TiDB 与 Redis 边界
+
+本目录只解决 `pandora_social` 的存储扩容和跨人强一致过渡,**不代表上 TiDB 后可以删除 Redis**。
+
+- TiDB / 分片:替代手工分库分表、应用侧路由和单 MySQL 容量瓶颈。
+- Redis:继续负责热点读挡板、极低延迟临时状态和专用数据结构(session / locator / leaderboard / auction book 等)。
+- 对 friend / chat:TiDB 降低数据层扩容复杂度;是否额外加 Redis 缓存仍按 `docs/design/read-cache-strategy.md` 的读热度、重复读命中率、共享度判据决策。
+
 ## TiDB 必知代价(§8.2)
 
 - 雪花单调主键写热点:`friend_requests` / `chat_private_messages` 已用
