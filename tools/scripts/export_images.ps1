@@ -49,6 +49,84 @@ function Write-Warn($m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 function Write-Err($m)  { Write-Host "[ERR ] $m" -ForegroundColor Red }
 function Write-Step($m) { Write-Host "`n===== $m =====" -ForegroundColor Magenta }
 
+function Get-ArchiveRepoTags([string]$Archive) {
+    $json = tar -xOf $Archive manifest.json
+    if ($LASTEXITCODE -ne 0) { throw "无法读取镜像包 manifest.json:$Archive" }
+    $manifest = $json | ConvertFrom-Json
+    $tags = @()
+    foreach ($entry in @($manifest)) {
+        foreach ($tag in @($entry.RepoTags)) {
+            if ($tag) { $tags += $tag }
+        }
+    }
+    return $tags
+}
+
+function Copy-ArchivePayload([string]$ExtractDir, [string]$MergeDir) {
+    Get-ChildItem -LiteralPath $ExtractDir -Recurse -File | ForEach-Object {
+        $rel = [System.IO.Path]::GetRelativePath($ExtractDir, $_.FullName)
+        if ($rel -in @('manifest.json', 'repositories', 'index.json', 'oci-layout')) { return }
+
+        $target = Join-Path $MergeDir $rel
+        $targetDir = Split-Path -Parent $target
+        if (-not (Test-Path -LiteralPath $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        if (-not (Test-Path -LiteralPath $target)) {
+            Copy-Item -LiteralPath $_.FullName -Destination $target
+        }
+    }
+}
+
+function Save-MergedDockerArchive([string[]]$Images, [string]$OutPath) {
+    $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("pandora-docker-save-" + [System.Guid]::NewGuid().ToString('N'))
+    $mergeDir = Join-Path $tmpRoot 'merged'
+    New-Item -ItemType Directory -Path $mergeDir -Force | Out-Null
+
+    try {
+        $allManifest = @()
+        $seenTags = New-Object 'System.Collections.Generic.HashSet[string]'
+        $index = 0
+
+        foreach ($img in $Images) {
+            $singleTar = Join-Path $tmpRoot ("image-$index.tar")
+            $extractDir = Join-Path $tmpRoot ("image-$index")
+            New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+
+            docker save -o $singleTar $img
+            if ($LASTEXITCODE -ne 0) { throw "docker save 单镜像失败:$img" }
+
+            tar -xf $singleTar -C $extractDir
+            if ($LASTEXITCODE -ne 0) { throw "解包单镜像 archive 失败:$img" }
+
+            $manifestPath = Join-Path $extractDir 'manifest.json'
+            $entries = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+            foreach ($entry in @($entries)) {
+                $newTags = @()
+                foreach ($tag in @($entry.RepoTags)) {
+                    if ($tag -and $seenTags.Add($tag)) { $newTags += $tag }
+                }
+                if ($newTags.Count -gt 0) {
+                    $entry.RepoTags = [string[]]$newTags
+                    $allManifest += $entry
+                }
+            }
+
+            Copy-ArchivePayload -ExtractDir $extractDir -MergeDir $mergeDir
+            $index++
+        }
+
+        $allManifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $mergeDir 'manifest.json') -Encoding UTF8
+        $items = @(Get-ChildItem -LiteralPath $mergeDir | ForEach-Object { $_.Name })
+        tar -cf $OutPath -C $mergeDir @items
+        if ($LASTEXITCODE -ne 0) { throw "合并镜像 archive 失败。" }
+    } finally {
+        if (Test-Path -LiteralPath $tmpRoot) {
+            Remove-Item -LiteralPath $tmpRoot -Recurse -Force
+        }
+    }
+}
+
 # 20 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
 $BusinessImages = @(
     'pandora/login:dev','pandora/player:dev','pandora/data-service:dev',
@@ -130,6 +208,23 @@ if (-not $Out) {
 Write-Step "导出 $($images.Count) 个镜像 → $Out(可能几分钟,镜像较大)"
 docker save -o $Out @images
 if ($LASTEXITCODE -ne 0) { throw "docker save 失败。" }
+
+$exportedTags = @(Get-ArchiveRepoTags -Archive $Out)
+$missingTags = @($images | Where-Object { $exportedTags -notcontains $_ })
+if ($missingTags.Count -gt 0) {
+    Write-Warn "docker save 产物缺少 $($missingTags.Count) 个 tag,改用逐镜像合并 archive:"
+    $missingTags | ForEach-Object { Write-Warn "  - $_" }
+    Save-MergedDockerArchive -Images $images -OutPath $Out
+
+    $exportedTags = @(Get-ArchiveRepoTags -Archive $Out)
+    $missingTags = @($images | Where-Object { $exportedTags -notcontains $_ })
+    if ($missingTags.Count -gt 0) {
+        Write-Err "合并后的镜像包仍缺少以下 tag:"
+        $missingTags | ForEach-Object { Write-Err "  - $_" }
+        throw "离线镜像包校验失败。"
+    }
+}
+Write-Ok "镜像包 manifest 校验通过($($exportedTags.Count) 个 tag)。"
 
 $sizeMB = [math]::Round((Get-Item $Out).Length / 1MB, 1)
 Write-Ok "打包完成:$Out(${sizeMB} MB)"
