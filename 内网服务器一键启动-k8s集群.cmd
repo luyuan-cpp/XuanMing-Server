@@ -25,7 +25,7 @@ rem  Packages\Server_Linux_Development\LinuxServer 取 UE Linux 打包产物
 rem  (不写死路径,优先匹配同级 Pandora-Client* 仓库),同步进 deploy/ds/stage
 rem  后构建 pandora/battle-ds:dev / pandora/hub-ds:dev 到 minikube。
 rem  DS 起来后看 UE 日志: kubectl get gameservers; kubectl logs -f <pod>。
-rem  想手动指定 DS 包路径,先设 环境变量 PANDORA_DS_LINUX_PKG 再双击本脚本。
+rem  想手动指定 DS 包路径,先设环境变量 PANDORA_DS_LINUX_PKG 再双击本脚本。
 rem
 rem  注意:minikube docker driver 下 Pod IP 默认不能被其它内网机器直接访问;
 rem  本入口用于在这台机器上验证真实 k8s + Agones DS 链路。面向内网/生产
@@ -36,11 +36,12 @@ rem ============================================================
 setlocal
 cd /d "%~dp0"
 
+rem 本项目要求 PowerShell 7(pwsh)。若缺失则明确报错,不回退到 Windows PowerShell 5.1。
 where pwsh >nul 2>nul
 if errorlevel 1 (
   echo.
   echo  [ERR] 未找到 PowerShell 7 pwsh。本项目脚本要求 PowerShell 7。
-  echo        安装地址: https://aka.ms/powershell
+  echo        安装地址: https://aka.ms/powershell 或 winget install Microsoft.PowerShell
   echo.
   pause
   exit /b 1
