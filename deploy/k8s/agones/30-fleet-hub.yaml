@@ -9,8 +9,8 @@
 # capacity 标签可选：单分片人数上限（缺省用 hub.default_capacity=500）。
 # shard-id 标签可选:同 Fleet 多副本无法静态区分,缺省由 hub_allocator 按 pod 名哈希派生。
 #
-# dev 占位镜像同 battle（simple-game-server 自带 Agones SDK 让分片进 Ready）。
-# 真 UE Pandora Hub DS 镜像就绪后替换 image。Hub DS 业务心跳上报 hub_allocator 见 ds-arch.md。
+# 当前直接使用真 UE Pandora Hub DS 镜像。Fleet Ready 证明 Agones SDK 生命周期正常；
+# Hub DS 还须经 :8444 向 hub_allocator 上报业务心跳，见 ds-arch.md。
 apiVersion: agones.dev/v1
 kind: Fleet
 metadata:

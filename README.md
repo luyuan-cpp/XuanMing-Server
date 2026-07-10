@@ -45,7 +45,7 @@ Pandora/
 一条命令把后端跑起来,会先检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;确实要让脚本尝试用 winget 安装时,显式追加 `-Install`:
 
 ```powershell
-# 默认 local 模式(基础设施 docker + 16 个 go 服务宿主进程,可断点调试)
+# 默认 local 模式(基础设施 docker + 20 个业务进程,含独立 matchmaker-pve 实例,可断点调试)
 pwsh tools/scripts/start.ps1
 
 # 也可双击仓库根的 start.cmd(无参数 = local 模式)
@@ -67,7 +67,7 @@ pwsh tools/scripts/play.ps1 -Battle -OpenClient
 | 模式      | 说明                                                          | DS   | 命令 |
 |-----------|---------------------------------------------------------------|------|------|
 | `local`   | 基础设施在 docker,go 服务宿主进程(可断点调试,**策划首选**)  | local | `start.ps1 -Mode local` |
-| `docker`  | 基础设施 + 19 个 go 服务全部容器化                            | mock | `start.ps1 -Mode docker` |
+| `docker`  | 基础设施 + 20 个业务容器(19 个 Go 服务,matchmaker 双实例)       | mock | `start.ps1 -Mode docker` |
 | `intranet`| 同 docker 全容器,绑内网 IP 供多人联调                         | mock | `start.ps1 -Mode intranet` |
 | `k8s`     | 本机 minikube + Agones,真 Linux DS(线上等价)                | agones | `start.ps1 -Mode k8s` |
 | `online`  | 部署到远端 k8s(需人工授权并确认 kube-context,谨慎)         | agones | 见下方真 DS 参数 |
@@ -84,10 +84,12 @@ pwsh tools/scripts/play.ps1 -Battle -OpenClient
 > 应保持 `0`。
 >
 > **线上真集群**:Fleet 的 DS 镜像与回调地址必须按环境注入,否则远端拉不到镜像/回调打空,
-> 故 `-Mode online` 强制要求 `-BattleDsImage` / `-HubDsImage` / `-DsGatewayAddr`(缺一即 fail-fast):
+> 故 `-Mode online` 强制要求 DS 三参数，并把 `test/prod` 各自绑定到预期 kube-context
+> （参数或 `PANDORA_K8S_TEST_CONTEXT` / `PANDORA_K8S_PROD_CONTEXT`）；缺失/不匹配即 fail-fast:
 >
 > ```powershell
-> start.ps1 -Mode online -Env test -Registry registry.mycorp.com -Tag v1.2.3 `
+> start.ps1 -Mode online -Env test -TestKubeContext pandora-test `
+>   -Registry registry.mycorp.com -Tag v1.2.3 `
 >   -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 `
 >   -HubDsImage    registry.mycorp.com/pandora/hub-ds:v1.2.3 `
 >   -DsGatewayAddr pandora-envoy.pandora.svc:8444

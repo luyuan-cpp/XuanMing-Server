@@ -9,18 +9,18 @@
   随仓库(git / svn)同步到其它机器,**不用 U 盘、不用联网拷贝**。
 
 > 说明:业务运行镜像用 `scratch` 基底(见 `deploy/services/Dockerfile`),体积很小,
-> 适合入库同步。基础设施镜像(mysql/redis/kafka/etcd/prometheus/grafana/envoy)不在此包内——
-> 目标机通常已经拉到过并在跑;若目标机也缺,用 `export_images.ps1 -Build -IncludeInfra`
-> 打个含基础设施的大包(会大很多,按需)。
+> 适合入库同步。基础设施镜像(mysql/redis/kafka/etcd/prometheus/grafana/loki/alloy/envoy)
+> 不在此包内——目标机通常已经拉到过并在跑;若目标机也缺,用
+> `export_images.ps1 -Build -IncludeInfra -Out D:\pandora-full-images.tar` 打仓库外的完整大包。
 
 ## 生成(能联网的机器)
 
 ```powershell
-# 构建 20 个业务镜像并打包到本目录
+# 默认走宿主 Go 交叉编译，需 Go 1.26.5+ 与 Docker；构建 20 个业务镜像并打包到本目录
 pwsh tools/scripts/export_images.ps1 -Build
 
-# 开发机已装 Go 时可用宿主编译方式,增量更快
-pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
+# 只有宿主 Go 不可用或 host 构建明确失败、并经人工确认后，才改用容器内慢路径
+pwsh tools/scripts/export_images.ps1 -Build -BuildMode incontainer
 ```
 
 生成后把 `pandora-images.tar` 纳入版本控制(`git add` / `svn add`)并提交/同步。

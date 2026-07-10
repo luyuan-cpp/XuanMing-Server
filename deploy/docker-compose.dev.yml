@@ -15,7 +15,7 @@ services:
     container_name: pandora-mysql
     restart: unless-stopped
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pandora_dev_root}
       MYSQL_USER: ${MYSQL_USER:-pandora}
@@ -40,7 +40,7 @@ services:
     container_name: pandora-redis
     restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     command:
       - redis-server
       - --appendonly
@@ -64,7 +64,7 @@ services:
     container_name: pandora-zookeeper
     restart: unless-stopped
     ports:
-      - "2182:2181"
+      - "127.0.0.1:2182:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -87,7 +87,7 @@ services:
       zookeeper:
         condition: service_healthy
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -118,8 +118,8 @@ services:
     container_name: pandora-etcd
     restart: unless-stopped
     ports:
-      - "2380:2379"  # client
-      - "2381:2380"  # peer
+      - "127.0.0.1:2380:2379"  # client
+      - "127.0.0.1:2381:2380"  # peer
     command:
       - /usr/local/bin/etcd
       - --name=pandora-etcd
@@ -146,7 +146,8 @@ services:
     container_name: pandora-prometheus
     restart: unless-stopped
     ports:
-      - "9091:9090"
+      # 监控面默认只供本机；确需局域网共享看板时单独显式设置该变量。
+      - "${PANDORA_OBSERVABILITY_BIND_HOST:-127.0.0.1}:9091:9090"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -162,7 +163,7 @@ services:
     container_name: pandora-grafana
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "${PANDORA_OBSERVABILITY_BIND_HOST:-127.0.0.1}:3001:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-pandora_dev_admin}
@@ -186,7 +187,7 @@ services:
     container_name: pandora-loki
     restart: unless-stopped
     ports:
-      - "3100:3100"   # 宿主直查 API(logcli / curl);Grafana 走内网 loki:3100
+      - "${PANDORA_OBSERVABILITY_BIND_HOST:-127.0.0.1}:3100:3100"   # 宿主直查 API(logcli / curl);Grafana 走内网 loki:3100
     command:
       - -config.file=/etc/loki/loki-config.yml
     volumes:
@@ -228,10 +229,11 @@ services:
     restart: unless-stopped
     ports:
       # 默认只绑本机回环(仅本机可连);内网多机联调由 start.ps1 的 intranet/battle/k8s 局域网路径
-      # 显式导出 PANDORA_EDGE_BIND_HOST=0.0.0.0 才对局域网开放。避免「仅本机」提示与实际发布不符,
-      # 也避免未鉴权的 DS 面 8444 默认暴露给整个局域网。
+      # 显式导出 PANDORA_EDGE_BIND_HOST=0.0.0.0 才把【客户端面 8443】对局域网开放。
+      # DS 面 8444 未鉴权,单独用 PANDORA_DS_EDGE_BIND_HOST 控制,默认恒绑本机 —— 即使客户端面已开到
+      # 局域网,未鉴权的 DS 面也不会跟着暴露;只有真有异机 DS 需回连时(start.ps1 -ExposeDsFace)才开放。
       - "${PANDORA_EDGE_BIND_HOST:-127.0.0.1}:8443:8443"   # 客户端 HTTPS / gRPC-Web 入口
-      - "${PANDORA_EDGE_BIND_HOST:-127.0.0.1}:8444:8444"   # DS 面 HTTP / gRPC-Web 入口(UE Hub/Battle DS → 内部服务,agones-dev.md §5.1)
+      - "${PANDORA_DS_EDGE_BIND_HOST:-127.0.0.1}:8444:8444"   # DS 面 HTTP / gRPC-Web 入口(UE Hub/Battle DS → 内部服务,agones-dev.md §5.1;默认只绑本机)
       - "127.0.0.1:9901:9901"   # admin:未鉴权,永远只绑本机回环,绝不对外(生产关闭)
     volumes:
       - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro

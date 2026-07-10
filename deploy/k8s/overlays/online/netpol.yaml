@@ -6,7 +6,7 @@
 #     ② 基础设施层(mysql/redis/kafka/etcd/zookeeper):**只接受来自业务层**的入站,
 #        且只开各自服务端口;基础设施之间除「kafka→zookeeper」「etcd 自连 peer」这两条
 #        必要边外互相不可达 → 被攻破的某个基础设施 Pod 无法横向 pivot 到其它存储。
-#     ③ 业务层(19 个 go 服务)之间保持 mesh 全通 —— **这是有意保留的开放面**:
+#     ③ 业务层(19 个 Go 服务类型 / 20 个 Deployment)之间保持 mesh 全通 —— **这是有意保留的开放面**:
 #        业务调用图复杂(login→data-service、matchmaker→ds-allocator、各服务→push 等)
 #        且尚未逐服务梳理;真正的「业务服之间按调用图收敛 + 身份认证」交给未来的
 #        service mesh sidecar mTLS/AuthorizationPolicy(见 gateway-decision.md §16.2)。
@@ -176,3 +176,39 @@ spec:
               pandora.dev/role: ingress-gateway
       ports:
         - { protocol: TCP, port: 50001, endPort: 50022 }
+---
+# 9) DS(UE Linux Pod,跑在 default 命名空间)→ pandora-envoy「DS 面」:8444。
+#    Fleet(20-fleet-battle / 30-fleet-hub)在 default namespace 起 GameServer,DS 用 grpc-web
+#    回连 pandora-envoy.pandora.svc:8444(心跳 / locator / battle_result)。default-deny 默认会
+#    把这条【跨命名空间】入站丢弃(规则 2 mesh 只覆盖本命名空间;规则 8 网关只放 50001~50022),
+#    导致 DS 心跳打不通 → ds-allocator ready 超时 → 撮合失败。此规则精准放行:仅 default 命名空间
+#    里【Agones GameServer Pod】来源、仅 pandora-envoy pod、仅 :8444(2026-07-10 收紧,回应审核
+#    P1「放行整个 default namespace」:namespaceSelector 与 podSelector 写在同一 from 元素 = AND,
+#    Agones controller 会给每个 GameServer Pod 自动打 `agones.dev/role: gameserver` 标签,
+#    default 命名空间里的非 GameServer Pod 不再被放行)。DS 面已在 Envoy 侧剥离 x-pandora-* 身份头
+#    (见 16-ds-envoy),与客户端面 8443 物理隔离。
+#    ⚠️ default 命名空间用 k8s ≥1.21 自动注入的 `kubernetes.io/metadata.name` 标签选中。
+#    ⚠️ 只放 8444;客户端面 8443 不对 default 命名空间开放。
+#    ⚠️ 生产后续演进:DS 迁到专用命名空间(如 pandora-ds)后,把 metadata.name 换成该命名空间即可,
+#       podSelector 不变。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ds-to-envoy
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: pandora-envoy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # 同一 from 元素里 namespaceSelector + podSelector 是 AND:default 命名空间 且 GameServer Pod。
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              agones.dev/role: gameserver
+      ports:
+        - { protocol: TCP, port: 8444 }

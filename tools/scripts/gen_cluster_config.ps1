@@ -20,7 +20,7 @@
 # 三条链路与 allocator 模式的对应(由 start.ps1 驱动):
 #   本地 windows (-Mode local)  → dev yaml 原样 mode=local,不过本生成器(宿主 exec Windows DS)
 #   docker        (-Mode docker) → -AllocatorMode mock  (容器内无真 DS,假地址只测后端链路)
-#   battle       (-Mode battle) → -AllocatorMode mock -HostAllocators(17 容器 + 2 宿主 allocator)
+#   battle       (-Mode battle) → -AllocatorMode mock -HostAllocators(18 容器 + 2 宿主 allocator)
 #   线上 k8s     (-Mode online) → -AllocatorMode agones(GameServer status.address 直连真 Linux DS)
 #   本地 k8s     (-Mode k8s)    → -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1 + udp_relay.ps1
 
@@ -134,6 +134,11 @@ function Rewrite-Allocator([string]$svcName, [string]$text) {
         $lines += "  advertise_host: `"$AllocatorAdvertiseHost`""
     }
     $lines += $timeoutLine
+    # ds-allocator 专属:Fleet 容量巡检(快到上限预警),hub-allocator 无此项
+    if ($svcName -ne 'hub-allocator') {
+        $lines += '  capacity_watch_interval: "30s"'
+        $lines += '  capacity_warn_ratio: 0.8'
+    }
     $agonesBlock = ($lines -join "`n") + "`n`n"
 
     # 把原 dev 的整个 agones: 段(直到下一个顶级注释块「# 本机拉起」)整块替换

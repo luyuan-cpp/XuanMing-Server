@@ -6,15 +6,15 @@
   面向策划的极简入口:默认 docker 模式不需要装 Go、不需要会编译,机器上只要有 Docker Desktop。
   做的事:
     1) 检查 Docker —— 没装就引导安装(能 winget 就自动装),没在跑就帮忙把 Docker Desktop 拉起来并等待就绪。
-    2) Docker 就绪后,把整套后端跑起来(基础设施 + 19 个 go 服务全在容器里)。
+    2) Docker 就绪后,把整套后端跑起来(基础设施 + 20 个业务服务容器)。
        首次会在容器内编译镜像(稍慢),之后复用缓存秒起。
-  -Battle 是含战斗混合模式:17 个纯业务服务进 docker,ds_allocator / hub_allocator 留宿主
+  -Battle 是含战斗混合模式:18 个纯业务服务进 docker,ds_allocator / hub_allocator 留宿主
   exec Windows DS;服务器机器当前仍需 Go 构建这两个 allocator。
 
 .EXAMPLE
-  双击 仓库根目录\策划一键启动-含战斗.cmd        # 本地战斗版(17 业务容器 + 2 个宿主 allocator + 本机 Windows DS)
+  双击 仓库根目录\策划一键启动-含战斗.cmd        # 本地战斗版(18 业务容器 + 2 个宿主 allocator + 本机 Windows DS)
   双击 仓库根目录\策划一键停止.cmd               # 停止(含战斗版)
-  双击 仓库根目录\内网服务器一键启动-含战斗.cmd  # 内网服务器战斗版(17 容器 + 2 个宿主 allocator + Windows DS + 绑内网 IP)
+  双击 仓库根目录\内网服务器一键启动-含战斗.cmd  # 内网服务器战斗版(18 容器 + 2 个宿主 allocator + Windows DS + 绑内网 IP)
   双击 仓库根目录\内网服务器一键停止.cmd         # 停止(内网服务器战斗版)
   pwsh tools/scripts/play.ps1 -Battle       # 本地战斗版
   pwsh tools/scripts/play.ps1 -Battle -Intranet    # 内网服务器战斗版(绑内网 IP,供局域网策划连)
@@ -27,7 +27,7 @@
 param(
     [switch]$Stop,     # 停止整套后端
     [switch]$Status,   # 只看状态,不启动
-    [switch]$Battle,   # 本地战斗模式:17 业务容器 + 2 个宿主 allocator + Windows DS(进 hub→匹配→battle 战斗)
+    [switch]$Battle,   # 本地战斗模式:18 业务容器 + 2 个宿主 allocator + Windows DS(进 hub→匹配→battle 战斗)
     [switch]$Intranet, # 内网服务器模式:全容器 + 绑内网 IP,供局域网内策划客户端连(DS=mock)
     [switch]$OpenEditor, # 启动完成后打开发行版 UE Editor,用 PIE/Standalone 当客户端进服
     [switch]$OpenClient  # 启动完成后打开已打包 Windows 客户端
@@ -423,14 +423,14 @@ if ($Stop) {
     exit $LASTEXITCODE
 }
 
-# ===== 本地战斗版:17 业务容器 + 2 个宿主 allocator + Windows DS(进 hub → 匹配 → battle 战斗)=====
+# ===== 本地战斗版:18 业务容器 + 2 个宿主 allocator + Windows DS(进 hub → 匹配 → battle 战斗)=====
 # -Battle 单独:本机自测,DS/Hub advertise_host=127.0.0.1(只本机客户端连得到)。
 # -Battle -Intranet:内网测试服,自动探测本机内网 IPv4 并经 PANDORA_DS_ADVERTISE_HOST 注入,
 #   Hub/Battle DS 把返回给客户端的地址改成局域网 IP,局域网内其它策划客户端可连进真实大厅+战斗。
 if ($Battle) {
     $lanIp = $null
     if ($Intranet) {
-        Write-Step '内网战斗版(17 容器 + 2 个宿主 allocator + Windows DS,绑内网 IP 供多人进真实战斗)'
+        Write-Step '内网战斗版(18 容器 + 2 个宿主 allocator + Windows DS,绑内网 IP 供多人进真实战斗)'
         # 允许手动覆盖:预先设了 PANDORA_DS_ADVERTISE_HOST 就用它,不再自动探测
         # (多网卡/自动探测选错网卡时可用 $env:PANDORA_DS_ADVERTISE_HOST=<IP> 兜底)。
         if (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) {
@@ -448,14 +448,14 @@ if ($Battle) {
     }
 
     Write-Step '本地战斗版预检(需 Go + Windows DS)'
-    Write-Info 'docker 版跑 17 个纯业务服务;ds/hub allocator 跑宿主 go 进程(要 exec Windows DS,'
+    Write-Info 'docker 版跑 18 个纯业务服务;ds/hub allocator 跑宿主 go 进程(要 exec Windows DS,'
     Write-Info '战斗/大厅 DS 是 Windows 程序、跑不进 Linux 容器)。策划机只是客户端,不用起任何 go 服务。'
     if (-not (Test-BattlePrerequisites)) {
         Write-Err '本地战斗版前置条件不满足,见上方提示。'
         exit 1
     }
 
-    Write-Step '检查 Docker(基础设施 + 17 业务服务都跑在 docker)'
+    Write-Step '检查 Docker(基础设施 + 18 业务服务都跑在 docker)'
     if (-not (Ensure-DockerInstalled)) { exit 1 }
     if (-not (Ensure-DockerRunning))   { exit 1 }
 
@@ -466,7 +466,7 @@ if ($Battle) {
         if (-not (Ensure-MkcertInstalled)) { exit 1 }
     }
 
-    # battle 模式:基础设施(docker) + 17 个业务服务(docker) + ds/hub allocator(宿主进程),
+    # battle 模式:基础设施(docker) + 18 个业务服务(docker) + ds/hub allocator(宿主进程),
     # ds_allocator 走 mode=local,匹配成局后直接 exec 本机 Windows DS。
     & $StartPs1 -Mode battle
     $rc = $LASTEXITCODE
@@ -543,7 +543,7 @@ if (-not (Ensure-DockerRunning))   { exit 1 }
 Write-Step '检查 mkcert(Envoy 本地 TLS 证书)'
 if (-not (Ensure-MkcertInstalled)) { exit 1 }
 
-# 委托给已验证的 docker 模式:基础设施 + 19 个 go 服务全容器化
+# 委托给已验证的 docker 模式:基础设施 + 20 个业务服务全容器化
 # (首次会在容器内编译镜像,稍慢;之后复用缓存。策划本机不需要装 Go。)
 & $StartPs1 -Mode docker
 $rc = $LASTEXITCODE

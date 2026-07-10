@@ -70,6 +70,13 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERR] compose up failed" -ForegroundColor Red
     exit 1
 }
+# envoy.yaml 为静态配置;仅挂载文件变化时 compose 不会自动重启已有容器。
+# 每次启动显式重建 Envoy,保证当前路由白名单/绑定配置实际生效。
+docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate envoy
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERR] envoy recreate failed" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "[4/4] Waiting for healthy..." -ForegroundColor Yellow
 $timeout = 120  # 秒

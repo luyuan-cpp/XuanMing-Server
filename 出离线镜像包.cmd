@@ -3,7 +3,8 @@ chcp 65001 >nul
 rem ============================================================
 rem  Pandora backend  export offline image package (run on an online dev machine)
 rem ------------------------------------------------------------
-rem  Rebuilds the latest 17 business images and packs them into:
+rem  Rebuilds the latest 20 business images (host go build by default) and packs
+rem  them into:
 rem      deploy\offline-images\pandora-images.tar
 rem  (overwrites the same-named file).
 rem
@@ -11,7 +12,7 @@ rem  After exporting: svn commit the code + this tar; on the intranet machine ru
 rem  svn update, then double-click the intranet one-click start .cmd to use the
 rem  new images (fully offline, no network build).
 rem
-rem  Prerequisite: this machine has network (can pull base images / go modules) + Docker.
+rem  Prerequisite: Go 1.26.5+ + Docker. Network is needed when local image/module caches are incomplete.
 rem ============================================================
 setlocal
 cd /d "%~dp0"

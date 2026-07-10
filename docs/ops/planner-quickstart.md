@@ -36,7 +36,8 @@ TLS 超时 / EOF / 403),**不用做任何额外操作**:仓库里带了离线镜
 2. 双击「策划一键启动-含战斗.cmd」即可(脚本自动导入离线镜像 + 起服务,无需手动命令)。
 
 > 离线包由能联网的机器用 `pwsh tools/scripts/export_images.ps1 -Build` 生成并提交。
-> 基础设施(mysql/redis/kafka 等)不在包内;若目标机基础设施也拉不到,用 `-IncludeInfra` 重新打包。
+> 基础设施(mysql/redis/kafka 等)不在包内;若目标机基础设施也拉不到,在联网机用
+> `-IncludeInfra -Out D:\pandora-full-images.tar` 另打仓库外的大包，不能覆盖仓库受管业务包。
 > 若这台机器其实能联网、想强制重新构建最新镜像:命令行加 `-Rebuild`(如 `pwsh tools/scripts/start.ps1 -Mode battle -Rebuild`)。
 
 ## 四、常见问题

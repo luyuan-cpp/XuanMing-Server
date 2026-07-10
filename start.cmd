@@ -27,11 +27,10 @@ rem     start.cmd -Mode k8s -Resume      rem no rebuild, restore last state
 rem     start.cmd -Mode k8s -Reset       rem minikube delete then fresh deploy
 rem
 rem  Real DS loop on this machine (minikube+Agones, no mock):
-rem     start.cmd -Mode k8s              rem cluster+Agones+Fleet+16 services
-rem     pwsh tools\scripts\e2e_k8s.ps1   rem load DS image + Envoy bridge + wait Fleet + UDP relay
+rem     start.cmd -Mode k8s              rem cluster+Agones+Fleet+20 deployments; auto Envoy bridge/UDP relay
 rem
 rem  Online real cluster (Fleet image/callbacks must be injected per env, fail-fast if missing):
-rem     start.cmd -Mode online -Env test -Registry registry.mycorp.com -Tag v1.2.3 ^
+rem     start.cmd -Mode online -Env test -TestKubeContext pandora-test -Registry registry.mycorp.com -Tag v1.2.3 ^
 rem        -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 ^
 rem        -HubDsImage    registry.mycorp.com/pandora/hub-ds:v1.2.3 ^
 rem        -DsGatewayAddr pandora-envoy.pandora.svc:8444

@@ -1,8 +1,8 @@
 # Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
 #
 # 为什么需要它:
-#   - k8s 模式里 17 个 Go 服务都跑在 pandora namespace 的 ClusterIP Service 后面
-#   - UE 客户端 / Linux DS 仍然只会打宿主机 Envoy(:8443 / :8444)
+#   - k8s 模式里 20 个 Go Deployment 都跑在 pandora namespace 的 ClusterIP Service 后面
+#   - UE 客户端打宿主 Envoy :8443；GameServer DS 回调走集群内 pandora-envoy :8444
 #   - 现有 deploy/envoy/envoy.yaml 的 upstream 全指向 host.docker.internal:500xx
 #
 # 所以这里做两件事:
@@ -23,7 +23,10 @@
 
 [CmdletBinding()]
 param(
-    [switch]$Force   # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
+    [switch]$Force,   # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
+    [Parameter(Mandatory = $true)]
+    [string]$KubeContext, # port-forward 必须显式钉住的本地 minikube context
+    [string]$MinikubeProfile = '' # endpoint 本地性校验；留空时与 KubeContext 同名
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +41,17 @@ function Write-Info($m) { Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Write-Ok($m)   { Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Write-Warn($m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 function Write-Step($m) { Write-Host "`n===== $m =====" -ForegroundColor Magenta }
+
+function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
+    $cluster = (kubectl config view -o jsonpath="{.contexts[?(@.name==`"$Context`")].context.cluster}" 2>$null)
+    if ([string]::IsNullOrWhiteSpace($cluster)) { return $false }
+    $server = (kubectl config view -o jsonpath="{.clusters[?(@.name==`"$cluster`")].cluster.server}" 2>$null)
+    if ([string]::IsNullOrWhiteSpace($server)) { return $false }
+    try { $apiHost = ([System.Uri]$server).Host } catch { return $false }
+    if ($apiHost -in @('127.0.0.1', 'localhost', '::1', '[::1]')) { return $true }
+    $mkIp = (minikube -p $Profile ip 2>$null | Out-String).Trim()
+    return ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($mkIp) -and $apiHost -eq $mkIp)
+}
 
 # Envoy dev TLS 证书校验 / 自愈(与 dev_up.ps1 复用同一套逻辑)。
 . "$ScriptDir/envoy_cert.ps1"
@@ -112,14 +126,32 @@ function Get-ProcDesc([int]$processId) {
     return "PID=$processId"
 }
 
-# 占用 $port 的进程是不是「本 bridge 期望的 kubectl port-forward svc/<name> port:port」
-function Test-IsBridgePortForward([int]$processId, [string]$name, [int]$port) {
+function Test-CommandLineOptionValue([string]$cmd, [string]$option, [string]$value) {
+    if ([string]::IsNullOrWhiteSpace($cmd) -or [string]::IsNullOrWhiteSpace($value)) { return $false }
+    # Start-Process 在 Windows 上可能给 flag/value 加双引号；按 token 边界精确匹配，避免
+    # `pandora-agones` 错把 `pandora-agones-old` 当成同一 context。
+    $pattern = '(?:^|\s)"?' + [regex]::Escape($option) + '"?(?:=|\s+)"?' +
+        [regex]::Escape($value) + '"?(?=\s|$)'
+    return [regex]::IsMatch($cmd, $pattern)
+}
+
+# 占用 $port 的进程是否具有本 bridge 的 port-forward 形状（暂不判断 context）。
+function Test-IsBridgePortForwardShape([int]$processId, [string]$name, [int]$port) {
     if (-not $processId) { return $false }
     $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
     if (-not $proc -or $proc.ProcessName -ne 'kubectl') { return $false }
     $cmd = Get-ProcCommandLine $processId
     if (-not $cmd) { return $false }
-    return ($cmd -like '*port-forward*' -and $cmd -like "*svc/$name*" -and $cmd -like "*${port}:${port}*")
+    $sameNamespace = Test-CommandLineOptionValue $cmd '--namespace' $K8sNamespace
+    return ($sameNamespace -and $cmd -like '*port-forward*' -and $cmd -like "*svc/$name*" -and $cmd -like "*${port}:${port}*")
+}
+
+# 占用 $port 的进程是不是「本 bridge + 当前显式 context」的 port-forward。
+function Test-IsBridgePortForward([int]$processId, [string]$name, [int]$port) {
+    if (-not (Test-IsBridgePortForwardShape $processId $name $port)) { return $false }
+    $cmd = Get-ProcCommandLine $processId
+    $sameContext = Test-CommandLineOptionValue $cmd '--context' $KubeContext
+    return $sameContext
 }
 
 # 预检:停掉仍在发布 bridge 端口的旧 docker compose 业务容器。
@@ -204,6 +236,19 @@ function Wait-PortForwardServing([int]$port, [int]$retries = 3, [int]$delayMs = 
 
 function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) {
     $ownerPid = Get-PortListenerPid $port
+    # 升级前版本的 bridge 没带 --context。若 pid 文件证明它确是本脚本留下的同名转发，
+    # 自动淘汰后重建；无 pid 证据的相似手工进程不越权处理，仍走下面 fail-fast/-Force。
+    $recordedPid = (Get-Content (Get-PidFile $name) -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($ownerPid -and "$recordedPid" -eq "$ownerPid" -and
+        (Test-IsBridgePortForwardShape $ownerPid $name $port) -and
+        -not (Test-IsBridgePortForward $ownerPid $name $port)) {
+        Write-Warn "发现未锁定当前 context 的旧 bridge port-forward $name(PID=$ownerPid)，自动停掉重建"
+        Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
+        for ($i = 0; $i -lt 10 -and (Get-PortListenerPid $port); $i++) { Start-Sleep -Milliseconds 300 }
+        Remove-Item (Get-PidFile $name) -ErrorAction SilentlyContinue
+        if (Get-PortListenerPid $port) { throw "旧 bridge port-forward 端口 $port 释放失败" }
+        $ownerPid = $null
+    }
     if ($ownerPid -and (Test-IsBridgePortForward $ownerPid $name $port)) {
         # 端口在 LISTEN 且命令行像 bridge 自己起的 port-forward —— 但"还在 LISTEN"不代表健康。
         # 滚动更新后旧 kubectl port-forward 会残留:端口照 LISTEN,底层 Pod/容器已被替换,
@@ -263,6 +308,7 @@ function Start-PortForward([string]$name, [int]$port, [bool]$essential = $true) 
     $log = Join-Path $StateDir "$name.log"
     $err = Join-Path $StateDir "$name.err.log"
     $proc = Start-Process kubectl -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $err -ArgumentList @(
+        '--context', $KubeContext,
         'port-forward',
         '--namespace', $K8sNamespace,
         '--address', '127.0.0.1',
@@ -351,6 +397,23 @@ Write-Host "============================================" -ForegroundColor Magen
 Write-Host " Pandora k8s Envoy bridge" -ForegroundColor Magenta
 Write-Host "============================================" -ForegroundColor Magenta
 
+$KubeContext = $KubeContext.Trim()
+if ([string]::IsNullOrWhiteSpace($MinikubeProfile)) { $MinikubeProfile = $KubeContext }
+$MinikubeProfile = $MinikubeProfile.Trim()
+if (-not (Test-KubeContextIsLocalMinikube $KubeContext $MinikubeProfile)) {
+    throw "kube-context '$KubeContext' 的 endpoint 不是本机 minikube profile '$MinikubeProfile'，拒绝建立可能指向远端集群的 port-forward。"
+}
+
+function Stop-HostInfraContainersForK8s {
+    # k8s 模式使用集群内 infra；宿主 compose 的 MySQL/Redis/Kafka/etcd/监控不参与链路。
+    # 切换模式时主动停掉它们，既释放资源，也确保升级前曾以 0.0.0.0 发布的旧容器不继续暴露。
+    $infraServices = @('mysql', 'redis', 'zookeeper', 'kafka', 'etcd', 'prometheus', 'grafana', 'loki', 'alloy')
+    docker compose -f $ComposeFile --env-file $EnvFile stop @infraServices *> $null
+    if ($LASTEXITCODE -ne 0) { throw '停止 k8s 模式不需要的宿主基础设施容器失败' }
+    Write-Ok '宿主 compose 基础设施已停止(k8s 使用集群内 infra)'
+}
+Write-Ok "port-forward context 已锁定:$KubeContext"
+
 Ensure-File $ComposeFile
 Ensure-File $EnvFile
 Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
@@ -359,7 +422,8 @@ Ensure-File (Join-Path $ProjectRoot 'deploy/envoy/envoy.yaml')
 Confirm-EnvoyDevCert -EnvoyDir (Join-Path $ProjectRoot 'deploy/envoy')
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 
-Write-Step "[1/4] 预检:停掉发布 500xx 端口的旧 compose 业务容器"
+Write-Step "[1/4] 预检:停掉 k8s 不需要的宿主 infra + 发布 500xx 的旧业务容器"
+Stop-HostInfraContainersForK8s
 Stop-StaleComposeContainers
 
 Write-Step "[2/4] 启本地 kubectl port-forward"
@@ -371,8 +435,9 @@ Write-Step "[3/4] 全量 gRPC 健康校验(必需服务须 SERVING,否则 fail-f
 Invoke-BridgeHealthSweep
 
 Write-Step "[4/4] 启 docker envoy(:8443 / :8444)"
-docker compose -f $ComposeFile --env-file $EnvFile up -d envoy
+# envoy.yaml 是静态配置,挂载文件变化不会让既有 Envoy 进程自动重读;每次桥接显式重建容器。
+docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate envoy
 if ($LASTEXITCODE -ne 0) { throw 'envoy 容器启动失败' }
 
 Write-Host ""
-Write-Ok '宿主 Envoy 桥接已就绪。UE 客户端/DS 现在可经 127.0.0.1:8443 / :8444 回到 k8s 服务。'
+Write-Ok '宿主 Envoy 桥接已就绪。UE 客户端经 127.0.0.1:8443 访问 k8s 服务；GameServer DS 回调走集群内 pandora-envoy:8444。'

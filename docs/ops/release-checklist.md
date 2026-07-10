@@ -173,12 +173,15 @@ git tag v1.2.3                       ① 源码快照(人手动打,AGENTS §3)
 git tag v1.2.3
 git push origin v1.2.3
 
-# 2) 构建 + 打同号镜像 + push 到 registry + apply 到线上(start.ps1 online 模式已支持)
-pwsh tools/scripts/start.ps1 -Mode online `
-  -Registry registry.yourcorp.com -Tag v1.2.3 -BuildPush
+# 2) 构建 + 打同号镜像 + push 到 registry + apply 到生产(start.ps1 online 模式已支持)
+pwsh tools/scripts/start.ps1 -Mode online -Env prod -ProdKubeContext pandora-prod `
+  -Registry registry.yourcorp.com -Tag v1.2.3 -BuildPush `
+  -BattleDsImage registry.yourcorp.com/pandora/battle-ds:v1.2.3 `
+  -HubDsImage registry.yourcorp.com/pandora/hub-ds:v1.2.3 `
+  -DsGatewayAddr pandora-envoy.pandora.svc:8444
 ```
 
-- `-BuildPush` 会构建 15 个服务镜像(自动带 git 版本烙印)、tag 成 `v1.2.3`、push 到 registry,
+- `-BuildPush` 会构建 20 个服务镜像(自动带 git 版本烙印)、tag 成 `v1.2.3`、push 到 registry,
   再用该 tag 覆盖 [`overlays/online/kustomization.yaml`](../../deploy/k8s/overlays/online/kustomization.yaml) 部署。
 - **git push / tag 由人手动执行**(AGENTS §3),脚本不替你推。
 

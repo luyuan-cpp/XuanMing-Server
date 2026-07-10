@@ -5,7 +5,7 @@ rem  Pandora 后端 内网服务器一键启动(k8s 集群)
 rem  双击运行
 rem ------------------------------------------------------------
 rem  在本机通过 minikube(docker driver) + Agones 启动真实 Kubernetes
-rem  开发集群:基础设施 + 19 个业务服务以 k8s Deployment 运行,Battle DS
+rem  开发集群:基础设施 + 20 个业务 Deployment 运行,Battle DS
 rem  走真实 Linux Agones Fleet。
 rem
 rem  包装命令:

@@ -9,8 +9,9 @@
 #    Service 名仍为 mysql/redis/kafka/etcd(在 pandora namespace 内由 ExternalName 或
 #    独立 StatefulSet 提供),从而 run/cluster/etc 配置仍然通用。
 #
-# 部署(由 start.ps1 -Mode online 编排,会先要求确认 kube-context):
-#   kubectl apply -k deploy/k8s/overlays/online
+# 部署由 start.ps1 -Mode online 编排并强制 test/prod context 映射。仓库内镜像仍是占位值，
+# 禁止直接 apply；手工只读排障可显式钉 context 做结构 diff（镜像差异仍是占位，仅供参考）:
+#   kubectl --context <expected-test-or-prod-context> diff -k deploy/k8s/overlays/online
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 

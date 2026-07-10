@@ -9,7 +9,7 @@
 
 - **服务间 / 中间件寻址一律写稳定的 DNS 名,绝不写裸 IP。** k8s Service 把名字解析到当前 Pod IP;Pod 重启 IP 变,名字不变。
 - **dev 和 cluster 是两套配置**:`*-dev.yaml` 写 `127.0.0.1` 仅本机自测;线上走 `run/cluster/etc/*.yaml`,全是 DNS 名(`redis:6379` / `kafka:9092` / `mysql:3306` / `player:50002`)。线上**不碰** dev 那套。
-- **真实外部地址只在一处注入**(ExternalName Service / Secret),19 个服务配置不动。改 1 处,不是改 19 处 —— 这是防手抖的关键。
+- **真实外部地址只在一处注入**(ExternalName Service / Secret),20 个 Deployment 配置不动。改 1 处,不是改 20 处 —— 这是防手抖的关键。
 
 ## §2 两类目标,机制不同
 
@@ -34,8 +34,10 @@
 ## §3 防错护栏
 
 1. **单一事实源**:服务配置只写 DNS 名,绝不写裸 IP;外部地址集中到 ExternalName / Secret 一处。
-2. **apply 前 diff**:`kubectl diff -k deploy/k8s/overlays/online` 或 `--dry-run=server`,先看改了啥再生效。
-3. **kube-context 确认**:`start.ps1 -Mode online` 先要求确认 kube-context,防误连生产。
+2. **apply 前 diff**:`kubectl --context <expected> diff -k deploy/k8s/overlays/online` 只用于结构预览；
+   仓库内镜像仍是 `registry.example.com/latest` 占位，真实 registry/tag 由 `start.ps1 -Mode online` 临时注入。
+3. **kube-context 确认**:`start.ps1 -Mode online` 强制把 test/prod 映射到各自允许的 context，且所有
+   变更命令显式 `--context`，不依赖可被其它终端切换的 current-context。
 4. **配置 schema 校验**:服务启动对配置做校验,缺字段/格式错直接启动失败,不带病运行。
 
 ## §4 单机 → 集群切换要注意的坑

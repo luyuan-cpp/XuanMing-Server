@@ -1,6 +1,6 @@
 # Pandora Envoy 边缘网关(W2 ④,2026-06-05)
 
-> 本目录:Envoy v1.38.0 本地开发期配置 + 证书占位。
+> 本目录:Envoy `v1.38-latest` 本地开发期配置 + 证书占位（当前验证镜像为 1.38.1）。
 > 上层设计:[`docs/design/gateway-decision.md`](../../docs/design/gateway-decision.md) §5。
 
 ## 目录文件
@@ -17,9 +17,9 @@
 
 | 端口 | 用途 | 暴露 |
 |---|---|---|
-| **8443** | 客户端入口(HTTPS / gRPC-Web over HTTP/2 TLS) | 0.0.0.0(本机) |
-| **8444** | DS 面入口(UE Hub/Battle DS → 内部服务,gRPC-Web,agones-dev.md §5.1) | 0.0.0.0(本机,生产须网络隔离) |
-| **9901** | Envoy admin(`/ready` `/clusters` `/stats` `/config_dump`) | 0.0.0.0(本机) |
+| **8443** | 客户端入口(HTTPS / gRPC-Web over HTTP/2 TLS) | 默认 `127.0.0.1`;局域网模式可显式开 `0.0.0.0` |
+| **8444** | DS 面入口(UE Hub/Battle DS → 内部服务,gRPC-Web,agones-dev.md §5.1) | 默认 `127.0.0.1`;仅 `-ExposeDsFace` 显式开放 |
+| **9901** | Envoy admin(`/ready` `/clusters` `/stats` `/config_dump`) | 恒定 `127.0.0.1`,绝不对外 |
 
 ## 上游 cluster(W2 ④)
 
@@ -37,7 +37,8 @@
 | `leaderboard_cluster` | leaderboard | host.docker.internal:50007 | h2c | route 15s |
 | `dialogue_cluster` | dialogue | host.docker.internal:50013 | h2c | route 15s |
 
-DS 面(`:8444` `pandora_ds_listener`,**不挂 jwt_authn**,DS 身份由 UE NetDriver 层 DSTicket 校验,见 agones-dev.md §5):
+DS 面(`:8444` `pandora_ds_listener`,**不挂 jwt_authn**):DSTicket 只认证玩家→DS，不认证
+DS→后端；当前只有精确 method 白名单 + 网络边界，生产仍需 workload identity（见 agones-dev.md §5）。
 
 | cluster | 内部服务 | 端口 | 协议 | timeout | DS 用途 |
 |---|---|---|---|---|---|
@@ -46,7 +47,8 @@ DS 面(`:8444` `pandora_ds_listener`,**不挂 jwt_authn**,DS 身份由 UE NetDri
 | `locator_cluster`        | player_locator | host.docker.internal:50006 | h2c | route 15s | Hub DS SetLocation(HUB) |
 | `battle_result_cluster`  | battle_result | host.docker.internal:50022 | h2c | route 15s | Battle DS 同步结算上报 |
 
-后续业务服上线时,**复制 cluster 块改名 + 改端口 + 加一条 route prefix** 即可。
+后续客户端业务服上线时可复制 cluster 块并按鉴权契约增加 route；DS 面新增回调必须逐个增加
+**精确 `path`**，禁止用 service `prefix` 扩大未鉴权攻击面。
 
 ---
 
@@ -174,12 +176,11 @@ grpcurl -plaintext 127.0.0.1:50014 describe pandora.push.v1.PushService
 
 ---
 
-## 5. W3 待办(本配置遗留)
+## 5. 后续待办(本配置遗留)
 
-- [ ] 加 `envoy.filters.http.jwt_authn` 校验 `Authorization: Bearer <jwt>`,sub 注入 `x-jwt-payload-sub` header(push 服务用)
 - [ ] gRPC reflection 路由改 `direct_response: { status: 403 }`(生产闸门)
 - [ ] mTLS 上行(`UpstreamTlsContext` + 业务服 server-side TLS)
 - [ ] 加 `envoy.filters.http.ratelimit`(对接独立 ratelimit service)
 - [ ] CORS `allow_origin_string_match` 收紧到具体域名(去掉 `.*`)
 - [ ] 接 OpenTelemetry tracing collector(对齐 docs/design/infra.md)
-- [ ] 业务服全接入后,clusters 段会拉到 14 个,考虑用 envoy CDS / xDS 动态下发(W4+)
+- [ ] 当前静态配置已有 17 个 cluster；后续继续增长或进入多环境动态路由时，评估 Envoy CDS / xDS 下发

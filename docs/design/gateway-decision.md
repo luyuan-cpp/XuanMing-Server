@@ -1110,8 +1110,15 @@ pwsh E:\work\Pandora\tools\scripts\import_dev_ca.ps1
 
 | 流量 | 方向 | 加密 | 谁负责 |
 |---|---|---|---|
-| 南北向(玩家) | Client → Envoy `:8443` / DS → Envoy `:8444` | **TLS**(公网 CA,§14) | Envoy 终止 |
+| 南北向(玩家) | Client → Envoy `:8443` | **TLS**(公网 CA,§14) | Envoy 终止 |
+| DS 面(集群内) | DS(Pod) → Envoy `:8444` | **明文**(§3.5:DS 面无 TLS;本地与线上同构,Fleet `PANDORA_DS_ALLOCATOR_TLS=0`) | 无(属东西向,靠 NetworkPolicy/未来 mesh 兜底) |
 | 东西向(内网) | 业务服 ↔ 业务服、业务服 → mysql/redis/kafka/etcd | **明文**(h2c / 明文 TCP) | 无(靠基础设施兜底) |
+
+> 2026-07-10 勘正(回应审核 P1 契约冲突):旧版本表曾把 DS `:8444` 归入「南北向 TLS」,与 §3.5
+> 「DS 面明文无 TLS」自相矛盾。权威口径:DS 跑在集群内(default ns Fleet),DS→Envoy 属集群内
+> 东西向,与其它内网流量同样保持明文;start.ps1 online 的 `-DsGatewayTls` 默认也已对齐为 0。
+> 若未来 DS 面真要挂集群外 TLS 边缘(DS 不在同集群),届时需同步配 `.svc`/边缘域名证书 + DS
+> 信任链并显式 `-DsGatewayTls 1`,单独过设计评审。
 
 **为什么内网不在应用层做 TLS**:这是主流实践。应用代码继续走明文,把"加密 + 身份"责任下沉到基础设施层
 (mesh sidecar / 网络策略),业务零改动、无证书运维负担。客户端 `PandoraDSBackendSubsystem.bUseTls`
@@ -1130,7 +1137,7 @@ pwsh E:\work\Pandora\tools\scripts\import_dev_ca.ps1
 
 ### 16.3 本次 NetworkPolicy 落地(deploy/k8s/overlays/online/netpol.yaml)
 
-分层最小权限(8 条策略),**只挂 online overlay(生产),dev base 不含**(dev 的 Envoy 在宿主 docker-compose,强制 default-deny 会挡联调):
+分层最小权限(9 条策略),**只挂 online overlay(生产),dev base 不含**(dev 的 Envoy 在宿主 docker-compose,强制 default-deny 会挡联调):
 
 | 策略 | 作用 |
 |---|---|
@@ -1140,8 +1147,13 @@ pwsh E:\work\Pandora\tools\scripts\import_dev_ca.ps1
 | `allow-etcd-ingress` | 业务层连 client :2379;peer :2380 仅 etcd 自身 |
 | `allow-zookeeper-ingress` | 仅 kafka 可连 :2181(唯一 infra→infra 边) |
 | `allow-ingress-gateway` | 若 Envoy 在独立命名空间,给其命名空间打标签 `pandora.dev/role=ingress-gateway` 即放行网关→业务 gRPC `50001-50022`;未打标签则天然 inert |
+| `allow-ds-to-envoy` | default 命名空间里**带 `agones.dev/role=gameserver` 标签的 GameServer Pod** → pandora-envoy `:8444`(DS 回调面;2026-07-10 由「整个 default ns」收紧为「仅 GameServer Pod」) |
 
 **当前真实收益(不夸大):** 阻断其它命名空间→本命名空间(除标签网关);把存储层入站收敛到「仅业务层 + 必要 infra 对等边」,封住「基础设施互连」与「跨 ns」两类横向。**业务服之间仍全通**,那一层的横向最小化待 mesh(见 §16.2)。
+
+`allow-ds-to-envoy` 只建立网络可达边界，不认证 GameServer workload；精确 method 白名单也不认证
+允许的 `SetLocation` / `ReportResult` / Heartbeat / GM Poll/Ack。生产残留是补 mTLS、ext_authz 或
+绑定 pod/match 的短时效 DS token，不能把现状描述成 DS 身份已可信。
 
 设计取舍:**只做 Ingress default-deny,不碰 Egress**(出站全通),避免误伤 DNS 解析、连基础设施、ds-allocator 调 Agones API。出站收紧留作阶段二。
 

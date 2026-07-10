@@ -8,7 +8,7 @@
 #   5) (可选)起容器版 UDP 回程中继(--network <minikube profile>;docker driver 下客户端连 DS 必需)
 #   6) 打印端到端验收清单(用真 UE 客户端验:登录→hub→战斗→结算回 hub)
 #
-# 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、16 个后端服务部署。
+# 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、20 个后端 Deployment 部署。
 #   pwsh tools/scripts/start.ps1 -Mode k8s
 #   pwsh tools/scripts/e2e_k8s.ps1
 #
@@ -27,6 +27,7 @@ param(
     [switch]$BridgeForce,    # 端口被非 bridge 进程占用时,杀掉占用者后重建 port-forward
     [Alias('Profile')]
     [string]$MinikubeProfile = 'pandora-agones', # minikube profile;docker driver 下通常同名 docker network
+    [string]$KubeContext = '', # 必须指向上述本地 minikube；留空时取与 profile 同名的 context
     [string]$RelayBindHost = '127.0.0.1', # UDP 中继 docker publish 绑定地址;内网多机联调传 0.0.0.0 对局域网开放
     [int]$TimeoutSec = 240   # 等 Fleet Ready 超时秒
 )
@@ -53,6 +54,18 @@ function Resolve-MinikubeProfile([string]$profile) {
     if (-not [string]::IsNullOrWhiteSpace($ctx)) { return $ctx }
 
     return 'pandora-agones'
+}
+
+function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
+    if ([string]::IsNullOrWhiteSpace($Context) -or [string]::IsNullOrWhiteSpace($Profile)) { return $false }
+    $cluster = (kubectl config view -o jsonpath="{.contexts[?(@.name==`"$Context`")].context.cluster}" 2>$null)
+    if ([string]::IsNullOrWhiteSpace($cluster)) { return $false }
+    $server = (kubectl config view -o jsonpath="{.clusters[?(@.name==`"$cluster`")].cluster.server}" 2>$null)
+    if ([string]::IsNullOrWhiteSpace($server)) { return $false }
+    try { $apiHost = ([System.Uri]$server).Host } catch { return $false }
+    if ($apiHost -in @('127.0.0.1', 'localhost', '::1', '[::1]')) { return $true }
+    $mkIp = (minikube -p $Profile ip 2>$null | Out-String).Trim()
+    return ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($mkIp) -and $apiHost -eq $mkIp)
 }
 
 function ConvertTo-IPv4UInt32([string]$ip) {
@@ -91,40 +104,30 @@ function Get-FleetImage([string]$yamlRelPath) {
     return $line.Matches[0].Groups[1].Value
 }
 
-# ── minikube 镜像一致性校验(与 start.ps1 的 Sync-ImagesToMinikube 同思路)──────
-# 复用 :dev 等滚动 tag 时,`minikube image load` 在 minikube 侧已有同名 tag 时可能静默
-# 不生效(残留旧镜像)→ Fleet 起的 DS Pod 跑旧包。load 后必须比对「宿主 docker 镜像 ID ==
-# minikube 内镜像 ID」,不一致就 rm 旧 tag 重 load,仍不一致直接失败,绝不带旧镜像继续。
-
-# 返回 hashtable:镜像名(去 docker.io/ 前缀) -> 镜像 ID;minikube 太旧不支持 json 时返回 $null。
-function Get-MinikubeImageIds() {
-    $json = (minikube -p $MinikubeProfile image ls --format json 2>$null | Out-String)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) { return $null }
-    try { $list = $json | ConvertFrom-Json } catch { return $null }
-    $map = @{}
-    foreach ($entry in $list) {
-        foreach ($tag in @($entry.repoTags)) {
-            if ([string]::IsNullOrWhiteSpace($tag)) { continue }
-            $map[($tag -replace '^docker\.io/', '')] = [string]$entry.id
-        }
+# 读取指定 Fleet 当前 GameServer 对象。调用时 kubectlContextArgs 已初始化。
+function Get-FleetGameServerItems([string]$fleet) {
+    $json = (kubectl @kubectlContextArgs get gameservers -n $FleetNamespace `
+        -l "agones.dev/fleet=$fleet" -o json 2>$null | Out-String)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
+        throw "读取 Fleet '$fleet' 的 GameServer 失败"
     }
-    return $map
-}
-
-function Test-ImageIdMatch([string]$hostId, [string]$mkId) {
-    if ([string]::IsNullOrWhiteSpace($hostId) -or [string]::IsNullOrWhiteSpace($mkId)) { return $false }
-    $h = $hostId.Trim().ToLowerInvariant()
-    $m = $mkId.Trim().ToLowerInvariant()
-    return ($h -eq $m) -or $h.StartsWith($m) -or $m.StartsWith($h)
+    return @((ConvertFrom-Json $json).items)
 }
 
 function Start-K8sEnvoyBridge {
     $bridgeScript = Join-Path $ScriptDir 'k8s_envoy_bridge.ps1'
     if (-not (Test-Path $bridgeScript)) { throw "缺少桥接脚本: $bridgeScript" }
-    # Envoy 边缘绑定跟随 UDP 中继:RelayBindHost=0.0.0.0(内网多机)时 8443/8444 也对局域网开放,
-    # 否则只绑本机回环。bridge 的 docker compose up envoy 会继承该进程环境变量。admin 9901 恒绑本机。
+    # 客户端面跟随 UDP 中继:RelayBindHost=0.0.0.0(内网多机)时只开放 8443。
+    # k8s GameServer 经集群内 pandora-envoy 回连,宿主 DS 面 8444 永远只绑回环;
+    # 显式覆盖父环境遗留值,不能只依赖 compose 默认值。admin 9901 同样恒绑本机。
     $env:PANDORA_EDGE_BIND_HOST = if ($RelayBindHost -eq '0.0.0.0') { '0.0.0.0' } else { '127.0.0.1' }
-    if ($BridgeForce) { & $bridgeScript -Force } else { & $bridgeScript }
+    $env:PANDORA_DS_EDGE_BIND_HOST = '127.0.0.1'
+    $bridgeParams = @{
+        KubeContext = $KubeContext
+        MinikubeProfile = $MinikubeProfile
+    }
+    if ($BridgeForce) { $bridgeParams.Force = $true }
+    & $bridgeScript @bridgeParams
     if ($LASTEXITCODE -ne 0) { throw "k8s Envoy 桥接启动失败" }
 }
 
@@ -139,37 +142,44 @@ foreach ($c in @('kubectl', 'minikube', 'docker')) {
     if (-not (Test-CommandExists $c)) { Write-Err "$c 未安装。先跑 start.ps1 -Mode k8s -Install。"; exit 1 }
 }
 $MinikubeProfile = Resolve-MinikubeProfile $MinikubeProfile
+$KubeContext = if ([string]::IsNullOrWhiteSpace($KubeContext)) { $MinikubeProfile } else { $KubeContext.Trim() }
 $MinikubeDockerNetwork = $MinikubeProfile
 Write-Info "minikube profile: $MinikubeProfile"
 minikube -p $MinikubeProfile status *> $null
 if ($LASTEXITCODE -ne 0) { Write-Err "minikube profile '$MinikubeProfile' 未在运行。先跑:pwsh tools/scripts/start.ps1 -Mode k8s"; exit 1 }
 Write-Ok "minikube profile '$MinikubeProfile' 运行中"
 
-$currentContext = (kubectl config current-context 2>$null | Out-String).Trim()
-if ($currentContext -ne $MinikubeProfile) {
-    Write-Warn "当前 kubectl context='$currentContext',切换到 minikube profile '$MinikubeProfile'"
-    kubectl config use-context $MinikubeProfile *> $null
-    if ($LASTEXITCODE -ne 0) { Write-Err "无法切换 kubectl context 到 '$MinikubeProfile'"; exit 1 }
+$contexts = @(kubectl config get-contexts -o name 2>$null)
+if ($LASTEXITCODE -ne 0 -or $contexts -cnotcontains $KubeContext) {
+    Write-Err "kubeconfig 中找不到 context '$KubeContext'，已中止。"
+    exit 1
 }
+if (-not (Test-KubeContextIsLocalMinikube $KubeContext $MinikubeProfile)) {
+    Write-Err "context '$KubeContext' 的 endpoint 不是本机 minikube profile '$MinikubeProfile'，为防误操作远端集群已中止。"
+    exit 1
+}
+$kubectlContextArgs = @('--context', $KubeContext)
+Write-Ok "kubectl 已显式钉在本机 context '$KubeContext'(不修改全局 current-context)"
 
-kubectl get ns agones-system *> $null
+kubectl @kubectlContextArgs get ns agones-system *> $null
 if ($LASTEXITCODE -ne 0) { Write-Err "未检测到 Agones(agones-system)。先跑:pwsh tools/scripts/start.ps1 -Mode k8s"; exit 1 }
 Write-Ok "Agones 已安装"
 
 # Fleet 在不在(start.ps1 -Mode k8s 已 apply)
-kubectl get fleet pandora-battle -n $FleetNamespace *> $null
+kubectl @kubectlContextArgs get fleet pandora-battle -n $FleetNamespace *> $null
 $battleFleetOk = ($LASTEXITCODE -eq 0)
-kubectl get fleet pandora-hub -n $FleetNamespace *> $null
+kubectl @kubectlContextArgs get fleet pandora-hub -n $FleetNamespace *> $null
 $hubFleetOk = ($LASTEXITCODE -eq 0)
 if (-not $battleFleetOk -or -not $hubFleetOk) {
     Write-Warn "Fleet 不全(battle=$battleFleetOk hub=$hubFleetOk),尝试 apply..."
-    kubectl apply -f (Join-Path $AgonesDir '10-rbac-allocator.yaml')
-    kubectl apply -f (Join-Path $AgonesDir '20-fleet-battle.yaml')
-    kubectl apply -f (Join-Path $AgonesDir '30-fleet-hub.yaml')
+    foreach ($manifest in @('10-rbac-allocator.yaml', '20-fleet-battle.yaml', '30-fleet-hub.yaml')) {
+        kubectl @kubectlContextArgs apply -f (Join-Path $AgonesDir $manifest)
+        if ($LASTEXITCODE -ne 0) { Write-Err "apply $manifest 失败"; exit 1 }
+    }
 }
 
 # allocator 部署在不在 + 是否 agones 模式(读 configmap)
-kubectl get deploy ds-allocator hub-allocator -n $K8sNamespace *> $null
+kubectl @kubectlContextArgs get deploy ds-allocator hub-allocator -n $K8sNamespace *> $null
 if ($LASTEXITCODE -ne 0) {
     Write-Warn "ds-allocator / hub-allocator 未部署。先跑:pwsh tools/scripts/start.ps1 -Mode k8s"
 }
@@ -184,9 +194,9 @@ Write-Info "hub:    $hubImg"
 if ($SkipImageLoad) {
     Write-Warn "已传 -SkipImageLoad,跳过 image load"
 } else {
-    $hostIds = @{}
     foreach ($img in @($battleImg, $hubImg)) {
-        # 校验宿主 docker 里有该镜像(否则 minikube image load 会失败),并记录宿主镜像 ID
+        # 校验宿主 docker 里有该镜像；随后复用 start.ps1 的强制刷新策略：节点内先 rmi -f
+        # 仅解绑旧 tag（不影响运行容器），再 overwrite load，避免 :dev 同名 tag 静默复用旧包。
         $hostId = (docker image inspect -f '{{.Id}}' $img 2>$null | Out-String).Trim()
         if ($LASTEXITCODE -ne 0 -or -not $hostId) {
             Write-Err "宿主 docker 没有镜像 $img"
@@ -194,38 +204,50 @@ if ($SkipImageLoad) {
             Write-Warn "  构建后重跑;或若 tag 不同,改 Fleet yaml 的 image: 再重试。"
             exit 1
         }
-        $hostIds[$img] = $hostId
-        Write-Info "  minikube -p $MinikubeProfile image load $img ..."
-        minikube -p $MinikubeProfile image load $img
+        Write-Info "  强制刷新 minikube tag:$img"
+        minikube -p $MinikubeProfile ssh -- docker rmi -f $img 2>$null | Out-Null
+        minikube -p $MinikubeProfile image load --daemon=true --overwrite=true $img
         if ($LASTEXITCODE -ne 0) { Write-Err "load 失败: $img"; exit 1 }
+        minikube -p $MinikubeProfile ssh -- "docker image inspect $img >/dev/null 2>&1" 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "强制刷新后 minikube 节点仍找不到 tag:$img"
+            exit 1
+        }
     }
+    Write-Ok "DS 镜像 tag 已强制刷新并在节点内确认存在"
 
-    # 一致性校验:minikube 内镜像 ID 必须 == 宿主(复用滚动 tag 时 load 可能静默不生效)
-    $mkIds = Get-MinikubeImageIds
-    if ($null -eq $mkIds) {
-        Write-Warn "minikube image ls --format json 不可用,跳过镜像一致性校验(建议升级 minikube)。"
-    } else {
-        $stale = @(@($battleImg, $hubImg) | Where-Object { -not (Test-ImageIdMatch $hostIds[$_] $mkIds[$_]) })
-        foreach ($img in $stale) {
-            Write-Warn "minikube 内 $img 为旧镜像(宿主=$($hostIds[$img]) minikube=$($mkIds[$img])),强制刷新..."
-            minikube -p $MinikubeProfile image rm $img 2>$null | Out-Null
-            minikube -p $MinikubeProfile image load $img
-            if ($LASTEXITCODE -ne 0) { Write-Err "强制刷新 load 失败: $img"; exit 1 }
+    $oldUidSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+        foreach ($item in @(Get-FleetGameServerItems $fleet)) {
+            if ($item.metadata.uid) { [void]$oldUidSet.Add([string]$item.metadata.uid) }
         }
-        if ($stale.Count -gt 0) {
-            $mkIds = Get-MinikubeImageIds
-            foreach ($img in $stale) {
-                if (-not (Test-ImageIdMatch $hostIds[$img] $mkIds[$img])) {
-                    Write-Err "镜像 $img 强制刷新后 minikube 内 ID 仍与宿主不一致,中止(避免 Fleet 起旧 DS)。"
-                    Write-Warn "  可尝试:minikube -p $MinikubeProfile image rm $img 后重跑。"
-                    exit 1
-                }
-            }
-            # tag 指向变了,已 Ready 的旧 GameServer 仍是旧包:删掉让 Fleet 用新镜像重建
-            Write-Warn "已强制刷新 DS 镜像,删除现存 GameServer 让 Fleet 重建(新 Pod 才会用新镜像)..."
-            kubectl delete gameservers --all -n $FleetNamespace 2>$null | Out-Null
+    }
+    # 只要执行过 image load，就必须按本项目两支 Fleet 精确重建 GameServer。即使 load 一次成功、
+    # tag 校验已匹配，运行中的旧 Pod 也不会自动换镜像；若不删会把旧 Ready 实例误判为新包就绪。
+    Write-Warn "DS 镜像已刷新，按 Fleet 标签删除现存 GameServer，让 Agones 用新镜像重建..."
+    foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+        kubectl @kubectlContextArgs delete gameservers -n $FleetNamespace -l "agones.dev/fleet=$fleet" --ignore-not-found
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "删除 Fleet '$fleet' 的旧 GameServer 失败；不能继续用旧 Ready 实例假报成功。"
+            exit 1
         }
-        Write-Ok "DS 镜像一致性校验通过(宿主 ID == minikube 内 ID)"
+    }
+    # delete 返回后仍显式确认旧 UID 已全部消失，再进入 Ready 等待；否则 Fleet status 的短暂旧值
+    # 可能让后面立即假通过。
+    $uidDeadline = (Get-Date).AddSeconds(60)
+    do {
+        $remainingOld = @()
+        foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+            $remainingOld += @(Get-FleetGameServerItems $fleet | Where-Object {
+                $_.metadata.uid -and $oldUidSet.Contains([string]$_.metadata.uid)
+            })
+        }
+        if ($remainingOld.Count -eq 0) { break }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $uidDeadline)
+    if ($remainingOld.Count -gt 0) {
+        Write-Err "旧 GameServer UID 在 60s 内未全部消失，拒绝把旧实例当作新镜像实例。"
+        exit 1
     }
     Write-Ok "两个 DS 镜像已 load"
 }
@@ -239,15 +261,20 @@ Write-Step "[3/6] 等 Fleet Ready(超时 ${TimeoutSec}s)"
 function Wait-FleetReady([string]$fleet, [int]$timeoutSec) {
     $deadline = (Get-Date).AddSeconds($timeoutSec)
     while ((Get-Date) -lt $deadline) {
-        $ready = (kubectl get fleet $fleet -n $FleetNamespace -o jsonpath='{.status.readyReplicas}' 2>$null)
-        if ([string]::IsNullOrWhiteSpace($ready)) { $ready = '0' }
-        if ([int]$ready -ge 1) { Write-Ok "$fleet Ready=$ready"; return $true }
-        Write-Host "  $fleet readyReplicas=$ready ..." -ForegroundColor DarkGray
+        $desired = (kubectl @kubectlContextArgs get fleet $fleet -n $FleetNamespace -o jsonpath='{.spec.replicas}' 2>$null)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($desired) -or [int]$desired -lt 1) {
+            Write-Err "读取 Fleet '$fleet' 的期望副本数失败或副本数 <1，不能降级按 1 个实例假验收。"
+            return $false
+        }
+        $items = @(Get-FleetGameServerItems $fleet)
+        $ready = @($items | Where-Object { $_.status.state -eq 'Ready' }).Count
+        if ($ready -ge [int]$desired) { Write-Ok "$fleet Ready=$ready/$desired"; return $true }
+        Write-Host "  $fleet actual Ready GameServers=$ready/$desired ..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 5
     }
     Write-Err "$fleet 在 ${timeoutSec}s 内未就绪"
-    kubectl get gameservers -n $FleetNamespace -L agones.dev/fleet 2>$null
-    Write-Warn "排查:kubectl describe fleet $fleet -n $FleetNamespace;kubectl logs <gs-pod> -n $FleetNamespace -c $fleet-ds"
+    kubectl @kubectlContextArgs get gameservers -n $FleetNamespace -L agones.dev/fleet 2>$null
+    Write-Warn "排查:kubectl --context $KubeContext describe fleet $fleet -n $FleetNamespace;kubectl --context $KubeContext logs <gs-pod> -n $FleetNamespace -c $fleet-ds"
     return $false
 }
 $bOk = Wait-FleetReady 'pandora-battle' $TimeoutSec
@@ -361,14 +388,16 @@ if ($NoRelay) {
 
 # ── 5) 现状打印 ────────────────────────────────────────────────────────
 Write-Step "[5/6] 当前 Fleet / GameServer"
-kubectl get fleet -n $FleetNamespace
-kubectl get gameservers -n $FleetNamespace -L agones.dev/fleet,pandora.dev/region
+kubectl @kubectlContextArgs get fleet -n $FleetNamespace
+kubectl @kubectlContextArgs get gameservers -n $FleetNamespace -L agones.dev/fleet,pandora.dev/region
 
 # ── 6) 端到端验收清单 ──────────────────────────────────────────────────
 Write-Step "[6/6] 真 DS 闭环验收(用真 UE 客户端)"
 $clientHost = if ($RelayBindHost -eq '0.0.0.0') { '<本机局域网IP>' } else { $RelayBindHost }
 Write-Host @"
-  后端入口(Envoy):客户端面 ${clientHost}:8443 / DS 面 ${clientHost}:8444
+  后端入口(Envoy):客户端面 ${clientHost}:8443
+  DS 回调入口:GameServer Pod → pandora-envoy.pandora.svc.cluster.local:8444
+  宿主 DS 面:127.0.0.1:8444(仅本机调试,不对局域网开放)
   确认客户端 DefaultGame.ini 后端指向本机 Envoy,然后:
 
   [ ] 登录 -> AssignHub 返回真 hub-ds 地址 -> ClientTravel 进大厅地图(MainCity)
@@ -377,9 +406,9 @@ Write-Host @"
   [ ] allocator 日志:allocator_mode=agones / fleet_mode=agones(不是 mock)
 
   实时观察:
-    kubectl get gameservers -n $FleetNamespace -w
-    kubectl logs deploy/ds-allocator  -n $K8sNamespace -f
-    kubectl logs deploy/hub-allocator -n $K8sNamespace -f
+    kubectl --context $KubeContext get gameservers -n $FleetNamespace -w
+    kubectl --context $KubeContext logs deploy/ds-allocator  -n $K8sNamespace -f
+    kubectl --context $KubeContext logs deploy/hub-allocator -n $K8sNamespace -f
 "@ -ForegroundColor Gray
 
 Write-Host ""

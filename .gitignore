@@ -70,6 +70,10 @@ deploy/k8s/local/
 # Docker 本地数据卷
 deploy/data/
 
+# 离线镜像目录只允许受管的 20 业务镜像包入库；完整基础设施包必须放仓库外
+deploy/offline-images/*.tar
+!deploy/offline-images/pandora-images.tar
+
 # 第三方下载缓存
 third_party/_cache/
 

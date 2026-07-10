@@ -1,4 +1,4 @@
-# Pandora 18 个 go 业务服务（k8s Deployment + Service）
+# Pandora 20 个业务 Deployment + Service（19 个 Go 服务类型，matchmaker 含 PVP/PVE 双实例）
 #
 # 镜像:pandora/<svc>:dev(k8s 模式由 start.ps1 docker build 后 `minikube image load`;
 #       online 模式由 kustomize overlay 把镜像换成 registry 推送的带版本 tag)。

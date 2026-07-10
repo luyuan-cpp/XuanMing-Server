@@ -210,7 +210,8 @@ static_resources:
                 requires:
                   provider_name: "pandora_session"
               # 没列到的 path(login.Login / login.VerifyDSTicket / grpc reflection)默认放行。
-              # VerifyDSTicket 是 DS → login 的内部调用,不带玩家 JWT;靠 ext_authz 限内网(W3+)。
+              # VerifyDSTicket 是 DS → login 的内部调用,不带玩家 JWT;当前只靠网络边界，未来补
+              # ext_authz/workload identity，不能把 allow_missing 当作已鉴权。
 
           - name: envoy.filters.http.router
             typed_config:
@@ -454,12 +455,13 @@ static_resources:
   # battle_result :50022)裸端口是原生 gRPC(h2c),这里用 grpc_web filter 做协议转换。
   # UE DS `UPandoraDSBackendSubsystem` 的 4 个 Endpoint 经 SetEndpoints / Game.ini 指向
   # 本地 dev 监听器用 http://host:8444（bUseTls=false），避免 Linux DS 容器无法信任宿主 mkcert 根证书。
-  # 生产期再把 DS 面切回 TLS/mTLS，并配套给 DS 镜像注入受信 CA。
+  # 同集群生产环境仍保持应用层明文，由 NetworkPolicy 收敛；未来 mesh mTLS 对业务透明。
+  # 只有 DS 位于集群外、显式接入 TLS 边缘时，才为 DS 镜像配置受信 CA 并开启应用层 TLS。
   #
   # ⚠️ 鉴权说明:本监听器**不挂 player jwt_authn**(DS→后端内部调用不带玩家 SessionToken,
-  # 内部服务用 pmw.AuthOptional)。DS 身份真正校验发生在 UE NetDriver 层的 DSTicket 校验
-  # (PreLogin/InitNewPlayer,见 agones-dev.md §5)。生产期须对 :8444 加网络隔离 + mTLS/ext_authz,
-  # 不可直接暴露公网。
+  # 内部服务用 pmw.AuthOptional)。UE NetDriver 的 DSTicket 只认证「玩家→DS」，不认证
+  # 「DS→后端」；当前只靠精确 method 白名单 + 网络可达边界，生产仍须补 workload identity
+  # (mTLS/ext_authz/短时效 DS token)并绑定 pod/match，:8444 绝不可直接暴露公网。
   # ============================================================================
   - name: pandora_ds_listener
     address:
@@ -487,7 +489,7 @@ static_resources:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
           # ⭐ 安全:DS 面不挂 jwt_authn,内部服务用 pmw.AuthOptional 直接读 x-pandora-player-id。
-          # DS→后端调用不该携带玩家身份头(SetLocation 的 player_id 在 body 里、由 DS 票据约束),
+          # DS→后端调用不该携带玩家身份头(SetLocation 的 player_id 是业务 body 参数),
           # 故无条件剥离客户端/DS 伪造的 x-pandora-player-id / x-pandora-jwt-payload,防止 DS 越权冒充玩家。
           - name: envoy.filters.http.header_mutation
             typed_config:
@@ -506,16 +508,21 @@ static_resources:
             - name: pandora_ds_vh
               domains: [ "*" ]
               routes:
+              # ⚠️ DS 面按方法白名单(2026-07-10,回应审核 P1)::8444 无 jwt_authn、后端仅 AuthOptional,
+              #    仅靠网络可达信任,故只放行 DS / Hub DS **文档明确会回调**的 method,用 path 精确匹配。
+              #    deny-by-default:未匹配路由 Envoy 直接 404 → 伪 DS / 局域网调用者无法调
+              #    Allocate/Release/Transfer/List/ClearLocation 等非 DS 回调方法。注意白名单不认证
+              #    允许的方法，SetLocation/ReportResult 等仍依赖网络信任；新增 DS 方法必须显式加一行。
               # ----- Hub DS → hub_allocator.Heartbeat(unary 5s 心跳)-----
               - match:
-                  prefix: "/pandora.hub.v1.HubAllocatorService/"
+                  path: "/pandora.hub.v1.HubAllocatorService/Heartbeat"
                 route:
                   cluster: hub_allocator_cluster
                   timeout: 15s
                   idle_timeout: 60s
               # ----- Battle DS → ds_allocator.Heartbeat(unary 5s 心跳)-----
               - match:
-                  prefix: "/pandora.ds.v1.DSAllocatorService/"
+                  path: "/pandora.ds.v1.DSAllocatorService/Heartbeat"
                 route:
                   cluster: ds_allocator_cluster
                   timeout: 15s
@@ -536,16 +543,23 @@ static_resources:
                   cluster: ds_allocator_cluster
                   timeout: 15s
                   idle_timeout: 60s
-              # ----- Hub DS → player_locator.SetLocation(HUB 上报)-----
+              # ----- Hub DS → player_locator.SetLocation(上报 HUB；MATCHING/BATTLE 由 matchmaker 写)-----
               - match:
-                  prefix: "/pandora.locator.v1.PlayerLocatorService/"
+                  path: "/pandora.locator.v1.PlayerLocatorService/SetLocation"
+                route:
+                  cluster: locator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- Hub DS → player_locator.ReportDisconnect(玩家断线快速上报,缩短 HUB TTL)-----
+              - match:
+                  path: "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
                 route:
                   cluster: locator_cluster
                   timeout: 15s
                   idle_timeout: 60s
               # ----- Battle DS → battle_result.ReportResult(同步结算上报,§6)-----
               - match:
-                  prefix: "/pandora.battle.v1.BattleResultService/"
+                  path: "/pandora.battle.v1.BattleResultService/ReportResult"
                 route:
                   cluster: battle_result_cluster
                   timeout: 15s

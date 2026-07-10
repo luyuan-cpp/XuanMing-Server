@@ -4,12 +4,9 @@
 # GameServerAllocation（selector agones.dev/fleet=pandora-battle）→ 拿到一个 Ready
 # GameServer 转 Allocated，返回 address:port 给客户端进战斗。
 #
-# dev 占位镜像：Agones 官方 simple-game-server（自带 Agones SDK：Ready/Health，
-# 让 Fleet 真的进 Ready 状态，可验证「分配 → Allocated → 返回真实 addr」整条链路）。
-# 真 UE Pandora Battle DS 镜像就绪后替换 image 即可（容器端口改 7777，详见 ds-arch.md）。
-#
-# ⚠️ 注意：simple-game-server 不会向 ds_allocator 发 Heartbeat（那是 Pandora DS 业务心跳，
-# 与 Agones SDK health 是两回事）。心跳上报链路要等真 UE DS 或 stub，见 README「分两步验证」。
+# 当前直接使用真 UE Pandora Battle DS 镜像（Agones SDK Ready/Health + Pandora 业务 Heartbeat）。
+# Fleet Ready 只证明 Agones 生命周期正常；分配闭环还必须看到 DS 经 :8444 向 ds_allocator
+# 上报正确 match_id/pod 的业务心跳，二者是两条独立链路（见 README「分两步验证」）。
 apiVersion: agones.dev/v1
 kind: Fleet
 metadata:
@@ -70,8 +67,10 @@ spec:
                 # 先选专属池(Pod 已预载目标图,分配即可玩),无空闲自动回落本通用 Loader 池。
                 # 长尾/新副本不建专属 Fleet,走本池填表即用。
                 # ds_allocator 的 grpc-web 入口。DS 走 grpc-web（FHttpModule），不能直连裸 gRPC :50020，
-                # 必须打到 Envoy 的「DS 面」grpc-web 监听器 :8444（TLS 终止 + grpc-web→gRPC 转换，
-                # 按 /pandora.ds.v1.DSAllocatorService/ 路由到 ds_allocator，见 deploy/envoy/envoy.yaml）。
+                # 必须打到 Envoy 的「DS 面」grpc-web 监听器 :8444（grpc-web→gRPC 转换，按方法白名单
+                # 路由到 ds_allocator，见 deploy/k8s/agones/16-ds-envoy.yaml）。
+                # ⚠️ :8444 DS 面是**明文无 TLS**(权威口径见 docs/design/gateway-decision.md §「DS 面」),
+                #    故 PANDORA_DS_ALLOCATOR_TLS=0;此处不做 TLS 终止,别被旧注释误导。
                 # 默认代码值 127.0.0.1:50020 是裸端口，集群里打不通——务必用下面 env 覆盖。
                 #
                 # 线上同款:DS 走集群内 Envoy「DS 面」Service DNS 回连,pod 内绝不写宿主 IP / host.docker.internal

@@ -138,7 +138,7 @@ local_hub:
   # capacity: 500                              # 留空取 hub.default_capacity
   working_dir: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)
   log_dir: "run/dev/logs/ds"                   # Hub DS stdout/stderr 落 pandora-hub-local.log
-  # extra_args: ["-PANDORA_BACKEND=https://127.0.0.1:8444"]
+  # extra_args: ["-PANDORA_BACKEND=http://127.0.0.1:8444"]   # 本地 DS 面明文
   extra_env:
     PANDORA_HUB_ALLOCATOR_ADDR: "127.0.0.1:8444"
     PANDORA_PLAYER_LOCATOR_ADDR: "127.0.0.1:8444"

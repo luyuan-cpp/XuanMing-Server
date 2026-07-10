@@ -24,11 +24,40 @@ metadata:
     app.kubernetes.io/name: pandora-envoy
 data:
   envoy.yaml: |
+    # ⚠️ admin 只绑 Pod 内回环(2026-07-10 收紧,回应审核 P1:admin 未鉴权,可 config_dump 泄露
+    # 配置 / POST 改运行时把网关打挂;绑 0.0.0.0 时 allow-app-mesh 的宽泛选择器会放行同命名空间
+    # 业务 Pod 直连 admin)。kubelet 探活走下面独立的 :9902 只读健康监听器(仅转发 /ready 到 admin)。
+    # 调试需要 admin 时，用临时 debug container 进入同 Pod 网络命名空间访问 127.0.0.1:9901；
+    # 官方 Envoy 镜像不含 wget/curl，勿在主容器里直接调用这些命令。
     admin:
       address:
-        socket_address: { address: 0.0.0.0, port_value: 9901 }
+        socket_address: { address: 127.0.0.1, port_value: 9901 }
     static_resources:
       listeners:
+      # 只读健康监听器:kubelet readinessProbe 打 :9902/ready,经本监听器转发到回环 admin 的
+      # /ready;除 /ready 外一律 404,不暴露 config_dump / stats / POST 管理面。
+      - name: pandora_admin_health_listener
+        address:
+          socket_address: { address: 0.0.0.0, port_value: 9902 }
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: pandora_admin_health_hcm
+              codec_type: AUTO
+              http_filters:
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              route_config:
+                name: pandora_admin_health_routes
+                virtual_hosts:
+                - name: pandora_admin_health_vh
+                  domains: [ "*" ]
+                  routes:
+                  - match: { path: "/ready" }
+                    route: { cluster: local_admin_cluster, timeout: 2s }
       - name: pandora_ds_listener
         address:
           socket_address: { address: 0.0.0.0, port_value: 8444 }
@@ -65,20 +94,51 @@ data:
                 virtual_hosts:
                 - name: pandora_ds_vh
                   domains: [ "*" ]
+                  # ⚠️ DS 面按方法白名单(2026-07-10,回应审核 P1)::8444 无鉴权(仅靠网络可达 +
+                  # header_mutation 剥离 x-pandora-* 身份头),故只放行 DS / Hub DS **文档明确会回调**
+                  # 的方法,一律用 path 精确匹配。deny-by-default:未匹配的请求 Envoy 直接 404。
+                  #   - 控制面(AllocateBattle / ReleaseBattle / ListBattles / AssignHub / ReleaseHub /
+                  #     TransferHub / ListHubs):matchmaker 等后端在集群内直连,不经 DS 面。
+                  #   - 客户端面(ListHubLines / TransferToLine / GetLocation / BatchGetLocation /
+                  #     SubscribePresence / UnsubscribePresence):走 :8443 客户端网关(带 jwt_authn)。
+                  #   - ClearLocation / RefreshHubLocations:后端内部(hub_allocator 等)直连 locator 调,
+                  #     不属 DS 面。
+                  # 这样可阻断伪 DS / 局域网调用者访问白名单之外的控制面方法。注意白名单不认证
+                  # 允许的方法，SetLocation/ReportResult 等仍依赖网络信任；生产须另补 DS workload
+                  # identity。若某 DS 确需新增方法,必须在此显式再加一行(保持 deny-by-default)。
                   routes:
-                  - match: { prefix: "/pandora.hub.v1.HubAllocatorService/" }
+                  # Hub DS 心跳(Hub DS 每 5s 主动调)
+                  - match: { path: "/pandora.hub.v1.HubAllocatorService/Heartbeat" }
                     route: { cluster: hub_allocator_cluster, timeout: 15s, idle_timeout: 60s }
-                  - match: { prefix: "/pandora.ds.v1.DSAllocatorService/" }
+                  # 战斗 DS 心跳(战斗 DS 每 5s 主动调)
+                  - match: { path: "/pandora.ds.v1.DSAllocatorService/Heartbeat" }
                     route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  # GM 指令拉取 / 回执(DS 复用心跳节奏轮询;GmService 与 ds_allocator 同进程)
                   - match: { path: "/pandora.gm.v1.GmService/PollCommands" }
                     route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }
                   - match: { path: "/pandora.gm.v1.GmService/AckCommand" }
                     route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }
-                  - match: { prefix: "/pandora.locator.v1.PlayerLocatorService/" }
+                  # Hub DS 上报 HUB 位置；MATCHING/BATTLE 由 matchmaker 写(见 agones-dev.md §4)
+                  - match: { path: "/pandora.locator.v1.PlayerLocatorService/SetLocation" }
                     route: { cluster: locator_cluster, timeout: 15s, idle_timeout: 60s }
-                  - match: { prefix: "/pandora.battle.v1.BattleResultService/" }
+                  # Hub DS 玩家断线快速上报(缩短 HUB 位置 TTL,见 locator.proto ReportDisconnect)
+                  - match: { path: "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect" }
+                    route: { cluster: locator_cluster, timeout: 15s, idle_timeout: 60s }
+                  # 战斗 DS 结算同步上报(match_id 幂等)
+                  - match: { path: "/pandora.battle.v1.BattleResultService/ReportResult" }
                     route: { cluster: battle_result_cluster, timeout: 15s, idle_timeout: 60s }
       clusters:
+      # 回环 admin(仅供 :9902 健康监听器转发 /ready,不对 Pod 外暴露)
+      - name: local_admin_cluster
+        type: STATIC
+        connect_timeout: 1s
+        load_assignment:
+          cluster_name: local_admin_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: 127.0.0.1, port_value: 9901 }
       - name: ds_allocator_cluster
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY
@@ -168,9 +228,10 @@ spec:
         args: [ "-c", "/etc/envoy/envoy.yaml", "--service-cluster", "pandora-ds-envoy" ]
         ports:
         - { name: ds-face, containerPort: 8444 }
-        - { name: admin, containerPort: 9901 }
+        # admin(9901)只绑 Pod 内回环,不声明 containerPort、不对外;探活走 :9902 只读健康监听器。
+        - { name: health, containerPort: 9902 }
         readinessProbe:
-          httpGet: { path: /ready, port: 9901 }
+          httpGet: { path: /ready, port: 9902 }
           initialDelaySeconds: 3
           periodSeconds: 5
         volumeMounts:

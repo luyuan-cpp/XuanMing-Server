@@ -11,7 +11,7 @@
                              用 -Env test|prod 区分「测试服集群」与「生产 kbs 集群」(不同 kube-context)
 
   还有两个本地联调辅助模式:
-    battle   含战斗混合版 —— 17 个业务服务跑 docker,ds_allocator + hub_allocator 跑宿主(需 exec Windows DS);
+    battle   含战斗混合版 —— 18 个业务服务跑 docker,ds_allocator + hub_allocator 跑宿主(需 exec Windows DS);
                              进真实 Hub/Battle DS。play.ps1 -Battle[ -Intranet] 走这个;策划机不用起 go 服务。
     k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(默认 advertise 本机局域网 IP + 自动宿主桥接/UDP 中继)
 
@@ -23,8 +23,8 @@
   pwsh tools/scripts/start.ps1 -Mode docker
   pwsh tools/scripts/start.ps1 -Mode intranet                       # 内网测试服(全容器,绑内网 IP)
   pwsh tools/scripts/start.ps1 -Mode k8s                            # 本地 minikube + Agones 真 DS 联调
-    pwsh tools/scripts/start.ps1 -Mode online -Env test  -Registry registry.mycorp.com -Tag v1.2.3 -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 -HubDsImage registry.mycorp.com/pandora/hub-ds:v1.2.3 -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 线上测试服集群
-    pwsh tools/scripts/start.ps1 -Mode online -Env prod  -Registry registry.mycorp.com -Tag v1.2.3 -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 -HubDsImage registry.mycorp.com/pandora/hub-ds:v1.2.3 -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 线上生产 kbs 集群(双重确认)
+  pwsh tools/scripts/start.ps1 -Mode online -Env test -TestKubeContext pandora-test -Registry registry.mycorp.com -Tag v1.2.3 -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 -HubDsImage registry.mycorp.com/pandora/hub-ds:v1.2.3 -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 测试服
+  pwsh tools/scripts/start.ps1 -Mode online -Env prod -ProdKubeContext pandora-prod -Registry registry.mycorp.com -Tag v1.2.3 -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 -HubDsImage registry.mycorp.com/pandora/hub-ds:v1.2.3 -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 生产(双重确认)
   pwsh tools/scripts/start.ps1 -Mode docker -Down  # 停
   pwsh tools/scripts/start.ps1 -Status             # 看状态
   pwsh tools/scripts/start.ps1 -Check              # 只检查工具
@@ -52,6 +52,10 @@ param(
     # intranet 对外广告 IP(内网其它机器连本机用;留空自动取本机内网 IPv4)
     [string]$AdvertiseHost = '',
 
+    # 局域网模式默认只把【客户端面 8443】开到局域网;未鉴权的 DS 面 8444 恒绑本机。
+    # 仅当真有【异机 UE DS】需要回连本机 Envoy :8444 时才加此开关显式开放(务必配合网络隔离)。
+    [switch]$ExposeDsFace,
+
     [switch]$Down,        # 停止该模式
     [switch]$Resume,      # 电脑重启后快速恢复:不重建镜像,把上次停掉的集群/容器拉回来
     [switch]$Reset,       # 一键重置:彻底清掉旧状态再全新启动(线上 online 模式禁用)
@@ -76,8 +80,14 @@ param(
     [string]$BattleDsImage, # online:战斗 DS 镜像(必须是远端集群可拉取的完整镜像名)
     [string]$HubDsImage,    # online:大厅 DS 镜像(必须是远端集群可拉取的完整镜像名)
     [string]$DsGatewayAddr, # online:DS 回调入口(如 pandora-envoy.pandora.svc:8444)
+    # online 安全映射:不同环境必须显式绑定各自 kube-context；也可用同名环境变量持久配置。
+    [string]$TestKubeContext = $env:PANDORA_K8S_TEST_CONTEXT,
+    [string]$ProdKubeContext = $env:PANDORA_K8S_PROD_CONTEXT,
     [ValidateSet('0', '1')]
-    [string]$DsGatewayTls = '1', # online:DS 回调是否 TLS(线上默认 1)
+    # online:DS 回调是否 TLS。权威口径(gateway-decision.md §3.5/§16):DS 面 :8444 是集群内明文,
+    # 本地/线上同构默认 0;仅当线上把 DS 面挂到集群外 TLS 边缘时才显式传 1
+    # (2026-07-10 已统一旧版互相冲突的默认值)。
+    [string]$DsGatewayTls = '0',
     [switch]$BuildPush    # online:本地构建并推送 20 个镜像到 -Registry(远端发布动作,需人工授权)
 )
 
@@ -258,7 +268,7 @@ function Resolve-Prerequisites([string]$mode) {
             if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'battle' {
-            # 含战斗混合版:17 业务服务跑 docker,只有 ds/hub allocator 跑宿主(需 Go build 这 2 个 + exec Windows DS)。
+            # 含战斗混合版:18 业务服务跑 docker,只有 ds/hub allocator 跑宿主(需 Go build 这 2 个 + exec Windows DS)。
             if (-not (Ensure-Go))     { $allOk = $false }
             if (-not (Ensure-Docker)) { $allOk = $false }
             # Envoy 本地 TLS 证书(客户端面 :8443 / 内网策划连接)靠 mkcert 自动签发 / 装共享 CA。
@@ -336,7 +346,8 @@ function Invoke-Docker {
 
 # ===== intranet 模式(内网测试服:全容器,绑内网 IP 供多人联调)=====
 # 与 docker 一致(基础设施 + 20 服务全容器,DS=mock),区别只是面向局域网:
-#   - 导出 PANDORA_EDGE_BIND_HOST=0.0.0.0,让 Envoy 8443/8444 对局域网开放(admin 9901 仍只绑本机)
+#   - 导出 PANDORA_EDGE_BIND_HOST=0.0.0.0,只让 Envoy 客户端面 8443 对局域网开放
+#   - DS 面 8444 未鉴权,默认仍固定在 127.0.0.1(admin 9901 也只绑本机)
 #   - 内网其它机器可直接连本机内网 IP
 #   - 打印内网访问地址,客户端把后端指向 <内网IP>:<port> 即可
 function Resolve-LanIp {
@@ -364,6 +375,23 @@ function Resolve-LanIp {
         Select-Object -First 1 -ExpandProperty IPAddress
 }
 
+# 设置 Envoy 边缘绑定:客户端面(8443)按 $ClientHost;DS 面(8444,未鉴权)默认恒绑本机,
+# 只有显式 -ExposeDsFace 才跟随客户端面开到局域网,避免未鉴权 DS 面默认暴露给整个局域网。
+function Set-EdgeBindHost([string]$ClientHost) {
+    $env:PANDORA_EDGE_BIND_HOST = $ClientHost
+    if ($ExposeDsFace) {
+        $env:PANDORA_DS_EDGE_BIND_HOST = $ClientHost
+        if ($ClientHost -eq '0.0.0.0') {
+            Write-Warn "已按 -ExposeDsFace 把未鉴权的 DS 面 :8444 也开到局域网($ClientHost);仅在真有异机 DS 需回连时使用,并确保网络隔离/防火墙收敛。"
+        }
+    } else {
+        $env:PANDORA_DS_EDGE_BIND_HOST = '127.0.0.1'
+        if ($ClientHost -eq '0.0.0.0') {
+            Write-Info "DS 面 :8444(未鉴权)保持只绑本机;异机 DS 需回连时加 -ExposeDsFace 显式开放。"
+        }
+    }
+}
+
 function Invoke-Intranet {
     if ($Down) { Invoke-Docker; return }
 
@@ -373,9 +401,10 @@ function Invoke-Intranet {
         Write-Warn "未能自动解析内网 IPv4,可用 -AdvertiseHost 显式指定。继续以 docker 全容器方式启动。"
     }
 
-    # 内网测试服面向局域网:让 Envoy 8443/8444 绑 0.0.0.0(admin 9901 仍恒绑本机)。
+    # 内网测试服面向局域网:让 Envoy【客户端面 8443】绑 0.0.0.0(admin 9901 仍恒绑本机)。
+    # DS 面 8444 未鉴权且 intranet=mock DS 根本用不到,恒绑本机(除非 -ExposeDsFace)。
     # 该环境变量会被 dev_up.ps1 的 docker compose 继承(进程环境优先级高于 --env-file)。
-    $env:PANDORA_EDGE_BIND_HOST = '0.0.0.0'
+    Set-EdgeBindHost '0.0.0.0'
 
     # 复用 docker 全容器启动路径(基础设施 + 服务容器,allocator=mock)
     Invoke-Docker
@@ -384,7 +413,11 @@ function Invoke-Intranet {
     Write-Ok "内网测试服已启动。其它机器把客户端后端指向:"
     if (-not [string]::IsNullOrWhiteSpace($lan)) {
         Write-Host "       客户端面(TLS)  https://${lan}:8443" -ForegroundColor Green
-        Write-Host "       DS 面          ${lan}:8444" -ForegroundColor Green
+        if ($ExposeDsFace) {
+            Write-Host "       DS 面          ${lan}:8444(-ExposeDsFace 已开放)" -ForegroundColor Green
+        } else {
+            Write-Host "       DS 面          127.0.0.1:8444(未鉴权,默认仅本机;intranet=mock DS 无需开放)" -ForegroundColor DarkGray
+        }
     }
     Write-Warn "DS=mock(无真实 DS);需真实战斗/大厅 DS 请用 -Mode online(Agones)。"
 }
@@ -418,13 +451,16 @@ function Invoke-Battle {
     & "$ScriptDir/run_services.ps1" -Action down 2>$null
     docker compose -f $ComposeServices down 2>$null | Out-Null
 
-    # Envoy 边缘绑定:仅当 DS advertise 指向局域网(非回环)时才对局域网开放 8443/8444;
-    # 本机自测(advertise=127.0.0.1)保持只绑本机。admin 9901 恒绑本机。
+    # Envoy 客户端面:仅当 DS advertise 指向局域网(非回环)时才开放 8443;
+    # DS 面 8444 默认仍只绑本机。admin 9901 恒绑本机。
     $battleAdv =
         if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { $AdvertiseHost.Trim() }
         elseif (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) { $env:PANDORA_DS_ADVERTISE_HOST.Trim() }
         else { '' }
-    $env:PANDORA_EDGE_BIND_HOST = if (-not [string]::IsNullOrWhiteSpace($battleAdv) -and $battleAdv -ne '127.0.0.1') { '0.0.0.0' } else { '127.0.0.1' }
+    # battle 模式真 DS 在本机 exec(DS→Envoy 走 127.0.0.1),故 DS 面 8444 无需局域网开放;
+    # 仅客户端面 8443 按 advertise 是否局域网决定。DS 面默认本机(除非 -ExposeDsFace)。
+    $battleClientBind = if (-not [string]::IsNullOrWhiteSpace($battleAdv) -and $battleAdv -ne '127.0.0.1') { '0.0.0.0' } else { '127.0.0.1' }
+    Set-EdgeBindHost $battleClientBind
 
     Write-Step "[1/5] 基础设施(建 pandora-net)"
     & "$ScriptDir/dev_up.ps1"
@@ -470,6 +506,10 @@ function Apply-AgonesManifests {
         [string]$KubeContext = ''
     )
     $agonesDir = Join-Path $ProjectRoot 'deploy/k8s/agones'
+    if ([string]::IsNullOrWhiteSpace($KubeContext)) {
+        throw 'Apply-AgonesManifests 必须显式传 -KubeContext，禁止依赖可被其它终端切换的 current-context。'
+    }
+    $kubectlContextArgs = @('--context', $KubeContext)
 
     function Set-YamlEnvValue([string]$text, [string]$name, [string]$value) {
         # 用显式 ${1}/${2} 分组语法:避免 value 以数字开头时(如 TLS=1)$1+值拼成 $11 被当作第 11 组
@@ -480,7 +520,7 @@ function Apply-AgonesManifests {
     function Apply-FleetManifest([string]$fileName, [string]$image, [string[]]$addrEnvNames, [string]$tlsEnvName) {
         $src = Join-Path $agonesDir $fileName
         if ([string]::IsNullOrWhiteSpace($image) -and [string]::IsNullOrWhiteSpace($DsGatewayAddr) -and [string]::IsNullOrWhiteSpace($DsGatewayTls)) {
-            kubectl apply -f $src
+            kubectl @kubectlContextArgs apply -f $src
             Assert-LastExit "kubectl apply Fleet $fileName"
             return
         }
@@ -502,7 +542,7 @@ function Apply-AgonesManifests {
         $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + '-' + $fileName)
         [System.IO.File]::WriteAllText($tmp, $raw, (New-Object System.Text.UTF8Encoding($false)))
         try {
-            kubectl apply -f $tmp
+            kubectl @kubectlContextArgs apply -f $tmp
             Assert-LastExit "kubectl apply Fleet $fileName"
         } finally {
             Remove-Item $tmp -ErrorAction SilentlyContinue
@@ -510,13 +550,13 @@ function Apply-AgonesManifests {
     }
 
     if ($InstallAgones) {
-        kubectl get ns agones-system *> $null
+        kubectl @kubectlContextArgs get ns agones-system *> $null
         if ($LASTEXITCODE -ne 0) {
             Write-Info "安装 Agones(helm,装到 agones-system)..."
             helm repo add agones https://agones.dev/chart/stable 2>$null | Out-Null
             helm repo update 2>$null | Out-Null
-            kubectl create namespace agones-system 2>$null | Out-Null
-            helm install agones agones/agones --namespace agones-system --wait
+            kubectl @kubectlContextArgs create namespace agones-system 2>$null | Out-Null
+            helm install agones agones/agones --kube-context $KubeContext --namespace agones-system --wait
             if ($LASTEXITCODE -ne 0) { throw "Agones 安装失败" }
         } else {
             Write-Ok "Agones 已安装(agones-system 存在)"
@@ -524,20 +564,26 @@ function Apply-AgonesManifests {
     }
 
     Write-Info "apply Agones RBAC(pandora-allocator)..."
-    kubectl apply -f (Join-Path $agonesDir '10-rbac-allocator.yaml')
+    kubectl @kubectlContextArgs apply -f (Join-Path $agonesDir '10-rbac-allocator.yaml')
     Assert-LastExit 'kubectl apply Agones RBAC'
 
     # ===== 本地 minikube:部署 in-cluster Envoy「DS 面」网关(线上同款 pandora-envoy.pandora.svc:8444)=====
     # 线上真集群自带边缘 Envoy;本地 minikube 无边缘 Envoy 且 pod 解析不了 host.docker.internal，故集群内起等价 Envoy。
     # 只在本地(InstallAgones)部署;online 模式不带 -InstallAgones，用线上真 Envoy。
     if ($InstallAgones) {
-        Write-Info "预拉 in-cluster Envoy 镜像进 minikube(envoyproxy/envoy:v1.38-latest)..."
-        minikube ssh -- 'docker image inspect envoyproxy/envoy:v1.38-latest >/dev/null 2>&1 && echo cached || (for i in 1 2 3 4 5 6; do docker pull envoyproxy/envoy:v1.38-latest && break || sleep 4; done)' 2>$null | Out-Null
+        # 三级来源确保 Envoy 镜像进节点:节点已有 → 宿主 load → 联网 pull(断网友好,失败 fail-fast)。
+        Ensure-EnvoyImageInMinikube -MinikubeProfile (Get-K8sManagedProfile)
         Write-Info "apply in-cluster Envoy(DS 面 :8444,上游=集群内 Service DNS)..."
-        kubectl apply -f (Join-Path $agonesDir '16-ds-envoy.yaml')
+        kubectl @kubectlContextArgs apply -f (Join-Path $agonesDir '16-ds-envoy.yaml')
         Assert-LastExit 'kubectl apply in-cluster Envoy'
-        kubectl rollout status deploy/pandora-envoy -n pandora --timeout=120s
-        if ($LASTEXITCODE -ne 0) { Write-Warn "pandora-envoy 未在 120s 内就绪;DS 心跳可能暂时打不通" }
+        # ⚠️ Envoy 只在进程启动时读一次静态 envoy.yaml。仅改 ConfigMap(路由白名单 / 上游等)时,
+        #    Deployment pod spec 不变 → kubectl apply 报 unchanged → 运行中的 Envoy 仍跑旧配置,
+        #    挂载的 ConfigMap 卷即便刷新到盘上 Envoy 也不会热读(回应审核 P#4:ConfigMap 变更不触发重载)。
+        #    故显式 rollout restart 让 Pod 重启重读新配置;首次部署时 restart 等价一次滚动,无害。
+        kubectl @kubectlContextArgs rollout restart deploy/pandora-envoy -n pandora
+        Assert-LastExit 'rollout restart pandora-envoy(强制重载 DS 面静态配置)'
+        kubectl @kubectlContextArgs rollout status deploy/pandora-envoy -n pandora --timeout=120s
+        if ($LASTEXITCODE -ne 0) { throw "pandora-envoy 未在 120s 内就绪;DS 心跳(:8444)打不通,已中止(排障:kubectl -n pandora describe deploy/pandora-envoy)。" }
     }
 
     Write-Info "apply Fleet(pandora-battle / pandora-hub 真 Linux DS)..."
@@ -559,7 +605,7 @@ function Apply-AgonesManifests {
         $fleetNs = 'default'
         Write-Info "强制重建 GameServer(context=$KubeContext,让 :dev tag 的新 DS 镜像生效)..."
         foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
-            kubectl --context $KubeContext delete gameservers -l "agones.dev/fleet=$fleet" -n $fleetNs --ignore-not-found
+            kubectl @kubectlContextArgs delete gameservers -l "agones.dev/fleet=$fleet" -n $fleetNs --ignore-not-found
             if ($LASTEXITCODE -ne 0) {
                 # 删除失败 = 旧镜像 Pod 可能仍在跑;绝不能静默继续,否则会把「旧实例还在跑」
                 # 误判成「新镜像已部署成功」。直接 fail-fast,让调用方看到并处理。
@@ -591,14 +637,28 @@ function Get-ActiveMinikubeProfile {
     return $p
 }
 
+# 本次运行内固定的 minikube profile(解析一次后缓存)。
+# 所有 minikube start / status / delete / image load 都钉在同一个 profile 上,杜绝
+# 「Reset 删了 profile A,却用默认 'minikube' 重建成 B」的 profile 漂移 —— delete 目标与
+# rebuild 目标必须始终一致(否则重置后跑的是另一个集群,旧集群还残留占资源)。
+$script:K8sManagedProfileResolved = $false
+$script:K8sManagedProfile = $null
+function Get-K8sManagedProfile {
+    if (-not $script:K8sManagedProfileResolved) {
+        $script:K8sManagedProfile = Get-ActiveMinikubeProfile
+        $script:K8sManagedProfileResolved = $true
+    }
+    return $script:K8sManagedProfile
+}
+
 # 校验 active minikube profile 对应的 kube-context 确实存在于 kubeconfig,返回该 context 名。
 # 用于把本地 k8s 操作显式钉在 minikube 上(kubectl --context <ctx>),不依赖易被用户切走的
 # current-context。context 不存在(minikube 没起/被删)时 fail-fast,绝不静默落到别的集群。
 function Resolve-MinikubeKubeContext {
-    $mkProfile = Get-ActiveMinikubeProfile
+    $mkProfile = Get-K8sManagedProfile
     $contexts = @(kubectl config get-contexts -o name 2>$null)
     if ($LASTEXITCODE -ne 0) { throw "kubectl 不可用或 kubeconfig 读取失败,无法解析 minikube kube-context。" }
-    if ($contexts -notcontains $mkProfile) {
+    if ($contexts -cnotcontains $mkProfile) {
         throw "kubeconfig 中找不到 minikube 的 kube-context『$mkProfile』(minikube 未启动或未创建集群?)。为防误操作远端集群,已中止。"
     }
     return $mkProfile
@@ -682,6 +742,42 @@ function Sync-ImagesToMinikube {
     Write-Ok "镜像 tag 已刷新到 minikube($($Images.Count) 个)。"
 }
 
+# ===== 共享:确保 in-cluster Envoy 镜像在 minikube 节点内(离线友好,三级来源)=====
+# 顺序(2026-07-10,回应审核 P1「离线只会在 minikube 节点联网 pull,不复用宿主已有镜像」):
+#   1) minikube 节点已有 → 直接用(cached);
+#   2) 宿主 docker 已有 → minikube image load 灌进去(断网机 import_images -IncludeInfra 后走这条);
+#   3) 都没有 → 才在节点内联网 pull(重试 6 次),仍失败 fail-fast 给出离线导入指引。
+function Ensure-EnvoyImageInMinikube {
+    param([string]$MinikubeProfile)
+    $envoyImg = 'envoyproxy/envoy:v1.38-latest'
+    $mkArgs = @()
+    if (-not [string]::IsNullOrWhiteSpace($MinikubeProfile)) { $mkArgs = @('-p', $MinikubeProfile) }
+
+    minikube @mkArgs ssh -- "docker image inspect $envoyImg >/dev/null 2>&1" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Ok "in-cluster Envoy 镜像已在 minikube 节点($envoyImg)"
+        return
+    }
+
+    docker image inspect $envoyImg *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Info "宿主 docker 已有 $envoyImg,直接 load 进 minikube(免联网)..."
+        minikube @mkArgs image load --daemon=true $envoyImg
+        Assert-LastExit "minikube image load $envoyImg"
+    } else {
+        Write-Info "宿主与 minikube 均无 $envoyImg,尝试在 minikube 节点联网拉取(断网机会失败)..."
+        minikube @mkArgs ssh -- "for i in 1 2 3 4 5 6; do docker pull $envoyImg && break || sleep 4; done" 2>$null | Out-Null
+    }
+
+    # 拉取/加载可能静默失败(stderr 被吞)。显式确认镜像已在节点内,否则后面 pandora-envoy Pod
+    # 会一直 ImagePullBackOff,DS 心跳(:8444)永远打不通 —— fail-fast 让调用方先解决镜像。
+    minikube @mkArgs ssh -- "docker image inspect $envoyImg >/dev/null 2>&1" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "in-cluster Envoy 镜像『$envoyImg』未能进入 minikube(断网/限流?)。DS 面 :8444 网关无法就绪,已中止。离线办法:在能联网机器 docker pull $envoyImg && docker save -o envoy.tar $envoyImg,拷到本机 docker load -i envoy.tar 后重跑(本函数会自动从宿主 load 进 minikube)。"
+    }
+    Write-Ok "in-cluster Envoy 镜像已就绪($envoyImg)"
+}
+
 # ===== k8s 模式(本地 minikube)=====
 # ===== k8s 模式:把 UE Linux DS 打成镜像并落进 minikube =====
 # DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 20 个 go 业务镜像的一部分,
@@ -699,8 +795,8 @@ function Build-DsImagesForMinikube {
     Write-Info "在宿主 docker 构建 Battle/Hub DS 镜像(从同级客户端仓库取 Linux 包,离线友好)..."
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $dsBuild -BuildOnHost
     Assert-LastExit 'DS 镜像构建(build-image-minikube.ps1 -BuildOnHost)'
-    # 跟随当前 active profile,避免本机同时存在旧 minikube 与 pandora-agones 时把镜像 load 到停用集群。
-    $mkProfile = Get-ActiveMinikubeProfile
+    # 使用本次运行固定的 profile,避免构建期间 active profile 漂移后把镜像 load 到另一个集群。
+    $mkProfile = Get-K8sManagedProfile
     Write-Info "把 DS 镜像 load 进 minikube(profile=$mkProfile,强制刷新 :dev tag)..."
     Sync-ImagesToMinikube -Images @('pandora/battle-ds:dev', 'pandora/hub-ds:dev') -MinikubeArgs @('-p', $mkProfile)
     Write-Ok "DS 镜像已就绪(pandora/battle-ds:dev / pandora/hub-ds:dev 已在 minikube)"
@@ -760,55 +856,70 @@ function Invoke-K8s {
         # 宿主侧桥接(kubectl port-forward / envoy 容器 / UDP relay 容器)跑在本机,与 k8s 集群
         # 是否可删无关——无论 context 在不在都要先清掉,否则残留进程/容器会占端口、误导后续启动。
         Stop-K8sHostBridge
-        $mkProfile = Get-ActiveMinikubeProfile
+        $mkProfile = Get-K8sManagedProfile
         $contexts = @(kubectl config get-contexts -o name 2>$null)
-        if ($contexts -notcontains $mkProfile) {
-            Write-Warn "kubeconfig 中无本机 minikube context『$mkProfile』,集群侧无可删对象,跳过(宿主桥接已清理,不对其它集群执行任何删除)。"
-            return
+        if ($contexts -cnotcontains $mkProfile) {
+            throw "宿主桥接已清理，但 kubeconfig 中找不到 minikube context『$mkProfile』，无法证明集群侧对象已删除。为避免假报 Down 成功，已中止；请先修复该 profile/context 或确认集群已销毁。"
         }
         # 只校验 context 名不够:别人 kubeconfig 里可能存在同名 context 却指向远端/生产集群。
         # 必须确认该 context 的 apiserver endpoint 是本机 minikube(回环 IP 或 minikube 节点 IP),
-        # 否则宁可跳过也绝不 delete,避免误删同名远端集群。
+        # 否则 fail-fast 且绝不 delete,避免误删同名远端集群或假报清理成功。
         if (-not (Test-KubeContextIsLocalMinikube $mkProfile)) {
-            Write-Warn "kube-context『$mkProfile』的 apiserver endpoint 不是本机 minikube(可能是同名远端/生产集群),为防误删已跳过集群侧删除(宿主桥接已清理)。"
-            return
+            throw "宿主桥接已清理，但 kube-context『$mkProfile』的 endpoint 不是本机 minikube(可能是同名远端/生产集群)。为防误删且避免假报 Down 成功，集群侧删除未执行。"
         }
         Write-Step "删除 k8s 业务服务 + 基础设施(context=$mkProfile)"
         # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)
         kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/30-fleet-hub.yaml') --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete hub Fleet'
         kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/20-fleet-battle.yaml') --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete battle Fleet'
         # in-cluster Envoy「DS 面」网关也是启动时 Apply-AgonesManifests 起的(本地专属),一并清理
         kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/16-ds-envoy.yaml') --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete in-cluster Envoy'
         kubectl --context $mkProfile delete -k $servicesDir --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete k8s services'
         kubectl --context $mkProfile delete -f $lokiYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete Loki'
         kubectl --context $mkProfile delete -f $infraYaml --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete k8s infra'
         Write-Info "minikube 仍在运行;彻底关:minikube stop"
         return
     }
 
     Write-Step "k8s 模式:minikube 本地集群"
 
+    # profile 钉死:本次运行的 minikube 全部操作(status/start,以及 Reset 的 delete)都用同一个 profile,
+    # 避免 delete 与 rebuild 目标漂移。
+    $mkProfile = Get-K8sManagedProfile
+
     # 1) minikube 起没起
-    minikube status *> $null
+    minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
-        Write-Info "启动 minikube(driver=docker)..."
-        minikube start --driver=docker --cpus=4 --memory=6144
+        Write-Info "启动 minikube(profile=$mkProfile,driver=docker)..."
+        minikube start -p $mkProfile --driver=docker --cpus=4 --memory=6144
         if ($LASTEXITCODE -ne 0) { throw "minikube 启动失败" }
     } else {
-        Write-Ok "minikube 已在运行"
+        Write-Ok "minikube 已在运行(profile=$mkProfile)"
     }
 
     # 上下文锁:本地 k8s 部署会 apply/删除大量对象,必须确认 current-context 就是本机 minikube,
     # 否则会把本地开发部署误发到用户 kubectl 当前指向的远端/生产集群。不匹配直接 fail-fast。
     $mkCtx = Resolve-MinikubeKubeContext
     $curCtx = (kubectl config current-context 2>$null)
-    if ($curCtx -ne $mkCtx) {
+    if ($curCtx -cne $mkCtx) {
         throw "当前 kubectl current-context『$curCtx』不是本机 minikube『$mkCtx』。为防止把本地 k8s 部署误发到远端/生产集群,已中止。请先执行:kubectl config use-context $mkCtx 再重跑。"
     }
+    # 只比对 context 名不够:别人 kubeconfig 里可能存在同名 context 却指向远端/生产集群。
+    # 必须确认该 context 的 apiserver endpoint 是本机 minikube(回环 / minikube 节点 IP),否则中止,
+    # 避免后续 kubectl apply 落到同名远端集群。
+    if (-not (Test-KubeContextIsLocalMinikube $mkCtx)) {
+        throw "kube-context『$mkCtx』的 apiserver endpoint 不是本机 minikube(疑似同名远端/生产集群)。为防把本地部署误发到远端,已中止。"
+    }
     Write-Ok "kube-context 已锁定本机 minikube:$mkCtx"
+    $kubectlContextArgs = @('--context', $mkCtx)
 
     Write-Step "[1/8] namespace"
-    kubectl apply -f (Join-Path $servicesDir '00-namespace.yaml')
+    kubectl @kubectlContextArgs apply -f (Join-Path $servicesDir '00-namespace.yaml')
     Assert-LastExit 'kubectl apply namespace'
 
     # DS advertise 地址:默认取本机局域网 IP,让内网其它机器的客户端能连到本机 DS(经容器版 UDP 中继回程)。
@@ -828,30 +939,30 @@ function Invoke-K8s {
     Write-Step "[2/8] 生成集群版配置 + ConfigMap(allocator=agones,DS advertise=$k8sAdvHost)"
     if ($script:K8sRelayBindHost -eq '0.0.0.0') {
         Write-Info "DS advertise=$k8sAdvHost(局域网),UDP 中继将监听 0.0.0.0。"
-        Write-Warn "内网多机联调前置:请确认本机防火墙已放行【入站 TCP 8443/8444 + 入站 UDP 7000-8000】,否则其它机器连不进 DS。"
+        Write-Warn "内网多机联调前置:请确认本机防火墙已放行【入站 TCP 8443 + 入站 UDP 7000-8000】,否则其它机器连不进客户端入口/DS。DS 面 8444 固定只绑本机。"
     }
     & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost $k8sAdvHost
-    kubectl create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
-        --dry-run=client -o yaml | kubectl apply -f -
+    kubectl @kubectlContextArgs create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-config'
-    kubectl create configmap pandora-mysql-init --from-file=$mysqlInit -n $K8sNamespace `
-        --dry-run=client -o yaml | kubectl apply -f -
+    kubectl @kubectlContextArgs create configmap pandora-mysql-init --from-file=$mysqlInit -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-mysql-init'
 
     Write-Step "[3/8] 基础设施(mysql/redis/zookeeper/kafka/etcd + loki/alloy 日志)"
-    kubectl apply -f $infraYaml
+    kubectl @kubectlContextArgs apply -f $infraYaml
     Assert-LastExit 'kubectl apply infra'
     # 日志采集(Loki + Alloy,infra.md §11.2):非关键路径,apply 失败只告警不阻断启动;
     # 也不等它 rollout(日志栈晚几十秒就绪不影响业务链路)。
-    kubectl apply -f $lokiYaml
+    kubectl @kubectlContextArgs apply -f $lokiYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "loki/alloy 日志栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/loki.yaml" }
     Write-Info "等待基础设施就绪(最多 180s)..."
-    kubectl rollout status deploy/mysql     -n $K8sNamespace --timeout=180s; Assert-LastExit 'mysql 就绪'
-    kubectl rollout status deploy/redis     -n $K8sNamespace --timeout=120s; Assert-LastExit 'redis 就绪'
-    kubectl rollout status deploy/etcd      -n $K8sNamespace --timeout=120s; Assert-LastExit 'etcd 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=180s; Assert-LastExit 'mysql 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=120s; Assert-LastExit 'redis 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/etcd      -n $K8sNamespace --timeout=120s; Assert-LastExit 'etcd 就绪'
     # zookeeper / kafka 必须就绪,否则 player/push/battle-result 会因连不上 kafka:9092 CrashLoop
-    kubectl rollout status deploy/zookeeper -n $K8sNamespace --timeout=120s; Assert-LastExit 'zookeeper 就绪'
-    kubectl rollout status deploy/kafka     -n $K8sNamespace --timeout=180s; Assert-LastExit 'kafka 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/zookeeper -n $K8sNamespace --timeout=120s; Assert-LastExit 'zookeeper 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/kafka     -n $K8sNamespace --timeout=180s; Assert-LastExit 'kafka 就绪'
 
     Write-Step "[4/8] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Build-DsImagesForMinikube
@@ -868,14 +979,14 @@ function Invoke-K8s {
     Sync-ImagesToMinikube -Images (Get-ServiceImages)
 
     Write-Step "[7/8] 部署业务服务"
-    kubectl apply -k $servicesDir
+    kubectl @kubectlContextArgs apply -k $servicesDir
     Assert-LastExit 'kubectl apply -k services'
     # 镜像 tag 固定为 :dev,重建/重 load 后 image 字符串不变 -> apply 报 unchanged,旧 Pod 不会换。
     # 按名强制滚动重启这 20 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
     # 确保跑的是刚 build 的新二进制。
     Write-Info "rollout restart 业务 Deployment(同 :dev tag 重建后强制换 Pod)..."
     foreach ($svc in (Get-ServiceList)) {
-        kubectl rollout restart deploy/$($svc.Name) -n $K8sNamespace
+        kubectl @kubectlContextArgs rollout restart deploy/$($svc.Name) -n $K8sNamespace
         Assert-LastExit "rollout restart $($svc.Name)"
     }
     # 等滚动完成:确认新 Pod 真的起来了。imagePullPolicy=IfNotPresent 在 Pod 创建时按 :dev tag
@@ -883,7 +994,7 @@ function Invoke-K8s {
     # 故 rollout 完成 == 新 Pod 必为新镜像(校验+重启+等待三步合一堵死"旧镜像旧 Pod"链路)。
     Write-Info "等待业务 Deployment 滚动完成(每个最多 180s)..."
     foreach ($svc in (Get-ServiceList)) {
-        kubectl rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
+        kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(新 Pod 未就绪,查:kubectl describe/logs)"
     }
 
@@ -894,16 +1005,19 @@ function Invoke-K8s {
     # 真 DS 闭环剩余的宿主侧步骤(port-forward 桥接 + docker envoy + udp-relay)直接接进一键启动。
     # DS 镜像已由 [4/8] Build-DsImagesForMinikube 直接构建进 minikube(宿主 docker 无该 tag),
     # 故传 -SkipImageLoad 跳过 e2e 的宿主->minikube image load。
-    # 用独立子进程跑,与 DS 镜像构建同一隔离理由;profile 跟随当前 active profile。
-    $mkProfile = Get-ActiveMinikubeProfile
+    # 用独立子进程跑,与 DS 镜像构建同一隔离理由;profile 使用本次运行固定值。
+    $mkProfile = Get-K8sManagedProfile
     $relayBind = if ($script:K8sRelayBindHost) { $script:K8sRelayBindHost } else { '127.0.0.1' }
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -RelayBindHost $relayBind
+    # k8s GameServer 经集群内 pandora-envoy 回连,宿主 DS 面永远无需对局域网开放。
+    # 显式覆盖父环境遗留值,不能只依赖 compose 默认值。
+    $env:PANDORA_DS_EDGE_BIND_HOST = '127.0.0.1'
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind
     Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
 
     Write-Host ""
     if ($relayBind -eq '0.0.0.0') {
         Write-Ok "真 DS 闭环就绪(局域网):内网其它机器客户端连 ${k8sAdvHost}:8443(TLS)即可登录进 Hub/战斗。"
-        Write-Info "若其它机器连不进,先查本机防火墙是否放行 入站 TCP 8443/8444 + 入站 UDP 7000-8000。"
+        Write-Info "若其它机器连不进,先查本机防火墙是否放行 入站 TCP 8443 + 入站 UDP 7000-8000。宿主 DS 面 8444 仅回环可达。"
     } else {
         Write-Ok "真 DS 闭环就绪:客户端连 127.0.0.1:8443(TLS)即可登录进 Hub/战斗(仅本机)。"
     }
@@ -914,8 +1028,26 @@ function Invoke-Online {
     $overlay     = Join-Path $ProjectRoot 'deploy/k8s/overlays/online'
     $overlayFile = Join-Path $overlay 'kustomization.yaml'
 
-    # 安全:确认当前 kube-context(线上误操作代价高;prod 再加一道确认)
-    $ctx = (kubectl config current-context) 2>$null
+    # 安全:Env 与预先配置的 context 一一绑定，不能只信用户临时传入的 -Env。
+    # 这样即使人在生产 context 上漏写 -Env prod，也会在任何变更前失败。
+    $ctx = (kubectl config current-context 2>$null | Out-String).Trim()
+    $expectedCtx = if ($Env -eq 'prod') { $ProdKubeContext } else { $TestKubeContext }
+    if ([string]::IsNullOrWhiteSpace($expectedCtx)) {
+        $paramName = if ($Env -eq 'prod') { '-ProdKubeContext / PANDORA_K8S_PROD_CONTEXT' } else { '-TestKubeContext / PANDORA_K8S_TEST_CONTEXT' }
+        throw "online -Env $Env 必须配置期望 context($paramName)，禁止仅凭 current-context 猜目标集群。"
+    }
+    $expectedCtx = $expectedCtx.Trim()
+    if ($ctx -cne $expectedCtx) {
+        throw "online -Env $Env 只允许 kube-context『$expectedCtx』，当前却是『$ctx』，已在变更前中止。"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($TestKubeContext) -and
+        -not [string]::IsNullOrWhiteSpace($ProdKubeContext) -and
+        $TestKubeContext.Trim() -ceq $ProdKubeContext.Trim()) {
+        throw 'TestKubeContext 与 ProdKubeContext 不得相同，否则环境隔离与生产二次确认可被绕过。'
+    }
+    # 后续所有命令直接使用映射值，而不是再次依赖可变 current-context。
+    $ctx = $expectedCtx
+    $kubectlContextArgs = @('--context', $ctx)
     Write-Step "online 模式:-Env $Env  目标 kube-context = $ctx"
     if ($Env -eq 'prod') {
         Write-Warn "⚠️ 这是【生产 kbs 集群】部署。请确认当前 context『$ctx』确为生产集群。"
@@ -924,18 +1056,29 @@ function Invoke-Online {
     }
     Write-Warn "这会对『$ctx』集群做变更。确认无误请输入该 context 名字以继续:"
     $confirm = Read-Host "  输入 context 名"
-    if ($confirm -ne $ctx) {
+    if ($confirm -cne $ctx) {
         Write-Err "输入与当前 context 不一致,已中止(防误操作)。"
         return
     }
     if ($Env -eq 'prod') {
         $p = Read-Host "  生产环境二次确认,请输入大写 PROD 继续"
-        if ($p -ne 'PROD') { Write-Err "生产二次确认失败,已中止。"; return }
+        if ($p -cne 'PROD') { Write-Err "生产二次确认失败,已中止。"; return }
     }
 
     if ($Down) {
-        Write-Step "删除 online 业务服务($Env)"
-        kubectl delete -k $overlay --ignore-not-found
+        Write-Step "删除 online 业务服务 + Agones Fleet/RBAC($Env)"
+        # 业务 overlay(pandora 命名空间 20 个 Deployment/Service/netpol 等)
+        kubectl @kubectlContextArgs delete -k $overlay --ignore-not-found
+        Assert-LastExit 'kubectl delete -k overlays/online'
+        # 启动时 Apply-AgonesManifests 还 apply 了 Fleet(default ns)与 allocator RBAC,否则 Down 后
+        # DS GameServer 继续占集群资源、孤儿 RBAC 残留(回应审核 P1:Down 只删业务 overlay)。
+        # ⚠️ 删 Fleet 会终止在跑的战斗/大厅 DS —— Down 本身就是下线动作,语义一致。
+        $downAgonesDir = Join-Path $ProjectRoot 'deploy/k8s/agones'
+        foreach ($f in @('20-fleet-battle.yaml', '30-fleet-hub.yaml', '10-rbac-allocator.yaml')) {
+            kubectl @kubectlContextArgs delete -f (Join-Path $downAgonesDir $f) --ignore-not-found
+            Assert-LastExit "kubectl delete $f"
+        }
+        Write-Ok "online($Env)已下线(业务 overlay + Fleet + RBAC)。"
         return
     }
 
@@ -943,7 +1086,7 @@ function Invoke-Online {
         throw "online 模式必须指定 -Registry 和 -Tag(Go 服务镜像来源)。"
     }
     if (-not $BattleDsImage -or -not $HubDsImage -or -not $DsGatewayAddr) {
-        throw "online 模式必须指定 -BattleDsImage / -HubDsImage / -DsGatewayAddr，避免把本地 Fleet 的 image/host.docker.internal 带到远端集群。"
+        throw "online 模式必须指定 -BattleDsImage / -HubDsImage / -DsGatewayAddr，避免把本地 dev 镜像或错误网关地址带到远端集群。"
     }
 
     if ($BuildPush) {
@@ -953,6 +1096,7 @@ function Invoke-Online {
             $local  = "pandora/$($svc.Name):dev"
             $remote = "$Registry/pandora/$($svc.Name):$Tag"
             docker tag $local $remote
+            Assert-LastExit "docker tag $local -> $remote"
             docker push $remote
             if ($LASTEXITCODE -ne 0) { throw "推送失败:$remote" }
         }
@@ -961,17 +1105,20 @@ function Invoke-Online {
     Write-Step "生成集群版配置 + ConfigMap(namespace $K8sNamespace,allocator=agones)"
     # 线上真集群:Pod IP 可路由,advertise 留空用 GameServer status.address 直连
     & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones
-    kubectl apply -f (Join-Path $ProjectRoot 'deploy/k8s/services/00-namespace.yaml')
-    kubectl create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
-        --dry-run=client -o yaml | kubectl apply -f -
+    Assert-LastExit 'gen_cluster_config(online)'
+    kubectl @kubectlContextArgs apply -f (Join-Path $ProjectRoot 'deploy/k8s/services/00-namespace.yaml')
+    Assert-LastExit 'kubectl apply 00-namespace'
+    kubectl @kubectlContextArgs create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
+        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
+    Assert-LastExit 'kubectl apply configmap pandora-config'
 
     Write-Step "apply Agones RBAC + Fleet(真 Linux DS)"
     # 线上 Agones 通常已由集群管理员预装;此处不自动 helm install,只 apply 业务 RBAC/Fleet
-    kubectl get ns agones-system *> $null
+    kubectl @kubectlContextArgs get ns agones-system *> $null
     if ($LASTEXITCODE -ne 0) {
         Write-Warn "未检测到 agones-system —— 线上 Agones 须由集群管理员预先安装,否则 Fleet/分配不可用。"
     }
-    Apply-AgonesManifests -BattleDsImage $BattleDsImage -HubDsImage $HubDsImage -DsGatewayAddr $DsGatewayAddr -DsGatewayTls $DsGatewayTls
+    Apply-AgonesManifests -BattleDsImage $BattleDsImage -HubDsImage $HubDsImage -DsGatewayAddr $DsGatewayAddr -DsGatewayTls $DsGatewayTls -KubeContext $ctx
 
     # 用 -Registry/-Tag 临时覆盖 overlay 占位镜像(try/finally 还原,保持仓库干净)
     $orig = Get-Content $overlayFile -Raw
@@ -979,13 +1126,16 @@ function Invoke-Online {
         $patched = $orig.Replace('registry.example.com', $Registry) -replace 'newTag: latest', "newTag: $Tag"
         [System.IO.File]::WriteAllText($overlayFile, $patched, (New-Object System.Text.UTF8Encoding($false)))
         Write-Step "kubectl apply -k overlays/online($Env)"
-        kubectl apply -k $overlay
+        kubectl @kubectlContextArgs apply -k $overlay
+        # 失败必须 fail-fast:否则下面照样打印「部署已提交」,把半吺子/失败的 apply 误报成功
+        # (回应审核 P1:apply 失败后仍打印部署成功)。finally 仍会还原 overlay 占位镜像。
+        Assert-LastExit 'kubectl apply -k overlays/online'
     } finally {
         [System.IO.File]::WriteAllText($overlayFile, $orig, (New-Object System.Text.UTF8Encoding($false)))
     }
 
     Write-Host ""
-    Write-Ok "online($Env)部署已提交。查看:kubectl get pods -n $K8sNamespace"
+    Write-Ok "online($Env)部署已提交。查看:kubectl --context $ctx get pods -n $K8sNamespace"
 }
 
 # ===== 共享:服务清单 / 镜像构建 =====
@@ -1277,19 +1427,23 @@ function Build-Images-Host {
 # k8s:minikube stop/重启只是停容器,集群状态+已 load 镜像都还在磁盘,minikube start 即恢复,Pod 自动重建。
 function Resume-K8s {
     Write-Step "k8s 快速恢复(电脑重启后:只拉起 minikube + 等 Pod,不重建镜像)"
-    minikube status *> $null
+    $mkProfile = Get-K8sManagedProfile
+    minikube -p $mkProfile status *> $null
     if ($LASTEXITCODE -ne 0) {
-        Write-Info "minikube 已停,minikube start 中(集群状态/镜像都在磁盘上,Pod 会自动恢复)..."
-        minikube start --driver=docker --cpus=4 --memory=6144
+        Write-Info "minikube 已停,minikube start 中(profile=$mkProfile;集群状态/镜像都在磁盘上,Pod 会自动恢复)..."
+        minikube start -p $mkProfile --driver=docker --cpus=4 --memory=6144
         if ($LASTEXITCODE -ne 0) { throw "minikube 启动失败(若集群已损坏,改用 -Reset 全新部署)" }
     } else {
-        Write-Ok "minikube 已在运行"
+        Write-Ok "minikube 已在运行(profile=$mkProfile)"
     }
     # 上下文锁:恢复流程也会 rollout restart/apply,必须确认 current-context 是本机 minikube。
     $mkCtx = Resolve-MinikubeKubeContext
     $curCtx = (kubectl config current-context 2>$null)
-    if ($curCtx -ne $mkCtx) {
+    if ($curCtx -cne $mkCtx) {
         throw "当前 kubectl current-context『$curCtx』不是本机 minikube『$mkCtx』。为防误操作远端集群,-Resume 已中止。请先 kubectl config use-context $mkCtx 再重试。"
+    }
+    if (-not (Test-KubeContextIsLocalMinikube $mkCtx)) {
+        throw "kube-context『$mkCtx』的 apiserver endpoint 不是本机 minikube(疑似同名远端/生产集群)。为防 -Resume 把清单发到远端,已中止。"
     }
     Write-Info "等待关键业务 Pod 就绪..."
     try {
@@ -1328,14 +1482,33 @@ function Resume-K8s {
     }
     Write-Ok "ConfigMap advertise 已刷新为 $resumeAdvHost,allocator 已重启生效。"
 
+    Write-Step "补部署 DS 面 Envoy + Fleet(让磁盘上的清单改动在恢复后生效)"
+    # -Resume 靠 minikube start 拉回的是「停机前」集群内对象;若期间改过 16-ds-envoy.yaml(如 :8444
+    # 路由白名单)或 Fleet 清单,光恢复只会拿回旧版本。这里幂等重 apply 补齐(回应审核 P#4:
+    # -Resume 不补 Envoy/Fleet)。Envoy 只在启动读一次静态配置,故 rollout restart 强制重读;
+    # Fleet 用 :dev 固定 tag,spec 不变则 apply=unchanged,不会打断在跑的 GameServer。
+    $resumeAgonesDir = Join-Path $ProjectRoot 'deploy/k8s/agones'
+    # 旧集群(部署于 16-ds-envoy 引入前)节点内可能还没有 Envoy 镜像;断网下 Pod pull 必失败。
+    # 先走三级来源(节点已有→宿主 load→联网 pull)把镜像备齐,再 apply(回应审核 P1:Resume 断网失败)。
+    Ensure-EnvoyImageInMinikube -MinikubeProfile $mkProfile
+    kubectl --context $mkCtx apply -f (Join-Path $resumeAgonesDir '16-ds-envoy.yaml'); Assert-LastExit 'apply 16-ds-envoy(恢复)'
+    kubectl --context $mkCtx rollout restart deploy/pandora-envoy -n $K8sNamespace; Assert-LastExit 'rollout restart pandora-envoy(恢复:重载 DS 面配置)'
+    kubectl --context $mkCtx rollout status  deploy/pandora-envoy -n $K8sNamespace --timeout=120s; Assert-LastExit 'pandora-envoy 恢复就绪'
+    # Fleet 清单自带 namespace: default,不加 -n,让清单里的命名空间生效。
+    foreach ($resumeFleet in @('20-fleet-battle.yaml', '30-fleet-hub.yaml')) {
+        kubectl --context $mkCtx apply -f (Join-Path $resumeAgonesDir $resumeFleet); Assert-LastExit "apply Fleet $resumeFleet(恢复)"
+    }
+    Write-Ok "DS 面 Envoy 已重载配置,Fleet 清单已同步。"
+
     Write-Step "宿主 Envoy 桥接 + UDP 中继(e2e_k8s.ps1)"
     # 重启后宿主 port-forward/envoy/relay 必然全丢,自动重建(DS 镜像还在 minikube 磁盘,跳过 load)。
-    $mkProfile = Get-ActiveMinikubeProfile
     $relayBind = if (-not [string]::IsNullOrWhiteSpace($resumeAdvHost) -and $resumeAdvHost -ne '127.0.0.1') { '0.0.0.0' } else { '127.0.0.1' }
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -RelayBindHost $relayBind
+    # 恢复路径同样锁死宿主 DS 面,避免继承用户环境中的 0.0.0.0。
+    $env:PANDORA_DS_EDGE_BIND_HOST = '127.0.0.1'
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind
     Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
     if ($relayBind -eq '0.0.0.0') {
-        Write-Ok "真 DS 闭环已恢复(局域网):内网其它机器客户端连 ${resumeAdvHost}:8443 即可(需防火墙放行 TCP 8443/8444 + UDP 7000-8000)。"
+        Write-Ok "真 DS 闭环已恢复(局域网):内网其它机器客户端连 ${resumeAdvHost}:8443 即可(需防火墙放行 TCP 8443 + UDP 7000-8000;宿主 8444 仅回环)。"
     } else {
         Write-Ok "真 DS 闭环已恢复:客户端连 127.0.0.1:8443 即可(仅本机)。"
     }
@@ -1350,7 +1523,7 @@ function Invoke-Resume {
             Invoke-Local
         }
         'battle' {
-            Write-Info "含战斗混合版恢复:重新拉起 17 业务容器 + 2 宿主 allocator。"
+            Write-Info "含战斗混合版恢复:重新拉起 18 业务容器 + 2 宿主 allocator。"
             Invoke-Battle
         }
         { $_ -in 'docker', 'intranet' } {
@@ -1360,12 +1533,12 @@ function Invoke-Resume {
             # 该环境变量要在 dev_up.ps1(起 envoy 的 infra compose)之前导出才生效。
             $lan = if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { $AdvertiseHost } else { Resolve-LanIp }
             if ($Mode -eq 'intranet') {
-                $env:PANDORA_EDGE_BIND_HOST = '0.0.0.0'
+                Set-EdgeBindHost '0.0.0.0'
                 if ([string]::IsNullOrWhiteSpace($lan)) {
-                    Write-Warn "未能解析内网 IPv4;Envoy 已绑 0.0.0.0,但请用 -AdvertiseHost 显式告知客户端连哪个地址。"
+                    Write-Warn "未能解析内网 IPv4;Envoy 客户端面已绑 0.0.0.0,但请用 -AdvertiseHost 显式告知客户端连哪个地址。"
                 }
             } else {
-                $env:PANDORA_EDGE_BIND_HOST = '127.0.0.1'
+                Set-EdgeBindHost '127.0.0.1'
             }
             & "$ScriptDir/dev_up.ps1"
             if ($LASTEXITCODE -ne 0) { throw "基础设施恢复失败(dev_up)" }
@@ -1373,7 +1546,8 @@ function Invoke-Resume {
             if ($LASTEXITCODE -ne 0) { throw "业务服务容器恢复失败" }
             Write-Ok "$Mode 容器已恢复(Envoy 绑定 $env:PANDORA_EDGE_BIND_HOST)。"
             if ($Mode -eq 'intranet' -and -not [string]::IsNullOrWhiteSpace($lan)) {
-                Write-Host "       内网地址  https://${lan}:8443 / ${lan}:8444" -ForegroundColor Green
+                Write-Host "       内网地址  https://${lan}:8443(客户端面)" -ForegroundColor Green
+                if ($ExposeDsFace) { Write-Host "       DS 面      ${lan}:8444(-ExposeDsFace 已开放)" -ForegroundColor Green }
             }
         }
         'online' { Write-Err "online 是远端集群,Pod 由集群自管,无需本机恢复。"; exit 1 }
@@ -1385,10 +1559,19 @@ function Invoke-Reset {
     Write-Step "$Mode 一键重置:先彻底清理,再全新启动"
     switch ($Mode) {
         'k8s' {
-            # 只销毁当前 active profile(本机 minikube),显式带 -p 避免误删默认 'minikube' 集群或别的 profile。
-            $mkProfile = Get-ActiveMinikubeProfile
+            # 只销毁本次运行钉死的 minikube profile(与 Invoke-K8s 重建目标严格一致,避免删 A 建 B)。
+            # minikube delete -p 只作用于本地 minikube,不触碰远端集群;但仍先确认该 profile 的 kube-context
+            # 指向本机 minikube(而非同名远端集群),再删,防「Get-ActiveMinikubeProfile 回退 minikube」误删默认集群。
+            $mkProfile = Get-K8sManagedProfile
+            $contexts = @(kubectl config get-contexts -o name 2>$null)
+            if ($contexts -ccontains $mkProfile -and -not (Test-KubeContextIsLocalMinikube $mkProfile)) {
+                throw "reset 目标『$mkProfile』的 kube-context 指向的不是本机 minikube(疑似同名远端/生产集群),为防误删已中止。"
+            }
+            # kube-context 缺失不等于本地 profile 已不存在(损坏/半删除集群常见)。minikube delete -p
+            # 只操作本机 profile,此时仍要执行，才能兑现 Reset 的“彻底清掉再重建”语义。
             Write-Warn "将 minikube delete -p $mkProfile(仅销毁本机集群『$mkProfile』,已 load 镜像一并清掉),然后全新部署。"
             minikube delete -p $mkProfile 2>$null
+            Assert-LastExit "minikube delete -p $mkProfile"
             Invoke-K8s
         }
         'local' {
@@ -1420,7 +1603,7 @@ function Show-Status {
     switch ($Mode) {
         'local'  { & "$ScriptDir/run_services.ps1" -Action status }
         'battle' {
-            Write-Step "业务服务容器(17 个,不含 ds/hub allocator)"
+            Write-Step "业务服务容器(18 个,不含 ds/hub allocator)"
             docker compose -f $ComposeServices ps
             Write-Step "宿主 allocator + 其它宿主 go 进程"
             & "$ScriptDir/run_services.ps1" -Action status
