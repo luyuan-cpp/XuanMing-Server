@@ -152,27 +152,54 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 # ---- 可选:先构建业务镜像 ----
 if ($Build) {
-    Write-Step "构建 20 个业务镜像(离线优先:本地 golang 基础镜像 + docker.io 源)"
+    Write-Step "构建 20 个业务镜像(BuildMode=$BuildMode;离线优先:本地基础镜像 + docker.io 源)"
 
-    # Dockerfile 编译阶段用 golang:${GO_VERSION}(默认 1.26.5),运行阶段是 scratch(不需 alpine)。
-    # 离线机器拉不到 golang 时,若本地已有等价的 golang 镜像,自动打成所需 tag 直接复用。
-    $wantGo = 'golang:1.26.5'
-    docker image inspect $wantGo *> $null
-    if ($LASTEXITCODE -ne 0) {
-        $localGo = (docker images --format '{{.Repository}}:{{.Tag}}' | Select-String '^golang:' | Select-Object -First 1)
-        if ($localGo) {
-            $src = "$localGo".Trim()
-            Write-Warn "本地无 $wantGo,发现 $src,自动打标 $wantGo 复用(避免联网拉取)。"
-            docker tag $src $wantGo
-            docker tag $src "docker.io/library/golang:1.26.5"
-        } else {
-            Write-Warn "本地无任何 golang 基础镜像,构建时需联网拉取 golang:1.26.5;若网络受限会失败。"
+    # incontainer(方案 A):容器内跑 `go build`,必须用 golang:1.26.5,旧 toolchain 会拒编 `go 1.26.5` module。
+    # host(方案 B):宿主用本机 go 1.26.5 交叉编译,容器里的 golang 镜像只被 Dockerfile.prebuilt 用来
+    #   取 CA 证书 / 时区(不编译),版本无所谓 —— 由 Build-Images-Host 自行打标任意本地 golang 复用。
+    # 因此严格的「golang 镜像版本 >= 1.26.5」校验只在 incontainer 模式做;host 模式不设此门槛,
+    # 否则本机只有 1.26.4 golang 镜像时会误挡宿主编译(宿主 go 已是 1.26.5,编译正确)。
+    if ($BuildMode -eq 'incontainer') {
+        $wantGo = 'golang:1.26.5'
+        $wantGoVersion = [version]'1.26.5'
+
+        # 从 `go version` 输出解析出主版本号(形如 "go version go1.26.5 linux/amd64" -> 1.26.5)。
+        function Get-GoImageVersion([string]$image) {
+            $out = (docker run --rm --entrypoint go $image version 2>$null | Out-String)
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($out)) { return $null }
+            if ($out -match 'go(\d+)\.(\d+)(?:\.(\d+))?') {
+                $patch = if ($Matches[3]) { $Matches[3] } else { '0' }
+                try { return [version]"$($Matches[1]).$($Matches[2]).$patch" } catch { return $null }
+            }
+            return $null
         }
-    } else {
-        docker tag $wantGo "docker.io/library/golang:1.26.5" 2>$null
+
+        docker image inspect $wantGo *> $null
+        if ($LASTEXITCODE -ne 0) {
+            # 逐个候选 golang 镜像实测其 `go version`,只接受 >= 1.26.5 的。
+            $candidates = @(docker images --format '{{.Repository}}:{{.Tag}}' | Select-String '^golang:' | ForEach-Object { "$_".Trim() })
+            $picked = $null
+            foreach ($cand in $candidates) {
+                $ver = Get-GoImageVersion $cand
+                if ($ver -and $ver -ge $wantGoVersion) { $picked = $cand; break }
+                elseif ($ver) { Write-Warn "本地 $cand 的 Go 版本 $ver < $wantGoVersion,跳过(不能冒充 $wantGo)。" }
+            }
+            if ($picked) {
+                Write-Warn "本地无 $wantGo,发现 $picked(Go 版本满足 >= $wantGoVersion),自动打标 $wantGo 复用(避免联网拉取)。"
+                docker tag $picked $wantGo
+                docker tag $picked "docker.io/library/golang:1.26.5"
+            } else {
+                Write-Err "本地无 $wantGo,且没有任何 >= $wantGoVersion 的 golang 镜像可复用。"
+                Write-Err "请先 docker pull golang:1.26.5(或在能联网的机器上 pull 后 docker save/load 过来),否则容器内 `go 1.26.5` 编译会失败。"
+                Write-Err "提示:本机已装 go 1.26.5 时,可改用 -BuildMode host(宿主编译,不需要容器内 golang 1.26.5)。"
+                exit 1
+            }
+        } else {
+            docker tag $wantGo "docker.io/library/golang:1.26.5" 2>$null
+        }
     }
 
-    # 用本地 golang(docker.io 源,已在本地不会真的联网)+ goproxy.cn 拉 go 模块。
+    # 基础镜像仓库 + go 模块代理(host / incontainer 都用):本地已有镜像不会真的联网。
     if (-not $env:PANDORA_BASE_REGISTRY) { $env:PANDORA_BASE_REGISTRY = 'docker.io' }
     if (-not $env:PANDORA_GOPROXY)       { $env:PANDORA_GOPROXY       = 'https://goproxy.cn,direct' }
 
