@@ -35,6 +35,122 @@ func newTestAllocator(t *testing.T, serverURL string) *AgonesGameServerAllocator
 	return a
 }
 
+// TestWatchedFleets 校验容量巡检盯的 Fleet 集合:通用池在前 + 专属池去重按字典序。
+func TestWatchedFleets(t *testing.T) {
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: "http://127.0.0.1:1",
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{
+			{MapID: 7, FleetName: "songlin-fleet"},
+			{MapID: 8, FleetName: "arena-fleet"},
+			{MapID: 9, FleetName: "battle-fleet"}, // 与通用池重名 → 去重
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+	got := a.WatchedFleets()
+	want := []string{"battle-fleet", "arena-fleet", "songlin-fleet"}
+	if len(got) != len(want) {
+		t.Fatalf("WatchedFleets len: got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("WatchedFleets[%d]: got %q want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestListFleetCapacities_OK 解析 Fleet status 容量快照,并对每个受管 Fleet 各发一次 GET。
+func TestListFleetCapacities_OK(t *testing.T) {
+	byFleet := map[string]map[string]any{
+		"battle-fleet":  {"replicas": 10, "readyReplicas": 3, "allocatedReplicas": 7},
+		"songlin-fleet": {"replicas": 4, "readyReplicas": 0, "allocatedReplicas": 4},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method: got %s want GET", r.Method)
+		}
+		// 路径尾段是 fleet 名
+		parts := strings.Split(r.URL.Path, "/")
+		fleet := parts[len(parts)-1]
+		st, ok := byFleet[fleet]
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": st})
+	}))
+	defer srv.Close()
+
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: srv.URL,
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+
+	caps, err := a.ListFleetCapacities(context.Background())
+	if err != nil {
+		t.Fatalf("ListFleetCapacities: %v", err)
+	}
+	if len(caps) != 2 {
+		t.Fatalf("caps len: got %d want 2", len(caps))
+	}
+	got := map[string]FleetCapacity{}
+	for _, c := range caps {
+		got[c.Fleet] = c
+	}
+	if c := got["battle-fleet"]; c.Replicas != 10 || c.Ready != 3 || c.Allocated != 7 {
+		t.Errorf("battle-fleet: got %+v want replicas=10 ready=3 allocated=7", c)
+	}
+	if c := got["songlin-fleet"]; c.Replicas != 4 || c.Ready != 0 || c.Allocated != 4 {
+		t.Errorf("songlin-fleet: got %+v want replicas=4 ready=0 allocated=4", c)
+	}
+}
+
+// TestListFleetCapacities_PartialFailure 单 Fleet 5xx 不影响其余,错误经 error 汇总返回。
+func TestListFleetCapacities_PartialFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "songlin-fleet") {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": map[string]any{"replicas": 5, "readyReplicas": 5, "allocatedReplicas": 0},
+		})
+	}))
+	defer srv.Close()
+
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: srv.URL,
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+
+	caps, err := a.ListFleetCapacities(context.Background())
+	if err == nil {
+		t.Fatal("expected aggregated error for failing fleet, got nil")
+	}
+	if len(caps) != 1 || caps[0].Fleet != "battle-fleet" {
+		t.Fatalf("expected 1 successful cap(battle-fleet), got %+v", caps)
+	}
+}
+
 func TestNewAgonesGameServerAllocator_RequiresFleet(t *testing.T) {
 	if _, err := NewAgonesGameServerAllocator(conf.AgonesConf{Enabled: true}); err == nil {
 		t.Fatal("expected error when fleet_name empty, got nil")

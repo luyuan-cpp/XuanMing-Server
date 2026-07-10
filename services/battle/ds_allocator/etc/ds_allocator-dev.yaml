@@ -94,6 +94,11 @@ agones:
   ca_path: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"     # in-cluster 默认
   insecure_skip_tls_verify: false  # in-cluster=false;minikube 外联自签时本地临时置 true,勿提交
   allocate_timeout: "5s"
+  # 容量巡检(K8s 快到上限预警,2026-07-10):定期 GET 通用 Fleet + 各 map_fleets 专属 Fleet 的
+  # status(replicas/ready/allocated),暴露 pandora_ds_allocator_fleet_* 指标,并在接近上限时打
+  # 预警日志(ds_fleet_capacity_near_limit / ds_fleet_capacity_exhausted)。仅 mode=agones 生效。
+  capacity_watch_interval: "30s"   # 巡检间隔;设负值禁用
+  capacity_warn_ratio: 0.8         # allocated/replicas ≥ 此比例 → 预警;ready==0 → exhausted 报错级
   # map_fleets(可选,标准混合形态):按 map_id 路由到「专属预热 Fleet」——该 Fleet 的 env
   # 烤死目标 umap + 战斗 GameMode,Pod 预热时已加载好图,分配即可玩(零 ServerTravel 延迟)。
   # 分配请求生成有序 selectors:[专属 Fleet, 上面的 fleet_name],Agones 按序尝试:

@@ -189,6 +189,16 @@ type AgonesConf struct {
 
 	// AllocateTimeout 单次 allocate / release REST 调用超时(默认 5s)。
 	AllocateTimeout config.Duration `yaml:"allocate_timeout,omitempty" json:"allocate_timeout,omitempty"`
+
+	// CapacityWatchInterval Fleet 容量巡检间隔(默认 30s;设负值禁用巡检)。
+	// 巡检定期 GET 通用 Fleet + 各 map_fleets 专属 Fleet 的 status(replicas/ready/allocated),
+	// 暴露 pandora_ds_allocator_fleet_* 指标,并在接近上限时打预警日志(见 CapacityWarnRatio)。
+	CapacityWatchInterval config.Duration `yaml:"capacity_watch_interval,omitempty" json:"capacity_watch_interval,omitempty"`
+
+	// CapacityWarnRatio 容量预警阈值,取值 (0,1](默认 0.8)。
+	// allocated/replicas ≥ 此比例 → Warn 日志 ds_fleet_capacity_near_limit;
+	// ready==0(完全打满/无可分配)→ Error 日志 ds_fleet_capacity_exhausted。
+	CapacityWarnRatio float64 `yaml:"capacity_warn_ratio,omitempty" json:"capacity_warn_ratio,omitempty"`
 }
 
 // AgonesMapFleet 是 map_id → 专属预热 Fleet 的一条路由。
@@ -301,6 +311,12 @@ func (c *Config) Defaults() {
 	}
 	if c.Agones.AllocateTimeout == 0 {
 		c.Agones.AllocateTimeout = config.Duration(5 * time.Second)
+	}
+	if c.Agones.CapacityWatchInterval == 0 {
+		c.Agones.CapacityWatchInterval = config.Duration(30 * time.Second)
+	}
+	if c.Agones.CapacityWarnRatio <= 0 || c.Agones.CapacityWarnRatio > 1 {
+		c.Agones.CapacityWarnRatio = 0.8
 	}
 	// 路径字段支持环境变量展开 + 跨机器兜底,便于策划机移植(Client 目录可能不在配置写死的盘符):
 	//  1. 先做 ${VAR}/$VAR 展开(绝对路径不含 $,dev 配置原样保留);

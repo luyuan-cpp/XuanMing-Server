@@ -20,10 +20,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -220,6 +222,77 @@ func (a *AgonesGameServerAllocator) Release(ctx context.Context, podName string)
 			"agones: release %s http %d: %s", podName, status, truncate(respBytes, 256))
 	}
 	return nil
+}
+
+// ── Fleet 容量巡检(K8s 快上限预警,2026-07-10)──────────────────────────────
+
+// FleetCapacity 一个 Agones Fleet 的容量快照(取自 Fleet status 子对象)。
+type FleetCapacity struct {
+	Fleet     string // Fleet 名
+	Replicas  uint32 // status.replicas:当前总副本数(容量上限)
+	Ready     uint32 // status.readyReplicas:空闲可分配
+	Allocated uint32 // status.allocatedReplicas:已被对局占用
+}
+
+// fleetStatusResponse 只声明容量巡检用到的 Fleet status 字段。
+type fleetStatusResponse struct {
+	Status struct {
+		Replicas          uint32 `json:"replicas"`
+		ReadyReplicas     uint32 `json:"readyReplicas"`
+		AllocatedReplicas uint32 `json:"allocatedReplicas"`
+	} `json:"status"`
+}
+
+// WatchedFleets 返回容量巡检要盯的 Fleet 集合:通用池 fleetName + 全部 map_fleets 专属预热池
+// (去重;通用池在前,专属池按名字典序,保证顺序稳定)。
+func (a *AgonesGameServerAllocator) WatchedFleets() []string {
+	out := make([]string, 0, 1+len(a.mapFleets))
+	seen := map[string]bool{a.fleetName: true}
+	out = append(out, a.fleetName)
+	dedicated := make([]string, 0, len(a.mapFleets))
+	for _, name := range a.mapFleets {
+		if !seen[name] {
+			seen[name] = true
+			dedicated = append(dedicated, name)
+		}
+	}
+	sort.Strings(dedicated)
+	return append(out, dedicated...)
+}
+
+// ListFleetCapacities GET 每个受管 Fleet 的 status,返回容量快照。
+// 单个 Fleet 查询失败不影响其余(部分成功也返回),错误经 errors.Join 汇总供上层打日志。
+func (a *AgonesGameServerAllocator) ListFleetCapacities(ctx context.Context) ([]FleetCapacity, error) {
+	var (
+		out  []FleetCapacity
+		errs []error
+	)
+	for _, fleet := range a.WatchedFleets() {
+		url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/fleets/%s",
+			a.apiServer, a.namespace, fleet)
+		respBytes, status, err := a.do(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("agones: get fleet %s: %w", fleet, err))
+			continue
+		}
+		if status < 200 || status >= 300 {
+			errs = append(errs, fmt.Errorf("agones: get fleet %s http %d: %s",
+				fleet, status, truncate(respBytes, 256)))
+			continue
+		}
+		var resp fleetStatusResponse
+		if err := json.Unmarshal(respBytes, &resp); err != nil {
+			errs = append(errs, fmt.Errorf("agones: decode fleet %s: %w", fleet, err))
+			continue
+		}
+		out = append(out, FleetCapacity{
+			Fleet:     fleet,
+			Replicas:  resp.Status.Replicas,
+			Ready:     resp.Status.ReadyReplicas,
+			Allocated: resp.Status.AllocatedReplicas,
+		})
+	}
+	return out, errors.Join(errs...)
 }
 
 // do 发一次带鉴权的 REST 请求,返回 (body, statusCode, transportErr)。

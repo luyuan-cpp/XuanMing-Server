@@ -61,6 +61,13 @@
   对局域网开放；未鉴权的宿主 DS 面 8444、admin 9901、基础设施与 20 个业务 gRPC 发布端口默认
   固定回环（特殊 Linux dev 环境须显式覆盖）。安全残留：方法白名单和
   NetworkPolicy 不等于 DS 身份认证，生产仍需 mTLS/ext_authz/短时效 DS token 并绑定 pod/match。
+- 2026-07-10:**战斗 DS 并发容量巡检落地**——`ds_allocator` 在 `mode=agones` 时定期读取通用 Fleet
+  与 `map_fleets` 专属 Fleet 的 `replicas/ready/allocated`，暴露
+  `pandora_ds_allocator_fleet_{replicas,ready,allocated,usage_ratio}` 指标；达到配置水位时输出
+  `ds_fleet_capacity_near_limit` / `ds_fleet_capacity_exhausted` 结构化日志，并以状态变化和 5 分钟
+  重报间隔降噪。新增 `capacity_watch_interval`（默认 30s，负值禁用）与
+  `capacity_warn_ratio`（默认 0.8），dev 配置和集群配置生成模板同步；单元测试覆盖容量解析、
+  部分 Fleet 查询失败、阈值状态机与重复告警降噪。
 
 ## 已完成里程碑
 

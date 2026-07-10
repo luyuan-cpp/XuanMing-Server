@@ -104,6 +104,7 @@ func main() {
 	//   - mode=local  → 本机拉起 Windows DS 进程(Windows 单机自测)
 	//   - mode=mock   → Mock 确定性假地址(无真实 DS,离线联调)
 	var allocator biz.GameServerAllocator
+	var agonesAlloc *data.AgonesGameServerAllocator // 仅 mode=agones 非空,供 Fleet 容量巡检
 	switch cfg.Mode {
 	case conf.ModeAgones:
 		ag, aerr := data.NewAgonesGameServerAllocator(cfg.Agones)
@@ -113,6 +114,7 @@ func main() {
 			os.Exit(1)
 		}
 		allocator = ag
+		agonesAlloc = ag
 		helper.Infow("msg", "agones_allocator_ready",
 			"api_server", cfg.Agones.APIServer, "namespace", cfg.Agones.Namespace, "fleet", cfg.Agones.FleetName)
 	case conf.ModeLocal:
@@ -186,6 +188,20 @@ func main() {
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
 	defer sweepCancel()
 	go uc.RunHeartbeatSweep(sweepCtx)
+
+	// 6.1 Fleet 容量巡检(仅 agones 模式):定期 GET Fleet status → 暴露
+	// pandora_ds_allocator_fleet_* 指标,容量快到上限时打预警日志
+	// (ds_fleet_capacity_near_limit / ds_fleet_capacity_exhausted),让运维在打满前扩 Fleet。
+	// capacity_watch_interval 设负值可禁用(NewCapacityWatcher 返 nil)。
+	if agonesAlloc != nil {
+		if watcher := biz.NewCapacityWatcher(agonesAlloc, cfg.Agones); watcher != nil {
+			go watcher.Run(sweepCtx)
+			helper.Infow("msg", "fleet_capacity_watch_enabled",
+				"interval", cfg.Agones.CapacityWatchInterval.String(),
+				"warn_ratio", cfg.Agones.CapacityWarnRatio,
+				"fleets", agonesAlloc.WatchedFleets())
+		}
+	}
 
 	helper.Infow(
 		"msg", "service_ready",
