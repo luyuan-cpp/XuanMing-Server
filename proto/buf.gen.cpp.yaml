@@ -14,6 +14,14 @@
 
 version: v2
 
+# proto2mysql 的 option 定义仅供后端建表使用,与 UE 客户端无关。
+# 但 data_service.proto `import "proto2mysql/proto2mysql_option.proto"`,C++ 代码生成会在
+# data_service.pb.h 里发出 `#include "proto2mysql/proto2mysql_option.pb.h"`——若把 proto2mysql
+# 排除在生成之外,该头文件缺失会导致 UE 编译直接失败。因此必须一并生成 proto2mysql option 头
+# (只是扩展定义,UE 侧无害),不能 exclude_paths。
+inputs:
+  - directory: .
+
 plugins:
   - remote: buf.build/protocolbuffers/cpp:v35.0
     out: gen/cpp

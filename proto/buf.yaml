@@ -31,7 +31,10 @@ lint:
     - ENUM_VALUE_PREFIX
     # ErrCode 枚举的 0 值不强制叫 ERR_CODE_UNSPECIFIED,我们用 OK
     - ENUM_ZERO_VALUE_SUFFIX
-
+  ignore:
+    # vendored 第三方 option 定义(package proto2mysql 无版本后缀,字段号固定),
+    # 不适用 Pandora 的 STANDARD 风格,整文件豁免 lint
+    - proto2mysql/proto2mysql_option.proto
 breaking:
   use:
     - FILE

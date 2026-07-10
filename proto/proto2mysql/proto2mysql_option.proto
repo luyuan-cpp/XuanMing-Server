@@ -1,0 +1,43 @@
+// proto2mysql 建表选项定义(vendored from github.com/luyuancpp/proto2mysql v0.0.28
+// proto/proto2mysql_option.proto)。
+//
+// 为什么 vendor 到本仓库:
+//   - data_service 用 proto2mysql v0.0.28 的 RegisterAllTables 自动注册表,
+//     它靠扫描 proto 描述符里的 option((proto2mysql.db)=true + (proto2mysql.table_name))
+//     来识别"哪些 message 建表",因此 data_service.proto 必须 import 本文件并声明 option。
+//   - buf 需要能解析该 import,故把 option 定义放进本 buf module。
+//   - 本文件仅供 data_service.proto 声明建表元数据;go 侧生成到
+//     proto/gen/go/proto2mysql,由 store.go blank-import 触发扩展注册
+//     (让运行时能把 data_service 描述符上的 option 解析为已知扩展)。
+//
+// 约束:字段编号(500000~600100)必须与上游一致,改动会导致 RegisterAllTables 读不到 option。
+// buf lint 对本文件豁免(package 无版本后缀,见 buf.yaml lint.ignore)。
+
+syntax = "proto3";
+
+package proto2mysql;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.FileOptions {
+  // 标记本 .proto 文件用于 proto2mysql 建表(文件级圈定"哪些文件参与自动扫描")。
+  optional bool db = 500000;
+}
+
+extend google.protobuf.MessageOptions {
+  // 表名(必填:声明了才视为一张表)
+  optional string table_name = 500001;
+  // 主键,逗号分隔 = 联合主键
+  optional string primary_key = 500002;
+  // 自增字段名
+  optional string auto_increment_key = 500006;
+  // 普通索引:分号分隔多个索引,每个索引内逗号分隔 = 联合索引
+  optional string index = 500011;
+  // 唯一键,逗号分隔 = 联合唯一键
+  optional string unique_key = 500012;
+}
+
+extend google.protobuf.FieldOptions {
+  // 该字段对应的列允许为 NULL(默认 NOT NULL)
+  optional bool nullable = 600100;
+}

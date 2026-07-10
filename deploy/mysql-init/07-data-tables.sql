@@ -2,7 +2,7 @@
 --
 -- ⚠️ 本文件不再建表:player_data 的 schema 唯一来源是
 --    proto/pandora/data_service/v1/data_service.proto 的 PlayerData message,
---    data_service 启动时经 proto2mysql CreateOrUpdateTable 按 pb 字段自动
+--    data_service 启动时经 proto2mysql RegisterAllTables 注册 + SyncAllTables 按 pb 字段自动
 --    建表/同步表结构(表不存在则 CREATE,存在则补缺列/对齐类型,不删多余列)。
 --
 -- 约定(不变):

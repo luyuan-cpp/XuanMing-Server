@@ -20,7 +20,7 @@ require (
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/luyuancpp/pandora/pkg v0.0.0
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
-	github.com/luyuancpp/proto2mysql v0.0.22
+	github.com/luyuancpp/proto2mysql v0.0.28
 	github.com/redis/go-redis/v9 v9.16.0
 	google.golang.org/protobuf v1.36.11
 )

@@ -194,7 +194,7 @@ MySQL 表自动映射,提供 CRUD,无需手写 SQL。
 
 ### 核心 API 速查
 
-- 表结构:`CreateOrUpdateTable`、`UpdateTableField`、`IsTableExists`
+- 表结构:`RegisterAllTables` / `SyncAllTables`(v0.0.28 自动扫描注册 + 批量建表/同步,data_service 用此路径)、`CreateOrUpdateTable`(单表)、`UpdateTableField`、`IsTableExists`
 - 插入:`Insert`、`BatchInsert`、`InsertOnDupUpdate`、`Save`(REPLACE)
 - 查询:`FindOneByKV`、`FindOneByWhereWithArgs`、`FindAll`、`FindAllByWhereWithArgs`
 - 更新:`Update`(按主键)

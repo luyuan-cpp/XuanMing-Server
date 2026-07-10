@@ -21,7 +21,7 @@
 
 | 服务 | 权威存储 | 是否已有 Redis 缓存 | 现状说明 |
 |---|---|---|---|
-| data_service | MySQL(pandora_player,版本乐观锁 blob) | ✅ cache-aside | Ping 失败降级直连,已闭环 |
+| data_service | MySQL(pandora_player,版本乐观锁数据) | 🧪 cache-aside 开发实现已闭环，**未正式上线** | Ping 失败降级直连；当前仅本地开发/minikube 验证 |
 | account/player | MySQL(pandora_player) | ❌ 裸连 | 玩家档案 / 领奖记录 |
 | economy/inventory | MySQL(pandora_trade) | ❌ 裸连 | `FOR UPDATE` + 幂等流水,事务权威 |
 | economy/auction | MySQL(pandora_auction)+ Redis 订单簿 | ✅(订单簿already) | 读加速层已在,成交权威在 MySQL |

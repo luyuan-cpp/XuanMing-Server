@@ -46,11 +46,13 @@ func (s *DataService) ReadPlayer(ctx context.Context, req *datav1.ReadPlayerRequ
 }
 
 // WritePlayer 乐观锁版本写。版本不匹配 → ERR_DATA_VERSION_MISMATCH。
+// 更新(data.version>0)必须带非空 update_mask,只更新掩码内的业务列(滚动升级时旧副本不清零新列);
+// 空掩码更新 → ERR_INVALID_ARG。新建(version==0)整条 INSERT,忽略掩码。
 func (s *DataService) WritePlayer(ctx context.Context, req *datav1.WritePlayerRequest) (*datav1.WritePlayerResponse, error) {
 	if req.GetData() == nil || req.GetData().GetPlayerId() == 0 {
 		return &datav1.WritePlayerResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	newVersion, err := s.uc.WritePlayer(ctx, req.GetData())
+	newVersion, err := s.uc.WritePlayer(ctx, req.GetData(), req.GetUpdateMask().GetPaths())
 	if err != nil {
 		return &datav1.WritePlayerResponse{Code: toProtoCode(err)}, nil
 	}

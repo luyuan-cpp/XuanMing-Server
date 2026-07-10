@@ -109,10 +109,8 @@ github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+
 github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0/go.mod h1:zJYVVT2jmtg6P3p1VtQj7WsuWi/y4VnjVBn7F8KPB3I=
 github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a h1:N9zuLhTvBSRt0gWSiJswwQ2HqDmtX/ZCDJURnKUt1Ik=
 github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a/go.mod h1:JKx41uQRwqlTZabZc+kILPrO/3jlKnQ2Z8b7YiVw5cE=
-github.com/luyuancpp/proto2mysql v0.0.22 h1:8JGQfjXuiv/HZ7IJ3q73jaGYQQ6IdHMN7+Qtmehj4hg=
-github.com/luyuancpp/proto2mysql v0.0.22/go.mod h1:ga7FUtahPvWiERaEG5UbRRv4pamT9XAs2v5FKybnSO4=
-github.com/luyuancpp/protooption v0.0.21 h1:QdkreYCG2FMZhBrfxmBKz5bxSDnneUkCzYDZalqp8rg=
-github.com/luyuancpp/protooption v0.0.21/go.mod h1:uNz9kXwuEqmgeloQ96j+J0RNMLsDIKNN6sVNaxBZuWk=
+github.com/luyuancpp/proto2mysql v0.0.28 h1:9iwSPgq/Z0LvEz/MN/O1DJJhN+Y5l9LmUADKTl0pBYQ=
+github.com/luyuancpp/proto2mysql v0.0.28/go.mod h1:090lbeAkv2cZ++KKKNpVaaP89Z4cQe0n9/ZrGN+saVQ=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/pierrec/lz4/v4 v4.1.21 h1:yOVMLb6qSIDP67pl/5F7RepeKYu/VmTyEXvuMI5d9mQ=

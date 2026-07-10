@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|---|
 | 1 | login | 50001 | 无 | mysql + redis | (生产 login.event) | ✅ W2 ③(mock,W3 接 mysql/redis) |
 | 2 | player | 50002 | 无 | mysql + redis | player.update | ✅ W4 ④(MMR 写回 + GetMMR reader) |
-| 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | ✅ 2026-06-16(player_data 版本化 blob + cache-aside 网关,内网) |
+| 3 | data_service | 50003 | 无 | mysql + redis | (写穿层) | 🧪 已实现供本地开发/minikube 验证，**未正式上线**、无有效历史数据 |
 | 4 | friend | 50004 | 弱(friend.event 推送) | mysql | pandora.friend.event | ✅ 2026-06-15(好友请求/接受/列表/拉黑 + locator 在线状态) |
 | 5 | chat | 50005 | 弱 | mysql(私聊历史)+ kafka | chat.{world,team,private,guild,group} | ✅ 2026-06-27(五频道 + 内容校验 + 私聊落库 + team/guild/group fan-out,公会/群即时不落库) |
 | 6 | player_locator | 50006 | 强 | redis | locator.update | ✅ W3 ⑤(W4 ⑦ matchmaker 上报 MATCHING/BATTLE) |
@@ -91,21 +91,26 @@ UpdateMMR(player_id, delta, reason, idempotency_key) → new_mmr
 
 ### 2.3 data_service
 
+**上线状态**：截至 2026-07-09 未正式上线，仅用于本地开发/minikube 验证；当前无外部调用方，
+也没有需要保留的旧协议、Redis 缓存或 `player_data` 表有效数据。
+
 **职责**:
-- **玩家数据统一读写网关**(保证 cache + db + kafka 三处一致)
+- **玩家数据统一读写网关**(cache-aside 保证 cache + db 一致;不接 kafka)
 - 缓存失效广播
 
 **对外 RPC**:
 ```
 ReadPlayer(player_id) → cached or db
-WritePlayer(player_id, fields, version) → new_version  // 乐观锁
+WritePlayer(data, update_mask) → new_version  // 乐观锁;更新(version>0)必须带非空 update_mask 仅更新指定列(空掩码→ERR_INVALID_ARG,防清零新列),新建(version==0)整条 INSERT
 InvalidateCache(player_id) → ok
 ```
 
 **关键设计**:
-- **写流程**:DB 写成功 → kafka 发 update → 删 cache(cache-aside)
+- **写流程**:先写 DB 成功 → 删 cache(cache-aside);不发 kafka
 - **读流程**:cache 命中返回,miss 读 db 写 cache
 - **乐观锁**:`UPDATE ... WHERE version = ?`,失败让上层重试
+- **部分更新**:`update_mask` 非空时只 SET 掩码列(仅 version>0 的 UPDATE 生效,INSERT 忽略掩码),
+  避免滚动升级期旧调用方整条覆盖把新增列清零;掩码含 `player_id`/`version`/未知列 → `ERR_INVALID_ARG`
 
 **为什么单独抽**:
 - 玩家数据在多个服务读写(player / trade / battle_result),抽一层避免缓存不一致
@@ -504,7 +509,7 @@ W2 开始才正式写业务逻辑,顺序:
 10. 🟢 可靠补偿 / outbox:W4 ⑧ ds.lifecycle(Redis ZSET 当 outbox)+ W4 ⑨ player.update(MySQL 事务出箱)均已 at-least-once 可靠化;余真 Agones CRD / locator HUB 对账
 11. ⏭️ UE 客户端 grpc-web(FHttpModule 自研解析)+ Envoy 全业务路由接入
 12. ⏭️ UE Hub DS / Battle DS 骨架 + GAS / Iris / Agones 联调,打通登录→进大厅→匹配→进战斗→结算→回大厅
-13. ⏭️ trade / dialogue / data_service 按 UE 主链路需要补最小版本
+13. ⏭️ trade / dialogue 按 UE 主链路需要补最小版本；data_service 已完成开发实现，但尚未正式上线、尚无外部调用方
 14. 🧊 chat 暂缓到最后：UE 与核心业务全部完成后再做完整实现（friend 已于 2026-06-15 提前上线，见 §2.4）
 
 ---

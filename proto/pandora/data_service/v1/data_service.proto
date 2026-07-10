@@ -1,18 +1,25 @@
 // Pandora DataService 协议。
 //
 // 职责(docs/design/go-services.md §2.3):
-//   - 玩家数据统一读写网关(保证 cache + db + kafka 三处一致)
-//   - 缓存失效广播
+//   - 玩家数据统一读写网关(MySQL 强 schema 列为事实源 + Redis pb 旁路缓存)
+//   - 缓存失效广播(主动 InvalidateCache;写后删缓存)
 //
-// 写流程:DB 写成功 → kafka 发 update → 删 cache(cache-aside)
-// 读流程:cache 命中返回,miss 读 db 写 cache
-// 乐观锁:UPDATE ... WHERE version = ?
+// 写流程:DB 乐观锁写成功 → 删 cache(cache-aside 先写库后删缓存;不接 kafka,
+//         避免与 player.update 事件语义重复)
+// 读流程:cache 命中返回,miss 读 db 回填 cache
+// 乐观锁:UPDATE ... WHERE version = ?(每次写 version +1)
 
 syntax = "proto3";
 
 package pandora.data_service.v1;
 
+import "google/protobuf/field_mask.proto";
 import "pandora/common/v1/errcode.proto";
+import "proto2mysql/proto2mysql_option.proto";
+
+// 本文件参与 proto2mysql 建表:data_service 启动时 RegisterAllTables 扫描到
+// 声明了 (proto2mysql.table_name) 的 message(即 PlayerData)并自动建表/同步表结构。
+option (proto2mysql.db) = true;
 
 service DataService {
   rpc ReadPlayer(ReadPlayerRequest) returns (ReadPlayerResponse);
@@ -21,7 +28,8 @@ service DataService {
 }
 
 // PlayerData 玩家数据(强 schema),同时是 MySQL player_data 表的 schema 唯一来源:
-// data_service 启动时按本 message 经 proto2mysql CreateOrUpdateTable 建表/同步表结构,
+// data_service 启动时按本 message 经 proto2mysql RegisterAllTables 自动注册 +
+// SyncAllTables 建表/同步表结构(表不存在则 CREATE;存在则补缺列/对齐类型,不删多余列),
 // 每个标量字段即一列(MySQL 直接可见、可查询)。
 //
 // 设计约束:
@@ -29,9 +37,17 @@ service DataService {
 //     且嵌套 message 在 proto2mysql 中会退化成 MEDIUMBLOB 列,失去列可见性)
 //   - 本 message 兼作存储快照与内网 RPC 载荷(data_service 仅内网,不经 Envoy 对客户端开放)
 //   - 改字段只允许加新编号字段 / reserved 删字段(CLAUDE.md §9 不变量 17)
+//   - 滚动新增字段时,写方须用 WritePlayerRequest.update_mask 只更新自己认得的列,
+//     避免旧副本全量覆盖把新列清零(见 WritePlayerRequest 注释)
 //   - 2026-06-20 开发期重构:原 `bytes data = 3` 删除,编号 3-10 复用为强类型字段
-//     (开发期允许,已全量重生 proto;dev 环境需清空 player_data 表与 Redis 缓存)
+//     (data_service 从未部署上线、无有效历史数据 → 属 CLAUDE.md §5.4 允许的开发期编号复用;
+//      已全量重生 proto;dev 环境切换前直接清空 player_data 表与 Redis pandora:data:player:* 缓存)
+//   - 表配置(表名/主键)写在 proto option 里,由 proto2mysql RegisterAllTables 自动读取,
+//     store.go 不再手写 RegisterTable
 message PlayerData {
+  option (proto2mysql.table_name) = "player_data";
+  option (proto2mysql.primary_key) = "player_id";
+
   uint64 player_id = 1;      // Snowflake
   uint32 version = 2;        // 乐观锁(每次写 +1;写请求带 0 = 新建)
   string nickname = 3;
@@ -55,6 +71,16 @@ message ReadPlayerResponse {
 
 message WritePlayerRequest {
   PlayerData data = 1;
+
+  // update_mask 指定本次 UPDATE 要写哪些业务列(路径 = PlayerData 的 proto 字段名 snake_case,
+  // 如 "nickname" / "total_wins"),仅对已存在行的更新(data.version > 0)生效:
+  //   - 更新时**必须非空**:每个写方只把自己认得的列放进掩码,只 SET 掩码内的列,其余列保持库中原值;
+  //     空掩码更新会全量覆盖并把新副本刚写入的新列清零,破坏零停机滚动升级(CLAUDE.md §9 不变量 17),
+  //     故服务端对空掩码更新返回 ERR_INVALID_ARG。
+  // proto3 标量无 presence,无法区分"显式写 0"与"没填",故用 field mask 表达写意图。
+  // 新建行(data.version == 0)时忽略本字段,按整条 PlayerData INSERT。
+  // 掩码路径不得含 player_id / version 或未知字段,否则服务端返回 ERR_INVALID_ARG。
+  google.protobuf.FieldMask update_mask = 2;
 }
 
 message WritePlayerResponse {

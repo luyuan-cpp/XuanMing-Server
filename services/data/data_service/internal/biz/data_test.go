@@ -23,6 +23,7 @@ import (
 type row struct {
 	version  uint32
 	nickname string
+	level    uint32
 }
 
 type fakeStore struct {
@@ -38,23 +39,37 @@ func (s *fakeStore) Read(_ context.Context, playerID uint64) (*datav1.PlayerData
 	if !ok {
 		return nil, false, nil
 	}
-	return &datav1.PlayerData{PlayerId: playerID, Version: r.version, Nickname: r.nickname}, true, nil
+	return &datav1.PlayerData{PlayerId: playerID, Version: r.version, Nickname: r.nickname, Level: r.level}, true, nil
 }
 
-func (s *fakeStore) Write(_ context.Context, pd *datav1.PlayerData) (uint32, error) {
+func (s *fakeStore) Write(_ context.Context, pd *datav1.PlayerData, updateFields []string) (uint32, error) {
 	r, ok := s.rows[pd.GetPlayerId()]
 	if pd.GetVersion() == 0 {
 		if ok {
 			return 0, errcode.New(errcode.ErrDataVersionMismatch, "exists")
 		}
-		s.rows[pd.GetPlayerId()] = &row{version: 1, nickname: pd.GetNickname()}
+		s.rows[pd.GetPlayerId()] = &row{version: 1, nickname: pd.GetNickname(), level: pd.GetLevel()}
 		return 1, nil
 	}
 	if !ok || r.version != pd.GetVersion() {
 		return 0, errcode.New(errcode.ErrDataVersionMismatch, "mismatch")
 	}
+	// 复刻 store.go 语义:更新(version>0)必须带非空 updateFields,只写掩码内的列。
+	set := func(f string) bool {
+		for _, u := range updateFields {
+			if u == f {
+				return true
+			}
+		}
+		return false
+	}
 	r.version++
-	r.nickname = pd.GetNickname()
+	if set("nickname") {
+		r.nickname = pd.GetNickname()
+	}
+	if set("level") {
+		r.level = pd.GetLevel()
+	}
 	return r.version, nil
 }
 
@@ -159,7 +174,7 @@ func TestWrite_NewPlayer(t *testing.T) {
 	cache := newFakeCache()
 	uc := newUC(store, cache)
 
-	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 0, Nickname: "v1"})
+	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 0, Nickname: "v1"}, nil)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -175,7 +190,7 @@ func TestWrite_OptimisticOK(t *testing.T) {
 	cache.m[1] = &datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "old"}
 	uc := newUC(store, cache)
 
-	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "new"})
+	v, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "new"}, []string{"nickname"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -196,13 +211,64 @@ func TestWrite_VersionMismatch(t *testing.T) {
 	store.rows[1] = &row{version: 5, nickname: "old"}
 	uc := newUC(store, newFakeCache())
 
-	_, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 3, Nickname: "stale"})
+	_, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 1, Version: 3, Nickname: "stale"}, []string{"nickname"})
 	wantCode(t, err, errcode.ErrDataVersionMismatch)
 }
 
 func TestWrite_NoPlayerID(t *testing.T) {
 	uc := newUC(newFakeStore(), newFakeCache())
-	_, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 0})
+	_, err := uc.WritePlayer(context.Background(), &datav1.PlayerData{PlayerId: 0}, nil)
+	wantCode(t, err, errcode.ErrInvalidArg)
+}
+
+// TestWrite_UpdateMask 验证 update_mask 只写掩码内的列,其余列保持原值(滚动升级不清零新列)。
+func TestWrite_UpdateMask(t *testing.T) {
+	store := newFakeStore()
+	store.rows[1] = &row{version: 5, nickname: "old", level: 9}
+	uc := newUC(store, newFakeCache())
+
+	// 只更新 level;nickname 传空但不在掩码内,应保持 "old"。
+	v, err := uc.WritePlayer(context.Background(),
+		&datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "", Level: 42}, []string{"level"})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if v != 6 {
+		t.Fatalf("want version 6, got %d", v)
+	}
+	if got := store.rows[1]; got.nickname != "old" || got.level != 42 {
+		t.Fatalf("masked update wrong: nickname=%q level=%d (want nickname=old level=42)", got.nickname, got.level)
+	}
+}
+
+// TestWrite_EmptyMaskOnUpdate 验证更新(version>0)带空 update_mask → ERR_INVALID_ARG
+// (防止全量覆盖清零未知新列,CLAUDE.md §9 不变量 17)。
+func TestWrite_EmptyMaskOnUpdate(t *testing.T) {
+	store := newFakeStore()
+	store.rows[1] = &row{version: 5, nickname: "old", level: 9}
+	uc := newUC(store, newFakeCache())
+
+	_, err := uc.WritePlayer(context.Background(),
+		&datav1.PlayerData{PlayerId: 1, Version: 5, Nickname: "new"}, nil)
+	wantCode(t, err, errcode.ErrInvalidArg)
+	// 覆写被拒 → 库中行保持原值。
+	if got := store.rows[1]; got.version != 5 || got.nickname != "old" || got.level != 9 {
+		t.Fatalf("empty-mask update should be rejected without touching row, got %+v", got)
+	}
+}
+
+// TestWrite_InvalidMask 验证非法 update_mask 路径 → ERR_INVALID_ARG。
+func TestWrite_InvalidMask(t *testing.T) {
+	store := newFakeStore()
+	store.rows[1] = &row{version: 5, nickname: "old"}
+	uc := newUC(store, newFakeCache())
+
+	_, err := uc.WritePlayer(context.Background(),
+		&datav1.PlayerData{PlayerId: 1, Version: 5}, []string{"version"})
+	wantCode(t, err, errcode.ErrInvalidArg)
+
+	_, err = uc.WritePlayer(context.Background(),
+		&datav1.PlayerData{PlayerId: 1, Version: 5}, []string{"nope"})
 	wantCode(t, err, errcode.ErrInvalidArg)
 }
 

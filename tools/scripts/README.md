@@ -25,6 +25,8 @@
 | `e2e_k8s.ps1` | 本地 minikube+Agones 真 DS 闭环(load 镜像 + 桥接 Envoy + 等 Fleet + UDP 中继) | 手动(`k8s` 模式起完后) |
 | `k8s_envoy_bridge.ps1` | 宿主 Envoy 端口转发桥接 | `e2e_k8s.ps1` |
 | `udp_relay.ps1` | UDP 回程中继(minikube docker driver 下 DS 连通) | `e2e_k8s.ps1` |
+| `reset_data_service_schema.ps1` | 开发期定向重置 data_service 的 `player_data` 表与玩家缓存；固定本地 minikube context，默认停服不重启 | 手动；需 `-Confirm`/`-Force` |
+| `reset_data_service_schema_k8s.bat` | 上述重置脚本的 Windows k8s 包装器；第二参数 `restart` 可在新镜像就位后重启并验表 | 手动/双击 |
 
 > DS(Hub/Battle)本身由 Pandora-Client / UE 侧仓库产出,后端不再维护 DS 编译或 stub 脚本。
 

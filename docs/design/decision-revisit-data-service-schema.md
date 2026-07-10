@@ -1,8 +1,10 @@
 # decision-revisit:data_service PlayerData 是否从 blob 升级为强类型列
 
-> 状态：**已拍板并实施**（2026-07-09 Claude 起草；同日人拍板：选 **B 变体——pb 驱动强 schema**）。
+> 状态：**已拍板并实施（代码/开发环境层面）**（2026-07-09 Claude 起草；同日人拍板：选 **B 变体——pb 驱动强 schema**）。
+> 上线状态：**未正式上线**。截至 2026-07-09 仅用于本地开发/minikube 验证，未部署到正式环境，
+> 没有需要保留的旧协议、Redis 缓存或 `player_data` 表有效数据；“已实施”不等于“已正式上线”。
 > 人的决定：PlayerData 改成真实类型字段；**pb 是 schema 唯一来源**，服务启动时经
-> proto2mysql `CreateOrUpdateTable` 按 pb 建表/同步表结构；Redis 缓存保持 pb 二进制。
+> proto2mysql `RegisterAllTables` 注册 + `SyncAllTables` 按 pb 建表/同步表结构；Redis 缓存保持 pb 二进制。
 > 实施记录见 §9。以下 §1-§8 为拍板前的分析存档。
 > 触发:接入 proto2mysql 后,提出「`PlayerData.data` 不该是 `bytes`,应是玩家真实字段的正确类型,让 MySQL 能看到列」。
 
@@ -19,7 +21,8 @@
 
 近期把 proto2mysql v0.0.22 接入了 data_service 的 store.go。但 proto2mysql 的定位是「proto message ↔ 结构化列」,喂给它不透明 `bytes` 反而水土不服(bytes 列被序列化成 base64 文本存储,与旧 raw BLOB 不兼容)。这是本次提出改动的直接诱因。
 
-**data_service 当前无任何外部调用方**(只有自身 biz/service/store + 生成桩),RPC 侧改动影响面小。
+**data_service 当前未正式上线、无任何外部调用方**（只有自身 biz/service/store + 生成桩）；
+仅存在本地开发/minikube 验证环境，未产生需保留的有效历史数据，因此 RPC 与开发数据重置影响面小。
 
 ## 2. 核心矛盾
 
@@ -88,9 +91,10 @@
 ## 9. 实施记录（2026-07-09）
 
 - `proto/pandora/data_service/v1/data_service.proto`：`bytes data = 3` 删除，编号 3-10 改为强类型字段（nickname/level/mmr/avatar/created_at_ms/last_seen_ms/total_battles/total_wins，镜像 PlayerProfile，开发期允许复用编号，已全量重生 proto）。
-- `store.go`：启动时 `CreateOrUpdateTable(&PlayerData{})` 建表/同步（DBName 经 `SELECT DATABASE()` 从连接取）；`Write(ctx, pd)` 整条 pb 写入，CAS 更新 SET 全部业务列（`playerDataFields`，新增 proto 字段需同步追加）。
+- `store.go`：启动时 `RegisterAllTables()` 自动扫描已链接描述符注册 + `SyncAllTables()` 建表/同步（DBName 经 `SELECT DATABASE()` 从连接取）；`Write(ctx, pd, updateFields)` 写入——`version=0` 走整条 INSERT（忽略 updateFields），`version>0` 走 CAS `UpdateFieldsIfVersion`：updateFields 必须非空，仅 SET 掩码列（空掩码 → `ERR_INVALID_ARG`，避免全量覆盖清零未知新列）；掩码合法列由 `playerDataUpdatableSet`（PlayerData 描述符动态推导，排除 player_id/version，新增 proto 字段自动纳入无需手改）校验。
+- `WritePlayerRequest.update_mask`（`google.protobuf.FieldMask`）驱动部分更新：更新（version>0）**必须带非空掩码**，仅更新指定列，避免滚动升级期旧调用方空掩码全量覆盖把新增列清零（空掩码更新 → biz/store 双层校验回 `ERR_INVALID_ARG`）；新建（version==0）忽略掩码整条 INSERT；掩码含 `player_id`/`version`/未知列 → `ERR_INVALID_ARG`。
 - `deploy/mysql-init/07-data-tables.sql`：DDL 移除，schema 归服务自管。
 - Redis 缓存不变（cache.go 本就存 pb 二进制）。
 - 乐观锁/错误码语义不变（version=0 新建；CAS 失配 → ErrDataVersionMismatch）。
-- **dev 迁移**：旧表含 `data BLOB NOT NULL` 孤儿列（自动同步不删列且无默认值会堵 INSERT），切换前需 `DROP TABLE pandora_player.player_data` 并清 Redis `pandora:data:player:*`，由服务重建。
+- **dev 迁移**：因 data_service 未正式上线且没有需保留的有效历史数据，允许开发期破坏性重置。旧表含 `data BLOB NOT NULL` 孤儿列（自动同步不删列且无默认值会堵 INSERT），切换前需 `DROP TABLE pandora_player.player_data` 并清 Redis `pandora:data:player:*`，由服务重建；此例外不适用于任何已正式上线或存在有效数据的环境。
 - 验证：data_service `go build` / `go vet` / 单测全绿（fake store 适配新签名）。
