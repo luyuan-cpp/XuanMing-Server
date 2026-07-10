@@ -36,7 +36,12 @@ param(
     [string]$Profile = '',
     [string]$BaseImage = 'ubuntu:22.04',
     # UE Linux DS 包路径（留空则按上面注释的优先级自动解析同级客户端仓库）
-    [string]$SourcePkg = ''
+    [string]$SourcePkg = '',
+    # 在【宿主 docker daemon】构建（不切到 minikube 内置 daemon）。内网/断网必用：
+    # minikube 内置 daemon 往往没有 ubuntu:22.04 基础镜像也拉不到公网 → FROM 失败；
+    # 宿主 docker 有 ubuntu + apt 缓存层，离线只重跑 COPY 层即可。构建完由调用方
+    # （start.ps1 的 Sync-ImagesToMinikube）用 minikube image load 落进集群。
+    [switch]$BuildOnHost
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,18 +91,39 @@ if (-not (Test-Path $StageDir)) {
 if (-not (Test-Path $Dockerfile)) {
     throw "找不到 Dockerfile：$Dockerfile"
 }
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw "找不到 docker CLI；请确认 Docker 已安装并在 PATH 中。"
+}
+
+if ($BuildOnHost) {
+    # 宿主构建路径：不切 docker-env、不校验 minikube。镜像落在宿主 docker daemon，
+    # 由调用方 minikube image load 进集群。内网/断网靠宿主已有的 ubuntu + apt 缓存层。
+    Write-Host "[build-image-minikube] 宿主构建模式（-BuildOnHost）：在宿主 docker daemon 构建，稍后由调用方 load 进 minikube。" -ForegroundColor Cyan
+    # 关键：清掉从父进程/上一轮 `minikube docker-env` 继承来的 docker 环境变量，
+    # 否则本会话的 docker CLI 仍连 minikube 内置 daemon，会“名为宿主构建、实为 minikube 构建”，
+    # 落错 daemon 后调用方再 `minikube image load` 又找不到镜像。强制回落宿主 Docker Desktop。
+    foreach ($ev in @('DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'MINIKUBE_ACTIVE_DOCKERD')) {
+        if (Test-Path "env:$ev") {
+            Write-Host "[build-image-minikube]   清除继承的 docker 环境变量 $ev（避免误连 minikube daemon）" -ForegroundColor DarkGray
+            Remove-Item "env:$ev" -ErrorAction SilentlyContinue
+        }
+    }
+    $dockerCtx = & docker info --format '{{.Name}}' 2>$null
+    Write-Host "[build-image-minikube] 当前 docker daemon node = $dockerCtx" -ForegroundColor DarkGray
+}
+else {
+
 if (-not (Get-Command minikube -ErrorAction SilentlyContinue)) {
     throw "找不到 minikube，可先跑 deploy/ds/install-minikube-windows.ps1。"
-}
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    throw "找不到 docker CLI；minikube docker-env 只改 env，仍需本机 docker 客户端。"
 }
 
 if ([string]::IsNullOrWhiteSpace($Profile)) {
     # 优先用当前 minikube profile；解析不到时 fallback 到 'pandora-agones'（本地 Agones 联调用 profile）。
     # 不要 fallback 到 'minikube'：旧默认 profile（192.168.49.x docker network）残留会让镜像落错 daemon，
     # 后续 relay/DS 走错网络，登录成功但 UDP 进不了 Hub DS。
-    $Profile = (& minikube profile 2>$null | Select-Object -First 1).Trim()
+    # 注意：`minikube profile` 首行可能是 `* pandora-agones`（带高亮前导星号），必须先剥掉 `^\*\s*`，
+    # 否则 profile 名会含星号，后续 `minikube -p '* xxx'` 全部失败。
+    $Profile = (((& minikube profile 2>$null | Select-Object -First 1) -replace '^\*\s*', '')).Trim()
     if ([string]::IsNullOrWhiteSpace($Profile)) {
         $Profile = 'pandora-agones'
         Write-Host "[build-image-minikube] 未指定 -Profile 且无法解析当前 minikube profile，fallback 到 '$Profile'" -ForegroundColor Yellow
@@ -126,6 +152,8 @@ $envScript | Invoke-Expression
 $dockerCtx = & docker info --format '{{.Name}}' 2>$null
 Write-Host "[build-image-minikube] 当前 docker daemon node = $dockerCtx" -ForegroundColor DarkGray
 
+} # end else (非 -BuildOnHost：切到 minikube 内置 daemon)
+
 function Build-One {
     param([string]$Name)
     $fullTag = "pandora/$Name-ds:$Tag"
@@ -144,6 +172,10 @@ switch ($Image) {
 }
 
 Write-Host ""
-Write-Host "[build-image-minikube] 全部完成。镜像已在 minikube profile '$Profile' 内。" -ForegroundColor Green
-Write-Host "[build-image-minikube] 下一步：pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad" -ForegroundColor Yellow
-Write-Host "[build-image-minikube] 注意：本会话的 docker env 已指向 minikube；要回宿主 Docker，重开终端或运行 minikube docker-env -u | Invoke-Expression。" -ForegroundColor DarkGray
+if ($BuildOnHost) {
+    Write-Host "[build-image-minikube] 全部完成。镜像已在【宿主 docker daemon】；由调用方 minikube image load 进集群。" -ForegroundColor Green
+} else {
+    Write-Host "[build-image-minikube] 全部完成。镜像已在 minikube profile '$Profile' 内。" -ForegroundColor Green
+    Write-Host "[build-image-minikube] 下一步：pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad" -ForegroundColor Yellow
+    Write-Host "[build-image-minikube] 注意：本会话的 docker env 已指向 minikube；要回宿主 Docker，重开终端或运行 minikube docker-env -u | Invoke-Expression。" -ForegroundColor DarkGray
+}

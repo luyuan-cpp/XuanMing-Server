@@ -121,6 +121,9 @@ function Test-ImageIdMatch([string]$hostId, [string]$mkId) {
 function Start-K8sEnvoyBridge {
     $bridgeScript = Join-Path $ScriptDir 'k8s_envoy_bridge.ps1'
     if (-not (Test-Path $bridgeScript)) { throw "缺少桥接脚本: $bridgeScript" }
+    # Envoy 边缘绑定跟随 UDP 中继:RelayBindHost=0.0.0.0(内网多机)时 8443/8444 也对局域网开放,
+    # 否则只绑本机回环。bridge 的 docker compose up envoy 会继承该进程环境变量。admin 9901 恒绑本机。
+    $env:PANDORA_EDGE_BIND_HOST = if ($RelayBindHost -eq '0.0.0.0') { '0.0.0.0' } else { '127.0.0.1' }
     if ($BridgeForce) { & $bridgeScript -Force } else { & $bridgeScript }
     if ($LASTEXITCODE -ne 0) { throw "k8s Envoy 桥接启动失败" }
 }

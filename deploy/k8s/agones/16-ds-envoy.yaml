@@ -1,0 +1,198 @@
+# in-cluster Envoy「DS 面」网关(线上同款拓扑,本地 minikube 用)
+#
+# 背景:DS(UE Linux Pod)用 grpc-web(FHttpModule)回连后端,必须经 Envoy 做
+# grpc-web→gRPC 转换,不能直连裸 gRPC 端口。线上真集群自带边缘 Envoy
+# (pandora-envoy.pandora.svc:8444);本地 minikube 没有边缘 Envoy,且 Pod 解析不了
+# host.docker.internal(那是 docker-desktop 内置 k8s 专属域名),导致 DS 心跳 DNS 失败
+# → ds_allocator ready 等待超时 5002 → matchmaker 置 failed → 客户端 GetMatchProgress 4001。
+#
+# 本文件在集群内起一个等价的 Envoy「DS 面」网关:
+#   DS(Pod) → pandora-envoy.pandora.svc.cluster.local:8444(标准 k8s Service DNS,必然可解析)
+#           → 本 Envoy(grpc-web→gRPC) → ds-allocator.pandora.svc:50020 等集群内后端
+# Fleet(20-fleet-battle / 30-fleet-hub)的 PANDORA_*_ADDR 与线上一字不差,切真集群时
+# 删掉本文件即可(线上用边缘网关自带的 pandora-envoy Service)。
+#
+# 上游是原生 gRPC(h2c),每个 cluster 必须带 http2_protocol_options,否则 Envoy 用
+# HTTP/1.1 调后端会 gRPC 415。DS 走明文 http://(PANDORA_DS_ALLOCATOR_TLS=0),
+# 故 :8444 监听器不挂 TLS。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pandora-ds-envoy-config
+  namespace: pandora
+  labels:
+    app.kubernetes.io/name: pandora-envoy
+data:
+  envoy.yaml: |
+    admin:
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 9901 }
+    static_resources:
+      listeners:
+      - name: pandora_ds_listener
+        address:
+          socket_address: { address: 0.0.0.0, port_value: 8444 }
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: pandora_ds_hcm
+              codec_type: AUTO
+              stream_idle_timeout: 0s
+              request_timeout: 0s
+              common_http_protocol_options: { idle_timeout: 0s }
+              access_log:
+              - name: envoy.access_loggers.stdout
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              http_filters:
+              - name: envoy.filters.http.grpc_web
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+              - name: envoy.filters.http.header_mutation
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+                  mutations:
+                    request_mutations:
+                    - remove: "x-pandora-player-id"
+                    - remove: "x-pandora-jwt-payload"
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              route_config:
+                name: pandora_ds_routes
+                virtual_hosts:
+                - name: pandora_ds_vh
+                  domains: [ "*" ]
+                  routes:
+                  - match: { prefix: "/pandora.hub.v1.HubAllocatorService/" }
+                    route: { cluster: hub_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { prefix: "/pandora.ds.v1.DSAllocatorService/" }
+                    route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.gm.v1.GmService/PollCommands" }
+                    route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.gm.v1.GmService/AckCommand" }
+                    route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { prefix: "/pandora.locator.v1.PlayerLocatorService/" }
+                    route: { cluster: locator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { prefix: "/pandora.battle.v1.BattleResultService/" }
+                    route: { cluster: battle_result_cluster, timeout: 15s, idle_timeout: 60s }
+      clusters:
+      - name: ds_allocator_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: ds_allocator_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: ds-allocator.pandora.svc.cluster.local, port_value: 50020 }
+      - name: hub_allocator_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: hub_allocator_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: hub-allocator.pandora.svc.cluster.local, port_value: 50021 }
+      - name: locator_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: locator_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: player-locator.pandora.svc.cluster.local, port_value: 50006 }
+      - name: battle_result_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: battle_result_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: battle-result.pandora.svc.cluster.local, port_value: 50022 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pandora-envoy
+  namespace: pandora
+  labels:
+    app.kubernetes.io/name: pandora-envoy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pandora-envoy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pandora-envoy
+    spec:
+      containers:
+      - name: envoy
+        image: envoyproxy/envoy:v1.38-latest
+        imagePullPolicy: IfNotPresent
+        args: [ "-c", "/etc/envoy/envoy.yaml", "--service-cluster", "pandora-ds-envoy" ]
+        ports:
+        - { name: ds-face, containerPort: 8444 }
+        - { name: admin, containerPort: 9901 }
+        readinessProbe:
+          httpGet: { path: /ready, port: 9901 }
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        volumeMounts:
+        - { name: config, mountPath: /etc/envoy, readOnly: true }
+        resources:
+          requests: { cpu: "50m", memory: 64Mi }
+          limits: { cpu: "500m", memory: 256Mi }
+      volumes:
+      - name: config
+        configMap:
+          name: pandora-ds-envoy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pandora-envoy
+  namespace: pandora
+  labels:
+    app.kubernetes.io/name: pandora-envoy
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: pandora-envoy
+  ports:
+  - { name: ds-face, port: 8444, targetPort: 8444, protocol: TCP }

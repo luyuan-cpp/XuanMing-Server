@@ -28,10 +28,12 @@ pwsh tools/scripts/e2e_k8s.ps1
 实时观察命令。常用开关：`-NoRelay`（自己起中继）、`-SkipImageLoad`（镜像已 load）、
 `-TimeoutSec`（等 Fleet 超时）。
 
-> **DS 回调为什么能通**：k8s 模式下 16 个 Go 服务都在 `pandora` ns 的 ClusterIP 后面,而 UE
-> 客户端/DS 只会打宿主 Envoy(`:8443`/`:8444`)。`k8s_envoy_bridge.ps1` 把每个 Service
-> `port-forward` 到 `127.0.0.1:500xx`,正好对上现有 `envoy.yaml` 的 `host.docker.internal:500xx`
-> upstream,所以 DS 的 `host.docker.internal:8444` 回调能真正落到 k8s 服务,闭环不再断。
+> **DS 回调为什么能通**：k8s 模式下 DS(Pod)走**集群内 Envoy「DS 面」网关**
+> `pandora-envoy.pandora.svc.cluster.local:8444`(由 `16-ds-envoy.yaml` 部署,线上同款拓扑),
+> 它把 grpc-web 转成 gRPC 后直连 `ds-allocator.pandora.svc:50020` 等集群内 Service。
+> Pod 内不再写 `host.docker.internal`(minikube 的 Pod 解析不了该域名,DNS 层就失败)。
+> 宿主 Envoy(`:8443`/`:8444`)只服务**UE 客户端**;`k8s_envoy_bridge.ps1` 的 port-forward
+> 是给宿主 Envoy 的 upstream 用的,与 DS 回调无关。
 
 > **为什么不是 `-Mode docker`**：docker-compose 里 ds_allocator 跑在 Linux 容器内,既不能 exec
 > Windows DS、又没有 Agones 可调,代码只有 local/agones/mock 三种 provider,故 docker 只能落 mock。
@@ -81,9 +83,9 @@ pwsh tools/scripts/e2e_k8s.ps1
 
 ## ☁️ 线上真集群部署(online:测试服 / 生产 kbs)
 
-线上 Fleet 跟本地有两处**必须换掉**,否则远端拉不到镜像、DS 回调打到不存在的宿主地址:
+线上 Fleet 跟本地有一处**必须换掉**、一处**默认已对齐**:
   1. DS 镜像:本地是 `pandora/battle-ds:dev` / `pandora/hub-ds:dev`(只在你机器上),远端要换成 registry 可拉取的完整镜像名
-  2. DS 回调地址:本地是 `host.docker.internal:8444`,远端要换成集群内 Envoy/网关的 DS 面 Service DNS
+  2. DS 回调地址:Fleet 默认已是线上同款 `pandora-envoy.pandora.svc.cluster.local:8444`(本地由 `16-ds-envoy.yaml` 提供同名 Service,线上由边缘网关提供);若线上网关 DNS 不同,用 `-DsGatewayAddr` 覆盖
 
 所以 `-Mode online` **强制要求**这几个参数(缺一即 fail-fast,不会把本地 Fleet 误打到远端):
 
@@ -107,7 +109,7 @@ pwsh tools/scripts/start.ps1 -Mode online -Env prod `
 |---|---|---|
 | `-Registry` / `-Tag` | 16 个 Go 服务镜像来源(kustomize overlay 覆盖占位镜像) | 必填 |
 | `-BattleDsImage` / `-HubDsImage` | 远端 Fleet 的真 DS 镜像名(apply 前临时改写 Fleet yaml,**不改仓库文件**) | 必填 |
-| `-DsGatewayAddr` | 改写 Fleet 里 3 个 `host.docker.internal:8444` 回调 env → 集群内 Envoy DS 面 DNS | 必填 |
+| `-DsGatewayAddr` | 覆写 Fleet 里 3 个 DS 回调 env(默认已是 `pandora-envoy.pandora.svc.cluster.local:8444`)→ 线上网关实际 DNS | 必填 |
 | `-DsGatewayTls` | 改写 `PANDORA_DS_ALLOCATOR_TLS`(线上 Envoy 终止 TLS 一般 `1`) | `1` |
 | `-BuildPush` | 本地构建并 push 16 个 Go 服务镜像到 `-Registry`(发布动作,需人工授权) | 关 |
 

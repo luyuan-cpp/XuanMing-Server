@@ -54,10 +54,11 @@ spec:
                   value: "/Game/Test/Level/MainCity"
                 - name: PANDORA_DS_GAMEMODE
                   value: "/Script/Pandora.PandoraHubGameMode"
+                # 线上同款:走集群内 Envoy「DS 面」Service DNS(见 16-ds-envoy.yaml),不写 host.docker.internal。
                 - name: PANDORA_HUB_ALLOCATOR_ADDR
-                  value: "host.docker.internal:8444"
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_PLAYER_LOCATOR_ADDR
-                  value: "host.docker.internal:8444"
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_DS_ALLOCATOR_TLS
                   value: "0"
               resources:

@@ -74,17 +74,18 @@ spec:
                 # 按 /pandora.ds.v1.DSAllocatorService/ 路由到 ds_allocator，见 deploy/envoy/envoy.yaml）。
                 # 默认代码值 127.0.0.1:50020 是裸端口，集群里打不通——务必用下面 env 覆盖。
                 #
-                # 本机 docker-desktop k8s（Envoy 在宿主 docker-compose）：pod 经 host.docker.internal 回连宿主。
+                # 线上同款:DS 走集群内 Envoy「DS 面」Service DNS 回连,pod 内绝不写宿主 IP / host.docker.internal
+                # (minikube 的 Pod 解析不了 host.docker.internal,DNS 失败 → 心跳发不出 → 匹配 4001)。
+                # in-cluster Envoy 由 deploy/k8s/agones/16-ds-envoy.yaml 部署在 pandora 命名空间。
+                # 线上真集群边缘网关自带同名 pandora-envoy Service,本段 env 一字不改即可切线上。
                 - name: PANDORA_DS_ALLOCATOR_ADDR
-                  value: "host.docker.internal:8444"
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_PLAYER_LOCATOR_ADDR
-                  value: "host.docker.internal:8444"
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_BATTLE_RESULT_ADDR
-                  value: "host.docker.internal:8444"
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_DS_ALLOCATOR_TLS
                   value: "0"
-                # ⚠️ 线上真集群：改成后端给的 Envoy/边缘网关「DS 面」Service DNS（同样 :8444 TLS，
-                #   如 pandora-envoy.<ns>.svc:8444）。镜像不变，只换这两个 env 值。
               resources:
                 requests:
                   cpu: "1"
