@@ -74,10 +74,10 @@ func (s *fakeStore) Write(_ context.Context, pd *datav1.PlayerData, updateFields
 }
 
 type fakeCache struct {
-	m         map[uint64]*datav1.PlayerData
-	getCalls  int
-	setCalls  int
-	delCalls  int
+	m        map[uint64]*datav1.PlayerData
+	getCalls int
+	setCalls int
+	delCalls int
 }
 
 func newFakeCache() *fakeCache { return &fakeCache{m: map[uint64]*datav1.PlayerData{}} }

@@ -96,6 +96,7 @@ func (u *DataUsecase) ReadPlayer(ctx context.Context, playerID uint64) (*datav1.
 //   - 更新(pd.version>0)时**必须非空**:每个写方只声明自己认得的列,禁止空掩码全量覆盖——
 //     否则旧副本一次全量写会把它不认得的新列清零,破坏零停机滚动升级(CLAUDE.md §9 不变量 17);
 //   - 非空 → 只写掩码内的列(其余列保持库中原值)。
+//
 // 新建(version==0)始终整条 INSERT,updateFields 被忽略。
 // 更新时掩码为空 → 返回 ErrInvalidArg;掩码含 player_id / version / 未知字段 → 返回 ErrInvalidArg。
 func (u *DataUsecase) WritePlayer(ctx context.Context, pd *datav1.PlayerData, updateFields []string) (uint32, error) {
