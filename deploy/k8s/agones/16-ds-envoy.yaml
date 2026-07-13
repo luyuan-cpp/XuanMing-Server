@@ -86,6 +86,9 @@ data:
                     request_mutations:
                     - remove: "x-pandora-player-id"
                     - remove: "x-pandora-jwt-payload"
+                    # 入站先剥离网关标记头(防外部伪造),再由下方 vh 统一盖回 "1":
+                    # 后端 DSCallbackGuard 凭此头区分「DS 面流量(须验令牌)」与「内部东西向直连」。
+                    - remove: "x-pandora-ds-gateway"
               - name: envoy.filters.http.router
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -94,19 +97,30 @@ data:
                 virtual_hosts:
                 - name: pandora_ds_vh
                   domains: [ "*" ]
-                  # ⚠️ DS 面按方法白名单(2026-07-10,回应审核 P1)::8444 无鉴权(仅靠网络可达 +
-                  # header_mutation 剥离 x-pandora-* 身份头),故只放行 DS / Hub DS **文档明确会回调**
-                  # 的方法,一律用 path 精确匹配。deny-by-default:未匹配的请求 Envoy 直接 404。
+                  # DS 网关标记头(审核 P1 #1):经 :8444 进后端的请求一律盖上 x-pandora-ds-gateway: "1"
+                  # (入站已先剥离,不可伪造)。后端 ds_auth.mode=permissive/enforce 时,凭此头要求
+                  # DS 必须带 Bearer 服务令牌;内部东西向直连无此头,不受影响。
+                  request_headers_to_add:
+                  - header: { key: "x-pandora-ds-gateway", value: "1" }
+                    append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                  # ⚠️ DS 面双层防护(2026-07-10,回应审核 P1;§5 五轮更新):
+                  #  1) 方法白名单::8444 无 jwt_authn(边缘客户端面 :8443 才做 JWT),配 header_mutation
+                  #     剥离/重盖 x-pandora-* 身份头,故只放行 DS / Hub DS **文档明确会回调**的方法,
+                  #     用 path 精确匹配;deny-by-default:未匹配请求 Envoy 直接 404。
                   #   - 控制面(AllocateBattle / ReleaseBattle / ListBattles / AssignHub / ReleaseHub /
                   #     TransferHub / ListHubs):matchmaker 等后端在集群内直连,不经 DS 面。
                   #   - 客户端面(ListHubLines / TransferToLine / GetLocation / BatchGetLocation /
                   #     SubscribePresence / UnsubscribePresence):走 :8443 客户端网关(带 jwt_authn)。
                   #   - ClearLocation / RefreshHubLocations:后端内部(hub_allocator 等)直连 locator 调,
                   #     不属 DS 面。
-                  # 这样可阻断伪 DS / 局域网调用者访问白名单之外的控制面方法。注意白名单不认证
-                  # 允许的方法，SetLocation/ReportResult 等仍依赖网络信任；生产须另补 DS workload
-                  # identity。若某 DS 确需新增方法,必须在此显式再加一行(保持 deny-by-default)。
+                  #  2) DS 服务令牌:后端 ds_auth.mode=enforce 时,白名单放行的方法仍要求 DS 带 Bearer
+                  #     服务令牌(hub 令牌绑 pod / battle 令牌绑 match_id)才通过——不再是「仅靠网络信任」,
+                  #     SetLocation/ReportResult/Heartbeat 均经令牌鉴权。
+                  # 若某 DS 确需新增方法,必须在此显式加一行(保持 deny-by-default)并确认后端已纳入 ds_auth 校验。
                   routes:
+                  # Hub/Battle DS 在线验玩家入场票；login 在消费 ticket jti 前校验调用 DS active。
+                  - match: { path: "/pandora.login.v1.LoginService/VerifyDSTicket" }
+                    route: { cluster: login_cluster, timeout: 15s, idle_timeout: 60s }
                   # Hub DS 心跳(Hub DS 每 5s 主动调)
                   - match: { path: "/pandora.hub.v1.HubAllocatorService/Heartbeat" }
                     route: { cluster: hub_allocator_cluster, timeout: 15s, idle_timeout: 60s }
@@ -139,6 +153,22 @@ data:
             - endpoint:
                 address:
                   socket_address: { address: 127.0.0.1, port_value: 9901 }
+      - name: login_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: login_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: login.pandora.svc.cluster.local, port_value: 50001 }
       - name: ds_allocator_cluster
         type: STRICT_DNS
         dns_lookup_family: V4_ONLY

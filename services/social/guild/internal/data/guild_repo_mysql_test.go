@@ -16,7 +16,7 @@
 //
 // 覆盖 reviewer「验证 P1」四项,且刻意做成能区分「旧漏洞实现 vs 现修复」的确定性交错:
 //   - 权限撤销 RR 快照(五审 P1):用外部连接持有 guilds 父行锁,先让 ApproveJoin 建立旧 RR 快照
-//     并阻塞在父锁上,再降级审批人并提交 —— 普通读实现会读快照旧角色误放行,FOR SHARE 实现读到
+//     并阻塞在父锁上,再降级审批人并提交 —— 普通读实现会读快照旧角色误放行,FOR UPDATE 实现读到
 //     最新已提交角色而拒绝。旧实现必挂,新实现必过。
 //   - Approve × Disband(四审 P1):同样用外部锁制造「Approve 已建快照、公会随后被解散」的确定性
 //     交错,断言 ApproveJoin 在父锁下复读公会已消失(ErrGuildNotFound),不复活成员到已删公会;
@@ -28,6 +28,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -40,13 +41,14 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
 
-// ddlStatements 是 5 张表的建表语句(取自 deploy/mysql-init/11-guild-tables.sql,去掉 USE)。
+// ddlStatements 是公会 / 群相关表的建表语句(取自 deploy/mysql-init/11-guild-tables.sql,去掉 USE)。
 var ddlStatements = []string{
 	`CREATE TABLE guilds (
 		guild_id     BIGINT UNSIGNED NOT NULL,
-		name         VARCHAR(64)     NOT NULL,
+		name         VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
 		leader_id    BIGINT UNSIGNED NOT NULL,
 		member_count INT             NOT NULL DEFAULT 1,
+		pending_request_count INT    NOT NULL DEFAULT 0,
 		max_members  INT             NOT NULL DEFAULT 100,
 		created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (guild_id),
@@ -73,7 +75,7 @@ var ddlStatements = []string{
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	`CREATE TABLE chat_groups (
 		group_id     BIGINT UNSIGNED NOT NULL,
-		name         VARCHAR(64)     NOT NULL,
+		name         VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
 		owner_id     BIGINT UNSIGNED NOT NULL,
 		member_count INT             NOT NULL DEFAULT 1,
 		max_members  INT             NOT NULL DEFAULT 50,
@@ -87,6 +89,11 @@ var ddlStatements = []string{
 		joined_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (group_id, player_id),
 		KEY idx_player (player_id)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE player_group_counts (
+		player_id   BIGINT UNSIGNED NOT NULL,
+		group_count INT             NOT NULL DEFAULT 0,
+		PRIMARY KEY (player_id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 }
 
@@ -105,6 +112,14 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 	if dsn == "" {
 		t.Skip("跳过真实 MySQL 集成测试:未设 PANDORA_TEST_MYSQL_DSN(例如 root:pandora@tcp(127.0.0.1:3306)/)")
 	}
+	return openTempDB(t, dsn)
+}
+
+// openTempDB 用给定 DSN 建独立临时库、建表,返回连该库的 *sql.DB 与清理函数。
+// DSN 已给出却连不上 / 建库失败 → Fatal(硬失败,杜绝「给了 DSN 却连不上也 PASS」的 false-green)。
+// MySQL 与 TiDB 均走 MySQL 协议,同一套 DDL / 建库流程通用。
+func openTempDB(t *testing.T, dsn string) (*sql.DB, func()) {
+	t.Helper()
 	cfg, err := drivermysql.ParseDSN(dsn)
 	if err != nil {
 		t.Fatalf("解析 DSN 失败:%v", err)
@@ -121,7 +136,7 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := admin.PingContext(ctx); err != nil {
-		t.Fatalf("已设 PANDORA_TEST_MYSQL_DSN 但无法连接测试 MySQL(不允许静默 PASS):%v", err)
+		t.Fatalf("已给出测试 DSN 但无法连接(不允许静默 PASS):%v", err)
 	}
 	dbName := fmt.Sprintf("pandora_guild_it_%d", time.Now().UnixNano())
 	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+dbName+"` DEFAULT CHARSET utf8mb4"); err != nil {
@@ -152,6 +167,42 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 		}
 	}
 	return db, cleanup
+}
+
+// backendCase 描述一个待测存储后端(MySQL 或 TiDB)。
+type backendCase struct {
+	name string
+	db   *sql.DB
+}
+
+// forEachBackend 对每个已配置的后端各跑一遍 fn(以子测试隔离):
+//   - MySQL:PANDORA_TEST_MYSQL_DSN(未设则该子测试 Skip);
+//   - TiDB :PANDORA_TEST_TIDB_DSN(未设则该子测试 Skip)。
+//
+// 上限并发测试(pending 申请 / 所在群)必须在 MySQL 与 TiDB 双后端各验一遍:计数列 / 计数表方案
+// 取代了依赖间隙锁的 COUNT(*)...FOR UPDATE,须证明在 TiDB(无间隙锁)下上限同样拦得住并发幻读
+// (decision-revisit-guild-scaling.md §3.5)。CI 注入哪个 DSN 就强制跑哪个后端,不给静默漏测。
+func forEachBackend(t *testing.T, fn func(t *testing.T, bc backendCase)) {
+	t.Helper()
+	backends := []struct {
+		name string
+		env  string
+	}{
+		{"mysql", "PANDORA_TEST_MYSQL_DSN"},
+		{"tidb", "PANDORA_TEST_TIDB_DSN"},
+	}
+	for _, b := range backends {
+		b := b
+		t.Run(b.name, func(t *testing.T) {
+			dsn := os.Getenv(b.env)
+			if dsn == "" {
+				t.Skipf("跳过 %s 后端:未设 %s", b.name, b.env)
+			}
+			db, cleanup := openTempDB(t, dsn)
+			defer cleanup()
+			fn(t, backendCase{name: b.name, db: db})
+		})
+	}
 }
 
 // waitForLockWaiters 轮询锁视图,直到出现 want 个被阻塞的锁请求(即目标 goroutine 已阻塞在
@@ -215,7 +266,7 @@ func addMemberViaApprove(t *testing.T, ctx context.Context, r *MySQLGuildRepo, g
 //	释放父锁 → ApproveJoin 拿到父锁后复读审批人角色。
 //
 // 旧实现(普通 SELECT 读 approver 角色)会命中 RR 快照里的旧 officer 角色 → 误放行(测试挂);
-// 现实现(FOR SHARE 锁定读)绕过快照读到最新已提交的 member 角色 → ErrGuildNoPermission(测试过)。
+// 现实现(FOR UPDATE 锁定读)绕过快照读到最新已提交的 member 角色 → ErrGuildNoPermission(测试过)。
 func TestMySQLApproveRRSnapshotRevokedOfficerDeterministic(t *testing.T) {
 	db, cleanup := setupMySQL(t)
 	defer cleanup()
@@ -483,8 +534,9 @@ func TestMySQLConcurrentCreateGroupReversedNoDeadlock(t *testing.T) {
 	ctx := context.Background()
 	gr := NewMySQLGroupRepo(db)
 
-	// 两个固定玩家,反序作为成员;maxGroups 取大值以强制 checkPlayerGroupLimit 的 FOR UPDATE 加锁
-	// (maxGroups<=0 会短路不加锁,无法制造竞争)。
+	// 两个固定玩家,反序作为成员;maxGroups 取大值以强制 reservePlayerGroupSlot 对
+	// player_group_counts 计数行的 FOR UPDATE 加锁(仍会 reserve 并锁行,只是不触发上限拒绝),
+	// 从而制造锁竞争验证排序加锁序消除 ABBA。
 	pa, pb := nextID(), nextID()
 	const maxMembers = 50
 	const maxGroups = 100000
@@ -605,4 +657,441 @@ func TestMySQLConcurrentMembershipConsistency(t *testing.T) {
 	if _, ok, _ := r.GetMember(ctx, leaderID); !ok {
 		t.Fatalf("会长成员行应存在")
 	}
+}
+
+// TestConcurrentPendingRequestLimitEnforced 双后端(MySQL / TiDB)验证公会 pending 申请上限:
+// 大量不同申请人并发对同一公会发起加入申请,maxPending 取小值;计数列(guilds.pending_request_count
+// 在 guilds 父行 FOR UPDATE 下维护)必须精确拦停——成功数恰为 maxPending,超出的全部 ErrGuildRequestLimit,
+// 且落库 pending 行数与计数列都恰等于 maxPending(§3.5:TiDB 无间隙锁,COUNT+FOR UPDATE 会漏,故改计数列)。
+func TestConcurrentPendingRequestLimitEnforced(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, bc backendCase) {
+		ctx := context.Background()
+		r := NewMySQLGuildRepo(bc.db)
+
+		const maxMembers = 500
+		const maxPending = 8
+		const applicants = 40
+		guildID, _ := createGuildWithLeader(t, ctx, r, maxMembers)
+
+		var wg sync.WaitGroup
+		wg.Add(applicants)
+		errs := make([]error, applicants)
+		for i := 0; i < applicants; i++ {
+			go func(idx int) {
+				defer wg.Done()
+				_, _, errs[idx] = r.CreateJoinRequest(ctx, nextID(), guildID, nextID(), maxPending)
+			}(i)
+		}
+		wg.Wait()
+
+		var ok, limited int
+		for i := 0; i < applicants; i++ {
+			switch {
+			case errs[i] == nil:
+				ok++
+			case errcode.As(errs[i]) == errcode.ErrGuildRequestLimit:
+				limited++
+			default:
+				t.Fatalf("[%s] 申请 %d 非预期错误码 %d:%v", bc.name, i, errcode.As(errs[i]), errs[i])
+			}
+		}
+		if ok != maxPending {
+			t.Fatalf("[%s] 成功申请数=%d,期望恰为 maxPending=%d(上限被击穿或误拦)", bc.name, ok, maxPending)
+		}
+		if limited != applicants-maxPending {
+			t.Fatalf("[%s] 被拒申请数=%d,期望=%d", bc.name, limited, applicants-maxPending)
+		}
+
+		// 落库 pending 行数与计数列都必须恰等于 maxPending。
+		var rows int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = 1`, guildID).Scan(&rows); err != nil {
+			t.Fatalf("[%s] count pending rows: %v", bc.name, err)
+		}
+		if rows != maxPending {
+			t.Fatalf("[%s] 实际 pending 行数=%d,期望=%d", bc.name, rows, maxPending)
+		}
+		var counter int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT pending_request_count FROM guilds WHERE guild_id = ?`, guildID).Scan(&counter); err != nil {
+			t.Fatalf("[%s] read pending_request_count: %v", bc.name, err)
+		}
+		if counter != maxPending {
+			t.Fatalf("[%s] pending_request_count=%d,期望=%d(计数列与实际行数漂移)", bc.name, counter, maxPending)
+		}
+	})
+}
+
+// TestConcurrentPlayerGroupLimitEnforced 双后端(MySQL / TiDB)验证「我所在的群」上限:同一玩家 P
+// 被大量不同群主并发拉入群(CreateGroup owner + [P]),maxGroups 取小值;计数表 player_group_counts
+// (per-player 计数行 FOR UPDATE)必须精确拦停——P 成功入群数恰为 maxGroups,超出全部 ErrGroupJoinLimit,
+// 且 P 的实际成员行数与计数行都恰等于 maxGroups(§3.5:取代 COUNT(*)...FOR UPDATE,TiDB 安全)。
+func TestConcurrentPlayerGroupLimitEnforced(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, bc backendCase) {
+		ctx := context.Background()
+		gr := NewMySQLGroupRepo(bc.db)
+
+		const maxMembers = 50
+		const maxGroups = 6
+		const attempts = 40
+		player := nextID() // 被争抢入群的固定玩家
+
+		var wg sync.WaitGroup
+		wg.Add(attempts)
+		errs := make([]error, attempts)
+		for i := 0; i < attempts; i++ {
+			go func(idx int) {
+				defer wg.Done()
+				gid := nextID()
+				owner := nextID() // 每个群不同群主,只有 player 是争抢点
+				errs[idx] = gr.CreateGroup(ctx, gid, owner, fmt.Sprintf("g-%d", gid), []uint64{player}, maxMembers, maxGroups)
+			}(i)
+		}
+		wg.Wait()
+
+		var ok, limited int
+		for i := 0; i < attempts; i++ {
+			switch {
+			case errs[i] == nil:
+				ok++
+			case errcode.As(errs[i]) == errcode.ErrGroupJoinLimit:
+				limited++
+			default:
+				t.Fatalf("[%s] 建群 %d 非预期错误码 %d:%v", bc.name, i, errcode.As(errs[i]), errs[i])
+			}
+		}
+		if ok != maxGroups {
+			t.Fatalf("[%s] 成功入群数=%d,期望恰为 maxGroups=%d(上限被击穿或误拦)", bc.name, ok, maxGroups)
+		}
+		if limited != attempts-maxGroups {
+			t.Fatalf("[%s] 被拒建群数=%d,期望=%d", bc.name, limited, attempts-maxGroups)
+		}
+
+		// P 的实际所在群成员行数与计数行都必须恰等于 maxGroups。
+		var rows int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ?`, player).Scan(&rows); err != nil {
+			t.Fatalf("[%s] count player group rows: %v", bc.name, err)
+		}
+		if rows != maxGroups {
+			t.Fatalf("[%s] P 实际所在群行数=%d,期望=%d", bc.name, rows, maxGroups)
+		}
+		var counter int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT group_count FROM player_group_counts WHERE player_id = ?`, player).Scan(&counter); err != nil {
+			t.Fatalf("[%s] read group_count: %v", bc.name, err)
+		}
+		if counter != maxGroups {
+			t.Fatalf("[%s] group_count=%d,期望=%d(计数表与实际行数漂移)", bc.name, counter, maxGroups)
+		}
+	})
+}
+
+// TestGroupCountReleasedOnLeave 双后端验证退群 / 被踢 / 解散后计数表正确回收:玩家满额入群后
+// 退出若干个,应能重新入群(名额被 releasePlayerGroupSlot 归还,计数行不漂移)。
+func TestGroupCountReleasedOnLeave(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, bc backendCase) {
+		ctx := context.Background()
+		gr := NewMySQLGroupRepo(bc.db)
+
+		const maxMembers = 50
+		const maxGroups = 3
+		player := nextID()
+
+		// 先把 player 塞满 maxGroups 个群,记下群 ID。
+		gids := make([]uint64, 0, maxGroups)
+		for i := 0; i < maxGroups; i++ {
+			gid := nextID()
+			if err := gr.CreateGroup(ctx, gid, nextID(), fmt.Sprintf("g-%d", gid), []uint64{player}, maxMembers, maxGroups); err != nil {
+				t.Fatalf("[%s] 建群 %d: %v", bc.name, i, err)
+			}
+			gids = append(gids, gid)
+		}
+		// 满额后再入群必须被拒。
+		if err := gr.CreateGroup(ctx, nextID(), nextID(), "overflow", []uint64{player}, maxMembers, maxGroups); errcode.As(err) != errcode.ErrGroupJoinLimit {
+			t.Fatalf("[%s] 满额入群应回 ErrGroupJoinLimit,得到 %v", bc.name, err)
+		}
+
+		// 退出一个群(player 是成员而非群主,可直接退群),名额应归还。
+		if err := gr.RemoveMember(ctx, gids[0], player); err != nil {
+			t.Fatalf("[%s] 退群: %v", bc.name, err)
+		}
+		var counter int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT group_count FROM player_group_counts WHERE player_id = ?`, player).Scan(&counter); err != nil {
+			t.Fatalf("[%s] read group_count: %v", bc.name, err)
+		}
+		if counter != maxGroups-1 {
+			t.Fatalf("[%s] 退群后 group_count=%d,期望=%d(名额未归还)", bc.name, counter, maxGroups-1)
+		}
+		// 归还后应能重新入一个新群。
+		if err := gr.CreateGroup(ctx, nextID(), nextID(), "refill", []uint64{player}, maxMembers, maxGroups); err != nil {
+			t.Fatalf("[%s] 归还名额后重新入群应成功,得到 %v", bc.name, err)
+		}
+	})
+}
+
+// TestLegacyGuildWriterCounterDriftSelfHeals 模拟滚动窗口中的旧 Pod：它仍按 guilds 父行 +
+// pending 明细范围锁判限，但只写 guild_join_requests，不维护新计数列。随后兼容新版必须以
+// 明细为权威自愈，且旧写把实际行数推到上限后不能再放入第 N+1 条。
+func TestLegacyGuildWriterCounterDriftSelfHeals(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, bc backendCase) {
+		ctx := context.Background()
+		r := NewMySQLGuildRepo(bc.db)
+		guildID, leaderID := createGuildWithLeader(t, ctx, r, 100)
+		const maxPending = 3
+
+		legacyPlayer1, legacyRequest1 := nextID(), nextID()
+		if err := legacyCreateJoinRequestForTest(ctx, r, legacyRequest1, guildID, legacyPlayer1, maxPending); err != nil {
+			t.Fatalf("[%s] legacy request 1: %v", bc.name, err)
+		}
+		if _, err := bc.db.ExecContext(ctx,
+			`UPDATE guilds SET pending_request_count = 99 WHERE guild_id = ?`, guildID); err != nil {
+			t.Fatalf("[%s] poison pending counter: %v", bc.name, err)
+		}
+
+		// 实际只有 1 条，错误高计数不能误拒；成功后应绝对值自愈为 2。
+		if _, _, err := r.CreateJoinRequest(ctx, nextID(), guildID, nextID(), maxPending); err != nil {
+			t.Fatalf("[%s] compatible writer should heal high counter: %v", bc.name, err)
+		}
+		assertGuildPendingCounts(t, ctx, bc, guildID, 2, 2)
+
+		legacyPlayer3, legacyRequest3 := nextID(), nextID()
+		if err := legacyCreateJoinRequestForTest(ctx, r, legacyRequest3, guildID, legacyPlayer3, maxPending); err != nil {
+			t.Fatalf("[%s] legacy request 3: %v", bc.name, err)
+		}
+		// 旧写后 counter 仍为 2、实际已满 3；新版必须拒绝第 4 条，不能信任低计数突破上限。
+		if _, _, err := r.CreateJoinRequest(ctx, nextID(), guildID, nextID(), maxPending); errcode.As(err) != errcode.ErrGuildRequestLimit {
+			t.Fatalf("[%s] stale low counter must not admit request 4: %v", bc.name, err)
+		}
+		var actual int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = ?`,
+			guildID, joinStatusPending).Scan(&actual); err != nil {
+			t.Fatalf("[%s] count pending after limit: %v", bc.name, err)
+		}
+		if actual != maxPending {
+			t.Fatalf("[%s] actual pending=%d,期望=%d", bc.name, actual, maxPending)
+		}
+
+		// 对旧写已有 pending 的幂等调用也会提交 self-heal，不要求新建一行才修正。
+		gotID, already, err := r.CreateJoinRequest(ctx, nextID(), guildID, legacyPlayer3, maxPending)
+		if err != nil || !already || gotID != legacyRequest3 {
+			t.Fatalf("[%s] idempotent self-heal got id=%d already=%v err=%v", bc.name, gotID, already, err)
+		}
+		assertGuildPendingCounts(t, ctx, bc, guildID, maxPending, maxPending)
+
+		if _, err := bc.db.ExecContext(ctx,
+			`UPDATE guilds SET pending_request_count = 99 WHERE guild_id = ?`, guildID); err != nil {
+			t.Fatalf("[%s] poison pending counter before reject: %v", bc.name, err)
+		}
+		rejected, err := r.RejectJoin(ctx, legacyRequest1, leaderID)
+		if err != nil || !rejected {
+			t.Fatalf("[%s] compatible reject should reconcile detail count, rejected=%v err=%v", bc.name, rejected, err)
+		}
+		assertGuildPendingCounts(t, ctx, bc, guildID, 2, 2)
+	})
+}
+
+// TestLegacyGroupWriterCounterDriftSelfHeals 模拟旧 Pod 继续用 chat_group_members(player_id)
+// COUNT...FOR UPDATE 判限且不维护 player_group_counts。兼容新版必须按明细修复高/低错误值，
+// 第 N+1 次入群仍被拒；删明细后计数也必须按剩余明细绝对值校正而不是盲目 -1。
+func TestLegacyGroupWriterCounterDriftSelfHeals(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, bc backendCase) {
+		ctx := context.Background()
+		r := NewMySQLGroupRepo(bc.db)
+		const maxGroups = 3
+		const maxMembers = 50
+		playerID := nextID()
+		groupIDs := []uint64{nextID(), nextID(), nextID(), nextID()}
+		for _, groupID := range groupIDs {
+			insertLegacyGroupForTest(t, ctx, bc, groupID, nextID())
+		}
+
+		if err := legacyAddGroupMemberForTest(ctx, r, groupIDs[0], playerID, maxGroups); err != nil {
+			t.Fatalf("[%s] legacy add group 1: %v", bc.name, err)
+		}
+		if _, err := bc.db.ExecContext(ctx,
+			`INSERT INTO player_group_counts (player_id, group_count) VALUES (?, 99)
+			 ON DUPLICATE KEY UPDATE group_count = VALUES(group_count)`, playerID); err != nil {
+			t.Fatalf("[%s] poison group counter: %v", bc.name, err)
+		}
+
+		if already, err := r.AddMember(ctx, groupIDs[1], 0, playerID, maxMembers, maxGroups); err != nil || already {
+			t.Fatalf("[%s] compatible add should heal high counter, already=%v err=%v", bc.name, already, err)
+		}
+		assertPlayerGroupCounts(t, ctx, bc, playerID, 2, 2)
+
+		if err := legacyAddGroupMemberForTest(ctx, r, groupIDs[2], playerID, maxGroups); err != nil {
+			t.Fatalf("[%s] legacy add group 3: %v", bc.name, err)
+		}
+		if _, err := r.AddMember(ctx, groupIDs[3], 0, playerID, maxMembers, maxGroups); errcode.As(err) != errcode.ErrGroupJoinLimit {
+			t.Fatalf("[%s] stale low counter must not admit group 4: %v", bc.name, err)
+		}
+		var actual int
+		if err := bc.db.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ?`, playerID).Scan(&actual); err != nil {
+			t.Fatalf("[%s] count groups after limit: %v", bc.name, err)
+		}
+		if actual != maxGroups {
+			t.Fatalf("[%s] actual groups=%d,期望=%d", bc.name, actual, maxGroups)
+		}
+
+		if already, err := r.AddMember(ctx, groupIDs[2], 0, playerID, maxMembers, maxGroups); err != nil || !already {
+			t.Fatalf("[%s] idempotent group self-heal already=%v err=%v", bc.name, already, err)
+		}
+		assertPlayerGroupCounts(t, ctx, bc, playerID, maxGroups, maxGroups)
+
+		if _, err := bc.db.ExecContext(ctx,
+			`UPDATE player_group_counts SET group_count = 99 WHERE player_id = ?`, playerID); err != nil {
+			t.Fatalf("[%s] poison group counter before release: %v", bc.name, err)
+		}
+		if err := r.RemoveMember(ctx, groupIDs[0], playerID); err != nil {
+			t.Fatalf("[%s] compatible release: %v", bc.name, err)
+		}
+		assertPlayerGroupCounts(t, ctx, bc, playerID, 2, 2)
+	})
+}
+
+func legacyCreateJoinRequestForTest(
+	ctx context.Context,
+	r *MySQLGuildRepo,
+	requestID, guildID, playerID uint64,
+	maxPending int,
+) error {
+	return r.tx(ctx, func(tx *sql.Tx) error {
+		var lockedGuildID uint64
+		if err := tx.QueryRowContext(ctx,
+			`SELECT guild_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&lockedGuildID); err != nil {
+			return dbErr(err, "legacy lock guild %d", guildID)
+		}
+		var existingID uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT request_id FROM guild_join_requests WHERE guild_id = ? AND player_id = ? FOR UPDATE`,
+			guildID, playerID).Scan(&existingID)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return dbErr(err, "legacy query join request")
+		}
+		var count int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = ? FOR UPDATE`,
+			guildID, joinStatusPending).Scan(&count); err != nil {
+			return dbErr(err, "legacy count pending")
+		}
+		if maxPending > 0 && count >= maxPending {
+			return errcode.New(errcode.ErrGuildRequestLimit, "legacy pending limit")
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO guild_join_requests (request_id, guild_id, player_id, status) VALUES (?, ?, ?, ?)`,
+			requestID, guildID, playerID, joinStatusPending); err != nil {
+			return dbErr(err, "legacy insert join request")
+		}
+		return nil
+	})
+}
+
+func legacyAddGroupMemberForTest(
+	ctx context.Context,
+	r *MySQLGroupRepo,
+	groupID, playerID uint64,
+	maxGroups int,
+) error {
+	return r.tx(ctx, func(tx *sql.Tx) error {
+		var memberCount int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT member_count FROM chat_groups WHERE group_id = ? FOR UPDATE`, groupID).Scan(&memberCount); err != nil {
+			return dbErr(err, "legacy lock group %d", groupID)
+		}
+		var count int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ? FOR UPDATE`, playerID).Scan(&count); err != nil {
+			return dbErr(err, "legacy count player groups")
+		}
+		if maxGroups > 0 && count >= maxGroups {
+			return errcode.New(errcode.ErrGroupJoinLimit, "legacy group limit")
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO chat_group_members (group_id, player_id, role) VALUES (?, ?, ?)`,
+			groupID, playerID, GroupRoleMember); err != nil {
+			return dbErr(err, "legacy insert group member")
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE chat_groups SET member_count = member_count + 1 WHERE group_id = ?`, groupID); err != nil {
+			return dbErr(err, "legacy inc group member_count")
+		}
+		return nil
+	})
+}
+
+func insertLegacyGroupForTest(t *testing.T, ctx context.Context, bc backendCase, groupID, ownerID uint64) {
+	t.Helper()
+	if _, err := bc.db.ExecContext(ctx,
+		`INSERT INTO chat_groups (group_id, name, owner_id, member_count, max_members) VALUES (?, ?, ?, 1, 50)`,
+		groupID, fmt.Sprintf("legacy-%d", groupID), ownerID); err != nil {
+		t.Fatalf("[%s] insert legacy group: %v", bc.name, err)
+	}
+	if _, err := bc.db.ExecContext(ctx,
+		`INSERT INTO chat_group_members (group_id, player_id, role) VALUES (?, ?, ?)`,
+		groupID, ownerID, GroupRoleOwner); err != nil {
+		t.Fatalf("[%s] insert legacy owner: %v", bc.name, err)
+	}
+}
+
+func assertGuildPendingCounts(t *testing.T, ctx context.Context, bc backendCase, guildID uint64, wantActual, wantCounter int) {
+	t.Helper()
+	var actual, counter int
+	if err := bc.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = ?`,
+		guildID, joinStatusPending).Scan(&actual); err != nil {
+		t.Fatalf("[%s] count pending details: %v", bc.name, err)
+	}
+	if err := bc.db.QueryRowContext(ctx,
+		`SELECT pending_request_count FROM guilds WHERE guild_id = ?`, guildID).Scan(&counter); err != nil {
+		t.Fatalf("[%s] read pending counter: %v", bc.name, err)
+	}
+	if actual != wantActual || counter != wantCounter {
+		t.Fatalf("[%s] pending actual=%d counter=%d,期望 actual=%d counter=%d",
+			bc.name, actual, counter, wantActual, wantCounter)
+	}
+}
+
+func assertPlayerGroupCounts(t *testing.T, ctx context.Context, bc backendCase, playerID uint64, wantActual, wantCounter int) {
+	t.Helper()
+	var actual, counter int
+	if err := bc.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ?`, playerID).Scan(&actual); err != nil {
+		t.Fatalf("[%s] count player group details: %v", bc.name, err)
+	}
+	if err := bc.db.QueryRowContext(ctx,
+		`SELECT group_count FROM player_group_counts WHERE player_id = ?`, playerID).Scan(&counter); err != nil {
+		t.Fatalf("[%s] read player group counter: %v", bc.name, err)
+	}
+	if actual != wantActual || counter != wantCounter {
+		t.Fatalf("[%s] groups actual=%d counter=%d,期望 actual=%d counter=%d",
+			bc.name, actual, counter, wantActual, wantCounter)
+	}
+}
+
+// TestGuildNameCaseInsensitiveDedup 双后端验证公会名唯一键的 collation 语义:name 列显式
+// utf8mb4_0900_ai_ci → 大小写 / 口音不敏感,"GuildAlpha" 与 "guildalpha" 视为同名冲突。
+// 关键防回归点(§5.1):TiDB 默认 collation 是 utf8mb4_bin(大小写敏感),若 name 列不显式声明
+// 0900_ai_ci,重名判定会从"冲突"变成"不冲突",与现网 MySQL 行为漂移。此测试锁死该语义。
+func TestGuildNameCaseInsensitiveDedup(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, bc backendCase) {
+		ctx := context.Background()
+		r := NewMySQLGuildRepo(bc.db)
+
+		if err := r.CreateGuild(ctx, nextID(), nextID(), "GuildAlpha", 100); err != nil {
+			t.Fatalf("[%s] 首次建公会应成功:%v", bc.name, err)
+		}
+		// 仅大小写不同的重名必须被拒(大小写不敏感 uk)。
+		err := r.CreateGuild(ctx, nextID(), nextID(), "guildalpha", 100)
+		if code := errcode.As(err); code != errcode.ErrGuildNameTaken {
+			t.Fatalf("[%s] 大小写变体重名必须回 ErrGuildNameTaken(collation 漂移风险),得到 code=%d err=%v",
+				bc.name, code, err)
+		}
+	})
 }

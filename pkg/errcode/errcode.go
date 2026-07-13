@@ -206,6 +206,7 @@ const (
 	ErrAuctionInsufficient        Code = 12004 // 结算资源不足(冻结 / 扣减失败)
 	ErrAuctionIdempotencyConflict Code = 12005 // idempotency_key 复用到不同请求(指纹不一致)
 	ErrAuctionMarketBusy          Code = 12006 // market 跨实例单写者锁竞争超时(让客户端稍后重试)
+	ErrAuctionOrderLimit          Code = 12007 // 单玩家 PENDING + 活跃拍卖订单达到硬上限
 )
 
 // leaderboard(13000-13999,通用排行榜)

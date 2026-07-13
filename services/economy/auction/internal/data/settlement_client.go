@@ -68,6 +68,32 @@ func (g *GrpcInventoryLedger) Freeze(ctx context.Context, playerID, orderID uint
 	}
 }
 
+// Ensure 调 inventory.EnsureAuctionEscrow 验证或补冻 legacy 活跃订单的剩余托管。
+func (g *GrpcInventoryLedger) Ensure(
+	ctx context.Context, playerID, orderID uint64, side Side, itemConfigID uint32, remaining, price int64,
+) error {
+	if remaining <= 0 || price <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "invalid ensure escrow remaining=%d price=%d", remaining, price)
+	}
+	resp, err := g.cli.EnsureAuctionEscrow(ctx, &inventoryv1.EnsureAuctionEscrowRequest{
+		PlayerId: playerID, OrderId: orderID, Side: inventoryv1.EscrowSide(side),
+		ItemConfigId: itemConfigID, RemainingQuantity: uint64(remaining), UnitPrice: uint64(price),
+	})
+	if err != nil {
+		return err
+	}
+	switch resp.GetCode() {
+	case commonv1.ErrCode_OK:
+		return nil
+	case commonv1.ErrCode_ERR_INVENTORY_INSUFFICIENT:
+		return errcode.New(errcode.ErrAuctionInsufficient,
+			"auction ensure escrow insufficient player=%d order=%d", playerID, orderID)
+	default:
+		return errcode.New(errcode.Code(resp.GetCode()),
+			"auction ensure escrow failed player=%d order=%d code=%d", playerID, orderID, int32(resp.GetCode()))
+	}
+}
+
 // Settle 调 inventory.SettleAuctionMatch 完成本笔成交的资产对转(幂等键 = match_id)。
 //
 //   - inventory 返回 OK              → nil(结算成功 / 幂等回放)

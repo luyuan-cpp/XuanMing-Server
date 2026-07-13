@@ -1,0 +1,20 @@
+# 内网/离线宿主编译路线。先用宿主 Go 交叉编译：
+#   $env:GOWORK='off'; $env:GOOS='linux'; $env:GOARCH='amd64'; $env:CGO_ENABLED='0'
+#   Push-Location tools/migrate
+#   go build -mod=readonly -trimpath -ldflags='-s -w' `
+#     -o ../../run/docker-build/prebuilt/migrate/pandora-migrate .
+#   Pop-Location
+# 再以该 stage 目录为构建上下文。该路径与业务服务 Dockerfile.prebuilt 的原则一致。
+ARG GO_VERSION=1.26.5
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION} AS runtime-files
+
+FROM scratch
+
+COPY --from=runtime-files /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=runtime-files /usr/share/zoneinfo /usr/share/zoneinfo
+COPY pandora-migrate /app/pandora-migrate
+
+USER 10001:10001
+ENTRYPOINT ["/app/pandora-migrate"]

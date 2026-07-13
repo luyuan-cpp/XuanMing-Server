@@ -1,7 +1,9 @@
 # Pandora 基础设施(k8s dev-grade,单副本,minikube/本地集群用)
 #
 # ⚠️ 这是「能把链路跑起来」的开发级基础设施,不是生产配置:
-#   - 单副本、emptyDir(Pod 重建丢数据)、明文口令、Kafka 单 broker。
+#   - 单副本、大多数状态仍是开发级临时存储、明文口令、Kafka 单 broker。
+#   - 例外：etcd 承载 DS auth required_writer_epoch，必须用 PVC 持久化；否则 Pod 重建
+#     会让所有 enforce writer/DS fail-closed，且禁止把 missing 默认成 1。
 #   - 生产请用各自的 Operator / StatefulSet / 外部托管实例,并改 online overlay。
 #
 # 由 tools/scripts/start.ps1 -Mode k8s 自动 apply。MySQL 建库脚本通过
@@ -171,11 +173,24 @@ spec:
   selector: { app: kafka }
   ports: [ { port: 9092, targetPort: 9092 } ]
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: etcd-data
+  namespace: pandora
+  labels: { app: etcd }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 1Gi }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: etcd, namespace: pandora, labels: { app: etcd } }
 spec:
   replicas: 1
+  # 单节点 + RWO 数据盘不得 RollingUpdate 并发起两个 etcd；先停旧 Pod 再挂同一 PVC。
+  strategy: { type: Recreate }
   selector: { matchLabels: { app: etcd } }
   template:
     metadata: { labels: { app: etcd } }
@@ -195,6 +210,16 @@ spec:
             - --initial-cluster-token=pandora-etcd-cluster
             - --initial-cluster-state=new
           ports: [ { containerPort: 2379 }, { containerPort: 2380 } ]
+          volumeMounts:
+            - { name: data, mountPath: /etcd-data }
+          readinessProbe:
+            exec: { command: ["/usr/local/bin/etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"] }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: etcd-data }
 ---
 apiVersion: v1
 kind: Service

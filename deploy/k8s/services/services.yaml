@@ -1,8 +1,8 @@
 # Pandora 20 个业务 Deployment + Service（19 个 Go 服务类型，matchmaker 含 PVP/PVE 双实例）
 #
 # 镜像:pandora/<svc>:dev(k8s 模式由 start.ps1 docker build 后 `minikube image load`;
-#       online 模式由 kustomize overlay 把镜像换成 registry 推送的带版本 tag)。
-# 配置:configmap pandora-config(launcher 用 run/cluster/etc 现场生成),
+#       online 模式先回读 registry，再由 runtime overlay 固定为 repo@sha256:digest)。
+# 配置:secret pandora-config(launcher 用 run/cluster/etc 现场生成,含 HS256 密钥故用 Secret 承载),
 #       按 subPath 把 <svc>.yaml 挂成 /app/etc/cluster.yaml。
 #
 # Service 短名 = 服务名,同 namespace 内 <svc>:<port> 直连(与 docker/compose 对齐)。
@@ -20,18 +20,34 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: login } }
   template:
-    metadata: { labels: { app: login } }
+    metadata: { labels: { app: login, pandora.dev/ds-auth-writer-epoch: "2" } }
     spec:
+      # 四个 DSTicket 签发方以固定非 root 身份运行；fsGroup 只为 Secret 投影提供组读权限。
+      # 私钥文件模式 0440(root:10001)，容器可读但不可写，其他 UID/GID 不可读。
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: login
           image: pandora/login:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+            - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50001 } ]
           readinessProbe: { grpc: { port: 50001 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: login.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: login.yaml, readOnly: true }
+            # DSTicket v2(方案 B)RSA 签发私钥(仅 login/matchmaker/matchmaker-pve/hub-allocator 四个签发方挂载,
+            # 决策文档 §7.2 私钥暴露面;Fleet/DS 绝不挂载,只拿公钥 JWKS ConfigMap)。
+            - { name: dsticket, mountPath: /run/secrets/pandora-dsticket, readOnly: true }
+            # Login VerifyDSTicket 诊断/兼容路径只读与 DS 同内容的 overlap JWKS；不从私钥
+            # 派生单 key，不依赖 keys[0]。ConfigMap 在 pandora namespace 内是 immutable 副本。
+            - { name: dsticket-jwks, mountPath: /run/config/pandora-dsticket, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: dsticket, secret: { secretName: pandora-dsticket-signer-r1, defaultMode: 0440 } }
+        - { name: dsticket-jwks, configMap: { name: pandora-dsticket-jwks-r1, defaultMode: 0444 } }
 ---
 apiVersion: v1
 kind: Service
@@ -56,7 +72,7 @@ spec:
           readinessProbe: { grpc: { port: 50002 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -81,7 +97,7 @@ spec:
           readinessProbe: { grpc: { port: 50003 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: data-service.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -106,7 +122,7 @@ spec:
           readinessProbe: { grpc: { port: 50004 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: friend.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -131,7 +147,7 @@ spec:
           readinessProbe: { grpc: { port: 50005 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: chat.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -156,7 +172,7 @@ spec:
           readinessProbe: { grpc: { port: 50008 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: guild.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -181,7 +197,7 @@ spec:
           readinessProbe: { grpc: { port: 50009 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: mail.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -195,18 +211,21 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: player-locator } }
   template:
-    metadata: { labels: { app: player-locator } }
+    metadata: { labels: { app: player-locator, pandora.dev/ds-auth-writer-epoch: "2" } }
     spec:
       containers:
         - name: player-locator
           image: pandora/player-locator:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+            - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50006 } ]
           readinessProbe: { grpc: { port: 50006 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player-locator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -231,7 +250,7 @@ spec:
           readinessProbe: { grpc: { port: 50010 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: team.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -249,6 +268,7 @@ spec:
   template:
     metadata: { labels: { app: matchmaker } }
     spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker
           image: pandora/matchmaker:dev
@@ -256,9 +276,14 @@ spec:
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50011 } ]
           readinessProbe: { grpc: { port: 50011 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker.yaml, readOnly: true }
+            # DSTicket v2(方案 B)RSA 签发私钥(签发方专属,见 login 注释)。
+            - { name: dsticket, mountPath: /run/secrets/pandora-dsticket, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: dsticket, secret: { secretName: pandora-dsticket-signer-r1, defaultMode: 0440 } }
 ---
 apiVersion: v1
 kind: Service
@@ -276,6 +301,7 @@ spec:
   template:
     metadata: { labels: { app: matchmaker-pve } }
     spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       containers:
         - name: matchmaker-pve
           image: pandora/matchmaker-pve:dev
@@ -283,9 +309,14 @@ spec:
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50018 } ]
           readinessProbe: { grpc: { port: 50018 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker-pve.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: matchmaker-pve.yaml, readOnly: true }
+            # DSTicket v2(方案 B)RSA 签发私钥(签发方专属,见 login 注释)。
+            - { name: dsticket, mountPath: /run/secrets/pandora-dsticket, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: dsticket, secret: { secretName: pandora-dsticket-signer-r1, defaultMode: 0440 } }
 ---
 apiVersion: v1
 kind: Service
@@ -310,7 +341,7 @@ spec:
           readinessProbe: { grpc: { port: 50012 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: trade.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -335,7 +366,7 @@ spec:
           readinessProbe: { grpc: { port: 50013 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: dialogue.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -360,7 +391,7 @@ spec:
           readinessProbe: { grpc: { port: 50014 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: push.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -385,7 +416,7 @@ spec:
           readinessProbe: { grpc: { port: 50007 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: leaderboard.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -410,7 +441,7 @@ spec:
           readinessProbe: { grpc: { port: 50015 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: inventory.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -435,7 +466,7 @@ spec:
           readinessProbe: { grpc: { port: 50016 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: auction.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -449,19 +480,22 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: ds-allocator } }
   template:
-    metadata: { labels: { app: ds-allocator } }
+    metadata: { labels: { app: ds-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }
     spec:
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: ds-allocator
           image: pandora/ds-allocator:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+            - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50020 } ]
           readinessProbe: { grpc: { port: 50020 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service
@@ -475,19 +509,28 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: hub-allocator } }
   template:
-    metadata: { labels: { app: hub-allocator } }
+    metadata: { labels: { app: hub-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }
     spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch }
       serviceAccountName: pandora-allocator   # Agones API 权限(agones 模式下需要;mock 不用但无害)
       containers:
         - name: hub-allocator
           image: pandora/hub-allocator:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+            - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50021 } ]
           readinessProbe: { grpc: { port: 50021 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: hub-allocator.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: hub-allocator.yaml, readOnly: true }
+            # DSTicket v2(方案 B)RSA 签发私钥(签发方专属,见 login 注释)。
+            - { name: dsticket, mountPath: /run/secrets/pandora-dsticket, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: dsticket, secret: { secretName: pandora-dsticket-signer-r1, defaultMode: 0440 } }
 ---
 apiVersion: v1
 kind: Service
@@ -501,18 +544,21 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: battle-result } }
   template:
-    metadata: { labels: { app: battle-result } }
+    metadata: { labels: { app: battle-result, pandora.dev/ds-auth-writer-epoch: "2" } }
     spec:
       containers:
         - name: battle-result
           image: pandora/battle-result:dev
           imagePullPolicy: IfNotPresent
+          env:
+            - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+            - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50022 } ]
           readinessProbe: { grpc: { port: 50022 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: battle-result.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, configMap: { name: pandora-config } } ]
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
 ---
 apiVersion: v1
 kind: Service

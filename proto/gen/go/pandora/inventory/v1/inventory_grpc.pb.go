@@ -33,18 +33,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InventoryService_GetInventory_FullMethodName       = "/pandora.inventory.v1.InventoryService/GetInventory"
-	InventoryService_GrantItems_FullMethodName         = "/pandora.inventory.v1.InventoryService/GrantItems"
-	InventoryService_UseItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/UseItem"
-	InventoryService_SellItem_FullMethodName           = "/pandora.inventory.v1.InventoryService/SellItem"
-	InventoryService_GrantInstances_FullMethodName     = "/pandora.inventory.v1.InventoryService/GrantInstances"
-	InventoryService_IdentifyItem_FullMethodName       = "/pandora.inventory.v1.InventoryService/IdentifyItem"
-	InventoryService_DiscardInstance_FullMethodName    = "/pandora.inventory.v1.InventoryService/DiscardInstance"
-	InventoryService_MoveInstance_FullMethodName       = "/pandora.inventory.v1.InventoryService/MoveInstance"
-	InventoryService_FreezeForOrder_FullMethodName     = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
-	InventoryService_SettleAuctionMatch_FullMethodName = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
-	InventoryService_SettlePlayerTrade_FullMethodName  = "/pandora.inventory.v1.InventoryService/SettlePlayerTrade"
-	InventoryService_ReleaseEscrow_FullMethodName      = "/pandora.inventory.v1.InventoryService/ReleaseEscrow"
+	InventoryService_GetInventory_FullMethodName        = "/pandora.inventory.v1.InventoryService/GetInventory"
+	InventoryService_GrantItems_FullMethodName          = "/pandora.inventory.v1.InventoryService/GrantItems"
+	InventoryService_UseItem_FullMethodName             = "/pandora.inventory.v1.InventoryService/UseItem"
+	InventoryService_SellItem_FullMethodName            = "/pandora.inventory.v1.InventoryService/SellItem"
+	InventoryService_GrantInstances_FullMethodName      = "/pandora.inventory.v1.InventoryService/GrantInstances"
+	InventoryService_IdentifyItem_FullMethodName        = "/pandora.inventory.v1.InventoryService/IdentifyItem"
+	InventoryService_DiscardInstance_FullMethodName     = "/pandora.inventory.v1.InventoryService/DiscardInstance"
+	InventoryService_MoveInstance_FullMethodName        = "/pandora.inventory.v1.InventoryService/MoveInstance"
+	InventoryService_FreezeForOrder_FullMethodName      = "/pandora.inventory.v1.InventoryService/FreezeForOrder"
+	InventoryService_EnsureAuctionEscrow_FullMethodName = "/pandora.inventory.v1.InventoryService/EnsureAuctionEscrow"
+	InventoryService_SettleAuctionMatch_FullMethodName  = "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
+	InventoryService_SettlePlayerTrade_FullMethodName   = "/pandora.inventory.v1.InventoryService/SettlePlayerTrade"
+	InventoryService_ReleaseEscrow_FullMethodName       = "/pandora.inventory.v1.InventoryService/ReleaseEscrow"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -82,6 +83,14 @@ type InventoryServiceClient interface {
 	// 与 SettleAuctionMatch / ReleaseEscrow 配套:成交从 escrow 消费、撤单 / 过期从 escrow 退还。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
 	FreezeForOrder(ctx context.Context, in *FreezeForOrderRequest, opts ...grpc.CallOption) (*FreezeForOrderResponse, error)
+	// EnsureAuctionEscrow 修复旧版本拍卖订单的托管缺口(系统接口,仅后端内部直连):
+	//
+	//	已有 active escrow 时严格核对方向、物品与剩余可结算资产,满足要求即幂等成功;
+	//	escrow 缺失时从玩家活跃资产原子补冻 remaining_quantity 并创建 escrow。
+	//
+	// closed / 订单参数冲突会明确拒绝,绝不把唯一键冲突直接当成功。
+	// 该 RPC 只供 auction 持久补偿器调用,不在 Envoy 暴露;带玩家 JWT 的调用一律拒绝。
+	EnsureAuctionEscrow(ctx context.Context, in *EnsureAuctionEscrowRequest, opts ...grpc.CallOption) (*EnsureAuctionEscrowResponse, error)
 	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
 	//
 	//	同一 MySQL 本地事务里从双方 escrow 消费完成资产对转 ——
@@ -210,6 +219,16 @@ func (c *inventoryServiceClient) FreezeForOrder(ctx context.Context, in *FreezeF
 	return out, nil
 }
 
+func (c *inventoryServiceClient) EnsureAuctionEscrow(ctx context.Context, in *EnsureAuctionEscrowRequest, opts ...grpc.CallOption) (*EnsureAuctionEscrowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnsureAuctionEscrowResponse)
+	err := c.cc.Invoke(ctx, InventoryService_EnsureAuctionEscrow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inventoryServiceClient) SettleAuctionMatch(ctx context.Context, in *SettleAuctionMatchRequest, opts ...grpc.CallOption) (*SettleAuctionMatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SettleAuctionMatchResponse)
@@ -275,6 +294,14 @@ type InventoryServiceServer interface {
 	// 与 SettleAuctionMatch / ReleaseEscrow 配套:成交从 escrow 消费、撤单 / 过期从 escrow 退还。
 	// 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
 	FreezeForOrder(context.Context, *FreezeForOrderRequest) (*FreezeForOrderResponse, error)
+	// EnsureAuctionEscrow 修复旧版本拍卖订单的托管缺口(系统接口,仅后端内部直连):
+	//
+	//	已有 active escrow 时严格核对方向、物品与剩余可结算资产,满足要求即幂等成功;
+	//	escrow 缺失时从玩家活跃资产原子补冻 remaining_quantity 并创建 escrow。
+	//
+	// closed / 订单参数冲突会明确拒绝,绝不把唯一键冲突直接当成功。
+	// 该 RPC 只供 auction 持久补偿器调用,不在 Envoy 暴露;带玩家 JWT 的调用一律拒绝。
+	EnsureAuctionEscrow(context.Context, *EnsureAuctionEscrowRequest) (*EnsureAuctionEscrowResponse, error)
 	// SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
 	//
 	//	同一 MySQL 本地事务里从双方 escrow 消费完成资产对转 ——
@@ -338,6 +365,9 @@ func (UnimplementedInventoryServiceServer) MoveInstance(context.Context, *MoveIn
 }
 func (UnimplementedInventoryServiceServer) FreezeForOrder(context.Context, *FreezeForOrderRequest) (*FreezeForOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FreezeForOrder not implemented")
+}
+func (UnimplementedInventoryServiceServer) EnsureAuctionEscrow(context.Context, *EnsureAuctionEscrowRequest) (*EnsureAuctionEscrowResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnsureAuctionEscrow not implemented")
 }
 func (UnimplementedInventoryServiceServer) SettleAuctionMatch(context.Context, *SettleAuctionMatchRequest) (*SettleAuctionMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SettleAuctionMatch not implemented")
@@ -530,6 +560,24 @@ func _InventoryService_FreezeForOrder_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_EnsureAuctionEscrow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureAuctionEscrowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).EnsureAuctionEscrow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_EnsureAuctionEscrow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).EnsureAuctionEscrow(ctx, req.(*EnsureAuctionEscrowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InventoryService_SettleAuctionMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SettleAuctionMatchRequest)
 	if err := dec(in); err != nil {
@@ -626,6 +674,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FreezeForOrder",
 			Handler:    _InventoryService_FreezeForOrder_Handler,
+		},
+		{
+			MethodName: "EnsureAuctionEscrow",
+			Handler:    _InventoryService_EnsureAuctionEscrow_Handler,
 		},
 		{
 			MethodName: "SettleAuctionMatch",

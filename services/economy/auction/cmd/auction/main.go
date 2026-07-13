@@ -2,17 +2,17 @@
 //
 // 职责(docs/design/decision-revisit-auction-engine.md):
 //
-//	挂单 / 出价进按 market_id 分片的订单簿,单写者价格-时间优先撮合;
-//	撮合权威落 MySQL(pandora_auction,强依赖);订单簿用 Redis ZSET(强依赖);
-//	成交发 kafka pandora.auction.match,流转发 pandora.auction.audit(弱依赖)。
+//	挂单 / 出价按 market_id 分片，单写者从 MySQL 精确物品候选做价格-时间优先撮合;
+//	撮合候选与订单状态权威落 MySQL(pandora_auction,强依赖);Redis ZSET 保留作旧版本兼容缓存;
+//	成交经 MySQL outbox 至少一次发 pandora.auction.match；流转 audit 仍是弱依赖。
 //
 // 启动顺序(对齐 trade / inventory):
 //  1. Logger
 //  2. 加载 yaml → conf.Defaults
 //  3. MySQL(强依赖:撮合权威;单库 dsn 或分库 shards 按 market_id 路由)
-//  4. Redis + Ping(强依赖:订单簿不可降级)
+//  4. Redis + Ping(当前部署强依赖:跨实例锁 + 旧版本兼容缓存)
 //  5. Snowflake(order_id / match_id 生成)
-//  6. kafka producer(pandora.auction.match + pandora.auction.audit)→ pusher(弱依赖)
+//  6. kafka producer(match outbox 强持久、audit 弱依赖)→ pusher
 //  7. SettlementLedger(配 inventory_addr 走真实结算;留空且 allow_noop_settlement=true 才退 Noop,否则 fail-fast)
 //  8. 装配 AuctionUsecase → AuctionService → gRPC/HTTP server
 //  9. kratos.New(...).Run() 阻塞
@@ -21,9 +21,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -45,7 +47,10 @@ import (
 	"github.com/luyuancpp/pandora/services/economy/auction/internal/service"
 )
 
-const serviceName = "auction"
+const (
+	serviceName             = "auction"
+	maxSupportedMySQLShards = 2
+)
 
 var flagConf string
 
@@ -84,6 +89,17 @@ func main() {
 
 	// 3. MySQL(强依赖:撮合权威库 pandora_auction)。分库优先,否则单库。
 	var router data.DBRouter
+	var topologyDSNs []string
+	if shardCount := len(cfg.Node.MySQLClient.Shards); shardCount > maxSupportedMySQLShards {
+		helper.Errorw("msg", "auction_mysql_shard_count_unsupported", "shards", shardCount,
+			"max_supported", maxSupportedMySQLShards,
+			"hint", "扩到更多分片前必须完成 owner idempotency registry 回填与完成标记")
+		os.Exit(1)
+	} else if shardCount == 1 {
+		helper.Errorw("msg", "auction_mysql_single_shard_list_invalid",
+			"hint", "单库必须使用 node.mysql_client.dsn；shards 只允许恰好 2 个有序 DSN")
+		os.Exit(1)
+	}
 	switch {
 	case len(cfg.Node.MySQLClient.Shards) > 0:
 		set, serr := mysqlx.NewShardSet(cfg.Node.MySQLClient)
@@ -97,18 +113,34 @@ func main() {
 			}
 		}()
 		router = data.ShardedDB{Set: set}
+		topologyDSNs = append([]string(nil), cfg.Node.MySQLClient.Shards...)
 		helper.Infow("msg", "mysql_connected", "mode", "sharded", "shards", set.Count())
 	case cfg.Node.MySQLClient.DSN != "":
 		db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 		defer func() { _ = db.Close() }()
 		router = data.SingleDB{DB: db}
+		topologyDSNs = []string{cfg.Node.MySQLClient.DSN}
 		helper.Infow("msg", "mysql_connected", "mode", "single", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 	default:
 		helper.Errorw("msg", "mysql_required", "hint", "node.mysql_client.dsn or .shards required (pandora_auction)")
 		os.Exit(1)
 	}
+	topologyCtx, topologyCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	topologyErr := data.ValidateShardTopology(topologyCtx, router, data.ShardTopologyOptions{
+		Generation:     cfg.Auction.ShardTopologyGeneration,
+		DSNs:           topologyDSNs,
+		AllowBootstrap: cfg.Auction.AllowShardTopologyBootstrap,
+	})
+	topologyCancel()
+	if topologyErr != nil {
+		helper.Errorw("msg", "auction_mysql_shard_topology_rejected", "err", topologyErr,
+			"hint", "do not change shard count/order/identity; first 2-shard start requires reviewed bootstrap")
+		os.Exit(1)
+	}
+	helper.Infow("msg", "auction_mysql_shard_topology_verified",
+		"generation", cfg.Auction.ShardTopologyGeneration, "shards", len(topologyDSNs))
 
-	// 4. Redis(强依赖:订单簿 ZSET 不可降级)
+	// 4. Redis(当前部署仍强依赖:跨实例锁 + 旧版本兼容缓存；不再承担撮合候选正确性)
 	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
 	rc := cfg.Node.RedisClient
 	if rc.Host == "" && len(rc.Addrs) == 0 {
@@ -116,7 +148,7 @@ func main() {
 			"hint", "set node.redis_client.host (single) or node.redis_client.addrs (cluster)")
 		os.Exit(1)
 	}
-	rdb := redisx.NewUniversalClient(rc)
+	rdb := redisx.NewDeadlineUniversalClient(rc)
 	defer func() { _ = rdb.Close() }()
 
 	pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -132,31 +164,34 @@ func main() {
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
 	defer func() { _ = sfCloser.Close() }()
 
-	// 6. kafka producer → auctionEventPusher(弱依赖:broker 不通则 warn 并继续)
+	// 6. match 事件由 MySQL outbox 保证至少一次；broker 暂时不可用时 producer 可延迟重建，
+	// marker 绝不清除。audit 仍是弱依赖。只有显式本地开关才允许完全禁用 match 事件。
 	var events biz.AuctionEventPusher
 	if len(cfg.Kafka.Brokers) > 0 {
 		matchTopic := config.BuildTopic("auction", "match") // pandora.auction.match
 		auditTopic := config.BuildTopic("auction", "audit") // pandora.auction.audit
-		pusher := &auctionEventPusher{}
+		pusher := &auctionEventPusher{cfg: cfg.Kafka, matchTopic: matchTopic}
 		if p, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, matchTopic); perr != nil {
-			helper.Warnw("msg", "kafka_match_producer_init_failed", "err", perr)
+			helper.Warnw("msg", "kafka_match_producer_init_failed_outbox_will_retry", "err", perr)
 		} else {
-			defer func() { _ = p.Close() }()
 			pusher.match = p
 			helper.Infow("msg", "kafka_producer_ready", "topic", matchTopic)
 		}
 		if p, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, auditTopic); perr != nil {
 			helper.Warnw("msg", "kafka_audit_producer_init_failed", "err", perr)
 		} else {
-			defer func() { _ = p.Close() }()
 			pusher.audit = p
 			helper.Infow("msg", "kafka_producer_ready", "topic", auditTopic)
 		}
-		if pusher.match != nil || pusher.audit != nil {
-			events = pusher
-		}
+		defer func() { _ = pusher.Close() }()
+		events = pusher
+	} else if cfg.Auction.AllowNoopMatchEvents {
+		helper.Warnw("msg", "kafka_match_events_explicitly_disabled",
+			"hint", "allow_noop_match_events=true; only valid for local no-event integration")
 	} else {
-		helper.Warnw("msg", "kafka_brokers_empty", "hint", "auction events disabled")
+		helper.Errorw("msg", "kafka_brokers_required",
+			"hint", "configure kafka.brokers; only local no-event integration may set auction.allow_noop_match_events=true")
+		os.Exit(1)
 	}
 
 	// 7. SettlementLedger:配了 inventory_addr → 走真实结算(inventory 卖↔买资产原子对转 +
@@ -180,25 +215,27 @@ func main() {
 	// 8. 装配链
 	repo := data.NewMySQLAuctionRepo(router)
 	book := data.NewRedisBookStore(rdb)
-	uc := biz.NewAuctionUsecase(repo, book, ledger, events, sf, cfg.Auction)
+	ownerSlots := data.NewRedisOwnerSlotLimiter(rdb)
+	uc := biz.NewAuctionUsecase(repo, book, ownerSlots, ledger, events, sf, cfg.Auction)
+	defer uc.Close() // 必须先停 audit worker，再由更早注册的 defer 关闭 Kafka producer。
 	if mr, ok := biz.NewMarketRouter(cfg.CellRoute.MarketSelf, cfg.CellRoute.MarketPeerList()); ok {
 		uc.SetMarketRouter(mr)
 		helper.Infow("msg", "market_router_enabled", "self", mr.Self(), "peers", mr.PeerCount())
 	}
 
-	// 8a. 跨实例 per-market 单写者锁(限制#2):多实例部署时同一 market 全局只有一个实例撮合。
-	//     单实例(cross_instance_lock=false)仅靠进程内 striped lock。
-	if cfg.Auction.CrossInstanceLock {
-		locker := data.NewRedisMarketLocker(rdb,
-			time.Duration(cfg.Auction.MarketLockTTLSeconds)*time.Second,
-			time.Duration(cfg.Auction.MarketLockMaxWaitMs)*time.Millisecond,
-			0)
-		uc.SetMarketLocker(locker)
-		helper.Infow("msg", "market_locker_ready", "mode", "redis_cross_instance",
-			"ttl_s", cfg.Auction.MarketLockTTLSeconds, "max_wait_ms", cfg.Auction.MarketLockMaxWaitMs)
-	} else {
-		helper.Infow("msg", "market_locker_inproc", "hint", "single-instance striped lock only")
+	// 8a. Redis 本身已是强依赖，新二进制始终装配跨实例 market 锁。保留 cross_instance_lock
+	// 字段只为旧版配置兼容；不能让自定义线上配置漏字段后静默退回进程锁而破坏单写者。
+	if !cfg.Auction.CrossInstanceLock {
+		helper.Warnw("msg", "cross_instance_lock_forced_on",
+			"hint", "field retained for old-version compatibility; new auction always enables Redis market lock")
 	}
+	locker := data.NewRedisMarketLocker(rdb,
+		time.Duration(cfg.Auction.MarketLockTTLSeconds)*time.Second,
+		time.Duration(cfg.Auction.MarketLockMaxWaitMs)*time.Millisecond,
+		0)
+	uc.SetMarketLocker(locker)
+	helper.Infow("msg", "market_locker_ready", "mode", "redis_cross_instance",
+		"ttl_s", cfg.Auction.MarketLockTTLSeconds, "max_wait_ms", cfg.Auction.MarketLockMaxWaitMs)
 
 	svc := service.NewAuctionService(uc)
 
@@ -220,30 +257,98 @@ func main() {
 		kratos.Server(grpcSrv, httpSrv),
 	)
 
-	// 9a. 过期清扫(限制#1 补偿):OrderTTLSeconds > 0 时起后台 ticker,周期把超 TTL 仍未成交的
-	//     挂单置 EXPIRED、移出簿、退还 escrow。随 app 生命周期退出(ctx 取消)。
-	if cfg.Auction.OrderTTLSeconds > 0 {
-		sweepCtx, stopSweep := context.WithCancel(context.Background())
-		defer stopSweep()
-		interval := time.Duration(cfg.Auction.ExpirySweepIntervalSeconds) * time.Second
+	if cfg.Auction.PassiveWarmup {
+		// R3 green 与旧 matcher 共存时必须完全只读：尤其不能先把 legacy 单置 verified，
+		// 否则旧实例在 Settle 后崩溃会让新 matcher 按陈旧 remaining 再次 Reserve。
+		helper.Warnw("msg", "auction_passive_warmup_enabled",
+			"hint", "writes, legacy verifier, side-effect reconciler and expiry sweeper are disabled until all old auction instances stop")
+	} else {
+		// 9a. 持久副作用补偿：事务内只预留成交/终态并登记 PENDING，事务提交后调用 inventory。
+		// Settle/Release 短暂失败或实例退出都不会丢意图；所有实例可并发扫描，幂等键与条件更新兜底。
+		reconcileCtx, stopReconcile := context.WithCancel(context.Background())
+		defer stopReconcile()
+		reconcileInterval := time.Duration(cfg.Auction.SideEffectReconcileIntervalSeconds) * time.Second
 		go func() {
-			ticker := time.NewTicker(interval)
+			run := func() {
+				settled, released, rerr := uc.ReconcilePendingSideEffects(reconcileCtx)
+				if rerr != nil {
+					helper.Warnw("msg", "auction_side_effect_reconcile_incomplete", "err", rerr,
+						"settled", settled, "released", released)
+				} else if settled > 0 || released > 0 {
+					helper.Infow("msg", "auction_side_effect_reconcile", "settled", settled, "released", released)
+				}
+			}
+			run() // 启动即恢复上次进程遗留，不先空等一个周期。
+			ticker := time.NewTicker(reconcileInterval)
 			defer ticker.Stop()
 			for {
 				select {
-				case <-sweepCtx.Done():
+				case <-reconcileCtx.Done():
 					return
 				case <-ticker.C:
-					n, serr := uc.ExpireDueOrders(sweepCtx)
-					if serr != nil {
-						helper.Warnw("msg", "auction_expiry_sweep_failed", "err", serr)
-					} else if n > 0 {
-						helper.Infow("msg", "auction_expiry_sweep", "expired", n)
-					}
+					run()
 				}
 			}
 		}()
-		helper.Infow("msg", "expiry_sweeper_ready", "ttl_s", cfg.Auction.OrderTTLSeconds, "interval_s", cfg.Auction.ExpirySweepIntervalSeconds)
+		helper.Infow("msg", "side_effect_reconciler_ready",
+			"interval_s", cfg.Auction.SideEffectReconcileIntervalSeconds,
+			"batch_per_shard", cfg.Auction.SideEffectReconcileBatch)
+
+		// Kafka outbox 必须与资产补偿分 goroutine：底层同步 producer 不可靠响应 context，
+		// broker 故障只能阻塞事件 worker，不能阻塞下一轮 Settle/Release。
+		eventCtx, stopEvents := context.WithCancel(context.Background())
+		defer stopEvents()
+		go func() {
+			run := func() {
+				published, perr := uc.ReconcilePendingMatchEvents(eventCtx)
+				if perr != nil {
+					helper.Warnw("msg", "auction_match_event_reconcile_incomplete", "err", perr,
+						"published", published)
+				} else if published > 0 {
+					helper.Infow("msg", "auction_match_event_reconcile", "published", published)
+				}
+			}
+			run()
+			ticker := time.NewTicker(reconcileInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-eventCtx.Done():
+					return
+				case <-ticker.C:
+					run()
+				}
+			}
+		}()
+		helper.Infow("msg", "match_event_reconciler_ready",
+			"interval_s", cfg.Auction.SideEffectReconcileIntervalSeconds,
+			"batch_per_shard", cfg.Auction.SideEffectReconcileBatch)
+
+		// 9b. 过期清扫(限制#1 补偿):OrderTTLSeconds > 0 时起后台 ticker,周期把超 TTL 仍未成交的
+		//     挂单置 EXPIRED、移出簿、退还 escrow。随 app 生命周期退出(ctx 取消)。
+		if cfg.Auction.OrderTTLSeconds > 0 {
+			sweepCtx, stopSweep := context.WithCancel(context.Background())
+			defer stopSweep()
+			interval := time.Duration(cfg.Auction.ExpirySweepIntervalSeconds) * time.Second
+			go func() {
+				ticker := time.NewTicker(interval)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-sweepCtx.Done():
+						return
+					case <-ticker.C:
+						n, serr := uc.ExpireDueOrders(sweepCtx)
+						if serr != nil {
+							helper.Warnw("msg", "auction_expiry_sweep_failed", "err", serr)
+						} else if n > 0 {
+							helper.Infow("msg", "auction_expiry_sweep", "expired", n)
+						}
+					}
+				}
+			}()
+			helper.Infow("msg", "expiry_sweeper_ready", "ttl_s", cfg.Auction.OrderTTLSeconds, "interval_s", cfg.Auction.ExpirySweepIntervalSeconds)
+		}
 	}
 
 	if err := app.Run(); err != nil {
@@ -256,22 +361,98 @@ func main() {
 //   - 成交 → pandora.auction.match,kafka key = match_id(同一成交保序,不变量 §9)
 //   - 流转 → pandora.auction.audit,kafka key = order_id(同一挂单保序)
 type auctionEventPusher struct {
-	match *kafkax.KeyOrderedProducer
-	audit *kafkax.KeyOrderedProducer
+	mu          sync.Mutex
+	matchInitMu sync.Mutex
+	cfg         config.KafkaConfig
+	matchTopic  string
+	match       *kafkax.KeyOrderedProducer
+	audit       *kafkax.KeyOrderedProducer
+	closed      bool
 }
 
 func (k *auctionEventPusher) PushMatch(ctx context.Context, e *auctionv1.AuctionMatchEvent) error {
-	if k.match == nil {
-		return nil
+	p, err := k.matchProducer()
+	if err != nil {
+		return err
 	}
-	return k.match.Send(ctx, strconv.FormatUint(e.GetMatchId(), 10), e)
+	return p.Send(ctx, strconv.FormatUint(e.GetMatchId(), 10), e)
 }
 
 func (k *auctionEventPusher) PushAudit(ctx context.Context, o *auctionv1.AuctionOrder) error {
-	if k.audit == nil {
+	k.mu.Lock()
+	p := k.audit
+	closed := k.closed
+	k.mu.Unlock()
+	if closed || p == nil {
 		return nil
 	}
-	return k.audit.Send(ctx, strconv.FormatUint(o.GetOrderId(), 10), o)
+	return p.Send(ctx, strconv.FormatUint(o.GetOrderId(), 10), o)
+}
+
+func (k *auctionEventPusher) matchProducer() (*kafkax.KeyOrderedProducer, error) {
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		return nil, fmt.Errorf("auction event pusher closed")
+	}
+	if k.match != nil {
+		p := k.match
+		k.mu.Unlock()
+		return p, nil
+	}
+	k.mu.Unlock()
+
+	// 只串行 producer 构造，不持状态锁做网络连接；否则 match broker 初始化会阻塞健康 audit
+	// 读取状态。业务 audit 另有有界异步队列，即使这里长时间失败也不会反压交易路径。
+	k.matchInitMu.Lock()
+	defer k.matchInitMu.Unlock()
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		return nil, fmt.Errorf("auction event pusher closed")
+	}
+	if k.match != nil {
+		p := k.match
+		k.mu.Unlock()
+		return p, nil
+	}
+	k.mu.Unlock()
+
+	p, err := kafkax.NewKeyOrderedProducer(k.cfg, k.matchTopic)
+	if err != nil {
+		return nil, fmt.Errorf("reconnect auction match producer: %w", err)
+	}
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		_ = p.Close()
+		return nil, fmt.Errorf("auction event pusher closed")
+	}
+	k.match = p
+	k.mu.Unlock()
+	return p, nil
+}
+
+func (k *auctionEventPusher) Close() error {
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		return nil
+	}
+	k.closed = true
+	match, audit := k.match, k.audit
+	k.match, k.audit = nil, nil
+	k.mu.Unlock()
+	var firstErr error
+	if match != nil {
+		firstErr = match.Close()
+	}
+	if audit != nil {
+		if err := audit.Close(); firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 trade / inventory main.go)。

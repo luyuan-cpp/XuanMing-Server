@@ -78,6 +78,22 @@ extern const ::google::protobuf::internal::ClassDataFull DiscardInstanceResponse
 #else
 extern const DiscardInstanceResponseGlobalsTypeInternal DiscardInstanceResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class EnsureAuctionEscrowRequest;
+struct EnsureAuctionEscrowRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EnsureAuctionEscrowRequestGlobalsTypeInternal EnsureAuctionEscrowRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EnsureAuctionEscrowRequest_class_data_;
+#else
+extern const EnsureAuctionEscrowRequestGlobalsTypeInternal EnsureAuctionEscrowRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EnsureAuctionEscrowResponse;
+struct EnsureAuctionEscrowResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EnsureAuctionEscrowResponseGlobalsTypeInternal EnsureAuctionEscrowResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EnsureAuctionEscrowResponse_class_data_;
+#else
+extern const EnsureAuctionEscrowResponseGlobalsTypeInternal EnsureAuctionEscrowResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class FreezeForOrderRequest;
 struct FreezeForOrderRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2065,7 +2081,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowResponse final : publi
   [[nodiscard]] static const ReleaseEscrowResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseEscrowResponse>(&ReleaseEscrowResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(ReleaseEscrowResponse& a, ReleaseEscrowResponse& b) { a.Swap(&b); }
   inline void Swap(ReleaseEscrowResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2266,7 +2282,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseEscrowRequest final : public
   [[nodiscard]] static const ReleaseEscrowRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReleaseEscrowRequest>(&ReleaseEscrowRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(ReleaseEscrowRequest& a, ReleaseEscrowRequest& b) { a.Swap(&b); }
   inline void Swap(ReleaseEscrowRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2479,7 +2495,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceResponse final : public
   [[nodiscard]] static const MoveInstanceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MoveInstanceResponse>(&MoveInstanceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(MoveInstanceResponse& a, MoveInstanceResponse& b) { a.Swap(&b); }
   inline void Swap(MoveInstanceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2680,7 +2696,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MoveInstanceRequest final : public 
   [[nodiscard]] static const MoveInstanceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MoveInstanceRequest>(&MoveInstanceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(MoveInstanceRequest& a, MoveInstanceRequest& b) { a.Swap(&b); }
   inline void Swap(MoveInstanceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3544,7 +3560,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemRequest final : public 
   [[nodiscard]] static const IdentifyItemRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IdentifyItemRequest>(&IdentifyItemRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(IdentifyItemRequest& a, IdentifyItemRequest& b) { a.Swap(&b); }
   inline void Swap(IdentifyItemRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3970,7 +3986,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesRequest final : publi
   [[nodiscard]] static const GrantInstancesRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrantInstancesRequest>(&GrantInstancesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(GrantInstancesRequest& a, GrantInstancesRequest& b) { a.Swap(&b); }
   inline void Swap(GrantInstancesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4818,6 +4834,468 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FreezeForOrderRequest final : publi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.EnsureAuctionEscrowResponse) */ {
+ public:
+  inline EnsureAuctionEscrowResponse() : EnsureAuctionEscrowResponse(nullptr) {}
+  ~EnsureAuctionEscrowResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EnsureAuctionEscrowResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EnsureAuctionEscrowResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EnsureAuctionEscrowResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EnsureAuctionEscrowResponse(const EnsureAuctionEscrowResponse& from) : EnsureAuctionEscrowResponse(nullptr, from) {}
+  inline EnsureAuctionEscrowResponse(EnsureAuctionEscrowResponse&& from) noexcept : EnsureAuctionEscrowResponse(nullptr, ::std::move(from)) {}
+  inline EnsureAuctionEscrowResponse& operator=(const EnsureAuctionEscrowResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EnsureAuctionEscrowResponse& operator=(EnsureAuctionEscrowResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EnsureAuctionEscrowResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnsureAuctionEscrowResponse>(&EnsureAuctionEscrowResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(EnsureAuctionEscrowResponse& a, EnsureAuctionEscrowResponse& b) { a.Swap(&b); }
+  inline void Swap(EnsureAuctionEscrowResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EnsureAuctionEscrowResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EnsureAuctionEscrowResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EnsureAuctionEscrowResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EnsureAuctionEscrowResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EnsureAuctionEscrowResponse& from) { EnsureAuctionEscrowResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EnsureAuctionEscrowResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.EnsureAuctionEscrowResponse"; }
+
+  explicit EnsureAuctionEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EnsureAuctionEscrowResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EnsureAuctionEscrowResponse& from);
+  EnsureAuctionEscrowResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EnsureAuctionEscrowResponse&& from) noexcept
+      : EnsureAuctionEscrowResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.EnsureAuctionEscrowResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EnsureAuctionEscrowResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnsureAuctionEscrowRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.inventory.v1.EnsureAuctionEscrowRequest) */ {
+ public:
+  inline EnsureAuctionEscrowRequest() : EnsureAuctionEscrowRequest(nullptr) {}
+  ~EnsureAuctionEscrowRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EnsureAuctionEscrowRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EnsureAuctionEscrowRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EnsureAuctionEscrowRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EnsureAuctionEscrowRequest(const EnsureAuctionEscrowRequest& from) : EnsureAuctionEscrowRequest(nullptr, from) {}
+  inline EnsureAuctionEscrowRequest(EnsureAuctionEscrowRequest&& from) noexcept : EnsureAuctionEscrowRequest(nullptr, ::std::move(from)) {}
+  inline EnsureAuctionEscrowRequest& operator=(const EnsureAuctionEscrowRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EnsureAuctionEscrowRequest& operator=(EnsureAuctionEscrowRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EnsureAuctionEscrowRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnsureAuctionEscrowRequest>(&EnsureAuctionEscrowRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(EnsureAuctionEscrowRequest& a, EnsureAuctionEscrowRequest& b) { a.Swap(&b); }
+  inline void Swap(EnsureAuctionEscrowRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EnsureAuctionEscrowRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EnsureAuctionEscrowRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EnsureAuctionEscrowRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EnsureAuctionEscrowRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EnsureAuctionEscrowRequest& from) { EnsureAuctionEscrowRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EnsureAuctionEscrowRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.inventory.v1.EnsureAuctionEscrowRequest"; }
+
+  explicit EnsureAuctionEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EnsureAuctionEscrowRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EnsureAuctionEscrowRequest& from);
+  EnsureAuctionEscrowRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EnsureAuctionEscrowRequest&& from) noexcept
+      : EnsureAuctionEscrowRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kOrderIdFieldNumber = 2,
+    kSideFieldNumber = 3,
+    kItemConfigIdFieldNumber = 4,
+    kRemainingQuantityFieldNumber = 5,
+    kUnitPriceFieldNumber = 6,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 order_id = 2 [json_name = "orderId"];
+  void clear_order_id() ;
+  [[nodiscard]] ::uint64_t order_id() const;
+  void set_order_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_order_id() const;
+  void _internal_set_order_id(::uint64_t value);
+
+  public:
+  // .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
+  void clear_side() ;
+  [[nodiscard]] ::pandora::inventory::v1::EscrowSide side() const;
+  void set_side(::pandora::inventory::v1::EscrowSide value);
+
+  private:
+  ::pandora::inventory::v1::EscrowSide _internal_side() const;
+  void _internal_set_side(::pandora::inventory::v1::EscrowSide value);
+
+  public:
+  // uint32 item_config_id = 4 [json_name = "itemConfigId"];
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
+  void clear_remaining_quantity() ;
+  [[nodiscard]] ::uint64_t remaining_quantity() const;
+  void set_remaining_quantity(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_remaining_quantity() const;
+  void _internal_set_remaining_quantity(::uint64_t value);
+
+  public:
+  // uint64 unit_price = 6 [json_name = "unitPrice"];
+  void clear_unit_price() ;
+  [[nodiscard]] ::uint64_t unit_price() const;
+  void set_unit_price(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_unit_price() const;
+  void _internal_set_unit_price(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.inventory.v1.EnsureAuctionEscrowRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EnsureAuctionEscrowRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    ::uint64_t order_id_;
+    int side_;
+    ::uint32_t item_config_id_;
+    ::uint64_t remaining_quantity_;
+    ::uint64_t unit_price_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2finventory_2fv1_2finventory_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.inventory.v1.DiscardInstanceResponse) */ {
  public:
@@ -4874,7 +5352,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceResponse final : pub
   [[nodiscard]] static const DiscardInstanceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DiscardInstanceResponse>(&DiscardInstanceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(DiscardInstanceResponse& a, DiscardInstanceResponse& b) { a.Swap(&b); }
   inline void Swap(DiscardInstanceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5075,7 +5553,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DiscardInstanceRequest final : publ
   [[nodiscard]] static const DiscardInstanceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DiscardInstanceRequest>(&DiscardInstanceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(DiscardInstanceRequest& a, DiscardInstanceRequest& b) { a.Swap(&b); }
   inline void Swap(DiscardInstanceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6367,7 +6845,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdentifyItemResponse final : public
   [[nodiscard]] static const IdentifyItemResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IdentifyItemResponse>(&IdentifyItemResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(IdentifyItemResponse& a, IdentifyItemResponse& b) { a.Swap(&b); }
   inline void Swap(IdentifyItemResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6586,7 +7064,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GrantInstancesResponse final : publ
   [[nodiscard]] static const GrantInstancesResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GrantInstancesResponse>(&GrantInstancesResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(GrantInstancesResponse& a, GrantInstancesResponse& b) { a.Swap(&b); }
   inline void Swap(GrantInstancesResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8924,6 +9402,182 @@ inline ::pandora::common::v1::ErrCode FreezeForOrderResponse::_internal_code() c
   return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
 }
 inline void FreezeForOrderResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EnsureAuctionEscrowRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void EnsureAuctionEscrowRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowRequest.player_id)
+  return _internal_player_id();
+}
+inline void EnsureAuctionEscrowRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowRequest.player_id)
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void EnsureAuctionEscrowRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 order_id = 2 [json_name = "orderId"];
+inline void EnsureAuctionEscrowRequest::clear_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::order_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowRequest.order_id)
+  return _internal_order_id();
+}
+inline void EnsureAuctionEscrowRequest::set_order_id(::uint64_t value) {
+  _internal_set_order_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowRequest.order_id)
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::_internal_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.order_id_;
+}
+inline void EnsureAuctionEscrowRequest::_internal_set_order_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_ = value;
+}
+
+// .pandora.inventory.v1.EscrowSide side = 3 [json_name = "side"];
+inline void EnsureAuctionEscrowRequest::clear_side() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::pandora::inventory::v1::EscrowSide EnsureAuctionEscrowRequest::side() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowRequest.side)
+  return _internal_side();
+}
+inline void EnsureAuctionEscrowRequest::set_side(::pandora::inventory::v1::EscrowSide value) {
+  _internal_set_side(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowRequest.side)
+}
+inline ::pandora::inventory::v1::EscrowSide EnsureAuctionEscrowRequest::_internal_side() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::inventory::v1::EscrowSide>(_impl_.side_);
+}
+inline void EnsureAuctionEscrowRequest::_internal_set_side(::pandora::inventory::v1::EscrowSide value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.side_ = value;
+}
+
+// uint32 item_config_id = 4 [json_name = "itemConfigId"];
+inline void EnsureAuctionEscrowRequest::clear_item_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t EnsureAuctionEscrowRequest::item_config_id() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowRequest.item_config_id)
+  return _internal_item_config_id();
+}
+inline void EnsureAuctionEscrowRequest::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowRequest.item_config_id)
+}
+inline ::uint32_t EnsureAuctionEscrowRequest::_internal_item_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_config_id_;
+}
+inline void EnsureAuctionEscrowRequest::_internal_set_item_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = value;
+}
+
+// uint64 remaining_quantity = 5 [json_name = "remainingQuantity"];
+inline void EnsureAuctionEscrowRequest::clear_remaining_quantity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.remaining_quantity_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::remaining_quantity() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowRequest.remaining_quantity)
+  return _internal_remaining_quantity();
+}
+inline void EnsureAuctionEscrowRequest::set_remaining_quantity(::uint64_t value) {
+  _internal_set_remaining_quantity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowRequest.remaining_quantity)
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::_internal_remaining_quantity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.remaining_quantity_;
+}
+inline void EnsureAuctionEscrowRequest::_internal_set_remaining_quantity(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.remaining_quantity_ = value;
+}
+
+// uint64 unit_price = 6 [json_name = "unitPrice"];
+inline void EnsureAuctionEscrowRequest::clear_unit_price() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unit_price_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::unit_price() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowRequest.unit_price)
+  return _internal_unit_price();
+}
+inline void EnsureAuctionEscrowRequest::set_unit_price(::uint64_t value) {
+  _internal_set_unit_price(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowRequest.unit_price)
+}
+inline ::uint64_t EnsureAuctionEscrowRequest::_internal_unit_price() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unit_price_;
+}
+inline void EnsureAuctionEscrowRequest::_internal_set_unit_price(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unit_price_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EnsureAuctionEscrowResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void EnsureAuctionEscrowResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::pandora::common::v1::ErrCode EnsureAuctionEscrowResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.inventory.v1.EnsureAuctionEscrowResponse.code)
+  return _internal_code();
+}
+inline void EnsureAuctionEscrowResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.inventory.v1.EnsureAuctionEscrowResponse.code)
+}
+inline ::pandora::common::v1::ErrCode EnsureAuctionEscrowResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void EnsureAuctionEscrowResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = value;
 }

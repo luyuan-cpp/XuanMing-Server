@@ -29,10 +29,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DSAllocatorService_AllocateBattle_FullMethodName = "/pandora.ds.v1.DSAllocatorService/AllocateBattle"
-	DSAllocatorService_ReleaseBattle_FullMethodName  = "/pandora.ds.v1.DSAllocatorService/ReleaseBattle"
-	DSAllocatorService_Heartbeat_FullMethodName      = "/pandora.ds.v1.DSAllocatorService/Heartbeat"
-	DSAllocatorService_ListBattles_FullMethodName    = "/pandora.ds.v1.DSAllocatorService/ListBattles"
+	DSAllocatorService_AllocateBattle_FullMethodName      = "/pandora.ds.v1.DSAllocatorService/AllocateBattle"
+	DSAllocatorService_ResolveBattleTarget_FullMethodName = "/pandora.ds.v1.DSAllocatorService/ResolveBattleTarget"
+	DSAllocatorService_ReleaseBattle_FullMethodName       = "/pandora.ds.v1.DSAllocatorService/ReleaseBattle"
+	DSAllocatorService_Heartbeat_FullMethodName           = "/pandora.ds.v1.DSAllocatorService/Heartbeat"
+	DSAllocatorService_ListBattles_FullMethodName         = "/pandora.ds.v1.DSAllocatorService/ListBattles"
 )
 
 // DSAllocatorServiceClient is the client API for DSAllocatorService service.
@@ -40,6 +41,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DSAllocatorServiceClient interface {
 	AllocateBattle(ctx context.Context, in *AllocateBattleRequest, opts ...grpc.CallOption) (*AllocateBattleResponse, error)
+	// ResolveBattleTarget 是重连重签票据的只读权威查询。它不创建 claim、不调用
+	// GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
+	ResolveBattleTarget(ctx context.Context, in *ResolveBattleTargetRequest, opts ...grpc.CallOption) (*ResolveBattleTargetResponse, error)
 	ReleaseBattle(ctx context.Context, in *ReleaseBattleRequest, opts ...grpc.CallOption) (*ReleaseBattleResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	ListBattles(ctx context.Context, in *ListBattlesRequest, opts ...grpc.CallOption) (*ListBattlesResponse, error)
@@ -57,6 +61,16 @@ func (c *dSAllocatorServiceClient) AllocateBattle(ctx context.Context, in *Alloc
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AllocateBattleResponse)
 	err := c.cc.Invoke(ctx, DSAllocatorService_AllocateBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dSAllocatorServiceClient) ResolveBattleTarget(ctx context.Context, in *ResolveBattleTargetRequest, opts ...grpc.CallOption) (*ResolveBattleTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveBattleTargetResponse)
+	err := c.cc.Invoke(ctx, DSAllocatorService_ResolveBattleTarget_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +112,9 @@ func (c *dSAllocatorServiceClient) ListBattles(ctx context.Context, in *ListBatt
 // for forward compatibility.
 type DSAllocatorServiceServer interface {
 	AllocateBattle(context.Context, *AllocateBattleRequest) (*AllocateBattleResponse, error)
+	// ResolveBattleTarget 是重连重签票据的只读权威查询。它不创建 claim、不调用
+	// GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
+	ResolveBattleTarget(context.Context, *ResolveBattleTargetRequest) (*ResolveBattleTargetResponse, error)
 	ReleaseBattle(context.Context, *ReleaseBattleRequest) (*ReleaseBattleResponse, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	ListBattles(context.Context, *ListBattlesRequest) (*ListBattlesResponse, error)
@@ -112,6 +129,9 @@ type UnimplementedDSAllocatorServiceServer struct{}
 
 func (UnimplementedDSAllocatorServiceServer) AllocateBattle(context.Context, *AllocateBattleRequest) (*AllocateBattleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AllocateBattle not implemented")
+}
+func (UnimplementedDSAllocatorServiceServer) ResolveBattleTarget(context.Context, *ResolveBattleTargetRequest) (*ResolveBattleTargetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolveBattleTarget not implemented")
 }
 func (UnimplementedDSAllocatorServiceServer) ReleaseBattle(context.Context, *ReleaseBattleRequest) (*ReleaseBattleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReleaseBattle not implemented")
@@ -156,6 +176,24 @@ func _DSAllocatorService_AllocateBattle_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DSAllocatorServiceServer).AllocateBattle(ctx, req.(*AllocateBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DSAllocatorService_ResolveBattleTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveBattleTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DSAllocatorServiceServer).ResolveBattleTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DSAllocatorService_ResolveBattleTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DSAllocatorServiceServer).ResolveBattleTarget(ctx, req.(*ResolveBattleTargetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -224,6 +262,10 @@ var DSAllocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AllocateBattle",
 			Handler:    _DSAllocatorService_AllocateBattle_Handler,
+		},
+		{
+			MethodName: "ResolveBattleTarget",
+			Handler:    _DSAllocatorService_ResolveBattleTarget_Handler,
 		},
 		{
 			MethodName: "ReleaseBattle",

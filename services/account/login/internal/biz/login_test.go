@@ -100,6 +100,7 @@ func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region s
 type fakeNotifier struct {
 	bl            data.BattleLocation
 	blErr         error
+	notifyErr     error
 	loginPendingN int
 
 	// failFirst:前 failFirst 次 GetBattleLocation 返回 blErr(模拟 locator 瞬时抖动),
@@ -110,7 +111,7 @@ type fakeNotifier struct {
 
 func (f *fakeNotifier) NotifyLoginPending(_ context.Context, _ uint64, _ string) error {
 	f.loginPendingN++
-	return nil
+	return f.notifyErr
 }
 
 func (f *fakeNotifier) GetBattleLocation(_ context.Context, _ uint64) (data.BattleLocation, error) {
@@ -147,7 +148,7 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	hash := mustBcrypt(t, "pw")
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
 	sf := snowflake.NewNode(1)
-	uc := NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false, nil, false)
+	uc := NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, nil, false)
 	ticketUC := NewTicketUsecase(signer, verifier, nil)
 	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{})
 	uc.SetBattleTicketIssuer(ticketUC)
@@ -407,7 +408,7 @@ func newDevSkipUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 	}
 	sf := snowflake.NewNode(1)
 	// hubAssigner=nil 走自签回退;devSkipPassword=true。
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, true, false, nil, false)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, true, false, nil, false)
 }
 
 // newDevAutoRegUsecase 构造 devAutoRegister=true 、 devSkipPassword=false 的用例。
@@ -423,7 +424,7 @@ func newDevAutoRegUsecase(t *testing.T, repo data.AccountRepo) *LoginUsecase {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 	sf := snowflake.NewNode(1)
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, true, nil, false)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, true, nil, false)
 }
 
 // newSelectRoleUsecase 构造选角测试用例(hubAssigner=nil 走自签回退;roleRepo=nil 跳过落库)。
@@ -440,7 +441,7 @@ func newSelectRoleUsecase(t *testing.T, allowedRoleIDs []uint32, devAllowAnyRole
 	}
 	sf := snowflake.NewNode(1)
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: mustBcrypt(t, "pw")}
-	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false, allowedRoleIDs, devAllowAnyRole)
+	return NewLoginUsecase(repo, fakeSessionRepo{}, nil, nil, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, nil, false, false, allowedRoleIDs, devAllowAnyRole)
 }
 
 // TestSelectRole_EmptyWhitelistFailClosed 验证:白名单为空且未开 dev_allow_any_role 时,
@@ -718,6 +719,98 @@ func TestLogin_BattleReconnect_QueryErrorFallsToHub(t *testing.T) {
 	}
 	if res.HubDSAddr == "" {
 		t.Errorf("query error should fall back to hub, got empty hub addr")
+	}
+}
+
+func TestLogin_B1RequiresConfiguredLocatorBeforeHubAssignment(t *testing.T) {
+	hub := &fakeHubAssigner{}
+	uc := newTestUsecaseWithNotifier(t, hub, nil)
+	uc.SetRequireHubAssignmentBinding(true)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+	}
+	if hub.gotPlayerID != 0 {
+		t.Fatalf("Hub allocator called before locator proof, player=%d", hub.gotPlayerID)
+	}
+}
+
+func TestLogin_B1LocatorQueryFailureDoesNotAssignHub(t *testing.T) {
+	notifier := &fakeNotifier{blErr: errcode.New(errcode.ErrInternal, "locator down")}
+	hub := &fakeHubAssigner{}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	uc.SetRequireHubAssignmentBinding(true)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+	}
+	if notifier.getN != battleLocationQueryRetries {
+		t.Fatalf("locator query count=%d, want %d", notifier.getN, battleLocationQueryRetries)
+	}
+	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
+		t.Fatalf("failed locator proof mutated hub/pending: hub_player=%d pending=%d",
+			hub.gotPlayerID, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_B1NotifyLoginPendingFailureDoesNotDeliverHubTicket(t *testing.T) {
+	keys := newHubV2TestKeys(t)
+	ticket, _ := signHubV2ForResolve(t, keys, "", nil)
+	hub := &fakeHubAssigner{res: &data.HubAssignment{
+		HubDSAddr: "10.0.0.9:7777", HubTicket: ticket, HubPodName: "hub-stable-1", ShardID: 7,
+	}}
+	notifier := &fakeNotifier{
+		bl:        data.BattleLocation{InBattle: false},
+		notifyErr: errcode.New(errcode.ErrInternal, "locator write failed"),
+	}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	uc.v2Verifier = keys.verifier
+	uc.SetRequireHubAssignmentBinding(true)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+	}
+	if hub.gotPlayerID != 0 || notifier.loginPendingN != 1 {
+		t.Fatalf("hub_player=%d pending_calls=%d, want 0/1", hub.gotPlayerID, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_B1LocatorPendingSucceedsBeforeHubAssignment(t *testing.T) {
+	keys := newHubV2TestKeys(t)
+	ticket, _ := signHubV2ForResolve(t, keys, "", nil)
+	hub := &fakeHubAssigner{res: &data.HubAssignment{
+		HubDSAddr: "10.0.0.9:7777", HubTicket: ticket, HubPodName: "hub-stable-1", ShardID: 7,
+	}}
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	uc.v2Verifier = keys.verifier
+	uc.SetRequireHubAssignmentBinding(true)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil || res == nil || res.HubTicket != ticket {
+		t.Fatalf("result=%+v ticket_match=%v err=%v", res, res != nil && res.HubTicket == ticket, err)
+	}
+	if hub.gotPlayerID != 42 || notifier.loginPendingN != 1 {
+		t.Fatalf("hub_player=%d pending_calls=%d, want 42/1", hub.gotPlayerID, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_LegacyNotifyLoginPendingFailureRemainsBestEffort(t *testing.T) {
+	notifier := &fakeNotifier{
+		bl:        data.BattleLocation{InBattle: false},
+		notifyErr: errcode.New(errcode.ErrInternal, "locator write failed"),
+	}
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil || res == nil || res.HubTicket == "" {
+		t.Fatalf("legacy weak dependency changed: result=%+v err=%v", res, err)
+	}
+	if notifier.loginPendingN != 1 {
+		t.Fatalf("NotifyLoginPending calls=%d, want 1", notifier.loginPendingN)
 	}
 }
 

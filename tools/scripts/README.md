@@ -15,7 +15,7 @@
 | `dev_down.ps1` | 停基础设施容器 | `start.ps1`、`dev_all.ps1`、`play.ps1` |
 | `dev_status.ps1` | 查看开发环境状态(容器 + 端口监听) | 手动 |
 | `run_services.ps1` | 宿主 go 服务编排(启/停/看日志) | `start.ps1`、`play.ps1`、`dev_all.ps1`、`dev_tools.ps1` |
-| `gen_cluster_config.ps1` | 生成集群版配置(容器地址 / allocator 模式改写) | `start.ps1`(docker/battle 等) |
+| `gen_cluster_config.ps1` | 生成集群版配置(容器地址 / allocator 模式；auction 强制 etcd Snowflake + 跨实例锁) | `start.ps1`(docker/battle 等) |
 | `tidb_up.ps1` | TiDB 集群一键起(社交库可选) | 手动(见 `deploy/tidb-init/README.md`) |
 
 ## 2. k8s / 真 DS 链路
@@ -25,6 +25,8 @@
 | `e2e_k8s.ps1` | 本地 minikube+Agones 真 DS 闭环(load 镜像 + 桥接 Envoy + 等 Fleet + UDP 中继) | 手动(`k8s` 模式起完后) |
 | `k8s_envoy_bridge.ps1` | 宿主 Envoy 端口转发桥接 | `e2e_k8s.ps1` |
 | `udp_relay.ps1` | UDP 回程中继(minikube docker driver 下 DS 连通) | `e2e_k8s.ps1` |
+| `dsticket_keyset.ps1` | K1/bootstrap 或轮换阶段材料的生成/校验；create-only 投递 immutable signer Secret 与 default/pandora 两份 public JWKS，首次投递可 create-only 补齐 `pandora` Namespace | 人工 bootstrap / 轮换材料预投递 |
+| `dsticket_rotate.ps1` | 独立执行 DSTicket `stage → promote → retire` 不停服轮换；与普通 online 发布共用线性操作锁，按 apiserver 时间等待清退窗，不删除旧密钥或在场 GameServer | 人工受控安全操作；不得由普通发布隐式调用 |
 | `reset_data_service_schema.ps1` | 开发期定向重置 data_service 的 `player_data` 表与玩家缓存；固定本地 minikube context，默认停服不重启 | 手动；需 `-Confirm`/`-Force` |
 | `reset_data_service_schema_k8s.bat` | 上述重置脚本的 Windows k8s 包装器；第二参数 `restart` 可在新镜像就位后重启并验表 | 手动/双击 |
 
@@ -56,3 +58,12 @@
 | `stress_summarize.ps1` | 压测单轮汇总(5 段二维表) | 手动 |
 | `release_preflight.ps1` | 发布前预检(配置安全 / 密码强度) | 手动(见 `docs/ops/release-checklist.md`) |
 | `http2_probe.ps1` | 探测 Envoy 客户端连接是否走 HTTP/2 | 手动(见 `docs/design/gateway-decision.md`) |
+| `lib/online_manifest_contract.ps1` | online 镜像 digest pin、writer/Fleet annotation 与渲染契约纯 helper(不访问远端) | `start.ps1`、静态测试 |
+| `lib/dsticket_keyset_contract.ps1` | DSTicket 私钥/JWKS/K8s 对象严格对账（RFC 7638、顶层 active_kid、immutable/hash） | `start.ps1`、`dsticket_keyset.ps1`、静态测试 |
+| `lib/dsticket_rotation_contract.ps1` | DSTicket 三阶段材料、marker 时间链、controller/Pod owner、普通发布终态与共享操作锁契约 | `start.ps1`、`dsticket_rotate.ps1`、静态测试 |
+| `tests/online_manifest_contract_test.ps1` | online 镜像/Fleet 契约与 mutant 反例测试 | 手动/CI |
+| `tests/dsticket_keyset_contract_test.ps1` | active key 非 keys[0]、双 namespace 同 hash、immutable 等 DSTicket mutant 测试 | 手动/CI |
+| `tests/dsticket_rotation_contract_test.ps1` | K1/K2 三阶段、225 秒清退窗、marker 历史链、孤儿/伪造 owner 与发布互斥 mutant 测试 | 手动/CI |
+| `tests/services_dsticket_secret_contract_test.ps1` | 四个 signer 私钥卷/非 root/fsGroup 与 Login-only public JWKS 契约 | 手动/CI |
+| `tests/gen_cluster_b1_contract_test.ps1` | B1 signer/verifier、Model-B callback、Stable/Canary allocator 配置生成契约 | 手动/CI |
+| `tests/infra_etcd_persistence_contract_test.ps1` | 本地 etcd PVC/Recreate 持久化契约与反例 | 手动/CI |

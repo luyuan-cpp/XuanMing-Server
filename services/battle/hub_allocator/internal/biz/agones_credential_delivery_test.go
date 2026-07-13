@@ -135,7 +135,10 @@ func newFakeGameServerAPI(t *testing.T, mode fakeGSMode) *fakeGameServerAPI {
 		gs: gameServer{
 			Metadata: gsMetadata{
 				Name: "hub-model-b", UID: "uid-A", ResourceVersion: "1",
-				Labels: map[string]string{fleetLabelKey: "pandora-hub"},
+				Labels: map[string]string{
+					fleetLabelKey: "pandora-hub", releaseTrackMetadataKey: "stable",
+				},
+				Annotations: map[string]string{releaseTrackMetadataKey: "stable"},
 			},
 			Status: gsStatus{State: "Ready", Address: "10.0.0.9", Ports: []gsPort{{Name: "default", Port: 7777}}},
 		},

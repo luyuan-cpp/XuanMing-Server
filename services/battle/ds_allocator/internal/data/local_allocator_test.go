@@ -86,7 +86,7 @@ func TestNewLocalGameServerAllocator_RejectsBadPortRange(t *testing.T) {
 
 func TestAllocate_ReturnsTrackedAddr(t *testing.T) {
 	l, created := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
-	pod, addr, err := l.Allocate(context.Background(), 42, 1, "moba5v5")
+	pod, addr, _, err := l.Allocate(context.Background(), 42, 1, "moba5v5", "stable")
 	if err != nil {
 		t.Fatalf("Allocate: %v", err)
 	}
@@ -103,11 +103,11 @@ func TestAllocate_ReturnsTrackedAddr(t *testing.T) {
 
 func TestAllocate_Idempotent(t *testing.T) {
 	l, created := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
-	_, addr1, err := l.Allocate(context.Background(), 7, 1, "")
+	_, addr1, _, err := l.Allocate(context.Background(), 7, 1, "", "stable")
 	if err != nil {
 		t.Fatalf("Allocate#1: %v", err)
 	}
-	_, addr2, err := l.Allocate(context.Background(), 7, 1, "")
+	_, addr2, _, err := l.Allocate(context.Background(), 7, 1, "", "stable")
 	if err != nil {
 		t.Fatalf("Allocate#2: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestAllocatePassesUniqueModelBIdentityAndTokenToProcess(t *testing.T) {
 		return newFakeProc(), nil
 	}
 
-	pod, _, err := l.Allocate(context.Background(), 88, 2, "moba")
+	pod, _, _, err := l.Allocate(context.Background(), 88, 2, "moba", "stable")
 	if err != nil {
 		t.Fatalf("Allocate: %v", err)
 	}
@@ -147,8 +147,8 @@ func TestAllocatePassesUniqueModelBIdentityAndTokenToProcess(t *testing.T) {
 
 func TestAllocate_DistinctPorts(t *testing.T) {
 	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
-	_, addr1, _ := l.Allocate(context.Background(), 1, 1, "")
-	_, addr2, _ := l.Allocate(context.Background(), 2, 1, "")
+	_, addr1, _, _ := l.Allocate(context.Background(), 1, 1, "", "stable")
+	_, addr2, _, _ := l.Allocate(context.Background(), 2, 1, "", "stable")
 	if addr1 == addr2 {
 		t.Fatalf("expected distinct ports, both %q", addr1)
 	}
@@ -156,13 +156,13 @@ func TestAllocate_DistinctPorts(t *testing.T) {
 
 func TestAllocate_PortExhaustion(t *testing.T) {
 	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 2})
-	if _, _, err := l.Allocate(context.Background(), 1, 1, ""); err != nil {
+	if _, _, _, err := l.Allocate(context.Background(), 1, 1, "", "stable"); err != nil {
 		t.Fatalf("Allocate#1: %v", err)
 	}
-	if _, _, err := l.Allocate(context.Background(), 2, 1, ""); err != nil {
+	if _, _, _, err := l.Allocate(context.Background(), 2, 1, "", "stable"); err != nil {
 		t.Fatalf("Allocate#2: %v", err)
 	}
-	_, _, err := l.Allocate(context.Background(), 3, 1, "")
+	_, _, _, err := l.Allocate(context.Background(), 3, 1, "", "stable")
 	if err == nil {
 		t.Fatal("expected ErrDSNoAvailable on port exhaustion")
 	}
@@ -173,7 +173,7 @@ func TestAllocate_PortExhaustion(t *testing.T) {
 
 func TestRelease_KillsAndFreesPort(t *testing.T) {
 	l, created := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 1})
-	pod, _, err := l.Allocate(context.Background(), 1, 1, "")
+	pod, _, _, err := l.Allocate(context.Background(), 1, 1, "", "stable")
 	if err != nil {
 		t.Fatalf("Allocate: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestRelease_KillsAndFreesPort(t *testing.T) {
 		t.Fatal("expected process killed on Release")
 	}
 	// 端口已释放 → 再分配应成功(池子只有 1 个端口)。
-	if _, _, err := l.Allocate(context.Background(), 2, 1, ""); err != nil {
+	if _, _, _, err := l.Allocate(context.Background(), 2, 1, "", "stable"); err != nil {
 		t.Fatalf("re-Allocate after release: %v", err)
 	}
 }
@@ -201,8 +201,8 @@ func TestRelease_IdempotentOnMissing(t *testing.T) {
 
 func TestClose_KillsAll(t *testing.T) {
 	l, created := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
-	_, _, _ = l.Allocate(context.Background(), 1, 1, "")
-	_, _, _ = l.Allocate(context.Background(), 2, 1, "")
+	_, _, _, _ = l.Allocate(context.Background(), 1, 1, "", "stable")
+	_, _, _, _ = l.Allocate(context.Background(), 2, 1, "", "stable")
 	if err := l.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestClose_KillsAll(t *testing.T) {
 func TestAllocate_ProbeSkipsBusyPort(t *testing.T) {
 	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7800, PortRange: 10})
 	l.portProbe = func(port int) bool { return port != 7800 } // 7800 被幽灵进程占用
-	_, addr, err := l.Allocate(context.Background(), 1, 1, "")
+	_, addr, _, err := l.Allocate(context.Background(), 1, 1, "", "stable")
 	if err != nil {
 		t.Fatalf("Allocate: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestAllocate_ProbeSkipsBusyPort(t *testing.T) {
 func TestAllocate_ProbeAllBusy(t *testing.T) {
 	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7800, PortRange: 3})
 	l.portProbe = func(int) bool { return false }
-	_, _, err := l.Allocate(context.Background(), 1, 1, "")
+	_, _, _, err := l.Allocate(context.Background(), 1, 1, "", "stable")
 	if err == nil {
 		t.Fatal("expected ErrDSNoAvailable when all ports probed busy")
 	}

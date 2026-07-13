@@ -143,8 +143,29 @@ func main() {
 		}
 	}()
 
+	// Hub allocator 的 v2 票与 Session/legacy HS256 是独立信任域。Login 主登录链和
+	// VerifyDSTicket 诊断链共用同一份完整 overlap JWKS verifier，但分别显式注入各自 usecase。
+	var v2Verifier *auth.DSTicketVerifier
+	if cfg.Login.DSTicket.VerifierEnabled() {
+		loaded, verr := auth.NewDSTicketVerifierFromConf(cfg.Login.DSTicket)
+		if verr != nil {
+			helper.Errorw("msg", "ds_ticket_v2_verifier_init_failed", "err", verr,
+				"hint", "check login.ds_ticket.jwks_file / keyset_revision / active_kid")
+			os.Exit(1)
+		}
+		v2Verifier = loaded
+		helper.Infow("msg", "ds_ticket_v2_verifier_ready",
+			"active_kid", cfg.Login.DSTicket.ActiveKid,
+			"keyset_revision", cfg.Login.DSTicket.KeysetRevision)
+	}
+	if cfg.Login.DSTicket.SignerEnabled() && v2Verifier == nil {
+		helper.Errorw("msg", "ds_ticket_v2_signer_requires_verifier",
+			"hint", "Login 需要校验 Hub allocator 返回的 RS256 票据，请配置完整的重叠期 JWKS")
+		os.Exit(1)
+	}
+
 	// 6. biz + service 装配
-	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
+	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, v2Verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
@@ -162,6 +183,33 @@ func main() {
 			"warn", "login.allowed_role_ids empty and dev_allow_any_role false: SelectRole will reject all requests")
 	}
 	ticketUC := biz.NewTicketUsecase(signer, verifier, jtiRepo)
+	// DSTicket v2(RS256,方案 B):配置了私钥即启用;启用后 login 侧 battle 票全部走 v2
+	// 实例绑定签发,hub 票拒签(只能由 hub_allocator 签)。加载失败直接拒绝启动(fail-closed)。
+	if cfg.Login.DSTicket.SignerEnabled() {
+		v2, verr := auth.NewDSTicketSignerFromConf(cfg.Login.DSTicket)
+		if verr != nil {
+			helper.Errorw("msg", "ds_ticket_v2_signer_init_failed", "err", verr,
+				"hint", "check login.ds_ticket.private_key_file / active_kid / ttl")
+			os.Exit(1)
+		}
+		if hubMode != "grpc" {
+			// v2 下 login 回退自签的 HS256 hub 票会被 v2 DS 全拒,这属于半完成配置,直接拒启。
+			helper.Errorw("msg", "ds_ticket_v2_requires_hub_allocator",
+				"hub_assigner", hubMode,
+				"hint", "ds_ticket v2 启用时必须配置 login.hub.addr(hub 票只能由 hub_allocator 签)")
+			os.Exit(1)
+		}
+		ticketUC.SetDSTicketV2Signer(v2)
+		helper.Infow("msg", "ds_ticket_v2_signer_ready", "kid", v2.Kid(), "ttl", v2.TTL().String())
+	}
+	if cfg.DSAuth.AuthorityModeRedis() && !cfg.Login.DSTicket.SignerEnabled() {
+		helper.Errorw("msg", "model_b_requires_ds_ticket_v2_signer",
+			"hint", "B1 k8s Login 只允许 RS256 battle 票；配置 login.ds_ticket.private_key_file + active_kid")
+		os.Exit(1)
+	}
+	if v2Verifier != nil {
+		ticketUC.SetDSTicketV2Verifier(v2Verifier)
+	}
 	var hubAssignmentChecker data.HubAssignmentChecker
 	if rdb != nil {
 		hubAssignmentChecker = data.NewRedisHubAssignmentChecker(rdb)

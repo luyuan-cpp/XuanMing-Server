@@ -507,6 +507,59 @@ func (u *InventoryUsecase) FreezeForOrder(ctx context.Context, playerID, orderID
 	return nil
 }
 
+// EnsureAuctionEscrow 为旧版本已进入订单状态机、但可能没有成功冻结资产的订单补齐 escrow。
+// 已有满足剩余量的 active escrow 只校验不重复扣；缺失时由 repo 在一个 MySQL 事务中补冻并建行。
+func (u *InventoryUsecase) EnsureAuctionEscrow(
+	ctx context.Context,
+	playerID, orderID uint64,
+	side EscrowSide,
+	itemConfigID uint32,
+	remainingQuantity, unitPrice uint64,
+) error {
+	if playerID == 0 || orderID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "player_id / order_id required")
+	}
+	if itemConfigID == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "item_config_id required")
+	}
+	if remainingQuantity == 0 || unitPrice == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "remaining_quantity / unit_price must be positive")
+	}
+	const maxInt64AsUint64 = uint64(^uint64(0) >> 1)
+	if remainingQuantity > maxInt64AsUint64 || unitPrice > maxInt64AsUint64 {
+		return errcode.New(errcode.ErrInvalidArg,
+			"ensure escrow amount exceeds int64 order=%d remaining=%d price=%d",
+			orderID, remainingQuantity, unitPrice)
+	}
+
+	var kind data.EscrowKind
+	switch side {
+	case EscrowSideSell:
+		kind = data.EscrowKindItem
+	case EscrowSideBuy:
+		kind = data.EscrowKindGold
+		if _, ok := safeMulInt64(int64(unitPrice), int64(remainingQuantity)); !ok {
+			return errcode.New(errcode.ErrInvalidArg,
+				"ensure escrow amount overflow order=%d price=%d remaining=%d",
+				orderID, unitPrice, remainingQuantity)
+		}
+	default:
+		return errcode.New(errcode.ErrInvalidArg, "unknown escrow side %d", side)
+	}
+
+	already, err := u.repo.EnsureAuctionEscrow(ctx, playerID, orderID, kind, itemConfigID,
+		int64(remainingQuantity), int64(unitPrice))
+	if err != nil {
+		return err
+	}
+	if already {
+		plog.With(ctx).Infow("msg", "auction_ensure_escrow_idempotent_hit",
+			"player_id", playerID, "order_id", orderID, "side", side,
+			"item", itemConfigID, "remaining", remainingQuantity)
+	}
+	return nil
+}
+
 // ReleaseEscrow 退还某挂单 escrow 残余资产到玩家活跃余额(撤单 / 过期 / 完全成交后,幂等键 = order_id)。
 func (u *InventoryUsecase) ReleaseEscrow(ctx context.Context, playerID, orderID uint64) error {
 	if playerID == 0 || orderID == 0 {

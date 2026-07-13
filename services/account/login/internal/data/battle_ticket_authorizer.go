@@ -23,6 +23,10 @@ type BattleTicketTarget struct {
 	PodName       string
 	InstanceUID   string
 	InstanceEpoch uint32
+	// AllocationID 是本局分配 ID(DSTicket v2 allocation_id claim;旧记录可能为空,
+	// v2 签发侧对空值 fail-closed 拒签)。
+	AllocationID string
+	ReleaseTrack string
 }
 
 // BattleTicketAuthorizer 是 battle DSTicket 的签发前 player↔match 权威门。
@@ -136,6 +140,7 @@ func battleTicketTarget(battle *dsv1.BattleStorageRecord) BattleTicketTarget {
 	return BattleTicketTarget{
 		DSAddr: battle.GetDsAddr(), PodName: battle.GetDsPodName(),
 		InstanceUID: battle.GetGameserverUid(), InstanceEpoch: battle.GetInstanceEpoch(),
+		AllocationID: battle.GetAllocationId(), ReleaseTrack: battle.GetReleaseTrack(),
 	}
 }
 

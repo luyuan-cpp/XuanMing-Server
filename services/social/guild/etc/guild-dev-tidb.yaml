@@ -1,0 +1,60 @@
+# Pandora guild 服务配置 —— TiDB 版(公会 / 临时群迁 social TiDB,2026-07-13)。
+#
+# 与 guild-dev.yaml 唯一差异:node.mysql_client.dsn 指向 TiDB(默认 :4000)、collation
+# 改 utf8mb4_bin(TiDB 连接默认排序;重名判定的大小写/口音不敏感由 guilds.name /
+# chat_groups.name 的列级 utf8mb4_0900_ai_ci 保证,见 01-social-tidb.sql),其余完全一致。
+# TiDB 兼容 MySQL 协议,pkg/mysqlx + database/sql + go-sql-driver/mysql 零改动直连;
+# guild_repo.go / group_repo.go 的事务 / FOR UPDATE 在 TiDB 悲观事务下跨节点原生可跑。
+# TiDB 无间隙锁,pending 申请 / 所在群上限已改用计数列 / 计数表(decision-revisit-
+# guild-scaling.md §3.5),在 TiDB / MySQL 均安全。
+#
+# 启用方式(TiDB 集群就绪后,由 Codex / 人):
+#   先用 deploy/tidb-init/01-social-tidb.sql 建库表,再:
+#   guild --conf services/social/guild/etc/guild-dev-tidb.yaml
+#
+# ⚠️ DSN host/port/账号按实际 TiDB 集群填;下方 4000 是 TiDB Server 默认端口占位。
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50008"
+    timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
+  http:
+    network: tcp
+    addr: ":51008"
+
+node:
+  node_id: 1
+  # TiDB:MySQL 协议兼容,DSN 形态与 MySQL 一致,仅 host:port 指向 TiDB Server。
+  # 连接池 max_open_conns 可比单 MySQL 略大(TiDB Server 可横向扩);此处保守沿用。
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:4000)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_bin"
+    max_open_conns: 32
+    max_idle_conns: 8
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+  # Redis:公会资料读缓存(cache-aside,弱依赖)。单实例填 host;Cluster/Sentinel 填 addrs。
+  # 留空(host 与 addrs 皆空)则禁用缓存降级直连 TiDB。dev 复用本机 docker redis :6380。
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
+
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  group_id: "pandora-guild"
+  partition_cnt: 4
+
+guild:
+  # max_guild_members: 单公会成员上限(默认 100)
+  max_guild_members: 100
+  # max_group_members: 单临时群成员上限(默认 50)
+  max_group_members: 50
+  # max_name_len: 公会 / 群名最大长度(utf8 rune,默认 24)
+  max_name_len: 24
+  # cache_ttl: 公会资料读缓存条目 TTL(默认 60s);写后删 + 短 TTL 兜底(read-cache-strategy.md §4)
+  cache_ttl: "60s"

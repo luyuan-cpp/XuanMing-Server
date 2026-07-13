@@ -172,6 +172,14 @@ type AgonesConf struct {
 	// 或专属池无空闲时都落到它(通常是 Loader 模式的 Fleet,分配后按 label travel)。
 	FleetName string `yaml:"fleet_name,omitempty" json:"fleet_name,omitempty"`
 
+	// CanaryFleetName 是 canary 通用池。CanaryPercent>0 时必填；stable 请求永不
+	// 选择它，canary 请求无 Ready 时可按同一 GSA selector 顺序回退 FleetName。
+	CanaryFleetName string `yaml:"canary_fleet_name,omitempty" json:"canary_fleet_name,omitempty"`
+
+	// CanaryPercent/CanarySeed 以 match_id 做确定性 cohort，同一局永不拆轨。
+	CanaryPercent uint32 `yaml:"canary_percent,omitempty" json:"canary_percent,omitempty"`
+	CanarySeed    string `yaml:"canary_seed,omitempty" json:"canary_seed,omitempty"`
+
 	// MapFleets 按 map_id 路由到专属预热 Fleet(可选,标准混合形态)。
 	// 专属 Fleet 的 env 烤死目标 umap,Pod 预热时就已加载好目标图 → 分配即可玩,零 travel 延迟。
 	// 分配时生成有序 selectors:[专属 Fleet, 通用 FleetName],Agones 按顺序尝试——
@@ -214,6 +222,8 @@ type AgonesMapFleet struct {
 	MapID uint32 `yaml:"map_id" json:"map_id"`
 	// FleetName 该副本的专属 Fleet 名(其 env 烤死对应 umap + 战斗 GameMode)。
 	FleetName string `yaml:"fleet_name" json:"fleet_name"`
+	// CanaryFleetName 是同 map 的 canary 专属预热池；留空时 canary 直接走通用 canary 池。
+	CanaryFleetName string `yaml:"canary_fleet_name,omitempty" json:"canary_fleet_name,omitempty"`
 }
 
 // DedicatedFleetFor 返回 mapID 的专属 Fleet 名;未配置返空串(= 只走通用池)。
@@ -225,6 +235,23 @@ func (c AgonesConf) DedicatedFleetFor(mapID uint32) string {
 		if mf.MapID == mapID && mf.FleetName != "" {
 			return mf.FleetName
 		}
+	}
+	return ""
+}
+
+// DedicatedFleetForTrack 返回指定轨道的 map 专属 Fleet。
+func (c AgonesConf) DedicatedFleetForTrack(mapID uint32, releaseTrack string) string {
+	if mapID == 0 {
+		return ""
+	}
+	for _, mf := range c.MapFleets {
+		if mf.MapID != mapID {
+			continue
+		}
+		if releaseTrack == "canary" {
+			return mf.CanaryFleetName
+		}
+		return mf.FleetName
 	}
 	return ""
 }

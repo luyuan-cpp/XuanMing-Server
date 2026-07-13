@@ -96,7 +96,24 @@ UE `PandoraBackendSubsystem` 的 dev 开关默认值在 C++ 头文件里,生产*
 
 - [ ] 清掉 dev 种子账号(`test` / `test1`~`test10000`,密码 `abc`)
 - [ ] 生产 DB 不带任何 dev 测试数据
-- [ ] 备份 / 迁移脚本就绪
+- [ ] 备份 / 回滚预案就绪；版本化迁移仅包含经审核的向后兼容 expand 变更
+- [ ] 相对上一个已发布 tag，所有已发布 migration SQL 均未改写/删除/重编号；修正只新增更高版本（`schema_migrations` 无 SQL checksum，违反会产生伪 clean）
+- [ ] 独立预存在的 `pandora-db-migrate` Secret 已由 DBA/Secret 管理器准备，使用逐库最小权限迁移账号（`SELECT/INSERT/UPDATE/DELETE/CREATE/ALTER/INDEX/REFERENCES`，不授 `TRIGGER/SUPER`），不含 root，也不复用业务 `pandora-config`
+- [ ] Job 的独立 `-expected-targets` inventory 已从真实分片配置生成并人工复核，按 `name:migration_set:database` triple 精确列全普通库和全部 auction shards
+- [ ] 按 [`tools/migrate`](../../tools/migrate/README.md) 先运行一次性 migration Job；生产 DSN 均为可验证的 `tls=true`，所有 expected targets 均验收 `version=N dirty=false`
+- [ ] migration Job 失败/超时/dirty/TLS 不安全/inventory 不一致时发布已阻断，未自动 force、未继续滚动业务 Deployment
+
+### 2.5 Auction 状态机升级（本次必须人工门禁）
+
+- [ ] 生产 auction 为单库或恰好 2 个 MySQL shard；`N>2` 已由服务 fail-fast，未绕过。扩容前另做 owner registry 全量回填、冲突审计和持久完成标记
+- [ ] `auction_shard_topology` 已在每片 exact-match generation/count/index/identity；禁止 data-bearing 集群改 `1↔2`、重排/重复 DSN。双分片首次登记只临时打开 bootstrap，成功后已恢复 false
+- [ ] 所有 old auction 已启用 etcd Snowflake node ID 与同一 Redis 跨实例 market 锁；inventory 的 `EnsureAuctionEscrow` 已先行发布
+- [ ] 每个 auction shard 的 expand migration 均完成；真实规模索引建造时间、MDL/复制延迟和 Claim p99 已验收
+- [ ] 已统计历史 COMPLETED match 数量并验证 Kafka/消费者容量：迁移会把历史成交纳入有界 outbox 重放，消费者必须按 `match_id` 幂等，发布期间持续监控 backlog 与消费延迟
+- [ ] R3 green 明确为 `passive_warmup=true`，不接写且 verifier/reconciler/expiry 均未运行；入口先暂停 `PlaceOrder/Bid`，old 在途写归零并等待至少一个旧 lock TTL 后才下线 old
+- [ ] old 全部退出后，green 已以 `passive_warmup=false` 重启并确认补偿器 ready，随后才一次切流并恢复写入口
+- [ ] 切流后 active unverified、PENDING/match/event/release 补偿队列持续下降并最终收敛；Kafka 消费者按 `match_id` 幂等
+- [ ] 若不接受短暂写冻结，已先滚兼容 owner coordinator 版本；禁止 old/green 同时接拍卖写流量
 
 ---
 
@@ -135,11 +152,40 @@ pwsh tools/scripts/import_dev_ca.ps1
 ## 5. 发布流程顺序
 
 1. 跑 `release_preflight.ps1` → 必须全 PASS
-2. 后端用 `*-prod.yaml` 部署,确认 dev_skip_password/reflection 关
-3. Envoy 换公网 CA 证书 + 真实域名
-4. UE 用生产 ini 打 **Shipping** 包
-5. 用真机 / 干净环境(没装过 mkcert CA)验证登录链路:登录 → 进大厅 → 匹配 → 战斗 → 结算
-6. git push / tag / release(人手动执行,见 AGENTS §3)
+2. 构建与发布版本同源的 migration 镜像，运行一次性 migration Job；全部目标验收通过才继续
+3. 完成下述 DS B1 / Stable-Canary 发布门禁；先预热 Canary（权重 0），验收后才逐级放量
+4. 后端用 `*-prod.yaml` 滚动部署,确认 dev_skip_password/reflection 关
+5. Envoy 换公网 CA 证书 + 真实域名
+6. UE 用生产 ini 打 **Shipping** 包
+7. 用真机 / 干净环境(没装过 mkcert CA)验证登录链路:登录 → 进大厅 → 匹配 → 战斗 → 结算
+8. git push / tag / release(人手动执行,见 AGENTS §3)
+
+### 5.1 DS B1 / Stable-Canary 硬门
+
+- 目标集群不得残留旧单轨 `pandora-battle` / `pandora-hub` Fleet。Battle 只有在无 Allocated 后由运维
+  显式移除；Hub 必须先用外部在线人数证据证明排空，普通发布器绝不自动删除。
+- DSTicket K1 在独立受控步骤用 `dsticket_keyset.ps1` bootstrap。发布时只读对账 immutable
+  `Secret/pandora-dsticket-signer-r<revision>` 与 `default`/`pandora` 两份同 hash、同 revision、同顶层 `active_kid` 的
+  public JWKS。DS 只挂公钥；login / matchmaker / matchmaker-pve / hub-allocator 四个 signer 才挂私钥。
+- 轮换只能分三次显式运行 `dsticket_rotate.ps1 -Phase stage|promote|retire`；不得塞进普通发布。
+  `retire` 必须以 activation marker 的 apiserver `creationTimestamp` 满足 225 秒清退窗，且四 signer、
+  Login、四 Fleet、GameServerSet/GameServer/Pod owner 链与存活残量全部通过门禁。脚本不删旧 key、
+  不杀 Allocated DS；首次真实轮换还须补真 UE DS K1/K2 矩阵和集群审计证据。
+- 普通发布与轮换共用 `pandora-dsticket-operation-lock`。遗留锁一律 fail-closed：先只读审计 holder、UID、
+  marker 和现场对象，再由人决定后续；禁止按本机时间判断过期、自动抢锁或为赶发布直接删除。
+- 玩家 DSTicket keyset 与 Model-B DS callback identity 是两套信任域。`-DsTicketKeysetRevision` 不能
+  代替 `-DsFenceKeysetRevision`，callback HMAC 也不能放进玩家 JWKS/Fleet。
+- `required_writer_epoch` 必须在发布前由独立激活流程显式建立并可线性读取；普通发布只读检查，
+  missing 不得默认成 1。生产必须使用 etcd mTLS/custom CA/ACL 只读身份。
+- Canary 镜像和 Stable 镜像都必须解析成 registry digest，显式 Canary digest 必须不同于 Stable。
+  Fleet/GameServer/Pod 三层 release-track、Ready 池 imageID 与 annotation 全部对账成功才可加权。
+- Canary 权重非 0 时禁止更换 `CanarySeed`。回滚先把 Battle/Hub 权重归零，再等旧 Allocated 会话排空；
+  不杀在场 DS、不删 Hub Fleet、不轮换 DSTicket keyset。
+
+当前 `start.ps1 -Mode online` 仍有三道**不可用 ACK 绕过**的生产硬阻断：DS auth etcd
+mTLS/custom CA/ACL、真 UE DS 的 DSTicket v2 正负向 E2E、registry native immutable-tag/create-only
+策略与发布锁。在相应证据由 Claude 审核、代码门禁被明确移除前，命令必须在 push/apply 前停止；
+看到该停止信息是正确行为，不得注释 throw 强行上线。
 
 ---
 
@@ -148,12 +194,13 @@ pwsh tools/scripts/import_dev_ca.ps1
 线上**不提交任何二进制**:git 只存源码 + tag,可部署的二进制以**容器镜像**存在 registry。
 用**同一个版本号**把三处串起来,做到「线上某个 pod ↔ git 某次提交」可追溯。
 
-### 6.1 一个版本号,焊进三处
+### 6.1 版本 + commit + digest，焊成可追溯链
 
 ```
-git tag v1.2.3                       ① 源码快照(人手动打,AGENTS §3)
-  └─同号─► 镜像 pandora/<svc>:v1.2.3  ② 可部署产物(push 到 registry)
-            └─同号─► k8s newTag: v1.2.3 ③ 线上实际部署的版本
+git tag v1.2.3                              ① 源码快照(人手动打,AGENTS §3)
+  + commit b5a5a95
+      └─► 镜像 pandora/<svc>:v1.2.3-b5a5a95 ② create-only 发布别名
+            └─registry 回读─► repo@sha256:… ③ k8s 线上实际运行身份
 ```
 
 二进制内部也烙了版本(编译期 `-ldflags -X` 注入 [`pkg/version`](../../pkg/version/version.go)):
@@ -163,8 +210,8 @@ git tag v1.2.3                       ① 源码快照(人手动打,AGENTS §3)
   通过 Dockerfile build-arg(`VERSION`/`GIT_COMMIT`/`BUILD_TIME`)注入。
 - 本地随手 `go run`(没注入)时回退 `version=dev commit=unknown`,不影响启动。
 
-> 排障时:`kubectl logs <pod> | head -1` 看启动版本行,或 `kubectl get deploy -o jsonpath` 看 image tag,
-> 两者应一致 = 没人偷偷热改过镜像。
+> 排障时先看启动首行的 version/commit，再看 Deployment/Pod 的 `repo@sha256:…`、运行时 imageID 与
+> `pandora.dev/image-digest` annotation；四者应闭环。tag 只是发布别名，不能作为最终身份。
 
 ### 6.2 线上发布打版本(命令)
 
@@ -173,16 +220,26 @@ git tag v1.2.3                       ① 源码快照(人手动打,AGENTS §3)
 git tag v1.2.3
 git push origin v1.2.3
 
-# 2) 构建 + 打同号镜像 + push 到 registry + apply 到生产(start.ps1 online 模式已支持)
+# 2) 目标命令形态（仅在 §5.1 三道硬门有审核证据并明确解除后执行）
+# Tag 必须含本次 git SHA；所有 DS 镜像最终由发布器回读并钉为 repo@sha256:digest。
 pwsh tools/scripts/start.ps1 -Mode online -Env prod -ProdKubeContext pandora-prod `
-  -Registry registry.yourcorp.com -Tag v1.2.3 -BuildPush `
-  -BattleDsImage registry.yourcorp.com/pandora/battle-ds:v1.2.3 `
-  -HubDsImage registry.yourcorp.com/pandora/hub-ds:v1.2.3 `
-  -DsGatewayAddr pandora-envoy.pandora.svc:8444
+  -Registry registry.yourcorp.com -Tag v1.2.3-b5a5a95 -BuildPush `
+  -BattleDsImage registry.yourcorp.com/pandora/battle-ds@sha256:<stable-battle-digest> `
+  -HubDsImage registry.yourcorp.com/pandora/hub-ds@sha256:<stable-hub-digest> `
+  -CanaryBattleDsImage registry.yourcorp.com/pandora/battle-ds@sha256:<canary-battle-digest> `
+  -CanaryHubDsImage registry.yourcorp.com/pandora/hub-ds@sha256:<canary-hub-digest> `
+  -BattleCanaryPercent 0 -HubCanaryPercent 0 `
+  -BattleCanaryReplicas 2 -HubCanaryReplicas 1 -CanarySeed ds-release-20260713 `
+  -DsGatewayAddr pandora-envoy.pandora.svc:8444 -DsAuthMode enforce -DsAuthorityMode redis `
+  -DsFenceEtcdEndpoints <mtls-etcd-endpoint> -DsFenceKeysetRevision <callback-revision> `
+  -DsTicketKeysetRevision 1
 ```
 
-- `-BuildPush` 会构建 20 个服务镜像(自动带 git 版本烙印)、tag 成 `v1.2.3`、push 到 registry,
-  再用该 tag 覆盖 [`overlays/online/kustomization.yaml`](../../deploy/k8s/overlays/online/kustomization.yaml) 部署。
+- 上例是 Canary **预热**（权重 0）；确认 Ready/指标后，下一次运行保持相同 digest/seed，只把百分比
+  调到小值。异常时先用同一参数把两项百分比归零。
+- `-BuildPush` 在门禁解除后才会构建 20 个服务镜像(自动带 git 版本烙印)、以不可变 tag 推送，
+  再解析 registry digest 并部署；tag 不是最终运行身份，运行身份必须是 digest。
 - **git push / tag 由人手动执行**(AGENTS §3),脚本不替你推。
 
-> dev/docker 模式的镜像 tag 固定 `:dev`(跟最新代码走,不需要版本号);**只有线上发布才打 `v1.2.3` 这种版本 tag**。
+> dev/docker 模式的镜像 tag 固定 `:dev`(跟最新代码走,不需要版本号)；线上 tag 必须带 git SHA，
+> 例如 `v1.2.3-b5a5a95`，且最终以 registry digest 为准。

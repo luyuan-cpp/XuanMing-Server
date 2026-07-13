@@ -13,6 +13,7 @@ package biz
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 
@@ -268,12 +269,29 @@ func (u *PlayerUsecase) AllocateAttributePoints(ctx context.Context, playerID ui
 	if len(allocs) == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "allocations required")
 	}
+	// 逐项校验并做溢出安全的累计:
+	//   - Points 必须为正(只增点);
+	//   - 同一 attr_key 的累计增量、以及所有增量之和都不得超过数据库有符号 INT 列上界
+	//     (player_attributes.points / unspent_attr_points 均为 INT,上界 MaxInt32)。
+	// 用 int64 累加并在每步与上界比较,单值 <= MaxInt32,累加前必然 < 2*MaxInt32,不会 int64 溢出。
+	// 这里只堵「请求级」越界(总和 / 单键增量),列「当前值 + 增量」越界由 repo 在事务内权威兜底。
+	perKey := make(map[string]int64, len(allocs))
+	var sum int64
 	for _, a := range allocs {
 		if a.Key == "" {
 			return 0, errcode.New(errcode.ErrInvalidArg, "attr_key must not be empty")
 		}
 		if a.Points <= 0 {
 			return 0, errcode.New(errcode.ErrInvalidArg, "points must be positive: %s", a.Key)
+		}
+		perKey[a.Key] += int64(a.Points)
+		if perKey[a.Key] > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr %s allocation out of range", a.Key)
+		}
+		sum += int64(a.Points)
+		if sum > math.MaxInt32 {
+			// 总和超过 INT 列上界(必然 >= 任何可能的 unspent)→ 点数不足,零写入。
+			return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "total allocation out of range")
 		}
 	}
 	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {

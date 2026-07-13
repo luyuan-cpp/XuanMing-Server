@@ -1,0 +1,68 @@
+{
+  "targets": [
+    {
+      "name": "account-primary",
+      "migration_set": "pandora_account",
+      "database": "pandora_account",
+      "dsn_file": "account.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "player-primary",
+      "migration_set": "pandora_player",
+      "database": "pandora_player",
+      "dsn_file": "player.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "social-primary",
+      "migration_set": "pandora_social",
+      "database": "pandora_social",
+      "dsn_file": "social.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "battle-primary",
+      "migration_set": "pandora_battle",
+      "database": "pandora_battle",
+      "dsn_file": "battle.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "trade-primary",
+      "migration_set": "pandora_trade",
+      "database": "pandora_trade",
+      "dsn_file": "trade.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "auction-shard-00",
+      "migration_set": "pandora_auction",
+      "database": "pandora_auction_00",
+      "dsn_file": "auction-00.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "auction-shard-01",
+      "migration_set": "pandora_auction",
+      "database": "pandora_auction_01",
+      "dsn_file": "auction-01.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    },
+    {
+      "name": "leaderboard-primary",
+      "migration_set": "pandora_leaderboard",
+      "database": "pandora_leaderboard",
+      "dsn_file": "leaderboard.dsn",
+      "timeout_seconds": 900,
+      "lock_wait_timeout_seconds": 15
+    }
+  ]
+}

@@ -1296,11 +1296,11 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      17, 248,  // max_field_number, fast_idx_mask
+      18, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294836224,  // skipmap
+      4294705152,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      17,  // num_field_entries
+      18,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1324,44 +1324,44 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
        {26, 2, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.region_)}},
       // uint32 shard_id = 4 [json_name = "shardId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.shard_id_), 6>(),
-       {32, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.shard_id_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_)}},
       // int32 player_count = 5 [json_name = "playerCount"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.player_count_), 7>(),
-       {40, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.player_count_), 8>(),
+       {40, 8, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.player_count_)}},
       // int32 capacity = 6 [json_name = "capacity"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.capacity_), 12>(),
-       {48, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubShardStorageRecord, _impl_.capacity_), 13>(),
+       {48, 13, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.capacity_)}},
       // string state = 7 [json_name = "state"];
       {::_pbi::TcParser::FastUS1,
        {58, 3, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.state_)}},
       // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.last_heartbeat_ms_), 8>(),
-       {64, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.last_heartbeat_ms_), 9>(),
+       {64, 9, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_heartbeat_ms_)}},
       // int64 created_at_ms = 9 [json_name = "createdAtMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.created_at_ms_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.created_at_ms_), 10>(),
+       {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.created_at_ms_)}},
       // int64 draining_since_ms = 10 [json_name = "drainingSinceMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.draining_since_ms_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.draining_since_ms_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.draining_since_ms_)}},
       // uint64 current_token_exp_ms = 11 [json_name = "currentTokenExpMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.current_token_exp_ms_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.current_token_exp_ms_), 12>(),
+       {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.current_token_exp_ms_)}},
       // uint64 current_token_gen = 12 [json_name = "currentTokenGen"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.current_token_gen_), 14>(),
-       {96, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.current_token_gen_), 15>(),
+       {96, 15, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.current_token_gen_)}},
       // uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.last_verified_gen_), 15>(),
-       {104, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubShardStorageRecord, _impl_.last_verified_gen_), 16>(),
+       {104, 16, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_gen_)}},
       // string last_verified_jti = 14 [json_name = "lastVerifiedJti"];
       {::_pbi::TcParser::FastUS1,
@@ -1373,13 +1373,16 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.gameserver_uid_)}},
       // uint32 auth_epoch = 16 [json_name = "authEpoch"];
       {::_pbi::TcParser::FastV32S2,
-       {384, 13, 0,
+       {384, 14, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.auth_epoch_)}},
       // uint32 last_verified_writer_epoch = 17 [json_name = "lastVerifiedWriterEpoch"];
       {::_pbi::TcParser::FastV32S2,
-       {392, 16, 0,
+       {392, 17, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_writer_epoch_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string release_track = 18 [json_name = "releaseTrack"];
+      {::_pbi::TcParser::FastUS2,
+       {402, 6, 0,
+        PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.release_track_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1403,37 +1406,39 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
       // string region = 3 [json_name = "region"];
       {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.region_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 shard_id = 4 [json_name = "shardId"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // int32 player_count = 5 [json_name = "playerCount"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.player_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.player_count_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
       // int32 capacity = 6 [json_name = "capacity"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.capacity_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.capacity_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
       // string state = 7 [json_name = "state"];
       {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.state_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_heartbeat_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_heartbeat_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // int64 created_at_ms = 9 [json_name = "createdAtMs"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // int64 draining_since_ms = 10 [json_name = "drainingSinceMs"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.draining_since_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.draining_since_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // uint64 current_token_exp_ms = 11 [json_name = "currentTokenExpMs"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.current_token_exp_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.current_token_exp_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 current_token_gen = 12 [json_name = "currentTokenGen"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.current_token_gen_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.current_token_gen_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_gen_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_gen_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string last_verified_jti = 14 [json_name = "lastVerifiedJti"];
       {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_jti_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string gameserver_uid = 15 [json_name = "gameserverUid"];
       {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.gameserver_uid_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 auth_epoch = 16 [json_name = "authEpoch"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.auth_epoch_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.auth_epoch_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 last_verified_writer_epoch = 17 [json_name = "lastVerifiedWriterEpoch"];
-      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_writer_epoch_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_writer_epoch_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string release_track = 18 [json_name = "releaseTrack"];
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.release_track_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\44\14\10\6\0\0\0\5\0\0\0\0\0\0\21\16\0\0\0\0\0\0\0\0"
+      "\44\14\10\6\0\0\0\5\0\0\0\0\0\0\21\16\0\0\15\0\0\0\0\0"
       "pandora.hub.v1.HubShardStorageRecord"
       "hub_pod_name"
       "hub_addr"
@@ -1441,6 +1446,7 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
       "state"
       "last_verified_jti"
       "gameserver_uid"
+      "release_track"
     }},
   };
 }
@@ -1466,6 +1472,9 @@ inline constexpr HubShardStorageRecord::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         gameserver_uid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        release_track_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         shard_id_{0u},
@@ -2379,11 +2388,11 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
     {
       PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
+      15,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2395,8 +2404,8 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.player_id_), 6>(),
-       {8, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.player_id_), 7>(),
+       {8, 7, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_)}},
       // string hub_pod_name = 2 [json_name = "hubPodName"];
       {::_pbi::TcParser::FastUS1,
@@ -2407,36 +2416,36 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_addr_)}},
       // uint32 shard_id = 4 [json_name = "shardId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.shard_id_), 8>(),
-       {32, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.shard_id_), 9>(),
+       {32, 9, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_)}},
       // string region = 5 [json_name = "region"];
       {::_pbi::TcParser::FastUS1,
        {42, 2, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.region_)}},
       // uint64 team_id = 6 [json_name = "teamId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.team_id_), 7>(),
-       {48, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.team_id_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_)}},
       // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), 10>(),
-       {56, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), 11>(),
+       {56, 11, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_)}},
       // uint32 role_id = 8 [json_name = "roleId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.role_id_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.role_id_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.role_id_)}},
       // string hub_instance_uid = 9 [json_name = "hubInstanceUid"];
       {::_pbi::TcParser::FastUS1,
        {74, 3, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_instance_uid_)}},
       // uint32 auth_epoch = 10 [json_name = "authEpoch"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.auth_epoch_), 12>(),
-       {80, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.auth_epoch_), 13>(),
+       {80, 13, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_epoch_)}},
       // uint64 auth_gen = 11 [json_name = "authGen"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.auth_gen_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubAssignmentStorageRecord, _impl_.auth_gen_), 12>(),
+       {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_gen_)}},
       // string auth_jti = 12 [json_name = "authJti"];
       {::_pbi::TcParser::FastUS1,
@@ -2447,45 +2456,50 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
        {106, 5, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assignment_id_)}},
       // uint32 auth_writer_epoch = 14 [json_name = "authWriterEpoch"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.auth_writer_epoch_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubAssignmentStorageRecord, _impl_.auth_writer_epoch_), 14>(),
+       {112, 14, 0,
         PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_writer_epoch_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string release_track = 15 [json_name = "releaseTrack"];
+      {::_pbi::TcParser::FastUS1,
+       {122, 6, 0,
+        PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.release_track_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string hub_pod_name = 2 [json_name = "hubPodName"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string hub_addr = 3 [json_name = "hubAddr"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_addr_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 shard_id = 4 [json_name = "shardId"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.shard_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string region = 5 [json_name = "region"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.region_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 team_id = 6 [json_name = "teamId"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.team_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assigned_at_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // uint32 role_id = 8 [json_name = "roleId"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.role_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.role_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string hub_instance_uid = 9 [json_name = "hubInstanceUid"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.hub_instance_uid_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 auth_epoch = 10 [json_name = "authEpoch"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_epoch_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_epoch_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 auth_gen = 11 [json_name = "authGen"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_gen_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_gen_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string auth_jti = 12 [json_name = "authJti"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_jti_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string assignment_id = 13 [json_name = "assignmentId"];
       {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.assignment_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 auth_writer_epoch = 14 [json_name = "authWriterEpoch"];
-      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_writer_epoch_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_writer_epoch_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string release_track = 15 [json_name = "releaseTrack"];
+      {PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.release_track_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\51\0\14\10\0\6\0\0\0\20\0\0\10\15\0\0"
+      "\51\0\14\10\0\6\0\0\0\20\0\0\10\15\0\15"
       "pandora.hub.v1.HubAssignmentStorageRecord"
       "hub_pod_name"
       "hub_addr"
@@ -2493,6 +2507,7 @@ constexpr HubAssignmentStorageRecord::ParseTableT_ HubAssignmentStorageRecord::I
       "hub_instance_uid"
       "auth_jti"
       "assignment_id"
+      "release_track"
     }},
   };
 }
@@ -2518,6 +2533,9 @@ inline constexpr HubAssignmentStorageRecord::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        release_track_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
@@ -4104,7 +4122,7 @@ const ::uint32_t
         7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_._has_bits_),
-        20, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.hub_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.hub_addr_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.region_),
@@ -4122,23 +4140,25 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.gameserver_uid_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.auth_epoch_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.last_verified_writer_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.release_track_),
         0,
         1,
         2,
-        6,
         7,
-        12,
-        3,
         8,
+        13,
+        3,
         9,
         10,
         11,
-        14,
+        12,
         15,
+        16,
         4,
         5,
-        13,
-        16,
+        14,
+        17,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubDSCredential, _impl_._has_bits_),
         11, // hasbit index offset
@@ -4187,7 +4207,7 @@ const ::uint32_t
         11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_._has_bits_),
-        17, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.hub_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.hub_addr_),
@@ -4202,20 +4222,22 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.auth_jti_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.assignment_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.auth_writer_epoch_),
-        6,
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubAssignmentStorageRecord, _impl_.release_track_),
+        7,
         0,
         1,
-        8,
-        2,
-        7,
-        10,
         9,
-        3,
-        12,
+        2,
+        8,
         11,
+        10,
+        3,
+        13,
+        12,
         4,
         5,
-        13,
+        14,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubMigrateEvent, _impl_._has_bits_),
         12, // hasbit index offset
@@ -4258,10 +4280,10 @@ static const ::_pbi::MigrationSchema
         {122, sizeof(::pandora::hub::v1::HeartbeatRequest)},
         {139, sizeof(::pandora::hub::v1::HeartbeatResponse)},
         {158, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
-        {195, sizeof(::pandora::hub::v1::HubDSCredential)},
-        {214, sizeof(::pandora::hub::v1::HubShardAuthStorageRecord)},
-        {241, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
-        {272, sizeof(::pandora::hub::v1::HubMigrateEvent)},
+        {197, sizeof(::pandora::hub::v1::HubDSCredential)},
+        {216, sizeof(::pandora::hub::v1::HubShardAuthStorageRecord)},
+        {243, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
+        {276, sizeof(::pandora::hub::v1::HubMigrateEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4347,7 +4369,7 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "dInstanceUid\0226\n\027accepted_protocol_epoch\030"
     "\r \001(\rR\025acceptedProtocolEpoch\0222\n\025accepted"
     "_writer_epoch\030\016 \001(\rR\023acceptedWriterEpoch"
-    "J\004\010\004\020\n\"\220\005\n\025HubShardStorageRecord\022 \n\014hub_"
+    "J\004\010\004\020\n\"\265\005\n\025HubShardStorageRecord\022 \n\014hub_"
     "pod_name\030\001 \001(\tR\nhubPodName\022\031\n\010hub_addr\030\002"
     " \001(\tR\007hubAddr\022\026\n\006region\030\003 \001(\tR\006region\022\031\n"
     "\010shard_id\030\004 \001(\rR\007shardId\022!\n\014player_count"
@@ -4363,68 +4385,69 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "astVerifiedJti\022%\n\016gameserver_uid\030\017 \001(\tR\r"
     "gameserverUid\022\035\n\nauth_epoch\030\020 \001(\rR\tauthE"
     "poch\022;\n\032last_verified_writer_epoch\030\021 \001(\r"
-    "R\027lastVerifiedWriterEpoch\"\356\001\n\017HubDSCrede"
-    "ntial\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jti\030\002 \001(\tR\003jt"
-    "i\022\025\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003kid\030\004 \001(\tR\003k"
-    "id\022!\n\014instance_uid\030\005 \001(\tR\013instanceUid\022%\n"
-    "\016protocol_epoch\030\006 \001(\rR\rprotocolEpoch\022!\n\014"
-    "token_sha256\030\007 \001(\tR\013tokenSha256\022!\n\014write"
-    "r_epoch\030\010 \001(\rR\013writerEpoch\"\260\004\n\031HubShardA"
-    "uthStorageRecord\022\031\n\010pod_name\030\001 \001(\tR\007podN"
-    "ame\022!\n\014instance_uid\030\002 \001(\tR\013instanceUid\022%"
-    "\n\016protocol_epoch\030\003 \001(\rR\rprotocolEpoch\0222\n"
-    "\005phase\030\004 \001(\0162\034.pandora.hub.v1.HubAuthPha"
-    "seR\005phase\0227\n\006active\030\005 \001(\0132\037.pandora.hub."
-    "v1.HubDSCredentialR\006active\0229\n\007pending\030\006 "
-    "\001(\0132\037.pandora.hub.v1.HubDSCredentialR\007pe"
-    "nding\022$\n\016high_water_gen\030\007 \001(\004R\014highWater"
-    "Gen\022,\n\022pending_started_ms\030\010 \001(\003R\020pending"
-    "StartedMs\022!\n\014delivered_rv\030\t \001(\tR\013deliver"
-    "edRv\022\"\n\rupdated_at_ms\030\n \001(\003R\013updatedAtMs"
-    "\0227\n\030last_active_heartbeat_ms\030\013 \001(\003R\025last"
-    "ActiveHeartbeatMs\0222\n\025required_writer_epo"
-    "ch\030\014 \001(\rR\023requiredWriterEpoch\"\321\003\n\032HubAss"
-    "ignmentStorageRecord\022\033\n\tplayer_id\030\001 \001(\004R"
-    "\010playerId\022 \n\014hub_pod_name\030\002 \001(\tR\nhubPodN"
-    "ame\022\031\n\010hub_addr\030\003 \001(\tR\007hubAddr\022\031\n\010shard_"
-    "id\030\004 \001(\rR\007shardId\022\026\n\006region\030\005 \001(\tR\006regio"
-    "n\022\027\n\007team_id\030\006 \001(\004R\006teamId\022$\n\016assigned_a"
-    "t_ms\030\007 \001(\003R\014assignedAtMs\022\027\n\007role_id\030\010 \001("
-    "\rR\006roleId\022(\n\020hub_instance_uid\030\t \001(\tR\016hub"
-    "InstanceUid\022\035\n\nauth_epoch\030\n \001(\rR\tauthEpo"
-    "ch\022\031\n\010auth_gen\030\013 \001(\004R\007authGen\022\031\n\010auth_jt"
-    "i\030\014 \001(\tR\007authJti\022#\n\rassignment_id\030\r \001(\tR"
-    "\014assignmentId\022*\n\021auth_writer_epoch\030\016 \001(\r"
-    "R\017authWriterEpoch\"\262\002\n\017HubMigrateEvent\022\033\n"
-    "\tplayer_id\030\001 \001(\004R\010playerId\022 \n\014from_hub_p"
-    "od\030\002 \001(\tR\nfromHubPod\022#\n\016to_hub_ds_addr\030\003"
-    " \001(\tR\013toHubDsAddr\022\"\n\rto_hub_ticket\030\004 \001(\t"
-    "R\013toHubTicket\022%\n\017to_hub_pod_name\030\005 \001(\tR\014"
-    "toHubPodName\022\036\n\013to_shard_id\030\006 \001(\rR\ttoSha"
-    "rdId\022#\n\rgrace_seconds\030\007 \001(\005R\014graceSecond"
-    "s\022\026\n\006reason\030\010 \001(\tR\006reason\022\023\n\005ts_ms\030\t \001(\003"
-    "R\004tsMs*\304\001\n\014HubAuthPhase\022\036\n\032HUB_AUTH_PHAS"
-    "E_UNSPECIFIED\020\000\022\034\n\030HUB_AUTH_PHASE_BOOTST"
-    "RAP\020\001\022\031\n\025HUB_AUTH_PHASE_ACTIVE\020\002\022\033\n\027HUB_"
-    "AUTH_PHASE_ROTATING\020\003\022\036\n\032HUB_AUTH_PHASE_"
-    "QUARANTINED\020\004\022\036\n\032HUB_AUTH_PHASE_TERMINAT"
-    "ING\020\0052\361\004\n\023HubAllocatorService\022P\n\tAssignH"
-    "ub\022 .pandora.hub.v1.AssignHubRequest\032!.p"
-    "andora.hub.v1.AssignHubResponse\022S\n\nRelea"
-    "seHub\022!.pandora.hub.v1.ReleaseHubRequest"
-    "\032\".pandora.hub.v1.ReleaseHubResponse\022V\n\013"
-    "TransferHub\022\".pandora.hub.v1.TransferHub"
-    "Request\032#.pandora.hub.v1.TransferHubResp"
-    "onse\022M\n\010ListHubs\022\037.pandora.hub.v1.ListHu"
-    "bsRequest\032 .pandora.hub.v1.ListHubsRespo"
-    "nse\022P\n\tHeartbeat\022 .pandora.hub.v1.Heartb"
-    "eatRequest\032!.pandora.hub.v1.HeartbeatRes"
-    "ponse\022Y\n\014ListHubLines\022#.pandora.hub.v1.L"
-    "istHubLinesRequest\032$.pandora.hub.v1.List"
-    "HubLinesResponse\022_\n\016TransferToLine\022%.pan"
-    "dora.hub.v1.TransferToLineRequest\032&.pand"
-    "ora.hub.v1.TransferToLineResponseb\006proto"
-    "3"
+    "R\027lastVerifiedWriterEpoch\022#\n\rrelease_tra"
+    "ck\030\022 \001(\tR\014releaseTrack\"\356\001\n\017HubDSCredenti"
+    "al\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jti\030\002 \001(\tR\003jti\022\025"
+    "\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003kid\030\004 \001(\tR\003kid\022"
+    "!\n\014instance_uid\030\005 \001(\tR\013instanceUid\022%\n\016pr"
+    "otocol_epoch\030\006 \001(\rR\rprotocolEpoch\022!\n\014tok"
+    "en_sha256\030\007 \001(\tR\013tokenSha256\022!\n\014writer_e"
+    "poch\030\010 \001(\rR\013writerEpoch\"\260\004\n\031HubShardAuth"
+    "StorageRecord\022\031\n\010pod_name\030\001 \001(\tR\007podName"
+    "\022!\n\014instance_uid\030\002 \001(\tR\013instanceUid\022%\n\016p"
+    "rotocol_epoch\030\003 \001(\rR\rprotocolEpoch\0222\n\005ph"
+    "ase\030\004 \001(\0162\034.pandora.hub.v1.HubAuthPhaseR"
+    "\005phase\0227\n\006active\030\005 \001(\0132\037.pandora.hub.v1."
+    "HubDSCredentialR\006active\0229\n\007pending\030\006 \001(\013"
+    "2\037.pandora.hub.v1.HubDSCredentialR\007pendi"
+    "ng\022$\n\016high_water_gen\030\007 \001(\004R\014highWaterGen"
+    "\022,\n\022pending_started_ms\030\010 \001(\003R\020pendingSta"
+    "rtedMs\022!\n\014delivered_rv\030\t \001(\tR\013deliveredR"
+    "v\022\"\n\rupdated_at_ms\030\n \001(\003R\013updatedAtMs\0227\n"
+    "\030last_active_heartbeat_ms\030\013 \001(\003R\025lastAct"
+    "iveHeartbeatMs\0222\n\025required_writer_epoch\030"
+    "\014 \001(\rR\023requiredWriterEpoch\"\366\003\n\032HubAssign"
+    "mentStorageRecord\022\033\n\tplayer_id\030\001 \001(\004R\010pl"
+    "ayerId\022 \n\014hub_pod_name\030\002 \001(\tR\nhubPodName"
+    "\022\031\n\010hub_addr\030\003 \001(\tR\007hubAddr\022\031\n\010shard_id\030"
+    "\004 \001(\rR\007shardId\022\026\n\006region\030\005 \001(\tR\006region\022\027"
+    "\n\007team_id\030\006 \001(\004R\006teamId\022$\n\016assigned_at_m"
+    "s\030\007 \001(\003R\014assignedAtMs\022\027\n\007role_id\030\010 \001(\rR\006"
+    "roleId\022(\n\020hub_instance_uid\030\t \001(\tR\016hubIns"
+    "tanceUid\022\035\n\nauth_epoch\030\n \001(\rR\tauthEpoch\022"
+    "\031\n\010auth_gen\030\013 \001(\004R\007authGen\022\031\n\010auth_jti\030\014"
+    " \001(\tR\007authJti\022#\n\rassignment_id\030\r \001(\tR\014as"
+    "signmentId\022*\n\021auth_writer_epoch\030\016 \001(\rR\017a"
+    "uthWriterEpoch\022#\n\rrelease_track\030\017 \001(\tR\014r"
+    "eleaseTrack\"\262\002\n\017HubMigrateEvent\022\033\n\tplaye"
+    "r_id\030\001 \001(\004R\010playerId\022 \n\014from_hub_pod\030\002 \001"
+    "(\tR\nfromHubPod\022#\n\016to_hub_ds_addr\030\003 \001(\tR\013"
+    "toHubDsAddr\022\"\n\rto_hub_ticket\030\004 \001(\tR\013toHu"
+    "bTicket\022%\n\017to_hub_pod_name\030\005 \001(\tR\014toHubP"
+    "odName\022\036\n\013to_shard_id\030\006 \001(\rR\ttoShardId\022#"
+    "\n\rgrace_seconds\030\007 \001(\005R\014graceSeconds\022\026\n\006r"
+    "eason\030\010 \001(\tR\006reason\022\023\n\005ts_ms\030\t \001(\003R\004tsMs"
+    "*\304\001\n\014HubAuthPhase\022\036\n\032HUB_AUTH_PHASE_UNSP"
+    "ECIFIED\020\000\022\034\n\030HUB_AUTH_PHASE_BOOTSTRAP\020\001\022"
+    "\031\n\025HUB_AUTH_PHASE_ACTIVE\020\002\022\033\n\027HUB_AUTH_P"
+    "HASE_ROTATING\020\003\022\036\n\032HUB_AUTH_PHASE_QUARAN"
+    "TINED\020\004\022\036\n\032HUB_AUTH_PHASE_TERMINATING\020\0052"
+    "\361\004\n\023HubAllocatorService\022P\n\tAssignHub\022 .p"
+    "andora.hub.v1.AssignHubRequest\032!.pandora"
+    ".hub.v1.AssignHubResponse\022S\n\nReleaseHub\022"
+    "!.pandora.hub.v1.ReleaseHubRequest\032\".pan"
+    "dora.hub.v1.ReleaseHubResponse\022V\n\013Transf"
+    "erHub\022\".pandora.hub.v1.TransferHubReques"
+    "t\032#.pandora.hub.v1.TransferHubResponse\022M"
+    "\n\010ListHubs\022\037.pandora.hub.v1.ListHubsRequ"
+    "est\032 .pandora.hub.v1.ListHubsResponse\022P\n"
+    "\tHeartbeat\022 .pandora.hub.v1.HeartbeatReq"
+    "uest\032!.pandora.hub.v1.HeartbeatResponse\022"
+    "Y\n\014ListHubLines\022#.pandora.hub.v1.ListHub"
+    "LinesRequest\032$.pandora.hub.v1.ListHubLin"
+    "esResponse\022_\n\016TransferToLine\022%.pandora.h"
+    "ub.v1.TransferToLineRequest\032&.pandora.hu"
+    "b.v1.TransferToLineResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps[1] = {
@@ -4434,7 +4457,7 @@ static ::absl::once_flag descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto = {
     false,
     false,
-    5401,
+    5475,
     descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto,
     "pandora/hub/v1/allocator.proto",
     &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_once,
@@ -8976,7 +8999,8 @@ PROTOBUF_NDEBUG_INLINE HubShardStorageRecord::Impl_::Impl_(
         region_(arena, from.region_),
         state_(arena, from.state_),
         last_verified_jti_(arena, from.last_verified_jti_),
-        gameserver_uid_(arena, from.gameserver_uid_) {}
+        gameserver_uid_(arena, from.gameserver_uid_),
+        release_track_(arena, from.release_track_) {}
 
 HubShardStorageRecord::HubShardStorageRecord(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -9011,7 +9035,8 @@ PROTOBUF_NDEBUG_INLINE HubShardStorageRecord::Impl_::Impl_(
         region_(arena),
         state_(arena),
         last_verified_jti_(arena),
-        gameserver_uid_(arena) {}
+        gameserver_uid_(arena),
+        release_track_(arena) {}
 
 inline void HubShardStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -9039,6 +9064,7 @@ inline void HubShardStorageRecord::SharedDtor(MessageLite& self) {
   this_._impl_.state_.Destroy();
   this_._impl_.last_verified_jti_.Destroy();
   this_._impl_.gameserver_uid_.Destroy();
+  this_._impl_.release_track_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -9076,7 +9102,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
     }
@@ -9095,18 +9121,21 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _impl_.gameserver_uid_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.release_track_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
-    ::memset(&_impl_.shard_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.player_count_) -
-        reinterpret_cast<char*>(&_impl_.shard_id_)) + sizeof(_impl_.player_count_));
-  }
+  _impl_.shard_id_ = 0u;
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.last_heartbeat_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.last_verified_gen_) -
-        reinterpret_cast<char*>(&_impl_.last_heartbeat_ms_)) + sizeof(_impl_.last_verified_gen_));
+    ::memset(&_impl_.player_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.current_token_gen_) -
+        reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.current_token_gen_));
   }
-  _impl_.last_verified_writer_epoch_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    ::memset(&_impl_.last_verified_gen_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.last_verified_writer_epoch_) -
+        reinterpret_cast<char*>(&_impl_.last_verified_gen_)) + sizeof(_impl_.last_verified_writer_epoch_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -9161,7 +9190,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // uint32 shard_id = 4 [json_name = "shardId"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_shard_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9170,7 +9199,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // int32 player_count = 5 [json_name = "playerCount"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_player_count() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<5>(
@@ -9179,7 +9208,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // int32 capacity = 6 [json_name = "capacity"];
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_capacity() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<6>(
@@ -9198,7 +9227,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_last_heartbeat_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<8>(
@@ -9207,7 +9236,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // int64 created_at_ms = 9 [json_name = "createdAtMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_created_at_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<9>(
@@ -9216,7 +9245,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // int64 draining_since_ms = 10 [json_name = "drainingSinceMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_draining_since_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<10>(
@@ -9225,7 +9254,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // uint64 current_token_exp_ms = 11 [json_name = "currentTokenExpMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_current_token_exp_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -9234,7 +9263,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // uint64 current_token_gen = 12 [json_name = "currentTokenGen"];
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_current_token_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -9243,7 +9272,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_last_verified_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -9272,7 +9301,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // uint32 auth_epoch = 16 [json_name = "authEpoch"];
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_auth_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9281,11 +9310,21 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
   }
 
   // uint32 last_verified_writer_epoch = 17 [json_name = "lastVerifiedWriterEpoch"];
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_last_verified_writer_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           17, this_._internal_last_verified_writer_epoch(), target);
+    }
+  }
+
+  // string release_track = 18 [json_name = "releaseTrack"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_release_track().empty()) {
+      const ::std::string& _s = this_._internal_release_track();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubShardStorageRecord.release_track");
+      target = stream->WriteStringMaybeAliased(18, _s, target);
     }
   }
 
@@ -9357,82 +9396,89 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
                                         this_._internal_gameserver_uid());
       }
     }
-    // uint32 shard_id = 4 [json_name = "shardId"];
+    // string release_track = 18 [json_name = "releaseTrack"];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_release_track().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_release_track());
+      }
+    }
+    // uint32 shard_id = 4 [json_name = "shardId"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_shard_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_shard_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // int32 player_count = 5 [json_name = "playerCount"];
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_player_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_player_count());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // int64 last_heartbeat_ms = 8 [json_name = "lastHeartbeatMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_last_heartbeat_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_last_heartbeat_ms());
       }
     }
     // int64 created_at_ms = 9 [json_name = "createdAtMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_created_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_created_at_ms());
       }
     }
     // int64 draining_since_ms = 10 [json_name = "drainingSinceMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_draining_since_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_draining_since_ms());
       }
     }
     // uint64 current_token_exp_ms = 11 [json_name = "currentTokenExpMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_current_token_exp_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_current_token_exp_ms());
       }
     }
     // int32 capacity = 6 [json_name = "capacity"];
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_capacity() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_capacity());
       }
     }
     // uint32 auth_epoch = 16 [json_name = "authEpoch"];
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_auth_epoch() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_auth_epoch());
       }
     }
     // uint64 current_token_gen = 12 [json_name = "currentTokenGen"];
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_current_token_gen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_current_token_gen());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     // uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_last_verified_gen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_last_verified_gen());
       }
     }
-  }
-   {
     // uint32 last_verified_writer_epoch = 17 [json_name = "lastVerifiedWriterEpoch"];
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_last_verified_writer_epoch() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_last_verified_writer_epoch());
@@ -9512,61 +9558,72 @@ void HubShardStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_shard_id() != 0) {
-        _this->_impl_.shard_id_ = from._impl_.shard_id_;
+      if (!from._internal_release_track().empty()) {
+        _this->_internal_set_release_track(from._internal_release_track());
+      } else {
+        if (_this->_impl_.release_track_.IsDefault()) {
+          _this->_internal_set_release_track("");
+        }
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_player_count() != 0) {
-        _this->_impl_.player_count_ = from._impl_.player_count_;
+      if (from._internal_shard_id() != 0) {
+        _this->_impl_.shard_id_ = from._impl_.shard_id_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_player_count() != 0) {
+        _this->_impl_.player_count_ = from._impl_.player_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_last_heartbeat_ms() != 0) {
         _this->_impl_.last_heartbeat_ms_ = from._impl_.last_heartbeat_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_created_at_ms() != 0) {
         _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_draining_since_ms() != 0) {
         _this->_impl_.draining_since_ms_ = from._impl_.draining_since_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_current_token_exp_ms() != 0) {
         _this->_impl_.current_token_exp_ms_ = from._impl_.current_token_exp_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_capacity() != 0) {
         _this->_impl_.capacity_ = from._impl_.capacity_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_auth_epoch() != 0) {
         _this->_impl_.auth_epoch_ = from._impl_.auth_epoch_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_current_token_gen() != 0) {
         _this->_impl_.current_token_gen_ = from._impl_.current_token_gen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_last_verified_gen() != 0) {
         _this->_impl_.last_verified_gen_ = from._impl_.last_verified_gen_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-    if (from._internal_last_verified_writer_epoch() != 0) {
-      _this->_impl_.last_verified_writer_epoch_ = from._impl_.last_verified_writer_epoch_;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_last_verified_writer_epoch() != 0) {
+        _this->_impl_.last_verified_writer_epoch_ = from._impl_.last_verified_writer_epoch_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -9594,6 +9651,7 @@ void HubShardStorageRecord::InternalSwap(HubShardStorageRecord* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.state_, &other->_impl_.state_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.last_verified_jti_, &other->_impl_.last_verified_jti_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gameserver_uid_, &other->_impl_.gameserver_uid_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_writer_epoch_)
       + sizeof(HubShardStorageRecord::_impl_.last_verified_writer_epoch_)
@@ -10576,7 +10634,8 @@ PROTOBUF_NDEBUG_INLINE HubAssignmentStorageRecord::Impl_::Impl_(
         region_(arena, from.region_),
         hub_instance_uid_(arena, from.hub_instance_uid_),
         auth_jti_(arena, from.auth_jti_),
-        assignment_id_(arena, from.assignment_id_) {}
+        assignment_id_(arena, from.assignment_id_),
+        release_track_(arena, from.release_track_) {}
 
 HubAssignmentStorageRecord::HubAssignmentStorageRecord(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -10611,7 +10670,8 @@ PROTOBUF_NDEBUG_INLINE HubAssignmentStorageRecord::Impl_::Impl_(
         region_(arena),
         hub_instance_uid_(arena),
         auth_jti_(arena),
-        assignment_id_(arena) {}
+        assignment_id_(arena),
+        release_track_(arena) {}
 
 inline void HubAssignmentStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -10639,6 +10699,7 @@ inline void HubAssignmentStorageRecord::SharedDtor(MessageLite& self) {
   this_._impl_.hub_instance_uid_.Destroy();
   this_._impl_.auth_jti_.Destroy();
   this_._impl_.assignment_id_.Destroy();
+  this_._impl_.release_track_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -10676,7 +10737,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
     }
@@ -10695,16 +10756,15 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _impl_.assignment_id_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.release_track_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.team_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.team_id_));
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    ::memset(&_impl_.shard_id_, 0, static_cast<::size_t>(
+  _impl_.player_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    ::memset(&_impl_.team_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.auth_writer_epoch_) -
-        reinterpret_cast<char*>(&_impl_.shard_id_)) + sizeof(_impl_.auth_writer_epoch_));
+        reinterpret_cast<char*>(&_impl_.team_id_)) + sizeof(_impl_.auth_writer_epoch_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -10730,7 +10790,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10759,7 +10819,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint32 shard_id = 4 [json_name = "shardId"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_shard_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10778,7 +10838,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint64 team_id = 6 [json_name = "teamId"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_team_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10787,7 +10847,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_assigned_at_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<7>(
@@ -10796,7 +10856,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint32 role_id = 8 [json_name = "roleId"];
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_role_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10815,7 +10875,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint32 auth_epoch = 10 [json_name = "authEpoch"];
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_auth_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10824,7 +10884,7 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint64 auth_gen = 11 [json_name = "authGen"];
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_auth_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10853,11 +10913,21 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
   }
 
   // uint32 auth_writer_epoch = 14 [json_name = "authWriterEpoch"];
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_auth_writer_epoch() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           14, this_._internal_auth_writer_epoch(), target);
+    }
+  }
+
+  // string release_track = 15 [json_name = "releaseTrack"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_release_track().empty()) {
+      const ::std::string& _s = this_._internal_release_track();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubAssignmentStorageRecord.release_track");
+      target = stream->WriteStringMaybeAliased(15, _s, target);
     }
   }
 
@@ -10929,59 +10999,66 @@ PROTOBUF_NOINLINE void HubAssignmentStorageRecord::Clear() {
                                         this_._internal_assignment_id());
       }
     }
-    // uint64 player_id = 1 [json_name = "playerId"];
+    // string release_track = 15 [json_name = "releaseTrack"];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_release_track().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_release_track());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint64 team_id = 6 [json_name = "teamId"];
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_team_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_team_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 shard_id = 4 [json_name = "shardId"];
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_shard_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_shard_id());
       }
     }
     // uint32 role_id = 8 [json_name = "roleId"];
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_role_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_role_id());
       }
     }
     // int64 assigned_at_ms = 7 [json_name = "assignedAtMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_assigned_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_assigned_at_ms());
       }
     }
     // uint64 auth_gen = 11 [json_name = "authGen"];
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_auth_gen() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_auth_gen());
       }
     }
     // uint32 auth_epoch = 10 [json_name = "authEpoch"];
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_auth_epoch() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_auth_epoch());
       }
     }
     // uint32 auth_writer_epoch = 14 [json_name = "authWriterEpoch"];
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_auth_writer_epoch() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_auth_writer_epoch());
@@ -11061,43 +11138,52 @@ void HubAssignmentStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_m
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_release_track().empty()) {
+        _this->_internal_set_release_track(from._internal_release_track());
+      } else {
+        if (_this->_impl_.release_track_.IsDefault()) {
+          _this->_internal_set_release_track("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_team_id() != 0) {
         _this->_impl_.team_id_ = from._impl_.team_id_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_shard_id() != 0) {
         _this->_impl_.shard_id_ = from._impl_.shard_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_role_id() != 0) {
         _this->_impl_.role_id_ = from._impl_.role_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_assigned_at_ms() != 0) {
         _this->_impl_.assigned_at_ms_ = from._impl_.assigned_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_auth_gen() != 0) {
         _this->_impl_.auth_gen_ = from._impl_.auth_gen_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_auth_epoch() != 0) {
         _this->_impl_.auth_epoch_ = from._impl_.auth_epoch_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_auth_writer_epoch() != 0) {
         _this->_impl_.auth_writer_epoch_ = from._impl_.auth_writer_epoch_;
       }
@@ -11128,6 +11214,7 @@ void HubAssignmentStorageRecord::InternalSwap(HubAssignmentStorageRecord* PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_instance_uid_, &other->_impl_.hub_instance_uid_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.auth_jti_, &other->_impl_.auth_jti_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.assignment_id_, &other->_impl_.assignment_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(HubAssignmentStorageRecord, _impl_.auth_writer_epoch_)
       + sizeof(HubAssignmentStorageRecord::_impl_.auth_writer_epoch_)

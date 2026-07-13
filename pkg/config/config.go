@@ -414,6 +414,40 @@ func (c *DSAuthConf) Defaults() {
 	}
 }
 
+// DSTicketConf 是「玩家 DSTicket v2(RS256 非对称,方案 B)」信任域配置
+// (docs/design/decision-revisit-player-jwt-key-rotation.md §7 拍板)。
+//
+// 与 SessionToken(HS256,pandora-client)、DS 回调令牌(HS256,pandora-ds)严格分域:
+// iss=pandora-dsticket,aud=pandora-game-ds,alg 固定 RS256。私钥只存在于签发侧
+// (login / hub_allocator / matchmaker)的 K8s Secret;DS Fleet 只持有公钥 JWKS,
+// 机械检查禁止任何私钥/oct 材料进入 Fleet(§7.5)。
+//
+// 留空 PrivateKeyFile = 本服务不启用 v2 签发,沿用 legacy HS256 DSTicket(dev/local-off 不变)。
+type DSTicketConf struct {
+	// PrivateKeyFile 签发侧 RSA 私钥 PEM 路径(≥2048 位,K8s Secret 挂载,0400)。
+	PrivateKeyFile string `yaml:"private_key_file,omitempty" json:"private_key_file,omitempty"`
+
+	// ActiveKid 签发侧必填:期望的活跃 kid(RFC 7638 指纹)。与私钥指纹不符时启动失败,
+	// 用于轮换窗口内机械确认「该副本用的是预期那把键」。
+	ActiveKid string `yaml:"active_kid,omitempty" json:"active_kid,omitempty"`
+
+	// TTL 票据有效期,默认 120s,机械上限 180s(auth.DSTicketMaxTTL,DS 校验侧同样强制)。
+	TTL Duration `yaml:"ttl,omitempty" json:"ttl,omitempty"`
+
+	// JWKSFile 校验侧公钥 JWKS 路径(仅 login 在线授权端点等服务侧校验用;DS 侧走
+	// PANDORA_DSTICKET_JWKS_FILE env)。留空 = 本服务不启用 v2 校验。
+	JWKSFile string `yaml:"jwks_file,omitempty" json:"jwks_file,omitempty"`
+
+	// KeysetRevision 可选:期望的 keyset revision。设置后与 JWKS 文件内 revision 不符时启动失败。
+	KeysetRevision string `yaml:"keyset_revision,omitempty" json:"keyset_revision,omitempty"`
+}
+
+// SignerEnabled 返回本服务是否启用 v2 签发。
+func (c *DSTicketConf) SignerEnabled() bool { return c.PrivateKeyFile != "" }
+
+// VerifierEnabled 返回本服务是否启用 v2 校验。
+func (c *DSTicketConf) VerifierEnabled() bool { return c.JWKSFile != "" }
+
 // DS 回调令牌 TTL 的启动期最小值。这两把令牌在关键路径上都存在「不续期」窗口:
 //   - 战斗 DS 令牌:一局一签、永不续期(战斗 DS 一局一销毁),TTL 必须覆盖「最长对局 + 重连窗口」,
 //     否则对局跑到一半令牌过期,battle_result 等回调被全拒、赛果无法结算。

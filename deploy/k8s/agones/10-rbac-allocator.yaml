@@ -35,9 +35,10 @@ rules:
     resources: ["gameserverallocations"]
     verbs: ["create"]
   # ds_allocator Release / hub_allocator 分片发现
+  # patch:hub_allocator 给 ready Hub DS 写 pandora.dev/ds-token annotation(DS 回调令牌,审核 P1 #1)
   - apiGroups: ["agones.dev"]
     resources: ["gameservers"]
-    verbs: ["get", "list", "delete"]
+    verbs: ["get", "list", "delete", "patch"]
   # hub_allocator 自动扩缩容 / 整合时需读写 Fleet spec.replicas
   - apiGroups: ["agones.dev"]
     resources: ["fleets"]

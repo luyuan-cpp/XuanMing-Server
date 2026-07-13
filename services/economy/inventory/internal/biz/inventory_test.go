@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -33,10 +34,11 @@ type escrowEntry struct {
 
 // fakeRepo 是 data.InventoryRepo 的内存实现(复刻 MySQL 幂等 / 扣减 / 指纹快照 / escrow 语义)。
 type fakeRepo struct {
-	gold   map[uint64]int64
-	items  map[uint64]map[uint32]int64
-	ledger map[string]ledgerEntry  // key=playerID|idempotencyKey
-	escrow map[string]*escrowEntry // key=playerID|order:<orderID>
+	escrowMu sync.Mutex
+	gold     map[uint64]int64
+	items    map[uint64]map[uint32]int64
+	ledger   map[string]ledgerEntry  // key=playerID|idempotencyKey
+	escrow   map[string]*escrowEntry // key=playerID|order:<orderID>
 
 	// 装备实例(W5 ④):instances[playerID][instanceID]=inst;instGrant 复刻 grant_inst 幂等。
 	instances map[uint64]map[uint64]*data.ItemInstance
@@ -252,6 +254,58 @@ func (f *fakeRepo) FreezeForOrder(_ context.Context, playerID, orderID uint64, k
 		}
 		f.gold[playerID] -= frozenGold
 		f.escrow[ek] = &escrowEntry{kind: kind, itemConfigID: itemConfigID, frozenGold: frozenGold}
+	default:
+		return false, errcode.New(errcode.ErrInvalidArg, "unknown escrow kind")
+	}
+	return false, nil
+}
+
+func (f *fakeRepo) EnsureAuctionEscrow(_ context.Context, playerID, orderID uint64, kind data.EscrowKind, itemConfigID uint32, remainingQuantity, unitPrice int64) (bool, error) {
+	f.escrowMu.Lock()
+	defer f.escrowMu.Unlock()
+
+	ek := escrowKeyOf(playerID, orderID)
+	if e := f.escrow[ek]; e != nil {
+		if e.closed || e.kind != kind || e.itemConfigID != itemConfigID {
+			return false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "escrow identity conflict")
+		}
+		switch kind {
+		case data.EscrowKindItem:
+			if e.frozenGold != 0 {
+				return false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "item escrow carries gold")
+			}
+			if e.frozenQty < remainingQuantity {
+				return false, errcode.New(errcode.ErrInventoryInsufficient, "item escrow short")
+			}
+		case data.EscrowKindGold:
+			requiredGold, ok := safeMulInt64(unitPrice, remainingQuantity)
+			if !ok || e.frozenQty != 0 {
+				return false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "gold escrow malformed")
+			}
+			if e.frozenGold < requiredGold {
+				return false, errcode.New(errcode.ErrInventoryInsufficient, "gold escrow short")
+			}
+		}
+		return true, nil
+	}
+
+	switch kind {
+	case data.EscrowKindItem:
+		if f.items[playerID] == nil || f.items[playerID][itemConfigID] < remainingQuantity {
+			return false, errcode.New(errcode.ErrInventoryInsufficient, "ensure item insufficient")
+		}
+		f.items[playerID][itemConfigID] -= remainingQuantity
+		f.escrow[ek] = &escrowEntry{kind: kind, itemConfigID: itemConfigID, frozenQty: remainingQuantity}
+	case data.EscrowKindGold:
+		requiredGold, ok := safeMulInt64(unitPrice, remainingQuantity)
+		if !ok {
+			return false, errcode.New(errcode.ErrInvalidArg, "ensure gold overflow")
+		}
+		if f.gold[playerID] < requiredGold {
+			return false, errcode.New(errcode.ErrInventoryInsufficient, "ensure gold insufficient")
+		}
+		f.gold[playerID] -= requiredGold
+		f.escrow[ek] = &escrowEntry{kind: kind, itemConfigID: itemConfigID, frozenGold: requiredGold}
 	default:
 		return false, errcode.New(errcode.ErrInvalidArg, "unknown escrow kind")
 	}
@@ -758,6 +812,164 @@ func TestFreezeForOrder_Idempotent(t *testing.T) {
 	}
 	if repo.items[10][7001] != 2 {
 		t.Fatalf("idempotent freeze must deduct once: active item want 2, got %d", repo.items[10][7001])
+	}
+}
+
+func TestEnsureAuctionEscrow_ExistingActiveIsValidatedWithoutRefreeze(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 10, []data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+		t.Fatalf("seed seller: %v", err)
+	}
+	if err := uc.FreezeForOrder(ctx, 10, 501, EscrowSideSell, 7001, 4, 100); err != nil {
+		t.Fatalf("freeze: %v", err)
+	}
+	if err := uc.EnsureAuctionEscrow(ctx, 10, 501, EscrowSideSell, 7001, 3, 100); err != nil {
+		t.Fatalf("ensure existing: %v", err)
+	}
+	if got := repo.items[10][7001]; got != 1 {
+		t.Fatalf("已有 escrow 不得再次扣活跃道具: got=%d want=1", got)
+	}
+	if got := repo.escrow[escrowKeyOf(10, 501)].frozenQty; got != 4 {
+		t.Fatalf("已有 escrow 余量不得被 ensure 改写: got=%d want=4", got)
+	}
+}
+
+func TestEnsureAuctionEscrow_MissingEscrowFreezesRemainingAssets(t *testing.T) {
+	t.Run("sell", func(t *testing.T) {
+		repo := newFakeRepo()
+		uc := newUC(repo)
+		if _, err := uc.GrantItems(context.Background(), 10,
+			[]data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed-seller"); err != nil {
+			t.Fatalf("seed seller: %v", err)
+		}
+		if err := uc.EnsureAuctionEscrow(context.Background(), 10, 501,
+			EscrowSideSell, 7001, 3, 100); err != nil {
+			t.Fatalf("ensure sell: %v", err)
+		}
+		if got := repo.items[10][7001]; got != 2 {
+			t.Fatalf("active item=%d want=2", got)
+		}
+		if got := repo.escrow[escrowKeyOf(10, 501)].frozenQty; got != 3 {
+			t.Fatalf("frozen item=%d want=3", got)
+		}
+	})
+
+	t.Run("buy", func(t *testing.T) {
+		repo := newFakeRepo()
+		uc := newUC(repo)
+		if _, err := uc.GrantItems(context.Background(), 20, nil, 1000, "seed-buyer"); err != nil {
+			t.Fatalf("seed buyer: %v", err)
+		}
+		if err := uc.EnsureAuctionEscrow(context.Background(), 20, 601,
+			EscrowSideBuy, 7001, 3, 100); err != nil {
+			t.Fatalf("ensure buy: %v", err)
+		}
+		if got := repo.gold[20]; got != 700 {
+			t.Fatalf("active gold=%d want=700", got)
+		}
+		if got := repo.escrow[escrowKeyOf(20, 601)].frozenGold; got != 300 {
+			t.Fatalf("frozen gold=%d want=300", got)
+		}
+	})
+}
+
+func TestEnsureAuctionEscrow_RejectsInsufficientMismatchAndClosed(t *testing.T) {
+	t.Run("missing-insufficient", func(t *testing.T) {
+		repo := newFakeRepo()
+		uc := newUC(repo)
+		if _, err := uc.GrantItems(context.Background(), 10,
+			[]data.ItemGrant{{ItemConfigID: 7001, Count: 1}}, 0, "seed"); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		err := uc.EnsureAuctionEscrow(context.Background(), 10, 501,
+			EscrowSideSell, 7001, 2, 100)
+		if errcode.As(err) != errcode.ErrInventoryInsufficient {
+			t.Fatalf("want ErrInventoryInsufficient, got %v", err)
+		}
+		if _, ok := repo.escrow[escrowKeyOf(10, 501)]; ok {
+			t.Fatal("补冻失败不得留下 escrow")
+		}
+		if got := repo.items[10][7001]; got != 1 {
+			t.Fatalf("补冻失败不得扣活跃资产: got=%d", got)
+		}
+	})
+
+	t.Run("identity-mismatch", func(t *testing.T) {
+		repo := newFakeRepo()
+		uc := newUC(repo)
+		repo.escrow[escrowKeyOf(10, 501)] = &escrowEntry{
+			kind: data.EscrowKindItem, itemConfigID: 7001, frozenQty: 3,
+		}
+		err := uc.EnsureAuctionEscrow(context.Background(), 10, 501,
+			EscrowSideSell, 7002, 2, 100)
+		if errcode.As(err) != errcode.ErrInventoryIdempotencyConflict {
+			t.Fatalf("want ErrInventoryIdempotencyConflict, got %v", err)
+		}
+	})
+
+	t.Run("closed", func(t *testing.T) {
+		repo := newFakeRepo()
+		uc := newUC(repo)
+		repo.escrow[escrowKeyOf(10, 501)] = &escrowEntry{
+			kind: data.EscrowKindItem, itemConfigID: 7001, closed: true,
+		}
+		err := uc.EnsureAuctionEscrow(context.Background(), 10, 501,
+			EscrowSideSell, 7001, 1, 100)
+		if errcode.As(err) != errcode.ErrInventoryIdempotencyConflict {
+			t.Fatalf("want ErrInventoryIdempotencyConflict, got %v", err)
+		}
+	})
+
+	t.Run("existing-short", func(t *testing.T) {
+		repo := newFakeRepo()
+		uc := newUC(repo)
+		repo.escrow[escrowKeyOf(10, 501)] = &escrowEntry{
+			kind: data.EscrowKindItem, itemConfigID: 7001, frozenQty: 1,
+		}
+		err := uc.EnsureAuctionEscrow(context.Background(), 10, 501,
+			EscrowSideSell, 7001, 2, 100)
+		if errcode.As(err) != errcode.ErrInventoryInsufficient {
+			t.Fatalf("want ErrInventoryInsufficient, got %v", err)
+		}
+	})
+}
+
+func TestEnsureAuctionEscrow_ConcurrentIdempotent(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	ctx := context.Background()
+	if _, err := uc.GrantItems(ctx, 10,
+		[]data.ItemGrant{{ItemConfigID: 7001, Count: 5}}, 0, "seed"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- uc.EnsureAuctionEscrow(ctx, 10, 501, EscrowSideSell, 7001, 5, 100)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("concurrent ensure: %v", err)
+		}
+	}
+	if got := repo.items[10][7001]; got != 0 {
+		t.Fatalf("并发 ensure 只能扣一次: active=%d want=0", got)
+	}
+	if got := repo.escrow[escrowKeyOf(10, 501)].frozenQty; got != 5 {
+		t.Fatalf("并发 ensure 只能创建一份 escrow: frozen=%d want=5", got)
 	}
 }
 

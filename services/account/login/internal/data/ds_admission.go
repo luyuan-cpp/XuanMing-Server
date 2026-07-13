@@ -39,6 +39,9 @@ type DSAdmissionBinding struct {
 	Kid           string
 	TokenSHA256   string
 	WriterEpoch   uint32
+	// v2 DSTicket 的稳定路由绑定；不属于 callback credential identity。
+	AllocationID string
+	ReleaseTrack string
 	// PlayerIDs 仅 Battle 使用，来自与 auth 同槽读取的 BattleStorageRecord 权威 roster。
 	PlayerIDs []uint64
 }
@@ -221,6 +224,7 @@ func (c *RedisDSAdmissionChecker) checkHubActive(
 		record.GetLastActiveHeartbeatMs() <= 0 || record.GetLastActiveHeartbeatMs() > nowMs ||
 		nowMs-record.GetLastActiveHeartbeatMs() > maxAgeMs ||
 		projection.GetHubPodName() != pod || projection.GetState() != "ready" ||
+		(projection.GetReleaseTrack() != "" && projection.GetReleaseTrack() != auth.ReleaseTrackStable && projection.GetReleaseTrack() != auth.ReleaseTrackCanary) ||
 		projection.GetGameserverUid() != credential.InstanceUID || projection.GetAuthEpoch() != credential.ProtocolEpoch ||
 		projection.GetLastVerifiedGen() != credential.Gen || projection.GetLastVerifiedJti() != credential.JTI ||
 		projection.GetLastVerifiedWriterEpoch() != auth.DSAuthWriterEpochV2 ||
@@ -229,7 +233,9 @@ func (c *RedisDSAdmissionChecker) checkHubActive(
 		!hubActiveMatches(active, credential, nowMs) {
 		return DSAdmissionBinding{}, errcode.New(errcode.ErrUnauthorized, "hub admission credential does not match active authority")
 	}
-	return bindingFromCredential(credential), nil
+	binding := bindingFromCredential(credential)
+	binding.ReleaseTrack = normalizedProjectionReleaseTrack(projection.GetReleaseTrack())
+	return binding, nil
 }
 
 func (c *RedisDSAdmissionChecker) checkBattleActive(
@@ -277,6 +283,7 @@ func (c *RedisDSAdmissionChecker) checkBattleActive(
 		record.GetLastActiveHeartbeatMs() <= 0 || record.GetLastActiveHeartbeatMs() > nowMs ||
 		nowMs-record.GetLastActiveHeartbeatMs() > maxAgeMs ||
 		projection.GetMatchId() != credential.MatchID || projection.GetAllocationId() != record.GetAllocationId() ||
+		(projection.GetReleaseTrack() != "" && projection.GetReleaseTrack() != auth.ReleaseTrackStable && projection.GetReleaseTrack() != auth.ReleaseTrackCanary) ||
 		projection.GetDsPodName() != pod || projection.GetGameserverUid() != credential.InstanceUID ||
 		projection.GetInstanceEpoch() != credential.ProtocolEpoch ||
 		(projection.GetState() != "ready" && projection.GetState() != "running") ||
@@ -288,6 +295,8 @@ func (c *RedisDSAdmissionChecker) checkBattleActive(
 	}
 	binding := bindingFromCredential(credential)
 	binding.PlayerIDs = append([]uint64(nil), projection.GetPlayerIds()...)
+	binding.AllocationID = projection.GetAllocationId()
+	binding.ReleaseTrack = normalizedProjectionReleaseTrack(projection.GetReleaseTrack())
 	return binding, nil
 }
 
@@ -327,6 +336,13 @@ func bindingFromCredential(credential *middleware.VerifiedCredential) DSAdmissio
 		CredentialGen: credential.Gen, CredentialJTI: credential.JTI, ExpMs: credential.ExpMs,
 		Kid: credential.Kid, TokenSHA256: credential.TokenSHA256, WriterEpoch: credential.WriterEpoch,
 	}
+}
+
+func normalizedProjectionReleaseTrack(track string) string {
+	if track == "" {
+		return auth.ReleaseTrackStable // additive rollout:pre-track authority records are stable
+	}
+	return track
 }
 
 func admissionRedisBytes(value any) ([]byte, error) {

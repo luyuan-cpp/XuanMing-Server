@@ -37,122 +37,6 @@ func newTestAllocator(t *testing.T, serverURL string) *AgonesGameServerAllocator
 	return a
 }
 
-// TestWatchedFleets 校验容量巡检盯的 Fleet 集合:通用池在前 + 专属池去重按字典序。
-func TestWatchedFleets(t *testing.T) {
-	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
-		Enabled:   true,
-		APIServer: "http://127.0.0.1:1",
-		Namespace: "pandora",
-		FleetName: "battle-fleet",
-		TokenPath: "-",
-		MapFleets: []conf.AgonesMapFleet{
-			{MapID: 7, FleetName: "songlin-fleet"},
-			{MapID: 8, FleetName: "arena-fleet"},
-			{MapID: 9, FleetName: "battle-fleet"}, // 与通用池重名 → 去重
-		},
-	})
-	if err != nil {
-		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
-	}
-	got := a.WatchedFleets()
-	want := []string{"battle-fleet", "arena-fleet", "songlin-fleet"}
-	if len(got) != len(want) {
-		t.Fatalf("WatchedFleets len: got %v want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("WatchedFleets[%d]: got %q want %q", i, got[i], want[i])
-		}
-	}
-}
-
-// TestListFleetCapacities_OK 解析 Fleet status 容量快照,并对每个受管 Fleet 各发一次 GET。
-func TestListFleetCapacities_OK(t *testing.T) {
-	byFleet := map[string]map[string]any{
-		"battle-fleet":  {"replicas": 10, "readyReplicas": 3, "allocatedReplicas": 7},
-		"songlin-fleet": {"replicas": 4, "readyReplicas": 0, "allocatedReplicas": 4},
-	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("method: got %s want GET", r.Method)
-		}
-		// 路径尾段是 fleet 名
-		parts := strings.Split(r.URL.Path, "/")
-		fleet := parts[len(parts)-1]
-		st, ok := byFleet[fleet]
-		if !ok {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": st})
-	}))
-	defer srv.Close()
-
-	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
-		Enabled:   true,
-		APIServer: srv.URL,
-		Namespace: "pandora",
-		FleetName: "battle-fleet",
-		TokenPath: "-",
-		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
-	})
-	if err != nil {
-		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
-	}
-
-	caps, err := a.ListFleetCapacities(context.Background())
-	if err != nil {
-		t.Fatalf("ListFleetCapacities: %v", err)
-	}
-	if len(caps) != 2 {
-		t.Fatalf("caps len: got %d want 2", len(caps))
-	}
-	got := map[string]FleetCapacity{}
-	for _, c := range caps {
-		got[c.Fleet] = c
-	}
-	if c := got["battle-fleet"]; c.Replicas != 10 || c.Ready != 3 || c.Allocated != 7 {
-		t.Errorf("battle-fleet: got %+v want replicas=10 ready=3 allocated=7", c)
-	}
-	if c := got["songlin-fleet"]; c.Replicas != 4 || c.Ready != 0 || c.Allocated != 4 {
-		t.Errorf("songlin-fleet: got %+v want replicas=4 ready=0 allocated=4", c)
-	}
-}
-
-// TestListFleetCapacities_PartialFailure 单 Fleet 5xx 不影响其余,错误经 error 汇总返回。
-func TestListFleetCapacities_PartialFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "songlin-fleet") {
-			http.Error(w, "boom", http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"status": map[string]any{"replicas": 5, "readyReplicas": 5, "allocatedReplicas": 0},
-		})
-	}))
-	defer srv.Close()
-
-	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
-		Enabled:   true,
-		APIServer: srv.URL,
-		Namespace: "pandora",
-		FleetName: "battle-fleet",
-		TokenPath: "-",
-		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
-	})
-	if err != nil {
-		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
-	}
-
-	caps, err := a.ListFleetCapacities(context.Background())
-	if err == nil {
-		t.Fatal("expected aggregated error for failing fleet, got nil")
-	}
-	if len(caps) != 1 || caps[0].Fleet != "battle-fleet" {
-		t.Fatalf("expected 1 successful cap(battle-fleet), got %+v", caps)
-	}
-}
-
 func TestNewAgonesGameServerAllocator_RequiresFleet(t *testing.T) {
 	if _, err := NewAgonesGameServerAllocator(conf.AgonesConf{Enabled: true}); err == nil {
 		t.Fatal("expected error when fleet_name empty, got nil")
@@ -184,7 +68,7 @@ func TestAgonesAllocate_OK(t *testing.T) {
 	defer srv.Close()
 
 	a := newTestAllocator(t, srv.URL)
-	pod, addr, err := a.Allocate(context.Background(), 12345, 2, "moba_5v5")
+	pod, addr, track, err := a.Allocate(context.Background(), 12345, 2, "moba_5v5", "stable")
 	if err != nil {
 		t.Fatalf("Allocate: %v", err)
 	}
@@ -193,6 +77,9 @@ func TestAgonesAllocate_OK(t *testing.T) {
 	}
 	if addr != "10.0.0.7:7777" {
 		t.Errorf("addr: got %q want 10.0.0.7:7777", addr)
+	}
+	if track != "stable" {
+		t.Errorf("track: got %q want stable", track)
 	}
 }
 
@@ -215,7 +102,7 @@ func TestAgonesAllocate_DSTokenAnnotation(t *testing.T) {
 
 	// 未注入 issuer:不带 annotations。
 	a := newTestAllocator(t, srv.URL)
-	if _, _, err := a.Allocate(context.Background(), 42, 1, "moba"); err != nil {
+	if _, _, _, err := a.Allocate(context.Background(), 42, 1, "moba", "stable"); err != nil {
 		t.Fatalf("Allocate: %v", err)
 	}
 	if strings.Contains(string(gotBody), "pandora.dev/ds-token") {
@@ -224,7 +111,7 @@ func TestAgonesAllocate_DSTokenAnnotation(t *testing.T) {
 
 	// 注入 issuer:annotation 带上令牌。
 	a.SetDSTokenIssuer(func(matchID uint64) (string, error) { return "tok-for-42", nil }, false)
-	if _, _, err := a.Allocate(context.Background(), 42, 1, "moba"); err != nil {
+	if _, _, _, err := a.Allocate(context.Background(), 42, 1, "moba", "stable"); err != nil {
 		t.Fatalf("Allocate with issuer: %v", err)
 	}
 	var req struct {
@@ -243,7 +130,7 @@ func TestAgonesAllocate_DSTokenAnnotation(t *testing.T) {
 
 	// issuer 报错 + off/permissive(required=false):降级为无令牌分配,不阻断。
 	a.SetDSTokenIssuer(func(matchID uint64) (string, error) { return "", context.DeadlineExceeded }, false)
-	if _, _, err := a.Allocate(context.Background(), 42, 1, "moba"); err != nil {
+	if _, _, _, err := a.Allocate(context.Background(), 42, 1, "moba", "stable"); err != nil {
 		t.Fatalf("Allocate with failing issuer must not fail: %v", err)
 	}
 	if strings.Contains(string(gotBody), "pandora.dev/ds-token") {
@@ -252,7 +139,7 @@ func TestAgonesAllocate_DSTokenAnnotation(t *testing.T) {
 
 	// issuer 报错 + enforce(required=true):fail-closed,Allocate 返回分配失败。
 	a.SetDSTokenIssuer(func(matchID uint64) (string, error) { return "", context.DeadlineExceeded }, true)
-	if _, _, err := a.Allocate(context.Background(), 42, 1, "moba"); err == nil {
+	if _, _, _, err := a.Allocate(context.Background(), 42, 1, "moba", "stable"); err == nil {
 		t.Fatal("Allocate under enforce with failing issuer must fail")
 	} else if got := errcode.As(err); got != errcode.ErrDSAllocationFailed {
 		t.Errorf("enforce sign-fail code: got %d want ErrDSAllocationFailed", got)
@@ -271,6 +158,10 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 			if !strings.Contains(string(body), "pandora.dev/allocation-id") {
 				t.Errorf("GSA POST missing persistent allocation-id label: %s", body)
 			}
+			if !strings.Contains(string(body), `"pandora.dev/roster":"2,9"`) ||
+				!strings.Contains(string(body), `"pandora.dev/release-track":"stable"`) {
+				t.Errorf("GSA POST missing canonical roster/release metadata: %s", body)
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]any{
 				"state": "Allocated", "gameServerName": "battle-fleet-auth1",
 				"address": "10.0.0.8", "ports": []map[string]any{{"port": 7777}},
@@ -278,7 +169,14 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 		case http.MethodGet:
 			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
 				"name": "battle-fleet-auth1", "uid": "uid-auth1", "resourceVersion": "101",
-				"labels": map[string]string{"pandora.dev/match-id": "42", "pandora.dev/allocation-id": "alloc-42"},
+				"labels": map[string]string{
+					"pandora.dev/match-id": "42", "pandora.dev/allocation-id": "11111111-1111-4111-8111-111111111111",
+					"pandora.dev/release-track": "stable",
+				},
+				"annotations": map[string]string{
+					"pandora.dev/allocation-id": "11111111-1111-4111-8111-111111111111",
+					"pandora.dev/roster":        "2,9", "pandora.dev/release-track": "stable",
+				},
 			}})
 		default:
 			t.Errorf("unexpected method %s", r.Method)
@@ -290,7 +188,8 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 		issuerCalled.Store(true)
 		return "must-not-be-used", nil
 	}, true)
-	got, err := a.AllocateAuthoritative(context.Background(), 42, "alloc-42", 1, "ranked")
+	const allocationID = "11111111-1111-4111-8111-111111111111"
+	got, err := a.AllocateAuthoritative(context.Background(), 42, allocationID, []uint64{9, 2, 9}, 1, "ranked", "stable")
 	if err != nil {
 		t.Fatalf("AllocateAuthoritative: %v", err)
 	}
@@ -298,7 +197,7 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 		t.Fatal("Model B signed token before selected GameServer UID was known")
 	}
 	if got.PodName != "battle-fleet-auth1" || got.Addr != "10.0.0.8:7777" ||
-		got.InstanceUID != "uid-auth1" || got.ResourceVersion != "101" {
+		got.InstanceUID != "uid-auth1" || got.ResourceVersion != "101" || got.ReleaseTrack != "stable" {
 		t.Fatalf("authoritative allocation mismatch: %+v", got)
 	}
 }
@@ -318,7 +217,7 @@ func TestAllocateAuthoritative_StrictGETRejectsMissingIdentity(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
-	if _, err := a.AllocateAuthoritative(context.Background(), 42, "alloc-42", 1, "ranked"); err == nil {
+	if _, err := a.AllocateAuthoritative(context.Background(), 42, "11111111-1111-4111-8111-111111111111", []uint64{1}, 1, "ranked", "stable"); err == nil {
 		t.Fatal("missing UID/RV must fail closed")
 	}
 }
@@ -327,9 +226,68 @@ func TestAllocateAuthoritative_POSTUnknownReturnsAllocationFence(t *testing.T) {
 	a := newTestAllocator(t, "http://127.0.0.1:1")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	got, err := a.AllocateAuthoritative(ctx, 42, "alloc-unknown", 1, "ranked")
-	if err == nil || got == nil || got.AllocationID != "alloc-unknown" || got.InstanceUID != "" {
+	const allocationID = "22222222-2222-4222-8222-222222222222"
+	got, err := a.AllocateAuthoritative(ctx, 42, allocationID, []uint64{1}, 1, "ranked", "stable")
+	if err == nil || got == nil || got.AllocationID != allocationID || got.InstanceUID != "" {
 		t.Fatalf("partial=%+v err=%v", got, err)
+	}
+}
+
+func TestAllocateAuthoritative_CanaryNoCapacityFallsBackAndPersistsGETTrack(t *testing.T) {
+	const allocationID = "33333333-3333-4333-8333-333333333333"
+	var posts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			call := posts.Add(1)
+			body, _ := io.ReadAll(r.Body)
+			if call == 1 {
+				if !strings.Contains(string(body), `"agones.dev/fleet":"battle-canary"`) ||
+					!strings.Contains(string(body), `"pandora.dev/release-track":"canary"`) {
+					t.Errorf("first request is not exact canary: %s", body)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]any{"state": "UnAllocated"}})
+				return
+			}
+			if !strings.Contains(string(body), `"agones.dev/fleet":"battle-stable"`) ||
+				!strings.Contains(string(body), `"pandora.dev/release-track":"stable"`) {
+				t.Errorf("fallback request is not exact stable: %s", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]any{
+				"state": "Allocated", "gameServerName": "battle-stable-1", "address": "10.0.0.9",
+				"ports": []map[string]any{{"port": 7777}},
+			}})
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+				"name": "battle-stable-1", "uid": "uid-stable-1", "resourceVersion": "7",
+				"labels": map[string]string{
+					"pandora.dev/match-id": "77", battleAllocationMetadataKey: allocationID,
+					releaseTrackMetadataKey: "stable",
+				},
+				"annotations": map[string]string{
+					battleAllocationMetadataKey: allocationID, battleRosterAnnotationKey: "10,20",
+					releaseTrackMetadataKey: "stable",
+				},
+			}})
+		default:
+			t.Errorf("unexpected method %s", r.Method)
+		}
+	}))
+	defer srv.Close()
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		APIServer: srv.URL, Namespace: "pandora", FleetName: "battle-stable",
+		CanaryFleetName: "battle-canary", CanaryPercent: 10, CanarySeed: "release-seed", TokenPath: "-",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.AllocateAuthoritative(context.Background(), 77, allocationID,
+		[]uint64{20, 10}, 1, "ranked", "canary")
+	if err != nil || got == nil || got.ReleaseTrack != "stable" || got.PodName != "battle-stable-1" {
+		t.Fatalf("fallback allocation=%+v err=%v", got, err)
+	}
+	if posts.Load() != 2 {
+		t.Fatalf("POST calls=%d want 2", posts.Load())
 	}
 }
 
@@ -454,7 +412,7 @@ func TestAgonesAllocate_NoAvailable(t *testing.T) {
 	defer srv.Close()
 
 	a := newTestAllocator(t, srv.URL)
-	_, _, err := a.Allocate(context.Background(), 1, 1, "moba")
+	_, _, _, err := a.Allocate(context.Background(), 1, 1, "moba", "stable")
 	if err == nil {
 		t.Fatal("expected ErrDSNoAvailable, got nil")
 	}
@@ -494,7 +452,7 @@ func TestAgonesAllocate_MapFleetSelectorOrder(t *testing.T) {
 	}
 
 	// 命中 map_id=7:两个 selector,专属在前、通用兜底在后。
-	if _, _, err := a.Allocate(context.Background(), 1, 7, "pve_coop"); err != nil {
+	if _, _, _, err := a.Allocate(context.Background(), 1, 7, "pve_coop", "stable"); err != nil {
 		t.Fatalf("Allocate(map 7): %v", err)
 	}
 	var req struct {
@@ -518,7 +476,7 @@ func TestAgonesAllocate_MapFleetSelectorOrder(t *testing.T) {
 	}
 
 	// 未命中 map_id=6:只有通用 selector。
-	if _, _, err := a.Allocate(context.Background(), 2, 6, "pvp_5v5"); err != nil {
+	if _, _, _, err := a.Allocate(context.Background(), 2, 6, "pvp_5v5", "stable"); err != nil {
 		t.Fatalf("Allocate(map 6): %v", err)
 	}
 	if err := json.Unmarshal(gotBody, &req); err != nil {
@@ -539,7 +497,7 @@ func TestAgonesAllocate_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	a := newTestAllocator(t, srv.URL)
-	_, _, err := a.Allocate(context.Background(), 1, 1, "moba")
+	_, _, _, err := a.Allocate(context.Background(), 1, 1, "moba", "stable")
 	if err == nil {
 		t.Fatal("expected ErrDSAllocationFailed, got nil")
 	}
@@ -686,5 +644,121 @@ func TestSanitizeLabelValue(t *testing.T) {
 		if got := sanitizeLabelValue(c.in); got != c.want {
 			t.Errorf("sanitizeLabelValue(%q): got %q want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// TestWatchedFleets 校验容量巡检盯的 Fleet 集合:通用池在前 + 专属池去重按字典序。
+func TestWatchedFleets(t *testing.T) {
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: "http://127.0.0.1:1",
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{
+			{MapID: 7, FleetName: "songlin-fleet"},
+			{MapID: 8, FleetName: "arena-fleet"},
+			{MapID: 9, FleetName: "battle-fleet"}, // 与通用池重名 → 去重
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+	got := a.WatchedFleets()
+	want := []string{"battle-fleet", "arena-fleet", "songlin-fleet"}
+	if len(got) != len(want) {
+		t.Fatalf("WatchedFleets len: got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("WatchedFleets[%d]: got %q want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestListFleetCapacities_OK 解析 Fleet status 容量快照,并对每个受管 Fleet 各发一次 GET。
+func TestListFleetCapacities_OK(t *testing.T) {
+	byFleet := map[string]map[string]any{
+		"battle-fleet":  {"replicas": 10, "readyReplicas": 3, "allocatedReplicas": 7},
+		"songlin-fleet": {"replicas": 4, "readyReplicas": 0, "allocatedReplicas": 4},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method: got %s want GET", r.Method)
+		}
+		// 路径尾段是 fleet 名
+		parts := strings.Split(r.URL.Path, "/")
+		fleet := parts[len(parts)-1]
+		st, ok := byFleet[fleet]
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": st})
+	}))
+	defer srv.Close()
+
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: srv.URL,
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+
+	caps, err := a.ListFleetCapacities(context.Background())
+	if err != nil {
+		t.Fatalf("ListFleetCapacities: %v", err)
+	}
+	if len(caps) != 2 {
+		t.Fatalf("caps len: got %d want 2", len(caps))
+	}
+	got := map[string]FleetCapacity{}
+	for _, c := range caps {
+		got[c.Fleet] = c
+	}
+	if c := got["battle-fleet"]; c.Replicas != 10 || c.Ready != 3 || c.Allocated != 7 {
+		t.Errorf("battle-fleet: got %+v want replicas=10 ready=3 allocated=7", c)
+	}
+	if c := got["songlin-fleet"]; c.Replicas != 4 || c.Ready != 0 || c.Allocated != 4 {
+		t.Errorf("songlin-fleet: got %+v want replicas=4 ready=0 allocated=4", c)
+	}
+}
+
+// TestListFleetCapacities_PartialFailure 单 Fleet 5xx 不影响其余,错误经 error 汇总返回。
+func TestListFleetCapacities_PartialFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "songlin-fleet") {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": map[string]any{"replicas": 5, "readyReplicas": 5, "allocatedReplicas": 0},
+		})
+	}))
+	defer srv.Close()
+
+	a, err := NewAgonesGameServerAllocator(conf.AgonesConf{
+		Enabled:   true,
+		APIServer: srv.URL,
+		Namespace: "pandora",
+		FleetName: "battle-fleet",
+		TokenPath: "-",
+		MapFleets: []conf.AgonesMapFleet{{MapID: 7, FleetName: "songlin-fleet"}},
+	})
+	if err != nil {
+		t.Fatalf("NewAgonesGameServerAllocator: %v", err)
+	}
+
+	caps, err := a.ListFleetCapacities(context.Background())
+	if err == nil {
+		t.Fatal("expected aggregated error for failing fleet, got nil")
+	}
+	if len(caps) != 1 || caps[0].Fleet != "battle-fleet" {
+		t.Fatalf("expected 1 successful cap(battle-fleet), got %+v", caps)
 	}
 }

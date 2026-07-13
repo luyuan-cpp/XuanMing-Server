@@ -63,6 +63,13 @@ service InventoryService {
   // 不在 Envoy 暴露;带玩家 JWT 的客户端调用一律拒绝(同 GrantItems)。
   rpc FreezeForOrder(FreezeForOrderRequest) returns (FreezeForOrderResponse);
 
+  // EnsureAuctionEscrow 修复旧版本拍卖订单的托管缺口(系统接口,仅后端内部直连):
+  //   已有 active escrow 时严格核对方向、物品与剩余可结算资产,满足要求即幂等成功;
+  //   escrow 缺失时从玩家活跃资产原子补冻 remaining_quantity 并创建 escrow。
+  // closed / 订单参数冲突会明确拒绝,绝不把唯一键冲突直接当成功。
+  // 该 RPC 只供 auction 持久补偿器调用,不在 Envoy 暴露;带玩家 JWT 的调用一律拒绝。
+  rpc EnsureAuctionEscrow(EnsureAuctionEscrowRequest) returns (EnsureAuctionEscrowResponse);
+
   // SettleAuctionMatch 原子结算一笔拍卖成交(系统接口,仅后端内部直连):
   //   同一 MySQL 本地事务里从双方 escrow 消费完成资产对转 ——
   //     卖家:从卖单 escrow 消费 quantity 个 item_config_id 交付买家,卖家加 quantity*unit_price 金币;
@@ -242,6 +249,22 @@ message FreezeForOrderRequest {
 }
 
 message FreezeForOrderResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
+// EnsureAuctionEscrowRequest 为旧版本已进入 OPEN/PARTIAL、但可能尚未冻结资产的订单补齐 escrow。
+// remaining_quantity / unit_price 均为非负业务量,按 CLAUDE.md §5.12 使用 uint64;
+// inventory 权威库为 BIGINT,超出 int64 或乘法溢出会返回 ERR_INVALID_ARG。
+message EnsureAuctionEscrowRequest {
+  uint64     player_id          = 1;  // 挂单玩家 player_id
+  uint64     order_id           = 2;  // 挂单 order_id(escrow 唯一键)
+  EscrowSide side               = 3;  // SELL=确保剩余道具托管 / BUY=确保剩余金币托管
+  uint32     item_config_id     = 4;  // 订单不可变道具配置 ID
+  uint64     remaining_quantity = 5;  // 尚未成交的剩余数量(> 0)
+  uint64     unit_price         = 6;  // 订单单价金币(> 0;BUY 至少托管 remaining*price)
+}
+
+message EnsureAuctionEscrowResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 

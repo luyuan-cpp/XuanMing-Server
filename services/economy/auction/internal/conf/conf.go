@@ -20,6 +20,10 @@ type AuctionConf struct {
 	// MaxPrice 单价上限(默认 1_000_000_000)。防溢出 / 异常价。
 	MaxPrice int64 `yaml:"max_price,omitempty" json:"max_price,omitempty"`
 
+	// MaxActiveOrdersPerPlayer 单玩家 PENDING+OPEN+PARTIALLY_FILLED 订单硬上限(默认 200)。
+	// 跨 market/分片由 Redis Lua SCARD+SADD 原子预留。
+	MaxActiveOrdersPerPlayer int `yaml:"max_active_orders_per_player,omitempty" json:"max_active_orders_per_player,omitempty"`
+
 	// DefaultListLimit ListMarket 默认返回条数(默认 50)。
 	DefaultListLimit int `yaml:"default_list_limit,omitempty" json:"default_list_limit,omitempty"`
 
@@ -36,6 +40,23 @@ type AuctionConf struct {
 	// 仅无交易联调 / 单测环境显式置 true。
 	AllowNoopSettlement bool `yaml:"allow_noop_settlement,omitempty" json:"allow_noop_settlement,omitempty"`
 
+	// AllowNoopMatchEvents 仅供明确不接 Kafka 的本地联调。默认 false：brokers 为空时启动失败，
+	// 防止成交 outbox 在“事件被静默禁用”时仍被清除。配置了 brokers 但暂时不可用时不退出，
+	// marker 保持 pending，由可重连 producer 后台重试。
+	AllowNoopMatchEvents bool `yaml:"allow_noop_match_events,omitempty" json:"allow_noop_match_events,omitempty"`
+
+	// PassiveWarmup 是蓝绿 R3 的只读预热门禁。true 时拒绝挂单/出价/撤单，并禁用
+	// legacy verifier、持久副作用补偿和过期清扫；必须等所有旧 auction 完全下线后再以 false 重启。
+	PassiveWarmup bool `yaml:"passive_warmup,omitempty" json:"passive_warmup,omitempty"`
+
+	// ShardTopologyGeneration 与有序 DSN 身份共同写入每个物理 shard，默认 auction-v1。
+	// 任何片数、顺序或目标库漂移都必须 fail-fast，不能靠修改本字段覆盖既有 marker。
+	ShardTopologyGeneration string `yaml:"shard_topology_generation,omitempty" json:"shard_topology_generation,omitempty"`
+
+	// AllowShardTopologyBootstrap 只授权“所有 marker 均不存在”的首次双分片登记。
+	// 首次成功后必须恢复 false；已有 marker 不一致时该开关也绝不允许覆盖。
+	AllowShardTopologyBootstrap bool `yaml:"allow_shard_topology_bootstrap,omitempty" json:"allow_shard_topology_bootstrap,omitempty"`
+
 	// OrderTTLSeconds 挂单存活时长(秒)。> 0 → 启用过期清扫:创建超过 TTL 仍未成交的挂单
 	// 自动置 EXPIRED、移出订单簿并退还 escrow(限制#1 补偿)。<= 0 → 不过期(永久挂单)。
 	OrderTTLSeconds int64 `yaml:"order_ttl_seconds,omitempty" json:"order_ttl_seconds,omitempty"`
@@ -46,8 +67,18 @@ type AuctionConf struct {
 	// ExpirySweepBatch 单次清扫最多处理的过期订单数(默认 200)。防一次扫太多阻塞。
 	ExpirySweepBatch int `yaml:"expiry_sweep_batch,omitempty" json:"expiry_sweep_batch,omitempty"`
 
-	// CrossInstanceLock 启用跨实例 per-market 单写者 Redis 锁(限制#2 多实例一致性)。
-	// 单实例部署留 false(仅进程内 striped lock);多实例部署置 true。需配 Redis(复用订单簿 Redis)。
+	// SideEffectReconcileIntervalSeconds 成交结算 / escrow 释放补偿扫描间隔(默认 5 秒)。
+	// 外部账本调用都以 MySQL 持久意图为准，失败或进程退出后由该循环幂等重试。
+	SideEffectReconcileIntervalSeconds int64 `yaml:"side_effect_reconcile_interval_seconds,omitempty" json:"side_effect_reconcile_interval_seconds,omitempty"`
+
+	// SideEffectReconcileBatch 单轮每片最多处理的待结算、待释放和待事件记录数(各自默认 100)。
+	SideEffectReconcileBatch int `yaml:"side_effect_reconcile_batch,omitempty" json:"side_effect_reconcile_batch,omitempty"`
+
+	// AuditQueueCapacity 弱依赖订单审计的进程内异步队列上限(默认 1024)。
+	// 队列满时只告警丢弃 audit，绝不能反压 market 锁或资产补偿主路径。
+	AuditQueueCapacity int `yaml:"audit_queue_capacity,omitempty" json:"audit_queue_capacity,omitempty"`
+
+	// CrossInstanceLock 保留给旧二进制读取；新二进制因 Redis 已是强依赖而始终启用跨实例锁。
 	CrossInstanceLock bool `yaml:"cross_instance_lock,omitempty" json:"cross_instance_lock,omitempty"`
 
 	// MarketLockTTLSeconds 跨实例 market 锁 TTL(秒,默认 30,上限 30,不变量 §10)。
@@ -59,11 +90,17 @@ type AuctionConf struct {
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
 func (c *Config) Defaults() {
+	if c.Auction.ShardTopologyGeneration == "" {
+		c.Auction.ShardTopologyGeneration = "auction-v1"
+	}
 	if c.Auction.MaxQuantityPerOrder <= 0 {
 		c.Auction.MaxQuantityPerOrder = 1_000_000
 	}
 	if c.Auction.MaxPrice <= 0 {
 		c.Auction.MaxPrice = 1_000_000_000
+	}
+	if c.Auction.MaxActiveOrdersPerPlayer <= 0 {
+		c.Auction.MaxActiveOrdersPerPlayer = 200
 	}
 	if c.Auction.DefaultListLimit <= 0 {
 		c.Auction.DefaultListLimit = 50
@@ -76,6 +113,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Auction.ExpirySweepBatch <= 0 {
 		c.Auction.ExpirySweepBatch = 200
+	}
+	if c.Auction.SideEffectReconcileIntervalSeconds <= 0 {
+		c.Auction.SideEffectReconcileIntervalSeconds = 5
+	}
+	if c.Auction.SideEffectReconcileBatch <= 0 {
+		c.Auction.SideEffectReconcileBatch = 100
+	}
+	if c.Auction.AuditQueueCapacity <= 0 {
+		c.Auction.AuditQueueCapacity = 1024
 	}
 	if c.Auction.MarketLockTTLSeconds <= 0 || c.Auction.MarketLockTTLSeconds > 30 {
 		c.Auction.MarketLockTTLSeconds = 30 // 不变量 §10:Redis lock TTL ≤ 30s

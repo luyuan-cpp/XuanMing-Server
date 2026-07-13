@@ -18,13 +18,16 @@ package biz
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
@@ -125,6 +128,7 @@ type AllocatorUsecase struct {
 	dsSigner           *auth.Signer
 	dsCredentialTTL    time.Duration
 	modelB             bool
+	releasePolicy      releasetrack.Policy
 
 	// killOrphanOnStop:心跳判定某 DS 该停机(orphan / pod_mismatch / 终态)时,是否由后端主动
 	// 回收该 pod。local 模式打开——本机 UE DS 没有 Agones,收到 stop 指令不会自杀,残留进程会
@@ -143,6 +147,9 @@ func (u *AllocatorUsecase) SetLifecyclePusher(p DSLifecyclePusher) { u.lifecycle
 
 // SetLocationRefresher 注入 BATTLE 位置续期器(main 在 locator_addr 已配时调用,弱依赖)。
 func (u *AllocatorUsecase) SetLocationRefresher(r LocationRefresher) { u.locator = r }
+
+// SetReleaseTrackPolicy 在启动期注入 match 级确定性 cohort 策略。
+func (u *AllocatorUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
 
 // EnableRedisAuthority 打开 Battle Model B。依赖必须一次完整注入；任何缺失都拒绝启动，
 // 禁止出现“配置说 redis authority、实际悄悄回退 legacy”的半开启状态。
@@ -194,10 +201,60 @@ func (u *AllocatorUsecase) readyWaitTimeout() time.Duration { return u.cfg.Ready
 // ── RPC 1:AllocateBattle ──────────────────────────────────────────────────────
 
 // AllocateResult 是 AllocateBattle 的出参。
+//
+// GameserverUID / InstanceEpoch / AllocationID(DSTicket v2,方案 B):matchmaker 签 battle 票
+// 时把票绑死到唯一 DS 实例。三者与 DSAddr 来自同一权威快照(Redis BattleStorageRecord),
+// 不得从其它时点/其它源拼凑,否则地址与票据可能指向不同实例。
 type AllocateResult struct {
 	DSAddr        string
 	DSPodName     string
 	AllocatedAtMs int64
+	GameserverUID string
+	InstanceEpoch uint32
+	AllocationID  string
+	ReleaseTrack  string
+}
+
+func allocateResultFromBattle(b *dsv1.BattleStorageRecord) *AllocateResult {
+	if b == nil {
+		return nil
+	}
+	return &AllocateResult{
+		DSAddr: b.GetDsAddr(), DSPodName: b.GetDsPodName(), AllocatedAtMs: b.GetAllocatedAtMs(),
+		GameserverUID: b.GetGameserverUid(), InstanceEpoch: b.GetInstanceEpoch(),
+		AllocationID: b.GetAllocationId(), ReleaseTrack: b.GetReleaseTrack(),
+	}
+}
+
+// ResolveBattleTarget 是重连重签的只读权威查询。它只读同一 Redis auth+projection
+// 快照，不创建 allocation claim、不调用 Agones、不刷新 TTL/heartbeat/index。
+func (u *AllocatorUsecase) ResolveBattleTarget(
+	ctx context.Context,
+	matchID, playerID uint64,
+) (*AllocateResult, error) {
+	if matchID == 0 || playerID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "match_id and player_id required")
+	}
+	if u == nil || !u.modelB || u.authRepo == nil {
+		return nil, errcode.New(errcode.ErrUnavailable, "battle read-only authority unavailable")
+	}
+	snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
+	if err != nil {
+		return nil, err
+	}
+	ready, reason := snapshot.ReadyAuthorized(
+		time.Now().UnixMilli(), u.cfg.HeartbeatTimeout.Std().Milliseconds())
+	battle := snapshot.Battle
+	if !ready || battle == nil || !slices.Contains(battle.GetPlayerIds(), playerID) {
+		return nil, errcode.New(errcode.ErrPermissionDeny,
+			"battle target not authorized for reconnect (reason=%s)", reason)
+	}
+	if battle.GetDsAddr() == "" || battle.GetDsPodName() == "" || battle.GetGameserverUid() == "" ||
+		battle.GetInstanceEpoch() == 0 || battle.GetAllocationId() == "" ||
+		(battle.GetReleaseTrack() != auth.ReleaseTrackStable && battle.GetReleaseTrack() != auth.ReleaseTrackCanary) {
+		return nil, errcode.New(errcode.ErrUnavailable, "battle target projection incomplete")
+	}
+	return allocateResultFromBattle(battle), nil
 }
 
 // AllocateBattle 为 match 申请战斗 DS。
@@ -217,6 +274,12 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
+	canonicalPlayers, _, rosterErr := dsmetadata.CanonicalRoster(playerIDs)
+	if rosterErr != nil {
+		return nil, errcode.New(errcode.ErrInvalidArg, "invalid battle roster: %v", rosterErr)
+	}
+	playerIDs = canonicalPlayers
+	desiredReleaseTrack := u.releasePolicy.Select(matchID)
 
 	// 单 key SET NX claim 是并发 AllocateBattle 的线性化点。只有持有本次 allocation_id
 	// 的赢家才允许调用外部 Agones；输家只观察同一权威记录，绝不再分配第二个 Pod。
@@ -243,6 +306,7 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 
 	var authoritative *data.AuthoritativeGameServerAllocation
 	var podName, addr string
+	actualReleaseTrack := desiredReleaseTrack
 	if u.modelB {
 		// 外部 GSA POST 前先把 claim CAS 成永久 allocation_uncertain。该 fence 是
 		// “是否允许 POST”的唯一线性化点；失败/响应未知时绝不能访问 K8s。
@@ -255,12 +319,12 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 				"battle %d allocation fence unavailable", matchID)
 		}
 		authoritative, err = u.authoritativeAlloc.AllocateAuthoritative(
-			ctx, matchID, allocationID, mapID, gameMode)
+			ctx, matchID, allocationID, playerIDs, mapID, gameMode, desiredReleaseTrack)
 		if authoritative != nil {
 			podName, addr = authoritative.PodName, authoritative.Addr
 		}
 	} else {
-		podName, addr, err = u.alloc.Allocate(ctx, matchID, mapID, gameMode)
+		podName, addr, actualReleaseTrack, err = u.alloc.Allocate(ctx, matchID, mapID, gameMode, desiredReleaseTrack)
 	}
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "gameserver_allocate_failed", "match_id", matchID, "err", err)
@@ -278,7 +342,7 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 	}
 	if u.modelB && (authoritative == nil || authoritative.PodName == "" || authoritative.Addr == "" ||
 		authoritative.InstanceUID == "" || authoritative.ResourceVersion == "" ||
-		authoritative.AllocationID != allocationID) {
+		authoritative.AllocationID != allocationID || !releasetrack.Valid(authoritative.ReleaseTrack)) {
 		// data 层虽已做严格 GET，这里仍在副作用边界复核完整身份，防错误实现/测试桩
 		// 以 nil error 绕过 UID/RV/allocation_id 确认。保持永久 uncertain，不做清理。
 		plog.With(ctx).Errorw("msg", "gameserver_authoritative_identity_incomplete",
@@ -288,6 +352,14 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 	}
 
 	now := time.Now().UnixMilli()
+	if authoritative != nil {
+		actualReleaseTrack = authoritative.ReleaseTrack
+	}
+	if !releasetrack.Valid(actualReleaseTrack) {
+		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, authoritative)
+		return nil, errcode.New(errcode.ErrDSAllocationFailed,
+			"allocator returned invalid actual release_track %q", actualReleaseTrack)
+	}
 	battle := &dsv1.BattleStorageRecord{
 		MatchId:         matchID,
 		DsPodName:       podName,
@@ -300,6 +372,7 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 		LastHeartbeatMs: now, // 仅作 sweep 宽限基准;ready 判定要求 LastHeartbeatMs 严格大于此(即真实心跳)
 		PlayerCount:     int32(len(playerIDs)),
 		AllocationId:    allocationID,
+		ReleaseTrack:    actualReleaseTrack,
 	}
 	if authoritative != nil {
 		battle.GameserverUid = authoritative.InstanceUID
@@ -487,8 +560,7 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 	if !u.modelB && battleReadyForPod(existing, existing.DsPodName, matchID, existing.AllocatedAtMs) {
 		plog.With(ctx).Infow("msg", "allocate_idempotent_hit", "match_id", matchID,
 			"ds_addr", existing.DsAddr, "state", existing.State, "allocation_id", existing.AllocationId)
-		return &AllocateResult{DSAddr: existing.DsAddr, DSPodName: existing.DsPodName,
-			AllocatedAtMs: existing.AllocatedAtMs}, nil
+		return allocateResultFromBattle(existing), nil
 	}
 	if existing.State != stateAllocating && existing.State != stateWarming &&
 		(!u.modelB || (existing.State != stateReady && existing.State != stateRunning)) {
@@ -538,8 +610,7 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			ready, _ := snapshot.ReadyAuthorized(
 				time.Now().UnixMilli(), u.cfg.HeartbeatTimeout.Std().Milliseconds())
 			if ready && (podName == "" || b.DsPodName == podName) {
-				return &AllocateResult{DSAddr: b.DsAddr, DSPodName: b.DsPodName,
-					AllocatedAtMs: b.AllocatedAtMs}, nil
+				return allocateResultFromBattle(b), nil
 			}
 		} else {
 			b, found, err := u.repo.GetBattle(ctx, matchID)
@@ -552,8 +623,7 @@ func (u *AllocatorUsecase) waitBattleReady(ctx context.Context, matchID uint64, 
 			}
 			if found && (podName == "" || b.DsPodName == podName) &&
 				battleReadyForPod(b, b.DsPodName, matchID, b.AllocatedAtMs) {
-				return &AllocateResult{DSAddr: b.DsAddr, DSPodName: b.DsPodName,
-					AllocatedAtMs: b.AllocatedAtMs}, nil
+				return allocateResultFromBattle(b), nil
 			}
 		}
 		if !time.Now().Before(deadline) {

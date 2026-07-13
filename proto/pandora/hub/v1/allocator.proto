@@ -226,6 +226,9 @@ message HubShardStorageRecord {
   // auth_epoch: 协议纪元(protocol_epoch),配合 uid 抵御计数器复位后的 gen 复用重放。
   uint32 auth_epoch = 16;
   uint32 last_verified_writer_epoch = 17;
+  // release_track 来自 GameServer metadata 的实际发布轨(stable/canary)。分配与迁移
+  // 必须始终留在同一轨；空值只代表滚动升级前的旧记录，业务层迁移为 stable。
+  string release_track = 18;
 }
 
 // ===== Model B DS 回调授权状态机(decision-revisit-ds-callback-auth §7)=====
@@ -312,6 +315,8 @@ message HubAssignmentStorageRecord {
   // hub DSTicket；Transfer/Release/同名 Pod 重建后旧票据因 assignment_id 不再匹配而失效。
   string assignment_id    = 13;
   uint32 auth_writer_epoch = 14; // 分配时 active 凭据的 writer epoch
+  // 玩家首次分配时持久化实际命中的发布轨；后续重登/切线/整合保持粘性。
+  string release_track = 15;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====

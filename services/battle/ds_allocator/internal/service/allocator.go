@@ -51,6 +51,32 @@ func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.Allocat
 		DsAddr:        res.DSAddr,
 		DsPodName:     res.DSPodName,
 		AllocatedAtMs: res.AllocatedAtMs,
+		// DSTicket v2 实例绑定(方案 B):与 ds_addr 同源同快照,matchmaker 签票用。
+		GameserverUid: res.GameserverUID,
+		InstanceEpoch: res.InstanceEpoch,
+		AllocationId:  res.AllocationID,
+		ReleaseTrack:  res.ReleaseTrack,
+	}, nil
+}
+
+// ResolveBattleTarget 只读返回当前可重连目标并核验 roster 成员。它与 AllocateBattle
+// 分离，确保重签票据永远不会产生 GameServerAllocation 副作用。
+func (s *AllocatorService) ResolveBattleTarget(
+	ctx context.Context,
+	req *dsv1.ResolveBattleTargetRequest,
+) (*dsv1.ResolveBattleTargetResponse, error) {
+	if req.GetMatchId() == 0 || req.GetPlayerId() == 0 {
+		return &dsv1.ResolveBattleTargetResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	res, err := s.uc.ResolveBattleTarget(ctx, req.GetMatchId(), req.GetPlayerId())
+	if err != nil {
+		return &dsv1.ResolveBattleTargetResponse{Code: toProtoCode(err)}, nil
+	}
+	return &dsv1.ResolveBattleTargetResponse{
+		Code: commonv1.ErrCode_OK, DsAddr: res.DSAddr, DsPodName: res.DSPodName,
+		AllocatedAtMs: res.AllocatedAtMs, GameserverUid: res.GameserverUID,
+		InstanceEpoch: res.InstanceEpoch, AllocationId: res.AllocationID,
+		ReleaseTrack: res.ReleaseTrack,
 	}, nil
 }
 

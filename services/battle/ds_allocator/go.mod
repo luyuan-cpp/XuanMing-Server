@@ -22,6 +22,7 @@ require (
 	github.com/luyuancpp/pandora/pkg v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/pkg/dsauthfence v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
+	github.com/prometheus/client_golang v1.21.1
 	github.com/redis/go-redis/v9 v9.16.0
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
@@ -62,7 +63,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
-	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect

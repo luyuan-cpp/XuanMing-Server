@@ -1,8 +1,8 @@
 // gameserver.go — DS pod 分配抽象 + W4 ② Mock 实现。
 //
 // 真 Agones 实现见 internal/data/agones_allocator.go(W4 ⑫ AgonesGameServerAllocator,
-// 经 k8s apiserver REST 调 allocation.agones.dev/v1 GameServerAllocation)。本接口签名
-// 保持不变,Mock / Agones 只是两个实现,main 按 agones.enabled 选装配,biz 逻辑零改动。
+// 经 k8s apiserver REST 调 allocation.agones.dev/v1 GameServerAllocation)。Mock / Local /
+// Agones 都回传实际 release track，避免 canary 容量回退后把意图误当成终态。
 package biz
 
 import (
@@ -15,8 +15,8 @@ import (
 
 // GameServerAllocator 向底层编排(W4 ② Mock / W4 ③ Agones)申请/释放一个战斗 DS pod。
 type GameServerAllocator interface {
-	// Allocate 申请一个战斗 DS,返回 pod 名 + 可连接地址(host:port)。
-	Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (podName, addr string, err error)
+	// Allocate 申请一个战斗 DS,返回 pod 名、地址和编排层实际命中的发布轨。
+	Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (podName, addr, actualReleaseTrack string, err error)
 	// Release 释放(回收)一个战斗 DS pod。
 	Release(ctx context.Context, podName string) error
 }
@@ -28,8 +28,9 @@ type AuthoritativeGameServerAllocator interface {
 		ctx context.Context,
 		matchID uint64,
 		allocationID string,
+		playerIDs []uint64,
 		mapID uint32,
-		gameMode string,
+		gameMode, releaseTrack string,
 	) (*data.AuthoritativeGameServerAllocation, error)
 	DeliverCredential(
 		ctx context.Context,
@@ -55,11 +56,11 @@ func NewMockGameServerAllocator(cfg conf.AllocatorConf) *MockGameServerAllocator
 }
 
 // Allocate 返回确定性假 pod / addr。
-func (m *MockGameServerAllocator) Allocate(_ context.Context, matchID uint64, _ uint32, _ string) (string, string, error) {
+func (m *MockGameServerAllocator) Allocate(_ context.Context, matchID uint64, _ uint32, _, releaseTrack string) (string, string, string, error) {
 	port := m.cfg.MockDSPortBase + int(matchID%uint64(m.cfg.MockDSPortRange))
 	podName := fmt.Sprintf("pandora-battle-%d", matchID)
 	addr := fmt.Sprintf("%s:%d", m.cfg.MockDSAddrHost, port)
-	return podName, addr, nil
+	return podName, addr, releaseTrack, nil
 }
 
 // Release 对 Mock 无操作(无真实 pod 可回收)。

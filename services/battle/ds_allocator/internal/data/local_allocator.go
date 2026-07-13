@@ -139,7 +139,7 @@ func NewLocalGameServerAllocator(cfg conf.LocalDSConf) (*LocalGameServerAllocato
 }
 
 // Allocate 拉起一个本机 DS 进程,返回 (podName, host:port)。
-func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
 	podName := fmt.Sprintf("pandora-battle-local-%d", matchID)
 
 	l.mu.Lock()
@@ -147,12 +147,12 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 
 	// 幂等:同对局已拉起 → 直接返回原地址。
 	if p, ok := l.procs[podName]; ok {
-		return podName, p.addr, nil
+		return podName, p.addr, releaseTrack, nil
 	}
 
 	port, ok := l.pickPortLocked()
 	if !ok {
-		return "", "", errcode.New(errcode.ErrDSNoAvailable,
+		return "", "", "", errcode.New(errcode.ErrDSNoAvailable,
 			"local_ds: no free port in [%d,%d) for match %d",
 			l.cfg.PortBase, l.cfg.PortBase+l.cfg.PortRange, matchID)
 	}
@@ -168,7 +168,7 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 		tok, terr := l.dsTokenIssuer(matchID, podName, instanceUID, instanceEpoch)
 		if terr != nil {
 			if l.dsTokenRequired {
-				return "", "", errcode.New(errcode.ErrDSAllocationFailed,
+				return "", "", "", errcode.New(errcode.ErrDSAllocationFailed,
 					"ds_callback_token sign failed under enforce for match %d: %v", matchID, terr)
 			}
 			plog.With(context.Background()).Warnw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr)
@@ -179,7 +179,7 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 
 	proc, err := l.startProc(podName, port, matchID, mapID, gameMode, dsToken)
 	if err != nil {
-		return "", "", errcode.New(errcode.ErrDSAllocationFailed,
+		return "", "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"local_ds: launch match %d on port %d: %v", matchID, port, err)
 	}
 
@@ -190,7 +190,7 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 
 	go l.reap(podName, lp)
 
-	return podName, addr, nil
+	return podName, addr, releaseTrack, nil
 }
 
 // Release 终止指定 DS 进程;台账无此记录视作已释放(幂等)。

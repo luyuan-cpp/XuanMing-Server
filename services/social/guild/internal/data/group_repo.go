@@ -94,8 +94,8 @@ func (r *MySQLGroupRepo) CreateGroup(ctx context.Context, newGroupID, ownerID ui
 			return errcode.New(errcode.ErrGroupFull, "group members %d > max %d", count, maxMembers)
 		}
 		// 每个入群玩家(owner + 初始成员)都不得超自身所在群上限(不变量 §9.18)。
-		// checkPlayerGroupLimit 对 player_id 索引区间 FOR UPDATE 加锁,若按 owner + 客户端原始
-		// 成员顺序逐个加锁,两个成员集相反的并发建群会形成 A↔B 锁环致确定性死锁(五审 P2)。
+		// reservePlayerGroupSlot 对 player_group_counts 该玩家计数行 FOR UPDATE 加锁,若按 owner +
+		// 客户端原始成员顺序逐个加锁,两个成员集相反的并发建群会形成 A↔B 锁环致确定性死锁(五审 P2)。
 		// 故先把 owner + 全部成员去重后按 player_id 升序排序,统一全局加锁序,消除 ABBA 死锁;
 		// 配合 tx 的 1213/1205 有界重试兜底二级索引间隙锁偶发死锁。
 		lockIDs := make([]uint64, 0, count)
@@ -109,7 +109,7 @@ func (r *MySQLGroupRepo) CreateGroup(ctx context.Context, newGroupID, ownerID ui
 				continue // 去重:同一玩家只需锁一次
 			}
 			prev, seenPrev = pid, true
-			if err := checkPlayerGroupLimit(ctx, tx, pid, maxGroups); err != nil {
+			if err := reservePlayerGroupSlot(ctx, tx, pid, maxGroups); err != nil {
 				return err
 			}
 		}
@@ -240,8 +240,11 @@ func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, operatorID, pla
 			`SELECT 1 FROM chat_group_members WHERE group_id = ? AND player_id = ? LIMIT 1`,
 			groupID, playerID).Scan(&x)
 		if err == nil {
+			if _, err := reconcilePlayerGroupCount(ctx, tx, playerID); err != nil {
+				return err
+			}
 			alreadyIn = true
-			return nil // 幂等命中
+			return nil // 幂等命中也自愈旧 Pod 留下的计数漂移
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return dbErr(err, "check group member")
@@ -251,7 +254,7 @@ func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, operatorID, pla
 			return errcode.New(errcode.ErrGroupFull, "group %d full (%d/%d)", groupID, memberCount, maxMembers)
 		}
 		// 新加入前校验目标玩家所在群数未超上限(不变量 §9.18)。
-		if err := checkPlayerGroupLimit(ctx, tx, playerID, maxGroups); err != nil {
+		if err := reservePlayerGroupSlot(ctx, tx, playerID, maxGroups); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
@@ -285,17 +288,25 @@ func (r *MySQLGroupRepo) RemoveMember(ctx context.Context, groupID, playerID uin
 			return errcode.New(errcode.ErrGroupNotOwner,
 				"owner %d must transfer or disband before leaving group %d", playerID, groupID)
 		}
+		// 固定 count-row → detail-range 顺序；先锁住该玩家全部成员关系，再执行 DELETE。
+		if _, err := reconcilePlayerGroupCount(ctx, tx, playerID); err != nil {
+			return err
+		}
 		res, err := tx.ExecContext(ctx,
 			`DELETE FROM chat_group_members WHERE group_id = ? AND player_id = ?`, groupID, playerID)
 		if err != nil {
 			return dbErr(err, "delete group member %d", playerID)
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			return nil // 幂等
+			return nil // 前置 reconcile 已完成幂等退群的计数自愈
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_groups SET member_count = member_count - 1 WHERE group_id = ? AND member_count > 0`, groupID); err != nil {
 			return dbErr(err, "dec group member_count")
+		}
+		// 释放该玩家一个「所在群」名额(计数表,§3.5)。
+		if err := releasePlayerGroupSlot(ctx, tx, playerID); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -322,6 +333,9 @@ func (r *MySQLGroupRepo) KickMember(ctx context.Context, groupID, operatorID, ta
 		if targetID == curOwner {
 			return errcode.New(errcode.ErrGroupNotOwner, "cannot kick the owner")
 		}
+		if _, err := reconcilePlayerGroupCount(ctx, tx, targetID); err != nil {
+			return err
+		}
 		res, err := tx.ExecContext(ctx,
 			`DELETE FROM chat_group_members WHERE group_id = ? AND player_id = ?`, groupID, targetID)
 		if err != nil {
@@ -333,6 +347,10 @@ func (r *MySQLGroupRepo) KickMember(ctx context.Context, groupID, operatorID, ta
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_groups SET member_count = member_count - 1 WHERE group_id = ? AND member_count > 0`, groupID); err != nil {
 			return dbErr(err, "dec group member_count")
+		}
+		// 释放被踢玩家一个「所在群」名额(计数表,§3.5)。
+		if err := releasePlayerGroupSlot(ctx, tx, targetID); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -354,11 +372,47 @@ func (r *MySQLGroupRepo) DisbandGroup(ctx context.Context, groupID, operatorID u
 			return errcode.New(errcode.ErrGroupNotOwner,
 				"player %d is not current owner of group %d (concurrent transfer?)", operatorID, groupID)
 		}
+		// 先读出全部成员 player_id 并升序排序,统一 player_group_counts 计数行加锁序(与 CreateGroup
+		// 的升序 reserve 同序),减少并发解散 / 建群间的 ABBA 死锁,由 tx 有界重试兜底。
+		rows, err := tx.QueryContext(ctx,
+			`SELECT player_id FROM chat_group_members WHERE group_id = ?`, groupID)
+		if err != nil {
+			return dbErr(err, "list group members %d", groupID)
+		}
+		var memberIDs []uint64
+		for rows.Next() {
+			var pid uint64
+			if serr := rows.Scan(&pid); serr != nil {
+				_ = rows.Close()
+				return dbErr(serr, "scan group member %d", groupID)
+			}
+			memberIDs = append(memberIDs, pid)
+		}
+		if rerr := rows.Err(); rerr != nil {
+			_ = rows.Close()
+			return dbErr(rerr, "iter group members %d", groupID)
+		}
+		_ = rows.Close()
+		sort.Slice(memberIDs, func(i, j int) bool { return memberIDs[i] < memberIDs[j] })
+
+		// 与 CreateGroup 相同，按 player_id 升序逐个取得 count-row → detail-range；不能先锁完
+		// 所有 count row 再碰明细，否则会和逐玩家 reserve 形成 count(B) ↔ detail(A) 的 ABBA。
+		for _, pid := range memberIDs {
+			if _, err := reconcilePlayerGroupCount(ctx, tx, pid); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chat_group_members WHERE group_id = ?`, groupID); err != nil {
 			return dbErr(err, "delete group members %d", groupID)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chat_groups WHERE group_id = ?`, groupID); err != nil {
 			return dbErr(err, "delete group %d", groupID)
+		}
+		// 每个成员释放一个「所在群」名额(计数表,§3.5)。
+		for _, pid := range memberIDs {
+			if err := releasePlayerGroupSlot(ctx, tx, pid); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -409,28 +463,65 @@ func (r *MySQLGroupRepo) TransferOwner(ctx context.Context, groupID, oldOwnerID,
 	})
 }
 
-// checkPlayerGroupLimit 在事务内锁定读玩家当前所在群数,达到上限回 ErrGroupJoinLimit
-// (不变量 §9.18)。maxGroups<=0 关闭校验。FOR UPDATE 对 player_id 索引区间加锁,消除并发
-// 入群致「我所在的群」列表超限的幻读竞态。
-func checkPlayerGroupLimit(ctx context.Context, tx *sql.Tx, playerID uint64, maxGroups int) error {
-	if maxGroups <= 0 {
-		return nil
+// reservePlayerGroupSlot 在事务内为玩家占用一个「所在群」名额。固定锁顺序是：
+// player_group_counts 单行 → chat_group_members(player_id) 明细范围。前者串行化 TiDB 新/新写，
+// 后者复用 MySQL 旧版 COUNT...FOR UPDATE 的索引锁，使旧/新混跑时新版必看到旧写提交后的明细。
+// 明细 COUNT 是权威，计数行只作为 TiDB 串行化点和读优化值；调用方须继续按 player_id 升序。
+func reservePlayerGroupSlot(ctx context.Context, tx *sql.Tx, playerID uint64, maxGroups int) error {
+	cnt, err := reconcilePlayerGroupCount(ctx, tx, playerID)
+	if err != nil {
+		return err
 	}
-	var cnt int
-	if err := tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); err != nil {
-		return dbErr(err, "count player groups %d", playerID)
-	}
-	if cnt >= maxGroups {
+	if maxGroups > 0 && cnt >= maxGroups {
 		return errcode.New(errcode.ErrGroupJoinLimit,
 			"group join limit reached for %d (max %d)", playerID, maxGroups)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE player_group_counts SET group_count = ? WHERE player_id = ?`, cnt+1, playerID); err != nil {
+		return dbErr(err, "set reserved group count %d", playerID)
 	}
 	return nil
 }
 
+// reconcilePlayerGroupCount 先取得 per-player 计数行锁，再用旧版同款明细锁定读取实际群数并
+// 绝对值回写。TiDB 不靠明细范围锁防幻读，而靠第一把计数行锁串行所有兼容新版；旧版只能在
+// MySQL 混跑，那里其 COUNT...FOR UPDATE / 明细 INSERT、DELETE 会与第二把锁互斥。
+func reconcilePlayerGroupCount(ctx context.Context, tx *sql.Tx, playerID uint64) (int, error) {
+	// 惰性建行：空更新 + 显式 FOR UPDATE 保证已有行和首次创建都成为新版本唯一串行化点。
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO player_group_counts (player_id, group_count) VALUES (?, 0)
+		 ON DUPLICATE KEY UPDATE player_id = player_id`, playerID); err != nil {
+		return 0, dbErr(err, "ensure group count row %d", playerID)
+	}
+	var stored int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT group_count FROM player_group_counts WHERE player_id = ? FOR UPDATE`, playerID).Scan(&stored); err != nil {
+		return 0, dbErr(err, "lock group count %d", playerID)
+	}
+	var actual int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ? FOR UPDATE`, playerID).Scan(&actual); err != nil {
+		return 0, dbErr(err, "count player groups %d", playerID)
+	}
+	if stored != actual {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE player_group_counts SET group_count = ? WHERE player_id = ?`, actual, playerID); err != nil {
+			return 0, dbErr(err, "reconcile group count %d", playerID)
+		}
+	}
+	return actual, nil
+}
+
+// releasePlayerGroupSlot 在调用方已按 count-row → detail-range 顺序锁定并完成明细 DELETE 后重算，
+// 不对可能被旧 Pod 留脏的计数做 -1。
+func releasePlayerGroupSlot(ctx context.Context, tx *sql.Tx, playerID uint64) error {
+	_, err := reconcilePlayerGroupCount(ctx, tx, playerID)
+	return err
+}
+
 // tx 是带死锁重试的事务封装(复用 guild_repo.go 同包的 txMaxRetries / isRetryableTxErr / dbErr)。
-// chat_groups 群行是每群操作的第一把锁(串行化点);CreateGroup 另按 player_id 升序锁玩家所在群
-// 计数区间。此重试兜底二级索引间隙锁等偶发 1213/1205;fn 必须可安全重放(只读锁 + 幂等写)。
+// chat_groups 群行是每群操作的第一把锁(串行化点);CreateGroup 另按 player_id 升序依次锁
+// 计数行→明细范围。此重试兜底二级索引间隙锁等偶发 1213/1205;fn 必须可安全重放。
 func (r *MySQLGroupRepo) tx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	var lastErr error
 	for attempt := 0; attempt <= txMaxRetries; attempt++ {

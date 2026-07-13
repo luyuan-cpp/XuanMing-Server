@@ -38,6 +38,12 @@ type Config struct {
 	// Issuer / Audience / Secret 必须与 login / Envoy jwt_authn provider 完全一致。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
 
+	// DSTicket 是玩家 DSTicket v2(RS256 非对称,方案 B)签发配置。private_key_file 非空
+	// 即启用:hub 票据改由 auth.DSTicketSigner 签发并绑死到唯一 Hub DS 实例
+	// (绑定不完整时 fail-closed 拒签,不再允许签无绑定票)。
+	// 留空 = 沿用 legacy HS256 DSTicket(dev/local-off 行为不变)。
+	DSTicket config.DSTicketConf `yaml:"ds_ticket,omitempty" json:"ds_ticket,omitempty"`
+
 	// Agones 真 Hub DS Fleet 发现配置(W4 ⑬)。mode=agones 时生效。
 	Agones AgonesConf `yaml:"agones" json:"agones"`
 
@@ -112,6 +118,15 @@ type AgonesConf struct {
 	// FleetName 选择 Hub DS GameServer 的 Fleet 名(selector agones.dev/fleet=<FleetName>)。
 	// Enabled=true 时必填,否则构造失败。
 	FleetName string `yaml:"fleet_name,omitempty" json:"fleet_name,omitempty"`
+
+	// CanaryFleetName 是 canary Hub Fleet。CanaryPercent>0 时必填；stable 玩家永不
+	// 进入此 Fleet，canary 玩家无容量时可以回退 stable 并持久化实际命中轨。
+	CanaryFleetName string `yaml:"canary_fleet_name,omitempty" json:"canary_fleet_name,omitempty"`
+
+	// CanaryPercent/CanarySeed 以 player_id 做确定性 cohort；已有 assignment 的
+	// release_track 是粘性权威，不随百分比调整漂移。
+	CanaryPercent uint32 `yaml:"canary_percent,omitempty" json:"canary_percent,omitempty"`
+	CanarySeed    string `yaml:"canary_seed,omitempty" json:"canary_seed,omitempty"`
 
 	// AdvertiseHost 覆盖返回给客户端连接的 host;留空则使用 Agones status.address。
 	// 本机 minikube docker-driver 联调时常设为 127.0.0.1,配合 UDP relay。

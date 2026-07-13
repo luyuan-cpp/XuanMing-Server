@@ -10,6 +10,7 @@
 --   guild_join_requests 公会加入申请(request_id PK = snowflake;uk guild+player 防重复挂起)
 --   chat_groups         临时群(group_id PK = snowflake)
 --   chat_group_members  临时群成员(uk group+player = 多归属:玩家可在多个群)
+--   player_group_counts 玩家所在群计数(max_groups_per_player 上限校验;与 TiDB 版一致)
 --
 -- 约定:
 --   - 所有业务 ID 均 BIGINT UNSIGNED(snowflake,不变量 §9.11 对齐 Go uint64)
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS `guilds` (
     `name`         VARCHAR(64)     NOT NULL COMMENT '公会名(唯一)',
     `leader_id`    BIGINT UNSIGNED NOT NULL COMMENT '会长 player_id',
     `member_count` INT             NOT NULL DEFAULT 1 COMMENT '成员数(含会长)',
+    `pending_request_count` INT    NOT NULL DEFAULT 0 COMMENT '挂起加入申请数(pending 上限校验计数列,与 TiDB 版一致)',
     `max_members`  INT             NOT NULL DEFAULT 100 COMMENT '成员上限',
     `created_at`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间(created_ms 来源)',
     PRIMARY KEY (`guild_id`),
@@ -77,3 +79,13 @@ CREATE TABLE IF NOT EXISTS `chat_group_members` (
     KEY `idx_player` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 临时群成员(多归属)';
+
+-- per-player「我所在的群」计数表(max_groups_per_player 上限校验用;与 TiDB 版
+-- deploy/tidb-init/01-social-tidb.sql 保持一致)。入群 / 退群同事务里锁该玩家计数行 + 增减
+-- group_count,取代依赖间隙锁的 COUNT(*)...FOR UPDATE(TiDB 无间隙锁,MySQL 下亦是等价且更明确的写法)。
+CREATE TABLE IF NOT EXISTS `player_group_counts` (
+    `player_id`   BIGINT UNSIGNED NOT NULL COMMENT '玩家 player_id',
+    `group_count` INT             NOT NULL DEFAULT 0 COMMENT '该玩家当前所在临时群数(max_groups_per_player 校验用)',
+    PRIMARY KEY (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家所在群计数(上限校验)';

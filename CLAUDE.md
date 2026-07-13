@@ -109,6 +109,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     | 临时群成员 | `max_group_members` 默认 50(建群 / AddMember 事务原子校验) | `ListGroupMembers` SQL LIMIT | `ERR_GROUP_FULL` |
     | 我所在的群 | `max_groups_per_player` 默认 50(建群 / AddMember 事务校验) | `ListMyGroups` SQL LIMIT | `ERR_GROUP_JOIN_LIMIT` |
     | 交易订单(单玩家参与,买/卖两侧各计) | `max_orders_per_player` 默认 200(CreateOrder 用 Lua SCARD+SADD 原子预留双方反查索引名额;满时惰性清理已终态/已回收成员再重试一次) | `ListMyOrders` cursor 分页 + SMEMBERS 全量被写入侧硬上限兜住 | `ERR_TRADE_ORDER_LIMIT` |
+    | 拍卖订单(单玩家 PENDING + 活跃) | `max_active_orders_per_player` 默认 200(Claim PENDING 后用 Redis Lua SCARD+SADD 原子预留含 market_id+order_id 的成员;满时按 MySQL 权威状态有界惰性清理) | `ListMyOrders` 按全局 order_id cursor 分页,默认 50/最大 100 | `ERR_AUCTION_ORDER_LIMIT` |
 
     **受管的客户端触发型内存容器**：UE DS 的已消费 DSTicket JTI cache 虽不对客户端分页展示，也必须
     按同一有界纪律维护：`JTI→exp+leeway` 到期清理，硬上限为

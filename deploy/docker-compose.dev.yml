@@ -168,16 +168,37 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-pandora_dev_admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # 告警联系点 webhook(飞书/企微群 + ntfy 个人推送)。
+      # secret 不入 git:实际值在本机 dev.env 或部署环境注入(见 docs/design/alerting.md)。
+      # 群 webhook 留空时不生成该 receiver，避免 Grafana 因空 URL 拒绝整套 provisioning。
+      PANDORA_ALERT_WECOM_URL: ${PANDORA_ALERT_WECOM_URL:-}
+      PANDORA_ALERT_FEISHU_WEBHOOK: ${PANDORA_ALERT_FEISHU_WEBHOOK:-}
+      # ntfy v2.11 用 inline template 把 Grafana webhook JSON 提取成可读标题/正文。
+      PANDORA_ALERT_NTFY_URL: "${PANDORA_ALERT_NTFY_URL:-http://ntfy:80/pandora-alerts?tpl=1&t=%7B%7B.title%7D%7D&m=%7B%7B.message%7D%7D}"
+      # entrypoint 先在 /tmp 生成只包含已配置渠道的 provisioning。
+      GF_PATHS_PROVISIONING: /tmp/pandora-grafana-provisioning
+    entrypoint:
+      - /bin/sh
+      - /etc/grafana/pandora-entrypoint.sh
     volumes:
       - grafana-data:/var/lib/grafana
       # 数据源自动注入(Prometheus / Loki / Loki-k8s),不用手动在 UI 里加
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning-source:ro
+      - ./grafana/entrypoint.sh:/etc/grafana/pandora-entrypoint.sh:ro
     extra_hosts:
       # 让 "Loki (k8s)" 数据源能通过 host.docker.internal 访宿主的 kubectl port-forward
       - "host.docker.internal:host-gateway"
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      # ntfy 是可选的个人推送出口:它不健康/起不来也绝不能连带拖垮仪表盘与告警引擎。
+      # service_started 只等容器启动(不等 healthcheck),required:false 让 ntfy 失败时 Grafana 照常启动。
+      # 群 webhook / Prometheus / Loki 告警链路与 ntfy 相互独立,ntfy 挂了其余渠道仍可用。
+      ntfy:
+        condition: service_started
+        required: false
     networks: [pandora-net]
 
   # ===== Loki 3.x 日志存储(infra.md §11.2)=====
@@ -252,6 +273,36 @@ services:
       - dev-local
     networks: [pandora-net]
 
+  # ===== ntfy 通知服务(个人手机 / 桌面推送,https://github.com/binwiederhier/ntfy)=====
+  # Grafana 统一告警的「个人推送」出口:Grafana Alerting 命中 critical 规则 → POST 到
+  # http://ntfy:80/pandora-alerts(见 grafana/provisioning/alerting/)。手机 / 桌面订阅该 topic
+  # 即可收推送。飞书 / 企微「群通知」不经 ntfy,直接走 Grafana 原生联系点(见 docs/design/alerting.md)。
+  #
+  # dev 默认无鉴权(本机回环 + 私密 topic 名即可);公网部署务必开 auth(NTFY_ENABLE_LOGIN=true +
+  # access-control)或改用 ntfy.sh 私密 topic,避免任何人往你的 topic 推消息。
+  ntfy:
+    image: binwiederhier/ntfy:v2.11.0
+    container_name: pandora-ntfy
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: ${PANDORA_NTFY_BASE_URL:-http://127.0.0.1:8080}
+      NTFY_LISTEN_HTTP: ":80"
+      # ntfy 默认只做内存缓存；显式指向持久卷，重启后才能回放离线告警。
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+    ports:
+      # 独立绑定变量，手机联调时只开 ntfy，不跟着暴露 Grafana/Prometheus/Loki。
+      - "${PANDORA_NTFY_BIND_HOST:-127.0.0.1}:8080:80"
+    volumes:
+      - ntfy-data:/var/lib/ntfy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/v1/health | grep -q '\"healthy\":true'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks: [pandora-net]
+
 networks:
   pandora-net:
     name: pandora-net
@@ -268,3 +319,4 @@ volumes:
   grafana-data: { name: pandora-grafana-data }
   loki-data:  { name: pandora-loki-data }
   alloy-data: { name: pandora-alloy-data }
+  ntfy-data:  { name: pandora-ntfy-data }

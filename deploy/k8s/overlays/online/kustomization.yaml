@@ -23,6 +23,7 @@ resources:
   # 只在 online 生效;dev base 不含,避免挡掉宿主 docker-compose Envoy 的联调流量。
   # ⚠️ 需集群 CNI 强制 NetworkPolicy(Calico/Cilium 等),否则被静默忽略(详见 netpol.yaml 头注)。
   - netpol.yaml
+  - ds-auth-admission.yaml
 
 # 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(20 个)。
 images:

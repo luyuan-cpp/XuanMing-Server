@@ -42,10 +42,23 @@ func TestRequireHubAssignmentBindingValidation(t *testing.T) {
 		cfg.Login.RequireHubAssignmentBinding = true
 		cfg.Node.RedisClient.Addrs = []string{"redis-0:6379", "redis-1:6379"}
 		cfg.Login.Hub.Addr = "hub-allocator:50021"
+		cfg.Login.Locator.Addr = "player-locator:50006"
 		cfg.Login.HubAssignmentFence.EtcdEndpoints = []string{"etcd:2379"}
 		cfg.Login.HubAssignmentFence.KeysetRevision = "pandora-auth-r1"
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("Validate: %v", err)
+		}
+	})
+
+	t.Run("requires-player-locator", func(t *testing.T) {
+		var cfg Config
+		cfg.Login.RequireHubAssignmentBinding = true
+		cfg.Node.RedisClient.Host = "redis:6379"
+		cfg.Login.Hub.Addr = "hub-allocator:50021"
+		cfg.Login.HubAssignmentFence.EtcdEndpoints = []string{"etcd:2379"}
+		cfg.Login.HubAssignmentFence.KeysetRevision = "pandora-auth-r1"
+		if err := cfg.Validate(); err == nil {
+			t.Fatal("expected missing player locator validation error")
 		}
 	})
 }
@@ -56,6 +69,7 @@ func TestRedisDSAdmissionRequiresSingleConsistentFence(t *testing.T) {
 		cfg.Defaults()
 		cfg.Node.RedisClient.Host = "redis:6379"
 		cfg.Login.Hub.Addr = "hub-allocator:50021"
+		cfg.Login.Locator.Addr = "player-locator:50006"
 		cfg.Login.RequireHubAssignmentBinding = true
 		fence := config.DSAuthFenceConf{
 			EtcdEndpoints: []string{"etcd:2379"}, EtcdPrefix: "/pandora/ds-auth/",

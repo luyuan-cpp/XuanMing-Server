@@ -8,11 +8,12 @@
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
 //  4. MySQL client + Ping(强依赖:公会 / 群关系落库不可降级)
-//  5. Snowflake Node(guild_id / group_id / request_id 生成,node_id 来自 yaml)
-//  6. Redis client + Ping(弱依赖:公会资料读缓存 cache-aside,失败降级直连 MySQL)
-//  7. kafka producer(topic=pandora.guild.event)→ guildEventPusher(弱依赖)
-//  8. 装配 GuildUsecase + GroupUsecase → GuildService + GroupService → gRPC/HTTP server
-//  9. kratos.New(...).Run() 阻塞
+//  5. pandora_social schema gate(计数列 / 计数表缺失时在接流量前失败)
+//  6. Snowflake Node(guild_id / group_id / request_id 生成,node_id 来自 yaml)
+//  7. Redis client + Ping(弱依赖:公会资料读缓存 cache-aside,失败降级直连 MySQL)
+//  8. kafka producer(topic=pandora.guild.event)→ guildEventPusher(弱依赖)
+//  9. 装配 GuildUsecase + GroupUsecase → GuildService + GroupService → gRPC/HTTP server
+//  10. kratos.New(...).Run() 阻塞
 package main
 
 import (
@@ -85,6 +86,18 @@ func main() {
 	}
 	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
 	defer func() { _ = db.Close() }()
+	schemaCtx, schemaCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	schemaErr := data.ValidateRequiredSchema(schemaCtx, db)
+	schemaCancel()
+	if schemaErr != nil {
+		helper.Errorw(
+			"msg", "guild_schema_incompatible",
+			"err", schemaErr,
+			"required_migration_version", data.RequiredSchemaVersion,
+			"hint", "先运行 tools/migrate 将 pandora_social 升至 version 2，再滚动 guild",
+		)
+		os.Exit(1)
+	}
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
 	// 4. Snowflake(guild_id / group_id / request_id 生成；node_id_source=static 静态，=etcd 走 etcd 自动抢占，失租自动退出)

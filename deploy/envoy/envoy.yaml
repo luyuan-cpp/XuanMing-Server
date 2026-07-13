@@ -9,7 +9,7 @@
 #      - HS256 + 共享 secret(dev 用,生产期切 RS256 + remote_jwks)
 #      - issuer=pandora-login / audience=pandora-client,要跟 login 服务 etc/login-dev.yaml 一致
 #      - 把 sub claim 提到 x-pandora-player-id 头,业务服 pmw.AuthOptional/Required 直接读
-#      - 对 push / team / match 等玩家鉴权 path 强制要 JWT;login / reflection / VerifyDSTicket bypass
+#      - 对 push / team / match 等玩家鉴权 path 强制要 JWT;Login/反射可按规则放行；VerifyDSTicket 仅走 :8444
 #
 # ⚠️ 协议铁律(详见 docs/design/protocol-ordering-rules.md):
 #   - push.PushService/Subscribe 是 server stream,timeout 必须为 0(永不超时)
@@ -80,7 +80,7 @@ static_resources:
 
           # ⭐ 安全:剥离客户端伪造的身份头(必须排在 jwt_authn 之前)。
           # jwt_authn 的 claim_to_headers 只在「命中 rules 的鉴权 path」上覆写 x-pandora-player-id;
-          # 对 bypass / allow_missing 的 path(login.Login / VerifyDSTicket / reflection),jwt_authn
+          # 对 bypass / allow_missing 的 path(login.Login / reflection),jwt_authn
           # 不跑 claim_to_headers,客户端自带的 x-pandora-player-id / x-pandora-jwt-payload 会原样透传
           # 给上游,上游 pmw.AuthOptional 会信任 → 任意未登录客户端可伪造 player_id(越权)。
           # 这里在入站第一时间无条件删掉这两个头,jwt_authn 随后只在鉴权成功时重新写入权威值;
@@ -93,12 +93,15 @@ static_resources:
                 request_mutations:
                 - remove: "x-pandora-player-id"
                 - remove: "x-pandora-jwt-payload"
+                # DS 网关标记头只属于 :8444 DS 面;客户端面无条件剥离,防公网客户端伪造
+                # “我是 DS 面流量”干扰后端 DSCallbackGuard 判定(纵深防御)。
+                - remove: "x-pandora-ds-gateway"
 
           # ⭐ W3 ①:JWT 鉴权(HS256 + local_jwks)
           # provider pandora_session 用 login 服务签发的 SessionToken,issuer / audience
           # 必须跟 login etc/login-dev.yaml 的 login.jwt 完全一致。
           #
-          # rules 列表只列"要鉴权的 path";没列到的 path(login / reflection / DS 票据 verify)
+          # rules 列表只列"要鉴权的 path";没列到的 path(login / reflection)
           # 默认放行。bypass 列表用空 requirement 走 allow_missing 语义。
           #
           # claim_to_headers 把 sub claim 写到 x-pandora-player-id 头,业务服 pkg/middleware
@@ -204,14 +207,15 @@ static_resources:
                 requires:
                   provider_name: "pandora_session"
               # inventory 服务所有 RPC 均需 JWT(player_id 以 JWT sub 为准,R5;系统方法
-              # GrantItems/GrantInstances/Freeze*/Settle*/ReleaseEscrow 由下方 route 精确 403 拦截)。
+              # GrantItems/GrantInstances/Freeze*/EnsureAuctionEscrow/Settle*/ReleaseEscrow
+              # 由下方 route 精确 403 拦截)。
               - match:
                   prefix: "/pandora.inventory.v1.InventoryService/"
                 requires:
                   provider_name: "pandora_session"
-              # 没列到的 path(login.Login / login.VerifyDSTicket / grpc reflection)默认放行。
-              # VerifyDSTicket 是 DS → login 的内部调用,不带玩家 JWT;当前只靠网络边界，未来补
-              # ext_authz/workload identity，不能把 allow_missing 当作已鉴权。
+              # 没列到的 path(login.Login / grpc reflection)默认按既有规则放行。
+              # VerifyDSTicket 在下方 public route 精确 403，唯一入口是 :8444 exact route；
+              # 后端还要求 DS Bearer + Redis active/projection，不能由玩家面 allow_missing 旁路。
 
           - name: envoy.filters.http.router
             typed_config:
@@ -236,7 +240,14 @@ static_resources:
                   max_age: "600"
 
               routes:
-              # ----- login(unary,立即完成型,demo 15s 超时)-----
+              # ----- DS-only:客户端面明确拒绝 VerifyDSTicket（必须排在 login prefix 前）-----
+              - match:
+                  path: "/pandora.login.v1.LoginService/VerifyDSTicket"
+                direct_response:
+                  status: 403
+                  body:
+                    inline_string: "DS-only method; use isolated :8444"
+              # ----- login 其余方法(unary,立即完成型,demo 15s 超时)-----
               - match:
                   prefix: "/pandora.login.v1.LoginService/"
                 route:
@@ -411,6 +422,9 @@ static_resources:
                   path: "/pandora.inventory.v1.InventoryService/FreezeForOrder"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               - match:
+                  path: "/pandora.inventory.v1.InventoryService/EnsureAuctionEscrow"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
                   path: "/pandora.inventory.v1.InventoryService/SettleAuctionMatch"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
               - match:
@@ -451,17 +465,17 @@ static_resources:
   #   battle_result.ReportResult / locator.SetLocation 伪造战绩/定位。故 DS 面单独开
   #   :8444,与客户端面物理隔离,便于后续单独加 mTLS / 网络策略锁死「只允许 DS pod 访问」。
   #
-  # UE DS 走 gRPC-Web(FHttpModule),内部服务(hub :50021 / ds :50020 / locator :50006 /
+  # UE DS 走 gRPC-Web(FHttpModule),内部服务(login :50001 / hub :50021 / ds :50020 / locator :50006 /
   # battle_result :50022)裸端口是原生 gRPC(h2c),这里用 grpc_web filter 做协议转换。
-  # UE DS `UPandoraDSBackendSubsystem` 的 4 个 Endpoint 经 SetEndpoints / Game.ini 指向
+  # UE DS `UPandoraDSBackendSubsystem` 的各 Endpoint 经 SetEndpoints / Game.ini 指向
   # 本地 dev 监听器用 http://host:8444（bUseTls=false），避免 Linux DS 容器无法信任宿主 mkcert 根证书。
   # 同集群生产环境仍保持应用层明文，由 NetworkPolicy 收敛；未来 mesh mTLS 对业务透明。
   # 只有 DS 位于集群外、显式接入 TLS 边缘时，才为 DS 镜像配置受信 CA 并开启应用层 TLS。
   #
   # ⚠️ 鉴权说明:本监听器**不挂 player jwt_authn**(DS→后端内部调用不带玩家 SessionToken,
   # 内部服务用 pmw.AuthOptional)。UE NetDriver 的 DSTicket 只认证「玩家→DS」，不认证
-  # 「DS→后端」；当前只靠精确 method 白名单 + 网络可达边界，生产仍须补 workload identity
-  # (mTLS/ext_authz/短时效 DS token)并绑定 pod/match，:8444 绝不可直接暴露公网。
+  # 「DS→后端」；本面使用 exact method 白名单 + DS Bearer + Redis active/projection，
+  # NetworkPolicy 继续收敛可达性；生产仍须补基础设施 mTLS/ACL，:8444 绝不可直接暴露公网。
   # ============================================================================
   - name: pandora_ds_listener
     address:
@@ -498,6 +512,9 @@ static_resources:
                 request_mutations:
                 - remove: "x-pandora-player-id"
                 - remove: "x-pandora-jwt-payload"
+                # 入站先剥离网关标记头(防伪造),再由下方 vh 统一盖回 "1":
+                # 后端 DSCallbackGuard 凭此头区分「DS 面流量(须验令牌)」与「内部东西向直连」。
+                - remove: "x-pandora-ds-gateway"
           # 注意:DS 面不挂 jwt_authn(见上方鉴权说明)。
           - name: envoy.filters.http.router
             typed_config:
@@ -507,12 +524,29 @@ static_resources:
             virtual_hosts:
             - name: pandora_ds_vh
               domains: [ "*" ]
+              # DS 网关标记头(审核 P1 #1):经 :8444 进后端的请求一律盖上 x-pandora-ds-gateway: "1"
+              # (入站已先剥离,不可伪造)。后端 ds_auth.mode=permissive/enforce 时,凭此头要求
+              # DS 必须带 Bearer 服务令牌(hub 令牌绑 pod / battle 令牌绑 match_id);
+              # 内部东西向直连无此头,不受影响。
+              request_headers_to_add:
+              - header: { key: "x-pandora-ds-gateway", value: "1" }
+                append_action: OVERWRITE_IF_EXISTS_OR_ADD
               routes:
-              # ⚠️ DS 面按方法白名单(2026-07-10,回应审核 P1)::8444 无 jwt_authn、后端仅 AuthOptional,
-              #    仅靠网络可达信任,故只放行 DS / Hub DS **文档明确会回调**的 method,用 path 精确匹配。
-              #    deny-by-default:未匹配路由 Envoy 直接 404 → 伪 DS / 局域网调用者无法调
-              #    Allocate/Release/Transfer/List/ClearLocation 等非 DS 回调方法。注意白名单不认证
-              #    允许的方法，SetLocation/ReportResult 等仍依赖网络信任；新增 DS 方法必须显式加一行。
+              # ⚠️ DS 面双层防护(2026-07-10,回应审核 P1;§5 五轮更新):
+              #  1) 方法白名单:8444 无 jwt_authn(边缘客户端面 :8443 才做 JWT 校验),故只放行 DS / Hub DS
+              #     **文档明确会回调**的 method,用 path 精确匹配;deny-by-default:未匹配路由 Envoy 直接 404 →
+              #     伪 DS / 局域网调用者无法调 Allocate/Release/Transfer/List/ClearLocation 等非 DS 回调方法。
+              #  2) DS 服务令牌:入站已剥离并重盖 x-pandora-ds-gateway,后端 ds_auth.mode=enforce 时,
+              #     白名单放行的方法仍要求 DS 带 Bearer 服务令牌(hub 令牌绑 pod / battle 令牌绑 match_id)才通过
+              #     ——不再是「仅靠网络信任」,SetLocation/ReportResult/Heartbeat 均经令牌鉴权。
+              #  新增 DS 方法必须显式加一行,并确认后端已纳入 ds_auth 校验。
+              # ----- Hub/Battle DS → login.VerifyDSTicket(玩家在线入场权威)-----
+              - match:
+                  path: "/pandora.login.v1.LoginService/VerifyDSTicket"
+                route:
+                  cluster: login_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
               # ----- Hub DS → hub_allocator.Heartbeat(unary 5s 心跳)-----
               - match:
                   path: "/pandora.hub.v1.HubAllocatorService/Heartbeat"

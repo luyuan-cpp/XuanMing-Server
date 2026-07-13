@@ -907,8 +907,20 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyOrdersRequest final : public 
 
   // accessors -------------------------------------------------------
   enum : int {
+    kCursorOrderIdFieldNumber = 2,
     kActiveOnlyFieldNumber = 1,
+    kLimitFieldNumber = 3,
   };
+  // uint64 cursor_order_id = 2 [json_name = "cursorOrderId"];
+  void clear_cursor_order_id() ;
+  [[nodiscard]] ::uint64_t cursor_order_id() const;
+  void set_cursor_order_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cursor_order_id() const;
+  void _internal_set_cursor_order_id(::uint64_t value);
+
+  public:
   // bool active_only = 1 [json_name = "activeOnly"];
   void clear_active_only() ;
   [[nodiscard]] bool active_only() const;
@@ -919,11 +931,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyOrdersRequest final : public 
   void _internal_set_active_only(bool value);
 
   public:
+  // uint32 limit = 3 [json_name = "limit"];
+  void clear_limit() ;
+  [[nodiscard]] ::uint32_t limit() const;
+  void set_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit() const;
+  void _internal_set_limit(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.auction.v1.ListMyOrdersRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -952,7 +974,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyOrdersRequest final : public 
         const ListMyOrdersRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t cursor_order_id_;
     bool active_only_;
+    ::uint32_t limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2870,6 +2894,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyOrdersResponse final : public
   enum : int {
     kOrdersFieldNumber = 2,
     kCodeFieldNumber = 1,
+    kHasMoreFieldNumber = 4,
+    kNextCursorOrderIdFieldNumber = 3,
   };
   // repeated .pandora.auction.v1.AuctionOrder orders = 2 [json_name = "orders"];
   [[nodiscard]] int orders_size()
@@ -2902,11 +2928,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyOrdersResponse final : public
   void _internal_set_code(::pandora::common::v1::ErrCode value);
 
   public:
+  // bool has_more = 4 [json_name = "hasMore"];
+  void clear_has_more() ;
+  [[nodiscard]] bool has_more() const;
+  void set_has_more(bool value);
+
+  private:
+  bool _internal_has_more() const;
+  void _internal_set_has_more(bool value);
+
+  public:
+  // uint64 next_cursor_order_id = 3 [json_name = "nextCursorOrderId"];
+  void clear_next_cursor_order_id() ;
+  [[nodiscard]] ::uint64_t next_cursor_order_id() const;
+  void set_next_cursor_order_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_cursor_order_id() const;
+  void _internal_set_next_cursor_order_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.auction.v1.ListMyOrdersResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2937,6 +2983,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyOrdersResponse final : public
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::auction::v1::AuctionOrder > orders_;
     int code_;
+    bool has_more_;
+    ::uint64_t next_cursor_order_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4466,7 +4514,7 @@ ListMarketResponse::_internal_mutable_orders() {
 inline void ListMyOrdersRequest::clear_active_only() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_only_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline bool ListMyOrdersRequest::active_only() const {
   // @@protoc_insertion_point(field_get:pandora.auction.v1.ListMyOrdersRequest.active_only)
@@ -4474,7 +4522,7 @@ inline bool ListMyOrdersRequest::active_only() const {
 }
 inline void ListMyOrdersRequest::set_active_only(bool value) {
   _internal_set_active_only(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:pandora.auction.v1.ListMyOrdersRequest.active_only)
 }
 inline bool ListMyOrdersRequest::_internal_active_only() const {
@@ -4484,6 +4532,54 @@ inline bool ListMyOrdersRequest::_internal_active_only() const {
 inline void ListMyOrdersRequest::_internal_set_active_only(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_only_ = value;
+}
+
+// uint64 cursor_order_id = 2 [json_name = "cursorOrderId"];
+inline void ListMyOrdersRequest::clear_cursor_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cursor_order_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ListMyOrdersRequest::cursor_order_id() const {
+  // @@protoc_insertion_point(field_get:pandora.auction.v1.ListMyOrdersRequest.cursor_order_id)
+  return _internal_cursor_order_id();
+}
+inline void ListMyOrdersRequest::set_cursor_order_id(::uint64_t value) {
+  _internal_set_cursor_order_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.auction.v1.ListMyOrdersRequest.cursor_order_id)
+}
+inline ::uint64_t ListMyOrdersRequest::_internal_cursor_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cursor_order_id_;
+}
+inline void ListMyOrdersRequest::_internal_set_cursor_order_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cursor_order_id_ = value;
+}
+
+// uint32 limit = 3 [json_name = "limit"];
+inline void ListMyOrdersRequest::clear_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ListMyOrdersRequest::limit() const {
+  // @@protoc_insertion_point(field_get:pandora.auction.v1.ListMyOrdersRequest.limit)
+  return _internal_limit();
+}
+inline void ListMyOrdersRequest::set_limit(::uint32_t value) {
+  _internal_set_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.auction.v1.ListMyOrdersRequest.limit)
+}
+inline ::uint32_t ListMyOrdersRequest::_internal_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_;
+}
+inline void ListMyOrdersRequest::_internal_set_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4567,6 +4663,54 @@ inline ::google::protobuf::RepeatedPtrField<::pandora::auction::v1::AuctionOrder
 ListMyOrdersResponse::_internal_mutable_orders() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.orders_;
+}
+
+// uint64 next_cursor_order_id = 3 [json_name = "nextCursorOrderId"];
+inline void ListMyOrdersResponse::clear_next_cursor_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_cursor_order_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t ListMyOrdersResponse::next_cursor_order_id() const {
+  // @@protoc_insertion_point(field_get:pandora.auction.v1.ListMyOrdersResponse.next_cursor_order_id)
+  return _internal_next_cursor_order_id();
+}
+inline void ListMyOrdersResponse::set_next_cursor_order_id(::uint64_t value) {
+  _internal_set_next_cursor_order_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.auction.v1.ListMyOrdersResponse.next_cursor_order_id)
+}
+inline ::uint64_t ListMyOrdersResponse::_internal_next_cursor_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_cursor_order_id_;
+}
+inline void ListMyOrdersResponse::_internal_set_next_cursor_order_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_cursor_order_id_ = value;
+}
+
+// bool has_more = 4 [json_name = "hasMore"];
+inline void ListMyOrdersResponse::clear_has_more() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_more_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool ListMyOrdersResponse::has_more() const {
+  // @@protoc_insertion_point(field_get:pandora.auction.v1.ListMyOrdersResponse.has_more)
+  return _internal_has_more();
+}
+inline void ListMyOrdersResponse::set_has_more(bool value) {
+  _internal_set_has_more(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.auction.v1.ListMyOrdersResponse.has_more)
+}
+inline bool ListMyOrdersResponse::_internal_has_more() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_more_;
+}
+inline void ListMyOrdersResponse::_internal_set_has_more(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_more_ = value;
 }
 
 #ifdef __GNUC__

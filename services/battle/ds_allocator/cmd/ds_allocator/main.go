@@ -34,6 +34,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/biz"
@@ -218,6 +219,14 @@ func main() {
 			"mode", cfg.Mode, "hint", "mode=mock,用确定性假地址(无真实 DS)")
 	}
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
+	releasePolicy, policyErr := releasetrack.New(cfg.Agones.CanaryPercent, cfg.Agones.CanarySeed)
+	if policyErr != nil {
+		helper.Errorw("msg", "battle_release_track_policy_invalid", "err", policyErr)
+		os.Exit(1)
+	}
+	uc.SetReleaseTrackPolicy(releasePolicy)
+	helper.Infow("msg", "battle_release_track_policy_ready",
+		"canary_percent", cfg.Agones.CanaryPercent, "canary_seed_configured", cfg.Agones.CanarySeed != "")
 	battleAuthRepo := data.NewRedisBattleAuthRepo(rdb)
 	if modelB {
 		if err := uc.EnableRedisAuthority(battleAuthRepo, dsSigner, cfg.DSAuth.BattleTokenTTL.Std()); err != nil {

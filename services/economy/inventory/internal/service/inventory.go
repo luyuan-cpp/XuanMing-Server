@@ -182,6 +182,21 @@ func (s *InventoryService) FreezeForOrder(ctx context.Context, req *inventoryv1.
 	return &inventoryv1.FreezeForOrderResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+// EnsureAuctionEscrow 补齐旧版本遗留订单的 escrow(系统接口,仅后端内部直连)。
+// 经 Envoy 的玩家调用(callerID>0)一律拒绝；合法调用者是 auction 持久补偿器的内网直连。
+func (s *InventoryService) EnsureAuctionEscrow(ctx context.Context, req *inventoryv1.EnsureAuctionEscrowRequest) (*inventoryv1.EnsureAuctionEscrowResponse, error) {
+	if pmw.PlayerIDFromContext(ctx) != 0 {
+		return &inventoryv1.EnsureAuctionEscrowResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	err := s.uc.EnsureAuctionEscrow(ctx,
+		req.GetPlayerId(), req.GetOrderId(), biz.EscrowSide(req.GetSide()),
+		req.GetItemConfigId(), req.GetRemainingQuantity(), req.GetUnitPrice())
+	if err != nil {
+		return &inventoryv1.EnsureAuctionEscrowResponse{Code: toProtoCode(err)}, nil
+	}
+	return &inventoryv1.EnsureAuctionEscrowResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
 // ReleaseEscrow 退还挂单 escrow 残余(系统接口,仅后端内部直连)。鉴权同 SettleAuctionMatch。
 func (s *InventoryService) ReleaseEscrow(ctx context.Context, req *inventoryv1.ReleaseEscrowRequest) (*inventoryv1.ReleaseEscrowResponse, error) {
 	if pmw.PlayerIDFromContext(ctx) != 0 {

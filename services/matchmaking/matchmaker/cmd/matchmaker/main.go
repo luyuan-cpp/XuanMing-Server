@@ -135,21 +135,38 @@ func main() {
 	// DSAllocator:ds_allocator_addr 非空 → 真 gRPC 拉 DS + 签 battle 票据;否则 W4 ① 打桩
 	var allocator biz.DSAllocator
 	if cfg.Match.DSAllocatorAddr != "" {
-		authCfg := auth.Config{
-			Issuer:            cfg.JWT.Issuer,
-			Audience:          cfg.JWT.Audience,
-			Secret:            []byte(cfg.JWT.Secret),
-			AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets),
-			SessionTTL:        cfg.JWT.SessionTTL.Std(),
-			DSTicketTTL:       cfg.JWT.DSTicketTTL.Std(),
+		// DSTicket v2(RS256,方案 B):配置了私钥即启用;启用后 battle 票全部走 v2
+		// 实例绑定签发,不再加载或持有 legacy HS256 玩家票据密钥。加载失败直接拒绝启动。
+		var v2Signer *auth.DSTicketSigner
+		if cfg.DSTicket.SignerEnabled() {
+			v2, verr := auth.NewDSTicketSignerFromConf(cfg.DSTicket)
+			if verr != nil {
+				helper.Errorw("msg", "ds_ticket_v2_signer_init_failed", "err", verr,
+					"hint", "check ds_ticket.private_key_file / active_kid / ttl")
+				os.Exit(1)
+			}
+			v2Signer = v2
+			helper.Infow("msg", "ds_ticket_v2_signer_ready", "kid", v2.Kid(), "ttl", v2.TTL().String())
 		}
-		signer, serr := auth.NewSigner(authCfg)
-		if serr != nil {
-			helper.Errorw("msg", "ds_ticket_signer_init_failed", "err", serr,
-				"hint", "jwt.secret must be >=32 bytes and match login/envoy")
-			os.Exit(1)
+		var signer *auth.Signer
+		if v2Signer == nil {
+			authCfg := auth.Config{
+				Issuer:            cfg.JWT.Issuer,
+				Audience:          cfg.JWT.Audience,
+				Secret:            []byte(cfg.JWT.Secret),
+				AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets),
+				SessionTTL:        cfg.JWT.SessionTTL.Std(),
+				DSTicketTTL:       cfg.JWT.DSTicketTTL.Std(),
+			}
+			legacySigner, serr := auth.NewSigner(authCfg)
+			if serr != nil {
+				helper.Errorw("msg", "ds_ticket_signer_init_failed", "err", serr,
+					"hint", "jwt.secret must be >=32 bytes and match login/envoy")
+				os.Exit(1)
+			}
+			signer = legacySigner
 		}
-		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, signer, cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
+		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, signer, v2Signer, cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
 		defer func() { _ = ga.Close() }()
 		allocator = ga
 		helper.Infow("msg", "ds_allocator_grpc_ready", "ds_allocator_addr", cfg.Match.DSAllocatorAddr,

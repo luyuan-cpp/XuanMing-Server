@@ -4,9 +4,17 @@
 本目录是 friend(及同库 chat)迁 TiDB 的 schema,**与单 MySQL 的
 `deploy/mysql-init/` 是两条独立线**,不互相覆盖。
 
+> 2026-07-13 起 `01-social-tidb.sql` 追加公会 / 临时群表(guild 服务迁 social TiDB 的上线前代码
+> 路径,`docs/design/decision-revisit-guild-scaling.md §6.1`):`guilds` / `guild_members` /
+> `guild_join_requests` / `chat_groups` / `chat_group_members` + 计数表 `player_group_counts`。
+> TiDB 无间隙锁,pending 申请 / 所在群上限改用计数列(`guilds.pending_request_count`)/ 计数表
+> (`player_group_counts`),不再依赖 `COUNT(*)...FOR UPDATE`。guild 连 TiDB 用
+> `services/social/guild/etc/guild-dev-tidb.yaml`(opt-in;运行默认仍单 MySQL)。
+
 ## 文件
 
-- `01-social-tidb.sql` —— `pandora_social` 库表的 TiDB 版 DDL(已做 §8.2 雪花主键热点处理)。
+- `01-social-tidb.sql` —— `pandora_social` 库表的 TiDB 版 DDL(已做 §8.2 雪花主键热点处理;
+  含 friend/chat + guild/group 全部同库表)。
 - `../docker-compose.tidb.yml` —— 本地 TiDB 集群（PD + TiKV + TiDB，单副本，与单 MySQL 并存）。
 - `../../tools/scripts/tidb_up.ps1` —— 一键起集群 + 建账号 + 装载 DDL。
 

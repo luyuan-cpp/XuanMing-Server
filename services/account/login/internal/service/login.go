@@ -210,6 +210,10 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 			DsCredentialJti: claims.DSCredentialJTI,
 			HubAssignmentId: claims.HubAssignmentID,
 			DsWriterEpoch:   claims.DSWriterEpoch,
+			DstVer:          uint32(claims.Version),
+			DsInstanceEpoch: claims.DSInstanceEpoch,
+			AllocationId:    claims.AllocationID,
+			ReleaseTrack:    claims.ReleaseTrack,
 		},
 	}, nil
 }

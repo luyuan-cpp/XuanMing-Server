@@ -1,7 +1,8 @@
-# pandora-battle Fleet（W4 ⑬，本地 Agones dev 联调）
+# pandora-battle-stable Fleet（Stable 轨，W4 ⑬）
 #
 # 战斗 DS 走 Agones「按需分配」模型：matchmaker 全员确认 → ds_allocator POST
-# GameServerAllocation（selector agones.dev/fleet=pandora-battle）→ 拿到一个 Ready
+# GameServerAllocation（selector 同时匹配 agones.dev/fleet=pandora-battle-stable 与
+# pandora.dev/release-track=stable）→ 拿到一个 Ready
 # GameServer 转 Allocated，返回 address:port 给客户端进战斗。
 #
 # 当前直接使用真 UE Pandora Battle DS 镜像（Agones SDK Ready/Health + Pandora 业务 Heartbeat）。
@@ -10,17 +11,20 @@
 apiVersion: agones.dev/v1
 kind: Fleet
 metadata:
-  name: pandora-battle
+  name: pandora-battle-stable
   namespace: default
   labels:
     app.kubernetes.io/part-of: pandora
     pandora.dev/role: battle
+    pandora.dev/release-track: stable
 spec:
   replicas: 2
   template:
     metadata:
       labels:
         pandora.dev/role: battle
+        pandora.dev/release-track: stable
+        pandora.dev/ds-auth-writer-epoch: "2"
     spec:
       ports:
         - name: default
@@ -32,6 +36,10 @@ spec:
         periodSeconds: 10
         failureThreshold: 3
       template:
+        metadata:
+          labels:
+            pandora.dev/ds-auth-writer-epoch: "2"
+            pandora.dev/release-track: stable
         spec:
           containers:
             - name: pandora-battle-ds
@@ -61,7 +69,7 @@ spec:
                 #   value: "/Script/Pandora.PandoraBattleGameMode"    # ← PANDORA_DS_GAMEMODE
                 #
                 # 进阶(热门图零加载延迟,标准混合形态):可为单张热门图克隆本 Fleet 建「专属预热 Fleet」——
-                # 改 metadata.name(如 pandora-battle-songlin)+ 上面两行 env 直启该图与其 GameMode
+                # 另建专用 Stable Fleet 时改 metadata.name(如 pandora-battle-stable-songlin)+ 上面两行 env
                 # (如 /Game/Test/Level/SonglinTown + /Script/Pandora.PandoraPveGameMode),
                 # 并在 ds_allocator agones.map_fleets 配 map_id→该 Fleet。分配时 Agones 有序 selectors
                 # 先选专属池(Pod 已预载目标图,分配即可玩),无空闲自动回落本通用 Loader 池。
@@ -79,12 +87,28 @@ spec:
                 # 线上真集群边缘网关自带同名 pandora-envoy Service,本段 env 一字不改即可切线上。
                 - name: PANDORA_DS_ALLOCATOR_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_DS_ADMISSION_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_PLAYER_LOCATOR_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_BATTLE_RESULT_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
                 - name: PANDORA_DS_ALLOCATOR_TLS
                   value: "0"
+                # DSTicket v2(方案 B,RS256 纯本地验票,决策文档 §7):DS 只持公钥 JWKS,无任何玩家票
+                # 签名 secret(玩家 HS256 密钥出现在 Fleet 里会被 online_manifest_contract 硬拒)。
+                # 公钥来自不可变 ConfigMap pandora-dsticket-jwks-r1(见 15-dsticket-jwks.yaml)。普通
+                # Stable/Canary 发布只读对账、不换钥；当前发布器不支持 public-only K2 stage。
+                # 两个 env 与 UE FPandoraDSTicketKeystore 约定一致:缺任一个 = v2 未配置,
+                # Agones Ready 门(FPandoraDSTicketReadyGatePolicy)会拒绝 Ready,容器不会半配置上线。
+                - name: PANDORA_DSTICKET_JWKS_FILE
+                  value: "/etc/pandora/dsticket/jwks.json"
+                - name: PANDORA_DSTICKET_KEYSET_REVISION
+                  value: "1"
+              volumeMounts:
+                - name: dsticket-jwks
+                  mountPath: /etc/pandora/dsticket
+                  readOnly: true
               resources:
                 requests:
                   cpu: "1"
@@ -92,3 +116,9 @@ spec:
                 limits:
                   cpu: "2"
                   memory: 2Gi
+          volumes:
+            # DSTicket v2 公钥 JWKS(只读,公钥非机密,用 ConfigMap 而非 Secret;由启动器/运维从
+            # dsticket_keyset.ps1 create-only 投递的 jwks.json，私钥绝不进 DS 镜像/Pod)。
+            - name: dsticket-jwks
+              configMap:
+                name: pandora-dsticket-jwks-r1

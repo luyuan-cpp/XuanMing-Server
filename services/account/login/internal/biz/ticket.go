@@ -17,6 +17,7 @@ package biz
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -42,6 +43,7 @@ type DSTicketResult struct {
 // DSTicketClaims 是 VerifyDSTicket 的产出(透传 auth.DSTicketClaims 的核心字段,
 // service 层翻译成 proto LoginService.DSTicket message)。
 type DSTicketClaims struct {
+	Version     int
 	PlayerID    uint64
 	MatchID     uint64
 	DSType      string
@@ -61,6 +63,37 @@ type DSTicketClaims struct {
 	DSCredentialGen uint64
 	DSCredentialJTI string
 	HubAssignmentID string
+	DSWriterEpoch   uint32
+	// v2(RS256/B1)稳定实例绑定。legacy 票据为零值。
+	DSInstanceEpoch uint32
+	AllocationID    string
+	ReleaseTrack    string
+}
+
+// verifiedDSTicket 是 legacy HS256 与 v2 RS256 在 Login 内部的统一、只读视图。
+// Version 精确区分两条验证规则，绝不把 v2 缺失字段降级解释成 legacy。
+type verifiedDSTicket struct {
+	Version         int
+	PlayerID        uint64
+	MatchID         uint64
+	DSType          string
+	JTI             string
+	IssuedAtMs      int64
+	ExpiresAtMs     int64
+	ReplayTTL       time.Duration
+	RegionID        uint32
+	CellID          uint32
+	RoleID          uint32
+	DSPodName       string
+	DSInstanceUID   string
+	DSInstanceEpoch uint32
+	ReleaseTrack    string
+	AllocationID    string
+	HubAssignmentID string
+	// legacy Model-B callback credential binding（v2 有意不携带）。
+	DSProtocolEpoch uint32
+	DSCredentialGen uint64
+	DSCredentialJTI string
 	DSWriterEpoch   uint32
 }
 
@@ -82,6 +115,14 @@ type TicketUsecase struct {
 	// 可为 nil:单 Cell / dev 部署不路由,签出票据 region/cell = 0。多 Cell 部署由 main
 	// 经 SetCellRouter 注入。nil-safe,不阻断签票。
 	router *cellroute.Router
+
+	// v2Signer 非 nil 时启用 DSTicket v2(RS256,方案 B):battle 票改签实例绑定票
+	// (绑定来自 roster 权威门同一 Redis 快照,缺失 fail-closed 拒签);hub 票一律拒签
+	// (v2 hub 票必须带实例绑定,只能由 hub_allocator 签)。
+	v2Signer *auth.DSTicketSigner
+	// v2Verifier 供 Login VerifyDSTicket 在线端点使用；非 nil 同时机械激活玩家票
+	// RS256-only。B1 DS 正常准入仍本地验签，不依赖此在线调用。
+	v2Verifier *auth.DSTicketVerifier
 }
 
 // NewTicketUsecase 构造用例。
@@ -99,6 +140,22 @@ func (u *TicketUsecase) SetHubAssignmentBindingPolicy(require bool, checker data
 // 未注入时 battle 签票 fail-closed；Hub 签票不受此门影响。
 func (u *TicketUsecase) SetBattleTicketAuthorizer(authorizer data.BattleTicketAuthorizer) {
 	u.battleAuthorizer = authorizer
+}
+
+// SetDSTicketV2Signer 注入 DSTicket v2(RS256,方案 B)签发器(启动期、对外监听前调用)。
+// 注入后 battle 签票全部走 v2,不再签 legacy HS256 票。
+func (u *TicketUsecase) SetDSTicketV2Signer(s *auth.DSTicketSigner) {
+	u.v2Signer = s
+}
+
+// SetDSTicketV2Verifier 注入严格 RS256 verifier。只要 v2 signer/verifier 任一启用，
+// 玩家 DSTicket 验证就机械进入 RS256-only；legacy HS256 只留给完全未启用 v2 的 local/off。
+func (u *TicketUsecase) SetDSTicketV2Verifier(v *auth.DSTicketVerifier) {
+	u.v2Verifier = v
+}
+
+func (u *TicketUsecase) rs256DSTicketProfileEnabled() bool {
+	return u != nil && (u.v2Signer != nil || u.v2Verifier != nil)
 }
 
 // SetCellRouter 注入确定性 region/cell 路由器(可选,多 Cell 部署用)。
@@ -149,6 +206,11 @@ func (u *TicketUsecase) IssueDSTicket(ctx context.Context, playerID uint64, dsTy
 		regionID, cellID := u.routeRegionCell(ctx, playerID)
 		return u.IssueBattleDSTicketAtCell(ctx, playerID, targetID, regionID, cellID)
 	}
+	if ds == auth.DSTypeHub && u.rs256DSTicketProfileEnabled() {
+		// v2(方案 B):hub 票必须带完整实例绑定,只能由 hub_allocator 签;login 不再自签。
+		return nil, errcode.New(errcode.ErrUnavailable,
+			"hub DSTicket v2 must be issued by hub_allocator (instance binding required)")
+	}
 	if ds == auth.DSTypeHub && u.requireHubAssignmentBinding {
 		return nil, errcode.New(errcode.ErrUnavailable,
 			"hub DSTicket must be issued by hub_allocator while assignment binding is required")
@@ -180,12 +242,63 @@ func (u *TicketUsecase) IssueBattleDSTicketAtCell(
 	if target.DSAddr == "" {
 		return nil, errcode.New(errcode.ErrUnavailable, "battle ticket target address unavailable")
 	}
+	if u.v2Signer != nil {
+		// v2(方案 B):票据绑死到 roster 权威门同一 Redis 快照里的唯一 DS 实例。
+		// 实例身份缺一即拒(旧记录/降级路径),绝不退回无绑定票。
+		return u.issueBattleDSTicketV2(ctx, playerID, matchID, regionID, cellID, target)
+	}
+	if u.rs256DSTicketProfileEnabled() {
+		return nil, errcode.New(errcode.ErrUnavailable,
+			"RS256 DSTicket profile has no battle ticket signer")
+	}
 	result, err := u.issueDSTicketAtCell(ctx, playerID, auth.DSTypeBattle, matchID, regionID, cellID)
 	if err != nil {
 		return nil, err
 	}
 	result.BattleDSAddr = target.DSAddr
 	return result, nil
+}
+
+// issueBattleDSTicketV2 用 v2 签发器签实例绑定 battle 票(RS256,方案 B)。
+func (u *TicketUsecase) issueBattleDSTicketV2(
+	ctx context.Context,
+	playerID, matchID uint64,
+	regionID, cellID uint32,
+	target data.BattleTicketTarget,
+) (*DSTicketResult, error) {
+	h := plog.With(ctx)
+	if target.PodName == "" || target.InstanceUID == "" || target.InstanceEpoch == 0 || target.AllocationID == "" ||
+		(target.ReleaseTrack != auth.ReleaseTrackStable && target.ReleaseTrack != auth.ReleaseTrackCanary) {
+		h.Warnw("msg", "battle_ticket_v2_target_incomplete",
+			"player_id", playerID, "match_id", matchID, "pod", target.PodName,
+			"uid", target.InstanceUID, "epoch", target.InstanceEpoch, "allocation_id", target.AllocationID)
+		return nil, errcode.New(errcode.ErrUnavailable,
+			"battle ticket v2 requires complete DS instance identity from roster authority")
+	}
+	jti := uuid.NewString()
+	tok, expMs, err := u.v2Signer.SignBattleTicket(playerID, regionID, cellID, jti, auth.DSTicketTarget{
+		DSPodName:       target.PodName,
+		DSInstanceUID:   target.InstanceUID,
+		DSInstanceEpoch: target.InstanceEpoch,
+		ReleaseTrack:    target.ReleaseTrack,
+		MatchID:         matchID,
+		AllocationID:    target.AllocationID,
+	})
+	if err != nil {
+		h.Errorw("msg", "sign_ds_ticket_v2_failed", "err", err, "player_id", playerID, "match_id", matchID)
+		return nil, errcode.New(errcode.ErrInternal, "sign v2 battle ticket failed: %v", err)
+	}
+	h.Infow("msg", "ds_ticket_v2_issued",
+		"player_id", playerID, "ds_type", "battle", "match_id", matchID,
+		"jti", jti, "exp_ms", expMs, "region_id", regionID, "cell_id", cellID,
+		"pod", target.PodName, "allocation_id", target.AllocationID)
+	return &DSTicketResult{
+		Ticket:       tok,
+		JTI:          jti,
+		ExpiresAtMs:  expMs,
+		PlayerID:     playerID,
+		BattleDSAddr: target.DSAddr,
+	}, nil
 }
 
 func (u *TicketUsecase) issueDSTicketAtCell(
@@ -195,6 +308,10 @@ func (u *TicketUsecase) issueDSTicketAtCell(
 	targetID uint64,
 	regionID, cellID uint32,
 ) (*DSTicketResult, error) {
+	if u.rs256DSTicketProfileEnabled() {
+		return nil, errcode.New(errcode.ErrUnavailable,
+			"legacy HS256 DSTicket signing is disabled by the RS256 profile")
+	}
 	h := plog.With(ctx)
 	jti := uuid.NewString()
 	tok, expMs, err := u.signer.SignDSTicketWithCell(playerID, ds, targetID, regionID, cellID, jti)
@@ -246,7 +363,7 @@ func (u *TicketUsecase) verifyDSTicket(
 ) (*DSTicketClaims, error) {
 	h := plog.With(ctx)
 
-	claims, err := u.verifier.VerifyDSTicket(ticket)
+	claims, err := u.verifyDSTicketSignature(ticket)
 	if err != nil {
 		h.Warnw("msg", "verify_ds_ticket_failed", "err", err, "ds_pod", dsPodName)
 		return nil, err
@@ -260,7 +377,7 @@ func (u *TicketUsecase) verifyDSTicket(
 	if admission != nil {
 		var ok bool
 		admissionRepo, ok = u.jtiRepo.(data.AdmissionTicketJTIRepo)
-		if !ok || admissionRepo == nil || claims.ID == "" {
+		if !ok || admissionRepo == nil || claims.JTI == "" {
 			return nil, errcode.New(errcode.ErrUnavailable, "ticket admission replay authority unavailable")
 		}
 		var ownerErr error
@@ -271,7 +388,7 @@ func (u *TicketUsecase) verifyDSTicket(
 		if ownerErr != nil {
 			return nil, errcode.NewCause(errcode.ErrInvalidArg, ownerErr, "invalid admission marker owner")
 		}
-		markerStatus, err = admissionRepo.PeekAdmission(ctx, claims.ID, attemptOwner)
+		markerStatus, err = admissionRepo.PeekAdmission(ctx, claims.JTI, attemptOwner)
 		if err != nil {
 			return nil, err
 		}
@@ -285,7 +402,7 @@ func (u *TicketUsecase) verifyDSTicket(
 		}
 		if err != nil {
 			h.Warnw("msg", "ds_ticket_admission_binding_rejected", "err", err,
-				"player_id", claims.PlayerID(), "ds_pod", dsPodName, "ds_type", claims.DSType)
+				"player_id", claims.PlayerID, "ds_pod", dsPodName, "ds_type", claims.DSType)
 			return nil, err
 		}
 		if claims.DSType == string(auth.DSTypeHub) {
@@ -294,23 +411,55 @@ func (u *TicketUsecase) verifyDSTicket(
 				return nil, errcode.New(errcode.ErrUnavailable, "hub admission assignment checker unavailable")
 			}
 			stable := hubBindingFromClaims(claims)
+			if claims.Version == auth.DSTicketVersion2 {
+				// v2 不携带 callback credential；它只钉稳定实例/assignment，当前
+				// credential 已由 admission checker 证明，借它构造 assignment 终态门。
+				stable = hubBindingFromAdmission(*admission, claims.HubAssignmentID)
+			}
 			active := hubBindingFromAdmission(*admission, claims.HubAssignmentID)
-			if err := admissionChecker.CheckCurrentAdmission(ctx, claims.PlayerID(), stable, active,
+			if err := admissionChecker.CheckCurrentAdmission(ctx, claims.PlayerID, stable, active,
 				markerStatus == data.AdmissionMarkerMissing); err != nil {
 				return nil, err
 			}
 		}
+	} else if claims.Version == auth.DSTicketVersion2 && claims.DSType == string(auth.DSTypeBattle) {
+		if u.battleAuthorizer == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "battle ticket roster authority unavailable")
+		}
+		target, targetErr := u.battleAuthorizer.AuthorizeBattleTicket(ctx, claims.PlayerID, claims.MatchID)
+		if targetErr != nil {
+			return nil, targetErr
+		}
+		if dsPodName == "" || dsPodName != claims.DSPodName || target.PodName != claims.DSPodName ||
+			target.InstanceUID != claims.DSInstanceUID || target.InstanceEpoch != claims.DSInstanceEpoch ||
+			target.AllocationID != claims.AllocationID || target.ReleaseTrack != claims.ReleaseTrack {
+			return nil, errcode.New(errcode.ErrLoginTicketInvalid, "battle v2 ticket no longer matches roster authority")
+		}
 	} else if claims.DSType == string(auth.DSTypeHub) {
-		// off/legacy 保留原有票内 binding 兼容策略。
-		binding := hubBindingFromClaims(claims)
-		if binding.Complete() {
-			if err := u.checkHubAssignment(ctx, claims.PlayerID(), dsPodName, binding); err != nil {
+		if claims.Version == auth.DSTicketVersion2 {
+			checker, ok := u.assignmentChecker.(data.B1HubAssignmentChecker)
+			if !ok || checker == nil {
+				return nil, errcode.New(errcode.ErrUnavailable, "hub v2 assignment checker unavailable")
+			}
+			if dsPodName == "" || dsPodName != claims.DSPodName {
+				return nil, errcode.New(errcode.ErrUnauthorized, "hub v2 ticket target pod mismatch")
+			}
+			if err := checker.CheckCurrentB1(ctx, claims.PlayerID, claims.DSPodName, claims.DSInstanceUID,
+				claims.DSInstanceEpoch, claims.HubAssignmentID, claims.ReleaseTrack); err != nil {
 				return nil, err
 			}
-		} else if !binding.Empty() {
-			return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket has incomplete assignment binding")
-		} else if u.requireHubAssignmentBinding {
-			return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket missing required assignment binding")
+		} else {
+			// off/legacy 保留原有票内 binding 兼容策略。
+			binding := hubBindingFromClaims(claims)
+			if binding.Complete() {
+				if err := u.checkHubAssignment(ctx, claims.PlayerID, dsPodName, binding); err != nil {
+					return nil, err
+				}
+			} else if !binding.Empty() {
+				return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket has incomplete assignment binding")
+			} else if u.requireHubAssignmentBinding {
+				return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket missing required assignment binding")
+			}
 		}
 	}
 
@@ -319,33 +468,36 @@ func (u *TicketUsecase) verifyDSTicket(
 	// 这也封住 Peek 后验证期间刚好跨出 replay_until 的竞态。
 	if admission != nil {
 		status, markErr := admissionRepo.MarkUsedByAdmission(
-			ctx, claims.ID, attemptOwner, credentialHash, u.verifier.DSTicketTTL())
+			ctx, claims.JTI, attemptOwner, credentialHash, claims.ReplayTTL)
 		if markErr != nil {
 			h.Warnw("msg", "ds_ticket_admission_replay_blocked",
-				"jti", claims.ID, "player_id", claims.PlayerID(), "ds_pod", dsPodName, "err", markErr)
+				"jti", claims.JTI, "player_id", claims.PlayerID, "ds_pod", dsPodName, "err", markErr)
 			return nil, markErr
 		}
 		if status != data.AdmissionMarkerCreated && status != data.AdmissionMarkerExisting {
 			return nil, errcode.New(errcode.ErrLoginTicketReplayed, "ticket admission marker conflict")
 		}
-	} else if admission == nil && u.jtiRepo != nil && claims.ID != "" {
-		if err := u.jtiRepo.MarkUsed(ctx, claims.ID, u.verifier.DSTicketTTL()); err != nil {
+	} else if admission == nil && u.jtiRepo != nil && claims.JTI != "" {
+		if err := u.jtiRepo.MarkUsed(ctx, claims.JTI, claims.ReplayTTL); err != nil {
 			h.Warnw("msg", "ds_ticket_replay_blocked",
-				"jti", claims.ID, "player_id", claims.PlayerID(), "ds_pod", dsPodName, "err", err)
+				"jti", claims.JTI, "player_id", claims.PlayerID, "ds_pod", dsPodName, "err", err)
 			return nil, err
 		}
 	}
 
 	h.Infow("msg", "ds_ticket_verified",
-		"player_id", claims.PlayerID(),
+		"player_id", claims.PlayerID,
 		"ds_type", claims.DSType, "match_id", claims.MatchID,
-		"jti", claims.ID, "ds_pod", dsPodName)
+		"jti", claims.JTI, "ds_pod", dsPodName)
 
 	out := &DSTicketClaims{
-		PlayerID:        claims.PlayerID(),
+		Version:         claims.Version,
+		PlayerID:        claims.PlayerID,
 		MatchID:         claims.MatchID,
 		DSType:          claims.DSType,
-		JTI:             claims.ID,
+		JTI:             claims.JTI,
+		IssuedAtMs:      claims.IssuedAtMs,
+		ExpiresAtMs:     claims.ExpiresAtMs,
 		RegionID:        claims.RegionID,
 		CellID:          claims.CellID,
 		RoleID:          claims.RoleID,
@@ -356,24 +508,105 @@ func (u *TicketUsecase) verifyDSTicket(
 		DSCredentialJTI: claims.DSCredentialJTI,
 		HubAssignmentID: claims.HubAssignmentID,
 		DSWriterEpoch:   claims.DSWriterEpoch,
-	}
-	if claims.IssuedAt != nil {
-		out.IssuedAtMs = claims.IssuedAt.UnixMilli()
-	}
-	if claims.ExpiresAt != nil {
-		out.ExpiresAtMs = claims.ExpiresAt.UnixMilli()
+		DSInstanceEpoch: claims.DSInstanceEpoch,
+		AllocationID:    claims.AllocationID,
+		ReleaseTrack:    claims.ReleaseTrack,
 	}
 	return out, nil
+}
+
+func (u *TicketUsecase) verifyDSTicketSignature(ticket string) (*verifiedDSTicket, error) {
+	alg, err := auth.DSTicketAlgorithm(ticket)
+	if err != nil {
+		return nil, err
+	}
+	switch alg {
+	case "HS256":
+		// B1 不是按票据 alg 做迁移兼容：一旦本进程装了任一 v2 组件，玩家票就必须
+		// 全部是 RS256。SessionToken 仍由独立的 VerifySession HS256 路径处理。
+		if u.rs256DSTicketProfileEnabled() {
+			return nil, errcode.New(errcode.ErrLoginTicketInvalid,
+				"legacy HS256 DSTicket is disabled by the RS256 profile")
+		}
+		if u == nil || u.verifier == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "legacy DSTicket verifier unavailable")
+		}
+		claims, err := u.verifier.VerifyDSTicket(ticket)
+		if err != nil {
+			return nil, err
+		}
+		out := &verifiedDSTicket{
+			Version: 1, PlayerID: claims.PlayerID(), MatchID: claims.MatchID, DSType: claims.DSType,
+			JTI: claims.ID, ReplayTTL: u.verifier.DSTicketTTL(), RegionID: claims.RegionID,
+			CellID: claims.CellID, RoleID: claims.RoleID, DSPodName: claims.DSPodName,
+			DSInstanceUID: claims.DSInstanceUID, HubAssignmentID: claims.HubAssignmentID,
+			DSProtocolEpoch: claims.DSProtocolEpoch, DSCredentialGen: claims.DSCredentialGen,
+			DSCredentialJTI: claims.DSCredentialJTI, DSWriterEpoch: claims.DSWriterEpoch,
+		}
+		if claims.IssuedAt != nil {
+			out.IssuedAtMs = claims.IssuedAt.UnixMilli()
+		}
+		if claims.ExpiresAt != nil {
+			out.ExpiresAtMs = claims.ExpiresAt.UnixMilli()
+		}
+		return out, nil
+	case "RS256":
+		if u == nil || u.v2Verifier == nil {
+			return nil, errcode.New(errcode.ErrUnavailable, "DSTicket v2 verifier unavailable")
+		}
+		claims, err := u.v2Verifier.Verify(ticket)
+		if err != nil {
+			return nil, err
+		}
+		out := &verifiedDSTicket{
+			Version: auth.DSTicketVersion2, PlayerID: claims.PlayerID(), MatchID: claims.MatchID,
+			DSType: claims.DSType, JTI: claims.ID, ReplayTTL: auth.DSTicketMaxTTL,
+			RegionID: claims.RegionID, CellID: claims.CellID, RoleID: claims.RoleID,
+			DSPodName: claims.DSPodName, DSInstanceUID: claims.DSInstanceUID,
+			DSInstanceEpoch: claims.DSInstanceEpoch, ReleaseTrack: claims.ReleaseTrack,
+			AllocationID: claims.AllocationID, HubAssignmentID: claims.HubAssignmentID,
+		}
+		if claims.IssuedAt != nil {
+			out.IssuedAtMs = claims.IssuedAt.UnixMilli()
+		}
+		if claims.ExpiresAt != nil {
+			out.ExpiresAtMs = claims.ExpiresAt.UnixMilli()
+		}
+		return out, nil
+	default:
+		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "DSTicket algorithm unsupported")
+	}
 }
 
 // validateTicketAdmissionStrict 用于 marker 不存在的首次准入，必须在 MarkUsed 前把
 // 玩家票内完整 Hub credential 或 Battle match 与本次 caller active 精确绑定。
 // Hub 票还需把票内 assignment/active tuple 与调用者 active 精确绑定；Battle 票没有
 // assignment 字段，必须把 ticket.match_id 与 caller active.match_id 精确绑定。
-func validateTicketAdmissionStrict(claims *auth.DSTicketClaims, dsPodName string, admission data.DSAdmissionBinding) error {
+func validateTicketAdmissionStrict(claims *verifiedDSTicket, dsPodName string, admission data.DSAdmissionBinding) error {
 	if claims == nil || !admission.Complete() || dsPodName == "" || dsPodName != admission.PodName ||
 		claims.DSType != string(admission.DSType) {
 		return errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket caller type or pod mismatch")
+	}
+	if claims.Version == auth.DSTicketVersion2 {
+		if claims.DSPodName != admission.PodName || claims.DSInstanceUID != admission.InstanceUID ||
+			claims.DSInstanceEpoch != admission.ProtocolEpoch || claims.ReleaseTrack == "" ||
+			claims.ReleaseTrack != admission.ReleaseTrack {
+			return errcode.New(errcode.ErrLoginTicketInvalid, "v2 ticket stable instance binding mismatch")
+		}
+		switch admission.DSType {
+		case auth.DSTypeHub:
+			if claims.MatchID != 0 || admission.MatchID != 0 || claims.HubAssignmentID == "" {
+				return errcode.New(errcode.ErrLoginTicketInvalid, "hub v2 ticket assignment binding invalid")
+			}
+		case auth.DSTypeBattle:
+			if claims.MatchID == 0 || claims.MatchID != admission.MatchID || claims.AllocationID == "" ||
+				claims.AllocationID != admission.AllocationID || !slices.Contains(admission.PlayerIDs, claims.PlayerID) {
+				return errcode.New(errcode.ErrLoginTicketInvalid, "battle v2 ticket authority binding mismatch")
+			}
+		default:
+			return errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket admission type invalid")
+		}
+		return nil
 	}
 	switch admission.DSType {
 	case auth.DSTypeHub:
@@ -385,7 +618,7 @@ func validateTicketAdmissionStrict(claims *auth.DSTicketClaims, dsPodName string
 		}
 	case auth.DSTypeBattle:
 		if claims.MatchID == 0 || claims.MatchID != admission.MatchID ||
-			!slices.Contains(admission.PlayerIDs, claims.PlayerID()) {
+			!slices.Contains(admission.PlayerIDs, claims.PlayerID) {
 			return errcode.New(errcode.ErrLoginTicketInvalid, "battle ticket match does not match caller active credential")
 		}
 	default:
@@ -397,10 +630,15 @@ func validateTicketAdmissionStrict(claims *auth.DSTicketClaims, dsPodName string
 // validateTicketAdmissionRetry 仅在 Redis 已存在同 attempt_owner marker 时使用。
 // 普通 token 轮换允许 gen/jti/exp/kid/hash 变化；稳定身份(type/match/pod/UID/instance
 // epoch/writer)与 Hub assignment_id 仍必须一致。caller 当前 active/projection 已由 service 先验。
-func validateTicketAdmissionRetry(claims *auth.DSTicketClaims, dsPodName string, admission data.DSAdmissionBinding) error {
+func validateTicketAdmissionRetry(claims *verifiedDSTicket, dsPodName string, admission data.DSAdmissionBinding) error {
 	if claims == nil || !admission.Complete() || dsPodName == "" || dsPodName != admission.PodName ||
 		claims.DSType != string(admission.DSType) {
 		return errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket retry caller type or pod mismatch")
+	}
+	if claims.Version == auth.DSTicketVersion2 {
+		// B1 票据不绑定普通 callback credential，重试仍必须精确钉住稳定实例、
+		// allocation/assignment 与实际 release track。
+		return validateTicketAdmissionStrict(claims, dsPodName, admission)
 	}
 	switch admission.DSType {
 	case auth.DSTypeHub:
@@ -411,7 +649,7 @@ func validateTicketAdmissionRetry(claims *auth.DSTicketClaims, dsPodName string,
 		}
 	case auth.DSTypeBattle:
 		if claims.MatchID == 0 || claims.MatchID != admission.MatchID ||
-			!slices.Contains(admission.PlayerIDs, claims.PlayerID()) {
+			!slices.Contains(admission.PlayerIDs, claims.PlayerID) {
 			return errcode.New(errcode.ErrLoginTicketInvalid, "battle ticket retry match mismatch")
 		}
 	default:
@@ -420,7 +658,7 @@ func validateTicketAdmissionRetry(claims *auth.DSTicketClaims, dsPodName string,
 	return nil
 }
 
-func hubBindingFromClaims(claims *auth.DSTicketClaims) data.HubAssignmentBinding {
+func hubBindingFromClaims(claims *verifiedDSTicket) data.HubAssignmentBinding {
 	if claims == nil {
 		return data.HubAssignmentBinding{}
 	}
@@ -428,7 +666,7 @@ func hubBindingFromClaims(claims *auth.DSTicketClaims) data.HubAssignmentBinding
 		PodName: claims.DSPodName, InstanceUID: claims.DSInstanceUID,
 		ProtocolEpoch: claims.DSProtocolEpoch, CredentialGen: claims.DSCredentialGen,
 		CredentialJTI: claims.DSCredentialJTI, AssignmentID: claims.HubAssignmentID,
-		WriterEpoch: claims.DSWriterEpoch,
+		WriterEpoch: claims.DSWriterEpoch, ReleaseTrack: claims.ReleaseTrack,
 	}
 }
 
@@ -438,7 +676,7 @@ func hubBindingFromAdmission(admission data.DSAdmissionBinding, assignmentID str
 		ProtocolEpoch: admission.ProtocolEpoch, CredentialGen: admission.CredentialGen,
 		CredentialJTI: admission.CredentialJTI, AssignmentID: assignmentID,
 		WriterEpoch: admission.WriterEpoch, ExpMs: admission.ExpMs, Kid: admission.Kid,
-		TokenSHA256: admission.TokenSHA256,
+		TokenSHA256: admission.TokenSHA256, ReleaseTrack: admission.ReleaseTrack,
 	}
 }
 

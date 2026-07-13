@@ -21,6 +21,32 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 )
 
+// stableMetadata 让旧测试夹具显式满足线上 contract：Fleet 与 release-track label，
+// 以及同值 annotation 都来自 apiserver 响应。
+type stableMetadata map[string]any
+
+func (m stableMetadata) MarshalJSON() ([]byte, error) {
+	copyMap := make(map[string]any, len(m)+2)
+	for k, v := range m {
+		copyMap[k] = v
+	}
+	labels, _ := copyMap["labels"].(map[string]any)
+	if labels == nil {
+		labels = map[string]any{}
+	}
+	labels[fleetLabelKey] = "pandora-hub"
+	labels[releaseTrackMetadataKey] = "stable"
+	copyMap["labels"] = labels
+	annotations, _ := copyMap["annotations"].(map[string]any)
+	if annotations == nil {
+		annotations = map[string]any{}
+	}
+	annotations[releaseTrackMetadataKey] = "stable"
+	copyMap["annotations"] = annotations
+	type plain map[string]any
+	return json.Marshal(plain(copyMap))
+}
+
 func newTestFleetProvider(t *testing.T, serverURL string) *AgonesHubFleetProvider {
 	t.Helper()
 	cfg := conf.Config{}
@@ -60,13 +86,16 @@ func TestAgonesListShards_OK(t *testing.T) {
 		if !strings.Contains(sel, "agones.dev/fleet=pandora-hub") {
 			t.Errorf("labelSelector missing fleet: %s", sel)
 		}
+		if !strings.Contains(sel, "pandora.dev/release-track=stable") {
+			t.Errorf("labelSelector missing stable release track: %s", sel)
+		}
 		if !strings.Contains(sel, "pandora.dev/region=cn") {
 			t.Errorf("labelSelector missing region: %s", sel)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{
 				{ // Ready + 显式 shard-id/capacity 标签
-					"metadata": map[string]any{
+					"metadata": stableMetadata{
 						"name": "pandora-hub-aaa",
 						"labels": map[string]any{
 							"pandora.dev/shard-id": "7",
@@ -80,7 +109,7 @@ func TestAgonesListShards_OK(t *testing.T) {
 					},
 				},
 				{ // Ready 但无标签 → shard_id 哈希派生 / capacity fallback
-					"metadata": map[string]any{"name": "pandora-hub-bbb"},
+					"metadata": stableMetadata{"name": "pandora-hub-bbb"},
 					"status": map[string]any{
 						"state":   "Allocated",
 						"address": "10.0.0.6",
@@ -88,11 +117,11 @@ func TestAgonesListShards_OK(t *testing.T) {
 					},
 				},
 				{ // Scheduled(未就绪)→ 过滤
-					"metadata": map[string]any{"name": "pandora-hub-ccc"},
+					"metadata": stableMetadata{"name": "pandora-hub-ccc"},
 					"status":   map[string]any{"state": "Scheduled"},
 				},
 				{ // Ready 但无 address → 过滤
-					"metadata": map[string]any{"name": "pandora-hub-ddd"},
+					"metadata": stableMetadata{"name": "pandora-hub-ddd"},
 					"status":   map[string]any{"state": "Ready"},
 				},
 			},
@@ -122,6 +151,9 @@ func TestAgonesListShards_OK(t *testing.T) {
 	if s0.Region != "cn" {
 		t.Errorf("shard0 region: got %s want cn", s0.Region)
 	}
+	if s0.ReleaseTrack != "stable" {
+		t.Errorf("shard0 release_track: got %q want stable", s0.ReleaseTrack)
+	}
 
 	s1 := shards[1]
 	if s1.PodName != "pandora-hub-bbb" || s1.Addr != "10.0.0.6:7778" {
@@ -132,6 +164,51 @@ func TestAgonesListShards_OK(t *testing.T) {
 	}
 	if s1.Capacity != 500 {
 		t.Errorf("shard1 capacity: got %d want 500 (fallback)", s1.Capacity)
+	}
+}
+
+func TestAgonesListShards_DualFleetExactTrackMetadata(t *testing.T) {
+	selectors := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sel := r.URL.Query().Get("labelSelector")
+		track, fleet, pod := "stable", "pandora-hub-stable", "hub-stable-1"
+		if strings.Contains(sel, "release-track=canary") {
+			track, fleet, pod = "canary", "pandora-hub-canary", "hub-canary-1"
+		}
+		selectors[track]++
+		if !strings.Contains(sel, "agones.dev/fleet="+fleet) ||
+			!strings.Contains(sel, "pandora.dev/release-track="+track) {
+			t.Errorf("selector=%q fleet=%q track=%q", sel, fleet, track)
+		}
+		_ = json.NewEncoder(w).Encode(gsListResponse{Items: []gameServer{{
+			Metadata: gsMetadata{
+				Name:        pod,
+				Labels:      map[string]string{fleetLabelKey: fleet, releaseTrackMetadataKey: track},
+				Annotations: map[string]string{releaseTrackMetadataKey: track},
+			},
+			Status: gsStatus{State: "Ready", Address: "10.0.0.1", Ports: []gsPort{{Port: 7777}}},
+		}}})
+	}))
+	defer srv.Close()
+
+	cfg := conf.Config{}
+	cfg.Hub.DefaultCapacity = 500
+	cfg.Agones = conf.AgonesConf{
+		Enabled: true, APIServer: srv.URL, Namespace: "pandora", TokenPath: "-",
+		FleetName: "pandora-hub-stable", CanaryFleetName: "pandora-hub-canary",
+		CanaryPercent: 10, CanarySeed: "seed",
+	}
+	p, err := NewAgonesHubFleetProvider(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shards, err := p.ListShards(context.Background(), "global")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shards) != 2 || selectors["stable"] != 1 || selectors["canary"] != 1 ||
+		shards[0].ReleaseTrack != "stable" || shards[1].ReleaseTrack != "canary" {
+		t.Fatalf("selectors=%v shards=%+v", selectors, shards)
 	}
 }
 
@@ -163,14 +240,14 @@ func TestAgonesListShards_EnsureDSToken(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{
 				{ // 无 annotation → 签发
-					"metadata": map[string]any{"name": "hub-no-token"},
+					"metadata": stableMetadata{"name": "hub-no-token"},
 					"status": map[string]any{
 						"state": "Ready", "address": "10.0.0.1",
 						"ports": []map[string]any{{"name": "default", "port": 7777}},
 					},
 				},
 				{ // 有 token 且寿命充足 → 不动
-					"metadata": map[string]any{
+					"metadata": stableMetadata{
 						"name": "hub-fresh",
 						"annotations": map[string]any{
 							"pandora.dev/ds-token":        "tok-fresh",
@@ -183,7 +260,7 @@ func TestAgonesListShards_EnsureDSToken(t *testing.T) {
 					},
 				},
 				{ // 有 token 但剩余寿命不足 → 续期
-					"metadata": map[string]any{
+					"metadata": stableMetadata{
 						"name": "hub-stale",
 						"annotations": map[string]any{
 							"pandora.dev/ds-token":        "tok-stale",
@@ -248,7 +325,7 @@ func TestAgonesEnsureDSToken_EnforceResignWhenMissingGen(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{
 				{ // 寿命充足但**无 gen annotation**(legacy):enforce 下须强制重签
-					"metadata": map[string]any{
+					"metadata": stableMetadata{
 						"name": "hub-legacy-nogen",
 						"annotations": map[string]any{
 							"pandora.dev/ds-token":        "tok-legacy",
@@ -304,7 +381,7 @@ func TestAgonesEnsureDSToken_ResourceVersionConflictReread(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/gameservers/hub-cas"):
 			// 冲突后重读:对方已写入当前代际(gen=7)有效令牌 → 本副本应复用,不再重签。
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"metadata": map[string]any{
+				"metadata": stableMetadata{
 					"name":            "hub-cas",
 					"resourceVersion": "222",
 					"annotations": map[string]any{
@@ -322,7 +399,7 @@ func TestAgonesEnsureDSToken_ResourceVersionConflictReread(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"metadata": map[string]any{
+						"metadata": stableMetadata{
 							"name":            "hub-cas",
 							"resourceVersion": "111",
 							"annotations": map[string]any{

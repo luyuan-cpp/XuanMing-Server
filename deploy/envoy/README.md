@@ -37,8 +37,17 @@
 | `leaderboard_cluster` | leaderboard | host.docker.internal:50007 | h2c | route 15s |
 | `dialogue_cluster` | dialogue | host.docker.internal:50013 | h2c | route 15s |
 
-DS 面(`:8444` `pandora_ds_listener`,**不挂 jwt_authn**):DSTicket 只认证玩家→DS，不认证
-DS→后端；当前只有精确 method 白名单 + 网络边界，生产仍需 workload identity（见 agones-dev.md §5）。
+DS 面(`:8444` `pandora_ds_listener`,**不挂玩家面 jwt_authn**):DSTicket 只认证玩家→DS；
+DS→后端由 exact method 白名单、服务层 DS Bearer Guard 与 Redis active/projection 共同授权。
+NetworkPolicy 只是可达性收敛，生产仍须补 mTLS/ACL 信任根（见 agones-dev.md §5）。
+
+> 当前 Fleet 尚不能安全完成玩家 DSTicket 的本地验签：不得把玩家 HS256 签名 secret 直接发给
+> 不可信 DS。生产须先拍板 DSTicket 公钥 JWKS 或只走 online login authority；UE 对空/短/dev 占位
+> secret 会 fail-closed。该项与 DS callback credential 是两套不同密钥边界，不能混用。
+>
+> `:8444` 当前本地/集群清单为明文 gRPC-Web。Bearer/玩家票/GM 命令因此没有传输机密性与服务端身份；
+> NetworkPolicy 与应用 ACK 不能替代 mTLS。生产必须先完成 mesh STRICT mTLS 或等价 Envoy 双向 TLS、
+> 身份/SAN 绑定和 revisioned CA 轮换。
 
 | cluster | 内部服务 | 端口 | 协议 | timeout | DS 用途 |
 |---|---|---|---|---|---|
@@ -46,8 +55,9 @@ DS→后端；当前只有精确 method 白名单 + 网络边界，生产仍需 
 | `ds_allocator_cluster`   | ds_allocator  | host.docker.internal:50020 | h2c | route 15s | Battle DS 心跳 |
 | `locator_cluster`        | player_locator | host.docker.internal:50006 | h2c | route 15s | Hub DS SetLocation(HUB) |
 | `battle_result_cluster`  | battle_result | host.docker.internal:50022 | h2c | route 15s | Battle DS 同步结算上报 |
+| `login_cluster` | login | host.docker.internal:50001 | h2c | route 15s | DS 在线 `VerifyDSTicket`；`:8443` 对同 path 精确 403 |
 
-后续客户端业务服上线时可复制 cluster 块并按鉴权契约增加 route；DS 面新增回调必须逐个增加
+后续客户端业务服上线时可复制 cluster 块并按鉴权契约增加 route；DS 面新增方法必须逐个增加
 **精确 `path`**，禁止用 service `prefix` 扩大未鉴权攻击面。
 
 ---

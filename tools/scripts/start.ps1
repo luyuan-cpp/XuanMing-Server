@@ -23,8 +23,8 @@
   pwsh tools/scripts/start.ps1 -Mode docker
   pwsh tools/scripts/start.ps1 -Mode intranet                       # 内网测试服(全容器,绑内网 IP)
   pwsh tools/scripts/start.ps1 -Mode k8s                            # 本地 minikube + Agones 真 DS 联调
-  pwsh tools/scripts/start.ps1 -Mode online -Env test -TestKubeContext pandora-test -Registry registry.mycorp.com -Tag v1.2.3 -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 -HubDsImage registry.mycorp.com/pandora/hub-ds:v1.2.3 -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 测试服
-  pwsh tools/scripts/start.ps1 -Mode online -Env prod -ProdKubeContext pandora-prod -Registry registry.mycorp.com -Tag v1.2.3 -BattleDsImage registry.mycorp.com/pandora/battle-ds:v1.2.3 -HubDsImage registry.mycorp.com/pandora/hub-ds:v1.2.3 -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 生产(双重确认)
+  pwsh tools/scripts/start.ps1 -Mode online -Env test -TestKubeContext pandora-test -Registry registry.mycorp.com -Tag v1.2.3-b5a5a95 -BattleDsImage registry.mycorp.com/pandora/battle-ds@sha256:<digest> -HubDsImage registry.mycorp.com/pandora/hub-ds@sha256:<digest> -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 测试服
+  pwsh tools/scripts/start.ps1 -Mode online -Env prod -ProdKubeContext pandora-prod -Registry registry.mycorp.com -Tag v1.2.3-b5a5a95 -BattleDsImage registry.mycorp.com/pandora/battle-ds@sha256:<digest> -HubDsImage registry.mycorp.com/pandora/hub-ds@sha256:<digest> -DsGatewayAddr pandora-envoy.pandora.svc:8444  # 生产(双重确认)
   pwsh tools/scripts/start.ps1 -Mode docker -Down  # 停
   pwsh tools/scripts/start.ps1 -Status             # 看状态
   pwsh tools/scripts/start.ps1 -Check              # 只检查工具
@@ -76,9 +76,16 @@ param(
 
     # online 模式参数
     [string]$Registry,    # 镜像仓库地址,如 registry.mycorp.com
-    [string]$Tag,         # 镜像 tag,如 v1.2.3
-    [string]$BattleDsImage, # online:战斗 DS 镜像(必须是远端集群可拉取的完整镜像名)
-    [string]$HubDsImage,    # online:大厅 DS 镜像(必须是远端集群可拉取的完整镜像名)
+    [string]$Tag,         # online 不可变 tag,必须含 git SHA 段,如 v1.2.3-b5a5a95
+    [string]$BattleDsImage, # online:Stable 战斗 DS 镜像,最终会解析并固定为 repo@sha256:digest
+    [string]$HubDsImage,    # online:Stable 大厅 DS 镜像,最终会解析并固定为 repo@sha256:digest
+    [string]$CanaryBattleDsImage, # online:Canary 战斗 DS 独立镜像；启用 Battle 灰度时必填且 digest 必须不同
+    [string]$CanaryHubDsImage,    # online:Canary 大厅 DS 独立镜像；启用 Hub 灰度时必填且 digest 必须不同
+    [ValidateRange(0, 100)][int]$BattleCanaryPercent = 0,
+    [ValidateRange(0, 100)][int]$HubCanaryPercent = 0,
+    [ValidateRange(0, 1000)][int]$BattleCanaryReplicas = 1,
+    [ValidateRange(0, 1000)][int]$HubCanaryReplicas = 1,
+    [string]$CanarySeed = $env:PANDORA_DS_CANARY_SEED,
     [string]$DsGatewayAddr, # online:DS 回调入口(如 pandora-envoy.pandora.svc:8444)
     # online 安全映射:不同环境必须显式绑定各自 kube-context；也可用同名环境变量持久配置。
     [string]$TestKubeContext = $env:PANDORA_K8S_TEST_CONTEXT,
@@ -88,12 +95,30 @@ param(
     # 本地/线上同构默认 0;仅当线上把 DS 面挂到集群外 TLS 边缘时才显式传 1
     # (2026-07-10 已统一旧版互相冲突的默认值)。
     [string]$DsGatewayTls = '0',
+    [ValidateSet('', 'enforce')]
+    # online:Redis authority 只允许 enforce；permissive/off 不再是生产逃生口。
+    [string]$DsAuthMode = '',
+    [ValidateSet('', 'redis')]
+    [string]$DsAuthorityMode = '',
+    [string]$DsFenceEtcdEndpoints = $env:PANDORA_DS_AUTH_FENCE_ETCD_ENDPOINTS,
+    [string]$DsFenceKeysetRevision = $env:PANDORA_DS_AUTH_KEYSET_REVISION,
+    # DSTicket v2(方案 B,RS256)active kid:online 可选显式期望值；实际值永远从
+    # immutable Secret 私钥 + JWKS 顶层 active_kid 对账得到，不读 keys[0]。
+    [string]$DsTicketActiveKid = $env:PANDORA_DSTICKET_ACTIVE_KID,
+    # 玩家 DSTicket 公钥 keyset revision，和 DS callback auth 的 keyset revision 是两套独立值。
+    [string]$DsTicketKeysetRevision = $env:PANDORA_DSTICKET_KEYSET_REVISION,
     [switch]$BuildPush    # online:本地构建并推送 20 个镜像到 -Registry(远端发布动作,需人工授权)
 )
 
 $ErrorActionPreference = 'Stop'
 $ScriptDir   = $PSScriptRoot
 $ProjectRoot = (Resolve-Path "$ScriptDir/../..").Path
+. (Join-Path $ScriptDir 'lib/online_manifest_contract.ps1')
+. (Join-Path $ScriptDir 'lib/dsticket_keyset_contract.ps1')
+. (Join-Path $ScriptDir 'lib/dsticket_rotation_contract.ps1')
+# rotation contract 自身在加载期开启 StrictMode；start.ps1 是历史运维入口，
+# 未全面满足 StrictMode Latest，因此只共享其纯函数契约后恢复本脚本既有语义。
+Set-StrictMode -Off
 $ComposeInfra    = Join-Path $ProjectRoot 'deploy/docker-compose.dev.yml'
 $ComposeServices = Join-Path $ProjectRoot 'deploy/docker-compose.services.yml'
 $EnvFile         = Join-Path $ProjectRoot 'deploy/env/dev.env'
@@ -112,6 +137,999 @@ function Write-Step($m) { Write-Host "`n===== $m =====" -ForegroundColor Magenta
 # 非 0 直接抛错中止,避免「某步骤失败但脚本继续往下跑、最后还打印 [OK]」的假成功。
 function Assert-LastExit([string]$what) {
     if ($LASTEXITCODE -ne 0) { throw "$what 失败(exit=$LASTEXITCODE)" }
+}
+
+# pandora-config Secret 只收录 20 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
+# OutDir 中其它运维文件也不应被 --from-file=<目录> 意外灌进 Pod Secret。
+function Apply-PandoraConfigSecret {
+    param(
+        [string]$KubeContext,
+        [string]$ConfigDir = $ClusterEtcDir,
+        [string]$Action
+    )
+
+    $kubectlContextArgs = @('--context', $KubeContext)
+    $expectedNames = @()
+    $fileArgs = @(
+        foreach ($svc in (Get-ServiceList)) {
+            $name = "$($svc.Name).yaml"
+            $expectedNames += $name
+            $path = Join-Path $ConfigDir $name
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "pandora-config Secret 缺少必需配置:$path"
+            }
+            "--from-file=$name=$path"
+        }
+    )
+    if ($fileArgs.Count -ne 20) { throw "pandora-config Secret 期望 20 份服务配置,实际=$($fileArgs.Count)" }
+
+    $manifest = @(kubectl @KubectlContextArgs create secret generic pandora-config @fileArgs `
+        -n $K8sNamespace --dry-run=client -o yaml)
+    Assert-LastExit "$Action(create secret manifest)"
+    $manifest | kubectl @KubectlContextArgs apply -f -
+    Assert-LastExit $Action
+
+    # client-side apply 遇到缺 last-applied annotation 的人工对象时可能保留旧 data key；回读服务端
+    # 严格核对，任何多余/缺失项都阻断 rollout，避免把陈旧配置伪装成“精确 20 文件”。
+    $secret = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'secret/pandora-config', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '回读 pandora-config Secret'
+    $actualNames = if ($null -eq $secret.data) { @() } else { @($secret.data.PSObject.Properties.Name | Sort-Object) }
+    $keyDiff = @(Compare-Object -ReferenceObject @($expectedNames | Sort-Object) -DifferenceObject $actualNames -CaseSensitive)
+    if ($keyDiff.Count -ne 0) {
+        $missing = @($keyDiff | Where-Object SideIndicator -eq '<=' | ForEach-Object InputObject)
+        $extra = @($keyDiff | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject)
+        throw "pandora-config Secret 服务端 key 集不精确:缺少=[$($missing -join ', ')],多余=[$($extra -join ', ')]。" +
+              '请先清理漂移 key 后重跑；当前不会继续 rollout。'
+    }
+}
+
+function Get-KubectlJsonObject {
+    param(
+        [string]$KubeContext,
+        [string[]]$Arguments,
+        [string]$Action
+    )
+
+    # stderr 不并入 JSON，避免 kubectl warning 污染解析；退出码仍严格检查。
+    $raw = @(& kubectl --context $KubeContext @Arguments 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "$Action 失败(exit=$LASTEXITCODE)" }
+    $text = (($raw | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { throw "$Action 返回空 JSON" }
+    try { return ($text | ConvertFrom-Json -ErrorAction Stop) }
+    catch { throw "$Action 返回非法 JSON:$($_.Exception.Message)" }
+}
+
+# ===== DSTicket v2(方案 B)本地 dev 钥料自举 =====
+# 生成/复用 dev RSA 钥对(私钥落 run/,不入版本库,见 tools/dsticketkeys 头注),并把:
+#   - 私钥 → immutable Secret pandora-dsticket-signer-r1(ns pandora，四个签发方经 services.yaml
+#     挂到稳定路径 /run/secrets/pandora-dsticket)；
+#   - 公钥 JWKS → 两份同 hash immutable ConfigMap pandora-dsticket-jwks-r1：default 给 Fleet，
+#     pandora 给 Login 的兼容/诊断 verifier。
+# 返回由 private.pem 推导、并与 JWKS 中同 kid 公钥参数对账后的 active kid；绝不依赖 keys[0]。
+# 线上不走本函数:真钥对由受控密钥管线生成,按 deploy/k8s/agones/15-dsticket-jwks.yaml 的纪律建
+# 不可变 Secret/ConfigMap；dev 同样只 create missing + 回读对账，绝不原地覆盖。
+function Ensure-DsTicketDevKeyMaterial {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $kubectlContextArgs = @('--context', $KubeContext)
+    $keyDir = Join-Path $ProjectRoot 'run/cluster/dsticket'
+    $privPath = Join-Path $keyDir 'private.pem'
+    $jwksPath = Join-Path $keyDir 'jwks.json'
+    if (-not ((Test-Path -LiteralPath $privPath -PathType Leaf) -and (Test-Path -LiteralPath $jwksPath -PathType Leaf))) {
+        # 半套残留(只有其一)时 dsticketkeys 会拒绝覆盖 —— 这是刻意的:密钥文件不自动删,
+        # 请人工确认后移走残件再重跑(防脚本静默换钥导致在跑集群票据全废)。
+        Write-Info "生成 DSTicket v2 dev 钥对(run/cluster/dsticket,revision=1)..."
+        Push-Location $ProjectRoot
+        try {
+            # Native stdout must not escape this function: callers assign the sole return value as
+            # DsTicketActiveKid.  A fresh bootstrap otherwise returns [generator output, kid] and
+            # PowerShell cannot bind that array to gen_cluster_config.ps1's string parameter.
+            & go run ./tools/dsticketkeys -out $keyDir -revision 1 | Out-Host
+            Assert-LastExit 'dsticketkeys 生成 dev 钥对'
+        } finally {
+            Pop-Location
+        }
+    }
+    $privatePem = Get-Content -LiteralPath $privPath -Raw
+    $jwksText = Get-Content -LiteralPath $jwksPath -Raw
+    $keyContract = Get-PandoraDSTicketKeyMaterialContract -PrivateKeyPem $privatePem -JwksText $jwksText -ExpectedRevision 1
+    $kid = $keyContract.ActiveKid
+    $keysetAnnotations = [ordered]@{
+        'pandora.dev/dsticket-active-kid' = $keyContract.ActiveKid
+        'pandora.dev/dsticket-keyset-revision' = '1'
+        'pandora.dev/dsticket-jwks-sha256' = $keyContract.JwksSha256
+    }
+    $signerAnnotations = [ordered]@{
+        'pandora.dev/dsticket-signer-kid' = $keyContract.SignerKid
+        'pandora.dev/dsticket-signer-revision' = '1'
+        'pandora.dev/dsticket-private-pem-sha256' = $keyContract.PrivatePemSha256
+    }
+    $labels = [ordered]@{
+        'app.kubernetes.io/part-of' = 'pandora'
+        'app.kubernetes.io/component' = 'dsticket-keyset'
+    }
+    function New-LocalDSTicketObjectIfMissing([object]$Object, [string]$KindName, [string]$Namespace) {
+        $existing = @(& kubectl @kubectlContextArgs get $KindName -n $Namespace --ignore-not-found -o name 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "读取 $Namespace/$KindName 失败:$($existing -join [Environment]::NewLine)" }
+        if ([string]::IsNullOrWhiteSpace((($existing | ForEach-Object { $_.ToString() }) -join '').Trim())) {
+            $json = $Object | ConvertTo-Json -Depth 20 -Compress
+            $created = @($json | & kubectl @kubectlContextArgs create -f - 2>&1)
+            if ($LASTEXITCODE -ne 0) { throw "create-only 创建 $Namespace/$KindName 失败:$($created -join [Environment]::NewLine)" }
+        }
+    }
+
+    # 开发集群也遵守 create-only + immutable：已有对象绝不 apply/patch，防止重跑
+    # start 时静默换钥。ConfigMap 是 namespaced 对象，default 供 Fleet/DS，pandora 供 Login verifier；
+    # 两份公钥对象的内容/hash/active kid 必须完全相同。
+    $secretObject = [ordered]@{
+        apiVersion = 'v1'; kind = 'Secret'; immutable = $true; type = 'Opaque'
+        metadata = [ordered]@{ name = 'pandora-dsticket-signer-r1'; namespace = $K8sNamespace; labels = $labels; annotations = $signerAnnotations }
+        data = [ordered]@{ 'private.pem' = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($privatePem)) }
+    }
+    New-LocalDSTicketObjectIfMissing $secretObject 'secret/pandora-dsticket-signer-r1' $K8sNamespace
+    foreach ($namespace in @('default', $K8sNamespace)) {
+        $cmObject = [ordered]@{
+            apiVersion = 'v1'; kind = 'ConfigMap'; immutable = $true
+            metadata = [ordered]@{ name = 'pandora-dsticket-jwks-r1'; namespace = $namespace; labels = $labels; annotations = $keysetAnnotations }
+            data = [ordered]@{ 'jwks.json' = $jwksText }
+        }
+        New-LocalDSTicketObjectIfMissing $cmObject 'configmap/pandora-dsticket-jwks-r1' $namespace
+    }
+    try {
+        $liveSecret = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'secret/pandora-dsticket-signer-r1', '-n', $K8sNamespace, '-o', 'json') -Action '回读 dev DSTicket revisioned signer 私钥'
+        foreach ($namespace in @('default', $K8sNamespace)) {
+            $liveCM = Get-KubectlJsonObject -KubeContext $KubeContext `
+                -Arguments @('get', 'configmap/pandora-dsticket-jwks-r1', '-n', $namespace, '-o', 'json') -Action "回读 $namespace DSTicket JWKS"
+            $null = Assert-PandoraDSTicketKubernetesObjects -SecretObject $liveSecret -ConfigMapObject $liveCM `
+                -ExpectedRevision 1 -ExpectedActiveKid $kid -ExpectedConfigMapNamespace $namespace
+        }
+    } catch {
+        throw "本地集群存在旧版/漂移的 DSTicket 对象，拒绝原地覆盖:$($_.Exception.Message) 请显式用 -Mode k8s -Reset 重建开发集群。"
+    }
+    Write-Ok "DSTicket v2 dev 钥料就绪(kid=$kid,signer=r1,keyset=r1；immutable JWKS=default+pandora)。"
+    return $kid
+}
+
+# 本地 minikube 的 DS callback Model-B 基线。业务配置使用集群 DNS
+# etcd.pandora.svc:2379；启动器从宿主做线性预检/CAS 时通过临时 port-forward。
+$script:LocalDsFenceEndpoint = 'etcd.pandora.svc:2379'
+$script:LocalDsFenceKeysetRevision = 'pandora-ds-auth-v2-local-r1'
+
+function Test-MinikubeProfileExists {
+    param([Parameter(Mandatory = $true)][string]$Profile)
+    $lines = @(& minikube profile list -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "无法列出 minikube profile，不能安全判定是否 fresh cluster:$($lines -join [Environment]::NewLine)"
+    }
+    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { return $false }
+    try { $profiles = $text | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "minikube profile list 返回非法 JSON:$($_.Exception.Message)" }
+    foreach ($entry in @($profiles.valid) + @($profiles.invalid)) {
+        if ([string]$entry.Name -ceq $Profile) { return $true }
+    }
+    return $false
+}
+
+function Invoke-WithLocalEtcdPortForward {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][scriptblock]$Action
+    )
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    try { $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port }
+    finally { $listener.Stop() }
+    $stdout = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-etcd-pf-' + [guid]::NewGuid().ToString('N') + '.out')
+    $stderr = $stdout + '.err'
+    $proc = $null
+    try {
+        $proc = Start-Process -FilePath 'kubectl' -ArgumentList @(
+            '--context', $KubeContext, '-n', $K8sNamespace, 'port-forward', 'service/etcd', "${port}:2379"
+        ) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        $ready = $false
+        $deadline = [DateTime]::UtcNow.AddSeconds(15)
+        do {
+            if ($proc.HasExited) { break }
+            $client = [System.Net.Sockets.TcpClient]::new()
+            try {
+                $task = $client.ConnectAsync([System.Net.IPAddress]::Loopback, $port)
+                if ($task.Wait(250) -and $client.Connected) { $ready = $true; break }
+            } catch { } finally { $client.Dispose() }
+            Start-Sleep -Milliseconds 200
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if (-not $ready) {
+            $detail = @(
+                if (Test-Path $stdout) { Get-Content $stdout -Raw }
+                if (Test-Path $stderr) { Get-Content $stderr -Raw }
+            ) -join [Environment]::NewLine
+            throw "etcd port-forward 未就绪(context=$KubeContext):$detail"
+        }
+        & $Action "127.0.0.1:$port"
+    } finally {
+        if ($null -ne $proc -and -not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            try { $proc.WaitForExit(5000) | Out-Null } catch { }
+        }
+        Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-LocalDsAuthBaseline {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][bool]$AllowFreshBootstrap
+    )
+    Invoke-WithLocalEtcdPortForward -KubeContext $KubeContext -Action {
+        param($endpoint)
+        Push-Location $ProjectRoot
+        try {
+            $readLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint --min-epoch 1 --max-epoch 2 2>&1)
+            $readExit = $LASTEXITCODE
+            if ($readExit -eq 0) {
+                $readLines | ForEach-Object { Write-Host $_ }
+                return
+            }
+            $readText = ($readLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+            if ($readText -notmatch '(?i)required epoch missing') {
+                throw "DS auth baseline 线性读失败（非 missing，禁止 bootstrap）:$readText"
+            }
+            if (-not $AllowFreshBootstrap) {
+                throw "DS auth required_writer_epoch 缺失；当前不是 fresh minikube，只读预检拒绝把 missing 当 1。请审计状态或显式 -Reset。"
+            }
+            Write-Info '检测到 fresh minikube 且 required_writer_epoch 缺失，执行唯一一次 CAS bootstrap=1...'
+            # dsauth-activate 在 bootstrap 分支前仍会校验这两个必填参数；它们不参与
+            # BootstrapRequired 的 CAS，此处只给固定 dev 审计占位，不作为生产 capability 证明。
+            $devDigest = 'sha256:' + ('0' * 64)
+            $bootLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                --keyset-revision $script:LocalDsFenceKeysetRevision --allowed-image-digests $devDigest `
+                --bootstrap --apply 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+                throw "fresh minikube required_writer_epoch CAS bootstrap 失败:$($bootLines -join [Environment]::NewLine)"
+            }
+            $verifyLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint --min-epoch 1 --max-epoch 1 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+                throw "bootstrap 后无法线性证明 required_writer_epoch=1:$($verifyLines -join [Environment]::NewLine)"
+            }
+            $bootLines | ForEach-Object { Write-Host $_ }
+            $verifyLines | ForEach-Object { Write-Host $_ }
+        } finally { Pop-Location }
+    }
+}
+
+function Assert-NoLegacyDsFleets {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [switch]$LocalDevelopment
+    )
+    $legacy = [System.Collections.Generic.List[string]]::new()
+    foreach ($name in @('pandora-battle', 'pandora-hub')) {
+        $lines = @(& kubectl --context $KubeContext get "fleet/$name" -n default --ignore-not-found -o name 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "读取 legacy Fleet/$name 失败:$($lines -join [Environment]::NewLine)" }
+        if (-not [string]::IsNullOrWhiteSpace((($lines | ForEach-Object { $_.ToString() }) -join '').Trim())) {
+            $legacy.Add($name)
+        }
+    }
+    if ($legacy.Count -eq 0) { return }
+    if ($LocalDevelopment) {
+        throw "检测到旧单轨 Fleet:$($legacy -join ',')。为防新旧 allocator 同时分配，本地不自动删除在跑 DS；请用 -Mode k8s -Reset 显式重建。"
+    }
+    throw "检测到旧单轨 Fleet:$($legacy -join ',')，拒绝与 Stable/Canary 四 Fleet 静默并存。" +
+          'Battle 只能在确认无 Allocated 后删除；Hub 本仓没有可机械证明玩家已排空的查询，发布脚本永不自动删除。' +
+          '请先走现有 drain/迁移流程，保存审计证据并由运维显式移除 legacy Fleet，然后重跑；本次尚未 apply/push。'
+}
+
+function Assert-NoLegacyDSTicketSignerSecret {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [switch]$LocalDevelopment
+    )
+    $lines = @(& kubectl --context $KubeContext get secret/pandora-dsticket -n $K8sNamespace `
+        --ignore-not-found -o name 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "读取 legacy Secret/pandora-dsticket 失败:$($lines -join [Environment]::NewLine)"
+    }
+    if ([string]::IsNullOrWhiteSpace((($lines | ForEach-Object { $_.ToString() }) -join '').Trim())) { return }
+    if ($LocalDevelopment) {
+        throw '检测到 legacy Secret/pandora-dsticket；新契约只接受 pandora-dsticket-signer-rN。为防旧私钥残留或误挂载，请用 -Mode k8s -Reset 显式重建本地集群。'
+    }
+    throw '检测到 legacy Secret/pandora-dsticket；online 发布拒绝让非 revisioned 私钥与 pandora-dsticket-signer-rN 并存。请审计迁移并由运维显式移除旧对象后重跑；本次尚未 push/apply。'
+}
+
+function Assert-ExistingLocalEtcdPersistence {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $lines = @(& kubectl --context $KubeContext get deployment/etcd -n $K8sNamespace --ignore-not-found -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "读取本地 Deployment/etcd 失败:$($lines -join [Environment]::NewLine)" }
+    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { return }
+    try { $deploy = $text | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "Deployment/etcd 返回非法 JSON:$($_.Exception.Message)" }
+    $container = @($deploy.spec.template.spec.containers | Where-Object name -eq 'etcd')
+    $mount = @($container.volumeMounts | Where-Object { $_.name -ceq 'data' -and $_.mountPath -ceq '/etcd-data' })
+    $volume = @($deploy.spec.template.spec.volumes | Where-Object {
+        $_.name -ceq 'data' -and [string]$_.persistentVolumeClaim.claimName -ceq 'etcd-data'
+    })
+    if ([string]$deploy.spec.strategy.type -cne 'Recreate' -or $container.Count -ne 1 -or
+        $mount.Count -ne 1 -or $volume.Count -ne 1) {
+        throw '现有本地 etcd 仍是旧版非持久布署；直接 apply PVC 会重建 Pod 并丢失 required_writer_epoch/capability。' +
+              '已在任何集群写入前中止。本地可用 -Mode k8s -Reset 显式重建；若必须保留现场，先做 etcd snapshot + restore 到 PVC 并审计 required epoch，禁止自动 missing=>1。'
+    }
+}
+
+function Wait-KubeApiServerReady {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [ValidateRange(1, 60)][int]$TimeoutSeconds = 45
+    )
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $lines = @(& kubectl --context $KubeContext get --raw=/readyz 2>&1)
+        $readExit = $LASTEXITCODE
+        $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+        if ($readExit -eq 0 -and $text -ceq 'ok') {
+            Write-Ok "kube-apiserver readyz 已就绪(context=$KubeContext)。"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "kube-apiserver 在 ${TimeoutSeconds}s 内未通过 /readyz；Resume 尚未等待旧业务 Ready、apply 或 rollout。"
+}
+
+function Get-RegistryImageDescriptor {
+    param([Parameter(Mandatory = $true)][string]$Reference)
+    $lines = @(& docker buildx imagetools inspect $Reference 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "读取 registry manifest 失败:$Reference;$($lines -join [Environment]::NewLine)"
+    }
+    $text = ($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    return ConvertFrom-PandoraImagetoolsInspect -Reference $Reference -Output $text
+}
+
+function Assert-RemoteImageTagAbsent {
+    param([Parameter(Mandatory = $true)][string]$Reference)
+    $lines = @(& docker buildx imagetools inspect $Reference 2>&1)
+    if ($LASTEXITCODE -eq 0) {
+        throw "不可变发布 tag 已存在，禁止覆盖:$Reference"
+    }
+    $text = ($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    if (-not (Test-PandoraManifestNotFoundOutput -Output $text)) {
+        throw "无法证明远端 tag 不存在（可能是鉴权/TLS/网络错误），禁止继续 push:$Reference;$($lines -join [Environment]::NewLine)"
+    }
+}
+
+function Push-ImageAndResolveDigest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Local,
+        [Parameter(Mandatory = $true)][string]$Remote
+    )
+    docker tag $Local $Remote
+    Assert-LastExit "docker tag $Local -> $Remote"
+    $pushLines = @(& docker push $Remote 2>&1)
+    $pushExit = $LASTEXITCODE
+    foreach ($line in $pushLines) { Write-Host $line }
+    if ($pushExit -ne 0) { throw "推送失败:$Remote" }
+    $pushText = ($pushLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    $pushDigest = Get-PandoraPushDigest -Output $pushText
+    $registry = Get-RegistryImageDescriptor $Remote
+    if ($registry.Digest -cne $pushDigest) {
+        throw "push digest 与 registry 回读不一致:$Remote push=$pushDigest registry=$($registry.Digest)"
+    }
+    return $registry
+}
+
+function Assert-CleanOnlineReleaseSource {
+    $lines = @(& git -C $ProjectRoot status --porcelain=v1 --untracked-files=normal 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "online BuildPush 无法读取 git worktree 状态:$($lines -join [Environment]::NewLine)" }
+    $text = ($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    Assert-PandoraCleanGitStatus -Output $text
+}
+
+function Assert-LocalImageRevision {
+    param(
+        [Parameter(Mandatory = $true)][string]$Reference,
+        [Parameter(Mandatory = $true)][string]$Expected
+    )
+    $lines = @(& docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' $Reference 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "无法读取本地镜像 provenance:$Reference;$($lines -join [Environment]::NewLine)" }
+    $actual = (($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
+    Assert-PandoraImageRevision -Reference $Reference -Actual $actual -Expected $Expected
+}
+
+function Invoke-KubectlClientContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$Manifest,
+        [Parameter(Mandatory = $true)][string]$JsonPath,
+        [Parameter(Mandatory = $true)][string]$Action
+    )
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-contract-' + [guid]::NewGuid().ToString('N') + '.yaml')
+    try {
+        [System.IO.File]::WriteAllText($tmp, $Manifest, [System.Text.UTF8Encoding]::new($false))
+        $lines = @(& kubectl create --dry-run=client --validate=false -f $tmp -o "jsonpath=$JsonPath" 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "$Action 结构化解析失败:$($lines -join [Environment]::NewLine)" }
+        return @($lines | ForEach-Object { $_.ToString() })
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-PandoraWorkloadContractRows {
+    param([Parameter(Mandatory = $true)][string]$Manifest)
+    $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.containers[*].image}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\n"}'
+    return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'online Deployment manifest')
+}
+
+function Get-PandoraDSTicketSignerContractRows {
+    param([Parameter(Mandatory = $true)][string]$Manifest)
+    $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket")].secret.secretName}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket-jwks")].configMap.name}{"\n"}'
+    return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'online DSTicket signer manifest')
+}
+
+function Get-OnlineOptionalKubectlJsonObject {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$Action
+    )
+    $raw = @(& kubectl --context $KubeContext @Arguments 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "$Action 失败(exit=$LASTEXITCODE)" }
+    $text = (($raw | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+    try { return ($text | ConvertFrom-Json -ErrorAction Stop) }
+    catch { throw "$Action 返回非法 JSON:$($_.Exception.Message)" }
+}
+
+function Get-OnlineDSTicketKeyMaterialContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][ValidateRange(1, 2147483647)][int]$Revision,
+        [AllowEmptyString()][string]$ExpectedActiveKid = '',
+        [AllowNull()]$SignerObject = $null
+    )
+    $dstTicketSignerSecretName = "pandora-dsticket-signer-r$Revision"
+    $signer = $SignerObject
+    if ($null -eq $signer) {
+        $signer = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "secret/$dstTicketSignerSecretName", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "读取 immutable DSTicket signer Secret/$dstTicketSignerSecretName"
+    }
+    $jwksName = "pandora-dsticket-jwks-r$Revision"
+    $contract = $null
+    foreach ($namespace in @('default', $K8sNamespace)) {
+        $jwks = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "configmap/$jwksName", '-n', $namespace, '-o', 'json') `
+            -Action "读取 $namespace immutable DSTicket 公钥 JWKS ConfigMap"
+        $current = Assert-PandoraDSTicketKubernetesObjects -SecretObject $signer `
+            -ConfigMapObject $jwks -ExpectedRevision $Revision `
+            -ExpectedActiveKid $ExpectedActiveKid -ExpectedConfigMapNamespace $namespace
+        if ($null -ne $contract -and
+            ($current.ActiveKid -cne $contract.ActiveKid -or $current.JwksSha256 -cne $contract.JwksSha256)) {
+            throw 'default(DS) 与 pandora(Login) namespace 的 DSTicket JWKS 副本不一致。'
+        }
+        $contract = $current
+    }
+    return $contract
+}
+
+# 一次读取普通发布所需的完整 DSTicket 集群快照。不用 field selector 排除
+# deletionTimestamp；terminating Pod/GameServer/marker 依然可以签票或验票，必须进契约。
+function Get-OnlineLiveDSTicketRevisionRows {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+
+    $expectedSigners = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
+    $expectedFleets = @('pandora-battle-stable', 'pandora-battle-canary', 'pandora-hub-stable', 'pandora-hub-canary')
+    $namespace = Get-OnlineOptionalKubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "namespace/$K8sNamespace", '--ignore-not-found', '-o', 'json') `
+        -Action "读取 Namespace/$K8sNamespace"
+    if ($null -ne $namespace -and -not [string]::IsNullOrWhiteSpace([string]$namespace.metadata.deletionTimestamp)) {
+        throw "Namespace/$K8sNamespace 正在终止，拒绝普通发布。"
+    }
+
+    $allDeployments = @()
+    $pandoraPods = @()
+    $allReplicaSets = @()
+    $activationMarkers = @()
+    $terminalMarkers = @()
+    $fixedConfig = $null
+    if ($null -ne $namespace) {
+        $deploymentList = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'deployments', '-n', $K8sNamespace, '-o', 'json') -Action '读取全部 pandora Deployment'
+        $allDeployments = @($deploymentList.items)
+        $podList = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-o', 'json') -Action '读取全部 pandora Pod（含 terminating）'
+        $pandoraPods = @($podList.items)
+        $replicaSetList = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'replicasets', '-n', $K8sNamespace, '-o', 'json') `
+            -Action '读取全部 pandora ReplicaSet（含 terminating）'
+        $allReplicaSets = @($replicaSetList.items)
+        $configMaps = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'configmaps', '-n', $K8sNamespace, '-o', 'json') `
+            -Action '读取全部 pandora ConfigMap（核对 DSTicket marker 集）'
+        foreach ($configMap in @($configMaps.items)) {
+            $name = [string]$configMap.metadata.name
+            $component = [string]$configMap.metadata.labels.'app.kubernetes.io/component'
+            $looksLikeMarker = $name -cmatch '^pandora-dsticket-(?:activation-signer-r|retired-r)' -or
+                $component -ceq 'dsticket-rotation-audit'
+            if (-not $looksLikeMarker) { continue }
+            if (-not [string]::IsNullOrWhiteSpace([string]$configMap.metadata.deletionTimestamp)) {
+                throw "DSTicket marker ConfigMap/$name 正在终止，拒绝普通发布。"
+            }
+            if ($name -cmatch '^pandora-dsticket-activation-signer-r[1-9][0-9]*$') {
+                $activationMarkers += $configMap
+            } elseif ($name -cmatch '^pandora-dsticket-retired-r[1-9][0-9]*$') {
+                $terminalMarkers += $configMap
+            } else {
+                throw "未知/漂移的 DSTicket marker ConfigMap/$name，拒绝普通发布。"
+            }
+        }
+        $fixedConfig = Get-OnlineOptionalKubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'secret/pandora-config', '-n', $K8sNamespace, '--ignore-not-found', '-o', 'json') `
+            -Action '读取 fixed Secret/pandora-config'
+    }
+
+    $fleetList = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'fleets.agones.dev', '-n', 'default', '-o', 'json') `
+        -Action '读取全部 Agones Fleet'
+    # parent controller 必须在 RS/GSS/Pod 尚未生成前就完成全量判定；相关但不属于
+    # 四 signer/四 Fleet 的 paused/zero 对象不能留到异步补出子对象后才发现。
+    $controllerScope = Assert-PandoraOrdinaryDSTicketControllerScope `
+        -DeploymentObjects $allDeployments -FleetObjects @($fleetList.items)
+    $deploymentObjects = @($controllerScope.DeploymentObjects)
+    $fleetObjects = @($controllerScope.FleetObjects)
+    $deploymentRows = [System.Collections.Generic.List[string]]::new()
+    foreach ($service in $expectedSigners) {
+        $matches = @($deploymentObjects | Where-Object { [string]$_.metadata.name -ceq $service })
+        if ($matches.Count -eq 0) { continue }
+        if ($matches.Count -ne 1) { throw "Deployment/$service 数量=$($matches.Count)，拒绝普通发布。" }
+        $volumes = @($matches[0].spec.template.spec.volumes)
+        $configRefs = @($volumes | Where-Object { [string]$_.name -ceq 'conf' } | ForEach-Object { [string]$_.secret.secretName })
+        $signerRefs = @($volumes | Where-Object { [string]$_.name -ceq 'dsticket' } | ForEach-Object { [string]$_.secret.secretName })
+        $jwksRefs = @($volumes | Where-Object { [string]$_.name -ceq 'dsticket-jwks' } | ForEach-Object { [string]$_.configMap.name })
+        $deploymentRows.Add("$service`t$($configRefs -join ',')`t$($signerRefs -join ',')`t$($jwksRefs -join ',')")
+    }
+
+    $fleetRows = [System.Collections.Generic.List[string]]::new()
+    foreach ($fleet in $expectedFleets) {
+        $matches = @($fleetObjects | Where-Object { [string]$_.metadata.name -ceq $fleet })
+        if ($matches.Count -eq 0) { continue }
+        if ($matches.Count -ne 1) { throw "Fleet/$fleet 数量=$($matches.Count)，拒绝普通发布。" }
+        $containers = @($matches[0].spec.template.spec.template.spec.containers)
+        $revisions = @($containers | ForEach-Object { @($_.env) } |
+            Where-Object { [string]$_.name -ceq 'PANDORA_DSTICKET_KEYSET_REVISION' } | ForEach-Object { [string]$_.value })
+        $volumes = @($matches[0].spec.template.spec.template.spec.volumes)
+        $jwksRefs = @($volumes | Where-Object { [string]$_.name -ceq 'dsticket-jwks' } | ForEach-Object { [string]$_.configMap.name })
+        $fleetRows.Add("$fleet`t$($revisions -join ',')`t$($jwksRefs -join ',')")
+    }
+
+    $gameServers = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'gameservers.agones.dev', '-n', 'default', '-o', 'json') `
+        -Action '读取全部 GameServer（含 terminating）'
+    $gameServerSets = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'gameserversets.agones.dev', '-n', 'default', '-o', 'json') `
+        -Action '读取全部 GameServerSet（含 terminating）'
+    $defaultPods = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'pods', '-n', 'default', '-o', 'json') `
+        -Action '读取 default Pod（含 terminating/orphan DS）'
+    $childScope = Get-PandoraOrdinaryDSTicketChildScope `
+        -PandoraPodObjects $pandoraPods -ReplicaSetObjects $allReplicaSets `
+        -GameServerObjects @($gameServers.items) -GameServerSetObjects @($gameServerSets.items) `
+        -DefaultPodObjects @($defaultPods.items)
+
+    return [pscustomobject]@{
+        DeploymentRows = @($deploymentRows)
+        FleetRows = @($fleetRows)
+        DeploymentObjects = @($deploymentObjects)
+        FleetObjects = @($fleetObjects)
+        SignerPodObjects = @($childScope.SignerPodObjects)
+        ReplicaSetObjects = @($childScope.ReplicaSetObjects)
+        GameServerObjects = @($gameServers.items)
+        GameServerSetObjects = @($childScope.GameServerSetObjects)
+        DSPodObjects = @($childScope.DSPodObjects)
+        ActivationMarkers = @($activationMarkers)
+        TerminalMarkers = @($terminalMarkers)
+        FixedConfigSecret = $fixedConfig
+        LegacyControllerObjects = @($controllerScope.LegacyControllerObjects) + @($childScope.LegacyControllerObjects)
+    }
+}
+
+function Assert-OnlineOrdinaryDSTicketState {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][ValidateRange(1, 2147483647)][int]$RequestedRevision
+    )
+    $snapshot = Get-OnlineLiveDSTicketRevisionRows -KubeContext $KubeContext
+    return Assert-PandoraOrdinaryReleaseDSTicketState `
+        -DeploymentRows $snapshot.DeploymentRows -FleetRows $snapshot.FleetRows `
+        -RequestedRevision $RequestedRevision -DeploymentObjects $snapshot.DeploymentObjects `
+        -FleetObjects $snapshot.FleetObjects -SignerPodObjects $snapshot.SignerPodObjects `
+        -ReplicaSetObjects $snapshot.ReplicaSetObjects -GameServerObjects $snapshot.GameServerObjects `
+        -GameServerSetObjects $snapshot.GameServerSetObjects -DSPodObjects $snapshot.DSPodObjects `
+        -ActivationMarkers $snapshot.ActivationMarkers -TerminalMarkers $snapshot.TerminalMarkers `
+        -FixedConfigSecret $snapshot.FixedConfigSecret -LegacyControllerObjects $snapshot.LegacyControllerObjects
+}
+
+function Enter-OnlineDSTicketOperationLock {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $holderId = [guid]::NewGuid().ToString('N')
+    $operation = 'ordinary-online'
+    $object = New-PandoraDSTicketOperationLockObject -HolderId $holderId -Operation $operation
+    $json = $object | ConvertTo-Json -Depth 20 -Compress
+    $createdLines = @($json | & kubectl --context $KubeContext create -f - -o json 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw '获取 DSTicket 操作互斥锁失败；可能已有普通发布/轮换正在进行，或存在崩溃残留锁。' +
+              '请只读审计 pandora/ConfigMap/pandora-dsticket-operation-lock；禁止自动抢锁/按本机时间判过期。'
+    }
+    $createdText = (($createdLines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    try { $created = $createdText | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "DSTicket 操作锁 create 返回非法 JSON:$($_.Exception.Message)" }
+    $identity = Assert-PandoraDSTicketOperationLockContract -LockObject $created `
+        -HolderId $holderId -Operation $operation -RequireLiveIdentity
+    $live = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'configmap/pandora-dsticket-operation-lock', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '回读 DSTicket 操作互斥锁'
+    $liveIdentity = Assert-PandoraDSTicketOperationLockContract -LockObject $live `
+        -HolderId $holderId -Operation $operation -RequireLiveIdentity
+    if ($liveIdentity.Uid -cne $identity.Uid -or $liveIdentity.ResourceVersion -cne $identity.ResourceVersion) {
+        throw 'DSTicket 操作锁 create/回读身份漂移，拒绝进入集群写阶段。'
+    }
+    return [pscustomobject]@{
+        HolderId = $holderId
+        Operation = $operation
+        Uid = $identity.Uid
+        ResourceVersion = $identity.ResourceVersion
+    }
+}
+
+function Assert-OnlineDSTicketOperationLockHeld {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)]$Identity
+    )
+    $live = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'configmap/pandora-dsticket-operation-lock', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '核对 DSTicket 操作互斥锁持有权'
+    $contract = Assert-PandoraDSTicketOperationLockContract -LockObject $live `
+        -HolderId ([string]$Identity.HolderId) -Operation ([string]$Identity.Operation) -RequireLiveIdentity
+    if ($contract.Uid -cne [string]$Identity.Uid -or
+        $contract.ResourceVersion -cne [string]$Identity.ResourceVersion) {
+        throw 'DSTicket 操作锁 UID/resourceVersion 已漂移，拒绝继续任何集群写入。'
+    }
+    return $contract
+}
+
+function Exit-OnlineDSTicketOperationLock {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)]$Identity
+    )
+    $held = Assert-OnlineDSTicketOperationLockHeld -KubeContext $KubeContext -Identity $Identity
+    # kubectl v1.34 没有 delete --preconditions flag；raw DELETE 的 body 使用 Kubernetes
+    # DeleteOptions UID+resourceVersion 双前置条件，防旧进程在 ABA 场景误删后继 holder。
+    $deleteOptions = [ordered]@{
+        apiVersion = 'v1'
+        kind = 'DeleteOptions'
+        preconditions = [ordered]@{ uid = $held.Uid; resourceVersion = $held.ResourceVersion }
+    } | ConvertTo-Json -Depth 10 -Compress
+    $deletePath = '/api/v1/namespaces/pandora/configmaps/pandora-dsticket-operation-lock'
+    $deleted = @($deleteOptions | & kubectl --context $KubeContext delete "--raw=$deletePath" -f - 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw '带 UID/resourceVersion 前置条件释放 DSTicket 操作锁失败；锁按 fail-closed 语义保留，须人工审计。'
+    }
+    $after = Get-OnlineOptionalKubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'configmap/pandora-dsticket-operation-lock', '-n', $K8sNamespace, '--ignore-not-found', '-o', 'json') `
+        -Action '复查 DSTicket 操作锁释放结果'
+    if ($null -eq $after) { return }
+    $afterUid = [string]$after.metadata.uid
+    if ($afterUid -ceq [string]$Identity.Uid) {
+        throw 'DSTicket 操作锁 DELETE 返回后同 UID 对象仍存在；拒绝把释放误报成功。'
+    }
+    $afterHolder = [string]$after.metadata.annotations.'pandora.dev/dsticket-lock-holder-id'
+    $afterOperation = [string]$after.metadata.annotations.'pandora.dev/dsticket-lock-operation'
+    $null = Assert-PandoraDSTicketOperationLockContract -LockObject $after `
+        -HolderId $afterHolder -Operation $afterOperation -RequireLiveIdentity
+}
+
+function Get-PandoraFleetContractRows {
+    param([Parameter(Mandatory = $true)][string]$Manifest)
+    $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.template.spec.containers[*].image}{"\t"}{.spec.template.spec.template.spec.containers[*].imagePullPolicy}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.labels.pandora\.dev/release-track}{"\n"}'
+    return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'Fleet manifest')
+}
+
+function New-OnlineRuntimeOverlay {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceOverlay,
+        [Parameter(Mandatory = $true)][string]$Registry,
+        [Parameter(Mandatory = $true)][hashtable]$Digests,
+        [Parameter(Mandatory = $true)][string[]]$ServiceNames,
+        [Parameter(Mandatory = $true)][string[]]$WriterServices,
+        [Parameter(Mandatory = $true)][string]$EnvironmentName,
+        [Parameter(Mandatory = $true)][ValidateRange(1, 2147483647)][int]$DSTicketKeysetRevision
+    )
+    $parent = Split-Path -Parent $SourceOverlay
+    $runtime = Join-Path $parent ('.online-runtime-' + $EnvironmentName + '-' + [guid]::NewGuid().ToString('N'))
+    try {
+        Copy-Item -LiteralPath $SourceOverlay -Destination $runtime -Recurse
+        $kustomizationPath = Join-Path $runtime 'kustomization.yaml'
+        $text = Get-Content -LiteralPath $kustomizationPath -Raw
+        $text = ConvertTo-PandoraDigestKustomization -Template $text -Registry $Registry -Digests $Digests -ServiceNames $ServiceNames
+        $dsticketPatchName = 'dsticket-keyset-login.yaml'
+        $dsticketSignerServices = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
+        $dsticketSignerPatchNames = @($dsticketSignerServices | ForEach-Object { "dsticket-signer-$_.yaml" })
+        $text = Add-PandoraWriterPatchEntries -Kustomization $text -WriterServices $WriterServices `
+            -AdditionalPatchPaths (@($dsticketPatchName) + $dsticketSignerPatchNames)
+        [System.IO.File]::WriteAllText($kustomizationPath, $text, [System.Text.UTF8Encoding]::new($false))
+        foreach ($writer in $WriterServices) {
+            $patchText = New-PandoraWriterDigestPatch -Service $writer -Digest ([string]$Digests[$writer])
+            [System.IO.File]::WriteAllText((Join-Path $runtime "writer-digest-$writer.yaml"), $patchText, [System.Text.UTF8Encoding]::new($false))
+        }
+        $dsticketPatch = New-PandoraLoginDSTicketJWKSRevisionPatch -Revision $DSTicketKeysetRevision
+        [System.IO.File]::WriteAllText((Join-Path $runtime $dsticketPatchName), $dsticketPatch, [System.Text.UTF8Encoding]::new($false))
+        foreach ($signer in $dsticketSignerServices) {
+            $signerPatch = New-PandoraDSTicketSignerSecretRevisionPatch -Service $signer -Revision $DSTicketKeysetRevision
+            [System.IO.File]::WriteAllText((Join-Path $runtime "dsticket-signer-$signer.yaml"), $signerPatch, [System.Text.UTF8Encoding]::new($false))
+        }
+        $renderedLines = @(& kubectl kustomize $runtime 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            throw "最终 online overlay 渲染失败:$($renderedLines -join [Environment]::NewLine)"
+        }
+        $rendered = ($renderedLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        $pins = @{}
+        foreach ($name in $ServiceNames) {
+            $pins[$name] = New-PandoraPinnedImageReference -Reference ($Registry.TrimEnd('/') + "/pandora/$name") -Digest ([string]$Digests[$name])
+        }
+        $contractRows = Get-PandoraWorkloadContractRows -Manifest $rendered
+        Assert-PandoraRenderedOnlineContract -ContractRows $contractRows -Pins $pins -Digests $Digests -ServiceNames $ServiceNames -WriterServices $WriterServices
+        $dsticketRows = Get-PandoraDSTicketSignerContractRows -Manifest $rendered
+        Assert-PandoraDSTicketSignerRevisionContract -ContractRows $dsticketRows -Revision $DSTicketKeysetRevision
+        return [pscustomobject]@{ Path = $runtime; Rendered = $rendered }
+    } catch {
+        if (Test-Path -LiteralPath $runtime -PathType Container) {
+            $resolved = [System.IO.Path]::GetFullPath($runtime)
+            if ((Split-Path -Parent $resolved).Equals([System.IO.Path]::GetFullPath($parent), [System.StringComparison]::OrdinalIgnoreCase) -and
+                (Split-Path -Leaf $resolved) -match ('^\.online-runtime-' + [regex]::Escape($EnvironmentName) + '-[0-9a-f]{32}$')) {
+                Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+        throw
+    }
+}
+
+function Assert-OnlineDeploymentImageState {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][hashtable]$Pins,
+        [Parameter(Mandatory = $true)][hashtable]$Digests,
+        [Parameter(Mandatory = $true)][string[]]$WriterServices
+    )
+    foreach ($svc in (Get-ServiceList)) {
+        $name = [string]$svc.Name
+        $deployment = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "deployment/$name", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "回读 Deployment/$name 镜像"
+        $want = [int]$deployment.spec.replicas
+        if ([int]$deployment.status.updatedReplicas -ne $want -or [int]$deployment.status.readyReplicas -ne $want -or
+            [int]$deployment.status.availableReplicas -ne $want -or [int]$deployment.status.unavailableReplicas -ne 0) {
+            throw "Deployment/$name rollout 未稳定到 $want 个新副本。"
+        }
+        $pods = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-l', "app=$name", '-o', 'json') `
+            -Action "回读 Deployment/$name Pod"
+        $live = @($pods.items | Where-Object { $null -eq $_.metadata.deletionTimestamp })
+        if ($live.Count -ne $want) { throw "Deployment/$name 非终止 Pod 数=$($live.Count)，expected=$want。" }
+        foreach ($pod in $live) {
+            $containers = @($pod.spec.containers | Where-Object name -eq $name)
+            $statuses = @($pod.status.containerStatuses | Where-Object name -eq $name)
+            if ($containers.Count -ne 1 -or [string]$containers[0].image -cne [string]$Pins[$name]) {
+                throw "Pod/$($pod.metadata.name) spec.image 未固定到本次 pin $($Pins[$name])。"
+            }
+            if ($statuses.Count -ne 1 -or -not ([string]$statuses[0].imageID).EndsWith([string]$Digests[$name], [StringComparison]::Ordinal)) {
+                throw "Pod/$($pod.metadata.name) imageID 未命中本次 digest $($Digests[$name])。"
+            }
+            if ($WriterServices -contains $name) {
+                $actual = [string]$pod.metadata.annotations.'pandora.dev/image-digest'
+                if ($actual -cne [string]$Digests[$name]) {
+                    throw "writer Pod/$($pod.metadata.name) digest annotation=$actual，expected=$($Digests[$name])。"
+                }
+            }
+        }
+    }
+}
+
+function Wait-OnlineReadyFleetImageState {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$Fleet,
+        [Parameter(Mandatory = $true)][string]$Container,
+        [Parameter(Mandatory = $true)][string]$Pin,
+        [Parameter(Mandatory = $true)][string]$Digest,
+        [Parameter(Mandatory = $true)][ValidateSet('stable', 'canary')][string]$ExpectedTrack,
+        [timespan]$Timeout = [timespan]::FromMinutes(5)
+    )
+    Assert-PandoraDigest -Digest $Digest -Where "Fleet/$Fleet"
+    $deadline = [DateTime]::UtcNow.Add($Timeout)
+    $lastReason = '尚未检查'
+    do {
+        $fleetObject = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "fleet/$Fleet", '-n', 'default', '-o', 'json') `
+            -Action "回读 Fleet/$Fleet 状态"
+        $list = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'gameservers', '-n', 'default', '-l', "agones.dev/fleet=$Fleet", '-o', 'json') `
+            -Action "回读 Fleet/$Fleet GameServer"
+        $desired = [int]$fleetObject.spec.replicas
+        $reportedTotal = [int]$fleetObject.status.replicas
+        $reportedReady = [int]$fleetObject.status.readyReplicas
+        $liveServers = @($list.items | Where-Object { $null -eq $_.metadata.deletionTimestamp })
+        $ready = @($liveServers | Where-Object { [string]$_.status.state -ceq 'Ready' })
+        $allocated = @($liveServers | Where-Object { [string]$_.status.state -ceq 'Allocated' })
+        $reserved = @($liveServers | Where-Object { [string]$_.status.state -ceq 'Reserved' })
+        $stableCount = $ready.Count + $allocated.Count + $reserved.Count
+        $wrongTrack = @($liveServers | Where-Object { [string]$_.metadata.labels.'pandora.dev/release-track' -cne $ExpectedTrack })
+        if ($desired -lt 0) {
+            $lastReason = "Fleet spec.replicas=$desired 非法"
+        } elseif ($wrongTrack.Count -gt 0) {
+            $lastReason = "GameServer release-track 漂移:$(@($wrongTrack | ForEach-Object { $_.metadata.name }) -join ',')"
+        } elseif ($reportedTotal -ne $liveServers.Count -or $stableCount -ne $liveServers.Count) {
+            $lastReason = "容量未稳定:desired-ready=$desired status.total=$reportedTotal live=$($liveServers.Count) ready/allocated/reserved=$($ready.Count)/$($allocated.Count)/$($reserved.Count)"
+        } elseif ($reportedReady -ne $ready.Count) {
+            $lastReason = "Fleet status.readyReplicas=$reportedReady 与实际 Ready=$($ready.Count) 不一致"
+        } elseif ($desired -eq 0 -and $ready.Count -eq 0) {
+            Write-Ok "Fleet/$Fleet 已缩到 0 Ready（不再接新分配）；旧 Allocated=$($allocated.Count) 可继续受控排空。"
+            return
+        } elseif ($ready.Count -lt $desired) {
+            $lastReason = "Ready 池未补足:desired=$desired actual=$($ready.Count)"
+        } elseif ($ready.Count -eq 0) {
+            $lastReason = '没有 Ready GameServer（不能证明新分配池已切新镜像）'
+        } else {
+            $bad = [System.Collections.Generic.List[string]]::new()
+            foreach ($gs in $ready) {
+                $name = [string]$gs.metadata.name
+                $gsDigest = [string]$gs.metadata.annotations.'pandora.dev/image-digest'
+                if ($gsDigest -cne $Digest) { $bad.Add("GameServer/$name annotation=$gsDigest") }
+                $pod = Get-KubectlJsonObject -KubeContext $KubeContext `
+                    -Arguments @('get', "pod/$name", '-n', 'default', '-o', 'json') `
+                    -Action "回读 Ready GameServer Pod/$name"
+                $podDigest = [string]$pod.metadata.annotations.'pandora.dev/image-digest'
+                $podTrack = [string]$pod.metadata.labels.'pandora.dev/release-track'
+                $spec = @($pod.spec.containers | Where-Object name -eq $Container)
+                $status = @($pod.status.containerStatuses | Where-Object name -eq $Container)
+                if ($podDigest -cne $Digest) { $bad.Add("Pod/$name annotation=$podDigest") }
+                if ($podTrack -cne $ExpectedTrack) { $bad.Add("Pod/$name release-track=$podTrack") }
+                if ($spec.Count -ne 1 -or [string]$spec[0].image -cne $Pin) { $bad.Add("Pod/$name spec.image=$($spec[0].image)") }
+                if ($status.Count -ne 1 -or -not ([string]$status[0].imageID).EndsWith($Digest, [StringComparison]::Ordinal)) {
+                    $bad.Add("Pod/$name imageID=$($status[0].imageID)")
+                }
+            }
+            if ($bad.Count -eq 0) {
+                Write-Ok "Fleet/$Fleet 可新分配 Ready 池全部命中 $Digest（旧 Allocated 对局允许受控排空）。"
+                return
+            }
+            $lastReason = $bad -join '; '
+        }
+        if ([DateTime]::UtcNow -lt $deadline) { Start-Sleep -Seconds 5 }
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Fleet/$Fleet 未在 $([int]$Timeout.TotalSeconds)s 内把 Ready 池收敛到本次 digest:$lastReason。" +
+          '不会强删仍在对局的旧 Allocated GameServer；请等待其按 battle_ttl 排空后另做全收敛审计。'
+}
+
+function Get-WorkloadTemplateVolumes($item) {
+    switch ([string]$item.kind) {
+        'Deployment'  { return @($item.spec.template.spec.volumes) }
+        'StatefulSet' { return @($item.spec.template.spec.volumes) }
+        'DaemonSet'   { return @($item.spec.template.spec.volumes) }
+        'Job'         { return @($item.spec.template.spec.volumes) }
+        'CronJob'     { return @($item.spec.jobTemplate.spec.template.spec.volumes) }
+        default       { return @() }
+    }
+}
+
+function Test-HasLegacyPandoraConfigMapRef($Node) {
+    if ($null -eq $Node -or $Node -is [string] -or $Node.GetType().IsPrimitive) { return $false }
+    if ($Node -is [System.Collections.IEnumerable] -and $Node -isnot [pscustomobject]) {
+        foreach ($entry in $Node) {
+            if (Test-HasLegacyPandoraConfigMapRef $entry) { return $true }
+        }
+        return $false
+    }
+    foreach ($property in $Node.PSObject.Properties) {
+        if ($property.Name -in @('configMap', 'configMapRef', 'configMapKeyRef')) {
+            $nameProperty = if ($null -eq $property.Value) { $null } else { $property.Value.PSObject.Properties['name'] }
+            if ($null -ne $nameProperty -and [string]$nameProperty.Value -ceq 'pandora-config') { return $true }
+        }
+        if (Test-HasLegacyPandoraConfigMapRef $property.Value) { return $true }
+    }
+    return $false
+}
+
+function Get-LegacyPandoraConfigMapRefs([object[]]$Items) {
+    return @(
+        foreach ($item in $Items) {
+            if ($null -ne $item -and (Test-HasLegacyPandoraConfigMapRef $item.spec)) {
+                "$($item.kind)/$($item.metadata.name)"
+            }
+        }
+    )
+}
+
+# Secret 迁移的最后一道门：当前 20 个 Deployment 都已改挂 Secret、控制器模板与存活 Pod
+# 均不再引用旧 ConfigMap 后才删除。历史零副本 ReplicaSet 刻意不纳入检查；删除后迁移前 revision
+# 不再可直接 rollout undo，故本次切换是明确的配置载体回退边界。
+function Remove-LegacyPandoraConfigMapAfterRollout([string]$KubeContext) {
+    $oldName = @(& kubectl --context $KubeContext get configmap/pandora-config -n $K8sNamespace --ignore-not-found -o name 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "查询旧 pandora-config ConfigMap 失败(exit=$LASTEXITCODE)" }
+    if ([string]::IsNullOrWhiteSpace((($oldName | ForEach-Object { $_.ToString() }) -join '').Trim())) {
+        Write-Skip '旧 pandora-config ConfigMap 不存在,无需迁移清理。'
+        return
+    }
+
+    $deployments = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'deployments', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '查询 Deployment 配置卷'
+    $deploymentItems = @($deployments.items)
+    $deploymentByName = @{}
+    foreach ($deployment in $deploymentItems) { $deploymentByName[[string]$deployment.metadata.name] = $deployment }
+
+    $missingSecretRefs = @(
+        foreach ($svc in (Get-ServiceList)) {
+            $name = [string]$svc.Name
+            if (-not $deploymentByName.ContainsKey($name)) { "$name(Deployment 不存在)"; continue }
+            $volumes = @(Get-WorkloadTemplateVolumes $deploymentByName[$name])
+            $secretRefs = @($volumes | Where-Object {
+                    $null -ne $_.secret -and [string]$_.secret.secretName -ceq 'pandora-config'
+                })
+            if ($secretRefs.Count -eq 0) { "$name(未引用 Secret/pandora-config)" }
+        }
+    )
+    if ($missingSecretRefs.Count -ne 0) {
+        throw "旧 ConfigMap 不可删除:当前业务 Deployment 尚未全部迁移到 Secret:$($missingSecretRefs -join ', ')"
+    }
+
+    $controllerRefs = @(Get-LegacyPandoraConfigMapRefs -Items $deploymentItems)
+    $otherControllers = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'statefulsets,daemonsets,replicationcontrollers,jobs,cronjobs', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '查询其它控制器配置卷'
+    $controllerRefs += @(Get-LegacyPandoraConfigMapRefs -Items @($otherControllers.items))
+    $replicaSets = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'replicasets', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '查询 ReplicaSet 配置引用'
+    foreach ($rs in @($replicaSets.items)) {
+        if ($null -eq $rs -or -not (Test-HasLegacyPandoraConfigMapRef $rs.spec)) { continue }
+        $deploymentOwners = @($rs.metadata.ownerReferences | Where-Object {
+                [string]$_.kind -ceq 'Deployment' -and ($_.controller -eq $true)
+            })
+        $specReplicas = if ($null -eq $rs.spec.replicas) { 0 } else { [int]$rs.spec.replicas }
+        $statusReplicas = if ($null -eq $rs.status.replicas) { 0 } else { [int]$rs.status.replicas }
+        # 只豁免 Deployment 管理且 desired/status 均为 0 的历史 revision；独立或仍活跃 RS 必须阻断。
+        if ($deploymentOwners.Count -eq 0 -or $specReplicas -ne 0 -or $statusReplicas -ne 0) {
+            $controllerRefs += "ReplicaSet/$($rs.metadata.name)"
+        }
+    }
+    if ($controllerRefs.Count -ne 0) {
+        throw "旧 ConfigMap 不可删除:仍有控制器模板引用 pandora-config:$($controllerRefs -join ', ')"
+    }
+
+    # rollout status 返回时旧 Pod 可能仍短暂 Terminating；最多等 60s，查询失败或超时均 fail-closed。
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+        $pods = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-o', 'json') `
+            -Action '查询存活 Pod 配置卷'
+        $livePods = @($pods.items | Where-Object { [string]$_.status.phase -notin @('Succeeded', 'Failed') })
+        $podRefs = @(Get-LegacyPandoraConfigMapRefs -Items $livePods)
+        if ($podRefs.Count -eq 0) { break }
+        if ((Get-Date) -ge $deadline) {
+            throw "旧 ConfigMap 不可删除:60s 后仍有存活 Pod 引用 pandora-config:$($podRefs -join ', ')"
+        }
+        Start-Sleep -Seconds 2
+    } while ($true)
+
+    kubectl --context $KubeContext delete configmap pandora-config -n $K8sNamespace --ignore-not-found
+    Assert-LastExit '删除旧 pandora-config ConfigMap'
+    $remaining = @(& kubectl --context $KubeContext get configmap/pandora-config -n $K8sNamespace --ignore-not-found -o name 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "复查旧 pandora-config ConfigMap 失败(exit=$LASTEXITCODE)" }
+    if (-not [string]::IsNullOrWhiteSpace((($remaining | ForEach-Object { $_.ToString() }) -join '').Trim())) {
+        throw '旧 pandora-config ConfigMap 删除后仍存在。'
+    }
+    Write-Ok '20 个业务 Deployment 与存活 Pod 已迁移到 Secret;旧 pandora-config ConfigMap 已删除。'
 }
 
 function Test-CommandExists([string]$cmd) {
@@ -488,12 +1506,17 @@ function Invoke-Battle {
 
 # ===== 共享:apply Agones(RBAC + Fleet),可选安装 Agones(minikube 本地用)=====
 # 让 agones 链路端到端可用:RBAC 给 allocator in-cluster token 调 Agones API 的权限,
-# Fleet(pandora-battle / pandora-hub)提供真实 Linux DS。namespace 须先存在(调用方保证)。
+# Stable/Canary 四 Fleet(pandora-battle-* / pandora-hub-*)提供真实 Linux DS。namespace 须先存在(调用方保证)。
 function Apply-AgonesManifests {
     param(
         [switch]$InstallAgones,
         [string]$BattleDsImage = '',
         [string]$HubDsImage = '',
+        [string]$CanaryBattleDsImage = '',
+        [string]$CanaryHubDsImage = '',
+        [ValidateRange(0, 1000)][int]$BattleCanaryReplicaCount = 0,
+        [ValidateRange(0, 1000)][int]$HubCanaryReplicaCount = 0,
+        [ValidateRange(1, 2147483647)][int]$DSTicketKeysetRevision = 1,
         [string]$DsGatewayAddr = '',
         [string]$DsGatewayTls = '',
         # 本地 minikube dev 专用:Fleet 用固定 :dev tag,kubectl apply 报 unchanged,
@@ -517,18 +1540,33 @@ function Apply-AgonesManifests {
         return [regex]::Replace($text, $pattern, ('${1}' + $value + '${2}'))
     }
 
-    function Apply-FleetManifest([string]$fileName, [string]$image, [string[]]$addrEnvNames, [string]$tlsEnvName) {
+    function Set-FleetReplicaCount([string]$text, [int]$count) {
+        $pattern = '(?m)^(spec:\r?\n\s{2}replicas:\s*)[0-9]+\s*$'
+        if ([regex]::Matches($text, $pattern).Count -ne 1) { throw 'Fleet spec.replicas 字段数量不是 1。' }
+        return [regex]::Replace($text, $pattern, ('${1}' + $count), 1)
+    }
+
+    function Apply-FleetManifest(
+        [string]$fileName,
+        [string]$image,
+        [string]$track,
+        [int]$replicaOverride,
+        [string[]]$addrEnvNames,
+        [string]$tlsEnvName) {
         $src = Join-Path $agonesDir $fileName
-        if ([string]::IsNullOrWhiteSpace($image) -and [string]::IsNullOrWhiteSpace($DsGatewayAddr) -and [string]::IsNullOrWhiteSpace($DsGatewayTls)) {
+        $baseRaw = Get-Content $src -Raw
+        Assert-PandoraFleetNoPlayerSigningMaterial -Manifest $baseRaw
+        if ([string]::IsNullOrWhiteSpace($image) -and [string]::IsNullOrWhiteSpace($DsGatewayAddr) -and
+            [string]::IsNullOrWhiteSpace($DsGatewayTls) -and $DSTicketKeysetRevision -eq 1 -and $replicaOverride -lt 0) {
             kubectl @kubectlContextArgs apply -f $src
             Assert-LastExit "kubectl apply Fleet $fileName"
             return
         }
-
-        $raw = Get-Content $src -Raw
+        $raw = $baseRaw
         if (-not [string]::IsNullOrWhiteSpace($image)) {
-            # Fleet 容器只有一行 image:(imagePullPolicy 不含 image:),全文唯一,直接替换
-            $raw = [regex]::Replace($raw, 'image:[^\S\r\n]*\S+', ('image: ' + $image))
+            # online 只接受 registry digest pin；同时把 digest 写进 GameServer/Pod 两层 annotation。
+            # 本地 minikube 不传 image，继续使用 base 的 :dev，不触发本分支。
+            $raw = Set-PandoraFleetImagePin -Manifest $raw -PinnedImage $image
         }
         if (-not [string]::IsNullOrWhiteSpace($DsGatewayAddr)) {
             foreach ($envName in $addrEnvNames) {
@@ -537,6 +1575,15 @@ function Apply-AgonesManifests {
         }
         if (-not [string]::IsNullOrWhiteSpace($DsGatewayTls)) {
             $raw = Set-YamlEnvValue $raw $tlsEnvName $DsGatewayTls
+        }
+        $raw = Set-PandoraFleetDSTicketKeysetRevision -Manifest $raw -Revision $DSTicketKeysetRevision
+        if ($replicaOverride -ge 0) { $raw = Set-FleetReplicaCount $raw $replicaOverride }
+        if (-not [string]::IsNullOrWhiteSpace($image)) {
+            $containerName = if ($fileName -match 'battle') { 'pandora-battle-ds' } elseif ($fileName -match 'hub') { 'pandora-hub-ds' } else { throw "未知 Fleet 清单:$fileName" }
+            $expectedFleetName = if ($containerName -ceq 'pandora-battle-ds') { "pandora-battle-$track" } else { "pandora-hub-$track" }
+            $contractRows = Get-PandoraFleetContractRows -Manifest $raw
+            Assert-PandoraFleetManifestContract -Manifest $raw -ContractRows $contractRows -PinnedImage $image `
+                -ContainerName $containerName -ExpectedTrack $track -ExpectedFleetName $expectedFleetName
         }
 
         $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + '-' + $fileName)
@@ -586,9 +1633,11 @@ function Apply-AgonesManifests {
         if ($LASTEXITCODE -ne 0) { throw "pandora-envoy 未在 120s 内就绪;DS 心跳(:8444)打不通,已中止(排障:kubectl -n pandora describe deploy/pandora-envoy)。" }
     }
 
-    Write-Info "apply Fleet(pandora-battle / pandora-hub 真 Linux DS)..."
-    Apply-FleetManifest '20-fleet-battle.yaml' $BattleDsImage @('PANDORA_DS_ALLOCATOR_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR', 'PANDORA_BATTLE_RESULT_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
-    Apply-FleetManifest '30-fleet-hub.yaml' $HubDsImage @('PANDORA_HUB_ALLOCATOR_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
+    Write-Info "apply Stable/Canary Fleet(pandora-battle-*/pandora-hub-* 真 Linux DS)..."
+    Apply-FleetManifest '20-fleet-battle.yaml' $BattleDsImage 'stable' -1 @('PANDORA_DS_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR', 'PANDORA_BATTLE_RESULT_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
+    Apply-FleetManifest '21-fleet-battle-canary.yaml' $CanaryBattleDsImage 'canary' $BattleCanaryReplicaCount @('PANDORA_DS_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR', 'PANDORA_BATTLE_RESULT_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
+    Apply-FleetManifest '30-fleet-hub.yaml' $HubDsImage 'stable' -1 @('PANDORA_HUB_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
+    Apply-FleetManifest '31-fleet-hub-canary.yaml' $CanaryHubDsImage 'canary' $HubCanaryReplicaCount @('PANDORA_HUB_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
     Write-Warn "Fleet 用真 UE DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)。"
     Write-Warn "  这些镜像由 UE 侧 Tool/Server/Agones 构建;minikube 需先 minikube image load,线上需 push 到 -Registry。"
 
@@ -604,7 +1653,7 @@ function Apply-AgonesManifests {
         }
         $fleetNs = 'default'
         Write-Info "强制重建 GameServer(context=$KubeContext,让 :dev tag 的新 DS 镜像生效)..."
-        foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+        foreach ($fleet in @('pandora-battle-stable', 'pandora-battle-canary', 'pandora-hub-stable', 'pandora-hub-canary')) {
             kubectl @kubectlContextArgs delete gameservers -l "agones.dev/fleet=$fleet" -n $fleetNs --ignore-not-found
             if ($LASTEXITCODE -ne 0) {
                 # 删除失败 = 旧镜像 Pod 可能仍在跑;绝不能静默继续,否则会把「旧实例还在跑」
@@ -869,10 +1918,13 @@ function Invoke-K8s {
         }
         Write-Step "删除 k8s 业务服务 + 基础设施(context=$mkProfile)"
         # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)
-        kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/30-fleet-hub.yaml') --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete hub Fleet'
-        kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/20-fleet-battle.yaml') --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete battle Fleet'
+        foreach ($fleetFile in @('31-fleet-hub-canary.yaml', '30-fleet-hub.yaml', '21-fleet-battle-canary.yaml', '20-fleet-battle.yaml')) {
+            kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot "deploy/k8s/agones/$fleetFile") --ignore-not-found 2>$null
+            Assert-LastExit "kubectl delete Fleet $fleetFile"
+        }
+        # Down 是用户明确要求停掉整套本地 DS，因此也清理旧版单轨对象。
+        kubectl --context $mkProfile delete fleet/pandora-battle fleet/pandora-hub -n default --ignore-not-found 2>$null
+        Assert-LastExit 'kubectl delete legacy local Fleets'
         # in-cluster Envoy「DS 面」网关也是启动时 Apply-AgonesManifests 起的(本地专属),一并清理
         kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/16-ds-envoy.yaml') --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete in-cluster Envoy'
@@ -891,6 +1943,9 @@ function Invoke-K8s {
     # profile 钉死:本次运行的 minikube 全部操作(status/start,以及 Reset 的 delete)都用同一个 profile,
     # 避免 delete 与 rebuild 目标漂移。
     $mkProfile = Get-K8sManagedProfile
+    # 只有 profile 在 start 前完全不存在才属于 fresh cluster。“已有但停止”不是 fresh，
+    # 不得在 required epoch 丢失时自动回填 1。
+    $profileExistedBeforeStart = Test-MinikubeProfileExists -Profile $mkProfile
 
     # 1) minikube 起没起
     minikube -p $mkProfile status *> $null
@@ -917,6 +1972,9 @@ function Invoke-K8s {
     }
     Write-Ok "kube-context 已锁定本机 minikube:$mkCtx"
     $kubectlContextArgs = @('--context', $mkCtx)
+    Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx
+    Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment
+    Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment
 
     Write-Step "[1/8] namespace"
     kubectl @kubectlContextArgs apply -f (Join-Path $servicesDir '00-namespace.yaml')
@@ -936,15 +1994,22 @@ function Invoke-K8s {
     }
     # advertise 非回环 => UDP 中继必须对局域网开放(publish 到 0.0.0.0),否则其它机器的 UDP 到不了本机中继。
     $script:K8sRelayBindHost = if ($k8sAdvHost -eq '127.0.0.1') { '127.0.0.1' } else { '0.0.0.0' }
-    Write-Step "[2/8] 生成集群版配置 + ConfigMap(allocator=agones,DS advertise=$k8sAdvHost)"
+    Write-Step "[2/8] 生成集群版配置 + Secret(allocator=agones,DS advertise=$k8sAdvHost)"
     if ($script:K8sRelayBindHost -eq '0.0.0.0') {
         Write-Info "DS advertise=$k8sAdvHost(局域网),UDP 中继将监听 0.0.0.0。"
         Write-Warn "内网多机联调前置:请确认本机防火墙已放行【入站 TCP 8443 + 入站 UDP 7000-8000】,否则其它机器连不进客户端入口/DS。DS 面 8444 固定只绑本机。"
     }
-    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost $k8sAdvHost
-    kubectl @kubectlContextArgs create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
-        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
-    Assert-LastExit 'kubectl apply configmap pandora-config'
+    # 本地 minikube 自测:agones 真 DS 链路但沿用公开 dev 密钥,显式 -AllowDevSecrets 承认(审核 P1:
+    # 不再靠 advertise host 推断本地,防生产 IP/DNS 绕过 -Prod)。线上走 online 分支的 -Prod。
+    # DSTicket v2(方案 B):先自举 dev 钥料(私钥 Secret + 公钥 ConfigMap,幂等),拿 kid 注入配置生成。
+    $dsTicketKid = Ensure-DsTicketDevKeyMaterial -KubeContext $mkCtx
+    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost $k8sAdvHost -AllowDevSecrets `
+        -DsAuthMode enforce -DsAuthorityMode redis -DsFenceEtcdEndpoints $script:LocalDsFenceEndpoint `
+        -DsFenceKeysetRevision $script:LocalDsFenceKeysetRevision -DsTicketActiveKid $dsTicketKid `
+        -DsTicketKeysetRevision 1
+    Assert-LastExit '生成本地 k8s enforce/redis DSTicket v2 配置'
+    # 配置含 HS256 密钥(即便本地 dev 也含 ds_auth secret),用 Secret 而非 ConfigMap 承载(P0:密钥不落明文 ConfigMap)。
+    Apply-PandoraConfigSecret -KubeContext $mkCtx -Action 'kubectl apply secret pandora-config'
     kubectl @kubectlContextArgs create configmap pandora-mysql-init --from-file=$mysqlInit -n $K8sNamespace `
         --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-mysql-init'
@@ -963,6 +2028,9 @@ function Invoke-K8s {
     # zookeeper / kafka 必须就绪,否则 player/push/battle-result 会因连不上 kafka:9092 CrashLoop
     kubectl @kubectlContextArgs rollout status deploy/zookeeper -n $K8sNamespace --timeout=120s; Assert-LastExit 'zookeeper 就绪'
     kubectl @kubectlContextArgs rollout status deploy/kafka     -n $K8sNamespace --timeout=180s; Assert-LastExit 'kafka 就绪'
+
+    Write-Step '[3.5/8] DS callback auth required_writer_epoch 线性预检 / fresh-only CAS bootstrap'
+    Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:(-not $profileExistedBeforeStart)
 
     Write-Step "[4/8] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Build-DsImagesForMinikube
@@ -997,6 +2065,7 @@ function Invoke-K8s {
         kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(新 Pod 未就绪,查:kubectl describe/logs)"
     }
+    Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
 
     Write-Host ""
     Write-Ok "k8s 模式已部署。查看:kubectl get pods -n $K8sNamespace"
@@ -1026,7 +2095,6 @@ function Invoke-K8s {
 # ===== online 模式(远端 k8s:-Env test 测试服集群 / prod 生产 kbs 集群)=====
 function Invoke-Online {
     $overlay     = Join-Path $ProjectRoot 'deploy/k8s/overlays/online'
-    $overlayFile = Join-Path $overlay 'kustomization.yaml'
 
     # 安全:Env 与预先配置的 context 一一绑定，不能只信用户临时传入的 -Env。
     # 这样即使人在生产 context 上漏写 -Env prod，也会在任何变更前失败。
@@ -1074,7 +2142,7 @@ function Invoke-Online {
         # DS GameServer 继续占集群资源、孤儿 RBAC 残留(回应审核 P1:Down 只删业务 overlay)。
         # ⚠️ 删 Fleet 会终止在跑的战斗/大厅 DS —— Down 本身就是下线动作,语义一致。
         $downAgonesDir = Join-Path $ProjectRoot 'deploy/k8s/agones'
-        foreach ($f in @('20-fleet-battle.yaml', '30-fleet-hub.yaml', '10-rbac-allocator.yaml')) {
+        foreach ($f in @('20-fleet-battle.yaml', '21-fleet-battle-canary.yaml', '30-fleet-hub.yaml', '31-fleet-hub-canary.yaml', '10-rbac-allocator.yaml')) {
             kubectl @kubectlContextArgs delete -f (Join-Path $downAgonesDir $f) --ignore-not-found
             Assert-LastExit "kubectl delete $f"
         }
@@ -1082,35 +2150,419 @@ function Invoke-Online {
         return
     }
 
+    # 任何 Secret/Fleet/Deployment/registry 写入前先拒绝旧单轨 Fleet。Hub 无可靠的自动排空
+    # 证明，所以这里只 fail-closed，永不在普通发布中代删。
+    Assert-NoLegacyDsFleets -KubeContext $ctx
+    Assert-NoLegacyDSTicketSignerSecret -KubeContext $ctx
+
     if (-not $Registry -or -not $Tag) {
         throw "online 模式必须指定 -Registry 和 -Tag(Go 服务镜像来源)。"
     }
     if (-not $BattleDsImage -or -not $HubDsImage -or -not $DsGatewayAddr) {
         throw "online 模式必须指定 -BattleDsImage / -HubDsImage / -DsGatewayAddr，避免把本地 dev 镜像或错误网关地址带到远端集群。"
     }
+    if ($BattleCanaryPercent -gt 0 -and ([string]::IsNullOrWhiteSpace($CanaryBattleDsImage) -or $BattleCanaryReplicas -lt 1)) {
+        throw 'BattleCanaryPercent > 0 时必须提供 -CanaryBattleDsImage 且 -BattleCanaryReplicas >= 1。'
+    }
+    if ($HubCanaryPercent -gt 0 -and ([string]::IsNullOrWhiteSpace($CanaryHubDsImage) -or $HubCanaryReplicas -lt 1)) {
+        throw 'HubCanaryPercent > 0 时必须提供 -CanaryHubDsImage 且 -HubCanaryReplicas >= 1。'
+    }
+    # cohort seed 是发布状态，不是密钥。从已有 pandora-config 只读回收它，防普通
+    # 发布因漏传参数把 seed 清空、导致灰度 cohort 漂移。旧权重>0 时禁止换 seed；
+    # 先降两轨权重到 0 并验收后，下一次 campaign 才可显式换 seed。
+    $existingConfig = $null
+    $existingConfigLines = @(& kubectl @kubectlContextArgs get secret/pandora-config -n $K8sNamespace --ignore-not-found -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "读取现有 pandora-config 检查 Canary cohort 失败:$($existingConfigLines -join [Environment]::NewLine)" }
+    $existingConfigText = (($existingConfigLines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if (-not [string]::IsNullOrWhiteSpace($existingConfigText)) {
+        try { $existingConfig = $existingConfigText | ConvertFrom-Json -ErrorAction Stop }
+        catch { throw "pandora-config 回读不是合法 JSON:$($_.Exception.Message)" }
+        try {
+            $oldBattleConfig = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([string]$existingConfig.data.'ds-allocator.yaml'))
+            $oldHubConfig = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([string]$existingConfig.data.'hub-allocator.yaml'))
+        } catch { throw "pandora-config 的 allocator 配置 base64 非法:$($_.Exception.Message)" }
+        $oldCanary = Get-PandoraCanaryConfigContract -BattleConfig $oldBattleConfig -HubConfig $oldHubConfig
+        if ([string]::IsNullOrWhiteSpace($CanarySeed) -and -not [string]::IsNullOrWhiteSpace($oldCanary.Seed)) {
+            $CanarySeed = $oldCanary.Seed
+            Write-Info '未显式传 CanarySeed，已从现有集群配置只读继承（不打印 seed）。'
+        }
+        if (($oldCanary.BattlePercent -gt 0 -or $oldCanary.HubPercent -gt 0) -and
+            $CanarySeed -cne $oldCanary.Seed) {
+            throw '现有 Canary 权重非 0 时禁止更换 cohort seed。请先用原 seed 将 Battle/Hub 权重降为 0 并验收，再开新 campaign。'
+        }
+    }
+    if (($BattleCanaryPercent -gt 0 -or $HubCanaryPercent -gt 0) -and
+        $CanarySeed -cnotmatch '^[A-Za-z0-9._-]{8,128}$') {
+        throw '启用 DS Canary 时必须提供稳定的 -CanarySeed / PANDORA_DS_CANARY_SEED(8..128 字符，仅字母数字._-)。'
+    }
+    $currentCommit = ((& git -C $ProjectRoot rev-parse --short=7 HEAD 2>$null) | Out-String).Trim().ToLowerInvariant()
+    if ($LASTEXITCODE -ne 0) { throw 'online 无法读取当前 git commit，不能生成不可变发布 tag。' }
+    Assert-PandoraImmutableReleaseTag -Tag $Tag -CurrentCommit $currentCommit -RequireCurrentCommit:$BuildPush
+
+    # ===== 生产密钥预检(P0 安全审核)=====
+    # 必须在 BuildPush(推镜像到远端 registry)之前就确认两把真密钥齐全 —— 否则可能镜像已推、稍后
+    # gen -Prod 才因缺密钥失败,留下「半推 + 未部署」的脏状态。玩家面 / DS 回调面必须分离:
+    # 同一把密钥覆盖玩家 JWT 与 DS 回调令牌时,泄露玩家面即可伪造 DS 回调绕过范围绑定。
+    $devPubSecret = 'pandora-dev-jwt-secret-change-me-32!'
+    $playerSec = $env:PANDORA_JWT_SECRET
+    $dsSec = $env:PANDORA_DS_JWT_SECRET
+    # additional_secrets 部分接线仅供非生产验证；两份轮换决策未拍板前 online 直接拒绝。
+    $playerSecAdd = $env:PANDORA_JWT_SECRET_ADDITIONAL
+    $dsSecAdd = $env:PANDORA_DS_JWT_SECRET_ADDITIONAL
+    if (-not [string]::IsNullOrWhiteSpace($playerSecAdd) -or -not [string]::IsNullOrWhiteSpace($dsSecAdd)) {
+        throw 'online 暂不允许 PANDORA_*_SECRET_ADDITIONAL：玩家/DS 轮换决策仍待人拍板，Edge 双 key 证明与统一 key-set gate 尚未获批准。' +
+              '当前只允许在非生产环境验证部分接线；批准决策并补齐阶段验收后再开放生产轮换。'
+    }
+    $secretChecks = @(
+        @{ n = 'PANDORA_JWT_SECRET(玩家面)';    v = $playerSec; required = $true },
+        @{ n = 'PANDORA_DS_JWT_SECRET(DS 回调面)'; v = $dsSec; required = $true },
+        @{ n = 'PANDORA_JWT_SECRET_ADDITIONAL(玩家面轮换兼容密钥)';    v = $playerSecAdd; required = $false },
+        @{ n = 'PANDORA_DS_JWT_SECRET_ADDITIONAL(DS 回调面轮换兼容密钥)'; v = $dsSecAdd; required = $false })
+    foreach ($p in $secretChecks) {
+        if ([string]::IsNullOrWhiteSpace($p.v)) {
+            if ($p.required) {
+                throw "online -Prod 部署必须先设环境变量 $($p.n)(真 HS256 密钥);缺失已中止,不推镜像不部署(P0)。"
+            }
+            continue
+        }
+        if ($p.v -eq $devPubSecret) { throw "$($p.n) 不能等于公开 dev 密钥,请换成真密钥。" }
+        if ([System.Text.Encoding]::UTF8.GetByteCount($p.v) -lt 32) { throw "$($p.n) 至少需要 32 字节(HS256)。" }
+        # C0/C1 控制字符防线(二审 #12):换行/回车/制表等混进密钥会被 YAML 双引号转义后原样进服务,
+        # 与运维手里的密钥「看起来相同实际不同」,导致全端验签静默失败。
+        if ($p.v -match '[\x00-\x1F\x7F-\x9F]') {
+            throw "$($p.n) 含控制字符(换行/回车/制表等),多半是复制粘贴事故;已中止(P0)。"
+        }
+    }
+    # 四把密钥两两不同 + 玩家面/DS 面跨面不相交(P0:任一交叉 = 泄露一面即可伪造另一面)。
+    $secretPairs = @($secretChecks | Where-Object { -not [string]::IsNullOrWhiteSpace($_.v) })
+    for ($i = 0; $i -lt $secretPairs.Count; $i++) {
+        for ($j = $i + 1; $j -lt $secretPairs.Count; $j++) {
+            if ($secretPairs[$i].v -ceq $secretPairs[$j].v) {
+                throw "$($secretPairs[$i].n) 与 $($secretPairs[$j].n) 不得相同(P0:玩家面/DS 回调面/新旧轮换密钥必须各自独立)。"
+            }
+        }
+    }
+    # Online 使用本次调用独占的不可复用快照。共享 run/cluster/etc 在 Edge 探测/BuildPush 的长窗口内
+    # 可能被 docker/k8s/Resume 重新生成成 dev/mock 配置，不能作为生产预检后的发布源。
+    $onlineSnapshotRoot = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot 'run/cluster'))
+    $onlineConfigDir = Join-Path $onlineSnapshotRoot "online-$Env-$([guid]::NewGuid().ToString('N'))"
+    $runtimeOverlayDir = ''
+    $dsticketOperationLock = $null
+    try {
+    # 所有本地确定性检查必须先于 BuildPush。生成器在独立 staging 中完成 20 文件精确校验，
+    # 发布失败会回滚旧集合；因此源配置缺失、磁盘错误、JWKS/密钥异常都不会等到推镜像后才暴露。
+    Write-Step "预生成并完整校验线上集群配置(allocator=agones)"
+    $genArgs = @('-OutDir', $onlineConfigDir, '-AllocatorMode', 'agones', '-Prod')
+    if (-not [string]::IsNullOrWhiteSpace($DsAuthMode)) {
+        $genArgs += @('-DsAuthMode', $DsAuthMode)
+    }
+    if ($DsAuthorityMode -ne 'redis') { throw 'online 必须显式传 -DsAuthorityMode redis。' }
+    if ([string]::IsNullOrWhiteSpace($DsFenceEtcdEndpoints)) { throw 'online 必须提供 -DsFenceEtcdEndpoints 或 PANDORA_DS_AUTH_FENCE_ETCD_ENDPOINTS。' }
+    if ([string]::IsNullOrWhiteSpace($DsFenceKeysetRevision)) { throw 'online 必须提供 -DsFenceKeysetRevision 或 PANDORA_DS_AUTH_KEYSET_REVISION。' }
+    # DSTicket v2(方案 B):普通发布只读核对集群里已 bootstrap 的当前 immutable keyset，不在发布流程生成/改钥。
+    # 当前普通发布门禁要求 JWKS 顶层 active_kid 与同 revision signer Secret 私钥一致，不接收
+    # public-only stage；独立轮换工具即使预投递了其它 revision，也不能借普通 online 发布切换。
+    # active kid 由 Secret 私钥推导，再与 revisioned JWKS 中同 kid 的 n/e 对账；keys[0] 顺序没有语义。
+    if ($DsTicketKeysetRevision -cnotmatch '^[1-9][0-9]*$' -or [int64]$DsTicketKeysetRevision -gt [int]::MaxValue) {
+        throw 'online 必须提供正整数 -DsTicketKeysetRevision / PANDORA_DSTICKET_KEYSET_REVISION。'
+    }
+    $dstTicketRevision = [int]$DsTicketKeysetRevision
+    $dstTicketSignerSecretName = "pandora-dsticket-signer-r$dstTicketRevision"
+    $dstTicketSecret = Get-KubectlJsonObject -KubeContext $ctx `
+        -Arguments @('get', "secret/$dstTicketSignerSecretName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action "读取 immutable DSTicket signer Secret/$dstTicketSignerSecretName"
+    $dstTicketKeyContract = Get-OnlineDSTicketKeyMaterialContract -KubeContext $ctx `
+        -Revision $dstTicketRevision -ExpectedActiveKid $DsTicketActiveKid -SignerObject $dstTicketSecret
+    $DsTicketActiveKid = $dstTicketKeyContract.ActiveKid
+    Write-Ok "DSTicket immutable keyset 对账通过:signer=$dstTicketSignerSecretName keyset=r$dstTicketRevision kid=$DsTicketActiveKid keys=$($dstTicketKeyContract.KeyCount)。"
+    $ordinaryDSTicketState = Assert-OnlineOrdinaryDSTicketState -KubeContext $ctx -RequestedRevision $dstTicketRevision
+    if (-not [string]::IsNullOrWhiteSpace([string]$ordinaryDSTicketState.ActiveKid) -and
+        [string]$ordinaryDSTicketState.ActiveKid -cne $DsTicketActiveKid) {
+        throw '普通发布早期状态的 fixed/terminal active kid 与 immutable key material 不一致。'
+    }
+    Write-Ok "普通发布 DSTicket 早期只读门禁通过:r$dstTicketRevision state=$($ordinaryDSTicketState.State)。集群写入前将在互斥锁内重新采样。"
+    $genArgs += @(
+        '-DsAuthorityMode', 'redis', '-DsFenceEtcdEndpoints', $DsFenceEtcdEndpoints,
+        '-DsFenceKeysetRevision', $DsFenceKeysetRevision, '-DsTicketActiveKid', $DsTicketActiveKid,
+        '-DsTicketKeysetRevision', [string]$dstTicketRevision,
+        '-BattleCanaryPercent', [string]$BattleCanaryPercent, '-HubCanaryPercent', [string]$HubCanaryPercent)
+    if (-not [string]::IsNullOrWhiteSpace($CanarySeed)) { $genArgs += @('-CanarySeed', $CanarySeed) }
+    & "$ScriptDir/gen_cluster_config.ps1" @genArgs
+    Assert-LastExit '生成 online 候选配置'
+
+    # P1:普通发布不是换钥流程。必须比较 live Secret/pandora-config 与本次生成结果中实际落盘的
+    # 玩家 Session / DS callback HMAC 指纹及 additional keyset；只比较完整 SHA256，不打印密钥
+    # 或指纹。这样环境变量误换、生成器漂移、additional 被普通发布增删都会在 push/apply 前中止。
+    $hmacServiceNames = @((Get-ServiceList) | ForEach-Object { [string]$_.Name })
+    if ($null -ne $existingConfig) {
+        $liveHmacConfigs = ConvertFrom-PandoraConfigSecretObject -SecretObject $existingConfig `
+            -ExpectedServiceNames $hmacServiceNames
+        $candidateHmacConfigs = Get-PandoraGeneratedConfigObject -ConfigDir $onlineConfigDir `
+            -ExpectedServiceNames $hmacServiceNames
+        Assert-PandoraOnlineHmacContinuity -LiveConfigs $liveHmacConfigs `
+            -CandidateConfigs $candidateHmacConfigs | Out-Null
+        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / additional keyset 均未变化；不打印指纹）。'
+    } else {
+        # 首次 bootstrap 没有 live baseline 可比较；后续普通发布一律走上面的连续性门禁。
+        # 若运行中的业务对象仍在但 Secret 被删，不能把它误判成首次 bootstrap。
+        $liveServiceLines = @(& kubectl @kubectlContextArgs get deployments -n $K8sNamespace --ignore-not-found -o name 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            $namespaceLines = @(& kubectl @kubectlContextArgs get namespace/$K8sNamespace --ignore-not-found -o name 2>&1)
+            if ($LASTEXITCODE -ne 0 -or
+                -not [string]::IsNullOrWhiteSpace((($namespaceLines | ForEach-Object { $_.ToString() }) -join '').Trim())) {
+                throw 'live Secret/pandora-config 缺失且无法证明这是空的新集群；拒绝普通发布，须走独立恢复/换钥流程。'
+            }
+            $liveServiceLines = @()
+        }
+        $expectedLiveDeploymentNames = @($hmacServiceNames | ForEach-Object { "deployment.apps/$_" })
+        $knownDeployments = @($liveServiceLines | ForEach-Object { $_.ToString().Trim() } |
+            Where-Object { $expectedLiveDeploymentNames -ccontains $_ })
+        if ($knownDeployments.Count -gt 0) {
+            throw 'live Secret/pandora-config 缺失但业务 Deployment 已存在；拒绝把密钥基线丢失误判为首次部署，须走独立恢复/换钥流程。'
+        }
+        Write-Warn 'live Secret/pandora-config 不存在且未发现既有业务 Deployment：按首次 bootstrap 继续；本次生成结果将成为后续普通发布的 HMAC 基线。'
+    }
+    # 边缘网关 JWKS 校验门(P0/P1:gen 产出的 JWKS 无仓库内 Envoy 消费,生产客户端面 :8443 由外部边缘
+    # 网关校验)。若边缘网关未同步玩家面密钥派生的 JWKS,login 用新密钥签的 SessionToken 会被边缘网关
+    # 全拒。分两级 —— 优先**真实探测**(证明当前 edge 确实在用当前密钥),否则退回**运维承诺**(布尔):
+    #   1) 设 PANDORA_EDGE_PROBE_URL(edge 上一条受 pandora_session JWT 保护的路由)→ 三段现签探测:
+    #        a. 无 token          应 401(证明该路由确受 JWT 保护)
+    #        b. 错误密钥签的 token 应 401(证明 edge 真在**验签**,而非只看 token 是否存在 → 排除假阳性)
+    #        c. 当前玩家面密钥签的 token 应**非 401**(证明当前 edge 就在用当前密钥)
+    #      三者缺一即 fail-closed 中止(任一不符 = 无法证明 edge 已用当前密钥)。
+    #   2) 未提供探测 URL 时退回 PANDORA_EDGE_JWKS_ACK=1(仅运维书面承诺,不构成证明,打印当前密钥指纹供审计)。
+    #   3) 两者都无 → fail-closed 中止。
+    # 当前玩家面密钥指纹(SHA256 前 12 hex):用于日志审计,让「真实探测通过」与「运维 ACK」都能对上具体密钥。
+    $playerKeyFp = ([System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+                [System.Text.Encoding]::UTF8.GetBytes($playerSec))) -replace '-', '').Substring(0, 12).ToLower()
+    $edgeProbeUrl = $env:PANDORA_EDGE_PROBE_URL
+    if (-not [string]::IsNullOrWhiteSpace($edgeProbeUrl)) {
+        # fail-closed(审核 P1 #7):生产探测链路必须 HTTPS。HTTP 明文探测可被中间人伪造出
+        # 预期的 401/401/非401 响应,让脚本误判「edge 已切当前密钥」。非 https 直接中止。
+        if ($edgeProbeUrl -notmatch '^(?i)https://') {
+            throw "边缘 JWKS 探测:PANDORA_EDGE_PROBE_URL 必须是 https:// 链路(当前=$edgeProbeUrl)。" +
+                  "生产不接受 HTTP 明文探测(可被 MITM 伪造 401/非401 响应制造假阳性)。"
+        }
+        # base64url(bytes):无填充、+/→-_。
+        function ConvertTo-B64Url([byte[]]$b) { [Convert]::ToBase64String($b).TrimEnd('=').Replace('+', '-').Replace('/', '_') }
+        # 用给定密钥现签一枚 60s 有效的 HS256 探测 JWT(iss/aud 对齐 login SessionToken 与 envoy provider)。
+        function New-ProbeJwt([string]$secret) {
+            $nowSec = [int][double]::Parse((Get-Date -UFormat %s))
+            $hdrJson = '{"alg":"HS256","typ":"JWT"}'
+            $plJson = '{"iss":"pandora-login","aud":"pandora-client","sub":"edge-jwks-probe","iat":' + $nowSec + ',"exp":' + ($nowSec + 60) + '}'
+            $enc = [System.Text.Encoding]::UTF8
+            $signingInput = (ConvertTo-B64Url $enc.GetBytes($hdrJson)) + '.' + (ConvertTo-B64Url $enc.GetBytes($plJson))
+            $hmac = [System.Security.Cryptography.HMACSHA256]::new($enc.GetBytes($secret))
+            try { $sig = $hmac.ComputeHash($enc.GetBytes($signingInput)) } finally { $hmac.Dispose() }
+            return $signingInput + '.' + (ConvertTo-B64Url $sig)
+        }
+        $probeJwt = New-ProbeJwt $playerSec
+        # 错误密钥:与真密钥不同的另一把(用于负向探测,证明 edge 真在验签)。
+        $wrongJwt = New-ProbeJwt ($playerSec + '-WRONG-KEY-EDGE-PROBE-NEGATIVE-CONTROL')
+
+        $reqArgs = @{ Uri = $edgeProbeUrl; Method = 'Get'; TimeoutSec = 10; SkipHttpErrorCheck = $true; ErrorAction = 'Stop' }
+        if ($env:PANDORA_EDGE_PROBE_INSECURE -eq '1') {
+            # fail-closed(审核 P1 #7):生产严禁跳过 TLS 证书校验。跳过后 MITM 可伪造 edge 响应制造
+            # 假阳性,让脚本误判 edge 已切当前密钥。online -Prod 路径遇到该开关直接中止,不降级。
+            throw "边缘 JWKS 探测:online -Prod 不允许 PANDORA_EDGE_PROBE_INSECURE=1(跳过 TLS 校验会被 MITM 伪造响应)。" +
+                  "请让边缘网关提供受信任证书,或在受控内网用可验证的证书链;跳过校验仅限非生产链路。"
+        }
+        try {
+            $noTok = Invoke-WebRequest @reqArgs
+            $wrongTok = Invoke-WebRequest @reqArgs -Headers @{ Authorization = "Bearer $wrongJwt" }
+            $withTok = Invoke-WebRequest @reqArgs -Headers @{ Authorization = "Bearer $probeJwt" }
+        } catch {
+            throw "边缘 JWKS 探测请求失败(URL=$edgeProbeUrl):$($_.Exception.Message)。修正 PANDORA_EDGE_PROBE_URL/网络后重试;不带证明不部署。"
+        }
+        if ($noTok.StatusCode -ne 401) {
+            throw "边缘 JWKS 探测:无 token 访问 $edgeProbeUrl 返回 $($noTok.StatusCode)(应为 401)。该路由未受 pandora_session JWT 保护,无法据此验证 edge 密钥。请把 PANDORA_EDGE_PROBE_URL 指向受 JWT 保护的 edge 路由。"
+        }
+        if ($wrongTok.StatusCode -ne 401) {
+            throw "边缘 JWKS 探测:错误密钥签的 token 访问 $edgeProbeUrl 返回 $($wrongTok.StatusCode)(应为 401)。edge 未对签名做校验(疑似只判 token 是否存在),探测结论不可信 → 中止。请检查边缘 Envoy 的 jwt_authn 配置。"
+        }
+        if ($withTok.StatusCode -eq 401) {
+            throw "边缘 JWKS 探测:当前玩家面密钥(指纹 $playerKeyFp)现签 token 访问 $edgeProbeUrl 仍返回 401 —— 当前边缘 Envoy 用的不是 PANDORA_JWT_SECRET 派生的 JWKS。请先通过受控密钥管线或单独运行 gen_cluster_config.ps1 -Prod 生成并同步 JWKS 后再部署(本次独占快照退出时会清理；否则 login 新密钥签发的 SessionToken 会被全拒)。"
+        }
+        Write-Ok "边缘 JWKS 真实探测通过(密钥指纹 $playerKeyFp):无 token→401、错误密钥→401、当前密钥→$($withTok.StatusCode),证明当前 edge 就在用当前玩家面密钥且确在验签。"
+    } elseif ($env:PANDORA_EDGE_JWKS_ACK -eq '1') {
+        Write-Warn "PANDORA_EDGE_JWKS_ACK=1 仅为运维书面承诺(未做真实探测,不能证明当前 edge 已用当前密钥)。"
+        Write-Warn "本次玩家面密钥指纹:$playerKeyFp —— 请人工核对边缘 Envoy 当前 JWKS 与该指纹一致。"
+        Write-Warn "强烈建议改设 PANDORA_EDGE_PROBE_URL(受 pandora_session JWT 保护的 edge 路由)让脚本现签探测 token 实测。"
+    } else {
+        throw "online -Prod 需验证边缘 Envoy(客户端 :8443 JWT 校验)的 JWKS 已同步为 PANDORA_JWT_SECRET 派生值(当前密钥指纹 $playerKeyFp)。" +
+              " 本仓库不含生产边缘网关(外部自带同名 pandora-envoy Service)。请先通过受控密钥管线或单独运行 gen_cluster_config.ps1 -Prod 生成并同步 JWKS" +
+              " (本次独占快照退出时会清理),再设 PANDORA_EDGE_PROBE_URL 做真实探测(推荐),或确认后设 PANDORA_EDGE_JWKS_ACK=1;" +
+              " 否则 login 新密钥签发的 SessionToken 会被边缘网关全部拒绝。"
+    }
+    Write-Ok "生产密钥预检通过:玩家面 / DS 回调面为两把独立真密钥,边缘 JWKS 已校验。"
+
+    if ($Env -eq 'prod') {
+        throw 'online prod 的 DS auth etcd mTLS/custom CA/ACL 只读身份尚未在五 writer 与预检工具中闭环；禁止用明文 endpoint 或无身份读取冒充生产 fencing。本次未 push、未 apply。'
+    }
+
+    Write-Step '只读验证 DS auth required_writer_epoch 已显式建立'
+    Push-Location $ProjectRoot
+    try {
+        & go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $DsFenceEtcdEndpoints --min-epoch 1 --max-epoch 2
+        $requiredExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($requiredExit -ne 0) {
+        throw 'DS auth required_writer_epoch 不存在、非法或 etcd 不可线性读取；已在 BuildPush/Secret/Fleet/Deployment 前停止。' +
+              '禁止把缺 key 默认成 1。fresh 集群须先走经 Claude 审核的显式 baseline bootstrap；当前 BootstrapRequired 仍有删除后回退风险，不能自动调用。'
+    }
+
+    # DSTicket 方案 B(RS256 纯本地验签)已拍板并在代码层落地(签发方 v2 + UE 验票/Ready 门 +
+    # Fleet JWKS 清单),但**尚未通过真 DS 端到端验证**(UE 侧未编译、未在真集群跑通 v2 准入)。
+    # 按本门口径「只能在 UE 验票方案完成并通过真 DS 测试后移除」:验证闭环前保持阻断,
+    # 不能由运维 ACK 绕过。验证清单:真 DS Fleet 带 JWKS Ready → v2 票进人 → 篡改票被拒 →
+    # 租约/排空门生效。完成后由 Claude 移除本 throw(digest 管线在下方,已测试就绪)。
+    throw 'online 生产验票阻断:DSTicket 方案 B 代码已落地但未经真 DS 端到端验证(UE 未编译/未跑真集群 v2 准入)。请先在本地 minikube agones 链路完成验证清单,再由 Claude 移除本门。当前 Fleet 禁止注入玩家 HMAC/私钥,本次未 push、未 apply。'
+
+    # 以下 digest 管线已完整实现并由纯函数/mutant 测试覆盖；上面的 DSTicket 硬门只能在 UE
+    # 验票方案完成并通过真 DS 测试后由 Claude 移除，不能由运维 ACK 绕过。
+    $serviceNames = @((Get-ServiceList) | ForEach-Object { [string]$_.Name })
+    $writerServices = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
+    $registryRoot = $Registry.Trim().TrimEnd('/')
+    $goDigests = @{}
+    $goPins = @{}
+    $remoteRefs = @{}
+    foreach ($name in $serviceNames) { $remoteRefs[$name] = "$registryRoot/pandora/${name}:$Tag" }
 
     if ($BuildPush) {
-        Write-Step "构建并推送 20 个 Go 服务镜像到 $Registry"
-        Build-AllImages
+        Assert-CleanOnlineReleaseSource
+        if ($env:PANDORA_OFFLINE -eq '1') {
+            throw 'online BuildPush 禁止 PANDORA_OFFLINE=1：发布必须从当前 clean commit 严格重建，不能导入/复用离线包。'
+        }
+        throw 'online BuildPush 仍阻断：必须先在目标 registry 启用并由平台验证 native immutable-tag/create-only 策略与发布锁。HEAD 预检存在 TOCTOU，不能作为不可变证明；本次未 build、未 push。'
+        Write-Step '预检 20 个不可变 tag 均不存在（任一鉴权/网络不确定即阻断）'
+        foreach ($name in $serviceNames) { Assert-RemoteImageTagAbsent -Reference $remoteRefs[$name] }
+        Write-Step "从当前 clean commit 严格重建并推送 20 个 Go 服务镜像到 $Registry"
+        Build-AllImages -StrictRelease
+        foreach ($name in $serviceNames) {
+            Assert-LocalImageRevision -Reference "pandora/${name}:dev" -Expected $currentCommit
+        }
         foreach ($svc in (Get-ServiceList)) {
             $local  = "pandora/$($svc.Name):dev"
-            $remote = "$Registry/pandora/$($svc.Name):$Tag"
-            docker tag $local $remote
-            Assert-LastExit "docker tag $local -> $remote"
-            docker push $remote
-            if ($LASTEXITCODE -ne 0) { throw "推送失败:$remote" }
+            $remote = [string]$remoteRefs[$svc.Name]
+            $descriptor = Push-ImageAndResolveDigest -Local $local -Remote $remote
+            $goDigests[$svc.Name] = $descriptor.Digest
+            $goPins[$svc.Name] = $descriptor.Pinned
+        }
+    } else {
+        Write-Step '从 registry 解析 20 个 Go 服务镜像 digest（不按 tag 部署）'
+        foreach ($name in $serviceNames) {
+            $descriptor = Get-RegistryImageDescriptor -Reference $remoteRefs[$name]
+            $goDigests[$name] = $descriptor.Digest
+            $goPins[$name] = $descriptor.Pinned
         }
     }
 
-    Write-Step "生成集群版配置 + ConfigMap(namespace $K8sNamespace,allocator=agones)"
-    # 线上真集群:Pod IP 可路由,advertise 留空用 GameServer status.address 直连
-    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones
-    Assert-LastExit 'gen_cluster_config(online)'
+    $battleDescriptor = Get-RegistryImageDescriptor -Reference $BattleDsImage
+    $hubDescriptor = Get-RegistryImageDescriptor -Reference $HubDsImage
+    $battleCanaryDescriptor = if ([string]::IsNullOrWhiteSpace($CanaryBattleDsImage)) {
+        $battleDescriptor
+    } else {
+        Get-RegistryImageDescriptor -Reference $CanaryBattleDsImage
+    }
+    $hubCanaryDescriptor = if ([string]::IsNullOrWhiteSpace($CanaryHubDsImage)) {
+        $hubDescriptor
+    } else {
+        Get-RegistryImageDescriptor -Reference $CanaryHubDsImage
+    }
+    foreach ($pair in @(
+        @{ Input = $BattleDsImage; Desc = $battleDescriptor },
+        @{ Input = $HubDsImage; Desc = $hubDescriptor },
+        @{ Input = $CanaryBattleDsImage; Desc = $battleCanaryDescriptor },
+        @{ Input = $CanaryHubDsImage; Desc = $hubCanaryDescriptor })) {
+        if ([string]::IsNullOrWhiteSpace([string]$pair.Input)) { continue }
+        $inputDigest = Get-PandoraImageDigestFromReference -Reference $pair.Input
+        if (-not [string]::IsNullOrWhiteSpace($inputDigest) -and $inputDigest -cne $pair.Desc.Digest) {
+            throw "DS 输入 pin 与 registry 回读不一致:$($pair.Input) input=$inputDigest registry=$($pair.Desc.Digest)"
+        }
+    }
+    $battlePin = $battleDescriptor.Pinned
+    $hubPin = $hubDescriptor.Pinned
+    $battleCanaryPin = $battleCanaryDescriptor.Pinned
+    $hubCanaryPin = $hubCanaryDescriptor.Pinned
+    if (-not [string]::IsNullOrWhiteSpace($CanaryBattleDsImage) -and
+        $battleCanaryDescriptor.Digest -ceq $battleDescriptor.Digest) {
+        throw 'Battle Canary 必须使用与 Stable 不同的独立 digest；同 digest 无法证明灰度轨道。'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CanaryHubDsImage) -and
+        $hubCanaryDescriptor.Digest -ceq $hubDescriptor.Digest) {
+        throw 'Hub Canary 必须使用与 Stable 不同的独立 digest；同 digest 无法证明灰度轨道。'
+    }
+    # 不传 Canary 镜像 = 仅创建 0 Ready 的休眠轨道，清单仍用 Stable pin 便于结构验证。
+    # 显式传图则允许 percent=0 预热，等 Ready 后再通过后续配置 rollout 放量。
+    $battleCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryBattleDsImage)) { 0 } else { $BattleCanaryReplicas }
+    $hubCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryHubDsImage)) { 0 } else { $HubCanaryReplicas }
+
+    Write-Step '生成独占 runtime overlay，并验证 20 个 digest pin + 5 个 writer annotation'
+    $runtimeOverlay = New-OnlineRuntimeOverlay -SourceOverlay $overlay -Registry $registryRoot `
+        -Digests $goDigests -ServiceNames $serviceNames -WriterServices $writerServices -EnvironmentName $Env `
+        -DSTicketKeysetRevision $dstTicketRevision
+    $runtimeOverlayDir = $runtimeOverlay.Path
+    foreach ($fleetCheck in @(
+        @{ File = '20-fleet-battle.yaml'; Pin = $battlePin; Container = 'pandora-battle-ds'; Track = 'stable'; Name = 'pandora-battle-stable' },
+        @{ File = '21-fleet-battle-canary.yaml'; Pin = $battleCanaryPin; Container = 'pandora-battle-ds'; Track = 'canary'; Name = 'pandora-battle-canary' },
+        @{ File = '30-fleet-hub.yaml'; Pin = $hubPin; Container = 'pandora-hub-ds'; Track = 'stable'; Name = 'pandora-hub-stable' },
+        @{ File = '31-fleet-hub-canary.yaml'; Pin = $hubCanaryPin; Container = 'pandora-hub-ds'; Track = 'canary'; Name = 'pandora-hub-canary' })) {
+        $fleetRaw = Get-Content -LiteralPath (Join-Path $ProjectRoot "deploy/k8s/agones/$($fleetCheck.File)") -Raw
+        $fleetRendered = Set-PandoraFleetImagePin -Manifest $fleetRaw -PinnedImage $fleetCheck.Pin
+        $fleetRendered = Set-PandoraFleetDSTicketKeysetRevision -Manifest $fleetRendered -Revision $dstTicketRevision
+        $fleetContractRows = Get-PandoraFleetContractRows -Manifest $fleetRendered
+        Assert-PandoraFleetManifestContract -Manifest $fleetRendered -ContractRows $fleetContractRows `
+            -PinnedImage $fleetCheck.Pin -ContainerName $fleetCheck.Container -ExpectedTrack $fleetCheck.Track `
+            -ExpectedFleetName $fleetCheck.Name
+    }
+
+    Write-Step "应用已校验的集群版配置 Secret(namespace $K8sNamespace,allocator=agones)"
     kubectl @kubectlContextArgs apply -f (Join-Path $ProjectRoot 'deploy/k8s/services/00-namespace.yaml')
     Assert-LastExit 'kubectl apply 00-namespace'
-    kubectl @kubectlContextArgs create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
-        --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
-    Assert-LastExit 'kubectl apply configmap pandora-config'
+    # 本地构建/registry 解析均在锁外；通过全部生产硬门后，在第一笔 DSTicket
+    # 相关集群写前原子 create-only 抢锁。rotation 同样使用此锁，消除 preflight->apply TOCTOU。
+    $dsticketOperationLock = Enter-OnlineDSTicketOperationLock -KubeContext $ctx
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+    $lockedKeyContract = Get-OnlineDSTicketKeyMaterialContract -KubeContext $ctx `
+        -Revision $dstTicketRevision -ExpectedActiveKid $DsTicketActiveKid
+    if ($lockedKeyContract.ActiveKid -cne $dstTicketKeyContract.ActiveKid -or
+        $lockedKeyContract.JwksSha256 -cne $dstTicketKeyContract.JwksSha256 -or
+        $lockedKeyContract.PrivatePemSha256 -cne $dstTicketKeyContract.PrivatePemSha256) {
+        throw '锁内重读 DSTicket key material 与早期预检不一致，拒绝写集群。'
+    }
+    $lockedOrdinaryState = Assert-OnlineOrdinaryDSTicketState -KubeContext $ctx -RequestedRevision $dstTicketRevision
+    if (-not [string]::IsNullOrWhiteSpace([string]$lockedOrdinaryState.ActiveKid) -and
+        [string]$lockedOrdinaryState.ActiveKid -cne $lockedKeyContract.ActiveKid) {
+        throw '锁内 ordinary state active kid 与 immutable key material 不一致。'
+    }
+    if ([string]$lockedOrdinaryState.State -cne [string]$ordinaryDSTicketState.State) {
+        throw "早期预检到锁内重验期间 DSTicket state 已变化:$($ordinaryDSTicketState.State) -> $($lockedOrdinaryState.State)；拒绝用旧候选覆盖。"
+    }
+    $earlyFixedRV = if ($null -eq $existingConfig) { '' } else { [string]$existingConfig.metadata.resourceVersion }
+    $lockedFixedConfig = Get-OnlineOptionalKubectlJsonObject -KubeContext $ctx `
+        -Arguments @('get', 'secret/pandora-config', '-n', $K8sNamespace, '--ignore-not-found', '-o', 'json') `
+        -Action '锁内重读 fixed Secret/pandora-config'
+    $lockedFixedRV = if ($null -eq $lockedFixedConfig) { '' } else { [string]$lockedFixedConfig.metadata.resourceVersion }
+    if ($earlyFixedRV -cne $lockedFixedRV -or
+        ($null -ne $existingConfig -and [string]::IsNullOrWhiteSpace($earlyFixedRV)) -or
+        ($null -ne $lockedFixedConfig -and [string]::IsNullOrWhiteSpace($lockedFixedRV))) {
+        throw '早期预检到锁内重验期间 fixed pandora-config resourceVersion/存在性已改变；拒绝覆盖新发布。'
+    }
+    if ($null -ne $lockedFixedConfig) {
+        $lockedHmacConfigs = ConvertFrom-PandoraConfigSecretObject -SecretObject $lockedFixedConfig `
+            -ExpectedServiceNames $hmacServiceNames
+        $lockedCandidateHmacConfigs = Get-PandoraGeneratedConfigObject -ConfigDir $onlineConfigDir `
+            -ExpectedServiceNames $hmacServiceNames
+        Assert-PandoraOnlineHmacContinuity -LiveConfigs $lockedHmacConfigs `
+            -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
+    }
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+    Write-Ok "DSTicket 锁内权威门禁通过:r$dstTicketRevision state=$($lockedOrdinaryState.State)。"
+    # 生产配置含两把真 HS256 密钥,用 Secret 承载(P0:严禁把真密钥写进明文 ConfigMap)。
+    Apply-PandoraConfigSecret -KubeContext $ctx -ConfigDir $onlineConfigDir -Action 'kubectl apply secret pandora-config'
 
     Write-Step "apply Agones RBAC + Fleet(真 Linux DS)"
     # 线上 Agones 通常已由集群管理员预装;此处不自动 helm install,只 apply 业务 RBAC/Fleet
@@ -1118,24 +2570,90 @@ function Invoke-Online {
     if ($LASTEXITCODE -ne 0) {
         Write-Warn "未检测到 agones-system —— 线上 Agones 须由集群管理员预先安装,否则 Fleet/分配不可用。"
     }
-    Apply-AgonesManifests -BattleDsImage $BattleDsImage -HubDsImage $HubDsImage -DsGatewayAddr $DsGatewayAddr -DsGatewayTls $DsGatewayTls -KubeContext $ctx
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+    Apply-AgonesManifests -BattleDsImage $battlePin -HubDsImage $hubPin `
+        -CanaryBattleDsImage $battleCanaryPin -CanaryHubDsImage $hubCanaryPin `
+        -BattleCanaryReplicaCount $battleCanaryReplicaApply -HubCanaryReplicaCount $hubCanaryReplicaApply `
+        -DSTicketKeysetRevision $dstTicketRevision -DsGatewayAddr $DsGatewayAddr -DsGatewayTls $DsGatewayTls `
+        -KubeContext $ctx
 
-    # 用 -Registry/-Tag 临时覆盖 overlay 占位镜像(try/finally 还原,保持仓库干净)
-    $orig = Get-Content $overlayFile -Raw
-    try {
-        $patched = $orig.Replace('registry.example.com', $Registry) -replace 'newTag: latest', "newTag: $Tag"
-        [System.IO.File]::WriteAllText($overlayFile, $patched, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Step "kubectl apply -k overlays/online($Env)"
-        kubectl @kubectlContextArgs apply -k $overlay
-        # 失败必须 fail-fast:否则下面照样打印「部署已提交」,把半吺子/失败的 apply 误报成功
-        # (回应审核 P1:apply 失败后仍打印部署成功)。finally 仍会还原 overlay 占位镜像。
-        Assert-LastExit 'kubectl apply -k overlays/online'
-    } finally {
-        [System.IO.File]::WriteAllText($overlayFile, $orig, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Step "kubectl apply -k runtime online overlay($Env,digest pinned)"
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+    kubectl @kubectlContextArgs apply -k $runtimeOverlayDir
+    Assert-LastExit 'kubectl apply -k runtime online overlay'
+
+    # Secret 传播(审核 P1 #4):pandora-config 以 subPath 挂载,Secret 内容更新不会热感知;
+    # 且镜像 tag 不变时 apply -k 判定 pod 模板 unchanged 不触发 rollout → Pod 继续用旧密钥/旧配置。
+    # 故显式按名 rollout restart 20 个业务 Deployment,强制重挂最新 Secret(服务支持 SIGTERM 排空,
+    # 滚动重启零停机,见 CLAUDE.md §9 不变量 16),再等关键服务就绪确认新配置生效。
+    Write-Step "rollout restart 业务 Deployment(传播更新后的 pandora-config Secret)"
+    foreach ($svc in (Get-ServiceList)) {
+        $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+        kubectl @kubectlContextArgs rollout restart deploy/$($svc.Name) -n $K8sNamespace
+        Assert-LastExit "rollout restart $($svc.Name)(Secret 传播)"
     }
+    foreach ($svc in (Get-ServiceList)) {
+        kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
+        Assert-LastExit "rollout status $($svc.Name)(Secret 传播后未就绪,查:kubectl describe/logs)"
+    }
+    Assert-OnlineDeploymentImageState -KubeContext $ctx -Pins $goPins -Digests $goDigests -WriterServices $writerServices
+    Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-battle-stable' -Container 'pandora-battle-ds' `
+        -Pin $battlePin -Digest $battleDescriptor.Digest -ExpectedTrack stable
+    Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-battle-canary' -Container 'pandora-battle-ds' `
+        -Pin $battleCanaryPin -Digest $battleCanaryDescriptor.Digest -ExpectedTrack canary
+    Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-hub-stable' -Container 'pandora-hub-ds' `
+        -Pin $hubPin -Digest $hubDescriptor.Digest -ExpectedTrack stable
+    Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-hub-canary' -Container 'pandora-hub-ds' `
+        -Pin $hubCanaryPin -Digest $hubCanaryDescriptor.Digest -ExpectedTrack canary
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+    $finalKeyContract = Get-OnlineDSTicketKeyMaterialContract -KubeContext $ctx `
+        -Revision $dstTicketRevision -ExpectedActiveKid $DsTicketActiveKid
+    if ($finalKeyContract.JwksSha256 -cne $lockedKeyContract.JwksSha256 -or
+        $finalKeyContract.PrivatePemSha256 -cne $lockedKeyContract.PrivatePemSha256) {
+        throw '普通发布验收时 DSTicket immutable key material 漂移。'
+    }
+    $finalOrdinaryState = Assert-OnlineOrdinaryDSTicketState -KubeContext $ctx -RequestedRevision $dstTicketRevision
+    if ([string]::IsNullOrWhiteSpace([string]$finalOrdinaryState.ActiveKid) -or
+        [string]$finalOrdinaryState.ActiveKid -cne $finalKeyContract.ActiveKid) {
+        throw '普通发布终态 fixed/terminal active kid 与 immutable key material 不一致。'
+    }
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+    Write-Ok "DSTicket 普通发布终态验收通过:r$dstTicketRevision state=$($finalOrdinaryState.State)。"
+    Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $ctx
 
+    } finally {
+        try {
+        if (-not [string]::IsNullOrWhiteSpace($runtimeOverlayDir) -and (Test-Path -LiteralPath $runtimeOverlayDir -PathType Container)) {
+            $resolvedRuntime = [System.IO.Path]::GetFullPath($runtimeOverlayDir)
+            $runtimeParent = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot 'deploy/k8s/overlays'))
+            $safeRuntimeParent = (Split-Path -Parent $resolvedRuntime).Equals($runtimeParent, [System.StringComparison]::OrdinalIgnoreCase)
+            $safeRuntimeLeaf = (Split-Path -Leaf $resolvedRuntime) -match "^\.online-runtime-$([regex]::Escape($Env))-[0-9a-f]{32}$"
+            if (-not $safeRuntimeParent -or -not $safeRuntimeLeaf) {
+                throw "拒绝清理未经验证的 runtime overlay 路径:$resolvedRuntime"
+            }
+            try { Remove-Item -LiteralPath $resolvedRuntime -Recurse -Force }
+            catch { throw "online 流程已结束,但 runtime overlay 清理失败:$resolvedRuntime;$($_.Exception.Message)" }
+        }
+        if (Test-Path -LiteralPath $onlineConfigDir -PathType Container) {
+            $resolvedSnapshot = [System.IO.Path]::GetFullPath($onlineConfigDir)
+            $resolvedParent = Split-Path -Parent $resolvedSnapshot
+            $safeParent = $resolvedParent.Equals($onlineSnapshotRoot, [System.StringComparison]::OrdinalIgnoreCase)
+            $safeLeaf = (Split-Path -Leaf $resolvedSnapshot) -match "^online-$([regex]::Escape($Env))-[0-9a-f]{32}$"
+            if (-not $safeParent -or -not $safeLeaf) {
+                throw "拒绝清理未经验证的 online 配置快照路径:$resolvedSnapshot"
+            }
+            try { Remove-Item -LiteralPath $resolvedSnapshot -Recurse -Force }
+            catch { throw "online 流程已结束,但含生产密钥的临时配置快照清理失败:$resolvedSnapshot;$($_.Exception.Message)" }
+        }
+        } finally {
+            if ($null -ne $dsticketOperationLock) {
+                Exit-OnlineDSTicketOperationLock -KubeContext $ctx -Identity $dsticketOperationLock
+                $dsticketOperationLock = $null
+            }
+        }
+    }
     Write-Host ""
-    Write-Ok "online($Env)部署已提交。查看:kubectl --context $ctx get pods -n $K8sNamespace"
+    Write-Ok "online($Env)部署已提交且临时密钥快照已清理。查看:kubectl --context $ctx get pods -n $K8sNamespace"
 }
 
 # ===== 共享:服务清单 / 镜像构建 =====
@@ -1191,7 +2709,7 @@ function Get-VersionInfo {
 }
 
 function Build-AllImages {
-    param([string[]]$Only = @())
+    param([string[]]$Only = @(), [switch]$StrictRelease)
     $dockerfile = Join-Path $ProjectRoot 'deploy/services/Dockerfile'
     $v = Get-VersionInfo
     Write-Info "  版本烙印:version=$($v.Version) commit=$($v.Commit) built=$($v.BuildTime)"
@@ -1217,7 +2735,7 @@ function Build-AllImages {
     # 这台机器不改代码(打包机 / 内网运行机),不该每次先试构建、DNS 抖了再兜底。
     # 设环境变量 PANDORA_OFFLINE=1(打包机一次性 `setx PANDORA_OFFLINE 1`)即走此路径:
     # 导入离线包 → 校验齐全 → 直接返回,不联网、不构建、不受 Docker DNS 抖动影响。
-    if (($env:PANDORA_OFFLINE -eq '1') -and -not $Rebuild) {
+    if (($env:PANDORA_OFFLINE -eq '1') -and -not $Rebuild -and -not $StrictRelease) {
         if (-not (Test-Path $offlineTar)) {
             throw "PANDORA_OFFLINE=1 但找不到离线包:$offlineTar(请在能联网机跑 export_images.ps1 -Build 生成并同步过来)。"
         }
@@ -1237,7 +2755,7 @@ function Build-AllImages {
 
     # 离线镜像优先:本机缺业务镜像 + 无「构建能力」时自动导入离线包(免联网)。
     # 「构建能力」两种模式判定不同:host 方式需本机装 Go;incontainer 方式需 golang 基础镜像。
-    if (-not $Rebuild -and (Test-Path $offlineTar)) {
+    if (-not $StrictRelease -and -not $Rebuild -and (Test-Path $offlineTar)) {
         $missing = @($list | Where-Object { docker image inspect "pandora/$($_.Name):dev" *> $null; $LASTEXITCODE -ne 0 })
         if ($BuildMode -eq 'host') {
             $canBuild = [bool](Test-CommandExists 'go')
@@ -1266,13 +2784,13 @@ function Build-AllImages {
     if ($BuildMode -eq 'host') {
         Build-Images-Host -List $list -Version $v
     } else {
-        Build-Images-InContainer -List $list -Version $v -Dockerfile $dockerfile -OfflineTar $offlineTar
+        Build-Images-InContainer -List $list -Version $v -Dockerfile $dockerfile -OfflineTar $offlineTar -StrictRelease:$StrictRelease
     }
 }
 
 # ===== 方案 A:容器内 go build(deploy/services/Dockerfile,环境隔离,无需本机 Go)=====
 function Build-Images-InContainer {
-    param([array]$List, $Version, [string]$Dockerfile, [string]$OfflineTar)
+    param([array]$List, $Version, [string]$Dockerfile, [string]$OfflineTar, [switch]$StrictRelease)
     $v = $Version
 
     # 国内镜像:基础镜像仓库前缀 + go 模块代理,避免卡在 Docker Hub / proxy.golang.org。
@@ -1319,11 +2837,12 @@ function Build-Images-InContainer {
             --build-arg "BUILD_TIME=$($v.BuildTime)" `
             --build-arg "BASE_REGISTRY=$baseRegistry" `
             --build-arg "GOPROXY=$goproxy" `
+            --label "org.opencontainers.image.revision=$($v.Commit)" `
             -t "pandora/$($svc.Name):dev" $ProjectRoot
         if ($LASTEXITCODE -ne 0) {
             # 构建失败兜底:有离线包就自动导入(拉不到基础镜像/goproxy 挂时),导入后该镜像存在则继续。
             # 导入只做一次(offlineFallbackDone),但之后每个失败服务都复查一次 inspect,避免第 2 个服务误报失败。
-            if (-not $Rebuild -and (Test-Path $OfflineTar)) {
+            if (-not $StrictRelease -and -not $Rebuild -and (Test-Path $OfflineTar)) {
                 if (-not $offlineFallbackDone) {
                     Write-Warn "  构建 $($svc.Name) 失败(多半拉不到基础镜像)。检测到离线镜像包,自动导入兜底..."
                     docker load -i $OfflineTar
@@ -1417,6 +2936,7 @@ function Build-Images-Host {
         Write-Info "  [host] docker build pandora/$($svc.Name):dev(打包预编译产物,秒级)..."
         docker build -f $prebuiltDockerfile `
             --build-arg "BASE_REGISTRY=$baseRegistry" `
+            --label "org.opencontainers.image.revision=$($v.Commit)" `
             -t "pandora/$($svc.Name):dev" $stage
         if ($LASTEXITCODE -ne 0) { throw "镜像打包失败:$($svc.Name)" }
     }
@@ -1445,8 +2965,20 @@ function Resume-K8s {
     if (-not (Test-KubeContextIsLocalMinikube $mkCtx)) {
         throw "kube-context『$mkCtx』的 apiserver endpoint 不是本机 minikube(疑似同名远端/生产集群)。为防 -Resume 把清单发到远端,已中止。"
     }
+
+    # minikube start 返回与 apiserver 真正可读之间仍可能有短暂竞态；这里只等待 control-plane
+    # /readyz，绝不先等待旧 login/allocator Ready。apiserver 一可读就完成所有 fail-closed 审计，
+    # 审计通过后才允许任何业务 Ready 等待、apply 或 rollout。
+    Wait-KubeApiServerReady -KubeContext $mkCtx
+    Write-Step 'Resume 最早只读审计（先于旧业务 Ready/apply/rollout）'
+    Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx
+    Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment
+    Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment
+    Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:$false
+
     Write-Info "等待关键业务 Pod 就绪..."
     try {
+        kubectl --context $mkCtx rollout status deploy/etcd          -n $K8sNamespace --timeout=120s; Assert-LastExit 'etcd 恢复就绪'
         kubectl --context $mkCtx rollout status deploy/login         -n $K8sNamespace --timeout=180s; Assert-LastExit 'login 恢复就绪'
         kubectl --context $mkCtx rollout status deploy/ds-allocator  -n $K8sNamespace --timeout=120s; Assert-LastExit 'ds-allocator 恢复就绪'
         kubectl --context $mkCtx rollout status deploy/hub-allocator -n $K8sNamespace --timeout=120s; Assert-LastExit 'hub-allocator 恢复就绪'
@@ -1460,7 +2992,7 @@ function Resume-K8s {
     Write-Ok "集群已恢复。"
 
     # advertise 地址重解析(-AdvertiseHost > env > 局域网 IP)。DHCP 换址后本机 IP 可能已变,
-    # 但 ConfigMap 里仍是旧地址 —— 必须重生配置 + 覆盖 ConfigMap + 重启读该地址的 Deployment,
+    # 但 Secret 里仍是旧地址 —— 必须重生配置 + 覆盖 Secret + 重启读该地址的 Deployment,
     # 否则 allocator 会继续把旧 IP 发给客户端,导致「恢复成功但连不进 DS」。
     $resumeAdvHost =
         if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { $AdvertiseHost.Trim() }
@@ -1468,19 +3000,37 @@ function Resume-K8s {
         else { Resolve-LanIp }
     if ([string]::IsNullOrWhiteSpace($resumeAdvHost)) { $resumeAdvHost = '127.0.0.1' }
 
-    Write-Step "刷新 DS advertise 到 ConfigMap(防 DHCP 换址后 allocator 继续发旧地址):$resumeAdvHost"
-    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost $resumeAdvHost
-    Assert-LastExit '重生集群配置(advertise 刷新)'
-    kubectl --context $mkCtx create configmap pandora-config --from-file=$ClusterEtcDir -n $K8sNamespace `
-        --dry-run=client -o yaml | kubectl --context $mkCtx apply -f -
-    Assert-LastExit 'kubectl apply configmap pandora-config(advertise 刷新)'
-    # ConfigMap 以文件挂载(subPath cluster.yaml),Pod 不会热感知 —— 重启读 advertise 的 allocator
-    # 让新地址生效(ds-allocator 直接下发给客户端,hub-allocator 同理)。
-    foreach ($dep in @('ds-allocator', 'hub-allocator')) {
-        kubectl --context $mkCtx rollout restart deploy/$dep -n $K8sNamespace; Assert-LastExit "$dep 重启触发(advertise 刷新)"
-        kubectl --context $mkCtx rollout status  deploy/$dep -n $K8sNamespace --timeout=120s; Assert-LastExit "$dep 重启就绪(advertise 刷新)"
+    Write-Step "刷新 DS advertise 到 Secret(防 DHCP 换址后 allocator 继续发旧地址):$resumeAdvHost"
+    # 本地 minikube resume(context=$mkCtx),沿用公开 dev 密钥,显式 -AllowDevSecrets(审核 P1)。
+    # DSTicket v2:复用/补齐 dev 钥料(旧集群若缺 Secret/ConfigMap 会在此幂等补上,Fleet 挂载不悬空)。
+    $resumeDsTicketKid = Ensure-DsTicketDevKeyMaterial -KubeContext $mkCtx
+    & "$ScriptDir/gen_cluster_config.ps1" -AllocatorMode agones -AllocatorAdvertiseHost $resumeAdvHost -AllowDevSecrets `
+        -DsAuthMode enforce -DsAuthorityMode redis -DsFenceEtcdEndpoints $script:LocalDsFenceEndpoint `
+        -DsFenceKeysetRevision $script:LocalDsFenceKeysetRevision -DsTicketActiveKid $resumeDsTicketKid `
+        -DsTicketKeysetRevision 1
+    Assert-LastExit '恢复生成本地 k8s enforce/redis DSTicket v2 配置'
+    Apply-PandoraConfigSecret -KubeContext $mkCtx -Action 'kubectl apply secret pandora-config(advertise 刷新)'
+    # 重新 apply 业务清单(审核 P1 #5):-Resume 若恢复的是「旧版本(挂 ConfigMap)部署的集群」,
+    # 光 create Secret 不会让 Pod 改用它 —— 卷源仍指向旧 ConfigMap,新 Secret 完全被忽略。
+    # 重 apply 当前清单把卷源纠正为 Secret(:dev tag 不变,未变的 Deployment 报 unchanged 不churn;
+    # 卷源从 ConfigMap 改成 Secret 的旧集群会被自动 rollout 迁移),确保新 Secret 真正被挂载。
+    $resumeServicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
+    kubectl --context $mkCtx apply -k $resumeServicesDir
+    Assert-LastExit 'kubectl apply -k services(Resume:纠正卷源为 Secret)'
+    # Secret 以 subPath 挂载不会热感知:按名 rollout restart 全部 20 个业务 Deployment,
+    # 让刷新后的 pandora-config Secret(advertise + 其它配置)在每个 Pod 生效(滚动重启零停机)。
+    # 必须逐个等待全部 20 个 Deployment；只等 allocator 会把其余服务的失败误报成“全部传播完成”。
+    Write-Info "rollout restart 全部业务 Deployment(传播刷新后的 pandora-config Secret)..."
+    foreach ($svc in (Get-ServiceList)) {
+        kubectl --context $mkCtx rollout restart deploy/$($svc.Name) -n $K8sNamespace
+        Assert-LastExit "rollout restart $($svc.Name)(Secret 刷新)"
     }
-    Write-Ok "ConfigMap advertise 已刷新为 $resumeAdvHost,allocator 已重启生效。"
+    foreach ($svc in (Get-ServiceList)) {
+        kubectl --context $mkCtx rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
+        Assert-LastExit "rollout status $($svc.Name)(Secret 刷新后未就绪)"
+    }
+    Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
+    Write-Ok "pandora-config Secret 已刷新为 advertise=$resumeAdvHost 并传播到全部业务 Pod(卷源已确保为 Secret)。"
 
     Write-Step "补部署 DS 面 Envoy + Fleet(让磁盘上的清单改动在恢复后生效)"
     # -Resume 靠 minikube start 拉回的是「停机前」集群内对象;若期间改过 16-ds-envoy.yaml(如 :8444
@@ -1495,7 +3045,7 @@ function Resume-K8s {
     kubectl --context $mkCtx rollout restart deploy/pandora-envoy -n $K8sNamespace; Assert-LastExit 'rollout restart pandora-envoy(恢复:重载 DS 面配置)'
     kubectl --context $mkCtx rollout status  deploy/pandora-envoy -n $K8sNamespace --timeout=120s; Assert-LastExit 'pandora-envoy 恢复就绪'
     # Fleet 清单自带 namespace: default,不加 -n,让清单里的命名空间生效。
-    foreach ($resumeFleet in @('20-fleet-battle.yaml', '30-fleet-hub.yaml')) {
+    foreach ($resumeFleet in @('20-fleet-battle.yaml', '21-fleet-battle-canary.yaml', '30-fleet-hub.yaml', '31-fleet-hub-canary.yaml')) {
         kubectl --context $mkCtx apply -f (Join-Path $resumeAgonesDir $resumeFleet); Assert-LastExit "apply Fleet $resumeFleet(恢复)"
     }
     Write-Ok "DS 面 Envoy 已重载配置,Fleet 清单已同步。"

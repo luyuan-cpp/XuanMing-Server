@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 )
 
@@ -20,6 +21,8 @@ type ShardCandidate struct {
 	Region   string
 	ShardID  uint32
 	Capacity int32
+	// ReleaseTrack 必须来自实际 GameServer metadata；本地/mock 固定 stable。
+	ReleaseTrack string
 	// TokenReady 表示该分片的 DS 回调令牌已就绪(enforce 下签发/续期成功)。
 	// false 仅出现在 agones + enforce 且令牌签发/patch 失败时:此分片虽在 Fleet 里 ready,但其
 	// DS 回调会被守卫全拒 —— 拓扑对账据此不把它当可用镜像(不新建 ready、清理已有 ready 镜像),
@@ -75,12 +78,13 @@ func (m *MockHubFleetProvider) ListShards(_ context.Context, region string) ([]S
 	out := make([]ShardCandidate, 0, m.cfg.MockShardCount)
 	for i := 1; i <= m.cfg.MockShardCount; i++ {
 		out = append(out, ShardCandidate{
-			PodName:    fmt.Sprintf("pandora-hub-%s-%d", region, i),
-			Addr:       fmt.Sprintf("%s:%d", m.cfg.MockHubAddrHost, m.cfg.MockHubPortBase+i),
-			Region:     region,
-			ShardID:    uint32(i),
-			Capacity:   m.cfg.DefaultCapacity,
-			TokenReady: true,
+			PodName:      fmt.Sprintf("pandora-hub-%s-%d", region, i),
+			Addr:         fmt.Sprintf("%s:%d", m.cfg.MockHubAddrHost, m.cfg.MockHubPortBase+i),
+			Region:       region,
+			ShardID:      uint32(i),
+			Capacity:     m.cfg.DefaultCapacity,
+			ReleaseTrack: releasetrack.Stable,
+			TokenReady:   true,
 		})
 	}
 	return out, nil

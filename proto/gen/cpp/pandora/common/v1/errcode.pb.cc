@@ -42,7 +42,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\037pandora/common/v1/errcode.proto\022\021pando"
-    "ra.common.v1*\375\032\n\007ErrCode\022\006\n\002OK\020\000\022\017\n\013ERR_"
+    "ra.common.v1*\233\033\n\007ErrCode\022\006\n\002OK\020\000\022\017\n\013ERR_"
     "UNKNOWN\020\001\022\020\n\014ERR_INTERNAL\020\002\022\017\n\013ERR_TIMEO"
     "UT\020\003\022\023\n\017ERR_INVALID_ARG\020\004\022\021\n\rERR_NOT_FOU"
     "ND\020\005\022\026\n\022ERR_ALREADY_EXISTS\020\006\022\027\n\023ERR_PERM"
@@ -124,17 +124,18 @@ const char descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto[] A
     "R_AUCTION_NOT_OWNER\020\343]\022\035\n\030ERR_AUCTION_IN"
     "SUFFICIENT\020\344]\022%\n ERR_AUCTION_IDEMPOTENCY"
     "_CONFLICT\020\345]\022\034\n\027ERR_AUCTION_MARKET_BUSY\020"
-    "\346]\022$\n\037ERR_LEADERBOARD_BOARD_NOT_FOUND\020\311e"
-    "\022$\n\037ERR_LEADERBOARD_ENTRY_NOT_FOUND\020\312e\022\""
-    "\n\035ERR_LEADERBOARD_INVALID_BOARD\020\313e\022$\n\037ER"
-    "R_LEADERBOARD_SETTLE_CONFLICT\020\314e\022\"\n\035ERR_"
-    "LEADERBOARD_REWARD_FAILED\020\315eb\006proto3"
+    "\346]\022\034\n\027ERR_AUCTION_ORDER_LIMIT\020\347]\022$\n\037ERR_"
+    "LEADERBOARD_BOARD_NOT_FOUND\020\311e\022$\n\037ERR_LE"
+    "ADERBOARD_ENTRY_NOT_FOUND\020\312e\022\"\n\035ERR_LEAD"
+    "ERBOARD_INVALID_BOARD\020\313e\022$\n\037ERR_LEADERBO"
+    "ARD_SETTLE_CONFLICT\020\314e\022\"\n\035ERR_LEADERBOAR"
+    "D_REWARD_FAILED\020\315eb\006proto3"
 };
 static ::absl::once_flag descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto = {
     false,
     false,
-    3516,
+    3546,
     descriptor_table_protodef_pandora_2fcommon_2fv1_2ferrcode_2eproto,
     "pandora/common/v1/errcode.proto",
     &descriptor_table_pandora_2fcommon_2fv1_2ferrcode_2eproto_once,
@@ -156,7 +157,7 @@ ErrCode_descriptor() {
   return file_level_enum_descriptors_pandora_2fcommon_2fv1_2ferrcode_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t ErrCode_internal_data_[] = {
-    917504u, 6881280u, 9102u, 5001u, 9603u, 2030u, 7005u, 9408u, 12004u, 1012u, 3007u, 5105u, 7016u, 9302u, 9505u, 10003u, 13002u, 1004u, 2010u, 3003u, 4004u, 5101u, 7001u, 7012u, 9001u, 9106u, 9404u, 9503u, 9601u, 10001u, 12002u, 12006u, 13004u, 1002u, 1010u, 2002u, 2020u, 3001u, 3005u, 4002u, 4006u, 5003u, 5103u, 6002u, 7003u, 7010u, 7014u, 8001u, 9003u, 9104u, 9202u, 9402u, 9406u, 9501u, 9504u, 9506u, 9602u, 9604u, 10002u, 12001u, 12003u, 12005u, 13001u, 13003u, 13005u, 1001u, 1003u, 1005u, 1011u, 2001u, 2003u, 2011u, 2021u, 2031u, 3002u, 3004u, 3006u, 4001u, 4003u, 4005u, 4007u, 5002u, 5004u, 5102u, 5104u, 6001u, 6003u, 7002u, 7004u, 7006u, 7011u, 7013u, 7015u, 7017u, 8002u, 9002u, 9101u, 9103u, 9105u, 9201u, 9301u, 9401u, 9403u, 9405u, 9407u, 9409u, 9502u, };
+    917504u, 6946816u, 9102u, 5001u, 9604u, 2030u, 7005u, 9408u, 12005u, 1012u, 3007u, 5105u, 7016u, 9302u, 9506u, 12001u, 13002u, 1004u, 2010u, 3003u, 4004u, 5101u, 7001u, 7012u, 9001u, 9106u, 9404u, 9503u, 9602u, 10002u, 12003u, 12007u, 13004u, 1002u, 1010u, 2002u, 2020u, 3001u, 3005u, 4002u, 4006u, 5003u, 5103u, 6002u, 7003u, 7010u, 7014u, 8001u, 9003u, 9104u, 9202u, 9402u, 9406u, 9501u, 9505u, 9601u, 9603u, 10001u, 10003u, 12002u, 12004u, 12006u, 13001u, 13003u, 13005u, 1001u, 1003u, 1005u, 1011u, 2001u, 2003u, 2011u, 2021u, 2031u, 3002u, 3004u, 3006u, 4001u, 4003u, 4005u, 4007u, 5002u, 5004u, 5102u, 5104u, 6001u, 6003u, 7002u, 7004u, 7006u, 7011u, 7013u, 7015u, 7017u, 8002u, 9002u, 9101u, 9103u, 9105u, 9201u, 9301u, 9401u, 9403u, 9405u, 9407u, 9409u, 9502u, 9504u, };
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace v1
 }  // namespace common

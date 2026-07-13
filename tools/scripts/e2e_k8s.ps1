@@ -4,7 +4,7 @@
 #   1) 校验 minikube / Agones / Fleet / 后端 allocator 就绪
 #   2) 把两个真 UE Linux DS 镜像(精确 tag,从 Fleet yaml 动态解析)load 进 minikube
 #   3) 起宿主 Envoy 桥接(kubectl port-forward 所有 envoy upstream + docker envoy :8443/:8444)
-#   4) 等 pandora-battle / pandora-hub Fleet Ready
+#   4) 等 Stable Fleet Ready，并验证 Canary Fleet 是 Ready 或显式 0 副本休眠
 #   5) (可选)起容器版 UDP 回程中继(--network <minikube profile>;docker driver 下客户端连 DS 必需)
 #   6) 打印端到端验收清单(用真 UE 客户端验:登录→hub→战斗→结算回 hub)
 #
@@ -165,14 +165,16 @@ kubectl @kubectlContextArgs get ns agones-system *> $null
 if ($LASTEXITCODE -ne 0) { Write-Err "未检测到 Agones(agones-system)。先跑:pwsh tools/scripts/start.ps1 -Mode k8s"; exit 1 }
 Write-Ok "Agones 已安装"
 
-# Fleet 在不在(start.ps1 -Mode k8s 已 apply)
-kubectl @kubectlContextArgs get fleet pandora-battle -n $FleetNamespace *> $null
-$battleFleetOk = ($LASTEXITCODE -eq 0)
-kubectl @kubectlContextArgs get fleet pandora-hub -n $FleetNamespace *> $null
-$hubFleetOk = ($LASTEXITCODE -eq 0)
-if (-not $battleFleetOk -or -not $hubFleetOk) {
-    Write-Warn "Fleet 不全(battle=$battleFleetOk hub=$hubFleetOk),尝试 apply..."
-    foreach ($manifest in @('10-rbac-allocator.yaml', '20-fleet-battle.yaml', '30-fleet-hub.yaml')) {
+# 四条 Fleet 在不在(start.ps1 -Mode k8s 已 apply)
+$fleetNames = @('pandora-battle-stable', 'pandora-battle-canary', 'pandora-hub-stable', 'pandora-hub-canary')
+$missingFleets = @()
+foreach ($fleet in $fleetNames) {
+    kubectl @kubectlContextArgs get fleet $fleet -n $FleetNamespace *> $null
+    if ($LASTEXITCODE -ne 0) { $missingFleets += $fleet }
+}
+if ($missingFleets.Count -gt 0) {
+    Write-Warn "Fleet 不全(missing=$($missingFleets -join ',')),尝试 apply..."
+    foreach ($manifest in @('10-rbac-allocator.yaml', '20-fleet-battle.yaml', '21-fleet-battle-canary.yaml', '30-fleet-hub.yaml', '31-fleet-hub-canary.yaml')) {
         kubectl @kubectlContextArgs apply -f (Join-Path $AgonesDir $manifest)
         if ($LASTEXITCODE -ne 0) { Write-Err "apply $manifest 失败"; exit 1 }
     }
@@ -217,15 +219,15 @@ if ($SkipImageLoad) {
     Write-Ok "DS 镜像 tag 已强制刷新并在节点内确认存在"
 
     $oldUidSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+    foreach ($fleet in $fleetNames) {
         foreach ($item in @(Get-FleetGameServerItems $fleet)) {
             if ($item.metadata.uid) { [void]$oldUidSet.Add([string]$item.metadata.uid) }
         }
     }
-    # 只要执行过 image load，就必须按本项目两支 Fleet 精确重建 GameServer。即使 load 一次成功、
+    # 只要执行过 image load，就必须按本项目四支 Fleet 精确重建 GameServer。即使 load 一次成功、
     # tag 校验已匹配，运行中的旧 Pod 也不会自动换镜像；若不删会把旧 Ready 实例误判为新包就绪。
     Write-Warn "DS 镜像已刷新，按 Fleet 标签删除现存 GameServer，让 Agones 用新镜像重建..."
-    foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+    foreach ($fleet in $fleetNames) {
         kubectl @kubectlContextArgs delete gameservers -n $FleetNamespace -l "agones.dev/fleet=$fleet" --ignore-not-found
         if ($LASTEXITCODE -ne 0) {
             Write-Err "删除 Fleet '$fleet' 的旧 GameServer 失败；不能继续用旧 Ready 实例假报成功。"
@@ -237,7 +239,7 @@ if ($SkipImageLoad) {
     $uidDeadline = (Get-Date).AddSeconds(60)
     do {
         $remainingOld = @()
-        foreach ($fleet in @('pandora-battle', 'pandora-hub')) {
+        foreach ($fleet in $fleetNames) {
             $remainingOld += @(Get-FleetGameServerItems $fleet | Where-Object {
                 $_.metadata.uid -and $oldUidSet.Contains([string]$_.metadata.uid)
             })
@@ -249,7 +251,7 @@ if ($SkipImageLoad) {
         Write-Err "旧 GameServer UID 在 60s 内未全部消失，拒绝把旧实例当作新镜像实例。"
         exit 1
     }
-    Write-Ok "两个 DS 镜像已 load"
+    Write-Ok "两个 DS 镜像已 load，四条 Fleet 的旧 GameServer 已重建"
 }
 
 # ── 2) 起宿主 Envoy 桥接 ────────────────────────────────────────────────
@@ -262,12 +264,22 @@ function Wait-FleetReady([string]$fleet, [int]$timeoutSec) {
     $deadline = (Get-Date).AddSeconds($timeoutSec)
     while ((Get-Date) -lt $deadline) {
         $desired = (kubectl @kubectlContextArgs get fleet $fleet -n $FleetNamespace -o jsonpath='{.spec.replicas}' 2>$null)
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($desired) -or [int]$desired -lt 1) {
-            Write-Err "读取 Fleet '$fleet' 的期望副本数失败或副本数 <1，不能降级按 1 个实例假验收。"
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($desired) -or [int]$desired -lt 0) {
+            Write-Err "读取 Fleet '$fleet' 的期望副本数失败或为负数，不能假验收。"
             return $false
         }
         $items = @(Get-FleetGameServerItems $fleet)
+        $expectedTrack = if ($fleet -like '*-canary') { 'canary' } else { 'stable' }
+        $wrongTrack = @($items | Where-Object { [string]$_.metadata.labels.'pandora.dev/release-track' -cne $expectedTrack })
+        if ($wrongTrack.Count -gt 0) {
+            Write-Err "$fleet 有 GameServer release-track 漂移，expected=$expectedTrack"
+            return $false
+        }
         $ready = @($items | Where-Object { $_.status.state -eq 'Ready' }).Count
+        if ([int]$desired -eq 0 -and $ready -eq 0) {
+            Write-Ok "$fleet 休眠:Ready=0/0（不接新分配）"
+            return $true
+        }
         if ($ready -ge [int]$desired) { Write-Ok "$fleet Ready=$ready/$desired"; return $true }
         Write-Host "  $fleet actual Ready GameServers=$ready/$desired ..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 5
@@ -277,9 +289,8 @@ function Wait-FleetReady([string]$fleet, [int]$timeoutSec) {
     Write-Warn "排查:kubectl --context $KubeContext describe fleet $fleet -n $FleetNamespace;kubectl --context $KubeContext logs <gs-pod> -n $FleetNamespace -c $fleet-ds"
     return $false
 }
-$bOk = Wait-FleetReady 'pandora-battle' $TimeoutSec
-$hOk = Wait-FleetReady 'pandora-hub' $TimeoutSec
-if (-not $bOk -or -not $hOk) {
+$fleetReady = @($fleetNames | ForEach-Object { Wait-FleetReady $_ $TimeoutSec })
+if (@($fleetReady | Where-Object { -not $_ }).Count -gt 0) {
     Write-Err "Fleet 未全就绪,中止(DS 镜像未进 Ready 多半是 Agones SDK 未调通,看上面排查指引)。"
     exit 1
 }

@@ -77,6 +77,9 @@ type LoginUsecase struct {
 	hubRegion   string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
 	signer      *auth.Signer
 	verifier    *auth.Verifier
+	// v2Verifier 独立验证 Hub allocator 返回的 DSTicket v2(RS256)。非 nil 也机械激活
+	// 玩家 DSTicket 的 RS256-only profile；玩家 Session 仍走独立 HS256 verifier。
+	v2Verifier *auth.DSTicketVerifier
 	// battleTicketIssuer 必须在监听前注入。nil 或 roster 权威失败时不签重连票，
 	// locator 已明确 InBattle 时返回 Unavailable；绝不回退到 signer 直签或继续 Hub 链。
 	battleTicketIssuer BattleTicketIssuer
@@ -115,7 +118,8 @@ func (u *LoginUsecase) SetBattleTicketIssuer(issuer BattleTicketIssuer) {
 // NewLoginUsecase 构造 LoginUsecase。
 //
 // repo / sessions 必填;notifier / hubAssigner 可为 nil(弱依赖,nil 时降级)。
-// sf 用 svc.BaseContext.Snowflake;hubDSAddr / hubRegion 从 conf 读;signer/verifier 由 main 层构造后传进来。
+// sf 用 svc.BaseContext.Snowflake;hubDSAddr / hubRegion 从 conf 读;signer / legacy verifier /
+// v2 verifier 由 main 层按独立信任域构造后传进来。
 //
 // W4 ⑥:新增 hubAssigner + hubRegion。hubAssigner 非 nil 时,Login 调 hub_allocator.AssignHub
 // 拿真实 hub_ds_addr + hub_ticket;nil 或调用失败时回退到自签票据 + 静态 hubDSAddr。
@@ -134,6 +138,7 @@ func NewLoginUsecase(
 	hubRegion string,
 	signer *auth.Signer,
 	verifier *auth.Verifier,
+	v2Verifier *auth.DSTicketVerifier,
 	devSkipPassword bool,
 	devAutoRegister bool,
 	allowedRoleIDs []uint32,
@@ -157,6 +162,7 @@ func NewLoginUsecase(
 		hubRegion:       hubRegion,
 		signer:          signer,
 		verifier:        verifier,
+		v2Verifier:      v2Verifier,
 		devSkipPassword: devSkipPassword,
 		devAutoRegister: devAutoRegister,
 		allowedRoleIDs:  allowed,
@@ -176,6 +182,10 @@ func (u *LoginUsecase) SetCellRouter(r *cellroute.Router) {
 // SetRequireHubAssignmentBinding 在服务监听前设置 Hub DSTicket 归属绑定激活栅栏。
 func (u *LoginUsecase) SetRequireHubAssignmentBinding(require bool) {
 	u.requireHubAssignmentBinding = require
+}
+
+func (u *LoginUsecase) rs256DSTicketProfileEnabled() bool {
+	return u != nil && u.v2Verifier != nil
 }
 
 // Login 走真实流程(W3 ②):
@@ -246,9 +256,14 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 查 player_locator 若发现其仍处于 BATTLE 态,直接下发原对局的 battle DS 直连信息,
 	// 而非把玩家丢回大厅。命中重连时:跳过 hub 分配 + 跳过 NotifyLoginPending
 	// (避免把 BATTLE 位置顶成 LOGIN_PENDING / HUB,把玩家从战斗里拉出来)。
-	// locator 查询失败仍沿用既有弱依赖策略；但一旦 locator 已明确 InBattle，后续 roster/Redis/
-	// 签票任一失败都必须阻断本次路由，不能再给同一玩家分配第二个 Hub 归属。
-	if u.notifier != nil {
+	// local/off 保留 locator 弱依赖；B1 归属绑定激活后，必须先由 locator 证明玩家
+	// !InBattle 才能分配 Hub，未配置或查询失败都 fail-closed。
+	if u.notifier == nil {
+		if u.requireHubAssignmentBinding {
+			return nil, errcode.New(errcode.ErrUnavailable,
+				"player locator is required before B1 hub assignment")
+		}
+	} else {
 		res, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID)
 		if reconnectErr != nil {
 			return nil, reconnectErr
@@ -261,6 +276,22 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 读玩家已选角色(选角权威化 2026-07-08):弱依赖,读失败按 0(未选角)处理不阻断登录。
 	// 透传给 resolveHub → hub 票据 claim;同时回给客户端选角界面预选中。
 	selectedRoleID := u.loadSelectedRole(ctx, playerID)
+
+	// B1 先建立 LOGIN_PENDING 权威位置，再调用 Hub allocator。写入失败时既不分配
+	// Hub，也不会产生/交付 Hub 票；local/off 保留历史上的分配后 best-effort 通知顺序。
+	pendingNotified := false
+	if u.requireHubAssignmentBinding {
+		if u.notifier == nil {
+			return nil, errcode.New(errcode.ErrUnavailable,
+				"player locator is required before B1 hub assignment")
+		}
+		if err := u.notifier.NotifyLoginPending(ctx, playerID, deviceID); err != nil {
+			h.Warnw("msg", "locator_notify_failed", "err", err, "player_id", playerID)
+			return nil, errcode.NewCause(errcode.ErrUnavailable, err,
+				"player locator refused LOGIN_PENDING; hub was not assigned")
+		}
+		pendingNotified = true
+	}
 
 	// 解析 hub 分片 + hub 票据(W4 ⑥):
 	// hub_allocator 是 hub 票据权威,优先调 AssignHub 拿真实地址 + 票据;
@@ -276,9 +307,8 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		h.Warnw("msg", "touch_device_failed", "err", err, "player_id", playerID, "device_id", deviceID)
 	}
 
-	// 通知 locator:玩家进入 LOGIN_PENDING(W3 ⑤,不变量 §1 入口)。
-	// locator 不可用 → 仅 Warn,不阻断登录(hub DS 接入后会重新刷此 key)。
-	if u.notifier != nil {
+	// local/off 在 Hub 解析后 best-effort 通知；B1 已在分配前成功写入，不能重复写。
+	if !pendingNotified && u.notifier != nil {
 		if err := u.notifier.NotifyLoginPending(ctx, playerID, deviceID); err != nil {
 			h.Warnw("msg", "locator_notify_failed", "err", err, "player_id", playerID)
 		}
@@ -303,17 +333,19 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 }
 
 // battleLocationQueryRetries / battleLocationQueryBackoff:BATTLE 位置查询的有界重试
-// (docs/design/battle-reconnect.md §2.3)。locator 是核心弱依赖,偶发抖动/超时不该让
+// (docs/design/battle-reconnect.md §2.3)。local/off 下 locator 是弱依赖；B1 下它是
+// Hub 分配前的权威门。偶发抖动/超时不该让
 // "正在战斗的玩家"被误判成"不在战斗"从而错进大厅——重试把可恢复失败救回来,拿到
-// InBattle 就照常跳回 battle。仅当重试全失败(locator 真的挂了)才降级走 hub,残余情况
-// 由 hub 入口对账兜底(§2.3)。重试只发生在错误路径(罕见),不加正常登录延迟。
+// InBattle 就照常跳回 battle。重试全失败时 local/off 才降级走 Hub，B1 则返回
+// Unavailable。重试只发生在错误路径(罕见),不加正常登录延迟。
 const (
 	battleLocationQueryRetries = 3
 	battleLocationQueryBackoff = 50 * time.Millisecond
 )
 
 // queryBattleLocation 查玩家 BATTLE 位置,对可恢复的查询失败做有界重试(§2.3)。
-// 重试期间 ctx 被取消则立刻返回;重试全失败返回最后一次错误,由调用方降级走 hub。
+// 重试期间 ctx 被取消则立刻返回；重试全失败返回最后一次错误，由调用方按 profile
+// 决定 local/off 降级或 B1 fail-closed。
 func (u *LoginUsecase) queryBattleLocation(ctx context.Context, playerID uint64) (data.BattleLocation, error) {
 	h := plog.With(ctx)
 	var lastErr error
@@ -340,7 +372,8 @@ func (u *LoginUsecase) queryBattleLocation(ctx context.Context, playerID uint64)
 // LoginResult(docs/design/battle-reconnect.md §2.1)。返回 nil 表示未命中重连 → 调用方继续
 // 走正常 hub 登录流程。
 //
-// 查询失败仍按既有 §2.3 弱依赖策略返回 (nil,nil) 走 Hub；明确 !InBattle 也走 Hub。
+// local/off 查询失败按既有 §2.3 弱依赖策略返回 (nil,nil) 走 Hub；B1 查询失败返回
+// Unavailable。只有明确 !InBattle 才允许 B1 继续走 Hub。
 // 一旦 locator 已明确 InBattle，issuer/roster/Redis/签名失败返回 Unavailable，调用方不得继续
 // AssignHub 或 NotifyLoginPending。Generic PermissionDeny 可能代表 roster 漂移而不是已终态，不能据此
 // 猜测玩家已经可以回 Hub。命中重连时:
@@ -354,9 +387,12 @@ func (u *LoginUsecase) tryBattleReconnect(
 
 	bl, err := u.queryBattleLocation(ctx, playerID)
 	if err != nil {
-		// 重试仍失败:locator 不可用,无法确认玩家是否在战斗 → 降级走 hub(不阻断登录),
-		// "战斗中误进 hub" 的兜底交给 hub 入口对账(§2.3)。
 		h.Warnw("msg", "battle_location_query_failed", "err", err, "player_id", playerID)
+		if u.requireHubAssignmentBinding {
+			return nil, errcode.NewCause(errcode.ErrUnavailable, err,
+				"cannot prove player is outside battle before B1 hub assignment")
+		}
+		// local/off 保留历史弱依赖降级。
 		return nil, nil
 	}
 	if !bl.InBattle {
@@ -432,10 +468,11 @@ func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash 
 // resolveHub 解析玩家进大厅需要的 hub_ds_addr + hub_ticket(+ 票据过期 unix ms)。
 //
 // 优先级(W4 ⑥):
-//  1. hubAssigner 非 nil → 调 hub_allocator.AssignHub。成功则用其返回的 hub_ds_addr + hub_ticket
-//     (hub_allocator 是 hub 票据权威,不变量 §1 一人一 DS 由其落地);票据 exp 用 verifier 解析,
-//     解析失败则按 DSTicketTTL 估算。
-//  2. hubAssigner 为 nil 或 AssignHub 失败 → 回退自签 hub 票据 + 静态 hubDSAddr(仅 Warn,不阻断登录)。
+//  1. hubAssigner 非 nil → 调 hub_allocator.AssignHub。local/off 按 JOSE alg 验 legacy；
+//     RS256 profile 只接受 v2，校验 player / Hub 类型 / 目标实例绑定并读取已验签 exp。
+//     解析、验签或绑定任一失败均 fail-closed，不回退估算 exp，也不把坏票返回客户端。
+//  2. 仅完全未配置 v2 且 assignment binding 关闭的 local/off，Hub 不可用时才可回退
+//     自签 HS256 hub 票据 + 静态 hubDSAddr。
 //
 // 回退分支保证 login 可独立联调(本机不起 hub_allocator 也能拿到可连 hub 的票据,
 // 因为 login 与 hub_allocator 共享同一 JWT secret/issuer/audience)。
@@ -455,37 +492,27 @@ func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID
 			aerr = errcode.New(errcode.ErrUnavailable, "hub allocator returned an empty assignment")
 		}
 		if aerr == nil {
-			if u.requireHubAssignmentBinding {
-				if u.verifier == nil {
-					return "", "", 0, errcode.New(errcode.ErrUnavailable,
-						"hub ticket verifier unavailable while assignment binding is required")
-				}
-				claims, verr := u.verifier.VerifyDSTicket(assign.HubTicket)
-				if verr != nil || claims.DSType != string(auth.DSTypeHub) ||
-					claims.HubAssignmentID == "" || claims.DSPodName == "" ||
-					claims.DSPodName != assign.HubPodName ||
-					claims.DSWriterEpoch != auth.DSAuthWriterEpochV2 {
-					h.Errorw("msg", "hub_assigner_returned_unbound_ticket", "err", verr,
-						"player_id", playerID, "hub_pod", assign.HubPodName)
-					return "", "", 0, errcode.New(errcode.ErrUnavailable,
-						"hub allocator did not return a valid assignment-bound ticket")
-				}
+			expMs, verr := u.verifyHubAssignmentTicket(playerID, assign)
+			if verr != nil {
+				h.Errorw("msg", "hub_assigner_returned_invalid_ticket", "err", verr,
+					"player_id", playerID, "hub_pod", assign.HubPodName)
+				return "", "", 0, errcode.New(errcode.ErrUnavailable,
+					"hub allocator returned an invalid ticket: %v", verr)
 			}
-			expMs = u.hubTicketExpMs(assign.HubTicket)
 			h.Infow("msg", "hub_assigned", "player_id", playerID,
 				"hub_pod", assign.HubPodName, "shard_id", assign.ShardID, "hub_ds_addr", assign.HubDSAddr)
 			return assign.HubDSAddr, assign.HubTicket, expMs, nil
 		}
-		if u.requireHubAssignmentBinding {
+		if u.requireHubAssignmentBinding || u.rs256DSTicketProfileEnabled() {
 			return "", "", 0, errcode.New(errcode.ErrUnavailable,
-				"hub allocator required for assignment-bound ticket: %v", aerr)
+				"hub allocator required for RS256/assignment-bound ticket: %v", aerr)
 		}
 		// hub_allocator 不可用 → 回退自签,不阻断登录(玩家仍可凭票据连静态 hub DS)
 		h.Warnw("msg", "hub_assign_failed_fallback_self_sign", "err", aerr, "player_id", playerID)
 	}
-	if u.requireHubAssignmentBinding {
+	if u.requireHubAssignmentBinding || u.rs256DSTicketProfileEnabled() {
 		return "", "", 0, errcode.New(errcode.ErrUnavailable,
-			"hub allocator is required while assignment binding is enabled")
+			"hub allocator is required by the RS256/assignment-bound ticket profile")
 	}
 
 	ticket, expMs, err = u.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, regionID, cellID, roleID, uuid.NewString())
@@ -595,17 +622,84 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 	return addr, ticket, expMs, nil
 }
 
-// hubTicketExpMs 解析 hub_allocator 签发的 hub 票据,取其 exp(unix ms)给客户端展示。
+// verifyHubAssignmentTicket 验证 hub_allocator 返回的票据并读取已验签 exp。
 //
-// login 与 hub_allocator 共享 JWT secret/issuer/audience,故 verifier 可直接验签。
-// 解析失败(理论上不应发生)兜底为 now + DSTicketTTL,避免返回 0 让客户端误判已过期。
-func (u *LoginUsecase) hubTicketExpMs(ticket string) int64 {
-	if u.verifier != nil {
-		if claims, err := u.verifier.VerifyDSTicket(ticket); err == nil && claims.ExpiresAt != nil {
-			return claims.ExpiresAt.UnixMilli()
-		}
+// 迁移期只允许两条显式路径：HS256=legacy，RS256=v2。alg 仅用于选择 verifier，随后分支
+// 必须完成各自签名/claims 校验；其它算法、缺 verifier、坏票和不完整绑定全部 fail-closed。
+func (u *LoginUsecase) verifyHubAssignmentTicket(playerID uint64, assign *data.HubAssignment) (int64, error) {
+	if assign == nil || assign.HubTicket == "" {
+		return 0, errcode.New(errcode.ErrLoginTicketInvalid, "hub assignment ticket is empty")
 	}
-	return time.Now().Add(u.signer.DSTicketTTL()).UnixMilli()
+	alg, err := auth.DSTicketAlgorithm(assign.HubTicket)
+	if err != nil {
+		return 0, err
+	}
+	switch alg {
+	case "HS256":
+		// v2 verifier 非 nil 是 Login 主链的机械 RS256-only 开关；不能因为收到一张
+		// HS256 票就退回 legacy verifier。SessionToken 的 HS256 验证不经过本函数。
+		if u.rs256DSTicketProfileEnabled() {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid,
+				"legacy HS256 DSTicket is disabled by the RS256 profile")
+		}
+		if u == nil || u.verifier == nil {
+			return 0, errcode.New(errcode.ErrUnavailable, "legacy DSTicket verifier unavailable")
+		}
+		claims, err := u.verifier.VerifyDSTicket(assign.HubTicket)
+		if err != nil {
+			return 0, err
+		}
+		if claims.PlayerID() != playerID || claims.DSType != string(auth.DSTypeHub) {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid,
+				"legacy hub ticket player or ds_type mismatch")
+		}
+		if claims.ExpiresAt == nil {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid, "legacy hub ticket missing exp")
+		}
+		// 兼容窗内的旧票允许完全没有实例绑定；一旦携带 pod，就必须与 allocator 响应一致。
+		if claims.DSPodName != "" && claims.DSPodName != assign.HubPodName {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid, "legacy hub ticket target pod mismatch")
+		}
+		if u.requireHubAssignmentBinding &&
+			(assign.HubPodName == "" || claims.DSPodName != assign.HubPodName ||
+				claims.DSInstanceUID == "" || claims.DSProtocolEpoch == 0 ||
+				claims.DSCredentialGen == 0 || claims.DSCredentialJTI == "" ||
+				claims.HubAssignmentID == "" || claims.DSWriterEpoch != auth.DSAuthWriterEpochV2) {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid,
+				"legacy hub ticket assignment binding is incomplete")
+		}
+		return claims.ExpiresAt.UnixMilli(), nil
+
+	case "RS256":
+		if u == nil || u.v2Verifier == nil {
+			return 0, errcode.New(errcode.ErrUnavailable, "DSTicket v2 verifier unavailable")
+		}
+		claims, err := u.v2Verifier.Verify(assign.HubTicket)
+		if err != nil {
+			return 0, err
+		}
+		if claims.PlayerID() != playerID || claims.DSType != string(auth.DSTypeHub) {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid,
+				"hub DSTicket v2 player or ds_type mismatch")
+		}
+		if assign.HubPodName == "" || claims.DSPodName != assign.HubPodName {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid, "hub DSTicket v2 target pod mismatch")
+		}
+		if claims.DSInstanceUID == "" || claims.DSInstanceEpoch == 0 ||
+			claims.HubAssignmentID == "" ||
+			(claims.ReleaseTrack != auth.ReleaseTrackStable && claims.ReleaseTrack != auth.ReleaseTrackCanary) {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid,
+				"hub DSTicket v2 instance binding is incomplete")
+		}
+		if claims.ExpiresAt == nil {
+			return 0, errcode.New(errcode.ErrLoginTicketInvalid, "hub DSTicket v2 missing exp")
+		}
+		return claims.ExpiresAt.UnixMilli(), nil
+
+	default:
+		// DSTicketAlgorithm 已先拒绝其它 alg；保留 default 作为未来改动的 fail-closed 保险。
+		return 0, errcode.New(errcode.ErrLoginTicketInvalid, "DSTicket algorithm unsupported")
+	}
 }
 
 // Logout 真实化(W3 ②):验 session_token 拿 player_id,DEL redis session。

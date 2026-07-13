@@ -97,6 +97,14 @@ type InventoryRepo interface {
 	// 道具 / 金币不足 → ErrInventoryInsufficient,整笔回滚(escrow 行一并回滚)。
 	FreezeForOrder(ctx context.Context, playerID, orderID uint64, kind EscrowKind, itemConfigID uint32, quantity, frozenGold int64) (already bool, err error)
 
+	// EnsureAuctionEscrow 为旧版本遗留的 OPEN/PARTIAL 订单补齐托管:
+	//   - 已有 active escrow:锁行并严格核对 kind/item/status，且 item 余量 >= remainingQuantity
+	//     或 gold 余量 >= remainingQuantity*unitPrice；满足即幂等成功，不再扣活跃资产；
+	//   - escrow 不存在:在一个事务内从活跃资产扣除剩余量并创建 active escrow。
+	// 唯一键冲突必须回滚后重新锁行校验，不能直接当幂等成功。closed/参数冲突返回
+	// ErrInventoryIdempotencyConflict，托管或活跃资产不足返回 ErrInventoryInsufficient。
+	EnsureAuctionEscrow(ctx context.Context, playerID, orderID uint64, kind EscrowKind, itemConfigID uint32, remainingQuantity, unitPrice int64) (already bool, err error)
+
 	// ReleaseEscrow 退还某挂单 escrow 残余资产到玩家活跃余额并关闭托管(撤单 / 过期 / 完全成交后)。
 	//   item escrow:退剩余 frozen_qty 道具;gold escrow:退剩余 frozen_gold 金币。
 	// 幂等:escrow 不存在或已 closed → already=true no-op(只退一次)。
@@ -678,6 +686,191 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`
 		return false, errcode.New(errcode.ErrInternal, "commit freeze player=%d order=%d: %v", playerID, orderID, cerr)
 	}
 	return false, nil
+}
+
+const ensureAuctionEscrowMaxAttempts = 3
+
+// EnsureAuctionEscrow 确保旧版本遗留订单具备足够的 active escrow。
+//
+// 并发无行时直接争用 uk_player_order 的 INSERT：胜者在同一事务扣活跃资产并提交；失败者收到
+// 1062 后必须先回滚，再以新事务 SELECT ... FOR UPDATE 严格核对胜者提交的整行。这样唯一键冲突
+// 只是“转入校验路径”的信号，绝不等价于幂等成功，也不会发生两个事务都扣活跃资产。
+func (r *MySQLInventoryRepo) EnsureAuctionEscrow(
+	ctx context.Context,
+	playerID, orderID uint64,
+	kind EscrowKind,
+	itemConfigID uint32,
+	remainingQuantity, unitPrice int64,
+) (bool, error) {
+	if playerID == 0 || orderID == 0 || itemConfigID == 0 || remainingQuantity <= 0 || unitPrice <= 0 {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"invalid ensure escrow player=%d order=%d kind=%d item=%d remaining=%d price=%d",
+			playerID, orderID, kind, itemConfigID, remainingQuantity, unitPrice)
+	}
+	if kind != EscrowKindItem && kind != EscrowKindGold {
+		return false, errcode.New(errcode.ErrInvalidArg, "unknown escrow kind %d", kind)
+	}
+	var requiredGold int64
+	if kind == EscrowKindGold {
+		var ok bool
+		requiredGold, ok = safeMulPositiveInt64(remainingQuantity, unitPrice)
+		if !ok {
+			return false, errcode.New(errcode.ErrInvalidArg,
+				"ensure escrow amount overflow order=%d remaining=%d price=%d", orderID, remainingQuantity, unitPrice)
+		}
+	}
+
+	for attempt := 1; attempt <= ensureAuctionEscrowMaxAttempts; attempt++ {
+		created, duplicate, err := r.tryCreateAuctionEscrow(
+			ctx, playerID, orderID, kind, itemConfigID, remainingQuantity, requiredGold)
+		if err != nil {
+			return false, err
+		}
+		if created {
+			return false, nil
+		}
+		if !duplicate {
+			return false, errcode.New(errcode.ErrInternal,
+				"ensure escrow neither created nor duplicate player=%d order=%d", playerID, orderID)
+		}
+
+		found, err := r.validateExistingAuctionEscrow(
+			ctx, playerID, orderID, kind, itemConfigID, remainingQuantity, requiredGold)
+		if err != nil {
+			return false, err
+		}
+		if found {
+			return true, nil
+		}
+		// auction_escrow 正常流程从不 DELETE。仅防御外部清理恰好发生在 1062 与复查之间；
+		// 重新竞争 INSERT，仍不把不可解释的消失当成功。
+	}
+	return false, errcode.New(errcode.ErrInternal,
+		"escrow disappeared after duplicate player=%d order=%d attempts=%d",
+		playerID, orderID, ensureAuctionEscrowMaxAttempts)
+}
+
+func (r *MySQLInventoryRepo) tryCreateAuctionEscrow(
+	ctx context.Context,
+	playerID, orderID uint64,
+	kind EscrowKind,
+	itemConfigID uint32,
+	remainingQuantity, requiredGold int64,
+) (created, duplicate bool, err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, false, errcode.New(errcode.ErrInternal, "begin ensure escrow tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var frozenQty, frozenGold int64
+	if kind == EscrowKindItem {
+		frozenQty = remainingQuantity
+	} else {
+		frozenGold = requiredGold
+	}
+	const ins = `INSERT INTO auction_escrow
+        (player_id, order_id, kind, item_config_id, frozen_qty, frozen_gold, status)
+VALUES (?, ?, ?, ?, ?, ?, ?)`
+	if _, err := tx.ExecContext(ctx, ins,
+		playerID, orderID, int8(kind), itemConfigID, frozenQty, frozenGold, escrowStatusActive); err != nil {
+		if isDupErr(err) {
+			// defer Rollback 在返回给复查路径前完成；不能在仍持有失败事务时读取并宣称成功。
+			return false, true, nil
+		}
+		return false, false, errcode.New(errcode.ErrInternal,
+			"insert ensured escrow player=%d order=%d: %v", playerID, orderID, err)
+	}
+
+	switch kind {
+	case EscrowKindItem:
+		if _, err := deductItemTx(ctx, tx, playerID, itemConfigID, remainingQuantity); err != nil {
+			return false, false, err
+		}
+	case EscrowKindGold:
+		if _, err := deductGoldTx(ctx, tx, playerID, requiredGold); err != nil {
+			return false, false, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, false, errcode.New(errcode.ErrInternal,
+			"commit ensure escrow player=%d order=%d: %v", playerID, orderID, err)
+	}
+	return true, false, nil
+}
+
+func (r *MySQLInventoryRepo) validateExistingAuctionEscrow(
+	ctx context.Context,
+	playerID, orderID uint64,
+	wantKind EscrowKind,
+	wantItemConfigID uint32,
+	remainingQuantity, requiredGold int64,
+) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "begin validate escrow tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		kind         int8
+		itemConfigID uint32
+		frozenQty    int64
+		frozenGold   int64
+		status       int8
+	)
+	err = tx.QueryRowContext(ctx,
+		`SELECT kind, item_config_id, frozen_qty, frozen_gold, status
+         FROM auction_escrow WHERE player_id = ? AND order_id = ? FOR UPDATE`,
+		playerID, orderID).Scan(&kind, &itemConfigID, &frozenQty, &frozenGold, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal,
+			"lock ensured escrow player=%d order=%d: %v", playerID, orderID, err)
+	}
+	if status != escrowStatusActive {
+		return true, errcode.New(errcode.ErrInventoryIdempotencyConflict,
+			"escrow is not active player=%d order=%d status=%d", playerID, orderID, status)
+	}
+	if EscrowKind(kind) != wantKind || itemConfigID != wantItemConfigID {
+		return true, errcode.New(errcode.ErrInventoryIdempotencyConflict,
+			"escrow identity conflict player=%d order=%d kind=%d item=%d want_kind=%d want_item=%d",
+			playerID, orderID, kind, itemConfigID, wantKind, wantItemConfigID)
+	}
+
+	switch wantKind {
+	case EscrowKindItem:
+		if frozenGold != 0 {
+			return true, errcode.New(errcode.ErrInventoryIdempotencyConflict,
+				"item escrow carries gold player=%d order=%d frozen_gold=%d", playerID, orderID, frozenGold)
+		}
+		if frozenQty < remainingQuantity {
+			return true, errcode.New(errcode.ErrInventoryInsufficient,
+				"item escrow short player=%d order=%d frozen=%d need=%d",
+				playerID, orderID, frozenQty, remainingQuantity)
+		}
+	case EscrowKindGold:
+		if frozenQty != 0 {
+			return true, errcode.New(errcode.ErrInventoryIdempotencyConflict,
+				"gold escrow carries item quantity player=%d order=%d frozen_qty=%d", playerID, orderID, frozenQty)
+		}
+		if frozenGold < requiredGold {
+			return true, errcode.New(errcode.ErrInventoryInsufficient,
+				"gold escrow short player=%d order=%d frozen=%d need=%d",
+				playerID, orderID, frozenGold, requiredGold)
+		}
+	}
+	return true, nil
+}
+
+func safeMulPositiveInt64(a, b int64) (int64, bool) {
+	if a <= 0 || b <= 0 || a > (int64(^uint64(0)>>1))/b {
+		return 0, false
+	}
+	return a * b, true
 }
 
 // ReleaseEscrow 退还某挂单 escrow 残余到玩家活跃余额并关闭托管(一个本地事务)。幂等键 = escrow 行状态。

@@ -128,10 +128,14 @@ message ListMarketResponse {
 
 message ListMyOrdersRequest {
   bool active_only = 1;  // true=只看未终态(挂在簿上的)
+  uint64 cursor_order_id = 2;  // 上页末 order_id;0=首页(按 order_id 降序)
+  uint32 limit = 3;  // 0=服务端默认 50,>100 收敛
   // player_id 以 JWT ctx 为准(R5)
 }
 
 message ListMyOrdersResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated AuctionOrder orders = 2;
+  uint64 next_cursor_order_id = 3;  // has_more=true 时为本页末 order_id,否则为 0
+  bool has_more = 4;
 }

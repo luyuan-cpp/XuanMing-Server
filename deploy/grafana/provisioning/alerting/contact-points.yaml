@@ -1,0 +1,19 @@
+# Grafana 统一告警——基础联系点。
+#
+# ntfy 始终可用；企微/钉钉/飞书群 receiver 由 ../entrypoint.sh 仅在对应 env 非空时
+# 追加到 /tmp 临时 provisioning，避免空 URL 使 Grafana 拒绝整套告警配置。
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ntfy-personal
+    receivers:
+      - uid: pandora-ntfy-personal
+        type: webhook
+        settings:
+          # URL 需保留 ntfy inline-template 查询参数，否则手机会收到整段 Grafana JSON。
+          url: $__env{PANDORA_ALERT_NTFY_URL}
+          httpMethod: POST
+          title: '{{ template "pandora.title" . }}'
+          message: '{{ template "pandora.message" . }}'
+        disableResolveMessage: false

@@ -1337,6 +1337,137 @@ func (x *FreezeForOrderResponse) GetCode() v1.ErrCode {
 	return v1.ErrCode(0)
 }
 
+// EnsureAuctionEscrowRequest 为旧版本已进入 OPEN/PARTIAL、但可能尚未冻结资产的订单补齐 escrow。
+// remaining_quantity / unit_price 均为非负业务量,按 CLAUDE.md §5.12 使用 uint64;
+// inventory 权威库为 BIGINT,超出 int64 或乘法溢出会返回 ERR_INVALID_ARG。
+type EnsureAuctionEscrowRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId          uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                            // 挂单玩家 player_id
+	OrderId           uint64                 `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`                               // 挂单 order_id(escrow 唯一键)
+	Side              EscrowSide             `protobuf:"varint,3,opt,name=side,proto3,enum=pandora.inventory.v1.EscrowSide" json:"side,omitempty"`               // SELL=确保剩余道具托管 / BUY=确保剩余金币托管
+	ItemConfigId      uint32                 `protobuf:"varint,4,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`              // 订单不可变道具配置 ID
+	RemainingQuantity uint64                 `protobuf:"varint,5,opt,name=remaining_quantity,json=remainingQuantity,proto3" json:"remaining_quantity,omitempty"` // 尚未成交的剩余数量(> 0)
+	UnitPrice         uint64                 `protobuf:"varint,6,opt,name=unit_price,json=unitPrice,proto3" json:"unit_price,omitempty"`                         // 订单单价金币(> 0;BUY 至少托管 remaining*price)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *EnsureAuctionEscrowRequest) Reset() {
+	*x = EnsureAuctionEscrowRequest{}
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnsureAuctionEscrowRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnsureAuctionEscrowRequest) ProtoMessage() {}
+
+func (x *EnsureAuctionEscrowRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnsureAuctionEscrowRequest.ProtoReflect.Descriptor instead.
+func (*EnsureAuctionEscrowRequest) Descriptor() ([]byte, []int) {
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *EnsureAuctionEscrowRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *EnsureAuctionEscrowRequest) GetOrderId() uint64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *EnsureAuctionEscrowRequest) GetSide() EscrowSide {
+	if x != nil {
+		return x.Side
+	}
+	return EscrowSide_ESCROW_SIDE_UNSPECIFIED
+}
+
+func (x *EnsureAuctionEscrowRequest) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *EnsureAuctionEscrowRequest) GetRemainingQuantity() uint64 {
+	if x != nil {
+		return x.RemainingQuantity
+	}
+	return 0
+}
+
+func (x *EnsureAuctionEscrowRequest) GetUnitPrice() uint64 {
+	if x != nil {
+		return x.UnitPrice
+	}
+	return 0
+}
+
+type EnsureAuctionEscrowResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          v1.ErrCode             `protobuf:"varint,1,opt,name=code,proto3,enum=pandora.common.v1.ErrCode" json:"code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnsureAuctionEscrowResponse) Reset() {
+	*x = EnsureAuctionEscrowResponse{}
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnsureAuctionEscrowResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnsureAuctionEscrowResponse) ProtoMessage() {}
+
+func (x *EnsureAuctionEscrowResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnsureAuctionEscrowResponse.ProtoReflect.Descriptor instead.
+func (*EnsureAuctionEscrowResponse) Descriptor() ([]byte, []int) {
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *EnsureAuctionEscrowResponse) GetCode() v1.ErrCode {
+	if x != nil {
+		return x.Code
+	}
+	return v1.ErrCode(0)
+}
+
 // ReleaseEscrowRequest 退还挂单 escrow 残余(系统接口,后端内部直连)。幂等键 = order_id。
 type ReleaseEscrowRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1348,7 +1479,7 @@ type ReleaseEscrowRequest struct {
 
 func (x *ReleaseEscrowRequest) Reset() {
 	*x = ReleaseEscrowRequest{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[19]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1360,7 +1491,7 @@ func (x *ReleaseEscrowRequest) String() string {
 func (*ReleaseEscrowRequest) ProtoMessage() {}
 
 func (x *ReleaseEscrowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[19]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1373,7 +1504,7 @@ func (x *ReleaseEscrowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseEscrowRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseEscrowRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{19}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ReleaseEscrowRequest) GetPlayerId() uint64 {
@@ -1399,7 +1530,7 @@ type ReleaseEscrowResponse struct {
 
 func (x *ReleaseEscrowResponse) Reset() {
 	*x = ReleaseEscrowResponse{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[20]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1411,7 +1542,7 @@ func (x *ReleaseEscrowResponse) String() string {
 func (*ReleaseEscrowResponse) ProtoMessage() {}
 
 func (x *ReleaseEscrowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[20]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1424,7 +1555,7 @@ func (x *ReleaseEscrowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseEscrowResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseEscrowResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{20}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ReleaseEscrowResponse) GetCode() v1.ErrCode {
@@ -1447,7 +1578,7 @@ type GrantInstancesRequest struct {
 
 func (x *GrantInstancesRequest) Reset() {
 	*x = GrantInstancesRequest{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[21]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1459,7 +1590,7 @@ func (x *GrantInstancesRequest) String() string {
 func (*GrantInstancesRequest) ProtoMessage() {}
 
 func (x *GrantInstancesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[21]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1472,7 +1603,7 @@ func (x *GrantInstancesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantInstancesRequest.ProtoReflect.Descriptor instead.
 func (*GrantInstancesRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{21}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GrantInstancesRequest) GetPlayerId() uint64 {
@@ -1506,7 +1637,7 @@ type GrantInstancesResponse struct {
 
 func (x *GrantInstancesResponse) Reset() {
 	*x = GrantInstancesResponse{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[22]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1518,7 +1649,7 @@ func (x *GrantInstancesResponse) String() string {
 func (*GrantInstancesResponse) ProtoMessage() {}
 
 func (x *GrantInstancesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[22]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1531,7 +1662,7 @@ func (x *GrantInstancesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantInstancesResponse.ProtoReflect.Descriptor instead.
 func (*GrantInstancesResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{22}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GrantInstancesResponse) GetCode() v1.ErrCode {
@@ -1559,7 +1690,7 @@ type IdentifyItemRequest struct {
 
 func (x *IdentifyItemRequest) Reset() {
 	*x = IdentifyItemRequest{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[23]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1571,7 +1702,7 @@ func (x *IdentifyItemRequest) String() string {
 func (*IdentifyItemRequest) ProtoMessage() {}
 
 func (x *IdentifyItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[23]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1584,7 +1715,7 @@ func (x *IdentifyItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IdentifyItemRequest.ProtoReflect.Descriptor instead.
 func (*IdentifyItemRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{23}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *IdentifyItemRequest) GetPlayerId() uint64 {
@@ -1611,7 +1742,7 @@ type IdentifyItemResponse struct {
 
 func (x *IdentifyItemResponse) Reset() {
 	*x = IdentifyItemResponse{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[24]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1623,7 +1754,7 @@ func (x *IdentifyItemResponse) String() string {
 func (*IdentifyItemResponse) ProtoMessage() {}
 
 func (x *IdentifyItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[24]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1636,7 +1767,7 @@ func (x *IdentifyItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IdentifyItemResponse.ProtoReflect.Descriptor instead.
 func (*IdentifyItemResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{24}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *IdentifyItemResponse) GetCode() v1.ErrCode {
@@ -1664,7 +1795,7 @@ type DiscardInstanceRequest struct {
 
 func (x *DiscardInstanceRequest) Reset() {
 	*x = DiscardInstanceRequest{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[25]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1676,7 +1807,7 @@ func (x *DiscardInstanceRequest) String() string {
 func (*DiscardInstanceRequest) ProtoMessage() {}
 
 func (x *DiscardInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[25]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1689,7 +1820,7 @@ func (x *DiscardInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardInstanceRequest.ProtoReflect.Descriptor instead.
 func (*DiscardInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{25}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DiscardInstanceRequest) GetPlayerId() uint64 {
@@ -1715,7 +1846,7 @@ type DiscardInstanceResponse struct {
 
 func (x *DiscardInstanceResponse) Reset() {
 	*x = DiscardInstanceResponse{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[26]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1727,7 +1858,7 @@ func (x *DiscardInstanceResponse) String() string {
 func (*DiscardInstanceResponse) ProtoMessage() {}
 
 func (x *DiscardInstanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[26]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1740,7 +1871,7 @@ func (x *DiscardInstanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardInstanceResponse.ProtoReflect.Descriptor instead.
 func (*DiscardInstanceResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{26}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DiscardInstanceResponse) GetCode() v1.ErrCode {
@@ -1762,7 +1893,7 @@ type MoveInstanceRequest struct {
 
 func (x *MoveInstanceRequest) Reset() {
 	*x = MoveInstanceRequest{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[27]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1774,7 +1905,7 @@ func (x *MoveInstanceRequest) String() string {
 func (*MoveInstanceRequest) ProtoMessage() {}
 
 func (x *MoveInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[27]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1787,7 +1918,7 @@ func (x *MoveInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveInstanceRequest.ProtoReflect.Descriptor instead.
 func (*MoveInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{27}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *MoveInstanceRequest) GetPlayerId() uint64 {
@@ -1820,7 +1951,7 @@ type MoveInstanceResponse struct {
 
 func (x *MoveInstanceResponse) Reset() {
 	*x = MoveInstanceResponse{}
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[28]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1832,7 +1963,7 @@ func (x *MoveInstanceResponse) String() string {
 func (*MoveInstanceResponse) ProtoMessage() {}
 
 func (x *MoveInstanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[28]
+	mi := &file_pandora_inventory_v1_inventory_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1845,7 +1976,7 @@ func (x *MoveInstanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveInstanceResponse.ProtoReflect.Descriptor instead.
 func (*MoveInstanceResponse) Descriptor() ([]byte, []int) {
-	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{28}
+	return file_pandora_inventory_v1_inventory_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *MoveInstanceResponse) GetCode() v1.ErrCode {
@@ -2028,6 +2159,27 @@ var file_pandora_inventory_v1_inventory_proto_rawDesc = string([]byte{
 	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x63,
 	0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x72, 0x72, 0x43, 0x6f, 0x64, 0x65,
+	0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x22, 0xfe, 0x01, 0x0a, 0x1a, 0x45, 0x6e, 0x73, 0x75, 0x72,
+	0x65, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f,
+	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72,
+	0x49, 0x64, 0x12, 0x19, 0x0a, 0x08, 0x6f, 0x72, 0x64, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x07, 0x6f, 0x72, 0x64, 0x65, 0x72, 0x49, 0x64, 0x12, 0x34, 0x0a,
+	0x04, 0x73, 0x69, 0x64, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x20, 0x2e, 0x70, 0x61,
+	0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e,
+	0x76, 0x31, 0x2e, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x53, 0x69, 0x64, 0x65, 0x52, 0x04, 0x73,
+	0x69, 0x64, 0x65, 0x12, 0x24, 0x0a, 0x0e, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x63, 0x6f, 0x6e, 0x66,
+	0x69, 0x67, 0x5f, 0x69, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x0c, 0x69, 0x74, 0x65,
+	0x6d, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x49, 0x64, 0x12, 0x2d, 0x0a, 0x12, 0x72, 0x65, 0x6d,
+	0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67, 0x5f, 0x71, 0x75, 0x61, 0x6e, 0x74, 0x69, 0x74, 0x79, 0x18,
+	0x05, 0x20, 0x01, 0x28, 0x04, 0x52, 0x11, 0x72, 0x65, 0x6d, 0x61, 0x69, 0x6e, 0x69, 0x6e, 0x67,
+	0x51, 0x75, 0x61, 0x6e, 0x74, 0x69, 0x74, 0x79, 0x12, 0x1d, 0x0a, 0x0a, 0x75, 0x6e, 0x69, 0x74,
+	0x5f, 0x70, 0x72, 0x69, 0x63, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x04, 0x52, 0x09, 0x75, 0x6e,
+	0x69, 0x74, 0x50, 0x72, 0x69, 0x63, 0x65, 0x22, 0x4d, 0x0a, 0x1b, 0x45, 0x6e, 0x73, 0x75, 0x72,
+	0x65, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x63,
+	0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x72, 0x72, 0x43, 0x6f, 0x64, 0x65,
 	0x52, 0x04, 0x63, 0x6f, 0x64, 0x65, 0x22, 0x4e, 0x0a, 0x14, 0x52, 0x65, 0x6c, 0x65, 0x61, 0x73,
 	0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b,
 	0x0a, 0x09, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
@@ -2101,7 +2253,7 @@ var file_pandora_inventory_v1_inventory_proto_rawDesc = string([]byte{
 	0x43, 0x55, 0x52, 0x52, 0x45, 0x4e, 0x43, 0x59, 0x5f, 0x4b, 0x49, 0x4e, 0x44, 0x5f, 0x55, 0x4e,
 	0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12, 0x16, 0x0a, 0x12, 0x43,
 	0x55, 0x52, 0x52, 0x45, 0x4e, 0x43, 0x59, 0x5f, 0x4b, 0x49, 0x4e, 0x44, 0x5f, 0x47, 0x4f, 0x4c,
-	0x44, 0x10, 0x01, 0x32, 0xfe, 0x09, 0x0a, 0x10, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72,
+	0x44, 0x10, 0x01, 0x32, 0xfa, 0x0a, 0x0a, 0x10, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72,
 	0x79, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x65, 0x0a, 0x0c, 0x47, 0x65, 0x74, 0x49,
 	0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x12, 0x29, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f,
 	0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e,
@@ -2159,44 +2311,52 @@ var file_pandora_inventory_v1_inventory_proto_rawDesc = string([]byte{
 	0x72, 0x4f, 0x72, 0x64, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2c, 0x2e,
 	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72,
 	0x79, 0x2e, 0x76, 0x31, 0x2e, 0x46, 0x72, 0x65, 0x65, 0x7a, 0x65, 0x46, 0x6f, 0x72, 0x4f, 0x72,
-	0x64, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x77, 0x0a, 0x12, 0x53,
-	0x65, 0x74, 0x74, 0x6c, 0x65, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x61, 0x74, 0x63,
-	0x68, 0x12, 0x2f, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65,
-	0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x41,
-	0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x30, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76,
-	0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65,
-	0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x74, 0x0a, 0x11, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x50, 0x6c,
-	0x61, 0x79, 0x65, 0x72, 0x54, 0x72, 0x61, 0x64, 0x65, 0x12, 0x2e, 0x2e, 0x70, 0x61, 0x6e, 0x64,
-	0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31,
-	0x2e, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x72, 0x61,
-	0x64, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2f, 0x2e, 0x70, 0x61, 0x6e, 0x64,
-	0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31,
-	0x2e, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x72, 0x61,
-	0x64, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x68, 0x0a, 0x0d, 0x52, 0x65,
-	0x6c, 0x65, 0x61, 0x73, 0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x12, 0x2a, 0x2e, 0x70, 0x61,
-	0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e,
-	0x76, 0x31, 0x2e, 0x52, 0x65, 0x6c, 0x65, 0x61, 0x73, 0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2b, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
+	0x64, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x7a, 0x0a, 0x13, 0x45,
+	0x6e, 0x73, 0x75, 0x72, 0x65, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x73, 0x63, 0x72,
+	0x6f, 0x77, 0x12, 0x30, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76,
+	0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x6e, 0x73, 0x75, 0x72, 0x65,
+	0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x31, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69,
+	0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x6e, 0x73, 0x75,
+	0x72, 0x65, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x77, 0x0a, 0x12, 0x53, 0x65, 0x74, 0x74, 0x6c,
+	0x65, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x61, 0x74, 0x63, 0x68, 0x12, 0x2f, 0x2e,
+	0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72,
+	0x79, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x41, 0x75, 0x63, 0x74, 0x69,
+	0x6f, 0x6e, 0x4d, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x30,
+	0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f,
+	0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x41, 0x75, 0x63, 0x74,
+	0x69, 0x6f, 0x6e, 0x4d, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x74, 0x0a, 0x11, 0x53, 0x65, 0x74, 0x74, 0x6c, 0x65, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72,
+	0x54, 0x72, 0x61, 0x64, 0x65, 0x12, 0x2e, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e,
+	0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74,
+	0x74, 0x6c, 0x65, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x72, 0x61, 0x64, 0x65, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2f, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e,
+	0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74,
+	0x74, 0x6c, 0x65, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x72, 0x61, 0x64, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x68, 0x0a, 0x0d, 0x52, 0x65, 0x6c, 0x65, 0x61, 0x73,
+	0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x12, 0x2a, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
 	0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x52,
-	0x65, 0x6c, 0x65, 0x61, 0x73, 0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x42, 0xe8, 0x01, 0x0a, 0x18, 0x63, 0x6f, 0x6d, 0x2e, 0x70, 0x61, 0x6e,
-	0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76,
-	0x31, 0x42, 0x0e, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x50, 0x72, 0x6f, 0x74,
-	0x6f, 0x50, 0x01, 0x5a, 0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
-	0x6c, 0x75, 0x79, 0x75, 0x61, 0x6e, 0x63, 0x70, 0x70, 0x2f, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72,
-	0x61, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f, 0x70,
-	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2f, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79,
-	0x2f, 0x76, 0x31, 0x3b, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x76, 0x31, 0xa2,
-	0x02, 0x03, 0x50, 0x49, 0x58, 0xaa, 0x02, 0x14, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e,
-	0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x56, 0x31, 0xca, 0x02, 0x14, 0x50,
-	0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x5c, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79,
-	0x5c, 0x56, 0x31, 0xe2, 0x02, 0x20, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x5c, 0x49, 0x6e,
-	0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x5c, 0x56, 0x31, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65,
-	0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x16, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61,
-	0x3a, 0x3a, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x3a, 0x3a, 0x56, 0x31, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x6c, 0x65, 0x61, 0x73, 0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x2b, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x69, 0x6e,
+	0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65, 0x6c, 0x65, 0x61,
+	0x73, 0x65, 0x45, 0x73, 0x63, 0x72, 0x6f, 0x77, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x42, 0xe8, 0x01, 0x0a, 0x18, 0x63, 0x6f, 0x6d, 0x2e, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61,
+	0x2e, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x76, 0x31, 0x42, 0x0e, 0x49,
+	0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a,
+	0x4a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6c, 0x75, 0x79, 0x75,
+	0x61, 0x6e, 0x63, 0x70, 0x70, 0x2f, 0x70, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2f, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f, 0x70, 0x61, 0x6e, 0x64, 0x6f,
+	0x72, 0x61, 0x2f, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2f, 0x76, 0x31, 0x3b,
+	0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x76, 0x31, 0xa2, 0x02, 0x03, 0x50, 0x49,
+	0x58, 0xaa, 0x02, 0x14, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x2e, 0x49, 0x6e, 0x76, 0x65,
+	0x6e, 0x74, 0x6f, 0x72, 0x79, 0x2e, 0x56, 0x31, 0xca, 0x02, 0x14, 0x50, 0x61, 0x6e, 0x64, 0x6f,
+	0x72, 0x61, 0x5c, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x5c, 0x56, 0x31, 0xe2,
+	0x02, 0x20, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x5c, 0x49, 0x6e, 0x76, 0x65, 0x6e, 0x74,
+	0x6f, 0x72, 0x79, 0x5c, 0x56, 0x31, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61,
+	0x74, 0x61, 0xea, 0x02, 0x16, 0x50, 0x61, 0x6e, 0x64, 0x6f, 0x72, 0x61, 0x3a, 0x3a, 0x49, 0x6e,
+	0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x3a, 0x3a, 0x56, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 })
 
 var (
@@ -2212,93 +2372,99 @@ func file_pandora_inventory_v1_inventory_proto_rawDescGZIP() []byte {
 }
 
 var file_pandora_inventory_v1_inventory_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_pandora_inventory_v1_inventory_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_pandora_inventory_v1_inventory_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_pandora_inventory_v1_inventory_proto_goTypes = []any{
-	(EscrowSide)(0),                    // 0: pandora.inventory.v1.EscrowSide
-	(CurrencyKind)(0),                  // 1: pandora.inventory.v1.CurrencyKind
-	(*ItemStack)(nil),                  // 2: pandora.inventory.v1.ItemStack
-	(*ItemGrant)(nil),                  // 3: pandora.inventory.v1.ItemGrant
-	(*Inventory)(nil),                  // 4: pandora.inventory.v1.Inventory
-	(*ItemAttribute)(nil),              // 5: pandora.inventory.v1.ItemAttribute
-	(*ItemInstance)(nil),               // 6: pandora.inventory.v1.ItemInstance
-	(*GetInventoryRequest)(nil),        // 7: pandora.inventory.v1.GetInventoryRequest
-	(*GetInventoryResponse)(nil),       // 8: pandora.inventory.v1.GetInventoryResponse
-	(*GrantItemsRequest)(nil),          // 9: pandora.inventory.v1.GrantItemsRequest
-	(*GrantItemsResponse)(nil),         // 10: pandora.inventory.v1.GrantItemsResponse
-	(*UseItemRequest)(nil),             // 11: pandora.inventory.v1.UseItemRequest
-	(*UseItemResponse)(nil),            // 12: pandora.inventory.v1.UseItemResponse
-	(*SellItemRequest)(nil),            // 13: pandora.inventory.v1.SellItemRequest
-	(*SellItemResponse)(nil),           // 14: pandora.inventory.v1.SellItemResponse
-	(*SettleAuctionMatchRequest)(nil),  // 15: pandora.inventory.v1.SettleAuctionMatchRequest
-	(*SettleAuctionMatchResponse)(nil), // 16: pandora.inventory.v1.SettleAuctionMatchResponse
-	(*SettlePlayerTradeRequest)(nil),   // 17: pandora.inventory.v1.SettlePlayerTradeRequest
-	(*SettlePlayerTradeResponse)(nil),  // 18: pandora.inventory.v1.SettlePlayerTradeResponse
-	(*FreezeForOrderRequest)(nil),      // 19: pandora.inventory.v1.FreezeForOrderRequest
-	(*FreezeForOrderResponse)(nil),     // 20: pandora.inventory.v1.FreezeForOrderResponse
-	(*ReleaseEscrowRequest)(nil),       // 21: pandora.inventory.v1.ReleaseEscrowRequest
-	(*ReleaseEscrowResponse)(nil),      // 22: pandora.inventory.v1.ReleaseEscrowResponse
-	(*GrantInstancesRequest)(nil),      // 23: pandora.inventory.v1.GrantInstancesRequest
-	(*GrantInstancesResponse)(nil),     // 24: pandora.inventory.v1.GrantInstancesResponse
-	(*IdentifyItemRequest)(nil),        // 25: pandora.inventory.v1.IdentifyItemRequest
-	(*IdentifyItemResponse)(nil),       // 26: pandora.inventory.v1.IdentifyItemResponse
-	(*DiscardInstanceRequest)(nil),     // 27: pandora.inventory.v1.DiscardInstanceRequest
-	(*DiscardInstanceResponse)(nil),    // 28: pandora.inventory.v1.DiscardInstanceResponse
-	(*MoveInstanceRequest)(nil),        // 29: pandora.inventory.v1.MoveInstanceRequest
-	(*MoveInstanceResponse)(nil),       // 30: pandora.inventory.v1.MoveInstanceResponse
-	(v1.ErrCode)(0),                    // 31: pandora.common.v1.ErrCode
+	(EscrowSide)(0),                     // 0: pandora.inventory.v1.EscrowSide
+	(CurrencyKind)(0),                   // 1: pandora.inventory.v1.CurrencyKind
+	(*ItemStack)(nil),                   // 2: pandora.inventory.v1.ItemStack
+	(*ItemGrant)(nil),                   // 3: pandora.inventory.v1.ItemGrant
+	(*Inventory)(nil),                   // 4: pandora.inventory.v1.Inventory
+	(*ItemAttribute)(nil),               // 5: pandora.inventory.v1.ItemAttribute
+	(*ItemInstance)(nil),                // 6: pandora.inventory.v1.ItemInstance
+	(*GetInventoryRequest)(nil),         // 7: pandora.inventory.v1.GetInventoryRequest
+	(*GetInventoryResponse)(nil),        // 8: pandora.inventory.v1.GetInventoryResponse
+	(*GrantItemsRequest)(nil),           // 9: pandora.inventory.v1.GrantItemsRequest
+	(*GrantItemsResponse)(nil),          // 10: pandora.inventory.v1.GrantItemsResponse
+	(*UseItemRequest)(nil),              // 11: pandora.inventory.v1.UseItemRequest
+	(*UseItemResponse)(nil),             // 12: pandora.inventory.v1.UseItemResponse
+	(*SellItemRequest)(nil),             // 13: pandora.inventory.v1.SellItemRequest
+	(*SellItemResponse)(nil),            // 14: pandora.inventory.v1.SellItemResponse
+	(*SettleAuctionMatchRequest)(nil),   // 15: pandora.inventory.v1.SettleAuctionMatchRequest
+	(*SettleAuctionMatchResponse)(nil),  // 16: pandora.inventory.v1.SettleAuctionMatchResponse
+	(*SettlePlayerTradeRequest)(nil),    // 17: pandora.inventory.v1.SettlePlayerTradeRequest
+	(*SettlePlayerTradeResponse)(nil),   // 18: pandora.inventory.v1.SettlePlayerTradeResponse
+	(*FreezeForOrderRequest)(nil),       // 19: pandora.inventory.v1.FreezeForOrderRequest
+	(*FreezeForOrderResponse)(nil),      // 20: pandora.inventory.v1.FreezeForOrderResponse
+	(*EnsureAuctionEscrowRequest)(nil),  // 21: pandora.inventory.v1.EnsureAuctionEscrowRequest
+	(*EnsureAuctionEscrowResponse)(nil), // 22: pandora.inventory.v1.EnsureAuctionEscrowResponse
+	(*ReleaseEscrowRequest)(nil),        // 23: pandora.inventory.v1.ReleaseEscrowRequest
+	(*ReleaseEscrowResponse)(nil),       // 24: pandora.inventory.v1.ReleaseEscrowResponse
+	(*GrantInstancesRequest)(nil),       // 25: pandora.inventory.v1.GrantInstancesRequest
+	(*GrantInstancesResponse)(nil),      // 26: pandora.inventory.v1.GrantInstancesResponse
+	(*IdentifyItemRequest)(nil),         // 27: pandora.inventory.v1.IdentifyItemRequest
+	(*IdentifyItemResponse)(nil),        // 28: pandora.inventory.v1.IdentifyItemResponse
+	(*DiscardInstanceRequest)(nil),      // 29: pandora.inventory.v1.DiscardInstanceRequest
+	(*DiscardInstanceResponse)(nil),     // 30: pandora.inventory.v1.DiscardInstanceResponse
+	(*MoveInstanceRequest)(nil),         // 31: pandora.inventory.v1.MoveInstanceRequest
+	(*MoveInstanceResponse)(nil),        // 32: pandora.inventory.v1.MoveInstanceResponse
+	(v1.ErrCode)(0),                     // 33: pandora.common.v1.ErrCode
 }
 var file_pandora_inventory_v1_inventory_proto_depIdxs = []int32{
 	2,  // 0: pandora.inventory.v1.Inventory.items:type_name -> pandora.inventory.v1.ItemStack
 	6,  // 1: pandora.inventory.v1.Inventory.instances:type_name -> pandora.inventory.v1.ItemInstance
 	5,  // 2: pandora.inventory.v1.ItemInstance.attributes:type_name -> pandora.inventory.v1.ItemAttribute
-	31, // 3: pandora.inventory.v1.GetInventoryResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 3: pandora.inventory.v1.GetInventoryResponse.code:type_name -> pandora.common.v1.ErrCode
 	4,  // 4: pandora.inventory.v1.GetInventoryResponse.inventory:type_name -> pandora.inventory.v1.Inventory
 	3,  // 5: pandora.inventory.v1.GrantItemsRequest.items:type_name -> pandora.inventory.v1.ItemGrant
-	31, // 6: pandora.inventory.v1.GrantItemsResponse.code:type_name -> pandora.common.v1.ErrCode
-	31, // 7: pandora.inventory.v1.UseItemResponse.code:type_name -> pandora.common.v1.ErrCode
-	31, // 8: pandora.inventory.v1.SellItemResponse.code:type_name -> pandora.common.v1.ErrCode
-	31, // 9: pandora.inventory.v1.SettleAuctionMatchResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 6: pandora.inventory.v1.GrantItemsResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 7: pandora.inventory.v1.UseItemResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 8: pandora.inventory.v1.SellItemResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 9: pandora.inventory.v1.SettleAuctionMatchResponse.code:type_name -> pandora.common.v1.ErrCode
 	3,  // 10: pandora.inventory.v1.SettlePlayerTradeRequest.seller_items:type_name -> pandora.inventory.v1.ItemGrant
 	3,  // 11: pandora.inventory.v1.SettlePlayerTradeRequest.buyer_items:type_name -> pandora.inventory.v1.ItemGrant
-	31, // 12: pandora.inventory.v1.SettlePlayerTradeResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 12: pandora.inventory.v1.SettlePlayerTradeResponse.code:type_name -> pandora.common.v1.ErrCode
 	0,  // 13: pandora.inventory.v1.FreezeForOrderRequest.side:type_name -> pandora.inventory.v1.EscrowSide
-	31, // 14: pandora.inventory.v1.FreezeForOrderResponse.code:type_name -> pandora.common.v1.ErrCode
-	31, // 15: pandora.inventory.v1.ReleaseEscrowResponse.code:type_name -> pandora.common.v1.ErrCode
-	31, // 16: pandora.inventory.v1.GrantInstancesResponse.code:type_name -> pandora.common.v1.ErrCode
-	6,  // 17: pandora.inventory.v1.GrantInstancesResponse.instances:type_name -> pandora.inventory.v1.ItemInstance
-	31, // 18: pandora.inventory.v1.IdentifyItemResponse.code:type_name -> pandora.common.v1.ErrCode
-	6,  // 19: pandora.inventory.v1.IdentifyItemResponse.instance:type_name -> pandora.inventory.v1.ItemInstance
-	31, // 20: pandora.inventory.v1.DiscardInstanceResponse.code:type_name -> pandora.common.v1.ErrCode
-	31, // 21: pandora.inventory.v1.MoveInstanceResponse.code:type_name -> pandora.common.v1.ErrCode
-	7,  // 22: pandora.inventory.v1.InventoryService.GetInventory:input_type -> pandora.inventory.v1.GetInventoryRequest
-	9,  // 23: pandora.inventory.v1.InventoryService.GrantItems:input_type -> pandora.inventory.v1.GrantItemsRequest
-	11, // 24: pandora.inventory.v1.InventoryService.UseItem:input_type -> pandora.inventory.v1.UseItemRequest
-	13, // 25: pandora.inventory.v1.InventoryService.SellItem:input_type -> pandora.inventory.v1.SellItemRequest
-	23, // 26: pandora.inventory.v1.InventoryService.GrantInstances:input_type -> pandora.inventory.v1.GrantInstancesRequest
-	25, // 27: pandora.inventory.v1.InventoryService.IdentifyItem:input_type -> pandora.inventory.v1.IdentifyItemRequest
-	27, // 28: pandora.inventory.v1.InventoryService.DiscardInstance:input_type -> pandora.inventory.v1.DiscardInstanceRequest
-	29, // 29: pandora.inventory.v1.InventoryService.MoveInstance:input_type -> pandora.inventory.v1.MoveInstanceRequest
-	19, // 30: pandora.inventory.v1.InventoryService.FreezeForOrder:input_type -> pandora.inventory.v1.FreezeForOrderRequest
-	15, // 31: pandora.inventory.v1.InventoryService.SettleAuctionMatch:input_type -> pandora.inventory.v1.SettleAuctionMatchRequest
-	17, // 32: pandora.inventory.v1.InventoryService.SettlePlayerTrade:input_type -> pandora.inventory.v1.SettlePlayerTradeRequest
-	21, // 33: pandora.inventory.v1.InventoryService.ReleaseEscrow:input_type -> pandora.inventory.v1.ReleaseEscrowRequest
-	8,  // 34: pandora.inventory.v1.InventoryService.GetInventory:output_type -> pandora.inventory.v1.GetInventoryResponse
-	10, // 35: pandora.inventory.v1.InventoryService.GrantItems:output_type -> pandora.inventory.v1.GrantItemsResponse
-	12, // 36: pandora.inventory.v1.InventoryService.UseItem:output_type -> pandora.inventory.v1.UseItemResponse
-	14, // 37: pandora.inventory.v1.InventoryService.SellItem:output_type -> pandora.inventory.v1.SellItemResponse
-	24, // 38: pandora.inventory.v1.InventoryService.GrantInstances:output_type -> pandora.inventory.v1.GrantInstancesResponse
-	26, // 39: pandora.inventory.v1.InventoryService.IdentifyItem:output_type -> pandora.inventory.v1.IdentifyItemResponse
-	28, // 40: pandora.inventory.v1.InventoryService.DiscardInstance:output_type -> pandora.inventory.v1.DiscardInstanceResponse
-	30, // 41: pandora.inventory.v1.InventoryService.MoveInstance:output_type -> pandora.inventory.v1.MoveInstanceResponse
-	20, // 42: pandora.inventory.v1.InventoryService.FreezeForOrder:output_type -> pandora.inventory.v1.FreezeForOrderResponse
-	16, // 43: pandora.inventory.v1.InventoryService.SettleAuctionMatch:output_type -> pandora.inventory.v1.SettleAuctionMatchResponse
-	18, // 44: pandora.inventory.v1.InventoryService.SettlePlayerTrade:output_type -> pandora.inventory.v1.SettlePlayerTradeResponse
-	22, // 45: pandora.inventory.v1.InventoryService.ReleaseEscrow:output_type -> pandora.inventory.v1.ReleaseEscrowResponse
-	34, // [34:46] is the sub-list for method output_type
-	22, // [22:34] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	33, // 14: pandora.inventory.v1.FreezeForOrderResponse.code:type_name -> pandora.common.v1.ErrCode
+	0,  // 15: pandora.inventory.v1.EnsureAuctionEscrowRequest.side:type_name -> pandora.inventory.v1.EscrowSide
+	33, // 16: pandora.inventory.v1.EnsureAuctionEscrowResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 17: pandora.inventory.v1.ReleaseEscrowResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 18: pandora.inventory.v1.GrantInstancesResponse.code:type_name -> pandora.common.v1.ErrCode
+	6,  // 19: pandora.inventory.v1.GrantInstancesResponse.instances:type_name -> pandora.inventory.v1.ItemInstance
+	33, // 20: pandora.inventory.v1.IdentifyItemResponse.code:type_name -> pandora.common.v1.ErrCode
+	6,  // 21: pandora.inventory.v1.IdentifyItemResponse.instance:type_name -> pandora.inventory.v1.ItemInstance
+	33, // 22: pandora.inventory.v1.DiscardInstanceResponse.code:type_name -> pandora.common.v1.ErrCode
+	33, // 23: pandora.inventory.v1.MoveInstanceResponse.code:type_name -> pandora.common.v1.ErrCode
+	7,  // 24: pandora.inventory.v1.InventoryService.GetInventory:input_type -> pandora.inventory.v1.GetInventoryRequest
+	9,  // 25: pandora.inventory.v1.InventoryService.GrantItems:input_type -> pandora.inventory.v1.GrantItemsRequest
+	11, // 26: pandora.inventory.v1.InventoryService.UseItem:input_type -> pandora.inventory.v1.UseItemRequest
+	13, // 27: pandora.inventory.v1.InventoryService.SellItem:input_type -> pandora.inventory.v1.SellItemRequest
+	25, // 28: pandora.inventory.v1.InventoryService.GrantInstances:input_type -> pandora.inventory.v1.GrantInstancesRequest
+	27, // 29: pandora.inventory.v1.InventoryService.IdentifyItem:input_type -> pandora.inventory.v1.IdentifyItemRequest
+	29, // 30: pandora.inventory.v1.InventoryService.DiscardInstance:input_type -> pandora.inventory.v1.DiscardInstanceRequest
+	31, // 31: pandora.inventory.v1.InventoryService.MoveInstance:input_type -> pandora.inventory.v1.MoveInstanceRequest
+	19, // 32: pandora.inventory.v1.InventoryService.FreezeForOrder:input_type -> pandora.inventory.v1.FreezeForOrderRequest
+	21, // 33: pandora.inventory.v1.InventoryService.EnsureAuctionEscrow:input_type -> pandora.inventory.v1.EnsureAuctionEscrowRequest
+	15, // 34: pandora.inventory.v1.InventoryService.SettleAuctionMatch:input_type -> pandora.inventory.v1.SettleAuctionMatchRequest
+	17, // 35: pandora.inventory.v1.InventoryService.SettlePlayerTrade:input_type -> pandora.inventory.v1.SettlePlayerTradeRequest
+	23, // 36: pandora.inventory.v1.InventoryService.ReleaseEscrow:input_type -> pandora.inventory.v1.ReleaseEscrowRequest
+	8,  // 37: pandora.inventory.v1.InventoryService.GetInventory:output_type -> pandora.inventory.v1.GetInventoryResponse
+	10, // 38: pandora.inventory.v1.InventoryService.GrantItems:output_type -> pandora.inventory.v1.GrantItemsResponse
+	12, // 39: pandora.inventory.v1.InventoryService.UseItem:output_type -> pandora.inventory.v1.UseItemResponse
+	14, // 40: pandora.inventory.v1.InventoryService.SellItem:output_type -> pandora.inventory.v1.SellItemResponse
+	26, // 41: pandora.inventory.v1.InventoryService.GrantInstances:output_type -> pandora.inventory.v1.GrantInstancesResponse
+	28, // 42: pandora.inventory.v1.InventoryService.IdentifyItem:output_type -> pandora.inventory.v1.IdentifyItemResponse
+	30, // 43: pandora.inventory.v1.InventoryService.DiscardInstance:output_type -> pandora.inventory.v1.DiscardInstanceResponse
+	32, // 44: pandora.inventory.v1.InventoryService.MoveInstance:output_type -> pandora.inventory.v1.MoveInstanceResponse
+	20, // 45: pandora.inventory.v1.InventoryService.FreezeForOrder:output_type -> pandora.inventory.v1.FreezeForOrderResponse
+	22, // 46: pandora.inventory.v1.InventoryService.EnsureAuctionEscrow:output_type -> pandora.inventory.v1.EnsureAuctionEscrowResponse
+	16, // 47: pandora.inventory.v1.InventoryService.SettleAuctionMatch:output_type -> pandora.inventory.v1.SettleAuctionMatchResponse
+	18, // 48: pandora.inventory.v1.InventoryService.SettlePlayerTrade:output_type -> pandora.inventory.v1.SettlePlayerTradeResponse
+	24, // 49: pandora.inventory.v1.InventoryService.ReleaseEscrow:output_type -> pandora.inventory.v1.ReleaseEscrowResponse
+	37, // [37:50] is the sub-list for method output_type
+	24, // [24:37] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_pandora_inventory_v1_inventory_proto_init() }
@@ -2312,7 +2478,7 @@ func file_pandora_inventory_v1_inventory_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pandora_inventory_v1_inventory_proto_rawDesc), len(file_pandora_inventory_v1_inventory_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   29,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

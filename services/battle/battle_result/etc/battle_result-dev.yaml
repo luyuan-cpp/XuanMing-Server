@@ -28,6 +28,14 @@ node:
     max_idle_conns: 8
     conn_max_lifetime: "30m"
     ping_timeout: "3s"
+  # Model-B DS callback authority 与其它 writer 共用 Redis 授权记录。
+  # legacy/off 模式下保留此连接配置无副作用，切 authority_mode=redis 时则是强依赖。
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
 
 snowflake:
   epoch: 1773446400

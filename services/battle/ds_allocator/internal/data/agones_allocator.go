@@ -31,20 +31,34 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 )
 
 // fleetLabelKey 是 Agones Fleet 给其 GameServer 打的标签 key(selector 用)。
-const fleetLabelKey = "agones.dev/fleet"
+const (
+	fleetLabelKey               = "agones.dev/fleet"
+	releaseTrackMetadataKey     = "pandora.dev/release-track"
+	battleRosterAnnotationKey   = "pandora.dev/roster"
+	battleAllocationMetadataKey = "pandora.dev/allocation-id"
+)
+
+type battleFleetRoute struct {
+	stable string
+	canary string
+}
 
 // AgonesGameServerAllocator 经 k8s REST 调 Agones GameServerAllocation。
 type AgonesGameServerAllocator struct {
 	apiServer       string // 已去尾部 /
 	namespace       string
 	fleetName       string
-	mapFleets       map[uint32]string // map_id → 专属预热 Fleet(可选;命中时作首选 selector)
+	canaryFleetName string
+	mapFleets       map[uint32]battleFleetRoute // map_id → stable/canary 专属预热 Fleet
 	advertiseHost   string
 	tokenPath       string // "" 或 "-" → 不带 Authorization
 	allocateTimeout time.Duration
@@ -80,6 +94,12 @@ func NewAgonesGameServerAllocator(cfg conf.AgonesConf) (*AgonesGameServerAllocat
 	if cfg.FleetName == "" {
 		return nil, fmt.Errorf("agones: fleet_name required when enabled")
 	}
+	if cfg.CanaryPercent > 100 {
+		return nil, fmt.Errorf("agones: canary_percent=%d out of range [0,100]", cfg.CanaryPercent)
+	}
+	if cfg.CanaryPercent > 0 && (cfg.CanaryFleetName == "" || cfg.CanarySeed == "") {
+		return nil, fmt.Errorf("agones: canary_percent>0 requires canary_fleet_name and canary_seed")
+	}
 
 	tlsCfg := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
@@ -101,10 +121,10 @@ func NewAgonesGameServerAllocator(cfg conf.AgonesConf) (*AgonesGameServerAllocat
 		timeout = 5 * time.Second
 	}
 
-	mapFleets := make(map[uint32]string, len(cfg.MapFleets))
+	mapFleets := make(map[uint32]battleFleetRoute, len(cfg.MapFleets))
 	for _, mf := range cfg.MapFleets {
-		if mf.MapID > 0 && mf.FleetName != "" {
-			mapFleets[mf.MapID] = mf.FleetName
+		if mf.MapID > 0 && (mf.FleetName != "" || mf.CanaryFleetName != "") {
+			mapFleets[mf.MapID] = battleFleetRoute{stable: mf.FleetName, canary: mf.CanaryFleetName}
 		}
 	}
 
@@ -112,6 +132,7 @@ func NewAgonesGameServerAllocator(cfg conf.AgonesConf) (*AgonesGameServerAllocat
 		apiServer:       strings.TrimRight(cfg.APIServer, "/"),
 		namespace:       cfg.Namespace,
 		fleetName:       cfg.FleetName,
+		canaryFleetName: cfg.CanaryFleetName,
 		mapFleets:       mapFleets,
 		advertiseHost:   strings.TrimSpace(cfg.AdvertiseHost),
 		tokenPath:       cfg.TokenPath,
@@ -170,6 +191,7 @@ type AuthoritativeGameServerAllocation struct {
 	InstanceEpoch      uint32
 	ResourceVersion    string
 	AllocationID       string
+	ReleaseTrack       string
 	AnnotationsPresent bool
 }
 
@@ -208,7 +230,10 @@ type deletePreconditions struct {
 // selectors 有序(Agones 按顺序尝试,选中首个有空闲 GameServer 的):
 //  1. 若 mapID 配了专属预热 Fleet(map_fleets)→ 首选它(Pod 已预加载目标图,分配即可玩);
 //  2. 通用 Fleet(Loader 模式,分配后按 map-id label travel)作兜底。
-func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
+	if !releasetrack.Valid(releaseTrack) {
+		return "", "", "", errcode.New(errcode.ErrInvalidArg, "agones: invalid release_track %q", releaseTrack)
+	}
 	meta := &gsaMetadata{Labels: map[string]string{
 		"pandora.dev/match-id":  fmt.Sprintf("%d", matchID),
 		"pandora.dev/map-id":    fmt.Sprintf("%d", mapID),
@@ -222,7 +247,7 @@ func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64
 			if a.dsTokenRequired {
 				plog.With(ctx).Errorw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr,
 					"mode", "enforce", "hint", "ds_auth.mode=enforce 下签发失败即 fail-closed;检查 ds_auth.secret / 签名配置")
-				return "", "", errcode.New(errcode.ErrDSAllocationFailed,
+				return "", "", "", errcode.New(errcode.ErrDSAllocationFailed,
 					"ds_callback_token sign failed under enforce for match %d: %v", matchID, terr)
 			}
 			plog.With(ctx).Warnw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr)
@@ -231,7 +256,8 @@ func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64
 		}
 	}
 
-	return a.allocateWithMetadata(ctx, matchID, mapID, meta)
+	pod, addr, actualTrack, err := a.allocateWithMetadata(ctx, matchID, mapID, releaseTrack, meta)
+	return pod, addr, actualTrack, err
 }
 
 // AllocateAuthoritative 执行 Model B 的 K8s 分配半段：GSA POST 永不携带令牌；选中后必须
@@ -240,20 +266,31 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	ctx context.Context,
 	matchID uint64,
 	allocationID string,
+	playerIDs []uint64,
 	mapID uint32,
-	gameMode string,
+	gameMode, releaseTrack string,
 ) (*AuthoritativeGameServerAllocation, error) {
-	if matchID == 0 || allocationID == "" {
+	parsedAllocationID, parseErr := uuid.Parse(allocationID)
+	if matchID == 0 || parseErr != nil || parsedAllocationID == uuid.Nil ||
+		parsedAllocationID.Version() != uuid.Version(4) || parsedAllocationID.String() != allocationID ||
+		!releasetrack.Valid(releaseTrack) {
 		return nil, errcode.New(errcode.ErrInvalidArg, "agones: match_id and allocation_id required")
+	}
+	canonicalPlayers, roster, rosterErr := dsmetadata.CanonicalRoster(playerIDs)
+	if rosterErr != nil || len(canonicalPlayers) == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "agones: invalid battle roster: %v", rosterErr)
 	}
 	partial := &AuthoritativeGameServerAllocation{AllocationID: allocationID}
 	meta := &gsaMetadata{Labels: map[string]string{
 		"pandora.dev/match-id":      fmt.Sprintf("%d", matchID),
 		"pandora.dev/map-id":        fmt.Sprintf("%d", mapID),
 		"pandora.dev/game-mode":     sanitizeLabelValue(gameMode),
-		"pandora.dev/allocation-id": sanitizeLabelValue(allocationID),
+		battleAllocationMetadataKey: sanitizeLabelValue(allocationID),
+	}, Annotations: map[string]string{
+		battleRosterAnnotationKey:   roster,
+		battleAllocationMetadataKey: allocationID,
 	}}
-	podName, addr, err := a.allocateWithMetadata(ctx, matchID, mapID, meta)
+	podName, addr, selectedTrack, err := a.allocateWithMetadata(ctx, matchID, mapID, releaseTrack, meta)
 	if err != nil {
 		// 即使 POST 没有可解析响应，也必须把 allocation_id 交还调用方。它是未知结果
 		// 对账/回收的唯一 fencing token；返回 nil 会让调用方删 claim 后再次分配第二个 Pod。
@@ -265,9 +302,14 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: strict GET selected gameserver %s failed: %v", podName, err)
 	}
+	actualReleaseTrack := gs.Metadata.Labels[releaseTrackMetadataKey]
 	if gs.Metadata.Name != podName || gs.Metadata.UID == "" || gs.Metadata.ResourceVersion == "" ||
 		gs.Metadata.Labels["pandora.dev/match-id"] != strconv.FormatUint(matchID, 10) ||
-		gs.Metadata.Labels["pandora.dev/allocation-id"] != sanitizeLabelValue(allocationID) {
+		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocationID) ||
+		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocationID ||
+		gs.Metadata.Annotations[battleRosterAnnotationKey] != roster ||
+		!releasetrack.Valid(actualReleaseTrack) || actualReleaseTrack != selectedTrack ||
+		gs.Metadata.Annotations[releaseTrackMetadataKey] != actualReleaseTrack {
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: selected gameserver identity/binding incomplete: want_name=%q name=%q uid=%q rv=%q",
 			podName, gs.Metadata.Name, gs.Metadata.UID, gs.Metadata.ResourceVersion)
@@ -278,6 +320,7 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		InstanceUID:        gs.Metadata.UID,
 		ResourceVersion:    gs.Metadata.ResourceVersion,
 		AllocationID:       allocationID,
+		ReleaseTrack:       actualReleaseTrack,
 		AnnotationsPresent: gs.Metadata.Annotations != nil,
 	}, nil
 }
@@ -286,13 +329,75 @@ func (a *AgonesGameServerAllocator) allocateWithMetadata(
 	ctx context.Context,
 	matchID uint64,
 	mapID uint32,
+	desiredReleaseTrack string,
+	meta *gsaMetadata,
+) (string, string, string, error) {
+	if !releasetrack.Valid(desiredReleaseTrack) {
+		return "", "", "", errcode.New(errcode.ErrInvalidArg,
+			"agones: invalid desired release track %q", desiredReleaseTrack)
+	}
+	tracks := []string{desiredReleaseTrack}
+	if desiredReleaseTrack == releasetrack.Canary {
+		// 只有明确的 UnAllocated/NoAvailable 才进入第二次 stable POST；transport/
+		// decode 等结果未知时立即停，绝不冒险产生第二个已分配 GameServer。
+		tracks = append(tracks, releasetrack.Stable)
+	}
+	for i, track := range tracks {
+		attemptMeta := cloneGSAMetadata(meta)
+		attemptMeta.Labels[releaseTrackMetadataKey] = track
+		attemptMeta.Annotations[releaseTrackMetadataKey] = track
+		pod, addr, err := a.allocateOnceWithMetadata(ctx, matchID, mapID, track, attemptMeta)
+		if err == nil {
+			return pod, addr, track, nil
+		}
+		if errcode.As(err) != errcode.ErrDSNoAvailable || i == len(tracks)-1 {
+			return "", "", "", err
+		}
+		plog.With(ctx).Warnw("msg", "battle_canary_capacity_fallback_stable",
+			"match_id", matchID, "map_id", mapID)
+	}
+	return "", "", "", errcode.New(errcode.ErrDSNoAvailable, "agones: no gameserver")
+}
+
+func cloneGSAMetadata(meta *gsaMetadata) *gsaMetadata {
+	out := &gsaMetadata{Labels: make(map[string]string), Annotations: make(map[string]string)}
+	if meta == nil {
+		return out
+	}
+	for key, value := range meta.Labels {
+		out.Labels[key] = value
+	}
+	for key, value := range meta.Annotations {
+		out.Annotations[key] = value
+	}
+	return out
+}
+
+func (a *AgonesGameServerAllocator) allocateOnceWithMetadata(
+	ctx context.Context,
+	matchID uint64,
+	mapID uint32,
+	releaseTrack string,
 	meta *gsaMetadata,
 ) (string, string, error) {
-	selectors := make([]gsaSelector, 0, 2)
-	if dedicated := a.mapFleets[mapID]; dedicated != "" && dedicated != a.fleetName {
-		selectors = append(selectors, gsaSelector{MatchLabels: map[string]string{fleetLabelKey: dedicated}})
+	generalFleet := a.fleetName
+	dedicatedFleet := a.mapFleets[mapID].stable
+	if releaseTrack == releasetrack.Canary {
+		generalFleet = a.canaryFleetName
+		dedicatedFleet = a.mapFleets[mapID].canary
 	}
-	selectors = append(selectors, gsaSelector{MatchLabels: map[string]string{fleetLabelKey: a.fleetName}})
+	if generalFleet == "" {
+		return "", "", errcode.New(errcode.ErrDSNoAvailable,
+			"agones: no %s fleet configured", releaseTrack)
+	}
+	selectorLabels := func(fleet string) map[string]string {
+		return map[string]string{fleetLabelKey: fleet, releaseTrackMetadataKey: releaseTrack}
+	}
+	selectors := make([]gsaSelector, 0, 2)
+	if dedicatedFleet != "" && dedicatedFleet != generalFleet {
+		selectors = append(selectors, gsaSelector{MatchLabels: selectorLabels(dedicatedFleet)})
+	}
+	selectors = append(selectors, gsaSelector{MatchLabels: selectorLabels(generalFleet)})
 
 	reqBody := gsaRequest{
 		APIVersion: "allocation.agones.dev/v1",
@@ -543,14 +648,23 @@ type fleetStatusResponse struct {
 // WatchedFleets 返回容量巡检要盯的 Fleet 集合:通用池 fleetName + 全部 map_fleets 专属预热池
 // (去重;通用池在前,专属池按名字典序,保证顺序稳定)。
 func (a *AgonesGameServerAllocator) WatchedFleets() []string {
-	out := make([]string, 0, 1+len(a.mapFleets))
-	seen := map[string]bool{a.fleetName: true}
-	out = append(out, a.fleetName)
-	dedicated := make([]string, 0, len(a.mapFleets))
-	for _, name := range a.mapFleets {
-		if !seen[name] {
+	out := make([]string, 0, 2+2*len(a.mapFleets))
+	seen := make(map[string]bool)
+	add := func(name string) {
+		if name != "" && !seen[name] {
 			seen[name] = true
-			dedicated = append(dedicated, name)
+			out = append(out, name)
+		}
+	}
+	add(a.fleetName)
+	add(a.canaryFleetName)
+	dedicated := make([]string, 0, 2*len(a.mapFleets))
+	for _, route := range a.mapFleets {
+		for _, name := range []string{route.stable, route.canary} {
+			if name != "" && !seen[name] {
+				seen[name] = true
+				dedicated = append(dedicated, name)
+			}
 		}
 	}
 	sort.Strings(dedicated)

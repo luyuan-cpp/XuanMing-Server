@@ -80,7 +80,20 @@ try {
     if ($Breaking) {
         Write-Host ""
         Write-Host "[2] buf breaking against main" -ForegroundColor Yellow
-        & buf breaking --against "$ProjectRoot/.git#branch=main"
+        # buf 从 $ProtoDir(proto/)运行,但 --against 指向仓库根 .git;必须带 subdir=proto,
+        # 否则 buf 会拿仓库根(无 buf.yaml 模块)当基线,对不上当前模块 → breaking 检测形同虚设。
+        #
+        # GIT_LFS_SKIP_SMUDGE=1(审核 P1 #9):buf 读取 .git 基线时 git 会对整棵树跑 LFS smudge,
+        # 本仓库含 171MB 离线镜像等 LFS 大对象,LFS remote 不可用时 smudge 报错会连累 breaking 检查失败。
+        # proto 文件本身不是 LFS 对象,跳过 smudge 不影响基线 proto 内容,只避免拉取无关 LFS blob。
+        $prevSkipSmudge = $env:GIT_LFS_SKIP_SMUDGE
+        $env:GIT_LFS_SKIP_SMUDGE = '1'
+        try {
+            & buf breaking --against "$ProjectRoot/.git#branch=main,subdir=proto"
+        }
+        finally {
+            $env:GIT_LFS_SKIP_SMUDGE = $prevSkipSmudge
+        }
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ERR] breaking change detected!" -ForegroundColor Red
             exit 1
@@ -106,6 +119,24 @@ try {
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ERR] cpp generate failed" -ForegroundColor Red
             exit 1
+        }
+        # 部分 protoc C++ 版本会在换行前输出单个空格，导致 git diff --check 失败。
+        # 统一生成入口内做确定性规范化，避免手改生成文件后下次生成又漂移。
+        Get-ChildItem -Path "$ProtoDir/gen/cpp" -File -Recurse -Include *.cc, *.h | ForEach-Object {
+            $content = [System.IO.File]::ReadAllText($_.FullName)
+            $normalized = [System.Text.RegularExpressions.Regex]::Replace(
+                $content,
+                '[ \t]+(?=\r?$)',
+                '',
+                [System.Text.RegularExpressions.RegexOptions]::Multiline
+            )
+            if ($normalized -cne $content) {
+                [System.IO.File]::WriteAllText(
+                    $_.FullName,
+                    $normalized,
+                    [System.Text.UTF8Encoding]::new($false)
+                )
+            }
         }
         Write-Host "  OK → $ProtoDir/gen/cpp/" -ForegroundColor Green
     }

@@ -79,12 +79,17 @@ version      INT          NOT NULL  DEFAULT 0                    -- 乐观锁
 | `auction_escrow` | 拍卖挂单冻结(escrow:卖冻道具 / 买冻金币) | uk(player_id, order_id), idx(player_id) |
 
 #### `pandora_auction`
-按 `market_id` 分片(mysqlx ShardSet,shard = market_id % N;W1 单库)。撮合是「每 market 单写者」交易所模型,不跨分片事务,MySQL 分库即可。
+按 `market_id` 分片(mysqlx ShardSet,shard = market_id % N;W1 单库，当前只批准 N≤2)。N 与有序
+物理 DSN 身份由各 shard 的 topology marker 锁定，不允许直接 rehash。MySQL 是候选、订单状态与补偿意图权威；
+`ReserveMatch` 在同一分片事务内锁双方订单并原子写成交意图，不依赖 Redis 锁承担防超卖正确性。
 
 | 表 | 用途 | 关键索引 |
 |---|---|---|
-| `auction_orders` | 挂单 / 出价 | PK(order_id), uk(owner_id, idempotency_key), idx(market_id, side, status), idx(owner_id, status), idx(status, created_at_ms) |
-| `auction_matches` | 成交流水(append-only) | PK(match_id), idx(market_id, matched_at_ms), idx(sell_order_id), idx(buy_order_id) |
+| `auction_orders` | 挂单 / 出价 + escrow 验证、撮合续跑、释放意图 | PK(order_id), uk(owner_id,idempotency_key), verified SELL/BUY 价格顺序索引, pending/match/release ready 索引, idx(owner_id,order_id) |
+| `auction_matches` | 成交流水 + 待结算/成交事件 outbox | PK(match_id), settlement/event ready 索引, sell/buy pending 引用索引 |
+| `auction_owner_guards` | 同 owner 全局幂等串行 guard | PK(owner_id) |
+| `auction_idempotency_keys` | owner+key 跨 market canonical 映射 | PK(owner_id,idempotency_key), uk(order_id) |
+| `auction_shard_topology` | id%N 有序物理拓扑 exact-match marker | PK(singleton_id), generation/count/index/identity hash |
 
 #### `pandora_leaderboard`
 排行榜实时排名权威在 Redis ZSET(board_store.go),MySQL 只兜结算结果 + 发奖凭证(结算是低频写,单库即可,无分库)。
@@ -151,13 +156,16 @@ pandora:<domain>:<entity>:<id>[:<field>]
 | `pandora:ds:hub:<pod_name>` | hash | 30s heartbeat | 大厅 DS 实例状态 |
 | `pandora:ds:battle:idle` | set | - | 空闲战斗 DS 池 |
 
-#### Auction(全服拍卖行订单簿)
+#### Auction(旧版本兼容订单簿缓存)
 | Key | 类型 | TTL | 用途 |
 |---|---|---|---|
 | `pandora:auction:book:{<market_id>}:ask` | zset | - | 卖盘(score=price,member=零padded order_id) |
 | `pandora:auction:book:{<market_id>}:bid` | zset | - | 买盘(score=-price,价格-时间优先) |
 
-⚠️ hashtag `{<market_id>}` 把同一市场买卖盘锁到同一 Cluster slot,撮合同时碰两侧不触发 CROSSSLOT。MySQL `pandora_auction` 为权威,Redis 仅活跃撮合索引。
+⚠️ hashtag `{<market_id>}` 保持旧 key/member/score 与 Redis Cluster slot 语义。自 2026-07-12 起，
+新版本不从该 ZSET 选撮合候选；它只是蓝绿切换期间供旧版本观察的 best-effort 兼容缓存，
+`ZADD/ZREM` 失败不改变 MySQL 权威业务结果。跨实例 market Redis 锁只做正常串行与降冲突，
+失锁窗口的最终防超卖由 MySQL 行锁、条件状态迁移和唯一成交意图负责。
 
 #### Leaderboard(通用排行榜)
 | Key | 类型 | TTL | 用途 |

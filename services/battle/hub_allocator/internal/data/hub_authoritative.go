@@ -19,6 +19,7 @@ import (
 
 	authpkg "github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 )
 
@@ -63,11 +64,12 @@ type ReserveResult struct {
 	ProtocolEpoch uint32
 	WriterEpoch   uint32
 	// 分片路由信息(供 AssignHub/TransferHub 组装归属与票据,避免再读一次)。
-	ShardID     uint32
-	HubAddr     string
-	Region      string
-	PlayerCount int32
-	Capacity    int32
+	ShardID      uint32
+	HubAddr      string
+	Region       string
+	PlayerCount  int32
+	Capacity     int32
+	ReleaseTrack string
 }
 
 // QuarantineResult 区分唯一权威吊销与派生投影 drain。AuthQuarantined=true 即表示
@@ -392,6 +394,14 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 				out.Reason = "shard-not-ready"
 				return nil
 			}
+			releaseTrack := shard.GetReleaseTrack()
+			if releaseTrack == "" {
+				releaseTrack = releasetrack.Stable // additive rollout migration for pre-track records
+			}
+			if !releasetrack.Valid(releaseTrack) {
+				out.Reason = "shard-release-track-invalid"
+				return nil
+			}
 			// active == shard.last_verified:确保分片镜像正是被当前 active 凭据投影的那份(把授权与镜像钉死)。
 			if shard.LastVerifiedGen != auth.Active.Gen || shard.LastVerifiedJti != auth.Active.Jti {
 				out.Reason = "shard-not-verified-by-active"
@@ -425,12 +435,14 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 			out.HubAddr = shard.HubAddr
 			out.Region = shard.Region
 			out.Capacity = shard.Capacity
+			out.ReleaseTrack = releaseTrack
 			if reserve {
 				if shard.Capacity <= 0 || shard.PlayerCount < 0 || shard.PlayerCount >= shard.Capacity {
 					out.Reason = "shard-full"
 					return nil
 				}
 				shard.PlayerCount++
+				shard.ReleaseTrack = releaseTrack
 				payload, merr := marshalShard(shard)
 				if merr != nil {
 					return merr

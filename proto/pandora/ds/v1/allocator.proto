@@ -16,9 +16,28 @@ import "pandora/common/v1/errcode.proto";
 
 service DSAllocatorService {
   rpc AllocateBattle(AllocateBattleRequest) returns (AllocateBattleResponse);
+  // ResolveBattleTarget 是重连重签票据的只读权威查询。它不创建 claim、不调用
+  // GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
+  rpc ResolveBattleTarget(ResolveBattleTargetRequest) returns (ResolveBattleTargetResponse);
   rpc ReleaseBattle(ReleaseBattleRequest) returns (ReleaseBattleResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // DS 每 5s 主动调
   rpc ListBattles(ListBattlesRequest) returns (ListBattlesResponse);
+}
+
+message ResolveBattleTargetRequest {
+  uint64 match_id = 1;
+  uint64 player_id = 2;
+}
+
+message ResolveBattleTargetResponse {
+  pandora.common.v1.ErrCode code = 1;
+  string ds_addr = 2;
+  string ds_pod_name = 3;
+  int64 allocated_at_ms = 4;
+  string gameserver_uid = 5;
+  uint32 instance_epoch = 6;
+  string allocation_id = 7;
+  string release_track = 8;
 }
 
 // ===== Allocate / Release =====
@@ -37,6 +56,14 @@ message AllocateBattleResponse {
   string ds_addr        = 2;
   string ds_pod_name    = 3;
   int64  allocated_at_ms = 4;
+  // DSTicket v2(方案 B,decision-revisit-player-jwt-key-rotation.md §7.3):
+  // matchmaker 签 battle 票需要把票绑死到唯一 DS 实例。以下字段来自 ds_allocator
+  // 判定 ReadyAuthorized 的同一权威快照(BattleStorageRecord / 授权记录),兼容加字段:
+  // 旧 ds_allocator 不回填时字段为零值,matchmaker v2 签票路径 fail-closed 拒签。
+  string gameserver_uid   = 5;  // Agones GameServer uid(票据 ds_uid claim)
+  uint32 instance_epoch   = 6;  // 实例代际(票据 ds_instance_epoch claim)
+  string allocation_id    = 7;  // 本次分配 ID(票据 allocation_id claim)
+  string release_track    = 8;  // "stable" | "canary" | ""(未启用双轨)
 }
 
 message ReleaseBattleRequest {
@@ -123,6 +150,9 @@ message BattleStorageRecord {
   string last_verified_jti = 15;
   uint32 last_verified_writer_epoch = 16;
   string allocation_id     = 17;
+  // 实际承载本局的发布轨道，只接受 stable/canary。必须来自已分配 GameServer
+  // 权威 metadata/GET 回读，不得按 cohort 意图猜测（canary 可回退 stable）。
+  string release_track     = 18;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====

@@ -34,6 +34,7 @@ import (
 	"time"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/data"
@@ -48,6 +49,8 @@ const (
 	shardIDLabelKey = "pandora.dev/shard-id"
 	// capacityLabelKey 可选:单分片人数上限(缺省用 cfg.DefaultCapacity)。
 	capacityLabelKey = "pandora.dev/capacity"
+	// releaseTrackMetadataKey 同时用作精确 selector 与实际轨 annotation 审计字段。
+	releaseTrackMetadataKey = "pandora.dev/release-track"
 )
 
 // hubReadyStates 是「可承载玩家」的 GameServer 状态集合。
@@ -61,14 +64,15 @@ var hubReadyStates = map[string]struct{}{
 
 // AgonesHubFleetProvider 经 k8s apiserver REST 查 Agones GameServer 列表发现 Hub 分片拓扑。
 type AgonesHubFleetProvider struct {
-	apiServer     string // 已去尾部 /
-	namespace     string
-	fleetName     string
-	advertiseHost string
-	tokenPath     string // "" 或 "-" → 不带 Authorization
-	listTimeout   time.Duration
-	capacity      int32
-	httpClient    *http.Client
+	apiServer       string // 已去尾部 /
+	namespace       string
+	fleetName       string
+	canaryFleetName string
+	advertiseHost   string
+	tokenPath       string // "" 或 "-" → 不带 Authorization
+	listTimeout     time.Duration
+	capacity        int32
+	httpClient      *http.Client
 
 	// dsTokenIssuer 签发 DS 回调服务令牌(审核 P1 #1;main 在 ds_auth.secret 已配时注入)。
 	// Hub DS 是常驻分片(不走 GameServerAllocation),所以采用「发现式签发」:ListShards
@@ -196,6 +200,16 @@ func NewAgonesHubFleetProvider(cfg conf.Config) (*AgonesHubFleetProvider, error)
 	if ag.FleetName == "" {
 		return nil, fmt.Errorf("agones: fleet_name required when enabled")
 	}
+	if _, err := releasetrack.New(ag.CanaryPercent, ag.CanarySeed); err != nil {
+		return nil, fmt.Errorf("agones: invalid canary policy: %w", err)
+	}
+	if ag.CanaryPercent > 0 && strings.TrimSpace(ag.CanaryFleetName) == "" {
+		return nil, fmt.Errorf("agones: canary_fleet_name required when canary_percent > 0")
+	}
+	// 当前 scaler 只治理 stable Fleet；双轨时继续启用会把两轨总负载错误作用到单轨。
+	if strings.TrimSpace(ag.CanaryFleetName) != "" && cfg.Hub.AutoScaleEnabled {
+		return nil, fmt.Errorf("agones: hub autoscale is not supported with split stable/canary fleets")
+	}
 
 	tlsCfg := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
@@ -222,13 +236,14 @@ func NewAgonesHubFleetProvider(cfg conf.Config) (*AgonesHubFleetProvider, error)
 	}
 
 	return &AgonesHubFleetProvider{
-		apiServer:     strings.TrimRight(ag.APIServer, "/"),
-		namespace:     ag.Namespace,
-		fleetName:     ag.FleetName,
-		advertiseHost: strings.TrimSpace(ag.AdvertiseHost),
-		tokenPath:     ag.TokenPath,
-		listTimeout:   timeout,
-		capacity:      capacity,
+		apiServer:       strings.TrimRight(ag.APIServer, "/"),
+		namespace:       ag.Namespace,
+		fleetName:       ag.FleetName,
+		canaryFleetName: strings.TrimSpace(ag.CanaryFleetName),
+		advertiseHost:   strings.TrimSpace(ag.AdvertiseHost),
+		tokenPath:       ag.TokenPath,
+		listTimeout:     timeout,
+		capacity:        capacity,
 		httpClient: &http.Client{
 			Timeout:   timeout,
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
@@ -276,9 +291,29 @@ type fleetResponse struct {
 	Spec fleetSpec `json:"spec"`
 }
 
-// ListShards LIST 指定 Fleet + region 下的 GameServer,映射成候选分片拓扑。
+// ListShards 分别发现 stable/canary。配置只决定要查哪个 Fleet；最终 ReleaseTrack
+// 必须由 GameServer label+annotation 一致证明，不能把 cohort 意图当成实际命中轨。
 func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) ([]ShardCandidate, error) {
-	selector := fleetLabelKey + "=" + a.fleetName
+	stable, err := a.listTrackShards(ctx, region, a.fleetName, releasetrack.Stable)
+	if err != nil {
+		return nil, err
+	}
+	out := stable
+	if a.canaryFleetName != "" {
+		canary, err := a.listTrackShards(ctx, region, a.canaryFleetName, releasetrack.Canary)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, canary...)
+	}
+	return out, nil
+}
+
+func (a *AgonesHubFleetProvider) listTrackShards(ctx context.Context, region, fleetName, releaseTrack string) ([]ShardCandidate, error) {
+	if fleetName == "" || !releasetrack.Valid(releaseTrack) {
+		return nil, fmt.Errorf("agones: invalid fleet/release track pair fleet=%q track=%q", fleetName, releaseTrack)
+	}
+	selector := fleetLabelKey + "=" + fleetName + "," + releaseTrackMetadataKey + "=" + releaseTrack
 	if region != "" {
 		selector += "," + regionLabelKey + "=" + region
 	}
@@ -289,11 +324,11 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 
 	respBytes, status, err := a.do(ctx, http.MethodGet, listURL, nil, "")
 	if err != nil {
-		return nil, fmt.Errorf("agones: list gameservers region=%s: %w", region, err)
+		return nil, fmt.Errorf("agones: list gameservers fleet=%s track=%s region=%s: %w", fleetName, releaseTrack, region, err)
 	}
 	if status < 200 || status >= 300 {
-		return nil, fmt.Errorf("agones: list gameservers region=%s http %d: %s",
-			region, status, truncateBody(respBytes, 256))
+		return nil, fmt.Errorf("agones: list gameservers fleet=%s track=%s region=%s http %d: %s",
+			fleetName, releaseTrack, region, status, truncateBody(respBytes, 256))
 	}
 
 	var resp gsListResponse
@@ -304,6 +339,13 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 	out := make([]ShardCandidate, 0, len(resp.Items))
 	for i := range resp.Items {
 		gs := &resp.Items[i]
+		if gs.Metadata.Labels[fleetLabelKey] != fleetName ||
+			gs.Metadata.Labels[releaseTrackMetadataKey] != releaseTrack ||
+			gs.Metadata.Annotations[releaseTrackMetadataKey] != releaseTrack {
+			plog.With(ctx).Warnw("msg", "hub_gameserver_release_track_metadata_invalid",
+				"pod", gs.Metadata.Name, "fleet", fleetName, "release_track", releaseTrack)
+			continue
+		}
 		if _, ok := hubReadyStates[gs.Status.State]; !ok {
 			continue
 		}
@@ -327,14 +369,15 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 			host = a.advertiseHost
 		}
 		out = append(out, ShardCandidate{
-			PodName:    gs.Metadata.Name,
-			Addr:       fmt.Sprintf("%s:%d", host, gs.Status.Ports[0].Port),
-			Region:     region,
-			ShardID:    shardIDFor(gs),
-			Capacity:   capacityFor(gs, a.capacity),
-			TokenReady: tokenReady,
-			TokenExpMs: tokenExpMs,
-			TokenGen:   tokenGen,
+			PodName:      gs.Metadata.Name,
+			Addr:         fmt.Sprintf("%s:%d", host, gs.Status.Ports[0].Port),
+			Region:       region,
+			ShardID:      shardIDFor(gs),
+			Capacity:     capacityFor(gs, a.capacity),
+			ReleaseTrack: releaseTrack,
+			TokenReady:   tokenReady,
+			TokenExpMs:   tokenExpMs,
+			TokenGen:     tokenGen,
 		})
 	}
 	return out, nil

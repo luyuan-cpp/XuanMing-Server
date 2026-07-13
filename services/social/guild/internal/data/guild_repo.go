@@ -262,9 +262,11 @@ func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, gu
 		// 1. 先锁 guilds 父行(全局统一 guilds → 子表 加锁序,兼作与 DisbandGuild 的串行化闸门)。
 		//    公会不存在 / 已被并发解散 → ErrGuildNotFound,避免写出指向已删公会的孤儿申请
 		//    (四审 P1:CreateJoinRequest 不锁公会父行,可与解散并发产生孤儿 pending)。
+		//    新旧二进制都先锁同一父行；新版随后以明细 COUNT 为权威自愈计数列，兼容旧版只写明细。
 		var lockedGuildID uint64
 		if err := tx.QueryRowContext(ctx,
-			`SELECT guild_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&lockedGuildID); err != nil {
+			`SELECT guild_id FROM guilds WHERE guild_id = ? FOR UPDATE`,
+			guildID).Scan(&lockedGuildID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
 			}
@@ -277,21 +279,36 @@ func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, gu
 		qerr := tx.QueryRowContext(ctx,
 			`SELECT request_id, status FROM guild_join_requests WHERE guild_id = ? AND player_id = ? FOR UPDATE`,
 			guildID, playerID).Scan(&existingID, &status)
+		if qerr != nil && !errors.Is(qerr, sql.ErrNoRows) {
+			return dbErr(qerr, "query join request")
+		}
+
+		// 3. 以 pending 明细为权威并校正计数列。FOR UPDATE 保证 MySQL RR 下读到最新已提交值，
+		// 同时沿用旧版的 idx_guild_status 锁语义；TiDB 下同公会新写由上面的 guilds 父行串行。
+		pendingCount, err := reconcileGuildPendingCount(ctx, tx, guildID)
+		if err != nil {
+			return err
+		}
 		switch {
 		case errors.Is(qerr, sql.ErrNoRows):
 			// 新增一条 pending 前,先校验该公会 pending 申请未满(不变量 §9.18)。
-			if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
-				return cerr
+			// guilds 父行已 FOR UPDATE,pendingCount 与后续 +1 在同一临界区,无幻读。
+			if maxPending > 0 && pendingCount >= maxPending {
+				return errcode.New(errcode.ErrGuildRequestLimit,
+					"pending join request limit reached for guild %d (max %d)", guildID, maxPending)
 			}
 			if _, ierr := tx.ExecContext(ctx,
 				`INSERT INTO guild_join_requests (request_id, guild_id, player_id, status) VALUES (?, ?, ?, ?)`,
 				newRequestID, guildID, playerID, joinStatusPending); ierr != nil {
 				return dbErr(ierr, "insert join request")
 			}
+			if _, uerr := tx.ExecContext(ctx,
+				`UPDATE guilds SET pending_request_count = ? WHERE guild_id = ?`,
+				pendingCount+1, guildID); uerr != nil {
+				return dbErr(uerr, "set pending count guild=%d", guildID)
+			}
 			resultID, already = newRequestID, false
 			return nil
-		case qerr != nil:
-			return dbErr(qerr, "query join request")
 		}
 
 		if status == joinStatusPending {
@@ -299,13 +316,19 @@ func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, gu
 			return nil
 		}
 		// 历史 rejected → 复位 pending,复用 request_id;从非 pending 转 pending 同样占用一格,先校验上限。
-		if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
-			return cerr
+		if maxPending > 0 && pendingCount >= maxPending {
+			return errcode.New(errcode.ErrGuildRequestLimit,
+				"pending join request limit reached for guild %d (max %d)", guildID, maxPending)
 		}
 		if _, uerr := tx.ExecContext(ctx,
 			`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
 			joinStatusPending, existingID); uerr != nil {
 			return dbErr(uerr, "reopen join request")
+		}
+		if _, uerr := tx.ExecContext(ctx,
+			`UPDATE guilds SET pending_request_count = ? WHERE guild_id = ?`,
+			pendingCount+1, guildID); uerr != nil {
+			return dbErr(uerr, "set pending count guild=%d", guildID)
 		}
 		resultID, already = existingID, false
 		return nil
@@ -316,24 +339,22 @@ func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, gu
 	return resultID, already, nil
 }
 
-// checkGuildPendingLimit 在事务内锁定读该公会的 pending 申请数,达到上限回 ErrGuildRequestLimit
-// (不变量 §9.18)。maxPending<=0 关闭校验。FOR UPDATE 对 guild_id 索引区间加锁,消除并发新增
-// pending 的幻读竞态。
-func checkGuildPendingLimit(ctx context.Context, tx *sql.Tx, guildID uint64, maxPending int) error {
-	if maxPending <= 0 {
-		return nil
-	}
-	var cnt int
+// reconcileGuildPendingCount 必须在持有 guilds(guildID)父行锁后调用。它复用旧版
+// COUNT(*)...FOR UPDATE 的 MySQL 索引锁，同时把明细权威值写回计数列：旧 Pod 在滚动窗口只改
+// guild_join_requests 也不会让新版信任陈旧计数。TiDB 没有间隙锁，但所有新版写已由父行串行。
+func reconcileGuildPendingCount(ctx context.Context, tx *sql.Tx, guildID uint64) (int, error) {
+	var count int
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = ? FOR UPDATE`,
-		guildID, joinStatusPending).Scan(&cnt); err != nil {
-		return dbErr(err, "count pending requests guild=%d", guildID)
+		guildID, joinStatusPending).Scan(&count); err != nil {
+		return 0, dbErr(err, "count pending requests guild=%d", guildID)
 	}
-	if cnt >= maxPending {
-		return errcode.New(errcode.ErrGuildRequestLimit,
-			"pending join request limit reached for guild %d (max %d)", guildID, maxPending)
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE guilds SET pending_request_count = ? WHERE guild_id = ? AND pending_request_count <> ?`,
+		count, guildID, count); err != nil {
+		return 0, dbErr(err, "reconcile pending count guild=%d", guildID)
 	}
-	return nil
+	return count, nil
 }
 
 func (r *MySQLGuildRepo) GetRequest(ctx context.Context, requestID uint64) (*GuildJoinRequestRow, bool, error) {
@@ -392,17 +413,19 @@ func (r *MySQLGuildRepo) ApproveJoin(ctx context.Context, requestID, approverID 
 			return dbErr(err, "lock request %d", requestID)
 		}
 		if status != joinStatusPending {
-			return nil // 已被并发处理,approved 保持 false
+			_, err := reconcileGuildPendingCount(ctx, tx, guildID)
+			return err // 已被并发处理；仍提交一次计数自愈
 		}
 
 		// 3. 审批人须在该公会且为 leader/officer(持父行锁复核,权威)。
-		// 用 FOR SHARE 锁定读而非普通读:本事务首条语句是未锁读 guild_id(为定加锁序),已在
+		// 用 FOR UPDATE 锁定读而非普通读:本事务首条语句是未锁读 guild_id(为定加锁序),已在
 		// 取父行锁前建立 REPEATABLE READ 快照;若这里用普通 SELECT,会读到父行锁获取之前的旧
 		// 快照角色——审批人在等锁期间被并发降级 / 踢出仍读到旧 leader/officer(五审 P1 TOCTOU
-		// 被 RR 快照重开)。锁定读绕过快照、取最新已提交值;父行 X 锁已串行化同公会成员写,不额外死锁。
+		// 被 RR 快照重开)。FOR UPDATE 同时兼容 TiDB（FOR SHARE 当前仅 noop 且默认拒绝）；父行 X 锁
+		// 已串行化同公会成员写，强化成员行锁不会新增同公会锁序。
 		var approverRole int32
 		err = tx.QueryRowContext(ctx,
-			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR SHARE`,
+			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR UPDATE`,
 			approverID, guildID).Scan(&approverRole)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildNoPermission, "approver %d not in guild %d", approverID, guildID)
@@ -449,6 +472,10 @@ func (r *MySQLGuildRepo) ApproveJoin(ctx context.Context, requestID, approverID 
 			`UPDATE guilds SET member_count = member_count + 1 WHERE guild_id = ?`, guildID); err != nil {
 			return dbErr(err, "inc member_count")
 		}
+		// pending 转 approved 后按明细重算，修复滚动窗口内旧 Pod 留下的任意计数漂移。
+		if _, err := reconcileGuildPendingCount(ctx, tx, guildID); err != nil {
+			return err
+		}
 		approved = true
 		return nil
 	})
@@ -489,13 +516,14 @@ func (r *MySQLGuildRepo) RejectJoin(ctx context.Context, requestID, approverID u
 			return dbErr(err, "lock request %d", requestID)
 		}
 		if status != joinStatusPending {
-			return nil
+			_, err := reconcileGuildPendingCount(ctx, tx, guildID)
+			return err
 		}
-		// FOR SHARE 锁定读绕过本事务首条未锁读 guild_id 建立的 RR 快照,取审批人最新已提交角色,
+		// FOR UPDATE 锁定读绕过本事务首条未锁读 guild_id 建立的 RR 快照,取审批人最新已提交角色,
 		// 防等父行锁期间被并发降级仍读到旧 leader/officer(五审 P1 TOCTOU 被 RR 快照重开)。
 		var approverRole int32
 		err = tx.QueryRowContext(ctx,
-			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR SHARE`,
+			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR UPDATE`,
 			approverID, guildID).Scan(&approverRole)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildNoPermission, "approver %d not in guild %d", approverID, guildID)
@@ -510,6 +538,10 @@ func (r *MySQLGuildRepo) RejectJoin(ctx context.Context, requestID, approverID u
 			`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
 			joinStatusRejected, requestID); err != nil {
 			return dbErr(err, "mark rejected")
+		}
+		// pending 转 rejected 后按明细重算，不依赖可能被旧 Pod 留脏的计数列。
+		if _, err := reconcileGuildPendingCount(ctx, tx, guildID); err != nil {
+			return err
 		}
 		rejected = true
 		return nil

@@ -1,0 +1,39 @@
+# DS auth epoch=2 防回滚准入门。默认 inert：只有激活工具给目标 namespace 打
+# pandora.dev/ds-auth-required-epoch=2 后才生效。
+#
+# 激活后：五个授权写/验服务和 Agones GameServer 新建 Pod 必须带 writer epoch=2。
+# 因 Pod CREATE 也受控，rollout undo 到旧 ReplicaSet/Fleet 时旧模板无法重新拉起，从机制上
+# 阻断“激活后回滚旧 writer”。现存旧 Pod 必须在打 namespace 标签前由激活工具确认数量为 0。
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-ds-auth-writer-epoch
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        !has(namespaceObject.metadata.labels) ||
+        !('pandora.dev/ds-auth-required-epoch' in namespaceObject.metadata.labels) ||
+        namespaceObject.metadata.labels['pandora.dev/ds-auth-required-epoch'] != '2' ||
+        !has(object.metadata.labels) ||
+        !(('app' in object.metadata.labels && object.metadata.labels['app'] in
+           ['login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result']) ||
+          ('agones.dev/role' in object.metadata.labels && object.metadata.labels['agones.dev/role'] == 'gameserver')) ||
+        ('pandora.dev/ds-auth-writer-epoch' in object.metadata.labels &&
+         object.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2')
+      message: "DS auth 已激活 epoch=2：旧 writer Pod/Fleet 回滚被拒绝"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-ds-auth-writer-epoch
+spec:
+  policyName: pandora-ds-auth-writer-epoch
+  validationActions: [Deny]

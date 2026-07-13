@@ -28,6 +28,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
@@ -73,6 +74,7 @@ type HubTicketBinding struct {
 	CredentialJTI   string
 	HubAssignmentID string
 	WriterEpoch     uint32
+	ReleaseTrack    string
 }
 
 // HubMigratePusher 抽象强制整合迁移通知推送(走 Kafka topic pandora.hub.migrate,key=player_id)。
@@ -110,6 +112,8 @@ type HubUsecase struct {
 	// authTTL:Model B 授权记录键 TTL(CE8:必须独立于 shardTTL,授权寿命远长于分片镜像 TTL,
 	// 否则授权键被 shardTTL 提前过期会导致「有效凭据被判 stale」)。main 注入(默认 2×HubTokenTTL,floor 48h)。
 	authTTL time.Duration
+	// releasePolicy 只决定无 assignment 玩家首次尝试的轨；实际命中轨写入 assignment 后粘性。
+	releasePolicy releasetrack.Policy
 }
 
 // HubCredential 是 service 层从**验签通过**的 Model B hub 令牌抽出的凭据身份(§7),
@@ -153,6 +157,9 @@ func (u *HubUsecase) SetAuthRepo(r data.HubAuthRepo) { u.authRepo = r }
 
 // SetAuthTTL 注入 Model B 授权记录键 TTL(CE8;独立于 shardTTL,授权寿命更长)。
 func (u *HubUsecase) SetAuthTTL(d time.Duration) { u.authTTL = d }
+
+// SetReleaseTrackPolicy 注入 player_id 级确定性 cohort 策略。
+func (u *HubUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
 
 // authTTLDur 返回授权键 TTL:main 已注入用注入值;未注入(测试/兜底)回退 2×shardTTL,
 // 绝不返回 0(0 = Redis 永不过期,授权键会泄漏)。
@@ -232,7 +239,13 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			return nil, err
 		}
 		effectiveRole := roleID
+		desiredTrack := u.releasePolicy.Select(playerID)
 		if found {
+			var trackErr error
+			desiredTrack, trackErr = stickyReleaseTrack(existing.GetReleaseTrack())
+			if trackErr != nil {
+				return nil, trackErr
+			}
 			effectiveRole = effectiveRoleID(roleID, existing.RoleId)
 			current, reusable, rerr := u.assignmentRoutable(ctx, playerID, existing)
 			if rerr != nil {
@@ -243,6 +256,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 				next.HubAddr = current.HubAddr
 				next.ShardId = current.ShardID
 				next.Region = current.Region
+				next.ReleaseTrack = current.ReleaseTrack
 				next.RoleId = effectiveRole
 				if next.AssignmentId == "" {
 					next.AssignmentId = uuid.NewString()
@@ -266,6 +280,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 				// 仅 CAS 重绑凭据并重签票，绝不能再 Reserve +1 后拿旧 tuple 退座。
 				next := proto.Clone(existing).(*hubv1.HubAssignmentStorageRecord)
 				next.HubAddr, next.ShardId, next.Region = current.HubAddr, current.ShardID, current.Region
+				next.ReleaseTrack = current.ReleaseTrack
 				next.RoleId = effectiveRole
 				if next.AssignmentId == "" {
 					next.AssignmentId = uuid.NewString()
@@ -283,10 +298,18 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			}
 		}
 
-		if err := u.ensureShards(ctx, region); err != nil {
+		if err := u.ensureShards(ctx, region, desiredTrack); err != nil {
 			return nil, err
 		}
-		target, seat, err := u.selectAndReserveShard(ctx, region, teamID, "")
+		target, seat, err := u.selectAndReserveShard(ctx, region, teamID, "", desiredTrack)
+		// 只有“首次分配且 cohort=canary 且 canary 明确无可用容量”才允许回退 stable；
+		// 已有 assignment 必须保持粘性，stable 也绝不反向进入 canary。
+		if err != nil && !found && desiredTrack == releasetrack.Canary && errcode.As(err) == errcode.ErrHubNoAvailable {
+			if ensureErr := u.ensureShards(ctx, region, releasetrack.Stable); ensureErr != nil {
+				return nil, ensureErr
+			}
+			target, seat, err = u.selectAndReserveShard(ctx, region, teamID, "", releasetrack.Stable)
+		}
 		if err != nil {
 			if errcode.As(err) == errcode.ErrHubNoAvailable {
 				u.tryScaleOutOnNoCapacity(ctx, region)
@@ -306,6 +329,7 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		assignment.AssignedAtMs = time.Now().UnixMilli()
 		assignment.RoleId = effectiveRole
 		assignment.AssignmentId = uuid.NewString()
+		assignment.ReleaseTrack = target.ReleaseTrack
 		bindAssignmentAuth(assignment, seat)
 		var expected *hubv1.HubAssignmentStorageRecord
 		if found {
@@ -332,7 +356,8 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 			}
 		}
 		plog.With(ctx).Infow("msg", "hub_assigned",
-			"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId, "region", target.Region)
+			"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId,
+			"region", target.Region, "release_track", target.ReleaseTrack)
 		return u.signResult(ctx, playerID, effectiveRole, assignment)
 	}
 	return nil, errcode.New(errcode.ErrHubNoAvailable, "player %d assignment changed concurrently", playerID)
@@ -416,6 +441,9 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 		if !found {
 			return nil, errcode.New(errcode.ErrHubTransferFailed, "player %d not in any hub", playerID)
 		}
+		if _, trackErr := stickyReleaseTrack(assignment.GetReleaseTrack()); trackErr != nil {
+			return nil, trackErr
+		}
 		if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
 			return nil, errcode.New(errcode.ErrHubTransferFailed,
 				"player %d assignment is not a complete writer-v2 binding", playerID)
@@ -438,6 +466,7 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 			if reusable {
 				next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
 				next.HubAddr, next.ShardId, next.Region = current.HubAddr, current.ShardID, current.Region
+				next.ReleaseTrack = current.ReleaseTrack
 				if next.AssignmentId == "" {
 					next.AssignmentId = uuid.NewString()
 				}
@@ -457,6 +486,7 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 			if target.HubPodName == assignment.HubPodName && assignmentSameInstance(assignment, &current) {
 				next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
 				next.HubAddr, next.ShardId, next.Region = current.HubAddr, current.ShardID, current.Region
+				next.ReleaseTrack = current.ReleaseTrack
 				if next.AssignmentId == "" {
 					next.AssignmentId = uuid.NewString()
 				}
@@ -488,6 +518,7 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 		newAssignment.AssignedAtMs = time.Now().UnixMilli()
 		newAssignment.RoleId = assignment.RoleId
 		newAssignment.AssignmentId = uuid.NewString()
+		newAssignment.ReleaseTrack = target.ReleaseTrack
 		bindAssignmentAuth(newAssignment, seat)
 		swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, newAssignment, u.assignTTL())
 		if serr != nil {
@@ -530,6 +561,7 @@ func (u *HubUsecase) ListHubLinesForPlayer(ctx context.Context, playerID uint64,
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
 	region, curPod := reqRegion, ""
+	releaseTrack := u.releasePolicy.Select(playerID)
 	if assignment, found, err := u.repo.GetAssignment(ctx, playerID); err != nil {
 		return nil, err
 	} else if found {
@@ -545,6 +577,11 @@ func (u *HubUsecase) ListHubLinesForPlayer(ctx context.Context, playerID uint64,
 		}
 		region = assignment.Region // 归属 region 权威
 		curPod = assignment.HubPodName
+		var trackErr error
+		releaseTrack, trackErr = stickyReleaseTrack(assignment.GetReleaseTrack())
+		if trackErr != nil {
+			return nil, trackErr
+		}
 	}
 	if region == "" {
 		region = u.cfg.DefaultRegion
@@ -557,14 +594,19 @@ func (u *HubUsecase) ListHubLinesForPlayer(ctx context.Context, playerID uint64,
 	if err != nil {
 		return nil, err
 	}
-	return buildHubLines(shards, region, curPod), nil
+	return buildHubLinesForTrack(shards, region, curPod, releaseTrack), nil
 }
 
 // buildHubLines 把某 region 的 ready 分片按 shard_id 升序编成 1-based 线路视图("1线/2线/…")。
 func buildHubLines(shards []*hubv1.HubShardStorageRecord, region, curPod string) []*HubLineView {
+	return buildHubLinesForTrack(shards, region, curPod, "")
+}
+
+func buildHubLinesForTrack(shards []*hubv1.HubShardStorageRecord, region, curPod, releaseTrack string) []*HubLineView {
 	ready := make([]*hubv1.HubShardStorageRecord, 0, len(shards))
 	for _, s := range shards {
-		if s.Region == region && s.State == stateReady {
+		track, err := stickyReleaseTrack(s.GetReleaseTrack())
+		if err == nil && s.Region == region && s.State == stateReady && (releaseTrack == "" || track == releaseTrack) {
 			ready = append(ready, s)
 		}
 	}
@@ -584,8 +626,8 @@ func buildHubLines(shards []*hubv1.HubShardStorageRecord, region, curPod string)
 }
 
 // lineNoOfShard 返回某 region 内目标 shard_id 的 1-based 线路号(不在 ready 列表返 0)。
-func lineNoOfShard(shards []*hubv1.HubShardStorageRecord, region string, shardID uint32) uint32 {
-	for _, v := range buildHubLines(shards, region, "") {
+func lineNoOfShard(shards []*hubv1.HubShardStorageRecord, region, releaseTrack string, shardID uint32) uint32 {
+	for _, v := range buildHubLinesForTrack(shards, region, "", releaseTrack) {
 		if v.ShardID == shardID {
 			return v.LineNo
 		}
@@ -686,8 +728,13 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 	}
 	// 目标线路必须是本 region 的 ready 分片
 	var target *hubv1.HubShardStorageRecord
+	assignmentTrack, trackErr := stickyReleaseTrack(assignment.GetReleaseTrack())
+	if trackErr != nil {
+		return nil, trackErr
+	}
 	for _, s := range shards {
-		if s.ShardId == targetShardID && s.Region == assignment.Region && s.State == stateReady {
+		shardTrack, shardTrackErr := stickyReleaseTrack(s.GetReleaseTrack())
+		if shardTrackErr == nil && shardTrack == assignmentTrack && s.ShardId == targetShardID && s.Region == assignment.Region && s.State == stateReady {
 			target = s
 			break
 		}
@@ -705,7 +752,7 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 	if err != nil {
 		return nil, err
 	}
-	lineNo := lineNoOfShard(shards, assignment.Region, targetShardID)
+	lineNo := lineNoOfShard(shards, assignment.Region, assignmentTrack, targetShardID)
 	return &TransferToLineResult{
 		NewHubDSAddr: tr.NewHubDSAddr,
 		NewHubTicket: tr.NewHubTicket,
@@ -958,14 +1005,18 @@ func (u *HubUsecase) sweepOnce(ctx context.Context) error {
 // ensureShards:region 无候选分片时,按 Fleet 拓扑种入 Redis(W4 ⑤ Mock 期 lazy-seed)。
 // 热路径只在该 region 首次无分片时打 Fleet 拉起种子;已有分片直接返回(不打 k8s,保持 AssignHub 轻量)。
 // 拓扑漂移(pod 改名/下线)的对账交后台 reconcileShardTopology 处理,避免每次登录都查 apiserver。
-func (u *HubUsecase) ensureShards(ctx context.Context, region string) error {
+func (u *HubUsecase) ensureShards(ctx context.Context, region, releaseTrack string) error {
+	if !releasetrack.Valid(releaseTrack) {
+		return errcode.New(errcode.ErrInvalidArg, "invalid hub release_track %q", releaseTrack)
+	}
 	shards, err := u.repo.ListShards(ctx)
 	if err != nil {
 		return err
 	}
 	for _, s := range shards {
-		if s.Region == region {
-			return nil // 已有该 region 分片
+		track, trackErr := stickyReleaseTrack(s.GetReleaseTrack())
+		if trackErr == nil && s.Region == region && track == releaseTrack {
+			return nil // 已有该 region + track 分片
 		}
 	}
 	cands, err := u.fleet.ListShards(ctx, region)
@@ -974,7 +1025,7 @@ func (u *HubUsecase) ensureShards(ctx context.Context, region string) error {
 	}
 	now := time.Now().UnixMilli()
 	for _, c := range cands {
-		if !c.TokenReady {
+		if !c.TokenReady || !releasetrack.Valid(c.ReleaseTrack) {
 			// enforce 下令牌不可用的分片:不种 ready 镜像(否则 AssignHub 会分到回调被全拒的 Hub)。
 			continue
 		}
@@ -990,6 +1041,7 @@ func (u *HubUsecase) ensureShards(ctx context.Context, region string) error {
 			CreatedAtMs:       now,
 			CurrentTokenExpMs: u.candidateTokenExp(c.TokenExpMs), // exp 镜像(调试用,仅 enforce 门控下非 0)
 			CurrentTokenGen:   u.candidateTokenGen(c.TokenGen),   // 令牌代际(仅 enforce 门控下非 0)
+			ReleaseTrack:      c.ReleaseTrack,
 		}
 		if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 			return cerr
@@ -1028,7 +1080,7 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 		}
 		live := make(map[string]struct{}, len(cands))
 		for _, c := range cands {
-			if !c.TokenReady {
+			if !c.TokenReady || !releasetrack.Valid(c.ReleaseTrack) {
 				// enforce 下令牌不可用的分片:不计入 live(视同“Fleet 里没有”),其已有 ready 镜像
 				// 会走下面 stale 清理被移除,AssignHub 不再分配;令牌恢复后下轮对账自动补回。
 				// 注意:cands 仍包含它(len(cands)!=0),故本 region“有 hub 但全部令牌失败”时也能进 stale
@@ -1044,6 +1096,12 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 			if found {
 				// 已有镜像:刷新地址/容量(pod 复用旧名但换端口/扩缩容时同步)。
 				if uerr := u.repo.UpdateShardWithLock(ctx, c.PodName, u.retry(), func(s *hubv1.HubShardStorageRecord) error {
+					if s.ReleaseTrack == "" {
+						s.ReleaseTrack = c.ReleaseTrack // additive rollout:旧镜像只迁为 stable/实际 metadata 轨
+					} else if s.ReleaseTrack != c.ReleaseTrack {
+						s.State = stateDraining
+						return nil // metadata 轨漂移：保留原轨证据并退出可分配集
+					}
 					s.HubAddr = c.Addr
 					s.Region = c.Region
 					s.ShardId = c.ShardID
@@ -1088,6 +1146,7 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 				CreatedAtMs:       now,
 				CurrentTokenExpMs: u.candidateTokenExp(c.TokenExpMs),
 				CurrentTokenGen:   u.candidateTokenGen(c.TokenGen),
+				ReleaseTrack:      c.ReleaseTrack,
 			}
 			if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 				plog.With(ctx).Warnw("msg", "reconcile_topology_create_failed", "pod", c.PodName, "err", cerr)
@@ -1126,7 +1185,7 @@ func (u *HubUsecase) selectShard(ctx context.Context, region string, teamID uint
 			}
 		}
 	}
-	best := leastLoaded(shards, region, "")
+	best := leastLoaded(shards, region, releasetrack.Stable, "")
 	if best == nil {
 		return nil, errcode.New(errcode.ErrHubNoAvailable, "no ready hub shard with capacity in region %s", region)
 	}
@@ -1195,14 +1254,22 @@ func (u *HubUsecase) assignmentRoutable(
 	playerID uint64,
 	a *hubv1.HubAssignmentStorageRecord,
 ) (data.ReserveResult, bool, error) {
+	assignmentTrack, trackErr := stickyReleaseTrack(a.GetReleaseTrack())
+	if trackErr != nil {
+		return data.ReserveResult{}, false, trackErr
+	}
 	if u.authRepo == nil {
 		shard, found, err := u.repo.GetShard(ctx, a.HubPodName)
 		if err != nil || !found || shard.State != stateReady {
 			return data.ReserveResult{}, false, err
 		}
+		shardTrack, shardTrackErr := stickyReleaseTrack(shard.GetReleaseTrack())
+		if shardTrackErr != nil || shardTrack != assignmentTrack {
+			return data.ReserveResult{}, false, shardTrackErr
+		}
 		return data.ReserveResult{
 			OK: true, ShardID: shard.ShardId, HubAddr: shard.HubAddr, Region: shard.Region,
-			PlayerCount: shard.PlayerCount, Capacity: shard.Capacity,
+			PlayerCount: shard.PlayerCount, Capacity: shard.Capacity, ReleaseTrack: shardTrack,
 		}, true, nil
 	}
 	if !assignmentBindingV2Complete(a, playerID) {
@@ -1216,6 +1283,11 @@ func (u *HubUsecase) assignmentRoutable(
 	if !info.OK {
 		return info, false, nil
 	}
+	infoTrack, infoTrackErr := stickyReleaseTrack(info.ReleaseTrack)
+	if infoTrackErr != nil || infoTrack != assignmentTrack {
+		return info, false, infoTrackErr
+	}
+	info.ReleaseTrack = infoTrack
 	if a.HubInstanceUid != info.InstanceUID || a.AuthEpoch != info.ProtocolEpoch || a.AuthGen != info.ActiveGen {
 		return info, false, nil
 	}
@@ -1229,7 +1301,8 @@ func (u *HubUsecase) assignmentRoutable(
 }
 
 func assignmentBindingV2Complete(a *hubv1.HubAssignmentStorageRecord, playerID uint64) bool {
-	return a != nil && playerID != 0 && a.GetPlayerId() == playerID && a.GetHubPodName() != "" &&
+	_, trackErr := stickyReleaseTrack(a.GetReleaseTrack())
+	return a != nil && trackErr == nil && playerID != 0 && a.GetPlayerId() == playerID && a.GetHubPodName() != "" &&
 		a.GetHubInstanceUid() != "" && a.GetAuthEpoch() != 0 && a.GetAuthGen() != 0 &&
 		a.GetAuthJti() != "" && a.GetAssignmentId() != "" &&
 		a.GetAuthWriterEpoch() == auth.DSAuthWriterEpochV2
@@ -1239,7 +1312,13 @@ func assignmentBindingV2Complete(a *hubv1.HubAssignmentStorageRecord, playerID u
 // 只有 UID+protocol epoch 仍完全相同且当前权威可路由时，旧 assignment 的座位才可原地重绑；
 // UID/epoch 任一变化必须走新占座，旧 token/assignment 永不复用。
 func assignmentSameInstance(a *hubv1.HubAssignmentStorageRecord, current *data.ReserveResult) bool {
-	return a != nil && current != nil && current.OK && a.HubPodName != "" &&
+	if a == nil || current == nil {
+		return false
+	}
+	aTrack, aTrackErr := stickyReleaseTrack(a.GetReleaseTrack())
+	currentTrack, currentTrackErr := stickyReleaseTrack(current.ReleaseTrack)
+	return current.OK && a.HubPodName != "" &&
+		aTrackErr == nil && currentTrackErr == nil && aTrack == currentTrack &&
 		a.HubInstanceUid != "" && a.HubInstanceUid == current.InstanceUID &&
 		a.AuthEpoch != 0 && a.AuthEpoch == current.ProtocolEpoch && a.AuthGen != 0 &&
 		a.AuthJti != "" && a.AuthWriterEpoch == auth.DSAuthWriterEpochV2 &&
@@ -1247,14 +1326,18 @@ func assignmentSameInstance(a *hubv1.HubAssignmentStorageRecord, current *data.R
 }
 
 // selectAndReserveShard 按队友优先、负载升序尝试所有候选；每个候选都必须通过最终原子授权+占座门。
-func (u *HubUsecase) selectAndReserveShard(ctx context.Context, region string, teamID uint64, excludePod string) (*hubv1.HubShardStorageRecord, *data.ReserveResult, error) {
+func (u *HubUsecase) selectAndReserveShard(ctx context.Context, region string, teamID uint64, excludePod, releaseTrack string) (*hubv1.HubShardStorageRecord, *data.ReserveResult, error) {
+	if !releasetrack.Valid(releaseTrack) {
+		return nil, nil, errcode.New(errcode.ErrInvalidArg, "invalid hub release_track %q", releaseTrack)
+	}
 	shards, err := u.repo.ListShards(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	candidates := make([]*hubv1.HubShardStorageRecord, 0, len(shards))
 	for _, shard := range shards {
-		if shard.Region == region && shard.HubPodName != excludePod && shard.State == stateReady && shard.PlayerCount < shard.Capacity {
+		track, trackErr := stickyReleaseTrack(shard.GetReleaseTrack())
+		if trackErr == nil && track == releaseTrack && shard.Region == region && shard.HubPodName != excludePod && shard.State == stateReady && shard.PlayerCount < shard.Capacity {
 			candidates = append(candidates, shard)
 		}
 	}
@@ -1297,6 +1380,7 @@ func authoritativeShard(shard *hubv1.HubShardStorageRecord, seat *data.ReserveRe
 		out.ShardId = seat.ShardID
 		out.PlayerCount = seat.PlayerCount
 		out.Capacity = seat.Capacity
+		out.ReleaseTrack = seat.ReleaseTrack
 	}
 	return out
 }
@@ -1367,14 +1451,16 @@ func bindAssignmentAuth(a *hubv1.HubAssignmentStorageRecord, seat *data.ReserveR
 }
 
 func ticketBindingFromAssignment(a *hubv1.HubAssignmentStorageRecord) HubTicketBinding {
+	releaseTrack, trackErr := stickyReleaseTrack(a.GetReleaseTrack())
 	if a == nil || a.HubPodName == "" || a.HubInstanceUid == "" || a.AuthEpoch == 0 || a.AuthGen == 0 ||
-		a.AuthJti == "" || a.AssignmentId == "" || a.AuthWriterEpoch != auth.DSAuthWriterEpochV2 {
+		a.AuthJti == "" || a.AssignmentId == "" || a.AuthWriterEpoch != auth.DSAuthWriterEpochV2 || trackErr != nil {
 		return HubTicketBinding{}
 	}
 	return HubTicketBinding{
 		PodName: a.HubPodName, InstanceUID: a.HubInstanceUid, ProtocolEpoch: a.AuthEpoch,
 		CredentialGen: a.AuthGen, CredentialJTI: a.AuthJti, HubAssignmentID: a.AssignmentId,
-		WriterEpoch: a.AuthWriterEpoch,
+		WriterEpoch:  a.AuthWriterEpoch,
+		ReleaseTrack: releaseTrack,
 	}
 }
 
@@ -1415,8 +1501,24 @@ func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID
 	}, nil
 }
 
+// stickyReleaseTrack 是 additive rollout 的唯一旧值迁移规则：空轨按 stable 解释；
+// 任意其他未知值 fail-closed，绝不被 cohort 策略重算。
+func stickyReleaseTrack(track string) (string, error) {
+	if track == "" {
+		return releasetrack.Stable, nil
+	}
+	if !releasetrack.Valid(track) {
+		return "", errcode.New(errcode.ErrInvalidState, "invalid persisted hub release_track %q", track)
+	}
+	return track, nil
+}
+
 // selectTransferTarget:targetHubID!=0 点名 shard_id 匹配的分片;否则同 region 最空「非当前」ready 分片。
 func selectTransferTarget(shards []*hubv1.HubShardStorageRecord, cur *hubv1.HubAssignmentStorageRecord, targetHubID uint64) *hubv1.HubShardStorageRecord {
+	curTrack, curTrackErr := stickyReleaseTrack(cur.GetReleaseTrack())
+	if curTrackErr != nil {
+		return nil
+	}
 	if targetHubID != 0 {
 		if targetHubID > math.MaxUint32 {
 			// shard_id 是 uint32(配置 ID),超出范围必然无匹配,直接返回避免截断误匹配
@@ -1424,7 +1526,8 @@ func selectTransferTarget(shards []*hubv1.HubShardStorageRecord, cur *hubv1.HubA
 		}
 		want := uint32(targetHubID)
 		for _, s := range shards {
-			if s.ShardId == want && s.Region == cur.Region && s.State == stateReady {
+			track, trackErr := stickyReleaseTrack(s.GetReleaseTrack())
+			if trackErr == nil && track == curTrack && s.ShardId == want && s.Region == cur.Region && s.State == stateReady {
 				if s.HubPodName == cur.HubPodName || s.PlayerCount < s.Capacity {
 					return s
 				}
@@ -1432,14 +1535,15 @@ func selectTransferTarget(shards []*hubv1.HubShardStorageRecord, cur *hubv1.HubA
 		}
 		return nil
 	}
-	return leastLoaded(shards, cur.Region, cur.HubPodName)
+	return leastLoaded(shards, cur.Region, curTrack, cur.HubPodName)
 }
 
 // leastLoaded:返回 region 内最空的 ready 且未满分片;excludePod 非空时排除它。并列取 shard_id 小者。
-func leastLoaded(shards []*hubv1.HubShardStorageRecord, region, excludePod string) *hubv1.HubShardStorageRecord {
+func leastLoaded(shards []*hubv1.HubShardStorageRecord, region, releaseTrack, excludePod string) *hubv1.HubShardStorageRecord {
 	var best *hubv1.HubShardStorageRecord
 	for _, s := range shards {
-		if s.Region != region || s.State != stateReady || s.PlayerCount >= s.Capacity {
+		track, trackErr := stickyReleaseTrack(s.GetReleaseTrack())
+		if trackErr != nil || track != releaseTrack || s.Region != region || s.State != stateReady || s.PlayerCount >= s.Capacity {
 			continue
 		}
 		if excludePod != "" && s.HubPodName == excludePod {
@@ -1703,7 +1807,12 @@ func (u *HubUsecase) drainAndMigrate(ctx context.Context, shard *hubv1.HubShardS
 		if moved >= batch {
 			break
 		}
-		target := leastLoaded(fresh, shard.Region, shard.HubPodName)
+		track, trackErr := stickyReleaseTrack(shard.GetReleaseTrack())
+		if trackErr != nil {
+			plog.With(ctx).Warnw("msg", "drain_invalid_release_track", "pod", shard.HubPodName, "err", trackErr)
+			break
+		}
+		target := leastLoaded(fresh, shard.Region, track, shard.HubPodName)
 		if target == nil {
 			plog.With(ctx).Warnw("msg", "drain_no_target", "pod", shard.HubPodName, "region", shard.Region)
 			break // 无空闲目标分片,留下个 tick
@@ -1747,6 +1856,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 	newAssign.AssignedAtMs = now
 	newAssign.RoleId = assign.RoleId // 选角镜像随强制整合搬迁
 	newAssign.AssignmentId = uuid.NewString()
+	newAssign.ReleaseTrack = target.ReleaseTrack
 	bindAssignmentAuth(newAssign, seat)
 	swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assign, newAssign, u.assignTTL())
 	if serr != nil || !swapped {

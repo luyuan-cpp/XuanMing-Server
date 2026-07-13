@@ -17,6 +17,12 @@ type Config struct {
 	// 给每个玩家签一张 battle DSTicket)。secret 必须与 login / Envoy jwt_authn 一致。
 	// 留空(无 ds_allocator_addr)时不签票据,仍走 StubDSAllocator。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
+
+	// DSTicket 是玩家 DSTicket v2(RS256 非对称,方案 B)签发配置。private_key_file 非空
+	// 即启用:battle 票据改由 auth.DSTicketSigner 签发并绑死到唯一 DS 实例
+	// (ds_allocator 必须回填 gameserver_uid / instance_epoch / allocation_id,
+	// 缺失时 fail-closed 拒签)。留空 = 沿用 legacy HS256 DSTicket(dev/local-off 行为不变)。
+	DSTicket config.DSTicketConf `yaml:"ds_ticket,omitempty" json:"ds_ticket,omitempty"`
 }
 
 // JWTConf 是签发 battle DSTicket 的 JWT 参数(镜像 login.JWTConf)。

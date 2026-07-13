@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
@@ -58,10 +59,31 @@ func (r *MySQLPlayerRepo) GrantAttributePoints(ctx context.Context, playerID uin
 }
 
 // AllocateAttributePoints 分配点(事务:锁 players 行校验 unspent>=sum,扣减,累加 player_attributes)。
+//
+// repo 自守(不依赖上层限制):逐项 checked-add 累计,拒非正点数,校验请求总和、单属性列
+// 「当前值 + 增量」与 unspent 均不越有符号 INT 列上界(MaxInt32);任一越界返回业务错误且零写入。
 func (r *MySQLPlayerRepo) AllocateAttributePoints(ctx context.Context, playerID uint64, allocs []AttrAllocation) (int, error) {
-	var sum int32
+	// 1) 请求级 checked 累计:按 attr_key 归并增量,单值 <= MaxInt32,累加前必 < 2*MaxInt32,不溢出。
+	if len(allocs) == 0 {
+		return 0, errcode.New(errcode.ErrInvalidArg, "allocations required")
+	}
+	perKey := make(map[string]int64, len(allocs))
+	var sum int64
 	for _, a := range allocs {
-		sum += a.Points
+		if a.Key == "" {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr_key must not be empty")
+		}
+		if a.Points <= 0 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "points must be positive: %s", a.Key)
+		}
+		perKey[a.Key] += int64(a.Points)
+		if perKey[a.Key] > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr %s allocation out of range", a.Key)
+		}
+		sum += int64(a.Points)
+		if sum > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "total allocation out of range")
+		}
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -78,19 +100,48 @@ func (r *MySQLPlayerRepo) AllocateAttributePoints(ctx context.Context, playerID 
 	if err != nil {
 		return 0, errcode.New(errcode.ErrInternal, "lock player=%d: %v", playerID, err)
 	}
-	if int(sum) > unspent {
+	// 2) 总和不得超过可分配点(sum <= MaxInt32 已保证,unspent 为 INT,int64 比较安全)。
+	if sum > int64(unspent) {
 		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient points player=%d need=%d have=%d", playerID, sum, unspent)
 	}
 
-	const upsert = `INSERT INTO player_attributes (player_id, attr_key, points) VALUES (?, ?, ?)
-ON DUPLICATE KEY UPDATE points = points + VALUES(points)`
-	for _, a := range allocs {
-		if _, aerr := tx.ExecContext(ctx, upsert, playerID, a.Key, a.Points); aerr != nil {
-			return 0, errcode.New(errcode.ErrInternal, "upsert attr player=%d key=%s: %v", playerID, a.Key, aerr)
+	// 3) 权威列上界:锁定并读取受影响属性当前值,校验「当前值 + 增量」不越 INT 列上界(MaxInt32)。
+	//    在任何写入前完成校验,越界直接返回(defer Rollback 保证零写入)。
+	existing := make(map[string]int64, len(perKey))
+	rows, qerr := tx.QueryContext(ctx, `SELECT attr_key, points FROM player_attributes WHERE player_id = ? FOR UPDATE`, playerID)
+	if qerr != nil {
+		return 0, errcode.New(errcode.ErrInternal, "lock attrs player=%d: %v", playerID, qerr)
+	}
+	for rows.Next() {
+		var k string
+		var p int64
+		if serr := rows.Scan(&k, &p); serr != nil {
+			_ = rows.Close()
+			return 0, errcode.New(errcode.ErrInternal, "scan attr player=%d: %v", playerID, serr)
+		}
+		existing[k] = p
+	}
+	if rerr := rows.Err(); rerr != nil {
+		_ = rows.Close()
+		return 0, errcode.New(errcode.ErrInternal, "iterate attrs player=%d: %v", playerID, rerr)
+	}
+	_ = rows.Close()
+	for k, delta := range perKey {
+		if existing[k]+delta > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr %s cumulative points out of range player=%d", k, playerID)
 		}
 	}
 
-	newUnspent := unspent - int(sum)
+	// 4) 写入:按归并后的增量逐属性 upsert(等价原逐条累加,消除重复 key 的列溢出隐患)。
+	const upsert = `INSERT INTO player_attributes (player_id, attr_key, points) VALUES (?, ?, ?)
+ON DUPLICATE KEY UPDATE points = points + VALUES(points)`
+	for k, delta := range perKey {
+		if _, aerr := tx.ExecContext(ctx, upsert, playerID, k, delta); aerr != nil {
+			return 0, errcode.New(errcode.ErrInternal, "upsert attr player=%d key=%s: %v", playerID, k, aerr)
+		}
+	}
+
+	newUnspent := unspent - int(sum) // sum <= unspent,newUnspent >= 0
 	if _, uerr := tx.ExecContext(ctx, `UPDATE players SET unspent_attr_points = ? WHERE player_id = ?`, newUnspent, playerID); uerr != nil {
 		return 0, errcode.New(errcode.ErrInternal, "deduct unspent player=%d: %v", playerID, uerr)
 	}

@@ -152,6 +152,11 @@ message DSTicket {
   string ds_credential_jti    = 15;
   string hub_assignment_id    = 16;
   uint32 ds_writer_epoch      = 17;
+  // DSTicket v2(RS256/B1)稳定绑定。编号只做 additive 扩展，旧副本会保留 unknown。
+  uint32 dst_ver              = 18;
+  uint32 ds_instance_epoch    = 19;
+  string allocation_id       = 20;
+  string release_track       = 21;
 }
 
 message IssueDSTicketRequest {

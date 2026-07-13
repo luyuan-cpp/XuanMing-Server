@@ -2170,6 +2170,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
     kStateFieldNumber = 7,
     kLastVerifiedJtiFieldNumber = 14,
     kGameserverUidFieldNumber = 15,
+    kReleaseTrackFieldNumber = 18,
     kShardIdFieldNumber = 4,
     kPlayerCountFieldNumber = 5,
     kLastHeartbeatMsFieldNumber = 8,
@@ -2270,6 +2271,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
   const ::std::string& _internal_gameserver_uid() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_gameserver_uid(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_gameserver_uid();
+
+  public:
+  // string release_track = 18 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
 
   public:
   // uint32 shard_id = 4 [json_name = "shardId"];
@@ -2386,8 +2402,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
-                          0, 123,
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          0, 136,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2421,6 +2437,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
     ::google::protobuf::internal::ArenaStringPtr state_;
     ::google::protobuf::internal::ArenaStringPtr last_verified_jti_;
     ::google::protobuf::internal::ArenaStringPtr gameserver_uid_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::uint32_t shard_id_;
     ::int32_t player_count_;
     ::int64_t last_heartbeat_ms_;
@@ -3762,6 +3779,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     kHubInstanceUidFieldNumber = 9,
     kAuthJtiFieldNumber = 12,
     kAssignmentIdFieldNumber = 13,
+    kReleaseTrackFieldNumber = 15,
     kPlayerIdFieldNumber = 1,
     kTeamIdFieldNumber = 6,
     kShardIdFieldNumber = 4,
@@ -3861,6 +3879,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_assignment_id();
 
   public:
+  // string release_track = 15 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
   // uint64 player_id = 1 [json_name = "playerId"];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -3945,8 +3978,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          0, 121,
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          0, 134,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3980,6 +4013,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     ::google::protobuf::internal::ArenaStringPtr hub_instance_uid_;
     ::google::protobuf::internal::ArenaStringPtr auth_jti_;
     ::google::protobuf::internal::ArenaStringPtr assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::uint64_t player_id_;
     ::uint64_t team_id_;
     ::uint32_t shard_id_;
@@ -8347,7 +8381,7 @@ inline void HubShardStorageRecord::set_allocated_region(::std::string* PROTOBUF_
 inline void HubShardStorageRecord::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t HubShardStorageRecord::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.shard_id)
@@ -8355,7 +8389,7 @@ inline ::uint32_t HubShardStorageRecord::shard_id() const {
 }
 inline void HubShardStorageRecord::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.shard_id)
 }
 inline ::uint32_t HubShardStorageRecord::_internal_shard_id() const {
@@ -8371,7 +8405,7 @@ inline void HubShardStorageRecord::_internal_set_shard_id(::uint32_t value) {
 inline void HubShardStorageRecord::clear_player_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::int32_t HubShardStorageRecord::player_count() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.player_count)
@@ -8379,7 +8413,7 @@ inline ::int32_t HubShardStorageRecord::player_count() const {
 }
 inline void HubShardStorageRecord::set_player_count(::int32_t value) {
   _internal_set_player_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.player_count)
 }
 inline ::int32_t HubShardStorageRecord::_internal_player_count() const {
@@ -8395,7 +8429,7 @@ inline void HubShardStorageRecord::_internal_set_player_count(::int32_t value) {
 inline void HubShardStorageRecord::clear_capacity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.capacity_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::int32_t HubShardStorageRecord::capacity() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.capacity)
@@ -8403,7 +8437,7 @@ inline ::int32_t HubShardStorageRecord::capacity() const {
 }
 inline void HubShardStorageRecord::set_capacity(::int32_t value) {
   _internal_set_capacity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.capacity)
 }
 inline ::int32_t HubShardStorageRecord::_internal_capacity() const {
@@ -8483,7 +8517,7 @@ inline void HubShardStorageRecord::set_allocated_state(::std::string* PROTOBUF_N
 inline void HubShardStorageRecord::clear_last_heartbeat_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_heartbeat_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::int64_t HubShardStorageRecord::last_heartbeat_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_heartbeat_ms)
@@ -8491,7 +8525,7 @@ inline ::int64_t HubShardStorageRecord::last_heartbeat_ms() const {
 }
 inline void HubShardStorageRecord::set_last_heartbeat_ms(::int64_t value) {
   _internal_set_last_heartbeat_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_heartbeat_ms)
 }
 inline ::int64_t HubShardStorageRecord::_internal_last_heartbeat_ms() const {
@@ -8507,7 +8541,7 @@ inline void HubShardStorageRecord::_internal_set_last_heartbeat_ms(::int64_t val
 inline void HubShardStorageRecord::clear_created_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::int64_t HubShardStorageRecord::created_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.created_at_ms)
@@ -8515,7 +8549,7 @@ inline ::int64_t HubShardStorageRecord::created_at_ms() const {
 }
 inline void HubShardStorageRecord::set_created_at_ms(::int64_t value) {
   _internal_set_created_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.created_at_ms)
 }
 inline ::int64_t HubShardStorageRecord::_internal_created_at_ms() const {
@@ -8531,7 +8565,7 @@ inline void HubShardStorageRecord::_internal_set_created_at_ms(::int64_t value) 
 inline void HubShardStorageRecord::clear_draining_since_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.draining_since_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::int64_t HubShardStorageRecord::draining_since_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.draining_since_ms)
@@ -8539,7 +8573,7 @@ inline ::int64_t HubShardStorageRecord::draining_since_ms() const {
 }
 inline void HubShardStorageRecord::set_draining_since_ms(::int64_t value) {
   _internal_set_draining_since_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.draining_since_ms)
 }
 inline ::int64_t HubShardStorageRecord::_internal_draining_since_ms() const {
@@ -8555,7 +8589,7 @@ inline void HubShardStorageRecord::_internal_set_draining_since_ms(::int64_t val
 inline void HubShardStorageRecord::clear_current_token_exp_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_token_exp_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t HubShardStorageRecord::current_token_exp_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.current_token_exp_ms)
@@ -8563,7 +8597,7 @@ inline ::uint64_t HubShardStorageRecord::current_token_exp_ms() const {
 }
 inline void HubShardStorageRecord::set_current_token_exp_ms(::uint64_t value) {
   _internal_set_current_token_exp_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.current_token_exp_ms)
 }
 inline ::uint64_t HubShardStorageRecord::_internal_current_token_exp_ms() const {
@@ -8579,7 +8613,7 @@ inline void HubShardStorageRecord::_internal_set_current_token_exp_ms(::uint64_t
 inline void HubShardStorageRecord::clear_current_token_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_token_gen_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t HubShardStorageRecord::current_token_gen() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.current_token_gen)
@@ -8587,7 +8621,7 @@ inline ::uint64_t HubShardStorageRecord::current_token_gen() const {
 }
 inline void HubShardStorageRecord::set_current_token_gen(::uint64_t value) {
   _internal_set_current_token_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.current_token_gen)
 }
 inline ::uint64_t HubShardStorageRecord::_internal_current_token_gen() const {
@@ -8603,7 +8637,7 @@ inline void HubShardStorageRecord::_internal_set_current_token_gen(::uint64_t va
 inline void HubShardStorageRecord::clear_last_verified_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_gen_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t HubShardStorageRecord::last_verified_gen() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_verified_gen)
@@ -8611,7 +8645,7 @@ inline ::uint64_t HubShardStorageRecord::last_verified_gen() const {
 }
 inline void HubShardStorageRecord::set_last_verified_gen(::uint64_t value) {
   _internal_set_last_verified_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_verified_gen)
 }
 inline ::uint64_t HubShardStorageRecord::_internal_last_verified_gen() const {
@@ -8755,7 +8789,7 @@ inline void HubShardStorageRecord::set_allocated_gameserver_uid(::std::string* P
 inline void HubShardStorageRecord::clear_auth_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.auth_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t HubShardStorageRecord::auth_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.auth_epoch)
@@ -8763,7 +8797,7 @@ inline ::uint32_t HubShardStorageRecord::auth_epoch() const {
 }
 inline void HubShardStorageRecord::set_auth_epoch(::uint32_t value) {
   _internal_set_auth_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.auth_epoch)
 }
 inline ::uint32_t HubShardStorageRecord::_internal_auth_epoch() const {
@@ -8779,7 +8813,7 @@ inline void HubShardStorageRecord::_internal_set_auth_epoch(::uint32_t value) {
 inline void HubShardStorageRecord::clear_last_verified_writer_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_writer_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t HubShardStorageRecord::last_verified_writer_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_verified_writer_epoch)
@@ -8787,7 +8821,7 @@ inline ::uint32_t HubShardStorageRecord::last_verified_writer_epoch() const {
 }
 inline void HubShardStorageRecord::set_last_verified_writer_epoch(::uint32_t value) {
   _internal_set_last_verified_writer_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_verified_writer_epoch)
 }
 inline ::uint32_t HubShardStorageRecord::_internal_last_verified_writer_epoch() const {
@@ -8797,6 +8831,70 @@ inline ::uint32_t HubShardStorageRecord::_internal_last_verified_writer_epoch() 
 inline void HubShardStorageRecord::_internal_set_last_verified_writer_epoch(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_writer_epoch_ = value;
+}
+
+// string release_track = 18 [json_name = "releaseTrack"];
+inline void HubShardStorageRecord::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& HubShardStorageRecord::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardStorageRecord::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.release_track)
+  return _s;
+}
+inline const ::std::string& HubShardStorageRecord::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardStorageRecord::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubShardStorageRecord::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubShardStorageRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.release_track)
 }
 
 // -------------------------------------------------------------------
@@ -9723,7 +9821,7 @@ inline void HubShardAuthStorageRecord::_internal_set_required_writer_epoch(::uin
 inline void HubAssignmentStorageRecord::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t HubAssignmentStorageRecord::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.player_id)
@@ -9731,7 +9829,7 @@ inline ::uint64_t HubAssignmentStorageRecord::player_id() const {
 }
 inline void HubAssignmentStorageRecord::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.player_id)
 }
 inline ::uint64_t HubAssignmentStorageRecord::_internal_player_id() const {
@@ -9875,7 +9973,7 @@ inline void HubAssignmentStorageRecord::set_allocated_hub_addr(::std::string* PR
 inline void HubAssignmentStorageRecord::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
@@ -9883,7 +9981,7 @@ inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
 }
 inline void HubAssignmentStorageRecord::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_shard_id() const {
@@ -9963,7 +10061,7 @@ inline void HubAssignmentStorageRecord::set_allocated_region(::std::string* PROT
 inline void HubAssignmentStorageRecord::clear_team_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t HubAssignmentStorageRecord::team_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.team_id)
@@ -9971,7 +10069,7 @@ inline ::uint64_t HubAssignmentStorageRecord::team_id() const {
 }
 inline void HubAssignmentStorageRecord::set_team_id(::uint64_t value) {
   _internal_set_team_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.team_id)
 }
 inline ::uint64_t HubAssignmentStorageRecord::_internal_team_id() const {
@@ -9987,7 +10085,7 @@ inline void HubAssignmentStorageRecord::_internal_set_team_id(::uint64_t value) 
 inline void HubAssignmentStorageRecord::clear_assigned_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.assigned_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
@@ -9995,7 +10093,7 @@ inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
 }
 inline void HubAssignmentStorageRecord::set_assigned_at_ms(::int64_t value) {
   _internal_set_assigned_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
 }
 inline ::int64_t HubAssignmentStorageRecord::_internal_assigned_at_ms() const {
@@ -10011,7 +10109,7 @@ inline void HubAssignmentStorageRecord::_internal_set_assigned_at_ms(::int64_t v
 inline void HubAssignmentStorageRecord::clear_role_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::role_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.role_id)
@@ -10019,7 +10117,7 @@ inline ::uint32_t HubAssignmentStorageRecord::role_id() const {
 }
 inline void HubAssignmentStorageRecord::set_role_id(::uint32_t value) {
   _internal_set_role_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.role_id)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_role_id() const {
@@ -10099,7 +10197,7 @@ inline void HubAssignmentStorageRecord::set_allocated_hub_instance_uid(::std::st
 inline void HubAssignmentStorageRecord::clear_auth_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.auth_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::auth_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_epoch)
@@ -10107,7 +10205,7 @@ inline ::uint32_t HubAssignmentStorageRecord::auth_epoch() const {
 }
 inline void HubAssignmentStorageRecord::set_auth_epoch(::uint32_t value) {
   _internal_set_auth_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_epoch)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_auth_epoch() const {
@@ -10123,7 +10221,7 @@ inline void HubAssignmentStorageRecord::_internal_set_auth_epoch(::uint32_t valu
 inline void HubAssignmentStorageRecord::clear_auth_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.auth_gen_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t HubAssignmentStorageRecord::auth_gen() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_gen)
@@ -10131,7 +10229,7 @@ inline ::uint64_t HubAssignmentStorageRecord::auth_gen() const {
 }
 inline void HubAssignmentStorageRecord::set_auth_gen(::uint64_t value) {
   _internal_set_auth_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_gen)
 }
 inline ::uint64_t HubAssignmentStorageRecord::_internal_auth_gen() const {
@@ -10275,7 +10373,7 @@ inline void HubAssignmentStorageRecord::set_allocated_assignment_id(::std::strin
 inline void HubAssignmentStorageRecord::clear_auth_writer_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.auth_writer_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::auth_writer_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_writer_epoch)
@@ -10283,7 +10381,7 @@ inline ::uint32_t HubAssignmentStorageRecord::auth_writer_epoch() const {
 }
 inline void HubAssignmentStorageRecord::set_auth_writer_epoch(::uint32_t value) {
   _internal_set_auth_writer_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_writer_epoch)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_auth_writer_epoch() const {
@@ -10293,6 +10391,70 @@ inline ::uint32_t HubAssignmentStorageRecord::_internal_auth_writer_epoch() cons
 inline void HubAssignmentStorageRecord::_internal_set_auth_writer_epoch(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.auth_writer_epoch_ = value;
+}
+
+// string release_track = 15 [json_name = "releaseTrack"];
+inline void HubAssignmentStorageRecord::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& HubAssignmentStorageRecord::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.release_track)
+  return _s;
+}
+inline const ::std::string& HubAssignmentStorageRecord::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubAssignmentStorageRecord::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubAssignmentStorageRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.release_track)
 }
 
 // -------------------------------------------------------------------

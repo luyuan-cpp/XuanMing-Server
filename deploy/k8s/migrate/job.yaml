@@ -1,0 +1,66 @@
+# 这是独立发布门禁 Job 模板，不加入 services/ 或 online overlay，避免普通 kubectl apply
+# 意外重复执行。发布系统必须先替换 RELEASE_ID 与镜像 digest/不可变 tag，再用 kubectl create
+# 创建一次性 Job；Job 成功后才允许滚动业务 Deployment。
+#
+# Secret pandora-db-migrate 必须由 DBA/外部 Secret 管理器预先创建，本文件不创建 Secret。
+# 挂载内容至少包含 targets.json 及 targets.json 引用的各 *.dsn 文件。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pandora-db-migrate-release-id
+  namespace: pandora
+  labels:
+    app: db-migrate
+    app.kubernetes.io/name: pandora-db-migrate
+    app.kubernetes.io/component: database-migration
+spec:
+  # 迁移失败立即阻断；是否在排障后重试必须由发布者显式创建新 Job 决定。
+  backoffLimit: 0
+  # 单目标最多 1 小时；全 Job 给多库顺序执行留 6 小时，但仍有确定上界。
+  activeDeadlineSeconds: 21600
+  template:
+    metadata:
+      labels:
+        app: db-migrate
+        app.kubernetes.io/name: pandora-db-migrate
+        app.kubernetes.io/component: database-migration
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          # 必须替换为与本次发布同源、已审核的 digest 或不可变 tag，禁止 latest。
+          image: registry.example.com/pandora/migrate:release-tag
+          imagePullPolicy: IfNotPresent
+          args:
+            - -targets-file=/var/run/secrets/pandora-migrate/targets.json
+            # 必须由发布侧按真实库/全部 auction shard 的 name:migration_set:database triples 替换；
+            # 当前大写占位不合法，必然 fail-closed。
+            - -expected-targets=REPLACE_WITH_REVIEWED_TARGET_INVENTORY
+            - -environment=production
+            - -bootstrap=false
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: "1", memory: 128Mi }
+          volumeMounts:
+            - name: migration-secret
+              mountPath: /var/run/secrets/pandora-migrate
+              readOnly: true
+      volumes:
+        - name: migration-secret
+          secret:
+            # 独立、预存在的最小权限迁移 Secret；绝不复用业务 pandora-config/root 凭据。
+            secretName: pandora-db-migrate
+            optional: false
+            defaultMode: 0440

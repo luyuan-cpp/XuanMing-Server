@@ -1,0 +1,31 @@
+# Pandora 版本化 MySQL 迁移器。构建上下文必须是仓库根：
+#   docker build -f deploy/migrate/Dockerfile -t pandora/migrate:<immutable-tag> .
+ARG GO_VERSION=1.26.5
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION} AS builder
+
+ARG GO_VERSION
+ARG GOPROXY=https://goproxy.cn,direct
+ENV CGO_ENABLED=0 GOOS=linux GOWORK=off GOFLAGS=-mod=readonly GOPROXY=${GOPROXY}
+
+WORKDIR /src
+COPY tools/migrate/go.mod tools/migrate/go.sum ./
+RUN actual="$(go env GOVERSION)" \
+    && test "$actual" = "go${GO_VERSION}" \
+       || (echo "ERROR: golang image tag=${GO_VERSION}, actual=${actual}" && exit 1)
+RUN go mod download
+
+COPY tools/migrate/*.go ./
+COPY tools/migrate/migrations/ ./migrations/
+RUN go test ./... \
+    && go build -trimpath -ldflags="-s -w" -o /out/pandora-migrate .
+
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /out/pandora-migrate /app/pandora-migrate
+
+USER 10001:10001
+ENTRYPOINT ["/app/pandora-migrate"]

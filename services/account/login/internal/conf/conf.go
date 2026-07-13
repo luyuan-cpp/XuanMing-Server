@@ -77,8 +77,15 @@ type LoginConf struct {
 	// dev/prod 都走 HS256,secret 要跟 deploy/envoy/envoy.yaml 的 jwt_authn provider 保持一致。
 	JWT JWTConf `yaml:"jwt,omitempty" json:"jwt,omitempty"`
 
+	// DSTicket 是玩家 DSTicket v2(RS256 非对称,方案 B)签发配置。private_key_file 非空
+	// 即启用:login 重连/公共签发的 battle 票改走 v2 实例绑定签发(roster 权威门同一
+	// Redis 快照必须能提供 pod/uid/epoch/allocation,缺失 fail-closed 拒签);hub 票一律
+	// 拒签(v2 hub 票只能由 hub_allocator 签)。留空 = 沿用 legacy HS256(dev 行为不变)。
+	DSTicket config.DSTicketConf `yaml:"ds_ticket,omitempty" json:"ds_ticket,omitempty"`
+
 	// Locator W3 ⑤ 联动:登录成功后调 PlayerLocatorService.SetLocation(state=LOGIN_PENDING)。
-	// addr 为空 → 不调(便于本机不起 locator 也能跑通 login)。
+	// addr 为空仅允许 local/off；RequireHubAssignmentBinding=true 时它是 Hub 分配前的
+	// 权威门，必须配置且查询/LOGIN_PENDING 写入失败均 fail-closed。
 	Locator LocatorClientConf `yaml:"locator,omitempty" json:"locator,omitempty"`
 
 	// Hub W4 ⑥ 联动:登录成功后调 HubAllocatorService.AssignHub 拿真实 hub_ds_addr + hub_ticket。
@@ -99,7 +106,7 @@ type LoginConf struct {
 // LocatorClientConf 是 login 调 player_locator 的客户端参数。
 type LocatorClientConf struct {
 	// Addr player_locator gRPC 端口(默认 127.0.0.1:50006)。
-	// 留空 → 不调 locator,Login 走 fallback(仅 Warn 日志)。
+	// 留空仅允许 local/off；Hub assignment binding 激活时 Validate 会拒绝启动。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 }
 
@@ -170,6 +177,13 @@ func (c *Config) Defaults() {
 
 // Validate 校验不能靠运行期降级修复的配置冲突。
 func (c *Config) Validate() error {
+	if c.Login.DSTicket.SignerEnabled() && c.Login.DSTicket.ActiveKid == "" {
+		return fmt.Errorf("login.ds_ticket signer requires explicit active_kid")
+	}
+	if c.Login.DSTicket.VerifierEnabled() &&
+		(c.Login.DSTicket.ActiveKid == "" || c.Login.DSTicket.KeysetRevision == "") {
+		return fmt.Errorf("login.ds_ticket verifier requires explicit active_kid and keyset_revision")
+	}
 	switch c.DSAuth.AuthorityMode {
 	case "", "legacy", "redis":
 	default:
@@ -192,6 +206,9 @@ func (c *Config) Validate() error {
 		}
 		if c.Login.Hub.Addr == "" {
 			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.hub.addr")
+		}
+		if c.Login.Locator.Addr == "" {
+			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.locator.addr")
 		}
 		if len(c.Login.HubAssignmentFence.EtcdEndpoints) == 0 || c.Login.HubAssignmentFence.KeysetRevision == "" {
 			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.hub_assignment_fence etcd endpoints/keyset revision")

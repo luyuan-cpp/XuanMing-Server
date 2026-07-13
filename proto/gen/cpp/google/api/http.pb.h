@@ -1570,7 +1570,7 @@ inline ::google::api::CustomHttpPattern* PROTOBUF_NONNULL HttpRule::_internal_mu
   if (pattern_case() != kCustom) {
     clear_pattern();
     set_has_custom();
-    _impl_.pattern_.custom_ = 
+    _impl_.pattern_.custom_ =
         ::google::protobuf::Message::DefaultConstruct<::google::api::CustomHttpPattern>(GetArena());
   }
   return _impl_.pattern_.custom_;

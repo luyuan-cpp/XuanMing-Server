@@ -22,6 +22,7 @@ func testHubBinding() HubAssignmentBinding {
 		CredentialJTI: "credential-jti-a",
 		AssignmentID:  "assignment-a",
 		WriterEpoch:   2,
+		ReleaseTrack:  auth.ReleaseTrackStable,
 	}
 }
 
@@ -35,6 +36,7 @@ func testAssignmentRecord() *hubv1.HubAssignmentStorageRecord {
 		AuthJti:         "credential-jti-a",
 		AssignmentId:    "assignment-a",
 		AuthWriterEpoch: 2,
+		ReleaseTrack:    auth.ReleaseTrackStable,
 	}
 }
 
@@ -86,6 +88,7 @@ func putActiveHubAuth(t *testing.T, mr *miniredis.Miniredis, mutate ...func(*hub
 		HubPodName: "hub-cn-1", State: "ready", GameserverUid: "uid-a", AuthEpoch: 7,
 		LastVerifiedGen: 42, LastVerifiedJti: "credential-jti-a", LastVerifiedWriterEpoch: 2,
 		LastHeartbeatMs: now.Add(-time.Second).UnixMilli(),
+		ReleaseTrack:    auth.ReleaseTrackStable,
 	}
 	shardPayload, err := proto.Marshal(shard)
 	if err != nil {
@@ -93,6 +96,20 @@ func putActiveHubAuth(t *testing.T, mr *miniredis.Miniredis, mutate ...func(*hub
 	}
 	if err := mr.Set(admissionHubProjectionKey("hub-cn-1"), string(shardPayload)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRedisHubAssignmentCheckerB1BindsReleaseTrack(t *testing.T) {
+	mr, checker := newAssignmentChecker(t)
+	putAssignment(t, mr, testAssignmentRecord())
+	putActiveHubAuth(t, mr)
+	if err := checker.CheckCurrentB1(context.Background(), 1001, "hub-cn-1", "uid-a", 7,
+		"assignment-a", auth.ReleaseTrackStable); err != nil {
+		t.Fatalf("CheckCurrentB1 stable: %v", err)
+	}
+	if err := checker.CheckCurrentB1(context.Background(), 1001, "hub-cn-1", "uid-a", 7,
+		"assignment-a", auth.ReleaseTrackCanary); errcode.As(err) != errcode.ErrLoginTicketInvalid {
+		t.Fatalf("track mismatch code=%v err=%v", errcode.As(err), err)
 	}
 }
 

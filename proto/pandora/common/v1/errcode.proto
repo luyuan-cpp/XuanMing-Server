@@ -175,6 +175,7 @@ enum ErrCode {
   ERR_AUCTION_INSUFFICIENT         = 12004;  // 结算资源不足(冻结 / 扣减失败)
   ERR_AUCTION_IDEMPOTENCY_CONFLICT = 12005;  // idempotency_key 复用到不同请求(指纹不一致)
   ERR_AUCTION_MARKET_BUSY          = 12006;  // market 跨实例单写者锁竞争超时(让客户端稍后重试)
+  ERR_AUCTION_ORDER_LIMIT          = 12007;  // 单玩家 PENDING + 活跃拍卖订单达到硬上限
 
   // 13000-13999 leaderboard(通用排行榜)
   ERR_LEADERBOARD_BOARD_NOT_FOUND  = 13001;  // 榜不存在(查询 / 结算空榜)

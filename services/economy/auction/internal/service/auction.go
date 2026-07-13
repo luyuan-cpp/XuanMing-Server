@@ -102,11 +102,14 @@ func (s *AuctionService) ListMyOrders(ctx context.Context, req *auctionv1.ListMy
 	if ownerID == 0 {
 		return &auctionv1.ListMyOrdersResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	orders, err := s.uc.ListMyOrders(ctx, ownerID, req.GetActiveOnly())
+	orders, next, hasMore, err := s.uc.ListMyOrders(ctx, ownerID, req.GetActiveOnly(),
+		req.GetCursorOrderId(), int(req.GetLimit()))
 	if err != nil {
 		return &auctionv1.ListMyOrdersResponse{Code: toProtoCode(err)}, nil
 	}
-	return &auctionv1.ListMyOrdersResponse{Code: commonv1.ErrCode_OK, Orders: orders}, nil
+	return &auctionv1.ListMyOrdersResponse{
+		Code: commonv1.ErrCode_OK, Orders: orders, NextCursorOrderId: next, HasMore: hasMore,
+	}, nil
 }
 
 // ── 辅助 ──────────────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ package biz
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"testing"
 
@@ -171,18 +172,38 @@ func (f *fakeRepo) GrantAttributePoints(_ context.Context, playerID uint64, poin
 }
 
 func (f *fakeRepo) AllocateAttributePoints(_ context.Context, playerID uint64, allocs []data.AttrAllocation) (int, error) {
-	var sum int32
+	// 复刻 MySQL repo 的溢出安全自守:归并增量 checked-add,校验单键列上界 / 总和 / unspent。
+	perKey := make(map[string]int64, len(allocs))
+	var sum int64
 	for _, a := range allocs {
-		sum += a.Points
+		if a.Key == "" {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr_key must not be empty")
+		}
+		if a.Points <= 0 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "points must be positive")
+		}
+		perKey[a.Key] += int64(a.Points)
+		if perKey[a.Key] > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr allocation out of range")
+		}
+		sum += int64(a.Points)
+		if sum > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "total out of range")
+		}
 	}
-	if int(sum) > f.unspent[playerID] {
+	if sum > int64(f.unspent[playerID]) {
 		return 0, errcode.New(errcode.ErrPlayerInsufficientPoints, "insufficient")
 	}
 	if f.attrs[playerID] == nil {
 		f.attrs[playerID] = map[string]int32{}
 	}
-	for _, a := range allocs {
-		f.attrs[playerID][a.Key] += a.Points
+	for k, delta := range perKey {
+		if int64(f.attrs[playerID][k])+delta > math.MaxInt32 {
+			return 0, errcode.New(errcode.ErrInvalidArg, "attr cumulative out of range")
+		}
+	}
+	for k, delta := range perKey {
+		f.attrs[playerID][k] += int32(delta)
 	}
 	f.unspent[playerID] -= int(sum)
 	return f.unspent[playerID], nil
@@ -544,6 +565,64 @@ func TestAllocateAttributePoints_Validation(t *testing.T) {
 	}
 	if _, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{{Key: "str", Points: 0}}); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("non-positive points should be ErrInvalidArg, got %v", err)
+	}
+}
+
+// TestAllocateAttributePoints_Overflow 验证 int32 求和溢出不能反向增加点数(P0-1)。
+func TestAllocateAttributePoints_Overflow(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	// 玩家只有 10 点可分配。
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 10, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+
+	// 两个 MaxInt32 正数:朴素 int32 求和会绕回负数骗过 sum<=unspent,反向增加点数。
+	_, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{
+		{Key: "str", Points: math.MaxInt32},
+		{Key: "agi", Points: math.MaxInt32},
+	})
+	if err == nil {
+		t.Fatalf("summed overflow must be rejected, got nil")
+	}
+	code := errcode.As(err)
+	if code != errcode.ErrPlayerInsufficientPoints && code != errcode.ErrInvalidArg {
+		t.Fatalf("overflow want Insufficient/InvalidArg, got %v", err)
+	}
+	// 零写入:unspent 与已分配属性都不得改变。
+	attrs, unspent, gerr := uc.GetAttributes(context.Background(), 100)
+	if gerr != nil {
+		t.Fatalf("get attrs err: %v", gerr)
+	}
+	if unspent != 10 {
+		t.Fatalf("unspent must stay 10 after rejected overflow, got %d", unspent)
+	}
+	if len(attrs) != 0 {
+		t.Fatalf("no attribute must be written on rejected overflow, got %d", len(attrs))
+	}
+}
+
+// TestAllocateAttributePoints_DuplicateKeyOverflow 验证重复 attr key 累加不能溢出单列。
+func TestAllocateAttributePoints_DuplicateKeyOverflow(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newUC(repo)
+	if _, err := uc.GrantAttributePoints(context.Background(), 100, 10, "g1"); err != nil {
+		t.Fatalf("grant err: %v", err)
+	}
+	// 同一 key 两条 MaxInt32:单列累计溢出必须被拒(且零写入)。
+	_, err := uc.AllocateAttributePoints(context.Background(), 100, []data.AttrAllocation{
+		{Key: "str", Points: math.MaxInt32},
+		{Key: "str", Points: math.MaxInt32},
+	})
+	if errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("duplicate-key column overflow want ErrInvalidArg, got %v", err)
+	}
+	attrs, unspent, gerr := uc.GetAttributes(context.Background(), 100)
+	if gerr != nil {
+		t.Fatalf("get attrs err: %v", gerr)
+	}
+	if unspent != 10 || len(attrs) != 0 {
+		t.Fatalf("rejected overflow must be zero-write, got unspent=%d attrs=%d", unspent, len(attrs))
 	}
 }
 

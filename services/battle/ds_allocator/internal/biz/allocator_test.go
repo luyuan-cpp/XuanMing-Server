@@ -176,8 +176,9 @@ func (a *timeoutLateApplyAllocator) AllocateAuthoritative(
 	_ context.Context,
 	_ uint64,
 	allocationID string,
+	_ []uint64,
 	_ uint32,
-	_ string,
+	_, _ string,
 ) (*data.AuthoritativeGameServerAllocation, error) {
 	a.authoritativeCalls.Add(1)
 	select {
@@ -201,17 +202,18 @@ func (r *rejectingFenceRepo) FenceBattleAllocation(context.Context, uint64, stri
 	return false, nil
 }
 
-func (a *authoritativeTestAllocator) Allocate(context.Context, uint64, uint32, string) (string, string, error) {
+func (a *authoritativeTestAllocator) Allocate(context.Context, uint64, uint32, string, string) (string, string, string, error) {
 	a.legacyCalls.Add(1)
-	return "", "", errors.New("legacy allocation must not be used in Model B")
+	return "", "", "", errors.New("legacy allocation must not be used in Model B")
 }
 
 func (a *authoritativeTestAllocator) AllocateAuthoritative(
 	_ context.Context,
 	_ uint64,
 	allocationID string,
+	_ []uint64,
 	_ uint32,
-	_ string,
+	_, releaseTrack string,
 ) (*data.AuthoritativeGameServerAllocation, error) {
 	a.authoritativeCalls.Add(1)
 	if a.allocateResult != nil || a.allocateErr != nil {
@@ -222,11 +224,14 @@ func (a *authoritativeTestAllocator) AllocateAuthoritative(
 		if out.AllocationID == "" {
 			out.AllocationID = allocationID
 		}
+		if out.ReleaseTrack == "" {
+			out.ReleaseTrack = releaseTrack
+		}
 		return &out, a.allocateErr
 	}
 	return &data.AuthoritativeGameServerAllocation{
 		PodName: "battle-auth-1", Addr: "10.0.0.9:7777", InstanceUID: "uid-auth-1",
-		ResourceVersion: "101", AllocationID: allocationID, AnnotationsPresent: true,
+		ResourceVersion: "101", AllocationID: allocationID, ReleaseTrack: releaseTrack, AnnotationsPresent: true,
 	}, nil
 }
 
@@ -264,24 +269,24 @@ func (a *authoritativeTestAllocator) ReleaseExpected(
 	return a.releaseErr
 }
 
-func (g *gatedAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+func (g *gatedAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
 	if g.calls.Add(1) == 1 {
 		close(g.started)
 	}
 	select {
 	case <-ctx.Done():
-		return "", "", ctx.Err()
+		return "", "", "", ctx.Err()
 	case <-g.proceed:
 	}
-	return g.inner.Allocate(ctx, matchID, mapID, gameMode)
+	return g.inner.Allocate(ctx, matchID, mapID, gameMode, releaseTrack)
 }
 
 func (g *gatedAllocator) Release(ctx context.Context, podName string) error {
 	return g.inner.Release(ctx, podName)
 }
 
-func (c *countingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
-	return c.inner.Allocate(ctx, matchID, mapID, gameMode)
+func (c *countingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
+	return c.inner.Allocate(ctx, matchID, mapID, gameMode, releaseTrack)
 }
 
 func (c *countingAllocator) Release(ctx context.Context, podName string) error {
@@ -448,7 +453,8 @@ func TestBattleModelB_EndToEndStageDeliverActivateReady(t *testing.T) {
 
 	select {
 	case got := <-done:
-		if got.err != nil || got.res == nil || got.res.DSPodName != "battle-auth-1" {
+		if got.err != nil || got.res == nil || got.res.DSPodName != "battle-auth-1" ||
+			got.res.ReleaseTrack != auth.ReleaseTrackStable {
 			t.Fatalf("AllocateBattle: res=%+v err=%v", got.res, got.err)
 		}
 	case <-time.After(2 * time.Second):
@@ -470,6 +476,19 @@ func TestBattleModelB_EndToEndStageDeliverActivateReady(t *testing.T) {
 	// ts_ms 是未来一天，但权威时间必须接近服务器当前时间，不能被客户端延长新鲜度。
 	if activeSnapshot.Auth.GetLastActiveHeartbeatMs() > time.Now().Add(time.Second).UnixMilli() {
 		t.Fatalf("client ts_ms contaminated authority heartbeat: %d", activeSnapshot.Auth.GetLastActiveHeartbeatMs())
+	}
+	// 重连查询必须纯只读：成员成功、非成员拒绝，均不能再次调用 GSA。
+	beforeCalls := allocator.authoritativeCalls.Load()
+	target, err := uc.ResolveBattleTarget(ctx, 800, 10)
+	if err != nil || target == nil || target.DSPodName != "battle-auth-1" ||
+		target.AllocationID == "" || target.ReleaseTrack != auth.ReleaseTrackStable {
+		t.Fatalf("ResolveBattleTarget member: target=%+v err=%v", target, err)
+	}
+	if _, err := uc.ResolveBattleTarget(ctx, 800, 999); errcode.As(err) != errcode.ErrPermissionDeny {
+		t.Fatalf("ResolveBattleTarget non-member err=%v code=%v", err, errcode.As(err))
+	}
+	if got := allocator.authoritativeCalls.Load(); got != beforeCalls {
+		t.Fatalf("read-only reconnect query called GSA: before=%d after=%d", beforeCalls, got)
 	}
 }
 
@@ -1378,8 +1397,8 @@ type recordingAllocator struct {
 	released chan string
 }
 
-func (r *recordingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
-	return r.inner.Allocate(ctx, matchID, mapID, gameMode)
+func (r *recordingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
+	return r.inner.Allocate(ctx, matchID, mapID, gameMode, releaseTrack)
 }
 
 func (r *recordingAllocator) Release(ctx context.Context, podName string) error {

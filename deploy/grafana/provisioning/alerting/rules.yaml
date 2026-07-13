@@ -1,0 +1,137 @@
+# Grafana 统一告警 —— 告警规则(2026-07-10)
+#
+# 首批规则消费 ds_allocator 容量巡检暴露的指标(pandora_ds_allocator_fleet_*,
+# 见 services/battle/ds_allocator/internal/biz/capacity.go)。数据源 uid=pandora-prometheus
+# (deploy/grafana/provisioning/datasources/datasources.yml)。
+#
+# 新增告警照此追加:一条规则 = 一个 Prometheus 查询(refId A)+ 一个阈值表达式(refId C)。
+# label severity 决定路由(notification-policies.yaml);annotations 决定通知文案(templates.yaml)。
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ds-capacity
+    folder: Pandora Alerts
+    interval: 1m
+    rules:
+      # ── 战斗 DS 并发接近容量上限(warning)──────────────────────────────────
+      # allocated/replicas ≥ 0.8 持续 5m → 提醒扩 Fleet replicas。
+      - uid: pandora-ds-fleet-near-limit
+        title: 战斗DS并发接近容量上限
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        isPaused: false
+        labels:
+          severity: warning
+          service: ds_allocator
+        annotations:
+          summary: '战斗 DS Fleet {{ $labels.fleet }} 并发占用 ≥80%,接近容量上限'
+          description: '考虑扩 Agones Fleet replicas;当前占用比 {{ with $values.A }}{{ humanizePercentage .Value }}{{ else }}无数据{{ end }}'
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: pandora-prometheus
+            model:
+              editorMode: code
+              expr: max by (fleet) (pandora_ds_allocator_fleet_usage_ratio)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator: { type: gt, params: [0, 0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+                  type: query
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: $A >= 0.8
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: math
+
+      # ── 战斗 DS 容量打满 / 无空闲(critical)────────────────────────────────
+      # ready==0 持续 2m → 新对局分配必失败(玩家匹配成功进不去),立即扩容。
+      - uid: pandora-ds-fleet-exhausted
+        title: 战斗DS容量打满无空闲
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        isPaused: false
+        labels:
+          severity: critical
+          service: ds_allocator
+        annotations:
+          summary: '战斗 DS Fleet {{ $labels.fleet }} 无空闲副本(ready=0),新对局分配将失败'
+          description: '立即扩 Agones Fleet replicas;玩家匹配成功但可能进不了战斗'
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: pandora-prometheus
+            model:
+              editorMode: code
+              expr: max by (fleet) (pandora_ds_allocator_fleet_ready)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: C
+
+      # ── ds_allocator 实例不可达 / metrics 采集中断(critical)──────────────
+      # 上面两条容量规则 noDataState=OK(Fleet 未部署时指标本就不存在,不该误报);
+      # 但这样一来 exporter 挂掉 / 抓取中断时 ready=0 critical 也会被 NoData 静默成 OK,
+      # 形成"最该告警时反而不响"的盲区(三审 P1-8)。这条可用性规则补齐该盲区:
+      # up{service=ds_allocator}==0(目标配置在案但抓不到)或整条 up 序列消失(NoData→Alerting)
+      # 持续 2m 即告警。目标在 prometheus.yml 静态登记,稳态下 up 必存在,不会误报。
+      - uid: pandora-ds-allocator-down
+        title: DS调度实例不可达
+        condition: C
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          service: ds_allocator
+        annotations:
+          summary: 'ds_allocator 实例不可达或 metrics 抓取中断,容量告警已失效'
+          description: '容量规则依赖 ds_allocator 暴露的 fleet 指标;实例挂掉时这些规则会被 NoData 静默。请立即检查 ds_allocator 进程与 51020 端口。'
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: pandora-prometheus
+            model:
+              editorMode: code
+              expr: max (up{job="pandora-go-services", service="ds_allocator"})
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: C

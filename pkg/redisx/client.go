@@ -60,6 +60,17 @@ func resolveMaintMode(s string) maintnotifications.Mode {
 // slot(用 {hash_tag} 把同一玩家的相关 key 绑定到同一 slot,如 lock:{player:123})。
 // redislock / 多键 ZSET 等改造前必须核对 hash tag,详见 scale-cellular-20m.md 的单 Cell Redis 口径。
 func NewUniversalClient(c config.RedisConf) redis.UniversalClient {
+	return newUniversalClient(c, false)
+}
+
+// NewDeadlineUniversalClient 与 NewUniversalClient 拓扑行为相同，但让 go-redis 把调用方
+// context deadline 计入 socket I/O 截止时间。仅应用在分布式锁等“业务声明的硬等待上限”
+// 必须真实生效的路径；保留原构造的既有行为，避免一次安全修复暗改所有服务的超时语义。
+func NewDeadlineUniversalClient(c config.RedisConf) redis.UniversalClient {
+	return newUniversalClient(c, true)
+}
+
+func newUniversalClient(c config.RedisConf, contextTimeoutEnabled bool) redis.UniversalClient {
 	addrs := c.Addrs
 	if len(addrs) == 0 {
 		addrs = []string{c.Host}
@@ -72,6 +83,9 @@ func NewUniversalClient(c config.RedisConf) redis.UniversalClient {
 		DialTimeout:  c.DialTimeout.Std(),
 		ReadTimeout:  c.ReadTimeout.Std(),
 		WriteTimeout: c.WriteTimeout.Std(),
+		// 默认 false 保持历史语义；拍卖 market 锁等严格截止路径显式走
+		// NewDeadlineUniversalClient，防单次 Redis I/O 越过业务 maxWait/TTL。
+		ContextTimeoutEnabled: contextTimeoutEnabled,
 		MaintNotificationsConfig: &maintnotifications.Config{
 			Mode: resolveMaintMode(c.MaintNotifications),
 		},

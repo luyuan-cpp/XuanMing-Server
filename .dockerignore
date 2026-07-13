@@ -14,6 +14,10 @@ run/
 **/*.test
 **/*.out
 
+# 迁移凭据 / 真实目标 inventory 永不进入 BuildKit context 或中间层。
+**/*.dsn
+tools/migrate/*.json
+
 # 部署产物(镜像不需要把部署目录再拷回去)
 deploy/ds/stage/
 deploy/dev-ca/

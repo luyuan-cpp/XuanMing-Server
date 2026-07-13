@@ -40,6 +40,11 @@ temp/
 .env.*.local
 *.env
 
+# 数据库迁移凭据/真实 inventory（示例文件可入库，真值 bundle 必须留在仓库外或 run/）
+*.dsn
+tools/migrate/*.json
+!tools/migrate/targets.example.json
+
 # IDE / 编辑器
 .vscode/
 .idea/

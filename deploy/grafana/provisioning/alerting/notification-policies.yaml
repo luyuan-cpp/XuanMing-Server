@@ -1,0 +1,24 @@
+# Grafana 统一告警——无群 webhook 时的安全默认路由。
+#
+# warning/critical 都至少进 ntfy，critical 重报间隔更短。只要任一群渠道 env 非空，
+# deploy/grafana/entrypoint.sh 就会在临时目录生成「warning→群、critical→群+ntfy」路由。
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: ntfy-personal
+    group_by: ['alertname', 'fleet']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: ntfy-personal
+        matchers:
+          - severity = critical
+        group_wait: 10s
+        group_interval: 5m
+        repeat_interval: 1h
+      - receiver: ntfy-personal
+        matchers:
+          - severity = warning
+        repeat_interval: 4h

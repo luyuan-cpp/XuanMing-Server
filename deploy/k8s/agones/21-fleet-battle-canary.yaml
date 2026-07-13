@@ -1,0 +1,124 @@
+# pandora-battle-canary Fleet（Canary 轨，W4 ⑬）
+#
+# 战斗 DS 走 Agones「按需分配」模型：matchmaker 全员确认 → ds_allocator POST
+# GameServerAllocation（selector 同时匹配 agones.dev/fleet=pandora-battle-canary 与
+# pandora.dev/release-track=canary）→ 拿到一个 Ready
+# GameServer 转 Allocated，返回 address:port 给客户端进战斗。
+#
+# 当前直接使用真 UE Pandora Battle DS 镜像（Agones SDK Ready/Health + Pandora 业务 Heartbeat）。
+# Fleet Ready 只证明 Agones 生命周期正常；分配闭环还必须看到 DS 经 :8444 向 ds_allocator
+# 上报正确 match_id/pod 的业务心跳，二者是两条独立链路（见 README「分两步验证」）。
+apiVersion: agones.dev/v1
+kind: Fleet
+metadata:
+  name: pandora-battle-canary
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+    pandora.dev/role: battle
+    pandora.dev/release-track: canary
+spec:
+  replicas: 0
+  template:
+    metadata:
+      labels:
+        pandora.dev/role: battle
+        pandora.dev/release-track: canary
+        pandora.dev/ds-auth-writer-epoch: "2"
+    spec:
+      ports:
+        - name: default
+          portPolicy: Dynamic
+          containerPort: 7777
+          protocol: UDP
+      health:
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        failureThreshold: 3
+      template:
+        metadata:
+          labels:
+            pandora.dev/ds-auth-writer-epoch: "2"
+            pandora.dev/release-track: canary
+        spec:
+          containers:
+            - name: pandora-battle-ds
+              # Pandora 战斗 DS（UE Linux Dedicated Server）。
+              # 由 Tool/Server/Agones/build-linux-ds.ps1 + build-image.sh 产出镜像；push 由人手动执行，按实际 registry 覆盖。
+              # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
+              # 用滚动 tag :dev（与 build-image.sh 默认一致）：重建镜像后只需 minikube image load，无需再改本文件，
+              # kubectl apply 也不会回退到过时的固定日期 tag。线上换成 registry 可拉取的完整镜像名（见 README online 节）。
+              image: pandora/battle-ds:dev
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PANDORA_DS_PORT
+                  value: "7777"
+                # 「填表即用」权威路径(2026-07-07 启用):DS 统一启到空入口图 Lvl_Server_Entry(包内已有,
+                # 无需新建 Lvl_DS_Loader),由 PandoraDSLoaderGameMode 等 Agones Allocated + pandora.dev/map-id
+                # label 就绪后查 g_关卡.xlsx → ServerTravel 到目标副本(GameModeClass 也由表行决定)。
+                # 之后策划新增副本只改表 + 重打 DS 内容,本 Fleet 无需改。见 Doc/服务器/副本选择_UE侧交接_Codex.md。
+                # 前提:镜像必须是含 APandoraDSLoaderGameMode + 关卡上下文修复(2026-07-07)的新构建。
+                - name: PANDORA_DS_MAP
+                  value: "/Game/Entry/Level/Lvl_Server_Entry"
+                - name: PANDORA_DS_GAMEMODE
+                  value: "/Script/Pandora.PandoraDSLoaderGameMode"
+                # 旧直启路径(回退用,仅当 Loader 镜像未就绪时换回):直接启到固定战斗图 + 战斗 GameMode。
+                # APandoraBattleGameMode::BeginPlay 起 Pandora 业务心跳(DS→ds_allocator.Heartbeat,每 5s,
+                # 防 battle_abandoned_heartbeat_timeout)。直启会绕过按 map_id 选图,所有局都进同一张图。
+                #   value: "/Game/Test/Level/MobaLevel"               # ← PANDORA_DS_MAP
+                #   value: "/Script/Pandora.PandoraBattleGameMode"    # ← PANDORA_DS_GAMEMODE
+                #
+                # 进阶(热门图零加载延迟,标准混合形态):可为单张热门图克隆本 Fleet 建「专属预热 Fleet」——
+                # 另建专用 Canary Fleet 时改 metadata.name(如 pandora-battle-canary-songlin)+ 上面两行 env
+                # (如 /Game/Test/Level/SonglinTown + /Script/Pandora.PandoraPveGameMode),
+                # 并在 ds_allocator agones.map_fleets 配 map_id→该 Fleet。分配时 Agones 有序 selectors
+                # 先选专属池(Pod 已预载目标图,分配即可玩),无空闲自动回落本通用 Loader 池。
+                # 长尾/新副本不建专属 Fleet,走本池填表即用。
+                # ds_allocator 的 grpc-web 入口。DS 走 grpc-web（FHttpModule），不能直连裸 gRPC :50020，
+                # 必须打到 Envoy 的「DS 面」grpc-web 监听器 :8444（grpc-web→gRPC 转换，按方法白名单
+                # 路由到 ds_allocator，见 deploy/k8s/agones/16-ds-envoy.yaml）。
+                # ⚠️ :8444 DS 面是**明文无 TLS**(权威口径见 docs/design/gateway-decision.md §「DS 面」),
+                #    故 PANDORA_DS_ALLOCATOR_TLS=0;此处不做 TLS 终止,别被旧注释误导。
+                # 默认代码值 127.0.0.1:50020 是裸端口，集群里打不通——务必用下面 env 覆盖。
+                #
+                # 线上同款:DS 走集群内 Envoy「DS 面」Service DNS 回连,pod 内绝不写宿主 IP / host.docker.internal
+                # (minikube 的 Pod 解析不了 host.docker.internal,DNS 失败 → 心跳发不出 → 匹配 4001)。
+                # in-cluster Envoy 由 deploy/k8s/agones/16-ds-envoy.yaml 部署在 pandora 命名空间。
+                # 线上真集群边缘网关自带同名 pandora-envoy Service,本段 env 一字不改即可切线上。
+                - name: PANDORA_DS_ALLOCATOR_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_DS_ADMISSION_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_PLAYER_LOCATOR_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_BATTLE_RESULT_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_DS_ALLOCATOR_TLS
+                  value: "0"
+                # DSTicket v2(方案 B,RS256 纯本地验票,决策文档 §7):DS 只持公钥 JWKS,无任何玩家票
+                # 签名 secret(玩家 HS256 密钥出现在 Fleet 里会被 online_manifest_contract 硬拒)。
+                # 公钥来自不可变 ConfigMap pandora-dsticket-jwks-r1(见 15-dsticket-jwks.yaml)。普通
+                # Stable/Canary 发布只读对账、不换钥；当前发布器不支持 public-only K2 stage。
+                # 两个 env 与 UE FPandoraDSTicketKeystore 约定一致:缺任一个 = v2 未配置,
+                # Agones Ready 门(FPandoraDSTicketReadyGatePolicy)会拒绝 Ready,容器不会半配置上线。
+                - name: PANDORA_DSTICKET_JWKS_FILE
+                  value: "/etc/pandora/dsticket/jwks.json"
+                - name: PANDORA_DSTICKET_KEYSET_REVISION
+                  value: "1"
+              volumeMounts:
+                - name: dsticket-jwks
+                  mountPath: /etc/pandora/dsticket
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 2Gi
+          volumes:
+            # DSTicket v2 公钥 JWKS(只读,公钥非机密,用 ConfigMap 而非 Secret;由启动器/运维从
+            # dsticket_keyset.ps1 create-only 投递的 jwks.json，私钥绝不进 DS 镜像/Pod)。
+            - name: dsticket-jwks
+              configMap:
+                name: pandora-dsticket-jwks-r1

@@ -1,0 +1,47 @@
+# DSTicket v2（方案 B，RS256 纯本地验票）DS 侧公钥 JWKS ConfigMap —— 模板/文档
+#
+# ⚠️ 本文件是**模板**，不要直接 kubectl apply：data 里是占位符，不是真公钥。
+#    （即使误 apply 也 fail-closed：DS 解析 JWKS 失败 → FPandoraDSTicketReadyGatePolicy
+#      拒绝 Agones Ready，容器不会带坏钥上线。）
+#
+# 真实对象只通过 create-only helper 投递（私钥绝不进版本库、命令行、ConfigMap 或 DS 镜像）：
+#   1) 在受控目录生成并本地严格校验 K1（已有材料则省略 -Generate，脚本拒绝覆盖）：
+#        pwsh tools/scripts/dsticket_keyset.ps1 -KeyDir <受控密钥目录> -Revision 1 -Generate
+#   2) 显式确认 kube-context 后 create-only 投递并从 apiserver 回读对账：
+#        pwsh tools/scripts/dsticket_keyset.ps1 -KeyDir <受控密钥目录> -Revision 1 `
+#          -Apply -KubeContext <精确context>
+#      helper 创建 immutable Secret/pandora-dsticket-signer-r1(namespace=pandora)，以及内容/hash 完全相同的
+#      immutable ConfigMap/pandora-dsticket-jwks-r1(namespace=default + pandora)。default 给 DS，
+#      pandora 给 Login 的兼容/诊断 verifier；四个签票 Deployment 只挂 Secret，只有 Login 额外挂公钥。
+#   本地 minikube 链路由 tools/scripts/start.ps1 自动执行同一 create-only 契约（dev 钥对生成进 run/，不入库）。
+#
+# 生命周期纪律（决策文档 §7.4）：
+#   - ConfigMap 名带 revision（-r1/-r2…）且不可变，绝不原地改 r1。
+#   - Stable 与 Canary 共用同一套公钥 keyset；普通金丝雀只换镜像 digest，不动本 ConfigMap。
+#   - create-only helper 可用显式 SignerRevision/AllowInactiveSigner 只预投递材料，但不会切运行时挂载；
+#     普通 online 发布器仍强制 signer revision = keyset revision 且 signer kid = active_kid。
+#     完整轮换编排/runbook 未交付前不得执行真实切换，也不能在普通发布里顺带换钥。
+#
+# UE 侧契约（Pandora Source/Pandora/Public/Auth/PandoraDSTicket.h）：
+#   - jwks.json ≤ 64KB，1..8 把 RSA 公钥（kty=RSA，n ≥ 2048 位），kid = RFC 7638 指纹；
+#   - 出现任何私钥字段（d/p/q…）或 kty=oct 成员则整个 JWKS 拒收（fail-closed）。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # 名字必须与 Fleet（20-fleet-battle.yaml / 30-fleet-hub.yaml volumes.configMap.name）一致。
+  name: pandora-dsticket-jwks-r1
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+    app.kubernetes.io/component: dsticket-keyset
+  # 真值由 dsticket_keyset.ps1 从受控材料推导；这些仍是故意不可用的模板占位符。
+  annotations:
+    pandora.dev/dsticket-active-kid: PLACEHOLDER_RFC7638_KID
+    pandora.dev/dsticket-keyset-revision: "1"
+    pandora.dev/dsticket-jwks-sha256: PLACEHOLDER_SHA256
+immutable: true
+data:
+  # 占位符——真文件顶层必须精确含 revision、active_kid、keys；每把 key 必须显式
+  # kty=RSA/use=sig/alg=RS256，kid 为该 n/e 的 RFC 7638 指纹。
+  jwks.json: |
+    { "revision": 1, "active_kid": "PLACEHOLDER_RFC7638_KID", "keys": [] }

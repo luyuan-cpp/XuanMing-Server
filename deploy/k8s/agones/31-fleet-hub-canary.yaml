@@ -1,0 +1,97 @@
+# pandora-hub-canary Fleet（Canary 轨，W4 ⑬）
+#
+# 大厅 Hub DS 走「常驻分片」模型（不同于战斗 DS 的按需分配）：Hub DS GameServer 持续
+# Ready 运行，hub_allocator 经 AgonesHubFleetProvider LIST 这些 GameServer 发现分片拓扑
+# （selector agones.dev/fleet=pandora-hub-canary,pandora.dev/release-track=canary,
+# pandora.dev/region=<region>），自己在 Redis 里
+# 维护各分片 player_count 做容量判定（500 人/实例），不走 Agones GameServerAllocation。
+#
+# region 标签必填：hub_allocator 按 pandora.dev/region 过滤分片;本 dev Fleet 标 region=cn。
+# capacity 标签可选：单分片人数上限（缺省用 hub.default_capacity=500）。
+# shard-id 标签可选:同 Fleet 多副本无法静态区分,缺省由 hub_allocator 按 pod 名哈希派生。
+#
+# 当前直接使用真 UE Pandora Hub DS 镜像。Fleet Ready 证明 Agones SDK 生命周期正常；
+# Hub DS 还须经 :8444 向 hub_allocator 上报业务心跳，见 ds-arch.md。
+apiVersion: agones.dev/v1
+kind: Fleet
+metadata:
+  name: pandora-hub-canary
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+    pandora.dev/role: hub
+    pandora.dev/release-track: canary
+spec:
+  replicas: 0
+  template:
+    metadata:
+      labels:
+        pandora.dev/role: hub
+        pandora.dev/release-track: canary
+        pandora.dev/ds-auth-writer-epoch: "2"
+        pandora.dev/region: cn
+        pandora.dev/capacity: "500"
+    spec:
+      ports:
+        - name: default
+          portPolicy: Dynamic
+          containerPort: 7777
+          protocol: UDP
+      health:
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        failureThreshold: 3
+      template:
+        metadata:
+          labels:
+            pandora.dev/ds-auth-writer-epoch: "2"
+            pandora.dev/release-track: canary
+        spec:
+          containers:
+            - name: pandora-hub-ds
+              # Pandora 大厅 DS（UE Linux Dedicated Server）。镜像产出同 battle；push 由人手动执行，按实际 registry 覆盖。
+              # Agones 自动注入 SDK sidecar；DS 内 UPandoraAgonesSubsystem 走 sidecar HTTP 调 Ready/Health/Shutdown。
+              # 用滚动 tag :dev（与 build-image.sh 默认一致）：重建镜像后只需 minikube image load，无需再改本文件，
+              # kubectl apply 也不会回退到过时的固定日期 tag。线上换成 registry 可拉取的完整镜像名（见 README online 节）。
+              image: pandora/hub-ds:dev
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PANDORA_DS_PORT
+                  value: "7777"
+                - name: PANDORA_DS_MAP
+                  value: "/Game/Test/Level/MainCity"
+                - name: PANDORA_DS_GAMEMODE
+                  value: "/Script/Pandora.PandoraHubGameMode"
+                # 线上同款:走集群内 Envoy「DS 面」Service DNS(见 16-ds-envoy.yaml),不写 host.docker.internal。
+                - name: PANDORA_HUB_ALLOCATOR_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_DS_ADMISSION_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_PLAYER_LOCATOR_ADDR
+                  value: "pandora-envoy.pandora.svc.cluster.local:8444"
+                - name: PANDORA_DS_ALLOCATOR_TLS
+                  value: "0"
+                # DSTicket v2(方案 B)公钥 JWKS 配置,与 battle Fleet 完全同款(见 20-fleet-battle.yaml 注释):
+                # 缺任一个 env 或 JWKS 解析失败,Agones Ready 门拒绝 Ready,容器不会半配置上线。
+                - name: PANDORA_DSTICKET_JWKS_FILE
+                  value: "/etc/pandora/dsticket/jwks.json"
+                - name: PANDORA_DSTICKET_KEYSET_REVISION
+                  value: "1"
+              volumeMounts:
+                - name: dsticket-jwks
+                  mountPath: /etc/pandora/dsticket
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 2Gi
+          volumes:
+            # DSTicket v2 公钥 JWKS(只读;公钥非机密用 ConfigMap;私钥绝不进 DS Pod)。
+            - name: dsticket-jwks
+              configMap:
+                name: pandora-dsticket-jwks-r1
+
+

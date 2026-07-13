@@ -61,13 +61,24 @@
   对局域网开放；未鉴权的宿主 DS 面 8444、admin 9901、基础设施与 20 个业务 gRPC 发布端口默认
   固定回环（特殊 Linux dev 环境须显式覆盖）。安全残留：方法白名单和
   NetworkPolicy 不等于 DS 身份认证，生产仍需 mTLS/ext_authz/短时效 DS token 并绑定 pod/match。
-- 2026-07-10:**战斗 DS 并发容量巡检落地**——`ds_allocator` 在 `mode=agones` 时定期读取通用 Fleet
-  与 `map_fleets` 专属 Fleet 的 `replicas/ready/allocated`，暴露
-  `pandora_ds_allocator_fleet_{replicas,ready,allocated,usage_ratio}` 指标；达到配置水位时输出
-  `ds_fleet_capacity_near_limit` / `ds_fleet_capacity_exhausted` 结构化日志，并以状态变化和 5 分钟
-  重报间隔降噪。新增 `capacity_watch_interval`（默认 30s，负值禁用）与
-  `capacity_warn_ratio`（默认 0.8），dev 配置和集群配置生成模板同步；单元测试覆盖容量解析、
-  部分 Fleet 查询失败、阈值状态机与重复告警降噪。
+- 2026-07-10:**战斗 DS 并发容量监控 + 告警通知链路**落地。①`ds_allocator`(mode=agones)新增
+  Fleet 容量巡检 `internal/biz/capacity.go`:定期 GET 通用 Fleet + 各 map_fleets 专属 Fleet 的
+  status,暴露指标 `pandora_ds_allocator_fleet_{replicas,ready,allocated,usage_ratio}`(label=fleet),
+  `allocated/replicas ≥ capacity_warn_ratio`(默认 0.8)打 Warn `ds_fleet_capacity_near_limit`、
+  `ready==0` 打 Error `ds_fleet_capacity_exhausted`,状态变化才打 + 5m 重报降噪。配置
+  `agones.capacity_watch_interval`(默认 30s,负值禁用)/`capacity_warn_ratio`;dev yaml +
+  gen_cluster_config.ps1 in-cluster 模板同步;复用既有 RBAC `fleets: get`。②**告警出口唯一 =
+  Grafana 统一告警**,业务服务只暴露指标/打日志,绝不直连通知端点(见 `docs/design/alerting.md`)。
+  新增 `deploy/grafana/provisioning/alerting/`(contact-points/templates/notification-policies/rules):
+  群通知走企微(原生 wecom)/飞书(需已验证 relay),个人推送走 ntfy(compose 内置
+  `binwiederhier/ntfy` 服务,开 SQLite 磁盘缓存)。secret 保留 `$__env{}` 占位,本机 `dev.env`
+  被 git 忽略,受跟踪的 `dev.env.example` 只放空占位;Grafana entrypoint 仅为非空群 env
+  生成 receiver。有群时 warning→群、critical→群+ntfy;无群时均回退 ntfy。首批规则消费
+  上述 DS 容量指标(warning near-limit / critical exhausted),非 Agones 模式 NoData 按 OK。
+  验证:ds_allocator go build/vet/test 全绿(新增 capacity_test.go + ListFleetCapacities 测试);
+  compose config、Grafana 11.3.1 空群/有群两种隔离 provisioning 均通过，本机 compose 已重建
+  ntfy/Grafana 并经 API 确认联系点/规则/路由，ntfy 文案模板与 SQLite 跨重启回放实测通过。**待办**:飞书 relay、
+  k8s Grafana 同步、ntfy 公网鉴权、Grafana 安全版升级后再开 DingDing、扩展更多规则(见 alerting.md §9)。
 
 ## 已完成里程碑
 
@@ -168,3 +179,146 @@
 - 完整命令清单和每条命令输出。
 - 与 `docs/design/` 已有内容重复的大段解释。
 - 每个文件逐条列“新增/修改”清单,除非它是破坏性变更索引。
+
+## 2026-07-10:DS 回调服务令牌认证(审核 P1 #1,已拍板并实现)
+
+- 已拍板决策:DS→后端回调(:8444 七个白名单方法)补服务令牌认证——allocator 签发
+  scope-bound HS256 JWT(battle 绑 match_id / hub 绑 pod),经 GameServer annotation
+  `pandora.dev/ds-token` / env `PANDORA_DS_TOKEN` 下发,四服务 handler 用
+  `middleware.DSCallbackGuard` 校验;Envoy :8444 盖 `x-pandora-ds-gateway` 标记头区分
+  DS 面与内部直连。详见 `docs/design/decision-revisit-ds-callback-auth.md`。
+- 边界:后端全部接线完成(pkg + ds_allocator/hub_allocator/player_locator/battle_result),
+  `ds_auth.mode` 默认 **off**(行为与现状一致);proto 零改动。
+- 客户端(UE DS 仓库)待同步:读 annotation/env 拿令牌,7 个回调方法带
+  `authorization: Bearer`,Hub DS 监听 annotation 续期换新令牌;接完后先 permissive 再 enforce。
+- 部署待办(Codex/人):重发 `deploy/k8s/agones/10-rbac-allocator.yaml`(gameservers 补
+  patch 动词)、重滚两份 Envoy 配置(均已 `envoy --mode validate` OK)。
+- 验证:5 模块 build/vet/test 全绿;enforce 端到端冒烟待 UE DS 接令牌后执行。
+
+## 2026-07-11:部署/重置阻断项 C/D/E 修复，A/B 保持待决策
+
+- 配置生成改为独立 staging 精确校验 20 份 YAML(+生产 JWKS)、自有文件事务发布/失败回滚、
+  目标目录物理文件锁；Online 在 BuildPush 前生成本次独占快照，Secret 只取这 20 份配置，堵住
+  共享 `run/cluster/etc` 被 dev/mock 并发覆盖后灌入生产的窗口。
+- K8s 配置载体按 Secret→Deployment 全量 rollout→控制器/存活 Pod 无旧引用→删除旧 ConfigMap
+  的顺序迁移；Resume 也逐个等待 20 个业务 Deployment。删除旧 ConfigMap 是明确回退边界，
+  迁移前零副本 ReplicaSet revision 不再可直接 rollout undo。
+- compose data_service reset 改为 checked 容器状态 + compose label 校验；stopped/absent 都需宿主停服
+  确认，stop 后复查才允许清理，`-Restart` 不再因容器不存在而静默忽略；验证失败会确认停服后
+  重新清缓存/删表，停服未知或保护清理失败均组合报错。
+- 文档已纠正 DS 轮换 TTL 没有上限的事实，并新增玩家 JWT 轮换待决策记录。
+- **仍阻塞、本轮 Codex 未改业务代码**:当前工作树已有 Hub token-exp 代际/玩家多 key 的部分接线，
+  但尚未获决策批准；Hub 仍缺 Agones⇒enforce 的启动期硬耦合，且秒精度 exp 不是无碰撞 generation。
+  玩家/DS 全集群 primary+additional 权威 key-set gate 与轮换算法/密钥权属也待人拍板。生产脚本暂时
+  拒绝 additional_secrets，避免未批准的半链路投产。详见 `decision-revisit-ds-callback-auth.md` §6.4 与
+  `decision-revisit-player-jwt-key-rotation.md`。
+
+## 2026-07-12:DS callback auth Model B P1 收束；生产行为激活仍阻断
+
+- 人已批准 Redis 唯一授权权威 + active/pending 两阶段方案。当前脏工作树已接 Hub/Battle 两类
+  auth record、UID/epoch/gen/jti/kid/hash/writer 完整绑定、K8s UID+RV 条件投递、跨服务 active 门、
+  login assignment fence，以及 UE active+staged token/Bearer/ACK 切换。这里的“已接”仅描述当前脏
+  工作树，不代表生产行为已经获准激活或真集群验收通过。
+- 独立反证后追加修复：Battle result receipt 先落库后允许 ended、GSA/PATCH 未知结果 fencing、
+  `allocation_uncertain` 永久隔离与 UID 条件 Release 墓碑（**不能**用 sweep 猜测恢复）、Hub assignment
+  future protobuf 字段保留、同实例轮换不重复占座、
+  Hub/Battle 完整 tuple 紧急 quarantine + audit-only ops CLI、etcd required value+ModRevision 注册 CAS、
+  后台 writer 在 capability 成功后才启动、Redis auth↔live projection 双向三周期审计、login 在线
+  VerifyDSTicket 的 Guard→active/projection→assignment/roster→JTI 顺序、battle 票签发前
+  player↔match roster 权威门，以及 Redis authority 下拒绝无凭据 `pandora.battle.result` consumer。
+  locator 已明确 `InBattle` 后，Battle 签票权威失败会使 Login 返回 unavailable，不再错误继续分配
+  Hub/占第二个 seat/写 LOGIN_PENDING；reconnect 地址取自同一次 Redis roster/active 快照，不再把
+  locator 的旧 UID 地址与当前实例的授权证明拼接。
+- 本机调试只允许 Windows `mode=local + off + legacy` 的精确 `local-off-v1` profile；仍签完整
+  `(pod,随机 UID,epoch,gen,jti,exp,kid,writer=2)` 凭据。profile/pod 前缀/平台任一伪造均不能关闭在线
+  admission。它是明确的非生产例外，不解决生产密钥投递或 Battle DS 的客户端侧空 roster 防御。
+- UE 长驻 Hub 的本地 JTI 防重放已从永久无界 `TSet` 改为按票据 exp 回收的线程安全有界 map；
+  满载不驱逐未过期值而是 fail-closed，`PreLoginAsync` 仅检查/清过期且不新增、真正接纳时才消费。
+- UE 心跳响应现绑定“本请求实际 Bearer snapshot + 回调时仍为 current active”：Hub/Battle 的
+  missing/wrong/stale ACK 都在 stop/drain/reload 前失败；activation 只有精确 staged ACK 成功提升后
+  才处理命令，active=A/staged=B 时迟到 ACK(A) 不再误报成功。`grpc-status` 同时改为 canonical
+  `0..16` 有界解析，整数溢出/前导零/重复/缺失均不能冒充 status 0。
+- UE admission owner 不再直接信任平台 `FGuid` 的字段布局/宽松 parser；改由 vendored OpenSSL
+  CSPRNG 生成并显式编码小写 RFC4122 UUIDv4，随机源失败在网络前拒绝，validator 逐字符检查
+  36 长度/连字符/version/variant。Automation 首轮正是由 UUID 反例失败并触发此修复，不能把首轮
+  10/11 误报为全绿。
+- 本地最终验证：UUID 修复后的 PandoraEditor UBT 714/714 Succeeded（1164.39s）；headless
+  `Pandora.Net` 11/11 + Battle terminal 1/1（合计 12/12）；PandoraServer UBT 824/824，
+  `PandoraServer.exe` 链接成功（1132.36s）。服务端相关 Go test/vet、`buf lint`、两套 Kustomize render、
+  Envoy config validate、PowerShell AST、生成物跨仓 SHA-256 与 `git diff --check` 也已通过。
+  `-race` 因 `CGO_ENABLED=0` 未执行且未改环境；真 Redis Cluster/envtest/minikube、安全 `:8444`
+  synthetic 与真 Hub/Battle 往返仍未验收。
+- **禁止宣称可生产激活**：审计证实 required=1 尚未约束数据面，新 Model-B 与旧 legacy writer 会在
+  普通滚动窗口混跑。需人拍板 blue/green prepare→quiesce→active（推荐）或逐路由 stage-only 门；
+  同时仍缺 immutable image/Secret、etcd/Redis TLS+ACL、仓内固定 K8s :8444 synthetic，以及
+  :8444 service-mesh mTLS/等价传输身份与机密性。当前 Fleet
+  还未安全注入 `PANDORA_DS_TICKET_SECRET`：真实生产 signer 与 UE tracked dev 占位会导致全拒票，
+  若生产沿用占位则直接失守，因此两种情况都不可上线。也不得把现有玩家 HS256 签名 secret 直接
+  注入不可信 DS；须拍板 DSTicket 公钥验签或只走 online authority。
+- 仍待人拍板：Hub active A→B 后旧 A 票据的 bounded `previous_admission` grace；Battle 结算与
+  MySQL 同事务的 terminal-release outbox；Hub quarantine 后 assignment/UID 持久迁移；
+  `allocation_uncertain` 权威 reconciler；locator 连续查询失败时选择“未知即拒绝”或版本化
+  placement lease + Hub admission 最终门。现状只保证已明确 InBattle 后不会误分 Hub；locator 状态
+  不可判定仍沿用既有弱依赖行为，因此也是生产 blocker。
+  `tools/scripts/activate_ds_auth.ps1 -Apply` 已主动 fail-closed，只保留 audit。
+- Claude Code 首轮独立只读审核仅覆盖 `hub_allocator` Model B 后端与 auth/middleware 抽检：未发现新的
+  鉴权 P0/P1，确认过期方法名注释一处（已修）。其把心跳实报覆盖 reservation 定为 P2，但后续反证确认
+  assignment 默认 30min、票据默认 5min、心跳 5s，且无逐 reservation ledger/到期退座；不同玩家可跨
+  多轮累计有效票据，不能证明容量上限，改列 §7.16.4 P1 生产阻断。标准修复需人拍板独立 reservation
+  lease/session 容量权威，当前未暗改。另修复等值 assignment 复用重签票却不刷新 Redis TTL 的缺陷，
+  统一走完整 bytes CAS SET 并补剩 1s 回归。UE、Battle 全调用点、`-race`、真集群仍未被该轮 Claude
+  审核覆盖。
+- 经人于 2026-07-12 明确授权，由 Codex 仅为本次范围创建本地 Git 提交；未 push/tag，未碰生产，
+  未写真实 secret。部署验证时误触发 Docker 自动拉取本机 `envoyproxy/envoy:v1.38.1`，发现后已停止
+  后续 Docker 操作；该镜像保留或移除仍待人指示，不能再宣称“未改本机环境”。详见
+  `docs/design/decision-revisit-ds-callback-auth.md` §7.14–§7.16。
+
+## 2026-07-12:全代码审核后的 Codex 部署防线修复；业务阻断交 Claude Code
+
+- online 发布代码已补不可变 SHA tag、首次 push 前的全 tag 不存在证明、push/registry digest 一致性、
+  20 Deployment 与 2 Fleet digest pin、五 writer/Fleet 两层 annotation、rollout 后 spec/imageID 回读；
+  旧 Allocated DS 只排空不强删。纯 helper/mutant 测试与 PowerShell AST 已通过，未访问远端。
+- 新增 `dsauth-required` 只读线性预检及 uint32 参数防截断；test online 下 required key 缺失/非法/
+  不可读会在远端写前停止。prod 因五 writer/预检尚未统一 custom CA+mTLS+ACL 最小权限身份，已在
+  明文/无身份读取前硬阻断；没有调用现有 `BootstrapRequired`，其删 key 后回退风险仍待 Claude 修。
+- 生产发布仍被 DSTicket B(公钥 keyset)或 C(online authority)未决硬门拦住；Fleet 禁止注入玩家
+  HMAC/私钥。BuildPush 另被 registry native immutable-tag/create-only+发布锁未验证硬门拦住；
+  clean tree/严格重建/provenance 与结构化 manifest mutant 已补。离线 tar 与 registry manifest digest
+  等价性也未在真实 CRI 证明。
+- Codex 按 `AGENTS.md §11.1` 未修改业务逻辑。player 属性点 `int32` 求和溢出与 auction 跨物品撮合
+  仍是 P0;其余跨服务 P1 修复队列及验收反例见
+  `docs/design/code-audit-blockers-claude-handoff-20260712.md`,交 Claude Code 实现并独立审核。
+
+## 2026-07-12:拍卖缓存正确性与属性 MySQL 集成测试阻断修复（待 Claude Code 复审）
+
+- 人明确授权 Codex 仅本次修复这组业务阻断。拍卖撮合候选改由 MySQL 按
+  `market_id + item_config_id + side + active status` 权威选择，查询直接排除 incoming owner，
+  按价格/`order_id` 时间优先；Redis ZSET 退为 best-effort 旧版本兼容缓存。删除临时移出/放回、
+  Redis reconcile SET、10,000 截断重建和扫描上限路径，缓存 `ZADD/ZREM` 失败不再让已冻结且
+  已持久化订单报失败或永久不可见。128 条异物品/自有前缀、Redis 全挂、缓存缺失、撤单降级、
+  价格时间优先用例均通过。
+- 新增 additive-only `idx_instrument_match` 与 `pandora_auction/000002` 迁移；真实 MySQL 8.4 已验证
+  init 已含索引时幂等、老库无索引时 `LOCK=NONE` 新增均成功。安全发布要求先扩索引，再蓝绿
+  一次切流并排空漏洞旧实例；详见 `decision-revisit-auction-match-authority.md`。
+- 属性 repo MySQL 测试改为拒绝带库名 DSN、随机临时库、严格 cleanup；用触发器在属性 upsert 后
+  强制最终扣点失败，验证完整事务回滚；用外部行锁与 InnoDB 锁等待视图确定两个 writer 同时阻塞
+  在首个 `SELECT ... FOR UPDATE`，真实 MySQL 8.4 验证恰一成功一余额不足。无 DSN 仍明确 SKIP，
+  不再把 SKIP 宣称为真实事务通过。
+- 两服务 `go test -count=1 ./...` 与 `go vet ./...` 已通过；未 commit/push、未碰生产、未写真实 secret。
+
+## 2026-07-12:Player / Inventory / Auction 业务阻断收束（待 Claude Code 最终复审）
+
+- 人明确授权 Codex 修复本批业务阻断。player 属性扣点改为事务内宽类型总和/重复属性/列上界校验；
+  inventory 新增严格快照校验且可并发幂等补冻的 `EnsureAuctionEscrow`。两者真实 MySQL 提交、回滚、
+  溢出和并发用例均实际执行通过。
+- auction 撮合与幂等权威收敛到 MySQL：owner coordinator registry 返回唯一 canonical order，跨片扫描/
+  补行移出 coordinator 事务；持久 shard topology 门禁阻断片数、顺序和目标库漂移。当前明确仅支持
+  单库或 2 片，`N>2` 重分片仍禁止。
+- 成交改为 MySQL Reserve→inventory 幂等 Settle→持久 release/event outbox；资产与 Kafka worker
+  分离，ready escrow 释放前置，事件另以双方 `release_pending` 为持久屏障；弱 audit 走有界非阻塞
+  队列。`passive_warmup` 保证 green 与旧 matcher 共存时不写、不补偿。
+- `000002` 以单次 `event_pending DEFAULT 1` 覆盖迁移中旧写并受控重放历史成交，无表锁/无界 DML；
+  MySQL 8.4 fresh/old schema 全量一致，首跑/复跑均 `version=2 dirty=false`。
+- player、inventory、auction 的完整 test/vet 与真实 MySQL 用例全绿。`CGO_ENABLED=0`，race、真 Kafka/
+  inventory gRPC 故障注入、生产规模 MDL/吞吐及真实蓝绿仍属外部验收门。Claude 复审清单见
+  `docs/design/auction-blockers-claude-review-20260712-final.md`；未 commit/push、未碰生产、未写真实 secret。

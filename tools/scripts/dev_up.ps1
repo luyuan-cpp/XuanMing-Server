@@ -31,6 +31,7 @@ if (-not (Test-Path $ComposeFile)) {
 }
 if (-not (Test-Path $EnvFile)) {
     Write-Host "[ERR] env file not found: $EnvFile" -ForegroundColor Red
+    Write-Host "      请先执行:Copy-Item deploy/env/dev.env.example deploy/env/dev.env,再填写本机 secret。" -ForegroundColor Yellow
     exit 1
 }
 
@@ -70,11 +71,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERR] compose up failed" -ForegroundColor Red
     exit 1
 }
-# envoy.yaml 为静态配置;仅挂载文件变化时 compose 不会自动重启已有容器。
-# 每次启动显式重建 Envoy,保证当前路由白名单/绑定配置实际生效。
-docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate envoy
+# Envoy/Grafana 都从只读挂载加载静态配置；仅文件变化时 compose 不会重启已有容器。
+# 每次启动显式重建两者，保证路由白名单与 Grafana alerting provisioning 实际生效。
+docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate --no-deps envoy grafana
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERR] envoy recreate failed" -ForegroundColor Red
+    Write-Host "[ERR] envoy/grafana recreate failed" -ForegroundColor Red
     exit 1
 }
 
@@ -137,6 +138,7 @@ Write-Host "Kafka       localhost:9093   (host网络可达)"
 Write-Host "etcd        localhost:2380"
 Write-Host "Prometheus  http://localhost:9091"
 Write-Host "Grafana     http://localhost:3001  user=admin pass=pandora_dev_admin"
+Write-Host "ntfy        http://localhost:8080  topic=pandora-alerts"
 Write-Host ""
 Write-Host "===== 状态 =====" -ForegroundColor Green
 docker compose -f $ComposeFile --env-file $EnvFile ps

@@ -1,0 +1,24 @@
+# Grafana 统一告警 —— 消息模板(2026-07-10)
+#
+# 统一飞书 / 企微 / 钉钉 / ntfy 的通知文案,含服务名 / 严重级 / 摘要 / 触发值。
+# 联系点用 {{ template "pandora.title" . }} / {{ template "pandora.message" . }} 引用。
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: pandora-notification
+    template: |
+      {{ define "pandora.title" }}[Pandora][{{ .Status | toUpper }}]{{ if gt (len .Alerts.Firing) 0 }} {{ len .Alerts.Firing }} 告警触发{{ else }} {{ len .Alerts.Resolved }} 告警恢复{{ end }}{{ end }}
+
+      {{ define "pandora.message" }}
+      {{ if gt (len .Alerts.Firing) 0 }}🔴 触发中 ({{ len .Alerts.Firing }})
+      {{ range .Alerts.Firing }}
+      - {{ .Labels.alertname }}{{ if .Labels.service }} [{{ .Labels.service }}]{{ end }}{{ if .Labels.fleet }} fleet={{ .Labels.fleet }}{{ end }}
+        {{ .Annotations.summary }}{{ if .Annotations.description }}
+        {{ .Annotations.description }}{{ end }}
+      {{ end }}{{ end }}
+      {{ if gt (len .Alerts.Resolved) 0 }}✅ 已恢复 ({{ len .Alerts.Resolved }})
+      {{ range .Alerts.Resolved }}
+      - {{ .Labels.alertname }}{{ if .Labels.fleet }} fleet={{ .Labels.fleet }}{{ end }}
+      {{ end }}{{ end }}
+      {{ end }}

@@ -410,11 +410,11 @@ constexpr ListMyOrdersRequest::ParseTableT_ ListMyOrdersRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -424,15 +424,28 @@ constexpr ListMyOrdersRequest::ParseTableT_ ListMyOrdersRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::pandora::auction::v1::ListMyOrdersRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
       // bool active_only = 1 [json_name = "activeOnly"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ListMyOrdersRequest, _impl_.active_only_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ListMyOrdersRequest, _impl_.active_only_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.active_only_)}},
+      // uint64 cursor_order_id = 2 [json_name = "cursorOrderId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListMyOrdersRequest, _impl_.cursor_order_id_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.cursor_order_id_)}},
+      // uint32 limit = 3 [json_name = "limit"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListMyOrdersRequest, _impl_.limit_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.limit_)}},
     }}, {{
       65535, 65535
     }}, {{
       // bool active_only = 1 [json_name = "activeOnly"];
-      {PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.active_only_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.active_only_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 cursor_order_id = 2 [json_name = "cursorOrderId"];
+      {PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.cursor_order_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 limit = 3 [json_name = "limit"];
+      {PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.limit_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -445,7 +458,9 @@ inline constexpr ListMyOrdersRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        active_only_{false} {}
+        cursor_order_id_{::uint64_t{0u}},
+        active_only_{false},
+        limit_{0u} {}
 
 template <typename>
 constexpr ListMyOrdersRequest::ListMyOrdersRequest(::_pbi::ConstantInitialized,
@@ -1761,11 +1776,11 @@ constexpr ListMyOrdersResponse::ParseTableT_ ListMyOrdersResponse::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      4,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1775,14 +1790,22 @@ constexpr ListMyOrdersResponse::ParseTableT_ ListMyOrdersResponse::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::auction::v1::ListMyOrdersResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .pandora.auction.v1.AuctionOrder orders = 2 [json_name = "orders"];
-      {::_pbi::TcParser::FastMtR1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.orders_)}},
+      // bool has_more = 4 [json_name = "hasMore"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ListMyOrdersResponse, _impl_.has_more_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.has_more_)}},
       // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ListMyOrdersResponse, _impl_.code_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.code_)}},
+      // repeated .pandora.auction.v1.AuctionOrder orders = 2 [json_name = "orders"];
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.orders_)}},
+      // uint64 next_cursor_order_id = 3 [json_name = "nextCursorOrderId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ListMyOrdersResponse, _impl_.next_cursor_order_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.next_cursor_order_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1790,6 +1813,10 @@ constexpr ListMyOrdersResponse::ParseTableT_ ListMyOrdersResponse::InternalGener
       {PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // repeated .pandora.auction.v1.AuctionOrder orders = 2 [json_name = "orders"];
       {PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.orders_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 next_cursor_order_id = 3 [json_name = "nextCursorOrderId"];
+      {PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.next_cursor_order_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool has_more = 4 [json_name = "hasMore"];
+      {PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.has_more_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1813,7 +1840,9 @@ inline constexpr ListMyOrdersResponse::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.orders_)>()
          }
         ,
-        code_{static_cast< ::pandora::common::v1::ErrCode >(0)} {}
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
+        has_more_{false},
+        next_cursor_order_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ListMyOrdersResponse::ListMyOrdersResponse(::_pbi::ConstantInitialized,
@@ -2201,16 +2230,24 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersRequest, _impl_._has_bits_),
-        4, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersRequest, _impl_.active_only_),
-        0,
-        0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.code_),
-        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.orders_),
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersRequest, _impl_.cursor_order_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersRequest, _impl_.limit_),
         1,
         0,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.orders_),
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.next_cursor_order_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::auction::v1::ListMyOrdersResponse, _impl_.has_more_),
+        1,
+        0,
+        3,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -2226,7 +2263,7 @@ static const ::_pbi::MigrationSchema
         {108, sizeof(::pandora::auction::v1::ListMarketRequest)},
         {117, sizeof(::pandora::auction::v1::ListMarketResponse)},
         {124, sizeof(::pandora::auction::v1::ListMyOrdersRequest)},
-        {129, sizeof(::pandora::auction::v1::ListMyOrdersResponse)},
+        {133, sizeof(::pandora::auction::v1::ListMyOrdersResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2294,32 +2331,35 @@ const char descriptor_table_protodef_pandora_2fauction_2fv1_2fauction_2eproto[] 
     "it\030\003 \001(\005R\005limit\"~\n\022ListMarketResponse\022.\n"
     "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
     "\004code\0228\n\006orders\030\002 \003(\0132 .pandora.auction."
-    "v1.AuctionOrderR\006orders\"6\n\023ListMyOrdersR"
-    "equest\022\037\n\013active_only\030\001 \001(\010R\nactiveOnly\""
-    "\200\001\n\024ListMyOrdersResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\0228\n\006orde"
-    "rs\030\002 \003(\0132 .pandora.auction.v1.AuctionOrd"
-    "erR\006orders*P\n\tOrderSide\022\032\n\026ORDER_SIDE_UN"
-    "SPECIFIED\020\000\022\023\n\017ORDER_SIDE_SELL\020\001\022\022\n\016ORDE"
-    "R_SIDE_BUY\020\002*\352\001\n\022AuctionOrderStatus\022$\n A"
-    "UCTION_ORDER_STATUS_UNSPECIFIED\020\000\022\035\n\031AUC"
-    "TION_ORDER_STATUS_OPEN\020\001\022)\n%AUCTION_ORDE"
-    "R_STATUS_PARTIALLY_FILLED\020\002\022\037\n\033AUCTION_O"
-    "RDER_STATUS_FILLED\020\003\022!\n\035AUCTION_ORDER_ST"
-    "ATUS_CANCELED\020\004\022 \n\034AUCTION_ORDER_STATUS_"
-    "EXPIRED\020\0052\325\003\n\016AuctionService\022[\n\nPlaceOrd"
-    "er\022%.pandora.auction.v1.PlaceOrderReques"
-    "t\032&.pandora.auction.v1.PlaceOrderRespons"
-    "e\022F\n\003Bid\022\036.pandora.auction.v1.BidRequest"
-    "\032\037.pandora.auction.v1.BidResponse\022^\n\013Can"
-    "celOrder\022&.pandora.auction.v1.CancelOrde"
-    "rRequest\032\'.pandora.auction.v1.CancelOrde"
-    "rResponse\022[\n\nListMarket\022%.pandora.auctio"
-    "n.v1.ListMarketRequest\032&.pandora.auction"
-    ".v1.ListMarketResponse\022a\n\014ListMyOrders\022\'"
-    ".pandora.auction.v1.ListMyOrdersRequest\032"
-    "(.pandora.auction.v1.ListMyOrdersRespons"
-    "eb\006proto3"
+    "v1.AuctionOrderR\006orders\"t\n\023ListMyOrdersR"
+    "equest\022\037\n\013active_only\030\001 \001(\010R\nactiveOnly\022"
+    "&\n\017cursor_order_id\030\002 \001(\004R\rcursorOrderId\022"
+    "\024\n\005limit\030\003 \001(\rR\005limit\"\314\001\n\024ListMyOrdersRe"
+    "sponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v1"
+    ".ErrCodeR\004code\0228\n\006orders\030\002 \003(\0132 .pandora"
+    ".auction.v1.AuctionOrderR\006orders\022/\n\024next"
+    "_cursor_order_id\030\003 \001(\004R\021nextCursorOrderI"
+    "d\022\031\n\010has_more\030\004 \001(\010R\007hasMore*P\n\tOrderSid"
+    "e\022\032\n\026ORDER_SIDE_UNSPECIFIED\020\000\022\023\n\017ORDER_S"
+    "IDE_SELL\020\001\022\022\n\016ORDER_SIDE_BUY\020\002*\352\001\n\022Aucti"
+    "onOrderStatus\022$\n AUCTION_ORDER_STATUS_UN"
+    "SPECIFIED\020\000\022\035\n\031AUCTION_ORDER_STATUS_OPEN"
+    "\020\001\022)\n%AUCTION_ORDER_STATUS_PARTIALLY_FIL"
+    "LED\020\002\022\037\n\033AUCTION_ORDER_STATUS_FILLED\020\003\022!"
+    "\n\035AUCTION_ORDER_STATUS_CANCELED\020\004\022 \n\034AUC"
+    "TION_ORDER_STATUS_EXPIRED\020\0052\325\003\n\016AuctionS"
+    "ervice\022[\n\nPlaceOrder\022%.pandora.auction.v"
+    "1.PlaceOrderRequest\032&.pandora.auction.v1"
+    ".PlaceOrderResponse\022F\n\003Bid\022\036.pandora.auc"
+    "tion.v1.BidRequest\032\037.pandora.auction.v1."
+    "BidResponse\022^\n\013CancelOrder\022&.pandora.auc"
+    "tion.v1.CancelOrderRequest\032\'.pandora.auc"
+    "tion.v1.CancelOrderResponse\022[\n\nListMarke"
+    "t\022%.pandora.auction.v1.ListMarketRequest"
+    "\032&.pandora.auction.v1.ListMarketResponse"
+    "\022a\n\014ListMyOrders\022\'.pandora.auction.v1.Li"
+    "stMyOrdersRequest\032(.pandora.auction.v1.L"
+    "istMyOrdersResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto_deps[1] = {
@@ -2329,7 +2369,7 @@ static ::absl::once_flag descriptor_table_pandora_2fauction_2fv1_2fauction_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto = {
     false,
     false,
-    2969,
+    3107,
     descriptor_table_protodef_pandora_2fauction_2fv1_2fauction_2eproto,
     "pandora/auction/v1/auction.proto",
     &descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto_once,
@@ -5324,7 +5364,12 @@ PROTOBUF_NDEBUG_INLINE ListMyOrdersRequest::Impl_::Impl_(
 
 inline void ListMyOrdersRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.active_only_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, cursor_order_id_),
+           0,
+           offsetof(Impl_, limit_) -
+               offsetof(Impl_, cursor_order_id_) +
+               sizeof(Impl_::limit_));
 }
 ListMyOrdersRequest::~ListMyOrdersRequest() {
   // @@protoc_insertion_point(destructor:pandora.auction.v1.ListMyOrdersRequest)
@@ -5373,7 +5418,12 @@ PROTOBUF_NOINLINE void ListMyOrdersRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.active_only_ = false;
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.cursor_order_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.limit_) -
+        reinterpret_cast<char*>(&_impl_.cursor_order_id_)) + sizeof(_impl_.limit_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -5398,11 +5448,29 @@ PROTOBUF_NOINLINE void ListMyOrdersRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // bool active_only = 1 [json_name = "activeOnly"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_active_only() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           1, this_._internal_active_only(), target);
+    }
+  }
+
+  // uint64 cursor_order_id = 2 [json_name = "cursorOrderId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_cursor_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_cursor_order_id(), target);
+    }
+  }
+
+  // uint32 limit = 3 [json_name = "limit"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_limit(), target);
     }
   }
 
@@ -5429,12 +5497,27 @@ PROTOBUF_NOINLINE void ListMyOrdersRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // bool active_only = 1 [json_name = "activeOnly"];
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 cursor_order_id = 2 [json_name = "cursorOrderId"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_cursor_order_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_cursor_order_id());
+      }
+    }
+    // bool active_only = 1 [json_name = "activeOnly"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_active_only() != 0) {
         total_size += 2;
+      }
+    }
+    // uint32 limit = 3 [json_name = "limit"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_limit());
       }
     }
   }
@@ -5455,9 +5538,21 @@ void ListMyOrdersRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_active_only() != 0) {
-      _this->_impl_.active_only_ = from._impl_.active_only_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_cursor_order_id() != 0) {
+        _this->_impl_.cursor_order_id_ = from._impl_.cursor_order_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_active_only() != 0) {
+        _this->_impl_.active_only_ = from._impl_.active_only_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_limit() != 0) {
+        _this->_impl_.limit_ = from._impl_.limit_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -5477,7 +5572,12 @@ void ListMyOrdersRequest::InternalSwap(ListMyOrdersRequest* PROTOBUF_RESTRICT PR
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.active_only_, other->_impl_.active_only_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.limit_)
+      + sizeof(ListMyOrdersRequest::_impl_.limit_)
+      - PROTOBUF_FIELD_OFFSET(ListMyOrdersRequest, _impl_.cursor_order_id_)>(
+          reinterpret_cast<char*>(&_impl_.cursor_order_id_),
+          reinterpret_cast<char*>(&other->_impl_.cursor_order_id_));
 }
 
 ::google::protobuf::Metadata ListMyOrdersRequest::GetMetadata() const {
@@ -5522,7 +5622,13 @@ ListMyOrdersResponse::ListMyOrdersResponse(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.code_ = from._impl_.code_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, code_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, code_),
+           offsetof(Impl_, next_cursor_order_id_) -
+               offsetof(Impl_, code_) +
+               sizeof(Impl_::next_cursor_order_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.auction.v1.ListMyOrdersResponse)
 }
@@ -5538,7 +5644,12 @@ PROTOBUF_NDEBUG_INLINE ListMyOrdersResponse::Impl_::Impl_(
 
 inline void ListMyOrdersResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.code_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, code_),
+           0,
+           offsetof(Impl_, next_cursor_order_id_) -
+               offsetof(Impl_, code_) +
+               sizeof(Impl_::next_cursor_order_id_));
 }
 ListMyOrdersResponse::~ListMyOrdersResponse() {
   // @@protoc_insertion_point(destructor:pandora.auction.v1.ListMyOrdersResponse)
@@ -5591,7 +5702,11 @@ PROTOBUF_NOINLINE void ListMyOrdersResponse::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.orders_.Clear();
   }
-  _impl_.code_ = 0;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.code_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.next_cursor_order_id_) -
+        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.next_cursor_order_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -5637,6 +5752,24 @@ PROTOBUF_NOINLINE void ListMyOrdersResponse::Clear() {
     }
   }
 
+  // uint64 next_cursor_order_id = 3 [json_name = "nextCursorOrderId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_next_cursor_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_next_cursor_order_id(), target);
+    }
+  }
+
+  // bool has_more = 4 [json_name = "hasMore"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_has_more() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_has_more(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -5662,7 +5795,7 @@ PROTOBUF_NOINLINE void ListMyOrdersResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .pandora.auction.v1.AuctionOrder orders = 2 [json_name = "orders"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_orders_size();
@@ -5675,6 +5808,19 @@ PROTOBUF_NOINLINE void ListMyOrdersResponse::Clear() {
       if (this_._internal_code() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+    // bool has_more = 4 [json_name = "hasMore"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_has_more() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 next_cursor_order_id = 3 [json_name = "nextCursorOrderId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_next_cursor_order_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_cursor_order_id());
       }
     }
   }
@@ -5696,7 +5842,7 @@ void ListMyOrdersResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_orders()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -5705,6 +5851,16 @@ void ListMyOrdersResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_code() != 0) {
         _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_has_more() != 0) {
+        _this->_impl_.has_more_ = from._impl_.has_more_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_next_cursor_order_id() != 0) {
+        _this->_impl_.next_cursor_order_id_ = from._impl_.next_cursor_order_id_;
       }
     }
   }
@@ -5726,7 +5882,12 @@ void ListMyOrdersResponse::InternalSwap(ListMyOrdersResponse* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.orders_.InternalSwap(&other->_impl_.orders_);
-  swap(_impl_.code_, other->_impl_.code_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.next_cursor_order_id_)
+      + sizeof(ListMyOrdersResponse::_impl_.next_cursor_order_id_)
+      - PROTOBUF_FIELD_OFFSET(ListMyOrdersResponse, _impl_.code_)>(
+          reinterpret_cast<char*>(&_impl_.code_),
+          reinterpret_cast<char*>(&other->_impl_.code_));
 }
 
 ::google::protobuf::Metadata ListMyOrdersResponse::GetMetadata() const {

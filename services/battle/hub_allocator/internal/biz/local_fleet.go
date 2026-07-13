@@ -23,6 +23,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 )
 
@@ -106,13 +107,14 @@ func (l *LocalHubFleetProvider) ListShards(_ context.Context, region string) ([]
 		region = l.cfg.Region
 	}
 	return []ShardCandidate{{
-		PodName:    l.podName,
-		Addr:       l.addr,
-		Region:     region,
-		ShardID:    1,
-		Capacity:   l.cfg.Capacity,
-		TokenReady: true,
-		TokenGen:   l.tokenGen,
+		PodName:      l.podName,
+		Addr:         l.addr,
+		Region:       region,
+		ShardID:      1,
+		Capacity:     l.cfg.Capacity,
+		ReleaseTrack: releasetrack.Stable,
+		TokenReady:   true,
+		TokenGen:     l.tokenGen,
 	}}, nil
 }
 

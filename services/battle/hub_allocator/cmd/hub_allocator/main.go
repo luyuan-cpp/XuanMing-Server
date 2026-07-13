@@ -34,6 +34,7 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/biz"
@@ -114,21 +115,43 @@ func main() {
 	cancel()
 	helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs)
 
-	// 4. JWT Signer(强依赖:AssignHub / TransferHub 必须签 hub DSTicket;secret 须与 login/envoy 一致)
-	signer, serr := auth.NewSigner(auth.Config{
-		Issuer:            cfg.JWT.Issuer,
-		Audience:          cfg.JWT.Audience,
-		Secret:            []byte(cfg.JWT.Secret),
-		AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets),
-		SessionTTL:        cfg.JWT.SessionTTL.Std(),
-		DSTicketTTL:       cfg.JWT.DSTicketTTL.Std(),
-	})
-	if serr != nil {
-		helper.Errorw("msg", "hub_ticket_signer_init_failed", "err", serr,
-			"hint", "jwt.secret must be >=32 bytes and match login/envoy")
+	// 4. DSTicket v2(RS256,方案 B):配置了私钥即启用;启用后 hub 票全部走 v2
+	// 实例绑定签发,不再签 legacy HS256 票。加载失败直接拒绝启动(fail-closed)。
+	var dstV2 *auth.DSTicketSigner
+	if cfg.DSTicket.SignerEnabled() {
+		v2, verr := auth.NewDSTicketSignerFromConf(cfg.DSTicket)
+		if verr != nil {
+			helper.Errorw("msg", "ds_ticket_v2_signer_init_failed", "err", verr,
+				"hint", "check ds_ticket.private_key_file / active_kid / ttl")
+			os.Exit(1)
+		}
+		dstV2 = v2
+		helper.Infow("msg", "ds_ticket_v2_signer_ready", "kid", v2.Kid(), "ttl", v2.TTL().String())
+	}
+	if cfg.Mode == conf.ModeAgones && dstV2 == nil {
+		helper.Errorw("msg", "agones_requires_ds_ticket_v2",
+			"hint", "B1 k8s Hub 只允许 RS256；配置 ds_ticket.private_key_file + active_kid")
 		os.Exit(1)
 	}
-	helper.Infow("msg", "hub_ticket_signer_ready", "ds_ticket_ttl", cfg.JWT.DSTicketTTL.String())
+	// legacy HS256 signer 只在非 B1 兼容模式构造；RS256 路径不加载玩家 HMAC secret。
+	var signer *auth.Signer
+	if dstV2 == nil {
+		var serr error
+		signer, serr = auth.NewSigner(auth.Config{
+			Issuer:            cfg.JWT.Issuer,
+			Audience:          cfg.JWT.Audience,
+			Secret:            []byte(cfg.JWT.Secret),
+			AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets),
+			SessionTTL:        cfg.JWT.SessionTTL.Std(),
+			DSTicketTTL:       cfg.JWT.DSTicketTTL.Std(),
+		})
+		if serr != nil {
+			helper.Errorw("msg", "hub_ticket_signer_init_failed", "err", serr,
+				"hint", "jwt.secret must be >=32 bytes and match login/envoy")
+			os.Exit(1)
+		}
+		helper.Infow("msg", "hub_ticket_legacy_signer_ready", "ds_ticket_ttl", cfg.JWT.DSTicketTTL.String())
+	}
 
 	// 4.1 DS 回调服务令牌(审核 P1 #1):签发器(发现 ready Hub DS 时签 hub 令牌下发)
 	// + 守卫(校验 Hub DS Heartbeat 回调)。secret 未配 → 不签发;mode=off → 不校验(默认)。
@@ -367,7 +390,18 @@ func main() {
 				"hint", "Mock 无真实 Fleet scaler:自动扩缩容/强制整合不会运行,需 mode=agones")
 		}
 	}
-	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer}, cfg.Hub)
+	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer, v2: dstV2}, cfg.Hub)
+	canaryPercent, canarySeed := uint32(0), ""
+	if cfg.Mode == conf.ModeAgones {
+		canaryPercent, canarySeed = cfg.Agones.CanaryPercent, cfg.Agones.CanarySeed
+	}
+	releasePolicy, policyErr := releasetrack.New(canaryPercent, canarySeed)
+	if policyErr != nil {
+		helper.Errorw("msg", "hub_release_track_policy_invalid", "err", policyErr)
+		os.Exit(1)
+	}
+	uc.SetReleaseTrackPolicy(releasePolicy)
+	helper.Infow("msg", "hub_release_track_policy_ready", "canary_percent", canaryPercent)
 	// agones 真 DS 链路:分片先 warming,等首个通过 Guard 的 Hub DS 心跳才转 ready(审核 P1:
 	// PATCH/发现成功 ≠ 收到过真实鉴权心跳,避免把玩家路由到从未心跳的 Hub)。mock/local 不置,保持
 	// 现有 dev/离线联调直接 ready 行为不变。
@@ -492,12 +526,32 @@ func main() {
 // hub DSTicket:ds_type=hub,match_id=0(不变量 §3 短时效 5min;jti=uuid v4 防重放)。
 // roleID(选角权威化 2026-07-08):>0 时盖进票据 role_id claim;region/cell 仍为 0
 // (hub_allocator 不做 cell 路由,与历史行为一致)。
+//
+// v2(方案 B)非 nil 时:改签 RS256 实例绑定票。v2 票据**必须**带完整实例绑定
+// (pod / instance_uid / instance_epoch / hub_assignment_id),无绑定路径 fail-closed 拒签;
+// v2 故意不绑 credential gen/jti——回调凭据轮换不得作废玩家票(决策文档 §7.3)。
 type hubTicketSigner struct {
 	signer *auth.Signer
+	v2     *auth.DSTicketSigner
 }
 
 func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding biz.HubTicketBinding) (string, int64, error) {
 	jti := uuid.NewString()
+	if h.v2 != nil {
+		if binding.PodName == "" || binding.InstanceUID == "" ||
+			binding.ProtocolEpoch == 0 || binding.HubAssignmentID == "" || !releasetrack.Valid(binding.ReleaseTrack) {
+			return "", 0, fmt.Errorf(
+				"ds_ticket v2: hub 票必须带完整实例绑定(pod=%q uid=%q epoch=%d assignment=%q track=%q),拒签无绑定票",
+				binding.PodName, binding.InstanceUID, binding.ProtocolEpoch, binding.HubAssignmentID, binding.ReleaseTrack)
+		}
+		return h.v2.SignHubTicket(playerID, 0, 0, roleID, jti, auth.DSTicketTarget{
+			DSPodName:       binding.PodName,
+			DSInstanceUID:   binding.InstanceUID,
+			DSInstanceEpoch: binding.ProtocolEpoch,
+			HubAssignmentID: binding.HubAssignmentID,
+			ReleaseTrack:    binding.ReleaseTrack,
+		})
+	}
 	if binding.PodName == "" {
 		return h.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, 0, 0, roleID, jti)
 	}

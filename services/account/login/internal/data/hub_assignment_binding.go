@@ -28,6 +28,7 @@ type HubAssignmentBinding struct {
 	CredentialJTI string
 	AssignmentID  string
 	WriterEpoch   uint32
+	ReleaseTrack  string
 	// 以下三项仅 StableHubAssignmentChecker 的 activeExpected 使用；票据/assignment
 	// 本身不存这些字段，因此 Complete 不把它们列为通用必填。
 	ExpMs       int64
@@ -44,12 +45,20 @@ func (b HubAssignmentBinding) Complete() bool {
 // Empty 仅表示旧格式票据完全没有归属绑定；任何半绑定都不是兼容旧票，必须拒绝。
 func (b HubAssignmentBinding) Empty() bool {
 	return b.PodName == "" && b.InstanceUID == "" && b.ProtocolEpoch == 0 &&
-		b.CredentialGen == 0 && b.CredentialJTI == "" && b.AssignmentID == "" && b.WriterEpoch == 0
+		b.CredentialGen == 0 && b.CredentialJTI == "" && b.AssignmentID == "" && b.WriterEpoch == 0 && b.ReleaseTrack == ""
 }
 
 // HubAssignmentChecker 校验一张已验签 Hub DSTicket 是否仍属于 Redis 当前归属。
 type HubAssignmentChecker interface {
 	CheckCurrent(ctx context.Context, playerID uint64, expected HubAssignmentBinding) error
+}
+
+// B1HubAssignmentChecker 校验 v2 票据的稳定 assignment/实例绑定。v2 有意不携带
+// callback credential gen/jti；实现必须从 Redis 当前 assignment+active 自行取得并核验，
+// 不能把缺失 callback 字段当 legacy 放行。
+type B1HubAssignmentChecker interface {
+	CheckCurrentB1(ctx context.Context, playerID uint64, podName, instanceUID string,
+		instanceEpoch uint32, assignmentID, releaseTrack string) error
 }
 
 // StableHubAssignmentChecker 用于已存在同 admission attempt marker 的响应未知重认。
@@ -98,6 +107,44 @@ func (c *RedisHubAssignmentChecker) CheckCurrent(ctx context.Context, playerID u
 	return c.checkCurrent(ctx, playerID, expected, expected, true, false)
 }
 
+func (c *RedisHubAssignmentChecker) CheckCurrentB1(
+	ctx context.Context,
+	playerID uint64,
+	podName, instanceUID string,
+	instanceEpoch uint32,
+	assignmentID, releaseTrack string,
+) error {
+	if playerID == 0 || podName == "" || instanceUID == "" || instanceEpoch == 0 || assignmentID == "" ||
+		(releaseTrack != auth.ReleaseTrackStable && releaseTrack != auth.ReleaseTrackCanary) {
+		return errcode.New(errcode.ErrLoginTicketInvalid, "hub v2 assignment binding incomplete")
+	}
+	if c == nil || c.rdb == nil {
+		return errcode.New(errcode.ErrUnavailable, "hub assignment authority unavailable")
+	}
+	payload, err := c.rdb.Get(ctx, hubPlayerAssignmentKey(playerID)).Bytes()
+	if err == redis.Nil {
+		return errcode.New(errcode.ErrLoginTicketInvalid, "hub assignment not found")
+	}
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err, "read hub assignment authority failed")
+	}
+	rec := &hubv1.HubAssignmentStorageRecord{}
+	if err := proto.Unmarshal(payload, rec); err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err, "decode hub assignment authority failed")
+	}
+	if rec.GetPlayerId() != playerID || rec.GetAssignmentId() != assignmentID || rec.GetHubPodName() != podName ||
+		rec.GetHubInstanceUid() != instanceUID || rec.GetAuthEpoch() != instanceEpoch || rec.GetReleaseTrack() != releaseTrack {
+		return errcode.New(errcode.ErrLoginTicketInvalid, "hub v2 ticket no longer matches current assignment")
+	}
+	current := HubAssignmentBinding{
+		PodName: podName, InstanceUID: instanceUID, ProtocolEpoch: instanceEpoch,
+		CredentialGen: rec.GetAuthGen(), CredentialJTI: rec.GetAuthJti(), AssignmentID: assignmentID,
+		WriterEpoch:  rec.GetAuthWriterEpoch(),
+		ReleaseTrack: releaseTrack,
+	}
+	return c.checkCurrent(ctx, playerID, current, current, true, false)
+}
+
 func (c *RedisHubAssignmentChecker) CheckCurrentStable(
 	ctx context.Context,
 	playerID uint64,
@@ -124,7 +171,9 @@ func (c *RedisHubAssignmentChecker) checkCurrent(
 	if playerID == 0 || !stableExpected.Complete() || !activeExpected.Complete() ||
 		stableExpected.WriterEpoch != auth.DSAuthWriterEpochV2 || activeExpected.WriterEpoch != auth.DSAuthWriterEpochV2 ||
 		stableExpected.PodName != activeExpected.PodName || stableExpected.InstanceUID != activeExpected.InstanceUID ||
-		stableExpected.ProtocolEpoch != activeExpected.ProtocolEpoch || stableExpected.AssignmentID != activeExpected.AssignmentID {
+		stableExpected.ProtocolEpoch != activeExpected.ProtocolEpoch || stableExpected.AssignmentID != activeExpected.AssignmentID ||
+		(stableExpected.ReleaseTrack != "" && (stableExpected.ReleaseTrack != activeExpected.ReleaseTrack ||
+			(stableExpected.ReleaseTrack != auth.ReleaseTrackStable && stableExpected.ReleaseTrack != auth.ReleaseTrackCanary))) {
 		return errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket assignment binding incomplete")
 	}
 	if strictAssignmentCredential &&
@@ -159,6 +208,7 @@ func (c *RedisHubAssignmentChecker) checkCurrent(
 		rec.GetHubInstanceUid() != stableExpected.InstanceUID ||
 		rec.GetAuthEpoch() != stableExpected.ProtocolEpoch ||
 		rec.GetAuthWriterEpoch() != stableExpected.WriterEpoch ||
+		(stableExpected.ReleaseTrack != "" && rec.GetReleaseTrack() != stableExpected.ReleaseTrack) ||
 		(strictAssignmentCredential && (rec.GetAuthGen() != stableExpected.CredentialGen ||
 			rec.GetAuthJti() != stableExpected.CredentialJTI)) {
 		return errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket no longer matches current assignment")
@@ -223,6 +273,7 @@ func (c *RedisHubAssignmentChecker) checkCurrent(
 		active.GetTokenSha256() == "" || authRec.GetLastActiveHeartbeatMs() <= 0 || authRec.GetLastActiveHeartbeatMs() > nowMs ||
 		nowMs-authRec.GetLastActiveHeartbeatMs() > maxAge.Milliseconds() ||
 		shardRec.GetHubPodName() != activeExpected.PodName || shardRec.GetState() != "ready" ||
+		(activeExpected.ReleaseTrack != "" && shardRec.GetReleaseTrack() != activeExpected.ReleaseTrack) ||
 		shardRec.GetGameserverUid() != activeExpected.InstanceUID || shardRec.GetAuthEpoch() != activeExpected.ProtocolEpoch ||
 		shardRec.GetLastVerifiedGen() != activeExpected.CredentialGen || shardRec.GetLastVerifiedJti() != activeExpected.CredentialJTI ||
 		shardRec.GetLastVerifiedWriterEpoch() != auth.DSAuthWriterEpochV2 ||
