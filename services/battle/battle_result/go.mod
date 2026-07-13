@@ -18,9 +18,12 @@ go 1.26.5
 
 require (
 	github.com/IBM/sarama v1.43.1
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/luyuancpp/pandora/pkg v0.0.0
-	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
+	github.com/luyuancpp/pandora/pkg/dsauthfence v0.0.0
+	github.com/luyuancpp/pandora/proto v0.0.0
+	github.com/redis/go-redis/v9 v9.16.0
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )
@@ -28,8 +31,10 @@ require (
 require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
@@ -37,6 +42,7 @@ require (
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
@@ -91,6 +97,7 @@ require (
 // 本地 workspace 内的模块通过 replace 指向源码目录。
 replace (
 	github.com/luyuancpp/pandora/pkg => ../../../pkg
+	github.com/luyuancpp/pandora/pkg/dsauthfence => ../../../pkg/dsauthfence
 	github.com/luyuancpp/pandora/proto => ../../../proto
 )
 

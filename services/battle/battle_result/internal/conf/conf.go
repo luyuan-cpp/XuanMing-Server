@@ -2,6 +2,7 @@
 package conf
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -13,6 +14,11 @@ type Config struct {
 	config.Base `yaml:",inline" mapstructure:",squash"`
 
 	Battle BattleConf `yaml:"battle" json:"battle"`
+
+	// DSAuth DS 回调服务令牌校验(审核 P1 #1)。battle_result 只做校验(verify-only):
+	// Battle DS 经 :8444 调 ReportResult 须带 battle 令牌(绑 match_id,ds_allocator 签发)。
+	// mode 默认 off;UE DS 带令牌后先 permissive 观察再 enforce。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 
 // BattleConf 是 battle_result 服务私有配置。
@@ -23,7 +29,8 @@ type BattleConf struct {
 	// BaseMMR 玩家缺省 MMR(W4 ③ player 服务未上线 → StaticMMRReader 全返此值,默认 1500)。
 	BaseMMR int `yaml:"base_mmr,omitempty" json:"base_mmr,omitempty"`
 
-	// ConsumeTopics 本服订阅的 kafka topic(默认 [battle.result, ds.lifecycle])。
+	// ConsumeTopics 本服订阅的 kafka topic(legacy 默认 [battle.result, ds.lifecycle])。
+	// Redis authority 只能显式配置 [ds.lifecycle]；battle.result 无凭据，会被启动校验拒绝。
 	ConsumeTopics []string `yaml:"consume_topics,omitempty" json:"consume_topics,omitempty"`
 
 	// PlayerAddr player 服务 gRPC 地址(弱依赖:空 → 用 BaseMMR 静态 reader)。
@@ -99,6 +106,23 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51022"
 	}
+	c.DSAuth.Defaults()
+}
+
+// ValidateRedisAuthorityIngress 保证 Model-B 结算只有经过 :8444 Guard + Redis active
+// checker + receipt 的同步 RPC 入口。旧 pandora.battle.result 消息没有可核验的完整凭据，
+// 继续订阅会直接调用 usecase 落 MySQL，形成绕过授权与 receipt 的第二入口。
+func (c *Config) ValidateRedisAuthorityIngress() error {
+	if !c.DSAuth.AuthorityModeRedis() {
+		return nil
+	}
+	for _, topic := range c.Battle.ConsumeTopics {
+		if topic == kafkax.TopicBattleResult {
+			return fmt.Errorf("battle_result: authority_mode=redis forbids unauthenticated topic %q; consume only %q and accept results via guarded ReportResult RPC",
+				kafkax.TopicBattleResult, kafkax.TopicDSLifecycle)
+		}
+	}
+	return nil
 }
 
 // IsDroppable 判断某 item_config_id 是否在战斗掉落白名单内(DS 不可信过滤,W5 ④)。

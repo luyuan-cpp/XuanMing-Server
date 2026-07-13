@@ -69,11 +69,11 @@ constexpr VerifyDSTicketRequest::ParseTableT_ VerifyDSTicketRequest::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -83,14 +83,19 @@ constexpr VerifyDSTicketRequest::ParseTableT_ VerifyDSTicketRequest::InternalGen
       ::_pbi::TcParser::GetTable<::pandora::login::v1::VerifyDSTicketRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string ds_pod_name = 2 [json_name = "dsPodName"];
-      {::_pbi::TcParser::FastUS1,
-       {18, 1, 0,
-        PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.ds_pod_name_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string ticket = 1 [json_name = "ticket"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.ticket_)}},
+      // string ds_pod_name = 2 [json_name = "dsPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.ds_pod_name_)}},
+      // string admission_id = 3 [json_name = "admissionId"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 2, 0,
+        PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.admission_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -98,13 +103,16 @@ constexpr VerifyDSTicketRequest::ParseTableT_ VerifyDSTicketRequest::InternalGen
       {PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.ticket_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string ds_pod_name = 2 [json_name = "dsPodName"];
       {PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.ds_pod_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string admission_id = 3 [json_name = "admissionId"];
+      {PROTOBUF_FIELD_OFFSET(VerifyDSTicketRequest, _impl_.admission_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\46\6\13\0\0\0\0\0"
+      "\46\6\13\14\0\0\0\0"
       "pandora.login.v1.VerifyDSTicketRequest"
       "ticket"
       "ds_pod_name"
+      "admission_id"
     }},
   };
 }
@@ -118,6 +126,9 @@ inline constexpr VerifyDSTicketRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         ds_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        admission_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()) {}
 
@@ -1566,11 +1577,11 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(DSTicket, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966528,  // skipmap
+      4294836480,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      16,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1582,20 +1593,20 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [json_name = "playerId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.player_id_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.player_id_), 6>(),
+       {8, 6, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.player_id_)}},
       // uint64 match_id = 2 [json_name = "matchId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.match_id_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.match_id_), 7>(),
+       {16, 7, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.match_id_)}},
       // int64 issued_at_ms = 3 [json_name = "issuedAtMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.issued_at_ms_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.issued_at_ms_), 8>(),
+       {24, 8, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.issued_at_ms_)}},
       // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.expires_at_ms_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.expires_at_ms_), 9>(),
+       {32, 9, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.expires_at_ms_)}},
       // string ds_type = 5 [json_name = "dsType"];
       {::_pbi::TcParser::FastUS1,
@@ -1606,18 +1617,55 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
        {50, 1, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.jti_)}},
       // uint32 region_id = 7 [json_name = "regionId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.region_id_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.region_id_), 10>(),
+       {56, 10, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.region_id_)}},
       // uint32 cell_id = 8 [json_name = "cellId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.cell_id_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.cell_id_), 11>(),
+       {64, 11, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 role_id = 10 [json_name = "roleId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.role_id_), 8>(),
-       {80, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.role_id_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_)}},
+      // string ds_pod_name = 11 [json_name = "dsPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {90, 2, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_pod_name_)}},
+      // string ds_instance_uid = 12 [json_name = "dsInstanceUid"];
+      {::_pbi::TcParser::FastUS1,
+       {98, 3, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_instance_uid_)}},
+      // uint32 ds_protocol_epoch = 13 [json_name = "dsProtocolEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DSTicket, _impl_.ds_protocol_epoch_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_protocol_epoch_)}},
+      // uint64 ds_credential_gen = 14 [json_name = "dsCredentialGen"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DSTicket, _impl_.ds_credential_gen_), 14>(),
+       {112, 14, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_credential_gen_)}},
+      // string ds_credential_jti = 15 [json_name = "dsCredentialJti"];
+      {::_pbi::TcParser::FastUS1,
+       {122, 4, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_credential_jti_)}},
+      // string hub_assignment_id = 16 [json_name = "hubAssignmentId"];
+      {::_pbi::TcParser::FastUS2,
+       {386, 5, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.hub_assignment_id_)}},
+      // uint32 ds_writer_epoch = 17 [json_name = "dsWriterEpoch"];
+      {::_pbi::TcParser::FastV32S2,
+       {392, 15, 0,
+        PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_writer_epoch_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1627,30 +1675,48 @@ constexpr DSTicket::ParseTableT_ DSTicket::InternalGenerateParseTable_(const ::_
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [json_name = "playerId"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.player_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 match_id = 2 [json_name = "matchId"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.match_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.match_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // int64 issued_at_ms = 3 [json_name = "issuedAtMs"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.issued_at_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.issued_at_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.expires_at_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.expires_at_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // string ds_type = 5 [json_name = "dsType"];
       {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_type_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string jti = 6 [json_name = "jti"];
       {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.jti_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 region_id = 7 [json_name = "regionId"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.region_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.region_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cell_id = 8 [json_name = "cellId"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.cell_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 role_id = 10 [json_name = "roleId"];
-      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string ds_pod_name = 11 [json_name = "dsPodName"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_pod_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string ds_instance_uid = 12 [json_name = "dsInstanceUid"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_instance_uid_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 ds_protocol_epoch = 13 [json_name = "dsProtocolEpoch"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_protocol_epoch_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 ds_credential_gen = 14 [json_name = "dsCredentialGen"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_credential_gen_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string ds_credential_jti = 15 [json_name = "dsCredentialJti"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_credential_jti_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_assignment_id = 16 [json_name = "hubAssignmentId"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.hub_assignment_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 ds_writer_epoch = 17 [json_name = "dsWriterEpoch"];
+      {PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_writer_epoch_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\31\0\0\0\0\7\3\0\0\0\0\0\0\0\0\0"
+      "\31\0\0\0\0\7\3\0\0\0\13\17\0\0\21\21\0\0\0\0\0\0\0\0"
       "pandora.login.v1.DSTicket"
       "ds_type"
       "jti"
+      "ds_pod_name"
+      "ds_instance_uid"
+      "ds_credential_jti"
+      "hub_assignment_id"
     }},
   };
 }
@@ -1666,13 +1732,28 @@ inline constexpr DSTicket::Impl_::Impl_(
         jti_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        ds_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ds_instance_uid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ds_credential_jti_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         match_id_{::uint64_t{0u}},
         issued_at_ms_{::int64_t{0}},
         expires_at_ms_{::int64_t{0}},
         region_id_{0u},
         cell_id_{0u},
-        role_id_{0u} {}
+        role_id_{0u},
+        ds_protocol_epoch_{0u},
+        ds_credential_gen_{::uint64_t{0u}},
+        ds_writer_epoch_{0u} {}
 
 template <typename>
 constexpr DSTicket::DSTicket(::_pbi::ConstantInitialized,
@@ -1982,7 +2063,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_._has_bits_),
-        12, // hasbit index offset
+        19, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.issued_at_ms_),
@@ -1992,15 +2073,29 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.region_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.cell_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.role_id_),
-        2,
-        3,
-        4,
-        5,
-        0,
-        1,
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.ds_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.ds_instance_uid_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.ds_protocol_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.ds_credential_gen_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.ds_credential_jti_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.hub_assignment_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::DSTicket, _impl_.ds_writer_epoch_),
         6,
         7,
         8,
+        9,
+        0,
+        1,
+        10,
+        11,
+        12,
+        2,
+        3,
+        13,
+        14,
+        4,
+        5,
+        15,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::IssueDSTicketRequest, _impl_._has_bits_),
         6, // hasbit index offset
@@ -2021,11 +2116,13 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketRequest, _impl_.ticket_),
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketRequest, _impl_.ds_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketRequest, _impl_.admission_id_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::login::v1::VerifyDSTicketResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -2056,12 +2153,12 @@ static const ::_pbi::MigrationSchema
         {40, sizeof(::pandora::login::v1::LogoutRequest)},
         {45, sizeof(::pandora::login::v1::LogoutResponse)},
         {50, sizeof(::pandora::login::v1::DSTicket)},
-        {71, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
-        {80, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
-        {89, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
-        {96, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
-        {103, sizeof(::pandora::login::v1::SelectRoleRequest)},
-        {108, sizeof(::pandora::login::v1::SelectRoleResponse)},
+        {85, sizeof(::pandora::login::v1::IssueDSTicketRequest)},
+        {94, sizeof(::pandora::login::v1::IssueDSTicketResponse)},
+        {103, sizeof(::pandora::login::v1::VerifyDSTicketRequest)},
+        {112, sizeof(::pandora::login::v1::VerifyDSTicketResponse)},
+        {119, sizeof(::pandora::login::v1::SelectRoleRequest)},
+        {124, sizeof(::pandora::login::v1::SelectRoleResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2099,45 +2196,53 @@ const char descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto[] ABSL
     "ed_role_id\030\013 \001(\rR\016selectedRoleId\"4\n\rLogo"
     "utRequest\022#\n\rsession_token\030\001 \001(\tR\014sessio"
     "nToken\"@\n\016LogoutResponse\022.\n\004code\030\001 \001(\0162\032"
-    ".pandora.common.v1.ErrCodeR\004code\"\210\002\n\010DST"
+    ".pandora.common.v1.ErrCodeR\004code\"\250\004\n\010DST"
     "icket\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022\031\n\010ma"
     "tch_id\030\002 \001(\004R\007matchId\022 \n\014issued_at_ms\030\003 "
     "\001(\003R\nissuedAtMs\022\"\n\rexpires_at_ms\030\004 \001(\003R\013"
     "expiresAtMs\022\027\n\007ds_type\030\005 \001(\tR\006dsType\022\020\n\003"
     "jti\030\006 \001(\tR\003jti\022\033\n\tregion_id\030\007 \001(\rR\010regio"
     "nId\022\027\n\007cell_id\030\010 \001(\rR\006cellId\022\027\n\007role_id\030"
-    "\n \001(\rR\006roleIdJ\004\010\t\020\n\"q\n\024IssueDSTicketRequ"
-    "est\022#\n\rsession_token\030\001 \001(\tR\014sessionToken"
-    "\022\027\n\007ds_type\030\002 \001(\tR\006dsType\022\033\n\ttarget_id\030\003"
-    " \001(\004R\010targetId\"\177\n\025IssueDSTicketResponse\022"
-    ".\n\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCod"
-    "eR\004code\022\026\n\006ticket\030\002 \001(\tR\006ticket\022\036\n\013hub_d"
-    "s_addr\030\003 \001(\tR\thubDsAddr\"O\n\025VerifyDSTicke"
-    "tRequest\022\026\n\006ticket\030\001 \001(\tR\006ticket\022\036\n\013ds_p"
-    "od_name\030\002 \001(\tR\tdsPodName\"|\n\026VerifyDSTick"
-    "etResponse\022.\n\004code\030\001 \001(\0162\032.pandora.commo"
-    "n.v1.ErrCodeR\004code\0222\n\006claims\030\002 \001(\0132\032.pan"
-    "dora.login.v1.DSTicketR\006claims\",\n\021Select"
-    "RoleRequest\022\027\n\007role_id\030\001 \001(\rR\006roleId\"\203\001\n"
-    "\022SelectRoleResponse\022.\n\004code\030\001 \001(\0162\032.pand"
-    "ora.common.v1.ErrCodeR\004code\022\036\n\013hub_ds_ad"
-    "dr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_ticket\030\003 \001(\tR"
-    "\thubTicket2\321\004\n\014LoginService\022^\n\005Login\022\036.p"
-    "andora.login.v1.LoginRequest\032\037.pandora.l"
-    "ogin.v1.LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/login"
-    ":\001*\022b\n\006Logout\022\037.pandora.login.v1.LogoutR"
-    "equest\032 .pandora.login.v1.LogoutResponse"
-    "\"\025\202\323\344\223\002\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTicke"
-    "t\022&.pandora.login.v1.IssueDSTicketReques"
-    "t\032\'.pandora.login.v1.IssueDSTicketRespon"
-    "se\"\036\202\323\344\223\002\030\"\023/v1/ds/ticket/issue:\001*\022s\n\nSe"
-    "lectRole\022#.pandora.login.v1.SelectRoleRe"
-    "quest\032$.pandora.login.v1.SelectRoleRespo"
-    "nse\"\032\202\323\344\223\002\024\"\017/v1/role/select:\001*\022\204\001\n\016Veri"
-    "fyDSTicket\022\'.pandora.login.v1.VerifyDSTi"
-    "cketRequest\032(.pandora.login.v1.VerifyDST"
-    "icketResponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/ver"
-    "ify:\001*b\006proto3"
+    "\n \001(\rR\006roleId\022\036\n\013ds_pod_name\030\013 \001(\tR\tdsPo"
+    "dName\022&\n\017ds_instance_uid\030\014 \001(\tR\rdsInstan"
+    "ceUid\022*\n\021ds_protocol_epoch\030\r \001(\rR\017dsProt"
+    "ocolEpoch\022*\n\021ds_credential_gen\030\016 \001(\004R\017ds"
+    "CredentialGen\022*\n\021ds_credential_jti\030\017 \001(\t"
+    "R\017dsCredentialJti\022*\n\021hub_assignment_id\030\020"
+    " \001(\tR\017hubAssignmentId\022&\n\017ds_writer_epoch"
+    "\030\021 \001(\rR\rdsWriterEpochJ\004\010\t\020\n\"q\n\024IssueDSTi"
+    "cketRequest\022#\n\rsession_token\030\001 \001(\tR\014sess"
+    "ionToken\022\027\n\007ds_type\030\002 \001(\tR\006dsType\022\033\n\ttar"
+    "get_id\030\003 \001(\004R\010targetId\"\177\n\025IssueDSTicketR"
+    "esponse\022.\n\004code\030\001 \001(\0162\032.pandora.common.v"
+    "1.ErrCodeR\004code\022\026\n\006ticket\030\002 \001(\tR\006ticket\022"
+    "\036\n\013hub_ds_addr\030\003 \001(\tR\thubDsAddr\"r\n\025Verif"
+    "yDSTicketRequest\022\026\n\006ticket\030\001 \001(\tR\006ticket"
+    "\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\022!\n\014admi"
+    "ssion_id\030\003 \001(\tR\013admissionId\"|\n\026VerifyDST"
+    "icketResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\0222\n\006claims\030\002 \001(\0132\032."
+    "pandora.login.v1.DSTicketR\006claims\",\n\021Sel"
+    "ectRoleRequest\022\027\n\007role_id\030\001 \001(\rR\006roleId\""
+    "\203\001\n\022SelectRoleResponse\022.\n\004code\030\001 \001(\0162\032.p"
+    "andora.common.v1.ErrCodeR\004code\022\036\n\013hub_ds"
+    "_addr\030\002 \001(\tR\thubDsAddr\022\035\n\nhub_ticket\030\003 \001"
+    "(\tR\thubTicket2\321\004\n\014LoginService\022^\n\005Login\022"
+    "\036.pandora.login.v1.LoginRequest\032\037.pandor"
+    "a.login.v1.LoginResponse\"\024\202\323\344\223\002\016\"\t/v1/lo"
+    "gin:\001*\022b\n\006Logout\022\037.pandora.login.v1.Logo"
+    "utRequest\032 .pandora.login.v1.LogoutRespo"
+    "nse\"\025\202\323\344\223\002\017\"\n/v1/logout:\001*\022\200\001\n\rIssueDSTi"
+    "cket\022&.pandora.login.v1.IssueDSTicketReq"
+    "uest\032\'.pandora.login.v1.IssueDSTicketRes"
+    "ponse\"\036\202\323\344\223\002\030\"\023/v1/ds/ticket/issue:\001*\022s\n"
+    "\nSelectRole\022#.pandora.login.v1.SelectRol"
+    "eRequest\032$.pandora.login.v1.SelectRoleRe"
+    "sponse\"\032\202\323\344\223\002\024\"\017/v1/role/select:\001*\022\204\001\n\016V"
+    "erifyDSTicket\022\'.pandora.login.v1.VerifyD"
+    "STicketRequest\032(.pandora.login.v1.Verify"
+    "DSTicketResponse\"\037\202\323\344\223\002\031\"\024/v1/ds/ticket/"
+    "verify:\001*b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_deps[2] = {
@@ -2148,7 +2253,7 @@ static ::absl::once_flag descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto = {
     false,
     false,
-    2334,
+    2657,
     descriptor_table_protodef_pandora_2flogin_2fv1_2flogin_2eproto,
     "pandora/login/v1/login.proto",
     &descriptor_table_pandora_2flogin_2fv1_2flogin_2eproto_once,
@@ -3479,7 +3584,11 @@ PROTOBUF_NDEBUG_INLINE DSTicket::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         ds_type_(arena, from.ds_type_),
-        jti_(arena, from.jti_) {}
+        jti_(arena, from.jti_),
+        ds_pod_name_(arena, from.ds_pod_name_),
+        ds_instance_uid_(arena, from.ds_instance_uid_),
+        ds_credential_jti_(arena, from.ds_credential_jti_),
+        hub_assignment_id_(arena, from.hub_assignment_id_) {}
 
 DSTicket::DSTicket(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3499,9 +3608,9 @@ DSTicket::DSTicket(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, role_id_) -
+           offsetof(Impl_, ds_writer_epoch_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::role_id_));
+               sizeof(Impl_::ds_writer_epoch_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.login.v1.DSTicket)
 }
@@ -3510,16 +3619,20 @@ PROTOBUF_NDEBUG_INLINE DSTicket::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         ds_type_(arena),
-        jti_(arena) {}
+        jti_(arena),
+        ds_pod_name_(arena),
+        ds_instance_uid_(arena),
+        ds_credential_jti_(arena),
+        hub_assignment_id_(arena) {}
 
 inline void DSTicket::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, role_id_) -
+           offsetof(Impl_, ds_writer_epoch_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::role_id_));
+               sizeof(Impl_::ds_writer_epoch_));
 }
 DSTicket::~DSTicket() {
   // @@protoc_insertion_point(destructor:pandora.login.v1.DSTicket)
@@ -3534,6 +3647,10 @@ inline void DSTicket::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.ds_type_.Destroy();
   this_._impl_.jti_.Destroy();
+  this_._impl_.ds_pod_name_.Destroy();
+  this_._impl_.ds_instance_uid_.Destroy();
+  this_._impl_.ds_credential_jti_.Destroy();
+  this_._impl_.hub_assignment_id_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -3571,20 +3688,36 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.ds_type_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.jti_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.ds_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.ds_instance_uid_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.ds_credential_jti_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.hub_assignment_id_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cell_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.cell_id_));
+        reinterpret_cast<char*>(&_impl_.match_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.match_id_));
   }
-  _impl_.role_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.issued_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.ds_writer_epoch_) -
+        reinterpret_cast<char*>(&_impl_.issued_at_ms_)) + sizeof(_impl_.ds_writer_epoch_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -3609,7 +3742,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [json_name = "playerId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3618,7 +3751,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   }
 
   // uint64 match_id = 2 [json_name = "matchId"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_match_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3627,7 +3760,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   }
 
   // int64 issued_at_ms = 3 [json_name = "issuedAtMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_issued_at_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
@@ -3636,7 +3769,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   }
 
   // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_expires_at_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<4>(
@@ -3665,7 +3798,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   }
 
   // uint32 region_id = 7 [json_name = "regionId"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_region_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3674,7 +3807,7 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   }
 
   // uint32 cell_id = 8 [json_name = "cellId"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_cell_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3683,11 +3816,78 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
   }
 
   // uint32 role_id = 10 [json_name = "roleId"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_role_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           10, this_._internal_role_id(), target);
+    }
+  }
+
+  // string ds_pod_name = 11 [json_name = "dsPodName"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_ds_pod_name().empty()) {
+      const ::std::string& _s = this_._internal_ds_pod_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.DSTicket.ds_pod_name");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // string ds_instance_uid = 12 [json_name = "dsInstanceUid"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_ds_instance_uid().empty()) {
+      const ::std::string& _s = this_._internal_ds_instance_uid();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.DSTicket.ds_instance_uid");
+      target = stream->WriteStringMaybeAliased(12, _s, target);
+    }
+  }
+
+  // uint32 ds_protocol_epoch = 13 [json_name = "dsProtocolEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_ds_protocol_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_ds_protocol_epoch(), target);
+    }
+  }
+
+  // uint64 ds_credential_gen = 14 [json_name = "dsCredentialGen"];
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_ds_credential_gen() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          14, this_._internal_ds_credential_gen(), target);
+    }
+  }
+
+  // string ds_credential_jti = 15 [json_name = "dsCredentialJti"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_ds_credential_jti().empty()) {
+      const ::std::string& _s = this_._internal_ds_credential_jti();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.DSTicket.ds_credential_jti");
+      target = stream->WriteStringMaybeAliased(15, _s, target);
+    }
+  }
+
+  // string hub_assignment_id = 16 [json_name = "hubAssignmentId"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_hub_assignment_id().empty()) {
+      const ::std::string& _s = this_._internal_hub_assignment_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.DSTicket.hub_assignment_id");
+      target = stream->WriteStringMaybeAliased(16, _s, target);
+    }
+  }
+
+  // uint32 ds_writer_epoch = 17 [json_name = "dsWriterEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_ds_writer_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_ds_writer_epoch(), target);
     }
   }
 
@@ -3731,55 +3931,104 @@ PROTOBUF_NOINLINE void DSTicket::Clear() {
                                         this_._internal_jti());
       }
     }
-    // uint64 player_id = 1 [json_name = "playerId"];
+    // string ds_pod_name = 11 [json_name = "dsPodName"];
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_ds_pod_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_ds_pod_name());
+      }
+    }
+    // string ds_instance_uid = 12 [json_name = "dsInstanceUid"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_ds_instance_uid().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_ds_instance_uid());
+      }
+    }
+    // string ds_credential_jti = 15 [json_name = "dsCredentialJti"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_ds_credential_jti().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_ds_credential_jti());
+      }
+    }
+    // string hub_assignment_id = 16 [json_name = "hubAssignmentId"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_hub_assignment_id().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_assignment_id());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint64 match_id = 2 [json_name = "matchId"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_match_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // int64 issued_at_ms = 3 [json_name = "issuedAtMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_issued_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_issued_at_ms());
       }
     }
     // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_expires_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_expires_at_ms());
       }
     }
     // uint32 region_id = 7 [json_name = "regionId"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_region_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_region_id());
       }
     }
     // uint32 cell_id = 8 [json_name = "cellId"];
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_cell_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cell_id());
       }
     }
-  }
-   {
     // uint32 role_id = 10 [json_name = "roleId"];
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_role_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_role_id());
+      }
+    }
+    // uint32 ds_protocol_epoch = 13 [json_name = "dsProtocolEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_ds_protocol_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_ds_protocol_epoch());
+      }
+    }
+    // uint64 ds_credential_gen = 14 [json_name = "dsCredentialGen"];
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_ds_credential_gen() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_ds_credential_gen());
+      }
+    }
+    // uint32 ds_writer_epoch = 17 [json_name = "dsWriterEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_ds_writer_epoch() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_ds_writer_epoch());
       }
     }
   }
@@ -3820,39 +4069,92 @@ void DSTicket::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_ds_pod_name().empty()) {
+        _this->_internal_set_ds_pod_name(from._internal_ds_pod_name());
+      } else {
+        if (_this->_impl_.ds_pod_name_.IsDefault()) {
+          _this->_internal_set_ds_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_ds_instance_uid().empty()) {
+        _this->_internal_set_ds_instance_uid(from._internal_ds_instance_uid());
+      } else {
+        if (_this->_impl_.ds_instance_uid_.IsDefault()) {
+          _this->_internal_set_ds_instance_uid("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_ds_credential_jti().empty()) {
+        _this->_internal_set_ds_credential_jti(from._internal_ds_credential_jti());
+      } else {
+        if (_this->_impl_.ds_credential_jti_.IsDefault()) {
+          _this->_internal_set_ds_credential_jti("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_hub_assignment_id().empty()) {
+        _this->_internal_set_hub_assignment_id(from._internal_hub_assignment_id());
+      } else {
+        if (_this->_impl_.hub_assignment_id_.IsDefault()) {
+          _this->_internal_set_hub_assignment_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_match_id() != 0) {
         _this->_impl_.match_id_ = from._impl_.match_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_issued_at_ms() != 0) {
         _this->_impl_.issued_at_ms_ = from._impl_.issued_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_expires_at_ms() != 0) {
         _this->_impl_.expires_at_ms_ = from._impl_.expires_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_region_id() != 0) {
         _this->_impl_.region_id_ = from._impl_.region_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_cell_id() != 0) {
         _this->_impl_.cell_id_ = from._impl_.cell_id_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_role_id() != 0) {
-      _this->_impl_.role_id_ = from._impl_.role_id_;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_role_id() != 0) {
+        _this->_impl_.role_id_ = from._impl_.role_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_ds_protocol_epoch() != 0) {
+        _this->_impl_.ds_protocol_epoch_ = from._impl_.ds_protocol_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_ds_credential_gen() != 0) {
+        _this->_impl_.ds_credential_gen_ = from._impl_.ds_credential_gen_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_ds_writer_epoch() != 0) {
+        _this->_impl_.ds_writer_epoch_ = from._impl_.ds_writer_epoch_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3876,9 +4178,13 @@ void DSTicket::InternalSwap(DSTicket* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_type_, &other->_impl_.ds_type_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.jti_, &other->_impl_.jti_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_pod_name_, &other->_impl_.ds_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_instance_uid_, &other->_impl_.ds_instance_uid_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_credential_jti_, &other->_impl_.ds_credential_jti_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_assignment_id_, &other->_impl_.hub_assignment_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.role_id_)
-      + sizeof(DSTicket::_impl_.role_id_)
+      PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.ds_writer_epoch_)
+      + sizeof(DSTicket::_impl_.ds_writer_epoch_)
       - PROTOBUF_FIELD_OFFSET(DSTicket, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -4459,7 +4765,8 @@ PROTOBUF_NDEBUG_INLINE VerifyDSTicketRequest::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         ticket_(arena, from.ticket_),
-        ds_pod_name_(arena, from.ds_pod_name_) {}
+        ds_pod_name_(arena, from.ds_pod_name_),
+        admission_id_(arena, from.admission_id_) {}
 
 VerifyDSTicketRequest::VerifyDSTicketRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -4483,7 +4790,8 @@ PROTOBUF_NDEBUG_INLINE VerifyDSTicketRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         ticket_(arena),
-        ds_pod_name_(arena) {}
+        ds_pod_name_(arena),
+        admission_id_(arena) {}
 
 inline void VerifyDSTicketRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -4501,6 +4809,7 @@ inline void VerifyDSTicketRequest::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.ticket_.Destroy();
   this_._impl_.ds_pod_name_.Destroy();
+  this_._impl_.admission_id_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -4538,12 +4847,15 @@ PROTOBUF_NOINLINE void VerifyDSTicketRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.ticket_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.ds_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.admission_id_.ClearNonDefaultToEmpty();
     }
   }
   _impl_._has_bits_.Clear();
@@ -4589,6 +4901,16 @@ PROTOBUF_NOINLINE void VerifyDSTicketRequest::Clear() {
     }
   }
 
+  // string admission_id = 3 [json_name = "admissionId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_admission_id().empty()) {
+      const ::std::string& _s = this_._internal_admission_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.login.v1.VerifyDSTicketRequest.admission_id");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4614,7 +4936,7 @@ PROTOBUF_NOINLINE void VerifyDSTicketRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string ticket = 1 [json_name = "ticket"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_ticket().empty()) {
@@ -4627,6 +4949,13 @@ PROTOBUF_NOINLINE void VerifyDSTicketRequest::Clear() {
       if (!this_._internal_ds_pod_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_ds_pod_name());
+      }
+    }
+    // string admission_id = 3 [json_name = "admissionId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_admission_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_admission_id());
       }
     }
   }
@@ -4647,7 +4976,7 @@ void VerifyDSTicketRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_ticket().empty()) {
         _this->_internal_set_ticket(from._internal_ticket());
@@ -4663,6 +4992,15 @@ void VerifyDSTicketRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       } else {
         if (_this->_impl_.ds_pod_name_.IsDefault()) {
           _this->_internal_set_ds_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_admission_id().empty()) {
+        _this->_internal_set_admission_id(from._internal_admission_id());
+      } else {
+        if (_this->_impl_.admission_id_.IsDefault()) {
+          _this->_internal_set_admission_id("");
         }
       }
     }
@@ -4688,6 +5026,7 @@ void VerifyDSTicketRequest::InternalSwap(VerifyDSTicketRequest* PROTOBUF_RESTRIC
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ticket_, &other->_impl_.ticket_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_pod_name_, &other->_impl_.ds_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.admission_id_, &other->_impl_.admission_id_, arena);
 }
 
 ::google::protobuf::Metadata VerifyDSTicketRequest::GetMetadata() const {

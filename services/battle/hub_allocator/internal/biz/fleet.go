@@ -20,6 +20,20 @@ type ShardCandidate struct {
 	Region   string
 	ShardID  uint32
 	Capacity int32
+	// TokenReady 表示该分片的 DS 回调令牌已就绪(enforce 下签发/续期成功)。
+	// false 仅出现在 agones + enforce 且令牌签发/patch 失败时:此分片虽在 Fleet 里 ready,但其
+	// DS 回调会被守卫全拒 —— 拓扑对账据此不把它当可用镜像(不新建 ready、清理已有 ready 镜像),
+	// 避免 AssignHub 仍分配到一个回调打不回来的 Hub(审核 P1)。mock / local / off / permissive 恒 true。
+	TokenReady bool
+	// TokenExpMs 是该分片当前 DS 回调令牌的 exp(unix ms;annotation 镜像)。0 = 未知/未启用。
+	// 【仅供拓扑续期判定;不再当代际】重签后 exp 必变,但 exp 为秒精度、同秒重签会碰撞(审核 P1-6),
+	// 代际标识改用 TokenGen。
+	TokenExpMs int64
+	// TokenGen 是该分片当前 DS 回调令牌的「代际」(Redis INCR 权威、独立、单调;annotation 镜像)。
+	// 0 = 未知/未启用(off/permissive/mock/local-未签发)。每次重签由签发器经 Redis INCR 领取严格
+	// 递增的 gen 并签进令牌,拓扑对账据此复位分片为 warming 并记录新代际,心跳侧只有携带 gen 精确
+	// 相等的已验签令牌才能翻回 ready(替代 TokenExpMs 秒级代际,消除同秒重签碰撞,审核 P1-6/P1-8)。
+	TokenGen uint64
 }
 
 // HubFleetProvider 返回某 region 的候选分片拓扑(W4 ⑤ Mock / W4+ Agones Fleet)。
@@ -61,11 +75,12 @@ func (m *MockHubFleetProvider) ListShards(_ context.Context, region string) ([]S
 	out := make([]ShardCandidate, 0, m.cfg.MockShardCount)
 	for i := 1; i <= m.cfg.MockShardCount; i++ {
 		out = append(out, ShardCandidate{
-			PodName:  fmt.Sprintf("pandora-hub-%s-%d", region, i),
-			Addr:     fmt.Sprintf("%s:%d", m.cfg.MockHubAddrHost, m.cfg.MockHubPortBase+i),
-			Region:   region,
-			ShardID:  uint32(i),
-			Capacity: m.cfg.DefaultCapacity,
+			PodName:    fmt.Sprintf("pandora-hub-%s-%d", region, i),
+			Addr:       fmt.Sprintf("%s:%d", m.cfg.MockHubAddrHost, m.cfg.MockHubPortBase+i),
+			Region:     region,
+			ShardID:    uint32(i),
+			Capacity:   m.cfg.DefaultCapacity,
+			TokenReady: true,
 		})
 	}
 	return out, nil

@@ -59,6 +59,12 @@ type LoginResult struct {
 	SelectedRoleID uint32
 }
 
+// BattleTicketIssuer 把所有 login 侧 Battle 票据签发统一到带 roster 权威门的入口。
+// TicketUsecase 实现此接口；测试可注入严格 fake 验证 fail-closed 行为。
+type BattleTicketIssuer interface {
+	IssueBattleDSTicketAtCell(context.Context, uint64, uint64, uint32, uint32) (*DSTicketResult, error)
+}
+
 // LoginUsecase 是 Login / Logout 用例。
 type LoginUsecase struct {
 	repo        data.AccountRepo
@@ -71,6 +77,12 @@ type LoginUsecase struct {
 	hubRegion   string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
 	signer      *auth.Signer
 	verifier    *auth.Verifier
+	// battleTicketIssuer 必须在监听前注入。nil 或 roster 权威失败时不签重连票，
+	// locator 已明确 InBattle 时返回 Unavailable；绝不回退到 signer 直签或继续 Hub 链。
+	battleTicketIssuer BattleTicketIssuer
+	// requireHubAssignmentBinding 激活后禁止 login 自签无归属绑定的 hub 票，也禁止在
+	// hub_allocator 故障/旧版本返回无绑定票时回退；所有 hub 入场票必须由 allocator 权威签发。
+	requireHubAssignmentBinding bool
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md 三层化地基)。
 	// 可为 nil:单 Cell / dev 部署不路由,登录返回 region/cell = 0。多 Cell 部署由 main
@@ -93,6 +105,11 @@ type LoginUsecase struct {
 	// 为 true 且白名单为空时,SelectRole 只校验 roleID 非 0(配合客户端配置表快速迭代)。
 	// 默认 false:白名单为空 → SelectRole 一律拒绝(fail-closed,防改包客户端签任意 role_id 进 hub 票据)。
 	devAllowAnyRole bool
+}
+
+// SetBattleTicketIssuer 在服务启动、对外监听前注入统一的 Battle 票据签发入口。
+func (u *LoginUsecase) SetBattleTicketIssuer(issuer BattleTicketIssuer) {
+	u.battleTicketIssuer = issuer
 }
 
 // NewLoginUsecase 构造 LoginUsecase。
@@ -154,6 +171,11 @@ func NewLoginUsecase(
 // 装配阶段调一次即可。Router 内部读路径无锁(AtomicTable),并发安全。
 func (u *LoginUsecase) SetCellRouter(r *cellroute.Router) {
 	u.router = r
+}
+
+// SetRequireHubAssignmentBinding 在服务监听前设置 Hub DSTicket 归属绑定激活栅栏。
+func (u *LoginUsecase) SetRequireHubAssignmentBinding(require bool) {
+	u.requireHubAssignmentBinding = require
 }
 
 // Login 走真实流程(W3 ②):
@@ -224,9 +246,14 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 查 player_locator 若发现其仍处于 BATTLE 态,直接下发原对局的 battle DS 直连信息,
 	// 而非把玩家丢回大厅。命中重连时:跳过 hub 分配 + 跳过 NotifyLoginPending
 	// (避免把 BATTLE 位置顶成 LOGIN_PENDING / HUB,把玩家从战斗里拉出来)。
-	// 弱依赖:locator 不可用 / 签票失败 → 只 Warn 并降级走正常 hub 流程,绝不阻断登录。
+	// locator 查询失败仍沿用既有弱依赖策略；但一旦 locator 已明确 InBattle，后续 roster/Redis/
+	// 签票任一失败都必须阻断本次路由，不能再给同一玩家分配第二个 Hub 归属。
 	if u.notifier != nil {
-		if res := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID); res != nil {
+		res, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID)
+		if reconnectErr != nil {
+			return nil, reconnectErr
+		}
+		if res != nil {
 			return res, nil
 		}
 	}
@@ -313,15 +340,16 @@ func (u *LoginUsecase) queryBattleLocation(ctx context.Context, playerID uint64)
 // LoginResult(docs/design/battle-reconnect.md §2.1)。返回 nil 表示未命中重连 → 调用方继续
 // 走正常 hub 登录流程。
 //
-// 弱依赖:任何一步失败(locator 查询失败 / 玩家不在战斗 / 签 battle 票失败)都返回 nil 降级,
-// 绝不阻断登录。查询失败已在 queryBattleLocation 做有界重试(§2.3),重试全挂才降级——此时
-// "战斗中却误进 hub" 的残余风险由 hub 入口对账兜底(见设计文档 §2.3)。命中重连时:
-//   - 用 login 自己的 signer 现签一张新 jti 的 battle 票(sub=playerID,盖 region/cell 落点);
+// 查询失败仍按既有 §2.3 弱依赖策略返回 (nil,nil) 走 Hub；明确 !InBattle 也走 Hub。
+// 一旦 locator 已明确 InBattle，issuer/roster/Redis/签名失败返回 Unavailable，调用方不得继续
+// AssignHub 或 NotifyLoginPending。Generic PermissionDeny 可能代表 roster 漂移而不是已终态，不能据此
+// 猜测玩家已经可以回 Hub。命中重连时:
+//   - 经统一 roster 权威门现签一张新 jti 的 battle 票(sub=playerID,盖 region/cell 落点);
 //   - best-effort 记录登录设备;
 //   - 不调 NotifyLoginPending / 不分配 hub(避免顶掉 BATTLE 位置把玩家拉出战斗)。
 func (u *LoginUsecase) tryBattleReconnect(
 	ctx context.Context, playerID uint64, deviceID, sessionToken string, sessExpMs int64, regionID, cellID uint32,
-) *LoginResult {
+) (*LoginResult, error) {
 	h := plog.With(ctx)
 
 	bl, err := u.queryBattleLocation(ctx, playerID)
@@ -329,19 +357,29 @@ func (u *LoginUsecase) tryBattleReconnect(
 		// 重试仍失败:locator 不可用,无法确认玩家是否在战斗 → 降级走 hub(不阻断登录),
 		// "战斗中误进 hub" 的兜底交给 hub 入口对账(§2.3)。
 		h.Warnw("msg", "battle_location_query_failed", "err", err, "player_id", playerID)
-		return nil
+		return nil, nil
 	}
 	if !bl.InBattle {
-		return nil
+		return nil, nil
 	}
 
-	battleTicket, battleExpMs, terr := u.signer.SignDSTicketWithCell(
-		playerID, auth.DSTypeBattle, bl.MatchID, regionID, cellID, uuid.NewString())
-	if terr != nil {
-		// 签票失败 → 降级走正常 hub 流程(玩家至少能回大厅,不卡登录)。
-		h.Errorw("msg", "sign_battle_reconnect_ticket_failed", "err", terr,
+	if u.battleTicketIssuer == nil {
+		h.Errorw("msg", "battle_reconnect_ticket_issuer_unavailable",
 			"player_id", playerID, "match_id", bl.MatchID)
-		return nil
+		return nil, errcode.New(errcode.ErrUnavailable, "battle reconnect ticket authority unavailable")
+	}
+	battleResult, terr := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
+		ctx, playerID, bl.MatchID, regionID, cellID)
+	if terr != nil {
+		// roster/Redis/签票任一失败 → 本次路由 fail-closed，绝不直签或继续分配 Hub。
+		h.Errorw("msg", "authorize_battle_reconnect_ticket_failed", "err", terr,
+			"player_id", playerID, "match_id", bl.MatchID)
+		return nil, errcode.NewCause(errcode.ErrUnavailable, terr,
+			"battle reconnect ticket authority unavailable")
+	}
+	battleTicket, battleExpMs := battleResult.Ticket, battleResult.ExpiresAtMs
+	if battleResult.BattleDSAddr == "" {
+		return nil, errcode.New(errcode.ErrUnavailable, "battle reconnect target address unavailable")
 	}
 
 	// 记录最近登录设备(失败不阻塞登录,只日志告警)。
@@ -350,20 +388,20 @@ func (u *LoginUsecase) tryBattleReconnect(
 	}
 
 	h.Infow("msg", "login_battle_reconnect", "player_id", playerID, "device_id", deviceID,
-		"match_id", bl.MatchID, "battle_ds_addr", bl.BattleAddr,
+		"match_id", bl.MatchID, "battle_ds_addr", battleResult.BattleDSAddr,
 		"battle_ticket_exp_ms", battleExpMs, "region_id", regionID, "cell_id", cellID)
 
 	return &LoginResult{
 		PlayerID:          playerID,
 		SessionToken:      sessionToken,
 		SessionExpMs:      sessExpMs,
-		BattleDSAddr:      bl.BattleAddr,
+		BattleDSAddr:      battleResult.BattleDSAddr,
 		BattleTicket:      battleTicket,
 		BattleTicketExpMs: battleExpMs,
 		MatchID:           bl.MatchID,
 		RegionID:          regionID,
 		CellID:            cellID,
-	}
+	}, nil
 }
 
 // ensureAccount 在开发期假注册 / 免密模式下为不存在的账号首登注册一条记录,返回稳定 player_id。
@@ -413,14 +451,41 @@ func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID
 
 	if u.hubAssigner != nil {
 		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0, roleID)
+		if aerr == nil && assign == nil {
+			aerr = errcode.New(errcode.ErrUnavailable, "hub allocator returned an empty assignment")
+		}
 		if aerr == nil {
+			if u.requireHubAssignmentBinding {
+				if u.verifier == nil {
+					return "", "", 0, errcode.New(errcode.ErrUnavailable,
+						"hub ticket verifier unavailable while assignment binding is required")
+				}
+				claims, verr := u.verifier.VerifyDSTicket(assign.HubTicket)
+				if verr != nil || claims.DSType != string(auth.DSTypeHub) ||
+					claims.HubAssignmentID == "" || claims.DSPodName == "" ||
+					claims.DSPodName != assign.HubPodName ||
+					claims.DSWriterEpoch != auth.DSAuthWriterEpochV2 {
+					h.Errorw("msg", "hub_assigner_returned_unbound_ticket", "err", verr,
+						"player_id", playerID, "hub_pod", assign.HubPodName)
+					return "", "", 0, errcode.New(errcode.ErrUnavailable,
+						"hub allocator did not return a valid assignment-bound ticket")
+				}
+			}
 			expMs = u.hubTicketExpMs(assign.HubTicket)
 			h.Infow("msg", "hub_assigned", "player_id", playerID,
 				"hub_pod", assign.HubPodName, "shard_id", assign.ShardID, "hub_ds_addr", assign.HubDSAddr)
 			return assign.HubDSAddr, assign.HubTicket, expMs, nil
 		}
+		if u.requireHubAssignmentBinding {
+			return "", "", 0, errcode.New(errcode.ErrUnavailable,
+				"hub allocator required for assignment-bound ticket: %v", aerr)
+		}
 		// hub_allocator 不可用 → 回退自签,不阻断登录(玩家仍可凭票据连静态 hub DS)
 		h.Warnw("msg", "hub_assign_failed_fallback_self_sign", "err", aerr, "player_id", playerID)
+	}
+	if u.requireHubAssignmentBinding {
+		return "", "", 0, errcode.New(errcode.ErrUnavailable,
+			"hub allocator is required while assignment binding is enabled")
 	}
 
 	ticket, expMs, err = u.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, regionID, cellID, roleID, uuid.NewString())

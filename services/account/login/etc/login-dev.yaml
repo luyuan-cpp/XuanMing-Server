@@ -57,6 +57,10 @@ login:
   session_token_ttl: "24h"      # W3 ⑥ 示范:此前靠 Defaults() 填,现可直写
   ds_ticket_ttl: "5m"           # 不变量 §3:DS 票据短时效
   mock_hub_ds_addr: "127.0.0.1:7777"
+  # Hub 归属绑定激活栅栏。滚动升级期间保持 false；确认所有 hub_allocator 已能签发
+  # 完整绑定票后再切 true。true 时 Redis/hub.addr 缺失会令 login 启动失败，且禁止自签回退。
+  require_hub_assignment_binding: false
+  # require_hub_assignment_binding=true 时由集群配置生成器原子注入 hub_assignment_fence。
 
   # 开发期免密登录(⚠️ 仅本机 / 联调,严禁上生产):
   #   true  → 跳过密码校验;账号不存在时自动懒注册,返回稳定 player_id
@@ -101,3 +105,13 @@ login:
   hub:
     addr: "127.0.0.1:50021"
     region: "cn"
+
+# UE DS → login.VerifyDSTicket 在线入场鉴权。默认 off/legacy，保留既有内部 Verify 行为；
+# 集群生成器在 Model B 激活产物里原子切成 enforce/redis，并注入与 assignment 相同的 fence。
+ds_auth:
+  mode: "off"
+  authority_mode: "legacy"
+  issuer: "pandora-ds-control"
+  audience: "pandora-ds"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  active_heartbeat_max_age: "30s"

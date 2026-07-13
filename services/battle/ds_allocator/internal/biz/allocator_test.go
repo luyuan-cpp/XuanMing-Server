@@ -4,12 +4,16 @@ package biz
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
@@ -101,6 +105,28 @@ func newUsecase(t *testing.T) (*AllocatorUsecase, *data.RedisBattleRepo) {
 	return uc, repo
 }
 
+func enableModelBForTest(
+	t *testing.T,
+	uc *AllocatorUsecase,
+	mr *miniredis.Miniredis,
+) (*data.RedisBattleAuthRepo, *redis.Client) {
+	t.Helper()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	authRepo := data.NewRedisBattleAuthRepo(rdb)
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-lifecycle-fence-test-secret"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(authRepo, signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	return authRepo, rdb
+}
+
 // backdate 把 match 的 last_heartbeat_ms 回拨到远古,模拟心跳超时。
 func backdate(t *testing.T, repo *data.RedisBattleRepo, matchID uint64) {
 	t.Helper()
@@ -116,6 +142,142 @@ func backdate(t *testing.T, repo *data.RedisBattleRepo, matchID uint64) {
 type countingAllocator struct {
 	inner    GameServerAllocator
 	releases int
+}
+
+// gatedAllocator 把第一次外部分配卡在闸门上，制造两个 AllocateBattle 真并发的 Get/claim 窗口。
+type gatedAllocator struct {
+	inner   GameServerAllocator
+	calls   atomic.Int32
+	started chan struct{}
+	proceed chan struct{}
+}
+
+type authoritativeTestAllocator struct {
+	authoritativeCalls atomic.Int32
+	legacyCalls        atomic.Int32
+	releases           atomic.Int32
+	delivered          chan map[string]string
+	allocateResult     *data.AuthoritativeGameServerAllocation
+	allocateErr        error
+	releaseErr         error
+	releaseCheck       func(*data.AuthoritativeGameServerAllocation) error
+}
+
+// timeoutLateApplyAllocator 模拟 apiserver 在 GSA POST 已进入处理后客户端超时，
+// GameServer 稍后才被 controller 标成 Allocated。响应永远不给严格 UID/RV。
+type timeoutLateApplyAllocator struct {
+	authoritativeTestAllocator
+	postStarted chan struct{}
+	returnError chan struct{}
+	lateApplied atomic.Bool
+}
+
+func (a *timeoutLateApplyAllocator) AllocateAuthoritative(
+	_ context.Context,
+	_ uint64,
+	allocationID string,
+	_ uint32,
+	_ string,
+) (*data.AuthoritativeGameServerAllocation, error) {
+	a.authoritativeCalls.Add(1)
+	select {
+	case a.postStarted <- struct{}{}:
+	default:
+	}
+	<-a.returnError
+	a.lateApplied.Store(true)
+	return &data.AuthoritativeGameServerAllocation{AllocationID: allocationID},
+		errors.New("GSA POST timeout, controller applied later")
+}
+
+// rejectingFenceRepo 只替换 POST 前 Redis fence，其他方法仍由真实 miniredis repo 执行。
+type rejectingFenceRepo struct {
+	data.BattleRepo
+	fenceCalls atomic.Int32
+}
+
+func (r *rejectingFenceRepo) FenceBattleAllocation(context.Context, uint64, string) (bool, error) {
+	r.fenceCalls.Add(1)
+	return false, nil
+}
+
+func (a *authoritativeTestAllocator) Allocate(context.Context, uint64, uint32, string) (string, string, error) {
+	a.legacyCalls.Add(1)
+	return "", "", errors.New("legacy allocation must not be used in Model B")
+}
+
+func (a *authoritativeTestAllocator) AllocateAuthoritative(
+	_ context.Context,
+	_ uint64,
+	allocationID string,
+	_ uint32,
+	_ string,
+) (*data.AuthoritativeGameServerAllocation, error) {
+	a.authoritativeCalls.Add(1)
+	if a.allocateResult != nil || a.allocateErr != nil {
+		if a.allocateResult == nil {
+			return nil, a.allocateErr
+		}
+		out := *a.allocateResult
+		if out.AllocationID == "" {
+			out.AllocationID = allocationID
+		}
+		return &out, a.allocateErr
+	}
+	return &data.AuthoritativeGameServerAllocation{
+		PodName: "battle-auth-1", Addr: "10.0.0.9:7777", InstanceUID: "uid-auth-1",
+		ResourceVersion: "101", AllocationID: allocationID, AnnotationsPresent: true,
+	}, nil
+}
+
+func (a *authoritativeTestAllocator) DeliverCredential(
+	_ context.Context,
+	_ *data.AuthoritativeGameServerAllocation,
+	annotations map[string]string,
+) (string, error) {
+	copyAnnotations := make(map[string]string, len(annotations))
+	for k, v := range annotations {
+		copyAnnotations[k] = v
+	}
+	a.delivered <- copyAnnotations
+	return "102", nil
+}
+
+func (a *authoritativeTestAllocator) Release(context.Context, string) error {
+	a.releases.Add(1)
+	return a.releaseErr
+}
+
+func (a *authoritativeTestAllocator) ReleaseExpected(
+	_ context.Context,
+	allocation *data.AuthoritativeGameServerAllocation,
+) error {
+	if allocation == nil || (allocation.InstanceUID == "" && allocation.AllocationID == "") {
+		return errors.New("missing expected UID")
+	}
+	a.releases.Add(1)
+	if a.releaseCheck != nil {
+		if err := a.releaseCheck(allocation); err != nil {
+			return err
+		}
+	}
+	return a.releaseErr
+}
+
+func (g *gatedAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+	if g.calls.Add(1) == 1 {
+		close(g.started)
+	}
+	select {
+	case <-ctx.Done():
+		return "", "", ctx.Err()
+	case <-g.proceed:
+	}
+	return g.inner.Allocate(ctx, matchID, mapID, gameMode)
+}
+
+func (g *gatedAllocator) Release(ctx context.Context, podName string) error {
+	return g.inner.Release(ctx, podName)
 }
 
 func (c *countingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
@@ -160,6 +322,871 @@ func TestAllocateBattle(t *testing.T) {
 	}
 	if got.LastHeartbeatMs <= got.AllocatedAtMs {
 		t.Fatalf("LastHeartbeatMs %d must be > AllocatedAtMs %d (real heartbeat)", got.LastHeartbeatMs, got.AllocatedAtMs)
+	}
+}
+
+func TestAllocateBattleTrueConcurrencyOnlyOneExternalAllocation(t *testing.T) {
+	ctx := context.Background()
+	gated := &gatedAllocator{
+		inner:   NewMockGameServerAllocator(testCfg()),
+		started: make(chan struct{}),
+		proceed: make(chan struct{}),
+	}
+	uc, repo, _ := newUsecaseWithAlloc(t, gated)
+	type result struct {
+		res *AllocateResult
+		err error
+	}
+	results := make(chan result, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			res, err := uc.AllocateBattle(ctx, 700, []uint64{1, 2}, 1, "ranked")
+			results <- result{res: res, err: err}
+		}()
+	}
+	select {
+	case <-gated.started:
+	case <-time.After(time.Second):
+		t.Fatal("external allocation never started")
+	}
+	// 第一调用仍卡在外部 API；第二调用已有充足时间撞同一持久 claim。
+	time.Sleep(50 * time.Millisecond)
+	if got := gated.calls.Load(); got != 1 {
+		t.Fatalf("external Allocate calls=%d, want exactly 1", got)
+	}
+	close(gated.proceed)
+	feedReadyHeartbeat(t, uc, repo, 700, 2)
+	var first *AllocateResult
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-results:
+			if got.err != nil {
+				t.Fatalf("concurrent allocate %d: %v", i, got.err)
+			}
+			if first == nil {
+				first = got.res
+			} else if got.res.DSPodName != first.DSPodName || got.res.DSAddr != first.DSAddr {
+				t.Fatalf("callers observed different allocation: first=%+v got=%+v", first, got.res)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("concurrent AllocateBattle did not return")
+		}
+	}
+	if got := gated.calls.Load(); got != 1 {
+		t.Fatalf("external Allocate calls after completion=%d, want 1", got)
+	}
+}
+
+func TestBattleModelB_EndToEndStageDeliverActivateReady(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, _, mr := newUsecaseWithAlloc(t, allocator)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	authRepo := data.NewRedisBattleAuthRepo(rdb)
+	secret := []byte("battle-model-b-test-secret-32-bytes!!")
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience, Secret: secret,
+	})
+	if err != nil {
+		t.Fatalf("new signer: %v", err)
+	}
+	if err := uc.EnableRedisAuthority(authRepo, signer, 3*time.Hour); err != nil {
+		t.Fatalf("EnableRedisAuthority: %v", err)
+	}
+
+	type allocationResult struct {
+		res *AllocateResult
+		err error
+	}
+	done := make(chan allocationResult, 1)
+	go func() {
+		res, err := uc.AllocateBattle(ctx, 800, []uint64{10, 20}, 1, "ranked")
+		done <- allocationResult{res: res, err: err}
+	}()
+
+	var annotations map[string]string
+	select {
+	case annotations = <-allocator.delivered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("credential was not delivered")
+	}
+	if annotations[battleTokenAnnotationKey] == "" || annotations[battleTokenGenAnnotationKey] != "1" ||
+		annotations[battleInstanceUIDAnnotationKey] != "uid-auth-1" || annotations[battleWriterEpochKey] != "2" {
+		t.Fatalf("incomplete delivery annotations: %v", annotations)
+	}
+
+	var snapshot data.BattleAuthoritySnapshot
+	deadline := time.Now().Add(time.Second)
+	for {
+		snapshot, err = authRepo.ReadAuthority(ctx, 800)
+		if err == nil && snapshot.AuthFound && snapshot.Auth.GetDeliveredRv() == "102" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pending not marked delivered: snapshot=%+v err=%v", snapshot, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	pending := snapshot.Auth.GetPending()
+	for time.Now().UnixMilli() <= snapshot.Battle.GetAllocatedAtMs() {
+		time.Sleep(time.Millisecond)
+	}
+	hb, err := uc.HeartbeatAuthorized(ctx, 800, data.BattleCredentialIdentity{
+		PodName: "battle-auth-1", InstanceUID: pending.GetInstanceUid(),
+		InstanceEpoch: pending.GetInstanceEpoch(), Gen: pending.GetGen(), JTI: pending.GetJti(),
+		ExpMs: pending.GetExpMs(), Kid: pending.GetKid(), TokenSHA256: pending.GetTokenSha256(),
+		WriterEpoch: pending.GetWriterEpoch(),
+	}, 2, stateRunning, time.Now().Add(24*time.Hour).UnixMilli()) // future ts 必须被忽略
+	if err != nil {
+		t.Fatalf("HeartbeatAuthorized: %v", err)
+	}
+	if hb.AcceptedTokenGen != pending.GetGen() || hb.AcceptedTokenJTI != pending.GetJti() ||
+		hb.AcceptedInstanceUID != "uid-auth-1" || hb.AcceptedInstanceEpoch != 1 || hb.AcceptedWriterEpoch != 2 {
+		t.Fatalf("incomplete activation ACK: %+v", hb)
+	}
+
+	select {
+	case got := <-done:
+		if got.err != nil || got.res == nil || got.res.DSPodName != "battle-auth-1" {
+			t.Fatalf("AllocateBattle: res=%+v err=%v", got.res, got.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("AllocateBattle did not pass authoritative ready gate")
+	}
+	if allocator.authoritativeCalls.Load() != 1 || allocator.legacyCalls.Load() != 0 || allocator.releases.Load() != 0 {
+		t.Fatalf("allocator calls authoritative=%d legacy=%d releases=%d",
+			allocator.authoritativeCalls.Load(), allocator.legacyCalls.Load(), allocator.releases.Load())
+	}
+
+	activeSnapshot, err := authRepo.ReadAuthority(ctx, 800)
+	if err != nil {
+		t.Fatalf("read active: %v", err)
+	}
+	ready, reason := activeSnapshot.ReadyAuthorized(time.Now().UnixMilli(), time.Minute.Milliseconds())
+	if !ready {
+		t.Fatalf("authority not ready: %s snapshot=%+v", reason, activeSnapshot)
+	}
+	// ts_ms 是未来一天，但权威时间必须接近服务器当前时间，不能被客户端延长新鲜度。
+	if activeSnapshot.Auth.GetLastActiveHeartbeatMs() > time.Now().Add(time.Second).UnixMilli() {
+		t.Fatalf("client ts_ms contaminated authority heartbeat: %d", activeSnapshot.Auth.GetLastActiveHeartbeatMs())
+	}
+}
+
+func TestBattleModelBCleanupFencesBeforeReleaseThenPurges(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, _, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Millisecond)
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+
+	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		snapshot, err := authRepo.ReadAuthority(ctx, 820)
+		if err != nil {
+			return err
+		}
+		if !snapshot.AuthFound || !snapshot.BattleFound ||
+			snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+			snapshot.Auth.GetActive() != nil || snapshot.Auth.GetPending() != nil ||
+			snapshot.Battle.GetState() != statePreactiveReleasing ||
+			snapshot.Battle.GetGameserverUid() != allocation.InstanceUID {
+			return errors.New("ReleaseExpected observed no exact preactive Redis fence")
+		}
+		if authTTL, battleTTL := mr.TTL("pandora:ds:auth:{820}"), mr.TTL("pandora:ds:battle:{820}"); authTTL != 0 || battleTTL != 0 {
+			return errors.New("ReleaseExpected observed expiring preactive fence")
+		}
+		return nil
+	}
+
+	if _, err := uc.AllocateBattle(ctx, 820, []uint64{1, 2}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrDSAllocationFailed {
+		t.Fatalf("ready timeout err=%v code=%v", err, errcode.As(err))
+	}
+	if allocator.releases.Load() != 1 {
+		t.Fatalf("ReleaseExpected calls=%d", allocator.releases.Load())
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, 820)
+	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
+		t.Fatalf("explicit release success did not purge: snapshot=%+v err=%v", snapshot, err)
+	}
+}
+
+func TestBattleModelBCleanupReleaseUnknownKeepsFenceAndCrashRetry(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{
+		delivered:  make(chan map[string]string, 1),
+		releaseErr: errors.New("simulated DELETE timeout with unknown result"),
+	}
+	uc, _, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Millisecond)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+
+	if _, err := uc.AllocateBattle(ctx, 821, []uint64{1}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrDSAllocationFailed {
+		t.Fatalf("ready timeout err=%v code=%v", err, errcode.As(err))
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, 821)
+	if err != nil || !snapshot.AuthFound || !snapshot.BattleFound ||
+		snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+		snapshot.Battle.GetState() != statePreactiveReleasing {
+		t.Fatalf("release timeout lost fence: snapshot=%+v err=%v", snapshot, err)
+	}
+	if authTTL, battleTTL := mr.TTL("pandora:ds:auth:{821}"), mr.TTL("pandora:ds:battle:{821}"); authTTL != 0 || battleTTL != 0 {
+		t.Fatalf("release timeout fence must be persistent: auth=%v battle=%v", authTTL, battleTTL)
+	}
+	authBefore, _ := rdb.Get(ctx, "pandora:ds:auth:{821}").Bytes()
+	battleBefore, _ := rdb.Get(ctx, "pandora:ds:battle:{821}").Bytes()
+	if _, err := uc.AllocateBattle(ctx, 821, []uint64{1}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("retry on release fence err=%v code=%v", err, errcode.As(err))
+	}
+	authAfter, _ := rdb.Get(ctx, "pandora:ds:auth:{821}").Bytes()
+	battleAfter, _ := rdb.Get(ctx, "pandora:ds:battle:{821}").Bytes()
+	if string(authAfter) != string(authBefore) || string(battleAfter) != string(battleBefore) ||
+		mr.TTL("pandora:ds:auth:{821}") != 0 || mr.TTL("pandora:ds:battle:{821}") != 0 {
+		t.Fatal("Allocate retry mutated release-timeout bytes or TTL")
+	}
+	if allocator.authoritativeCalls.Load() != 1 || allocator.releases.Load() != 1 {
+		t.Fatalf("release-timeout retry side effects: POST=%d release=%d",
+			allocator.authoritativeCalls.Load(), allocator.releases.Load())
+	}
+
+	// 模拟进程崩溃后由另一副本接棒：永久 fence 仍在；幂等 UID delete
+	// 得到明确成功后才 purge。这里的重试改善 liveness，安全不依赖它一定发生。
+	allocator.releaseErr = nil
+	if err := rdb.ZAdd(ctx, "pandora:ds:active", redis.Z{Score: 0, Member: 821}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = authRepo.ReadAuthority(ctx, 821)
+	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
+		t.Fatalf("confirmed retry did not purge: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.authoritativeCalls.Load() != 1 || allocator.releases.Load() != 2 {
+		t.Fatalf("crash retry side effects: POST=%d release=%d",
+			allocator.authoritativeCalls.Load(), allocator.releases.Load())
+	}
+}
+
+func TestBattleModelBReleaseBattleUnknownKeepsPermanentTerminatingFence(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{
+		delivered:  make(chan map[string]string, 1),
+		releaseErr: errors.New("simulated ReleaseExpected timeout"),
+	}
+	uc, battleRepo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+	const matchID = uint64(822)
+	const allocationID = "alloc-822"
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
+		AllocatedAtMs: time.Now().UnixMilli(), LastHeartbeatMs: time.Now().UnixMilli(),
+	}
+	if claimed, _, err := battleRepo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim=%v err=%v", claimed, err)
+	}
+	if fenced, err := battleRepo.FenceBattleAllocation(ctx, matchID, allocationID); err != nil || !fenced {
+		t.Fatalf("allocation fence=%v err=%v", fenced, err)
+	}
+	battle := proto.Clone(claim).(*dsv1.BattleStorageRecord)
+	battle.State, battle.DsPodName, battle.DsAddr = stateWarming, "battle-822", "10.0.0.82:7777"
+	battle.GameserverUid = "uid-822"
+	if finalized, err := battleRepo.FinalizeFencedBattleAllocation(ctx, battle, time.Hour); err != nil || !finalized {
+		t.Fatalf("finalize=%v err=%v", finalized, err)
+	}
+	seed, err := authRepo.PrepareCredential(ctx, data.BattleAuthorityBinding{
+		MatchID: matchID, AllocationID: allocationID, PodName: "battle-822", InstanceUID: "uid-822",
+		RequiredWriterEpoch: data.BattleDSWriterEpochV2, AuthTTL: time.Hour, BattleTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := &dsv1.BattleDSCredential{
+		Gen: seed.Gen, Jti: "jti-822", ExpMs: uint64(time.Now().Add(time.Hour).UnixMilli()),
+		Kid: "kid-822", InstanceUid: "uid-822", InstanceEpoch: seed.InstanceEpoch,
+		TokenSha256: "sha256-822", WriterEpoch: data.BattleDSWriterEpochV2,
+	}
+	if _, err := authRepo.StagePending(ctx, data.BattleStageInput{
+		MatchID: matchID, AllocationID: allocationID, Credential: credential, AuthTTL: time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := authRepo.MarkDelivered(ctx, matchID, allocationID, credential, "rv-822", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authRepo.ActivateHeartbeat(ctx, matchID, data.BattleCredentialIdentity{
+		PodName: "battle-822", InstanceUID: "uid-822", InstanceEpoch: seed.InstanceEpoch,
+		Gen: seed.Gen, JTI: credential.Jti, ExpMs: credential.ExpMs, Kid: credential.Kid,
+		TokenSHA256: credential.TokenSha256, WriterEpoch: credential.WriterEpoch,
+	}, data.BattleHeartbeatInput{PlayerCount: 1, State: stateRunning, AuthTTL: time.Hour, BattleTTL: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+		if err != nil {
+			return err
+		}
+		if snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+			snapshot.Battle.GetState() != stateAbandoned ||
+			snapshot.Battle.GetGameserverUid() != allocation.InstanceUID ||
+			mr.TTL("pandora:ds:auth:{822}") != 0 || mr.TTL("pandora:ds:battle:{822}") != 0 {
+			return errors.New("ReleaseBattle called ReleaseExpected before permanent TERMINATING fence")
+		}
+		return nil
+	}
+
+	if err := uc.ReleaseBattle(ctx, matchID, "failed"); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("release timeout code=%v err=%v", errcode.As(err), err)
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || !snapshot.AuthFound || !snapshot.BattleFound ||
+		snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+		snapshot.Battle.GetState() != stateAbandoned {
+		t.Fatalf("ReleaseBattle timeout lost terminal fence: snapshot=%+v err=%v", snapshot, err)
+	}
+	if authTTL, battleTTL := mr.TTL("pandora:ds:auth:{822}"), mr.TTL("pandora:ds:battle:{822}"); authTTL != 0 || battleTTL != 0 {
+		t.Fatalf("ReleaseBattle timeout fence must persist: auth=%v battle=%v", authTTL, battleTTL)
+	}
+	if allocator.releases.Load() != 1 {
+		t.Fatalf("first release calls=%d", allocator.releases.Load())
+	}
+
+	allocator.releaseErr = nil
+	if err := uc.ReleaseBattle(ctx, matchID, "failed"); err != nil {
+		t.Fatalf("idempotent release retry: %v", err)
+	}
+	snapshot, err = authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
+		t.Fatalf("release retry did not purge: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.releases.Load() != 2 {
+		t.Fatalf("release retry calls=%d", allocator.releases.Load())
+	}
+}
+
+func TestBattleModelB_StrictGETMissingUIDKeepsPersistentFence(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{
+		delivered: make(chan map[string]string, 1),
+		allocateResult: &data.AuthoritativeGameServerAllocation{
+			PodName: "battle-partial", Addr: "10.0.0.8:7777", AllocationID: "ignored-by-fake",
+		},
+		allocateErr: errors.New("strict GET missing UID/RV"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-partial-secret-32bytes"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(data.NewRedisBattleAuthRepo(rdb), signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.AllocateBattle(ctx, 802, []uint64{1, 2}, 1, "ranked"); err == nil {
+		t.Fatal("strict GET failure must fail allocation")
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("strict GET failure triggered external cleanup: releases=%d", allocator.releases.Load())
+	}
+	claim, found, err := repo.GetBattle(ctx, 802)
+	if err != nil || !found || claim.GetState() != stateAllocationUncertain {
+		t.Fatalf("strict GET failure lost uncertain fence: found=%v claim=%+v err=%v", found, claim, err)
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{802}"); ttl != 0 {
+		t.Fatalf("uncertain fence must be persistent, ttl=%s", ttl)
+	}
+}
+
+func TestBattleModelB_UnknownUIDKeepsClaimAndBlocksSecondPOST(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{
+		delivered: make(chan map[string]string, 1),
+		allocateResult: &data.AuthoritativeGameServerAllocation{
+			PodName: "battle-partial", Addr: "10.0.0.8:7777", AllocationID: "alloc-unknown",
+		},
+		allocateErr: errors.New("strict GET timeout"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.ReadyWaitTimeout = config.Duration(30 * time.Millisecond)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-unknown-secret-32bytes"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(data.NewRedisBattleAuthRepo(rdb), signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.AllocateBattle(ctx, 803, []uint64{1, 2}, 1, "ranked"); err == nil {
+		t.Fatal("identity/delete uncertainty must fail allocation")
+	}
+	first, found, err := repo.GetBattle(ctx, 803)
+	if err != nil || !found || first.GetState() != stateAllocationUncertain {
+		t.Fatalf("uncertain allocation claim not retained: found=%v rec=%+v err=%v", found, first, err)
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{803}"); ttl != 0 {
+		t.Fatalf("uncertain allocation claim must not expire: ttl=%s", ttl)
+	}
+	started := time.Now()
+	if _, err := uc.AllocateBattle(ctx, 803, []uint64{1, 2}, 1, "ranked"); err == nil {
+		t.Fatal("retry should fail closed on retained claim")
+	} else if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("retry code=%v, want ErrUnavailable", errcode.As(err))
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("uncertain retry waited instead of failing closed: %s", elapsed)
+	}
+	if allocator.authoritativeCalls.Load() != 1 {
+		t.Fatalf("uncertain first POST allowed second POST: calls=%d", allocator.authoritativeCalls.Load())
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("uncertain retry triggered cleanup: releases=%d", allocator.releases.Load())
+	}
+}
+
+func TestBattleModelB_POSTUnknownWithoutPodStillUsesAllocationFence(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{
+		delivered:      make(chan map[string]string, 1),
+		allocateResult: &data.AuthoritativeGameServerAllocation{AllocationID: "alloc-unknown"},
+		allocateErr:    errors.New("POST timeout after possible apply"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-post-unknown-secret-32b"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(data.NewRedisBattleAuthRepo(rdb), signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.AllocateBattle(ctx, 804, []uint64{1}, 1, "ranked"); err == nil {
+		t.Fatal("unknown POST must fail closed")
+	}
+	claim, found, err := repo.GetBattle(ctx, 804)
+	if err != nil || !found || claim.GetState() != stateAllocationUncertain {
+		t.Fatalf("unknown POST claim was removed: claim=%+v found=%v err=%v", claim, found, err)
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{804}"); ttl != 0 {
+		t.Fatalf("unknown POST claim must be persistent: ttl=%s", ttl)
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("unknown POST triggered reconciliation side effect: releases=%d", allocator.releases.Load())
+	}
+}
+
+func TestBattleModelB_FenceCASFailureNeverCallsGSA(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	rejecting := &rejectingFenceRepo{BattleRepo: repo}
+	uc.repo = rejecting
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-fence-reject-secret-32b"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(data.NewRedisBattleAuthRepo(rdb), signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.AllocateBattle(ctx, 806, []uint64{1}, 1, "ranked"); err == nil {
+		t.Fatal("fence CAS failure must fail allocation")
+	} else if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("fence failure code=%v, want ErrUnavailable", errcode.As(err))
+	}
+	if rejecting.fenceCalls.Load() != 1 || allocator.authoritativeCalls.Load() != 0 {
+		t.Fatalf("fence_calls=%d GSA_POST_calls=%d, want 1/0",
+			rejecting.fenceCalls.Load(), allocator.authoritativeCalls.Load())
+	}
+	claim, found, err := repo.GetBattle(ctx, 806)
+	if err != nil || !found || claim.GetState() != stateAllocating {
+		t.Fatalf("pre-POST claim changed unexpectedly: found=%v claim=%+v err=%v", found, claim, err)
+	}
+}
+
+func TestBattleModelB_POSTTimeoutLateApplyConcurrentRetryStaysPersistent(t *testing.T) {
+	ctx := context.Background()
+	allocator := &timeoutLateApplyAllocator{
+		authoritativeTestAllocator: authoritativeTestAllocator{delivered: make(chan map[string]string, 1)},
+		postStarted:                make(chan struct{}, 1),
+		returnError:                make(chan struct{}),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-late-apply-secret-32bytes"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(data.NewRedisBattleAuthRepo(rdb), signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, allocateErr := uc.AllocateBattle(ctx, 807, []uint64{1, 2}, 1, "ranked")
+		firstDone <- allocateErr
+	}()
+	select {
+	case <-allocator.postStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first GSA POST did not start")
+	}
+	claim, found, err := repo.GetBattle(ctx, 807)
+	if err != nil || !found || claim.GetState() != stateAllocationUncertain {
+		t.Fatalf("POST began without persistent uncertain fence: found=%v claim=%+v err=%v", found, claim, err)
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{807}"); ttl != 0 {
+		t.Fatalf("POST-timeout fence must be persistent, ttl=%s", ttl)
+	}
+
+	// 第一请求仍卡在 POST 时并发重入：必须立即 unavailable，且绝不能第二次 POST。
+	secondDone := make(chan error, 1)
+	go func() {
+		_, allocateErr := uc.AllocateBattle(ctx, 807, []uint64{1, 2}, 1, "ranked")
+		secondDone <- allocateErr
+	}()
+	select {
+	case secondErr := <-secondDone:
+		if errcode.As(secondErr) != errcode.ErrUnavailable {
+			t.Fatalf("concurrent retry code=%v, want ErrUnavailable", errcode.As(secondErr))
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("concurrent retry waited instead of failing closed")
+	}
+	if calls := allocator.authoritativeCalls.Load(); calls != 1 {
+		t.Fatalf("concurrent retry issued another GSA POST: calls=%d", calls)
+	}
+
+	// 模拟 controller 在客户端超时后才应用原 POST；原请求只能返回 unavailable，
+	// 不得以 DeleteCollection/LIST 空作为“未应用”并撤掉 claim。
+	close(allocator.returnError)
+	select {
+	case firstErr := <-firstDone:
+		if errcode.As(firstErr) != errcode.ErrUnavailable {
+			t.Fatalf("timeout-late-apply code=%v, want ErrUnavailable", errcode.As(firstErr))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first allocation did not return after simulated timeout")
+	}
+	if !allocator.lateApplied.Load() {
+		t.Fatal("test did not reach simulated late apply")
+	}
+
+	// 强制派生索引进入 stale；两轮 sweep 必须严格只读：不 Release、不删 claim、
+	// 不刷新/恢复 TTL，也不移出 active。
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "807"); err != nil {
+		t.Fatalf("backdate active index: %v", err)
+	}
+	rawBefore, err := rdb.Get(ctx, "pandora:ds:battle:{807}").Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := uc.sweepOnce(ctx); err != nil {
+			t.Fatalf("sweep %d: %v", i+1, err)
+		}
+	}
+	rawAfter, err := rdb.Get(ctx, "pandora:ds:battle:{807}").Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(rawAfter) != string(rawBefore) {
+		t.Fatal("sweep mutated persistent uncertain claim")
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{807}"); ttl != 0 {
+		t.Fatalf("sweep restored/changed uncertain TTL: ttl=%s", ttl)
+	}
+	if allocator.releases.Load() != 0 || allocator.authoritativeCalls.Load() != 1 {
+		t.Fatalf("uncertain sweep side effects: releases=%d GSA_POST_calls=%d",
+			allocator.releases.Load(), allocator.authoritativeCalls.Load())
+	}
+	ids, err := repo.RangeActiveBattles(ctx)
+	if err != nil || len(ids) != 1 || ids[0] != 807 {
+		t.Fatalf("sweep removed uncertain audit index: ids=%v err=%v", ids, err)
+	}
+}
+
+func TestAllocationUncertainLegacyWriterPathsAlsoFailClosed(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator) // 故意不 EnableRedisAuthority，模拟 legacy 配置副本
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 808, State: stateAllocating, AllocationId: "alloc-808",
+		AllocatedAtMs: 1, LastHeartbeatMs: 1,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, 808, "alloc-808"); err != nil || !fenced {
+		t.Fatalf("fence: fenced=%v err=%v", fenced, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "808"); err != nil {
+		t.Fatalf("backdate active index: %v", err)
+	}
+	rawBefore, err := mr.Get("pandora:ds:battle:{808}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.AllocateBattle(ctx, 808, []uint64{1}, 1, "ranked"); err == nil ||
+		errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("legacy awaitExisting err=%v code=%v", err, errcode.As(err))
+	}
+	if err := uc.ReleaseBattle(ctx, 808, "failed"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("legacy ReleaseBattle err=%v code=%v", err, errcode.As(err))
+	}
+	if hb, err := uc.Heartbeat(ctx, 808, "old-pod", 1, stateRunning, time.Now().UnixMilli()); err != nil || hb.Command != commandStop {
+		t.Fatalf("legacy fenced heartbeat result=%+v err=%v", hb, err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("legacy sweep: %v", err)
+	}
+	rawAfter, err := mr.Get("pandora:ds:battle:{808}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rawAfter != rawBefore || mr.TTL("pandora:ds:battle:{808}") != 0 {
+		t.Fatal("legacy path mutated/de-expired uncertain claim")
+	}
+	if allocator.legacyCalls.Load() != 0 || allocator.releases.Load() != 0 {
+		t.Fatalf("legacy path touched external allocator: allocate=%d release=%d",
+			allocator.legacyCalls.Load(), allocator.releases.Load())
+	}
+	ids, err := repo.RangeActiveBattles(ctx)
+	if err != nil || len(ids) != 1 || ids[0] != 808 {
+		t.Fatalf("legacy path removed uncertain audit index: ids=%v err=%v", ids, err)
+	}
+}
+
+func TestPreactiveReleaseLegacyWriterPathsAlsoFailClosed(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator) // 故意 legacy 配置
+	record := &dsv1.BattleStorageRecord{
+		MatchId: 809, State: statePreactiveReleasing, AllocationId: "alloc-809",
+		DsPodName: "battle-809", GameserverUid: "uid-809",
+		AllocatedAtMs: 1, LastHeartbeatMs: 1,
+	}
+	if err := repo.CreateBattle(ctx, record, 0); err != nil {
+		t.Fatal(err)
+	}
+	rawBefore, _ := mr.Get("pandora:ds:battle:{809}")
+	if _, err := uc.AllocateBattle(ctx, 809, []uint64{1}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("legacy Allocate release fence err=%v code=%v", err, errcode.As(err))
+	}
+	if err := uc.ReleaseBattle(ctx, 809, "failed"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("legacy Release release fence err=%v code=%v", err, errcode.As(err))
+	}
+	if hb, err := uc.Heartbeat(ctx, 809, "battle-809", 1, stateRunning, time.Now().UnixMilli()); err != nil || hb.Command != commandStop {
+		t.Fatalf("legacy Heartbeat release fence result=%+v err=%v", hb, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "809"); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rawAfter, _ := mr.Get("pandora:ds:battle:{809}")
+	if rawAfter != rawBefore || mr.TTL("pandora:ds:battle:{809}") != 0 {
+		t.Fatal("legacy paths mutated/de-expired preactive release fence")
+	}
+	if allocator.legacyCalls.Load() != 0 || allocator.releases.Load() != 0 {
+		t.Fatalf("legacy paths touched external allocator: allocate=%d release=%d",
+			allocator.legacyCalls.Load(), allocator.releases.Load())
+	}
+}
+
+func TestBattleModelB_SweepReconcilesCrashedAllocatingClaim(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-crash-claim-secret-32b"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.EnableRedisAuthority(data.NewRedisBattleAuthRepo(rdb), signer, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 805, State: stateAllocating, AllocationId: "alloc-crashed",
+		AllocatedAtMs:   time.Now().Add(-time.Minute).UnixMilli(),
+		LastHeartbeatMs: time.Now().Add(-time.Minute).UnixMilli(),
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim=%v err=%v", claimed, err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := repo.GetBattle(ctx, 805); err != nil || found {
+		t.Fatalf("crashed claim retained: found=%v err=%v", found, err)
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("pre-POST allocating claim must not call external release, calls=%d", allocator.releases.Load())
+	}
+}
+
+func TestBattleModelBSweepReliableCompensationKeepsOutbox(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, battleRepo, mr := newUsecaseWithAlloc(t, allocator)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	authRepo := data.NewRedisBattleAuthRepo(rdb)
+	signer, err := auth.NewSigner(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-sweep-secret-32bytes!!"),
+	})
+	if err != nil {
+		t.Fatalf("new signer: %v", err)
+	}
+	if err := uc.EnableRedisAuthority(authRepo, signer, time.Hour); err != nil {
+		t.Fatalf("EnableRedisAuthority: %v", err)
+	}
+	const matchID uint64 = 801
+	const allocationID = "alloc-801"
+	const pod = "battle-auth-801"
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
+		AllocatedAtMs:   time.Now().Add(-time.Second).UnixMilli(),
+		LastHeartbeatMs: time.Now().Add(-time.Second).UnixMilli(),
+	}
+	if claimed, _, err := battleRepo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
+	}
+	battle := proto.Clone(claim).(*dsv1.BattleStorageRecord)
+	battle.State, battle.DsPodName, battle.DsAddr, battle.GameserverUid =
+		stateWarming, pod, "10.0.0.9:7777", "uid-801"
+	battle.PlayerIds, battle.MapId, battle.GameMode = []uint64{1, 2}, 1, "ranked"
+	if ok, err := battleRepo.FinalizeBattleAllocation(ctx, battle, time.Hour); err != nil || !ok {
+		t.Fatalf("finalize: ok=%v err=%v", ok, err)
+	}
+	seed, err := authRepo.PrepareCredential(ctx, data.BattleAuthorityBinding{
+		MatchID: matchID, AllocationID: allocationID, PodName: pod, InstanceUID: "uid-801",
+		RequiredWriterEpoch: data.BattleDSWriterEpochV2, AuthTTL: time.Hour, BattleTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	signed, err := signer.SignBattleCredential(
+		matchID, pod, "uid-801", seed.InstanceEpoch, seed.Gen, uuid.NewString(), time.Hour)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	verifier, err := auth.NewVerifier(auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte("battle-model-b-sweep-secret-32bytes!!"),
+	})
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	claims, err := verifier.VerifyDSCallback(signed.Token)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	stored := &dsv1.BattleDSCredential{
+		Gen: seed.Gen, Jti: claims.JTI(), ExpMs: uint64(signed.ExpMs), Kid: signed.Kid,
+		InstanceUid: "uid-801", InstanceEpoch: seed.InstanceEpoch,
+		TokenSha256: signed.TokenSHA256, WriterEpoch: signed.WriterEpoch,
+	}
+	if _, err := authRepo.StagePending(ctx, data.BattleStageInput{
+		MatchID: matchID, AllocationID: allocationID, Credential: stored, AuthTTL: time.Hour,
+	}); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if err := authRepo.MarkDelivered(ctx, matchID, allocationID, stored, "102", time.Hour); err != nil {
+		t.Fatalf("mark: %v", err)
+	}
+	if _, err := authRepo.ActivateHeartbeat(ctx, matchID, data.BattleCredentialIdentity{
+		PodName: pod, InstanceUID: "uid-801", InstanceEpoch: seed.InstanceEpoch,
+		Gen: seed.Gen, JTI: stored.Jti, ExpMs: stored.ExpMs, Kid: stored.Kid,
+		TokenSHA256: stored.TokenSha256, WriterEpoch: stored.WriterEpoch,
+	}, data.BattleHeartbeatInput{PlayerCount: 2, State: stateRunning, AuthTTL: time.Hour, BattleTTL: time.Hour}); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+
+	// 同时回拨 auth+battle 权威心跳与派生 ZSET，模拟真实失联。
+	authBytes, _ := rdb.Get(ctx, "pandora:ds:auth:{801}").Bytes()
+	authRec := &dsv1.BattleDSAuthStorageRecord{}
+	if err := proto.Unmarshal(authBytes, authRec); err != nil {
+		t.Fatalf("unmarshal auth: %v", err)
+	}
+	battleBytes, _ := rdb.Get(ctx, "pandora:ds:battle:{801}").Bytes()
+	battleRec := &dsv1.BattleStorageRecord{}
+	if err := proto.Unmarshal(battleBytes, battleRec); err != nil {
+		t.Fatalf("unmarshal battle: %v", err)
+	}
+	authRec.LastActiveHeartbeatMs, battleRec.LastHeartbeatMs = 1, 1
+	authBytes, _ = proto.Marshal(authRec)
+	battleBytes, _ = proto.Marshal(battleRec)
+	if err := rdb.Set(ctx, "pandora:ds:auth:{801}", authBytes, time.Hour).Err(); err != nil {
+		t.Fatalf("backdate auth: %v", err)
+	}
+	if err := rdb.Set(ctx, "pandora:ds:battle:{801}", battleBytes, time.Hour).Err(); err != nil {
+		t.Fatalf("backdate battle: %v", err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 1, "801"); err != nil {
+		t.Fatalf("backdate index: %v", err)
+	}
+	life := &mockLifecycle{failFirst: 1}
+	uc.SetLifecyclePusher(life)
+	allocator.releaseErr = errors.New("simulated sweep ReleaseExpected timeout")
+
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep1: %v", err)
+	}
+	if ids, _ := battleRepo.RangeActiveBattles(ctx); len(ids) != 1 {
+		t.Fatalf("failed release lost outbox: active=%v", ids)
+	}
+	if allocator.releases.Load() != 1 || life.calls != 0 {
+		t.Fatalf("sweep1 releases=%d lifecycle_calls=%d", allocator.releases.Load(), life.calls)
+	}
+	if authTTL, battleTTL := mr.TTL("pandora:ds:auth:{801}"), mr.TTL("pandora:ds:battle:{801}"); authTTL != 0 || battleTTL != 0 {
+		t.Fatalf("release timeout lost permanent terminal fence: auth=%v battle=%v", authTTL, battleTTL)
+	}
+	allocator.releaseErr = nil
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep2: %v", err)
+	}
+	if ids, _ := battleRepo.RangeActiveBattles(ctx); len(ids) != 1 {
+		t.Fatalf("failed lifecycle delivery lost outbox: active=%v", ids)
+	}
+	if allocator.releases.Load() != 2 || life.calls != 1 {
+		t.Fatalf("sweep2 releases=%d lifecycle_calls=%d", allocator.releases.Load(), life.calls)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep3: %v", err)
+	}
+	if ids, _ := battleRepo.RangeActiveBattles(ctx); len(ids) != 0 {
+		t.Fatalf("delivered outbox not removed: active=%v", ids)
+	}
+	// lifecycle 未确认前保留 outbox；每轮都用 UID/allocation fencing 幂等确认外部对象已回收，
+	// 避免首轮 DELETE 结果未知却只补偿不再清理。
+	if allocator.releases.Load() != 3 || life.calls != 2 || len(life.delivered) != 1 {
+		t.Fatalf("retry missed fenced release confirmation or delivery: releases=%d calls=%d delivered=%v",
+			allocator.releases.Load(), life.calls, life.delivered)
 	}
 }
 
@@ -648,6 +1675,41 @@ func TestSweepDeliversAbandonedFirstTry(t *testing.T) {
 	}
 	if alloc.releases != 1 {
 		t.Fatalf("releases=%d, want 1", alloc.releases)
+	}
+}
+
+// TestSweepRechecksAuthorityBeforeAbandon 模拟权威 record 心跳写成功、跨 slot ZADD 失败留下
+// 旧 score。sweep 必须先重读 record 修索引，绝不能误标 abandoned/Release/发补偿。
+func TestSweepRechecksAuthorityBeforeAbandon(t *testing.T) {
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, mr := newUsecaseWithAlloc(t, alloc)
+	life := &mockLifecycle{}
+	uc.SetLifecyclePusher(life)
+	allocateReady(t, uc, repo, 71, []uint64{1, 2}, 1, "ranked")
+
+	if err := repo.UpdateBattleWithLock(ctx, 71, 3, func(b *dsv1.BattleStorageRecord) error {
+		b.LastHeartbeatMs = time.Now().UnixMilli()
+		return nil
+	}, 2*time.Hour); err != nil {
+		t.Fatalf("refresh record: %v", err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 1, "71"); err != nil {
+		t.Fatalf("force stale derived index: %v", err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	got, found, err := repo.GetBattle(ctx, 71)
+	if err != nil || !found || got.State != stateRunning {
+		t.Fatalf("fresh authority was abandoned: found=%v rec=%+v err=%v", found, got, err)
+	}
+	if alloc.releases != 0 || life.calls != 0 {
+		t.Fatalf("stale index caused side effects: releases=%d lifecycle=%d", alloc.releases, life.calls)
+	}
+	stale, err := repo.RangeStaleBattles(ctx, time.Now().Add(-time.Second).UnixMilli())
+	if err != nil || len(stale) != 0 {
+		t.Fatalf("derived index was not repaired: stale=%v err=%v", stale, err)
 	}
 }
 

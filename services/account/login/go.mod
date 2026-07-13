@@ -17,20 +17,24 @@ go 1.26.5
 //   - 暂未生产 pandora.login.event
 
 require (
+	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/google/uuid v1.6.0
 	github.com/luyuancpp/pandora/pkg v0.0.0
 	github.com/luyuancpp/pandora/pkg/cellroute/etcdtable v0.0.0-00010101000000-000000000000
+	github.com/luyuancpp/pandora/pkg/dsauthfence v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/pkg/snowflake/etcdnode v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.16.0
 	google.golang.org/grpc v1.79.3
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/IBM/sarama v1.43.1 // indirect
+	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
@@ -72,6 +76,7 @@ require (
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
@@ -85,7 +90,6 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
@@ -94,6 +98,7 @@ require (
 // 同时 `go build`(在 go.work 下)也能正常解析。
 replace (
 	github.com/luyuancpp/pandora/pkg => ../../../pkg
+	github.com/luyuancpp/pandora/pkg/dsauthfence => ../../../pkg/dsauthfence
 	github.com/luyuancpp/pandora/pkg/snowflake/etcdnode => ../../../pkg/snowflake/etcdnode
 	github.com/luyuancpp/pandora/proto => ../../../proto
 )

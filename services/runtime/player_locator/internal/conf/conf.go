@@ -2,6 +2,7 @@
 package conf
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -13,6 +14,23 @@ type Config struct {
 
 	Locator  LocatorConf  `yaml:"locator" json:"locator"`
 	Presence PresenceConf `yaml:"presence" json:"presence"`
+
+	// DSAuth DS 回调服务令牌校验(审核 P1 #1)。player_locator 只做校验(verify-only):
+	// Hub DS 经 :8444 调 SetLocation(HUB)/ReportDisconnect 须带 hub 令牌(绑 pod)。
+	// mode 默认 off;authority_mode 默认 legacy。Model B 激活时部署层须与 hub_allocator 同步
+	// 切 authority_mode=redis，才会启用 Redis active credential 终态门。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
+}
+
+// ValidateDSAuthAuthorityMode 拒绝拼写错误的授权权威模式。若把预期的 redis 误写成
+// 其它值却静默退化为 legacy，SetLocation/ReportDisconnect 会绕过 active credential 门。
+func (c *Config) ValidateDSAuthAuthorityMode() error {
+	switch c.DSAuth.AuthorityMode {
+	case "legacy", "redis":
+		return nil
+	default:
+		return fmt.Errorf("ds_auth.authority_mode invalid: %q (want legacy|redis)", c.DSAuth.AuthorityMode)
+	}
 }
 
 // LocatorConf 是 player_locator 私有配置。
@@ -61,5 +79,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51006"
+	}
+	c.DSAuth.Defaults()
+	if c.DSAuth.AuthorityMode == "" {
+		c.DSAuth.AuthorityMode = "legacy"
 	}
 }

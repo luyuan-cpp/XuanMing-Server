@@ -32,9 +32,12 @@ import (
 	klog "github.com/go-kratos/kratos/v2/log"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -86,6 +89,15 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if err := cfg.DSAuth.ValidateRedisFence(); err != nil {
+		helper.Errorw("msg", "ds_auth_fence_config_invalid", "err", err)
+		os.Exit(1)
+	}
+	if err := cfg.ValidateRedisAuthorityIngress(); err != nil {
+		helper.Errorw("msg", "battle_result_ingress_invalid", "err", err,
+			"hint", "Model-B 只允许受 Guard/Redis active/receipt 保护的 ReportResult RPC；Kafka 只保留 ds.lifecycle")
+		os.Exit(1)
+	}
 
 	// 3. MySQL(强依赖:结算落库不可降级)
 	if cfg.Node.MySQLClient.DSN == "" {
@@ -181,6 +193,37 @@ func main() {
 	}
 
 	svc := service.NewBattleResultService(uc)
+	if cfg.DSAuth.AuthorityModeRedis() {
+		rc := cfg.Node.RedisClient
+		if rc.Host == "" && len(rc.Addrs) == 0 {
+			helper.Errorw("msg", "battle_auth_redis_required")
+			os.Exit(1)
+		}
+		authRedis := redisx.NewUniversalClient(rc)
+		defer func() { _ = authRedis.Close() }()
+		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := authRedis.Ping(pingCtx).Err(); err != nil {
+			cancel()
+			helper.Errorw("msg", "battle_auth_redis_ping_failed", "err", err)
+			os.Exit(1)
+		}
+		cancel()
+		svc.SetBattleCredentialStateChecker(service.NewBattleCredentialStateChecker(
+			data.NewRedisBattleAuthReader(authRedis), cfg.DSAuth.ActiveHeartbeatMaxAge.Std()))
+		helper.Infow("msg", "battle_active_credential_checker_ready", "authority_mode", "redis")
+	}
+
+	// DS 回调令牌守卫(审核 P1 #1):校验 Battle DS 经 :8444 的 ReportResult。
+	// mode=off(默认)→ dsGuard 为 nil,不校验。
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	svc.SetDSCallbackGuard(dsGuard)
+	if dsGuard != nil {
+		helper.Infow("msg", "ds_callback_guard_ready", "mode", dsGuard.Mode().String())
+	}
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
@@ -188,14 +231,34 @@ func main() {
 	// 6.1 后台 player.update 出箱发布器(W4 ⑨ 可靠补偿,随进程生命周期启停)
 	pubCtx, pubCancel := context.WithCancel(context.Background())
 	defer pubCancel()
-	go uc.RunOutboxPublisher(pubCtx)
 
 	// 6.3 后台战斗装备掉落出箱发布器(W5 ④,at-least-once + GrantInstances 幂等)。
 	// granter==nil(inventory_addr 未配)时内部直接返回,不空转。
-	go uc.RunDropPublisher(pubCtx)
 
 	// 7. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
 	consumers, dlqProducers := mustBuildConsumers(&cfg, uc, helper)
+	if cfg.DSAuth.AuthorityModeRedis() {
+		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
+			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
+			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
+			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+		})
+		if err != nil {
+			helper.Errorw("msg", "ds_auth_fence_acquire_failed", "err", err)
+			os.Exit(1)
+		}
+		defer func() { _ = fence.Close() }()
+		go func() {
+			<-fence.Lost()
+			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch 副本继续结算")
+			os.Exit(1)
+		}()
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+	}
+	// publisher/consumer 都会产生外部副作用；capability 未取得前禁止启动。
+	go uc.RunOutboxPublisher(pubCtx)
+	go uc.RunDropPublisher(pubCtx)
 	for _, kc := range consumers {
 		kc.Start()
 	}

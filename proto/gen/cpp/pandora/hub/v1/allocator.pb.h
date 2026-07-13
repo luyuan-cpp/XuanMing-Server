@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "pandora/common/v1/errcode.pb.h"
 // @@protoc_insertion_point(includes)
@@ -57,6 +58,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_pand
 namespace pandora {
 namespace hub {
 namespace v1 {
+enum HubAuthPhase : int;
+extern const uint32_t HubAuthPhase_internal_data_[];
 class AssignHubRequest;
 struct AssignHubRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -97,6 +100,14 @@ extern const ::google::protobuf::internal::ClassDataFull HubAssignmentStorageRec
 #else
 extern const HubAssignmentStorageRecordGlobalsTypeInternal HubAssignmentStorageRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class HubDSCredential;
+struct HubDSCredentialGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern HubDSCredentialGlobalsTypeInternal HubDSCredential_globals_;
+extern const ::google::protobuf::internal::ClassDataFull HubDSCredential_class_data_;
+#else
+extern const HubDSCredentialGlobalsTypeInternal HubDSCredential_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class HubInfo;
 struct HubInfoGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -120,6 +131,14 @@ extern HubMigrateEventGlobalsTypeInternal HubMigrateEvent_globals_;
 extern const ::google::protobuf::internal::ClassDataFull HubMigrateEvent_class_data_;
 #else
 extern const HubMigrateEventGlobalsTypeInternal HubMigrateEvent_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class HubShardAuthStorageRecord;
+struct HubShardAuthStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern HubShardAuthStorageRecordGlobalsTypeInternal HubShardAuthStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull HubShardAuthStorageRecord_class_data_;
+#else
+extern const HubShardAuthStorageRecordGlobalsTypeInternal HubShardAuthStorageRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class HubShardStorageRecord;
 struct HubShardStorageRecordGlobalsTypeInternal;
@@ -214,12 +233,61 @@ extern const TransferToLineResponseGlobalsTypeInternal TransferToLineResponse_gl
 }  // namespace pandora
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::pandora::hub::v1::HubAuthPhase_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::hub::v1::HubAuthPhase>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace pandora {
 namespace hub {
 namespace v1 {
+enum HubAuthPhase : int {
+  HUB_AUTH_PHASE_UNSPECIFIED = 0,
+  HUB_AUTH_PHASE_BOOTSTRAP = 1,
+  HUB_AUTH_PHASE_ACTIVE = 2,
+  HUB_AUTH_PHASE_ROTATING = 3,
+  HUB_AUTH_PHASE_QUARANTINED = 4,
+  HUB_AUTH_PHASE_TERMINATING = 5,
+  HubAuthPhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  HubAuthPhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t HubAuthPhase_internal_data_[];
+inline constexpr HubAuthPhase HubAuthPhase_MIN =
+    static_cast<HubAuthPhase>(0);
+inline constexpr HubAuthPhase HubAuthPhase_MAX =
+    static_cast<HubAuthPhase>(5);
+[[nodiscard]] inline bool HubAuthPhase_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int HubAuthPhase_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+HubAuthPhase_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(HubAuthPhase) {
+  return HubAuthPhase_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& HubAuthPhase_Name(T value) {
+  static_assert(::std::is_same<T, HubAuthPhase>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to HubAuthPhase_Name().");
+  return HubAuthPhase_Name(static_cast<HubAuthPhase>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& HubAuthPhase_Name(HubAuthPhase value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<HubAuthPhase_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool HubAuthPhase_Parse(
+    ::absl::string_view name, HubAuthPhase* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<HubAuthPhase>(HubAuthPhase_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -2100,12 +2168,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
     kHubAddrFieldNumber = 2,
     kRegionFieldNumber = 3,
     kStateFieldNumber = 7,
+    kLastVerifiedJtiFieldNumber = 14,
+    kGameserverUidFieldNumber = 15,
     kShardIdFieldNumber = 4,
     kPlayerCountFieldNumber = 5,
     kLastHeartbeatMsFieldNumber = 8,
     kCreatedAtMsFieldNumber = 9,
     kDrainingSinceMsFieldNumber = 10,
+    kCurrentTokenExpMsFieldNumber = 11,
     kCapacityFieldNumber = 6,
+    kAuthEpochFieldNumber = 16,
+    kCurrentTokenGenFieldNumber = 12,
+    kLastVerifiedGenFieldNumber = 13,
+    kLastVerifiedWriterEpochFieldNumber = 17,
   };
   // string hub_pod_name = 1 [json_name = "hubPodName"];
   void clear_hub_pod_name() ;
@@ -2167,6 +2242,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
   ::std::string* PROTOBUF_NONNULL _internal_mutable_state();
 
   public:
+  // string last_verified_jti = 14 [json_name = "lastVerifiedJti"];
+  void clear_last_verified_jti() ;
+  [[nodiscard]] const ::std::string& last_verified_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_verified_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_verified_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_verified_jti();
+  void set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_verified_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_verified_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_verified_jti();
+
+  public:
+  // string gameserver_uid = 15 [json_name = "gameserverUid"];
+  void clear_gameserver_uid() ;
+  [[nodiscard]] const ::std::string& gameserver_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gameserver_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gameserver_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gameserver_uid();
+  void set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gameserver_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gameserver_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gameserver_uid();
+
+  public:
   // uint32 shard_id = 4 [json_name = "shardId"];
   void clear_shard_id() ;
   [[nodiscard]] ::uint32_t shard_id() const;
@@ -2217,6 +2322,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
   void _internal_set_draining_since_ms(::int64_t value);
 
   public:
+  // uint64 current_token_exp_ms = 11 [json_name = "currentTokenExpMs"];
+  void clear_current_token_exp_ms() ;
+  [[nodiscard]] ::uint64_t current_token_exp_ms() const;
+  void set_current_token_exp_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_current_token_exp_ms() const;
+  void _internal_set_current_token_exp_ms(::uint64_t value);
+
+  public:
   // int32 capacity = 6 [json_name = "capacity"];
   void clear_capacity() ;
   [[nodiscard]] ::int32_t capacity() const;
@@ -2227,12 +2342,52 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
   void _internal_set_capacity(::int32_t value);
 
   public:
+  // uint32 auth_epoch = 16 [json_name = "authEpoch"];
+  void clear_auth_epoch() ;
+  [[nodiscard]] ::uint32_t auth_epoch() const;
+  void set_auth_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_auth_epoch() const;
+  void _internal_set_auth_epoch(::uint32_t value);
+
+  public:
+  // uint64 current_token_gen = 12 [json_name = "currentTokenGen"];
+  void clear_current_token_gen() ;
+  [[nodiscard]] ::uint64_t current_token_gen() const;
+  void set_current_token_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_current_token_gen() const;
+  void _internal_set_current_token_gen(::uint64_t value);
+
+  public:
+  // uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
+  void clear_last_verified_gen() ;
+  [[nodiscard]] ::uint64_t last_verified_gen() const;
+  void set_last_verified_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_verified_gen() const;
+  void _internal_set_last_verified_gen(::uint64_t value);
+
+  public:
+  // uint32 last_verified_writer_epoch = 17 [json_name = "lastVerifiedWriterEpoch"];
+  void clear_last_verified_writer_epoch() ;
+  [[nodiscard]] ::uint32_t last_verified_writer_epoch() const;
+  void set_last_verified_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_last_verified_writer_epoch() const;
+  void _internal_set_last_verified_writer_epoch(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubShardStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          0, 84,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 123,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2264,12 +2419,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardStorageRecord final : publi
     ::google::protobuf::internal::ArenaStringPtr hub_addr_;
     ::google::protobuf::internal::ArenaStringPtr region_;
     ::google::protobuf::internal::ArenaStringPtr state_;
+    ::google::protobuf::internal::ArenaStringPtr last_verified_jti_;
+    ::google::protobuf::internal::ArenaStringPtr gameserver_uid_;
     ::uint32_t shard_id_;
     ::int32_t player_count_;
     ::int64_t last_heartbeat_ms_;
     ::int64_t created_at_ms_;
     ::int64_t draining_since_ms_;
+    ::uint64_t current_token_exp_ms_;
     ::int32_t capacity_;
+    ::uint32_t auth_epoch_;
+    ::uint64_t current_token_gen_;
+    ::uint64_t last_verified_gen_;
+    ::uint32_t last_verified_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2333,7 +2495,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubMigrateEvent final : public ::go
   [[nodiscard]] static const HubMigrateEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HubMigrateEvent>(&HubMigrateEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(HubMigrateEvent& a, HubMigrateEvent& b) { a.Swap(&b); }
   inline void Swap(HubMigrateEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3141,6 +3303,311 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubInfo final : public ::google::pr
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubDSCredential final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.hub.v1.HubDSCredential) */ {
+ public:
+  inline HubDSCredential() : HubDSCredential(nullptr) {}
+  ~HubDSCredential() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HubDSCredential* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HubDSCredential));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr HubDSCredential(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline HubDSCredential(const HubDSCredential& from) : HubDSCredential(nullptr, from) {}
+  inline HubDSCredential(HubDSCredential&& from) noexcept : HubDSCredential(nullptr, ::std::move(from)) {}
+  inline HubDSCredential& operator=(const HubDSCredential& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HubDSCredential& operator=(HubDSCredential&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const HubDSCredential& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HubDSCredential>(&HubDSCredential_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(HubDSCredential& a, HubDSCredential& b) { a.Swap(&b); }
+  inline void Swap(HubDSCredential* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HubDSCredential* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] HubDSCredential* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HubDSCredential>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HubDSCredential& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HubDSCredential& from) { HubDSCredential::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HubDSCredential* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.hub.v1.HubDSCredential"; }
+
+  explicit HubDSCredential(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HubDSCredential(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HubDSCredential& from);
+  HubDSCredential(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HubDSCredential&& from) noexcept
+      : HubDSCredential(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJtiFieldNumber = 2,
+    kKidFieldNumber = 4,
+    kInstanceUidFieldNumber = 5,
+    kTokenSha256FieldNumber = 7,
+    kGenFieldNumber = 1,
+    kExpMsFieldNumber = 3,
+    kProtocolEpochFieldNumber = 6,
+    kWriterEpochFieldNumber = 8,
+  };
+  // string jti = 2 [json_name = "jti"];
+  void clear_jti() ;
+  [[nodiscard]] const ::std::string& jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_jti();
+  void set_allocated_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_jti();
+
+  public:
+  // string kid = 4 [json_name = "kid"];
+  void clear_kid() ;
+  [[nodiscard]] const ::std::string& kid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_kid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_kid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_kid();
+  void set_allocated_kid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_kid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_kid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_kid();
+
+  public:
+  // string instance_uid = 5 [json_name = "instanceUid"];
+  void clear_instance_uid() ;
+  [[nodiscard]] const ::std::string& instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_instance_uid();
+  void set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_instance_uid();
+
+  public:
+  // string token_sha256 = 7 [json_name = "tokenSha256"];
+  void clear_token_sha256() ;
+  [[nodiscard]] const ::std::string& token_sha256() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_token_sha256(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_token_sha256();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_token_sha256();
+  void set_allocated_token_sha256(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_token_sha256() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_token_sha256(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_token_sha256();
+
+  public:
+  // uint64 gen = 1 [json_name = "gen"];
+  void clear_gen() ;
+  [[nodiscard]] ::uint64_t gen() const;
+  void set_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gen() const;
+  void _internal_set_gen(::uint64_t value);
+
+  public:
+  // uint64 exp_ms = 3 [json_name = "expMs"];
+  void clear_exp_ms() ;
+  [[nodiscard]] ::uint64_t exp_ms() const;
+  void set_exp_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_exp_ms() const;
+  void _internal_set_exp_ms(::uint64_t value);
+
+  public:
+  // uint32 protocol_epoch = 6 [json_name = "protocolEpoch"];
+  void clear_protocol_epoch() ;
+  [[nodiscard]] ::uint32_t protocol_epoch() const;
+  void set_protocol_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_protocol_epoch() const;
+  void _internal_set_protocol_epoch(::uint32_t value);
+
+  public:
+  // uint32 writer_epoch = 8 [json_name = "writerEpoch"];
+  void clear_writer_epoch() ;
+  [[nodiscard]] ::uint32_t writer_epoch() const;
+  void set_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_writer_epoch() const;
+  void _internal_set_writer_epoch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubDSCredential)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 77,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HubDSCredential& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr jti_;
+    ::google::protobuf::internal::ArenaStringPtr kid_;
+    ::google::protobuf::internal::ArenaStringPtr instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr token_sha256_;
+    ::uint64_t gen_;
+    ::uint64_t exp_ms_;
+    ::uint32_t protocol_epoch_;
+    ::uint32_t writer_epoch_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fhub_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.hub.v1.HubAssignmentStorageRecord) */ {
  public:
@@ -3197,7 +3664,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   [[nodiscard]] static const HubAssignmentStorageRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HubAssignmentStorageRecord>(&HubAssignmentStorageRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(HubAssignmentStorageRecord& a, HubAssignmentStorageRecord& b) { a.Swap(&b); }
   inline void Swap(HubAssignmentStorageRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3292,11 +3759,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     kHubPodNameFieldNumber = 2,
     kHubAddrFieldNumber = 3,
     kRegionFieldNumber = 5,
+    kHubInstanceUidFieldNumber = 9,
+    kAuthJtiFieldNumber = 12,
+    kAssignmentIdFieldNumber = 13,
     kPlayerIdFieldNumber = 1,
     kTeamIdFieldNumber = 6,
     kShardIdFieldNumber = 4,
     kRoleIdFieldNumber = 8,
     kAssignedAtMsFieldNumber = 7,
+    kAuthGenFieldNumber = 11,
+    kAuthEpochFieldNumber = 10,
+    kAuthWriterEpochFieldNumber = 14,
   };
   // string hub_pod_name = 2 [json_name = "hubPodName"];
   void clear_hub_pod_name() ;
@@ -3341,6 +3814,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   const ::std::string& _internal_region() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_region(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_region();
+
+  public:
+  // string hub_instance_uid = 9 [json_name = "hubInstanceUid"];
+  void clear_hub_instance_uid() ;
+  [[nodiscard]] const ::std::string& hub_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_instance_uid();
+  void set_allocated_hub_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_instance_uid();
+
+  public:
+  // string auth_jti = 12 [json_name = "authJti"];
+  void clear_auth_jti() ;
+  [[nodiscard]] const ::std::string& auth_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_auth_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_auth_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_auth_jti();
+  void set_allocated_auth_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_auth_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_auth_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_auth_jti();
+
+  public:
+  // string assignment_id = 13 [json_name = "assignmentId"];
+  void clear_assignment_id() ;
+  [[nodiscard]] const ::std::string& assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_assignment_id();
+  void set_allocated_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_assignment_id();
 
   public:
   // uint64 player_id = 1 [json_name = "playerId"];
@@ -3393,12 +3911,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
   void _internal_set_assigned_at_ms(::int64_t value);
 
   public:
+  // uint64 auth_gen = 11 [json_name = "authGen"];
+  void clear_auth_gen() ;
+  [[nodiscard]] ::uint64_t auth_gen() const;
+  void set_auth_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_auth_gen() const;
+  void _internal_set_auth_gen(::uint64_t value);
+
+  public:
+  // uint32 auth_epoch = 10 [json_name = "authEpoch"];
+  void clear_auth_epoch() ;
+  [[nodiscard]] ::uint32_t auth_epoch() const;
+  void set_auth_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_auth_epoch() const;
+  void _internal_set_auth_epoch(::uint32_t value);
+
+  public:
+  // uint32 auth_writer_epoch = 14 [json_name = "authWriterEpoch"];
+  void clear_auth_writer_epoch() ;
+  [[nodiscard]] ::uint32_t auth_writer_epoch() const;
+  void set_auth_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_auth_writer_epoch() const;
+  void _internal_set_auth_writer_epoch(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubAssignmentStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          0, 84,
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          0, 121,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3429,11 +3977,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubAssignmentStorageRecord final : 
     ::google::protobuf::internal::ArenaStringPtr hub_pod_name_;
     ::google::protobuf::internal::ArenaStringPtr hub_addr_;
     ::google::protobuf::internal::ArenaStringPtr region_;
+    ::google::protobuf::internal::ArenaStringPtr hub_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr auth_jti_;
+    ::google::protobuf::internal::ArenaStringPtr assignment_id_;
     ::uint64_t player_id_;
     ::uint64_t team_id_;
     ::uint32_t shard_id_;
     ::uint32_t role_id_;
     ::int64_t assigned_at_ms_;
+    ::uint64_t auth_gen_;
+    ::uint32_t auth_epoch_;
+    ::uint32_t auth_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3590,8 +4144,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kCommandFieldNumber = 2,
+    kAcceptedTokenJtiFieldNumber = 11,
+    kAcceptedInstanceUidFieldNumber = 12,
     kCodeFieldNumber = 1,
     kGraceSecondsFieldNumber = 3,
+    kAcceptedTokenGenFieldNumber = 10,
+    kAcceptedProtocolEpochFieldNumber = 13,
+    kAcceptedWriterEpochFieldNumber = 14,
   };
   // string command = 2 [json_name = "command"];
   void clear_command() ;
@@ -3606,6 +4165,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
   const ::std::string& _internal_command() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_command(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_command();
+
+  public:
+  // string accepted_token_jti = 11 [json_name = "acceptedTokenJti"];
+  void clear_accepted_token_jti() ;
+  [[nodiscard]] const ::std::string& accepted_token_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_accepted_token_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_accepted_token_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_accepted_token_jti();
+  void set_allocated_accepted_token_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_accepted_token_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_accepted_token_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_accepted_token_jti();
+
+  public:
+  // string accepted_instance_uid = 12 [json_name = "acceptedInstanceUid"];
+  void clear_accepted_instance_uid() ;
+  [[nodiscard]] const ::std::string& accepted_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_accepted_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_accepted_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_accepted_instance_uid();
+  void set_allocated_accepted_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_accepted_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_accepted_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_accepted_instance_uid();
 
   public:
   // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
@@ -3628,12 +4217,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
   void _internal_set_grace_seconds(::int32_t value);
 
   public:
+  // uint64 accepted_token_gen = 10 [json_name = "acceptedTokenGen"];
+  void clear_accepted_token_gen() ;
+  [[nodiscard]] ::uint64_t accepted_token_gen() const;
+  void set_accepted_token_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_accepted_token_gen() const;
+  void _internal_set_accepted_token_gen(::uint64_t value);
+
+  public:
+  // uint32 accepted_protocol_epoch = 13 [json_name = "acceptedProtocolEpoch"];
+  void clear_accepted_protocol_epoch() ;
+  [[nodiscard]] ::uint32_t accepted_protocol_epoch() const;
+  void set_accepted_protocol_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_accepted_protocol_epoch() const;
+  void _internal_set_accepted_protocol_epoch(::uint32_t value);
+
+  public:
+  // uint32 accepted_writer_epoch = 14 [json_name = "acceptedWriterEpoch"];
+  void clear_accepted_writer_epoch() ;
+  [[nodiscard]] ::uint32_t accepted_writer_epoch() const;
+  void set_accepted_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_accepted_writer_epoch() const;
+  void _internal_set_accepted_writer_epoch(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.hub.v1.HeartbeatResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
-                          0, 48,
+      ::google::protobuf::internal::TcParseTable<4, 8,
+                          0, 95,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3662,8 +4281,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr command_;
+    ::google::protobuf::internal::ArenaStringPtr accepted_token_jti_;
+    ::google::protobuf::internal::ArenaStringPtr accepted_instance_uid_;
     int code_;
     ::int32_t grace_seconds_;
+    ::uint64_t accepted_token_gen_;
+    ::uint32_t accepted_protocol_epoch_;
+    ::uint32_t accepted_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4912,6 +5536,366 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListHubLinesResponse final : public
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::hub::v1::HubLine > lines_;
     int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fhub_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HubShardAuthStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.hub.v1.HubShardAuthStorageRecord) */ {
+ public:
+  inline HubShardAuthStorageRecord() : HubShardAuthStorageRecord(nullptr) {}
+  ~HubShardAuthStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HubShardAuthStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HubShardAuthStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr HubShardAuthStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline HubShardAuthStorageRecord(const HubShardAuthStorageRecord& from) : HubShardAuthStorageRecord(nullptr, from) {}
+  inline HubShardAuthStorageRecord(HubShardAuthStorageRecord&& from) noexcept : HubShardAuthStorageRecord(nullptr, ::std::move(from)) {}
+  inline HubShardAuthStorageRecord& operator=(const HubShardAuthStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HubShardAuthStorageRecord& operator=(HubShardAuthStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const HubShardAuthStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<HubShardAuthStorageRecord>(&HubShardAuthStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(HubShardAuthStorageRecord& a, HubShardAuthStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(HubShardAuthStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HubShardAuthStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] HubShardAuthStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HubShardAuthStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HubShardAuthStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HubShardAuthStorageRecord& from) { HubShardAuthStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HubShardAuthStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.hub.v1.HubShardAuthStorageRecord"; }
+
+  explicit HubShardAuthStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HubShardAuthStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HubShardAuthStorageRecord& from);
+  HubShardAuthStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HubShardAuthStorageRecord&& from) noexcept
+      : HubShardAuthStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPodNameFieldNumber = 1,
+    kInstanceUidFieldNumber = 2,
+    kDeliveredRvFieldNumber = 9,
+    kActiveFieldNumber = 5,
+    kPendingFieldNumber = 6,
+    kProtocolEpochFieldNumber = 3,
+    kPhaseFieldNumber = 4,
+    kHighWaterGenFieldNumber = 7,
+    kPendingStartedMsFieldNumber = 8,
+    kUpdatedAtMsFieldNumber = 10,
+    kLastActiveHeartbeatMsFieldNumber = 11,
+    kRequiredWriterEpochFieldNumber = 12,
+  };
+  // string pod_name = 1 [json_name = "podName"];
+  void clear_pod_name() ;
+  [[nodiscard]] const ::std::string& pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pod_name();
+  void set_allocated_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_pod_name();
+
+  public:
+  // string instance_uid = 2 [json_name = "instanceUid"];
+  void clear_instance_uid() ;
+  [[nodiscard]] const ::std::string& instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_instance_uid();
+  void set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_instance_uid();
+
+  public:
+  // string delivered_rv = 9 [json_name = "deliveredRv"];
+  void clear_delivered_rv() ;
+  [[nodiscard]] const ::std::string& delivered_rv() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_delivered_rv(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_delivered_rv();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_delivered_rv();
+  void set_allocated_delivered_rv(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_delivered_rv() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_delivered_rv(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_delivered_rv();
+
+  public:
+  // .pandora.hub.v1.HubDSCredential active = 5 [json_name = "active"];
+  [[nodiscard]] bool has_active()
+      const;
+  void clear_active() ;
+  [[nodiscard]] const ::pandora::hub::v1::HubDSCredential& active() const;
+  [[nodiscard]] ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE release_active();
+  ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL mutable_active();
+  void set_allocated_active(::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_active(::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value);
+  ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE unsafe_arena_release_active();
+
+  private:
+  const ::pandora::hub::v1::HubDSCredential& _internal_active() const;
+  ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL _internal_mutable_active();
+
+  public:
+  // .pandora.hub.v1.HubDSCredential pending = 6 [json_name = "pending"];
+  [[nodiscard]] bool has_pending()
+      const;
+  void clear_pending() ;
+  [[nodiscard]] const ::pandora::hub::v1::HubDSCredential& pending() const;
+  [[nodiscard]] ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE release_pending();
+  ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL mutable_pending();
+  void set_allocated_pending(::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pending(::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value);
+  ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE unsafe_arena_release_pending();
+
+  private:
+  const ::pandora::hub::v1::HubDSCredential& _internal_pending() const;
+  ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL _internal_mutable_pending();
+
+  public:
+  // uint32 protocol_epoch = 3 [json_name = "protocolEpoch"];
+  void clear_protocol_epoch() ;
+  [[nodiscard]] ::uint32_t protocol_epoch() const;
+  void set_protocol_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_protocol_epoch() const;
+  void _internal_set_protocol_epoch(::uint32_t value);
+
+  public:
+  // .pandora.hub.v1.HubAuthPhase phase = 4 [json_name = "phase"];
+  void clear_phase() ;
+  [[nodiscard]] ::pandora::hub::v1::HubAuthPhase phase() const;
+  void set_phase(::pandora::hub::v1::HubAuthPhase value);
+
+  private:
+  ::pandora::hub::v1::HubAuthPhase _internal_phase() const;
+  void _internal_set_phase(::pandora::hub::v1::HubAuthPhase value);
+
+  public:
+  // uint64 high_water_gen = 7 [json_name = "highWaterGen"];
+  void clear_high_water_gen() ;
+  [[nodiscard]] ::uint64_t high_water_gen() const;
+  void set_high_water_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_high_water_gen() const;
+  void _internal_set_high_water_gen(::uint64_t value);
+
+  public:
+  // int64 pending_started_ms = 8 [json_name = "pendingStartedMs"];
+  void clear_pending_started_ms() ;
+  [[nodiscard]] ::int64_t pending_started_ms() const;
+  void set_pending_started_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_pending_started_ms() const;
+  void _internal_set_pending_started_ms(::int64_t value);
+
+  public:
+  // int64 updated_at_ms = 10 [json_name = "updatedAtMs"];
+  void clear_updated_at_ms() ;
+  [[nodiscard]] ::int64_t updated_at_ms() const;
+  void set_updated_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_updated_at_ms() const;
+  void _internal_set_updated_at_ms(::int64_t value);
+
+  public:
+  // int64 last_active_heartbeat_ms = 11 [json_name = "lastActiveHeartbeatMs"];
+  void clear_last_active_heartbeat_ms() ;
+  [[nodiscard]] ::int64_t last_active_heartbeat_ms() const;
+  void set_last_active_heartbeat_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_last_active_heartbeat_ms() const;
+  void _internal_set_last_active_heartbeat_ms(::int64_t value);
+
+  public:
+  // uint32 required_writer_epoch = 12 [json_name = "requiredWriterEpoch"];
+  void clear_required_writer_epoch() ;
+  [[nodiscard]] ::uint32_t required_writer_epoch() const;
+  void set_required_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_required_writer_epoch() const;
+  void _internal_set_required_writer_epoch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.hub.v1.HubShardAuthStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          2, 89,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HubShardAuthStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr delivered_rv_;
+    ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE active_;
+    ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE pending_;
+    ::uint32_t protocol_epoch_;
+    int phase_;
+    ::uint64_t high_water_gen_;
+    ::int64_t pending_started_ms_;
+    ::int64_t updated_at_ms_;
+    ::int64_t last_active_heartbeat_ms_;
+    ::uint32_t required_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6855,7 +7839,7 @@ HeartbeatRequest::_internal_mutable_player_ids() {
 inline void HeartbeatResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::pandora::common::v1::ErrCode HeartbeatResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.code)
@@ -6863,7 +7847,7 @@ inline ::pandora::common::v1::ErrCode HeartbeatResponse::code() const {
 }
 inline void HeartbeatResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.code)
 }
 inline ::pandora::common::v1::ErrCode HeartbeatResponse::_internal_code() const {
@@ -6943,7 +7927,7 @@ inline void HeartbeatResponse::set_allocated_command(::std::string* PROTOBUF_NUL
 inline void HeartbeatResponse::clear_grace_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.grace_seconds_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::int32_t HeartbeatResponse::grace_seconds() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.grace_seconds)
@@ -6951,7 +7935,7 @@ inline ::int32_t HeartbeatResponse::grace_seconds() const {
 }
 inline void HeartbeatResponse::set_grace_seconds(::int32_t value) {
   _internal_set_grace_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.grace_seconds)
 }
 inline ::int32_t HeartbeatResponse::_internal_grace_seconds() const {
@@ -6961,6 +7945,206 @@ inline ::int32_t HeartbeatResponse::_internal_grace_seconds() const {
 inline void HeartbeatResponse::_internal_set_grace_seconds(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.grace_seconds_ = value;
+}
+
+// uint64 accepted_token_gen = 10 [json_name = "acceptedTokenGen"];
+inline void HeartbeatResponse::clear_accepted_token_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t HeartbeatResponse::accepted_token_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.accepted_token_gen)
+  return _internal_accepted_token_gen();
+}
+inline void HeartbeatResponse::set_accepted_token_gen(::uint64_t value) {
+  _internal_set_accepted_token_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.accepted_token_gen)
+}
+inline ::uint64_t HeartbeatResponse::_internal_accepted_token_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_token_gen_;
+}
+inline void HeartbeatResponse::_internal_set_accepted_token_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_gen_ = value;
+}
+
+// string accepted_token_jti = 11 [json_name = "acceptedTokenJti"];
+inline void HeartbeatResponse::clear_accepted_token_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& HeartbeatResponse::accepted_token_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.accepted_token_jti)
+  return _internal_accepted_token_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HeartbeatResponse::set_accepted_token_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.accepted_token_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.accepted_token_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::mutable_accepted_token_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_accepted_token_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HeartbeatResponse.accepted_token_jti)
+  return _s;
+}
+inline const ::std::string& HeartbeatResponse::_internal_accepted_token_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_token_jti_.Get();
+}
+inline void HeartbeatResponse::_internal_set_accepted_token_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::_internal_mutable_accepted_token_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.accepted_token_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HeartbeatResponse::release_accepted_token_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HeartbeatResponse.accepted_token_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.accepted_token_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.accepted_token_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HeartbeatResponse::set_allocated_accepted_token_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.accepted_token_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.accepted_token_jti_.IsDefault()) {
+    _impl_.accepted_token_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HeartbeatResponse.accepted_token_jti)
+}
+
+// string accepted_instance_uid = 12 [json_name = "acceptedInstanceUid"];
+inline void HeartbeatResponse::clear_accepted_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& HeartbeatResponse::accepted_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.accepted_instance_uid)
+  return _internal_accepted_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HeartbeatResponse::set_accepted_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.accepted_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.accepted_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::mutable_accepted_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_accepted_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HeartbeatResponse.accepted_instance_uid)
+  return _s;
+}
+inline const ::std::string& HeartbeatResponse::_internal_accepted_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_instance_uid_.Get();
+}
+inline void HeartbeatResponse::_internal_set_accepted_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::_internal_mutable_accepted_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.accepted_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HeartbeatResponse::release_accepted_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HeartbeatResponse.accepted_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.accepted_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.accepted_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HeartbeatResponse::set_allocated_accepted_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.accepted_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.accepted_instance_uid_.IsDefault()) {
+    _impl_.accepted_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HeartbeatResponse.accepted_instance_uid)
+}
+
+// uint32 accepted_protocol_epoch = 13 [json_name = "acceptedProtocolEpoch"];
+inline void HeartbeatResponse::clear_accepted_protocol_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_protocol_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t HeartbeatResponse::accepted_protocol_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.accepted_protocol_epoch)
+  return _internal_accepted_protocol_epoch();
+}
+inline void HeartbeatResponse::set_accepted_protocol_epoch(::uint32_t value) {
+  _internal_set_accepted_protocol_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.accepted_protocol_epoch)
+}
+inline ::uint32_t HeartbeatResponse::_internal_accepted_protocol_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_protocol_epoch_;
+}
+inline void HeartbeatResponse::_internal_set_accepted_protocol_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_protocol_epoch_ = value;
+}
+
+// uint32 accepted_writer_epoch = 14 [json_name = "acceptedWriterEpoch"];
+inline void HeartbeatResponse::clear_accepted_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t HeartbeatResponse::accepted_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HeartbeatResponse.accepted_writer_epoch)
+  return _internal_accepted_writer_epoch();
+}
+inline void HeartbeatResponse::set_accepted_writer_epoch(::uint32_t value) {
+  _internal_set_accepted_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HeartbeatResponse.accepted_writer_epoch)
+}
+inline ::uint32_t HeartbeatResponse::_internal_accepted_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_writer_epoch_;
+}
+inline void HeartbeatResponse::_internal_set_accepted_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_writer_epoch_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -7163,7 +8347,7 @@ inline void HubShardStorageRecord::set_allocated_region(::std::string* PROTOBUF_
 inline void HubShardStorageRecord::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t HubShardStorageRecord::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.shard_id)
@@ -7171,7 +8355,7 @@ inline ::uint32_t HubShardStorageRecord::shard_id() const {
 }
 inline void HubShardStorageRecord::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.shard_id)
 }
 inline ::uint32_t HubShardStorageRecord::_internal_shard_id() const {
@@ -7187,7 +8371,7 @@ inline void HubShardStorageRecord::_internal_set_shard_id(::uint32_t value) {
 inline void HubShardStorageRecord::clear_player_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::int32_t HubShardStorageRecord::player_count() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.player_count)
@@ -7195,7 +8379,7 @@ inline ::int32_t HubShardStorageRecord::player_count() const {
 }
 inline void HubShardStorageRecord::set_player_count(::int32_t value) {
   _internal_set_player_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.player_count)
 }
 inline ::int32_t HubShardStorageRecord::_internal_player_count() const {
@@ -7211,7 +8395,7 @@ inline void HubShardStorageRecord::_internal_set_player_count(::int32_t value) {
 inline void HubShardStorageRecord::clear_capacity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.capacity_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::int32_t HubShardStorageRecord::capacity() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.capacity)
@@ -7219,7 +8403,7 @@ inline ::int32_t HubShardStorageRecord::capacity() const {
 }
 inline void HubShardStorageRecord::set_capacity(::int32_t value) {
   _internal_set_capacity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.capacity)
 }
 inline ::int32_t HubShardStorageRecord::_internal_capacity() const {
@@ -7299,7 +8483,7 @@ inline void HubShardStorageRecord::set_allocated_state(::std::string* PROTOBUF_N
 inline void HubShardStorageRecord::clear_last_heartbeat_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_heartbeat_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::int64_t HubShardStorageRecord::last_heartbeat_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_heartbeat_ms)
@@ -7307,7 +8491,7 @@ inline ::int64_t HubShardStorageRecord::last_heartbeat_ms() const {
 }
 inline void HubShardStorageRecord::set_last_heartbeat_ms(::int64_t value) {
   _internal_set_last_heartbeat_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_heartbeat_ms)
 }
 inline ::int64_t HubShardStorageRecord::_internal_last_heartbeat_ms() const {
@@ -7323,7 +8507,7 @@ inline void HubShardStorageRecord::_internal_set_last_heartbeat_ms(::int64_t val
 inline void HubShardStorageRecord::clear_created_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::int64_t HubShardStorageRecord::created_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.created_at_ms)
@@ -7331,7 +8515,7 @@ inline ::int64_t HubShardStorageRecord::created_at_ms() const {
 }
 inline void HubShardStorageRecord::set_created_at_ms(::int64_t value) {
   _internal_set_created_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.created_at_ms)
 }
 inline ::int64_t HubShardStorageRecord::_internal_created_at_ms() const {
@@ -7347,7 +8531,7 @@ inline void HubShardStorageRecord::_internal_set_created_at_ms(::int64_t value) 
 inline void HubShardStorageRecord::clear_draining_since_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.draining_since_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::int64_t HubShardStorageRecord::draining_since_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.draining_since_ms)
@@ -7355,7 +8539,7 @@ inline ::int64_t HubShardStorageRecord::draining_since_ms() const {
 }
 inline void HubShardStorageRecord::set_draining_since_ms(::int64_t value) {
   _internal_set_draining_since_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.draining_since_ms)
 }
 inline ::int64_t HubShardStorageRecord::_internal_draining_since_ms() const {
@@ -7367,6 +8551,1170 @@ inline void HubShardStorageRecord::_internal_set_draining_since_ms(::int64_t val
   _impl_.draining_since_ms_ = value;
 }
 
+// uint64 current_token_exp_ms = 11 [json_name = "currentTokenExpMs"];
+inline void HubShardStorageRecord::clear_current_token_exp_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_token_exp_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t HubShardStorageRecord::current_token_exp_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.current_token_exp_ms)
+  return _internal_current_token_exp_ms();
+}
+inline void HubShardStorageRecord::set_current_token_exp_ms(::uint64_t value) {
+  _internal_set_current_token_exp_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.current_token_exp_ms)
+}
+inline ::uint64_t HubShardStorageRecord::_internal_current_token_exp_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_token_exp_ms_;
+}
+inline void HubShardStorageRecord::_internal_set_current_token_exp_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_token_exp_ms_ = value;
+}
+
+// uint64 current_token_gen = 12 [json_name = "currentTokenGen"];
+inline void HubShardStorageRecord::clear_current_token_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_token_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t HubShardStorageRecord::current_token_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.current_token_gen)
+  return _internal_current_token_gen();
+}
+inline void HubShardStorageRecord::set_current_token_gen(::uint64_t value) {
+  _internal_set_current_token_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.current_token_gen)
+}
+inline ::uint64_t HubShardStorageRecord::_internal_current_token_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_token_gen_;
+}
+inline void HubShardStorageRecord::_internal_set_current_token_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_token_gen_ = value;
+}
+
+// uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
+inline void HubShardStorageRecord::clear_last_verified_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t HubShardStorageRecord::last_verified_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_verified_gen)
+  return _internal_last_verified_gen();
+}
+inline void HubShardStorageRecord::set_last_verified_gen(::uint64_t value) {
+  _internal_set_last_verified_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_verified_gen)
+}
+inline ::uint64_t HubShardStorageRecord::_internal_last_verified_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_verified_gen_;
+}
+inline void HubShardStorageRecord::_internal_set_last_verified_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_gen_ = value;
+}
+
+// string last_verified_jti = 14 [json_name = "lastVerifiedJti"];
+inline void HubShardStorageRecord::clear_last_verified_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& HubShardStorageRecord::last_verified_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_verified_jti)
+  return _internal_last_verified_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_last_verified_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.last_verified_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_verified_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardStorageRecord::mutable_last_verified_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_last_verified_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.last_verified_jti)
+  return _s;
+}
+inline const ::std::string& HubShardStorageRecord::_internal_last_verified_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_verified_jti_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_last_verified_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardStorageRecord::_internal_mutable_last_verified_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_verified_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubShardStorageRecord::release_last_verified_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.last_verified_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.last_verified_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_verified_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubShardStorageRecord::set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.last_verified_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_verified_jti_.IsDefault()) {
+    _impl_.last_verified_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.last_verified_jti)
+}
+
+// string gameserver_uid = 15 [json_name = "gameserverUid"];
+inline void HubShardStorageRecord::clear_gameserver_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gameserver_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& HubShardStorageRecord::gameserver_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.gameserver_uid)
+  return _internal_gameserver_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubShardStorageRecord::set_gameserver_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.gameserver_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.gameserver_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardStorageRecord::mutable_gameserver_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_gameserver_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardStorageRecord.gameserver_uid)
+  return _s;
+}
+inline const ::std::string& HubShardStorageRecord::_internal_gameserver_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gameserver_uid_.Get();
+}
+inline void HubShardStorageRecord::_internal_set_gameserver_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gameserver_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardStorageRecord::_internal_mutable_gameserver_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gameserver_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubShardStorageRecord::release_gameserver_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardStorageRecord.gameserver_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.gameserver_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gameserver_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubShardStorageRecord::set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.gameserver_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gameserver_uid_.IsDefault()) {
+    _impl_.gameserver_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardStorageRecord.gameserver_uid)
+}
+
+// uint32 auth_epoch = 16 [json_name = "authEpoch"];
+inline void HubShardStorageRecord::clear_auth_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t HubShardStorageRecord::auth_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.auth_epoch)
+  return _internal_auth_epoch();
+}
+inline void HubShardStorageRecord::set_auth_epoch(::uint32_t value) {
+  _internal_set_auth_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.auth_epoch)
+}
+inline ::uint32_t HubShardStorageRecord::_internal_auth_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_epoch_;
+}
+inline void HubShardStorageRecord::_internal_set_auth_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_epoch_ = value;
+}
+
+// uint32 last_verified_writer_epoch = 17 [json_name = "lastVerifiedWriterEpoch"];
+inline void HubShardStorageRecord::clear_last_verified_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t HubShardStorageRecord::last_verified_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardStorageRecord.last_verified_writer_epoch)
+  return _internal_last_verified_writer_epoch();
+}
+inline void HubShardStorageRecord::set_last_verified_writer_epoch(::uint32_t value) {
+  _internal_set_last_verified_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardStorageRecord.last_verified_writer_epoch)
+}
+inline ::uint32_t HubShardStorageRecord::_internal_last_verified_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_verified_writer_epoch_;
+}
+inline void HubShardStorageRecord::_internal_set_last_verified_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_writer_epoch_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// HubDSCredential
+
+// uint64 gen = 1 [json_name = "gen"];
+inline void HubDSCredential::clear_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t HubDSCredential::gen() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.gen)
+  return _internal_gen();
+}
+inline void HubDSCredential::set_gen(::uint64_t value) {
+  _internal_set_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.gen)
+}
+inline ::uint64_t HubDSCredential::_internal_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gen_;
+}
+inline void HubDSCredential::_internal_set_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gen_ = value;
+}
+
+// string jti = 2 [json_name = "jti"];
+inline void HubDSCredential::clear_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& HubDSCredential::jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.jti)
+  return _internal_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubDSCredential::set_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.jti)
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::mutable_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubDSCredential.jti)
+  return _s;
+}
+inline const ::std::string& HubDSCredential::_internal_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.jti_.Get();
+}
+inline void HubDSCredential::_internal_set_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::_internal_mutable_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubDSCredential::release_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubDSCredential.jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubDSCredential::set_allocated_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.jti_.IsDefault()) {
+    _impl_.jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubDSCredential.jti)
+}
+
+// uint64 exp_ms = 3 [json_name = "expMs"];
+inline void HubDSCredential::clear_exp_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t HubDSCredential::exp_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.exp_ms)
+  return _internal_exp_ms();
+}
+inline void HubDSCredential::set_exp_ms(::uint64_t value) {
+  _internal_set_exp_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.exp_ms)
+}
+inline ::uint64_t HubDSCredential::_internal_exp_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exp_ms_;
+}
+inline void HubDSCredential::_internal_set_exp_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_ms_ = value;
+}
+
+// string kid = 4 [json_name = "kid"];
+inline void HubDSCredential::clear_kid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& HubDSCredential::kid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.kid)
+  return _internal_kid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubDSCredential::set_kid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.kid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.kid)
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::mutable_kid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_kid();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubDSCredential.kid)
+  return _s;
+}
+inline const ::std::string& HubDSCredential::_internal_kid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.kid_.Get();
+}
+inline void HubDSCredential::_internal_set_kid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::_internal_mutable_kid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.kid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubDSCredential::release_kid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubDSCredential.kid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.kid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.kid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubDSCredential::set_allocated_kid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.kid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.kid_.IsDefault()) {
+    _impl_.kid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubDSCredential.kid)
+}
+
+// string instance_uid = 5 [json_name = "instanceUid"];
+inline void HubDSCredential::clear_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& HubDSCredential::instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.instance_uid)
+  return _internal_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubDSCredential::set_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::mutable_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubDSCredential.instance_uid)
+  return _s;
+}
+inline const ::std::string& HubDSCredential::_internal_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_uid_.Get();
+}
+inline void HubDSCredential::_internal_set_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::_internal_mutable_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubDSCredential::release_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubDSCredential.instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubDSCredential::set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_uid_.IsDefault()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubDSCredential.instance_uid)
+}
+
+// uint32 protocol_epoch = 6 [json_name = "protocolEpoch"];
+inline void HubDSCredential::clear_protocol_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.protocol_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t HubDSCredential::protocol_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.protocol_epoch)
+  return _internal_protocol_epoch();
+}
+inline void HubDSCredential::set_protocol_epoch(::uint32_t value) {
+  _internal_set_protocol_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.protocol_epoch)
+}
+inline ::uint32_t HubDSCredential::_internal_protocol_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.protocol_epoch_;
+}
+inline void HubDSCredential::_internal_set_protocol_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.protocol_epoch_ = value;
+}
+
+// string token_sha256 = 7 [json_name = "tokenSha256"];
+inline void HubDSCredential::clear_token_sha256() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.token_sha256_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& HubDSCredential::token_sha256() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.token_sha256)
+  return _internal_token_sha256();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubDSCredential::set_token_sha256(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.token_sha256_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.token_sha256)
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::mutable_token_sha256()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_token_sha256();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubDSCredential.token_sha256)
+  return _s;
+}
+inline const ::std::string& HubDSCredential::_internal_token_sha256() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.token_sha256_.Get();
+}
+inline void HubDSCredential::_internal_set_token_sha256(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.token_sha256_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubDSCredential::_internal_mutable_token_sha256() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.token_sha256_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubDSCredential::release_token_sha256() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubDSCredential.token_sha256)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.token_sha256_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.token_sha256_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubDSCredential::set_allocated_token_sha256(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.token_sha256_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.token_sha256_.IsDefault()) {
+    _impl_.token_sha256_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubDSCredential.token_sha256)
+}
+
+// uint32 writer_epoch = 8 [json_name = "writerEpoch"];
+inline void HubDSCredential::clear_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t HubDSCredential::writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubDSCredential.writer_epoch)
+  return _internal_writer_epoch();
+}
+inline void HubDSCredential::set_writer_epoch(::uint32_t value) {
+  _internal_set_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubDSCredential.writer_epoch)
+}
+inline ::uint32_t HubDSCredential::_internal_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.writer_epoch_;
+}
+inline void HubDSCredential::_internal_set_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writer_epoch_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// HubShardAuthStorageRecord
+
+// string pod_name = 1 [json_name = "podName"];
+inline void HubShardAuthStorageRecord::clear_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& HubShardAuthStorageRecord::pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.pod_name)
+  return _internal_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubShardAuthStorageRecord::set_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardAuthStorageRecord::mutable_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardAuthStorageRecord.pod_name)
+  return _s;
+}
+inline const ::std::string& HubShardAuthStorageRecord::_internal_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pod_name_.Get();
+}
+inline void HubShardAuthStorageRecord::_internal_set_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardAuthStorageRecord::_internal_mutable_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubShardAuthStorageRecord::release_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardAuthStorageRecord.pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubShardAuthStorageRecord::set_allocated_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.pod_name_.IsDefault()) {
+    _impl_.pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.pod_name)
+}
+
+// string instance_uid = 2 [json_name = "instanceUid"];
+inline void HubShardAuthStorageRecord::clear_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& HubShardAuthStorageRecord::instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.instance_uid)
+  return _internal_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubShardAuthStorageRecord::set_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardAuthStorageRecord::mutable_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardAuthStorageRecord.instance_uid)
+  return _s;
+}
+inline const ::std::string& HubShardAuthStorageRecord::_internal_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_uid_.Get();
+}
+inline void HubShardAuthStorageRecord::_internal_set_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardAuthStorageRecord::_internal_mutable_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubShardAuthStorageRecord::release_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardAuthStorageRecord.instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubShardAuthStorageRecord::set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_uid_.IsDefault()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.instance_uid)
+}
+
+// uint32 protocol_epoch = 3 [json_name = "protocolEpoch"];
+inline void HubShardAuthStorageRecord::clear_protocol_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.protocol_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t HubShardAuthStorageRecord::protocol_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.protocol_epoch)
+  return _internal_protocol_epoch();
+}
+inline void HubShardAuthStorageRecord::set_protocol_epoch(::uint32_t value) {
+  _internal_set_protocol_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.protocol_epoch)
+}
+inline ::uint32_t HubShardAuthStorageRecord::_internal_protocol_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.protocol_epoch_;
+}
+inline void HubShardAuthStorageRecord::_internal_set_protocol_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.protocol_epoch_ = value;
+}
+
+// .pandora.hub.v1.HubAuthPhase phase = 4 [json_name = "phase"];
+inline void HubShardAuthStorageRecord::clear_phase() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::pandora::hub::v1::HubAuthPhase HubShardAuthStorageRecord::phase() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.phase)
+  return _internal_phase();
+}
+inline void HubShardAuthStorageRecord::set_phase(::pandora::hub::v1::HubAuthPhase value) {
+  _internal_set_phase(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.phase)
+}
+inline ::pandora::hub::v1::HubAuthPhase HubShardAuthStorageRecord::_internal_phase() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::hub::v1::HubAuthPhase>(_impl_.phase_);
+}
+inline void HubShardAuthStorageRecord::_internal_set_phase(::pandora::hub::v1::HubAuthPhase value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = value;
+}
+
+// .pandora.hub.v1.HubDSCredential active = 5 [json_name = "active"];
+inline bool HubShardAuthStorageRecord::has_active() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.active_ != nullptr);
+  return value;
+}
+inline void HubShardAuthStorageRecord::clear_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.active_ != nullptr) _impl_.active_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::pandora::hub::v1::HubDSCredential& HubShardAuthStorageRecord::_internal_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::hub::v1::HubDSCredential* p = _impl_.active_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::hub::v1::HubDSCredential>(&::pandora::hub::v1::HubDSCredential_globals_);
+}
+inline const ::pandora::hub::v1::HubDSCredential& HubShardAuthStorageRecord::active() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.active)
+  return _internal_active();
+}
+inline void HubShardAuthStorageRecord::unsafe_arena_set_allocated_active(
+    ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.active_);
+  }
+  _impl_.active_ = reinterpret_cast<::pandora::hub::v1::HubDSCredential*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.active)
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE HubShardAuthStorageRecord::release_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::pandora::hub::v1::HubDSCredential* released = _impl_.active_;
+  _impl_.active_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE HubShardAuthStorageRecord::unsafe_arena_release_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardAuthStorageRecord.active)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::pandora::hub::v1::HubDSCredential* temp = _impl_.active_;
+  _impl_.active_ = nullptr;
+  return temp;
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL HubShardAuthStorageRecord::_internal_mutable_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.active_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::hub::v1::HubDSCredential>(GetArena());
+    _impl_.active_ = reinterpret_cast<::pandora::hub::v1::HubDSCredential*>(p);
+  }
+  return _impl_.active_;
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL HubShardAuthStorageRecord::mutable_active()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::pandora::hub::v1::HubDSCredential* _msg = _internal_mutable_active();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardAuthStorageRecord.active)
+  return _msg;
+}
+inline void HubShardAuthStorageRecord::set_allocated_active(::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.active_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.active_ = reinterpret_cast<::pandora::hub::v1::HubDSCredential*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.active)
+}
+
+// .pandora.hub.v1.HubDSCredential pending = 6 [json_name = "pending"];
+inline bool HubShardAuthStorageRecord::has_pending() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.pending_ != nullptr);
+  return value;
+}
+inline void HubShardAuthStorageRecord::clear_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pending_ != nullptr) _impl_.pending_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::pandora::hub::v1::HubDSCredential& HubShardAuthStorageRecord::_internal_pending() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::hub::v1::HubDSCredential* p = _impl_.pending_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::hub::v1::HubDSCredential>(&::pandora::hub::v1::HubDSCredential_globals_);
+}
+inline const ::pandora::hub::v1::HubDSCredential& HubShardAuthStorageRecord::pending() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.pending)
+  return _internal_pending();
+}
+inline void HubShardAuthStorageRecord::unsafe_arena_set_allocated_pending(
+    ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pending_);
+  }
+  _impl_.pending_ = reinterpret_cast<::pandora::hub::v1::HubDSCredential*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.pending)
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE HubShardAuthStorageRecord::release_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::hub::v1::HubDSCredential* released = _impl_.pending_;
+  _impl_.pending_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE HubShardAuthStorageRecord::unsafe_arena_release_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardAuthStorageRecord.pending)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::hub::v1::HubDSCredential* temp = _impl_.pending_;
+  _impl_.pending_ = nullptr;
+  return temp;
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL HubShardAuthStorageRecord::_internal_mutable_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pending_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::hub::v1::HubDSCredential>(GetArena());
+    _impl_.pending_ = reinterpret_cast<::pandora::hub::v1::HubDSCredential*>(p);
+  }
+  return _impl_.pending_;
+}
+inline ::pandora::hub::v1::HubDSCredential* PROTOBUF_NONNULL HubShardAuthStorageRecord::mutable_pending()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::hub::v1::HubDSCredential* _msg = _internal_mutable_pending();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardAuthStorageRecord.pending)
+  return _msg;
+}
+inline void HubShardAuthStorageRecord::set_allocated_pending(::pandora::hub::v1::HubDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pending_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.pending_ = reinterpret_cast<::pandora::hub::v1::HubDSCredential*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.pending)
+}
+
+// uint64 high_water_gen = 7 [json_name = "highWaterGen"];
+inline void HubShardAuthStorageRecord::clear_high_water_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.high_water_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t HubShardAuthStorageRecord::high_water_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.high_water_gen)
+  return _internal_high_water_gen();
+}
+inline void HubShardAuthStorageRecord::set_high_water_gen(::uint64_t value) {
+  _internal_set_high_water_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.high_water_gen)
+}
+inline ::uint64_t HubShardAuthStorageRecord::_internal_high_water_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.high_water_gen_;
+}
+inline void HubShardAuthStorageRecord::_internal_set_high_water_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.high_water_gen_ = value;
+}
+
+// int64 pending_started_ms = 8 [json_name = "pendingStartedMs"];
+inline void HubShardAuthStorageRecord::clear_pending_started_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_started_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::int64_t HubShardAuthStorageRecord::pending_started_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.pending_started_ms)
+  return _internal_pending_started_ms();
+}
+inline void HubShardAuthStorageRecord::set_pending_started_ms(::int64_t value) {
+  _internal_set_pending_started_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.pending_started_ms)
+}
+inline ::int64_t HubShardAuthStorageRecord::_internal_pending_started_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_started_ms_;
+}
+inline void HubShardAuthStorageRecord::_internal_set_pending_started_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_started_ms_ = value;
+}
+
+// string delivered_rv = 9 [json_name = "deliveredRv"];
+inline void HubShardAuthStorageRecord::clear_delivered_rv() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivered_rv_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& HubShardAuthStorageRecord::delivered_rv() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.delivered_rv)
+  return _internal_delivered_rv();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubShardAuthStorageRecord::set_delivered_rv(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.delivered_rv_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.delivered_rv)
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardAuthStorageRecord::mutable_delivered_rv()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_delivered_rv();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubShardAuthStorageRecord.delivered_rv)
+  return _s;
+}
+inline const ::std::string& HubShardAuthStorageRecord::_internal_delivered_rv() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.delivered_rv_.Get();
+}
+inline void HubShardAuthStorageRecord::_internal_set_delivered_rv(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivered_rv_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubShardAuthStorageRecord::_internal_mutable_delivered_rv() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.delivered_rv_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubShardAuthStorageRecord::release_delivered_rv() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubShardAuthStorageRecord.delivered_rv)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.delivered_rv_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.delivered_rv_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubShardAuthStorageRecord::set_allocated_delivered_rv(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.delivered_rv_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.delivered_rv_.IsDefault()) {
+    _impl_.delivered_rv_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubShardAuthStorageRecord.delivered_rv)
+}
+
+// int64 updated_at_ms = 10 [json_name = "updatedAtMs"];
+inline void HubShardAuthStorageRecord::clear_updated_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::int64_t HubShardAuthStorageRecord::updated_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.updated_at_ms)
+  return _internal_updated_at_ms();
+}
+inline void HubShardAuthStorageRecord::set_updated_at_ms(::int64_t value) {
+  _internal_set_updated_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.updated_at_ms)
+}
+inline ::int64_t HubShardAuthStorageRecord::_internal_updated_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_at_ms_;
+}
+inline void HubShardAuthStorageRecord::_internal_set_updated_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = value;
+}
+
+// int64 last_active_heartbeat_ms = 11 [json_name = "lastActiveHeartbeatMs"];
+inline void HubShardAuthStorageRecord::clear_last_active_heartbeat_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_active_heartbeat_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::int64_t HubShardAuthStorageRecord::last_active_heartbeat_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.last_active_heartbeat_ms)
+  return _internal_last_active_heartbeat_ms();
+}
+inline void HubShardAuthStorageRecord::set_last_active_heartbeat_ms(::int64_t value) {
+  _internal_set_last_active_heartbeat_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.last_active_heartbeat_ms)
+}
+inline ::int64_t HubShardAuthStorageRecord::_internal_last_active_heartbeat_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_active_heartbeat_ms_;
+}
+inline void HubShardAuthStorageRecord::_internal_set_last_active_heartbeat_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_active_heartbeat_ms_ = value;
+}
+
+// uint32 required_writer_epoch = 12 [json_name = "requiredWriterEpoch"];
+inline void HubShardAuthStorageRecord::clear_required_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t HubShardAuthStorageRecord::required_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubShardAuthStorageRecord.required_writer_epoch)
+  return _internal_required_writer_epoch();
+}
+inline void HubShardAuthStorageRecord::set_required_writer_epoch(::uint32_t value) {
+  _internal_set_required_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubShardAuthStorageRecord.required_writer_epoch)
+}
+inline ::uint32_t HubShardAuthStorageRecord::_internal_required_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.required_writer_epoch_;
+}
+inline void HubShardAuthStorageRecord::_internal_set_required_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_writer_epoch_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // HubAssignmentStorageRecord
@@ -7375,7 +9723,7 @@ inline void HubShardStorageRecord::_internal_set_draining_since_ms(::int64_t val
 inline void HubAssignmentStorageRecord::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t HubAssignmentStorageRecord::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.player_id)
@@ -7383,7 +9731,7 @@ inline ::uint64_t HubAssignmentStorageRecord::player_id() const {
 }
 inline void HubAssignmentStorageRecord::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.player_id)
 }
 inline ::uint64_t HubAssignmentStorageRecord::_internal_player_id() const {
@@ -7527,7 +9875,7 @@ inline void HubAssignmentStorageRecord::set_allocated_hub_addr(::std::string* PR
 inline void HubAssignmentStorageRecord::clear_shard_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shard_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
@@ -7535,7 +9883,7 @@ inline ::uint32_t HubAssignmentStorageRecord::shard_id() const {
 }
 inline void HubAssignmentStorageRecord::set_shard_id(::uint32_t value) {
   _internal_set_shard_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.shard_id)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_shard_id() const {
@@ -7615,7 +9963,7 @@ inline void HubAssignmentStorageRecord::set_allocated_region(::std::string* PROT
 inline void HubAssignmentStorageRecord::clear_team_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t HubAssignmentStorageRecord::team_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.team_id)
@@ -7623,7 +9971,7 @@ inline ::uint64_t HubAssignmentStorageRecord::team_id() const {
 }
 inline void HubAssignmentStorageRecord::set_team_id(::uint64_t value) {
   _internal_set_team_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.team_id)
 }
 inline ::uint64_t HubAssignmentStorageRecord::_internal_team_id() const {
@@ -7639,7 +9987,7 @@ inline void HubAssignmentStorageRecord::_internal_set_team_id(::uint64_t value) 
 inline void HubAssignmentStorageRecord::clear_assigned_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.assigned_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
@@ -7647,7 +9995,7 @@ inline ::int64_t HubAssignmentStorageRecord::assigned_at_ms() const {
 }
 inline void HubAssignmentStorageRecord::set_assigned_at_ms(::int64_t value) {
   _internal_set_assigned_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.assigned_at_ms)
 }
 inline ::int64_t HubAssignmentStorageRecord::_internal_assigned_at_ms() const {
@@ -7663,7 +10011,7 @@ inline void HubAssignmentStorageRecord::_internal_set_assigned_at_ms(::int64_t v
 inline void HubAssignmentStorageRecord::clear_role_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t HubAssignmentStorageRecord::role_id() const {
   // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.role_id)
@@ -7671,7 +10019,7 @@ inline ::uint32_t HubAssignmentStorageRecord::role_id() const {
 }
 inline void HubAssignmentStorageRecord::set_role_id(::uint32_t value) {
   _internal_set_role_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.role_id)
 }
 inline ::uint32_t HubAssignmentStorageRecord::_internal_role_id() const {
@@ -7681,6 +10029,270 @@ inline ::uint32_t HubAssignmentStorageRecord::_internal_role_id() const {
 inline void HubAssignmentStorageRecord::_internal_set_role_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_id_ = value;
+}
+
+// string hub_instance_uid = 9 [json_name = "hubInstanceUid"];
+inline void HubAssignmentStorageRecord::clear_hub_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& HubAssignmentStorageRecord::hub_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.hub_instance_uid)
+  return _internal_hub_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_hub_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.hub_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.hub_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::mutable_hub_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_hub_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.hub_instance_uid)
+  return _s;
+}
+inline const ::std::string& HubAssignmentStorageRecord::_internal_hub_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_instance_uid_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_hub_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::_internal_mutable_hub_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubAssignmentStorageRecord::release_hub_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.hub_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.hub_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubAssignmentStorageRecord::set_allocated_hub_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.hub_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_instance_uid_.IsDefault()) {
+    _impl_.hub_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.hub_instance_uid)
+}
+
+// uint32 auth_epoch = 10 [json_name = "authEpoch"];
+inline void HubAssignmentStorageRecord::clear_auth_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t HubAssignmentStorageRecord::auth_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_epoch)
+  return _internal_auth_epoch();
+}
+inline void HubAssignmentStorageRecord::set_auth_epoch(::uint32_t value) {
+  _internal_set_auth_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_epoch)
+}
+inline ::uint32_t HubAssignmentStorageRecord::_internal_auth_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_epoch_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_auth_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_epoch_ = value;
+}
+
+// uint64 auth_gen = 11 [json_name = "authGen"];
+inline void HubAssignmentStorageRecord::clear_auth_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t HubAssignmentStorageRecord::auth_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_gen)
+  return _internal_auth_gen();
+}
+inline void HubAssignmentStorageRecord::set_auth_gen(::uint64_t value) {
+  _internal_set_auth_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_gen)
+}
+inline ::uint64_t HubAssignmentStorageRecord::_internal_auth_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_gen_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_auth_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_gen_ = value;
+}
+
+// string auth_jti = 12 [json_name = "authJti"];
+inline void HubAssignmentStorageRecord::clear_auth_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& HubAssignmentStorageRecord::auth_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_jti)
+  return _internal_auth_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_auth_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.auth_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::mutable_auth_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_auth_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.auth_jti)
+  return _s;
+}
+inline const ::std::string& HubAssignmentStorageRecord::_internal_auth_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_jti_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_auth_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::_internal_mutable_auth_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.auth_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubAssignmentStorageRecord::release_auth_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.auth_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.auth_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.auth_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubAssignmentStorageRecord::set_allocated_auth_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.auth_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.auth_jti_.IsDefault()) {
+    _impl_.auth_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.auth_jti)
+}
+
+// string assignment_id = 13 [json_name = "assignmentId"];
+inline void HubAssignmentStorageRecord::clear_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& HubAssignmentStorageRecord::assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.assignment_id)
+  return _internal_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HubAssignmentStorageRecord::set_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::mutable_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.hub.v1.HubAssignmentStorageRecord.assignment_id)
+  return _s;
+}
+inline const ::std::string& HubAssignmentStorageRecord::_internal_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.assignment_id_.Get();
+}
+inline void HubAssignmentStorageRecord::_internal_set_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HubAssignmentStorageRecord::_internal_mutable_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HubAssignmentStorageRecord::release_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.hub.v1.HubAssignmentStorageRecord.assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HubAssignmentStorageRecord::set_allocated_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.assignment_id_.IsDefault()) {
+    _impl_.assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.hub.v1.HubAssignmentStorageRecord.assignment_id)
+}
+
+// uint32 auth_writer_epoch = 14 [json_name = "authWriterEpoch"];
+inline void HubAssignmentStorageRecord::clear_auth_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t HubAssignmentStorageRecord::auth_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.hub.v1.HubAssignmentStorageRecord.auth_writer_epoch)
+  return _internal_auth_writer_epoch();
+}
+inline void HubAssignmentStorageRecord::set_auth_writer_epoch(::uint32_t value) {
+  _internal_set_auth_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.hub.v1.HubAssignmentStorageRecord.auth_writer_epoch)
+}
+inline ::uint32_t HubAssignmentStorageRecord::_internal_auth_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_writer_epoch_;
+}
+inline void HubAssignmentStorageRecord::_internal_set_auth_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_writer_epoch_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -8112,6 +10724,19 @@ inline void HubMigrateEvent::_internal_set_ts_ms(::int64_t value) {
 }  // namespace hub
 }  // namespace pandora
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::pandora::hub::v1::HubAuthPhase> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::hub::v1::HubAuthPhase>() {
+  return ::pandora::hub::v1::HubAuthPhase_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

@@ -24,12 +24,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 )
 
@@ -46,6 +49,26 @@ type AgonesGameServerAllocator struct {
 	tokenPath       string // "" 或 "-" → 不带 Authorization
 	allocateTimeout time.Duration
 	httpClient      *http.Client
+
+	// dsTokenIssuer 签发 DS 回调服务令牌(审核 P1 #1;main 在 ds_auth.secret 已配时注入)。
+	// 非 nil 时 Allocate 把令牌写进 GameServerAllocation 的 metadata.annotations
+	// pandora.dev/ds-token,DS 经 Agones SDK GameServer() 读到后回调时带 Bearer 头。
+	dsTokenIssuer func(matchID uint64) (token string, err error)
+	// dsTokenRequired 为 guard=enforce 时 true:签发失败必须 fail-closed(不分配无令牌的 DS,
+	// 否则该 DS 回调会被 enforce 守卫全拒,等于开了个连不回来的对局)。off/permissive 下 false,
+	// 签发失败降级为无令牌分配以保对局可开。
+	dsTokenRequired bool
+}
+
+// dsTokenAnnotationKey 是下发 DS 回调令牌的 GameServer annotation key。
+// label 有 63 字符 / 字符集限制放不下 JWT,annotation 无此限制。
+const dsTokenAnnotationKey = "pandora.dev/ds-token"
+
+// SetDSTokenIssuer 注入 DS 回调令牌签发器(可选依赖,main 在 ds_auth.secret 已配时调用)。
+// required=true(guard=enforce)时签发失败会让 Allocate 返回错误(fail-closed)。
+func (a *AgonesGameServerAllocator) SetDSTokenIssuer(f func(matchID uint64) (string, error), required bool) {
+	a.dsTokenIssuer = f
+	a.dsTokenRequired = required
 }
 
 // NewAgonesGameServerAllocator 构造真 Agones 分配器。
@@ -107,7 +130,8 @@ type gsaSelector struct {
 }
 
 type gsaMetadata struct {
-	Labels map[string]string `json:"labels,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type gsaSpec struct {
@@ -137,12 +161,133 @@ type gsaResponse struct {
 	Status gsaStatus `json:"status"`
 }
 
+// AuthoritativeGameServerAllocation 是 Model B 分配结果。UID/resourceVersion 只来自选中后
+// 的严格 GameServer GET；AnnotationsPresent 决定 JSON Patch 应新增整个 map 还是单独成员。
+type AuthoritativeGameServerAllocation struct {
+	PodName            string
+	Addr               string
+	InstanceUID        string
+	InstanceEpoch      uint32
+	ResourceVersion    string
+	AllocationID       string
+	AnnotationsPresent bool
+}
+
+type gameServerResponse struct {
+	Metadata struct {
+		Name            string            `json:"name"`
+		UID             string            `json:"uid"`
+		ResourceVersion string            `json:"resourceVersion"`
+		Labels          map[string]string `json:"labels"`
+		Annotations     map[string]string `json:"annotations"`
+	} `json:"metadata"`
+}
+
+type gameServerListResponse struct {
+	Items []gameServerResponse `json:"items"`
+}
+
+type jsonPatchOperation struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value any    `json:"value"`
+}
+
+type deleteOptions struct {
+	APIVersion    string               `json:"apiVersion"`
+	Kind          string               `json:"kind"`
+	Preconditions *deletePreconditions `json:"preconditions,omitempty"`
+}
+
+type deletePreconditions struct {
+	UID string `json:"uid"`
+}
+
 // Allocate POST 一个 GameServerAllocation,返回 (gameServerName, address:port)。
 //
 // selectors 有序(Agones 按顺序尝试,选中首个有空闲 GameServer 的):
 //  1. 若 mapID 配了专属预热 Fleet(map_fleets)→ 首选它(Pod 已预加载目标图,分配即可玩);
 //  2. 通用 Fleet(Loader 模式,分配后按 map-id label travel)作兜底。
 func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (string, string, error) {
+	meta := &gsaMetadata{Labels: map[string]string{
+		"pandora.dev/match-id":  fmt.Sprintf("%d", matchID),
+		"pandora.dev/map-id":    fmt.Sprintf("%d", mapID),
+		"pandora.dev/game-mode": sanitizeLabelValue(gameMode),
+	}}
+	// DS 回调服务令牌经 annotation 下发(DS 拿不到签名密钥,只持有短期令牌)。
+	// enforce(dsTokenRequired=true):签发失败 fail-closed,返回分配失败,不产生连不回来的对局;
+	// off/permissive:签发失败降级为无令牌分配,先保对局可开。
+	if a.dsTokenIssuer != nil {
+		if tok, terr := a.dsTokenIssuer(matchID); terr != nil {
+			if a.dsTokenRequired {
+				plog.With(ctx).Errorw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr,
+					"mode", "enforce", "hint", "ds_auth.mode=enforce 下签发失败即 fail-closed;检查 ds_auth.secret / 签名配置")
+				return "", "", errcode.New(errcode.ErrDSAllocationFailed,
+					"ds_callback_token sign failed under enforce for match %d: %v", matchID, terr)
+			}
+			plog.With(ctx).Warnw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr)
+		} else {
+			meta.Annotations = map[string]string{dsTokenAnnotationKey: tok}
+		}
+	}
+
+	return a.allocateWithMetadata(ctx, matchID, mapID, meta)
+}
+
+// AllocateAuthoritative 执行 Model B 的 K8s 分配半段：GSA POST 永不携带令牌；选中后必须
+// 严格 GET GameServer 取得 UID/resourceVersion，任一字段缺失都 fail-closed。
+func (a *AgonesGameServerAllocator) AllocateAuthoritative(
+	ctx context.Context,
+	matchID uint64,
+	allocationID string,
+	mapID uint32,
+	gameMode string,
+) (*AuthoritativeGameServerAllocation, error) {
+	if matchID == 0 || allocationID == "" {
+		return nil, errcode.New(errcode.ErrInvalidArg, "agones: match_id and allocation_id required")
+	}
+	partial := &AuthoritativeGameServerAllocation{AllocationID: allocationID}
+	meta := &gsaMetadata{Labels: map[string]string{
+		"pandora.dev/match-id":      fmt.Sprintf("%d", matchID),
+		"pandora.dev/map-id":        fmt.Sprintf("%d", mapID),
+		"pandora.dev/game-mode":     sanitizeLabelValue(gameMode),
+		"pandora.dev/allocation-id": sanitizeLabelValue(allocationID),
+	}}
+	podName, addr, err := a.allocateWithMetadata(ctx, matchID, mapID, meta)
+	if err != nil {
+		// 即使 POST 没有可解析响应，也必须把 allocation_id 交还调用方。它是未知结果
+		// 对账/回收的唯一 fencing token；返回 nil 会让调用方删 claim 后再次分配第二个 Pod。
+		return partial, err
+	}
+	partial.PodName, partial.Addr = podName, addr
+	gs, err := a.getGameServer(ctx, podName)
+	if err != nil {
+		return partial, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: strict GET selected gameserver %s failed: %v", podName, err)
+	}
+	if gs.Metadata.Name != podName || gs.Metadata.UID == "" || gs.Metadata.ResourceVersion == "" ||
+		gs.Metadata.Labels["pandora.dev/match-id"] != strconv.FormatUint(matchID, 10) ||
+		gs.Metadata.Labels["pandora.dev/allocation-id"] != sanitizeLabelValue(allocationID) {
+		return partial, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: selected gameserver identity/binding incomplete: want_name=%q name=%q uid=%q rv=%q",
+			podName, gs.Metadata.Name, gs.Metadata.UID, gs.Metadata.ResourceVersion)
+	}
+	return &AuthoritativeGameServerAllocation{
+		PodName:            podName,
+		Addr:               addr,
+		InstanceUID:        gs.Metadata.UID,
+		ResourceVersion:    gs.Metadata.ResourceVersion,
+		AllocationID:       allocationID,
+		AnnotationsPresent: gs.Metadata.Annotations != nil,
+	}, nil
+}
+
+func (a *AgonesGameServerAllocator) allocateWithMetadata(
+	ctx context.Context,
+	matchID uint64,
+	mapID uint32,
+	meta *gsaMetadata,
+) (string, string, error) {
 	selectors := make([]gsaSelector, 0, 2)
 	if dedicated := a.mapFleets[mapID]; dedicated != "" && dedicated != a.fleetName {
 		selectors = append(selectors, gsaSelector{MatchLabels: map[string]string{fleetLabelKey: dedicated}})
@@ -155,11 +300,7 @@ func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64
 		Spec: gsaSpec{
 			Selectors: selectors,
 			// 把业务标识打到被分配的 GameServer 上,便于运维 / 排障关联对局。
-			Metadata: &gsaMetadata{Labels: map[string]string{
-				"pandora.dev/match-id":  fmt.Sprintf("%d", matchID),
-				"pandora.dev/map-id":    fmt.Sprintf("%d", mapID),
-				"pandora.dev/game-mode": sanitizeLabelValue(gameMode),
-			}},
+			Metadata: meta,
 		},
 	}
 	payload, err := json.Marshal(reqBody)
@@ -200,6 +341,162 @@ func (a *AgonesGameServerAllocator) Allocate(ctx context.Context, matchID uint64
 	}
 	addr := fmt.Sprintf("%s:%d", host, resp.Status.Ports[0].Port)
 	return resp.Status.GameServerName, addr, nil
+}
+
+// DeliverCredential 用 UID+resourceVersion JSON Patch 投递 Redis pending 的镜像。PATCH 的
+// HTTP 结果从不直接作为成功依据：无论 2xx 空/坏响应、409，还是 transport timeout，均再做
+// 一次严格 GET；只有 UID 未变且全部 annotation 与期望精确相等才成功，绝不本地 fallback。
+func (a *AgonesGameServerAllocator) DeliverCredential(
+	ctx context.Context,
+	allocation *AuthoritativeGameServerAllocation,
+	annotations map[string]string,
+) (string, error) {
+	if allocation == nil || allocation.PodName == "" || allocation.InstanceUID == "" ||
+		allocation.ResourceVersion == "" || len(annotations) == 0 {
+		return "", errcode.New(errcode.ErrInvalidArg, "agones: incomplete credential delivery input")
+	}
+	for k, v := range annotations {
+		if k == "" || v == "" {
+			return "", errcode.New(errcode.ErrInvalidArg,
+				"agones: credential annotation key/value must be non-empty")
+		}
+	}
+	ops := []jsonPatchOperation{
+		{Op: "test", Path: "/metadata/uid", Value: allocation.InstanceUID},
+		{Op: "test", Path: "/metadata/resourceVersion", Value: allocation.ResourceVersion},
+	}
+	if !allocation.AnnotationsPresent {
+		ops = append(ops, jsonPatchOperation{Op: "add", Path: "/metadata/annotations", Value: annotations})
+	} else {
+		keys := make([]string, 0, len(annotations))
+		for key := range annotations {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			pathKey := strings.ReplaceAll(strings.ReplaceAll(key, "~", "~0"), "/", "~1")
+			ops = append(ops, jsonPatchOperation{Op: "add", Path: "/metadata/annotations/" + pathKey, Value: annotations[key]})
+		}
+	}
+	payload, err := json.Marshal(ops)
+	if err != nil {
+		return "", errcode.New(errcode.ErrDSAllocationFailed, "agones: marshal credential patch: %v", err)
+	}
+	url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, allocation.PodName)
+	patchBody, patchStatus, patchErr := a.doWithContentType(
+		ctx, http.MethodPatch, url, payload, "application/json-patch+json")
+
+	// PATCH 结果未知时，确认读不能复用一个可能已因入站超时/取消而失效的 ctx。
+	// 独立确认仍由 do() 的 allocateTimeout 严格限时；它只读 K8s 当前事实，不延长业务写。
+	confirmed, confirmErr := a.getGameServer(context.WithoutCancel(ctx), allocation.PodName)
+	if confirmErr == nil {
+		confirmErr = confirmCredentialDelivery(confirmed, allocation, annotations)
+	}
+	if confirmErr == nil {
+		return confirmed.Metadata.ResourceVersion, nil
+	}
+	return "", errcode.New(errcode.ErrDSAllocationFailed,
+		"agones: credential PATCH not strictly confirmed: patch_status=%d patch_err=%v patch_body=%q confirm_err=%v",
+		patchStatus, patchErr, truncate(patchBody, 256), confirmErr)
+}
+
+func (a *AgonesGameServerAllocator) getGameServer(ctx context.Context, podName string) (*gameServerResponse, error) {
+	url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, podName)
+	body, status, err := a.do(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, fmt.Errorf("GET gameserver http %d: %s", status, truncate(body, 256))
+	}
+	var gs gameServerResponse
+	if err := json.Unmarshal(body, &gs); err != nil {
+		return nil, fmt.Errorf("decode gameserver: %w", err)
+	}
+	return &gs, nil
+}
+
+func confirmCredentialDelivery(
+	gs *gameServerResponse,
+	allocation *AuthoritativeGameServerAllocation,
+	annotations map[string]string,
+) error {
+	if gs == nil || gs.Metadata.Name != allocation.PodName || gs.Metadata.UID != allocation.InstanceUID ||
+		gs.Metadata.ResourceVersion == "" {
+		return fmt.Errorf("gameserver identity mismatch or incomplete")
+	}
+	for key, want := range annotations {
+		if got := gs.Metadata.Annotations[key]; got != want {
+			return fmt.Errorf("annotation %q mismatch: got=%q", key, got)
+		}
+	}
+	return nil
+}
+
+// ReleaseExpected 只删除 UID 仍等于本次分配实例的 GameServer。同名对象重建后 UID 变化，
+// apiserver 会拒绝 DeleteOptions precondition，旧 cleanup 不能误杀新实例。
+func (a *AgonesGameServerAllocator) ReleaseExpected(
+	ctx context.Context,
+	allocation *AuthoritativeGameServerAllocation,
+) error {
+	if allocation == nil || (allocation.InstanceUID == "" && allocation.AllocationID == "") {
+		return errcode.New(errcode.ErrInvalidArg,
+			"agones: expected release requires uid or allocation_id")
+	}
+	if allocation.InstanceUID == "" {
+		// POST 已选中但 UID GET 不确定时，不能按名字删除。allocation_id 是本次 GSA 写入
+		// 选中对象的唯一 UUID label，用 DeleteCollection 精确回收；同名重建的新对象不会
+		// 带旧 allocation_id，因此旧 cleanup 不会误杀新实例。
+		selector := "pandora.dev/allocation-id=" + sanitizeLabelValue(allocation.AllocationID)
+		deleteBody, err := json.Marshal(deleteOptions{APIVersion: "v1", Kind: "DeleteOptions"})
+		if err != nil {
+			return errcode.New(errcode.ErrDSAllocationFailed, "agones: marshal allocation delete: %v", err)
+		}
+		collectionURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?labelSelector=%s",
+			a.apiServer, a.namespace, url.QueryEscape(selector))
+		deleteResp, deleteStatus, deleteErr := a.do(ctx, http.MethodDelete, collectionURL, deleteBody)
+		// DeleteCollection 的响应/超时同样不构成完成证据；严格 LIST 确认该唯一 label
+		// 已无对象。timeout-but-applied 可幂等成功，2xx 但仍有对象则保留 Redis claim。
+		listBody, listStatus, listErr := a.do(ctx, http.MethodGet, collectionURL, nil)
+		if listErr == nil && listStatus >= 200 && listStatus < 300 {
+			var list gameServerListResponse
+			if uerr := json.Unmarshal(listBody, &list); uerr == nil && len(list.Items) == 0 {
+				return nil
+			}
+		}
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: allocation-id release not confirmed: allocation_id=%s delete_status=%d delete_err=%v delete_body=%q list_status=%d list_err=%v list_body=%q",
+			allocation.AllocationID, deleteStatus, deleteErr, truncate(deleteResp, 128),
+			listStatus, listErr, truncate(listBody, 128))
+	}
+	if allocation.PodName == "" {
+		return errcode.New(errcode.ErrInvalidArg, "agones: UID release requires gameserver name")
+	}
+	body, err := json.Marshal(deleteOptions{
+		APIVersion: "v1", Kind: "DeleteOptions",
+		Preconditions: &deletePreconditions{UID: allocation.InstanceUID},
+	})
+	if err != nil {
+		return errcode.New(errcode.ErrDSAllocationFailed, "agones: marshal expected delete: %v", err)
+	}
+	url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, allocation.PodName)
+	respBody, status, err := a.do(ctx, http.MethodDelete, url, body)
+	if err != nil {
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: expected release %s uid=%s: %v", allocation.PodName, allocation.InstanceUID, err)
+	}
+	if status == http.StatusNotFound {
+		return nil
+	}
+	if status < 200 || status >= 300 {
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: expected release %s uid=%s http %d: %s",
+			allocation.PodName, allocation.InstanceUID, status, truncate(respBody, 256))
+	}
+	return nil
 }
 
 // Release DELETE 该 GameServer(Fleet 自动补新);404 视作已释放(幂等)。
@@ -297,6 +594,15 @@ func (a *AgonesGameServerAllocator) ListFleetCapacities(ctx context.Context) ([]
 
 // do 发一次带鉴权的 REST 请求,返回 (body, statusCode, transportErr)。
 func (a *AgonesGameServerAllocator) do(ctx context.Context, method, url string, body []byte) ([]byte, int, error) {
+	return a.doWithContentType(ctx, method, url, body, "application/json")
+}
+
+func (a *AgonesGameServerAllocator) doWithContentType(
+	ctx context.Context,
+	method, url string,
+	body []byte,
+	contentType string,
+) ([]byte, int, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, a.allocateTimeout)
 	defer cancel()
 
@@ -309,7 +615,7 @@ func (a *AgonesGameServerAllocator) do(ctx context.Context, method, url string, 
 		return nil, 0, err
 	}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
 	// 每次请求重读 token(容忍 in-cluster 投影 token 轮转);"-" 或空 → 不带。

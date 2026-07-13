@@ -22,6 +22,7 @@ require (
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/google/uuid v1.6.0
 	github.com/luyuancpp/pandora/pkg v0.0.0-00010101000000-000000000000
+	github.com/luyuancpp/pandora/pkg/dsauthfence v0.0.0-00010101000000-000000000000
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.20.0
 	google.golang.org/grpc v1.79.3
@@ -34,6 +35,8 @@ require (
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.6.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
@@ -42,7 +45,9 @@ require (
 	github.com/go-kratos/aegis v0.2.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-playground/form/v4 v4.2.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
@@ -69,6 +74,9 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.16 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
@@ -85,5 +93,6 @@ require (
 // 本地 workspace 内的模块通过 replace 指向源码目录。
 replace (
 	github.com/luyuancpp/pandora/pkg => ../../../pkg
+	github.com/luyuancpp/pandora/pkg/dsauthfence => ../../../pkg/dsauthfence
 	github.com/luyuancpp/pandora/proto => ../../../proto
 )

@@ -23,6 +23,8 @@ go 1.26.5
 
 use ./pkg
 
+use ./pkg/dsauthfence
+
 use ./pkg/cellroute/etcdtable
 
 use ./pkg/leader/etcdleader

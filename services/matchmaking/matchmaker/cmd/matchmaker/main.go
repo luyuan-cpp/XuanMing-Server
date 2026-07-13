@@ -136,11 +136,12 @@ func main() {
 	var allocator biz.DSAllocator
 	if cfg.Match.DSAllocatorAddr != "" {
 		authCfg := auth.Config{
-			Issuer:      cfg.JWT.Issuer,
-			Audience:    cfg.JWT.Audience,
-			Secret:      []byte(cfg.JWT.Secret),
-			SessionTTL:  cfg.JWT.SessionTTL.Std(),
-			DSTicketTTL: cfg.JWT.DSTicketTTL.Std(),
+			Issuer:            cfg.JWT.Issuer,
+			Audience:          cfg.JWT.Audience,
+			Secret:            []byte(cfg.JWT.Secret),
+			AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets),
+			SessionTTL:        cfg.JWT.SessionTTL.Std(),
+			DSTicketTTL:       cfg.JWT.DSTicketTTL.Std(),
 		}
 		signer, serr := auth.NewSigner(authCfg)
 		if serr != nil {

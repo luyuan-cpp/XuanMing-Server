@@ -22,8 +22,10 @@
 package auth
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -86,6 +88,27 @@ type DSTicketClaims struct {
 	// omitempty:0(未选角 / battle 票走 roster)时不序列化,与历史票据兼容。
 	// uint32 配置表 ID(非 snowflake 业务 ID,CLAUDE.md §9.12)。
 	RoleID uint32 `json:"role_id,omitempty"`
+	// 以下字段把 hub 入场票绑定到「当前玩家归属 + 当前 Hub DS active 凭据」。
+	// 全部使用 omitempty 保持旧票据字节/解析兼容；Model B enforce 由上层要求六项必须完整。
+	DSPodName       string `json:"ds_pod,omitempty"`
+	DSInstanceUID   string `json:"ds_uid,omitempty"`
+	DSProtocolEpoch uint32 `json:"ds_epoch,omitempty"`
+	DSCredentialGen uint64 `json:"ds_gen,omitempty"`
+	DSCredentialJTI string `json:"ds_credential_jti,omitempty"`
+	HubAssignmentID string `json:"hub_assignment_id,omitempty"`
+	DSWriterEpoch   uint32 `json:"ds_writer_epoch,omitempty"`
+}
+
+// DSTicketBinding 是 hub DSTicket 的实例/归属绑定。零值表示旧兼容票据；非零时六项必须完整，
+// 身份为 assignment_id + (pod, instance_uid, protocol_epoch, gen, credential_jti)。
+type DSTicketBinding struct {
+	DSPodName       string
+	DSInstanceUID   string
+	ProtocolEpoch   uint32
+	CredentialGen   uint64
+	CredentialJTI   string
+	HubAssignmentID string
+	WriterEpoch     uint32
 }
 
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
@@ -100,6 +123,80 @@ func (t *DSTicketClaims) PlayerID() uint64 {
 	return id
 }
 
+// ── DS 回调服务令牌(审核 P1 #1,2026-07-10)────────────────────────────────────
+//
+// 与 DSTicket(玩家→DS 的入场票)方向相反:DSCallbackToken 是「DS→后端」的服务身份令牌,
+// 证明回调方(Heartbeat / ReportResult / SetLocation / PollCommands …)确实是后端刚分配 /
+// 发现的那个 DS 实例,而不是集群内的伪造调用者。
+//
+//   - 签发方:ds_allocator(战斗 DS,分配时签,绑 match_id)/ hub_allocator(大厅 DS,
+//     发现时签,绑 pod 名,临期续签)
+//   - 下发通道:Agones GameServer annotation `pandora.dev/ds-token`(分配 metadata /
+//     发现后 PATCH)或 local 模式 PANDORA_DS_TOKEN env——DS 全程拿不到签名密钥
+//   - 携带方式:DS 回调时 `authorization: Bearer <token>`
+//   - 校验方:pkg/middleware.DSCallbackGuard(四个被回调服务按 ds_auth.mode 灰度)
+//
+// aud 与玩家令牌严格分域(默认 "pandora-ds" vs "pandora-client"),互不可用。
+
+// DSCallbackClaims 是 DS 回调服务令牌的载荷。
+//
+// 自定义 claim:
+//   - ds_type:"hub" / "battle"
+//   - match_id:battle 令牌必填(授权范围 = 本场对局);hub 为 0 不序列化
+//
+// sub:hub 令牌 = GameServer pod 名(授权范围 = 本实例);battle 令牌签发时尚不知道
+// Agones 会选中哪个 GameServer(分配 metadata 原子下发),故 sub 留空、以 match_id 为准
+// (match↔pod 的绑定由 ds_allocator 心跳镜像的 pod_mismatch 校验闭环)。
+type DSCallbackClaims struct {
+	jwt.RegisteredClaims
+	DSType  string `json:"ds_type"`
+	MatchID uint64 `json:"match_id,omitempty"`
+	// DSGen 是 hub 回调令牌的「代际」(Redis INCR 权威、独立、单调;0=未启用/battle 令牌)。
+	// hub_allocator 每次重签 Hub 令牌领取一个严格递增的 gen 签进来,DS 心跳原样回显,
+	// 服务端据此精确相等比较判定令牌是否当前代际(替代秒级 exp 代际,消除同秒重签碰撞;审核 P1-6)。
+	DSGen uint64 `json:"ds_gen,omitempty"`
+	// DSInstanceUID / DSProtocolEpoch:Model B 凭据身份绑定(decision-revisit-ds-callback-auth §7)。
+	// 凭据身份 = (instance_uid, protocol_epoch, gen, jti) 四元组:gen 单独不安全(计数器 TTL
+	// 复位可致 gen 复用),必须联合 DS 实例身份(Agones GameServer uid)与协议纪元才能唯一锚定。
+	// Redis Model B 生产路径以及机械隔离的 local-off-v1 均必须非空；legacy 令牌保持空
+	// (omitempty)只用于旧二进制迁移读取，新 UE 不再把它当可用凭据。
+	DSInstanceUID   string `json:"ds_uid,omitempty"`
+	DSProtocolEpoch uint32 `json:"ds_epoch,omitempty"`
+	// DSWriterEpoch 是二进制授权协议能力纪元；与 DSProtocolEpoch(实例轮次)严格分离。
+	DSWriterEpoch uint32 `json:"ds_writer_epoch,omitempty"`
+	// DSKid 是签发密钥指纹的签名内副本；active-state checker 不依赖未签名的外部 annotation。
+	DSKid string `json:"ds_kid,omitempty"`
+}
+
+// Pod 返回令牌绑定的 GameServer pod 名(hub 令牌;battle 令牌为空)。
+func (c *DSCallbackClaims) Pod() string { return c.Subject }
+
+// Gen 返回令牌代际(hub 令牌;battle 令牌 / 未启用为 0)。
+func (c *DSCallbackClaims) Gen() uint64 { return c.DSGen }
+
+// UID 返回凭据绑定的 DS 实例身份(Agones GameServer uid;Model B 未启用为空)。
+func (c *DSCallbackClaims) UID() string { return c.DSInstanceUID }
+
+// Epoch 返回凭据协议纪元(Model B 未启用为 0)。
+func (c *DSCallbackClaims) Epoch() uint32 { return c.DSProtocolEpoch }
+
+// WriterEpoch 返回签发该凭据的授权协议能力纪元。
+func (c *DSCallbackClaims) WriterEpoch() uint32 { return c.DSWriterEpoch }
+
+// Kid 返回签发密钥指纹的签名 claim。
+func (c *DSCallbackClaims) Kid() string { return c.DSKid }
+
+// JTI 返回令牌唯一 id(RegisteredClaims.ID)。
+func (c *DSCallbackClaims) JTI() string { return c.ID }
+
+// DS 回调令牌的默认 iss / aud(config.DSAuthConf.Defaults 同步这两个值)。
+const (
+	DSCallbackIssuer   = "pandora-ds-control"
+	DSCallbackAudience = "pandora-ds"
+	// DSAuthWriterEpochV2 是本二进制实现的 Model B writer capability。
+	DSAuthWriterEpochV2 uint32 = 2
+)
+
 // Config 是 JWT signer / verifier 公共配置。
 //
 // Secret 必须 ≥ 32 字节(HS256 推荐安全长度);生产期换 RS256 时本字段废弃,
@@ -113,6 +210,16 @@ type Config struct {
 
 	// Secret HS256 共享密钥;dev 期 login 服务跟 Envoy 各持一份(同一字符串)。
 	Secret []byte
+
+	// AdditionalSecrets 是**仅用于校验**的额外可接受密钥(不用于签发),支持不停服密钥轮换
+	// (审核 P1 #3)。签发始终用 Secret(主密钥);校验时按 token 头 kid 路由到匹配密钥,
+	// 无 / 未知 kid 时依次尝试 [Secret, AdditionalSecrets...]。轮换三段式:
+	//   ① 各服务先把新密钥 K2 加进 additional(仍用 K1 签)→ 全量接受 K1/K2;
+	//   ② 主密钥翻成 K2、additional 放 K1 → 用 K2 签,仍接受 K1;
+	//   ③ 清空 additional 只留 K2。
+	// 三步都是滚动更新,新旧副本共存期两把密钥都被接受,无 401 断档(CLAUDE.md §9 不变量 16)。
+	// 默认 nil:单密钥,行为与历史完全一致。
+	AdditionalSecrets [][]byte
 
 	// SessionTTL SessionToken 有效期,默认 24h。
 	SessionTTL time.Duration
@@ -152,7 +259,38 @@ func (c *Config) Validate() error {
 	if len(c.Secret) < 32 {
 		return fmt.Errorf("auth.Config: Secret too short (got %d bytes, need >=32 for HS256)", len(c.Secret))
 	}
+	for i, s := range c.AdditionalSecrets {
+		if len(s) < 32 {
+			return fmt.Errorf("auth.Config: AdditionalSecrets[%d] too short (got %d bytes, need >=32 for HS256)", i, len(s))
+		}
+		// 重复密钥必属误配(轮换三段式里 additional 只放「另一把」密钥):与主密钥同值 =
+		// 轮换实际没生效;additional 内部重复 = 复制粘贴事故。静默接受会掩盖轮换失败 → 启动即拒。
+		if SecretEqual(s, c.Secret) {
+			return fmt.Errorf("auth.Config: AdditionalSecrets[%d] duplicates primary Secret (rotation misconfig)", i)
+		}
+		for j := 0; j < i; j++ {
+			if SecretEqual(s, c.AdditionalSecrets[j]) {
+				return fmt.Errorf("auth.Config: AdditionalSecrets[%d] duplicates AdditionalSecrets[%d]", i, j)
+			}
+		}
+	}
 	return nil
+}
+
+// verificationKeys 返回校验时依次尝试的密钥集合:主密钥在前,额外密钥在后。
+func (c *Config) verificationKeys() [][]byte {
+	keys := make([][]byte, 0, 1+len(c.AdditionalSecrets))
+	keys = append(keys, c.Secret)
+	keys = append(keys, c.AdditionalSecrets...)
+	return keys
+}
+
+// keyFingerprint 取密钥的稳定短指纹(SHA256 前 8 字节的 hex),作为 token 头 kid。
+// 不可逆、确定性:同一密钥恒得同一 kid,供轮换期按 kid 把 token 路由到对应校验密钥,
+// 并让令牌自描述用了哪把密钥(审核 P1 #3:此前 token 无 kid)。
+func keyFingerprint(secret []byte) string {
+	sum := sha256.Sum256(secret)
+	return hex.EncodeToString(sum[:8])
 }
 
 // Signer 签发 SessionToken / DSTicket。线程安全(无可变状态)。
@@ -251,6 +389,16 @@ func (s *Signer) SignDSTicketWithCell(playerID uint64, dsType DSType, matchID ui
 //
 // 其余语义同 SignDSTicketWithCell。不变量 §3:默认 TTL=5min。
 func (s *Signer) SignDSTicketFull(playerID uint64, dsType DSType, matchID uint64, regionID, cellID, roleID uint32, jti string) (token string, expiresAtMs int64, err error) {
+	return s.signDSTicket(playerID, dsType, matchID, regionID, cellID, roleID, jti, DSTicketBinding{})
+}
+
+// SignBoundHubDSTicket 签发绑定当前 Hub DS active 凭据与玩家归属版本的 hub 票据。
+// 绑定不完整一律拒绝，避免产生看似新格式但实际可跨实例/跨归属使用的半绑定票据。
+func (s *Signer) SignBoundHubDSTicket(playerID uint64, regionID, cellID, roleID uint32, jti string, binding DSTicketBinding) (token string, expiresAtMs int64, err error) {
+	return s.signDSTicket(playerID, DSTypeHub, 0, regionID, cellID, roleID, jti, binding)
+}
+
+func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, regionID, cellID, roleID uint32, jti string, binding DSTicketBinding) (token string, expiresAtMs int64, err error) {
 	if playerID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: playerID must be > 0")
 	}
@@ -263,6 +411,11 @@ func (s *Signer) SignDSTicketFull(playerID uint64, dsType DSType, matchID uint64
 	if dsType == DSTypeBattle && matchID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: battle DSTicket requires matchID")
 	}
+	if !binding.empty() {
+		if dsType != DSTypeHub || !binding.complete() {
+			return "", 0, errors.New("auth.SignDSTicket: hub binding must be complete and only used by hub tickets")
+		}
+	}
 	now := s.cfg.NowFn()
 	exp := now.Add(s.cfg.DSTicketTTL)
 	claims := DSTicketClaims{
@@ -274,11 +427,18 @@ func (s *Signer) SignDSTicketFull(playerID uint64, dsType DSType, matchID uint64
 			ExpiresAt: jwt.NewNumericDate(exp),
 			ID:        jti,
 		},
-		DSType:   string(dsType),
-		MatchID:  matchID,
-		RegionID: regionID,
-		CellID:   cellID,
-		RoleID:   roleID,
+		DSType:          string(dsType),
+		MatchID:         matchID,
+		RegionID:        regionID,
+		CellID:          cellID,
+		RoleID:          roleID,
+		DSPodName:       binding.DSPodName,
+		DSInstanceUID:   binding.DSInstanceUID,
+		DSProtocolEpoch: binding.ProtocolEpoch,
+		DSCredentialGen: binding.CredentialGen,
+		DSCredentialJTI: binding.CredentialJTI,
+		HubAssignmentID: binding.HubAssignmentID,
+		DSWriterEpoch:   binding.WriterEpoch,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	str, err := t.SignedString(s.cfg.Secret)
@@ -286,6 +446,194 @@ func (s *Signer) SignDSTicketFull(playerID uint64, dsType DSType, matchID uint64
 		return "", 0, fmt.Errorf("auth.SignDSTicket: %w", err)
 	}
 	return str, exp.UnixMilli(), nil
+}
+
+func (b DSTicketBinding) empty() bool {
+	return b.DSPodName == "" && b.DSInstanceUID == "" && b.ProtocolEpoch == 0 &&
+		b.CredentialGen == 0 && b.CredentialJTI == "" && b.HubAssignmentID == "" && b.WriterEpoch == 0
+}
+
+func (b DSTicketBinding) complete() bool {
+	return b.DSPodName != "" && b.DSInstanceUID != "" && b.ProtocolEpoch > 0 &&
+		b.CredentialGen > 0 && b.CredentialJTI != "" && b.HubAssignmentID != "" && b.WriterEpoch > 0
+}
+
+// SignDSCallback 签发 DS 回调服务令牌(方向:DS→后端;详见 DSCallbackClaims 注释)。
+//
+// 约束:
+//   - dsType=battle:matchID 必填(授权范围 = 本场对局),pod 可空(分配时未知)
+//   - dsType=hub:pod 必填(授权范围 = 本实例),matchID 必须为 0
+//   - ttl 必须 > 0(battle 默认 4h / hub 默认 24h 由 config.DSAuthConf 决定,调用方传入)
+//
+// 注意:签发用的 Signer 必须以 DS 回调专用 Config 构造(Issuer=DSCallbackIssuer /
+// Audience=DSCallbackAudience 或 ds_auth 配置值),不要复用玩家令牌 Signer。
+func (s *Signer) SignDSCallback(dsType DSType, pod string, matchID uint64, ttl time.Duration) (token string, expiresAtMs int64, err error) {
+	return s.SignDSCallbackWithGen(dsType, pod, matchID, 0, ttl)
+}
+
+// SignDSCallbackWithGen 与 SignDSCallback 相同,但额外把 hub 令牌代际 gen 签进 ds_gen claim。
+//
+// gen=0 等价于 SignDSCallback(不带代际;battle 令牌 / 未启用代际门控)。gen>0 仅用于
+// hub 令牌:hub_allocator 经 Redis INCR 领取严格递增的 gen 后签进来,DS 心跳原样回显,
+// 服务端精确相等比较判定是否当前代际(替代秒级 exp 代际,消除同秒重签碰撞;审核 P1-6)。
+func (s *Signer) SignDSCallbackWithGen(dsType DSType, pod string, matchID, gen uint64, ttl time.Duration) (token string, expiresAtMs int64, err error) {
+	switch dsType {
+	case DSTypeBattle:
+		if matchID == 0 {
+			return "", 0, errors.New("auth.SignDSCallback: battle token requires matchID")
+		}
+	case DSTypeHub:
+		if pod == "" {
+			return "", 0, errors.New("auth.SignDSCallback: hub token requires pod")
+		}
+		if matchID != 0 {
+			return "", 0, errors.New("auth.SignDSCallback: hub token must not carry matchID")
+		}
+	default:
+		return "", 0, fmt.Errorf("auth.SignDSCallback: invalid dsType %q", dsType)
+	}
+	if ttl <= 0 {
+		return "", 0, errors.New("auth.SignDSCallback: ttl must be > 0")
+	}
+	now := s.cfg.NowFn()
+	exp := now.Add(ttl)
+	kid := keyFingerprint(s.cfg.Secret)
+	claims := DSCallbackClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.cfg.Issuer,
+			Subject:   pod,
+			Audience:  jwt.ClaimStrings{s.cfg.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(exp),
+		},
+		DSType:  string(dsType),
+		MatchID: matchID,
+		DSGen:   gen,
+		DSKid:   kid,
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	// 打 kid = 主密钥指纹:令牌自描述用了哪把密钥,轮换期校验侧据此路由到对应密钥(审核 P1 #3)。
+	// DS 回调令牌不经 Envoy jwt_authn(只由 DSCallbackGuard 校验),加 kid 头对边缘网关无影响。
+	t.Header["kid"] = kid
+	str, err := t.SignedString(s.cfg.Secret)
+	if err != nil {
+		return "", 0, fmt.Errorf("auth.SignDSCallback: %w", err)
+	}
+	return str, exp.UnixMilli(), nil
+}
+
+// HubCredentialResult 是 SignHubCredential 的产物:除令牌串外,还回显组装 HubDSCredential
+// 所需的身份字段(kid 在令牌头不在 payload,token_sha256 需签后算),免调用方重解析。
+type HubCredentialResult struct {
+	Token       string
+	ExpMs       int64
+	Kid         string // 签发密钥指纹(= keyFingerprint(主密钥))
+	TokenSHA256 string // 令牌串 SHA256(hex),完整性绑定
+	WriterEpoch uint32
+}
+
+// SignHubCredential 签发 Model B 的 hub 回调凭据令牌(decision-revisit-ds-callback-auth §7)。
+//
+// 与 SignDSCallbackWithGen 相比,额外把 DS 实例身份(instanceUID)、协议纪元(epoch)、jti 签进去,
+// 使凭据身份 = (instance_uid, protocol_epoch, gen, jti) 四元组(gen 单独不安全)。jti 由调用方
+// 传入(uuid v4,与其他票据签发一致,pkg/auth 不引入 uuid 依赖)。生产 Redis Model B 与
+// Windows local-off-v1 都使用本方法；两者只在“是否需要 Redis pending→active ACK”上不同。
+func (s *Signer) SignHubCredential(pod, instanceUID string, epoch uint32, gen uint64, jti string, ttl time.Duration) (HubCredentialResult, error) {
+	if pod == "" {
+		return HubCredentialResult{}, errors.New("auth.SignHubCredential: pod must be non-empty")
+	}
+	if instanceUID == "" {
+		return HubCredentialResult{}, errors.New("auth.SignHubCredential: instanceUID must be non-empty")
+	}
+	if epoch == 0 {
+		return HubCredentialResult{}, errors.New("auth.SignHubCredential: protocol epoch must be > 0")
+	}
+	if gen == 0 {
+		return HubCredentialResult{}, errors.New("auth.SignHubCredential: gen must be > 0")
+	}
+	if jti == "" {
+		return HubCredentialResult{}, errors.New("auth.SignHubCredential: jti must be non-empty")
+	}
+	if ttl <= 0 {
+		return HubCredentialResult{}, errors.New("auth.SignHubCredential: ttl must be > 0")
+	}
+	now := s.cfg.NowFn()
+	exp := now.Add(ttl)
+	kid := keyFingerprint(s.cfg.Secret)
+	claims := DSCallbackClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.cfg.Issuer,
+			Subject:   pod,
+			Audience:  jwt.ClaimStrings{s.cfg.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(exp),
+			ID:        jti,
+		},
+		DSType:          string(DSTypeHub),
+		DSGen:           gen,
+		DSInstanceUID:   instanceUID,
+		DSProtocolEpoch: epoch,
+		DSWriterEpoch:   DSAuthWriterEpochV2,
+		DSKid:           kid,
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	t.Header["kid"] = kid
+	str, err := t.SignedString(s.cfg.Secret)
+	if err != nil {
+		return HubCredentialResult{}, fmt.Errorf("auth.SignHubCredential: %w", err)
+	}
+	sum := sha256.Sum256([]byte(str))
+	return HubCredentialResult{
+		Token: str,
+		// jwt.NumericDate 按库的 TimePrecision(默认秒)序列化；Redis 必须保存实际 claim 值，
+		// 不能保存未截断的本地 exp，否则严格 active-state 比较会稳定差 1-999ms。
+		ExpMs:       claims.ExpiresAt.UnixMilli(),
+		Kid:         kid,
+		TokenSHA256: hex.EncodeToString(sum[:]),
+		WriterEpoch: DSAuthWriterEpochV2,
+	}, nil
+}
+
+// SignBattleCredential 签发 Model B battle 回调凭据。与 Hub 凭据相同地绑定
+// (pod, instance_uid, instance_epoch, gen, jti, writer_epoch)，并额外绑定 match_id。
+// Agones 路径必须先选中 GameServer 并经 GET 取得 UID；local-off-v1 则由本地 allocator
+// 为每个进程生成唯一 UUID，并以 epoch/gen=1 的单次实例凭据调用。
+func (s *Signer) SignBattleCredential(matchID uint64, pod, instanceUID string, epoch uint32, gen uint64, jti string, ttl time.Duration) (HubCredentialResult, error) {
+	if matchID == 0 {
+		return HubCredentialResult{}, errors.New("auth.SignBattleCredential: matchID must be > 0")
+	}
+	if pod == "" {
+		return HubCredentialResult{}, errors.New("auth.SignBattleCredential: pod must be non-empty")
+	}
+	if instanceUID == "" {
+		return HubCredentialResult{}, errors.New("auth.SignBattleCredential: instanceUID must be non-empty")
+	}
+	if epoch == 0 || gen == 0 || jti == "" || ttl <= 0 {
+		return HubCredentialResult{}, errors.New("auth.SignBattleCredential: epoch/gen/jti/ttl must be non-zero")
+	}
+	now := s.cfg.NowFn()
+	exp := now.Add(ttl)
+	kid := keyFingerprint(s.cfg.Secret)
+	claims := DSCallbackClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer: s.cfg.Issuer, Subject: pod, Audience: jwt.ClaimStrings{s.cfg.Audience},
+			IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(exp), ID: jti,
+		},
+		DSType: string(DSTypeBattle), MatchID: matchID, DSGen: gen,
+		DSInstanceUID: instanceUID, DSProtocolEpoch: epoch,
+		DSWriterEpoch: DSAuthWriterEpochV2, DSKid: kid,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = kid
+	encoded, err := token.SignedString(s.cfg.Secret)
+	if err != nil {
+		return HubCredentialResult{}, fmt.Errorf("auth.SignBattleCredential: %w", err)
+	}
+	sum := sha256.Sum256([]byte(encoded))
+	return HubCredentialResult{
+		Token: encoded, ExpMs: claims.ExpiresAt.UnixMilli(), Kid: kid,
+		TokenSHA256: hex.EncodeToString(sum[:]), WriterEpoch: DSAuthWriterEpochV2,
+	}, nil
 }
 
 // VerifySession 校验 SessionToken,返回 claims。
@@ -326,6 +674,47 @@ func (v *Verifier) VerifyDSTicket(token string) (*DSTicketClaims, error) {
 	if claims.DSType == string(DSTypeBattle) && claims.MatchID == 0 {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "battle ds ticket missing match_id")
 	}
+	binding := DSTicketBinding{
+		DSPodName:       claims.DSPodName,
+		DSInstanceUID:   claims.DSInstanceUID,
+		ProtocolEpoch:   claims.DSProtocolEpoch,
+		CredentialGen:   claims.DSCredentialGen,
+		CredentialJTI:   claims.DSCredentialJTI,
+		HubAssignmentID: claims.HubAssignmentID,
+		WriterEpoch:     claims.DSWriterEpoch,
+	}
+	if !binding.empty() && (claims.DSType != string(DSTypeHub) || !binding.complete()) {
+		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket has incomplete or invalid hub binding")
+	}
+	return &claims, nil
+}
+
+// VerifyDSCallback 校验 DS 回调服务令牌,返回 claims。
+//
+// 校验项:
+//   - 签名 / exp / iss / aud(parseInto;aud 分域保证玩家令牌 / DSTicket 在此必然失败)
+//   - ds_type 必在 "hub" / "battle"
+//   - battle → match_id 非 0;hub → sub(pod)非空(与 SignDSCallback 防御性检查对称)
+//
+// 失败统一返回 errcode.ErrUnauthorized(区别于玩家票据的 LoginTicket 错误码)。
+// 范围绑定(match_id / pod 与请求参数一致)由 pkg/middleware.DSCallbackGuard 做。
+func (v *Verifier) VerifyDSCallback(token string) (*DSCallbackClaims, error) {
+	var claims DSCallbackClaims
+	if err := v.parseInto(token, &claims); err != nil {
+		return nil, errcode.New(errcode.ErrUnauthorized, "ds callback token: %v", err)
+	}
+	switch claims.DSType {
+	case string(DSTypeBattle):
+		if claims.MatchID == 0 {
+			return nil, errcode.New(errcode.ErrUnauthorized, "battle ds callback token missing match_id")
+		}
+	case string(DSTypeHub):
+		if claims.Subject == "" {
+			return nil, errcode.New(errcode.ErrUnauthorized, "hub ds callback token missing pod (sub)")
+		}
+	default:
+		return nil, errcode.New(errcode.ErrUnauthorized, "ds callback token dsType invalid: %q", claims.DSType)
+	}
 	return &claims, nil
 }
 
@@ -338,10 +727,31 @@ func (v *Verifier) parseInto(token string, dst jwt.Claims) error {
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithIssuer(v.cfg.Issuer),
 		jwt.WithAudience(v.cfg.Audience),
+		// exp 必须存在:所有 Sign* 都写 exp,校验侧强制要求,杜绝「签名正确但无过期时间 = 永久有效」
+		// 的令牌(审核 P1:DS 回调令牌若无 exp 即成永久凭证)。
+		jwt.WithExpirationRequired(),
 		jwt.WithTimeFunc(v.cfg.NowFn),
 	)
 	_, err := parser.ParseWithClaims(token, dst, func(t *jwt.Token) (interface{}, error) {
-		return v.cfg.Secret, nil
+		keys := v.cfg.verificationKeys()
+		// 有 kid 且能匹配到某把校验密钥 → 直接路由到它(轮换期确定性选键)。
+		if kid, _ := t.Header["kid"].(string); kid != "" {
+			for _, k := range keys {
+				if keyFingerprint(k) == kid {
+					return k, nil
+				}
+			}
+		}
+		// 单密钥:与历史行为完全一致(直接返回该密钥)。
+		if len(keys) == 1 {
+			return keys[0], nil
+		}
+		// 多密钥且无 / 未知 kid(如轮换前签发的旧 token):依次尝试全部密钥(golang-jwt v5 VerificationKeySet)。
+		set := jwt.VerificationKeySet{Keys: make([]jwt.VerificationKey, len(keys))}
+		for i := range keys {
+			set.Keys[i] = keys[i]
+		}
+		return set, nil
 	})
 	if err == nil {
 		return nil
@@ -386,4 +796,33 @@ func JWKSInlineHS256(secret []byte, kid string) string {
 // SecretEqual 常量时间比较两个 secret;dev / 配置检查用。
 func SecretEqual(a, b []byte) bool {
 	return subtle.ConstantTimeCompare(a, b) == 1
+}
+
+// AdditionalSecretsBytes 把 yaml 配置里的 additional_secrets([]string)原样转 [][]byte。
+// 刻意**不过滤空串**:空条目是轮换清单事故,交给 Config.Validate 报错(fail-closed,二审 #8),
+// 静默过滤会让运维以为旧密钥仍被接受、实则轮换断档。
+func AdditionalSecretsBytes(list []string) [][]byte {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([][]byte, len(list))
+	for i, s := range list {
+		out[i] = []byte(s)
+	}
+	return out
+}
+
+// AssertDisjointSecrets 断言玩家面密钥集与 DS 回调面密钥集完全不相交(P0 审核:
+// 任何一把密钥同时出现在两面时,泄露玩家面即可伪造 DS 回调令牌绕过范围绑定,反之亦然)。
+// 两个集合各自包含「主密钥 + 全部 additional 校验密钥」;同时装配两面的服务
+// (hub_allocator)启动期必须调用,任一交叉即返回错误(fail-closed,启动即拒)。
+func AssertDisjointSecrets(playerKeys, dsKeys [][]byte) error {
+	for i, p := range playerKeys {
+		for j, d := range dsKeys {
+			if SecretEqual(p, d) {
+				return fmt.Errorf("auth: player-facing key[%d] equals ds-callback key[%d] (P0: 玩家面与 DS 回调面密钥集必须不相交)", i, j)
+			}
+		}
+	}
+	return nil
 }

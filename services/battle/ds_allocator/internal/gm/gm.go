@@ -29,9 +29,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 	gmv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/gm/v1"
+
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
 
 const (
@@ -63,7 +68,10 @@ type Service struct {
 	gmv1.UnimplementedGmServiceServer
 	rdb           redis.UniversalClient
 	helper        *log.Helper
-	battleChecker BattleLivenessChecker // 可选:SendCommand 前置校验目标对局活跃;nil 则不校验
+	battleChecker BattleLivenessChecker       // 可选:SendCommand 前置校验目标对局活跃;nil 则不校验
+	dsGuard       *middleware.DSCallbackGuard // 可选:PollCommands/AckCommand 的 DS 回调令牌守卫(审核 P1 #1);nil 等价 off
+	battleAuth    data.BattleAuthRepo         // Model B Redis 唯一授权权威
+	modelB        bool
 }
 
 // NewService 构造 GmService。
@@ -74,6 +82,21 @@ func NewService(rdb redis.UniversalClient, logger log.Logger) *Service {
 // SetBattleChecker 注入对局活跃性校验器(可选依赖,同 uc.SetLifecyclePusher 风格)。
 // 注入后 SendCommand 会先校验 match_id 对应的战斗镜像是否存在;不注则跳过(保留旧行为)。
 func (s *Service) SetBattleChecker(c BattleLivenessChecker) { s.battleChecker = c }
+
+// SetDSCallbackGuard 注入 DS 回调令牌守卫(可选依赖,main 在 ds_auth 已配时调用)。
+// 只管 DS 侧的 PollCommands/AckCommand;SendCommand 是运维内部接口不经 DS 面网关,不受影响。
+func (s *Service) SetDSCallbackGuard(g *middleware.DSCallbackGuard) { s.dsGuard = g }
+
+// EnableRedisAuthority 打开 GM DS 写接口的 Model B active 门。开启后 legacy/nil credential
+// 一律在 RPOP/审计日志前拒绝，不存在 permissive fallback。
+func (s *Service) EnableRedisAuthority(repo data.BattleAuthRepo) error {
+	if repo == nil {
+		return errcode.New(errcode.ErrInvalidState, "gm Model B requires battle auth repo")
+	}
+	s.battleAuth = repo
+	s.modelB = true
+	return nil
+}
 
 // SendCommand 运维 / GM 工具下发一条 GM 指令(立即完成型:入队即返回 idempotency_key)。
 //
@@ -151,6 +174,24 @@ func (s *Service) PollCommands(ctx context.Context, req *gmv1.PollCommandsReques
 	if req.GetMatchId() == 0 {
 		return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	var identity data.BattleCredentialIdentity
+	if s.modelB {
+		if req.GetDsPodName() == "" {
+			return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+		}
+		var err error
+		identity, err = s.modelBCredential(ctx, req.GetMatchId(), req.GetDsPodName())
+		if err != nil {
+			return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode(errcode.As(err))}, nil
+		}
+	} else {
+		// DS 回调令牌校验:只能拉自己这局的指令(防拿 A 局令牌偷 B 局 GM 指令,取即出队=窃取+丢失)。
+		if err := s.dsGuard.Check(ctx, middleware.DSScope{
+			Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), RequireToken: true,
+		}); err != nil {
+			return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode(errcode.As(err))}, nil
+		}
+	}
 
 	max := int(req.GetMax())
 	if max <= 0 {
@@ -160,9 +201,20 @@ func (s *Service) PollCommands(ctx context.Context, req *gmv1.PollCommandsReques
 		max = maxPollMax
 	}
 
-	// LPUSH 入头 + RPOP 出尾 = FIFO;RPopCount 一次弹出最多 max 条。
-	raw, err := s.rdb.RPopCount(ctx, queueKey(req.GetMatchId()), max).Result()
+	// Model B 把完整 active tuple 校验与 RPOP 放进 auth+queue 同 slot 的一次事务，
+	// 消灭 check 后轮换/吊销仍然弹出命令的 TOCTOU；legacy 保持原 RPOP。
+	var raw []string
+	var err error
+	if s.modelB {
+		raw, err = s.battleAuth.PopCommandsIfActive(
+			ctx, req.GetMatchId(), identity, queueKey(req.GetMatchId()), int64(max))
+	} else {
+		raw, err = s.rdb.RPopCount(ctx, queueKey(req.GetMatchId()), max).Result()
+	}
 	if err != nil && err != redis.Nil {
+		if code := errcode.As(err); code == errcode.ErrUnauthorized || code == errcode.ErrPermissionDeny {
+			return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode(code)}, nil
+		}
 		s.helper.Errorw("msg", "gm_command_poll_failed", "err", err, "match_id", req.GetMatchId())
 		return &gmv1.PollCommandsResponse{Code: commonv1.ErrCode_ERR_INTERNAL}, nil
 	}
@@ -190,6 +242,19 @@ func (s *Service) AckCommand(ctx context.Context, req *gmv1.AckCommandRequest) (
 	if req.GetMatchId() == 0 || req.GetIdempotencyKey() == "" {
 		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
+	if s.modelB {
+		identity, err := s.modelBCredential(ctx, req.GetMatchId(), "")
+		if err != nil {
+			return &gmv1.AckCommandResponse{Code: commonv1.ErrCode(errcode.As(err))}, nil
+		}
+		if err := s.battleAuth.CheckActive(ctx, req.GetMatchId(), identity); err != nil {
+			return &gmv1.AckCommandResponse{Code: commonv1.ErrCode(errcode.As(err))}, nil
+		}
+	} else if err := s.dsGuard.Check(ctx, middleware.DSScope{
+		Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), RequireToken: true,
+	}); err != nil {
+		return &gmv1.AckCommandResponse{Code: commonv1.ErrCode(errcode.As(err))}, nil
+	}
 	if req.GetOk() {
 		s.helper.Infow("msg", "gm_command_acked",
 			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey(), "ok", true)
@@ -198,4 +263,32 @@ func (s *Service) AckCommand(ctx context.Context, req *gmv1.AckCommandRequest) (
 			"match_id", req.GetMatchId(), "idempotency_key", req.GetIdempotencyKey(), "ok", false, "reason", req.GetMessage())
 	}
 	return &gmv1.AckCommandResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+func (s *Service) modelBCredential(
+	ctx context.Context,
+	matchID uint64,
+	podName string,
+) (data.BattleCredentialIdentity, error) {
+	_, verified, err := s.dsGuard.CheckBattleCredential(ctx, middleware.DSScope{
+		Type: auth.DSTypeBattle, MatchID: matchID, Pod: podName, RequireToken: true,
+	})
+	if err != nil {
+		return data.BattleCredentialIdentity{}, err
+	}
+	if verified == nil || verified.ExpMs <= 0 {
+		return data.BattleCredentialIdentity{}, errcode.New(errcode.ErrUnauthorized,
+			"battle callback requires complete Model B credential")
+	}
+	return data.BattleCredentialIdentity{
+		PodName:       verified.Pod,
+		InstanceUID:   verified.InstanceUID,
+		InstanceEpoch: verified.ProtocolEpoch,
+		Gen:           verified.Gen,
+		JTI:           verified.JTI,
+		ExpMs:         uint64(verified.ExpMs),
+		Kid:           verified.Kid,
+		TokenSHA256:   verified.TokenSHA256,
+		WriterEpoch:   verified.WriterEpoch,
+	}, nil
 }

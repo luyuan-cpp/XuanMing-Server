@@ -6,8 +6,11 @@ package data
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
@@ -55,7 +58,7 @@ func newLocalTestAllocator(t *testing.T, cfg conf.LocalDSConf) (*LocalGameServer
 	}
 	var mu sync.Mutex
 	created := make([]*fakeProc, 0)
-	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _ string) (dsProcess, error) {
+	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, _ string) (dsProcess, error) {
 		fp := newFakeProc()
 		mu.Lock()
 		created = append(created, fp)
@@ -113,6 +116,32 @@ func TestAllocate_Idempotent(t *testing.T) {
 	}
 	if len(*created) != 1 {
 		t.Fatalf("expected only 1 process for repeated allocate, got %d", len(*created))
+	}
+}
+
+func TestAllocatePassesUniqueModelBIdentityAndTokenToProcess(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{PortBase: 7777, PortRange: 10})
+	var gotMatch uint64
+	var gotPod, gotUID, gotToken string
+	var gotEpoch uint32
+	l.SetDSTokenIssuer(func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, error) {
+		gotMatch, gotPod, gotUID, gotEpoch = matchID, podName, instanceUID, instanceEpoch
+		return "model-b-token", nil
+	}, true)
+	l.startProc = func(_ string, _ int, _ uint64, _ uint32, _, token string) (dsProcess, error) {
+		gotToken = token
+		return newFakeProc(), nil
+	}
+
+	pod, _, err := l.Allocate(context.Background(), 88, 2, "moba")
+	if err != nil {
+		t.Fatalf("Allocate: %v", err)
+	}
+	if gotMatch != 88 || gotPod != pod || gotEpoch != 1 || gotToken != "model-b-token" {
+		t.Fatalf("issuer/process=(match=%d pod=%q epoch=%d token=%q)", gotMatch, gotPod, gotEpoch, gotToken)
+	}
+	if _, err := uuid.Parse(gotUID); err != nil {
+		t.Fatalf("instance uid 不是 UUID: %q: %v", gotUID, err)
 	}
 }
 
@@ -252,4 +281,28 @@ func TestBuildArgs_LoaderMapOverridesDirectSelect(t *testing.T) {
 	if len(args) == 0 || args[0] != "/Game/Maps/Loader?game=/Script/Pandora.PandoraDSLoaderGameMode" {
 		t.Fatalf("loader_map should override direct map select, args=%v", args)
 	}
+}
+
+func TestBuildEnvCarriesLocalProfileAndRejectsOverride(t *testing.T) {
+	l, _ := newLocalTestAllocator(t, conf.LocalDSConf{
+		PortBase: 7777, PortRange: 10,
+		ExtraEnv: map[string]string{"pandora_ds_local_profile": "evil"},
+	})
+	env := l.buildEnv("pandora-battle-local-9", 9, 1, "moba", "model-b-token")
+	if value := lastLocalEnvValue(env, "PANDORA_DS_LOCAL_PROFILE"); value != "local-off-v1" {
+		t.Fatalf("profile=%q", value)
+	}
+	if value := lastLocalEnvValue(env, "PANDORA_DS_TOKEN"); value != "model-b-token" {
+		t.Fatalf("token=%q", value)
+	}
+}
+
+func lastLocalEnvValue(env []string, key string) string {
+	for i := len(env) - 1; i >= 0; i-- {
+		parts := strings.SplitN(env[i], "=", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], key) {
+			return parts[1]
+		}
+	}
+	return ""
 }

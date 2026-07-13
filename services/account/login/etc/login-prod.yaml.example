@@ -48,6 +48,10 @@ locker:
 login:
   session_token_ttl: "24h"
   ds_ticket_ttl: "5m"               # 不变量 §3:DS 票据短时效
+  # 滚动兼容默认 false；Activation Job 机械确认所有 writer 具备绑定能力后才改 true。
+  # true 后 login 只接受 hub_allocator 权威签发且绑定 Redis 当前 assignment 的 hub 票。
+  require_hub_assignment_binding: false
+  # hub_assignment_fence: binding=true 时必填，使用与 DS auth 相同 required writer epoch。
   dev_skip_password: false          # ⚠️ 必须 false:走正常 bcrypt 密码校验
   # 选角白名单(⚠️ prod 必填):对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
   # 留空 = fail-closed,SelectRole 全部拒绝(dev_allow_any_role 默认 false,严禁上生产)。
@@ -65,3 +69,13 @@ login:
   hub:
     addr: "hub-allocator.pandora.svc.cluster.local:50021"
     region: ""
+
+# 生产实际配置由 gen_cluster_config.ps1 原子注入 enforce/redis + fence；本模板保持
+# off/legacy，避免脱离 Activation 流程手工填半套配置后误以为已启用在线入场权威。
+ds_auth:
+  mode: "off"
+  authority_mode: "legacy"
+  issuer: "pandora-ds-control"
+  audience: "pandora-ds"
+  secret: "__DS_JWT_SHARED_SECRET_32B_CHANGE_ME__"
+  active_heartbeat_max_age: "30s"

@@ -15,6 +15,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 
@@ -30,7 +31,7 @@ type HubLocationChecker interface {
 	// RefreshHubLocations 把 Hub DS 心跳捎带的在场 player_ids 转发给 locator 批量
 	// 续期 HUB 位置 TTL(在线保活)。locator 侧只续 state==HUB 且 hub_pod 匹配的记录。
 	// 返实际续期成功条数;失败由调用方 best-effort 处理(不影响心跳主流程)。
-	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64) (int, error)
+	RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, bearerToken string) (int, error)
 }
 
 // GrpcHubLocationChecker 实现 HubLocationChecker,内嵌 locator gRPC client。
@@ -63,7 +64,10 @@ func (g *GrpcHubLocationChecker) InBattleOrMatching(ctx context.Context, playerI
 }
 
 // RefreshHubLocations 转发 Hub DS 心跳捎带的在场玩家列表,批量续期 HUB 位置 TTL。
-func (g *GrpcHubLocationChecker) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64) (int, error) {
+func (g *GrpcHubLocationChecker) RefreshHubLocations(ctx context.Context, hubPod string, playerIDs []uint64, bearerToken string) (int, error) {
+	if bearerToken != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+bearerToken)
+	}
 	resp, err := g.client.RefreshHubLocations(ctx, &locatorv1.RefreshHubLocationsRequest{
 		HubPod:    hubPod,
 		PlayerIds: playerIDs,

@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
 
 // GameServerAllocator 向底层编排(W4 ② Mock / W4 ③ Agones)申请/释放一个战斗 DS pod。
@@ -18,6 +19,26 @@ type GameServerAllocator interface {
 	Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode string) (podName, addr string, err error)
 	// Release 释放(回收)一个战斗 DS pod。
 	Release(ctx context.Context, podName string) error
+}
+
+// AuthoritativeGameServerAllocator 是 Agones Model B 的额外能力：分配时先取得实例 UID/RV，
+// Redis stage 成功后再用 UID+RV 条件 PATCH 投递 annotation。K8s 仅是投递镜像，不是授权权威。
+type AuthoritativeGameServerAllocator interface {
+	AllocateAuthoritative(
+		ctx context.Context,
+		matchID uint64,
+		allocationID string,
+		mapID uint32,
+		gameMode string,
+	) (*data.AuthoritativeGameServerAllocation, error)
+	DeliverCredential(
+		ctx context.Context,
+		allocation *data.AuthoritativeGameServerAllocation,
+		annotations map[string]string,
+	) (confirmedResourceVersion string, err error)
+	// ReleaseExpected 用 Kubernetes UID delete precondition 回收本实例；同名 GameServer 已重建
+	// 时必须失败且零删除，禁止旧 cleanup 按名字误杀新实例。
+	ReleaseExpected(ctx context.Context, allocation *data.AuthoritativeGameServerAllocation) error
 }
 
 // MockGameServerAllocator 是 W4 ② 的打桩实现:不连 k8s,按 match_id 计算确定性假地址。

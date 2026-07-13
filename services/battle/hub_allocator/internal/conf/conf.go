@@ -43,6 +43,13 @@ type Config struct {
 
 	// LocalHub 本机 exec 常驻 Windows Hub DS 配置(mode=local 时生效)。
 	LocalHub LocalHubConf `yaml:"local_hub" json:"local_hub"`
+
+	// DSAuth DS 回调服务令牌(审核 P1 #1:DS→后端回调认证)。本服务两个角色都用它:
+	//   - 签发:ListShards 发现 ready Hub DS 时签 hub 令牌(绑 pod),经 GameServer
+	//     annotation(agones,剩余寿命 < TTL/3 时续期)/ PANDORA_DS_TOKEN env(local)下发。
+	//   - 校验:Heartbeat 按 mode(off/permissive/enforce)验证令牌 + pod 范围绑定。
+	// 详见 pkg/config.DSAuthConf、docs/design/decision-revisit-ds-callback-auth.md。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 
 // LocalHubConf 是「本机拉起一个常驻 Windows Hub Dedicated Server 进程」的调试后端配置(mode=local)。
@@ -127,11 +134,14 @@ type AgonesConf struct {
 
 // JWTConf 是签发 hub DSTicket 的 JWT 参数(镜像 login.JWTConf / matchmaker.JWTConf)。
 type JWTConf struct {
-	Issuer      string          `yaml:"issuer,omitempty" json:"issuer,omitempty"`
-	Audience    string          `yaml:"audience,omitempty" json:"audience,omitempty"`
-	Secret      string          `yaml:"secret,omitempty" json:"secret,omitempty"`
-	SessionTTL  config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
-	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
+	Issuer   string `yaml:"issuer,omitempty" json:"issuer,omitempty"`
+	Audience string `yaml:"audience,omitempty" json:"audience,omitempty"`
+	Secret   string `yaml:"secret,omitempty" json:"secret,omitempty"`
+	// AdditionalSecrets 是**仅用于校验**的额外可接受密钥(不用于签发),支持玩家面
+	// JWT 不停服密钥轮换(三段式,同 ds_auth.additional_secrets)。默认空。
+	AdditionalSecrets []string        `yaml:"additional_secrets,omitempty" json:"additional_secrets,omitempty"`
+	SessionTTL        config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
+	DSTicketTTL       config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 }
 
 // HubConf 是 hub_allocator 服务私有配置。
@@ -280,6 +290,7 @@ func (c *Config) Defaults() {
 	if c.Agones.ListTimeout == 0 {
 		c.Agones.ListTimeout = config.Duration(5 * time.Second)
 	}
+	c.DSAuth.Defaults()
 	// LocalHub 默认值(mode=local 时生效)。
 	// 路径字段支持环境变量展开 + 跨机器兜底,便于策划机移植(Client 目录可能不在配置写死的盘符):
 	//  1. 先做 ${VAR}/$VAR 展开(绝对路径不含 $,dev 配置原样保留);

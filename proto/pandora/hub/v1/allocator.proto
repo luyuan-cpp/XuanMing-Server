@@ -149,7 +149,7 @@ message ListHubsResponse {
   repeated uint64 player_ids = 10;
 }
 
- message HeartbeatResponse {
+message HeartbeatResponse {
   pandora.common.v1.ErrCode code = 1;
   string command = 2;  // "" | "drain" | "stop" | "reload_config"
   // grace_seconds: command=="drain"/"stop" 时下发的优雅迁移倒计时(秒)。
@@ -158,6 +158,18 @@ message ListHubsResponse {
   int32 grace_seconds = 3;
   // 4-9 reserved
   reserved 4 to 9;
+  // accepted_token_gen: Model B 令牌激活确认(additive)。Hub DS 用 pending 令牌的
+  // 首个合法心跳完成 pending→active 原子激活后,服务端回显被激活/被确认为当前 active 的
+  // 令牌代际(gen)。DS 侧据此判定「本令牌已被服务端接纳为权威」,可停止用旧令牌重试。
+  // 仅 ds_auth.mode=enforce + agones 下非 0;其余模式恒 0(旧 DS 忽略,双向兼容)。
+  uint64 accepted_token_gen = 10;
+  // Model B 激活 ACK 必须回显完整凭据身份,DS 只有在四元组
+  // (instance_uid, protocol_epoch, gen, jti) 与本地 staged 凭据全部一致时才切 active。
+  // 只比较 gen 会在计数器回退/同代重签时误接纳另一份令牌。
+  string accepted_token_jti = 11;
+  string accepted_instance_uid = 12;
+  uint32 accepted_protocol_epoch = 13;
+  uint32 accepted_writer_epoch = 14;
 }
 
 // ===== 服务端存储快照(CLAUDE.md §5.8)=====
@@ -182,6 +194,97 @@ message HubShardStorageRecord {
   // draining_since_ms: 强制整合时被标记 draining 的时刻(0=未在缩容排空中)。
   // 缩容回收要等 now-draining_since_ms ≥ grace 且 player_count==0 才删分片,避免提前杀 pod。
   int64  draining_since_ms = 10;
+  // current_token_exp_ms: 当前下发给该 Hub DS 的回调令牌 exp(unix ms)。
+  // 仅 ds_auth.mode=enforce + agones 心跳门控下由拓扑对账写入(其余模式恒 0 = 不启用),
+  // 【已弃用作代际标识,保留仅为兼容/调试,不再参与代际比较】。
+  // 历史用途:曾以 exp 秒级粒度充当令牌代际,但 JWT exp 为秒精度,同一秒内两次重签得到相同 exp,
+  // 旧令牌会被误判为当前代际(审核 P1-6 碰撞)。改用 current_token_gen(field 12)单调代际,
+  // exp 仅继续供拓扑续期判定(annotation 侧),不再当代际。上线后不复用编号(不变量 §5/17)。
+  uint64 current_token_exp_ms = 11;
+  // current_token_gen: 当前下发给该 Hub DS 的回调令牌「代际」(Redis INCR 权威、独立、单调)。
+  // 仅 ds_auth.mode=enforce + agones 心跳门控下由拓扑对账写入(其余模式恒 0 = 不启用)。
+  // 每次重签(PATCH 新 annotation)由 hub_allocator 经 Redis INCR 领取一个严格递增的 gen 并签进令牌;
+  // 拓扑对账把新 gen 写入本字段并把分片复位 warming,心跳侧只有携带 gen 与本值**精确相等**的
+  // 已验签令牌才能把分片翻回 ready(所有状态都校验,不止 warming),挡住迟到的旧令牌心跳
+  // (审核 P1-6/P1-8:替代秒级 exp 代际,消除同秒重签碰撞)。additive 新增编号,双向兼容
+  // (旧副本忽略、默认 0),不停服滚动更新安全(不变量 §17)。
+  uint64 current_token_gen = 12;
+  // ─── Model B 权威投影(additive,decision-revisit-ds-callback-auth §7)───
+  // 分片镜像不再是令牌授权权威,授权权威落 HubShardAuthStorageRecord(key
+  // `pandora:hub:auth:{pod}`)。以下字段是 promote(DS 首个 pending 心跳原子激活)成功后
+  // 由授权记录投影到分片镜像的只读快照,供 AssignHub 终态门(active 元组一致性)快速判定,
+  // 免每次分配再读授权记录。仅 enforce+agones 下非 0,双向兼容(旧副本忽略、默认 0/空)。
+  //
+  // last_verified_gen: 已被 promote 接纳为 active 的令牌代际(= 授权记录 active.gen)。
+  uint64 last_verified_gen = 13;
+  // last_verified_jti: 已被 promote 接纳为 active 的令牌 jti(与 gen 联合唯一标识凭据)。
+  string last_verified_jti = 14;
+  // gameserver_uid: 绑定的 Hub DS 实例身份(Agones GameServer metadata.uid);
+  // 代际计数器可能因 TTL 复位导致 gen 复用,故凭据身份用 (instance_uid, protocol_epoch, gen, jti)
+  // 四元组而非单一 gen。uid 变化 = 换了 DS 实例,授权记录必须复位重新走 bootstrap。
+  string gameserver_uid = 15;
+  // auth_epoch: 协议纪元(protocol_epoch),配合 uid 抵御计数器复位后的 gen 复用重放。
+  uint32 auth_epoch = 16;
+  uint32 last_verified_writer_epoch = 17;
+}
+
+// ===== Model B DS 回调授权状态机(decision-revisit-ds-callback-auth §7)=====
+
+// HubAuthPhase 是单个 Hub DS 授权记录的相位。Redis 是唯一授权权威,K8s annotation 只负责
+// 投递;DS 用 pending 令牌的首个合法心跳在 Redis 单 slot 事务里完成 pending→active 原子激活。
+enum HubAuthPhase {
+  HUB_AUTH_PHASE_UNSPECIFIED = 0;  // 未知/旧记录:回退当前(dormant)行为
+  HUB_AUTH_PHASE_BOOTSTRAP   = 1;  // 授权记录已建、尚无 active 凭据(等首个 pending 心跳激活)
+  HUB_AUTH_PHASE_ACTIVE      = 2;  // 已有 active 凭据(稳态)
+  HUB_AUTH_PHASE_ROTATING    = 3;  // active + pending 并存(轮换在途,等新 pending 被激活)
+  HUB_AUTH_PHASE_QUARANTINED = 4;  // uid 不符/疑似冒名:一律拒,等运维/重建
+  HUB_AUTH_PHASE_TERMINATING = 5;  // DS 退役中:不再接纳新凭据
+}
+
+// HubDSCredential 是一份 DS 回调令牌的身份指纹(存授权记录内,不外发客户端)。
+// 身份 = (instance_uid, protocol_epoch, gen, jti) 四元组:gen 单独不安全(计数器 TTL 复位
+// 可致 gen 复用),必须联合 uid+epoch+jti 才能唯一锚定一份凭据。
+message HubDSCredential {
+  uint64 gen            = 1;  // Redis INCR 单调代际
+  string jti           = 2;  // JWT jti(RegisteredClaims.ID),防重放
+  uint64 exp_ms        = 3;  // 令牌过期(unix ms)
+  string kid           = 4;  // 签发密钥指纹(key fingerprint),轮换期定位密钥
+  string instance_uid  = 5;  // 绑定 DS 实例身份(Agones GameServer uid)
+  uint32 protocol_epoch = 6; // 协议纪元,抗计数器复位重放
+  string token_sha256  = 7;  // 令牌串 SHA256(hex),完整性绑定(可选,空=不校验)
+  // writer_epoch:二进制授权协议能力纪元，与 protocol_epoch(实例轮次)语义严格分离。
+  uint32 writer_epoch  = 8;
+}
+
+// HubShardAuthStorageRecord 是 Model B 的**唯一授权权威**(key `pandora:hub:auth:{pod}`
+// proto bytes,与分片镜像 / 代际计数器同 {pod} hashtag 保证同 slot 可事务)。
+// 服务端内部存储快照,绝不外发客户端。read-modify-write 路径禁止 DiscardUnknown(不变量 §17)。
+message HubShardAuthStorageRecord {
+  string pod_name        = 1;
+  string instance_uid    = 2;  // 当前绑定的 Hub DS 实例身份(Agones GameServer uid)
+  uint32 protocol_epoch  = 3;  // 协议纪元
+  HubAuthPhase phase     = 4;
+  // active: 当前生效(权威)凭据。AssignHub / 心跳鉴权以此为准。空 = 尚无 active(bootstrap)。
+  HubDSCredential active  = 5;
+  // pending: 已 stage、等 DS 首个合法心跳激活的凭据。空 = 无在途轮换。
+  HubDSCredential pending = 6;
+  // high_water_gen: 见过的最大 gen(单调上界)。即便代际计数器因 TTL 复位回退,stage 也必须
+  // 满足 pending.gen > high_water_gen,彻底杜绝 gen 复用/回退重放。
+  uint64 high_water_gen  = 7;
+  // pending_started_ms: pending 被 stage 的时刻(激活栅栏/超时告警用)。
+  int64  pending_started_ms = 8;
+  // delivered_rv: pending 令牌被 PATCH 投递到 K8s annotation 时的 GameServer resourceVersion,
+  // 供投递侧条件 PATCH(uid+rv CAS)判定投递是否仍针对同一实例同一代。
+  string delivered_rv    = 9;
+  int64  updated_at_ms   = 10;
+  // last_active_heartbeat_ms:仅由 Model B ActivateHeartbeat 在验证 active/pending 凭据后，
+  // 与 pending->active、分片投影同一 Redis 事务写入的服务端接收时间。最终分配门以本字段
+  // 判断心跳新鲜度，不再信任请求 ts_ms，也不信任旧 writer 可修改的 shard.last_heartbeat_ms。
+  // 因而 activation 后旧副本即使仍写 legacy shard 镜像，也只能造成不可用，不能伪造新鲜心跳。
+  int64 last_active_heartbeat_ms = 11;
+  // required_writer_epoch:单个 DS 的机械激活栅栏。>0 后任何低于该纪元的凭据/legacy writer
+  // 均在 Redis 记录读取时直接拒绝；只允许 Activation Job 单调推进，永不回退。
+  uint32 required_writer_epoch = 12;
 }
 
 // HubAssignmentStorageRecord 是 hub_allocator 在 Redis 中维护的「玩家→分片」归属镜像
@@ -198,6 +301,17 @@ message HubAssignmentStorageRecord {
   // Transfer/TransferToLine/强制整合重签 hub 票据时从这里取 role_id 盖进新票
   // (这些路径 login 不在环上,必须有本地镜像)。0 = 未选角/旧记录。
   uint32 role_id        = 8;
+  // ─── Model B 授权快照绑定(additive,§7)───
+  // 归属建立时把当时该分片的 active 授权身份钉进归属记录,供后续对账/审计判定
+  // 「该玩家是被哪个 DS 实例哪一代授权时分配上来的」。仅 enforce+agones 下非 0,双向兼容。
+  string hub_instance_uid = 9;  // 分配时分片绑定的 Hub DS 实例身份(uid)
+  uint32 auth_epoch       = 10; // 分配时的协议纪元
+  uint64 auth_gen         = 11; // 分配时分片 active 令牌代际
+  string auth_jti         = 12; // 分配时分片 active 令牌 jti；与 uid/epoch/gen 联合唯一
+  // assignment_id:每次归属所有权切换生成的新 UUID。玩家单键 CAS 的版本标识，同时盖进
+  // hub DSTicket；Transfer/Release/同名 Pod 重建后旧票据因 assignment_id 不再匹配而失效。
+  string assignment_id    = 13;
+  uint32 auth_writer_epoch = 14; // 分配时 active 凭据的 writer epoch
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====

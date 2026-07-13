@@ -48,6 +48,8 @@ battle:
   consume_topics:
     - "pandora.battle.result"
     - "pandora.ds.lifecycle"
+  # authority_mode=redis 激活时必须删除 pandora.battle.result，只保留 ds.lifecycle；旧 topic
+  # 不携带可核验 Model-B 凭据，服务会在连接 MySQL/Kafka 前启动失败，禁止绕过同步 ReportResult。
   # player_addr: player 服务 gRPC 地址(W4 ④ player 已上线 → 接真实当前 MMR;
   # 弱依赖:gRPC 懒连接,player 未起时调用失败由 biz 回退 base_mmr,不阻断落库)
   player_addr: "127.0.0.1:50002"
@@ -62,3 +64,21 @@ battle:
   # W4 ⑨ player.update 事务出箱发布器:落库同事务写出箱 → 后台轮询投递 Kafka(at-least-once 不变量 §4)
   outbox_publish_interval: "2s"
   outbox_batch_size: 128
+
+# ── DS 回调服务令牌校验(审核 P1 #1)────────────────────────────────────────────
+# battle_result 只校验不签发:Battle DS 经 Envoy :8444 调 ReportResult 须带 battle 令牌
+# (ds_allocator 分配时签发,绑 match_id,防拿 A 局令牌伪造 B 局结算)。
+# mode: off(默认;UE DS 未带令牌前必须 off)→ permissive(灰度观察)→ enforce(强制)。
+# secret 必须与 ds_allocator ds_auth.secret 一致。
+ds_auth:
+  mode: "off"
+  authority_mode: "legacy"
+  active_heartbeat_max_age: "30s"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  # authority_mode=redis 时 fence 必填；dev/legacy 不连接 etcd。
+  # fence:
+  #   etcd_endpoints: ["127.0.0.1:2380"]
+  #   etcd_prefix: "/pandora/ds-auth/"
+  #   etcd_lease_ttl_sec: 15
+  #   etcd_dial_timeout: "5s"
+  #   keyset_revision: "pandora-ds-auth-v2-r1"

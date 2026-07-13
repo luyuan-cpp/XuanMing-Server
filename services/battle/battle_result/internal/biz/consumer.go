@@ -18,7 +18,9 @@ import (
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
 
-// BattleResultHandler 返回 pandora.battle.result 的消费 handler(幂等落库 + MMR)。
+// BattleResultHandler 返回旧 pandora.battle.result 的消费 handler(幂等落库 + MMR)。
+// 该消息不携带 Model-B credential；authority_mode=redis 时 Config 启动校验禁止注册本 handler，
+// 结算唯一入口改为受 Guard + Redis active + receipt 保护的同步 ReportResult RPC。
 func (u *BattleResultUsecase) BattleResultHandler() kafkax.Handler {
 	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
 		result := &battlev1.BattleResult{}

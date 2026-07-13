@@ -58,6 +58,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_pand
 namespace pandora {
 namespace ds {
 namespace v1 {
+enum BattleAuthPhase : int;
+extern const uint32_t BattleAuthPhase_internal_data_[];
 enum DSLifecyclePhase : int;
 extern const uint32_t DSLifecyclePhase_internal_data_[];
 class AllocateBattleRequest;
@@ -75,6 +77,22 @@ extern AllocateBattleResponseGlobalsTypeInternal AllocateBattleResponse_globals_
 extern const ::google::protobuf::internal::ClassDataFull AllocateBattleResponse_class_data_;
 #else
 extern const AllocateBattleResponseGlobalsTypeInternal AllocateBattleResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattleDSAuthStorageRecord;
+struct BattleDSAuthStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleDSAuthStorageRecordGlobalsTypeInternal BattleDSAuthStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleDSAuthStorageRecord_class_data_;
+#else
+extern const BattleDSAuthStorageRecordGlobalsTypeInternal BattleDSAuthStorageRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattleDSCredential;
+struct BattleDSCredentialGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleDSCredentialGlobalsTypeInternal BattleDSCredential_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleDSCredential_class_data_;
+#else
+extern const BattleDSCredentialGlobalsTypeInternal BattleDSCredential_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattleInfo;
 struct BattleInfoGlobalsTypeInternal;
@@ -154,6 +172,9 @@ extern const ReleaseBattleResponseGlobalsTypeInternal ReleaseBattleResponse_glob
 namespace google {
 namespace protobuf {
 template <>
+internal::EnumTraitsT<::pandora::ds::v1::BattleAuthPhase_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::ds::v1::BattleAuthPhase>;
+template <>
 internal::EnumTraitsT<::pandora::ds::v1::DSLifecyclePhase_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::ds::v1::DSLifecyclePhase>;
 }  // namespace protobuf
@@ -162,6 +183,50 @@ internal::EnumTraitsT<::pandora::ds::v1::DSLifecyclePhase_internal_data_>
 namespace pandora {
 namespace ds {
 namespace v1 {
+enum BattleAuthPhase : int {
+  BATTLE_AUTH_PHASE_UNSPECIFIED = 0,
+  BATTLE_AUTH_PHASE_BOOTSTRAP = 1,
+  BATTLE_AUTH_PHASE_ACTIVE = 2,
+  BATTLE_AUTH_PHASE_ROTATING = 3,
+  BATTLE_AUTH_PHASE_QUARANTINED = 4,
+  BATTLE_AUTH_PHASE_TERMINATING = 5,
+  BattleAuthPhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  BattleAuthPhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t BattleAuthPhase_internal_data_[];
+inline constexpr BattleAuthPhase BattleAuthPhase_MIN =
+    static_cast<BattleAuthPhase>(0);
+inline constexpr BattleAuthPhase BattleAuthPhase_MAX =
+    static_cast<BattleAuthPhase>(5);
+[[nodiscard]] inline bool BattleAuthPhase_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int BattleAuthPhase_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+BattleAuthPhase_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(BattleAuthPhase) {
+  return BattleAuthPhase_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& BattleAuthPhase_Name(T value) {
+  static_assert(::std::is_same<T, BattleAuthPhase>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to BattleAuthPhase_Name().");
+  return BattleAuthPhase_Name(static_cast<BattleAuthPhase>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& BattleAuthPhase_Name(BattleAuthPhase value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<BattleAuthPhase_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool BattleAuthPhase_Parse(
+    ::absl::string_view name, BattleAuthPhase* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<BattleAuthPhase>(BattleAuthPhase_descriptor(), name,
+                                           value);
+}
 enum DSLifecyclePhase : int {
   DS_LIFECYCLE_PHASE_UNSPECIFIED = 0,
   DS_LIFECYCLE_PHASE_ALLOCATED = 1,
@@ -986,7 +1051,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kCommandFieldNumber = 2,
+    kAcceptedTokenJtiFieldNumber = 11,
+    kAcceptedInstanceUidFieldNumber = 12,
     kCodeFieldNumber = 1,
+    kAcceptedInstanceEpochFieldNumber = 13,
+    kAcceptedTokenGenFieldNumber = 10,
+    kAcceptedWriterEpochFieldNumber = 14,
   };
   // string command = 2 [json_name = "command"];
   void clear_command() ;
@@ -1003,6 +1073,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_command();
 
   public:
+  // string accepted_token_jti = 11 [json_name = "acceptedTokenJti"];
+  void clear_accepted_token_jti() ;
+  [[nodiscard]] const ::std::string& accepted_token_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_accepted_token_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_accepted_token_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_accepted_token_jti();
+  void set_allocated_accepted_token_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_accepted_token_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_accepted_token_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_accepted_token_jti();
+
+  public:
+  // string accepted_instance_uid = 12 [json_name = "acceptedInstanceUid"];
+  void clear_accepted_instance_uid() ;
+  [[nodiscard]] const ::std::string& accepted_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_accepted_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_accepted_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_accepted_instance_uid();
+  void set_allocated_accepted_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_accepted_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_accepted_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_accepted_instance_uid();
+
+  public:
   // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
   void clear_code() ;
   [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
@@ -1013,12 +1113,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
   void _internal_set_code(::pandora::common::v1::ErrCode value);
 
   public:
+  // uint32 accepted_instance_epoch = 13 [json_name = "acceptedInstanceEpoch"];
+  void clear_accepted_instance_epoch() ;
+  [[nodiscard]] ::uint32_t accepted_instance_epoch() const;
+  void set_accepted_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_accepted_instance_epoch() const;
+  void _internal_set_accepted_instance_epoch(::uint32_t value);
+
+  public:
+  // uint64 accepted_token_gen = 10 [json_name = "acceptedTokenGen"];
+  void clear_accepted_token_gen() ;
+  [[nodiscard]] ::uint64_t accepted_token_gen() const;
+  void set_accepted_token_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_accepted_token_gen() const;
+  void _internal_set_accepted_token_gen(::uint64_t value);
+
+  public:
+  // uint32 accepted_writer_epoch = 14 [json_name = "acceptedWriterEpoch"];
+  void clear_accepted_writer_epoch() ;
+  [[nodiscard]] ::uint32_t accepted_writer_epoch() const;
+  void set_accepted_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_accepted_writer_epoch() const;
+  void _internal_set_accepted_writer_epoch(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.HeartbeatResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 47,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 86,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1047,7 +1177,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr command_;
+    ::google::protobuf::internal::ArenaStringPtr accepted_token_jti_;
+    ::google::protobuf::internal::ArenaStringPtr accepted_instance_uid_;
     int code_;
+    ::uint32_t accepted_instance_epoch_;
+    ::uint64_t accepted_token_gen_;
+    ::uint32_t accepted_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1394,7 +1529,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSLifecycleEvent final : public ::g
   [[nodiscard]] static const DSLifecycleEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DSLifecycleEvent>(&DSLifecycleEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(DSLifecycleEvent& a, DSLifecycleEvent& b) { a.Swap(&b); }
   inline void Swap(DSLifecycleEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1785,12 +1920,18 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     kDsAddrFieldNumber = 3,
     kStateFieldNumber = 4,
     kGameModeFieldNumber = 7,
+    kGameserverUidFieldNumber = 12,
+    kLastVerifiedJtiFieldNumber = 15,
+    kAllocationIdFieldNumber = 17,
     kMatchIdFieldNumber = 1,
     kAllocatedAtMsFieldNumber = 8,
     kMapIdFieldNumber = 6,
     kPlayerCountFieldNumber = 10,
     kLastHeartbeatMsFieldNumber = 9,
     kEmptySinceMsFieldNumber = 11,
+    kLastVerifiedGenFieldNumber = 14,
+    kInstanceEpochFieldNumber = 13,
+    kLastVerifiedWriterEpochFieldNumber = 16,
   };
   // repeated uint64 player_ids = 5 [json_name = "playerIds"];
   [[nodiscard]] int player_ids_size()
@@ -1872,6 +2013,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
 
   public:
+  // string gameserver_uid = 12 [json_name = "gameserverUid"];
+  void clear_gameserver_uid() ;
+  [[nodiscard]] const ::std::string& gameserver_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gameserver_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gameserver_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gameserver_uid();
+  void set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gameserver_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gameserver_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gameserver_uid();
+
+  public:
+  // string last_verified_jti = 15 [json_name = "lastVerifiedJti"];
+  void clear_last_verified_jti() ;
+  [[nodiscard]] const ::std::string& last_verified_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_verified_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_verified_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_verified_jti();
+  void set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_verified_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_verified_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_verified_jti();
+
+  public:
+  // string allocation_id = 17 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
   // uint64 match_id = 1 [json_name = "matchId"];
   void clear_match_id() ;
   [[nodiscard]] ::uint64_t match_id() const;
@@ -1932,12 +2118,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
   void _internal_set_empty_since_ms(::int64_t value);
 
   public:
+  // uint64 last_verified_gen = 14 [json_name = "lastVerifiedGen"];
+  void clear_last_verified_gen() ;
+  [[nodiscard]] ::uint64_t last_verified_gen() const;
+  void set_last_verified_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_verified_gen() const;
+  void _internal_set_last_verified_gen(::uint64_t value);
+
+  public:
+  // uint32 instance_epoch = 13 [json_name = "instanceEpoch"];
+  void clear_instance_epoch() ;
+  [[nodiscard]] ::uint32_t instance_epoch() const;
+  void set_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_instance_epoch() const;
+  void _internal_set_instance_epoch(::uint32_t value);
+
+  public:
+  // uint32 last_verified_writer_epoch = 16 [json_name = "lastVerifiedWriterEpoch"];
+  void clear_last_verified_writer_epoch() ;
+  [[nodiscard]] ::uint32_t last_verified_writer_epoch() const;
+  void set_last_verified_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_last_verified_writer_epoch() const;
+  void _internal_set_last_verified_writer_epoch(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
-                          0, 82,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 134,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1971,12 +2187,18 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public 
     ::google::protobuf::internal::ArenaStringPtr ds_addr_;
     ::google::protobuf::internal::ArenaStringPtr state_;
     ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::google::protobuf::internal::ArenaStringPtr gameserver_uid_;
+    ::google::protobuf::internal::ArenaStringPtr last_verified_jti_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
     ::uint64_t match_id_;
     ::int64_t allocated_at_ms_;
     ::uint32_t map_id_;
     ::int32_t player_count_;
     ::int64_t last_heartbeat_ms_;
     ::int64_t empty_since_ms_;
+    ::uint64_t last_verified_gen_;
+    ::uint32_t instance_epoch_;
+    ::uint32_t last_verified_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2253,6 +2475,311 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleInfo final : public ::google:
     ::uint64_t match_id_;
     ::int64_t allocated_at_ms_;
     ::int32_t player_count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleDSCredential final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattleDSCredential) */ {
+ public:
+  inline BattleDSCredential() : BattleDSCredential(nullptr) {}
+  ~BattleDSCredential() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleDSCredential* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleDSCredential));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleDSCredential(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleDSCredential(const BattleDSCredential& from) : BattleDSCredential(nullptr, from) {}
+  inline BattleDSCredential(BattleDSCredential&& from) noexcept : BattleDSCredential(nullptr, ::std::move(from)) {}
+  inline BattleDSCredential& operator=(const BattleDSCredential& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleDSCredential& operator=(BattleDSCredential&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleDSCredential& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleDSCredential>(&BattleDSCredential_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(BattleDSCredential& a, BattleDSCredential& b) { a.Swap(&b); }
+  inline void Swap(BattleDSCredential* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleDSCredential* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleDSCredential* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleDSCredential>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleDSCredential& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleDSCredential& from) { BattleDSCredential::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleDSCredential* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.BattleDSCredential"; }
+
+  explicit BattleDSCredential(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleDSCredential(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleDSCredential& from);
+  BattleDSCredential(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleDSCredential&& from) noexcept
+      : BattleDSCredential(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJtiFieldNumber = 2,
+    kKidFieldNumber = 4,
+    kInstanceUidFieldNumber = 5,
+    kTokenSha256FieldNumber = 7,
+    kGenFieldNumber = 1,
+    kExpMsFieldNumber = 3,
+    kInstanceEpochFieldNumber = 6,
+    kWriterEpochFieldNumber = 8,
+  };
+  // string jti = 2 [json_name = "jti"];
+  void clear_jti() ;
+  [[nodiscard]] const ::std::string& jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_jti();
+  void set_allocated_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_jti();
+
+  public:
+  // string kid = 4 [json_name = "kid"];
+  void clear_kid() ;
+  [[nodiscard]] const ::std::string& kid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_kid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_kid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_kid();
+  void set_allocated_kid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_kid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_kid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_kid();
+
+  public:
+  // string instance_uid = 5 [json_name = "instanceUid"];
+  void clear_instance_uid() ;
+  [[nodiscard]] const ::std::string& instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_instance_uid();
+  void set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_instance_uid();
+
+  public:
+  // string token_sha256 = 7 [json_name = "tokenSha256"];
+  void clear_token_sha256() ;
+  [[nodiscard]] const ::std::string& token_sha256() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_token_sha256(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_token_sha256();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_token_sha256();
+  void set_allocated_token_sha256(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_token_sha256() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_token_sha256(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_token_sha256();
+
+  public:
+  // uint64 gen = 1 [json_name = "gen"];
+  void clear_gen() ;
+  [[nodiscard]] ::uint64_t gen() const;
+  void set_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gen() const;
+  void _internal_set_gen(::uint64_t value);
+
+  public:
+  // uint64 exp_ms = 3 [json_name = "expMs"];
+  void clear_exp_ms() ;
+  [[nodiscard]] ::uint64_t exp_ms() const;
+  void set_exp_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_exp_ms() const;
+  void _internal_set_exp_ms(::uint64_t value);
+
+  public:
+  // uint32 instance_epoch = 6 [json_name = "instanceEpoch"];
+  void clear_instance_epoch() ;
+  [[nodiscard]] ::uint32_t instance_epoch() const;
+  void set_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_instance_epoch() const;
+  void _internal_set_instance_epoch(::uint32_t value);
+
+  public:
+  // uint32 writer_epoch = 8 [json_name = "writerEpoch"];
+  void clear_writer_epoch() ;
+  [[nodiscard]] ::uint32_t writer_epoch() const;
+  void set_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_writer_epoch() const;
+  void _internal_set_writer_epoch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleDSCredential)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 79,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleDSCredential& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr jti_;
+    ::google::protobuf::internal::ArenaStringPtr kid_;
+    ::google::protobuf::internal::ArenaStringPtr instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr token_sha256_;
+    ::uint64_t gen_;
+    ::uint64_t exp_ms_;
+    ::uint32_t instance_epoch_;
+    ::uint32_t writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2977,6 +3504,395 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattlesResponse final : public 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::ds::v1::BattleInfo > battles_;
     int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleDSAuthStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattleDSAuthStorageRecord) */ {
+ public:
+  inline BattleDSAuthStorageRecord() : BattleDSAuthStorageRecord(nullptr) {}
+  ~BattleDSAuthStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleDSAuthStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleDSAuthStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleDSAuthStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleDSAuthStorageRecord(const BattleDSAuthStorageRecord& from) : BattleDSAuthStorageRecord(nullptr, from) {}
+  inline BattleDSAuthStorageRecord(BattleDSAuthStorageRecord&& from) noexcept : BattleDSAuthStorageRecord(nullptr, ::std::move(from)) {}
+  inline BattleDSAuthStorageRecord& operator=(const BattleDSAuthStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleDSAuthStorageRecord& operator=(BattleDSAuthStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleDSAuthStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleDSAuthStorageRecord>(&BattleDSAuthStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(BattleDSAuthStorageRecord& a, BattleDSAuthStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(BattleDSAuthStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleDSAuthStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleDSAuthStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleDSAuthStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleDSAuthStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleDSAuthStorageRecord& from) { BattleDSAuthStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleDSAuthStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.BattleDSAuthStorageRecord"; }
+
+  explicit BattleDSAuthStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleDSAuthStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleDSAuthStorageRecord& from);
+  BattleDSAuthStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleDSAuthStorageRecord&& from) noexcept
+      : BattleDSAuthStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDsPodNameFieldNumber = 2,
+    kInstanceUidFieldNumber = 3,
+    kDeliveredRvFieldNumber = 10,
+    kAllocationIdFieldNumber = 13,
+    kActiveFieldNumber = 6,
+    kPendingFieldNumber = 7,
+    kMatchIdFieldNumber = 1,
+    kInstanceEpochFieldNumber = 4,
+    kPhaseFieldNumber = 5,
+    kHighWaterGenFieldNumber = 8,
+    kPendingStartedMsFieldNumber = 9,
+    kUpdatedAtMsFieldNumber = 11,
+    kLastActiveHeartbeatMsFieldNumber = 14,
+    kRequiredWriterEpochFieldNumber = 12,
+  };
+  // string ds_pod_name = 2 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string instance_uid = 3 [json_name = "instanceUid"];
+  void clear_instance_uid() ;
+  [[nodiscard]] const ::std::string& instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_instance_uid();
+  void set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_instance_uid();
+
+  public:
+  // string delivered_rv = 10 [json_name = "deliveredRv"];
+  void clear_delivered_rv() ;
+  [[nodiscard]] const ::std::string& delivered_rv() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_delivered_rv(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_delivered_rv();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_delivered_rv();
+  void set_allocated_delivered_rv(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_delivered_rv() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_delivered_rv(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_delivered_rv();
+
+  public:
+  // string allocation_id = 13 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
+  // .pandora.ds.v1.BattleDSCredential active = 6 [json_name = "active"];
+  [[nodiscard]] bool has_active()
+      const;
+  void clear_active() ;
+  [[nodiscard]] const ::pandora::ds::v1::BattleDSCredential& active() const;
+  [[nodiscard]] ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE release_active();
+  ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL mutable_active();
+  void set_allocated_active(::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_active(::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value);
+  ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE unsafe_arena_release_active();
+
+  private:
+  const ::pandora::ds::v1::BattleDSCredential& _internal_active() const;
+  ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL _internal_mutable_active();
+
+  public:
+  // .pandora.ds.v1.BattleDSCredential pending = 7 [json_name = "pending"];
+  [[nodiscard]] bool has_pending()
+      const;
+  void clear_pending() ;
+  [[nodiscard]] const ::pandora::ds::v1::BattleDSCredential& pending() const;
+  [[nodiscard]] ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE release_pending();
+  ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL mutable_pending();
+  void set_allocated_pending(::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pending(::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value);
+  ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE unsafe_arena_release_pending();
+
+  private:
+  const ::pandora::ds::v1::BattleDSCredential& _internal_pending() const;
+  ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL _internal_mutable_pending();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // uint32 instance_epoch = 4 [json_name = "instanceEpoch"];
+  void clear_instance_epoch() ;
+  [[nodiscard]] ::uint32_t instance_epoch() const;
+  void set_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_instance_epoch() const;
+  void _internal_set_instance_epoch(::uint32_t value);
+
+  public:
+  // .pandora.ds.v1.BattleAuthPhase phase = 5 [json_name = "phase"];
+  void clear_phase() ;
+  [[nodiscard]] ::pandora::ds::v1::BattleAuthPhase phase() const;
+  void set_phase(::pandora::ds::v1::BattleAuthPhase value);
+
+  private:
+  ::pandora::ds::v1::BattleAuthPhase _internal_phase() const;
+  void _internal_set_phase(::pandora::ds::v1::BattleAuthPhase value);
+
+  public:
+  // uint64 high_water_gen = 8 [json_name = "highWaterGen"];
+  void clear_high_water_gen() ;
+  [[nodiscard]] ::uint64_t high_water_gen() const;
+  void set_high_water_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_high_water_gen() const;
+  void _internal_set_high_water_gen(::uint64_t value);
+
+  public:
+  // int64 pending_started_ms = 9 [json_name = "pendingStartedMs"];
+  void clear_pending_started_ms() ;
+  [[nodiscard]] ::int64_t pending_started_ms() const;
+  void set_pending_started_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_pending_started_ms() const;
+  void _internal_set_pending_started_ms(::int64_t value);
+
+  public:
+  // int64 updated_at_ms = 11 [json_name = "updatedAtMs"];
+  void clear_updated_at_ms() ;
+  [[nodiscard]] ::int64_t updated_at_ms() const;
+  void set_updated_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_updated_at_ms() const;
+  void _internal_set_updated_at_ms(::int64_t value);
+
+  public:
+  // int64 last_active_heartbeat_ms = 14 [json_name = "lastActiveHeartbeatMs"];
+  void clear_last_active_heartbeat_ms() ;
+  [[nodiscard]] ::int64_t last_active_heartbeat_ms() const;
+  void set_last_active_heartbeat_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_last_active_heartbeat_ms() const;
+  void _internal_set_last_active_heartbeat_ms(::int64_t value);
+
+  public:
+  // uint32 required_writer_epoch = 12 [json_name = "requiredWriterEpoch"];
+  void clear_required_writer_epoch() ;
+  [[nodiscard]] ::uint32_t required_writer_epoch() const;
+  void set_required_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_required_writer_epoch() const;
+  void _internal_set_required_writer_epoch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleDSAuthStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          2, 104,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleDSAuthStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr delivered_rv_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
+    ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE active_;
+    ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE pending_;
+    ::uint64_t match_id_;
+    ::uint32_t instance_epoch_;
+    int phase_;
+    ::uint64_t high_water_gen_;
+    ::int64_t pending_started_ms_;
+    ::int64_t updated_at_ms_;
+    ::int64_t last_active_heartbeat_ms_;
+    ::uint32_t required_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3722,7 +4638,7 @@ inline void HeartbeatRequest::_internal_set_ts_ms(::int64_t value) {
 inline void HeartbeatResponse::clear_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.code_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::pandora::common::v1::ErrCode HeartbeatResponse::code() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.HeartbeatResponse.code)
@@ -3730,7 +4646,7 @@ inline ::pandora::common::v1::ErrCode HeartbeatResponse::code() const {
 }
 inline void HeartbeatResponse::set_code(::pandora::common::v1::ErrCode value) {
   _internal_set_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.HeartbeatResponse.code)
 }
 inline ::pandora::common::v1::ErrCode HeartbeatResponse::_internal_code() const {
@@ -3804,6 +4720,206 @@ inline void HeartbeatResponse::set_allocated_command(::std::string* PROTOBUF_NUL
     _impl_.command_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.HeartbeatResponse.command)
+}
+
+// uint64 accepted_token_gen = 10 [json_name = "acceptedTokenGen"];
+inline void HeartbeatResponse::clear_accepted_token_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t HeartbeatResponse::accepted_token_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.HeartbeatResponse.accepted_token_gen)
+  return _internal_accepted_token_gen();
+}
+inline void HeartbeatResponse::set_accepted_token_gen(::uint64_t value) {
+  _internal_set_accepted_token_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.HeartbeatResponse.accepted_token_gen)
+}
+inline ::uint64_t HeartbeatResponse::_internal_accepted_token_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_token_gen_;
+}
+inline void HeartbeatResponse::_internal_set_accepted_token_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_gen_ = value;
+}
+
+// string accepted_token_jti = 11 [json_name = "acceptedTokenJti"];
+inline void HeartbeatResponse::clear_accepted_token_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& HeartbeatResponse::accepted_token_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.HeartbeatResponse.accepted_token_jti)
+  return _internal_accepted_token_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HeartbeatResponse::set_accepted_token_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.accepted_token_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.HeartbeatResponse.accepted_token_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::mutable_accepted_token_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_accepted_token_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.HeartbeatResponse.accepted_token_jti)
+  return _s;
+}
+inline const ::std::string& HeartbeatResponse::_internal_accepted_token_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_token_jti_.Get();
+}
+inline void HeartbeatResponse::_internal_set_accepted_token_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_token_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::_internal_mutable_accepted_token_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.accepted_token_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HeartbeatResponse::release_accepted_token_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.HeartbeatResponse.accepted_token_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.accepted_token_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.accepted_token_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HeartbeatResponse::set_allocated_accepted_token_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.accepted_token_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.accepted_token_jti_.IsDefault()) {
+    _impl_.accepted_token_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.HeartbeatResponse.accepted_token_jti)
+}
+
+// string accepted_instance_uid = 12 [json_name = "acceptedInstanceUid"];
+inline void HeartbeatResponse::clear_accepted_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& HeartbeatResponse::accepted_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.HeartbeatResponse.accepted_instance_uid)
+  return _internal_accepted_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void HeartbeatResponse::set_accepted_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.accepted_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.HeartbeatResponse.accepted_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::mutable_accepted_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_accepted_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.HeartbeatResponse.accepted_instance_uid)
+  return _s;
+}
+inline const ::std::string& HeartbeatResponse::_internal_accepted_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_instance_uid_.Get();
+}
+inline void HeartbeatResponse::_internal_set_accepted_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL HeartbeatResponse::_internal_mutable_accepted_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.accepted_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE HeartbeatResponse::release_accepted_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.HeartbeatResponse.accepted_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.accepted_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.accepted_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void HeartbeatResponse::set_allocated_accepted_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.accepted_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.accepted_instance_uid_.IsDefault()) {
+    _impl_.accepted_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.HeartbeatResponse.accepted_instance_uid)
+}
+
+// uint32 accepted_instance_epoch = 13 [json_name = "acceptedInstanceEpoch"];
+inline void HeartbeatResponse::clear_accepted_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t HeartbeatResponse::accepted_instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.HeartbeatResponse.accepted_instance_epoch)
+  return _internal_accepted_instance_epoch();
+}
+inline void HeartbeatResponse::set_accepted_instance_epoch(::uint32_t value) {
+  _internal_set_accepted_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.HeartbeatResponse.accepted_instance_epoch)
+}
+inline ::uint32_t HeartbeatResponse::_internal_accepted_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_instance_epoch_;
+}
+inline void HeartbeatResponse::_internal_set_accepted_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_instance_epoch_ = value;
+}
+
+// uint32 accepted_writer_epoch = 14 [json_name = "acceptedWriterEpoch"];
+inline void HeartbeatResponse::clear_accepted_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t HeartbeatResponse::accepted_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.HeartbeatResponse.accepted_writer_epoch)
+  return _internal_accepted_writer_epoch();
+}
+inline void HeartbeatResponse::set_accepted_writer_epoch(::uint32_t value) {
+  _internal_set_accepted_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.HeartbeatResponse.accepted_writer_epoch)
+}
+inline ::uint32_t HeartbeatResponse::_internal_accepted_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accepted_writer_epoch_;
+}
+inline void HeartbeatResponse::_internal_set_accepted_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accepted_writer_epoch_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4233,7 +5349,7 @@ ListBattlesResponse::_internal_mutable_battles() {
 inline void BattleStorageRecord::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t BattleStorageRecord::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.match_id)
@@ -4241,7 +5357,7 @@ inline ::uint64_t BattleStorageRecord::match_id() const {
 }
 inline void BattleStorageRecord::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.match_id)
 }
 inline ::uint64_t BattleStorageRecord::_internal_match_id() const {
@@ -4500,7 +5616,7 @@ BattleStorageRecord::_internal_mutable_player_ids() {
 inline void BattleStorageRecord::clear_map_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t BattleStorageRecord::map_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.map_id)
@@ -4508,7 +5624,7 @@ inline ::uint32_t BattleStorageRecord::map_id() const {
 }
 inline void BattleStorageRecord::set_map_id(::uint32_t value) {
   _internal_set_map_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.map_id)
 }
 inline ::uint32_t BattleStorageRecord::_internal_map_id() const {
@@ -4588,7 +5704,7 @@ inline void BattleStorageRecord::set_allocated_game_mode(::std::string* PROTOBUF
 inline void BattleStorageRecord::clear_allocated_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allocated_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
@@ -4596,7 +5712,7 @@ inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
 }
 inline void BattleStorageRecord::set_allocated_at_ms(::int64_t value) {
   _internal_set_allocated_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_allocated_at_ms() const {
@@ -4612,7 +5728,7 @@ inline void BattleStorageRecord::_internal_set_allocated_at_ms(::int64_t value) 
 inline void BattleStorageRecord::clear_last_heartbeat_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_heartbeat_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
@@ -4620,7 +5736,7 @@ inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
 }
 inline void BattleStorageRecord::set_last_heartbeat_ms(::int64_t value) {
   _internal_set_last_heartbeat_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_last_heartbeat_ms() const {
@@ -4636,7 +5752,7 @@ inline void BattleStorageRecord::_internal_set_last_heartbeat_ms(::int64_t value
 inline void BattleStorageRecord::clear_player_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::int32_t BattleStorageRecord::player_count() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.player_count)
@@ -4644,7 +5760,7 @@ inline ::int32_t BattleStorageRecord::player_count() const {
 }
 inline void BattleStorageRecord::set_player_count(::int32_t value) {
   _internal_set_player_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.player_count)
 }
 inline ::int32_t BattleStorageRecord::_internal_player_count() const {
@@ -4660,7 +5776,7 @@ inline void BattleStorageRecord::_internal_set_player_count(::int32_t value) {
 inline void BattleStorageRecord::clear_empty_since_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.empty_since_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::int64_t BattleStorageRecord::empty_since_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
@@ -4668,7 +5784,7 @@ inline ::int64_t BattleStorageRecord::empty_since_ms() const {
 }
 inline void BattleStorageRecord::set_empty_since_ms(::int64_t value) {
   _internal_set_empty_since_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_empty_since_ms() const {
@@ -4678,6 +5794,1274 @@ inline ::int64_t BattleStorageRecord::_internal_empty_since_ms() const {
 inline void BattleStorageRecord::_internal_set_empty_since_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.empty_since_ms_ = value;
+}
+
+// string gameserver_uid = 12 [json_name = "gameserverUid"];
+inline void BattleStorageRecord::clear_gameserver_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gameserver_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& BattleStorageRecord::gameserver_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
+  return _internal_gameserver_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_gameserver_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.gameserver_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_gameserver_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_gameserver_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
+  return _s;
+}
+inline const ::std::string& BattleStorageRecord::_internal_gameserver_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gameserver_uid_.Get();
+}
+inline void BattleStorageRecord::_internal_set_gameserver_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gameserver_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_gameserver_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gameserver_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_gameserver_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.gameserver_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gameserver_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleStorageRecord::set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.gameserver_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gameserver_uid_.IsDefault()) {
+    _impl_.gameserver_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
+}
+
+// uint32 instance_epoch = 13 [json_name = "instanceEpoch"];
+inline void BattleStorageRecord::clear_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t BattleStorageRecord::instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.instance_epoch)
+  return _internal_instance_epoch();
+}
+inline void BattleStorageRecord::set_instance_epoch(::uint32_t value) {
+  _internal_set_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.instance_epoch)
+}
+inline ::uint32_t BattleStorageRecord::_internal_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_epoch_;
+}
+inline void BattleStorageRecord::_internal_set_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_epoch_ = value;
+}
+
+// uint64 last_verified_gen = 14 [json_name = "lastVerifiedGen"];
+inline void BattleStorageRecord::clear_last_verified_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t BattleStorageRecord::last_verified_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_gen)
+  return _internal_last_verified_gen();
+}
+inline void BattleStorageRecord::set_last_verified_gen(::uint64_t value) {
+  _internal_set_last_verified_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_gen)
+}
+inline ::uint64_t BattleStorageRecord::_internal_last_verified_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_verified_gen_;
+}
+inline void BattleStorageRecord::_internal_set_last_verified_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_gen_ = value;
+}
+
+// string last_verified_jti = 15 [json_name = "lastVerifiedJti"];
+inline void BattleStorageRecord::clear_last_verified_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& BattleStorageRecord::last_verified_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
+  return _internal_last_verified_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_last_verified_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.last_verified_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_last_verified_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_last_verified_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
+  return _s;
+}
+inline const ::std::string& BattleStorageRecord::_internal_last_verified_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_verified_jti_.Get();
+}
+inline void BattleStorageRecord::_internal_set_last_verified_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_last_verified_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_verified_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_last_verified_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.last_verified_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_verified_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleStorageRecord::set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.last_verified_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_verified_jti_.IsDefault()) {
+    _impl_.last_verified_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
+}
+
+// uint32 last_verified_writer_epoch = 16 [json_name = "lastVerifiedWriterEpoch"];
+inline void BattleStorageRecord::clear_last_verified_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t BattleStorageRecord::last_verified_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_writer_epoch)
+  return _internal_last_verified_writer_epoch();
+}
+inline void BattleStorageRecord::set_last_verified_writer_epoch(::uint32_t value) {
+  _internal_set_last_verified_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_writer_epoch)
+}
+inline ::uint32_t BattleStorageRecord::_internal_last_verified_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_verified_writer_epoch_;
+}
+inline void BattleStorageRecord::_internal_set_last_verified_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_verified_writer_epoch_ = value;
+}
+
+// string allocation_id = 17 [json_name = "allocationId"];
+inline void BattleStorageRecord::clear_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& BattleStorageRecord::allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.allocation_id)
+  return _internal_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.allocation_id)
+  return _s;
+}
+inline const ::std::string& BattleStorageRecord::_internal_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocation_id_.Get();
+}
+inline void BattleStorageRecord::_internal_set_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleStorageRecord::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.allocation_id)
+}
+
+// -------------------------------------------------------------------
+
+// BattleDSCredential
+
+// uint64 gen = 1 [json_name = "gen"];
+inline void BattleDSCredential::clear_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BattleDSCredential::gen() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.gen)
+  return _internal_gen();
+}
+inline void BattleDSCredential::set_gen(::uint64_t value) {
+  _internal_set_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.gen)
+}
+inline ::uint64_t BattleDSCredential::_internal_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gen_;
+}
+inline void BattleDSCredential::_internal_set_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gen_ = value;
+}
+
+// string jti = 2 [json_name = "jti"];
+inline void BattleDSCredential::clear_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BattleDSCredential::jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.jti)
+  return _internal_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSCredential::set_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.jti)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::mutable_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSCredential.jti)
+  return _s;
+}
+inline const ::std::string& BattleDSCredential::_internal_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.jti_.Get();
+}
+inline void BattleDSCredential::_internal_set_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::_internal_mutable_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSCredential::release_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSCredential.jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSCredential::set_allocated_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.jti_.IsDefault()) {
+    _impl_.jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSCredential.jti)
+}
+
+// uint64 exp_ms = 3 [json_name = "expMs"];
+inline void BattleDSCredential::clear_exp_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t BattleDSCredential::exp_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.exp_ms)
+  return _internal_exp_ms();
+}
+inline void BattleDSCredential::set_exp_ms(::uint64_t value) {
+  _internal_set_exp_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.exp_ms)
+}
+inline ::uint64_t BattleDSCredential::_internal_exp_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exp_ms_;
+}
+inline void BattleDSCredential::_internal_set_exp_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_ms_ = value;
+}
+
+// string kid = 4 [json_name = "kid"];
+inline void BattleDSCredential::clear_kid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BattleDSCredential::kid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.kid)
+  return _internal_kid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSCredential::set_kid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.kid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.kid)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::mutable_kid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_kid();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSCredential.kid)
+  return _s;
+}
+inline const ::std::string& BattleDSCredential::_internal_kid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.kid_.Get();
+}
+inline void BattleDSCredential::_internal_set_kid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::_internal_mutable_kid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.kid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSCredential::release_kid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSCredential.kid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.kid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.kid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSCredential::set_allocated_kid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.kid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.kid_.IsDefault()) {
+    _impl_.kid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSCredential.kid)
+}
+
+// string instance_uid = 5 [json_name = "instanceUid"];
+inline void BattleDSCredential::clear_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& BattleDSCredential::instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.instance_uid)
+  return _internal_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSCredential::set_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::mutable_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSCredential.instance_uid)
+  return _s;
+}
+inline const ::std::string& BattleDSCredential::_internal_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_uid_.Get();
+}
+inline void BattleDSCredential::_internal_set_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::_internal_mutable_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSCredential::release_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSCredential.instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSCredential::set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_uid_.IsDefault()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSCredential.instance_uid)
+}
+
+// uint32 instance_epoch = 6 [json_name = "instanceEpoch"];
+inline void BattleDSCredential::clear_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t BattleDSCredential::instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.instance_epoch)
+  return _internal_instance_epoch();
+}
+inline void BattleDSCredential::set_instance_epoch(::uint32_t value) {
+  _internal_set_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.instance_epoch)
+}
+inline ::uint32_t BattleDSCredential::_internal_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_epoch_;
+}
+inline void BattleDSCredential::_internal_set_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_epoch_ = value;
+}
+
+// string token_sha256 = 7 [json_name = "tokenSha256"];
+inline void BattleDSCredential::clear_token_sha256() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.token_sha256_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& BattleDSCredential::token_sha256() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.token_sha256)
+  return _internal_token_sha256();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSCredential::set_token_sha256(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.token_sha256_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.token_sha256)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::mutable_token_sha256()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_token_sha256();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSCredential.token_sha256)
+  return _s;
+}
+inline const ::std::string& BattleDSCredential::_internal_token_sha256() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.token_sha256_.Get();
+}
+inline void BattleDSCredential::_internal_set_token_sha256(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.token_sha256_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSCredential::_internal_mutable_token_sha256() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.token_sha256_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSCredential::release_token_sha256() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSCredential.token_sha256)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.token_sha256_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.token_sha256_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSCredential::set_allocated_token_sha256(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.token_sha256_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.token_sha256_.IsDefault()) {
+    _impl_.token_sha256_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSCredential.token_sha256)
+}
+
+// uint32 writer_epoch = 8 [json_name = "writerEpoch"];
+inline void BattleDSCredential::clear_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t BattleDSCredential::writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSCredential.writer_epoch)
+  return _internal_writer_epoch();
+}
+inline void BattleDSCredential::set_writer_epoch(::uint32_t value) {
+  _internal_set_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSCredential.writer_epoch)
+}
+inline ::uint32_t BattleDSCredential::_internal_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.writer_epoch_;
+}
+inline void BattleDSCredential::_internal_set_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.writer_epoch_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattleDSAuthStorageRecord
+
+// uint64 match_id = 1 [json_name = "matchId"];
+inline void BattleDSAuthStorageRecord::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t BattleDSAuthStorageRecord::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.match_id)
+  return _internal_match_id();
+}
+inline void BattleDSAuthStorageRecord::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.match_id)
+}
+inline ::uint64_t BattleDSAuthStorageRecord::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// string ds_pod_name = 2 [json_name = "dsPodName"];
+inline void BattleDSAuthStorageRecord::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BattleDSAuthStorageRecord::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSAuthStorageRecord::set_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::mutable_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSAuthStorageRecord.ds_pod_name)
+  return _s;
+}
+inline const ::std::string& BattleDSAuthStorageRecord::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void BattleDSAuthStorageRecord::_internal_set_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSAuthStorageRecord.ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSAuthStorageRecord::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.ds_pod_name)
+}
+
+// string instance_uid = 3 [json_name = "instanceUid"];
+inline void BattleDSAuthStorageRecord::clear_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BattleDSAuthStorageRecord::instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.instance_uid)
+  return _internal_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSAuthStorageRecord::set_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::mutable_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSAuthStorageRecord.instance_uid)
+  return _s;
+}
+inline const ::std::string& BattleDSAuthStorageRecord::_internal_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_uid_.Get();
+}
+inline void BattleDSAuthStorageRecord::_internal_set_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::_internal_mutable_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::release_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSAuthStorageRecord.instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSAuthStorageRecord::set_allocated_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.instance_uid_.IsDefault()) {
+    _impl_.instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.instance_uid)
+}
+
+// uint32 instance_epoch = 4 [json_name = "instanceEpoch"];
+inline void BattleDSAuthStorageRecord::clear_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t BattleDSAuthStorageRecord::instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.instance_epoch)
+  return _internal_instance_epoch();
+}
+inline void BattleDSAuthStorageRecord::set_instance_epoch(::uint32_t value) {
+  _internal_set_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.instance_epoch)
+}
+inline ::uint32_t BattleDSAuthStorageRecord::_internal_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.instance_epoch_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.instance_epoch_ = value;
+}
+
+// .pandora.ds.v1.BattleAuthPhase phase = 5 [json_name = "phase"];
+inline void BattleDSAuthStorageRecord::clear_phase() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::pandora::ds::v1::BattleAuthPhase BattleDSAuthStorageRecord::phase() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.phase)
+  return _internal_phase();
+}
+inline void BattleDSAuthStorageRecord::set_phase(::pandora::ds::v1::BattleAuthPhase value) {
+  _internal_set_phase(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.phase)
+}
+inline ::pandora::ds::v1::BattleAuthPhase BattleDSAuthStorageRecord::_internal_phase() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::ds::v1::BattleAuthPhase>(_impl_.phase_);
+}
+inline void BattleDSAuthStorageRecord::_internal_set_phase(::pandora::ds::v1::BattleAuthPhase value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = value;
+}
+
+// .pandora.ds.v1.BattleDSCredential active = 6 [json_name = "active"];
+inline bool BattleDSAuthStorageRecord::has_active() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.active_ != nullptr);
+  return value;
+}
+inline void BattleDSAuthStorageRecord::clear_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.active_ != nullptr) _impl_.active_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::pandora::ds::v1::BattleDSCredential& BattleDSAuthStorageRecord::_internal_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::ds::v1::BattleDSCredential* p = _impl_.active_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::ds::v1::BattleDSCredential>(&::pandora::ds::v1::BattleDSCredential_globals_);
+}
+inline const ::pandora::ds::v1::BattleDSCredential& BattleDSAuthStorageRecord::active() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.active)
+  return _internal_active();
+}
+inline void BattleDSAuthStorageRecord::unsafe_arena_set_allocated_active(
+    ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.active_);
+  }
+  _impl_.active_ = reinterpret_cast<::pandora::ds::v1::BattleDSCredential*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.active)
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::release_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::ds::v1::BattleDSCredential* released = _impl_.active_;
+  _impl_.active_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::unsafe_arena_release_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSAuthStorageRecord.active)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::ds::v1::BattleDSCredential* temp = _impl_.active_;
+  _impl_.active_ = nullptr;
+  return temp;
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL BattleDSAuthStorageRecord::_internal_mutable_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.active_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::ds::v1::BattleDSCredential>(GetArena());
+    _impl_.active_ = reinterpret_cast<::pandora::ds::v1::BattleDSCredential*>(p);
+  }
+  return _impl_.active_;
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL BattleDSAuthStorageRecord::mutable_active()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::ds::v1::BattleDSCredential* _msg = _internal_mutable_active();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSAuthStorageRecord.active)
+  return _msg;
+}
+inline void BattleDSAuthStorageRecord::set_allocated_active(::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.active_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.active_ = reinterpret_cast<::pandora::ds::v1::BattleDSCredential*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.active)
+}
+
+// .pandora.ds.v1.BattleDSCredential pending = 7 [json_name = "pending"];
+inline bool BattleDSAuthStorageRecord::has_pending() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.pending_ != nullptr);
+  return value;
+}
+inline void BattleDSAuthStorageRecord::clear_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pending_ != nullptr) _impl_.pending_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::pandora::ds::v1::BattleDSCredential& BattleDSAuthStorageRecord::_internal_pending() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::ds::v1::BattleDSCredential* p = _impl_.pending_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::ds::v1::BattleDSCredential>(&::pandora::ds::v1::BattleDSCredential_globals_);
+}
+inline const ::pandora::ds::v1::BattleDSCredential& BattleDSAuthStorageRecord::pending() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.pending)
+  return _internal_pending();
+}
+inline void BattleDSAuthStorageRecord::unsafe_arena_set_allocated_pending(
+    ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pending_);
+  }
+  _impl_.pending_ = reinterpret_cast<::pandora::ds::v1::BattleDSCredential*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.pending)
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::release_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::ds::v1::BattleDSCredential* released = _impl_.pending_;
+  _impl_.pending_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::unsafe_arena_release_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSAuthStorageRecord.pending)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::ds::v1::BattleDSCredential* temp = _impl_.pending_;
+  _impl_.pending_ = nullptr;
+  return temp;
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL BattleDSAuthStorageRecord::_internal_mutable_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pending_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::ds::v1::BattleDSCredential>(GetArena());
+    _impl_.pending_ = reinterpret_cast<::pandora::ds::v1::BattleDSCredential*>(p);
+  }
+  return _impl_.pending_;
+}
+inline ::pandora::ds::v1::BattleDSCredential* PROTOBUF_NONNULL BattleDSAuthStorageRecord::mutable_pending()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::ds::v1::BattleDSCredential* _msg = _internal_mutable_pending();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSAuthStorageRecord.pending)
+  return _msg;
+}
+inline void BattleDSAuthStorageRecord::set_allocated_pending(::pandora::ds::v1::BattleDSCredential* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pending_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.pending_ = reinterpret_cast<::pandora::ds::v1::BattleDSCredential*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.pending)
+}
+
+// uint64 high_water_gen = 8 [json_name = "highWaterGen"];
+inline void BattleDSAuthStorageRecord::clear_high_water_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.high_water_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t BattleDSAuthStorageRecord::high_water_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.high_water_gen)
+  return _internal_high_water_gen();
+}
+inline void BattleDSAuthStorageRecord::set_high_water_gen(::uint64_t value) {
+  _internal_set_high_water_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.high_water_gen)
+}
+inline ::uint64_t BattleDSAuthStorageRecord::_internal_high_water_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.high_water_gen_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_high_water_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.high_water_gen_ = value;
+}
+
+// int64 pending_started_ms = 9 [json_name = "pendingStartedMs"];
+inline void BattleDSAuthStorageRecord::clear_pending_started_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_started_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::int64_t BattleDSAuthStorageRecord::pending_started_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.pending_started_ms)
+  return _internal_pending_started_ms();
+}
+inline void BattleDSAuthStorageRecord::set_pending_started_ms(::int64_t value) {
+  _internal_set_pending_started_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.pending_started_ms)
+}
+inline ::int64_t BattleDSAuthStorageRecord::_internal_pending_started_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_started_ms_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_pending_started_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_started_ms_ = value;
+}
+
+// string delivered_rv = 10 [json_name = "deliveredRv"];
+inline void BattleDSAuthStorageRecord::clear_delivered_rv() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivered_rv_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& BattleDSAuthStorageRecord::delivered_rv() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.delivered_rv)
+  return _internal_delivered_rv();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSAuthStorageRecord::set_delivered_rv(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.delivered_rv_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.delivered_rv)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::mutable_delivered_rv()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_delivered_rv();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSAuthStorageRecord.delivered_rv)
+  return _s;
+}
+inline const ::std::string& BattleDSAuthStorageRecord::_internal_delivered_rv() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.delivered_rv_.Get();
+}
+inline void BattleDSAuthStorageRecord::_internal_set_delivered_rv(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivered_rv_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::_internal_mutable_delivered_rv() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.delivered_rv_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::release_delivered_rv() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSAuthStorageRecord.delivered_rv)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.delivered_rv_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.delivered_rv_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSAuthStorageRecord::set_allocated_delivered_rv(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.delivered_rv_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.delivered_rv_.IsDefault()) {
+    _impl_.delivered_rv_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.delivered_rv)
+}
+
+// int64 updated_at_ms = 11 [json_name = "updatedAtMs"];
+inline void BattleDSAuthStorageRecord::clear_updated_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::int64_t BattleDSAuthStorageRecord::updated_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.updated_at_ms)
+  return _internal_updated_at_ms();
+}
+inline void BattleDSAuthStorageRecord::set_updated_at_ms(::int64_t value) {
+  _internal_set_updated_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.updated_at_ms)
+}
+inline ::int64_t BattleDSAuthStorageRecord::_internal_updated_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_at_ms_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_updated_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = value;
+}
+
+// uint32 required_writer_epoch = 12 [json_name = "requiredWriterEpoch"];
+inline void BattleDSAuthStorageRecord::clear_required_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t BattleDSAuthStorageRecord::required_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.required_writer_epoch)
+  return _internal_required_writer_epoch();
+}
+inline void BattleDSAuthStorageRecord::set_required_writer_epoch(::uint32_t value) {
+  _internal_set_required_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.required_writer_epoch)
+}
+inline ::uint32_t BattleDSAuthStorageRecord::_internal_required_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.required_writer_epoch_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_required_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_writer_epoch_ = value;
+}
+
+// string allocation_id = 13 [json_name = "allocationId"];
+inline void BattleDSAuthStorageRecord::clear_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& BattleDSAuthStorageRecord::allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.allocation_id)
+  return _internal_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleDSAuthStorageRecord::set_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::mutable_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleDSAuthStorageRecord.allocation_id)
+  return _s;
+}
+inline const ::std::string& BattleDSAuthStorageRecord::_internal_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocation_id_.Get();
+}
+inline void BattleDSAuthStorageRecord::_internal_set_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleDSAuthStorageRecord::_internal_mutable_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleDSAuthStorageRecord::release_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleDSAuthStorageRecord.allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleDSAuthStorageRecord::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleDSAuthStorageRecord.allocation_id)
+}
+
+// int64 last_active_heartbeat_ms = 14 [json_name = "lastActiveHeartbeatMs"];
+inline void BattleDSAuthStorageRecord::clear_last_active_heartbeat_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_active_heartbeat_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::int64_t BattleDSAuthStorageRecord::last_active_heartbeat_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleDSAuthStorageRecord.last_active_heartbeat_ms)
+  return _internal_last_active_heartbeat_ms();
+}
+inline void BattleDSAuthStorageRecord::set_last_active_heartbeat_ms(::int64_t value) {
+  _internal_set_last_active_heartbeat_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleDSAuthStorageRecord.last_active_heartbeat_ms)
+}
+inline ::int64_t BattleDSAuthStorageRecord::_internal_last_active_heartbeat_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_active_heartbeat_ms_;
+}
+inline void BattleDSAuthStorageRecord::_internal_set_last_active_heartbeat_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_active_heartbeat_ms_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4972,6 +7356,12 @@ inline void DSLifecycleEvent::_internal_set_ts_ms(::int64_t value) {
 namespace google {
 namespace protobuf {
 
+template <>
+struct is_proto_enum<::pandora::ds::v1::BattleAuthPhase> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::ds::v1::BattleAuthPhase>() {
+  return ::pandora::ds::v1::BattleAuthPhase_descriptor();
+}
 template <>
 struct is_proto_enum<::pandora::ds::v1::DSLifecyclePhase> : std::true_type {};
 template <>

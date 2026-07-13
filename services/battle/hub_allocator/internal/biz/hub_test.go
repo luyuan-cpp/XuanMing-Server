@@ -1,6 +1,7 @@
 package biz
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
@@ -83,7 +85,7 @@ func (f *fakeRepo) UpdateShardWithLock(_ context.Context, pod string, _ int, fn 
 	return nil
 }
 
-func (f *fakeRepo) HeartbeatShard(_ context.Context, pod string, playerCount int32, state string, tsMs int64, _ time.Duration) (bool, error) {
+func (f *fakeRepo) HeartbeatShard(_ context.Context, pod string, playerCount int32, state string, tsMs int64, _ uint64, _ bool, _ time.Duration) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	s, ok := f.shards[pod]
@@ -165,6 +167,28 @@ func (f *fakeRepo) SetAssignment(_ context.Context, rec *hubv1.HubAssignmentStor
 	}
 	f.assignments[rec.PlayerId] = proto.Clone(rec).(*hubv1.HubAssignmentStorageRecord)
 	return nil
+}
+
+func (f *fakeRepo) CompareAndSwapAssignment(_ context.Context, playerID uint64, expected, next *hubv1.HubAssignmentStorageRecord, _ time.Duration) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.setAssignErr != nil {
+		return false, f.setAssignErr
+	}
+	current, found := f.assignments[playerID]
+	if expected == nil {
+		if found {
+			return false, nil
+		}
+	} else if !found || !proto.Equal(current, expected) {
+		return false, nil
+	}
+	if next == nil {
+		delete(f.assignments, playerID)
+	} else {
+		f.assignments[playerID] = proto.Clone(next).(*hubv1.HubAssignmentStorageRecord)
+	}
+	return true, nil
 }
 
 func (f *fakeRepo) DeleteAssignmentIfPodMatches(_ context.Context, playerID uint64, pod string) (bool, error) {
@@ -251,15 +275,26 @@ func (f *fakeRepo) playerCount(pod string) int32 {
 	return -1
 }
 
-// fakeSigner 返回确定性假票据。
-type fakeSigner struct {
-	calls    int
-	lastRole uint32 // 最近一次签票携带的 role_id(选角权威化断言用)
+func (f *fakeRepo) setHeartbeatTime(pod string, tsMs int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if shard, ok := f.shards[pod]; ok {
+		shard.LastHeartbeatMs = tsMs
+	}
+	f.active[pod] = tsMs
 }
 
-func (s *fakeSigner) SignHubTicket(playerID uint64, roleID uint32) (string, int64, error) {
+// fakeSigner 返回确定性假票据。
+type fakeSigner struct {
+	calls       int
+	lastRole    uint32 // 最近一次签票携带的 role_id(选角权威化断言用)
+	lastBinding HubTicketBinding
+}
+
+func (s *fakeSigner) SignHubTicket(playerID uint64, roleID uint32, binding HubTicketBinding) (string, int64, error) {
 	s.calls++
 	s.lastRole = roleID
+	s.lastBinding = binding
 	return "hub-ticket-fake", time.Now().Add(5 * time.Minute).UnixMilli(), nil
 }
 
@@ -469,6 +504,14 @@ func TestTransferHub_MoveBetweenShards(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
+	unknown := protowire.AppendTag(nil, 2047, protowire.VarintType)
+	unknown = protowire.AppendVarint(unknown, 7)
+	before, _, _ := repo.GetAssignment(ctx, 1001)
+	withFuture := proto.Clone(before).(*hubv1.HubAssignmentStorageRecord)
+	withFuture.ProtoReflect().SetUnknown(unknown)
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, 1001, before, withFuture, time.Minute); err != nil || !swapped {
+		t.Fatalf("inject future field swapped=%v err=%v", swapped, err)
+	}
 	// 点名传送到 shard 2
 	tr, err := uc.TransferHub(ctx, 1001, 2)
 	if err != nil {
@@ -488,6 +531,9 @@ func TestTransferHub_MoveBetweenShards(t *testing.T) {
 	a, found, _ := repo.GetAssignment(ctx, 1001)
 	if !found || a.HubPodName != tr.NewHubPodName {
 		t.Fatalf("assignment not moved: found=%v pod=%v", found, a)
+	}
+	if !bytes.Equal(a.ProtoReflect().GetUnknown(), unknown) {
+		t.Fatalf("transfer lost future fields: got=%x want=%x", a.ProtoReflect().GetUnknown(), unknown)
 	}
 }
 
@@ -565,7 +611,7 @@ func TestHeartbeat_SeedsTopologyBeforeCommand(t *testing.T) {
 	ctx := context.Background()
 
 	// 没有 Redis 分片镜像时，首跳先刷新 Fleet 拓扑并重试，避免新 Hub 被误判孤儿。
-	res, err := uc.Heartbeat(ctx, "pandora-hub-global-1", 42, "ready", time.Now().UnixMilli())
+	res, err := uc.Heartbeat(ctx, "pandora-hub-global-1", 42, "ready", time.Now().UnixMilli(), 0)
 	if err != nil {
 		t.Fatalf("heartbeat err: %v", err)
 	}
@@ -578,13 +624,10 @@ func TestHeartbeat_UnknownShardWaitsForTopology(t *testing.T) {
 	uc, _, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	// Fleet 刷新后仍不存在的 pod 不立刻 stop；下一轮拓扑就绪/清理流程再处理。
-	res, err := uc.Heartbeat(ctx, "pandora-hub-ghost-9", 0, "ready", time.Now().UnixMilli())
-	if err != nil {
-		t.Fatalf("heartbeat err: %v", err)
-	}
-	if res.Command != commandNone {
-		t.Fatalf("unknown shard want no command, got %q", res.Command)
+	// Fleet 刷新后仍不存在的 pod 必须返回 Unavailable，service 不得继续刷新 locator presence。
+	res, err := uc.Heartbeat(ctx, "pandora-hub-ghost-9", 0, "ready", time.Now().UnixMilli(), 0)
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("unknown shard must fail unavailable without authorized result, res=%+v err=%v", res, err)
 	}
 }
 
@@ -596,7 +639,7 @@ func TestHeartbeat_KnownShardNoCommand(t *testing.T) {
 		t.Fatalf("assign err: %v", err)
 	}
 	now := time.Now().UnixMilli()
-	res, err := uc.Heartbeat(ctx, "pandora-hub-global-1", 42, "ready", now)
+	res, err := uc.Heartbeat(ctx, "pandora-hub-global-1", 42, "ready", now, 0)
 	if err != nil {
 		t.Fatalf("heartbeat err: %v", err)
 	}
@@ -615,11 +658,12 @@ func TestSweepOnce_MarksStaleDraining(t *testing.T) {
 		t.Fatalf("assign err: %v", err)
 	}
 	pod := "pandora-hub-global-1"
-	// 心跳一个很旧的时间戳 → 进 active 且已超时
+	// 请求 ts_ms 已不再可信；先正常心跳，再直接构造派生索引/镜像陈旧态供 sweep 测试。
 	staleTs := time.Now().Add(-1 * time.Hour).UnixMilli()
-	if _, err := uc.Heartbeat(ctx, pod, 1, "ready", staleTs); err != nil {
+	if _, err := uc.Heartbeat(ctx, pod, 1, "ready", staleTs, 0); err != nil {
 		t.Fatalf("heartbeat err: %v", err)
 	}
+	repo.setHeartbeatTime(pod, staleTs)
 
 	if err := uc.sweepOnce(ctx); err != nil {
 		t.Fatalf("sweepOnce err: %v", err)
@@ -720,6 +764,14 @@ func TestReconcile_ConsolidationMigratesPlayers(t *testing.T) {
 	seedPlayer(repo, 1001, "hub-a", 1)
 	seedPlayer(repo, 1002, "hub-b", 2)
 	seedPlayer(repo, 1003, "hub-b", 2)
+	unknown := protowire.AppendTag(nil, 2046, protowire.BytesType)
+	unknown = protowire.AppendBytes(unknown, []byte("future"))
+	before, _, _ := repo.GetAssignment(ctx, 1001)
+	withFuture := proto.Clone(before).(*hubv1.HubAssignmentStorageRecord)
+	withFuture.ProtoReflect().SetUnknown(unknown)
+	if swapped, err := repo.CompareAndSwapAssignment(ctx, 1001, before, withFuture, time.Minute); err != nil || !swapped {
+		t.Fatalf("inject future field swapped=%v err=%v", swapped, err)
+	}
 
 	if err := uc.reconcileFleetReplicas(ctx); err != nil {
 		t.Fatalf("reconcile err: %v", err)
@@ -744,6 +796,9 @@ func TestReconcile_ConsolidationMigratesPlayers(t *testing.T) {
 	if !found || asn.HubPodName != "hub-b" {
 		t.Fatalf("player 1001 should be migrated to hub-b, got found=%v pod=%v", found, asn.GetHubPodName())
 	}
+	if !bytes.Equal(asn.ProtoReflect().GetUnknown(), unknown) {
+		t.Fatalf("drain migration lost future fields: got=%x want=%x", asn.ProtoReflect().GetUnknown(), unknown)
+	}
 	// 推送了 1 条迁移通知(只有 hub-a 上的 1 个玩家被迁)。
 	if pusher.count() != 1 {
 		t.Fatalf("want 1 migrate push, got %d", pusher.count())
@@ -762,7 +817,7 @@ func TestHeartbeat_DrainingShardReturnsDrainCommand(t *testing.T) {
 	}, time.Minute)
 
 	// DS 仍上报 ready,不应把 draining 降级回 ready。
-	res, err := uc.Heartbeat(ctx, "hub-x", 0, "ready", time.Now().UnixMilli())
+	res, err := uc.Heartbeat(ctx, "hub-x", 0, "ready", time.Now().UnixMilli(), 0)
 	if err != nil {
 		t.Fatalf("heartbeat err: %v", err)
 	}
@@ -790,7 +845,7 @@ func TestHeartbeat_ReviveLivenessDrainOnHealthyReport(t *testing.T) {
 	}, time.Minute)
 
 	// 健康 DS 上报 ready → 应复位 ready 并回 no command(打断死锁)。
-	res, err := uc.Heartbeat(ctx, "hub-x", 3, "ready", time.Now().UnixMilli())
+	res, err := uc.Heartbeat(ctx, "hub-x", 3, "ready", time.Now().UnixMilli(), 0)
 	if err != nil {
 		t.Fatalf("heartbeat err: %v", err)
 	}
@@ -810,11 +865,12 @@ func TestHeartbeat_ReviveAfterSweepFalsePositive(t *testing.T) {
 		t.Fatalf("assign err: %v", err)
 	}
 	pod := "pandora-hub-global-1"
-	// ① 一个很旧的心跳时间戳 → sweep 会把它误标 draining(draining_since_ms 保持 0)。
+	// ① 构造一个陈旧的 Redis 派生索引 → sweep 标 draining(draining_since_ms 保持 0)。
 	staleTs := time.Now().Add(-1 * time.Hour).UnixMilli()
-	if _, err := uc.Heartbeat(ctx, pod, 1, "ready", staleTs); err != nil {
+	if _, err := uc.Heartbeat(ctx, pod, 1, "ready", staleTs, 0); err != nil {
 		t.Fatalf("stale heartbeat err: %v", err)
 	}
+	repo.setHeartbeatTime(pod, staleTs)
 	if err := uc.sweepOnce(ctx); err != nil {
 		t.Fatalf("sweepOnce err: %v", err)
 	}
@@ -822,7 +878,7 @@ func TestHeartbeat_ReviveAfterSweepFalsePositive(t *testing.T) {
 		t.Fatalf("sweep should mark stale shard draining, got %q", s.State)
 	}
 	// ② DS 其实还活着,下一跳按时上报 ready → 应复位 ready 且不再收到 drain。
-	res, err := uc.Heartbeat(ctx, pod, 1, "ready", time.Now().UnixMilli())
+	res, err := uc.Heartbeat(ctx, pod, 1, "ready", time.Now().UnixMilli(), 0)
 	if err != nil {
 		t.Fatalf("fresh heartbeat err: %v", err)
 	}
@@ -922,7 +978,7 @@ func (f *fakeLocator) InBattleOrMatching(context.Context, uint64) (bool, error) 
 	return f.blocked, f.err
 }
 
-func (f *fakeLocator) RefreshHubLocations(_ context.Context, hubPod string, playerIDs []uint64) (int, error) {
+func (f *fakeLocator) RefreshHubLocations(_ context.Context, hubPod string, playerIDs []uint64, _ string) (int, error) {
 	if f.err != nil {
 		return 0, f.err
 	}

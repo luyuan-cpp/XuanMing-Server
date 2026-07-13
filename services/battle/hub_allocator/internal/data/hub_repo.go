@@ -61,7 +61,12 @@ type HubRepo interface {
 	// HeartbeatShard Hub DS 心跳上报:仅刷新已存在分片(player_count/state/last_heartbeat_ms)并 ZADD active。
 	// 分片不存在(孤儿 DS)返 (false, nil),由 biz 下发 stop 指令。HeartbeatRequest 不含 addr/region,
 	// 故不在心跳路径建档(分片拓扑由 Fleet provider 登记)。
-	HeartbeatShard(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, shardTTL time.Duration) (bool, error)
+	// tokenGen:本次心跳携带的已验签 DS 回调令牌代际(Redis INCR 单调值;0=无)。genRequired:enforce
+	// 代际门是否开启(= biz.dsTokenGeneration)。代际校验在**任何镜像变更之前**做,过期/缺失代际一律
+	// fail-closed(返回 ErrShardTokenStale,镜像零变更:不刷 player_count/state/last_heartbeat_ms/TTL,
+	// 不进 active 索引),旧代际/无令牌 DS 不能借心跳保活/占位/伪造在场(审核 P1)。stale 两种情形:
+	// ① 镜像已绑定代际(CurrentTokenGen!=0)但心跳代际不等(含 0);② genRequired 但心跳无代际(tokenGen==0)。
+	HeartbeatShard(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, tokenGen uint64, genRequired bool, shardTTL time.Duration) (bool, error)
 	// RemoveShard 删分片镜像 + 移出 shards SET + 移出 active ZSET。
 	RemoveShard(ctx context.Context, pod string) error
 	// RangeStaleShards 返回 active ZSET 中 last_heartbeat_ms ≤ thresholdMs(且 >0)的 pod(心跳超时)。
@@ -73,6 +78,10 @@ type HubRepo interface {
 	GetAssignment(ctx context.Context, playerID uint64) (*hubv1.HubAssignmentStorageRecord, bool, error)
 	// SetAssignment 写玩家归属(TTL=assignmentTTL)。
 	SetAssignment(ctx context.Context, rec *hubv1.HubAssignmentStorageRecord, assignmentTTL time.Duration) error
+	// CompareAndSwapAssignment 以玩家单键为线性化点精确 CAS 归属。
+	// expected=nil 表示仅当键不存在时创建；next=nil 表示仅当当前值完整等于 expected 时删除。
+	// 比较覆盖 unknown fields，滚动更新期间不会把新副本字段静默当成相同。返回 false 表示前置快照已变化，零写入。
+	CompareAndSwapAssignment(ctx context.Context, playerID uint64, expected, next *hubv1.HubAssignmentStorageRecord, assignmentTTL time.Duration) (bool, error)
 	// DeleteAssignmentIfPodMatches CAS 删玩家归属:仅当当前归属仍指向 pod 才删。
 	// 防止 ReleaseHub 读到旧归属后、并发 Assign/Transfer 已写入新归属时无条件 DEL 误删新归属
 	// (同 team 孤儿索引修复的写序铁律:删除必须带前置校验)。
@@ -149,15 +158,21 @@ func (r *RedisHubRepo) ListShards(ctx context.Context) ([]*hubv1.HubShardStorage
 
 // CreateShard 写分片镜像(权威)并登记到全局 shards SET。
 //
+// **init-only 语义(审核二轮 CE7)**:用 SET NX 只在分片键不存在时初始化,已存在则**绝不覆盖**
+// —— 两个并发 GetShard-miss 的种子调用(ensureShards / reconcile 新 pod 分支)不会互相把对方
+// 刚写入的心跳 / last_verified / 状态清回初始值。已存在分片的地址 / 容量刷新由 reconcile 的
+// UpdateShardWithLock 单调合并负责,不走本路径覆盖。
+//
 // Redis Cluster 兼容(decision-revisit-hub-crossslot.md):shardKey{pod} 与全局 shardsSetKey
-// 分属不同 slot,不能捆同一事务。① shardKey 单键 SET 权威落库;② shardsSetKey 独立 SADD
+// 分属不同 slot,不能捆同一事务。① shardKey 单键 SET NX 初始化;② shardsSetKey 独立 SADD
 // 登记 membership(必须成功,否则 ListShards 漏这个分片)。两步幂等,失败重试可重入。
 func (r *RedisHubRepo) CreateShard(ctx context.Context, rec *hubv1.HubShardStorageRecord, shardTTL time.Duration) error {
 	payload, err := marshalShard(rec)
 	if err != nil {
 		return err
 	}
-	if err := r.rdb.Set(ctx, shardKey(rec.HubPodName), payload, shardTTL).Err(); err != nil {
+	// SET NX:仅初始化,不覆盖既有镜像(CE7 防并发种子互相清心跳/last_verified)。
+	if err := r.rdb.SetNX(ctx, shardKey(rec.HubPodName), payload, shardTTL).Err(); err != nil {
 		return err
 	}
 	return r.rdb.SAdd(ctx, shardsSetKey, rec.HubPodName).Err()
@@ -219,7 +234,13 @@ func (r *RedisHubRepo) UpdateShardWithLock(
 	return errcode.New(errcode.ErrHubNoAvailable, "hub shard %s update concurrent retry exhausted", pod)
 }
 
-func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, shardTTL time.Duration) (bool, error) {
+// errShardTokenStale:enforce 代际门下心跳令牌代际过期/缺失 → fail-closed。
+// 返回前对镜像**零变更**(不刷 player_count/state/last_heartbeat_ms/TTL,不进 active 索引),
+// biz 透传该错误 → service 层据此**不刷 presence**(审核 P1:旧代际心跳不得保活/占位/伪造在场)。
+// 用 ErrUnauthorized(=8)对客户端/DS 呈现明确的鉴权拒绝码。
+var errShardTokenStale = errcode.New(errcode.ErrUnauthorized, "hub heartbeat token generation stale")
+
+func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, tokenGen uint64, genRequired bool, shardTTL time.Duration) (bool, error) {
 	key := shardKey(pod)
 	found := false
 	err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
@@ -236,27 +257,17 @@ func (r *RedisHubRepo) HeartbeatShard(ctx context.Context, pod string, playerCou
 			return uerr
 		}
 		found = true
-		// Hub DS 上报为准:对账在线数 / 状态 / 心跳时刻
-		rec.PlayerCount = playerCount
-		// 状态机:允许 DS 上报升级 drain 等级(ready→draining→stopping),
-		// 但禁止把 allocator 强制整合标记的 draining/stopping 被 DS 上报的 ready 冲掉。
-		//
-		// 存活恢复例外:心跳超时误标的 draining(draining_since_ms==0)不是 allocator 的主动意图,
-		// 只是「DS 可能已死」的推断;一个健康的 ready 心跳就是推断失效的直接证据,允许它把分片复位
-		// ready,打断「活着的 DS 被误判超时后 ready 心跳被忽略、永久卡 draining」的死锁(dev 重启复用
-		// 同名分片 / 线上 hub_allocator 重启后 sweep 误判一批活 pod,都靠这条自愈)。
-		// 强制整合排空的 draining(draining_since_ms>0)仍 sticky,绝不被 ready 冲掉(保留原不变量)。
-		switch {
-		case state == "":
-			// 空上报:不动状态。
-		case drainRank(state) >= drainRank(rec.State):
-			rec.State = state // 升级或同级 drain → 采用 DS 上报
-		case state == "ready" && rec.State == "draining" && rec.DrainingSinceMs == 0:
-			rec.State = "ready" // 存活恢复:心跳超时误标的 draining 被健康心跳复位
-		default:
-			// 其余降级(强制整合 draining 被 ready 冲)→ 保持 rec.State 不变。
+		// 令牌代际校验(审核 P1):代际门下过期/缺失代际的心跳一律 fail-closed,且必须在**任何镜像变更之前**
+		// 拒绝 —— 旧代际/无令牌心跳不得刷 player_count/state/last_heartbeat_ms/TTL,也不得进 active 索引
+		// (旧代际 DS 不能借心跳保活/占位;presence 由上层据本错误跳过)。
+		//   ① 镜像已绑定代际(CurrentTokenGen!=0)但心跳代际不等(含 0)→ stale;
+		//   ② genRequired(enforce 代际门开)但心跳无代际(tokenGen==0)→ stale(挡 legacy gen0 关闭代际门)。
+		// gen 来自 Redis INCR 单调值,同秒多次重签不碰撞;精确相等才算「当前代际」(替代旧 exp 秒级比较)。
+		if (rec.CurrentTokenGen != 0 && tokenGen != rec.CurrentTokenGen) || (genRequired && tokenGen == 0) {
+			return errShardTokenStale // 零变更返回:WATCH fn 报错 → 不 EXEC,镜像/索引/TTL 全不动
 		}
-		rec.LastHeartbeatMs = tsMs
+		// —— 代际校验通过,方可变更镜像 ——
+		applyHeartbeatToShard(rec, playerCount, state, tsMs)
 		payload, merr := marshalShard(rec)
 		if merr != nil {
 			return merr
@@ -337,6 +348,72 @@ func (r *RedisHubRepo) SetAssignment(ctx context.Context, rec *hubv1.HubAssignme
 		return err
 	}
 	return r.rdb.Set(ctx, assignKey(rec.PlayerId), payload, assignmentTTL).Err()
+}
+
+func (r *RedisHubRepo) CompareAndSwapAssignment(
+	ctx context.Context,
+	playerID uint64,
+	expected, next *hubv1.HubAssignmentStorageRecord,
+	assignmentTTL time.Duration,
+) (bool, error) {
+	if playerID == 0 || (expected != nil && expected.PlayerId != playerID) || (next != nil && next.PlayerId != playerID) {
+		return false, errcode.New(errcode.ErrInvalidArg, "assignment CAS player_id mismatch")
+	}
+	key := assignKey(playerID)
+	const casMaxRetry = 8
+	for attempt := 0; attempt < casMaxRetry; attempt++ {
+		matched := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			var current *hubv1.HubAssignmentStorageRecord
+			b, gerr := tx.Get(ctx, key).Bytes()
+			switch {
+			case gerr == redis.Nil:
+				if expected != nil {
+					return nil
+				}
+			case gerr != nil:
+				return gerr
+			default:
+				current = &hubv1.HubAssignmentStorageRecord{}
+				if uerr := proto.Unmarshal(b, current); uerr != nil {
+					return fmt.Errorf("assignment %d bad proto: %w", playerID, uerr)
+				}
+				if expected == nil || !proto.Equal(current, expected) {
+					return nil
+				}
+			}
+
+			var payload []byte
+			if next != nil {
+				var merr error
+				payload, merr = proto.Marshal(next)
+				if merr != nil {
+					return merr
+				}
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				if next == nil {
+					pipe.Del(ctx, key)
+				} else {
+					pipe.Set(ctx, key, payload, assignmentTTL)
+				}
+				return nil
+			})
+			if perr == nil {
+				matched = true
+			}
+			return perr
+		}, key)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		return matched, nil
+	}
+	// 高并发下 WATCH 连续冲突只表示 expected 已不再稳定；交给上层重读最新归属重试，零写入。
+	return false, nil
 }
 
 func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerID uint64, pod string) (bool, error) {
@@ -442,6 +519,39 @@ func (r *RedisHubRepo) ClearTransferCooldown(ctx context.Context, playerID uint6
 }
 
 // ── 序列化辅助 ────────────────────────────────────────────────────────────────
+
+// applyHeartbeatToShard 把一次(已鉴权/已授权的)心跳上报应用到分片镜像:对账在线数、
+// 推进状态机、刷新 last_heartbeat。抽成纯函数供 HeartbeatShard(legacy 代际门路径)与
+// ActivateHeartbeat(Model B 授权原子路径)共用**同一套状态机语义**,杜绝两条路径漂移。
+//
+// 状态机:允许 DS 上报升级 drain 等级(ready→draining→stopping),但禁止把 allocator 强制整合
+// 标记的 draining/stopping 被 DS 上报的 ready 冲掉。存活恢复例外:心跳超时误标的 draining
+// (draining_since_ms==0)不是 allocator 主动意图,只是「DS 可能已死」的推断;一个健康心跳即推断
+// 失效的直接证据,允许它复位 ready,打断「活着的 DS 被误判超时后永久卡 draining」的死锁。强制整合
+// 排空的 draining(draining_since_ms>0)仍 sticky。调用方须保证心跳已通过代际/授权校验(stale
+// 心跳必须在调用本函数前 fail-closed 返回,零变更)。
+func applyHeartbeatToShard(rec *hubv1.HubShardStorageRecord, playerCount int32, state string, tsMs int64) {
+	rec.PlayerCount = playerCount
+	switch {
+	case rec.State == "warming":
+		// 首个通过 Guard/授权的心跳即「DS 已就绪且可信」的直接证据:warming → ready。
+		// 若 DS 首跳已上报更高 drain 等级(draining/stopping),则采纳其上报,不强行 ready。
+		if drainRank(state) > 0 {
+			rec.State = state
+		} else {
+			rec.State = "ready"
+		}
+	case state == "":
+		// 空上报:不动状态。
+	case drainRank(state) >= drainRank(rec.State):
+		rec.State = state // 升级或同级 drain → 采用 DS 上报
+	case state == "ready" && rec.State == "draining" && rec.DrainingSinceMs == 0:
+		rec.State = "ready" // 存活恢复:心跳超时误标的 draining 被健康心跳复位
+	default:
+		// 其余降级(强制整合 draining 被 ready 冲)→ 保持 rec.State 不变。
+	}
+	rec.LastHeartbeatMs = tsMs
+}
 
 // drainRank 把分片状态映射成排空等级(ready<draining<stopping),
 // 心跳路径用它防止 allocator 标记的 draining/stopping 被 DS 上报的 ready 降级。

@@ -22,6 +22,7 @@
 package errcode
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -220,11 +221,18 @@ const (
 type Error struct {
 	Code Code
 	Msg  string
+	// cause 是可选的底层原因(如 *mysql.MySQLError)。仅用于让上层 errors.As / errors.Is
+	// 沿链检出底层错误(例如数据层判定 1213 死锁重试),不进入对客户端的错误码语义。
+	cause error
 }
 
 func (e *Error) Error() string {
 	return fmt.Sprintf("errcode=%d %s", e.Code, e.Msg)
 }
+
+// Unwrap 暴露底层原因,供 errors.As / errors.Is 沿链遍历(cause 为 nil 时返回 nil,
+// 行为与未包裹时一致,向后兼容)。
+func (e *Error) Unwrap() error { return e.cause }
 
 // New 构造一个错误。msg 可以是 fmt.Sprintf 风格。
 func New(code Code, msg string, args ...any) *Error {
@@ -234,12 +242,26 @@ func New(code Code, msg string, args ...any) *Error {
 	return &Error{Code: code, Msg: msg}
 }
 
-// As 从 error 中提取 Code,非 *Error 返回 ErrUnknown。
+// NewCause 构造带底层原因的错误:业务错误码 + 人读消息不变,同时保留 cause 供
+// errors.As / errors.Is 沿链检出(如数据层判定 MySQL 1213 死锁是否可重试)。
+// cause 不改变 As(err) 返回的错误码语义,只对客户端暴露 code/msg。
+func NewCause(code Code, cause error, msg string, args ...any) *Error {
+	e := New(code, msg, args...)
+	e.cause = cause
+	return e
+}
+
+// As 从 error 中提取 Code,非 *Error 返回 ErrUnknown。先直接断言(最常见,零开销),
+// 再沿 Unwrap 链回溯(兼容被 fmt.Errorf %w / 其它错误包裹的场景)。
 func As(err error) Code {
 	if err == nil {
 		return OK
 	}
 	if e, ok := err.(*Error); ok {
+		return e.Code
+	}
+	var e *Error
+	if errors.As(err, &e) {
 		return e.Code
 	}
 	return ErrUnknown

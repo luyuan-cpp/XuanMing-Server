@@ -37,9 +37,31 @@ internal/
 - `Login(account, password_hash, ...)`:
   - 默认走 MySQL `pandora_account.accounts` 查询账号,用 bcrypt 校验密码。
   - `dev_skip_password` / `dev_auto_register` 只供本机联调,见下文。
-  - hub_allocator 可用时返回真实 hub 地址和票据;不可用时回退静态 `mock_hub_ds_addr` + login 自签 hub 票据。
+  - hub_allocator 可用时返回真实 hub 地址和票据;兼容栅栏关闭时，不可用会回退静态
+    `mock_hub_ds_addr` + login 自签 hub 票据。
 - `Logout`:删除 Redis session(未启 Redis 时幂等返回)。
 - `IssueDSTicket` / `VerifyDSTicket`:JWT 签发 / 校验,Redis JTI repo 启用时做票据防重放。
+  公共 RPC 与登录断线重连的 Battle 签票共用一个 issuer：签名前必须从 Redis 证明玩家属于 live
+  match roster；Redis/坏 protobuf/空 roster/陈旧心跳/Model-B 漂移均 fail-closed，不再直接相信
+  `target_id` 或 locator。locator 已明确 `InBattle` 后授权失败返回 `Unavailable`，不再继续分配 Hub
+  或写 LOGIN_PENDING；重连地址使用 authorizer 同一 Redis 快照中的 live `ds_addr`，不回退 locator
+  旧地址。带 Model B 绑定的 Hub 票会在消费 jti 前严格核对 Redis 当前玩家 assignment。
+- Redis authority 下的 UE DS 在线 `VerifyDSTicket` 只走独立 Envoy `:8444` exact route，固定执行
+  Guard → Redis active/projection → ticket binding/assignment/roster → admission JTI marker；`:8443`
+  对该 path 精确 403。相同小写 UUIDv4 `admission_id` 仅在 30s 短窗内幂等恢复响应丢失。
+
+## Hub 归属绑定激活栅栏
+
+`login.require_hub_assignment_binding` 默认 `false`，供新旧副本滚动兼容。切为 `true` 后：
+
+- 无完整 `(assignment_id, pod, uid, epoch, gen, credential_jti, writer_epoch)` 绑定的 Hub 票一律拒绝；
+- login 禁止自签 Hub 票和静态地址回退，只接受 hub_allocator 权威签发结果；
+- Redis 或 `login.hub.addr` 未配置会在启动期直接失败；
+- assignment missing/mismatch 不消费票据 jti，Redis 故障或坏 protobuf 返回 `Unavailable`。
+
+> 生产阻断：上述代码门不等于 DS auth 已可 Apply。blue/green 行为激活、跨普通轮换旧 Hub 票据 grace、
+> Battle terminal outbox、revisioned immutable Secret/keyset、digest 与集群内 synthetic 尚未闭环；详见
+> `docs/design/decision-revisit-ds-callback-auth.md` §7.15–§7.16。
 
 ## 本地启动
 

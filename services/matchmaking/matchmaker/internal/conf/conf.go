@@ -23,11 +23,14 @@ type Config struct {
 //
 // Issuer / Audience / Secret 必须与 login 服务和 Envoy jwt_authn provider 完全一致。
 type JWTConf struct {
-	Issuer      string          `yaml:"issuer,omitempty" json:"issuer,omitempty"`
-	Audience    string          `yaml:"audience,omitempty" json:"audience,omitempty"`
-	Secret      string          `yaml:"secret,omitempty" json:"secret,omitempty"`
-	SessionTTL  config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
-	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
+	Issuer   string `yaml:"issuer,omitempty" json:"issuer,omitempty"`
+	Audience string `yaml:"audience,omitempty" json:"audience,omitempty"`
+	Secret   string `yaml:"secret,omitempty" json:"secret,omitempty"`
+	// AdditionalSecrets 是**仅用于校验**的额外可接受密钥(不用于签发),支持玩家面
+	// JWT 不停服密钥轮换(三段式,同 ds_auth.additional_secrets)。默认空。
+	AdditionalSecrets []string        `yaml:"additional_secrets,omitempty" json:"additional_secrets,omitempty"`
+	SessionTTL        config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
+	DSTicketTTL       config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 }
 
 // MatchConf 是 matchmaker 服务私有配置。

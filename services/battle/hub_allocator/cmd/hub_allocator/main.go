@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,11 +28,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 
+	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/data"
@@ -40,6 +44,10 @@ import (
 )
 
 const serviceName = "hub_allocator"
+
+// hubTokenGenKey 是某 Hub DS pod 的令牌代际计数器 key(Redis INCR 权威、独立、单调)。
+// hashtag {pod} 锁 cluster slot,与该 pod 的分片镜像 key 同 slot,便于 cluster 部署。
+func hubTokenGenKey(pod string) string { return "pandora:hub:tokengen:{" + pod + "}" }
 
 var flagConf string
 
@@ -75,6 +83,16 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if cfg.DSAuth.AuthorityModeRedis() {
+		if cfg.Mode != conf.ModeAgones {
+			helper.Errorw("msg", "ds_auth_redis_authority_requires_agones", "mode", cfg.Mode)
+			os.Exit(1)
+		}
+		if err := cfg.DSAuth.ValidateRedisFence(); err != nil {
+			helper.Errorw("msg", "ds_auth_fence_config_invalid", "err", err)
+			os.Exit(1)
+		}
+	}
 
 	// 3. Redis(强依赖)
 	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
@@ -98,11 +116,12 @@ func main() {
 
 	// 4. JWT Signer(强依赖:AssignHub / TransferHub 必须签 hub DSTicket;secret 须与 login/envoy 一致)
 	signer, serr := auth.NewSigner(auth.Config{
-		Issuer:      cfg.JWT.Issuer,
-		Audience:    cfg.JWT.Audience,
-		Secret:      []byte(cfg.JWT.Secret),
-		SessionTTL:  cfg.JWT.SessionTTL.Std(),
-		DSTicketTTL: cfg.JWT.DSTicketTTL.Std(),
+		Issuer:            cfg.JWT.Issuer,
+		Audience:          cfg.JWT.Audience,
+		Secret:            []byte(cfg.JWT.Secret),
+		AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets),
+		SessionTTL:        cfg.JWT.SessionTTL.Std(),
+		DSTicketTTL:       cfg.JWT.DSTicketTTL.Std(),
 	})
 	if serr != nil {
 		helper.Errorw("msg", "hub_ticket_signer_init_failed", "err", serr,
@@ -111,6 +130,160 @@ func main() {
 	}
 	helper.Infow("msg", "hub_ticket_signer_ready", "ds_ticket_ttl", cfg.JWT.DSTicketTTL.String())
 
+	// 4.1 DS 回调服务令牌(审核 P1 #1):签发器(发现 ready Hub DS 时签 hub 令牌下发)
+	// + 守卫(校验 Hub DS Heartbeat 回调)。secret 未配 → 不签发;mode=off → 不校验(默认)。
+	dsSigner, derr := middleware.NewDSCallbackSignerFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_signer_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	// 启动期 TTL 正值/最小值校验(审核 P1):签发(dsSigner!=nil)或校验(guard!=nil)DS 回调令牌时,
+	// HubTokenTTL 必须 >= 最小值,否则令牌签发即过期(续期判据 TTL/3 也会退化),启动即拒。
+	if derr := cfg.DSAuth.Validate(dsSigner != nil || dsGuard != nil); derr != nil {
+		helper.Errorw("msg", "ds_auth_ttl_invalid", "err", derr)
+		os.Exit(1)
+	}
+	// DS 回调令牌验签器(审核 P1):agones 续期判据除“外置 exp 未近”外,还须实测 annotation 令牌
+	// 验签通过(挡住空/损坏/旧密钥签发的令牌被误判可用)。secret 未配 → nil,续期只看 exp(不启用)。
+	dsVerifier, derr := middleware.NewDSCallbackVerifierFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_verifier_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	// 签发回调:hub 令牌绑 pod(sub),不带 match_id,并携带 Redis INCR 权威、独立、单调的「代际」gen。
+	// 每次(重)签经 hubTokenGenKey(pod)领取严格递增的 gen 签进 ds_gen claim,DS 心跳原样回显,
+	// 服务端精确相等比较判定是否当前代际(替代秒级 exp 代际,消除同秒重签碰撞;审核 P1-6)。
+	// INCR 只在真实(重)签路径触发(agones 续期判定不通过 / local 拉起),不随发现空跑。
+	issueHubToken := func(pod string) (string, int64, uint64, error) {
+		genCtx, genCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer genCancel()
+		gen, gerr := rdb.Incr(genCtx, hubTokenGenKey(pod)).Result()
+		if gerr != nil {
+			return "", 0, 0, fmt.Errorf("hub token gen incr for pod %s: %w", pod, gerr)
+		}
+		// 代际计数器 TTL 兜底 key 增长:pod 名唯一不复用(Agones generateName / local UUID 后缀),
+		// 且续期(TTL/3)远早于此过期,故计数器在 pod 生命周期内绝不过期回退,单调性保持。
+		genTTL := cfg.DSAuth.HubTokenTTL.Std() * 2
+		if genTTL < 48*time.Hour {
+			genTTL = 48 * time.Hour
+		}
+		_ = rdb.Expire(genCtx, hubTokenGenKey(pod), genTTL).Err()
+		tok, exp, serr := dsSigner.SignDSCallbackWithGen(auth.DSTypeHub, pod, 0, uint64(gen), cfg.DSAuth.HubTokenTTL.Std())
+		return tok, exp, uint64(gen), serr
+	}
+	// enforce 下签发/patch 失败必须 fail-closed(该 Hub DS 不进候选,否则客户端被路由到回调被全拒的 Hub)。
+	dsEnforce := dsGuard.Mode() == middleware.DSAuthEnforce
+	// modelBAuthority:Model B「Redis 唯一授权权威」(§7)仅在 agones + enforce + authority_mode=redis
+	// 三者齐备时启用。启用后签发走两阶段 pending 凭据 + authRepo,legacy 代际镜像门由 Model B 取代关闭。
+	modelBAuthority := cfg.Mode == conf.ModeAgones && dsEnforce && cfg.DSAuth.AuthorityModeRedis()
+	// hubAuthRepo:Model B 授权记录仓(agones+enforce+redis 时构造,注入 fleet 与 usecase)。
+	var hubAuthRepo data.HubAuthRepo
+	// authRecordTTL:授权记录 Redis TTL(>= 令牌 TTL,常驻 Hub 心跳持续刷新;与代际计数器同量级)。
+	authRecordTTL := cfg.DSAuth.HubTokenTTL.Std() * 2
+	if authRecordTTL < 48*time.Hour {
+		authRecordTTL = 48 * time.Hour
+	}
+	// issueHubCredential 是 Model B pending 凭据签发器(§7):领单调 gen(复用 hubTokenGenKey)+
+	// 生成 jti(uuid v4)+ SignHubCredential(绑 uid/epoch/gen/jti),返回 Bearer token 与凭据身份。
+	// StagePending / annotation 投递由 fleet provider 完成;此处只管签发。
+	issueHubCredential := func(pod, instanceUID string, epoch uint32) (string, *hubv1.HubDSCredential, error) {
+		genCtx, genCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer genCancel()
+		gen, gerr := rdb.Incr(genCtx, hubTokenGenKey(pod)).Result()
+		if gerr != nil {
+			return "", nil, fmt.Errorf("hub credential gen incr for pod %s: %w", pod, gerr)
+		}
+		_ = rdb.Expire(genCtx, hubTokenGenKey(pod), authRecordTTL).Err()
+		jti := uuid.NewString()
+		res, serr := dsSigner.SignHubCredential(pod, instanceUID, epoch, uint64(gen), jti, cfg.DSAuth.HubTokenTTL.Std())
+		if serr != nil {
+			return "", nil, fmt.Errorf("hub credential sign for pod %s: %w", pod, serr)
+		}
+		cred := &hubv1.HubDSCredential{
+			Gen: uint64(gen),
+			Jti: jti,
+			// SignHubCredential 回显的是实际序列化进 JWT NumericDate 的 claim 值；原样存储，
+			// 才能与验签后 claims.exp 做严格相等比较。
+			ExpMs:         uint64(res.ExpMs),
+			Kid:           res.Kid,
+			InstanceUid:   instanceUID,
+			ProtocolEpoch: epoch,
+			TokenSha256:   res.TokenSHA256,
+			WriterEpoch:   res.WriterEpoch,
+		}
+		return res.Token, cred, nil
+	}
+	// local-off-v1 仍只把 K8s/Redis 权威功能关闭，不会退回 legacy JWT。UE 对所有受保护
+	// DS RPC 一律要求完整 Model-B tuple；本地实例以唯一 UID、epoch=1、随机 jti 和持久 gen
+	// 签发一次性凭据，随后由 UE 的机械隔离 profile 直接设为 active（不等待 Redis ACK）。
+	issueLocalHubCredential := func(pod, instanceUID string, epoch uint32) (string, int64, uint64, error) {
+		genCtx, genCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer genCancel()
+		gen, gerr := rdb.Incr(genCtx, hubTokenGenKey(pod)).Result()
+		if gerr != nil {
+			return "", 0, 0, fmt.Errorf("local hub credential gen incr for pod %s: %w", pod, gerr)
+		}
+		res, serr := dsSigner.SignHubCredential(
+			pod, instanceUID, epoch, uint64(gen), uuid.NewString(), cfg.DSAuth.HubTokenTTL.Std())
+		if serr != nil {
+			return "", 0, 0, fmt.Errorf("local hub credential sign for pod %s: %w", pod, serr)
+		}
+		return res.Token, res.ExpMs, uint64(gen), nil
+	}
+	// verifyHubCredential 把 pkg/auth 已完整验签的 JWT claims 映射成投递侧严格比对 tuple。
+	// annotation 的 gen/exp 永远只是镜像,不能绕过这里的签名/iss/aud/exp 校验。
+	verifyHubCredential := func(token string) (*biz.HubCredentialClaims, error) {
+		if dsVerifier == nil {
+			return nil, fmt.Errorf("hub credential verifier is not configured")
+		}
+		claims, verr := dsVerifier.VerifyDSCallback(token)
+		if verr != nil {
+			return nil, verr
+		}
+		if claims.DSType != string(auth.DSTypeHub) || claims.Pod() == "" || claims.MatchID != 0 || claims.ExpiresAt == nil {
+			return nil, fmt.Errorf("hub credential claims scope/exp invalid")
+		}
+		expMs := claims.ExpiresAt.Time.UnixMilli()
+		if expMs <= 0 {
+			return nil, fmt.Errorf("hub credential claims exp invalid")
+		}
+		return &biz.HubCredentialClaims{
+			Pod:           claims.Pod(),
+			InstanceUID:   claims.UID(),
+			ProtocolEpoch: claims.Epoch(),
+			Gen:           claims.Gen(),
+			JTI:           claims.JTI(),
+			ExpMs:         uint64(expMs),
+			Kid:           claims.Kid(),
+			WriterEpoch:   claims.WriterEpoch(),
+		}, nil
+	}
+	// 4.2 玩家面 / DS 回调面密钥集不相交(P0,二审 #7):hub_allocator 是唯一同时装配两面密钥的服务
+	// (jwt 签 hub DSTicket + ds_auth 签/验 DS 回调令牌)。任一交叉 = 泄露一面即可伪造另一面。
+	// enforce(生产姿态)下启动即拒;off/permissive 只告警 —— dev 模板两面共用公开 dev 密钥,
+	// 硬拒会打断本地一键启动(CLAUDE.md §14.2:默认路径不许坏)。集合含主密钥 + 全部 additional。
+	if cfg.DSAuth.Secret != "" {
+		playerKeys := append([][]byte{[]byte(cfg.JWT.Secret)}, auth.AdditionalSecretsBytes(cfg.JWT.AdditionalSecrets)...)
+		dsKeys := append([][]byte{[]byte(cfg.DSAuth.Secret)}, auth.AdditionalSecretsBytes(cfg.DSAuth.AdditionalSecrets)...)
+		if derr := auth.AssertDisjointSecrets(playerKeys, dsKeys); derr != nil {
+			if dsEnforce {
+				helper.Errorw("msg", "jwt_ds_auth_secret_overlap", "err", derr,
+					"hint", "玩家面 jwt.secret/additional_secrets 与 ds_auth.secret/additional_secrets 必须是两套完全独立的密钥(P0);enforce 下启动即拒")
+				os.Exit(1)
+			}
+			helper.Warnw("msg", "jwt_ds_auth_secret_overlap_dev", "err", derr,
+				"hint", "玩家面与 DS 回调面密钥交叉,仅 dev 可容忍;生产(enforce)会启动即拒")
+		}
+	}
+	if dsSigner != nil {
+		helper.Infow("msg", "ds_callback_token_issuer_ready",
+			"hub_token_ttl", cfg.DSAuth.HubTokenTTL.Std().String(), "guard_mode", dsGuard.Mode().String())
+	}
 	// 5. 装配链
 	repo := data.NewRedisHubRepo(rdb)
 	// Hub DS 分片来源由 cfg.Mode 单一开关决定(标准两模式 + 离线兜底),biz 逻辑零改:
@@ -127,9 +300,47 @@ func main() {
 			os.Exit(1)
 		}
 		fleet = af
+		if dsSigner != nil {
+			if modelBAuthority {
+				// Model B:两阶段 pending 凭据投递 + Redis 授权记录仓(§7)。annotation 只投递,
+				// 授权由 DS 首个合法 pending 心跳在 authRepo 上原子激活。取代 legacy 代际门。
+				hubAuthRepo = data.NewRedisHubAuthRepo(rdb)
+				af.SetHubAuthority(hubAuthRepo, issueHubCredential, verifyHubCredential,
+					cfg.DSAuth.HubTokenTTL.Std()/3, authRecordTTL)
+				helper.Infow("msg", "hub_authority_model_b_ready",
+					"authority_mode", "redis", "auth_record_ttl", authRecordTTL.String(),
+					"hint", "Model B:Redis 唯一授权权威 + active/pending 两阶段令牌状态机")
+			} else {
+				// 发现式签发:ListShards 扫到 ready Hub DS 时签发/续期 annotation(剩余寿命 < TTL/3 重签)。
+				af.SetDSTokenIssuer(issueHubToken, cfg.DSAuth.HubTokenTTL.Std()/3, dsEnforce)
+				if dsVerifier != nil {
+					// 续期判据加实测验签:annotation 令牌须验签通过且 sub==pod、ds_type==hub,否则重签
+					// (挡空/损坏/旧密钥令牌被误判可用,审核 P1)。
+					af.SetDSTokenVerifier(func(token, pod string) error {
+						claims, verr := dsVerifier.VerifyDSCallback(token)
+						if verr != nil {
+							return verr
+						}
+						if claims.DSType != string(auth.DSTypeHub) || claims.Subject != pod {
+							return fmt.Errorf("ds token scope mismatch: ds_type=%q sub=%q want hub/%s", claims.DSType, claims.Subject, pod)
+						}
+						return nil
+					})
+				}
+			}
+		}
 		helper.Infow("msg", "agones_fleet_provider_ready",
 			"api_server", cfg.Agones.APIServer, "namespace", cfg.Agones.Namespace, "fleet", cfg.Agones.FleetName)
 	case conf.ModeLocal:
+		// 新 UE 不接受 legacy JWT，也不会在没有 Redis pending/ACK 的本地链路自动降级。
+		// 因而本机模式只允许显式 local-off-v1；其他组合若继续启动只会得到永远 staged 的 DS。
+		if perr := auth.ValidateDSLocalHubProfileOffV1(
+			dsGuard.Mode().String(), cfg.DSAuth.AuthorityMode, dsSigner != nil, cfg.DSAuth.HubTokenTTL.Std()); perr != nil {
+			helper.Errorw("msg", "local_hub_auth_profile_invalid",
+				"err", perr,
+				"hint", "mode=local requires ds_auth.mode=off + authority_mode=legacy + signing key (local-off-v1); Redis Model-B local authority is not implemented")
+			os.Exit(1)
+		}
 		lf, lerr := biz.NewLocalHubFleetProvider(cfg.LocalHub)
 		if lerr != nil {
 			helper.Errorw("msg", "local_hub_fleet_provider_init_failed", "err", lerr,
@@ -139,6 +350,7 @@ func main() {
 		// 进程随 hub_allocator 退出而 Kill,避免遗留孤儿 Hub DS。
 		defer func() { _ = lf.Close() }()
 		fleet = lf
+		lf.SetDSTokenIssuer(issueLocalHubCredential, true) // 完整 tuple 经 env 下发；签发失败必须 fail-closed
 		helper.Infow("msg", "local_hub_fleet_provider_ready",
 			"executable", cfg.LocalHub.ExecutablePath, "map", cfg.LocalHub.MapName,
 			"advertise_host", cfg.LocalHub.AdvertiseHost, "port", cfg.LocalHub.Port)
@@ -156,6 +368,36 @@ func main() {
 		}
 	}
 	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer}, cfg.Hub)
+	// agones 真 DS 链路:分片先 warming,等首个通过 Guard 的 Hub DS 心跳才转 ready(审核 P1:
+	// PATCH/发现成功 ≠ 收到过真实鉴权心跳,避免把玩家路由到从未心跳的 Hub)。mock/local 不置,保持
+	// 现有 dev/离线联调直接 ready 行为不变。
+	if cfg.Mode == conf.ModeAgones {
+		uc.SetRequireHeartbeatReady(true)
+		if modelBAuthority {
+			// Model B:注入授权记录仓 → 心跳走 ActivateHeartbeat 单事务线性化点、AssignHub/TransferHub
+			// 走 ReserveRoutableSeat/CheckRoutable 原子终态门(§7)。legacy 代际镜像门由 Model B 取代,
+			// 故关闭 DSTokenGeneration(避免与 promote 双门叠加)。authRecordTTL 独立注入(CE8:授权键
+			// 不被 shardTTL 缩短)。
+			uc.SetAuthRepo(hubAuthRepo)
+			uc.SetAuthTTL(authRecordTTL)
+			uc.SetDSTokenGeneration(false)
+			helper.Infow("msg", "hub_usecase_model_b_authority",
+				"hint", "Model B:心跳 ActivateHeartbeat 单事务 + Assign/Transfer 原子授权终态门;legacy 代际门已关闭",
+				"auth_record_ttl", authRecordTTL.String())
+		} else {
+			// 令牌代际绑定(二审 #3/#4):仅 enforce 下开启——镜像记录当前令牌 exp,重签/轮换后分片
+			// 复位 warming,只有携带新代际已验签令牌的心跳才翻回 ready(挡旧令牌迟到心跳)。
+			// off/permissive 下心跳无已验签 claims,开了会自锁,故不开。
+			uc.SetDSTokenGeneration(dsEnforce)
+		}
+		if !dsEnforce {
+			// A#2:agones 真 DS 链路却未 enforce → warming→ready 翻转只是「活性」信号,不是鉴权证明,
+			// 任何能连上本服务的进程都能伪造心跳把分片置 ready/伪造在场玩家列表。生产必须 enforce
+			// (gen_cluster_config.ps1 -Prod 默认改写 ds_auth.mode=enforce);本地 minikube dev 可忽略。
+			helper.Warnw("msg", "agones_ds_auth_not_enforce", "guard_mode", dsGuard.Mode().String(),
+				"hint", "mode=agones 且 ds_auth.mode!=enforce:Hub 心跳未经令牌鉴权,warming→ready 仅是活性信号;生产环境必须 enforce")
+		}
+	}
 
 	// 5.1 Kafka producer → migratePusher(弱依赖:broker 不通则 warn 并继续,迁移推送静默丢弃,
 	// Hub DS drain 心跳指令仍兜底让客户端重连到新分片)。强制整合 consolidation 才需要。
@@ -187,10 +429,33 @@ func main() {
 	}
 
 	svc := service.NewHubService(uc)
+	svc.SetDSCallbackGuard(dsGuard)         // DS 回调令牌校验(Heartbeat);nil=off
+	svc.SetModelBAuthority(modelBAuthority) // Model B:心跳必须携带 Model B 凭据,legacy 令牌一律拒(CE1/CE2)
 
 	// 6. gRPC + HTTP
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
+
+	// 任何后台 reconcile/sweep 与 RPC server 启动前先取得 capability。失败进程零业务写。
+	if cfg.DSAuth.AuthorityModeRedis() {
+		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
+			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
+			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
+			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+		})
+		if err != nil {
+			helper.Errorw("msg", "ds_auth_fence_acquire_failed", "err", err)
+			os.Exit(1)
+		}
+		defer func() { _ = fence.Close() }()
+		go func() {
+			<-fence.Lost()
+			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止旧 writer 在失租/epoch 回退后继续写")
+			os.Exit(1)
+		}()
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+	}
 
 	// 7. 后台心跳超时扫描(随进程生命周期启停)
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
@@ -231,8 +496,17 @@ type hubTicketSigner struct {
 	signer *auth.Signer
 }
 
-func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32) (string, int64, error) {
-	return h.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, 0, 0, roleID, uuid.NewString())
+func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding biz.HubTicketBinding) (string, int64, error) {
+	jti := uuid.NewString()
+	if binding.PodName == "" {
+		return h.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, 0, 0, roleID, jti)
+	}
+	return h.signer.SignBoundHubDSTicket(playerID, 0, 0, roleID, jti, auth.DSTicketBinding{
+		DSPodName: binding.PodName, DSInstanceUID: binding.InstanceUID,
+		ProtocolEpoch: binding.ProtocolEpoch, CredentialGen: binding.CredentialGen,
+		CredentialJTI: binding.CredentialJTI, HubAssignmentID: binding.HubAssignmentID,
+		WriterEpoch: binding.WriterEpoch,
+	})
 }
 
 // kafkaMigratePusher 把 biz.HubMigratePusher 适配到 kafkax.KeyOrderedProducer。

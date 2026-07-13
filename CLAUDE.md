@@ -110,6 +110,11 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     | 我所在的群 | `max_groups_per_player` 默认 50(建群 / AddMember 事务校验) | `ListMyGroups` SQL LIMIT | `ERR_GROUP_JOIN_LIMIT` |
     | 交易订单(单玩家参与,买/卖两侧各计) | `max_orders_per_player` 默认 200(CreateOrder 用 Lua SCARD+SADD 原子预留双方反查索引名额;满时惰性清理已终态/已回收成员再重试一次) | `ListMyOrders` cursor 分页 + SMEMBERS 全量被写入侧硬上限兜住 | `ERR_TRADE_ORDER_LIMIT` |
 
+    **受管的客户端触发型内存容器**：UE DS 的已消费 DSTicket JTI cache 虽不对客户端分页展示，也必须
+    按同一有界纪律维护：`JTI→exp+leeway` 到期清理，硬上限为
+    `min(effective MaxPlayers×每玩家窗口预算, configured absolute max, 65536)`；满载 fail-closed，
+    禁止驱逐未过期 JTI 后重新允许重放。契约见 `docs/design/agones-dev.md §5`。
+
 ## 10. AI 协作约定
 
 AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细则,避免双文档漂移。

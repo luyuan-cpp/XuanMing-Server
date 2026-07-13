@@ -69,6 +69,11 @@ message HeartbeatResponse {
   string command = 2;  // "" | "stop" | "drain" | "reload_config"
   // 3-9 reserved for future control commands
   reserved 3 to 9;
+  uint64 accepted_token_gen = 10;
+  string accepted_token_jti = 11;
+  string accepted_instance_uid = 12;
+  uint32 accepted_instance_epoch = 13;
+  uint32 accepted_writer_epoch = 14;
 }
 
 // ===== List =====
@@ -112,6 +117,54 @@ message BattleStorageRecord {
   // 持续空场超过 allocator.empty_battle_timeout → 后端兜底判 abandoned(全员掉线未归 /
   // 客户端从未连入,DS 空转烧资源)。主路径是 DS 侧空场计时器自结算(agones-dev.md §2.4)。
   int64  empty_since_ms    = 11;
+  string gameserver_uid    = 12;
+  uint32 instance_epoch    = 13;
+  uint64 last_verified_gen = 14;
+  string last_verified_jti = 15;
+  uint32 last_verified_writer_epoch = 16;
+  string allocation_id     = 17;
+}
+
+// ===== Model B Battle DS 回调授权状态机 =====
+
+enum BattleAuthPhase {
+  BATTLE_AUTH_PHASE_UNSPECIFIED = 0;
+  BATTLE_AUTH_PHASE_BOOTSTRAP = 1;
+  BATTLE_AUTH_PHASE_ACTIVE = 2;
+  BATTLE_AUTH_PHASE_ROTATING = 3;
+  BATTLE_AUTH_PHASE_QUARANTINED = 4;
+  BATTLE_AUTH_PHASE_TERMINATING = 5;
+}
+
+message BattleDSCredential {
+  uint64 gen = 1;
+  string jti = 2;
+  uint64 exp_ms = 3;
+  string kid = 4;
+  string instance_uid = 5;
+  uint32 instance_epoch = 6;
+  string token_sha256 = 7;
+  uint32 writer_epoch = 8;
+}
+
+// BattleDSAuthStorageRecord 是 battle 回调授权的 Redis 唯一权威，key
+// `pandora:ds:auth:{<match_id>}`，与 BattleStorageRecord/代际计数器同 slot。
+message BattleDSAuthStorageRecord {
+  uint64 match_id = 1;
+  string ds_pod_name = 2;
+  string instance_uid = 3;
+  uint32 instance_epoch = 4;
+  BattleAuthPhase phase = 5;
+  BattleDSCredential active = 6;
+  BattleDSCredential pending = 7;
+  uint64 high_water_gen = 8;
+  int64 pending_started_ms = 9;
+  string delivered_rv = 10;
+  int64 updated_at_ms = 11;
+  uint32 required_writer_epoch = 12;
+  string allocation_id = 13;
+  // 仅由携带完整 active/pending 凭据的 Model B 心跳以服务端接收时间原子推进。
+  int64 last_active_heartbeat_ms = 14;
 }
 
 // ===== 生命周期事件(kafka pandora.ds.lifecycle)=====
@@ -141,4 +194,3 @@ message DSLifecycleEvent {
   string game_mode         = 6;
   int64  ts_ms             = 7;
 }
-

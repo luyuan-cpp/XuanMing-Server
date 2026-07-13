@@ -22,8 +22,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
@@ -34,6 +36,7 @@ import (
 
 // 分片状态常量(对应 proto string state 字段)。
 const (
+	stateWarming  = "warming" // 分片已播种但尚未收到首个(鉴权)心跳:不可被 AssignHub 选中
 	stateReady    = "ready"
 	stateDraining = "draining"
 	stateStopping = "stopping"
@@ -57,7 +60,19 @@ type TicketSigner interface {
 	// SignHubTicket 给 playerID 签一张 hub DSTicket,返回 token + 过期毫秒。
 	// roleID(选角权威化 2026-07-08):玩家已选角色,>0 时盖进票据 role_id claim
 	// (DS 验签后直接用它 spawn);0 = 未选角,claim 不序列化(与旧票兼容)。
-	SignHubTicket(playerID uint64, roleID uint32) (token string, expiresAtMs int64, err error)
+	SignHubTicket(playerID uint64, roleID uint32, binding HubTicketBinding) (token string, expiresAtMs int64, err error)
+}
+
+// HubTicketBinding 把 hub 入场票绑定到当前归属版本和目标 DS active 凭据。
+// legacy 模式使用零值；Model B 必须六项完整。
+type HubTicketBinding struct {
+	PodName         string
+	InstanceUID     string
+	ProtocolEpoch   uint32
+	CredentialGen   uint64
+	CredentialJTI   string
+	HubAssignmentID string
+	WriterEpoch     uint32
 }
 
 // HubMigratePusher 抽象强制整合迁移通知推送(走 Kafka topic pandora.hub.migrate,key=player_id)。
@@ -76,6 +91,37 @@ type HubUsecase struct {
 	migrate HubMigratePusher
 	locator data.HubLocationChecker
 	cfg     conf.HubConf
+	// requireHeartbeatReady:播种分片镜像时先置 warming,等首个通过 Guard 的 Hub DS 心跳才转 ready
+	// (审核 P1:agones PATCH/进程拉起成功 ≠ DS 已真正鉴权回调,不能直接当 ready 否则会把玩家路由到
+	// 一个从未成功心跳的 Hub)。mode=agones 置 true;mock/local 不置(无真实心跳/保 dev 自测不坏)。
+	requireHeartbeatReady bool
+	// dsTokenGeneration:令牌代际绑定开关(审核 P1-6/P1-8;仅 agones + ds_auth.mode=enforce 置 true)。
+	// 开启后拓扑对账把候选令牌代际(Redis INCR 单调值)写进镜像 CurrentTokenGen,重签(gen 递增)时复位分片 warming;
+	// 心跳侧只有携带当前代际已验签令牌的心跳才能把 warming 翻回 ready(gen 精确相等)。off/permissive 不开:
+	// 守卫不验签、心跳无可信 gen,开了会自锁。
+	dsTokenGeneration bool
+	// authRepo:Model B「Redis 唯一授权权威」授权记录仓(decision-revisit-ds-callback-auth §7)。
+	// 仅 ds_auth.authority_mode=redis(agones+enforce)时由 main 注入;nil = legacy 代际门路径
+	// (mock/local/off 及默认 legacy 权威模式)。装配后:①心跳走 ActivateHeartbeat 单事务线性化点
+	// (授权 promote + 分片 warming→ready + 投影 active 元组同一 EXEC),stale 一律 fail-closed;
+	// ②AssignHub/TransferHub 走 ReserveRoutableSeat/CheckRoutable 原子终态门。
+	// 此时 dsTokenGeneration 关闭(Model B 授权记录取代 legacy 镜像代际门)。
+	authRepo data.HubAuthRepo
+	// authTTL:Model B 授权记录键 TTL(CE8:必须独立于 shardTTL,授权寿命远长于分片镜像 TTL,
+	// 否则授权键被 shardTTL 提前过期会导致「有效凭据被判 stale」)。main 注入(默认 2×HubTokenTTL,floor 48h)。
+	authTTL time.Duration
+}
+
+// HubCredential 是 service 层从**验签通过**的 Model B hub 令牌抽出的凭据身份(§7),
+// 由 HeartbeatWithCredential 透传到 authRepo.PromoteOrValidate 做 promote/validate 匹配。
+type HubCredential struct {
+	InstanceUID   string
+	ProtocolEpoch uint32
+	Gen           uint64
+	JTI           string
+	TokenSHA256   string
+	Kid           string
+	WriterEpoch   uint32
 }
 
 // NewHubUsecase 构造 HubUsecase。
@@ -92,6 +138,63 @@ func (u *HubUsecase) SetMigratePusher(p HubMigratePusher) { u.migrate = p }
 
 // SetLocationChecker 注入 player_locator 位置检查器(弱依赖:玩家切线护栏,nil 时跳过战斗/匹配中检查)。
 func (u *HubUsecase) SetLocationChecker(c data.HubLocationChecker) { u.locator = c }
+
+// SetRequireHeartbeatReady 开启「先 warming、首个鉴权心跳才 ready」(agones 真 DS 链路置 true)。
+// off/mock/local 不置:无真实心跳的模式仍直接播种 ready,保持现有 dev/离线联调行为不变。
+func (u *HubUsecase) SetRequireHeartbeatReady(b bool) { u.requireHeartbeatReady = b }
+
+// SetDSTokenGeneration 开启令牌代际绑定(仅 agones + enforce;见字段注释)。
+func (u *HubUsecase) SetDSTokenGeneration(b bool) { u.dsTokenGeneration = b }
+
+// SetAuthRepo 注入 Model B 授权记录仓(§7;仅 ds_auth.authority_mode=redis 时装配)。
+// 装配后心跳走 ActivateHeartbeat 单事务线性化点、AssignHub/TransferHub 走 ReserveRoutableSeat/
+// CheckRoutable 原子终态门;nil 保持 legacy 代际门路径不变。
+func (u *HubUsecase) SetAuthRepo(r data.HubAuthRepo) { u.authRepo = r }
+
+// SetAuthTTL 注入 Model B 授权记录键 TTL(CE8;独立于 shardTTL,授权寿命更长)。
+func (u *HubUsecase) SetAuthTTL(d time.Duration) { u.authTTL = d }
+
+// authTTLDur 返回授权键 TTL:main 已注入用注入值;未注入(测试/兜底)回退 2×shardTTL,
+// 绝不返回 0(0 = Redis 永不过期,授权键会泄漏)。
+func (u *HubUsecase) authTTLDur() time.Duration {
+	if u.authTTL > 0 {
+		return u.authTTL
+	}
+	return u.shardTTL() * 2
+}
+
+// heartbeatMaxAgeMs 返回「分片心跳仍算新鲜」的最大毫秒(= 心跳超时阈值)。
+// ReserveRoutableSeat/CheckRoutable 用它拒绝把玩家分到心跳已陈旧但镜像尚未被 sweep 标 draining 的分片。
+func (u *HubUsecase) heartbeatMaxAgeMs() int64 {
+	return u.cfg.HeartbeatTimeout.Std().Milliseconds()
+}
+
+// candidateTokenExp 返回播种/对账时写入镜像的令牌 exp 镜像值(仅调试/兼容,不再当代际):
+// 仅代际绑定开启且候选带有效 exp 时记录,其余恒 0。代际识别已改用 candidateTokenGen。
+func (u *HubUsecase) candidateTokenExp(expMs int64) uint64 {
+	if u.dsTokenGeneration && expMs > 0 {
+		return uint64(expMs)
+	}
+	return 0
+}
+
+// candidateTokenGen 返回播种/对账时写入镜像的令牌「代际」(Redis INCR 单调值):仅代际绑定
+// 开启时记录候选 gen,其余恒 0(= 不启用;off/permissive 心跳无已验签 claims,开了会自锁)。
+// 替代秒级 exp 代际:gen 来自 Redis INCR 单调,同秒多次重签也不碰撞(审核 P1-6),且可精确相等比较。
+func (u *HubUsecase) candidateTokenGen(gen uint64) uint64 {
+	if u.dsTokenGeneration {
+		return gen
+	}
+	return 0
+}
+
+// initialShardState 返回播种新分片镜像的初始状态:需心跳确认时 warming,否则直接 ready。
+func (u *HubUsecase) initialShardState() string {
+	if u.requireHeartbeatReady {
+		return stateWarming
+	}
+	return stateReady
+}
 
 func (u *HubUsecase) shardTTL() time.Duration         { return u.cfg.ShardTTL.Std() }
 func (u *HubUsecase) assignTTL() time.Duration        { return u.cfg.AssignmentTTL.Std() }
@@ -123,73 +226,117 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 		region = u.cfg.DefaultRegion
 	}
 
-	// 1. 幂等:已有归属且分片仍 ready → 重签票返回(不重复占位,落不变量 §1)
-	if existing, found, err := u.repo.GetAssignment(ctx, playerID); err != nil {
-		return nil, err
-	} else if found {
-		if shard, ok, gerr := u.repo.GetShard(ctx, existing.HubPodName); gerr == nil && ok && shard.State == stateReady {
-			u.addShardMember(ctx, existing.HubPodName, playerID) // 自愈成员反向索引 + 刷 TTL
-			// 选角同步:roleID>0 且与镜像不一致 → 刷新镜像(换角重选);刷失败仅 Warn
-			// (票据 claim 已用新值,镜像旧值下次 Assign 会再刷,不阻断)。
-			if roleID > 0 && existing.RoleId != roleID {
-				existing.RoleId = roleID
-				if serr := u.repo.SetAssignment(ctx, existing, u.assignTTL()); serr != nil {
-					plog.With(ctx).Warnw("msg", "assign_update_role_failed", "player_id", playerID, "role_id", roleID, "err", serr)
-				}
+	for attempt := 0; attempt < 8; attempt++ {
+		existing, found, err := u.repo.GetAssignment(ctx, playerID)
+		if err != nil {
+			return nil, err
+		}
+		effectiveRole := roleID
+		if found {
+			effectiveRole = effectiveRoleID(roleID, existing.RoleId)
+			current, reusable, rerr := u.assignmentRoutable(ctx, playerID, existing)
+			if rerr != nil {
+				return nil, rerr // Redis/授权读取失败不能降级成另分配
 			}
-			return u.signResult(ctx, playerID, effectiveRoleID(roleID, existing.RoleId), shard)
+			if reusable {
+				next := proto.Clone(existing).(*hubv1.HubAssignmentStorageRecord)
+				next.HubAddr = current.HubAddr
+				next.ShardId = current.ShardID
+				next.Region = current.Region
+				next.RoleId = effectiveRole
+				if next.AssignmentId == "" {
+					next.AssignmentId = uuid.NewString()
+				}
+				bindAssignmentAuth(next, &current)
+				if proto.Equal(existing, next) {
+					u.addShardMember(ctx, next.HubPodName, playerID)
+					return u.signResult(ctx, playerID, effectiveRole, next)
+				}
+				swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, existing, next, u.assignTTL())
+				if serr != nil {
+					return nil, serr
+				}
+				if !swapped {
+					continue
+				}
+				u.addShardMember(ctx, next.HubPodName, playerID)
+				return u.signResult(ctx, playerID, effectiveRole, next)
+			}
+			if assignmentSameInstance(existing, &current) {
+				// 同一 GameServer 实例只发生 active credential 平滑轮换：原座位仍存在，
+				// 仅 CAS 重绑凭据并重签票，绝不能再 Reserve +1 后拿旧 tuple 退座。
+				next := proto.Clone(existing).(*hubv1.HubAssignmentStorageRecord)
+				next.HubAddr, next.ShardId, next.Region = current.HubAddr, current.ShardID, current.Region
+				next.RoleId = effectiveRole
+				if next.AssignmentId == "" {
+					next.AssignmentId = uuid.NewString()
+				}
+				bindAssignmentAuth(next, &current)
+				swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, existing, next, u.assignTTL())
+				if serr != nil {
+					return nil, serr
+				}
+				if !swapped {
+					continue
+				}
+				u.addShardMember(ctx, next.HubPodName, playerID)
+				return u.signResult(ctx, playerID, effectiveRole, next)
+			}
 		}
-		// 旧分片下线/漂移:退旧占位后重新分配;保留已存角色(roleID=0 时不丢)
-		roleID = effectiveRoleID(roleID, existing.RoleId)
-		u.releaseFromShard(ctx, existing.HubPodName)
-		u.removeShardMember(ctx, existing.HubPodName, playerID)
-	}
 
-	// 2. 确保 region 有候选分片(空则按 Fleet 拓扑种子)
-	if err := u.ensureShards(ctx, region); err != nil {
-		return nil, err
-	}
-
-	// 3. 选分片:队友所在分片优先,否则最空 ready 分片
-	target, err := u.selectShard(ctx, region, teamID)
-	if err != nil {
-		if errcode.As(err) == errcode.ErrHubNoAvailable {
-			u.tryScaleOutOnNoCapacity(ctx, region)
+		if err := u.ensureShards(ctx, region); err != nil {
+			return nil, err
 		}
-		return nil, err
-	}
-
-	// 4. 占位(乐观锁内复核 ready + 容量)
-	if rerr := u.reserveSeat(ctx, target.HubPodName); rerr != nil {
-		return nil, rerr
-	}
-
-	// 5. 写玩家归属(不变量 §1)+ 队友同分片提示
-	now := time.Now().UnixMilli()
-	assignment := &hubv1.HubAssignmentStorageRecord{
-		PlayerId:     playerID,
-		HubPodName:   target.HubPodName,
-		HubAddr:      target.HubAddr,
-		ShardId:      target.ShardId,
-		Region:       region,
-		TeamId:       teamID,
-		AssignedAtMs: now,
-		RoleId:       roleID, // 选角镜像:Transfer/重签路径从这里取角色盖进新票
-	}
-	if serr := u.repo.SetAssignment(ctx, assignment, u.assignTTL()); serr != nil {
-		u.releaseFromShard(ctx, target.HubPodName) // 回滚占位避免泄漏
-		return nil, serr
-	}
-	u.addShardMember(ctx, target.HubPodName, playerID) // 成员反向索引(强制整合枚举用)
-	if teamID != 0 {
-		if terr := u.repo.SetTeamShard(ctx, teamID, target.HubPodName, u.assignTTL()); terr != nil {
-			plog.With(ctx).Warnw("msg", "set_team_shard_failed", "team_id", teamID, "err", terr)
+		target, seat, err := u.selectAndReserveShard(ctx, region, teamID, "")
+		if err != nil {
+			if errcode.As(err) == errcode.ErrHubNoAvailable {
+				u.tryScaleOutOnNoCapacity(ctx, region)
+			}
+			return nil, err
 		}
-	}
+		assignment := &hubv1.HubAssignmentStorageRecord{}
+		if found {
+			assignment = proto.Clone(existing).(*hubv1.HubAssignmentStorageRecord)
+		}
+		assignment.PlayerId = playerID
+		assignment.HubPodName = target.HubPodName
+		assignment.HubAddr = target.HubAddr
+		assignment.ShardId = target.ShardId
+		assignment.Region = target.Region
+		assignment.TeamId = teamID
+		assignment.AssignedAtMs = time.Now().UnixMilli()
+		assignment.RoleId = effectiveRole
+		assignment.AssignmentId = uuid.NewString()
+		bindAssignmentAuth(assignment, seat)
+		var expected *hubv1.HubAssignmentStorageRecord
+		if found {
+			expected = existing
+		}
+		swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, expected, assignment, u.assignTTL())
+		if serr != nil {
+			u.compensateReservedSeat(ctx, target.HubPodName, seat)
+			return nil, serr
+		}
+		if !swapped {
+			u.compensateReservedSeat(ctx, target.HubPodName, seat)
+			continue
+		}
 
-	plog.With(ctx).Infow("msg", "hub_assigned",
-		"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId, "region", region)
-	return u.signResult(ctx, playerID, roleID, target)
+		u.addShardMember(ctx, target.HubPodName, playerID)
+		if found {
+			u.releaseAssignmentSeat(ctx, existing)
+			u.removeShardMember(ctx, existing.HubPodName, playerID)
+		}
+		if teamID != 0 {
+			if terr := u.repo.SetTeamShard(ctx, teamID, target.HubPodName, u.assignTTL()); terr != nil {
+				plog.With(ctx).Warnw("msg", "set_team_shard_failed", "team_id", teamID, "err", terr)
+			}
+		}
+		plog.With(ctx).Infow("msg", "hub_assigned",
+			"player_id", playerID, "pod", target.HubPodName, "shard_id", target.ShardId, "region", target.Region)
+		return u.signResult(ctx, playerID, effectiveRole, assignment)
+	}
+	return nil, errcode.New(errcode.ErrHubNoAvailable, "player %d assignment changed concurrently", playerID)
 }
 
 // ── RPC 2:ReleaseHub ──────────────────────────────────────────────────────────
@@ -199,27 +346,52 @@ func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
 	if playerID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	assignment, found, err := u.repo.GetAssignment(ctx, playerID)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return nil // 幂等
-	}
-	u.releaseFromShard(ctx, assignment.HubPodName)
-	u.removeShardMember(ctx, assignment.HubPodName, playerID)
-	deleted, derr := u.repo.DeleteAssignmentIfPodMatches(ctx, playerID, assignment.HubPodName)
-	if derr != nil {
-		return derr
-	}
-	if !deleted {
-		// 并发 Assign/Transfer 已把归属指向新分片(或已被删):不动新归属,旧分片占位
-		// 已退(座位计数由心跳 PlayerCount 对账自愈),视为幂等成功。
-		plog.With(ctx).Infow("msg", "hub_release_assignment_changed", "player_id", playerID, "old_pod", assignment.HubPodName)
+	for attempt := 0; attempt < 8; attempt++ {
+		assignment, found, err := u.repo.GetAssignment(ctx, playerID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return nil // 幂等
+		}
+		if u.authRepo != nil {
+			current, reusable, routeErr := u.assignmentRoutable(ctx, playerID, assignment)
+			if routeErr != nil {
+				return routeErr
+			}
+			if !reusable {
+				if assignmentSameInstance(assignment, &current) {
+					// 同实例普通凭据轮换：先把归属 CAS 到当前 active，再重新进入精确
+					// Release；不占新座，也不会拿旧 tuple 删除归属后退座失败。
+					next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
+					bindAssignmentAuth(next, &current)
+					swapped, swapErr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, next, u.assignTTL())
+					if swapErr != nil {
+						return swapErr
+					}
+					if !swapped {
+						continue
+					}
+					continue
+				}
+				return errcode.New(errcode.ErrInvalidState,
+					"hub assignment is not bound to the current active credential")
+			}
+		}
+		deleted, derr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, nil, 0)
+		if derr != nil {
+			return derr
+		}
+		if !deleted {
+			continue
+		}
+		// 只有赢得玩家归属 CAS 的 Release 才退位；并发 Transfer/Assign 的新归属及新实例计数不受影响。
+		u.releaseAssignmentSeat(ctx, assignment)
+		u.removeShardMember(ctx, assignment.HubPodName, playerID)
+		plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID, "pod", assignment.HubPodName)
 		return nil
 	}
-	plog.With(ctx).Infow("msg", "hub_released", "player_id", playerID, "pod", assignment.HubPodName)
-	return nil
+	return errcode.New(errcode.ErrInternal, "player %d release CAS retry exhausted", playerID)
 }
 
 // ── RPC 3:TransferHub ─────────────────────────────────────────────────────────
@@ -237,61 +409,104 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	assignment, found, err := u.repo.GetAssignment(ctx, playerID)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, errcode.New(errcode.ErrHubTransferFailed, "player %d not in any hub", playerID)
-	}
+	for attempt := 0; attempt < 8; attempt++ {
+		assignment, found, err := u.repo.GetAssignment(ctx, playerID)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, errcode.New(errcode.ErrHubTransferFailed, "player %d not in any hub", playerID)
+		}
+		if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
+			return nil, errcode.New(errcode.ErrHubTransferFailed,
+				"player %d assignment is not a complete writer-v2 binding", playerID)
+		}
+		shards, err := u.repo.ListShards(ctx)
+		if err != nil {
+			return nil, err
+		}
+		target := selectTransferTarget(shards, assignment, targetHubID)
+		if target == nil {
+			return nil, errcode.New(errcode.ErrHubTransferFailed,
+				"no ready target shard for player %d (target_hub_id=%d)", playerID, targetHubID)
+		}
 
-	shards, err := u.repo.ListShards(ctx)
-	if err != nil {
-		return nil, err
-	}
-	target := selectTransferTarget(shards, assignment, targetHubID)
-	if target == nil {
-		return nil, errcode.New(errcode.ErrHubTransferFailed,
-			"no ready target shard for player %d (target_hub_id=%d)", playerID, targetHubID)
-	}
+		if target.HubPodName == assignment.HubPodName {
+			current, reusable, rerr := u.assignmentRoutable(ctx, playerID, assignment)
+			if rerr != nil {
+				return nil, errcode.New(errcode.ErrHubTransferFailed, "check current shard: %v", rerr)
+			}
+			if reusable {
+				next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
+				next.HubAddr, next.ShardId, next.Region = current.HubAddr, current.ShardID, current.Region
+				if next.AssignmentId == "" {
+					next.AssignmentId = uuid.NewString()
+				}
+				bindAssignmentAuth(next, &current)
+				if proto.Equal(assignment, next) {
+					return u.transferResult(ctx, playerID, next.RoleId, next)
+				}
+				swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, next, u.assignTTL())
+				if serr != nil {
+					return nil, serr
+				}
+				if !swapped {
+					continue
+				}
+				return u.transferResult(ctx, playerID, next.RoleId, next)
+			}
+			if target.HubPodName == assignment.HubPodName && assignmentSameInstance(assignment, &current) {
+				next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
+				next.HubAddr, next.ShardId, next.Region = current.HubAddr, current.ShardID, current.Region
+				if next.AssignmentId == "" {
+					next.AssignmentId = uuid.NewString()
+				}
+				bindAssignmentAuth(next, &current)
+				swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, next, u.assignTTL())
+				if serr != nil {
+					return nil, serr
+				}
+				if !swapped {
+					continue
+				}
+				return u.transferResult(ctx, playerID, next.RoleId, next)
+			}
+		}
 
-	// 已在目标分片 → 仅重签票(角色从归属镜像取,Transfer 路径不丢选角)
-	if target.HubPodName == assignment.HubPodName {
-		return u.transferResult(ctx, playerID, assignment.RoleId, target)
+		seat, rerr := u.reserveRoutableSeat(ctx, target.HubPodName)
+		if rerr != nil {
+			return nil, errcode.New(errcode.ErrHubTransferFailed,
+				"reserve target shard %s failed: %v", target.HubPodName, rerr)
+		}
+		target = authoritativeShard(target, seat)
+		newAssignment := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
+		newAssignment.PlayerId = playerID
+		newAssignment.HubPodName = target.HubPodName
+		newAssignment.HubAddr = target.HubAddr
+		newAssignment.ShardId = target.ShardId
+		newAssignment.Region = target.Region
+		newAssignment.TeamId = assignment.TeamId
+		newAssignment.AssignedAtMs = time.Now().UnixMilli()
+		newAssignment.RoleId = assignment.RoleId
+		newAssignment.AssignmentId = uuid.NewString()
+		bindAssignmentAuth(newAssignment, seat)
+		swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, newAssignment, u.assignTTL())
+		if serr != nil {
+			u.compensateReservedSeat(ctx, target.HubPodName, seat)
+			return nil, serr
+		}
+		if !swapped {
+			u.compensateReservedSeat(ctx, target.HubPodName, seat)
+			continue
+		}
+		u.addShardMember(ctx, target.HubPodName, playerID)
+		u.releaseAssignmentSeat(ctx, assignment)
+		u.removeShardMember(ctx, assignment.HubPodName, playerID)
+		plog.With(ctx).Infow("msg", "hub_transferred",
+			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
+		return u.transferResult(ctx, playerID, assignment.RoleId, newAssignment)
 	}
-
-	// 先占新分片(失败不动旧分片)
-	if rerr := u.reserveSeat(ctx, target.HubPodName); rerr != nil {
-		return nil, errcode.New(errcode.ErrHubTransferFailed,
-			"reserve target shard %s failed: %v", target.HubPodName, rerr)
-	}
-
-	now := time.Now().UnixMilli()
-	newAssignment := &hubv1.HubAssignmentStorageRecord{
-		PlayerId:     playerID,
-		HubPodName:   target.HubPodName,
-		HubAddr:      target.HubAddr,
-		ShardId:      target.ShardId,
-		Region:       target.Region,
-		TeamId:       assignment.TeamId,
-		AssignedAtMs: now,
-		RoleId:       assignment.RoleId, // 选角镜像随归属搬迁,新票 claim 不丢角色
-	}
-	// 在退旧分片之前先把归属切到新分片(顺序:reserve 新 → SetAssignment → release 旧)。
-	// 这样 SetAssignment 失败时只需回滚新占位,旧分片 player_count 与旧 assignment 仍一致,
-	// 玩家保持在旧 hub(不会出现「旧 assignment 指向旧 pod 但旧 pod 计数已减 1」的悬挂状态)。
-	if serr := u.repo.SetAssignment(ctx, newAssignment, u.assignTTL()); serr != nil {
-		u.releaseFromShard(ctx, target.HubPodName) // 回滚新占位,旧分片不动
-		return nil, serr
-	}
-	u.addShardMember(ctx, target.HubPodName, playerID)
-	// 归属已切到新分片,再退旧分片占位(退位幂等,失败仅 Warn 不影响已切换的归属)
-	u.releaseFromShard(ctx, assignment.HubPodName)
-	u.removeShardMember(ctx, assignment.HubPodName, playerID)
-
-	plog.With(ctx).Infow("msg", "hub_transferred",
-		"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
-	return u.transferResult(ctx, playerID, assignment.RoleId, target)
+	return nil, errcode.New(errcode.ErrHubTransferFailed, "player %d assignment changed concurrently", playerID)
 }
 
 // ── 玩家侧:线路列表 + 主动切线 ────────────────────────────────────────────────
@@ -319,6 +534,16 @@ func (u *HubUsecase) ListHubLinesForPlayer(ctx context.Context, playerID uint64,
 	if assignment, found, err := u.repo.GetAssignment(ctx, playerID); err != nil {
 		return nil, err
 	} else if found {
+		if u.authRepo != nil {
+			_, reusable, rerr := u.assignmentRoutable(ctx, playerID, assignment)
+			if rerr != nil {
+				return nil, rerr
+			}
+			if !reusable {
+				return nil, errcode.New(errcode.ErrInvalidState,
+					"hub assignment is not bound to the current active credential")
+			}
+		}
 		region = assignment.Region // 归属 region 权威
 		curPod = assignment.HubPodName
 	}
@@ -326,6 +551,10 @@ func (u *HubUsecase) ListHubLinesForPlayer(ctx context.Context, playerID uint64,
 		region = u.cfg.DefaultRegion
 	}
 	shards, err := u.repo.ListShards(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shards, err = u.routableShardViews(ctx, shards)
 	if err != nil {
 		return nil, err
 	}
@@ -393,6 +622,26 @@ func (u *HubUsecase) TransferToLineForPlayer(ctx context.Context, playerID uint6
 		}
 	}
 
+	// 任何 cooldown SET 副作用之前先证明当前 assignment 是完整 writer-v2 且仍精确绑定
+	// Redis active。legacy/future/缺 JTI 的旧 writer 记录必须零变更拒绝。
+	if u.authRepo != nil {
+		assignment, found, readErr := u.repo.GetAssignment(ctx, playerID)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if !found {
+			return nil, errcode.New(errcode.ErrHubTransferNotInHub, "player %d not in any hub", playerID)
+		}
+		_, reusable, routeErr := u.assignmentRoutable(ctx, playerID, assignment)
+		if routeErr != nil {
+			return nil, routeErr
+		}
+		if !reusable {
+			return nil, errcode.New(errcode.ErrInvalidState,
+				"hub assignment is not bound to the current active credential")
+		}
+	}
+
 	// 护栏 2:冷却防刷(先占坑;后续失败再释放让玩家可立即重试)
 	ok, err := u.repo.TryTransferCooldown(ctx, playerID, u.transferCooldown())
 	if err != nil {
@@ -420,6 +669,16 @@ func (u *HubUsecase) transferToLineInner(ctx context.Context, playerID uint64, t
 	}
 	if !found {
 		return nil, errcode.New(errcode.ErrHubTransferNotInHub, "player %d not in any hub", playerID)
+	}
+	if u.authRepo != nil {
+		_, reusable, routeErr := u.assignmentRoutable(ctx, playerID, assignment)
+		if routeErr != nil {
+			return nil, routeErr
+		}
+		if !reusable {
+			return nil, errcode.New(errcode.ErrInvalidState,
+				"hub assignment is not bound to the current active credential")
+		}
 	}
 
 	shards, err := u.repo.ListShards(ctx)
@@ -487,19 +746,45 @@ func (u *HubUsecase) ListHubs(ctx context.Context, region string) ([]*hubv1.HubI
 type HeartbeatResult struct {
 	Command      string
 	GraceSeconds int32 // command=="drain"/"stop" 时的优雅迁移倒计时(秒),其余为 0
+	// AcceptedTokenGen:Model B 令牌激活确认(§7)。promote/validate 通过后回显当前 active
+	// 代际,DS 据此确认「本令牌已被服务端接纳为权威」;legacy/off 路径恒 0。
+	AcceptedTokenGen      uint64
+	AcceptedTokenJTI      string
+	AcceptedInstanceUID   string
+	AcceptedProtocolEpoch uint32
+	AcceptedWriterEpoch   uint32
 }
 
 // Heartbeat 处理 Hub DS 上报(单向 unary,DS 每 5s 调)。刷新在线数 + 心跳时刻。
 // 分片镜像不存在(孤儿 DS)→ 返回 stop 指令让其自行停机。
 // 分片已被强制整合标记 draining → 下发 drain + grace_seconds,Hub DS 引导在场玩家倒计时切大厅。
-func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int32, state string, tsMs int64) (*HeartbeatResult, error) {
+// tokenGen:本次心跳携带的**已验签**DS 回调令牌代际(service 层从 Guard claims 的 ds_gen 取,
+// 无已验签令牌时为 0)。代际绑定下 warming→ready 只接受与镜像代际**精确相等**的心跳(审核 P1-6/P1-8)。
+func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, tokenGen uint64) (*HeartbeatResult, error) {
+	return u.heartbeat(ctx, pod, playerCount, state, tsMs, tokenGen, nil)
+}
+
+// HeartbeatWithCredential 是 Model B 心跳入口(§7):service 层验签抽出 Model B 凭据后调用。
+// authRepo 已装配 → cred 携带的 (uid,epoch,gen,jti) 走 ActivateHeartbeat 单事务线性化点:
+// 首个合法 pending 心跳在 authKey+shardKey 同事务内原子完成 promote(pending→active)+ 分片
+// warming→ready + 投影 active 元组;stale(无授权记录/uid|epoch 不符/相位锁定/都不匹配)一律
+// fail-closed 返回 ErrUnauthorized(两键零变更)。分片镜像缺失 → reconcile 拓扑后重试一次,
+// 保证 promote 与 ready 恒同事务(杜绝半激活)。返回 accepted gen 供 DS 回显。
+func (u *HubUsecase) HeartbeatWithCredential(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, cred *HubCredential) (*HeartbeatResult, error) {
+	return u.heartbeat(ctx, pod, playerCount, state, tsMs, 0, cred)
+}
+
+func (u *HubUsecase) heartbeat(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, tokenGen uint64, cred *HubCredential) (*HeartbeatResult, error) {
 	if pod == "" {
 		return nil, errcode.New(errcode.ErrInvalidArg, "hub_pod_name required")
 	}
-	if tsMs <= 0 {
-		tsMs = time.Now().UnixMilli()
+	// 请求 ts_ms 不参与授权/存活权威；统一用服务端接收时间，future ts 不能延长可路由窗口。
+	tsMs = time.Now().UnixMilli()
+	// Model B:授权记录仓已装配 → 走 ActivateHeartbeat 单事务线性化点(authRepo=nil 时落 legacy 分支)。
+	if u.authRepo != nil {
+		return u.heartbeatModelB(ctx, pod, playerCount, state, tsMs, cred)
 	}
-	found, err := u.repo.HeartbeatShard(ctx, pod, playerCount, state, tsMs, u.shardTTL())
+	found, err := u.repo.HeartbeatShard(ctx, pod, playerCount, state, tsMs, tokenGen, u.dsTokenGeneration, u.shardTTL())
 	if err != nil {
 		return nil, err
 	}
@@ -509,14 +794,14 @@ func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int3
 		if rerr := u.reconcileShardTopology(ctx); rerr != nil {
 			plog.With(ctx).Warnw("msg", "heartbeat_topology_reconcile_failed", "pod", pod, "err", rerr)
 		} else {
-			found, err = u.repo.HeartbeatShard(ctx, pod, playerCount, state, tsMs, u.shardTTL())
+			found, err = u.repo.HeartbeatShard(ctx, pod, playerCount, state, tsMs, tokenGen, u.dsTokenGeneration, u.shardTTL())
 			if err != nil {
 				return nil, err
 			}
 		}
 		if !found {
 			plog.With(ctx).Warnw("msg", "heartbeat_unknown_hub_waiting_topology", "pod", pod)
-			return &HeartbeatResult{Command: commandNone}, nil
+			return nil, errcode.New(errcode.ErrUnavailable, "hub shard %s topology not confirmed", pod)
 		}
 	}
 	// 分片被标记 draining/stopping → 下发迁移/停机指令(与 Kafka 推送双通道)。
@@ -531,6 +816,66 @@ func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int3
 	return &HeartbeatResult{Command: commandNone}, nil
 }
 
+// heartbeatModelB 处理 Model B 心跳(authRepo 已装配)。
+// cred==nil(legacy 令牌 / 无凭据)在 Model B 下一律拒:Redis 授权权威模式不接受未携带 Model B
+// 凭据的心跳借旧令牌保活或翻 ready(纵深防御,service 层也会拦;审核二轮 CE1/CE2)。
+func (u *HubUsecase) heartbeatModelB(ctx context.Context, pod string, playerCount int32, state string, tsMs int64, cred *HubCredential) (*HeartbeatResult, error) {
+	if cred == nil {
+		return nil, errcode.New(errcode.ErrUnauthorized, "hub heartbeat requires model B credential under redis authority")
+	}
+	in := data.ActivateHeartbeatInput{
+		PlayerCount: playerCount,
+		State:       state,
+		TsMs:        tsMs,
+		AuthTTL:     u.authTTLDur(),
+		ShardTTL:    u.shardTTL(),
+	}
+	id := data.CredentialIdentity{
+		Gen:           cred.Gen,
+		JTI:           cred.JTI,
+		InstanceUID:   cred.InstanceUID,
+		ProtocolEpoch: cred.ProtocolEpoch,
+		TokenSHA256:   cred.TokenSHA256,
+		Kid:           cred.Kid,
+		WriterEpoch:   cred.WriterEpoch,
+	}
+	res, err := u.authRepo.ActivateHeartbeat(ctx, pod, id, in)
+	if err != nil {
+		return nil, err // ErrUnauthorized:授权未激活/不匹配/相位锁定,fail-closed
+	}
+	if !res.ShardFound {
+		// 分片镜像缺失(孤儿 / 早于拓扑种子):先刷一次拓扑再重试,保证 promote 与 ready 同事务。
+		if rerr := u.reconcileShardTopology(ctx); rerr != nil {
+			plog.With(ctx).Warnw("msg", "heartbeat_topology_reconcile_failed", "pod", pod, "err", rerr)
+			return nil, errcode.New(errcode.ErrUnavailable, "hub shard %s topology reconcile: %v", pod, rerr)
+		}
+		res, err = u.authRepo.ActivateHeartbeat(ctx, pod, id, in)
+		if err != nil {
+			return nil, err
+		}
+		if !res.ShardFound {
+			plog.With(ctx).Warnw("msg", "heartbeat_unknown_hub_waiting_topology", "pod", pod)
+			return nil, errcode.New(errcode.ErrUnavailable, "hub shard %s topology not confirmed", pod)
+		}
+	}
+	switch res.ShardState {
+	case stateDraining:
+		return modelBHeartbeatResult(res, commandDrain, u.cfg.MigrateGraceSeconds), nil
+	case stateStopping:
+		return modelBHeartbeatResult(res, commandStop, u.cfg.MigrateGraceSeconds), nil
+	}
+	return modelBHeartbeatResult(res, commandNone, 0), nil
+}
+
+func modelBHeartbeatResult(res data.ActivateResult, command string, graceSeconds int32) *HeartbeatResult {
+	return &HeartbeatResult{
+		Command: command, GraceSeconds: graceSeconds,
+		AcceptedTokenGen: res.ActiveGen, AcceptedTokenJTI: res.ActiveJTI,
+		AcceptedInstanceUID: res.InstanceUID, AcceptedProtocolEpoch: res.ProtocolEpoch,
+		AcceptedWriterEpoch: res.WriterEpoch,
+	}
+}
+
 // RefreshHubPresence 把 Hub DS 心跳捎带的在场 player_ids 转发给 player_locator
 // 批量续期 HUB 位置 TTL(在线保活链路:DS 每 5s 上报,locator TTL 30s,
 // 玩家掉线 → DS 停报该 id → 30s 自然过期 = 好友视角离线)。
@@ -540,15 +885,16 @@ func (u *HubUsecase) Heartbeat(ctx context.Context, pod string, playerCount int3
 // locator 抖动/卡死既不拖慢心跳响应尾延迟,也不泄漏 goroutine。
 // best-effort 弱依赖:locator 未配(nil)/ 转发失败只记 Warn,绝不影响心跳主流程
 // (心跳是分片存活信号,不能因旁路观测链路抖动而失败)。
-func (u *HubUsecase) RefreshHubPresence(ctx context.Context, pod string, playerIDs []uint64) {
+func (u *HubUsecase) RefreshHubPresence(ctx context.Context, pod string, playerIDs []uint64, bearerToken string) {
 	if u.locator == nil || pod == "" || len(playerIDs) == 0 {
 		return
 	}
 	players := append([]uint64(nil), playerIDs...) // 拷贝,脱离调用方切片复用
+	token := bearerToken                           // 仅闭包内存中短暂转发；禁止日志/持久化
 	go func() {
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), presenceRefreshTimeout)
 		defer cancel()
-		if _, err := u.locator.RefreshHubLocations(rctx, pod, players); err != nil {
+		if _, err := u.locator.RefreshHubLocations(rctx, pod, players, token); err != nil {
 			plog.With(rctx).Warnw("msg", "hub_presence_refresh_failed",
 				"pod", pod, "players", len(players), "err", err)
 		}
@@ -629,16 +975,22 @@ func (u *HubUsecase) ensureShards(ctx context.Context, region string) error {
 	}
 	now := time.Now().UnixMilli()
 	for _, c := range cands {
+		if !c.TokenReady {
+			// enforce 下令牌不可用的分片:不种 ready 镜像(否则 AssignHub 会分到回调被全拒的 Hub)。
+			continue
+		}
 		rec := &hubv1.HubShardStorageRecord{
-			HubPodName:      c.PodName,
-			HubAddr:         c.Addr,
-			Region:          c.Region,
-			ShardId:         c.ShardID,
-			PlayerCount:     0,
-			Capacity:        c.Capacity,
-			State:           stateReady,
-			LastHeartbeatMs: 0, // Mock 种子:从未心跳(扫描排除)
-			CreatedAtMs:     now,
+			HubPodName:        c.PodName,
+			HubAddr:           c.Addr,
+			Region:            c.Region,
+			ShardId:           c.ShardID,
+			PlayerCount:       0,
+			Capacity:          c.Capacity,
+			State:             u.initialShardState(),
+			LastHeartbeatMs:   0, // 种子:从未心跳(扫描排除;requireHeartbeatReady 时为 warming 不可分配)
+			CreatedAtMs:       now,
+			CurrentTokenExpMs: u.candidateTokenExp(c.TokenExpMs), // exp 镜像(调试用,仅 enforce 门控下非 0)
+			CurrentTokenGen:   u.candidateTokenGen(c.TokenGen),   // 令牌代际(仅 enforce 门控下非 0)
 		}
 		if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 			return cerr
@@ -677,6 +1029,13 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 		}
 		live := make(map[string]struct{}, len(cands))
 		for _, c := range cands {
+			if !c.TokenReady {
+				// enforce 下令牌不可用的分片:不计入 live(视同“Fleet 里没有”),其已有 ready 镜像
+				// 会走下面 stale 清理被移除,AssignHub 不再分配;令牌恢复后下轮对账自动补回。
+				// 注意:cands 仍包含它(len(cands)!=0),故本 region“有 hub 但全部令牌失败”时也能进 stale
+				// 清理,而不会被上面 len==0 的 Fleet 空守卫误判保留(审核 P1)。
+				continue
+			}
 			live[c.PodName] = struct{}{}
 			_, found, gerr := u.repo.GetShard(ctx, c.PodName)
 			if gerr != nil {
@@ -690,6 +1049,27 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 					s.Region = c.Region
 					s.ShardId = c.ShardID
 					s.Capacity = c.Capacity
+					// 滚动升级投毒防护(审核 P1 #2):旧镜像 allocator(requireHeartbeatReady=false)
+					// 可能把分片建成 ready+LastHeartbeatMs=0。新镜像开启心跳门控后,该分片从未发过
+					// (鉴权)心跳却是 ready,会被 AssignHub 直接选中 —— 把玩家分到 DS 令牌握手尚未
+					// 经真实鉴权心跳确认的 Hub。这里把「从未心跳且非排空态」的分片降级回 warming,
+					// 等首个通过 Guard 的心跳(HeartbeatShard 里 warming→ready)再放行分配。
+					if u.requireHeartbeatReady && s.LastHeartbeatMs == 0 &&
+						s.State != stateDraining && s.State != stateStopping {
+						s.State = stateWarming
+					}
+					// 令牌代际单调推进(审核 P1 #3/#12):CurrentTokenGen **只增不减**,绝不被 0/低代际清除或回退。
+					// permissive 副本 / annotation 缺失 → 候选 gen=0 → **保持镜像既有代际不变**(不降级已生效的
+					// enforce 代际门;旧方案的「off/permissive 清 0 自愈」是 fail-open 降级向量,已废弃)。
+					// 只有严格更高的候选代际(重签/轮换,含密钥轮换验签失败触发的重签)才推进,并复位 warming
+					// 等新代际鉴权心跳——挡住旧令牌迟到心跳把轮换后的分片重新置 ready。gen 精确单调(非秒级)。
+					if gen := u.candidateTokenGen(c.TokenGen); gen > s.CurrentTokenGen {
+						s.CurrentTokenGen = gen
+						s.CurrentTokenExpMs = u.candidateTokenExp(c.TokenExpMs) // 同步 exp 镜像(调试用)
+						if u.requireHeartbeatReady && s.State != stateDraining && s.State != stateStopping {
+							s.State = stateWarming // 新代际未证明:等带新令牌的鉴权心跳再放行分配
+						}
+					}
 					return nil
 				}, u.shardTTL()); uerr != nil && errcode.As(uerr) != errcode.ErrHubNoAvailable {
 					plog.With(ctx).Warnw("msg", "reconcile_topology_update_failed", "pod", c.PodName, "err", uerr)
@@ -698,15 +1078,17 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 			}
 			// 新 pod:补齐镜像。
 			rec := &hubv1.HubShardStorageRecord{
-				HubPodName:      c.PodName,
-				HubAddr:         c.Addr,
-				Region:          c.Region,
-				ShardId:         c.ShardID,
-				PlayerCount:     0,
-				Capacity:        c.Capacity,
-				State:           stateReady,
-				LastHeartbeatMs: 0,
-				CreatedAtMs:     now,
+				HubPodName:        c.PodName,
+				HubAddr:           c.Addr,
+				Region:            c.Region,
+				ShardId:           c.ShardID,
+				PlayerCount:       0,
+				Capacity:          c.Capacity,
+				State:             u.initialShardState(),
+				LastHeartbeatMs:   0,
+				CreatedAtMs:       now,
+				CurrentTokenExpMs: u.candidateTokenExp(c.TokenExpMs),
+				CurrentTokenGen:   u.candidateTokenGen(c.TokenGen),
 			}
 			if cerr := u.repo.CreateShard(ctx, rec, u.shardTTL()); cerr != nil {
 				plog.With(ctx).Warnw("msg", "reconcile_topology_create_failed", "pod", c.PodName, "err", cerr)
@@ -788,31 +1170,248 @@ func effectiveRoleID(requested, stored uint32) uint32 {
 	return stored
 }
 
-func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, shard *hubv1.HubShardStorageRecord) (*AssignResult, error) {
-	token, expMs, err := u.signer.SignHubTicket(playerID, roleID)
+// reserveRoutableSeat 原子占一个座位:Model B(authRepo 装配)走 ReserveRoutableSeat 单事务
+// 授权+路由+占座门(审核二轮 CE6),返回本次绑定的 active 元组供钉进归属;legacy 走单纯 reserveSeat。
+// 不可路由(授权未激活 / 分片非 ready / 元组不符 / 心跳陈旧 / 已满)→ ErrHubNoAvailable(fail-closed)。
+func (u *HubUsecase) reserveRoutableSeat(ctx context.Context, pod string) (*data.ReserveResult, error) {
+	if u.authRepo == nil {
+		return nil, u.reserveSeat(ctx, pod) // legacy:纯容量占座
+	}
+	res, err := u.authRepo.ReserveRoutableSeat(ctx, pod, time.Now().UnixMilli(), u.heartbeatMaxAgeMs(), u.shardTTL())
+	if err != nil {
+		return nil, err
+	}
+	if !res.OK {
+		plog.With(ctx).Warnw("msg", "hub_reserve_not_routable", "pod", pod, "reason", res.Reason)
+		return nil, errcode.New(errcode.ErrHubNoAvailable, "hub shard %s not routable: %s", pod, res.Reason)
+	}
+	return &res, nil
+}
+
+// assignmentRoutable 返回归属目标的权威路由快照，并验证归属钉住的完整 active 身份仍为当前值。
+// Model B 数据面永久只接受 writer=2 的完整 assignment tuple；legacy/缺字段/future writer 的
+// 一次性迁移必须由 activation 控制面在开放业务流量前完成，不能在请求路径里静默“升级”。
+func (u *HubUsecase) assignmentRoutable(
+	ctx context.Context,
+	playerID uint64,
+	a *hubv1.HubAssignmentStorageRecord,
+) (data.ReserveResult, bool, error) {
+	if u.authRepo == nil {
+		shard, found, err := u.repo.GetShard(ctx, a.HubPodName)
+		if err != nil || !found || shard.State != stateReady {
+			return data.ReserveResult{}, false, err
+		}
+		return data.ReserveResult{
+			OK: true, ShardID: shard.ShardId, HubAddr: shard.HubAddr, Region: shard.Region,
+			PlayerCount: shard.PlayerCount, Capacity: shard.Capacity,
+		}, true, nil
+	}
+	if !assignmentBindingV2Complete(a, playerID) {
+		return data.ReserveResult{}, false, errcode.New(errcode.ErrInvalidState,
+			"hub assignment is not a complete writer-v2 binding")
+	}
+	info, err := u.authRepo.CheckRoutable(ctx, a.HubPodName, time.Now().UnixMilli(), u.heartbeatMaxAgeMs())
+	if err != nil {
+		return data.ReserveResult{}, false, err
+	}
+	if !info.OK {
+		return info, false, nil
+	}
+	if a.HubInstanceUid != info.InstanceUID || a.AuthEpoch != info.ProtocolEpoch || a.AuthGen != info.ActiveGen {
+		return info, false, nil
+	}
+	if a.AuthJti != info.ActiveJTI {
+		return info, false, nil
+	}
+	if a.AuthWriterEpoch != info.WriterEpoch {
+		return info, false, nil
+	}
+	return info, true, nil
+}
+
+func assignmentBindingV2Complete(a *hubv1.HubAssignmentStorageRecord, playerID uint64) bool {
+	return a != nil && playerID != 0 && a.GetPlayerId() == playerID && a.GetHubPodName() != "" &&
+		a.GetHubInstanceUid() != "" && a.GetAuthEpoch() != 0 && a.GetAuthGen() != 0 &&
+		a.GetAuthJti() != "" && a.GetAssignmentId() != "" &&
+		a.GetAuthWriterEpoch() == auth.DSAuthWriterEpochV2
+}
+
+// assignmentSameInstance 区分“同名 Pod 的凭据轮换”和“同名 GameServer 重建”。
+// 只有 UID+protocol epoch 仍完全相同且当前权威可路由时，旧 assignment 的座位才可原地重绑；
+// UID/epoch 任一变化必须走新占座，旧 token/assignment 永不复用。
+func assignmentSameInstance(a *hubv1.HubAssignmentStorageRecord, current *data.ReserveResult) bool {
+	return a != nil && current != nil && current.OK && a.HubPodName != "" &&
+		a.HubInstanceUid != "" && a.HubInstanceUid == current.InstanceUID &&
+		a.AuthEpoch != 0 && a.AuthEpoch == current.ProtocolEpoch && a.AuthGen != 0 &&
+		a.AuthJti != "" && a.AuthWriterEpoch == auth.DSAuthWriterEpochV2 &&
+		current.WriterEpoch == auth.DSAuthWriterEpochV2
+}
+
+// selectAndReserveShard 按队友优先、负载升序尝试所有候选；每个候选都必须通过最终原子授权+占座门。
+func (u *HubUsecase) selectAndReserveShard(ctx context.Context, region string, teamID uint64, excludePod string) (*hubv1.HubShardStorageRecord, *data.ReserveResult, error) {
+	shards, err := u.repo.ListShards(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	candidates := make([]*hubv1.HubShardStorageRecord, 0, len(shards))
+	for _, shard := range shards {
+		if shard.Region == region && shard.HubPodName != excludePod && shard.State == stateReady && shard.PlayerCount < shard.Capacity {
+			candidates = append(candidates, shard)
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].PlayerCount != candidates[j].PlayerCount {
+			return candidates[i].PlayerCount < candidates[j].PlayerCount
+		}
+		return candidates[i].ShardId < candidates[j].ShardId
+	})
+	if teamID != 0 {
+		if pod, found, gerr := u.repo.GetTeamShard(ctx, teamID); gerr != nil {
+			return nil, nil, gerr
+		} else if found {
+			for i, candidate := range candidates {
+				if candidate.HubPodName == pod {
+					candidates[0], candidates[i] = candidates[i], candidates[0]
+					break
+				}
+			}
+		}
+	}
+	for _, candidate := range candidates {
+		seat, rerr := u.reserveRoutableSeat(ctx, candidate.HubPodName)
+		if rerr != nil {
+			if errcode.As(rerr) == errcode.ErrHubNoAvailable {
+				continue
+			}
+			return nil, nil, rerr
+		}
+		return authoritativeShard(candidate, seat), seat, nil
+	}
+	return nil, nil, errcode.New(errcode.ErrHubNoAvailable, "no authoritatively routable hub shard in region %s", region)
+}
+
+func authoritativeShard(shard *hubv1.HubShardStorageRecord, seat *data.ReserveResult) *hubv1.HubShardStorageRecord {
+	out := proto.Clone(shard).(*hubv1.HubShardStorageRecord)
+	if seat != nil {
+		out.HubAddr = seat.HubAddr
+		out.Region = seat.Region
+		out.ShardId = seat.ShardID
+		out.PlayerCount = seat.PlayerCount
+		out.Capacity = seat.Capacity
+	}
+	return out
+}
+
+func (u *HubUsecase) compensateReservedSeat(ctx context.Context, pod string, seat *data.ReserveResult) {
+	if u.authRepo == nil {
+		u.releaseFromShard(ctx, pod)
+		return
+	}
+	if seat == nil {
+		return
+	}
+	released, err := u.authRepo.ReleaseAssignmentSeat(ctx, pod, data.AssignmentInstanceIdentity{
+		InstanceUID: seat.InstanceUID, ProtocolEpoch: seat.ProtocolEpoch, WriterEpoch: seat.WriterEpoch,
+	}, u.shardTTL())
+	if err != nil || !released {
+		plog.With(ctx).Warnw("msg", "hub_reserved_seat_compensation_failed", "pod", pod, "released", released, "err", err)
+	}
+}
+
+func (u *HubUsecase) releaseAssignmentSeat(ctx context.Context, assignment *hubv1.HubAssignmentStorageRecord) {
+	if u.authRepo == nil {
+		u.releaseFromShard(ctx, assignment.HubPodName)
+		return
+	}
+	released, err := u.authRepo.ReleaseAssignmentSeat(ctx, assignment.HubPodName, data.AssignmentInstanceIdentity{
+		InstanceUID: assignment.HubInstanceUid, ProtocolEpoch: assignment.AuthEpoch,
+		WriterEpoch: assignment.AuthWriterEpoch,
+	}, u.shardTTL())
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "hub_assignment_seat_release_failed", "pod", assignment.HubPodName, "err", err)
+	} else if !released {
+		plog.With(ctx).Infow("msg", "hub_assignment_seat_release_skipped_stale_instance", "pod", assignment.HubPodName)
+	}
+}
+
+func (u *HubUsecase) routableShardViews(ctx context.Context, shards []*hubv1.HubShardStorageRecord) ([]*hubv1.HubShardStorageRecord, error) {
+	if u.authRepo == nil {
+		return shards, nil
+	}
+	out := make([]*hubv1.HubShardStorageRecord, 0, len(shards))
+	for _, shard := range shards {
+		if shard.State != stateReady {
+			continue
+		}
+		info, err := u.authRepo.CheckRoutable(ctx, shard.HubPodName, time.Now().UnixMilli(), u.heartbeatMaxAgeMs())
+		if err != nil {
+			return nil, err
+		}
+		if info.OK {
+			out = append(out, authoritativeShard(shard, &info))
+		}
+	}
+	return out, nil
+}
+
+// bindAssignmentAuth 把 Model B 占座时确认的 active 元组钉进归属记录(审计 + 复用漂移检测,§7)。
+// seat=nil(legacy/off,reserveSeat 返回 nil)时不动。
+func bindAssignmentAuth(a *hubv1.HubAssignmentStorageRecord, seat *data.ReserveResult) {
+	if seat == nil {
+		return
+	}
+	a.HubInstanceUid = seat.InstanceUID
+	a.AuthEpoch = seat.ProtocolEpoch
+	a.AuthGen = seat.ActiveGen
+	a.AuthJti = seat.ActiveJTI
+	a.AuthWriterEpoch = seat.WriterEpoch
+}
+
+func ticketBindingFromAssignment(a *hubv1.HubAssignmentStorageRecord) HubTicketBinding {
+	if a == nil || a.HubPodName == "" || a.HubInstanceUid == "" || a.AuthEpoch == 0 || a.AuthGen == 0 ||
+		a.AuthJti == "" || a.AssignmentId == "" || a.AuthWriterEpoch != auth.DSAuthWriterEpochV2 {
+		return HubTicketBinding{}
+	}
+	return HubTicketBinding{
+		PodName: a.HubPodName, InstanceUID: a.HubInstanceUid, ProtocolEpoch: a.AuthEpoch,
+		CredentialGen: a.AuthGen, CredentialJTI: a.AuthJti, HubAssignmentID: a.AssignmentId,
+		WriterEpoch: a.AuthWriterEpoch,
+	}
+}
+
+func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*AssignResult, error) {
+	if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"refuse to sign hub ticket from incomplete writer-v2 assignment")
+	}
+	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, ticketBindingFromAssignment(assignment))
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
 		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
 	}
 	return &AssignResult{
-		HubDSAddr:   shard.HubAddr,
+		HubDSAddr:   assignment.HubAddr,
 		HubTicket:   token,
-		HubPodName:  shard.HubPodName,
-		ShardID:     shard.ShardId,
+		HubPodName:  assignment.HubPodName,
+		ShardID:     assignment.ShardId,
 		TicketExpMs: expMs,
 	}, nil
 }
 
-func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, shard *hubv1.HubShardStorageRecord) (*TransferResult, error) {
-	token, expMs, err := u.signer.SignHubTicket(playerID, roleID)
+func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*TransferResult, error) {
+	if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"refuse to sign hub transfer ticket from incomplete writer-v2 assignment")
+	}
+	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, ticketBindingFromAssignment(assignment))
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
 		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
 	}
 	return &TransferResult{
-		NewHubDSAddr:  shard.HubAddr,
+		NewHubDSAddr:  assignment.HubAddr,
 		NewHubTicket:  token,
-		NewHubPodName: shard.HubPodName,
+		NewHubPodName: assignment.HubPodName,
 		TicketExpMs:   expMs,
 	}, nil
 }
@@ -1090,6 +1689,11 @@ func (u *HubUsecase) drainAndMigrate(ctx context.Context, shard *hubv1.HubShardS
 		plog.With(ctx).Warnw("msg", "drain_list_shards_failed", "pod", shard.HubPodName, "err", ferr)
 		return true // 已标 draining,搬迁留下个 tick
 	}
+	fresh, ferr = u.routableShardViews(ctx, fresh)
+	if ferr != nil {
+		plog.With(ctx).Warnw("msg", "drain_authoritative_routes_failed", "pod", shard.HubPodName, "err", ferr)
+		return true
+	}
 
 	batch := u.cfg.ConsolidationBatch
 	if batch <= 0 {
@@ -1124,31 +1728,43 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 		u.removeShardMember(ctx, from.HubPodName, playerID) // 已不在此分片,清理残留索引
 		return false
 	}
-	if rerr := u.reserveSeat(ctx, target.HubPodName); rerr != nil {
+	if u.authRepo != nil && !assignmentBindingV2Complete(assign, playerID) {
+		plog.With(ctx).Warnw("msg", "drain_migration_rejected_invalid_assignment", "player_id", playerID)
+		return false
+	}
+	seat, rerr := u.reserveRoutableSeat(ctx, target.HubPodName)
+	if rerr != nil {
 		return false // 目标没位置/非 ready,留下个 tick 重试
 	}
+	target = authoritativeShard(target, seat)
 	now := time.Now().UnixMilli()
-	newAssign := &hubv1.HubAssignmentStorageRecord{
-		PlayerId:     playerID,
-		HubPodName:   target.HubPodName,
-		HubAddr:      target.HubAddr,
-		ShardId:      target.ShardId,
-		Region:       target.Region,
-		TeamId:       assign.TeamId,
-		AssignedAtMs: now,
-		RoleId:       assign.RoleId, // 选角镜像随强制整合搬迁
-	}
-	if serr := u.repo.SetAssignment(ctx, newAssign, u.assignTTL()); serr != nil {
-		u.releaseFromShard(ctx, target.HubPodName) // 回滚新占位,旧分片不动
+	newAssign := proto.Clone(assign).(*hubv1.HubAssignmentStorageRecord)
+	newAssign.PlayerId = playerID
+	newAssign.HubPodName = target.HubPodName
+	newAssign.HubAddr = target.HubAddr
+	newAssign.ShardId = target.ShardId
+	newAssign.Region = target.Region
+	newAssign.TeamId = assign.TeamId
+	newAssign.AssignedAtMs = now
+	newAssign.RoleId = assign.RoleId // 选角镜像随强制整合搬迁
+	newAssign.AssignmentId = uuid.NewString()
+	bindAssignmentAuth(newAssign, seat)
+	swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, assign, newAssign, u.assignTTL())
+	if serr != nil || !swapped {
+		u.compensateReservedSeat(ctx, target.HubPodName, seat)
 		return false
 	}
 	u.addShardMember(ctx, target.HubPodName, playerID)
-	u.releaseFromShard(ctx, from.HubPodName)
+	u.releaseAssignmentSeat(ctx, assign)
 	u.removeShardMember(ctx, from.HubPodName, playerID)
 
 	// 重签新分片票据 + 推送迁移通知(best-effort:失败不回滚已切换的归属,
 	// Hub DS drain 心跳指令会兜底让客户端重连,AssignHub 幂等返回新分片)。
-	token, _, terr := u.signer.SignHubTicket(playerID, assign.RoleId)
+	if u.authRepo != nil && !assignmentBindingV2Complete(newAssign, playerID) {
+		plog.With(ctx).Errorw("msg", "migrate_assignment_missing_writer_v2_binding", "player_id", playerID)
+		return true
+	}
+	token, _, terr := u.signer.SignHubTicket(playerID, assign.RoleId, ticketBindingFromAssignment(newAssign))
 	if terr != nil {
 		plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", terr)
 		return true

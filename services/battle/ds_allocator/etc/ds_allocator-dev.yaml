@@ -53,6 +53,27 @@ kafka:
 # 留空 → 不续期(弱依赖,不影响心跳/对局,但长对局中途掉线重登可能退化为回大厅)。
 locator_addr: "127.0.0.1:50006"
 
+# ── DS 回调服务令牌(审核 P1 #1:DS→后端回调认证)─────────────────────────────
+# ds_allocator 双角色:①签发——AllocateBattle 时给战斗 DS 签 battle 令牌(绑 match_id),
+# 经 GameServer annotation pandora.dev/ds-token(agones)/ PANDORA_DS_TOKEN env(local)下发;
+# ②校验——Heartbeat / GmService Poll·Ack 按 mode 验证令牌 + 范围绑定。
+# mode: off(默认;UE DS 未带令牌前必须 off)→ permissive(灰度观察)→ enforce(强制)。
+# secret 配了就签发(无害,DS 拿不到签名密钥);dev 与 jwt.secret 同值,生产独立密钥。
+ds_auth:
+  # mode=local 的新 UE 使用机械隔离 local-off-v1：只接受 off+legacy，且 secret 仍必填用于
+  # 签发完整 Model-B tuple；permissive/enforce/redis 或缺 signer 会启动失败，不会退回 legacy JWT。
+  mode: "off"
+  authority_mode: "legacy"
+  active_heartbeat_max_age: "30s"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  # authority_mode=redis 时 fence 必填；dev/legacy 不连接 etcd。
+  # fence:
+  #   etcd_endpoints: ["127.0.0.1:2380"]
+  #   etcd_prefix: "/pandora/ds-auth/"
+  #   etcd_lease_ttl_sec: 15
+  #   etcd_dial_timeout: "5s"
+  #   keyset_revision: "pandora-ds-auth-v2-r1"
+
 allocator:
   # ready_wait_timeout: AllocateBattle 等 DS 心跳 ready 的最长时间(代码默认 10s)。
   # k8s/minikube 真 Linux DS 冷启动 = Loader GameMode 等 Agones Allocated label → ServerTravel
@@ -147,9 +168,10 @@ local_ds:
   port_range: 100                              # 端口池大小,实际端口在 [base, base+range) 取空闲
   working_dir: "F:\\work\\Pandora-Client-SVN\\Packages\\Server_Win64_Development\\WindowsServer" # DS 进程工作目录(staged 根目录)
   log_dir: "run/dev/logs/ds"                   # 每个 DS 进程 stdout/stderr 落 <pod>.log
-  # extra_args: ["-PANDORA_BACKEND=https://127.0.0.1:8444"]  # 追加 UE DS 命令行参数
+  # extra_args: ["-PANDORA_BACKEND=http://127.0.0.1:8444"]   # 追加 UE DS 命令行参数(本地 DS 面明文)
   extra_env:                                   # 注入 DS 进程额外环境变量
     PANDORA_DS_ALLOCATOR_ADDR: "127.0.0.1:8444"
+    PANDORA_DS_ADMISSION_ADDR: "127.0.0.1:8444"
     PANDORA_PLAYER_LOCATOR_ADDR: "127.0.0.1:8444"
     PANDORA_BATTLE_RESULT_ADDR: "127.0.0.1:8444"
     # 本地 dev 的 Envoy DS 面 :8444 是明文 grpc-web(见 deploy/envoy/envoy.yaml pandora_ds_listener)。

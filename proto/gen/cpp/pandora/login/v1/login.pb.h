@@ -313,6 +313,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketRequest final : publi
   enum : int {
     kTicketFieldNumber = 1,
     kDsPodNameFieldNumber = 2,
+    kAdmissionIdFieldNumber = 3,
   };
   // string ticket = 1 [json_name = "ticket"];
   void clear_ticket() ;
@@ -344,12 +345,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketRequest final : publi
   ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
 
   public:
+  // string admission_id = 3 [json_name = "admissionId"];
+  void clear_admission_id() ;
+  [[nodiscard]] const ::std::string& admission_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_admission_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_admission_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_admission_id();
+  void set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_admission_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_admission_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_admission_id();
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.VerifyDSTicketRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 64,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 76,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -379,6 +395,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyDSTicketRequest final : publi
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr ticket_;
     ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr admission_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2486,6 +2503,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
   enum : int {
     kDsTypeFieldNumber = 5,
     kJtiFieldNumber = 6,
+    kDsPodNameFieldNumber = 11,
+    kDsInstanceUidFieldNumber = 12,
+    kDsCredentialJtiFieldNumber = 15,
+    kHubAssignmentIdFieldNumber = 16,
     kPlayerIdFieldNumber = 1,
     kMatchIdFieldNumber = 2,
     kIssuedAtMsFieldNumber = 3,
@@ -2493,6 +2514,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
     kRegionIdFieldNumber = 7,
     kCellIdFieldNumber = 8,
     kRoleIdFieldNumber = 10,
+    kDsProtocolEpochFieldNumber = 13,
+    kDsCredentialGenFieldNumber = 14,
+    kDsWriterEpochFieldNumber = 17,
   };
   // string ds_type = 5 [json_name = "dsType"];
   void clear_ds_type() ;
@@ -2522,6 +2546,66 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
   const ::std::string& _internal_jti() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_jti(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_jti();
+
+  public:
+  // string ds_pod_name = 11 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_instance_uid = 12 [json_name = "dsInstanceUid"];
+  void clear_ds_instance_uid() ;
+  [[nodiscard]] const ::std::string& ds_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_instance_uid();
+  void set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_instance_uid();
+
+  public:
+  // string ds_credential_jti = 15 [json_name = "dsCredentialJti"];
+  void clear_ds_credential_jti() ;
+  [[nodiscard]] const ::std::string& ds_credential_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_credential_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_credential_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_credential_jti();
+  void set_allocated_ds_credential_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_credential_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_credential_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_credential_jti();
+
+  public:
+  // string hub_assignment_id = 16 [json_name = "hubAssignmentId"];
+  void clear_hub_assignment_id() ;
+  [[nodiscard]] const ::std::string& hub_assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_assignment_id();
+  void set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_assignment_id();
 
   public:
   // uint64 player_id = 1 [json_name = "playerId"];
@@ -2594,12 +2678,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
   void _internal_set_role_id(::uint32_t value);
 
   public:
+  // uint32 ds_protocol_epoch = 13 [json_name = "dsProtocolEpoch"];
+  void clear_ds_protocol_epoch() ;
+  [[nodiscard]] ::uint32_t ds_protocol_epoch() const;
+  void set_ds_protocol_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ds_protocol_epoch() const;
+  void _internal_set_ds_protocol_epoch(::uint32_t value);
+
+  public:
+  // uint64 ds_credential_gen = 14 [json_name = "dsCredentialGen"];
+  void clear_ds_credential_gen() ;
+  [[nodiscard]] ::uint64_t ds_credential_gen() const;
+  void set_ds_credential_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ds_credential_gen() const;
+  void _internal_set_ds_credential_gen(::uint64_t value);
+
+  public:
+  // uint32 ds_writer_epoch = 17 [json_name = "dsWriterEpoch"];
+  void clear_ds_writer_epoch() ;
+  [[nodiscard]] ::uint32_t ds_writer_epoch() const;
+  void set_ds_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ds_writer_epoch() const;
+  void _internal_set_ds_writer_epoch(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.DSTicket)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
-                          0, 52,
+      ::google::protobuf::internal::TcParseTable<5, 16,
+                          0, 120,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2629,6 +2743,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr ds_type_;
     ::google::protobuf::internal::ArenaStringPtr jti_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr ds_credential_jti_;
+    ::google::protobuf::internal::ArenaStringPtr hub_assignment_id_;
     ::uint64_t player_id_;
     ::uint64_t match_id_;
     ::int64_t issued_at_ms_;
@@ -2636,6 +2754,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSTicket final : public ::google::p
     ::uint32_t region_id_;
     ::uint32_t cell_id_;
     ::uint32_t role_id_;
+    ::uint32_t ds_protocol_epoch_;
+    ::uint64_t ds_credential_gen_;
+    ::uint32_t ds_writer_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3833,7 +3954,7 @@ inline void LogoutResponse::_internal_set_code(::pandora::common::v1::ErrCode va
 inline void DSTicket::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t DSTicket::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.player_id)
@@ -3841,7 +3962,7 @@ inline ::uint64_t DSTicket::player_id() const {
 }
 inline void DSTicket::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.player_id)
 }
 inline ::uint64_t DSTicket::_internal_player_id() const {
@@ -3857,7 +3978,7 @@ inline void DSTicket::_internal_set_player_id(::uint64_t value) {
 inline void DSTicket::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t DSTicket::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.match_id)
@@ -3865,7 +3986,7 @@ inline ::uint64_t DSTicket::match_id() const {
 }
 inline void DSTicket::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.match_id)
 }
 inline ::uint64_t DSTicket::_internal_match_id() const {
@@ -3881,7 +4002,7 @@ inline void DSTicket::_internal_set_match_id(::uint64_t value) {
 inline void DSTicket::clear_issued_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.issued_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::int64_t DSTicket::issued_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.issued_at_ms)
@@ -3889,7 +4010,7 @@ inline ::int64_t DSTicket::issued_at_ms() const {
 }
 inline void DSTicket::set_issued_at_ms(::int64_t value) {
   _internal_set_issued_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.issued_at_ms)
 }
 inline ::int64_t DSTicket::_internal_issued_at_ms() const {
@@ -3905,7 +4026,7 @@ inline void DSTicket::_internal_set_issued_at_ms(::int64_t value) {
 inline void DSTicket::clear_expires_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expires_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::int64_t DSTicket::expires_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.expires_at_ms)
@@ -3913,7 +4034,7 @@ inline ::int64_t DSTicket::expires_at_ms() const {
 }
 inline void DSTicket::set_expires_at_ms(::int64_t value) {
   _internal_set_expires_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.expires_at_ms)
 }
 inline ::int64_t DSTicket::_internal_expires_at_ms() const {
@@ -4057,7 +4178,7 @@ inline void DSTicket::set_allocated_jti(::std::string* PROTOBUF_NULLABLE value) 
 inline void DSTicket::clear_region_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.region_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t DSTicket::region_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.region_id)
@@ -4065,7 +4186,7 @@ inline ::uint32_t DSTicket::region_id() const {
 }
 inline void DSTicket::set_region_id(::uint32_t value) {
   _internal_set_region_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.region_id)
 }
 inline ::uint32_t DSTicket::_internal_region_id() const {
@@ -4081,7 +4202,7 @@ inline void DSTicket::_internal_set_region_id(::uint32_t value) {
 inline void DSTicket::clear_cell_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cell_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t DSTicket::cell_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.cell_id)
@@ -4089,7 +4210,7 @@ inline ::uint32_t DSTicket::cell_id() const {
 }
 inline void DSTicket::set_cell_id(::uint32_t value) {
   _internal_set_cell_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.cell_id)
 }
 inline ::uint32_t DSTicket::_internal_cell_id() const {
@@ -4105,7 +4226,7 @@ inline void DSTicket::_internal_set_cell_id(::uint32_t value) {
 inline void DSTicket::clear_role_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t DSTicket::role_id() const {
   // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.role_id)
@@ -4113,7 +4234,7 @@ inline ::uint32_t DSTicket::role_id() const {
 }
 inline void DSTicket::set_role_id(::uint32_t value) {
   _internal_set_role_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.role_id)
 }
 inline ::uint32_t DSTicket::_internal_role_id() const {
@@ -4123,6 +4244,334 @@ inline ::uint32_t DSTicket::_internal_role_id() const {
 inline void DSTicket::_internal_set_role_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_id_ = value;
+}
+
+// string ds_pod_name = 11 [json_name = "dsPodName"];
+inline void DSTicket::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& DSTicket::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void DSTicket::set_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::mutable_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.DSTicket.ds_pod_name)
+  return _s;
+}
+inline const ::std::string& DSTicket::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void DSTicket::_internal_set_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE DSTicket::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.DSTicket.ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void DSTicket::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.DSTicket.ds_pod_name)
+}
+
+// string ds_instance_uid = 12 [json_name = "dsInstanceUid"];
+inline void DSTicket::clear_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& DSTicket::ds_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.ds_instance_uid)
+  return _internal_ds_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void DSTicket::set_ds_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.ds_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.ds_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::mutable_ds_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_ds_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.DSTicket.ds_instance_uid)
+  return _s;
+}
+inline const ::std::string& DSTicket::_internal_ds_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_uid_.Get();
+}
+inline void DSTicket::_internal_set_ds_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::_internal_mutable_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE DSTicket::release_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.DSTicket.ds_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.ds_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void DSTicket::set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.ds_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_instance_uid_.IsDefault()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.DSTicket.ds_instance_uid)
+}
+
+// uint32 ds_protocol_epoch = 13 [json_name = "dsProtocolEpoch"];
+inline void DSTicket::clear_ds_protocol_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_protocol_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t DSTicket::ds_protocol_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.ds_protocol_epoch)
+  return _internal_ds_protocol_epoch();
+}
+inline void DSTicket::set_ds_protocol_epoch(::uint32_t value) {
+  _internal_set_ds_protocol_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.ds_protocol_epoch)
+}
+inline ::uint32_t DSTicket::_internal_ds_protocol_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_protocol_epoch_;
+}
+inline void DSTicket::_internal_set_ds_protocol_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_protocol_epoch_ = value;
+}
+
+// uint64 ds_credential_gen = 14 [json_name = "dsCredentialGen"];
+inline void DSTicket::clear_ds_credential_gen() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_credential_gen_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t DSTicket::ds_credential_gen() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.ds_credential_gen)
+  return _internal_ds_credential_gen();
+}
+inline void DSTicket::set_ds_credential_gen(::uint64_t value) {
+  _internal_set_ds_credential_gen(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.ds_credential_gen)
+}
+inline ::uint64_t DSTicket::_internal_ds_credential_gen() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_credential_gen_;
+}
+inline void DSTicket::_internal_set_ds_credential_gen(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_credential_gen_ = value;
+}
+
+// string ds_credential_jti = 15 [json_name = "dsCredentialJti"];
+inline void DSTicket::clear_ds_credential_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_credential_jti_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& DSTicket::ds_credential_jti() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.ds_credential_jti)
+  return _internal_ds_credential_jti();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void DSTicket::set_ds_credential_jti(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.ds_credential_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.ds_credential_jti)
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::mutable_ds_credential_jti()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_ds_credential_jti();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.DSTicket.ds_credential_jti)
+  return _s;
+}
+inline const ::std::string& DSTicket::_internal_ds_credential_jti() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_credential_jti_.Get();
+}
+inline void DSTicket::_internal_set_ds_credential_jti(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_credential_jti_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::_internal_mutable_ds_credential_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_credential_jti_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE DSTicket::release_ds_credential_jti() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.DSTicket.ds_credential_jti)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.ds_credential_jti_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_credential_jti_.Set("", GetArena());
+  }
+  return released;
+}
+inline void DSTicket::set_allocated_ds_credential_jti(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.ds_credential_jti_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_credential_jti_.IsDefault()) {
+    _impl_.ds_credential_jti_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.DSTicket.ds_credential_jti)
+}
+
+// string hub_assignment_id = 16 [json_name = "hubAssignmentId"];
+inline void DSTicket::clear_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& DSTicket::hub_assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.hub_assignment_id)
+  return _internal_hub_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void DSTicket::set_hub_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.hub_assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.hub_assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::mutable_hub_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_hub_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.DSTicket.hub_assignment_id)
+  return _s;
+}
+inline const ::std::string& DSTicket::_internal_hub_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_assignment_id_.Get();
+}
+inline void DSTicket::_internal_set_hub_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL DSTicket::_internal_mutable_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE DSTicket::release_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.DSTicket.hub_assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.hub_assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void DSTicket::set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.hub_assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_assignment_id_.IsDefault()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.DSTicket.hub_assignment_id)
+}
+
+// uint32 ds_writer_epoch = 17 [json_name = "dsWriterEpoch"];
+inline void DSTicket::clear_ds_writer_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_writer_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t DSTicket::ds_writer_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.DSTicket.ds_writer_epoch)
+  return _internal_ds_writer_epoch();
+}
+inline void DSTicket::set_ds_writer_epoch(::uint32_t value) {
+  _internal_set_ds_writer_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.DSTicket.ds_writer_epoch)
+}
+inline ::uint32_t DSTicket::_internal_ds_writer_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_writer_epoch_;
+}
+inline void DSTicket::_internal_set_ds_writer_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_writer_epoch_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4567,6 +5016,70 @@ inline void VerifyDSTicketRequest::set_allocated_ds_pod_name(::std::string* PROT
     _impl_.ds_pod_name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.VerifyDSTicketRequest.ds_pod_name)
+}
+
+// string admission_id = 3 [json_name = "admissionId"];
+inline void VerifyDSTicketRequest::clear_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& VerifyDSTicketRequest::admission_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.VerifyDSTicketRequest.admission_id)
+  return _internal_admission_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void VerifyDSTicketRequest::set_admission_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.admission_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.login.v1.VerifyDSTicketRequest.admission_id)
+}
+inline ::std::string* PROTOBUF_NONNULL VerifyDSTicketRequest::mutable_admission_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_admission_id();
+  // @@protoc_insertion_point(field_mutable:pandora.login.v1.VerifyDSTicketRequest.admission_id)
+  return _s;
+}
+inline const ::std::string& VerifyDSTicketRequest::_internal_admission_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admission_id_.Get();
+}
+inline void VerifyDSTicketRequest::_internal_set_admission_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL VerifyDSTicketRequest::_internal_mutable_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.admission_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE VerifyDSTicketRequest::release_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.login.v1.VerifyDSTicketRequest.admission_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.admission_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void VerifyDSTicketRequest::set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.admission_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.admission_id_.IsDefault()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.VerifyDSTicketRequest.admission_id)
 }
 
 // -------------------------------------------------------------------

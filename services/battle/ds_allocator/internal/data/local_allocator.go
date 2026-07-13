@@ -22,9 +22,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
+	"github.com/google/uuid"
+
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 )
 
@@ -82,13 +87,29 @@ type LocalGameServerAllocator struct {
 	usedPorts map[int]struct{}
 
 	// startProc 拉起一个 DS 进程;单测注入假实现绕过真 exec。
-	startProc func(podName string, port int, matchID uint64, mapID uint32, gameMode string) (dsProcess, error)
+	// token 是本对局的 DS 回调令牌(Allocate 处一次性签发,避免二次签发失败只告警的空窗)。
+	startProc func(podName string, port int, matchID uint64, mapID uint32, gameMode, token string) (dsProcess, error)
 
 	// portProbe 探测端口在本机是否真的空闲(可绑定)。nil=不探测(单测默认放行)。
 	// 用于挡住「台账已释放但进程未退出(幽灵 DS)」或外部程序占用的端口:否则 allocator 把
 	// -port=X 传给 UE DS,X 被占时 UE 会静默 fallback 到 X+1,导致 allocator 记录/返回的端口(X)
 	// 与 DS 实际监听端口(X+1)不一致,新对局客户端拿新 ticket 却连到 X 上的旧 DS,被 PreLogin 拒。
 	portProbe func(port int) bool
+
+	// dsTokenIssuer 签发 DS 回调服务令牌(审核 P1 #1;main 在 ds_auth.secret 已配时注入)。
+	// 非 nil 时 defaultStart 把令牌注入 DS 进程 env PANDORA_DS_TOKEN,DS 回调时带 Bearer 头。
+	// 签发失败只告警不阻断拉起(guard 默认 off/permissive,先保对局可开)。
+	dsTokenIssuer func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (token string, err error)
+	// dsTokenRequired 为 guard=enforce 时 true:签发失败则 fail-closed 不拉起 DS(否则该 DS
+	// 回调会被 enforce 守卫全拒)。off/permissive 下 false,签发失败只告警照拉。
+	dsTokenRequired bool
+}
+
+// SetDSTokenIssuer 注入 DS 回调令牌签发器(可选依赖,main 在 ds_auth.secret 已配时调用)。
+// required=true(guard=enforce)时签发失败会让 Allocate 返回错误(fail-closed)。
+func (l *LocalGameServerAllocator) SetDSTokenIssuer(f func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, error), required bool) {
+	l.dsTokenIssuer = f
+	l.dsTokenRequired = required
 }
 
 // NewLocalGameServerAllocator 构造本机 DS 拉起器。
@@ -136,7 +157,27 @@ func (l *LocalGameServerAllocator) Allocate(_ context.Context, matchID uint64, m
 			l.cfg.PortBase, l.cfg.PortBase+l.cfg.PortRange, matchID)
 	}
 
-	proc, err := l.startProc(podName, port, matchID, mapID, gameMode)
+	// DS 回调令牌一次性签发(审核 P1):在此签一次并透传给进程 env,避免“预签验证 + 启动再签”
+	// 的二次签发失败只告警的空窗(enforce 下二次失败会拉起一个无令牌、回调必被拒的 DS)。
+	//   enforce(dsTokenRequired):签发失败 fail-closed,不拉起。
+	//   off/permissive:签发失败只告警,token 置空(DS 无令牌照常运行,守卫放行)。
+	var dsToken string
+	instanceUID := uuid.NewString()
+	const instanceEpoch uint32 = 1
+	if l.dsTokenIssuer != nil {
+		tok, terr := l.dsTokenIssuer(matchID, podName, instanceUID, instanceEpoch)
+		if terr != nil {
+			if l.dsTokenRequired {
+				return "", "", errcode.New(errcode.ErrDSAllocationFailed,
+					"ds_callback_token sign failed under enforce for match %d: %v", matchID, terr)
+			}
+			plog.With(context.Background()).Warnw("msg", "ds_callback_token_sign_failed", "match_id", matchID, "err", terr)
+		} else {
+			dsToken = tok
+		}
+	}
+
+	proc, err := l.startProc(podName, port, matchID, mapID, gameMode, dsToken)
 	if err != nil {
 		return "", "", errcode.New(errcode.ErrDSAllocationFailed,
 			"local_ds: launch match %d on port %d: %v", matchID, port, err)
@@ -233,12 +274,12 @@ func defaultPortProbe(port int) bool {
 }
 
 // defaultStart 是 startProc 的真实现:exec UE Windows DS 并把 stdout/stderr 落盘。
-func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchID uint64, mapID uint32, gameMode string) (dsProcess, error) {
+func (l *LocalGameServerAllocator) defaultStart(podName string, port int, matchID uint64, mapID uint32, gameMode, token string) (dsProcess, error) {
 	cmd := exec.Command(l.cfg.ExecutablePath, l.buildArgs(port, mapID)...) //nolint:gosec // 路径来自受信本机配置
 	if l.cfg.WorkingDir != "" {
 		cmd.Dir = l.cfg.WorkingDir
 	}
-	cmd.Env = l.buildEnv(podName, matchID, mapID, gameMode)
+	cmd.Env = l.buildEnv(podName, matchID, mapID, gameMode, token)
 
 	var logF *os.File
 	if l.cfg.LogDir != "" {
@@ -274,16 +315,43 @@ func (l *LocalGameServerAllocator) buildArgs(port int, mapID uint32) []string {
 }
 
 // buildEnv 在当前进程环境基础上注入 DS 身份变量(对齐 UE DS 侧 PandoraAgonesProvider 读取的 env)。
-func (l *LocalGameServerAllocator) buildEnv(podName string, matchID uint64, mapID uint32, gameMode string) []string {
+// token 是 Allocate 一次性签好的 DS 回调令牌(空=未启用/off 下签发失败,DS 无令牌运行)。
+func (l *LocalGameServerAllocator) buildEnv(podName string, matchID uint64, mapID uint32, gameMode, token string) []string {
 	env := os.Environ()
 	env = append(env,
 		"AGONES_GAMESERVER_NAME="+podName,
 		"PANDORA_MATCH_ID="+strconv.FormatUint(matchID, 10),
 		"PANDORA_MAP_ID="+strconv.FormatUint(uint64(mapID), 10),
 		"PANDORA_GAME_MODE="+gameMode,
+		// 仅 Windows 本机 allocator 注入；UE 还会校验 local pod 身份与非 Agones 运行态。
+		auth.DSLocalProfileEnv+"="+auth.DSLocalProfileOffV1,
 	)
+	// DS 回调服务令牌(审核 P1 #1):local 模式经 env 下发(agones 模式走 annotation)。
+	if token != "" {
+		env = append(env, "PANDORA_DS_TOKEN="+token)
+	}
+	// extra_env 追加,但严禁覆盖内置身份/令牌变量(审核 P1:extra_env 覆盖 PANDORA_DS_TOKEN
+	// 会用静态/伪造令牌替换真签发令牌,绕过范围绑定)。保留字命中即跳过并告警。
 	for k, v := range l.cfg.ExtraEnv {
+		if isReservedDSEnvKey(k) {
+			plog.With(context.Background()).Warnw("msg", "extra_env_reserved_key_ignored", "key", k,
+				"hint", "extra_env 不得覆盖 PANDORA_DS_TOKEN / PANDORA_MATCH_ID / AGONES_GAMESERVER_NAME 等内置变量")
+			continue
+		}
 		env = append(env, k+"="+v)
 	}
 	return env
+}
+
+// isReservedDSEnvKey 判断 env key 是否为 allocator 内置注入的身份/令牌变量,extra_env 不得覆盖。
+// 大小写不敏感:Windows(local 模式 DS 宿主)环境变量名大小写不敏感,`pandora_ds_token` 与
+// `PANDORA_DS_TOKEN` 指向同一变量;若只按精确大写比对,小写别名仍能覆盖真令牌(审核 P1 补漏)。
+func isReservedDSEnvKey(k string) bool {
+	switch strings.ToUpper(strings.TrimSpace(k)) {
+	case "PANDORA_DS_TOKEN", auth.DSLocalProfileEnv, "AGONES_GAMESERVER_NAME", "PANDORA_MATCH_ID",
+		"PANDORA_MAP_ID", "PANDORA_GAME_MODE", "PANDORA_DS_TYPE", "PANDORA_REGION":
+		return true
+	default:
+		return false
+	}
 }

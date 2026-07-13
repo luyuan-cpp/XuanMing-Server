@@ -15,6 +15,7 @@ package service
 import (
 	"context"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
@@ -26,13 +27,25 @@ import (
 // HubService 实现 hubv1.HubAllocatorServiceServer。
 type HubService struct {
 	hubv1.UnimplementedHubAllocatorServiceServer
-	uc *biz.HubUsecase
+	uc      *biz.HubUsecase
+	dsGuard *pmw.DSCallbackGuard // DS 回调令牌守卫(审核 P1 #1);nil 等价 off
+	// modelBAuthority:Model B「Redis 唯一授权权威」总开关(main 在 ds_auth.authority_mode=redis
+	// +agones+enforce 时置 true)。置 true 后心跳**必须**携带 Model B 凭据(cred!=nil);仅带 legacy
+	// 令牌(ds_gen 但无 uid/epoch/jti)→ 直接拒 ErrUnauthorized,不给旧令牌借心跳保活/翻 ready
+	// (审核二轮 CE1/CE2:彻底删除 Redis 授权下的 legacy 心跳回退分支)。
+	modelBAuthority bool
 }
 
 // NewHubService 构造 HubService。
 func NewHubService(uc *biz.HubUsecase) *HubService {
 	return &HubService{uc: uc}
 }
+
+// SetDSCallbackGuard 注入 DS 回调令牌守卫(可选依赖,main 在 ds_auth 已配时调用)。
+func (s *HubService) SetDSCallbackGuard(g *pmw.DSCallbackGuard) { s.dsGuard = g }
+
+// SetModelBAuthority 开启 Model B「Redis 唯一授权权威」(见字段注释;仅 authority_mode=redis 时置 true)。
+func (s *HubService) SetModelBAuthority(b bool) { s.modelBAuthority = b }
 
 // AssignHub 为玩家分配大厅 DS 分片(login 登录成功后调)。
 func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest) (*hubv1.AssignHubResponse, error) {
@@ -93,17 +106,54 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	if req.GetHubPodName() == "" {
 		return &hubv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.Heartbeat(ctx, req.GetHubPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs())
+	// DS 回调令牌校验:hub 令牌的 sub(pod)必须等于上报的 hub_pod_name
+	// (防拿 A 分片令牌冒充 B 分片心跳/伪造在场玩家列表)。RequireToken:纯 DS 回调,
+	// 无合法东西向无令牌调用者,enforce 下无令牌直连一律拒(堵旁路,审核 P1)。
+	// CheckHubCredential:enforce 下验签并抽出凭据。Model B 令牌(带 ds_uid/ds_epoch/ds_gen/jti)
+	// → 返回非空 cred,走 HeartbeatWithCredential 的 promote 线性化点(§7);legacy 令牌(仅 ds_gen)
+	// → cred=nil,走原代际门路径,取 claims.Gen() 透传。off/permissive 下 claims/cred 均 nil → tokenGen=0。
+	claims, cred, err := s.dsGuard.CheckHubCredential(ctx, pmw.DSScope{Type: auth.DSTypeHub, Pod: req.GetHubPodName(), RequireToken: true})
+	if err != nil {
+		return &hubv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
+	}
+	var res *biz.HeartbeatResult
+	if cred != nil {
+		// Model B 权威模式:走 ActivateHeartbeat 单事务线性化点(stale fail-closed)。
+		res, err = s.uc.HeartbeatWithCredential(ctx, req.GetHubPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs(), &biz.HubCredential{
+			InstanceUID:   cred.InstanceUID,
+			ProtocolEpoch: cred.ProtocolEpoch,
+			Gen:           cred.Gen,
+			JTI:           cred.JTI,
+			TokenSHA256:   cred.TokenSHA256,
+			Kid:           cred.Kid,
+			WriterEpoch:   cred.WriterEpoch,
+		})
+	} else if s.modelBAuthority {
+		// Model B 权威下**删除 legacy 回退**(审核二轮 CE1/CE2):仅带 legacy 令牌(无 Model B 凭据)
+		// 的心跳一律拒,不给旧令牌借心跳保活/翻 ready。off/permissive 不会进此分支(那时不是 Model B)。
+		return &hubv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	} else {
+		var tokenGen uint64
+		if claims != nil {
+			tokenGen = claims.Gen()
+		}
+		res, err = s.uc.Heartbeat(ctx, req.GetHubPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs(), tokenGen)
+	}
 	if err != nil {
 		return &hubv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
 	}
 	// 在线保活:把心跳捎带的在场 player_ids 转发 locator 续 HUB 位置 TTL
 	// (biz 内 goroutine 异步 + 独立超时,locator 抖动不拖慢心跳响应)。
-	s.uc.RefreshHubPresence(ctx, req.GetHubPodName(), req.GetPlayerIds())
+	s.uc.RefreshHubPresence(ctx, req.GetHubPodName(), req.GetPlayerIds(), pmw.DSBearerToken(ctx))
 	return &hubv1.HeartbeatResponse{
-		Code:         commonv1.ErrCode_OK,
-		Command:      res.Command,
-		GraceSeconds: res.GraceSeconds,
+		Code:                  commonv1.ErrCode_OK,
+		Command:               res.Command,
+		GraceSeconds:          res.GraceSeconds,
+		AcceptedTokenGen:      res.AcceptedTokenGen,
+		AcceptedTokenJti:      res.AcceptedTokenJTI,
+		AcceptedInstanceUid:   res.AcceptedInstanceUID,
+		AcceptedProtocolEpoch: res.AcceptedProtocolEpoch,
+		AcceptedWriterEpoch:   res.AcceptedWriterEpoch,
 	}, nil
 }
 

@@ -24,9 +24,11 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/killswitch"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
@@ -73,6 +75,16 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if err := cfg.ValidateDSAuthAuthorityMode(); err != nil {
+		helper.Errorw("msg", "ds_auth_authority_mode_invalid", "err", err)
+		os.Exit(1)
+	}
+	if cfg.DSAuth.AuthorityModeRedis() {
+		if err := cfg.DSAuth.ValidateRedisFence(); err != nil {
+			helper.Errorw("msg", "ds_auth_fence_config_invalid", "err", err)
+			os.Exit(1)
+		}
+	}
 
 	// 3. Redis(强依赖)
 	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
@@ -116,8 +128,6 @@ func main() {
 					cfg.Presence.CoalesceTick.Std(),
 					ks,
 				)
-				presenceHub.Start()
-				defer presenceHub.Close()
 				helper.Infow("msg", "presence_fanout_enabled",
 					"debounce", cfg.Presence.DebounceWindow.String(),
 					"coalesce_tick", cfg.Presence.CoalesceTick.String(),
@@ -140,6 +150,25 @@ func main() {
 	}
 	svc := service.NewLocatorService(uc)
 
+	// 4.2 DS 回调令牌守卫(审核 P1 #1):校验 Hub DS 经 :8444 的 SetLocation/ReportDisconnect。
+	// mode=off(默认)→ dsGuard 为 nil,不校验。
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	svc.SetDSCallbackGuard(dsGuard)
+	if dsGuard != nil {
+		helper.Infow("msg", "ds_callback_guard_ready", "mode", dsGuard.Mode().String())
+	}
+	// Model B 跨服务终态门：JWT 验签之后再读 Redis 唯一授权权威，只有当前 active
+	// 凭据可执行 SetLocation(HUB)/ReportDisconnect。legacy/off/permissive 保持原行为。
+	if dsGuard.Mode() == middleware.DSAuthEnforce && cfg.DSAuth.AuthorityModeRedis() {
+		svc.SetHubCredentialStateChecker(service.NewHubCredentialStateChecker(
+			data.NewRedisHubAuthReader(rdb), cfg.DSAuth.ActiveHeartbeatMaxAge.Std()))
+		helper.Infow("msg", "hub_active_credential_checker_ready", "authority_mode", "redis")
+	}
+
 	// 5. gRPC + HTTP
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
@@ -151,6 +180,32 @@ func main() {
 		"redis_addr", rc.Host,
 		"location_ttl", cfg.Locator.LocationTTL.String(),
 	)
+
+	// critical dependencies 与 active checker 全部装配成功后才注册 capability。
+	if cfg.DSAuth.AuthorityModeRedis() {
+		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
+			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
+			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
+			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+		})
+		if err != nil {
+			helper.Errorw("msg", "ds_auth_fence_acquire_failed", "err", err)
+			os.Exit(1)
+		}
+		defer func() { _ = fence.Close() }()
+		go func() {
+			<-fence.Lost()
+			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch 副本继续接受 Hub 写回")
+			os.Exit(1)
+		}()
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+	}
+	// Presence worker 可写 Kafka；Redis authority 模式下必须在 capability 成功后才启动。
+	if presenceHub != nil {
+		presenceHub.Start()
+		defer presenceHub.Close()
+	}
 
 	// 6. Kratos App
 	app := kratos.New(

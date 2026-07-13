@@ -14,11 +14,13 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
+	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
 // LoginService 实现 loginv1.LoginServiceServer。
@@ -32,11 +34,24 @@ type LoginService struct {
 
 	loginUC  *biz.LoginUsecase
 	ticketUC *biz.TicketUsecase
+
+	// redisDSAdmission 仅由 authority_mode=redis + mode=enforce 的 main 开启。
+	// guard/checker 任一缺失都 fail-closed，绝不回退 legacy Verify。
+	redisDSAdmission bool
+	dsGuard          *middleware.DSCallbackGuard
+	admissionChecker data.DSAdmissionChecker
 }
 
 // NewLoginService 注入 LoginUsecase + TicketUsecase。
 func NewLoginService(loginUC *biz.LoginUsecase, ticketUC *biz.TicketUsecase) *LoginService {
 	return &LoginService{loginUC: loginUC, ticketUC: ticketUC}
+}
+
+// SetRedisDSAdmissionAuthority 启用 VerifyDSTicket 的 DS 在线 active 权威门。
+func (s *LoginService) SetRedisDSAdmissionAuthority(guard *middleware.DSCallbackGuard, checker data.DSAdmissionChecker) {
+	s.redisDSAdmission = true
+	s.dsGuard = guard
+	s.admissionChecker = checker
 }
 
 // Login 立即完成型(参考 proto/pandora/login/v1/login.proto 注释)。
@@ -136,25 +151,65 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 
 // VerifyDSTicket 立即完成型,W3 ① 真实化(验签 + exp + iss + aud)。
 //
-// ⚠️ Envoy 应该用 ext_authz / route 限制本 path 只允许内网(DS 调,不暴露给玩家客户端)。
+// Envoy 客户端面 :8443 对本 path 精确 403；唯一网关入口是 :8444 exact route。
+// Redis authority 下还必须通过 DS Bearer + active/projection，网络位置本身不构成身份。
 // 不变量 §3:本方法返回的 claims.exp 必须严格短时效。
 func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDSTicketRequest) (*loginv1.VerifyDSTicketResponse, error) {
-	claims, err := s.ticketUC.VerifyDSTicket(ctx, req.GetTicket(), req.GetDsPodName())
+	var (
+		claims *biz.DSTicketClaims
+		err    error
+	)
+	if s.redisDSAdmission {
+		// ds_pod_name 是 Guard 的范围输入；空值不能退化成“不校验 pod”。
+		if req.GetDsPodName() == "" {
+			return &loginv1.VerifyDSTicketResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+		}
+		if s.dsGuard == nil || s.admissionChecker == nil {
+			return &loginv1.VerifyDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+		}
+		// 固定线性顺序：① Bearer 验签+请求 pod scope；② Redis active；
+		// ③ TicketUsecase 比对玩家票 binding/assignment；④ 原子 MarkUsedByAdmission。
+		_, credential, guardErr := s.dsGuard.CheckCredential(ctx, middleware.DSScope{
+			Pod: req.GetDsPodName(), RequireToken: true,
+		})
+		if guardErr != nil {
+			return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(guardErr)}, nil
+		}
+		if credential == nil {
+			return &loginv1.VerifyDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+		}
+		admission, activeErr := s.admissionChecker.CheckActive(ctx, req.GetDsPodName(), credential)
+		if activeErr != nil {
+			return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(activeErr)}, nil
+		}
+		claims, err = s.ticketUC.VerifyDSTicketForAdmission(
+			ctx, req.GetTicket(), req.GetDsPodName(), req.GetAdmissionId(), admission)
+	} else {
+		// off/legacy 完整保留既有内部 Verify 语义与单次 JTI SETNX。
+		claims, err = s.ticketUC.VerifyDSTicket(ctx, req.GetTicket(), req.GetDsPodName())
+	}
 	if err != nil {
 		return &loginv1.VerifyDSTicketResponse{Code: toProtoCode(err)}, nil
 	}
 	return &loginv1.VerifyDSTicketResponse{
 		Code: commonv1.ErrCode_OK,
 		Claims: &loginv1.DSTicket{
-			PlayerId:    claims.PlayerID,
-			MatchId:     claims.MatchID,
-			IssuedAtMs:  claims.IssuedAtMs,
-			ExpiresAtMs: claims.ExpiresAtMs,
-			DsType:      claims.DSType,
-			Jti:         claims.JTI,
-			RegionId:    claims.RegionID,
-			CellId:      claims.CellID,
-			RoleId:      claims.RoleID,
+			PlayerId:        claims.PlayerID,
+			MatchId:         claims.MatchID,
+			IssuedAtMs:      claims.IssuedAtMs,
+			ExpiresAtMs:     claims.ExpiresAtMs,
+			DsType:          claims.DSType,
+			Jti:             claims.JTI,
+			RegionId:        claims.RegionID,
+			CellId:          claims.CellID,
+			RoleId:          claims.RoleID,
+			DsPodName:       claims.DSPodName,
+			DsInstanceUid:   claims.DSInstanceUID,
+			DsProtocolEpoch: claims.DSProtocolEpoch,
+			DsCredentialGen: claims.DSCredentialGen,
+			DsCredentialJti: claims.DSCredentialJTI,
+			HubAssignmentId: claims.HubAssignmentID,
+			DsWriterEpoch:   claims.DSWriterEpoch,
 		},
 	}, nil
 }

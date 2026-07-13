@@ -40,6 +40,13 @@ type Config struct {
 	// docs/design/battle-reconnect.md §2.2)。留空 → 不续期(弱依赖,不影响心跳/对局,
 	// 但长对局中途掉线重登可能因位置 TTL 过期无法直连回原 battle DS,退化为回大厅)。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
+
+	// DSAuth DS 回调服务令牌(审核 P1 #1:DS→后端回调认证)。本服务两个角色都用它:
+	//   - 签发:AllocateBattle 时给战斗 DS 签 battle 令牌(绑 match_id),经 GameServer
+	//     annotation(agones)/ PANDORA_DS_TOKEN env(local)下发;secret 配了就签(无害)。
+	//   - 校验:Heartbeat / GmService Poll·Ack 按 mode(off/permissive/enforce)验证令牌。
+	// 详见 pkg/config.DSAuthConf、docs/design/decision-revisit-ds-callback-auth.md。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 
 // LocalDSConf 是「本机拉起 Windows Dedicated Server 进程」的调试后端配置。
@@ -318,6 +325,7 @@ func (c *Config) Defaults() {
 	if c.Agones.CapacityWarnRatio <= 0 || c.Agones.CapacityWarnRatio > 1 {
 		c.Agones.CapacityWarnRatio = 0.8
 	}
+	c.DSAuth.Defaults()
 	// 路径字段支持环境变量展开 + 跨机器兜底,便于策划机移植(Client 目录可能不在配置写死的盘符):
 	//  1. 先做 ${VAR}/$VAR 展开(绝对路径不含 $,dev 配置原样保留);
 	//  2. filepath.FromSlash 归一化分隔符:策划在 yaml 里写正斜杠 / (无需 \\ 转义)也能在 Windows 正常工作;

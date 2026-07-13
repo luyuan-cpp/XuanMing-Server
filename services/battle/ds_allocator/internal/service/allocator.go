@@ -12,23 +12,30 @@ package service
 import (
 	"context"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/biz"
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
 
 // AllocatorService 实现 dsv1.DSAllocatorServiceServer。
 type AllocatorService struct {
 	dsv1.UnimplementedDSAllocatorServiceServer
-	uc *biz.AllocatorUsecase
+	uc      *biz.AllocatorUsecase
+	dsGuard *middleware.DSCallbackGuard // DS 回调令牌守卫(审核 P1 #1);nil 等价 off
 }
 
 // NewAllocatorService 构造 AllocatorService。
 func NewAllocatorService(uc *biz.AllocatorUsecase) *AllocatorService {
 	return &AllocatorService{uc: uc}
 }
+
+// SetDSCallbackGuard 注入 DS 回调令牌守卫(可选依赖,main 在 ds_auth 已配时调用)。
+func (s *AllocatorService) SetDSCallbackGuard(g *middleware.DSCallbackGuard) { s.dsGuard = g }
 
 // AllocateBattle 为 match 申请战斗 DS(matchmaker 全员确认后调)。
 func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.AllocateBattleRequest) (*dsv1.AllocateBattleResponse, error) {
@@ -63,11 +70,52 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 	if req.GetMatchId() == 0 {
 		return &dsv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.Heartbeat(ctx, req.GetMatchId(), req.GetDsPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs())
+	var res *biz.HeartbeatResult
+	var err error
+	if s.uc.RedisAuthorityEnabled() {
+		// Model B 必须同时绑定 match+pod，并要求完整 JWT credential；legacy/nil credential
+		// 不允许在 permissive 语义下回退，任何 Redis 副作用前即拒绝。
+		_, verified, checkErr := s.dsGuard.CheckBattleCredential(ctx, middleware.DSScope{
+			Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), Pod: req.GetDsPodName(), RequireToken: true,
+		})
+		if checkErr != nil {
+			return &dsv1.HeartbeatResponse{Code: toProtoCode(checkErr)}, nil
+		}
+		if verified == nil || verified.ExpMs <= 0 {
+			return &dsv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+		}
+		res, err = s.uc.HeartbeatAuthorized(ctx, req.GetMatchId(), data.BattleCredentialIdentity{
+			PodName:       verified.Pod,
+			InstanceUID:   verified.InstanceUID,
+			InstanceEpoch: verified.ProtocolEpoch,
+			Gen:           verified.Gen,
+			JTI:           verified.JTI,
+			ExpMs:         uint64(verified.ExpMs),
+			Kid:           verified.Kid,
+			TokenSHA256:   verified.TokenSHA256,
+			WriterEpoch:   verified.WriterEpoch,
+		}, req.GetPlayerCount(), req.GetState(), req.GetTsMs())
+	} else {
+		// Legacy/off 灰度路径保持既有范围语义；Model B 开启后不会落到这里。
+		if checkErr := s.dsGuard.Check(ctx, middleware.DSScope{
+			Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), RequireToken: true,
+		}); checkErr != nil {
+			return &dsv1.HeartbeatResponse{Code: toProtoCode(checkErr)}, nil
+		}
+		res, err = s.uc.Heartbeat(ctx, req.GetMatchId(), req.GetDsPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs())
+	}
 	if err != nil {
 		return &dsv1.HeartbeatResponse{Code: toProtoCode(err)}, nil
 	}
-	return &dsv1.HeartbeatResponse{Code: commonv1.ErrCode_OK, Command: res.Command}, nil
+	return &dsv1.HeartbeatResponse{
+		Code:                  commonv1.ErrCode_OK,
+		Command:               res.Command,
+		AcceptedTokenGen:      res.AcceptedTokenGen,
+		AcceptedTokenJti:      res.AcceptedTokenJTI,
+		AcceptedInstanceUid:   res.AcceptedInstanceUID,
+		AcceptedInstanceEpoch: res.AcceptedInstanceEpoch,
+		AcceptedWriterEpoch:   res.AcceptedWriterEpoch,
+	}, nil
 }
 
 // ListBattles 列出当前战斗实例(运维/调试)。

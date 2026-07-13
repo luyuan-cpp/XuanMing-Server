@@ -1,0 +1,112 @@
+// battle_credential.go 实现 ReportResult 的 Redis active credential 终态门。
+package service
+
+import (
+	"context"
+	"crypto/subtle"
+	"time"
+
+	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/middleware"
+	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
+	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
+)
+
+// BattleCredentialStateChecker 证明已验签 JWT 此刻仍等于 Redis active。
+type BattleCredentialStateChecker interface {
+	CheckActive(context.Context, uint64, *middleware.VerifiedCredential) error
+	MarkResultRecorded(context.Context, uint64, *middleware.VerifiedCredential) error
+}
+
+type redisBattleCredentialStateChecker struct {
+	reader                data.BattleAuthReader
+	recorder              data.BattleResultRecorder
+	now                   func() time.Time
+	maxActiveHeartbeatAge time.Duration
+}
+
+func NewBattleCredentialStateChecker(reader data.BattleAuthReader, maxAge time.Duration) BattleCredentialStateChecker {
+	if maxAge <= 0 {
+		maxAge = 30 * time.Second
+	}
+	recorder, _ := reader.(data.BattleResultRecorder)
+	return &redisBattleCredentialStateChecker{reader: reader, recorder: recorder, now: time.Now, maxActiveHeartbeatAge: maxAge}
+}
+
+func (c *redisBattleCredentialStateChecker) CheckActive(ctx context.Context, matchID uint64, cred *middleware.VerifiedCredential) error {
+	if matchID == 0 || cred == nil || cred.DSType != auth.DSTypeBattle || cred.MatchID != matchID ||
+		cred.Pod == "" || cred.InstanceUID == "" || cred.ProtocolEpoch == 0 || cred.Gen == 0 ||
+		cred.JTI == "" || cred.ExpMs <= 0 || cred.TokenSHA256 == "" || cred.Kid == "" ||
+		cred.WriterEpoch != auth.DSAuthWriterEpochV2 {
+		return errcode.New(errcode.ErrUnauthorized, "battle credential is incomplete or scope mismatched")
+	}
+	if c == nil || c.reader == nil || c.now == nil {
+		return errcode.New(errcode.ErrUnavailable, "battle credential authority is unavailable")
+	}
+	rec, battle, found, err := c.reader.GetBattleAuthority(ctx, matchID)
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err, "battle credential authority read failed")
+	}
+	if !found || rec == nil || battle == nil {
+		return errcode.New(errcode.ErrUnauthorized, "battle credential is not active")
+	}
+	if rec.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE &&
+		rec.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ROTATING {
+		return errcode.New(errcode.ErrUnauthorized, "battle credential phase is not active")
+	}
+	active := rec.GetActive()
+	if active == nil {
+		return errcode.New(errcode.ErrUnauthorized, "battle active credential is missing")
+	}
+	nowMs := c.now().UnixMilli()
+	maxAge := c.maxActiveHeartbeatAge
+	if maxAge <= 0 {
+		maxAge = 30 * time.Second
+	}
+	if nowMs <= 0 || cred.ExpMs <= nowMs || active.GetExpMs() == 0 || uint64(nowMs) >= active.GetExpMs() ||
+		rec.GetLastActiveHeartbeatMs() <= 0 || rec.GetLastActiveHeartbeatMs() > nowMs ||
+		nowMs-rec.GetLastActiveHeartbeatMs() > maxAge.Milliseconds() {
+		return errcode.New(errcode.ErrUnauthorized, "battle credential expired or heartbeat stale")
+	}
+	if rec.GetMatchId() != matchID || rec.GetDsPodName() != cred.Pod || rec.GetAllocationId() == "" ||
+		battle.GetMatchId() != matchID || battle.GetAllocationId() != rec.GetAllocationId() ||
+		battle.GetDsPodName() != cred.Pod || (battle.GetState() != "ready" && battle.GetState() != "running") ||
+		battle.GetGameserverUid() != cred.InstanceUID || battle.GetInstanceEpoch() != cred.ProtocolEpoch ||
+		battle.GetLastVerifiedGen() != cred.Gen || battle.GetLastVerifiedJti() != cred.JTI ||
+		battle.GetLastVerifiedWriterEpoch() != cred.WriterEpoch ||
+		rec.GetInstanceUid() == "" || rec.GetInstanceUid() != cred.InstanceUID ||
+		rec.GetInstanceEpoch() == 0 || rec.GetInstanceEpoch() != cred.ProtocolEpoch ||
+		active.GetInstanceUid() != cred.InstanceUID || active.GetInstanceEpoch() != cred.ProtocolEpoch ||
+		active.GetGen() == 0 || active.GetGen() != cred.Gen || active.GetJti() == "" || active.GetJti() != cred.JTI ||
+		active.GetExpMs() != uint64(cred.ExpMs) || active.GetKid() == "" || active.GetKid() != cred.Kid ||
+		active.GetTokenSha256() == "" || active.GetWriterEpoch() != auth.DSAuthWriterEpochV2 ||
+		active.GetWriterEpoch() != cred.WriterEpoch ||
+		rec.GetRequiredWriterEpoch() != auth.DSAuthWriterEpochV2 ||
+		(rec.GetPending() != nil && rec.GetPending().GetWriterEpoch() != auth.DSAuthWriterEpochV2) ||
+		rec.GetHighWaterGen() < active.GetGen() ||
+		subtle.ConstantTimeCompare([]byte(active.GetTokenSha256()), []byte(cred.TokenSHA256)) != 1 {
+		return errcode.New(errcode.ErrUnauthorized, "battle credential does not match active authority")
+	}
+	return nil
+}
+
+func (c *redisBattleCredentialStateChecker) MarkResultRecorded(
+	ctx context.Context,
+	matchID uint64,
+	cred *middleware.VerifiedCredential,
+) error {
+	if c == nil || c.recorder == nil {
+		return errcode.New(errcode.ErrUnavailable, "battle result receipt writer is unavailable")
+	}
+	if cred == nil || matchID == 0 || cred.MatchID != matchID ||
+		cred.WriterEpoch != auth.DSAuthWriterEpochV2 {
+		return errcode.New(errcode.ErrUnauthorized, "battle result credential writer epoch is not supported")
+	}
+	return c.recorder.RecordBattleResult(ctx, data.BattleResultCredential{
+		MatchID: matchID, PodName: cred.Pod, InstanceUID: cred.InstanceUID,
+		InstanceEpoch: cred.ProtocolEpoch, Gen: cred.Gen, JTI: cred.JTI,
+		ExpMs: cred.ExpMs, Kid: cred.Kid, TokenSHA256: cred.TokenSHA256,
+		WriterEpoch: cred.WriterEpoch,
+	}, c.maxActiveHeartbeatAge)
+}

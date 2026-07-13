@@ -25,12 +25,43 @@ import (
 
 const activeKey = "pandora:ds:active"
 
+const fencedFinalizeReadbackTimeout = 3 * time.Second
+
+// BattleStateAllocationUncertain 表示本轮 allocation_id 已在 Redis 持久化封死，
+// 随后的 GameServerAllocation POST 可能尚未发出、也可能已经应用但响应未知。
+// 该字符串故意不复用 allocating/warming：旧 writer 遇到未知状态会 fail-closed，
+// 不能靠 TTL、sweep 或幂等重试把它当成“未分配”后再次 POST。
+const BattleStateAllocationUncertain = "allocation_uncertain"
+
+// BattleStatePreactiveReleasePending 表示已确认 GameServer UID 的未激活分配正在回收。
+// 该状态与 auth TERMINATING（若 auth 已建立）共同构成外部 ReleaseExpected 之前的
+// 永久墓碑：只有 UID 条件删除被明确确认成功后，才允许按 expected tuple 物理 purge。
+// 它不能带 TTL，否则 release 响应未知后墓碑过期会重新开放同 match 的第二次 GSA POST。
+const BattleStatePreactiveReleasePending = "preactive_release_pending"
+
 func battleKey(matchID uint64) string { return fmt.Sprintf("pandora:ds:battle:{%d}", matchID) }
 
 // ── 接口 ──────────────────────────────────────────────────────────────────────
 
 // BattleRepo 是 ds_allocator 数据层抽象。biz 层只依赖此接口,不依赖 redis。
 type BattleRepo interface {
+	// ClaimBattle 以单个 battle key 的 SET NX 取得本轮分配所有权。只有 claimed=true 的调用者
+	// 才允许访问外部 Agones Allocation API；allocation_id 是后续 finalize/cleanup 的 fencing token。
+	ClaimBattle(ctx context.Context, claim *dsv1.BattleStorageRecord, battleTTL time.Duration) (claimed bool, existing *dsv1.BattleStorageRecord, err error)
+	// FenceBattleAllocation 在任何外部 GameServerAllocation POST 前，把 allocating claim
+	// CAS 成 allocation_uncertain 并去掉 TTL。只有 fenced=true 的调用者才准发 POST。
+	FenceBattleAllocation(ctx context.Context, matchID uint64, allocationID string) (fenced bool, err error)
+	// FinalizeBattleAllocation 把本调用持有的 allocating claim CAS 成 warming 镜像。
+	// allocation_id 不匹配或 claim 已被替换时返回 finalized=false，绝不覆盖当前赢家。
+	FinalizeBattleAllocation(ctx context.Context, battle *dsv1.BattleStorageRecord, battleTTL time.Duration) (finalized bool, err error)
+	// FinalizeFencedBattleAllocation 只把同 allocation_id 的 allocation_uncertain claim
+	// CAS 成 warming，且在首个授权心跳激活前继续保持永久。Model B 严格确认
+	// GameServer UID/RV 后才可调用；激活事务才给 auth+battle 赋正常 TTL。
+	FinalizeFencedBattleAllocation(ctx context.Context, battle *dsv1.BattleStorageRecord, battleTTL time.Duration) (finalized bool, err error)
+	// DeleteBattleIfAllocationMatches 仅删除仍属于 expected allocation_id/pod 的已知可回收阶段
+	// allocating/warming/abandoned。allocation_uncertain 与所有未知状态一律拒删。
+	// deleted=true 才表示调用方取得了释放对应 GameServer 的权利。
+	DeleteBattleIfAllocationMatches(ctx context.Context, matchID uint64, allocationID, podName string) (deleted bool, err error)
 	// CreateBattle 写战斗镜像 proto bytes(TTL=battleTTL)并 ZADD 进 active(score=last_heartbeat_ms)。
 	CreateBattle(ctx context.Context, battle *dsv1.BattleStorageRecord, battleTTL time.Duration) error
 	// GetBattle 读战斗镜像。not found 返 (nil, false, nil)。
@@ -74,6 +105,344 @@ func NewRedisBattleRepo(rdb redis.UniversalClient) *RedisBattleRepo {
 	return &RedisBattleRepo{rdb: rdb}
 }
 
+// ClaimBattle 是 AllocateBattle 的线性化点。先持久化 allocation_id claim，再访问 Agones，
+// 消除两个 ds_allocator 副本同时 Get miss 后各自分配一个 GameServer 的竞态。
+// claim 同时登记 active ZSET 作为 inflight 扫描索引；否则进程在 SETNX 后崩溃会让
+// allocating key 卡满 BattleTTL，且 GSA 未知结果永远无人按 allocation_id 对账。
+func (r *RedisBattleRepo) ClaimBattle(
+	ctx context.Context,
+	claim *dsv1.BattleStorageRecord,
+	battleTTL time.Duration,
+) (bool, *dsv1.BattleStorageRecord, error) {
+	if claim == nil || claim.MatchId == 0 || claim.AllocationId == "" || claim.State != "allocating" {
+		return false, nil, errcode.New(errcode.ErrInvalidArg, "invalid battle allocation claim")
+	}
+	payload, err := marshalBattle(claim)
+	if err != nil {
+		return false, nil, err
+	}
+	ok, err := r.rdb.SetNX(ctx, battleKey(claim.MatchId), payload, battleTTL).Result()
+	if err != nil {
+		return false, nil, err
+	}
+	if ok {
+		if zerr := r.rdb.ZAdd(ctx, activeKey, redis.Z{
+			Score: float64(claim.LastHeartbeatMs), Member: claim.MatchId,
+		}).Err(); zerr != nil {
+			// 尚未调用外部 Agones，索引登记失败时可按 allocation_id 安全撤 claim。
+			// 撤销也失败只会留下不可分配 claim，不会产生第二个 Pod。
+			_, cleanupErr := r.DeleteBattleIfAllocationMatches(
+				ctx, claim.MatchId, claim.AllocationId, claim.DsPodName)
+			if cleanupErr != nil {
+				return false, nil, fmt.Errorf("claim inflight index: %w; cleanup: %v", zerr, cleanupErr)
+			}
+			return false, nil, fmt.Errorf("claim inflight index: %w", zerr)
+		}
+		return true, nil, nil
+	}
+	existing, found, err := r.GetBattle(ctx, claim.MatchId)
+	if err != nil {
+		return false, nil, err
+	}
+	if !found {
+		// key 可能恰在 SETNX=false 后过期；本轮不擅自再次争抢，避免一次 RPC 内产生
+		// 两次外部分配。调用方重试会领取新的 allocation_id。
+		return false, nil, errcode.New(errcode.ErrDSAllocationFailed,
+			"battle %d allocation claim disappeared", claim.MatchId)
+	}
+	return false, existing, nil
+}
+
+// FenceBattleAllocation 是“是否允许调用外部 GSA POST”的 Redis 线性化点。
+// WATCH/MULTI 保证只有当前 allocation_id 的 allocating owner 能成功；事务里的无 TTL SET
+// 同时完成状态替换与 PERSIST 语义。若 EXEC 的响应未知，调用方也必须按失败处理且绝不 POST，
+// 最坏只留下一个永久 fail-closed、需显式审计的 uncertain claim。
+func (r *RedisBattleRepo) FenceBattleAllocation(
+	ctx context.Context,
+	matchID uint64,
+	allocationID string,
+) (bool, error) {
+	if matchID == 0 || allocationID == "" {
+		return false, errcode.New(errcode.ErrInvalidArg, "match_id and allocation_id required")
+	}
+	key := battleKey(matchID)
+	for attempt := 0; attempt <= 3; attempt++ {
+		fenced := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			currentBytes, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil
+			}
+			if gerr != nil {
+				return gerr
+			}
+			current, uerr := unmarshalBattle(matchID, currentBytes)
+			if uerr != nil {
+				return uerr
+			}
+			if current.AllocationId != allocationID || current.State != "allocating" {
+				return nil
+			}
+			current.State = BattleStateAllocationUncertain
+			payload, merr := marshalBattle(current)
+			if merr != nil {
+				return merr
+			}
+			_, xerr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				// SET KEEPTTL + PERSIST 同处一个 EXEC：状态替换和去 TTL 对外原子可见，
+				// 不存在先写 uncertain、进程崩溃后它仍会过期的窗口。
+				pipe.Set(ctx, key, payload, redis.KeepTTL)
+				pipe.Persist(ctx, key)
+				return nil
+			})
+			if xerr == nil {
+				fenced = true
+			}
+			return xerr
+		}, key)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if err != nil || !fenced {
+			return fenced, err
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrDSAllocationFailed,
+		"battle %d pre-allocation fence concurrent retry exhausted", matchID)
+}
+
+// FinalizeBattleAllocation 只允许 allocation_id 对应的 allocating claim 写成 warming。
+// 权威 battle key 与 CAS 在同 slot/单事务；active ZSET 是跨 slot 派生索引，ZADD 失败会把
+// 错误返回给调用方，由 expected-allocation cleanup 把 warming 镜像撤掉，绝不放行 ready。
+func (r *RedisBattleRepo) FinalizeBattleAllocation(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+	battleTTL time.Duration,
+) (bool, error) {
+	return r.finalizeBattleAllocation(ctx, battle, "allocating", battleTTL, false)
+}
+
+// FinalizeFencedBattleAllocation 是 Model B 唯一 finalize 入口。它拒绝直接从 allocating
+// 跳到 warming，保证严格 UID/RV 确认之前 Redis claim 一直处于永久 uncertain 状态。
+func (r *RedisBattleRepo) FinalizeFencedBattleAllocation(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+	battleTTL time.Duration,
+) (bool, error) {
+	return r.finalizeBattleAllocation(ctx, battle, BattleStateAllocationUncertain, battleTTL, true)
+}
+
+func (r *RedisBattleRepo) finalizeBattleAllocation(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+	expectedState string,
+	battleTTL time.Duration,
+	persistent bool,
+) (bool, error) {
+	if battle == nil || battle.MatchId == 0 || battle.AllocationId == "" || battle.State != "warming" || battle.DsPodName == "" {
+		return false, errcode.New(errcode.ErrInvalidArg, "invalid finalized battle allocation")
+	}
+	if expectedState != "allocating" && expectedState != BattleStateAllocationUncertain {
+		return false, errcode.New(errcode.ErrInvalidArg, "invalid battle allocation source state")
+	}
+	key := battleKey(battle.MatchId)
+	for attempt := 0; attempt <= 3; attempt++ {
+		matched := false
+		postCommitCtx := ctx
+		var postCommitCancel context.CancelFunc
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			currentBytes, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil
+			}
+			if gerr != nil {
+				return gerr
+			}
+			current, uerr := unmarshalBattle(battle.MatchId, currentBytes)
+			if uerr != nil {
+				return uerr
+			}
+			if current.AllocationId != battle.AllocationId || current.State != expectedState {
+				return nil
+			}
+			// finalize 是 read-modify-write；以 WATCH 内刚读到的权威 unknown fields
+			// 覆盖调用方快照，防旧/并发 writer 在滚动更新中静默丢未来字段。
+			next := proto.Clone(battle).(*dsv1.BattleStorageRecord)
+			next.ProtoReflect().SetUnknown(append([]byte(nil), current.ProtoReflect().GetUnknown()...))
+			payload, merr := marshalBattle(next)
+			if merr != nil {
+				return merr
+			}
+			matched = true
+			_, xerr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				ttl := battleTTL
+				if persistent {
+					ttl = 0
+				}
+				pipe.Set(ctx, key, payload, ttl)
+				return nil
+			})
+			return xerr
+		}, key)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if persistent && (err != nil || !matched) {
+			// EXEC 可能已经提交、但响应在客户端侧丢失。此时不能把永久
+			// allocation_uncertain 错当成“仍未 finalize”后直接返回：提交后的
+			// warming 也是 GSA 生命周期 fence，调用方应继续凭据投递。只在严格
+			// GET read-back 同时确认 allocation/UID/pod/state 且 PTTL=-1 时认定成功。
+			// 外层请求常因“EXEC 响应超时”已经 canceled；read-back 若复用它会
+			// 立刻失败，等同没有确认。保留 trace/value，但用独立短预算完成严格 GET。
+			readCtx, cancel := context.WithTimeout(
+				context.WithoutCancel(ctx), fencedFinalizeReadbackTimeout)
+			confirmed, readErr := r.confirmPersistentFencedFinalize(readCtx, battle)
+			if confirmed && readErr == nil {
+				matched = true
+				err = nil
+				postCommitCtx = readCtx
+				postCommitCancel = cancel
+			} else if err != nil {
+				cancel()
+				if readErr != nil {
+					return false, fmt.Errorf("battle %d finalize response uncertain: %w; read-back: %v", battle.MatchId, err, readErr)
+				}
+				return false, err
+			} else if readErr != nil {
+				cancel()
+				return false, readErr
+			} else {
+				cancel()
+			}
+		}
+		if err != nil {
+			if postCommitCancel != nil {
+				postCommitCancel()
+			}
+			return false, err
+		}
+		if !matched {
+			if postCommitCancel != nil {
+				postCommitCancel()
+			}
+			return false, nil
+		}
+		if err := r.rdb.ZAdd(postCommitCtx, activeKey, redis.Z{
+			Score: float64(battle.LastHeartbeatMs), Member: battle.MatchId,
+		}).Err(); err != nil {
+			if postCommitCancel != nil {
+				postCommitCancel()
+			}
+			return false, err
+		}
+		if postCommitCancel != nil {
+			postCommitCancel()
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrDSAllocationFailed,
+		"battle %d finalize concurrent retry exhausted", battle.MatchId)
+}
+
+// confirmPersistentFencedFinalize 只为 Model B 的 response-lost/read-back 使用。
+// 不能只看 state=warming：同 match 的另一次分配、同名 Pod 重建或有限 TTL 的旧 writer
+// 都不能被误认成本次提交。UID、allocation_id、pod、地址与实例 epoch 必须逐项一致，
+// 且 key 必须已经无过期时间。
+func (r *RedisBattleRepo) confirmPersistentFencedFinalize(
+	ctx context.Context,
+	expected *dsv1.BattleStorageRecord,
+) (bool, error) {
+	key := battleKey(expected.GetMatchId())
+	payload, err := r.rdb.Get(ctx, key).Bytes()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	current, err := unmarshalBattle(expected.GetMatchId(), payload)
+	if err != nil {
+		return false, err
+	}
+	strictExpected := proto.Clone(expected).(*dsv1.BattleStorageRecord)
+	// future unknown fields 来自 WATCH 内原 claim，属于必须保留的滚动升级数据；
+	// 除它们外，所有已知 allocation/UID/state/roster/address/timestamp 字段都须
+	// 与本次 intended write 完全相等，不能只抽查三四个身份字段。
+	strictExpected.ProtoReflect().SetUnknown(
+		append([]byte(nil), current.ProtoReflect().GetUnknown()...))
+	if current.GetState() != "warming" || !proto.Equal(current, strictExpected) {
+		return false, nil
+	}
+	pttl, err := r.rdb.PTTL(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	if pttl != -1 {
+		return false, errcode.New(errcode.ErrInvalidState,
+			"battle %d fenced finalize read-back is not persistent", expected.GetMatchId())
+	}
+	return true, nil
+}
+
+// DeleteBattleIfAllocationMatches 是旧请求清理路径的 fencing delete。事务内再次确认
+// allocation_id/pod，且只允许已知的 allocating/warming/abandoned；allocation_uncertain、ready/running
+// 以及未来未知状态全部 fail-closed。只有 deleted=true 的调用方才可 Release。
+func (r *RedisBattleRepo) DeleteBattleIfAllocationMatches(
+	ctx context.Context,
+	matchID uint64,
+	allocationID, podName string,
+) (bool, error) {
+	if matchID == 0 || allocationID == "" {
+		return false, errcode.New(errcode.ErrInvalidArg, "match_id and allocation_id required")
+	}
+	key := battleKey(matchID)
+	for attempt := 0; attempt <= 3; attempt++ {
+		deleted := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			payload, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil
+			}
+			if gerr != nil {
+				return gerr
+			}
+			current, uerr := unmarshalBattle(matchID, payload)
+			if uerr != nil {
+				return uerr
+			}
+			if current.AllocationId != allocationID ||
+				(podName != "" && current.DsPodName != podName) ||
+				(current.State != "allocating" && current.State != "warming" && current.State != "abandoned") {
+				return nil
+			}
+			deleted = true
+			_, xerr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(ctx, key)
+				return nil
+			})
+			return xerr
+		}, key)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if !deleted {
+			return false, nil
+		}
+		if err := r.rdb.ZRem(ctx, activeKey, matchID).Err(); err != nil {
+			// 权威 key 已按 fencing 条件删除；即使派生索引清理失败，调用方仍必须知道
+			// 自己赢得了删除权并释放对应 Pod，残留 ZSET 由 sweep 的 miss 分支清理。
+			return true, err
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrDSAllocationFailed,
+		"battle %d cleanup concurrent retry exhausted", matchID)
+}
+
 // CreateBattle 写战斗镜像(权威)并登记到全局 active ZSET。
 // Redis Cluster 兼容(同 hub decision-revisit-hub-crossslot.md):battleKey{match} 与全局
 // activeKey 分属不同 slot,不能捆同一事务(否则 CROSSSLOT)。① battleKey 单键 SET 权威落库;
@@ -83,8 +452,13 @@ func (r *RedisBattleRepo) CreateBattle(ctx context.Context, battle *dsv1.BattleS
 	if err != nil {
 		return err
 	}
-	if err := r.rdb.Set(ctx, battleKey(battle.MatchId), payload, battleTTL).Err(); err != nil {
+	ok, err := r.rdb.SetNX(ctx, battleKey(battle.MatchId), payload, battleTTL).Result()
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"battle %d already exists; refusing overwrite", battle.MatchId)
 	}
 	return r.rdb.ZAdd(ctx, activeKey, redis.Z{Score: float64(battle.LastHeartbeatMs), Member: battle.MatchId}).Err()
 }

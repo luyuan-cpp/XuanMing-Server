@@ -50,3 +50,22 @@ presence:
   debounce_window: "8s"       # 上线去抖窗口(§13.4.2)
   coalesce_tick: "1s"         # 合并/flush 间隔(§13.4.3)
   kill_switch_key: "presence/fanout"  # 洪峰降级开关 key(§13.5)
+
+# ── DS 回调服务令牌校验(审核 P1 #1)────────────────────────────────────────────
+# player_locator 只校验不签发:Hub DS 经 Envoy :8444 调 SetLocation(HUB)/ReportDisconnect
+# 须带 hub 令牌(由 hub_allocator 签发,sub=pod);非 HUB 状态写入只允许内部服务(DenyDS)。
+# mode: off(默认;UE DS 未带令牌前必须 off)→ permissive(灰度观察)→ enforce(强制)。
+# secret 必须与 hub_allocator ds_auth.secret 一致。
+ds_auth:
+  mode: "off"
+  # 默认 legacy 不读 Hub auth record；部署激活 Model B 时必须与 hub_allocator 同步切为 redis。
+  authority_mode: "legacy"
+  active_heartbeat_max_age: "30s"
+  secret: "pandora-dev-jwt-secret-change-me-32!"
+  # authority_mode=redis 时与 allocator 共用同一 required epoch/capability lease。
+  # fence:
+  #   etcd_endpoints: ["127.0.0.1:2380"]
+  #   etcd_prefix: "/pandora/ds-auth/"
+  #   etcd_lease_ttl_sec: 15
+  #   etcd_dial_timeout: "5s"
+  #   keyset_revision: "pandora-ds-auth-v2-r1"

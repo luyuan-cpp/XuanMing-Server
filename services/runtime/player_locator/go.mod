@@ -15,6 +15,7 @@ go 1.26.5
 require (
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/luyuancpp/pandora/pkg v0.0.0
+	github.com/luyuancpp/pandora/pkg/dsauthfence v0.0.0
 	github.com/luyuancpp/pandora/proto v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.16.0
 )
@@ -24,6 +25,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
@@ -80,13 +82,14 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.3 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 // 本地 workspace 内的模块通过 replace 指向源码目录。
 replace (
 	github.com/luyuancpp/pandora/pkg => ../../../pkg
+	github.com/luyuancpp/pandora/pkg/dsauthfence => ../../../pkg/dsauthfence
 	github.com/luyuancpp/pandora/proto => ../../../proto
 )
 

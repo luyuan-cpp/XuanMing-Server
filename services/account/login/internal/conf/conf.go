@@ -11,6 +11,8 @@
 package conf
 
 import (
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -23,6 +25,10 @@ type Config struct {
 
 	// Login 业务字段。
 	Login LoginConf `yaml:"login" json:"login"`
+
+	// DSAuth 是 UE DS 经 :8444 调 VerifyDSTicket 时的服务身份与 Redis active 权威配置。
+	// 默认 off/legacy，保持既有内部 Verify 行为；仅 redis+enforce 启用在线入场门。
+	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
 }
 
 // LoginConf 是 login 服务私有配置。
@@ -33,6 +39,16 @@ type LoginConf struct {
 	// DSTicketTTL DS 票据有效期(JWT exp - issued_at)。
 	// 不变量 §3:DS 票据短时效。默认 5 分钟。
 	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
+
+	// RequireHubAssignmentBinding 是 Hub DSTicket 归属绑定的机械激活栅栏。
+	// false(默认):滚动兼容旧的无绑定 hub 票，但带绑定票仍会严格查 Redis 当前归属。
+	// true:拒绝所有无绑定 hub 票，并禁止 login 在 hub_allocator 缺失/失败时自签回退。
+	// 开启前必须同时配置 Redis 与 hub_allocator，否则启动失败。
+	RequireHubAssignmentBinding bool `yaml:"require_hub_assignment_binding,omitempty" json:"require_hub_assignment_binding,omitempty"`
+
+	// HubAssignmentFence 与 DS Redis authority 共用全局 required writer/capability lease。
+	// binding=true 时必填，确保旧 login writer 激活后不能回滚接流量。
+	HubAssignmentFence config.DSAuthFenceConf `yaml:"hub_assignment_fence,omitempty" json:"hub_assignment_fence,omitempty"`
 
 	// MockHubDSAddr 是 hub_allocator 不可用时的本地回退 hub DS 地址。
 	MockHubDSAddr string `yaml:"mock_hub_ds_addr,omitempty" json:"mock_hub_ds_addr,omitempty"`
@@ -104,11 +120,15 @@ type HubClientConf struct {
 //   - Secret base64某种 / 明文 都可以,但 envoy.yaml 里是 base64url(secret) 填进 JWKS 的 k 字段
 //   - SessionTTL 默认 24h;DSTicketTTL 默认 5min(不变量 §3)
 type JWTConf struct {
-	Issuer      string          `yaml:"issuer,omitempty" json:"issuer,omitempty"`
-	Audience    string          `yaml:"audience,omitempty" json:"audience,omitempty"`
-	Secret      string          `yaml:"secret,omitempty" json:"secret,omitempty"`
-	SessionTTL  config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
-	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
+	Issuer   string `yaml:"issuer,omitempty" json:"issuer,omitempty"`
+	Audience string `yaml:"audience,omitempty" json:"audience,omitempty"`
+	Secret   string `yaml:"secret,omitempty" json:"secret,omitempty"`
+	// AdditionalSecrets 是**仅用于校验**的额外可接受密钥(不用于签发),支持玩家面
+	// JWT 不停服密钥轮换(三段式,同 ds_auth.additional_secrets;注意 Envoy JWKS 也要
+	// 同步包含全部 key,gen_cluster_config.ps1 -SecretAdditional 一道注入)。默认空。
+	AdditionalSecrets []string        `yaml:"additional_secrets,omitempty" json:"additional_secrets,omitempty"`
+	SessionTTL        config.Duration `yaml:"session_ttl,omitempty" json:"session_ttl,omitempty"`
+	DSTicketTTL       config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 }
 
 // Defaults 把零值填成 Pandora 标准默认值。
@@ -145,4 +165,55 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51001"
 	}
+	c.DSAuth.Defaults()
+}
+
+// Validate 校验不能靠运行期降级修复的配置冲突。
+func (c *Config) Validate() error {
+	switch c.DSAuth.AuthorityMode {
+	case "", "legacy", "redis":
+	default:
+		return fmt.Errorf("ds_auth.authority_mode invalid: %q (want legacy|redis)", c.DSAuth.AuthorityMode)
+	}
+	if err := c.DSAuth.ValidateRedisFence(); err != nil {
+		return err
+	}
+	if c.DSAuth.AuthorityModeRedis() {
+		if !c.Login.RequireHubAssignmentBinding {
+			return fmt.Errorf("ds_auth.authority_mode=redis requires login.require_hub_assignment_binding=true")
+		}
+		if !sameFence(c.DSAuth.Fence, c.Login.HubAssignmentFence) {
+			return fmt.Errorf("login ds_auth.fence and hub_assignment_fence must be identical (single capability lease)")
+		}
+	}
+	if c.Login.RequireHubAssignmentBinding {
+		if c.Node.RedisClient.Host == "" && len(c.Node.RedisClient.Addrs) == 0 {
+			return fmt.Errorf("login.require_hub_assignment_binding=true requires node.redis_client")
+		}
+		if c.Login.Hub.Addr == "" {
+			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.hub.addr")
+		}
+		if len(c.Login.HubAssignmentFence.EtcdEndpoints) == 0 || c.Login.HubAssignmentFence.KeysetRevision == "" {
+			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.hub_assignment_fence etcd endpoints/keyset revision")
+		}
+	}
+	return nil
+}
+
+// CapabilityFence 返回 login 唯一应注册的 capability 配置。Redis admission 与既有
+// Hub assignment fence 同时开启时 Validate 已要求二者完全一致，因此 main 只 Acquire 一次。
+func (c *Config) CapabilityFence() (config.DSAuthFenceConf, bool) {
+	if c.DSAuth.AuthorityModeRedis() {
+		return c.DSAuth.Fence, true
+	}
+	if c.Login.RequireHubAssignmentBinding {
+		return c.Login.HubAssignmentFence, true
+	}
+	return config.DSAuthFenceConf{}, false
+}
+
+func sameFence(a, b config.DSAuthFenceConf) bool {
+	return slices.Equal(a.EtcdEndpoints, b.EtcdEndpoints) && a.EtcdPrefix == b.EtcdPrefix &&
+		a.EtcdLeaseTTLSec == b.EtcdLeaseTTLSec && a.EtcdDialTimeout == b.EtcdDialTimeout &&
+		a.KeysetRevision == b.KeysetRevision
 }

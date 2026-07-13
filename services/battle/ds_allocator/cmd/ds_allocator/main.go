@@ -24,11 +24,15 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
@@ -76,6 +80,10 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if err := cfg.DSAuth.ValidateRedisFence(); err != nil {
+		helper.Errorw("msg", "ds_auth_fence_config_invalid", "err", err)
+		os.Exit(1)
+	}
 
 	// 3. Redis(强依赖)
 	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
@@ -99,6 +107,69 @@ func main() {
 
 	// 4. 装配链
 	repo := data.NewRedisBattleRepo(rdb)
+
+	// 4.0 DS 回调服务令牌(审核 P1 #1):签发器(分配时下发给战斗 DS)+ 守卫(校验 DS 回调)。
+	// secret 未配 → dsSigner=nil 不签发;mode=off → dsGuard=nil 不校验(默认,现行为不变)。
+	dsSigner, err := middleware.NewDSCallbackSignerFromConf(cfg.DSAuth)
+	if err != nil {
+		helper.Errorw("msg", "ds_auth_signer_init_failed", "err", err)
+		os.Exit(1)
+	}
+	dsGuard, err := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if err != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", err)
+		os.Exit(1)
+	}
+	// 启动期 TTL 正值/最小值校验(审核 P1):本服务签发(dsSigner!=nil)或校验(guard!=nil)DS 回调
+	// 令牌时,BattleTokenTTL/HubTokenTTL 必须 >= 最小值,否则令牌签发即过期属误配,启动即拒。
+	if err := cfg.DSAuth.Validate(dsSigner != nil || dsGuard != nil); err != nil {
+		helper.Errorw("msg", "ds_auth_ttl_invalid", "err", err)
+		os.Exit(1)
+	}
+	// 战斗令牌不续期(一局一签、DS 一局一销毁),TTL 必须覆盖「战斗镜像 TTL(battle_ttl,最长对局 +
+	// 补偿重试上界)+ 重连/ready 余量」。否则活跃对局跑到一半令牌过期,battle_result / 心跳等 DS 回调被
+	// enforce 守卫全拒、赛果无法结算(审核 P1:battle 令牌下限须关联 battle_ttl,不能只看固定 30m/1h)。
+	if dsSigner != nil {
+		const battleReconnectMargin = 15 * time.Minute
+		needTTL := cfg.Allocator.BattleTTL.Std() + battleReconnectMargin
+		if cfg.DSAuth.BattleTokenTTL.Std() < needTTL {
+			helper.Errorw("msg", "ds_auth_battle_token_ttl_too_small_vs_battle_ttl",
+				"battle_token_ttl", cfg.DSAuth.BattleTokenTTL.Std().String(),
+				"battle_ttl", cfg.Allocator.BattleTTL.Std().String(),
+				"need_at_least", needTTL.String(),
+				"hint", "战斗令牌不续期,须 >= battle_ttl + 15m 重连余量;调大 ds_auth.battle_token_ttl 或调小 allocator.battle_ttl")
+			os.Exit(1)
+		}
+	}
+	// 签发回调:battle 令牌绑 match_id(pod 分配时未知,pod↔match 绑定由心跳 pod_mismatch 逻辑兜底)。
+	issueBattleToken := func(matchID uint64) (string, error) {
+		tok, _, serr := dsSigner.SignDSCallback(auth.DSTypeBattle, "", matchID, cfg.DSAuth.BattleTokenTTL.Std())
+		return tok, serr
+	}
+	// local-off-v1 不接 Redis pending/ACK，但仍必须给 UE 完整 Model-B tuple，不能回退 legacy JWT。
+	// 每个本机进程有随机实例 UID 与 jti；一局一实例，epoch/gen 从 1 起且不会在实例内回退。
+	issueLocalBattleCredential := func(matchID uint64, podName, instanceUID string, instanceEpoch uint32) (string, error) {
+		res, serr := dsSigner.SignBattleCredential(
+			matchID, podName, instanceUID, instanceEpoch, 1, uuid.NewString(), cfg.DSAuth.BattleTokenTTL.Std())
+		if serr != nil {
+			return "", serr
+		}
+		return res.Token, nil
+	}
+	// enforce 下签发失败必须 fail-closed(不分配无令牌的 DS,否则回调被守卫全拒)。
+	dsEnforce := dsGuard.Mode() == middleware.DSAuthEnforce
+	modelB := cfg.DSAuth.AuthorityModeRedis()
+	if modelB && (cfg.Mode != conf.ModeAgones || !dsEnforce || dsSigner == nil) {
+		helper.Errorw("msg", "battle_model_b_invalid_activation",
+			"allocator_mode", cfg.Mode, "guard_mode", dsGuard.Mode().String(), "signer_ready", dsSigner != nil,
+			"hint", "authority_mode=redis requires mode=agones + ds_auth.mode=enforce + signing key; no legacy fallback")
+		os.Exit(1)
+	}
+	if dsSigner != nil {
+		helper.Infow("msg", "ds_callback_token_issuer_ready",
+			"battle_token_ttl", cfg.DSAuth.BattleTokenTTL.Std().String(), "guard_mode", dsGuard.Mode().String())
+	}
+
 	// DS 启动方式由 cfg.Mode 单一开关决定(标准两模式 + 离线兜底),biz 逻辑零改:
 	//   - mode=agones → 真 GameServerAllocation(Linux 生产)
 	//   - mode=local  → 本机拉起 Windows DS 进程(Windows 单机自测)
@@ -115,9 +186,18 @@ func main() {
 		}
 		allocator = ag
 		agonesAlloc = ag
+		if dsSigner != nil && !modelB {
+			ag.SetDSTokenIssuer(issueBattleToken, dsEnforce) // 令牌经 GameServerAllocation annotation 下发
+		}
 		helper.Infow("msg", "agones_allocator_ready",
 			"api_server", cfg.Agones.APIServer, "namespace", cfg.Agones.Namespace, "fleet", cfg.Agones.FleetName)
 	case conf.ModeLocal:
+		if perr := auth.ValidateDSLocalProfileOffV1(dsGuard.Mode().String(), cfg.DSAuth.AuthorityMode, dsSigner != nil); perr != nil {
+			helper.Errorw("msg", "local_battle_auth_profile_invalid",
+				"err", perr,
+				"hint", "mode=local requires ds_auth.mode=off + authority_mode=legacy + signing key (local-off-v1); Redis Model-B local authority is not implemented")
+			os.Exit(1)
+		}
 		ld, lerr := data.NewLocalGameServerAllocator(cfg.LocalDS)
 		if lerr != nil {
 			helper.Errorw("msg", "local_ds_allocator_init_failed", "err", lerr,
@@ -127,6 +207,7 @@ func main() {
 		// 进程退出时杀掉全部在管 DS,避免遗留孤儿。
 		defer func() { _ = ld.Close() }()
 		allocator = ld
+		ld.SetDSTokenIssuer(issueLocalBattleCredential, true) // 完整 tuple 经 env 下发；失败必须 fail-closed
 		helper.Infow("msg", "local_ds_allocator_ready",
 			"executable", cfg.LocalDS.ExecutablePath, "map", cfg.LocalDS.MapName,
 			"advertise_host", cfg.LocalDS.AdvertiseHost,
@@ -137,6 +218,15 @@ func main() {
 			"mode", cfg.Mode, "hint", "mode=mock,用确定性假地址(无真实 DS)")
 	}
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
+	battleAuthRepo := data.NewRedisBattleAuthRepo(rdb)
+	if modelB {
+		if err := uc.EnableRedisAuthority(battleAuthRepo, dsSigner, cfg.DSAuth.BattleTokenTTL.Std()); err != nil {
+			helper.Errorw("msg", "battle_model_b_init_failed", "err", err)
+			os.Exit(1)
+		}
+		helper.Infow("msg", "battle_model_b_enabled", "required_writer_epoch", data.BattleDSWriterEpochV2,
+			"authority", "redis", "k8s_role", "delivery-only")
+	}
 	if cfg.Mode == conf.ModeLocal {
 		// local 模式 UE DS 无 Agones,收到 stop 指令不会自杀 → 让后端在 orphan/pod_mismatch/终态
 		// 心跳时主动 kill 该 DS,防幽灵进程占端口污染下一局(配合端口 bind 探测双保险)。
@@ -171,11 +261,19 @@ func main() {
 	}
 
 	svc := service.NewAllocatorService(uc)
+	svc.SetDSCallbackGuard(dsGuard) // DS 回调令牌校验(Heartbeat);nil=off
 
 	// GmService(GM / 运维指令下发):与 ds_allocator 同进程复用 gRPC 端口。
 	// 运维 GM 工具 SendCommand 入 Redis 队列 → 战斗 DS 轮询 PollCommands 拉取执行(如给玩家发道具)。
 	// 内部接口,不经 Envoy 暴露给玩家客户端。
 	gmSvc := gm.NewService(rdb, logger)
+	gmSvc.SetDSCallbackGuard(dsGuard) // DS 回调令牌校验(PollCommands/AckCommand);nil=off
+	if modelB {
+		if err := gmSvc.EnableRedisAuthority(battleAuthRepo); err != nil {
+			helper.Errorw("msg", "gm_battle_model_b_init_failed", "err", err)
+			os.Exit(1)
+		}
+	}
 	// SendCommand 前置校验目标对局是否有活跃战斗镜像:typo / 已结束的 match_id 立即拒,
 	// 避免静默入僵尸队列(repo 天然满足 BattleLivenessChecker,复用同一 Redis)。
 	gmSvc.SetBattleChecker(repo)
@@ -183,6 +281,27 @@ func main() {
 	// 5. gRPC + HTTP
 	grpcSrv := server.NewGRPCServer(&cfg, svc, gmSvc)
 	httpSrv := server.NewHTTPServer(&cfg)
+
+	// sweep/capacity watcher 也是 writer；capability 未取得前禁止启动任何后台循环或 RPC。
+	if modelB {
+		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
+			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
+			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
+			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
+		})
+		if err != nil {
+			helper.Errorw("msg", "ds_auth_fence_acquire_failed", "err", err)
+			os.Exit(1)
+		}
+		defer func() { _ = fence.Close() }()
+		go func() {
+			<-fence.Lost()
+			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch allocator 继续分配或接收 DS 写回")
+			os.Exit(1)
+		}()
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+	}
 
 	// 6. 后台心跳超时扫描(随进程生命周期启停)
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
@@ -212,7 +331,6 @@ func main() {
 		"sweep_interval", cfg.Allocator.SweepInterval.String(),
 		"allocator_mode", cfg.Mode,
 	)
-
 	// 7. Kratos App
 	app := kratos.New(
 		kratos.Name(serviceName),

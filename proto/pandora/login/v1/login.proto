@@ -143,6 +143,15 @@ message DSTicket {
   // battle 票走 match roster)。DS 侧 ResolveRoleIdForPlayer 优先取此值 spawn。
   // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
   uint32 role_id        = 10;
+  // Model B hub 票据绑定。六项必须全有或全无；enforce 下 Hub DS 只接受完整绑定且与当前
+  // Redis 玩家归属、目标 DS active credential 精确一致的票据。battle/legacy 票据均为零值。
+  string ds_pod_name          = 11;
+  string ds_instance_uid      = 12;
+  uint32 ds_protocol_epoch    = 13;
+  uint64 ds_credential_gen    = 14;
+  string ds_credential_jti    = 15;
+  string hub_assignment_id    = 16;
+  uint32 ds_writer_epoch      = 17;
 }
 
 message IssueDSTicketRequest {
@@ -163,6 +172,10 @@ message IssueDSTicketResponse {
 message VerifyDSTicketRequest {
   string ticket       = 1;
   string ds_pod_name  = 2;
+  // admission_id 由 UE DS 为一次 PreLoginAsync 准入尝试生成并在有界重试中复用。
+  // Redis authority 模式下必填；login 把它与已核验 caller active credential 一起绑定到
+  // ticket jti，使 SETNX 响应丢失后同一准入可幂等确认，不同准入/凭据仍按 replay 拒绝。
+  string admission_id = 3;
 }
 
 message VerifyDSTicketResponse {

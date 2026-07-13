@@ -8,7 +8,9 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -178,14 +180,34 @@ type TicketJTIRepo interface {
 	MarkUsed(ctx context.Context, jti string, ttl time.Duration) error
 }
 
+// AdmissionMarkerStatus 区分 marker 不存在、首次创建、同 attempt 已存在与冲突。
+type AdmissionMarkerStatus uint8
+
+const (
+	AdmissionMarkerMissing AdmissionMarkerStatus = iota
+	AdmissionMarkerCreated
+	AdmissionMarkerExisting
+	AdmissionMarkerConflict
+)
+
+// AdmissionTicketJTIRepo 是 Redis authority 在线准入的幂等消费扩展。
+// attemptOwner 跨同实例普通 token 轮换稳定；acceptedCredentialHash 永久记录首次接受
+// 的完整 active tuple。Peek 与原子 Mark 分开，使 TicketUsecase 能按 missing/existing
+// 选择严格首次绑定或稳定身份重认，且绝不先覆盖已有 owner。
+type AdmissionTicketJTIRepo interface {
+	PeekAdmission(ctx context.Context, jti, attemptOwner string) (AdmissionMarkerStatus, error)
+	MarkUsedByAdmission(ctx context.Context, jti, attemptOwner, acceptedCredentialHash string, ttl time.Duration) (AdmissionMarkerStatus, error)
+}
+
 // RedisTicketJTIRepo 基于 go-redis/v9 的 TicketJTIRepo 实现。
 type RedisTicketJTIRepo struct {
-	rdb redis.UniversalClient
+	rdb                   redis.UniversalClient
+	admissionReplayWindow time.Duration
 }
 
 // NewRedisTicketJTIRepo 构造。
 func NewRedisTicketJTIRepo(rdb redis.UniversalClient) *RedisTicketJTIRepo {
-	return &RedisTicketJTIRepo{rdb: rdb}
+	return &RedisTicketJTIRepo{rdb: rdb, admissionReplayWindow: 30 * time.Second}
 }
 
 func ticketKey(jti string) string {
@@ -204,4 +226,108 @@ func (r *RedisTicketJTIRepo) MarkUsed(ctx context.Context, jti string, ttl time.
 		return errcode.New(errcode.ErrLoginTicketReplayed, "ticket jti=%s already used", jti)
 	}
 	return nil
+}
+
+var peekTicketAdmissionScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+if not current then return 0 end
+local version, attempt, credential, accepted_at, replay_until = string.match(
+  current, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+if version ~= 'admission-v4' or string.len(attempt or '') ~= 64 or not string.match(attempt, '^[0-9a-f]+$') or
+   string.len(credential or '') ~= 64 or not string.match(credential, '^[0-9a-f]+$') or
+   not tonumber(accepted_at) or not tonumber(replay_until) or tonumber(replay_until) < tonumber(accepted_at) then
+  return 3
+end
+local redis_time = redis.call('TIME')
+local now_ms = tonumber(redis_time[1]) * 1000 + math.floor(tonumber(redis_time[2]) / 1000)
+if attempt == ARGV[1] and now_ms <= tonumber(replay_until) then
+  return 2
+end
+return 3
+`)
+
+var markTicketAdmissionScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+local redis_time = redis.call('TIME')
+local now_ms = tonumber(redis_time[1]) * 1000 + math.floor(tonumber(redis_time[2]) / 1000)
+if not current then
+  local replay_until = now_ms + tonumber(ARGV[4])
+  local marker = 'admission-v4|' .. ARGV[1] .. '|' .. ARGV[2] .. '|' .. now_ms .. '|' .. replay_until
+  redis.call('PSETEX', KEYS[1], ARGV[3], marker)
+  return 1
+end
+local version, attempt, credential, accepted_at, replay_until = string.match(
+  current, '^([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)$')
+if version == 'admission-v4' and string.len(attempt or '') == 64 and string.match(attempt, '^[0-9a-f]+$') and
+   string.len(credential or '') == 64 and string.match(credential, '^[0-9a-f]+$') and
+   tonumber(accepted_at) and tonumber(replay_until) and tonumber(replay_until) >= tonumber(accepted_at) and
+   attempt == ARGV[1] and now_ms <= tonumber(replay_until) then
+  return 2
+end
+return 0
+`)
+
+const admissionMarkerVersion = "admission-v4"
+
+func validAdmissionDigest(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+// PeekAdmission 只读现有 marker。legacy value="1"、坏格式与不同 attempt 一律返回
+// Conflict（安全 replay），Redis 故障返回 Unavailable。
+func (r *RedisTicketJTIRepo) PeekAdmission(ctx context.Context, jti, attemptOwner string) (AdmissionMarkerStatus, error) {
+	if jti == "" || !validAdmissionDigest(attemptOwner) {
+		return AdmissionMarkerConflict, errcode.New(errcode.ErrInvalidArg, "invalid admission marker lookup")
+	}
+	if r == nil || r.rdb == nil {
+		return AdmissionMarkerConflict, errcode.New(errcode.ErrUnavailable, "ticket admission replay authority unavailable")
+	}
+	result, err := peekTicketAdmissionScript.Run(ctx, r.rdb, []string{ticketKey(jti)}, attemptOwner).Int64()
+	if err != nil {
+		return AdmissionMarkerConflict, errcode.NewCause(errcode.ErrUnavailable, err, "redis ticket admission lookup failed")
+	}
+	switch result {
+	case 0:
+		return AdmissionMarkerMissing, nil
+	case 2:
+		return AdmissionMarkerExisting, nil
+	default:
+		return AdmissionMarkerConflict, nil
+	}
+}
+
+// MarkUsedByAdmission 在单条 Redis Lua 中完成 absent→versioned marker；同 attempt_owner
+// 只确认已存在，绝不覆盖首次 accepted_credential_hash。不同 owner、legacy "1"、坏格式均冲突。
+func (r *RedisTicketJTIRepo) MarkUsedByAdmission(
+	ctx context.Context,
+	jti, attemptOwner, acceptedCredentialHash string,
+	ttl time.Duration,
+) (AdmissionMarkerStatus, error) {
+	if jti == "" || ttl <= 0 || !validAdmissionDigest(attemptOwner) || !validAdmissionDigest(acceptedCredentialHash) {
+		return AdmissionMarkerConflict, errcode.New(errcode.ErrInvalidArg, "invalid admission ticket marker")
+	}
+	if r == nil || r.rdb == nil {
+		return AdmissionMarkerConflict, errcode.New(errcode.ErrUnavailable, "ticket admission replay authority unavailable")
+	}
+	replayWindow := r.admissionReplayWindow
+	if replayWindow <= 0 {
+		replayWindow = 30 * time.Second
+	}
+	result, err := markTicketAdmissionScript.Run(ctx, r.rdb, []string{ticketKey(jti)},
+		attemptOwner, acceptedCredentialHash, ttl.Milliseconds(), replayWindow.Milliseconds()).Int64()
+	if err != nil {
+		return AdmissionMarkerConflict, errcode.NewCause(errcode.ErrUnavailable, err, "redis ticket admission mark failed")
+	}
+	switch result {
+	case 1:
+		return AdmissionMarkerCreated, nil
+	case 2:
+		return AdmissionMarkerExisting, nil
+	default:
+		return AdmissionMarkerConflict, errcode.New(errcode.ErrLoginTicketReplayed, "ticket jti=%s already used by another admission", jti)
+	}
 }

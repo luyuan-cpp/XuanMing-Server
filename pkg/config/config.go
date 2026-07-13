@@ -20,6 +20,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/IBM/sarama"
 
@@ -286,6 +287,162 @@ type TimeoutConf struct {
 	ServiceDiscoveryTimeout Duration `yaml:"service_discovery_timeout,omitempty" json:"service_discovery_timeout,omitempty"`
 	TaskWaitTimeout         Duration `yaml:"task_wait_timeout,omitempty" json:"task_wait_timeout,omitempty"`
 	RoleCacheExpire         Duration `yaml:"role_cache_expire,omitempty" json:"role_cache_expire,omitempty"`
+}
+
+// DSAuthConf 是「DS→后端回调服务令牌」配置(审核 P1 #1,2026-07-10 拍板落地)。
+//
+// 背景:DS 面网关 :8444 只有方法白名单 + 网络隔离,回调方法(Heartbeat / ReportResult /
+// SetLocation / PollCommands …)此前不认证调用者身份。本机制由 ds_allocator / hub_allocator
+// 在分配 / 发现 DS 时签发短期 JWT 服务令牌(aud=pandora-ds,绑定 match_id / pod),经
+// GameServer annotation(Agones)或 PANDORA_DS_TOKEN env(local)下发给 DS;DS 回调时带
+// `authorization: Bearer <token>`,四个被回调服务(ds_allocator / hub_allocator /
+// player_locator / battle_result)按 Mode 校验并做范围绑定(详见
+// docs/design/decision-revisit-ds-callback-auth.md)。
+//
+// 四个服务共用本结构:签发侧(两个 allocator)用到 TTL 字段,校验侧只用 Mode/Issuer/Audience/Secret。
+type DSAuthConf struct {
+	// Mode 校验模式(灰度开关,CLAUDE.md §14:默认关不破坏现有行为,开启分支是完整实现):
+	//   ""/"off"      → 不校验(默认;UE DS 侧尚未携带令牌前必须保持 off)
+	//   "permissive"  → 校验并记 warn 日志,但不拒绝(灰度观察期)
+	//   "enforce"     → 经 DS 面网关(x-pandora-ds-gateway)进来的回调必须带有效且范围匹配的令牌
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+
+	// Issuer JWT iss(默认 "pandora-ds-control");签发/校验双方必须一致。
+	Issuer string `yaml:"issuer,omitempty" json:"issuer,omitempty"`
+
+	// Audience JWT aud(默认 "pandora-ds");与玩家 SessionToken(pandora-client)严格分域,
+	// 玩家令牌/DSTicket 不可能通过 DS 回调校验,反之亦然。
+	Audience string `yaml:"audience,omitempty" json:"audience,omitempty"`
+
+	// Secret HS256 共享密钥(≥32 字节)。dev 期可与 jwt.secret 同值;生产建议独立密钥并切 RS256。
+	// 留空 = 本服务不启用 DS 回调令牌(签发侧不签,校验侧视同 mode=off)。
+	Secret string `yaml:"secret,omitempty" json:"secret,omitempty"`
+
+	// AdditionalSecrets 是**仅用于校验**的额外可接受密钥(不用于签发),支持 DS 回调令牌不停服轮换
+	// (审核 P1 #3)。签发始终用 Secret;校验时按 token 头 kid 路由,无 / 未知 kid 时依次尝试
+	// Secret + AdditionalSecrets。三段式滚动轮换(①各服务先加新密钥进 additional → ②主密钥翻新、
+	// 旧密钥进 additional → ③清空 additional)保证新旧副本共存期两把密钥都被接受,无 401 断档。
+	// 每把仍须 ≥32 字节。默认空:单密钥,行为与历史一致。
+	AdditionalSecrets []string `yaml:"additional_secrets,omitempty" json:"additional_secrets,omitempty"`
+
+	// BattleTokenTTL 战斗 DS 令牌有效期(默认 4h,覆盖最长对局 + 重连窗口;战斗 DS 一局一销毁,不续期)。
+	BattleTokenTTL Duration `yaml:"battle_token_ttl,omitempty" json:"battle_token_ttl,omitempty"`
+
+	// HubTokenTTL 大厅 DS 令牌有效期(默认 24h;Hub DS 常驻,hub_allocator 在剩余寿命 < 1/3 时
+	// 重签并重新 patch annotation 续期)。
+	HubTokenTTL Duration `yaml:"hub_token_ttl,omitempty" json:"hub_token_ttl,omitempty"`
+
+	// ActiveHeartbeatMaxAge 是非心跳业务写 RPC 读取 Redis active credential 时允许的最大
+	// 服务端接收心跳年龄。只认 auth record 的 server receive time，不认 DS 上报 ts。
+	ActiveHeartbeatMaxAge Duration `yaml:"active_heartbeat_max_age,omitempty" json:"active_heartbeat_max_age,omitempty"`
+
+	// AuthorityMode 是 Hub DS 令牌**授权权威模式**(Model B,decision-revisit-ds-callback-auth §7)。
+	// 仅 hub_allocator 读取,且仅在 agones + mode=enforce 下生效:
+	//   ""/"legacy" → 沿用「令牌代际镜像门」(Redis INCR 代际写镜像 CurrentTokenGen,心跳精确匹配;默认,已验证)
+	//   "redis"     → 「Redis 唯一授权权威 + active/pending 两阶段令牌状态机」:allocator 签发 pending 凭据
+	//                  经 annotation 投递,DS 首个合法 pending 心跳在 authRepo 上原子激活;AssignHub 授权终态门
+	//                  要求分片授权记录已激活。开启后 legacy 代际镜像门自动关闭(Model B 取代之)。
+	// 非 agones/非 enforce 下本字段无效(legacy 与 redis 均退化为不校验)。
+	AuthorityMode string `yaml:"authority_mode,omitempty" json:"authority_mode,omitempty"`
+
+	// Fence 是 authority_mode=redis + mode=enforce 的机械激活栅栏。
+	// etcd required_writer_epoch 必须先显式 bootstrap；服务启动线性读取并注册带租约 capability，
+	// 失租、required 删除/回退/超过本二进制支持版本时进程立即退出。
+	Fence DSAuthFenceConf `yaml:"fence,omitempty" json:"fence,omitempty"`
+}
+
+// DSAuthFenceConf 只含非敏感控制面配置；Pod UID 与镜像 digest 必须由 Downward API 注入环境变量，
+// 不能从可伪造的 hostname/tag 回退。
+type DSAuthFenceConf struct {
+	EtcdEndpoints   []string `yaml:"etcd_endpoints,omitempty" json:"etcd_endpoints,omitempty"`
+	EtcdPrefix      string   `yaml:"etcd_prefix,omitempty" json:"etcd_prefix,omitempty"`
+	EtcdLeaseTTLSec int64    `yaml:"etcd_lease_ttl_sec,omitempty" json:"etcd_lease_ttl_sec,omitempty"`
+	EtcdDialTimeout Duration `yaml:"etcd_dial_timeout,omitempty" json:"etcd_dial_timeout,omitempty"`
+	KeysetRevision  string   `yaml:"keyset_revision,omitempty" json:"keyset_revision,omitempty"`
+}
+
+// AuthorityModeRedis 返回是否启用 Model B「Redis 唯一授权权威」模式(§7)。
+func (c *DSAuthConf) AuthorityModeRedis() bool {
+	return c.AuthorityMode == "redis"
+}
+
+// ValidateRedisFence 验证 Redis 单一权威不能在缺失机械 fence 时启动。
+func (c *DSAuthConf) ValidateRedisFence() error {
+	if !c.AuthorityModeRedis() {
+		return nil
+	}
+	if c.Mode != "enforce" {
+		return fmt.Errorf("ds_auth: authority_mode=redis requires mode=enforce")
+	}
+	if len(c.Fence.EtcdEndpoints) == 0 {
+		return fmt.Errorf("ds_auth: authority_mode=redis requires fence.etcd_endpoints")
+	}
+	if c.Fence.KeysetRevision == "" {
+		return fmt.Errorf("ds_auth: authority_mode=redis requires immutable fence.keyset_revision")
+	}
+	if c.Fence.EtcdLeaseTTLSec < 0 {
+		return fmt.Errorf("ds_auth: fence.etcd_lease_ttl_sec must be positive or zero(default)")
+	}
+	if c.Fence.EtcdDialTimeout.Std() < 0 {
+		return fmt.Errorf("ds_auth: fence.etcd_dial_timeout must be positive or zero(default)")
+	}
+	if c.ActiveHeartbeatMaxAge.Std() <= 0 {
+		return fmt.Errorf("ds_auth: authority_mode=redis requires positive active_heartbeat_max_age")
+	}
+	return nil
+}
+
+// Defaults 把零值填默认(Mode/Secret 留空即"不启用",不填默认)。
+func (c *DSAuthConf) Defaults() {
+	if c.AuthorityMode == "" {
+		c.AuthorityMode = "legacy"
+	}
+	if c.Issuer == "" {
+		c.Issuer = "pandora-ds-control"
+	}
+	if c.Audience == "" {
+		c.Audience = "pandora-ds"
+	}
+	if c.BattleTokenTTL == 0 {
+		c.BattleTokenTTL = Duration(4 * time.Hour)
+	}
+	if c.HubTokenTTL == 0 {
+		c.HubTokenTTL = Duration(24 * time.Hour)
+	}
+	if c.ActiveHeartbeatMaxAge == 0 {
+		c.ActiveHeartbeatMaxAge = Duration(30 * time.Second)
+	}
+}
+
+// DS 回调令牌 TTL 的启动期最小值。这两把令牌在关键路径上都存在「不续期」窗口:
+//   - 战斗 DS 令牌:一局一签、永不续期(战斗 DS 一局一销毁),TTL 必须覆盖「最长对局 + 重连窗口」,
+//     否则对局跑到一半令牌过期,battle_result 等回调被全拒、赛果无法结算。
+//   - 大厅 DS 令牌:仅 agones 模式在剩余寿命 <1/3 时重签续期;local 模式(宿主 exec Hub DS)一次性
+//     签发后永不续期。TTL 太短会让常驻 Hub 运行中途令牌过期、Hub 回调被拒。
+//
+// 因此最小值不能只防「签发即过期」(1 分钟),必须防「运行中途过期」——按各自不续期场景设可用下限。
+// 低于下限属明显误配,启动即 fatal,而非等线上 DS 回调被莫名全拒才排查(审核 P1:非续期令牌 TTL 下限过松)。
+const (
+	dsAuthMinBattleTokenTTL = time.Hour // 战斗令牌不续期:粗粒度下限(精确关联 battle_ttl 的校验在 ds_allocator main)
+	dsAuthMinHubTokenTTL    = time.Hour // 大厅令牌 local 模式不续期:至少覆盖一段常驻会话(local+enforce 更严的 12h 下限在 hub_allocator main)
+)
+
+// Validate 启动期校验签发侧 TTL 的正值与最小值(仅在本服务启用 DS 回调令牌时才有意义)。
+//
+// enabled=true 由调用方按“本服务是否签发/校验 DS 回调令牌”传入(Secret 非空 或 Mode!=off)。
+// 未启用时零/负 TTL 无害(不会签发),直接放行;启用时 TTL 低于对应不续期下限 → error。
+// 校验侧(只用 Mode/Secret)不受影响:BattleTokenTTL/HubTokenTTL 只在签发侧读取。
+func (c *DSAuthConf) Validate(enabled bool) error {
+	if !enabled {
+		return nil
+	}
+	if c.BattleTokenTTL.Std() < dsAuthMinBattleTokenTTL {
+		return fmt.Errorf("ds_auth: battle_token_ttl=%s too small (need >= %s; 战斗令牌不续期,须覆盖最长对局+重连窗口)", c.BattleTokenTTL.Std(), dsAuthMinBattleTokenTTL)
+	}
+	if c.HubTokenTTL.Std() < dsAuthMinHubTokenTTL {
+		return fmt.Errorf("ds_auth: hub_token_ttl=%s too small (need >= %s; 大厅令牌 local 模式不续期,须覆盖一段常驻会话)", c.HubTokenTTL.Std(), dsAuthMinHubTokenTTL)
+	}
+	return nil
 }
 
 // BuildTopic 按 docs/design/infra.md §4 规范构造 kafka topic。

@@ -3,15 +3,55 @@ package gm
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/transport"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 	gmv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/gm/v1"
+	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
 )
+
+type gmTestHeader map[string][]string
+
+func (h gmTestHeader) Get(key string) string {
+	if v := h[key]; len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+func (h gmTestHeader) Set(key, value string)      { h[key] = []string{value} }
+func (h gmTestHeader) Add(key, value string)      { h[key] = append(h[key], value) }
+func (h gmTestHeader) Values(key string) []string { return h[key] }
+func (h gmTestHeader) Keys() []string {
+	out := make([]string, 0, len(h))
+	for k := range h {
+		out = append(out, k)
+	}
+	return out
+}
+
+type gmTestTransport struct{ request gmTestHeader }
+
+func (t *gmTestTransport) Kind() transport.Kind            { return transport.KindGRPC }
+func (t *gmTestTransport) Endpoint() string                { return "" }
+func (t *gmTestTransport) Operation() string               { return "/pandora.gm.v1.GmService/PollCommands" }
+func (t *gmTestTransport) RequestHeader() transport.Header { return t.request }
+func (t *gmTestTransport) ReplyHeader() transport.Header   { return gmTestHeader{} }
+
+func gmBearerContext(token string) context.Context {
+	h := gmTestHeader{}
+	h.Set("authorization", "Bearer "+token)
+	h.Set(middleware.MetadataKeyDSGateway, "1")
+	return transport.NewServerContext(context.Background(), &gmTestTransport{request: h})
+}
 
 func newTestService(t *testing.T) (*Service, func()) {
 	t.Helper()
@@ -212,5 +252,121 @@ func TestSendCommand_LivenessCheck(t *testing.T) {
 	s3.SetBattleChecker(fakeChecker{found: true})
 	if resp, _ := s3.SendCommand(ctx, addItemReq(1, 1001, 10001, 1)); resp.GetCode() != commonv1.ErrCode_OK {
 		t.Fatalf("active match want OK, got %v", resp.GetCode())
+	}
+}
+
+func TestModelBPollAndAckRejectStaleCredentialBeforeSideEffects(t *testing.T) {
+	s, cleanup := newTestService(t)
+	defer cleanup()
+	ctx := context.Background()
+	battleRepo := data.NewRedisBattleRepo(s.rdb)
+	authRepo := data.NewRedisBattleAuthRepo(s.rdb)
+	const matchID uint64 = 900
+	const allocationID = "alloc-900"
+	const pod = "battle-auth-900"
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: "allocating", AllocationId: allocationID,
+		AllocatedAtMs:   time.Now().Add(-time.Second).UnixMilli(),
+		LastHeartbeatMs: time.Now().Add(-time.Second).UnixMilli(),
+	}
+	claimed, _, err := battleRepo.ClaimBattle(ctx, claim, time.Hour)
+	if err != nil || !claimed {
+		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
+	}
+	battle := &dsv1.BattleStorageRecord{
+		MatchId: matchID, DsPodName: pod, DsAddr: "10.0.0.9:7777", State: "warming",
+		AllocationId: allocationID, GameserverUid: "uid-900",
+		AllocatedAtMs: claim.AllocatedAtMs, LastHeartbeatMs: claim.LastHeartbeatMs,
+	}
+	if ok, err := battleRepo.FinalizeBattleAllocation(ctx, battle, time.Hour); err != nil || !ok {
+		t.Fatalf("finalize: ok=%v err=%v", ok, err)
+	}
+	seed, err := authRepo.PrepareCredential(ctx, data.BattleAuthorityBinding{
+		MatchID: matchID, AllocationID: allocationID, PodName: pod, InstanceUID: "uid-900",
+		RequiredWriterEpoch: data.BattleDSWriterEpochV2, AuthTTL: time.Hour, BattleTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	secret := []byte("gm-model-b-test-secret-at-least-32-bytes")
+	authCfg := auth.Config{Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience, Secret: secret}
+	signer, err := auth.NewSigner(authCfg)
+	if err != nil {
+		t.Fatalf("signer: %v", err)
+	}
+	verifier, err := auth.NewVerifier(authCfg)
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	guard, err := middleware.NewDSCallbackGuard(verifier, middleware.DSAuthEnforce)
+	if err != nil {
+		t.Fatalf("guard: %v", err)
+	}
+	jti := uuid.NewString()
+	signed, err := signer.SignBattleCredential(matchID, pod, "uid-900", seed.InstanceEpoch, seed.Gen, jti, time.Hour)
+	if err != nil {
+		t.Fatalf("sign active: %v", err)
+	}
+	stored := &dsv1.BattleDSCredential{
+		Gen: seed.Gen, Jti: jti, ExpMs: uint64(signed.ExpMs), Kid: signed.Kid,
+		InstanceUid: "uid-900", InstanceEpoch: seed.InstanceEpoch,
+		TokenSha256: signed.TokenSHA256, WriterEpoch: signed.WriterEpoch,
+	}
+	if _, err := authRepo.StagePending(ctx, data.BattleStageInput{
+		MatchID: matchID, AllocationID: allocationID, Credential: stored, AuthTTL: time.Hour,
+	}); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if err := authRepo.MarkDelivered(ctx, matchID, allocationID, stored, "102", time.Hour); err != nil {
+		t.Fatalf("mark delivered: %v", err)
+	}
+	identity := data.BattleCredentialIdentity{
+		PodName: pod, InstanceUID: "uid-900", InstanceEpoch: seed.InstanceEpoch,
+		Gen: seed.Gen, JTI: jti, ExpMs: uint64(signed.ExpMs), Kid: signed.Kid,
+		TokenSHA256: signed.TokenSHA256, WriterEpoch: signed.WriterEpoch,
+	}
+	if _, err := authRepo.ActivateHeartbeat(ctx, matchID, identity, data.BattleHeartbeatInput{
+		PlayerCount: 1, State: "running", AuthTTL: time.Hour, BattleTTL: time.Hour,
+	}); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+	s.SetDSCallbackGuard(guard)
+	if err := s.EnableRedisAuthority(authRepo); err != nil {
+		t.Fatalf("EnableRedisAuthority: %v", err)
+	}
+	if resp, _ := s.SendCommand(ctx, addItemReq(matchID, 1, 10001, 1)); resp.GetCode() != commonv1.ErrCode_OK {
+		t.Fatalf("enqueue: %v", resp.GetCode())
+	}
+
+	// 另一份签名完全合法、scope 也相同，但不是 Redis active；不得弹出队列或写 Ack 审计。
+	staleJTI := uuid.NewString()
+	stale, err := signer.SignBattleCredential(
+		matchID, pod, "uid-900", seed.InstanceEpoch, seed.Gen+1, staleJTI, time.Hour)
+	if err != nil {
+		t.Fatalf("sign stale: %v", err)
+	}
+	staleCtx := gmBearerContext(stale.Token)
+	poll, _ := s.PollCommands(staleCtx, &gmv1.PollCommandsRequest{
+		MatchId: matchID, DsPodName: pod, Max: 1,
+	})
+	if poll.GetCode() != commonv1.ErrCode_ERR_UNAUTHORIZED {
+		t.Fatalf("stale poll code=%v, want unauthorized", poll.GetCode())
+	}
+	if n, err := s.rdb.LLen(ctx, queueKey(matchID)).Result(); err != nil || n != 1 {
+		t.Fatalf("stale poll mutated queue: len=%d err=%v", n, err)
+	}
+	ack, _ := s.AckCommand(staleCtx, &gmv1.AckCommandRequest{
+		MatchId: matchID, IdempotencyKey: "command-1", Ok: true,
+	})
+	if ack.GetCode() != commonv1.ErrCode_ERR_UNAUTHORIZED {
+		t.Fatalf("stale ack code=%v, want unauthorized", ack.GetCode())
+	}
+
+	activeCtx := gmBearerContext(signed.Token)
+	poll, _ = s.PollCommands(activeCtx, &gmv1.PollCommandsRequest{
+		MatchId: matchID, DsPodName: pod, Max: 1,
+	})
+	if poll.GetCode() != commonv1.ErrCode_OK || len(poll.GetCommands()) != 1 {
+		t.Fatalf("active poll code=%v commands=%d", poll.GetCode(), len(poll.GetCommands()))
 	}
 }

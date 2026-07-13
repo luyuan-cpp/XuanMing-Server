@@ -56,6 +56,25 @@ func (fakeSessionRepo) Set(_ context.Context, _ uint64, _, _, _ string, _ time.D
 }
 func (fakeSessionRepo) Delete(_ context.Context, _ uint64) error { return nil }
 
+type loginBattleAuthorizerFake struct {
+	err         error
+	target      data.BattleTicketTarget
+	returnEmpty bool
+}
+
+func (f *loginBattleAuthorizerFake) AuthorizeBattleTicket(context.Context, uint64, uint64) (data.BattleTicketTarget, error) {
+	if f.err != nil {
+		return data.BattleTicketTarget{}, f.err
+	}
+	if f.returnEmpty {
+		return data.BattleTicketTarget{}, nil
+	}
+	if f.target.DSAddr == "" {
+		f.target = data.BattleTicketTarget{DSAddr: "10.1.2.3:7000", PodName: "battle-test"}
+	}
+	return f.target, nil
+}
+
 type fakeHubAssigner struct {
 	res *data.HubAssignment
 	err error
@@ -128,7 +147,11 @@ func newTestUsecaseWithNotifier(t *testing.T, hub data.HubAssigner, notifier dat
 	hash := mustBcrypt(t, "pw")
 	repo := &fakeAccountRepo{playerID: 42, passwordHash: hash}
 	sf := snowflake.NewNode(1)
-	return NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false, nil, false)
+	uc := NewLoginUsecase(repo, fakeSessionRepo{}, notifier, hub, nil, sf, "127.0.0.1:7777", "cn", signer, verifier, false, false, nil, false)
+	ticketUC := NewTicketUsecase(signer, verifier, nil)
+	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{})
+	uc.SetBattleTicketIssuer(ticketUC)
+	return uc
 }
 
 func TestLogin_HubAssignerSuccess(t *testing.T) {
@@ -299,6 +322,7 @@ func TestIssueDSTicket_CellRoute(t *testing.T) {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 	tu := NewTicketUsecase(signer, verifier, nil)
+	tu.SetBattleTicketAuthorizer(&battleTicketAuthorizerFake{})
 	tu.SetCellRouter(singleCellRouter(t, 5, 55))
 
 	issued, err := tu.IssueDSTicket(context.Background(), 42, string(auth.DSTypeBattle), 9001)
@@ -573,6 +597,88 @@ func TestLogin_BattleReconnect_ReturnsBattleAndSkipsHub(t *testing.T) {
 	if claims.DSType != string(auth.DSTypeBattle) || claims.PlayerID() != 42 || claims.MatchID != 9001 {
 		t.Errorf("battle ticket claims = (ds=%s pid=%d match=%d), want (battle,42,9001)",
 			claims.DSType, claims.PlayerID(), claims.MatchID)
+	}
+}
+
+func TestLogin_BattleReconnect_UsesAuthoritativeProjectionAddress(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{
+		InBattle: true, MatchID: 9001, BattleAddr: "10.1.2.3:7000", // locator 旧实例 A
+	}}
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	ticketUC := NewTicketUsecase(uc.signer, uc.verifier, nil)
+	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{target: data.BattleTicketTarget{
+		DSAddr: "10.9.8.7:7100", PodName: "battle-new", InstanceUID: "uid-new", InstanceEpoch: 2,
+	}})
+	uc.SetBattleTicketIssuer(ticketUC)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if res.BattleDSAddr != "10.9.8.7:7100" {
+		t.Fatalf("BattleDSAddr=%q, want Redis projection B instead of stale locator A", res.BattleDSAddr)
+	}
+	if res.HubDSAddr != "" || notifier.loginPendingN != 0 {
+		t.Fatalf("authoritative reconnect unexpectedly entered hub: hub=%q pending=%d",
+			res.HubDSAddr, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_BattleReconnect_EmptyAuthoritativeAddressDoesNotAssignHub(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{
+		InBattle: true, MatchID: 9001, BattleAddr: "10.1.2.3:7000",
+	}}
+	hub := &fakeHubAssigner{res: &data.HubAssignment{HubDSAddr: "10.0.0.9:7777", HubTicket: "must-not-be-used"}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	ticketUC := NewTicketUsecase(uc.signer, uc.verifier, nil)
+	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{returnEmpty: true})
+	uc.SetBattleTicketIssuer(ticketUC)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("empty target result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+	}
+	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
+		t.Fatalf("empty target mutated hub/login-pending: hub_player=%d pending=%d",
+			hub.gotPlayerID, notifier.loginPendingN)
+	}
+}
+
+func TestLogin_BattleReconnect_RosterAuthorityFailureDoesNotAssignHub(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: true, MatchID: 9001, BattleAddr: "10.1.2.3:7000"}}
+	hub := &fakeHubAssigner{res: &data.HubAssignment{HubDSAddr: "10.0.0.9:7777", HubTicket: "must-not-be-used"}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	ticketUC := NewTicketUsecase(uc.signer, uc.verifier, nil)
+	ticketUC.SetBattleTicketAuthorizer(&loginBattleAuthorizerFake{
+		err: errcode.New(errcode.ErrPermissionDeny, "player not in authoritative roster"),
+	})
+	uc.SetBattleTicketIssuer(ticketUC)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("roster rejection result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+	}
+	if hub.gotPlayerID != 0 {
+		t.Fatalf("roster rejection called AssignHub for player %d", hub.gotPlayerID)
+	}
+	if notifier.loginPendingN != 0 {
+		t.Fatalf("roster rejection wrote LOGIN_PENDING %d times", notifier.loginPendingN)
+	}
+}
+
+func TestLogin_BattleReconnect_MissingIssuerDoesNotAssignHub(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: true, MatchID: 9001, BattleAddr: "10.1.2.3:7000"}}
+	hub := &fakeHubAssigner{res: &data.HubAssignment{HubDSAddr: "10.0.0.9:7777", HubTicket: "must-not-be-used"}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	uc.SetBattleTicketIssuer(nil)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+		t.Fatalf("missing issuer result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+	}
+	if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
+		t.Fatalf("missing issuer mutated hub/login-pending: hub_player=%d pending=%d",
+			hub.gotPlayerID, notifier.loginPendingN)
 	}
 }
 

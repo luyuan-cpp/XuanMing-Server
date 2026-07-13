@@ -126,6 +126,38 @@ func TestSignAndVerifyDSTicket(t *testing.T) {
 	}
 }
 
+func TestSignBoundHubDSTicketRoundTrip(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0).UTC()
+	s, v := newTestSigner(t, now)
+	binding := DSTicketBinding{
+		DSPodName: "hub-a", DSInstanceUID: "uid-a", ProtocolEpoch: 3,
+		CredentialGen: 17, CredentialJTI: "credential-jti", HubAssignmentID: "assignment-id",
+		WriterEpoch: DSAuthWriterEpochV2,
+	}
+	tok, _, err := s.SignBoundHubDSTicket(7777, 0, 0, 9, "ticket-jti", binding)
+	if err != nil {
+		t.Fatalf("SignBoundHubDSTicket: %v", err)
+	}
+	claims, err := v.VerifyDSTicket(tok)
+	if err != nil {
+		t.Fatalf("VerifyDSTicket: %v", err)
+	}
+	if claims.DSPodName != binding.DSPodName || claims.DSInstanceUID != binding.DSInstanceUID ||
+		claims.DSProtocolEpoch != binding.ProtocolEpoch || claims.DSCredentialGen != binding.CredentialGen ||
+		claims.DSCredentialJTI != binding.CredentialJTI || claims.HubAssignmentID != binding.HubAssignmentID ||
+		claims.DSWriterEpoch != binding.WriterEpoch || claims.RoleID != 9 {
+		t.Fatalf("bound claims mismatch: %+v", claims)
+	}
+}
+
+func TestSignBoundHubDSTicketRejectsPartialBinding(t *testing.T) {
+	s, _ := newTestSigner(t, time.Unix(1_700_000_000, 0).UTC())
+	_, _, err := s.SignBoundHubDSTicket(7777, 0, 0, 0, "ticket-jti", DSTicketBinding{DSPodName: "hub-a"})
+	if err == nil {
+		t.Fatal("partial hub binding must be rejected")
+	}
+}
+
 func TestSignDSTicketWithCell_RoundTrip(t *testing.T) {
 	now := time.Unix(1_780_000_000, 0).UTC()
 	s, v := newTestSigner(t, now)
@@ -193,6 +225,55 @@ func TestSignDSTicketRequiresMatchIDForBattle(t *testing.T) {
 	}
 	if _, _, err := s.SignDSTicket(1, DSTypeHub, 0, "jti"); err != nil {
 		t.Fatalf("hub ticket without match_id should be OK: %v", err)
+	}
+}
+
+// TestRejectDSCallbackWithoutExp 构造签名正确但无 exp 的 DS 回调令牌,验证 VerifyDSCallback
+// 一律拒绝(审核 P1:无过期时间的令牌否则将成永久有效凭证)。
+func TestRejectDSCallbackWithoutExp(t *testing.T) {
+	now := time.Unix(1_780_000_000, 0).UTC()
+	cfg := Config{
+		Issuer:   DSCallbackIssuer,
+		Audience: DSCallbackAudience,
+		Secret:   []byte("pandora-dev-shared-secret-32bytes!!"),
+		NowFn:    func() time.Time { return now },
+	}
+	s, err := NewSigner(cfg)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	v, err := NewVerifier(cfg)
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+
+	// 正常带 exp 的令牌应通过。
+	good, _, err := s.SignDSCallback(DSTypeBattle, "", 42, time.Hour)
+	if err != nil {
+		t.Fatalf("SignDSCallback: %v", err)
+	}
+	if _, err := v.VerifyDSCallback(good); err != nil {
+		t.Fatalf("valid callback token must pass: %v", err)
+	}
+
+	// 手工构造无 exp 的令牌(签名正确)→ 必须被拒。
+	claims := DSCallbackClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:   cfg.Issuer,
+			Audience: jwt.ClaimStrings{cfg.Audience},
+			IssuedAt: jwt.NewNumericDate(now),
+			// 故意不设 ExpiresAt
+		},
+		DSType:  string(DSTypeBattle),
+		MatchID: 42,
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	noExp, err := tok.SignedString(cfg.Secret)
+	if err != nil {
+		t.Fatalf("SignedString: %v", err)
+	}
+	if _, err := v.VerifyDSCallback(noExp); err == nil {
+		t.Fatal("expected reject DS callback token without exp")
 	}
 }
 

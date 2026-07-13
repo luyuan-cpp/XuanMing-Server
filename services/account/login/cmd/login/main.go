@@ -32,8 +32,10 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
@@ -81,6 +83,10 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if err := cfg.Validate(); err != nil {
+		helper.Errorw("msg", "config_validation_failed", "err", err)
+		os.Exit(1)
+	}
 
 	// 3. snowflake（node_id_source=static 静态本地发号；=etcd 走 etcd 自动抢占独占 nodeID，失租自动退出）
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
@@ -88,11 +94,12 @@ func main() {
 
 	// 4. JWT signer / verifier
 	authCfg := auth.Config{
-		Issuer:      cfg.Login.JWT.Issuer,
-		Audience:    cfg.Login.JWT.Audience,
-		Secret:      []byte(cfg.Login.JWT.Secret),
-		SessionTTL:  cfg.Login.JWT.SessionTTL.Std(),
-		DSTicketTTL: cfg.Login.JWT.DSTicketTTL.Std(),
+		Issuer:            cfg.Login.JWT.Issuer,
+		Audience:          cfg.Login.JWT.Audience,
+		Secret:            []byte(cfg.Login.JWT.Secret),
+		AdditionalSecrets: auth.AdditionalSecretsBytes(cfg.Login.JWT.AdditionalSecrets),
+		SessionTTL:        cfg.Login.JWT.SessionTTL.Std(),
+		DSTicketTTL:       cfg.Login.JWT.DSTicketTTL.Std(),
 	}
 	signer, err := auth.NewSigner(authCfg)
 	if err != nil {
@@ -138,6 +145,7 @@ func main() {
 
 	// 6. biz + service 装配
 	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
+	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
 			"warn", "password verification disabled + unknown accounts auto-provisioned; NEVER enable in prod")
@@ -154,6 +162,16 @@ func main() {
 			"warn", "login.allowed_role_ids empty and dev_allow_any_role false: SelectRole will reject all requests")
 	}
 	ticketUC := biz.NewTicketUsecase(signer, verifier, jtiRepo)
+	var hubAssignmentChecker data.HubAssignmentChecker
+	if rdb != nil {
+		hubAssignmentChecker = data.NewRedisHubAssignmentChecker(rdb)
+	}
+	ticketUC.SetHubAssignmentBindingPolicy(cfg.Login.RequireHubAssignmentBinding, hubAssignmentChecker)
+	if rdb != nil {
+		ticketUC.SetBattleTicketAuthorizer(data.NewRedisBattleTicketAuthorizer(
+			rdb, cfg.DSAuth.AuthorityModeRedis(), cfg.DSAuth.ActiveHeartbeatMaxAge.Std()))
+	}
+	loginUC.SetBattleTicketIssuer(ticketUC)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, func(r *cellroute.Router) {
 		loginUC.SetCellRouter(r)
 		ticketUC.SetCellRouter(r)
@@ -164,6 +182,25 @@ func main() {
 		defer func() { _ = closeCell() }()
 	}
 	svc := service.NewLoginService(loginUC, ticketUC)
+	// UE DS 在线 VerifyDSTicket 入场权威：默认 off/legacy 完全不改变旧内部调用；
+	// redis+enforce 才装配 Guard + 同一 Redis 的 Hub/Battle active checker，任一缺失启动失败。
+	dsGuard, derr := middleware.NewDSCallbackGuardFromConf(cfg.DSAuth)
+	if derr != nil {
+		helper.Errorw("msg", "ds_auth_guard_init_failed", "err", derr)
+		os.Exit(1)
+	}
+	if cfg.DSAuth.AuthorityModeRedis() {
+		if dsGuard == nil || dsGuard.Mode() != middleware.DSAuthEnforce || rdb == nil {
+			helper.Errorw("msg", "ds_admission_authority_incomplete",
+				"hint", "redis authority requires enforce guard and Redis")
+			os.Exit(1)
+		}
+		svc.SetRedisDSAdmissionAuthority(dsGuard,
+			data.NewRedisDSAdmissionChecker(rdb, cfg.DSAuth.ActiveHeartbeatMaxAge.Std()))
+		helper.Infow("msg", "ds_admission_authority_ready", "mode", dsGuard.Mode().String(),
+			"authority_mode", cfg.DSAuth.AuthorityMode,
+			"active_heartbeat_max_age", cfg.DSAuth.ActiveHeartbeatMaxAge.String())
+	}
 
 	// 7. gRPC + HTTP server
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
@@ -178,6 +215,9 @@ func main() {
 		"jti_repo", repoEnabled(jtiRepo != nil),
 		"locator_notifier", locatorMode,
 		"hub_assigner", hubMode,
+		"require_hub_assignment_binding", cfg.Login.RequireHubAssignmentBinding,
+		"ds_auth_mode", cfg.DSAuth.Mode,
+		"ds_auth_authority_mode", cfg.DSAuth.AuthorityMode,
 		"dev_skip_password", cfg.Login.DevSkipPassword,
 		"dev_auto_register", cfg.Login.DevAutoRegister,
 		"jwt_issuer", cfg.Login.JWT.Issuer,
@@ -185,6 +225,25 @@ func main() {
 		"jwt_session_ttl", cfg.Login.JWT.SessionTTL.String(),
 		"jwt_ds_ticket_ttl", cfg.Login.JWT.DSTicketTTL.String(),
 	)
+	if fenceCfg, fenceEnabled := cfg.CapabilityFence(); fenceEnabled {
+		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
+			Endpoints: fenceCfg.EtcdEndpoints, Prefix: fenceCfg.EtcdPrefix,
+			Service: serviceName, KeysetRevision: fenceCfg.KeysetRevision,
+			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			LeaseTTLSec: fenceCfg.EtcdLeaseTTLSec, DialTimeout: fenceCfg.EtcdDialTimeout.Std(),
+		})
+		if err != nil {
+			helper.Errorw("msg", "login_ds_auth_fence_acquire_failed", "err", err)
+			os.Exit(1)
+		}
+		defer func() { _ = fence.Close() }()
+		go func() {
+			<-fence.Lost()
+			helper.Errorw("msg", "login_ds_auth_fence_lost", "hint", "立即退出，禁止失租 login writer 消费 DS 入场票")
+			os.Exit(1)
+		}()
+		helper.Infow("msg", "login_ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+	}
 
 	// 8. Kratos App
 	app := kratos.New(
