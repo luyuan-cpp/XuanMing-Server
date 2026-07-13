@@ -1155,6 +1155,13 @@ pwsh E:\work\Pandora\tools\scripts\import_dev_ca.ps1
 允许的 `SetLocation` / `ReportResult` / Heartbeat / GM Poll/Ack。生产残留是补 mTLS、ext_authz 或
 绑定 pod/match 的短时效 DS token，不能把现状描述成 DS 身份已可信。
 
+> **2026-07-12 DS 回调鉴权复审修正：**明文 `:8444` 仍是当前开发态，但已升级为 Model B
+> 生产启用阻断项。该链路会承载 DS Bearer、玩家入场票据以及 GM poll/stop/drain 响应；
+> NetworkPolicy、method 白名单、应用 token 与 credential ACK 都不提供机密性或服务端身份。
+> 生产执行 `Apply` 前必须由人拍板并交付 mesh `STRICT mTLS`（含可信 workload 身份/SPIFFE SAN、
+> revision 化 CA 与不停服轮换）或等价的 Envoy 双向 TLS。此修正只把 DS `:8444` 提升为先行阻断，
+> 不静默推翻其它东西向流量继续由基础设施层逐步接管的既有方向。
+
 设计取舍:**只做 Ingress default-deny,不碰 Egress**(出站全通),避免误伤 DNS 解析、连基础设施、ds-allocator 调 Agones API。出站收紧留作阶段二。
 
 **生效前提(否则"装了但没防"):** 集群 CNI 必须支持并强制 NetworkPolicy(Calico/Cilium/Antrea)。
@@ -1168,3 +1175,4 @@ minikube 默认 kindnet/bridge **不强制** → 策略被静默忽略;minikube 
 | 2026-07-03 | 生产 online overlay 加 **分层 NetworkPolicy**(default-deny-ingress + 业务层 mesh + 存储层按端口收敛 + 网关放行) | K8s 生产最低门槛,收敛「跨 ns」与「存储层」横向;业务服之间暂全通待 mesh;dev 不挂,避免挡宿主 Envoy 联调 |
 | 2026-07-03 | 仅做 **Ingress default-deny,Egress 暂全通** | 避免误伤 DNS/基础设施/Agones API;出站收紧列为阶段二 |
 | 2026-07-03 | 内网加密未来走 **mesh sidecar mTLS**,不在应用层手写 TLS | 业务零改动;`bUseTls` 开关保留作无 mesh 环境后路 |
+| 2026-07-12 | DS `:8444` 明文升级为 Model B 生产启用阻断项，须先落地 mesh STRICT mTLS 或等价双向 TLS | Bearer、玩家票据与 GM 控制响应均属敏感流量；NetworkPolicy/token/ACK 不能替代机密性与服务身份 |

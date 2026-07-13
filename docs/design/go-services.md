@@ -51,8 +51,18 @@
 Login(account, password_hash, device_id) → session_token + hub_ds_addr + hub_ticket
 Logout(session_token) → ok
 IssueDSTicket(session_token, ds_type, target_id) → ticket
-VerifyDSTicket(ticket, ds_pod_name) → player_id + claims
+VerifyDSTicket(ticket, ds_pod_name, admission_id; Authorization: Bearer <active DS credential>)
+  → player_id + claims
 ```
+
+- `IssueDSTicket(ds_type=battle)` 与登录断线重连共用同一签发入口：签名前必须从 Redis 证明
+  `player_id` 属于 live `target_id` roster；Redis 故障、坏 protobuf、空 roster、陈旧心跳或 Model-B
+  active/projection 漂移均不签票。不得只信客户端自报 match_id 或 locator。locator 已明确
+  `InBattle` 后签票权威失败会使 Login 返回 `Unavailable`，不会继续 AssignHub/写 LOGIN_PENDING。
+  reconnect 最终地址取自同一次 Redis roster/active 快照，不再使用可能滞后的 locator 地址。
+- Redis authority 下的 `VerifyDSTicket` 固定顺序为 DS Bearer Guard → active/projection →
+  ticket 的 match/pod/UID/epoch/credential 与 assignment/roster → admission JTI marker。
+  `admission_id` 是小写 RFC4122 UUIDv4；只给同一逻辑尝试 30s 有界幂等，不同尝试仍按 replay 拒绝。
 
 **不该做的事**:
 - ❌ 不存玩家档案(那是 player 服务)
@@ -60,8 +70,9 @@ VerifyDSTicket(ticket, ds_pod_name) → player_id + claims
 - ❌ 不广播大厅状态
 
 **依赖**:
-- 上游:客户端、UE DS(只用 VerifyDSTicket)
-- 下游:hub_allocator(给 hub_ds_addr)、player(查档案是否存在)
+- 上游:客户端、UE DS(只用 VerifyDSTicket，走独立 :8444 DS 面)
+- 下游:hub_allocator(给 hub_ds_addr)、player(查档案是否存在)、Redis(票据 JTI、Battle roster、
+  Redis authority 下的 DS active/projection 与 Hub assignment)
 
 ---
 
