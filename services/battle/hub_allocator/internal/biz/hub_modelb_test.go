@@ -315,6 +315,42 @@ func TestModelB_AssignIdempotentReuse(t *testing.T) {
 	}
 }
 
+func TestModelB_AssignIdempotentReuseRefreshesAssignmentTTL(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	if err := repo.UpdateShardWithLock(ctx, pod, 1, func(*hubv1.HubShardStorageRecord) error { return nil }, modelBAuthTTL); err != nil {
+		t.Fatalf("extend shard ttl: %v", err)
+	}
+
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("first assign: %v", err)
+	}
+	assignmentKey := "pandora:hub:player:1001"
+	initialTTL := mr.TTL(assignmentKey)
+	if initialTTL <= 0 {
+		t.Fatalf("assignment must have positive TTL, got %s", initialTTL)
+	}
+
+	// 把归属推进到即将到期；auth/shard 使用更长测试 TTL，且 miniredis 快进不改变服务端心跳时钟。
+	mr.FastForward(initialTTL - time.Second)
+	if remaining := mr.TTL(assignmentKey); remaining <= 0 || remaining > time.Second {
+		t.Fatalf("assignment must be near expiry before reuse, got %s", remaining)
+	}
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("reuse assign: %v", err)
+	}
+	if refreshed := mr.TTL(assignmentKey); refreshed < initialTTL-time.Second {
+		t.Fatalf("idempotent reuse must refresh assignment TTL: got=%s initial=%s", refreshed, initialTTL)
+	}
+}
+
 func TestModelB_AssignRejectsIncompleteOrFutureWriterAssignmentWithoutMutation(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

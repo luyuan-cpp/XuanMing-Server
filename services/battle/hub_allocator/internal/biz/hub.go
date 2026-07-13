@@ -113,7 +113,7 @@ type HubUsecase struct {
 }
 
 // HubCredential 是 service 层从**验签通过**的 Model B hub 令牌抽出的凭据身份(§7),
-// 由 HeartbeatWithCredential 透传到 authRepo.PromoteOrValidate 做 promote/validate 匹配。
+// 由 HeartbeatWithCredential 透传到 authRepo.ActivateHeartbeat 做 promote/validate 匹配。
 type HubCredential struct {
 	InstanceUID   string
 	ProtocolEpoch uint32
@@ -248,10 +248,9 @@ func (u *HubUsecase) AssignHub(ctx context.Context, playerID uint64, region stri
 					next.AssignmentId = uuid.NewString()
 				}
 				bindAssignmentAuth(next, &current)
-				if proto.Equal(existing, next) {
-					u.addShardMember(ctx, next.HubPodName, playerID)
-					return u.signResult(ctx, playerID, effectiveRole, next)
-				}
+				// 即使归属 bytes 完全相同也必须走 CAS SET 刷新 assignment TTL。否则可在归属只剩
+				// 数秒时重签一张仍有数分钟有效期的票，随后 assignment 先过期，在线 admission
+				// 会拒绝这张后端刚签出的票。CAS 仍以完整旧 bytes 为前置，不放宽并发语义。
 				swapped, serr := u.repo.CompareAndSwapAssignment(ctx, playerID, existing, next, u.assignTTL())
 				if serr != nil {
 					return nil, serr
