@@ -3,6 +3,7 @@
 # - gRPC :50008 / HTTP :51008(仅 /metrics)
 # - 公会(GuildService)+ 临时群(GroupService)同进程
 # - MySQL 强依赖(pandora_social 库:guilds + guild_members + guild_join_requests + chat_groups + chat_group_members)
+# - Redis 弱依赖(公会资料读缓存 cache-aside;Ping 失败降级直连 MySQL,不阻塞启动)
 # - Kafka 弱依赖(生产 pandora.guild.event → push 推送公会成员变更通知)
 # - dev: enable_reflection=true 便于 grpcurl 联调
 
@@ -26,6 +27,14 @@ node:
     max_idle_conns: 8
     conn_max_lifetime: "30m"
     ping_timeout: "3s"
+  # Redis:公会资料读缓存(cache-aside,弱依赖)。单实例填 host;Cluster/Sentinel 填 addrs。
+  # 留空(host 与 addrs 皆空)则禁用缓存降级直连 MySQL。dev 复用本机 docker redis :6380。
+  redis_client:
+    host: "127.0.0.1:6380"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
 
 kafka:
   brokers: ["127.0.0.1:9093"]
@@ -39,3 +48,5 @@ guild:
   max_group_members: 50
   # max_name_len: 公会 / 群名最大长度(utf8 rune,默认 24)
   max_name_len: 24
+  # cache_ttl: 公会资料读缓存条目 TTL(默认 60s);写后删 + 短 TTL 兜底(read-cache-strategy.md §4)
+  cache_ttl: "60s"

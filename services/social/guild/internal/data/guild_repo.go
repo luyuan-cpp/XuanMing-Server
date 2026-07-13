@@ -43,6 +43,15 @@ const (
 // mysqlErrDupEntry 是 MySQL 唯一键冲突错误码(用于把 uk_name 冲突翻译成 ErrGuildNameTaken)。
 const mysqlErrDupEntry = 1062
 
+// MySQL 事务并发错误码:1213 死锁、1205 锁等待超时。二者发生时 InnoDB 已回滚本事务,
+// 整段事务重放是安全且标准的做法。虽然本包已把 guilds 父行作为「所有公会操作的第一把锁」
+// (统一 guilds → 子表 加锁序,消除确定性 ABBA 死锁,见 tx 注释),仍保留有界重试兜底
+// 二级索引间隙锁等偶发死锁。
+const (
+	mysqlErrLockWaitTimeout = 1205
+	mysqlErrDeadlock        = 1213
+)
+
 // GuildRow 是一行公会(data → biz 内部结构)。
 type GuildRow struct {
 	GuildID     uint64
@@ -90,18 +99,30 @@ type GuildRepo interface {
 	CreateJoinRequest(ctx context.Context, newRequestID, guildID, playerID uint64, maxPending int) (requestID uint64, reused bool, err error)
 	// GetRequest 读申请;not found → (nil, false, nil)。
 	GetRequest(ctx context.Context, requestID uint64) (*GuildJoinRequestRow, bool, error)
-	// ApproveJoin 在事务里审批通过:锁申请行 → 校验审批人在该公会且为 leader/officer →
-	// 校验申请仍 pending、申请人未在公会、未超员 → 插成员 + 申请置 approved + member_count++。
+	// ApproveJoin 在事务里审批通过:读取申请的不可变 guild_id → 锁 guilds 父行 → 锁申请行 →
+	// 校验审批人在该公会且为 leader/officer、申请仍 pending、申请人未在公会、未超员 →
+	// 插成员 + 申请置 approved + member_count++。
 	// 返回 approved=false,err=nil 表示申请已被并发处理(非 pending),biz 不报成功。
 	ApproveJoin(ctx context.Context, requestID, approverID uint64, maxMembers int) (approved bool, err error)
-	// RejectJoin 在事务里拒绝:锁申请行 → 校验审批人 leader/officer → 仍 pending → 置 rejected。
+	// RejectJoin 在事务里拒绝:读取申请的不可变 guild_id → 锁 guilds 父行 → 锁申请行 →
+	// 校验审批人 leader/officer → 仍 pending → 置 rejected。
 	RejectJoin(ctx context.Context, requestID, approverID uint64) (rejected bool, err error)
-	// RemoveMember 在事务里删成员 + member_count--(退会 / 踢人共用,幂等:不存在不报错)。
+	// RemoveMember 在事务里删成员 + member_count--(玩家本人退会用;幂等:不存在不报错)。
+	// 先锁 guilds 父行并禁止移除现任会长(会长须先转让 / 解散)。
 	RemoveMember(ctx context.Context, guildID, playerID uint64) error
-	// DisbandGuild 在事务里删公会:删全部成员 + 删全部申请 + 删 guild 行。
-	DisbandGuild(ctx context.Context, guildID uint64) error
-	// SetRole 设成员职位(任命 / 撤销官员)。
-	SetRole(ctx context.Context, guildID, playerID uint64, role int32) error
+	// KickMember 在事务里踢人:锁 guilds 父行 → 持锁复核操作者仍具权限(leader 可踢非会长成员,
+	// officer 只可踢 member)且目标非会长 → 删成员 + member_count--(幂等)。operatorID 权限在事务内
+	// 权威复核,消除「检查后被并发降级 / 退会仍能踢人」的 TOCTOU(三审 P1-9)。
+	KickMember(ctx context.Context, guildID, operatorID, targetID uint64) error
+	// DisbandGuild 在事务里删公会:锁 guilds 父行 → 持锁复核 operatorID 仍是现任会长 →
+	// 持锁读全部成员 player_id(与删除原子,消除「快照后并发批准新成员被删却漏失效 / 漏通知」
+	// 的 TOCTOU)→ 删全部成员 + 删全部申请 + 删 guild 行 → 返回实际删除的成员 player_id 集合。
+	// 防旧会长转让后仍解散公会的 TOCTOU(三审 P1-9)。
+	DisbandGuild(ctx context.Context, guildID, operatorID uint64) (deletedMembers []uint64, err error)
+	// SetRole 设成员职位(任命 / 撤销官员):锁 guilds 父行 → 持锁复核 operatorID 为现任会长、
+	// 目标是本公会成员且非现任会长 → 改职位。防并发转让后旧请求把新会长降级致 leader_id 与职位不一致
+	// 的 TOCTOU(三审 P1-9)。
+	SetRole(ctx context.Context, guildID, operatorID, targetID uint64, role int32) error
 	// TransferLeader 在事务里转让会长:旧会长降 member,新会长升 leader,更新 guilds.leader_id。
 	TransferLeader(ctx context.Context, guildID, oldLeaderID, newLeaderID uint64) error
 	// ListPendingRequests 列公会的挂起申请(按 request_id 升序游标分页)。
@@ -123,6 +144,20 @@ func isDupEntry(err error) bool {
 	return errors.As(err, &me) && me.Number == mysqlErrDupEntry
 }
 
+// isRetryableTxErr 判断是否是可重试的事务并发错误(1213 死锁 / 1205 锁等待超时)。
+// 依赖 dbErr 用 errcode.NewCause 保留底层 *mysql.MySQLError,errors.As 才能沿链检出。
+func isRetryableTxErr(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) &&
+		(me.Number == mysqlErrDeadlock || me.Number == mysqlErrLockWaitTimeout)
+}
+
+// dbErr 包装底层 DB 错误:对外仍是 ErrInternal(客户端错误码不变),同时用 NewCause 保留
+// 原始 *mysql.MySQLError 供 tx 判定死锁重试。所有会加锁 / 写库的语句失败都应走此封装。
+func dbErr(cause error, format string, args ...any) error {
+	return errcode.NewCause(errcode.ErrInternal, cause, format+": %v", append(args, cause)...)
+}
+
 func (r *MySQLGuildRepo) CreateGuild(ctx context.Context, newGuildID, leaderID uint64, name string, maxMembers int) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
 		// 单归属:创建者不能已在任何公会。
@@ -132,7 +167,7 @@ func (r *MySQLGuildRepo) CreateGuild(ctx context.Context, newGuildID, leaderID u
 			return errcode.New(errcode.ErrGuildAlreadyInGuild, "player %d already in a guild", leaderID)
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return errcode.New(errcode.ErrInternal, "check member %d: %v", leaderID, err)
+			return dbErr(err, "check member %d", leaderID)
 		}
 
 		if _, err := tx.ExecContext(ctx,
@@ -141,12 +176,12 @@ func (r *MySQLGuildRepo) CreateGuild(ctx context.Context, newGuildID, leaderID u
 			if isDupEntry(err) {
 				return errcode.New(errcode.ErrGuildNameTaken, "guild name %q taken", name)
 			}
-			return errcode.New(errcode.ErrInternal, "insert guild %d: %v", newGuildID, err)
+			return dbErr(err, "insert guild %d", newGuildID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO guild_members (player_id, guild_id, role) VALUES (?, ?, ?)`,
 			leaderID, newGuildID, GuildRoleLeader); err != nil {
-			return errcode.New(errcode.ErrInternal, "insert leader member %d: %v", leaderID, err)
+			return dbErr(err, "insert leader member %d", leaderID)
 		}
 		return nil
 	})
@@ -221,55 +256,64 @@ func (r *MySQLGuildRepo) ListMembers(ctx context.Context, guildID, cursor uint64
 }
 
 func (r *MySQLGuildRepo) CreateJoinRequest(ctx context.Context, newRequestID, guildID, playerID uint64, maxPending int) (uint64, bool, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, false, errcode.New(errcode.ErrInternal, "begin tx: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
+	var resultID uint64
+	var already bool
+	err := r.tx(ctx, func(tx *sql.Tx) error {
+		// 1. 先锁 guilds 父行(全局统一 guilds → 子表 加锁序,兼作与 DisbandGuild 的串行化闸门)。
+		//    公会不存在 / 已被并发解散 → ErrGuildNotFound,避免写出指向已删公会的孤儿申请
+		//    (四审 P1:CreateJoinRequest 不锁公会父行,可与解散并发产生孤儿 pending)。
+		var lockedGuildID uint64
+		if err := tx.QueryRowContext(ctx,
+			`SELECT guild_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&lockedGuildID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+			}
+			return dbErr(err, "lock guild %d", guildID)
+		}
 
-	var existingID uint64
-	var status int32
-	qerr := tx.QueryRowContext(ctx,
-		`SELECT request_id, status FROM guild_join_requests WHERE guild_id = ? AND player_id = ? FOR UPDATE`,
-		guildID, playerID).Scan(&existingID, &status)
-	switch {
-	case errors.Is(qerr, sql.ErrNoRows):
-		// 新增一条 pending 前,先校验该公会 pending 申请未满(不变量 §9.18)。
+		// 2. 锁该玩家对该公会的申请行(唯一键 guild_id+player_id)。
+		var existingID uint64
+		var status int32
+		qerr := tx.QueryRowContext(ctx,
+			`SELECT request_id, status FROM guild_join_requests WHERE guild_id = ? AND player_id = ? FOR UPDATE`,
+			guildID, playerID).Scan(&existingID, &status)
+		switch {
+		case errors.Is(qerr, sql.ErrNoRows):
+			// 新增一条 pending 前,先校验该公会 pending 申请未满(不变量 §9.18)。
+			if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
+				return cerr
+			}
+			if _, ierr := tx.ExecContext(ctx,
+				`INSERT INTO guild_join_requests (request_id, guild_id, player_id, status) VALUES (?, ?, ?, ?)`,
+				newRequestID, guildID, playerID, joinStatusPending); ierr != nil {
+				return dbErr(ierr, "insert join request")
+			}
+			resultID, already = newRequestID, false
+			return nil
+		case qerr != nil:
+			return dbErr(qerr, "query join request")
+		}
+
+		if status == joinStatusPending {
+			resultID, already = existingID, true
+			return nil
+		}
+		// 历史 rejected → 复位 pending,复用 request_id;从非 pending 转 pending 同样占用一格,先校验上限。
 		if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
-			return 0, false, cerr
+			return cerr
 		}
-		if _, ierr := tx.ExecContext(ctx,
-			`INSERT INTO guild_join_requests (request_id, guild_id, player_id, status) VALUES (?, ?, ?, ?)`,
-			newRequestID, guildID, playerID, joinStatusPending); ierr != nil {
-			return 0, false, errcode.New(errcode.ErrInternal, "insert join request: %v", ierr)
+		if _, uerr := tx.ExecContext(ctx,
+			`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
+			joinStatusPending, existingID); uerr != nil {
+			return dbErr(uerr, "reopen join request")
 		}
-		if commitErr := tx.Commit(); commitErr != nil {
-			return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", commitErr)
-		}
-		return newRequestID, false, nil
-	case qerr != nil:
-		return 0, false, errcode.New(errcode.ErrInternal, "query join request: %v", qerr)
+		resultID, already = existingID, false
+		return nil
+	})
+	if err != nil {
+		return 0, false, err
 	}
-
-	if status == joinStatusPending {
-		if commitErr := tx.Commit(); commitErr != nil {
-			return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", commitErr)
-		}
-		return existingID, true, nil
-	}
-	// 历史 rejected → 复位 pending,复用 request_id;从非 pending 转 pending 同样占用一格,先校验上限。
-	if cerr := checkGuildPendingLimit(ctx, tx, guildID, maxPending); cerr != nil {
-		return 0, false, cerr
-	}
-	if _, uerr := tx.ExecContext(ctx,
-		`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
-		joinStatusPending, existingID); uerr != nil {
-		return 0, false, errcode.New(errcode.ErrInternal, "reopen join request: %v", uerr)
-	}
-	if commitErr := tx.Commit(); commitErr != nil {
-		return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", commitErr)
-	}
-	return existingID, false, nil
+	return resultID, already, nil
 }
 
 // checkGuildPendingLimit 在事务内锁定读该公会的 pending 申请数,达到上限回 ErrGuildRequestLimit
@@ -283,7 +327,7 @@ func checkGuildPendingLimit(ctx context.Context, tx *sql.Tx, guildID uint64, max
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM guild_join_requests WHERE guild_id = ? AND status = ? FOR UPDATE`,
 		guildID, joinStatusPending).Scan(&cnt); err != nil {
-		return errcode.New(errcode.ErrInternal, "count pending requests guild=%d: %v", guildID, err)
+		return dbErr(err, "count pending requests guild=%d", guildID)
 	}
 	if cnt >= maxPending {
 		return errcode.New(errcode.ErrGuildRequestLimit,
@@ -310,58 +354,82 @@ func (r *MySQLGuildRepo) GetRequest(ctx context.Context, requestID uint64) (*Gui
 func (r *MySQLGuildRepo) ApproveJoin(ctx context.Context, requestID, approverID uint64, maxMembers int) (bool, error) {
 	approved := false
 	err := r.tx(ctx, func(tx *sql.Tx) error {
-		// 1. 锁申请行。
-		var guildID, applicantID uint64
+		// 全局统一加锁序 guilds → guild_join_requests / guild_members:先取申请所属公会(guild_id
+		// 是申请行的不可变列,未锁读安全),再锁 guilds 父行,最后锁申请行。与 DisbandGuild 的
+		// guilds → 子表 同序,消除 Approve/Reject(旧 request→guild)与 Disband(guild→request)
+		// 交叉的确定性 ABBA 死锁(四审 P1)。
+		var guildID uint64
+		gerr := tx.QueryRowContext(ctx,
+			`SELECT guild_id FROM guild_join_requests WHERE request_id = ?`, requestID).Scan(&guildID)
+		if errors.Is(gerr, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildRequestInvalid, "request %d not found", requestID)
+		}
+		if gerr != nil {
+			return dbErr(gerr, "read request %d guild", requestID)
+		}
+
+		// 1. 锁公会父行(所有职位变更的串行化点)读 member_count:先于审批人职位读取上锁,
+		//    确保审批人职位快照在本事务提交前不被并发转让 / 降级 / 踢人改变(三审 P1-9 TOCTOU)。
+		var memberCount int32
+		if err := tx.QueryRowContext(ctx,
+			`SELECT member_count FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&memberCount); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+			}
+			return dbErr(err, "lock guild %d", guildID)
+		}
+
+		// 2. 锁申请行并复读权威状态 / 申请人(锁序在 guilds 之后)。
+		var applicantID uint64
 		var status int32
 		err := tx.QueryRowContext(ctx,
-			`SELECT guild_id, player_id, status FROM guild_join_requests WHERE request_id = ? FOR UPDATE`,
-			requestID).Scan(&guildID, &applicantID, &status)
+			`SELECT player_id, status FROM guild_join_requests WHERE request_id = ? FOR UPDATE`,
+			requestID).Scan(&applicantID, &status)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildRequestInvalid, "request %d not found", requestID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "lock request %d: %v", requestID, err)
+			return dbErr(err, "lock request %d", requestID)
 		}
 		if status != joinStatusPending {
 			return nil // 已被并发处理,approved 保持 false
 		}
 
-		// 2. 审批人须在该公会且为 leader/officer。
+		// 3. 审批人须在该公会且为 leader/officer(持父行锁复核,权威)。
+		// 用 FOR SHARE 锁定读而非普通读:本事务首条语句是未锁读 guild_id(为定加锁序),已在
+		// 取父行锁前建立 REPEATABLE READ 快照;若这里用普通 SELECT,会读到父行锁获取之前的旧
+		// 快照角色——审批人在等锁期间被并发降级 / 踢出仍读到旧 leader/officer(五审 P1 TOCTOU
+		// 被 RR 快照重开)。锁定读绕过快照、取最新已提交值;父行 X 锁已串行化同公会成员写,不额外死锁。
 		var approverRole int32
 		err = tx.QueryRowContext(ctx,
-			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ?`,
+			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR SHARE`,
 			approverID, guildID).Scan(&approverRole)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildNoPermission, "approver %d not in guild %d", approverID, guildID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "check approver: %v", err)
+			return dbErr(err, "check approver")
 		}
 		if approverRole != GuildRoleLeader && approverRole != GuildRoleOfficer {
 			return errcode.New(errcode.ErrGuildNoPermission, "approver %d not leader/officer", approverID)
 		}
 
-		// 3. 申请人不能已在任何公会(单归属)。
+		// 4. 申请人不能已在任何公会(单归属)。
 		var x int
 		err = tx.QueryRowContext(ctx, `SELECT 1 FROM guild_members WHERE player_id = ? LIMIT 1`, applicantID).Scan(&x)
 		if err == nil {
 			return errcode.New(errcode.ErrGuildAlreadyInGuild, "applicant %d already in a guild", applicantID)
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return errcode.New(errcode.ErrInternal, "check applicant: %v", err)
+			return dbErr(err, "check applicant")
 		}
 
-		// 4. 不超员(锁公会行读 member_count)。
-		var memberCount int32
-		if err := tx.QueryRowContext(ctx,
-			`SELECT member_count FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&memberCount); err != nil {
-			return errcode.New(errcode.ErrInternal, "lock guild %d: %v", guildID, err)
-		}
+		// 5. 不超员(member_count 已在步骤 1 持父行锁读取)。
 		if int(memberCount) >= maxMembers {
 			return errcode.New(errcode.ErrGuildFull, "guild %d full (%d/%d)", guildID, memberCount, maxMembers)
 		}
 
-		// 5. 插成员 + 申请 approved + member_count++。
+		// 6. 插成员 + 申请 approved + member_count++。
 		// player_id 是主键(单归属硬约束):并发被另一个公会先批时 dup → 翻译成
 		// 「已在公会」业务错误(步骤 3 的快照读拦不住这种竞态,靠 PK 兑底)。
 		if _, err := tx.ExecContext(ctx,
@@ -370,16 +438,16 @@ func (r *MySQLGuildRepo) ApproveJoin(ctx context.Context, requestID, approverID 
 			if isDupEntry(err) {
 				return errcode.New(errcode.ErrGuildAlreadyInGuild, "applicant %d already in a guild", applicantID)
 			}
-			return errcode.New(errcode.ErrInternal, "insert member %d: %v", applicantID, err)
+			return dbErr(err, "insert member %d", applicantID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
 			joinStatusApproved, requestID); err != nil {
-			return errcode.New(errcode.ErrInternal, "mark approved: %v", err)
+			return dbErr(err, "mark approved")
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guilds SET member_count = member_count + 1 WHERE guild_id = ?`, guildID); err != nil {
-			return errcode.New(errcode.ErrInternal, "inc member_count: %v", err)
+			return dbErr(err, "inc member_count")
 		}
 		approved = true
 		return nil
@@ -390,29 +458,50 @@ func (r *MySQLGuildRepo) ApproveJoin(ctx context.Context, requestID, approverID 
 func (r *MySQLGuildRepo) RejectJoin(ctx context.Context, requestID, approverID uint64) (bool, error) {
 	rejected := false
 	err := r.tx(ctx, func(tx *sql.Tx) error {
-		var guildID, applicantID uint64
+		// 加锁序同 ApproveJoin:先未锁读申请所属公会(guild_id 不可变),再锁 guilds 父行,
+		// 最后锁申请行,保持全局 guilds → 子表 单一顺序,消除与 Disband 的 ABBA 死锁(四审 P1),
+		// 并防 approver 通过职位检查后被并发降级仍能拒绝申请的 TOCTOU(三审 P1-9)。
+		var guildID uint64
+		gerr := tx.QueryRowContext(ctx,
+			`SELECT guild_id FROM guild_join_requests WHERE request_id = ?`, requestID).Scan(&guildID)
+		if errors.Is(gerr, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildRequestInvalid, "request %d not found", requestID)
+		}
+		if gerr != nil {
+			return dbErr(gerr, "read request %d guild", requestID)
+		}
+		var dummyCount int32
+		if err := tx.QueryRowContext(ctx,
+			`SELECT member_count FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&dummyCount); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+			}
+			return dbErr(err, "lock guild %d", guildID)
+		}
 		var status int32
 		err := tx.QueryRowContext(ctx,
-			`SELECT guild_id, player_id, status FROM guild_join_requests WHERE request_id = ? FOR UPDATE`,
-			requestID).Scan(&guildID, &applicantID, &status)
+			`SELECT status FROM guild_join_requests WHERE request_id = ? FOR UPDATE`,
+			requestID).Scan(&status)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildRequestInvalid, "request %d not found", requestID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "lock request %d: %v", requestID, err)
+			return dbErr(err, "lock request %d", requestID)
 		}
 		if status != joinStatusPending {
 			return nil
 		}
+		// FOR SHARE 锁定读绕过本事务首条未锁读 guild_id 建立的 RR 快照,取审批人最新已提交角色,
+		// 防等父行锁期间被并发降级仍读到旧 leader/officer(五审 P1 TOCTOU 被 RR 快照重开)。
 		var approverRole int32
 		err = tx.QueryRowContext(ctx,
-			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ?`,
+			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR SHARE`,
 			approverID, guildID).Scan(&approverRole)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildNoPermission, "approver %d not in guild %d", approverID, guildID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "check approver: %v", err)
+			return dbErr(err, "check approver")
 		}
 		if approverRole != GuildRoleLeader && approverRole != GuildRoleOfficer {
 			return errcode.New(errcode.ErrGuildNoPermission, "approver %d not leader/officer", approverID)
@@ -420,7 +509,7 @@ func (r *MySQLGuildRepo) RejectJoin(ctx context.Context, requestID, approverID u
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guild_join_requests SET status = ? WHERE request_id = ?`,
 			joinStatusRejected, requestID); err != nil {
-			return errcode.New(errcode.ErrInternal, "mark rejected: %v", err)
+			return dbErr(err, "mark rejected")
 		}
 		rejected = true
 		return nil
@@ -430,10 +519,26 @@ func (r *MySQLGuildRepo) RejectJoin(ctx context.Context, requestID, approverID u
 
 func (r *MySQLGuildRepo) RemoveMember(ctx context.Context, guildID, playerID uint64) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁公会行,与 TransferLeader 共用同一串行化点,并禁止移除现任会长:否则退会/踢人
+		// 与转让交错时,会删掉刚晋升的新会长并留下悬空 leader_id(三审 P1-9 TOCTOU)。
+		// 会长须先 TransferLeader 或 DisbandGuild;此处为数据层兜底,不依赖上层检查。
+		var curLeader uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT leader_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&curLeader)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil // 公会已解散,退会/踢人幂等成功
+		}
+		if err != nil {
+			return dbErr(err, "lock guild %d", guildID)
+		}
+		if curLeader == playerID {
+			return errcode.New(errcode.ErrGuildNotLeader,
+				"leader %d must transfer or disband before leaving guild %d", playerID, guildID)
+		}
 		res, err := tx.ExecContext(ctx,
 			`DELETE FROM guild_members WHERE guild_id = ? AND player_id = ?`, guildID, playerID)
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "delete member %d: %v", playerID, err)
+			return dbErr(err, "delete member %d", playerID)
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
@@ -441,65 +546,202 @@ func (r *MySQLGuildRepo) RemoveMember(ctx context.Context, guildID, playerID uin
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guilds SET member_count = member_count - 1 WHERE guild_id = ? AND member_count > 0`, guildID); err != nil {
-			return errcode.New(errcode.ErrInternal, "dec member_count: %v", err)
+			return dbErr(err, "dec member_count")
 		}
 		return nil
 	})
 }
 
-func (r *MySQLGuildRepo) DisbandGuild(ctx context.Context, guildID uint64) error {
+func (r *MySQLGuildRepo) KickMember(ctx context.Context, guildID, operatorID, targetID uint64) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁 guilds 父行(与 Transfer/Remove/SetRole 共用串行化点),再持锁复核操作者与目标职位:
+		// 消除「biz 检查通过后操作者被并发降级 / 目标被并发转成会长仍被踢」的 TOCTOU(三审 P1-9)。
+		var lockedGuildID uint64
+		if err := tx.QueryRowContext(ctx,
+			`SELECT guild_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&lockedGuildID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+			}
+			return dbErr(err, "lock guild %d", guildID)
+		}
+		var opRole int32
+		err := tx.QueryRowContext(ctx,
+			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ?`,
+			operatorID, guildID).Scan(&opRole)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildNoPermission, "operator %d not in guild %d", operatorID, guildID)
+		}
+		if err != nil {
+			return dbErr(err, "check operator %d", operatorID)
+		}
+		var targetRole int32
+		err = tx.QueryRowContext(ctx,
+			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ?`,
+			targetID, guildID).Scan(&targetRole)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildNotMember, "target %d not in guild %d", targetID, guildID)
+		}
+		if err != nil {
+			return dbErr(err, "check target %d", targetID)
+		}
+		if targetRole == GuildRoleLeader {
+			return errcode.New(errcode.ErrGuildNoPermission, "cannot kick the leader")
+		}
+		switch opRole {
+		case GuildRoleLeader:
+			// leader 可踢 officer / member
+		case GuildRoleOfficer:
+			if targetRole != GuildRoleMember {
+				return errcode.New(errcode.ErrGuildNoPermission, "officer can only kick members")
+			}
+		default:
+			return errcode.New(errcode.ErrGuildNoPermission, "member cannot kick")
+		}
+		res, err := tx.ExecContext(ctx,
+			`DELETE FROM guild_members WHERE guild_id = ? AND player_id = ?`, guildID, targetID)
+		if err != nil {
+			return dbErr(err, "delete member %d", targetID)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return nil
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE guilds SET member_count = member_count - 1 WHERE guild_id = ? AND member_count > 0`, guildID); err != nil {
+			return dbErr(err, "dec member_count")
+		}
+		return nil
+	})
+}
+
+func (r *MySQLGuildRepo) DisbandGuild(ctx context.Context, guildID, operatorID uint64) ([]uint64, error) {
+	var deletedMembers []uint64
+	err := r.tx(ctx, func(tx *sql.Tx) error {
+		deletedMembers = nil // 事务重试时重置,避免累计重复 player_id。
+		// 先锁 guilds 父行并复核 operatorID 仍是现任会长:防旧会长转让后仍解散公会(三审 P1-9)。
+		var curLeader uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT leader_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&curLeader)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+		}
+		if err != nil {
+			return dbErr(err, "lock guild %d", guildID)
+		}
+		if curLeader != operatorID {
+			return errcode.New(errcode.ErrGuildNotLeader,
+				"player %d is not current leader of guild %d (concurrent transfer?)", operatorID, guildID)
+		}
+		// 持锁读全部成员 player_id:父行 FOR UPDATE 已串行化 ApproveJoin(其审批也锁同一父行),
+		// 故此处读到的成员集合与随后的 DELETE 原子一致,不会漏掉并发新批准的成员(TOCTOU 收口)。
+		rows, err := tx.QueryContext(ctx, `SELECT player_id FROM guild_members WHERE guild_id = ?`, guildID)
+		if err != nil {
+			return dbErr(err, "list members of %d", guildID)
+		}
+		for rows.Next() {
+			var pid uint64
+			if err := rows.Scan(&pid); err != nil {
+				rows.Close()
+				return dbErr(err, "scan member of %d", guildID)
+			}
+			deletedMembers = append(deletedMembers, pid)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return dbErr(err, "iterate members of %d", guildID)
+		}
+		rows.Close()
 		if _, err := tx.ExecContext(ctx, `DELETE FROM guild_members WHERE guild_id = ?`, guildID); err != nil {
-			return errcode.New(errcode.ErrInternal, "delete members of %d: %v", guildID, err)
+			return dbErr(err, "delete members of %d", guildID)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM guild_join_requests WHERE guild_id = ?`, guildID); err != nil {
-			return errcode.New(errcode.ErrInternal, "delete requests of %d: %v", guildID, err)
+			return dbErr(err, "delete requests of %d", guildID)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM guilds WHERE guild_id = ?`, guildID); err != nil {
-			return errcode.New(errcode.ErrInternal, "delete guild %d: %v", guildID, err)
+			return dbErr(err, "delete guild %d", guildID)
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return deletedMembers, nil
 }
 
-func (r *MySQLGuildRepo) SetRole(ctx context.Context, guildID, playerID uint64, role int32) error {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE guild_members SET role = ? WHERE guild_id = ? AND player_id = ?`, role, guildID, playerID)
-	if err != nil {
-		return errcode.New(errcode.ErrInternal, "set role %d: %v", playerID, err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return errcode.New(errcode.ErrGuildNotMember, "player %d not in guild %d", playerID, guildID)
-	}
-	return nil
+func (r *MySQLGuildRepo) SetRole(ctx context.Context, guildID, operatorID, targetID uint64, role int32) error {
+	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁 guilds 父行(串行化点)并复核 operatorID 仍是现任会长:防旧会长转让后仍改职位,
+		// 或并发转让后把新会长降成 member/officer 致 leader_id 与角色不一致(三审 P1-9)。
+		var curLeader uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT leader_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&curLeader)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+		}
+		if err != nil {
+			return dbErr(err, "lock guild %d", guildID)
+		}
+		if curLeader != operatorID {
+			return errcode.New(errcode.ErrGuildNotLeader,
+				"player %d is not current leader of guild %d (concurrent transfer?)", operatorID, guildID)
+		}
+		// 不能通过 SetRole 改现任会长职位(会长变更只能走 TransferLeader,保 leader_id 一致)。
+		if targetID == curLeader {
+			return errcode.New(errcode.ErrGuildNoPermission, "cannot change role of current leader %d", targetID)
+		}
+		res, err := tx.ExecContext(ctx,
+			`UPDATE guild_members SET role = ? WHERE guild_id = ? AND player_id = ?`, role, guildID, targetID)
+		if err != nil {
+			return dbErr(err, "set role %d", targetID)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return errcode.New(errcode.ErrGuildNotMember, "player %d not in guild %d", targetID, guildID)
+		}
+		return nil
+	})
 }
 
 func (r *MySQLGuildRepo) TransferLeader(ctx context.Context, guildID, oldLeaderID, newLeaderID uint64) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁公会行(所有会长/成员变更的串行化点)并确认旧会长仍是现任会长。缺这步会让
+		// 并发两次 TransferLeader 各自降旧会长、升不同目标 → 双 LEADER 且 leader_id 只留最后一个
+		// (三审 P1-9 TOCTOU)。lock 顺序统一为 guilds → guild_members,与 RemoveMember 一致,避免死锁。
+		var curLeader uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT leader_id FROM guilds WHERE guild_id = ? FOR UPDATE`, guildID).Scan(&curLeader)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
+		}
+		if err != nil {
+			return dbErr(err, "lock guild %d", guildID)
+		}
+		if curLeader != oldLeaderID {
+			return errcode.New(errcode.ErrGuildNotLeader,
+				"player %d is not current leader of guild %d (concurrent transfer?)", oldLeaderID, guildID)
+		}
 		// 新会长须为本公会成员。
 		var role int32
-		err := tx.QueryRowContext(ctx,
+		err = tx.QueryRowContext(ctx,
 			`SELECT role FROM guild_members WHERE player_id = ? AND guild_id = ? FOR UPDATE`,
 			newLeaderID, guildID).Scan(&role)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGuildNotMember, "target %d not in guild %d", newLeaderID, guildID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "lock target %d: %v", newLeaderID, err)
+			return dbErr(err, "lock target %d", newLeaderID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guild_members SET role = ? WHERE guild_id = ? AND player_id = ?`,
 			GuildRoleMember, guildID, oldLeaderID); err != nil {
-			return errcode.New(errcode.ErrInternal, "demote old leader: %v", err)
+			return dbErr(err, "demote old leader")
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guild_members SET role = ? WHERE guild_id = ? AND player_id = ?`,
 			GuildRoleLeader, guildID, newLeaderID); err != nil {
-			return errcode.New(errcode.ErrInternal, "promote new leader: %v", err)
+			return dbErr(err, "promote new leader")
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE guilds SET leader_id = ? WHERE guild_id = ?`, newLeaderID, guildID); err != nil {
-			return errcode.New(errcode.ErrInternal, "update guild leader: %v", err)
+			return dbErr(err, "update guild leader")
 		}
 		return nil
 	})
@@ -531,8 +773,28 @@ func (r *MySQLGuildRepo) ListPendingRequests(ctx context.Context, guildID, curso
 	return out, rows.Err()
 }
 
-// tx 是事务封装:fn 返回 error 则回滚,nil 则提交。
+// txMaxRetries 是事务遇死锁 / 锁等待超时后的额外重试次数(共 1+N 次尝试)。
+const txMaxRetries = 3
+
+// tx 是带死锁重试的事务封装。加锁序在本包内已全局统一为 guilds 父行 → 子表(guild_members /
+// guild_join_requests):任一公会操作都先锁该公会的 guilds 行,使 guilds 行成为「单公会唯一
+// 串行化闸门」——两个事务在拿到任何子表锁之前就会在 guilds 行相互阻塞,无法形成 hold-and-wait
+// 环,确定性 ABBA 死锁(Approve/Reject 的 request→guild 与 Disband 的 guild→request 交叉)被消除。
+// 此重试仅兜底 InnoDB 二级索引间隙锁等偶发死锁;fn 必须可安全重放(只读锁 + 幂等写,不得依赖
+// 首次副作用)。
 func (r *MySQLGuildRepo) tx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	var lastErr error
+	for attempt := 0; attempt <= txMaxRetries; attempt++ {
+		lastErr = r.txOnce(ctx, fn)
+		if lastErr == nil || !isRetryableTxErr(lastErr) || ctx.Err() != nil {
+			return lastErr
+		}
+	}
+	return lastErr
+}
+
+// txOnce 执行单次事务:fn 返回 error 则回滚,nil 则提交。
+func (r *MySQLGuildRepo) txOnce(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "begin tx: %v", err)
@@ -542,7 +804,7 @@ func (r *MySQLGuildRepo) tx(ctx context.Context, fn func(tx *sql.Tx) error) erro
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return errcode.New(errcode.ErrInternal, "commit tx: %v", err)
+		return dbErr(err, "commit tx")
 	}
 	return nil
 }

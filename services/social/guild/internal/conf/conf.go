@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"time"
+
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
@@ -32,6 +34,11 @@ type GuildConf struct {
 
 	// MaxNameLen 公会 / 群名最大长度(utf8 rune,默认 24)。
 	MaxNameLen int `yaml:"max_name_len,omitempty" json:"max_name_len,omitempty"`
+
+	// CacheTTL 公会读缓存(Redis cache-aside)条目存活时长(默认 60s)。
+	// 读 miss 回填按此 TTL;写路径写库后主动删缓存,删失败靠 TTL 兜底(read-cache-strategy.md §3/§4)。
+	// Redis 弱依赖:node.redis_client 未配 / Ping 失败则降级直连 MySQL(cache 关闭)。
+	CacheTTL config.Duration `yaml:"cache_ttl,omitempty" json:"cache_ttl,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -50,6 +57,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Guild.MaxNameLen <= 0 {
 		c.Guild.MaxNameLen = 24
+	}
+	if c.Guild.CacheTTL <= 0 {
+		c.Guild.CacheTTL = config.Duration(60 * time.Second)
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50008"

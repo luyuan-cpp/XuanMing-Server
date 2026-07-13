@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
@@ -60,14 +61,18 @@ type GroupRepo interface {
 	ListGroupMembers(ctx context.Context, groupID uint64) ([]GroupMemberRow, error)
 	// ListMyGroups 列玩家所在的群。
 	ListMyGroups(ctx context.Context, playerID uint64) ([]GroupRow, error)
-	// AddMember 在事务里拉人入群:锁群行 → 校验未在群、未超员 → 插成员 + member_count++。
+	// AddMember 在事务里拉人入群:锁群行 → 复核 operatorID 仍是本群成员(邀请者权限,持锁复核
+	// 消除「biz 检查通过后邀请者已退群仍能拉人」的 TOCTOU)→ 校验未在群、未超员 → 插成员 + member_count++。
 	//   返回 alreadyIn=true 表示玩家已在群(幂等命中,未改动)。
 	// maxGroups>0 时:新加入前校验该玩家所在群数未超上限(不变量 §9.18)。
-	AddMember(ctx context.Context, groupID, playerID uint64, maxMembers, maxGroups int) (alreadyIn bool, err error)
-	// RemoveMember 在事务里删群成员 + member_count--(退群 / 踢人共用,幂等)。
+	AddMember(ctx context.Context, groupID, operatorID, playerID uint64, maxMembers, maxGroups int) (alreadyIn bool, err error)
+	// RemoveMember 在事务里删群成员 + member_count--(玩家本人退群用,幂等)。先锁群行且禁移除现任群主。
 	RemoveMember(ctx context.Context, groupID, playerID uint64) error
-	// DisbandGroup 在事务里删群:删全部成员 + 删 group 行。
-	DisbandGroup(ctx context.Context, groupID uint64) error
+	// KickMember 在事务里踢人:锁群行 → 持锁复核 operatorID 为现任群主、target 在群且非群主 → 删成员 + member_count--。
+	// operatorID 权限在事务内权威复核,消除「biz 检查通过后群主被并发转让仍能踢人」的 TOCTOU(三审 P1-9)。
+	KickMember(ctx context.Context, groupID, operatorID, targetID uint64) error
+	// DisbandGroup 在事务里删群:锁群行 → 持锁复核 operatorID 仍是现任群主 → 删全部成员 + 删 group 行。
+	DisbandGroup(ctx context.Context, groupID, operatorID uint64) error
 	// TransferOwner 在事务里转让群主:旧群主降 member,新群主升 owner,更新 chat_groups.owner_id。
 	TransferOwner(ctx context.Context, groupID, oldOwnerID, newOwnerID uint64) error
 }
@@ -89,29 +94,40 @@ func (r *MySQLGroupRepo) CreateGroup(ctx context.Context, newGroupID, ownerID ui
 			return errcode.New(errcode.ErrGroupFull, "group members %d > max %d", count, maxMembers)
 		}
 		// 每个入群玩家(owner + 初始成员)都不得超自身所在群上限(不变量 §9.18)。
-		if err := checkPlayerGroupLimit(ctx, tx, ownerID, maxGroups); err != nil {
-			return err
-		}
-		for _, m := range memberIDs {
-			if err := checkPlayerGroupLimit(ctx, tx, m, maxGroups); err != nil {
+		// checkPlayerGroupLimit 对 player_id 索引区间 FOR UPDATE 加锁,若按 owner + 客户端原始
+		// 成员顺序逐个加锁,两个成员集相反的并发建群会形成 A↔B 锁环致确定性死锁(五审 P2)。
+		// 故先把 owner + 全部成员去重后按 player_id 升序排序,统一全局加锁序,消除 ABBA 死锁;
+		// 配合 tx 的 1213/1205 有界重试兜底二级索引间隙锁偶发死锁。
+		lockIDs := make([]uint64, 0, count)
+		lockIDs = append(lockIDs, ownerID)
+		lockIDs = append(lockIDs, memberIDs...)
+		sort.Slice(lockIDs, func(i, j int) bool { return lockIDs[i] < lockIDs[j] })
+		var prev uint64
+		var seenPrev bool
+		for _, pid := range lockIDs {
+			if seenPrev && pid == prev {
+				continue // 去重:同一玩家只需锁一次
+			}
+			prev, seenPrev = pid, true
+			if err := checkPlayerGroupLimit(ctx, tx, pid, maxGroups); err != nil {
 				return err
 			}
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO chat_groups (group_id, name, owner_id, member_count, max_members) VALUES (?, ?, ?, ?, ?)`,
 			newGroupID, name, ownerID, count, maxMembers); err != nil {
-			return errcode.New(errcode.ErrInternal, "insert group %d: %v", newGroupID, err)
+			return dbErr(err, "insert group %d", newGroupID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO chat_group_members (group_id, player_id, role) VALUES (?, ?, ?)`,
 			newGroupID, ownerID, GroupRoleOwner); err != nil {
-			return errcode.New(errcode.ErrInternal, "insert owner member: %v", err)
+			return dbErr(err, "insert owner member")
 		}
 		for _, m := range memberIDs {
 			if _, err := tx.ExecContext(ctx,
 				`INSERT INTO chat_group_members (group_id, player_id, role) VALUES (?, ?, ?)`,
 				newGroupID, m, GroupRoleMember); err != nil {
-				return errcode.New(errcode.ErrInternal, "insert member %d: %v", m, err)
+				return dbErr(err, "insert member %d", m)
 			}
 		}
 		return nil
@@ -191,7 +207,7 @@ func (r *MySQLGroupRepo) ListMyGroups(ctx context.Context, playerID uint64) ([]G
 	return out, rows.Err()
 }
 
-func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, playerID uint64, maxMembers, maxGroups int) (bool, error) {
+func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, operatorID, playerID uint64, maxMembers, maxGroups int) (bool, error) {
 	alreadyIn := false
 	err := r.tx(ctx, func(tx *sql.Tx) error {
 		var memberCount int32
@@ -201,7 +217,22 @@ func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, playerID uint64
 			return errcode.New(errcode.ErrGroupNotFound, "group %d not found", groupID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "lock group %d: %v", groupID, err)
+			return dbErr(err, "lock group %d", groupID)
+		}
+
+		// 持群行锁复核邀请者仍在群内(权威),消除「biz GetGroupMember 通过后邀请者已退群 / 被踢
+		// 仍能拉人」的 TOCTOU(三审 P1-9)。operatorID==0 时跳过(内部无邀请者场景不经此路径)。
+		if operatorID != 0 {
+			var x int
+			oerr := tx.QueryRowContext(ctx,
+				`SELECT 1 FROM chat_group_members WHERE group_id = ? AND player_id = ? LIMIT 1`,
+				groupID, operatorID).Scan(&x)
+			if errors.Is(oerr, sql.ErrNoRows) {
+				return errcode.New(errcode.ErrGroupNotMember, "operator %d not in group %d", operatorID, groupID)
+			}
+			if oerr != nil {
+				return dbErr(oerr, "check operator %d", operatorID)
+			}
 		}
 
 		var x int
@@ -213,7 +244,7 @@ func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, playerID uint64
 			return nil // 幂等命中
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return errcode.New(errcode.ErrInternal, "check group member: %v", err)
+			return dbErr(err, "check group member")
 		}
 
 		if int(memberCount) >= maxMembers {
@@ -226,11 +257,11 @@ func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, playerID uint64
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO chat_group_members (group_id, player_id, role) VALUES (?, ?, ?)`,
 			groupID, playerID, GroupRoleMember); err != nil {
-			return errcode.New(errcode.ErrInternal, "insert group member %d: %v", playerID, err)
+			return dbErr(err, "insert group member %d", playerID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_groups SET member_count = member_count + 1 WHERE group_id = ?`, groupID); err != nil {
-			return errcode.New(errcode.ErrInternal, "inc group member_count: %v", err)
+			return dbErr(err, "inc group member_count")
 		}
 		return nil
 	})
@@ -239,29 +270,95 @@ func (r *MySQLGroupRepo) AddMember(ctx context.Context, groupID, playerID uint64
 
 func (r *MySQLGroupRepo) RemoveMember(ctx context.Context, groupID, playerID uint64) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁群行,与 TransferOwner 共用串行化点,并禁止移除现任群主:否则退群/踢人与转让
+		// 交错会删掉刚晋升的新群主并留下悬空 owner_id(三审 P1-9 TOCTOU)。群主须先转让或解散。
+		var curOwner uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT owner_id FROM chat_groups WHERE group_id = ? FOR UPDATE`, groupID).Scan(&curOwner)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil // 群已解散,退群/踢人幂等成功
+		}
+		if err != nil {
+			return dbErr(err, "lock group %d", groupID)
+		}
+		if curOwner == playerID {
+			return errcode.New(errcode.ErrGroupNotOwner,
+				"owner %d must transfer or disband before leaving group %d", playerID, groupID)
+		}
 		res, err := tx.ExecContext(ctx,
 			`DELETE FROM chat_group_members WHERE group_id = ? AND player_id = ?`, groupID, playerID)
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "delete group member %d: %v", playerID, err)
+			return dbErr(err, "delete group member %d", playerID)
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
 			return nil // 幂等
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_groups SET member_count = member_count - 1 WHERE group_id = ? AND member_count > 0`, groupID); err != nil {
-			return errcode.New(errcode.ErrInternal, "dec group member_count: %v", err)
+			return dbErr(err, "dec group member_count")
 		}
 		return nil
 	})
 }
 
-func (r *MySQLGroupRepo) DisbandGroup(ctx context.Context, groupID uint64) error {
+func (r *MySQLGroupRepo) KickMember(ctx context.Context, groupID, operatorID, targetID uint64) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁群行(与 TransferOwner/RemoveMember 共用串行化点)并持锁复核 operatorID 仍是现任群主、
+		// target 在群且非群主:消除「biz 检查通过后群主被并发转让 / target 被转成群主仍被踢」的
+		// TOCTOU(三审 P1-9)。
+		var curOwner uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT owner_id FROM chat_groups WHERE group_id = ? FOR UPDATE`, groupID).Scan(&curOwner)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGroupNotFound, "group %d not found", groupID)
+		}
+		if err != nil {
+			return dbErr(err, "lock group %d", groupID)
+		}
+		if curOwner != operatorID {
+			return errcode.New(errcode.ErrGroupNotOwner,
+				"player %d is not current owner of group %d (concurrent transfer?)", operatorID, groupID)
+		}
+		if targetID == curOwner {
+			return errcode.New(errcode.ErrGroupNotOwner, "cannot kick the owner")
+		}
+		res, err := tx.ExecContext(ctx,
+			`DELETE FROM chat_group_members WHERE group_id = ? AND player_id = ?`, groupID, targetID)
+		if err != nil {
+			return dbErr(err, "delete group member %d", targetID)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return errcode.New(errcode.ErrGroupNotMember, "target %d not in group %d", targetID, groupID)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE chat_groups SET member_count = member_count - 1 WHERE group_id = ? AND member_count > 0`, groupID); err != nil {
+			return dbErr(err, "dec group member_count")
+		}
+		return nil
+	})
+}
+
+func (r *MySQLGroupRepo) DisbandGroup(ctx context.Context, groupID, operatorID uint64) error {
+	return r.tx(ctx, func(tx *sql.Tx) error {
+		// 先锁群行并复核 operatorID 仍是现任群主:防旧群主转让后仍解散群(三审 P1-9)。
+		var curOwner uint64
+		err := tx.QueryRowContext(ctx,
+			`SELECT owner_id FROM chat_groups WHERE group_id = ? FOR UPDATE`, groupID).Scan(&curOwner)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGroupNotFound, "group %d not found", groupID)
+		}
+		if err != nil {
+			return dbErr(err, "lock group %d", groupID)
+		}
+		if curOwner != operatorID {
+			return errcode.New(errcode.ErrGroupNotOwner,
+				"player %d is not current owner of group %d (concurrent transfer?)", operatorID, groupID)
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chat_group_members WHERE group_id = ?`, groupID); err != nil {
-			return errcode.New(errcode.ErrInternal, "delete group members %d: %v", groupID, err)
+			return dbErr(err, "delete group members %d", groupID)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chat_groups WHERE group_id = ?`, groupID); err != nil {
-			return errcode.New(errcode.ErrInternal, "delete group %d: %v", groupID, err)
+			return dbErr(err, "delete group %d", groupID)
 		}
 		return nil
 	})
@@ -269,29 +366,44 @@ func (r *MySQLGroupRepo) DisbandGroup(ctx context.Context, groupID uint64) error
 
 func (r *MySQLGroupRepo) TransferOwner(ctx context.Context, groupID, oldOwnerID, newOwnerID uint64) error {
 	return r.tx(ctx, func(tx *sql.Tx) error {
-		var role int32
+		// 先锁群行(串行化点)并确认旧群主仍是现任群主,防止并发两次转让产生双 OWNER
+		// (三审 P1-9 TOCTOU)。lock 顺序统一为 chat_groups → chat_group_members,与 RemoveMember 一致。
+		var curOwner uint64
 		err := tx.QueryRowContext(ctx,
+			`SELECT owner_id FROM chat_groups WHERE group_id = ? FOR UPDATE`, groupID).Scan(&curOwner)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errcode.New(errcode.ErrGroupNotFound, "group %d not found", groupID)
+		}
+		if err != nil {
+			return dbErr(err, "lock group %d", groupID)
+		}
+		if curOwner != oldOwnerID {
+			return errcode.New(errcode.ErrGroupNotOwner,
+				"player %d is not current owner of group %d (concurrent transfer?)", oldOwnerID, groupID)
+		}
+		var role int32
+		err = tx.QueryRowContext(ctx,
 			`SELECT role FROM chat_group_members WHERE group_id = ? AND player_id = ? FOR UPDATE`,
 			groupID, newOwnerID).Scan(&role)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errcode.New(errcode.ErrGroupNotMember, "target %d not in group %d", newOwnerID, groupID)
 		}
 		if err != nil {
-			return errcode.New(errcode.ErrInternal, "lock target %d: %v", newOwnerID, err)
+			return dbErr(err, "lock target %d", newOwnerID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_group_members SET role = ? WHERE group_id = ? AND player_id = ?`,
 			GroupRoleMember, groupID, oldOwnerID); err != nil {
-			return errcode.New(errcode.ErrInternal, "demote old owner: %v", err)
+			return dbErr(err, "demote old owner")
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_group_members SET role = ? WHERE group_id = ? AND player_id = ?`,
 			GroupRoleOwner, groupID, newOwnerID); err != nil {
-			return errcode.New(errcode.ErrInternal, "promote new owner: %v", err)
+			return dbErr(err, "promote new owner")
 		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE chat_groups SET owner_id = ? WHERE group_id = ?`, newOwnerID, groupID); err != nil {
-			return errcode.New(errcode.ErrInternal, "update group owner: %v", err)
+			return dbErr(err, "update group owner")
 		}
 		return nil
 	})
@@ -307,7 +419,7 @@ func checkPlayerGroupLimit(ctx context.Context, tx *sql.Tx, playerID uint64, max
 	var cnt int
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM chat_group_members WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); err != nil {
-		return errcode.New(errcode.ErrInternal, "count player groups %d: %v", playerID, err)
+		return dbErr(err, "count player groups %d", playerID)
 	}
 	if cnt >= maxGroups {
 		return errcode.New(errcode.ErrGroupJoinLimit,
@@ -316,7 +428,22 @@ func checkPlayerGroupLimit(ctx context.Context, tx *sql.Tx, playerID uint64, max
 	return nil
 }
 
+// tx 是带死锁重试的事务封装(复用 guild_repo.go 同包的 txMaxRetries / isRetryableTxErr / dbErr)。
+// chat_groups 群行是每群操作的第一把锁(串行化点);CreateGroup 另按 player_id 升序锁玩家所在群
+// 计数区间。此重试兜底二级索引间隙锁等偶发 1213/1205;fn 必须可安全重放(只读锁 + 幂等写)。
 func (r *MySQLGroupRepo) tx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	var lastErr error
+	for attempt := 0; attempt <= txMaxRetries; attempt++ {
+		lastErr = r.txOnce(ctx, fn)
+		if lastErr == nil || !isRetryableTxErr(lastErr) || ctx.Err() != nil {
+			return lastErr
+		}
+	}
+	return lastErr
+}
+
+// txOnce 执行单次事务:fn 返回 error 则回滚,nil 则提交。
+func (r *MySQLGroupRepo) txOnce(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "begin tx: %v", err)
@@ -326,7 +453,7 @@ func (r *MySQLGroupRepo) tx(ctx context.Context, fn func(tx *sql.Tx) error) erro
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return errcode.New(errcode.ErrInternal, "commit tx: %v", err)
+		return dbErr(err, "commit tx")
 	}
 	return nil
 }

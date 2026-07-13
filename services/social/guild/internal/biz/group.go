@@ -63,7 +63,7 @@ func (u *GroupUsecase) InviteToGroup(ctx context.Context, operatorID, groupID, t
 	} else if !ok {
 		return errcode.New(errcode.ErrGroupNotMember, "operator %d not in group %d", operatorID, groupID)
 	}
-	_, err := u.repo.AddMember(ctx, groupID, targetID, u.cfg.MaxGroupMembers, u.cfg.MaxGroupsPerPlayer)
+	_, err := u.repo.AddMember(ctx, groupID, operatorID, targetID, u.cfg.MaxGroupMembers, u.cfg.MaxGroupsPerPlayer)
 	return err
 }
 
@@ -99,7 +99,7 @@ func (u *GroupUsecase) KickFromGroup(ctx context.Context, ownerID, groupID, targ
 	} else if !ok {
 		return errcode.New(errcode.ErrGroupNotMember, "target %d not in group %d", targetID, groupID)
 	}
-	return u.repo.RemoveMember(ctx, groupID, targetID)
+	return u.repo.KickMember(ctx, groupID, ownerID, targetID)
 }
 
 // DisbandGroup 解散群。仅 OWNER。
@@ -111,7 +111,7 @@ func (u *GroupUsecase) DisbandGroup(ctx context.Context, ownerID, groupID uint64
 	if !ok || owner.Role != data.GroupRoleOwner {
 		return errcode.New(errcode.ErrGroupNotOwner, "only owner can disband")
 	}
-	return u.repo.DisbandGroup(ctx, groupID)
+	return u.repo.DisbandGroup(ctx, groupID, ownerID)
 }
 
 // TransferOwner 转让群主。仅现任 OWNER;目标须为本群成员且非自己。

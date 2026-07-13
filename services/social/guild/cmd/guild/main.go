@@ -9,9 +9,10 @@
 //  3. log.Setup → 全局 zap logger
 //  4. MySQL client + Ping(强依赖:公会 / 群关系落库不可降级)
 //  5. Snowflake Node(guild_id / group_id / request_id 生成,node_id 来自 yaml)
-//  6. kafka producer(topic=pandora.guild.event)→ guildEventPusher(弱依赖)
-//  7. 装配 GuildUsecase + GroupUsecase → GuildService + GroupService → gRPC/HTTP server
-//  8. kratos.New(...).Run() 阻塞
+//  6. Redis client + Ping(弱依赖:公会资料读缓存 cache-aside,失败降级直连 MySQL)
+//  7. kafka producer(topic=pandora.guild.event)→ guildEventPusher(弱依赖)
+//  8. 装配 GuildUsecase + GroupUsecase → GuildService + GroupService → gRPC/HTTP server
+//  9. kratos.New(...).Run() 阻塞
 package main
 
 import (
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
@@ -28,6 +30,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 	guildv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/guild/v1"
 
@@ -88,7 +91,28 @@ func main() {
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
 	defer func() { _ = sfCloser.Close() }()
 
-	// 5. kafka producer → guildEventPusher(弱依赖:broker 不通则 warn 并继续,推送静默 fail)
+	// 5. Redis(弱依赖:公会资料读缓存 cache-aside;Ping 失败降级直连 MySQL,cache=nil)。
+	//    单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
+	var guildCache data.GuildCache
+	if rc := cfg.Node.RedisClient; rc.Host != "" || len(rc.Addrs) > 0 {
+		rdb := redisx.NewUniversalClient(rc)
+		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if perr := rdb.Ping(pingCtx).Err(); perr != nil {
+			cancel()
+			_ = rdb.Close()
+			helper.Warnw("msg", "redis_ping_failed", "err", perr, "addr", rc.Host, "addrs", rc.Addrs,
+				"hint", "degrade to direct MySQL (no guild cache)")
+		} else {
+			cancel()
+			defer func() { _ = rdb.Close() }()
+			guildCache = data.NewRedisGuildCache(rdb)
+			helper.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs, "cache_ttl", cfg.Guild.CacheTTL.String())
+		}
+	} else {
+		helper.Warnw("msg", "redis_endpoint_empty", "hint", "guild cache disabled (direct MySQL)")
+	}
+
+	// 6. kafka producer → guildEventPusher(弱依赖:broker 不通则 warn 并继续,推送静默 fail)
 	var pusher biz.GuildEventPusher
 	if len(cfg.Kafka.Brokers) > 0 {
 		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicGuildEvent)
@@ -104,10 +128,10 @@ func main() {
 		helper.Warnw("msg", "kafka_brokers_empty", "hint", "guild push disabled")
 	}
 
-	// 6. 装配链(公会 + 临时群同进程)
+	// 7. 装配链(公会 + 临时群同进程)
 	guildRepo := data.NewMySQLGuildRepo(db)
 	groupRepo := data.NewMySQLGroupRepo(db)
-	guildUC := biz.NewGuildUsecase(guildRepo, pusher, cfg.Guild)
+	guildUC := biz.NewGuildUsecase(guildRepo, guildCache, pusher, cfg.Guild)
 	groupUC := biz.NewGroupUsecase(groupRepo, cfg.Guild)
 	guildSvc := service.NewGuildService(guildUC, sf)
 	groupSvc := service.NewGroupService(groupUC, sf)
@@ -120,11 +144,12 @@ func main() {
 		"grpc", cfg.Server.Grpc.Addr,
 		"http", cfg.Server.Http.Addr,
 		"kafka_brokers", cfg.Kafka.Brokers,
+		"cache_enabled", guildCache != nil,
 		"max_guild_members", cfg.Guild.MaxGuildMembers,
 		"max_group_members", cfg.Guild.MaxGroupMembers,
 	)
 
-	// 7. Kratos App
+	// 8. Kratos App
 	app := kratos.New(
 		kratos.Name(serviceName),
 		kratos.Logger(logger),

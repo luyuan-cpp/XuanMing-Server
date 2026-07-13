@@ -94,7 +94,12 @@ func (f *fakeGroupRepo) ListMyGroups(_ context.Context, playerID uint64) ([]data
 	return out, nil
 }
 
-func (f *fakeGroupRepo) AddMember(_ context.Context, groupID, playerID uint64, maxMembers, maxGroups int) (bool, error) {
+func (f *fakeGroupRepo) AddMember(_ context.Context, groupID, operatorID, playerID uint64, maxMembers, maxGroups int) (bool, error) {
+	if operatorID != 0 {
+		if _, ok := f.members[memberKey{groupID, operatorID}]; !ok {
+			return false, errcode.New(errcode.ErrGroupNotMember, "operator not in group")
+		}
+	}
 	if _, ok := f.members[memberKey{groupID, playerID}]; ok {
 		return true, nil
 	}
@@ -123,7 +128,33 @@ func (f *fakeGroupRepo) RemoveMember(_ context.Context, groupID, playerID uint64
 	return nil
 }
 
-func (f *fakeGroupRepo) DisbandGroup(_ context.Context, groupID uint64) error {
+func (f *fakeGroupRepo) KickMember(_ context.Context, groupID, operatorID, targetID uint64) error {
+	g, ok := f.groups[groupID]
+	if !ok {
+		return errcode.New(errcode.ErrGroupNotFound, "not found")
+	}
+	if g.OwnerID != operatorID {
+		return errcode.New(errcode.ErrGroupNotOwner, "not current owner")
+	}
+	if targetID == g.OwnerID {
+		return errcode.New(errcode.ErrGroupNotOwner, "cannot kick owner")
+	}
+	if _, ok := f.members[memberKey{groupID, targetID}]; !ok {
+		return errcode.New(errcode.ErrGroupNotMember, "target not in group")
+	}
+	delete(f.members, memberKey{groupID, targetID})
+	g.MemberCount--
+	return nil
+}
+
+func (f *fakeGroupRepo) DisbandGroup(_ context.Context, groupID, operatorID uint64) error {
+	g, ok := f.groups[groupID]
+	if !ok {
+		return errcode.New(errcode.ErrGroupNotFound, "not found")
+	}
+	if g.OwnerID != operatorID {
+		return errcode.New(errcode.ErrGroupNotOwner, "not current owner")
+	}
 	for k := range f.members {
 		if k.group == groupID {
 			delete(f.members, k)
@@ -275,4 +306,46 @@ func TestGetGroup_NotFound(t *testing.T) {
 	uc := newGroupUC(newFakeGroupRepo())
 	_, err := uc.GetGroup(context.Background(), 9999)
 	wantGuildCode(t, err, errcode.ErrGroupNotFound)
+}
+
+// ── TOCTOU 权威复核(三审 P1-9):repo 层持群行锁再复核操作者 ──
+
+// 转让后旧群主(已降 member)再解散群,repo 复核 owner_id != 旧群主 → 拒绝。
+func TestDisbandGroup_StaleOwnerRejected(t *testing.T) {
+	repo := newFakeGroupRepo()
+	uc := newGroupUC(repo)
+	_, _ = uc.CreateGroup(context.Background(), 1, "g", []uint64{2}, 9001)
+	_ = uc.TransferOwner(context.Background(), 1, 9001, 2) // 群主 1 → 2
+	err := repo.DisbandGroup(context.Background(), 9001, 1)
+	wantGuildCode(t, err, errcode.ErrGroupNotOwner)
+	if _, ok := repo.groups[9001]; !ok {
+		t.Fatalf("group must survive stale-owner disband")
+	}
+}
+
+// 转让后旧群主(已降 member)再踢人,repo 复核操作者为现任群主 → 拒绝。
+func TestKickFromGroup_StaleOwnerRejected(t *testing.T) {
+	repo := newFakeGroupRepo()
+	uc := newGroupUC(repo)
+	_, _ = uc.CreateGroup(context.Background(), 1, "g", []uint64{2, 3}, 9001)
+	_ = uc.TransferOwner(context.Background(), 1, 9001, 2) // 群主 1 → 2
+	err := repo.KickMember(context.Background(), 9001, 1, 3)
+	wantGuildCode(t, err, errcode.ErrGroupNotOwner)
+	if _, ok := repo.members[memberKey{9001, 3}]; !ok {
+		t.Fatalf("member 3 must survive stale-owner kick")
+	}
+}
+
+// 邀请者退群后再拉人,repo 持群行锁复核邀请者仍在群 → 拒绝。
+func TestInviteToGroup_StaleInviterRejected(t *testing.T) {
+	repo := newFakeGroupRepo()
+	uc := newGroupUC(repo)
+	_, _ = uc.CreateGroup(context.Background(), 1, "g", []uint64{2}, 9001)
+	// 成员 2 退群后,用 2 作邀请者拉 3:repo 复核邀请者 2 已不在群 → 拒。
+	_ = uc.LeaveGroup(context.Background(), 2, 9001)
+	_, err := repo.AddMember(context.Background(), 9001, 2, 3, 50, 50)
+	wantGuildCode(t, err, errcode.ErrGroupNotMember)
+	if _, ok := repo.members[memberKey{9001, 3}]; ok {
+		t.Fatalf("target 3 must not be added by stale inviter")
+	}
 }

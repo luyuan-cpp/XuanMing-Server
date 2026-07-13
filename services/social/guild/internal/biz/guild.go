@@ -16,6 +16,7 @@ package biz
 import (
 	"context"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -34,14 +35,16 @@ type GuildEventPusher interface {
 
 // GuildUsecase 是 guild 服务公会业务逻辑核心。
 type GuildUsecase struct {
-	repo   data.GuildRepo
-	pusher GuildEventPusher // 弱依赖,可为 nil
-	cfg    conf.GuildConf
+	repo     data.GuildRepo
+	cache    data.GuildCache  // 弱依赖读缓存,可为 nil(降级直连 MySQL)
+	pusher   GuildEventPusher // 弱依赖,可为 nil
+	cfg      conf.GuildConf
+	cacheTTL time.Duration
 }
 
-// NewGuildUsecase 构造。pusher 允许为 nil(弱依赖未配置时降级)。
-func NewGuildUsecase(repo data.GuildRepo, pusher GuildEventPusher, cfg conf.GuildConf) *GuildUsecase {
-	return &GuildUsecase{repo: repo, pusher: pusher, cfg: cfg}
+// NewGuildUsecase 构造。cache / pusher 均允许为 nil(弱依赖未配置时降级)。
+func NewGuildUsecase(repo data.GuildRepo, cache data.GuildCache, pusher GuildEventPusher, cfg conf.GuildConf) *GuildUsecase {
+	return &GuildUsecase{repo: repo, cache: cache, pusher: pusher, cfg: cfg, cacheTTL: cfg.CacheTTL.Std()}
 }
 
 // CreateGuild 创建公会,创建者成为会长。newGuildID 由 service 用 snowflake 预生成。
@@ -56,6 +59,10 @@ func (u *GuildUsecase) CreateGuild(ctx context.Context, playerID uint64, name st
 	if err := u.repo.CreateGuild(ctx, newGuildID, playerID, name, u.cfg.MaxGuildMembers); err != nil {
 		return 0, err
 	}
+	// 写后删:创建者入会成为会长 → 失效其 member 反查缓存。
+	// 若不删,旧「所属某公会」反查(退会/踢出后删失败或并发迟到回填的残留)会让
+	// GetMyGuild 在 TTL 内继续返回旧公会,最长 cacheTTL(默认 60s)。
+	u.invalidateMember(ctx, playerID)
 	return newGuildID, nil
 }
 
@@ -113,6 +120,9 @@ func (u *GuildUsecase) ApproveJoin(ctx context.Context, approverID, requestID ui
 	if !approved {
 		return errcode.New(errcode.ErrGuildRequestInvalid, "request %d not pending", requestID)
 	}
+	// 写后删:成员数++ → 失效公会资料;申请人新入会 → 失效其 member 反查。
+	u.invalidateGuild(ctx, rq.GuildID)
+	u.invalidateMember(ctx, rq.PlayerID)
 	g, _, _ := u.repo.GetGuild(ctx, rq.GuildID)
 	guildName := ""
 	if g != nil {
@@ -167,7 +177,13 @@ func (u *GuildUsecase) LeaveGuild(ctx context.Context, playerID uint64) error {
 	if m.Role == data.GuildRoleLeader {
 		return errcode.New(errcode.ErrGuildNotLeader, "leader must transfer or disband before leaving")
 	}
-	return u.repo.RemoveMember(ctx, m.GuildID, playerID)
+	if err := u.repo.RemoveMember(ctx, m.GuildID, playerID); err != nil {
+		return err
+	}
+	// 写后删:成员数-- → 失效公会资料;玩家退会 → 失效其 member 反查。
+	u.invalidateGuild(ctx, m.GuildID)
+	u.invalidateMember(ctx, playerID)
+	return nil
 }
 
 // KickMember 踢出成员。LEADER 可踢任意非会长成员;OFFICER 只能踢普通成员。不能踢自己 / 踢会长。
@@ -202,9 +218,12 @@ func (u *GuildUsecase) KickMember(ctx context.Context, operatorID, targetID uint
 	default:
 		return errcode.New(errcode.ErrGuildNoPermission, "member cannot kick")
 	}
-	if err := u.repo.RemoveMember(ctx, op.GuildID, targetID); err != nil {
+	if err := u.repo.KickMember(ctx, op.GuildID, operatorID, targetID); err != nil {
 		return err
 	}
+	// 写后删:成员数-- → 失效公会资料;被踢玩家 → 失效其 member 反查。
+	u.invalidateGuild(ctx, op.GuildID)
+	u.invalidateMember(ctx, targetID)
 	g, _, _ := u.repo.GetGuild(ctx, op.GuildID)
 	guildName := ""
 	if g != nil {
@@ -219,7 +238,7 @@ func (u *GuildUsecase) KickMember(ctx context.Context, operatorID, targetID uint
 	return nil
 }
 
-// DisbandGuild 解散公会。仅 LEADER。解散前先抓全体成员用于推送通知。
+// DisbandGuild 解散公会。仅 LEADER。删除的成员集合由解散事务在锁住公会父行后原子返回。
 func (u *GuildUsecase) DisbandGuild(ctx context.Context, leaderID uint64) error {
 	m, ok, err := u.repo.GetMember(ctx, leaderID)
 	if err != nil {
@@ -236,14 +255,21 @@ func (u *GuildUsecase) DisbandGuild(ctx context.Context, leaderID uint64) error 
 	if g != nil {
 		guildName = g.Name
 	}
-	members, _ := u.repo.ListMembers(ctx, m.GuildID, 0, 0)
-
-	if err := u.repo.DisbandGuild(ctx, m.GuildID); err != nil {
+	// 成员集合由解散事务在持公会父行 FOR UPDATE 锁时读取并原子返回:与删除同事务,不会漏掉
+	// 「快照后并发批准的新成员」(那类成员会被删却拿不到,导致缓存失效 / 通知遗漏)。事务失败
+	// 则整体回滚、什么都没删,直接返回错误让上层重试。
+	deletedMembers, err := u.repo.DisbandGuild(ctx, m.GuildID, leaderID)
+	if err != nil {
 		return err
 	}
+	// 写后删:公会已删 → 失效公会资料 + 全体被删成员 member 反查。
+	u.invalidateGuild(ctx, m.GuildID)
+	for _, pid := range deletedMembers {
+		u.invalidateMember(ctx, pid)
+	}
 	// 通知全体成员(含会长本人,解散是全员事件,例外于原则 2)。
-	for _, mem := range members {
-		u.push(ctx, mem.PlayerID, &guildv1.GuildEvent{
+	for _, pid := range deletedMembers {
+		u.push(ctx, pid, &guildv1.GuildEvent{
 			Type:      guildv1.GuildEventType_GUILD_EVENT_TYPE_DISBANDED,
 			GuildId:   m.GuildID,
 			ActorId:   leaderID,
@@ -268,6 +294,8 @@ func (u *GuildUsecase) TransferLeader(ctx context.Context, leaderID, targetID ui
 	if err := u.repo.TransferLeader(ctx, m.GuildID, leaderID, targetID); err != nil {
 		return err
 	}
+	// 写后删:leader_id 变更 → 失效公会资料(成员集合不变,member 反查无需动)。
+	u.invalidateGuild(ctx, m.GuildID)
 	g, _, _ := u.repo.GetGuild(ctx, m.GuildID)
 	guildName := ""
 	if g != nil {
@@ -311,11 +339,19 @@ func (u *GuildUsecase) SetOfficer(ctx context.Context, leaderID, targetID uint64
 	if isOfficer {
 		role = data.GuildRoleOfficer
 	}
-	return u.repo.SetRole(ctx, m.GuildID, targetID, role)
+	return u.repo.SetRole(ctx, m.GuildID, leaderID, targetID, role)
 }
 
-// GetGuild 查公会。不存在 → ErrGuildNotFound。
+// GetGuild 查公会。不存在 → ErrGuildNotFound。cache-aside:先读缓存,miss 回落 MySQL 并回填。
 func (u *GuildUsecase) GetGuild(ctx context.Context, guildID uint64) (*guildv1.Guild, error) {
+	if u.cache != nil {
+		if g, ok, err := u.cache.GetGuild(ctx, guildID); err != nil {
+			// Redis 读故障:记录后回落 MySQL(缓存弱依赖,不报错给上层)。
+			plog.With(ctx).Warnw("msg", "guild_cache_get_failed", "guild_id", guildID, "err", err)
+		} else if ok {
+			return toGuildView(g), nil
+		}
+	}
 	g, ok, err := u.repo.GetGuild(ctx, guildID)
 	if err != nil {
 		return nil, err
@@ -323,18 +359,36 @@ func (u *GuildUsecase) GetGuild(ctx context.Context, guildID uint64) (*guildv1.G
 	if !ok {
 		return nil, errcode.New(errcode.ErrGuildNotFound, "guild %d not found", guildID)
 	}
+	u.fillGuildCache(ctx, g)
 	return toGuildView(g), nil
 }
 
 // GetMyGuild 查玩家当前公会;不在任何公会返回 (nil, nil)(service 回 OK + 空)。
+// cache-aside:member 反查缓存解析所属 guild_id → info 缓存取公会资料;任一 miss 回落 MySQL。
 func (u *GuildUsecase) GetMyGuild(ctx context.Context, playerID uint64) (*guildv1.Guild, error) {
+	if u.cache != nil {
+		if guildID, ok, err := u.cache.GetMemberGuildID(ctx, playerID); err != nil {
+			plog.With(ctx).Warnw("msg", "guild_member_cache_get_failed", "player_id", playerID, "err", err)
+		} else if ok {
+			if g, ok2, err2 := u.cache.GetGuild(ctx, guildID); err2 != nil {
+				plog.With(ctx).Warnw("msg", "guild_cache_get_failed", "guild_id", guildID, "err", err2)
+			} else if ok2 {
+				return toGuildView(g), nil
+			}
+			// member 命中但 info miss / 读故障 → 落到下方权威读取并重建缓存。
+		}
+	}
 	g, ok, err := u.repo.GetMyGuild(ctx, playerID)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
+		// 权威:不在任何公会 → 清掉可能残留的陈旧 member 反查缓存(写路径删失败时的自愈)。
+		u.invalidateMember(ctx, playerID)
 		return nil, nil
 	}
+	u.fillGuildCache(ctx, g)
+	u.fillMemberCache(ctx, playerID, g.GuildID)
 	return toGuildView(g), nil
 }
 
@@ -445,6 +499,46 @@ func (u *GuildUsecase) push(ctx context.Context, toPlayerID uint64, evt *guildv1
 	if err := u.pusher.PushGuildEvent(ctx, toPlayerID, e); err != nil {
 		plog.With(ctx).Warnw("msg", "guild_push_failed",
 			"to_player_id", toPlayerID, "type", evt.GetType(), "err", err)
+	}
+}
+
+// invalidateGuild 删公会资料缓存(写后删,弱依赖;删失败仅 warn,靠短 TTL 兜底)。
+func (u *GuildUsecase) invalidateGuild(ctx context.Context, guildID uint64) {
+	if u.cache == nil || guildID == 0 {
+		return
+	}
+	if err := u.cache.DelGuild(ctx, guildID); err != nil {
+		plog.With(ctx).Warnw("msg", "guild_cache_del_failed", "guild_id", guildID, "err", err)
+	}
+}
+
+// invalidateMember 删玩家→guild_id 反查缓存(入会 / 退会 / 踢人 / 解散后)。
+func (u *GuildUsecase) invalidateMember(ctx context.Context, playerID uint64) {
+	if u.cache == nil || playerID == 0 {
+		return
+	}
+	if err := u.cache.DelMember(ctx, playerID); err != nil {
+		plog.With(ctx).Warnw("msg", "guild_member_cache_del_failed", "player_id", playerID, "err", err)
+	}
+}
+
+// fillGuildCache 回填公会资料缓存(读 miss 后;失败仅少命中,不报错给上层)。
+func (u *GuildUsecase) fillGuildCache(ctx context.Context, g *data.GuildRow) {
+	if u.cache == nil || g == nil {
+		return
+	}
+	if err := u.cache.SetGuild(ctx, g, u.cacheTTL); err != nil {
+		plog.With(ctx).Warnw("msg", "guild_cache_set_failed", "guild_id", g.GuildID, "err", err)
+	}
+}
+
+// fillMemberCache 回填玩家→guild_id 反查缓存(guildID=0 时为不在公会,SetMemberGuildID 自身跳过)。
+func (u *GuildUsecase) fillMemberCache(ctx context.Context, playerID, guildID uint64) {
+	if u.cache == nil {
+		return
+	}
+	if err := u.cache.SetMemberGuildID(ctx, playerID, guildID, u.cacheTTL); err != nil {
+		plog.With(ctx).Warnw("msg", "guild_member_cache_set_failed", "player_id", playerID, "err", err)
 	}
 }
 
