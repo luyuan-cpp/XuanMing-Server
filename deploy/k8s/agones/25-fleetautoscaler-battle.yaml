@@ -1,0 +1,59 @@
+# pandora-battle-stable FleetAutoscaler(Buffer 策略,Agones 标准做法)
+#
+# 战斗 DS 是「一局 = 一个 GameServer」的按需分配模型:每次 GameServerAllocation 把一个
+# Ready GameServer 转 Allocated。没有 autoscaler 时 Fleet replicas 是硬上限(此前为 2,
+# 即同时最多 2 局)。本 autoscaler 用 Buffer 策略让 Agones 始终维持 bufferSize 个 Ready
+# 预热实例:每分配走一个,Agones 自动补一个,直到总量(Ready+Allocated)触到 maxReplicas。
+#
+#   同时最大局数 = maxReplicas(所有实例都被分配、buffer 无法再补时)。
+#
+# 参数说明:
+#   - bufferSize:  常备 Ready 预热数。分配后立刻有下一局可用,不用等新 Pod 冷启动。
+#                  大规模时 Agones 支持百分比(如 "10%"):预热量随在跑局数自动放大。
+#   - minReplicas: 空闲时的最小总量,≥ bufferSize。与 20-fleet-battle.yaml 的 replicas: 2
+#                  保持一致(Fleet 的 replicas 只是初值,autoscaler 接管后以本文件为准)。
+#   - maxReplicas: 总量硬上限 = 同时最大局数。Agones 必填,没有「无限」选项 —— 它是防
+#                  bug/被刷时无限烧钱的安全护栏,不是目标容量。
+#
+# 线上标准姿势(两层自动扩容,Agones 官方推荐):
+#   1) GameServer 层 = 本 FleetAutoscaler(Buffer);
+#   2) 节点层 = k8s Cluster Autoscaler(云厂商节点池自动扩缩)。Pod 多到节点装不下→自动加
+#      节点。Agones 原生配合:GameServer Pod 自带 safe-to-evict=false(缩节点不驱逐在跑
+#      对局),Fleet 默认 Packed 调度(把局挤到少数节点,空节点好回收)。
+#   所以「无限」来自节点层;maxReplicas 设为节点池上限对应的容量即可。
+#
+# 本文件是本地 dev 默认值;线上发布用 start.ps1 -Mode online 的
+#   -BattleMaxReplicas <节点池上限容量> 和 -BattleBufferSize <如 "10%">
+# 在临时文件里改写后 apply(与 Fleet 镜像覆写同模式,仓库原文不脏)。
+#
+# 只给 Battle Stable 轨配 autoscaler:
+#   - Battle Canary(21):replicas 由发布流程 -BattleCanaryReplicas 显式控制,不自动伸缩。
+#   - Hub(30/31):常驻分片模型,GameServer 恒为 Ready 不被 Allocate,Buffer 策略对它
+#     永远不会触发扩容;Hub 容量按 500 人/分片由 hub_allocator 在 Redis 里判定,扩分片
+#     是改 Fleet replicas 的人工决策(见 30-fleet-hub.yaml 注释)。
+#
+# 观测:kubectl get fleetautoscaler pandora-battle-stable -n default
+#      kubectl get fleet pandora-battle-stable -n default(看 replicas/allocated 随分配变化)
+# 告警:Grafana 已有 allocated/replicas ≥ 0.8 持续 5m 告警(rules.yaml);触发说明逼近
+#      maxReplicas,该调大本文件的 maxReplicas 而不是 Fleet replicas。
+apiVersion: autoscaling.agones.dev/v1
+kind: FleetAutoscaler
+metadata:
+  name: pandora-battle-stable
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pandora
+    pandora.dev/role: battle
+    pandora.dev/release-track: stable
+spec:
+  fleetName: pandora-battle-stable
+  policy:
+    type: Buffer
+    buffer:
+      bufferSize: 2
+      minReplicas: 2
+      maxReplicas: 500
+  sync:
+    type: FixedInterval
+    fixedInterval:
+      seconds: 30

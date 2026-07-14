@@ -85,6 +85,11 @@ param(
     [ValidateRange(0, 100)][int]$HubCanaryPercent = 0,
     [ValidateRange(0, 1000)][int]$BattleCanaryReplicas = 1,
     [ValidateRange(0, 1000)][int]$HubCanaryReplicas = 1,
+    # online:Battle FleetAutoscaler 覆写。maxReplicas = 同时最大局数护栏,设为节点池上限
+    # 对应的容量(真弹性由集群 Cluster Autoscaler 加节点提供);bufferSize 支持百分比(如 10%)。
+    # 0/空 = 用 25-fleetautoscaler-battle.yaml 的本地 dev 默认值。
+    [ValidateRange(0, 1000000)][int]$BattleMaxReplicas = 0,
+    [ValidatePattern('^([0-9]+%?)?$')][string]$BattleBufferSize = '',
     [string]$CanarySeed = $env:PANDORA_DS_CANARY_SEED,
     [string]$DsGatewayAddr, # online:DS 回调入口(如 pandora-envoy.pandora.svc:8444)
     # online 安全映射:不同环境必须显式绑定各自 kube-context；也可用同名环境变量持久配置。
@@ -1749,6 +1754,9 @@ function Apply-AgonesManifests {
         [string]$CanaryHubDsImage = '',
         [ValidateRange(0, 1000)][int]$BattleCanaryReplicaCount = 0,
         [ValidateRange(0, 1000)][int]$HubCanaryReplicaCount = 0,
+        # Battle FleetAutoscaler 覆写(online 用):0/空 = 用 yaml 里的本地 dev 默认值。
+        [ValidateRange(0, 1000000)][int]$BattleMaxReplicasOverride = 0,
+        [ValidatePattern('^([0-9]+%?)?$')][string]$BattleBufferSizeOverride = '',
         [ValidateRange(1, 2147483647)][int]$DSTicketKeysetRevision = 1,
         [string]$DsGatewayAddr = '',
         [string]$DsGatewayTls = '',
@@ -1871,6 +1879,37 @@ function Apply-AgonesManifests {
     Apply-FleetManifest '21-fleet-battle-canary.yaml' $CanaryBattleDsImage 'canary' $BattleCanaryReplicaCount @('PANDORA_DS_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR', 'PANDORA_BATTLE_RESULT_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
     Apply-FleetManifest '30-fleet-hub.yaml' $HubDsImage 'stable' -1 @('PANDORA_HUB_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
     Apply-FleetManifest '31-fleet-hub-canary.yaml' $CanaryHubDsImage 'canary' $HubCanaryReplicaCount @('PANDORA_HUB_ALLOCATOR_ADDR', 'PANDORA_DS_ADMISSION_ADDR', 'PANDORA_PLAYER_LOCATOR_ADDR') 'PANDORA_DS_ALLOCATOR_TLS'
+    # Battle Stable 轨 FleetAutoscaler(Buffer 策略):维持常备 Ready 预热,分配走一个自动补一个,
+    # 同时最大局数 = maxReplicas(见 25-fleetautoscaler-battle.yaml 注释)。Canary/Hub 不配,原因同文件注释。
+    # online 可用 -BattleMaxReplicas/-BattleBufferSize 覆写(临时文件改写再 apply,仓库原文不脏)。
+    Write-Info "apply Battle FleetAutoscaler(Buffer 策略,上限见 25-fleetautoscaler-battle.yaml)..."
+    $autoscalerSrc = Join-Path $agonesDir '25-fleetautoscaler-battle.yaml'
+    if ($BattleMaxReplicasOverride -gt 0 -or -not [string]::IsNullOrWhiteSpace($BattleBufferSizeOverride)) {
+        $autoscalerRaw = Get-Content $autoscalerSrc -Raw
+        if ($BattleMaxReplicasOverride -gt 0) {
+            $maxPattern = '(?m)^(\s*maxReplicas:\s*)[0-9]+\s*$'
+            if ([regex]::Matches($autoscalerRaw, $maxPattern).Count -ne 1) { throw 'FleetAutoscaler maxReplicas 字段数量不是 1。' }
+            $autoscalerRaw = [regex]::Replace($autoscalerRaw, $maxPattern, ('${1}' + $BattleMaxReplicasOverride), 1)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($BattleBufferSizeOverride)) {
+            # 百分比必须带引号(yaml 字符串);纯整数裸写。
+            $bufValue = if ($BattleBufferSizeOverride -like '*%') { '"' + $BattleBufferSizeOverride + '"' } else { $BattleBufferSizeOverride }
+            $bufPattern = '(?m)^(\s*bufferSize:\s*)"?[0-9]+%?"?\s*$'
+            if ([regex]::Matches($autoscalerRaw, $bufPattern).Count -ne 1) { throw 'FleetAutoscaler bufferSize 字段数量不是 1。' }
+            $autoscalerRaw = [regex]::Replace($autoscalerRaw, $bufPattern, ('${1}' + $bufValue), 1)
+        }
+        $autoscalerTmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + '-25-fleetautoscaler-battle.yaml')
+        [System.IO.File]::WriteAllText($autoscalerTmp, $autoscalerRaw, (New-Object System.Text.UTF8Encoding($false)))
+        try {
+            kubectl @kubectlContextArgs apply -f $autoscalerTmp
+            Assert-LastExit 'kubectl apply Battle FleetAutoscaler(override)'
+        } finally {
+            Remove-Item $autoscalerTmp -ErrorAction SilentlyContinue
+        }
+    } else {
+        kubectl @kubectlContextArgs apply -f $autoscalerSrc
+        Assert-LastExit 'kubectl apply Battle FleetAutoscaler'
+    }
     Write-Warn "Fleet 用真 UE DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)。"
     Write-Warn "  这些镜像由 UE 侧 Tool/Server/Agones 构建;minikube 需先 minikube image load,线上需 push 到 -Registry。"
 
@@ -2150,8 +2189,9 @@ function Invoke-K8s {
             throw "宿主桥接已清理，但 kube-context『$mkProfile』的 endpoint 不是本机 minikube(可能是同名远端/生产集群)。为防误删且避免假报 Down 成功，集群侧删除未执行。"
         }
         Write-Step "删除 k8s 业务服务 + 基础设施(context=$mkProfile)"
-        # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)
-        foreach ($fleetFile in @('31-fleet-hub-canary.yaml', '30-fleet-hub.yaml', '21-fleet-battle-canary.yaml', '20-fleet-battle.yaml')) {
+        # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)。
+        # 先删 FleetAutoscaler 再删 Fleet:避免删 Fleet 期间 autoscaler 还在按 buffer 补建 GameServer。
+        foreach ($fleetFile in @('25-fleetautoscaler-battle.yaml', '31-fleet-hub-canary.yaml', '30-fleet-hub.yaml', '21-fleet-battle-canary.yaml', '20-fleet-battle.yaml')) {
             kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot "deploy/k8s/agones/$fleetFile") --ignore-not-found 2>$null
             Assert-LastExit "kubectl delete Fleet $fleetFile"
         }
@@ -2378,7 +2418,8 @@ function Invoke-Online {
         # DS GameServer 继续占集群资源、孤儿 RBAC 残留(回应审核 P1:Down 只删业务 overlay)。
         # ⚠️ 删 Fleet 会终止在跑的战斗/大厅 DS —— Down 本身就是下线动作,语义一致。
         $downAgonesDir = Join-Path $ProjectRoot 'deploy/k8s/agones'
-        foreach ($f in @('20-fleet-battle.yaml', '21-fleet-battle-canary.yaml', '30-fleet-hub.yaml', '31-fleet-hub-canary.yaml', '10-rbac-allocator.yaml')) {
+        # 25-fleetautoscaler 放最前:先停 autoscaler 再删 Fleet,避免删除期间 buffer 补建 GameServer。
+        foreach ($f in @('25-fleetautoscaler-battle.yaml', '20-fleet-battle.yaml', '21-fleet-battle-canary.yaml', '30-fleet-hub.yaml', '31-fleet-hub-canary.yaml', '10-rbac-allocator.yaml')) {
             kubectl @kubectlContextArgs delete -f (Join-Path $downAgonesDir $f) --ignore-not-found
             Assert-LastExit "kubectl delete $f"
         }
@@ -2843,6 +2884,7 @@ function Invoke-Online {
     Apply-AgonesManifests -BattleDsImage $battlePin -HubDsImage $hubPin `
         -CanaryBattleDsImage $battleCanaryPin -CanaryHubDsImage $hubCanaryPin `
         -BattleCanaryReplicaCount $battleCanaryReplicaApply -HubCanaryReplicaCount $hubCanaryReplicaApply `
+        -BattleMaxReplicasOverride $BattleMaxReplicas -BattleBufferSizeOverride $BattleBufferSize `
         -DSTicketKeysetRevision $dstTicketRevision -DsGatewayAddr $DsGatewayAddr -DsGatewayTls $DsGatewayTls `
         -KubeContext $ctx
 

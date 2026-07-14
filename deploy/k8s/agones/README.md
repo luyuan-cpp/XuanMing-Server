@@ -14,7 +14,7 @@
 不是 mock 假地址），一条命令：
 
 ```powershell
-# 起 minikube + 装 Agones + apply RBAC/16-ds-envoy/Fleet + 部署 20 个后端服务(allocator=agones)
+# 起 minikube + 装 Agones + apply RBAC/16-ds-envoy/Fleet/FleetAutoscaler + 部署 20 个后端服务(allocator=agones)
 # 末尾 [8/8] 会自动跑 e2e_k8s.ps1(宿主 Envoy 桥接 + UDP 回程中继 + 验收清单),无需再手动跑
 pwsh tools/scripts/start.ps1 -Mode k8s
 ```
@@ -140,6 +140,8 @@ pwsh tools/scripts/start.ps1 -Mode online -Env prod -ProdKubeContext pandora-pro
 | `-CanaryBattleDsImage` / `-CanaryHubDsImage` | Canary 独立镜像；启用对应权重时必填，digest 必须与 Stable 不同 | 不启用时空 |
 | `-BattleCanaryPercent` / `-HubCanaryPercent` | allocator 确定性 cohort 权重；0 可先预热 Canary | `0` |
 | `-BattleCanaryReplicas` / `-HubCanaryReplicas` | 显式 Canary 镜像的预热池容量 | `1` |
+| `-BattleMaxReplicas` | Battle FleetAutoscaler 同时最大局数护栏;设为节点池上限对应容量,真弹性由集群 Cluster Autoscaler 加节点提供 | `0`(用 yaml 本地值 500) |
+| `-BattleBufferSize` | Battle Ready 预热量;大规模建议百分比(如 `10%`,随在跑局数自动放大) | 空(用 yaml 本地值 2) |
 | `-CanarySeed` | Battle 按 match_id、Hub 按 player_id 的稳定 cohort seed；权重非 0 时禁止更换 | 权重>0 必填 |
 | `-DsGatewayAddr` | 覆写四个 Fleet 的 DS 回调地址 env → 线上网关实际 DNS | 必填 |
 | `-DsGatewayTls` | 改写 `PANDORA_DS_ALLOCATOR_TLS`；同集群 DS 面明文，只有集群外 TLS 边缘才设 `1` | `0` |

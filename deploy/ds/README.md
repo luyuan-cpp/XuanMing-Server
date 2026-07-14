@@ -149,7 +149,7 @@ kubectl create -f deploy/k8s/agones/40-gameserverallocation-example.yaml -o yaml
 
 1. **分配压测（直接打 Agones）**：循环 `kubectl create -f 40-gameserverallocation-example.yaml`，
    或写脚本并发 N 次 GameServerAllocation，统计 Allocated 耗时与失败率；配合
-   `FleetAutoscaler`（如未建可加）观察 Ready buffer 是否被打穿。
+   `FleetAutoscaler`（已建：`25-fleetautoscaler-battle.yaml`，Buffer 策略）观察 Ready buffer 是否被打穿。
 2. **端到端压测（打 matchmaker）**：用后端 `E:\work\Pandora\robot/`（机器人）或 `run/` 脚本
    批量发 Team→StartMatch，验证 ds_allocator→Agones→回址→客户端可连 的整链 QPS。
 3. **单 DS 承载**：往一个 Allocated DS 灌 N 个模拟客户端连接，看 CPU/内存/网络与 tick 稳定性，

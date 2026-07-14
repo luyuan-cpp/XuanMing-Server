@@ -18,6 +18,9 @@ metadata:
     pandora.dev/role: battle
     pandora.dev/release-track: stable
 spec:
+  # 初始副本数。本 Fleet 由 25-fleetautoscaler-battle.yaml(Buffer 策略)接管伸缩:
+  # 常备 bufferSize 个 Ready 预热,分配走一个自动补一个,同时最大局数 = maxReplicas。
+  # 扩容改 autoscaler 的 maxReplicas,不要改这里。
   replicas: 2
   template:
     metadata:
