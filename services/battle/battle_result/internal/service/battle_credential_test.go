@@ -13,11 +13,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
+	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/biz"
+	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
 )
 
@@ -26,11 +29,12 @@ var battleCredentialNow = time.UnixMilli(1_800_000_000_000)
 const battleCredentialTestSecret = "test-only-ds-callback-secret-32bytes"
 
 type battleAuthReaderStub struct {
-	rec      *dsv1.BattleDSAuthStorageRecord
-	battle   *dsv1.BattleStorageRecord
-	found    bool
-	err      error
-	recorded int
+	rec       *dsv1.BattleDSAuthStorageRecord
+	battle    *dsv1.BattleStorageRecord
+	found     bool
+	err       error
+	recordErr error
+	recorded  int
 }
 
 func (s *battleAuthReaderStub) GetBattleAuthority(context.Context, uint64) (*dsv1.BattleDSAuthStorageRecord, *dsv1.BattleStorageRecord, bool, error) {
@@ -38,7 +42,7 @@ func (s *battleAuthReaderStub) GetBattleAuthority(context.Context, uint64) (*dsv
 }
 func (s *battleAuthReaderStub) RecordBattleResult(context.Context, data.BattleResultCredential, time.Duration) error {
 	s.recorded++
-	return s.err
+	return s.recordErr
 }
 
 func validBattleCredential() (*middleware.VerifiedCredential, *dsv1.BattleDSAuthStorageRecord) {
@@ -238,14 +242,221 @@ func (*resultTestTransport) Operation() string {
 func (t *resultTestTransport) RequestHeader() transport.Header { return t.request }
 func (*resultTestTransport) ReplyHeader() transport.Header     { return resultTestHeader{} }
 
+type serviceBattleRepo struct {
+	saveErr  error
+	saved    bool
+	terminal *data.TerminalReleaseRecord
+}
+
+func (r *serviceBattleRepo) SaveResult(
+	_ context.Context,
+	_ *battlev1.BattleResult,
+	_ []data.OutboxRecord,
+	_ []data.DropOutboxRecord,
+	terminal *data.TerminalReleaseRecord,
+) (bool, error) {
+	if r.saveErr != nil {
+		return false, r.saveErr
+	}
+	if r.saved {
+		return true, nil
+	}
+	r.saved = true
+	if terminal != nil {
+		copyRecord := *terminal
+		copyRecord.ID = 1
+		r.terminal = &copyRecord
+	}
+	return false, nil
+}
+
+func (*serviceBattleRepo) GetResult(context.Context, uint64) (*battlev1.BattleResult, bool, error) {
+	return nil, false, nil
+}
+func (*serviceBattleRepo) ListPlayerHistory(context.Context, uint64, int, int64) ([]*battlev1.BattleResult, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) FetchOutbox(context.Context, int) ([]data.OutboxRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) DeleteOutbox(context.Context, int64) error { return nil }
+func (*serviceBattleRepo) FetchDropOutbox(context.Context, int) ([]data.DropOutboxRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) DeleteDropOutbox(context.Context, int64) error { return nil }
+func (*serviceBattleRepo) FetchTerminalReleaseOutbox(context.Context, int, int64) ([]data.TerminalReleaseRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) MarkTerminalReleaseReleased(context.Context, uint64, int64) (bool, error) {
+	return false, nil
+}
+func (*serviceBattleRepo) DeleteTerminalReleaseOutbox(context.Context, uint64) error { return nil }
+
+type guardedReportFixture struct {
+	svc    *BattleResultService
+	repo   *serviceBattleRepo
+	reader *battleAuthReaderStub
+	signer *auth.Signer
+	token  string
+	now    time.Time
+	req    *battlev1.ReportResultRequest
+}
+
+func newGuardedReportFixture(t *testing.T) *guardedReportFixture {
+	t.Helper()
+	reportNow := time.Now().Add(-time.Second).Truncate(time.Second)
+	authCfg := auth.Config{
+		Issuer: auth.DSCallbackIssuer, Audience: auth.DSCallbackAudience,
+		Secret: []byte(battleCredentialTestSecret), NowFn: func() time.Time { return reportNow },
+	}
+	signer, err := auth.NewSigner(authCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := auth.NewVerifier(authCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard, err := middleware.NewDSCallbackGuard(verifier, middleware.DSAuthEnforce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := signer.SignBattleCredential(9, "battle-9", "uid-9", 3, 7, "j7", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active := &dsv1.BattleDSCredential{
+		Gen: 7, Jti: "j7", ExpMs: uint64(issued.ExpMs), Kid: issued.Kid,
+		InstanceUid: "uid-9", InstanceEpoch: 3, TokenSha256: issued.TokenSHA256,
+		WriterEpoch: issued.WriterEpoch,
+	}
+	reader := &battleAuthReaderStub{
+		found: true,
+		rec: &dsv1.BattleDSAuthStorageRecord{
+			MatchId: 9, DsPodName: "battle-9", InstanceUid: "uid-9", InstanceEpoch: 3,
+			Phase: dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE, Active: active,
+			HighWaterGen: 7, RequiredWriterEpoch: auth.DSAuthWriterEpochV2,
+			AllocationId: "alloc-9", LastActiveHeartbeatMs: reportNow.Add(-time.Second).UnixMilli(),
+		},
+		battle: &dsv1.BattleStorageRecord{
+			MatchId: 9, DsPodName: "battle-9", State: "running", AllocationId: "alloc-9",
+			GameserverUid: "uid-9", InstanceEpoch: 3, LastVerifiedGen: 7,
+			LastVerifiedJti: "j7", LastVerifiedWriterEpoch: auth.DSAuthWriterEpochV2,
+		},
+	}
+	repo := &serviceBattleRepo{}
+	battleCfg := conf.BattleConf{
+		EloKFactor: 32, BaseMMR: 1500,
+		TerminalReleaseGrace: config.Duration(5 * time.Second),
+	}
+	uc := biz.NewBattleResultUsecase(repo, biz.NewStaticMMRReader(1500), nil, nil, battleCfg)
+	svc := NewBattleResultService(uc)
+	svc.SetDSCallbackGuard(guard)
+	svc.SetBattleCredentialStateChecker(&redisBattleCredentialStateChecker{
+		reader: reader, recorder: reader, now: func() time.Time { return reportNow },
+		maxActiveHeartbeatAge: 30 * time.Second,
+	})
+	req := &battlev1.ReportResultRequest{Result: &battlev1.BattleResult{
+		MatchId: 9, DsPodName: "battle-9", WinnerTeam: 0, EndedAtMs: reportNow.UnixMilli(),
+		Stats: []*battlev1.PlayerStats{{PlayerId: 1, Team: 0}, {PlayerId: 2, Team: 1}},
+	}}
+	return &guardedReportFixture{svc: svc, repo: repo, reader: reader, signer: signer, token: issued.Token, now: reportNow, req: req}
+}
+
+func guardedReportContext(token string) context.Context {
+	header := resultTestHeader{}
+	header.Set("authorization", "Bearer "+token)
+	header.Set(middleware.MetadataKeyDSGateway, "1")
+	return transport.NewServerContext(context.Background(), &resultTestTransport{request: header})
+}
+
+func signedBattleToken(t *testing.T, signer *auth.Signer, gen uint64, jti string) auth.HubCredentialResult {
+	t.Helper()
+	issued, err := signer.SignBattleCredential(9, "battle-9", "uid-9", 3, gen, jti, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return issued
+}
+
 type rejectingBattleChecker struct{ calls int }
 
 func (c *rejectingBattleChecker) CheckActive(context.Context, uint64, *middleware.VerifiedCredential) error {
-	c.calls++
 	return errcode.New(errcode.ErrUnauthorized, "stale")
+}
+func (c *rejectingBattleChecker) AuthorizeResult(context.Context, uint64, *middleware.VerifiedCredential) (data.TerminalReleaseRecord, error) {
+	c.calls++
+	return data.TerminalReleaseRecord{}, errcode.New(errcode.ErrUnauthorized, "stale")
 }
 func (c *rejectingBattleChecker) MarkResultRecorded(context.Context, uint64, *middleware.VerifiedCredential) error {
 	panic("must not record a rejected result")
+}
+
+func TestReportResultDBCommitSuccessReceiptFailureStillReturnsOKAndKeepsOutbox(t *testing.T) {
+	f := newGuardedReportFixture(t)
+	f.reader.recordErr = errors.New("redis receipt write unavailable")
+	resp, err := f.svc.ReportResult(guardedReportContext(f.token), f.req)
+	if err != nil || resp.GetCode() != commonv1.ErrCode_OK || resp.GetAlreadyRecorded() {
+		t.Fatalf("resp=%+v err=%v", resp, err)
+	}
+	if !f.repo.saved || f.repo.terminal == nil || f.reader.recorded != 1 {
+		t.Fatalf("durable success missing: saved=%v terminal=%+v receipt_calls=%d",
+			f.repo.saved, f.repo.terminal, f.reader.recorded)
+	}
+	if f.repo.terminal.AuthGen != 7 || f.repo.terminal.AuthJTI != "j7" ||
+		f.repo.terminal.ReleaseAfterMs <= f.now.UnixMilli() {
+		t.Fatalf("durable terminal proof invalid: %+v", f.repo.terminal)
+	}
+}
+
+func TestReportResultDBCommitFailureNeverReturnsOKOrWritesReceipt(t *testing.T) {
+	f := newGuardedReportFixture(t)
+	f.repo.saveErr = errors.New("mysql commit failed")
+	resp, err := f.svc.ReportResult(guardedReportContext(f.token), f.req)
+	if err != nil || resp.GetCode() == commonv1.ErrCode_OK {
+		t.Fatalf("DB failure response=%+v err=%v", resp, err)
+	}
+	if f.repo.saved || f.repo.terminal != nil || f.reader.recorded != 0 {
+		t.Fatalf("DB failure leaked success side effects: saved=%v terminal=%+v receipt_calls=%d",
+			f.repo.saved, f.repo.terminal, f.reader.recorded)
+	}
+}
+
+func TestReportResultRotatedCredentialReplayDoesNotReplaceDurableProof(t *testing.T) {
+	f := newGuardedReportFixture(t)
+	first, err := f.svc.ReportResult(guardedReportContext(f.token), f.req)
+	if err != nil || first.GetCode() != commonv1.ErrCode_OK || first.GetAlreadyRecorded() {
+		t.Fatalf("first response=%+v err=%v", first, err)
+	}
+	original := *f.repo.terminal
+	if f.reader.recorded != 1 {
+		t.Fatalf("first receipt calls=%d", f.reader.recorded)
+	}
+
+	rotated := signedBattleToken(t, f.signer, 8, "j8")
+	f.reader.rec.Active = &dsv1.BattleDSCredential{
+		Gen: 8, Jti: "j8", ExpMs: uint64(rotated.ExpMs), Kid: rotated.Kid,
+		InstanceUid: "uid-9", InstanceEpoch: 3, TokenSha256: rotated.TokenSHA256,
+		WriterEpoch: rotated.WriterEpoch,
+	}
+	f.reader.rec.HighWaterGen = 8
+	f.reader.battle.LastVerifiedGen = 8
+	f.reader.battle.LastVerifiedJti = "j8"
+	f.reader.battle.LastVerifiedWriterEpoch = rotated.WriterEpoch
+	second, err := f.svc.ReportResult(
+		guardedReportContext(rotated.Token),
+		&battlev1.ReportResultRequest{Result: proto.Clone(f.req.GetResult()).(*battlev1.BattleResult)},
+	)
+	if err != nil || second.GetCode() != commonv1.ErrCode_OK || !second.GetAlreadyRecorded() {
+		t.Fatalf("rotated replay response=%+v err=%v", second, err)
+	}
+	if f.reader.recorded != 1 {
+		t.Fatalf("idempotent replay rewrote immediate receipt: calls=%d", f.reader.recorded)
+	}
+	if f.repo.terminal == nil || *f.repo.terminal != original ||
+		f.repo.terminal.AuthGen != 7 || f.repo.terminal.AuthJTI != "j7" {
+		t.Fatalf("rotated replay replaced durable proof: before=%+v after=%+v", original, f.repo.terminal)
+	}
 }
 
 func TestReportResultChecksActiveBeforeUsecaseSideEffects(t *testing.T) {

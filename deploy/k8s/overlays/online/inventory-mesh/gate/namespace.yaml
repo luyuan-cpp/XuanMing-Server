@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pandora
+  labels:
+    pandora.dev/inventory-mesh-revision: PANDORA_ISTIO_REVISION_REQUIRED

@@ -554,6 +554,18 @@ static_resources:
                   cluster: hub_allocator_cluster
                   timeout: 15s
                   idle_timeout: 60s
+              - match:
+                  path: "/pandora.hub.v1.HubAllocatorService/AcknowledgeAdmission"
+                route:
+                  cluster: hub_allocator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.hub.v1.HubAllocatorService/AcknowledgeDeparture"
+                route:
+                  cluster: hub_allocator_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
               # ----- Battle DS → ds_allocator.Heartbeat(unary 5s 心跳)-----
               - match:
                   path: "/pandora.ds.v1.DSAllocatorService/Heartbeat"

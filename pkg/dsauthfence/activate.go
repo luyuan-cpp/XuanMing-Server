@@ -44,7 +44,13 @@ type ActivationClient struct {
 }
 
 // NewActivationClient 构造只操作 DS auth 命名空间的客户端。
+
 func NewActivationClient(endpoints []string, prefix string, timeout time.Duration) (*ActivationClient, error) {
+	return NewActivationClientWithSecurity(endpoints, prefix, timeout, ClientSecurity{})
+}
+
+// NewActivationClientWithSecurity 构造带 mTLS/auth/ACL 负向证明的激活客户端。
+func NewActivationClientWithSecurity(endpoints []string, prefix string, timeout time.Duration, security ClientSecurity) (*ActivationClient, error) {
 	if len(endpoints) == 0 {
 		return nil, fmt.Errorf("dsauthfence: empty endpoints")
 	}
@@ -54,7 +60,7 @@ func NewActivationClient(endpoints []string, prefix string, timeout time.Duratio
 	if timeout <= 0 {
 		timeout = DefaultDialTimeout
 	}
-	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints, DialTimeout: timeout})
+	cli, err := newEtcdClient(endpoints, timeout, prefix, security)
 	if err != nil {
 		return nil, err
 	}
@@ -178,11 +184,15 @@ func (c *ActivationClient) Capabilities(ctx context.Context) ([]LiveCapability, 
 
 // AuditPolicy 是推进前 capability 快照必须满足的精确条件。
 type AuditPolicy struct {
-	RequiredServices  map[string]int
-	RequiredInstances map[string]map[string]struct{}
-	TargetEpoch       uint32
-	KeysetRevision    string
-	AllowedDigests    map[string]struct{}
+	Prefix               string
+	RequiredServices     map[string]int
+	RequiredInstances    map[string]map[string]struct{}
+	TargetEpoch          uint32
+	KeysetRevision       string
+	EtcdIdentityRevision string
+	AllowedDigests       map[string]struct{}
+	ExpectedDigests      map[string]string
+	RequiredFeatures     map[string]map[string]struct{}
 }
 
 // AuditCapabilities 验证每个预期服务的实时副本数与不可变身份。
@@ -190,10 +200,36 @@ func AuditCapabilities(capabilities []LiveCapability, policy AuditPolicy) []stri
 	counts := make(map[string]int)
 	findings := make([]string, 0)
 	seenUID := make(map[string]struct{})
+	prefix := policy.Prefix
+	if prefix == "" {
+		prefix = DefaultPrefix
+	}
+	for service, expectedFeatures := range policy.RequiredFeatures {
+		if _, ok := policy.RequiredServices[service]; !ok {
+			findings = append(findings, fmt.Sprintf("feature policy 包含未声明 writer %s", service))
+		}
+		for feature := range expectedFeatures {
+			if err := validateFeatures([]string{feature}); err != nil {
+				findings = append(findings, fmt.Sprintf("%s feature policy 非 canonical", service))
+			}
+		}
+	}
+	for service, digest := range policy.ExpectedDigests {
+		if _, ok := policy.RequiredServices[service]; !ok {
+			findings = append(findings, fmt.Sprintf("digest policy 包含未声明 writer %s", service))
+		}
+		if !digestPattern.MatchString(digest) {
+			findings = append(findings, fmt.Sprintf("%s expected image_digest 非 immutable digest", service))
+		}
+	}
+	for service := range policy.RequiredServices {
+		if _, ok := policy.ExpectedDigests[service]; !ok {
+			findings = append(findings, fmt.Sprintf("%s 缺服务级 expected image_digest", service))
+		}
+	}
 	for _, live := range capabilities {
 		capability := live.Capability
-		if live.Key != capabilityKey(DefaultPrefix, capability.Service, capability.InstanceUID) &&
-			!strings.HasSuffix(live.Key, "/capabilities/"+capability.Service+"/"+capability.InstanceUID) {
+		if live.Key != capabilityKey(prefix, capability.Service, capability.InstanceUID) {
 			findings = append(findings, fmt.Sprintf("capability key 与 payload 身份不一致: %s", live.Key))
 		}
 		if live.LeaseID == 0 {
@@ -210,8 +246,32 @@ func AuditCapabilities(capabilities []LiveCapability, policy AuditPolicy) []stri
 				findings = append(findings, fmt.Sprintf("%s/%s image_digest 不在本次激活清单", capability.Service, capability.InstanceUID))
 			}
 		}
+		if expectedDigest, ok := policy.ExpectedDigests[capability.Service]; !ok || capability.ImageDigest != expectedDigest {
+			findings = append(findings, fmt.Sprintf("%s/%s image_digest=%q, service expected=%q", capability.Service, capability.InstanceUID, capability.ImageDigest, expectedDigest))
+		}
 		if policy.KeysetRevision == "" || capability.KeysetRevision != policy.KeysetRevision {
 			findings = append(findings, fmt.Sprintf("%s/%s keyset_revision=%q, expected=%q", capability.Service, capability.InstanceUID, capability.KeysetRevision, policy.KeysetRevision))
+		}
+		if policy.EtcdIdentityRevision != "" && capability.EtcdIdentityRevision != policy.EtcdIdentityRevision {
+			findings = append(findings, fmt.Sprintf("%s/%s etcd_identity_revision=%q, expected=%q", capability.Service, capability.InstanceUID, capability.EtcdIdentityRevision, policy.EtcdIdentityRevision))
+		}
+		if err := validateFeatures(capability.Features); err != nil {
+			findings = append(findings, fmt.Sprintf("%s/%s capability features 非 canonical", capability.Service, capability.InstanceUID))
+		}
+		featureSet := make(map[string]struct{}, len(capability.Features))
+		for _, feature := range capability.Features {
+			featureSet[feature] = struct{}{}
+		}
+		expectedFeatures := policy.RequiredFeatures[capability.Service]
+		for feature := range expectedFeatures {
+			if _, ok := featureSet[feature]; !ok {
+				findings = append(findings, fmt.Sprintf("%s/%s 缺 capability feature=%s", capability.Service, capability.InstanceUID, feature))
+			}
+		}
+		for feature := range featureSet {
+			if _, ok := expectedFeatures[feature]; !ok {
+				findings = append(findings, fmt.Sprintf("%s/%s 含未批准 capability feature=%s", capability.Service, capability.InstanceUID, feature))
+			}
 		}
 		identity := capability.Service + "/" + capability.InstanceUID
 		if _, ok := seenUID[identity]; ok {
@@ -251,6 +311,59 @@ func AuditCapabilities(capabilities []LiveCapability, policy AuditPolicy) []stri
 	}
 	sort.Strings(findings)
 	return findings
+}
+
+// ParseExpectedDigests 解析 service=sha256:<64 lowercase hex> 的精确服务级镜像清单。
+// 与全局 allowlist 不同，这个映射阻止一个 writer 冒用本次发布中另一个服务的合法 digest。
+func ParseExpectedDigests(raw string) (map[string]string, error) {
+	out := make(map[string]string)
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || strings.ContainsAny(parts[0], "/,=| ") || !digestPattern.MatchString(parts[1]) {
+			return nil, fmt.Errorf("invalid expected service digest %q", item)
+		}
+		if _, exists := out[parts[0]]; exists {
+			return nil, fmt.Errorf("duplicate digest service %q", parts[0])
+		}
+		out[parts[0]] = parts[1]
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("expected service digests is empty")
+	}
+	return out, nil
+}
+
+// ParseRequiredFeatures 解析 service=feature|feature,service=feature 的精确必需能力。
+func ParseRequiredFeatures(raw string) (map[string]map[string]struct{}, error) {
+	out := make(map[string]map[string]struct{})
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	for _, item := range strings.Split(raw, ",") {
+		parts := strings.SplitN(strings.TrimSpace(item), "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return nil, fmt.Errorf("invalid required features %q", item)
+		}
+		if _, exists := out[parts[0]]; exists {
+			return nil, fmt.Errorf("duplicate feature service %q", parts[0])
+		}
+		set := make(map[string]struct{})
+		for _, feature := range strings.Split(parts[1], "|") {
+			if err := validateFeatures([]string{feature}); err != nil {
+				return nil, fmt.Errorf("invalid feature for %s", parts[0])
+			}
+			if _, exists := set[feature]; exists {
+				return nil, fmt.Errorf("duplicate feature %q", feature)
+			}
+			set[feature] = struct{}{}
+		}
+		out[parts[0]] = set
+	}
+	return out, nil
 }
 
 // AdvanceRequired 只允许 expected→target 的前进 CAS，并写不可变审计记录。

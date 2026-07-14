@@ -541,7 +541,8 @@ function Get-PandoraOnlineObjectProperty {
 
 function Test-PandoraOnlineDSTicketReferenceName {
     param([AllowEmptyString()][string]$Name)
-    return $Name -cmatch '^pandora-dsticket(?:$|-signer-r[1-9][0-9]*$|-jwks(?:-r[1-9][0-9]*)?$)' -or
+    # pandora-dsticket* 全部是保留 material 前缀；r0/r01/backup 等畸形名也必须进入 parent clue。
+    return $Name -cmatch '^pandora-dsticket(?:-|$)' -or
         $Name -cmatch '^pandora-config-dsticket(?:-|$)'
 }
 
@@ -1169,8 +1170,35 @@ function Set-PandoraFleetImagePin {
         $blocks += [pscustomobject]@{ End = $end; LabelIndent = $labelIndent; EntryIndent = $writerIndent }
     }
     foreach ($block in @($blocks | Sort-Object End -Descending)) {
-        $lines.Insert([int]$block.End, ((' ' * [int]$block.LabelIndent) + 'annotations:'))
-        $lines.Insert([int]$block.End + 1, ((' ' * [int]$block.EntryIndent) + 'pandora.dev/image-digest: "' + $digest + '"'))
+        $annotationHeader = [int]$block.End
+        $headerIsAnnotations = $annotationHeader -lt $lines.Count -and
+            [regex]::Match($lines[$annotationHeader], '^([ ]*)').Groups[1].Value.Length -eq [int]$block.LabelIndent -and
+            $lines[$annotationHeader].Trim() -ceq 'annotations:'
+        $digestLine = ((' ' * [int]$block.EntryIndent) + 'pandora.dev/image-digest: "' + $digest + '"')
+        if (-not $headerIsAnnotations) {
+            $lines.Insert($annotationHeader, ((' ' * [int]$block.LabelIndent) + 'annotations:'))
+            $lines.Insert($annotationHeader + 1, $digestLine)
+            continue
+        }
+
+        $annotationEnd = $annotationHeader + 1
+        $digestIndexes = @()
+        while ($annotationEnd -lt $lines.Count) {
+            if ([string]::IsNullOrWhiteSpace($lines[$annotationEnd])) { $annotationEnd++; continue }
+            $indent = [regex]::Match($lines[$annotationEnd], '^([ ]*)').Groups[1].Value.Length
+            if ($indent -le [int]$block.LabelIndent) { break }
+            if ($indent -eq [int]$block.EntryIndent -and
+                $lines[$annotationEnd].Trim() -cmatch '^pandora\.dev/image-digest\s*:') {
+                $digestIndexes += $annotationEnd
+            }
+            $annotationEnd++
+        }
+        if ($digestIndexes.Count -gt 1) { throw 'Fleet annotations 中 image-digest 重复。' }
+        if ($digestIndexes.Count -eq 1) {
+            $lines[[int]$digestIndexes[0]] = $digestLine
+        } else {
+            $lines.Insert($annotationHeader + 1, $digestLine)
+        }
     }
     return ($lines -join $nl)
 }
@@ -1254,7 +1282,7 @@ function Assert-PandoraFleetManifestContract {
     $rows = @($ContractRows | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($rows.Count -ne 1) { throw "Fleet kubectl contract 行数=$($rows.Count)，应为 1。" }
     $fields = @([regex]::Split($rows[0], "`t"))
-    if ($fields.Count -ne 10 -or $fields[0] -cne 'Fleet') { throw "Fleet kubectl contract 非法:$($rows[0])" }
+    if ($fields.Count -ne 12 -or $fields[0] -cne 'Fleet') { throw "Fleet kubectl contract 非法:$($rows[0])" }
     if ([string]$fields[1] -cne $ExpectedFleetName) { throw "Fleet 名=$($fields[1])，expected=$ExpectedFleetName。" }
     $names = @($fields[2].Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries))
     $images = @($fields[3].Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries))
@@ -1271,7 +1299,9 @@ function Assert-PandoraFleetManifestContract {
         throw "Fleet 的 GameServer/Pod 两层 digest annotation 未闭合:gs=$($fields[5]) pod=$($fields[6])。"
     }
     if ([string]$fields[7] -cne $ExpectedTrack -or [string]$fields[8] -cne $ExpectedTrack -or
-        [string]$fields[9] -cne $ExpectedTrack) {
-        throw "Fleet release-track 三层标签未闭合:fleet=$($fields[7]) gs=$($fields[8]) pod=$($fields[9]) expected=$ExpectedTrack。"
+        [string]$fields[9] -cne $ExpectedTrack -or [string]$fields[10] -cne $ExpectedTrack -or
+        [string]$fields[11] -cne $ExpectedTrack) {
+        throw "Fleet release-track metadata 未闭合:fleet-label=$($fields[7]) gs-label=$($fields[8]) " +
+              "gs-annotation=$($fields[9]) pod-label=$($fields[10]) pod-annotation=$($fields[11]) expected=$ExpectedTrack。"
     }
 }

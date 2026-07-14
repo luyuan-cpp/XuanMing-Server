@@ -573,11 +573,11 @@ constexpr ReleaseBattleRequest::ParseTableT_ ReleaseBattleRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      13,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -587,27 +587,102 @@ constexpr ReleaseBattleRequest::ParseTableT_ ReleaseBattleRequest::InternalGener
       ::_pbi::TcParser::GetTable<::pandora::ds::v1::ReleaseBattleRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 match_id = 1 [json_name = "matchId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseBattleRequest, _impl_.match_id_), 7>(),
+       {8, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.match_id_)}},
       // string reason = 2 [json_name = "reason"];
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.reason_)}},
-      // uint64 match_id = 1 [json_name = "matchId"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseBattleRequest, _impl_.match_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.match_id_)}},
+      // string allocation_id = 3 [json_name = "allocationId"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.allocation_id_)}},
+      // string ds_pod_name = 4 [json_name = "dsPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.ds_pod_name_)}},
+      // string gameserver_uid = 5 [json_name = "gameserverUid"];
+      {::_pbi::TcParser::FastUS1,
+       {42, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.gameserver_uid_)}},
+      // uint32 instance_epoch = 6 [json_name = "instanceEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReleaseBattleRequest, _impl_.instance_epoch_), 10>(),
+       {48, 10, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.instance_epoch_)}},
+      // uint64 auth_gen = 7 [json_name = "authGen"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseBattleRequest, _impl_.auth_gen_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_gen_)}},
+      // string auth_jti = 8 [json_name = "authJti"];
+      {::_pbi::TcParser::FastUS1,
+       {66, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_jti_)}},
+      // int64 auth_exp_ms = 9 [json_name = "authExpMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseBattleRequest, _impl_.auth_exp_ms_), 9>(),
+       {72, 9, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_exp_ms_)}},
+      // string auth_kid = 10 [json_name = "authKid"];
+      {::_pbi::TcParser::FastUS1,
+       {82, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_kid_)}},
+      // string auth_token_sha256 = 11 [json_name = "authTokenSha256"];
+      {::_pbi::TcParser::FastUS1,
+       {90, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_token_sha256_)}},
+      // uint32 auth_writer_epoch = 12 [json_name = "authWriterEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReleaseBattleRequest, _impl_.auth_writer_epoch_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_writer_epoch_)}},
+      // int64 authorized_at_ms = 13 [json_name = "authorizedAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReleaseBattleRequest, _impl_.authorized_at_ms_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.authorized_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 match_id = 1 [json_name = "matchId"];
-      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.match_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.match_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string reason = 2 [json_name = "reason"];
       {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string allocation_id = 3 [json_name = "allocationId"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.allocation_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string ds_pod_name = 4 [json_name = "dsPodName"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.ds_pod_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string gameserver_uid = 5 [json_name = "gameserverUid"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.gameserver_uid_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 instance_epoch = 6 [json_name = "instanceEpoch"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.instance_epoch_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 auth_gen = 7 [json_name = "authGen"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_gen_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string auth_jti = 8 [json_name = "authJti"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_jti_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // int64 auth_exp_ms = 9 [json_name = "authExpMs"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_exp_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // string auth_kid = 10 [json_name = "authKid"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_kid_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string auth_token_sha256 = 11 [json_name = "authTokenSha256"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_token_sha256_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 auth_writer_epoch = 12 [json_name = "authWriterEpoch"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.auth_writer_epoch_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // int64 authorized_at_ms = 13 [json_name = "authorizedAtMs"];
+      {PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.authorized_at_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
     {{
-      "\42\0\6\0\0\0\0\0"
+      "\42\0\6\15\13\16\0\0\10\0\10\21\0\0\0\0"
       "pandora.ds.v1.ReleaseBattleRequest"
       "reason"
+      "allocation_id"
+      "ds_pod_name"
+      "gameserver_uid"
+      "auth_jti"
+      "auth_kid"
+      "auth_token_sha256"
     }},
   };
 }
@@ -620,7 +695,30 @@ inline constexpr ReleaseBattleRequest::Impl_::Impl_(
         reason_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        match_id_{::uint64_t{0u}} {}
+        allocation_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ds_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gameserver_uid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_jti_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_kid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_token_sha256_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        match_id_{::uint64_t{0u}},
+        auth_gen_{::uint64_t{0u}},
+        auth_exp_ms_{::int64_t{0}},
+        instance_epoch_{0u},
+        auth_writer_epoch_{0u},
+        authorized_at_ms_{::int64_t{0}} {}
 
 template <typename>
 constexpr ReleaseBattleRequest::ReleaseBattleRequest(::_pbi::ConstantInitialized,
@@ -3003,11 +3101,33 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.reason_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.allocation_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.ds_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.gameserver_uid_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.instance_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.auth_gen_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.auth_jti_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.auth_exp_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.auth_kid_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.auth_token_sha256_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.auth_writer_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleRequest, _impl_.authorized_at_ms_),
+        7,
         0,
+        1,
+        2,
+        3,
+        10,
+        8,
+        4,
+        9,
+        5,
+        6,
+        11,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::ds::v1::ReleaseBattleResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3189,16 +3309,16 @@ static const ::_pbi::MigrationSchema
         {26, sizeof(::pandora::ds::v1::AllocateBattleRequest)},
         {37, sizeof(::pandora::ds::v1::AllocateBattleResponse)},
         {56, sizeof(::pandora::ds::v1::ReleaseBattleRequest)},
-        {63, sizeof(::pandora::ds::v1::ReleaseBattleResponse)},
-        {68, sizeof(::pandora::ds::v1::HeartbeatRequest)},
-        {85, sizeof(::pandora::ds::v1::HeartbeatResponse)},
-        {102, sizeof(::pandora::ds::v1::BattleInfo)},
-        {117, sizeof(::pandora::ds::v1::ListBattlesRequest)},
-        {122, sizeof(::pandora::ds::v1::ListBattlesResponse)},
-        {129, sizeof(::pandora::ds::v1::BattleStorageRecord)},
-        {168, sizeof(::pandora::ds::v1::BattleDSCredential)},
-        {187, sizeof(::pandora::ds::v1::BattleDSAuthStorageRecord)},
-        {218, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
+        {85, sizeof(::pandora::ds::v1::ReleaseBattleResponse)},
+        {90, sizeof(::pandora::ds::v1::HeartbeatRequest)},
+        {107, sizeof(::pandora::ds::v1::HeartbeatResponse)},
+        {124, sizeof(::pandora::ds::v1::BattleInfo)},
+        {139, sizeof(::pandora::ds::v1::ListBattlesRequest)},
+        {144, sizeof(::pandora::ds::v1::ListBattlesResponse)},
+        {151, sizeof(::pandora::ds::v1::BattleStorageRecord)},
+        {190, sizeof(::pandora::ds::v1::BattleDSCredential)},
+        {209, sizeof(::pandora::ds::v1::BattleDSAuthStorageRecord)},
+        {240, sizeof(::pandora::ds::v1::DSLifecycleEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3244,100 +3364,110 @@ const char descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto[] ABS
     "rverUid\022%\n\016instance_epoch\030\006 \001(\rR\rinstanc"
     "eEpoch\022#\n\rallocation_id\030\007 \001(\tR\014allocatio"
     "nId\022#\n\rrelease_track\030\010 \001(\tR\014releaseTrack"
-    "\"I\n\024ReleaseBattleRequest\022\031\n\010match_id\030\001 \001"
-    "(\004R\007matchId\022\026\n\006reason\030\002 \001(\tR\006reason\"G\n\025R"
-    "eleaseBattleResponse\022.\n\004code\030\001 \001(\0162\032.pan"
-    "dora.common.v1.ErrCodeR\004code\"\321\001\n\020Heartbe"
-    "atRequest\022\036\n\013ds_pod_name\030\001 \001(\tR\tdsPodNam"
-    "e\022\031\n\010match_id\030\002 \001(\004R\007matchId\022!\n\014player_c"
-    "ount\030\003 \001(\005R\013playerCount\022\027\n\007cpu_pct\030\004 \001(\002"
-    "R\006cpuPct\022\025\n\006mem_mb\030\005 \001(\002R\005memMb\022\024\n\005state"
-    "\030\006 \001(\tR\005state\022\023\n\005ts_ms\030\007 \001(\003R\004tsMsJ\004\010\010\020\n"
-    "\"\337\002\n\021HeartbeatResponse\022.\n\004code\030\001 \001(\0162\032.p"
-    "andora.common.v1.ErrCodeR\004code\022\030\n\007comman"
-    "d\030\002 \001(\tR\007command\022,\n\022accepted_token_gen\030\n"
-    " \001(\004R\020acceptedTokenGen\022,\n\022accepted_token"
-    "_jti\030\013 \001(\tR\020acceptedTokenJti\0222\n\025accepted"
-    "_instance_uid\030\014 \001(\tR\023acceptedInstanceUid"
-    "\0226\n\027accepted_instance_epoch\030\r \001(\rR\025accep"
-    "tedInstanceEpoch\0222\n\025accepted_writer_epoc"
-    "h\030\016 \001(\rR\023acceptedWriterEpochJ\004\010\003\020\n\"\301\001\n\nB"
-    "attleInfo\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013"
-    "ds_pod_name\030\002 \001(\tR\tdsPodName\022\027\n\007ds_addr\030"
-    "\003 \001(\tR\006dsAddr\022\024\n\005state\030\004 \001(\tR\005state\022!\n\014p"
-    "layer_count\030\005 \001(\005R\013playerCount\022&\n\017alloca"
-    "ted_at_ms\030\006 \001(\003R\rallocatedAtMs\"7\n\022ListBa"
-    "ttlesRequest\022!\n\014state_filter\030\001 \001(\tR\013stat"
-    "eFilter\"z\n\023ListBattlesResponse\022.\n\004code\030\001"
-    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\0223"
-    "\n\007battles\030\002 \003(\0132\031.pandora.ds.v1.BattleIn"
-    "foR\007battles\"\234\005\n\023BattleStorageRecord\022\031\n\010m"
-    "atch_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 "
-    "\001(\tR\tdsPodName\022\027\n\007ds_addr\030\003 \001(\tR\006dsAddr\022"
-    "\024\n\005state\030\004 \001(\tR\005state\022\035\n\nplayer_ids\030\005 \003("
-    "\004R\tplayerIds\022\025\n\006map_id\030\006 \001(\rR\005mapId\022\033\n\tg"
-    "ame_mode\030\007 \001(\tR\010gameMode\022&\n\017allocated_at"
-    "_ms\030\010 \001(\003R\rallocatedAtMs\022*\n\021last_heartbe"
-    "at_ms\030\t \001(\003R\017lastHeartbeatMs\022!\n\014player_c"
-    "ount\030\n \001(\005R\013playerCount\022$\n\016empty_since_m"
-    "s\030\013 \001(\003R\014emptySinceMs\022%\n\016gameserver_uid\030"
-    "\014 \001(\tR\rgameserverUid\022%\n\016instance_epoch\030\r"
-    " \001(\rR\rinstanceEpoch\022*\n\021last_verified_gen"
-    "\030\016 \001(\004R\017lastVerifiedGen\022*\n\021last_verified"
-    "_jti\030\017 \001(\tR\017lastVerifiedJti\022;\n\032last_veri"
-    "fied_writer_epoch\030\020 \001(\rR\027lastVerifiedWri"
-    "terEpoch\022#\n\rallocation_id\030\021 \001(\tR\014allocat"
-    "ionId\022#\n\rrelease_track\030\022 \001(\tR\014releaseTra"
-    "ck\"\361\001\n\022BattleDSCredential\022\020\n\003gen\030\001 \001(\004R\003"
-    "gen\022\020\n\003jti\030\002 \001(\tR\003jti\022\025\n\006exp_ms\030\003 \001(\004R\005e"
-    "xpMs\022\020\n\003kid\030\004 \001(\tR\003kid\022!\n\014instance_uid\030\005"
-    " \001(\tR\013instanceUid\022%\n\016instance_epoch\030\006 \001("
-    "\rR\rinstanceEpoch\022!\n\014token_sha256\030\007 \001(\tR\013"
-    "tokenSha256\022!\n\014writer_epoch\030\010 \001(\rR\013write"
-    "rEpoch\"\373\004\n\031BattleDSAuthStorageRecord\022\031\n\010"
-    "match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002"
-    " \001(\tR\tdsPodName\022!\n\014instance_uid\030\003 \001(\tR\013i"
-    "nstanceUid\022%\n\016instance_epoch\030\004 \001(\rR\rinst"
-    "anceEpoch\0224\n\005phase\030\005 \001(\0162\036.pandora.ds.v1"
-    ".BattleAuthPhaseR\005phase\0229\n\006active\030\006 \001(\0132"
-    "!.pandora.ds.v1.BattleDSCredentialR\006acti"
-    "ve\022;\n\007pending\030\007 \001(\0132!.pandora.ds.v1.Batt"
-    "leDSCredentialR\007pending\022$\n\016high_water_ge"
-    "n\030\010 \001(\004R\014highWaterGen\022,\n\022pending_started"
-    "_ms\030\t \001(\003R\020pendingStartedMs\022!\n\014delivered"
-    "_rv\030\n \001(\tR\013deliveredRv\022\"\n\rupdated_at_ms\030"
-    "\013 \001(\003R\013updatedAtMs\0222\n\025required_writer_ep"
-    "och\030\014 \001(\rR\023requiredWriterEpoch\022#\n\ralloca"
-    "tion_id\030\r \001(\tR\014allocationId\0227\n\030last_acti"
-    "ve_heartbeat_ms\030\016 \001(\003R\025lastActiveHeartbe"
-    "atMs\"\354\001\n\020DSLifecycleEvent\022\031\n\010match_id\030\001 "
-    "\001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPod"
-    "Name\0225\n\005phase\030\003 \001(\0162\037.pandora.ds.v1.DSLi"
-    "fecyclePhaseR\005phase\022\035\n\nplayer_ids\030\004 \003(\004R"
-    "\tplayerIds\022\025\n\006map_id\030\005 \001(\rR\005mapId\022\033\n\tgam"
-    "e_mode\030\006 \001(\tR\010gameMode\022\023\n\005ts_ms\030\007 \001(\003R\004t"
-    "sMs*\331\001\n\017BattleAuthPhase\022!\n\035BATTLE_AUTH_P"
-    "HASE_UNSPECIFIED\020\000\022\037\n\033BATTLE_AUTH_PHASE_"
-    "BOOTSTRAP\020\001\022\034\n\030BATTLE_AUTH_PHASE_ACTIVE\020"
-    "\002\022\036\n\032BATTLE_AUTH_PHASE_ROTATING\020\003\022!\n\035BAT"
-    "TLE_AUTH_PHASE_QUARANTINED\020\004\022!\n\035BATTLE_A"
-    "UTH_PHASE_TERMINATING\020\005*\233\001\n\020DSLifecycleP"
-    "hase\022\"\n\036DS_LIFECYCLE_PHASE_UNSPECIFIED\020\000"
-    "\022 \n\034DS_LIFECYCLE_PHASE_ALLOCATED\020\001\022\037\n\033DS"
-    "_LIFECYCLE_PHASE_RELEASED\020\002\022 \n\034DS_LIFECY"
-    "CLE_PHASE_ABANDONED\020\0032\343\003\n\022DSAllocatorSer"
-    "vice\022]\n\016AllocateBattle\022$.pandora.ds.v1.A"
-    "llocateBattleRequest\032%.pandora.ds.v1.All"
-    "ocateBattleResponse\022l\n\023ResolveBattleTarg"
-    "et\022).pandora.ds.v1.ResolveBattleTargetRe"
-    "quest\032*.pandora.ds.v1.ResolveBattleTarge"
-    "tResponse\022Z\n\rReleaseBattle\022#.pandora.ds."
-    "v1.ReleaseBattleRequest\032$.pandora.ds.v1."
-    "ReleaseBattleResponse\022N\n\tHeartbeat\022\037.pan"
-    "dora.ds.v1.HeartbeatRequest\032 .pandora.ds"
-    ".v1.HeartbeatResponse\022T\n\013ListBattles\022!.p"
-    "andora.ds.v1.ListBattlesRequest\032\".pandor"
-    "a.ds.v1.ListBattlesResponseb\006proto3"
+    "\"\317\003\n\024ReleaseBattleRequest\022\031\n\010match_id\030\001 "
+    "\001(\004R\007matchId\022\026\n\006reason\030\002 \001(\tR\006reason\022#\n\r"
+    "allocation_id\030\003 \001(\tR\014allocationId\022\036\n\013ds_"
+    "pod_name\030\004 \001(\tR\tdsPodName\022%\n\016gameserver_"
+    "uid\030\005 \001(\tR\rgameserverUid\022%\n\016instance_epo"
+    "ch\030\006 \001(\rR\rinstanceEpoch\022\031\n\010auth_gen\030\007 \001("
+    "\004R\007authGen\022\031\n\010auth_jti\030\010 \001(\tR\007authJti\022\036\n"
+    "\013auth_exp_ms\030\t \001(\003R\tauthExpMs\022\031\n\010auth_ki"
+    "d\030\n \001(\tR\007authKid\022*\n\021auth_token_sha256\030\013 "
+    "\001(\tR\017authTokenSha256\022*\n\021auth_writer_epoc"
+    "h\030\014 \001(\rR\017authWriterEpoch\022(\n\020authorized_a"
+    "t_ms\030\r \001(\003R\016authorizedAtMs\"G\n\025ReleaseBat"
+    "tleResponse\022.\n\004code\030\001 \001(\0162\032.pandora.comm"
+    "on.v1.ErrCodeR\004code\"\321\001\n\020HeartbeatRequest"
+    "\022\036\n\013ds_pod_name\030\001 \001(\tR\tdsPodName\022\031\n\010matc"
+    "h_id\030\002 \001(\004R\007matchId\022!\n\014player_count\030\003 \001("
+    "\005R\013playerCount\022\027\n\007cpu_pct\030\004 \001(\002R\006cpuPct\022"
+    "\025\n\006mem_mb\030\005 \001(\002R\005memMb\022\024\n\005state\030\006 \001(\tR\005s"
+    "tate\022\023\n\005ts_ms\030\007 \001(\003R\004tsMsJ\004\010\010\020\n\"\337\002\n\021Hear"
+    "tbeatResponse\022.\n\004code\030\001 \001(\0162\032.pandora.co"
+    "mmon.v1.ErrCodeR\004code\022\030\n\007command\030\002 \001(\tR\007"
+    "command\022,\n\022accepted_token_gen\030\n \001(\004R\020acc"
+    "eptedTokenGen\022,\n\022accepted_token_jti\030\013 \001("
+    "\tR\020acceptedTokenJti\0222\n\025accepted_instance"
+    "_uid\030\014 \001(\tR\023acceptedInstanceUid\0226\n\027accep"
+    "ted_instance_epoch\030\r \001(\rR\025acceptedInstan"
+    "ceEpoch\0222\n\025accepted_writer_epoch\030\016 \001(\rR\023"
+    "acceptedWriterEpochJ\004\010\003\020\n\"\301\001\n\nBattleInfo"
+    "\022\031\n\010match_id\030\001 \001(\004R\007matchId\022\036\n\013ds_pod_na"
+    "me\030\002 \001(\tR\tdsPodName\022\027\n\007ds_addr\030\003 \001(\tR\006ds"
+    "Addr\022\024\n\005state\030\004 \001(\tR\005state\022!\n\014player_cou"
+    "nt\030\005 \001(\005R\013playerCount\022&\n\017allocated_at_ms"
+    "\030\006 \001(\003R\rallocatedAtMs\"7\n\022ListBattlesRequ"
+    "est\022!\n\014state_filter\030\001 \001(\tR\013stateFilter\"z"
+    "\n\023ListBattlesResponse\022.\n\004code\030\001 \001(\0162\032.pa"
+    "ndora.common.v1.ErrCodeR\004code\0223\n\007battles"
+    "\030\002 \003(\0132\031.pandora.ds.v1.BattleInfoR\007battl"
+    "es\"\234\005\n\023BattleStorageRecord\022\031\n\010match_id\030\001"
+    " \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPo"
+    "dName\022\027\n\007ds_addr\030\003 \001(\tR\006dsAddr\022\024\n\005state\030"
+    "\004 \001(\tR\005state\022\035\n\nplayer_ids\030\005 \003(\004R\tplayer"
+    "Ids\022\025\n\006map_id\030\006 \001(\rR\005mapId\022\033\n\tgame_mode\030"
+    "\007 \001(\tR\010gameMode\022&\n\017allocated_at_ms\030\010 \001(\003"
+    "R\rallocatedAtMs\022*\n\021last_heartbeat_ms\030\t \001"
+    "(\003R\017lastHeartbeatMs\022!\n\014player_count\030\n \001("
+    "\005R\013playerCount\022$\n\016empty_since_ms\030\013 \001(\003R\014"
+    "emptySinceMs\022%\n\016gameserver_uid\030\014 \001(\tR\rga"
+    "meserverUid\022%\n\016instance_epoch\030\r \001(\rR\rins"
+    "tanceEpoch\022*\n\021last_verified_gen\030\016 \001(\004R\017l"
+    "astVerifiedGen\022*\n\021last_verified_jti\030\017 \001("
+    "\tR\017lastVerifiedJti\022;\n\032last_verified_writ"
+    "er_epoch\030\020 \001(\rR\027lastVerifiedWriterEpoch\022"
+    "#\n\rallocation_id\030\021 \001(\tR\014allocationId\022#\n\r"
+    "release_track\030\022 \001(\tR\014releaseTrack\"\361\001\n\022Ba"
+    "ttleDSCredential\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jt"
+    "i\030\002 \001(\tR\003jti\022\025\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003k"
+    "id\030\004 \001(\tR\003kid\022!\n\014instance_uid\030\005 \001(\tR\013ins"
+    "tanceUid\022%\n\016instance_epoch\030\006 \001(\rR\rinstan"
+    "ceEpoch\022!\n\014token_sha256\030\007 \001(\tR\013tokenSha2"
+    "56\022!\n\014writer_epoch\030\010 \001(\rR\013writerEpoch\"\373\004"
+    "\n\031BattleDSAuthStorageRecord\022\031\n\010match_id\030"
+    "\001 \001(\004R\007matchId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsP"
+    "odName\022!\n\014instance_uid\030\003 \001(\tR\013instanceUi"
+    "d\022%\n\016instance_epoch\030\004 \001(\rR\rinstanceEpoch"
+    "\0224\n\005phase\030\005 \001(\0162\036.pandora.ds.v1.BattleAu"
+    "thPhaseR\005phase\0229\n\006active\030\006 \001(\0132!.pandora"
+    ".ds.v1.BattleDSCredentialR\006active\022;\n\007pen"
+    "ding\030\007 \001(\0132!.pandora.ds.v1.BattleDSCrede"
+    "ntialR\007pending\022$\n\016high_water_gen\030\010 \001(\004R\014"
+    "highWaterGen\022,\n\022pending_started_ms\030\t \001(\003"
+    "R\020pendingStartedMs\022!\n\014delivered_rv\030\n \001(\t"
+    "R\013deliveredRv\022\"\n\rupdated_at_ms\030\013 \001(\003R\013up"
+    "datedAtMs\0222\n\025required_writer_epoch\030\014 \001(\r"
+    "R\023requiredWriterEpoch\022#\n\rallocation_id\030\r"
+    " \001(\tR\014allocationId\0227\n\030last_active_heartb"
+    "eat_ms\030\016 \001(\003R\025lastActiveHeartbeatMs\"\354\001\n\020"
+    "DSLifecycleEvent\022\031\n\010match_id\030\001 \001(\004R\007matc"
+    "hId\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\0225\n\005p"
+    "hase\030\003 \001(\0162\037.pandora.ds.v1.DSLifecyclePh"
+    "aseR\005phase\022\035\n\nplayer_ids\030\004 \003(\004R\tplayerId"
+    "s\022\025\n\006map_id\030\005 \001(\rR\005mapId\022\033\n\tgame_mode\030\006 "
+    "\001(\tR\010gameMode\022\023\n\005ts_ms\030\007 \001(\003R\004tsMs*\331\001\n\017B"
+    "attleAuthPhase\022!\n\035BATTLE_AUTH_PHASE_UNSP"
+    "ECIFIED\020\000\022\037\n\033BATTLE_AUTH_PHASE_BOOTSTRAP"
+    "\020\001\022\034\n\030BATTLE_AUTH_PHASE_ACTIVE\020\002\022\036\n\032BATT"
+    "LE_AUTH_PHASE_ROTATING\020\003\022!\n\035BATTLE_AUTH_"
+    "PHASE_QUARANTINED\020\004\022!\n\035BATTLE_AUTH_PHASE"
+    "_TERMINATING\020\005*\233\001\n\020DSLifecyclePhase\022\"\n\036D"
+    "S_LIFECYCLE_PHASE_UNSPECIFIED\020\000\022 \n\034DS_LI"
+    "FECYCLE_PHASE_ALLOCATED\020\001\022\037\n\033DS_LIFECYCL"
+    "E_PHASE_RELEASED\020\002\022 \n\034DS_LIFECYCLE_PHASE"
+    "_ABANDONED\020\0032\343\003\n\022DSAllocatorService\022]\n\016A"
+    "llocateBattle\022$.pandora.ds.v1.AllocateBa"
+    "ttleRequest\032%.pandora.ds.v1.AllocateBatt"
+    "leResponse\022l\n\023ResolveBattleTarget\022).pand"
+    "ora.ds.v1.ResolveBattleTargetRequest\032*.p"
+    "andora.ds.v1.ResolveBattleTargetResponse"
+    "\022Z\n\rReleaseBattle\022#.pandora.ds.v1.Releas"
+    "eBattleRequest\032$.pandora.ds.v1.ReleaseBa"
+    "ttleResponse\022N\n\tHeartbeat\022\037.pandora.ds.v"
+    "1.HeartbeatRequest\032 .pandora.ds.v1.Heart"
+    "beatResponse\022T\n\013ListBattles\022!.pandora.ds"
+    ".v1.ListBattlesRequest\032\".pandora.ds.v1.L"
+    "istBattlesResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_deps[1] = {
@@ -3347,7 +3477,7 @@ static ::absl::once_flag descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto = {
     false,
     false,
-    4715,
+    5106,
     descriptor_table_protodef_pandora_2fds_2fv1_2fallocator_2eproto,
     "pandora/ds/v1/allocator.proto",
     &descriptor_table_pandora_2fds_2fv1_2fallocator_2eproto_once,
@@ -4822,7 +4952,13 @@ PROTOBUF_NDEBUG_INLINE ReleaseBattleRequest::Impl_::Impl_(
     [[maybe_unused]] const ::pandora::ds::v1::ReleaseBattleRequest& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        reason_(arena, from.reason_) {}
+        reason_(arena, from.reason_),
+        allocation_id_(arena, from.allocation_id_),
+        ds_pod_name_(arena, from.ds_pod_name_),
+        gameserver_uid_(arena, from.gameserver_uid_),
+        auth_jti_(arena, from.auth_jti_),
+        auth_kid_(arena, from.auth_kid_),
+        auth_token_sha256_(arena, from.auth_token_sha256_) {}
 
 ReleaseBattleRequest::ReleaseBattleRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -4838,7 +4974,13 @@ ReleaseBattleRequest::ReleaseBattleRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.match_id_ = from._impl_.match_id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, match_id_),
+           offsetof(Impl_, authorized_at_ms_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::authorized_at_ms_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.ds.v1.ReleaseBattleRequest)
 }
@@ -4846,11 +4988,22 @@ PROTOBUF_NDEBUG_INLINE ReleaseBattleRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        reason_(arena) {}
+        reason_(arena),
+        allocation_id_(arena),
+        ds_pod_name_(arena),
+        gameserver_uid_(arena),
+        auth_jti_(arena),
+        auth_kid_(arena),
+        auth_token_sha256_(arena) {}
 
 inline void ReleaseBattleRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.match_id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           0,
+           offsetof(Impl_, authorized_at_ms_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::authorized_at_ms_));
 }
 ReleaseBattleRequest::~ReleaseBattleRequest() {
   // @@protoc_insertion_point(destructor:pandora.ds.v1.ReleaseBattleRequest)
@@ -4864,6 +5017,12 @@ inline void ReleaseBattleRequest::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.reason_.Destroy();
+  this_._impl_.allocation_id_.Destroy();
+  this_._impl_.ds_pod_name_.Destroy();
+  this_._impl_.gameserver_uid_.Destroy();
+  this_._impl_.auth_jti_.Destroy();
+  this_._impl_.auth_kid_.Destroy();
+  this_._impl_.auth_token_sha256_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -4901,10 +5060,35 @@ PROTOBUF_NOINLINE void ReleaseBattleRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.reason_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.allocation_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.ds_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.gameserver_uid_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.auth_jti_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.auth_kid_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.auth_token_sha256_.ClearNonDefaultToEmpty();
+    }
   }
   _impl_.match_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    ::memset(&_impl_.auth_gen_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.authorized_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.auth_gen_)) + sizeof(_impl_.authorized_at_ms_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4929,7 +5113,7 @@ PROTOBUF_NOINLINE void ReleaseBattleRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 match_id = 1 [json_name = "matchId"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_match_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4944,6 +5128,111 @@ PROTOBUF_NOINLINE void ReleaseBattleRequest::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.reason");
       target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string allocation_id = 3 [json_name = "allocationId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_allocation_id().empty()) {
+      const ::std::string& _s = this_._internal_allocation_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.allocation_id");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string ds_pod_name = 4 [json_name = "dsPodName"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_ds_pod_name().empty()) {
+      const ::std::string& _s = this_._internal_ds_pod_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.ds_pod_name");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string gameserver_uid = 5 [json_name = "gameserverUid"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_gameserver_uid().empty()) {
+      const ::std::string& _s = this_._internal_gameserver_uid();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.gameserver_uid");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint32 instance_epoch = 6 [json_name = "instanceEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_instance_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_instance_epoch(), target);
+    }
+  }
+
+  // uint64 auth_gen = 7 [json_name = "authGen"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_auth_gen() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_auth_gen(), target);
+    }
+  }
+
+  // string auth_jti = 8 [json_name = "authJti"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_auth_jti().empty()) {
+      const ::std::string& _s = this_._internal_auth_jti();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.auth_jti");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // int64 auth_exp_ms = 9 [json_name = "authExpMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_auth_exp_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<9>(
+              stream, this_._internal_auth_exp_ms(), target);
+    }
+  }
+
+  // string auth_kid = 10 [json_name = "authKid"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_auth_kid().empty()) {
+      const ::std::string& _s = this_._internal_auth_kid();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.auth_kid");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // string auth_token_sha256 = 11 [json_name = "authTokenSha256"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_auth_token_sha256().empty()) {
+      const ::std::string& _s = this_._internal_auth_token_sha256();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.ds.v1.ReleaseBattleRequest.auth_token_sha256");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // uint32 auth_writer_epoch = 12 [json_name = "authWriterEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_auth_writer_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_auth_writer_epoch(), target);
+    }
+  }
+
+  // int64 authorized_at_ms = 13 [json_name = "authorizedAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_authorized_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<13>(
+              stream, this_._internal_authorized_at_ms(), target);
     }
   }
 
@@ -4972,7 +5261,7 @@ PROTOBUF_NOINLINE void ReleaseBattleRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string reason = 2 [json_name = "reason"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_reason().empty()) {
@@ -4980,11 +5269,90 @@ PROTOBUF_NOINLINE void ReleaseBattleRequest::Clear() {
                                         this_._internal_reason());
       }
     }
-    // uint64 match_id = 1 [json_name = "matchId"];
+    // string allocation_id = 3 [json_name = "allocationId"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_allocation_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_allocation_id());
+      }
+    }
+    // string ds_pod_name = 4 [json_name = "dsPodName"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_ds_pod_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_ds_pod_name());
+      }
+    }
+    // string gameserver_uid = 5 [json_name = "gameserverUid"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_gameserver_uid().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_gameserver_uid());
+      }
+    }
+    // string auth_jti = 8 [json_name = "authJti"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_auth_jti().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_auth_jti());
+      }
+    }
+    // string auth_kid = 10 [json_name = "authKid"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_auth_kid().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_auth_kid());
+      }
+    }
+    // string auth_token_sha256 = 11 [json_name = "authTokenSha256"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_auth_token_sha256().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_auth_token_sha256());
+      }
+    }
+    // uint64 match_id = 1 [json_name = "matchId"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_match_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_match_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    // uint64 auth_gen = 7 [json_name = "authGen"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_auth_gen() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_auth_gen());
+      }
+    }
+    // int64 auth_exp_ms = 9 [json_name = "authExpMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_auth_exp_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_auth_exp_ms());
+      }
+    }
+    // uint32 instance_epoch = 6 [json_name = "instanceEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_instance_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_instance_epoch());
+      }
+    }
+    // uint32 auth_writer_epoch = 12 [json_name = "authWriterEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_auth_writer_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_auth_writer_epoch());
+      }
+    }
+    // int64 authorized_at_ms = 13 [json_name = "authorizedAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_authorized_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_authorized_at_ms());
       }
     }
   }
@@ -5005,7 +5373,7 @@ void ReleaseBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_reason().empty()) {
         _this->_internal_set_reason(from._internal_reason());
@@ -5016,8 +5384,89 @@ void ReleaseBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_allocation_id().empty()) {
+        _this->_internal_set_allocation_id(from._internal_allocation_id());
+      } else {
+        if (_this->_impl_.allocation_id_.IsDefault()) {
+          _this->_internal_set_allocation_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_ds_pod_name().empty()) {
+        _this->_internal_set_ds_pod_name(from._internal_ds_pod_name());
+      } else {
+        if (_this->_impl_.ds_pod_name_.IsDefault()) {
+          _this->_internal_set_ds_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_gameserver_uid().empty()) {
+        _this->_internal_set_gameserver_uid(from._internal_gameserver_uid());
+      } else {
+        if (_this->_impl_.gameserver_uid_.IsDefault()) {
+          _this->_internal_set_gameserver_uid("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_auth_jti().empty()) {
+        _this->_internal_set_auth_jti(from._internal_auth_jti());
+      } else {
+        if (_this->_impl_.auth_jti_.IsDefault()) {
+          _this->_internal_set_auth_jti("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_auth_kid().empty()) {
+        _this->_internal_set_auth_kid(from._internal_auth_kid());
+      } else {
+        if (_this->_impl_.auth_kid_.IsDefault()) {
+          _this->_internal_set_auth_kid("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_auth_token_sha256().empty()) {
+        _this->_internal_set_auth_token_sha256(from._internal_auth_token_sha256());
+      } else {
+        if (_this->_impl_.auth_token_sha256_.IsDefault()) {
+          _this->_internal_set_auth_token_sha256("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_match_id() != 0) {
         _this->_impl_.match_id_ = from._impl_.match_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_auth_gen() != 0) {
+        _this->_impl_.auth_gen_ = from._impl_.auth_gen_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_auth_exp_ms() != 0) {
+        _this->_impl_.auth_exp_ms_ = from._impl_.auth_exp_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_instance_epoch() != 0) {
+        _this->_impl_.instance_epoch_ = from._impl_.instance_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_auth_writer_epoch() != 0) {
+        _this->_impl_.auth_writer_epoch_ = from._impl_.auth_writer_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_authorized_at_ms() != 0) {
+        _this->_impl_.authorized_at_ms_ = from._impl_.authorized_at_ms_;
       }
     }
   }
@@ -5041,7 +5490,18 @@ void ReleaseBattleRequest::InternalSwap(ReleaseBattleRequest* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
-  swap(_impl_.match_id_, other->_impl_.match_id_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.allocation_id_, &other->_impl_.allocation_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ds_pod_name_, &other->_impl_.ds_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gameserver_uid_, &other->_impl_.gameserver_uid_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.auth_jti_, &other->_impl_.auth_jti_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.auth_kid_, &other->_impl_.auth_kid_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.auth_token_sha256_, &other->_impl_.auth_token_sha256_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.authorized_at_ms_)
+      + sizeof(ReleaseBattleRequest::_impl_.authorized_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(ReleaseBattleRequest, _impl_.match_id_)>(
+          reinterpret_cast<char*>(&_impl_.match_id_),
+          reinterpret_cast<char*>(&other->_impl_.match_id_));
 }
 
 ::google::protobuf::Metadata ReleaseBattleRequest::GetMetadata() const {

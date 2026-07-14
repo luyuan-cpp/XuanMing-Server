@@ -125,7 +125,7 @@ type AllocatorUsecase struct {
 	// 唯一授权权威；K8s annotation 只投递 pending 凭据。
 	authRepo           data.BattleAuthRepo
 	authoritativeAlloc AuthoritativeGameServerAllocator
-	dsSigner           *auth.Signer
+	dsSigner           BattleCredentialSigner
 	dsCredentialTTL    time.Duration
 	modelB             bool
 	releasePolicy      releasetrack.Policy
@@ -135,6 +135,12 @@ type AllocatorUsecase struct {
 	// 幽灵般占着监听端口污染下一局;打开后 stop 时异步调 alloc.Release kill 掉它。Agones 模式默认
 	// 关闭:孤儿 GameServer 由 Agones 生命周期回收,避免 Redis 抖动误判 orphan 时误删正常 pod。
 	killOrphanOnStop bool
+}
+
+// BattleCredentialSigner 把 Allocator 可见能力收窄为 DS callback 凭据签发；生产实现是
+// *auth.DSCallbackSigner，无法从该字段调用玩家 Session/DSTicket 签发方法。
+type BattleCredentialSigner interface {
+	SignBattleCredential(matchID uint64, pod, instanceUID string, epoch uint32, gen uint64, jti string, ttl time.Duration) (auth.HubCredentialResult, error)
 }
 
 // NewAllocatorUsecase 构造 AllocatorUsecase。
@@ -155,7 +161,7 @@ func (u *AllocatorUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.rele
 // 禁止出现“配置说 redis authority、实际悄悄回退 legacy”的半开启状态。
 func (u *AllocatorUsecase) EnableRedisAuthority(
 	repo data.BattleAuthRepo,
-	signer *auth.Signer,
+	signer BattleCredentialSigner,
 	tokenTTL time.Duration,
 ) error {
 	a, ok := u.alloc.(AuthoritativeGameServerAllocator)
@@ -770,70 +776,11 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 		return errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
 	if u.modelB {
-		snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
-		if err != nil {
-			return err
-		}
-		if !snapshot.BattleFound && !snapshot.AuthFound {
-			plog.With(ctx).Infow("msg", "release_idempotent_miss", "match_id", matchID, "reason", reason)
-			return nil
-		}
-		if !snapshot.BattleFound || snapshot.Battle.GetAllocationId() == "" {
-			return errcode.New(errcode.ErrInvalidState,
-				"battle %d authority incomplete during release", matchID)
-		}
-		terminalState := stateAbandoned
-		if reason == "completed" {
-			terminalState = stateEnded
-		}
-		expected := data.BattleExpectedInstance{
-			AllocationID:  snapshot.Battle.GetAllocationId(),
-			InstanceUID:   snapshot.Battle.GetGameserverUid(),
-			InstanceEpoch: snapshot.Battle.GetInstanceEpoch(),
-		}
-		// 每次调用都重新执行 idempotent TerminateExpected：它既校验完整 expected
-		// tuple，也把历史有限 TTL 终态升级为永久 fence。不能仅凭 snapshot 中两个
-		// state 字符串跳过线性化检查。
-		terminated, terr := u.authRepo.TerminateExpected(
-			ctx, matchID, expected, terminalState,
-			u.dsCredentialTTL, u.battleTTL())
-		if !terminated {
-			if terr != nil {
-				return terr
-			}
-			return errcode.New(errcode.ErrDSAllocationFailed,
-				"battle %d allocation changed during release", matchID)
-		}
-		// 先锁死 Redis active authority，再释放 K8s；后者失败最多留下不可授权孤儿，
-		// 不会留下仍可写/可分配的活实例。
-		if terr != nil {
-			plog.With(ctx).Warnw("msg", "release_authority_index_cleanup_failed",
-				"match_id", matchID, "err", terr)
-		}
-		if err := u.releaseGameServer(ctx, snapshot.Battle.GetDsPodName(), &data.AuthoritativeGameServerAllocation{
-			PodName: snapshot.Battle.GetDsPodName(), InstanceUID: snapshot.Battle.GetGameserverUid(),
-			AllocationID: snapshot.Battle.GetAllocationId(), InstanceEpoch: snapshot.Battle.GetInstanceEpoch(),
-		}); err != nil {
-			plog.With(ctx).Warnw("msg", "gameserver_release_failed", "match_id", matchID,
-				"pod", snapshot.Battle.GetDsPodName(), "err", err)
-			return errcode.New(errcode.ErrUnavailable,
-				"battle %d gameserver release not confirmed", matchID)
-		}
-		purged, perr := u.authRepo.PurgeTerminatedExpected(ctx, matchID, expected)
-		if perr != nil {
-			return perr
-		}
-		if !purged {
-			latest, rerr := u.authRepo.ReadAuthority(ctx, matchID)
-			if rerr == nil && !latest.AuthFound && !latest.BattleFound {
-				return nil // 并发 Release 已完成 purge，幂等成功
-			}
-			return errcode.New(errcode.ErrDSAllocationFailed,
-				"battle %d terminated authority changed before purge", matchID)
-		}
-		plog.With(ctx).Infow("msg", "battle_released", "match_id", matchID,
-			"pod", snapshot.Battle.GetDsPodName(), "reason", reason, "authority", "terminating")
-		return nil
+		// Model-B 禁止 match_id-only 回读“当前实例”后删除：旧请求可能误杀同 match
+		// 重建出的新 UID。正常结算必须走 ReleaseBattleExpected 的 MySQL outbox 证明；
+		// abandoned 由内部 sweep 已持有同事务 expected tuple，不经过本 RPC。
+		return errcode.New(errcode.ErrInvalidArg,
+			"battle %d Model-B release requires terminal outbox expected tuple", matchID)
 	}
 	battle, found, err := u.repo.GetBattle(ctx, matchID)
 	if err != nil {
@@ -856,6 +803,85 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 		return err
 	}
 	plog.With(ctx).Infow("msg", "battle_released", "match_id", matchID, "pod", battle.DsPodName, "reason", reason)
+	return nil
+}
+
+// ReleaseBattleExpected 是 Model-B 正常结算 phase1 服务端回收入口。严格顺序：
+//  1. MySQL 持久 proof 与当前 Redis stable identity 做 terminal+receipt 原子 CAS；
+//  2. 用 Kubernetes GameServer UID delete precondition 回收；
+//
+// 本方法绝不恢复 Redis TTL。battle_result 必须先把成功 durable CAS 为 released_at_ms，
+// 再调用 FinalizeBattleReleaseExpected；DB ACK 长期失败时永久墓碑不会先消失。
+// 任一步 timeout/unknown 都返回 error；pending outbox 以同 tuple 幂等重试。
+func (u *AllocatorUsecase) ReleaseBattleExpected(
+	ctx context.Context,
+	matchID uint64,
+	reason, podName string,
+	expected data.BattleExpectedInstance,
+	proof data.BattleResultAuthorizationProof,
+) error {
+	if !u.modelB || u.authRepo == nil || u.authoritativeAlloc == nil {
+		return errcode.New(errcode.ErrInvalidState, "battle terminal release requires Redis authority")
+	}
+	if matchID == 0 || reason != "completed" || podName == "" ||
+		proof.Credential.PodName != podName || proof.Credential.InstanceUID != expected.InstanceUID ||
+		proof.Credential.InstanceEpoch != expected.InstanceEpoch {
+		return errcode.New(errcode.ErrInvalidArg, "battle terminal release proof is incomplete")
+	}
+	terminated, err := u.authRepo.TerminateResultExpected(ctx, matchID, expected, proof)
+	if err != nil {
+		return err
+	}
+	if !terminated {
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"battle %d stable identity changed before terminal release", matchID)
+	}
+	allocation := &data.AuthoritativeGameServerAllocation{
+		PodName: podName, InstanceUID: expected.InstanceUID,
+		InstanceEpoch: expected.InstanceEpoch, AllocationID: expected.AllocationID,
+	}
+	if err := u.releaseGameServer(ctx, podName, allocation); err != nil {
+		plog.With(ctx).Warnw("msg", "terminal_gameserver_release_unconfirmed",
+			"match_id", matchID, "allocation_id", expected.AllocationID, "pod", podName, "err", err)
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d terminal gameserver release not confirmed", matchID)
+	}
+	plog.With(ctx).Infow("msg", "battle_terminal_release_phase1_completed",
+		"match_id", matchID, "allocation_id", expected.AllocationID,
+		"pod", podName, "uid", expected.InstanceUID)
+	return nil
+}
+
+// FinalizeBattleReleaseExpected 是 durable released_at_ms 之后的 phase2。它只校验同一
+// proof 的 Redis terminal/receipt 墓碑并恢复 TTL，绝不调用 Kubernetes。若上一次
+// finalize 响应丢失且 TTL 已把三键全部清空，则按幂等成功返回。
+func (u *AllocatorUsecase) FinalizeBattleReleaseExpected(
+	ctx context.Context,
+	matchID uint64,
+	podName string,
+	expected data.BattleExpectedInstance,
+	proof data.BattleResultAuthorizationProof,
+) error {
+	if !u.modelB || u.authRepo == nil {
+		return errcode.New(errcode.ErrInvalidState, "battle terminal finalize requires Redis authority")
+	}
+	if matchID == 0 || podName == "" || proof.Credential.PodName != podName ||
+		proof.Credential.InstanceUID != expected.InstanceUID ||
+		proof.Credential.InstanceEpoch != expected.InstanceEpoch {
+		return errcode.New(errcode.ErrInvalidArg, "battle terminal finalize proof is incomplete")
+	}
+	expired, err := u.authRepo.ExpireResultTerminatedExpected(
+		ctx, matchID, expected, proof, u.battleTTL())
+	if err != nil {
+		return err
+	}
+	if !expired {
+		return errcode.New(errcode.ErrUnavailable,
+			"battle %d terminal tombstone retention not confirmed", matchID)
+	}
+	plog.With(ctx).Infow("msg", "battle_terminal_release_finalized",
+		"match_id", matchID, "allocation_id", expected.AllocationID,
+		"pod", podName, "uid", expected.InstanceUID)
 	return nil
 }
 

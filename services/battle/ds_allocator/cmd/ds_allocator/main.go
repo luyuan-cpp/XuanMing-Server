@@ -297,6 +297,7 @@ func main() {
 			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
 			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
 			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			Features:    []string{"battle-release-expected-tuple-v1"},
 			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
 		})
 		if err != nil {

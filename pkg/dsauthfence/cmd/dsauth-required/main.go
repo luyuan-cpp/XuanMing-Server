@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math"
@@ -20,17 +21,47 @@ func main() {
 	minEpoch := flag.Uint64("min-epoch", 1, "minimum accepted required writer epoch")
 	maxEpoch := flag.Uint64("max-epoch", uint64(dsauthfence.ProtocolEpochV2), "maximum accepted required writer epoch")
 	timeout := flag.Duration("timeout", 10*time.Second, "linearizable read timeout")
+	output := flag.String("output", "text", "output format: text or json")
+	requireMTLS := flag.Bool("require-mtls", false, "require custom-CA mutual TLS for etcd")
+	caFile := flag.String("ca-file", "", "custom etcd CA PEM path")
+	certFile := flag.String("cert-file", "", "etcd client certificate PEM path")
+	keyFile := flag.String("key-file", "", "etcd client private-key PEM path")
+	serverName := flag.String("server-name", "", "exact etcd TLS server name")
+	clientIdentity := flag.String("client-identity", "", "exact etcd client certificate common name")
+	etcdIdentityRevision := flag.String("etcd-identity-revision", "", "exact revisioned immutable etcd client identity")
+	usernameFile := flag.String("username-file", "", "optional etcd username file path")
+	passwordFile := flag.String("password-file", "", "optional etcd password file path")
+	requireAuth := flag.Bool("require-auth", false, "require etcd v3 authentication to be enabled")
+	forbiddenReadPrefix := flag.String("forbidden-read-prefix", "", "prefix this identity must be denied from reading")
 	flag.Parse()
+	if *output != "text" && *output != "json" {
+		fatal(fmt.Errorf("-output must be text or json"))
+	}
 
 	endpoints := splitNonEmpty(*endpointsRaw)
 	if len(endpoints) == 0 {
 		fatal(fmt.Errorf("-endpoints is required"))
 	}
+	if *requireMTLS && *etcdIdentityRevision == "" {
+		fatal(fmt.Errorf("-etcd-identity-revision is required with -require-mtls"))
+	}
 	minAccepted, maxAccepted, err := checkedEpochRange(*minEpoch, *maxEpoch)
 	if err != nil {
 		fatal(err)
 	}
-	client, err := dsauthfence.NewActivationClient(endpoints, *prefix, *timeout)
+	client, err := dsauthfence.NewActivationClientWithSecurity(endpoints, *prefix, *timeout, dsauthfence.ClientSecurity{
+		RequireMTLS:         *requireMTLS,
+		CAFile:              *caFile,
+		CertFile:            *certFile,
+		KeyFile:             *keyFile,
+		ServerName:          *serverName,
+		ClientIdentity:      *clientIdentity,
+		IdentityRevision:    *etcdIdentityRevision,
+		UsernameFile:        *usernameFile,
+		PasswordFile:        *passwordFile,
+		RequireAuth:         *requireAuth,
+		ForbiddenReadPrefix: *forbiddenReadPrefix,
+	})
 	if err != nil {
 		fatal(err)
 	}
@@ -44,6 +75,13 @@ func main() {
 	}
 	if err := validateRequiredEpoch(snapshot.Epoch, minAccepted, maxAccepted); err != nil {
 		fatal(err)
+	}
+	if *output == "json" {
+		mustJSON(json.NewEncoder(os.Stdout).Encode(struct {
+			Epoch       uint32 `json:"epoch"`
+			ModRevision int64  `json:"mod_revision"`
+		}{Epoch: snapshot.Epoch, ModRevision: snapshot.ModRevision}))
+		return
 	}
 	fmt.Printf("required_writer_epoch 只读预检通过: epoch=%d mod_revision=%d\n", snapshot.Epoch, snapshot.ModRevision)
 }
@@ -89,4 +127,10 @@ func splitNonEmpty(raw string) []string {
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "ERROR:", err)
 	os.Exit(1)
+}
+
+func mustJSON(err error) {
+	if err != nil {
+		fatal(fmt.Errorf("encode output: %w", err))
+	}
 }

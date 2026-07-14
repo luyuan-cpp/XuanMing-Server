@@ -15,12 +15,14 @@ package biz
 import (
 	"bytes"
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -91,7 +93,7 @@ func activate(t *testing.T, uc *HubUsecase, authRepo *data.RedisHubAuthRepo, pod
 	if _, err := authRepo.StagePending(ctx, pod, cred, modelBAuthTTL); err != nil {
 		t.Fatalf("stage pending: %v", err)
 	}
-	res, err := uc.HeartbeatWithCredential(ctx, pod, 0, "ready", nowMs,
+	res, err := uc.HeartbeatWithCredential(ctx, pod, 0, nil, uint32(uc.cfg.DefaultCapacity), "ready", nowMs,
 		&HubCredential{InstanceUID: uid, ProtocolEpoch: epoch, Gen: gen, JTI: jti, TokenSHA256: "sha-" + jti, Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch})
 	if err != nil {
 		t.Fatalf("activate heartbeat: %v", err)
@@ -101,6 +103,14 @@ func activate(t *testing.T, uc *HubUsecase, authRepo *data.RedisHubAuthRepo, pod
 		t.Fatalf("activate must echo the complete credential identity, got %+v", res)
 	}
 	return epoch
+}
+
+func modelBPlayerIDs(count int) []uint64 {
+	ids := make([]uint64, count)
+	for i := range ids {
+		ids[i] = uint64(i + 1)
+	}
+	return ids
 }
 
 // seedResetWarming 把已存在的分片镜像强制回 warming 并清 last_verified(模拟新 DS 实例接管前的种子态)。
@@ -171,7 +181,7 @@ func TestModelB_HeartbeatStaleFailClosed(t *testing.T) {
 	activate(t, uc, authRepo, pod, "uid-A", 9, "j9", now)
 
 	// 旧代际凭据(gen=3)→ fail-closed,分片不被刷。
-	_, err := uc.HeartbeatWithCredential(ctx, pod, 99, "ready", now+1000,
+	_, err := uc.HeartbeatWithCredential(ctx, pod, 99, modelBPlayerIDs(99), uint32(uc.cfg.DefaultCapacity), "ready", now+1000,
 		&HubCredential{InstanceUID: "uid-A", ProtocolEpoch: 1, Gen: 3, JTI: "j3", TokenSHA256: "sha-j3", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch})
 	if errcode.As(err) != errcode.ErrUnauthorized {
 		t.Fatalf("stale credential heartbeat must fail-closed, got %v", err)
@@ -238,6 +248,132 @@ type concurrentBindingSigner struct {
 	bindings []HubTicketBinding
 }
 
+type failingHubTicketSigner struct{}
+
+func (*failingHubTicketSigner) SignHubTicket(uint64, uint32, HubTicketBinding) (string, int64, error) {
+	return "", 0, errors.New("injected hub ticket signing failure")
+}
+
+type admissionPostCheckDriftRepo struct {
+	data.HubRepo
+	playerID uint64
+	calls    int
+	driftTo  *hubv1.HubAssignmentStorageRecord
+}
+
+func (r *admissionPostCheckDriftRepo) GetAssignment(
+	ctx context.Context, playerID uint64,
+) (*hubv1.HubAssignmentStorageRecord, bool, error) {
+	r.calls++
+	if playerID == r.playerID && r.calls == 2 {
+		current, found, err := r.HubRepo.GetAssignment(ctx, playerID)
+		if err != nil || !found {
+			return current, found, err
+		}
+		if swapped, err := r.HubRepo.CompareAndSwapAssignment(ctx, playerID, current, r.driftTo, modelBAuthTTL); err != nil {
+			return nil, false, err
+		} else if !swapped {
+			return nil, false, errors.New("injected admission assignment drift CAS lost")
+		}
+	}
+	return r.HubRepo.GetAssignment(ctx, playerID)
+}
+
+func TestModelB_AdmissionCrossSlotAssignmentDriftExactCleanup(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const pod = "pandora-hub-global-1"
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	oldAssignment, found, err := repo.GetAssignment(ctx, 1001)
+	if err != nil || !found {
+		t.Fatalf("old assignment found=%v err=%v", found, err)
+	}
+	drifted := proto.Clone(oldAssignment).(*hubv1.HubAssignmentStorageRecord)
+	drifted.AssignmentId = uuid.NewString() // assignment IDs are never reused
+	uc.repo = &admissionPostCheckDriftRepo{
+		HubRepo: repo, playerID: 1001, driftTo: drifted,
+	}
+	_, err = uc.AcknowledgeAdmission(ctx, 1001, oldAssignment.GetAssignmentId(), pod,
+		uuid.NewString(), 1, &HubCredential{
+			InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+			TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+		})
+	if errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("cross-slot drift code=%v err=%v", errcode.As(err), err)
+	}
+	current, _, _ := repo.GetAssignment(ctx, 1001)
+	reservationKeys, _ := mr.HKeys("pandora:hub:reservations:{" + pod + "}")
+	sessionKeys, _ := mr.HKeys("pandora:hub:sessions:{" + pod + "}")
+	shard, _, _ := repo.GetShard(ctx, pod)
+	if current.GetAssignmentId() != drifted.GetAssignmentId() || len(reservationKeys) != 0 ||
+		len(sessionKeys) != 0 || shard.GetPlayerCount() != 0 {
+		t.Fatalf("post-ACK drift cleanup failed: assignment=%+v reservations=%v sessions=%v shard=%+v",
+			current, reservationKeys, sessionKeys, shard)
+	}
+}
+
+func TestModelB_AssignSignFailureExactReservationCleanup(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const pod = "pandora-hub-global-1"
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	uc.signer = &failingHubTicketSigner{}
+
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); errcode.As(err) != errcode.ErrInternal {
+		t.Fatalf("sign failure code=%v err=%v", errcode.As(err), err)
+	}
+	if assignment, found, err := repo.GetAssignment(ctx, 1001); err != nil || found {
+		t.Fatalf("failed sign must not publish assignment: found=%v assignment=%+v err=%v", found, assignment, err)
+	}
+	shard, _, _ := repo.GetShard(ctx, pod)
+	reservationKeys, _ := mr.HKeys("pandora:hub:reservations:{" + pod + "}")
+	sessionKeys, _ := mr.HKeys("pandora:hub:sessions:{" + pod + "}")
+	reservations, sessions := len(reservationKeys), len(sessionKeys)
+	if shard.GetPlayerCount() != 0 || shard.GetReservedCount() != 0 || shard.GetConnectedOwnershipCount() != 0 ||
+		reservations != 0 || sessions != 0 {
+		t.Fatalf("failed sign leaked capacity: shard=%+v reservations=%d sessions=%d", shard,
+			reservations, sessions)
+	}
+}
+
+func TestModelB_TransferSignFailureKeepsOldOwnerAndCleansTargetReservation(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 2)
+	ctx := context.Background()
+	const pod1, pod2 = "pandora-hub-global-1", "pandora-hub-global-2"
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod1, 1, 500, now)
+	seedWarming(t, repo, pod2, 2, 500, now)
+	activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
+	activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	before, _, _ := repo.GetAssignment(ctx, 1001)
+	uc.signer = &failingHubTicketSigner{}
+
+	if _, err := uc.TransferHub(ctx, 1001, 2); errcode.As(err) != errcode.ErrInternal {
+		t.Fatalf("transfer sign failure code=%v err=%v", errcode.As(err), err)
+	}
+	after, _, _ := repo.GetAssignment(ctx, 1001)
+	from, _, _ := repo.GetShard(ctx, pod1)
+	target, _, _ := repo.GetShard(ctx, pod2)
+	targetReservationKeys, _ := mr.HKeys("pandora:hub:reservations:{" + pod2 + "}")
+	targetSessionKeys, _ := mr.HKeys("pandora:hub:sessions:{" + pod2 + "}")
+	targetReservations, targetSessions := len(targetReservationKeys), len(targetSessionKeys)
+	if !proto.Equal(after, before) || from.GetPlayerCount() != 1 || target.GetPlayerCount() != 0 ||
+		targetReservations != 0 || targetSessions != 0 {
+		t.Fatalf("failed transfer sign mutated owner/leaked target: before=%+v after=%+v from=%+v target=%+v",
+			before, after, from, target)
+	}
+}
+
 func (s *concurrentBindingSigner) SignHubTicket(_ uint64, _ uint32, binding HubTicketBinding) (string, int64, error) {
 	s.mu.Lock()
 	s.bindings = append(s.bindings, binding)
@@ -258,18 +394,23 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
+	ticketCh := make(chan string, workers)
 	wg.Add(workers)
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0)
+			result, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0)
+			if result != nil {
+				ticketCh <- result.HubTicket
+			}
 			errCh <- err
 		}()
 	}
 	close(start)
 	wg.Wait()
 	close(errCh)
+	close(ticketCh)
 	for err := range errCh {
 		if err != nil {
 			t.Fatalf("concurrent AssignHub: %v", err)
@@ -280,13 +421,25 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 	if err != nil || !found || shard.PlayerCount != 1 {
 		t.Fatalf("one player must own exactly one seat: count=%d assignment=%+v err=%v", shard.PlayerCount, assignment, err)
 	}
+	returnedTickets := 0
+	for ticket := range ticketCh {
+		returnedTickets++
+		if ticket != assignment.GetAssignmentId() {
+			t.Fatalf("returned ticket was signed for losing assignment: got=%q winner=%q", ticket, assignment.GetAssignmentId())
+		}
+	}
+	if returnedTickets != workers {
+		t.Fatalf("every successful caller must receive one ticket: got=%d want=%d", returnedTickets, workers)
+	}
 	signer.mu.Lock()
 	defer signer.mu.Unlock()
-	if len(signer.bindings) != workers {
-		t.Fatalf("every successful caller must receive a ticket: got=%d want=%d", len(signer.bindings), workers)
+	if len(signer.bindings) < workers {
+		t.Fatalf("sign attempts cannot be fewer than successful callers: got=%d want>=%d", len(signer.bindings), workers)
 	}
+	// 新 reservation 必须先签后 CAS，故并发 loser 可产生不会返回的预签名；所有预签名仍须
+	// 绑定同一权威 Pod/instance，只有 winning assignment 的票能返回给调用方（上面已断言）。
 	for _, binding := range signer.bindings {
-		if binding.HubAssignmentID != assignment.AssignmentId || binding.PodName != assignment.HubPodName ||
+		if binding.HubAssignmentID == "" || binding.PodName != assignment.HubPodName ||
 			binding.InstanceUID != assignment.HubInstanceUid || binding.CredentialJTI != assignment.AuthJti ||
 			binding.WriterEpoch != assignment.AuthWriterEpoch {
 			t.Fatalf("ticket binding drifted from winning assignment: binding=%+v assignment=%+v", binding, assignment)
@@ -312,6 +465,177 @@ func TestModelB_AssignIdempotentReuse(t *testing.T) {
 	s, _, _ := repo.GetShard(ctx, pod)
 	if s.PlayerCount != 1 {
 		t.Fatalf("idempotent reuse must not double-seat, got %d", s.PlayerCount)
+	}
+}
+
+func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("first assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	firstAdmissionID := uuid.NewString()
+	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		firstAdmissionID, 1, cred); err != nil || !admitted.Admitted {
+		t.Fatalf("first admission result=%+v err=%v", admitted, err)
+	}
+	if _, err := uc.HeartbeatWithCredential(ctx, pod, 1, []uint64{playerID}, 500, "ready", now+1, cred); err != nil {
+		t.Fatalf("heartbeat connected audit: %v", err)
+	}
+	if departed, err := uc.AcknowledgeDeparture(ctx, playerID, assignment.GetAssignmentId(), pod,
+		firstAdmissionID, 1, cred); err != nil || !departed.Departed || departed.Conflict {
+		t.Fatalf("clean departure result=%+v err=%v", departed, err)
+	}
+	reservationKey := "pandora:hub:reservations:{" + pod + "}"
+	sessionKey := "pandora:hub:sessions:{" + pod + "}"
+	if reservations, _ := mr.HKeys(reservationKey); len(reservations) != 0 {
+		t.Fatalf("clean departure left reservations: %v", reservations)
+	}
+	if sessions, _ := mr.HKeys(sessionKey); len(sessions) != 0 {
+		t.Fatalf("clean departure left sessions: %v", sessions)
+	}
+	// Departure 与下一次 5s heartbeat 之间，audit=1 > connected=0 必须安全暂停路由；
+	// 不能为了重登在 DS 尚未证明连接已消失时超发。
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
+		t.Fatalf("stale connected audit must pause relogin, code=%v err=%v", errcode.As(err), err)
+	}
+	if _, err := uc.HeartbeatWithCredential(ctx, pod, 0, nil, 500, "ready", now+2, cred); err != nil {
+		t.Fatalf("heartbeat departure audit: %v", err)
+	}
+
+	// assignment 仍用于线路粘性，但 admission ledger 已空；重签必须原子补回 reservation。
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("relogin assign: %v", err)
+	}
+	current, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found || current.GetAssignmentId() != assignment.GetAssignmentId() {
+		t.Fatalf("relogin must reuse assignment identity: current=%+v found=%v err=%v", current, found, err)
+	}
+	if reservations, _ := mr.HKeys(reservationKey); len(reservations) != 1 || reservations[0] != assignment.GetAssignmentId() {
+		t.Fatalf("relogin must recreate exact reservation: %v", reservations)
+	}
+	shard, _, _ := repo.GetShard(ctx, pod)
+	if shard.GetPlayerCount() != 1 || shard.GetReservedCount() != 1 || shard.GetConnectedOwnershipCount() != 0 {
+		t.Fatalf("relogin reservation projection invalid: %+v", shard)
+	}
+	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 2, cred); err != nil || !admitted.Admitted {
+		t.Fatalf("relogin admission result=%+v err=%v", admitted, err)
+	}
+}
+
+func TestModelB_ExpiredReservationThenReloginRefreshesLease(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("first assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	reservationKey := "pandora:hub:reservations:{" + pod + "}"
+	if ttl := mr.TTL(reservationKey); ttl <= 0 {
+		t.Fatalf("reservation hash must have bounded retention, ttl=%s", ttl)
+	}
+
+	// Redis 整键 retention = reservation 绝对到期 + guard；推进后 assignment 仍存活。
+	mr.FastForward(uc.reservationTTL() + time.Minute)
+	if mr.Exists(reservationKey) {
+		t.Fatalf("test precondition: expired reservation hash still exists")
+	}
+	if _, found, err := repo.GetAssignment(ctx, playerID); err != nil || !found {
+		t.Fatalf("assignment must outlive reservation: found=%v err=%v", found, err)
+	}
+
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("assign after reservation expiry: %v", err)
+	}
+	current, _, _ := repo.GetAssignment(ctx, playerID)
+	if current.GetAssignmentId() != assignment.GetAssignmentId() {
+		t.Fatalf("expired lease relogin changed sticky assignment: before=%s after=%s",
+			assignment.GetAssignmentId(), current.GetAssignmentId())
+	}
+	if reservations, _ := mr.HKeys(reservationKey); len(reservations) != 1 || reservations[0] != assignment.GetAssignmentId() {
+		t.Fatalf("expired lease was not recreated exactly: %v", reservations)
+	}
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 1, cred); err != nil || !admitted.Admitted {
+		t.Fatalf("admission after lease refresh result=%+v err=%v", admitted, err)
+	}
+}
+
+func TestModelB_ActiveSessionReuseDoesNotDoubleCountOrDeleteOwner(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const (
+		pod      = "pandora-hub-global-1"
+		playerID = uint64(1001)
+	)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("first assign: %v", err)
+	}
+	assignment, _, _ := repo.GetAssignment(ctx, playerID)
+	admissionID := uuid.NewString()
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
+	if admitted, err := uc.AcknowledgeAdmission(ctx, playerID, assignment.GetAssignmentId(), pod,
+		admissionID, 7, cred); err != nil || !admitted.Admitted {
+		t.Fatalf("first admission result=%+v err=%v", admitted, err)
+	}
+	sessionKey := "pandora:hub:sessions:{" + pod + "}"
+	sessionBefore := mr.HGet(sessionKey, assignment.GetAssignmentId())
+	if sessionBefore == "" {
+		t.Fatal("active session missing before reuse")
+	}
+
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+		t.Fatalf("active session reuse: %v", err)
+	}
+	if reservations, _ := mr.HKeys("pandora:hub:reservations:{" + pod + "}"); len(reservations) != 0 {
+		t.Fatalf("active session reuse created duplicate reservation: %v", reservations)
+	}
+	if sessions, _ := mr.HKeys(sessionKey); len(sessions) != 1 || sessions[0] != assignment.GetAssignmentId() {
+		t.Fatalf("active session reuse changed ownership cardinality: %v", sessions)
+	}
+	if sessionAfter := mr.HGet(sessionKey, assignment.GetAssignmentId()); sessionAfter != sessionBefore {
+		t.Fatal("active session reuse replaced or deleted the current admission owner")
+	}
+	shard, _, _ := repo.GetShard(ctx, pod)
+	if shard.GetPlayerCount() != 1 || shard.GetReservedCount() != 0 || shard.GetConnectedOwnershipCount() != 1 {
+		t.Fatalf("active session reuse double-counted capacity: %+v", shard)
 	}
 }
 
@@ -516,6 +840,12 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 		t.Fatalf("assignment found=%v err=%v", found, err)
 	}
 	oldID := old.GetAssignmentId()
+	if admission, err := uc.AcknowledgeAdmission(ctx, 1001, oldID, pod, uuid.NewString(), 1, &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 9, JTI: "j9",
+		TokenSHA256: "sha-j9", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}); err != nil || !admission.Admitted {
+		t.Fatalf("acknowledge initial admission: result=%+v err=%v", admission, err)
+	}
 	unknown := protowire.AppendTag(nil, 2047, protowire.VarintType)
 	unknown = protowire.AppendVarint(unknown, 12345)
 	next := proto.Clone(old).(*hubv1.HubAssignmentStorageRecord)
@@ -532,7 +862,7 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 	if _, err := authRepo.StagePending(ctx, pod, rotated, modelBAuthTTL); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := uc.HeartbeatWithCredential(ctx, pod, 1, "ready", now+1000, &HubCredential{
+	if _, err := uc.HeartbeatWithCredential(ctx, pod, 1, []uint64{1001}, uint32(uc.cfg.DefaultCapacity), "ready", now+1000, &HubCredential{
 		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 10, JTI: "j10",
 		TokenSHA256: "sha-j10", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}); err != nil {

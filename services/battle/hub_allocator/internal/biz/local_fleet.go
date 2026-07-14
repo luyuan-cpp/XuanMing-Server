@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -34,6 +35,7 @@ type LocalHubFleetProvider struct {
 	instanceUID   string
 	protocolEpoch uint32
 	addr          string
+	mapURL        string
 
 	// dsTokenIssuer 签发 DS 回调服务令牌(审核 P1 #1;main 在 ds_auth.secret 已配时、
 	// 懒拉起前注入)。local 模式经 PANDORA_DS_TOKEN env 一次性下发(进程常驻无法改 env,
@@ -75,6 +77,10 @@ func NewLocalHubFleetProvider(cfg conf.LocalHubConf) (*LocalHubFleetProvider, er
 	if _, err := os.Stat(cfg.ExecutablePath); err != nil {
 		return nil, fmt.Errorf("local_hub: executable_path %q not found: %w", cfg.ExecutablePath, err)
 	}
+	mapURL, err := hubMapURLWithMaxPlayers(cfg.MapName, cfg.Capacity)
+	if err != nil {
+		return nil, fmt.Errorf("local_hub: %w", err)
+	}
 	return &LocalHubFleetProvider{
 		cfg: cfg,
 		// 每次进程启动生成唯一实例名(对齐线上 Agones「GameServer 名每次唯一」语义):
@@ -85,6 +91,7 @@ func NewLocalHubFleetProvider(cfg conf.LocalHubConf) (*LocalHubFleetProvider, er
 		instanceUID:   uuid.NewString(),
 		protocolEpoch: 1,
 		addr:          fmt.Sprintf("%s:%d", cfg.AdvertiseHost, cfg.Port),
+		mapURL:        mapURL,
 	}, nil
 }
 
@@ -178,12 +185,39 @@ func (l *LocalHubFleetProvider) start() error {
 // buildArgs 拼 UE DS 命令行:大厅关卡 + -server -log -port=<port> + 额外参数。
 func (l *LocalHubFleetProvider) buildArgs() []string {
 	args := make([]string, 0, 4+len(l.cfg.ExtraArgs))
-	if l.cfg.MapName != "" {
-		args = append(args, l.cfg.MapName)
+	if l.mapURL != "" {
+		args = append(args, l.mapURL)
 	}
 	args = append(args, "-server", "-log", fmt.Sprintf("-port=%d", l.cfg.Port))
 	args = append(args, l.cfg.ExtraArgs...)
 	return args
+}
+
+func hubMapURLWithMaxPlayers(mapName string, capacity int32) (string, error) {
+	if capacity <= 0 {
+		return "", fmt.Errorf("capacity must be positive")
+	}
+	parts := strings.Split(mapName, "?")
+	found := false
+	for _, option := range parts[1:] {
+		keyValue := strings.SplitN(option, "=", 2)
+		if !strings.EqualFold(strings.TrimSpace(keyValue[0]), "MaxPlayers") {
+			continue
+		}
+		if found || len(keyValue) != 2 {
+			return "", fmt.Errorf("map_name contains duplicate/invalid MaxPlayers option")
+		}
+		parsed, err := strconv.ParseInt(keyValue[1], 10, 32)
+		canonical := strconv.FormatInt(int64(capacity), 10)
+		if err != nil || parsed != int64(capacity) || keyValue[1] != canonical {
+			return "", fmt.Errorf("map_name MaxPlayers must exactly equal capacity %d", capacity)
+		}
+		found = true
+	}
+	if found {
+		return mapName, nil
+	}
+	return fmt.Sprintf("%s?MaxPlayers=%d", mapName, capacity), nil
 }
 
 // buildEnv 注入 Hub DS 身份变量(对齐 UE DS 侧读取的 env)。

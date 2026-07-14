@@ -61,6 +61,8 @@ $StressTables = @(
     "pandora_battle.battles",
     "pandora_battle.battle_player_stats",
     "pandora_battle.player_update_outbox",
+    "pandora_battle.battle_drop_outbox",
+    "pandora_battle.terminal_release_outbox",
     "pandora_trade.player_currency",
     "pandora_trade.player_items",
     "pandora_trade.inventory_ledger",

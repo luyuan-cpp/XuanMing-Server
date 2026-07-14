@@ -366,7 +366,7 @@ EndDialogue(player_id, dialogue_id) → ok
 **对外 RPC**:
 ```
 AllocateBattle(match_id, player_ids, map_id, game_mode) → ds_addr + ds_pod_name
-ReleaseBattle(match_id, reason) → ok  # 暴露但当前无生产调用方;正常结算靠 DS ended 心跳 + Agones Shutdown
+ReleaseBattle(match_id, expected allocation/pod/UID/epoch + result proof, reason) → ok
 Heartbeat(request) → command           # DS 每 5s 单向 unary 主动调
 ListBattles(filter) → []BattleInfo
 ```
@@ -378,8 +378,13 @@ ListBattles(filter) → []BattleInfo
 - `local_ds.enabled=true` 时可直接 exec 本机 Windows Dedicated Server 进程,与 Agones / Mock
   三种模式互斥,接口仍是同一个 `GameServerAllocator`。
 - 维护 redis 中的 DS 状态镜像
-- 正常结算:Battle DS 上报 `state=ended` 后自行 `Agones->Shutdown()`,allocator 后台 sweep 只把
-  ended match 移出 active,不发 abandoned 补偿。
+- 正常结算(Model-B):DS 经 Guard+Redis active 同步 `ReportResult`；`battle_result` 把结算与
+  terminal-release proof 同一 MySQL 事务落库。后台先以 `reason=completed` 建永久 Redis terminal
+  墓碑并做 Kubernetes UID precondition release，再 CAS `released_at_ms`；下一轮仅以
+  `reason=completed-finalize` 给 exact-proof 墓碑设 TTL，绝不再次碰 Kubernetes，成功后才删 released
+  outbox。DS 的 ended/Shutdown 只改善通知体验，不再决定资源安全释放。
+- Model-B 的 match-id-only `ReleaseBattle` 永久拒绝；该内部 proof RPC 只允许 battle-result mTLS
+  workload identity，且不暴露在 `:8444` DS listener。legacy/off 本地配置保留旧管理兼容路径。
 - 心跳超时 15s → 标记 abandoned + `alloc.Release(pod)` + 投递 `pandora.ds.lifecycle`
   给 battle_result(玩家段位回滚);投递失败留在 active 下轮重试,`BattleTTL` 是重试上界。
 - 空场兜底(2026-07-06):对局活跃(ready/running)但 DS 上报 `player_count==0` 持续超过

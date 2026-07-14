@@ -586,7 +586,7 @@ func TestBattleModelBCleanupReleaseUnknownKeepsFenceAndCrashRetry(t *testing.T) 
 	}
 }
 
-func TestBattleModelBReleaseBattleUnknownKeepsPermanentTerminatingFence(t *testing.T) {
+func TestBattleModelBTerminalOutboxReleaseUnknownKeepsPermanentTerminatingFence(t *testing.T) {
 	ctx := context.Background()
 	allocator := &authoritativeTestAllocator{
 		delivered:  make(chan map[string]string, 1),
@@ -639,46 +639,83 @@ func TestBattleModelBReleaseBattleUnknownKeepsPermanentTerminatingFence(t *testi
 	}, data.BattleHeartbeatInput{PlayerCount: 1, State: stateRunning, AuthTTL: time.Hour, BattleTTL: time.Hour}); err != nil {
 		t.Fatal(err)
 	}
+	expected := data.BattleExpectedInstance{
+		AllocationID: allocationID, InstanceUID: credential.InstanceUid, InstanceEpoch: credential.InstanceEpoch,
+	}
+	proof := data.BattleResultAuthorizationProof{
+		Credential: data.BattleCredentialIdentity{
+			PodName: "battle-822", InstanceUID: credential.InstanceUid, InstanceEpoch: credential.InstanceEpoch,
+			Gen: credential.Gen, JTI: credential.Jti, ExpMs: credential.ExpMs, Kid: credential.Kid,
+			TokenSHA256: credential.TokenSha256, WriterEpoch: credential.WriterEpoch,
+		},
+		AuthorizedAtMs: time.Now().UnixMilli(),
+	}
 	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
 		snapshot, err := authRepo.ReadAuthority(ctx, matchID)
 		if err != nil {
 			return err
 		}
 		if snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
-			snapshot.Battle.GetState() != stateAbandoned ||
+			snapshot.Battle.GetState() != stateEnded ||
 			snapshot.Battle.GetGameserverUid() != allocation.InstanceUID ||
-			mr.TTL("pandora:ds:auth:{822}") != 0 || mr.TTL("pandora:ds:battle:{822}") != 0 {
-			return errors.New("ReleaseBattle called ReleaseExpected before permanent TERMINATING fence")
+			mr.TTL("pandora:ds:auth:{822}") != 0 || mr.TTL("pandora:ds:battle:{822}") != 0 ||
+			mr.TTL("pandora:ds:result-receipt:{822}") != 0 {
+			return errors.New("terminal outbox called ReleaseExpected before permanent TERMINATING fence")
 		}
 		return nil
 	}
 
-	if err := uc.ReleaseBattle(ctx, matchID, "failed"); errcode.As(err) != errcode.ErrUnavailable {
+	if err := uc.ReleaseBattleExpected(ctx, matchID, "completed", "battle-822", expected, proof); errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("release timeout code=%v err=%v", errcode.As(err), err)
 	}
 	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
 	if err != nil || !snapshot.AuthFound || !snapshot.BattleFound ||
 		snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
-		snapshot.Battle.GetState() != stateAbandoned {
+		snapshot.Battle.GetState() != stateEnded {
 		t.Fatalf("ReleaseBattle timeout lost terminal fence: snapshot=%+v err=%v", snapshot, err)
 	}
-	if authTTL, battleTTL := mr.TTL("pandora:ds:auth:{822}"), mr.TTL("pandora:ds:battle:{822}"); authTTL != 0 || battleTTL != 0 {
-		t.Fatalf("ReleaseBattle timeout fence must persist: auth=%v battle=%v", authTTL, battleTTL)
+	if authTTL, battleTTL, receiptTTL := mr.TTL("pandora:ds:auth:{822}"), mr.TTL("pandora:ds:battle:{822}"), mr.TTL("pandora:ds:result-receipt:{822}"); authTTL != 0 || battleTTL != 0 || receiptTTL != 0 {
+		t.Fatalf("ReleaseBattle timeout fence must persist: auth=%v battle=%v receipt=%v", authTTL, battleTTL, receiptTTL)
 	}
 	if allocator.releases.Load() != 1 {
 		t.Fatalf("first release calls=%d", allocator.releases.Load())
 	}
 
 	allocator.releaseErr = nil
-	if err := uc.ReleaseBattle(ctx, matchID, "failed"); err != nil {
+	if err := uc.ReleaseBattleExpected(ctx, matchID, "completed", "battle-822", expected, proof); err != nil {
 		t.Fatalf("idempotent release retry: %v", err)
 	}
 	snapshot, err = authRepo.ReadAuthority(ctx, matchID)
-	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
-		t.Fatalf("release retry did not purge: snapshot=%+v err=%v", snapshot, err)
+	if err != nil || !snapshot.AuthFound || !snapshot.BattleFound ||
+		snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+		snapshot.Battle.GetState() != stateEnded {
+		t.Fatalf("release retry lost retained tombstone: snapshot=%+v err=%v", snapshot, err)
+	}
+	if authTTL, battleTTL, receiptTTL := mr.TTL("pandora:ds:auth:{822}"), mr.TTL("pandora:ds:battle:{822}"), mr.TTL("pandora:ds:result-receipt:{822}"); authTTL != 0 || battleTTL != 0 || receiptTTL != 0 {
+		t.Fatalf("phase1 must keep permanent tombstones until durable DB mark: auth=%v battle=%v receipt=%v", authTTL, battleTTL, receiptTTL)
 	}
 	if allocator.releases.Load() != 2 {
 		t.Fatalf("release retry calls=%d", allocator.releases.Load())
+	}
+
+	if err := uc.FinalizeBattleReleaseExpected(ctx, matchID, "battle-822", expected, proof); err != nil {
+		t.Fatalf("finalize after durable DB mark: %v", err)
+	}
+	if authTTL, battleTTL, receiptTTL := mr.TTL("pandora:ds:auth:{822}"), mr.TTL("pandora:ds:battle:{822}"), mr.TTL("pandora:ds:result-receipt:{822}"); authTTL <= 0 || battleTTL <= 0 || receiptTTL <= 0 {
+		t.Fatalf("finalize must bound tombstone TTLs: auth=%v battle=%v receipt=%v", authTTL, battleTTL, receiptTTL)
+	}
+	if allocator.releases.Load() != 2 {
+		t.Fatalf("finalize touched Kubernetes: releases=%d", allocator.releases.Load())
+	}
+
+	// finalize 响应丢失 + DB DELETE 长期失败可跨过完整 TTL。新进程重放 finalize-only
+	// 时三键已自然清空，应幂等成功且绝不再调用 Kubernetes。
+	mr.FastForward(3 * time.Hour)
+	if err := uc.FinalizeBattleReleaseExpected(ctx, matchID, "battle-822", expected, proof); err != nil {
+		t.Fatalf("finalize retry after tombstone TTL: %v", err)
+	}
+	if allocator.releases.Load() != 2 {
+		t.Fatalf("post-TTL finalize touched Kubernetes: releases=%d", allocator.releases.Load())
 	}
 }
 

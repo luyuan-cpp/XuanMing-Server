@@ -31,6 +31,8 @@ spec:
         pandora.dev/ds-auth-writer-epoch: "2"
         pandora.dev/region: cn
         pandora.dev/capacity: "500"
+      annotations:
+        pandora.dev/release-track: canary
     spec:
       ports:
         - name: default
@@ -45,6 +47,8 @@ spec:
         metadata:
           labels:
             pandora.dev/ds-auth-writer-epoch: "2"
+            pandora.dev/release-track: canary
+          annotations:
             pandora.dev/release-track: canary
         spec:
           containers:
@@ -62,6 +66,8 @@ spec:
                   value: "/Game/Test/Level/MainCity"
                 - name: PANDORA_DS_GAMEMODE
                   value: "/Script/Pandora.PandoraHubGameMode"
+                - name: PANDORA_DS_MAX_PLAYERS
+                  value: "500"
                 # 线上同款:走集群内 Envoy「DS 面」Service DNS(见 16-ds-envoy.yaml),不写 host.docker.internal。
                 - name: PANDORA_HUB_ALLOCATOR_ADDR
                   value: "pandora-envoy.pandora.svc.cluster.local:8444"
@@ -93,5 +99,3 @@ spec:
             - name: dsticket-jwks
               configMap:
                 name: pandora-dsticket-jwks-r1
-
-

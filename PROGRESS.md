@@ -322,3 +322,74 @@
 - player、inventory、auction 的完整 test/vet 与真实 MySQL 用例全绿。`CGO_ENABLED=0`，race、真 Kafka/
   inventory gRPC 故障注入、生产规模 MDL/吞吐及真实蓝绿仍属外部验收门。Claude 复审清单见
   `docs/design/auction-blockers-claude-review-20260712-final.md`；未 commit/push、未碰生产、未写真实 secret。
+
+## 2026-07-13:DSTicket v2 与不停服轮换/普通发布防线收束（生产激活仍阻断）
+
+- 人明确授权 Codex 修复本轮本地审核问题。Login 已严格签发/校验 RS256 `dst_ver=2` 票据，绑定
+  DS UID/epoch、assignment、release track 等权威声明并限制最大 TTL 180s；四 signer 私钥改为
+  revisioned immutable Secret、非 root UID/GID/fsGroup 10001 与 0440，只向 Login/DS 投递对应公钥 JWKS。
+- 新增独立 `stage -> promote -> retire` 轮换流程：K1/K2 overlap、四 signer 逐个 rollout、全部 Fleet/
+  GameServer/Pod 与历史 controller 引用闭包、apiserver activation 时间起算 225s 后退役 K1；旧 key/
+  config 不自动删除，也不强杀 GameServer。普通 online 发布与轮换共用 create-only immutable 操作锁，
+  以 UID/resourceVersion CAS 释放；崩溃残留锁只允许人工审计，不按本机时间抢锁。
+- 轮换/发布门禁已覆盖 direct/projected/env/envFrom/init/ephemeral/CSI、畸形保留前缀、影子 config/
+  signer/JWKS consumer、YAML 真实反序列化路径、fixed/phase Secret 全量 data 投影与 marker 历史配对；
+  activation/terminal/fixed handoff 的远端写入前均紧邻复证精确运行态和锁身份。
+- Social Guild 的 TiDB counter/schema migration 已保持新旧实例混跑兼容并补并发/自愈用例；Envoy 对
+  七个 Inventory internal RPC 已精确 403。Login/Social/迁移工具及 `pkg/auth`/`dsticketkeys` 的
+  test/vet/build、7 组 PowerShell 契约、38 脚本 AST、两套 Kustomize render 与 `git diff --check`
+  均通过；离线业务镜像包已按 host 模式重建并复查为未过期、精确 20 tags。
+- **仍禁止宣称可生产激活**：真集群/UE K1→K2→K2-only（含 K1 旧票耗尽）E2E 未完成；本轮
+  post-redaction K1 尚未到达认证入口，K2 未执行，也未写真实 secret、apply 生产、commit/push。
+  `pkg/auth`、`services/account/login`、`services/social/guild` 的离线 linux/amd64 `-race` 已通过；Guild
+  `internal/data` 12 个真实 MySQL 集成/并发场景与 `tools/migrate` 2 个 Social v2 场景已复跑通过，临时库
+  清零。Inventory 的 Istio 方案 A 已获人批准，但仅交付独立静态候选，不能冒充已完成服务间鉴权或生产激活。
+
+## 2026-07-13:Battle Model-B 正常结算持久终态回收（方案 B）
+
+- `battle_result` 将结算、玩家更新与完整 terminal-release proof 放入同一 MySQL 事务；DB commit
+  失败不返回 OK，commit 后 Redis receipt 即时失败仍由 durable outbox 恢复。旧 credential 已提交后，
+  新 active credential 的幂等重试不替换旧 proof、不增加第二行。
+- worker 落地两阶段状态机：pending 先以 exact proof 建永久 Redis terminal/receipt 墓碑并执行
+  Kubernetes UID precondition release，再 CAS `released_at_ms`；released 行只走
+  `completed-finalize` 恢复墓碑 TTL，绝不再删 K8s，最后仅以 `released_at_ms>0` 删除 outbox。
+  response loss、DB mark/delete failure、跨完整 TTL 与两个 worker 并发 CAS/finalize 均有回归测试。
+- additive migration 与启动 schema gate 精确核验全部列/索引、`ENGINE=InnoDB`、
+  `utf8mb4_0900_ai_ci`、`released_at_ms NOT NULL DEFAULT 0`；mutant 和隔离 MySQL 8.4 集成测试通过。
+  Redis authority 生产配置拒绝无凭据 `pandora.battle.result`，match-id-only Model-B release 拒绝；
+  online 内部 ReleaseBattle 另以 battle-result SPIFFE/mTLS exact method policy 收口，不暴露到 `:8444`。
+- 本轮 battle_result/ds_allocator 全量 Go test/vet、并发用例 50 次、mesh/config 契约均通过；未
+  commit/push、未 Apply 生产、未写真实 secret。上线前仍须先执行 migration、接入 online component，
+  并通过 §7.15 blue/green/真实集群 synthetic 激活门。
+
+## 2026-07-13:Inventory 服务身份方案 A 获批并交付独立静态候选（普通 online 未接线）
+
+- 人已明确批准 `docs/design/decision-revisit-internal-service-auth.md` 方案 A：revision 化 Istio
+  STRICT mTLS + SPIFFE + exact AuthorizationPolicy 为统一最终身份层，Inventory 是第一条落地链。
+  本轮未安装 Istio、未执行 Kubernetes apply、未写真实 secret、未碰生产。
+- 独立静态候选包含六个 ServiceAccount、纯 revision sidecar、Inventory `grpc/appProtocol`、
+  9 个系统 allow / 26 个 system deny 补集、edge 6 个玩家 allow / 7 个 system deny 补集、STRICT 与
+  observe 分层策略、Inventory 专用 L4 NetworkPolicy。内部六 workload 与外部 edge 均以
+  Deployment→ReplicaSet→Pod VAP 锁 owner、受保护 SA、token/capability、sidecar 与流量截获；生产最低
+  Kubernetes 1.30。candidate 安全对象由测试按审核 hash 精确比对。共享静态 component 唯一拥有
+  battle-result SA；Inventory 与 DS-terminal 双候选组合只引入一次，DS-terminal 自行声明两端 revision
+  patch，不依赖 Inventory identity component。
+- 只读 helper/契约可覆盖完整 live Pod labels、protected SA 全量占用（含 terminating）、
+  canonical green `battle-result-ds-auth-green`、edge owner/容器/image、创建时 RS labels、唯一 Istio
+  injector、actual revision、MeshConfig canonical 表示、root namespace additive policy、VAP controller
+  收敛、STRICT、Service 与 NetworkPolicy；但这些 helper 未接入 ordinary `start.ps1`。
+- 默认 online kustomization 不引用 shared identity/Inventory/DS-terminal component，普通 online NetworkPolicy 未改，
+  `start.ps1` 不加载 Inventory helper、不接收 Istio revision、不生成 runtime patch，也不执行 Inventory
+  preflight。静态候选不能由普通发布误 apply；未来接线必须重新审核。
+- 可伪造/重放的 `pandora.inventory-mesh-audit/v1` 已永久 hard-fail。真实 Kubernetes 尚未产生短时
+  `observeEvidence` 与 active ALLOW 新 generation/RV 后的 `activeAllowEvidence`，也未逐 proxy 证明 xDS
+  传播。首次激活必须完成 PERMISSIVE→identity→gate→observe→active ALLOW→STRICT 独立阶段，不能把
+  单个 `workflows_ok` 布尔当验收。ordinary online 当前的全局零写门来自独立 DSTicket K1→K2→K2-only
+  真实 Kubernetes/UE E2E 边界，不代表 Inventory 已接线。
+- 本地通过 `inventory_mesh_contract_test.ps1`（含 wildcard、额外 policy、sidecar/token/旁加载、
+  MeshConfig flow/缩进/merge、candidate broad-policy mutants）、`ds_terminal_mesh_contract_test.ps1`、
+  `online_manifest_contract_test.ps1` 的 B 收口断言、Kustomize render 与 PowerShell AST；`pandora-agones`
+  API server 对 7 个 VAP + 7 个 Binding 的 server dry-run/CEL 编译全部通过。`pkg/auth`、Login、Guild 的
+  离线 linux/amd64 `-race`，以及 Guild 12 个真实 MySQL 集成/并发场景、Social v2 2 个迁移场景已通过；
+  post-redaction K1 尚未到达认证入口，K2 未执行。
+  真实 Kubernetes/外部 edge/metrics/probe/CNI/五条补偿链滚动验收尚未执行，不宣称生产可激活。

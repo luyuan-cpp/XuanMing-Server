@@ -85,7 +85,35 @@ func (s *AllocatorService) ReleaseBattle(ctx context.Context, req *dsv1.ReleaseB
 	if req.GetMatchId() == 0 {
 		return &dsv1.ReleaseBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	if err := s.uc.ReleaseBattle(ctx, req.GetMatchId(), req.GetReason()); err != nil {
+	var err error
+	if s.uc.RedisAuthorityEnabled() {
+		if (req.GetReason() != "completed" && req.GetReason() != "completed-finalize") || req.GetAuthExpMs() <= 0 {
+			return &dsv1.ReleaseBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+		}
+		expected := data.BattleExpectedInstance{
+			AllocationID: req.GetAllocationId(), InstanceUID: req.GetGameserverUid(),
+			InstanceEpoch: req.GetInstanceEpoch(),
+		}
+		proof := data.BattleResultAuthorizationProof{
+			Credential: data.BattleCredentialIdentity{
+				PodName: req.GetDsPodName(), InstanceUID: req.GetGameserverUid(),
+				InstanceEpoch: req.GetInstanceEpoch(), Gen: req.GetAuthGen(),
+				JTI: req.GetAuthJti(), ExpMs: uint64(req.GetAuthExpMs()), Kid: req.GetAuthKid(),
+				TokenSHA256: req.GetAuthTokenSha256(), WriterEpoch: req.GetAuthWriterEpoch(),
+			},
+			AuthorizedAtMs: req.GetAuthorizedAtMs(),
+		}
+		if req.GetReason() == "completed" {
+			err = s.uc.ReleaseBattleExpected(
+				ctx, req.GetMatchId(), req.GetReason(), req.GetDsPodName(), expected, proof)
+		} else {
+			err = s.uc.FinalizeBattleReleaseExpected(
+				ctx, req.GetMatchId(), req.GetDsPodName(), expected, proof)
+		}
+	} else {
+		err = s.uc.ReleaseBattle(ctx, req.GetMatchId(), req.GetReason())
+	}
+	if err != nil {
 		return &dsv1.ReleaseBattleResponse{Code: toProtoCode(err)}, nil
 	}
 	return &dsv1.ReleaseBattleResponse{Code: commonv1.ErrCode_OK}, nil

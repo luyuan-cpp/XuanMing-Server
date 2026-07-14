@@ -1,0 +1,741 @@
+# Injector failurePolicy=Fail 只能约束「已命中 webhook 但注入失败」；revision 拼错会完全
+# 绕过 webhook。Deployment gate 先禁止模板伪造 proxy/status/token；Pod gate 再只接受
+# ReplicaSet controller 创建、并校验 mutation 后的精确注入态，两层合起来才可证明 sidecar。
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-mesh-deployments
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+        scope: "*"
+  matchConditions:
+    - name: pandora-managed-now-or-before
+      expression: >-
+        object.metadata.namespace == 'pandora' &&
+        (object.spec.template.spec.serviceAccountName in
+           ['pandora-inventory', 'pandora-auction', 'pandora-trade', 'pandora-mail',
+            'pandora-leaderboard', 'pandora-battle-result'] ||
+         (oldObject != null && oldObject.spec.template.spec.serviceAccountName in
+           ['pandora-inventory', 'pandora-auction', 'pandora-trade', 'pandora-mail',
+            'pandora-leaderboard', 'pandora-battle-result']) ||
+         (has(object.spec.template.metadata.labels) && 'app' in object.spec.template.metadata.labels &&
+          object.spec.template.metadata.labels['app'] in
+          ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result']) ||
+         (oldObject != null && has(oldObject.spec.template.metadata.labels) &&
+          'app' in oldObject.spec.template.metadata.labels && oldObject.spec.template.metadata.labels['app'] in
+          ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result']))
+  validations:
+    - expression: >-
+        has(object.spec.template.metadata.labels) && 'app' in object.spec.template.metadata.labels &&
+        object.spec.template.metadata.labels['app'] in
+          ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result'] &&
+        has(object.spec.selector.matchLabels) &&
+        ((object.spec.template.metadata.labels['app'] != 'battle-result' &&
+          object.metadata.name == object.spec.template.metadata.labels['app'] &&
+          object.spec.selector.matchLabels == {'app':object.spec.template.metadata.labels['app']}) ||
+         (object.spec.template.metadata.labels['app'] == 'battle-result' &&
+          ((object.metadata.name == 'battle-result' &&
+            ((object.spec.selector.matchLabels == {'app':'battle-result'} &&
+              !('pandora.dev/ds-auth-writer-set' in object.spec.template.metadata.labels) &&
+              object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2') ||
+             object.spec.selector.matchLabels ==
+               {'app':'battle-result', 'pandora.dev/ds-auth-writer-set':'blue',
+                'pandora.dev/ds-auth-writer-epoch':'1'})) ||
+           (object.metadata.name == 'battle-result-ds-auth-green' &&
+            object.spec.selector.matchLabels ==
+              {'app':'battle-result', 'pandora.dev/ds-auth-writer-set':'green',
+               'pandora.dev/ds-auth-writer-epoch':'2'})))) &&
+        object.spec.selector.matchLabels.all(k,
+          k in object.spec.template.metadata.labels &&
+          object.spec.template.metadata.labels[k] == object.spec.selector.matchLabels[k]) &&
+        (oldObject == null || object.spec.template.metadata.labels['app'] ==
+          oldObject.spec.template.metadata.labels['app'])
+      message: "Inventory mesh Deployment 禁止改名或逃逸 app selector"
+    - expression: >-
+        object.spec.template.spec.serviceAccountName ==
+          {'inventory':'pandora-inventory', 'auction':'pandora-auction', 'trade':'pandora-trade',
+           'mail':'pandora-mail', 'leaderboard':'pandora-leaderboard',
+           'battle-result':'pandora-battle-result'}[object.spec.template.metadata.labels['app']] &&
+        object.spec.template.spec.automountServiceAccountToken == false &&
+        object.spec.template.spec.containers.size() == 1 &&
+        object.spec.template.spec.containers[0].name == object.spec.template.metadata.labels['app'] &&
+        object.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false &&
+        object.spec.template.spec.containers[0].securityContext.privileged == false &&
+        (!has(object.spec.template.spec.containers[0].securityContext.capabilities.add) ||
+         object.spec.template.spec.containers[0].securityContext.capabilities.add.size() == 0) &&
+        object.spec.template.spec.containers[0].securityContext.capabilities.drop == ['ALL'] &&
+        (!has(object.spec.template.spec.containers[0].volumeMounts) ||
+         object.spec.template.spec.containers[0].volumeMounts.all(m, m.name != 'istio-token')) &&
+        (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.size() == 0) &&
+        (!has(object.spec.template.spec.ephemeralContainers) || object.spec.template.spec.ephemeralContainers.size() == 0) &&
+        (!has(object.spec.template.spec.volumes) ||
+         object.spec.template.spec.volumes.all(v, v.name != 'istio-token'))
+      message: "Inventory mesh Deployment 模板只允许单应用容器，禁止预置 proxy/init/token/ephemeral"
+    - expression: >-
+        has(object.spec.template.metadata.labels) && 'istio.io/rev' in object.spec.template.metadata.labels &&
+        !(object.spec.template.metadata.labels['istio.io/rev'] in
+          ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+        !('sidecar.istio.io/inject' in object.spec.template.metadata.labels) &&
+        (!('istio.io/dataplane-mode' in object.spec.template.metadata.labels) ||
+         object.spec.template.metadata.labels['istio.io/dataplane-mode'] != 'none') &&
+        has(object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations['sidecar.istio.io/rewriteAppHTTPProbers'] == 'true' &&
+        !('sidecar.istio.io/status' in object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations.all(k,
+          !k.startsWith('traffic.sidecar.istio.io/') && k != 'proxy.istio.io/config' &&
+          k != 'sidecar.istio.io/inject' && k != 'sidecar.istio.io/interceptionMode')
+      message: "Inventory mesh Deployment 必须使用纯 revision 注入且禁止伪造 injector 字段"
+    - expression: >-
+        !has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false
+      message: "Inventory mesh Deployment 禁止 hostNetwork"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-mesh-deployments
+spec:
+  policyName: pandora-inventory-mesh-deployments
+  validationActions: [Deny]
+---
+# Deployment controller 生成的 ReplicaSet 仍是可直接写入的 API；这一层禁止攻击者
+# 伪造一个带 proxy/status/token 的 RS，再借合法 controller 身份创建可骗过 Pod gate 的 Pod。
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-mesh-replicasets
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["replicasets"]
+        scope: "*"
+  matchConditions:
+    - name: inventory-mesh-gate-active
+      expression: >-
+        has(namespaceObject.metadata.labels) &&
+        'pandora.dev/inventory-mesh-revision' in namespaceObject.metadata.labels
+    - name: pandora-managed-now-or-before
+      expression: >-
+        object.metadata.namespace == 'pandora' &&
+        (object.spec.template.spec.serviceAccountName in
+           ['pandora-inventory', 'pandora-auction', 'pandora-trade', 'pandora-mail',
+            'pandora-leaderboard', 'pandora-battle-result'] ||
+         (oldObject != null && oldObject.spec.template.spec.serviceAccountName in
+           ['pandora-inventory', 'pandora-auction', 'pandora-trade', 'pandora-mail',
+            'pandora-leaderboard', 'pandora-battle-result']) ||
+         (has(object.spec.template.metadata.labels) && 'app' in object.spec.template.metadata.labels &&
+          object.spec.template.metadata.labels['app'] in
+          ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result']) ||
+         (oldObject != null && has(oldObject.spec.template.metadata.labels) &&
+          'app' in oldObject.spec.template.metadata.labels && oldObject.spec.template.metadata.labels['app'] in
+          ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result']))
+  validations:
+    - expression: >-
+        request.userInfo.username in
+          ['system:kube-controller-manager',
+           'system:serviceaccount:kube-system:deployment-controller']
+      message: "Inventory mesh ReplicaSet 只允许 Deployment controller 创建/更新"
+    - expression: >-
+        has(object.metadata.ownerReferences) && object.metadata.ownerReferences.size() == 1 &&
+        object.metadata.ownerReferences[0].apiVersion == 'apps/v1' &&
+        object.metadata.ownerReferences[0].kind == 'Deployment' &&
+        object.metadata.ownerReferences[0].controller == true &&
+        object.metadata.ownerReferences[0].blockOwnerDeletion == true &&
+        object.metadata.ownerReferences[0].uid != '' &&
+        ((object.spec.template.metadata.labels['app'] != 'battle-result' &&
+          object.metadata.ownerReferences[0].name == object.spec.template.metadata.labels['app']) ||
+         (object.spec.template.metadata.labels['app'] == 'battle-result' &&
+          ((!('pandora.dev/ds-auth-writer-set' in object.spec.template.metadata.labels) &&
+            object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2' &&
+            object.metadata.ownerReferences[0].name == 'battle-result') ||
+           (object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-set'] == 'blue' &&
+            object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '1' &&
+            object.metadata.ownerReferences[0].name == 'battle-result') ||
+           (object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-set'] == 'green' &&
+            object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2' &&
+            object.metadata.ownerReferences[0].name == 'battle-result-ds-auth-green')))) &&
+        object.metadata.name == object.metadata.ownerReferences[0].name + '-' +
+          object.spec.template.metadata.labels['pod-template-hash']
+      message: "Inventory mesh ReplicaSet 必须唯一受同名 Deployment controller 管理"
+    - expression: >-
+        has(object.spec.template.metadata.labels) && 'app' in object.spec.template.metadata.labels &&
+        object.spec.template.metadata.labels['app'] in
+          ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result'] &&
+        has(object.spec.selector.matchLabels) &&
+        object.spec.selector.matchLabels['app'] == object.spec.template.metadata.labels['app'] &&
+        'pod-template-hash' in object.spec.selector.matchLabels &&
+        object.spec.selector.matchLabels['pod-template-hash'] != '' &&
+        'pod-template-hash' in object.spec.template.metadata.labels &&
+        object.spec.template.metadata.labels['pod-template-hash'] ==
+          object.spec.selector.matchLabels['pod-template-hash'] &&
+        ((object.spec.template.metadata.labels['app'] != 'battle-result' &&
+          object.spec.selector.matchLabels.size() == 2) ||
+         (object.spec.template.metadata.labels['app'] == 'battle-result' &&
+          ((object.spec.selector.matchLabels.size() == 2 &&
+            !('pandora.dev/ds-auth-writer-set' in object.spec.template.metadata.labels) &&
+            object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2') ||
+           (object.spec.selector.matchLabels.size() == 4 &&
+            object.spec.selector.matchLabels['pandora.dev/ds-auth-writer-set'] ==
+              object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-set'] &&
+            object.spec.selector.matchLabels['pandora.dev/ds-auth-writer-epoch'] ==
+              object.spec.template.metadata.labels['pandora.dev/ds-auth-writer-epoch'] &&
+            ((object.spec.selector.matchLabels['pandora.dev/ds-auth-writer-set'] == 'blue' &&
+              object.spec.selector.matchLabels['pandora.dev/ds-auth-writer-epoch'] == '1') ||
+             (object.spec.selector.matchLabels['pandora.dev/ds-auth-writer-set'] == 'green' &&
+              object.spec.selector.matchLabels['pandora.dev/ds-auth-writer-epoch'] == '2')))))) &&
+        (oldObject == null || object.spec.template.metadata.labels['app'] ==
+          oldObject.spec.template.metadata.labels['app'])
+      message: "Inventory mesh ReplicaSet 禁止删除、改变或扩张 app selector"
+    - expression: >-
+        object.spec.template.spec.serviceAccountName ==
+          {'inventory':'pandora-inventory', 'auction':'pandora-auction', 'trade':'pandora-trade',
+           'mail':'pandora-mail', 'leaderboard':'pandora-leaderboard',
+           'battle-result':'pandora-battle-result'}[object.spec.template.metadata.labels['app']] &&
+        object.spec.template.spec.automountServiceAccountToken == false &&
+        object.spec.template.spec.containers.size() == 1 &&
+        object.spec.template.spec.containers[0].name == object.spec.template.metadata.labels['app'] &&
+        object.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false &&
+        object.spec.template.spec.containers[0].securityContext.privileged == false &&
+        (!has(object.spec.template.spec.containers[0].securityContext.capabilities.add) ||
+         object.spec.template.spec.containers[0].securityContext.capabilities.add.size() == 0) &&
+        object.spec.template.spec.containers[0].securityContext.capabilities.drop == ['ALL'] &&
+        (!has(object.spec.template.spec.containers[0].volumeMounts) ||
+         object.spec.template.spec.containers[0].volumeMounts.all(m, m.name != 'istio-token')) &&
+        (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.size() == 0) &&
+        (!has(object.spec.template.spec.ephemeralContainers) || object.spec.template.spec.ephemeralContainers.size() == 0) &&
+        (!has(object.spec.template.spec.volumes) ||
+         object.spec.template.spec.volumes.all(v, v.name != 'istio-token'))
+      message: "Inventory mesh ReplicaSet 模板只允许单应用容器，禁止预置 proxy/init/token/ephemeral"
+    - expression: >-
+        has(object.spec.template.metadata.labels) && 'istio.io/rev' in object.spec.template.metadata.labels &&
+        object.spec.template.metadata.labels['istio.io/rev'] ==
+          namespaceObject.metadata.labels['pandora.dev/inventory-mesh-revision'] &&
+        !(object.spec.template.metadata.labels['istio.io/rev'] in
+          ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+        !('sidecar.istio.io/inject' in object.spec.template.metadata.labels) &&
+        (!('istio.io/dataplane-mode' in object.spec.template.metadata.labels) ||
+         object.spec.template.metadata.labels['istio.io/dataplane-mode'] != 'none') &&
+        has(object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations['sidecar.istio.io/rewriteAppHTTPProbers'] == 'true' &&
+        !('sidecar.istio.io/status' in object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations.all(k,
+          !k.startsWith('traffic.sidecar.istio.io/') && k != 'proxy.istio.io/config' &&
+          k != 'sidecar.istio.io/inject' && k != 'sidecar.istio.io/interceptionMode') &&
+        (!has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false)
+      message: "Inventory mesh ReplicaSet 必须继承 gate revision 且禁止伪造 injector/流量字段"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-mesh-replicasets
+spec:
+  policyName: pandora-inventory-mesh-replicasets
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-mesh-pods
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods", "pods/ephemeralcontainers"]
+        scope: "*"
+  matchConditions:
+    - name: inventory-mesh-gate-active
+      expression: >-
+        has(namespaceObject.metadata.labels) &&
+        'pandora.dev/inventory-mesh-revision' in namespaceObject.metadata.labels
+    - name: managed-now-or-before
+      expression: >-
+        object.spec.serviceAccountName in
+          ['pandora-inventory', 'pandora-auction', 'pandora-trade', 'pandora-mail',
+           'pandora-leaderboard', 'pandora-battle-result'] ||
+        (oldObject != null && oldObject.spec.serviceAccountName in
+          ['pandora-inventory', 'pandora-auction', 'pandora-trade', 'pandora-mail',
+           'pandora-leaderboard', 'pandora-battle-result']) ||
+        (has(object.metadata.labels) && 'app' in object.metadata.labels &&
+         object.metadata.labels['app'] in
+         ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result']) ||
+        (oldObject != null && has(oldObject.metadata.labels) && 'app' in oldObject.metadata.labels &&
+         oldObject.metadata.labels['app'] in
+         ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result'])
+  validations:
+    - expression: >-
+        request.userInfo.username in
+          ['system:kube-controller-manager',
+           'system:serviceaccount:kube-system:replicaset-controller']
+      message: "Inventory mesh 受管 Pod 只允许 ReplicaSet controller 创建/更新"
+    - expression: >-
+        has(object.metadata.ownerReferences) && object.metadata.ownerReferences.size() == 1 &&
+        object.metadata.ownerReferences[0].apiVersion == 'apps/v1' &&
+        object.metadata.ownerReferences[0].kind == 'ReplicaSet' &&
+        object.metadata.ownerReferences[0].controller == true &&
+        object.metadata.ownerReferences[0].blockOwnerDeletion == true &&
+        object.metadata.ownerReferences[0].uid != '' &&
+        'pod-template-hash' in object.metadata.labels &&
+        object.metadata.labels['pod-template-hash'] != '' &&
+        ((object.metadata.labels['app'] != 'battle-result' &&
+          object.metadata.ownerReferences[0].name == object.metadata.labels['app'] + '-' +
+            object.metadata.labels['pod-template-hash']) ||
+         (object.metadata.labels['app'] == 'battle-result' &&
+          ((!('pandora.dev/ds-auth-writer-set' in object.metadata.labels) &&
+            object.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2' &&
+            object.metadata.ownerReferences[0].name == 'battle-result-' +
+              object.metadata.labels['pod-template-hash']) ||
+           (object.metadata.labels['pandora.dev/ds-auth-writer-set'] == 'blue' &&
+            object.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '1' &&
+            object.metadata.ownerReferences[0].name == 'battle-result-' +
+              object.metadata.labels['pod-template-hash']) ||
+           (object.metadata.labels['pandora.dev/ds-auth-writer-set'] == 'green' &&
+            object.metadata.labels['pandora.dev/ds-auth-writer-epoch'] == '2' &&
+            object.metadata.ownerReferences[0].name == 'battle-result-ds-auth-green-' +
+              object.metadata.labels['pod-template-hash']))))
+      message: "Inventory mesh Pod 必须唯一受对应 ReplicaSet controller 管理"
+    - expression: >-
+        has(object.metadata.labels) && 'app' in object.metadata.labels &&
+        object.metadata.labels['app'] in
+        ['inventory', 'auction', 'trade', 'mail', 'leaderboard', 'battle-result'] &&
+        (oldObject == null || !has(oldObject.metadata.labels) || !('app' in oldObject.metadata.labels) ||
+         object.metadata.labels['app'] == oldObject.metadata.labels['app'])
+      message: "Inventory mesh 受管 Pod 禁止删除或改变 app selector"
+    - expression: >-
+        object.spec.serviceAccountName ==
+        {'inventory':'pandora-inventory', 'auction':'pandora-auction', 'trade':'pandora-trade',
+         'mail':'pandora-mail', 'leaderboard':'pandora-leaderboard',
+         'battle-result':'pandora-battle-result'}[object.metadata.labels['app']] &&
+        object.spec.automountServiceAccountToken == false
+      message: "Inventory mesh Pod ServiceAccount 与 app 身份不匹配"
+    - expression: >-
+        'istio.io/rev' in object.metadata.labels &&
+        object.metadata.labels['istio.io/rev'] ==
+          namespaceObject.metadata.labels['pandora.dev/inventory-mesh-revision'] &&
+        !(object.metadata.labels['istio.io/rev'] in
+          ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+        (!('sidecar.istio.io/inject' in object.metadata.labels)) &&
+        (!('istio.io/dataplane-mode' in object.metadata.labels) ||
+         object.metadata.labels['istio.io/dataplane-mode'] != 'none')
+      message: "Inventory mesh Pod 必须仅由 namespace gate 指定的 revision 注入"
+    - expression: >-
+        !has(object.spec.hostNetwork) || object.spec.hostNetwork == false
+      message: "Inventory mesh Pod 禁止 hostNetwork 绕过 sidecar"
+    - expression: >-
+        has(object.metadata.annotations) &&
+        object.metadata.annotations['sidecar.istio.io/rewriteAppHTTPProbers'] == 'true' &&
+        object.metadata.annotations.all(k,
+          !k.startsWith('traffic.sidecar.istio.io/') && k != 'proxy.istio.io/config' &&
+          k != 'sidecar.istio.io/inject' && k != 'sidecar.istio.io/interceptionMode') &&
+        (!('prometheus.istio.io/merge-metrics' in object.metadata.annotations) ||
+         object.metadata.annotations['prometheus.istio.io/merge-metrics'] != 'false')
+      message: "Inventory mesh Pod 禁止流量截获/代理自定义，且必须启用 probe rewrite/metrics merge"
+    - expression: >-
+        object.spec.containers.filter(c, c.name == object.metadata.labels['app']).all(c,
+          c.securityContext.allowPrivilegeEscalation == false &&
+          c.securityContext.privileged == false &&
+          (!has(c.securityContext.capabilities.add) || c.securityContext.capabilities.add.size() == 0) &&
+          c.securityContext.capabilities.drop == ['ALL'] &&
+          (!has(c.volumeMounts) || c.volumeMounts.all(m, m.name != 'istio-token'))) &&
+        (!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.all(c,
+          !has(c.securityContext) ||
+          ((!has(c.securityContext.privileged) || c.securityContext.privileged == false) &&
+           (!has(c.securityContext.capabilities) || !has(c.securityContext.capabilities.add) ||
+            (!('NET_ADMIN' in c.securityContext.capabilities.add) &&
+             !('NET_RAW' in c.securityContext.capabilities.add)))))) &&
+        (!has(object.spec.initContainers) || object.spec.initContainers.all(c,
+          c.name in ['istio-init', 'istio-validation'] || !has(c.securityContext) ||
+          ((!has(c.securityContext.privileged) || c.securityContext.privileged == false) &&
+           (!has(c.securityContext.capabilities) || !has(c.securityContext.capabilities.add) ||
+            (!('NET_ADMIN' in c.securityContext.capabilities.add) &&
+             !('NET_RAW' in c.securityContext.capabilities.add))))))
+      message: "Inventory mesh app/ephemeral/非Istio init 容器禁止 privileged/NET_ADMIN/NET_RAW"
+    - expression: >-
+        object.spec.containers.filter(c, c.name == 'istio-proxy').size() == 1 &&
+        object.spec.containers.filter(c, c.name == object.metadata.labels['app']).size() == 1 &&
+        object.spec.containers.size() == 2 &&
+        (!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.size() == 0) &&
+        (!has(object.spec.initContainers) ||
+         (object.spec.initContainers.size() <= 1 &&
+          object.spec.initContainers.all(c, c.name in ['istio-init', 'istio-validation']))) &&
+        has(object.metadata.annotations) &&
+        'sidecar.istio.io/status' in object.metadata.annotations &&
+        object.metadata.annotations['sidecar.istio.io/status'].size() > 0
+      message: "Inventory mesh Pod 必须由 injector 生成唯一 istio-proxy 与 sidecar status"
+    - expression: >-
+        oldObject == null ||
+        (oldObject.spec.containers.filter(c, c.name == 'istio-proxy').size() == 1 &&
+         object.spec.containers.filter(c, c.name == 'istio-proxy')[0].image ==
+           oldObject.spec.containers.filter(c, c.name == 'istio-proxy')[0].image &&
+         ((!has(oldObject.spec.initContainers) && !has(object.spec.initContainers)) ||
+          (has(oldObject.spec.initContainers) && has(object.spec.initContainers) &&
+           oldObject.spec.initContainers.filter(c, c.name == 'istio-init').size() ==
+             object.spec.initContainers.filter(c, c.name == 'istio-init').size() &&
+           (oldObject.spec.initContainers.filter(c, c.name == 'istio-init').size() == 0 ||
+            oldObject.spec.initContainers.filter(c, c.name == 'istio-init')[0].image ==
+              object.spec.initContainers.filter(c, c.name == 'istio-init')[0].image))))
+      message: "Inventory mesh Pod UPDATE 禁止替换 istio-proxy/istio-init image"
+    - expression: >-
+        object.spec.containers.exists(c,
+          c.name == object.metadata.labels['app'] && has(c.readinessProbe) &&
+          has(c.readinessProbe.httpGet) && c.readinessProbe.httpGet.port == 15020 &&
+          c.readinessProbe.httpGet.path ==
+            '/app-health/' + object.metadata.labels['app'] + '/readyz')
+      message: "Inventory mesh Pod readiness 必须由 injector 改写到 15020 app-health"
+    - expression: >-
+        object.spec.containers.exists(c, c.name == 'istio-proxy' && has(c.env) &&
+          c.env.filter(e, e.name == 'ISTIO_KUBE_APP_PROBERS').size() == 1 &&
+          c.env.exists(e, e.name == 'ISTIO_KUBE_APP_PROBERS' &&
+            e.value.contains('"grpc":{"port":' +
+              string({'inventory':50015, 'auction':50016, 'trade':50012, 'mail':50009,
+                      'leaderboard':50007, 'battle-result':50022}[object.metadata.labels['app']]))))
+      message: "Inventory mesh Pod proxy 必须保留原始 gRPC readiness 端口"
+    - expression: >-
+        object.spec.volumes.exists(v, v.name == 'istio-token' && has(v.projected) &&
+          v.projected.sources.exists(s, has(s.serviceAccountToken))) &&
+        object.spec.containers.exists(c, c.name == 'istio-proxy' && has(c.volumeMounts) &&
+          c.volumeMounts.exists(m, m.name == 'istio-token' && m.readOnly == true))
+      message: "Inventory mesh Pod 必须给 istio-proxy 注入 projected ServiceAccount token"
+    - expression: >-
+        object.metadata.labels['app'] != 'inventory' ||
+        (object.metadata.annotations['prometheus.io/scrape'] == 'true' &&
+         object.metadata.annotations['prometheus.io/port'] == '15020' &&
+         object.metadata.annotations['prometheus.io/path'] == '/stats/prometheus')
+      message: "Inventory metrics 必须由 Istio merge 重写到 15020/stats/prometheus"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-mesh-pods
+spec:
+  policyName: pandora-inventory-mesh-pods
+  validationActions: [Deny]
+---
+# gate revision 一旦激活便不可在普通发布中删除或偷换；revision 升级必须在共享操作锁内
+# 走 prepare/observe/enforce 状态机，先调整准入迁移态再逐副本切换。
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-mesh-namespace-revision
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+        scope: "*"
+  matchConditions:
+    - name: pandora-only
+      expression: object.metadata.name == 'pandora'
+  validations:
+    - expression: >-
+        !has(object.metadata.labels) ||
+        !('pandora.dev/inventory-mesh-revision' in object.metadata.labels) ||
+        (!(object.metadata.labels['pandora.dev/inventory-mesh-revision'] in
+           ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+         object.metadata.labels['pandora.dev/inventory-mesh-revision'].matches(
+           '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'))
+      message: "Pandora Inventory mesh revision 标签非法"
+    - expression: >-
+        oldObject == null || !has(oldObject.metadata.labels) ||
+        !('pandora.dev/inventory-mesh-revision' in oldObject.metadata.labels) ||
+        (has(object.metadata.labels) &&
+         'pandora.dev/inventory-mesh-revision' in object.metadata.labels &&
+         object.metadata.labels['pandora.dev/inventory-mesh-revision'] ==
+           oldObject.metadata.labels['pandora.dev/inventory-mesh-revision'])
+      message: "Inventory mesh revision 已激活，普通更新禁止删除或偷换"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-mesh-namespace-revision
+spec:
+  policyName: pandora-inventory-mesh-namespace-revision
+  validationActions: [Deny]
+---
+# 外部 edge 持有六个玩家方法的高权限 principal；必须和内部 workload 一样锁住
+# Deployment -> ReplicaSet -> Pod owner 链，不能只在发布时点检 live Pod。
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-edge-deployments
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+        scope: "*"
+  matchConditions:
+    - name: pandora-edge-only
+      expression: >-
+        object.metadata.namespace == 'pandora-ingress' &&
+        (object.metadata.name == 'pandora-edge-envoy' ||
+         object.spec.template.spec.serviceAccountName == 'pandora-edge-envoy' ||
+         (oldObject != null && oldObject.spec.template.spec.serviceAccountName == 'pandora-edge-envoy'))
+  validations:
+    - expression: >-
+        has(object.spec.template.metadata.labels) &&
+        object.spec.template.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy' &&
+        object.spec.selector.matchLabels == {'app.kubernetes.io/name':'pandora-edge-envoy'} &&
+        object.spec.template.spec.serviceAccountName == 'pandora-edge-envoy' &&
+        object.spec.template.spec.automountServiceAccountToken == false
+      message: "Inventory edge Deployment selector/SA/token automount 不精确"
+    - expression: >-
+        object.spec.template.spec.containers.size() == 1 &&
+        object.spec.template.spec.containers[0].name == 'pandora-edge-envoy' &&
+        object.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false &&
+        object.spec.template.spec.containers[0].securityContext.privileged == false &&
+        (!has(object.spec.template.spec.containers[0].securityContext.capabilities.add) ||
+         object.spec.template.spec.containers[0].securityContext.capabilities.add.size() == 0) &&
+        object.spec.template.spec.containers[0].securityContext.capabilities.drop == ['ALL'] &&
+        (!has(object.spec.template.spec.containers[0].volumeMounts) ||
+         object.spec.template.spec.containers[0].volumeMounts.all(m, m.name != 'istio-token')) &&
+        (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.size() == 0) &&
+        (!has(object.spec.template.spec.ephemeralContainers) || object.spec.template.spec.ephemeralContainers.size() == 0) &&
+        (!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, v.name != 'istio-token'))
+      message: "Inventory edge Deployment 只允许无能力的单应用容器且禁止预置 sidecar/token"
+    - expression: >-
+        object.spec.template.metadata.labels['istio.io/rev'] != '' &&
+        !(object.spec.template.metadata.labels['istio.io/rev'] in
+          ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+        !('sidecar.istio.io/inject' in object.spec.template.metadata.labels) &&
+        (!('istio.io/dataplane-mode' in object.spec.template.metadata.labels) ||
+         object.spec.template.metadata.labels['istio.io/dataplane-mode'] != 'none') &&
+        has(object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations['sidecar.istio.io/rewriteAppHTTPProbers'] == 'true' &&
+        !('sidecar.istio.io/status' in object.spec.template.metadata.annotations) &&
+        !('sidecar.istio.io/inject' in object.spec.template.metadata.annotations) &&
+        !('proxy.istio.io/config' in object.spec.template.metadata.annotations) &&
+        !('sidecar.istio.io/interceptionMode' in object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations.all(k,
+          !k.startsWith('traffic.sidecar.istio.io/') ||
+          (k == 'traffic.sidecar.istio.io/excludeInboundPorts' &&
+           object.spec.template.metadata.annotations[k] == '8443,8444,9901')) &&
+        (!has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false)
+      message: "Inventory edge Deployment 必须纯 revision 注入且禁止 outbound/interception 绕过"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-edge-deployments
+spec:
+  policyName: pandora-inventory-edge-deployments
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-edge-replicasets
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["replicasets"]
+        scope: "*"
+  matchConditions:
+    - name: pandora-edge-now-or-before
+      expression: >-
+        object.metadata.namespace == 'pandora-ingress' &&
+        (object.spec.template.spec.serviceAccountName == 'pandora-edge-envoy' ||
+         (oldObject != null && oldObject.spec.template.spec.serviceAccountName == 'pandora-edge-envoy') ||
+         (has(object.spec.template.metadata.labels) &&
+          object.spec.template.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy') ||
+         (oldObject != null && has(oldObject.spec.template.metadata.labels) &&
+          oldObject.spec.template.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy'))
+  validations:
+    - expression: >-
+        request.userInfo.username in
+          ['system:kube-controller-manager',
+           'system:serviceaccount:kube-system:deployment-controller'] &&
+        has(object.metadata.ownerReferences) && object.metadata.ownerReferences.size() == 1 &&
+        object.metadata.ownerReferences[0].apiVersion == 'apps/v1' &&
+        object.metadata.ownerReferences[0].kind == 'Deployment' &&
+        object.metadata.ownerReferences[0].name == 'pandora-edge-envoy' &&
+        object.metadata.ownerReferences[0].controller == true &&
+        object.metadata.ownerReferences[0].blockOwnerDeletion == true &&
+        object.metadata.ownerReferences[0].uid != '' &&
+        object.metadata.name == 'pandora-edge-envoy-' + object.spec.template.metadata.labels['pod-template-hash']
+      message: "Inventory edge ReplicaSet 必须唯一受 edge Deployment controller 管理"
+    - expression: >-
+        object.spec.template.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy' &&
+        object.spec.selector.matchLabels.size() == 2 &&
+        object.spec.selector.matchLabels['app.kubernetes.io/name'] == 'pandora-edge-envoy' &&
+        object.spec.selector.matchLabels['pod-template-hash'] != '' &&
+        object.spec.template.metadata.labels['pod-template-hash'] ==
+          object.spec.selector.matchLabels['pod-template-hash'] &&
+        object.spec.template.spec.serviceAccountName == 'pandora-edge-envoy' &&
+        object.spec.template.spec.automountServiceAccountToken == false
+      message: "Inventory edge ReplicaSet selector/SA/token automount 不精确"
+    - expression: >-
+        object.spec.template.spec.containers.size() == 1 &&
+        object.spec.template.spec.containers[0].name == 'pandora-edge-envoy' &&
+        object.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false &&
+        object.spec.template.spec.containers[0].securityContext.privileged == false &&
+        (!has(object.spec.template.spec.containers[0].securityContext.capabilities.add) ||
+         object.spec.template.spec.containers[0].securityContext.capabilities.add.size() == 0) &&
+        object.spec.template.spec.containers[0].securityContext.capabilities.drop == ['ALL'] &&
+        (!has(object.spec.template.spec.containers[0].volumeMounts) ||
+         object.spec.template.spec.containers[0].volumeMounts.all(m, m.name != 'istio-token')) &&
+        (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.size() == 0) &&
+        (!has(object.spec.template.spec.ephemeralContainers) || object.spec.template.spec.ephemeralContainers.size() == 0) &&
+        (!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, v.name != 'istio-token'))
+      message: "Inventory edge ReplicaSet 只允许无能力的单应用容器且禁止预置 sidecar/token"
+    - expression: >-
+        object.spec.template.metadata.labels['istio.io/rev'] != '' &&
+        !(object.spec.template.metadata.labels['istio.io/rev'] in
+          ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+        !('sidecar.istio.io/inject' in object.spec.template.metadata.labels) &&
+        (!('istio.io/dataplane-mode' in object.spec.template.metadata.labels) ||
+         object.spec.template.metadata.labels['istio.io/dataplane-mode'] != 'none') &&
+        object.spec.template.metadata.annotations['sidecar.istio.io/rewriteAppHTTPProbers'] == 'true' &&
+        !('sidecar.istio.io/status' in object.spec.template.metadata.annotations) &&
+        !('sidecar.istio.io/inject' in object.spec.template.metadata.annotations) &&
+        !('proxy.istio.io/config' in object.spec.template.metadata.annotations) &&
+        !('sidecar.istio.io/interceptionMode' in object.spec.template.metadata.annotations) &&
+        object.spec.template.metadata.annotations.all(k,
+          !k.startsWith('traffic.sidecar.istio.io/') ||
+          (k == 'traffic.sidecar.istio.io/excludeInboundPorts' &&
+           object.spec.template.metadata.annotations[k] == '8443,8444,9901')) &&
+        (!has(object.spec.template.spec.hostNetwork) || object.spec.template.spec.hostNetwork == false)
+      message: "Inventory edge ReplicaSet 必须纯 revision 注入且禁止流量绕过"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-edge-replicasets
+spec:
+  policyName: pandora-inventory-edge-replicasets
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pandora-inventory-edge-pods
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods", "pods/ephemeralcontainers"]
+        scope: "*"
+  matchConditions:
+    - name: pandora-edge-now-or-before
+      expression: >-
+        object.metadata.namespace == 'pandora-ingress' &&
+        (object.spec.serviceAccountName == 'pandora-edge-envoy' ||
+         (oldObject != null && oldObject.spec.serviceAccountName == 'pandora-edge-envoy') ||
+         (has(object.metadata.labels) &&
+          object.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy') ||
+         (oldObject != null && has(oldObject.metadata.labels) &&
+          oldObject.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy'))
+  validations:
+    - expression: >-
+        request.userInfo.username in
+          ['system:kube-controller-manager',
+           'system:serviceaccount:kube-system:replicaset-controller'] &&
+        has(object.metadata.ownerReferences) && object.metadata.ownerReferences.size() == 1 &&
+        object.metadata.ownerReferences[0].apiVersion == 'apps/v1' &&
+        object.metadata.ownerReferences[0].kind == 'ReplicaSet' &&
+        object.metadata.ownerReferences[0].controller == true &&
+        object.metadata.ownerReferences[0].blockOwnerDeletion == true &&
+        object.metadata.ownerReferences[0].uid != '' &&
+        object.metadata.labels['pod-template-hash'] != '' &&
+        object.metadata.ownerReferences[0].name == 'pandora-edge-envoy-' +
+          object.metadata.labels['pod-template-hash']
+      message: "Inventory edge Pod 必须唯一受对应 ReplicaSet controller 管理"
+    - expression: >-
+        object.metadata.labels['app.kubernetes.io/name'] == 'pandora-edge-envoy' &&
+        object.spec.serviceAccountName == 'pandora-edge-envoy' &&
+        object.spec.automountServiceAccountToken == false &&
+        object.metadata.labels['istio.io/rev'] != '' &&
+        !(object.metadata.labels['istio.io/rev'] in
+          ['default', 'latest', 'PANDORA_ISTIO_REVISION_REQUIRED']) &&
+        !('sidecar.istio.io/inject' in object.metadata.labels) &&
+        (!('istio.io/dataplane-mode' in object.metadata.labels) ||
+         object.metadata.labels['istio.io/dataplane-mode'] != 'none') &&
+        (!has(object.spec.hostNetwork) || object.spec.hostNetwork == false)
+      message: "Inventory edge Pod SA/revision/token automount 不精确"
+    - expression: >-
+        has(object.metadata.annotations) &&
+        object.metadata.annotations['sidecar.istio.io/rewriteAppHTTPProbers'] == 'true' &&
+        !('sidecar.istio.io/inject' in object.metadata.annotations) &&
+        !('proxy.istio.io/config' in object.metadata.annotations) &&
+        !('sidecar.istio.io/interceptionMode' in object.metadata.annotations) &&
+        object.metadata.annotations.all(k,
+          !k.startsWith('traffic.sidecar.istio.io/') ||
+          (k == 'traffic.sidecar.istio.io/excludeInboundPorts' &&
+           object.metadata.annotations[k] == '8443,8444,9901'))
+      message: "Inventory edge Pod 禁止 outbound/interception capture 绕过"
+    - expression: >-
+        object.spec.containers.size() == 2 &&
+        object.spec.containers.filter(c, c.name == 'pandora-edge-envoy').size() == 1 &&
+        object.spec.containers.filter(c, c.name == 'istio-proxy').size() == 1 &&
+        object.spec.containers.filter(c, c.name == 'pandora-edge-envoy').all(c,
+          c.securityContext.allowPrivilegeEscalation == false &&
+          c.securityContext.privileged == false &&
+          (!has(c.securityContext.capabilities.add) || c.securityContext.capabilities.add.size() == 0) &&
+          c.securityContext.capabilities.drop == ['ALL'] &&
+          (!has(c.volumeMounts) || c.volumeMounts.all(m, m.name != 'istio-token'))) &&
+        (!has(object.spec.ephemeralContainers) || object.spec.ephemeralContainers.size() == 0) &&
+        (!has(object.spec.initContainers) ||
+         (object.spec.initContainers.size() <= 1 &&
+          object.spec.initContainers.all(c, c.name in ['istio-init', 'istio-validation']))) &&
+        'sidecar.istio.io/status' in object.metadata.annotations &&
+        object.metadata.annotations['sidecar.istio.io/status'] != ''
+      message: "Inventory edge Pod 只允许应用+proxy 与唯一 Istio init，禁止旁加载体"
+    - expression: >-
+        object.spec.volumes.exists(v, v.name == 'istio-token' && has(v.projected) &&
+          v.projected.sources.exists(s, has(s.serviceAccountToken))) &&
+        object.spec.containers.exists(c, c.name == 'istio-proxy' && has(c.volumeMounts) &&
+          c.volumeMounts.exists(m, m.name == 'istio-token' && m.readOnly == true))
+      message: "Inventory edge Pod 必须仅给 proxy 注入 projected ServiceAccount token"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pandora-inventory-edge-pods
+spec:
+  policyName: pandora-inventory-edge-pods
+  validationActions: [Deny]

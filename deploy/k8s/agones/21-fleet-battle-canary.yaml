@@ -25,6 +25,8 @@ spec:
         pandora.dev/role: battle
         pandora.dev/release-track: canary
         pandora.dev/ds-auth-writer-epoch: "2"
+      annotations:
+        pandora.dev/release-track: canary
     spec:
       ports:
         - name: default
@@ -39,6 +41,8 @@ spec:
         metadata:
           labels:
             pandora.dev/ds-auth-writer-epoch: "2"
+            pandora.dev/release-track: canary
+          annotations:
             pandora.dev/release-track: canary
         spec:
           containers:

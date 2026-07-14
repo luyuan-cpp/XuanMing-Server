@@ -19,34 +19,79 @@ func main() {
 		expectedRaw          = flag.String("expected-services", "", "exact live capabilities, service=count,...")
 		expectedInstancesRaw = flag.String("expected-instances", "", "exact K8s Pod UIDs, service=uid|uid,...")
 		keysetRevision       = flag.String("keyset-revision", "", "exact immutable Secret/keyset revision expected on every capability")
+		etcdIdentityRevision = flag.String("etcd-identity-revision", "", "exact revisioned immutable etcd client identity expected on every capability")
 		allowedDigestsRaw    = flag.String("allowed-image-digests", "", "comma-separated immutable sha256 digests allowed in this activation")
+		expectedDigestsRaw   = flag.String("expected-image-digests", "", "exact service-level immutable digests, service=sha256:...,...")
+		requiredFeaturesRaw  = flag.String("required-features", "", "exact versioned capabilities, service=feature|feature,...")
 		expected             = flag.Uint("expected-epoch", 1, "current required writer epoch")
 		target               = flag.Uint("target-epoch", uint(dsauthfence.ProtocolEpochV2), "target writer epoch")
 		bootstrap            = flag.Bool("bootstrap", false, "CAS-create missing required epoch at expected-epoch")
 		apply                = flag.Bool("apply", false, "advance required epoch after a clean audit")
+		requireEmpty         = flag.Bool("require-empty-capabilities", false, "read-only proof that the DS auth capability prefix is empty")
 		timeout              = flag.Duration("timeout", 10*time.Second, "single audit/apply timeout")
+		requireMTLS          = flag.Bool("require-mtls", false, "require custom-CA mutual TLS for etcd")
+		caFile               = flag.String("ca-file", "", "custom etcd CA PEM path")
+		certFile             = flag.String("cert-file", "", "etcd client certificate PEM path")
+		keyFile              = flag.String("key-file", "", "etcd client private-key PEM path")
+		serverName           = flag.String("server-name", "", "exact etcd TLS server name")
+		clientIdentity       = flag.String("client-identity", "", "exact etcd client certificate common name")
+		usernameFile         = flag.String("username-file", "", "optional etcd username file path")
+		passwordFile         = flag.String("password-file", "", "optional etcd password file path")
+		requireAuth          = flag.Bool("require-auth", false, "require etcd v3 authentication to be enabled")
+		forbiddenReadPrefix  = flag.String("forbidden-read-prefix", "", "prefix this identity must be denied from reading")
 	)
 	flag.Parse()
 
-	services, err := dsauthfence.ParseExpectedServices(*expectedRaw)
-	must(err)
-	instances, err := dsauthfence.ParseExpectedInstances(*expectedInstancesRaw)
-	must(err)
-	if *keysetRevision == "" {
-		must(fmt.Errorf("-keyset-revision is required"))
+	services := make(map[string]int)
+	instances := make(map[string]map[string]struct{})
+	requiredFeatures := make(map[string]map[string]struct{})
+	expectedDigests := make(map[string]string)
+	var err error
+	if !*requireEmpty && !*bootstrap {
+		services, err = dsauthfence.ParseExpectedServices(*expectedRaw)
+		must(err)
+		instances, err = dsauthfence.ParseExpectedInstances(*expectedInstancesRaw)
+		must(err)
+		requiredFeatures, err = dsauthfence.ParseRequiredFeatures(*requiredFeaturesRaw)
+		must(err)
+		expectedDigests, err = dsauthfence.ParseExpectedDigests(*expectedDigestsRaw)
+		must(err)
+	}
+	if *bootstrap && *requireEmpty {
+		must(fmt.Errorf("-bootstrap cannot be combined with -require-empty-capabilities"))
+	}
+	if *requireMTLS && *etcdIdentityRevision == "" {
+		must(fmt.Errorf("-etcd-identity-revision is required with -require-mtls"))
 	}
 	allowedDigests := make(map[string]struct{})
-	for _, digest := range splitNonEmpty(*allowedDigestsRaw) {
-		allowedDigests[digest] = struct{}{}
-	}
-	if len(allowedDigests) == 0 {
-		must(fmt.Errorf("-allowed-image-digests is required"))
+	if !*bootstrap {
+		if *keysetRevision == "" {
+			must(fmt.Errorf("-keyset-revision is required"))
+		}
+		for _, digest := range splitNonEmpty(*allowedDigestsRaw) {
+			allowedDigests[digest] = struct{}{}
+		}
+		if len(allowedDigests) == 0 {
+			must(fmt.Errorf("-allowed-image-digests is required"))
+		}
 	}
 	items := splitNonEmpty(*endpoints)
 	if len(items) == 0 {
 		must(fmt.Errorf("-endpoints is required"))
 	}
-	client, err := dsauthfence.NewActivationClient(items, *prefix, *timeout)
+	client, err := dsauthfence.NewActivationClientWithSecurity(items, *prefix, *timeout, dsauthfence.ClientSecurity{
+		RequireMTLS:         *requireMTLS,
+		CAFile:              *caFile,
+		CertFile:            *certFile,
+		KeyFile:             *keyFile,
+		ServerName:          *serverName,
+		ClientIdentity:      *clientIdentity,
+		IdentityRevision:    *etcdIdentityRevision,
+		UsernameFile:        *usernameFile,
+		PasswordFile:        *passwordFile,
+		RequireAuth:         *requireAuth,
+		ForbiddenReadPrefix: *forbiddenReadPrefix,
+	})
 	must(err)
 	defer func() { _ = client.Close() }()
 
@@ -64,6 +109,9 @@ func main() {
 		}
 		return
 	}
+	if *requireEmpty && *apply {
+		must(fmt.Errorf("-require-empty-capabilities is read-only and cannot be combined with -apply"))
+	}
 	var lock *dsauthfence.ActivationLock
 	if *apply {
 		lock, err = client.AcquireLock(ctx, 30)
@@ -78,12 +126,26 @@ func main() {
 	}
 	capabilities, err := client.Capabilities(ctx)
 	must(err)
+	if *requireEmpty {
+		if len(capabilities) != 0 {
+			for _, capability := range capabilities {
+				fmt.Fprintf(os.Stderr, "FAIL: live capability remains: %s/%s\n", capability.Capability.Service, capability.Capability.InstanceUID)
+			}
+			os.Exit(2)
+		}
+		fmt.Printf("只读空窗审计通过：required=%d capabilities=0\n", current)
+		return
+	}
 	findings := dsauthfence.AuditCapabilities(capabilities, dsauthfence.AuditPolicy{
-		RequiredServices:  services,
-		RequiredInstances: instances,
-		TargetEpoch:       uint32(*target),
-		KeysetRevision:    *keysetRevision,
-		AllowedDigests:    allowedDigests,
+		Prefix:               *prefix,
+		RequiredServices:     services,
+		RequiredInstances:    instances,
+		TargetEpoch:          uint32(*target),
+		KeysetRevision:       *keysetRevision,
+		EtcdIdentityRevision: *etcdIdentityRevision,
+		AllowedDigests:       allowedDigests,
+		ExpectedDigests:      expectedDigests,
+		RequiredFeatures:     requiredFeatures,
 	})
 	if len(findings) > 0 {
 		for _, finding := range findings {

@@ -446,7 +446,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: inventory, namespace: pandora }
-spec: { selector: { app: inventory }, ports: [ { port: 50015, targetPort: 50015 } ] }
+spec:
+  selector: { app: inventory }
+  ports:
+    - { name: grpc, appProtocol: grpc, port: 50015, targetPort: 50015 }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -491,7 +494,7 @@ spec:
             - { name: PANDORA_POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
             - { name: PANDORA_IMAGE_DIGEST, valueFrom: { fieldRef: { fieldPath: "metadata.annotations['pandora.dev/image-digest']" } } }
           args: ["-conf", "etc/cluster.yaml"]
-          ports: [ { containerPort: 50020 } ]
+          ports: [ { name: grpc, containerPort: 50020 } ]
           readinessProbe: { grpc: { port: 50020 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
           volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: ds-allocator.yaml, readOnly: true } ]
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
@@ -500,7 +503,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata: { name: ds-allocator, namespace: pandora }
-spec: { selector: { app: ds-allocator }, ports: [ { port: 50020, targetPort: 50020 } ] }
+spec: { selector: { app: ds-allocator }, ports: [ { name: grpc, appProtocol: grpc, port: 50020, targetPort: 50020 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment

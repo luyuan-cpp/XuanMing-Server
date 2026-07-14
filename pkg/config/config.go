@@ -314,7 +314,8 @@ type DSAuthConf struct {
 	// 玩家令牌/DSTicket 不可能通过 DS 回调校验,反之亦然。
 	Audience string `yaml:"audience,omitempty" json:"audience,omitempty"`
 
-	// Secret HS256 共享密钥(≥32 字节)。dev 期可与 jwt.secret 同值;生产建议独立密钥并切 RS256。
+	// Secret 是 DS callback 域的 HS256 密钥(≥32 字节)，与玩家 jwt.secret keyset 必须无交集；
+	// 本地开发也使用独立的稳定 dev key，确保 Model-B 域隔离不会只在线上才生效。
 	// 留空 = 本服务不启用 DS 回调令牌(签发侧不签,校验侧视同 mode=off)。
 	Secret string `yaml:"secret,omitempty" json:"secret,omitempty"`
 

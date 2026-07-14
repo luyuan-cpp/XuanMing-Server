@@ -1,0 +1,28 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: pandora-ds-terminal-release-exact-deny
+  namespace: pandora
+spec:
+  selector:
+    matchLabels:
+      app: ds-allocator
+  action: DENY
+  rules:
+    # Istio negative-match 对空 principal 有历史陷阱：先用 notPrincipals:["*"]
+    # 显式拒绝 plaintext/未认证请求，不能只写下一条“非 battle-result”。
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            methods: ["POST"]
+            paths: ["/pandora.ds.v1.DSAllocatorService/ReleaseBattle"]
+    # 已完成 mTLS 的其它 workload 也必须拒绝；唯一允许 principal 是持久 outbox worker。
+    - from:
+        - source:
+            notPrincipals: ["cluster.local/ns/pandora/sa/pandora-battle-result"]
+      to:
+        - operation:
+            methods: ["POST"]
+            paths: ["/pandora.ds.v1.DSAllocatorService/ReleaseBattle"]

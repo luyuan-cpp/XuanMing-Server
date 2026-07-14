@@ -1,7 +1,9 @@
 # Pandora battle_result 生产配置【模板】。cp battle_result-prod.yaml.example battle_result-prod.yaml 填真值后部署。
 # ⚠️ 真实 battle_result-prod.yaml 被 services/.gitignore 忽略,只提交本 .example。
-# 与 dev 差异:删 enable_reflection;timeout 收紧;mysql 强密码;kafka 真实 brokers;
-#            player_addr 走 k8s service DNS。
+# 本模板固定 Model-B：同步 ReportResult 经 DS callback Guard + Redis active 校验；
+# pandora.battle.result 旧 Kafka 消息没有可核验实例凭据，生产禁止订阅。
+# 与 dev 差异:删 enable_reflection;timeout 收紧;mysql/redis 强密码;kafka 真实 brokers；
+#            player_addr 走 k8s service DNS；DS authority fence 必须已 bootstrap。
 
 server:
   grpc:
@@ -21,6 +23,13 @@ node:
     max_idle_conns: 16
     conn_max_lifetime: "30m"
     ping_timeout: "3s"
+  redis_client:
+    host: "__REDIS_HOST__:6379"
+    password: "__REDIS_PASSWORD__"
+    db: 0
+    dial_timeout: "2s"
+    read_timeout: "1s"
+    write_timeout: "1s"
 
 snowflake:
   epoch: 1773446400
@@ -36,8 +45,28 @@ battle:
   elo_k_factor: 32                # 不变量 §6:MMR 在 battle_result 算(DS 不可信)
   base_mmr: 1500
   consume_topics:
-    - "pandora.battle.result"
     - "pandora.ds.lifecycle"
   player_addr: "player.pandora.svc.cluster.local:50002"
+  matchmaker_addr: "matchmaker.pandora.svc.cluster.local:50011"
+  ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"
+  terminal_release_interval: "2s"
+  terminal_release_batch_size: 128
+  terminal_release_grace: "15s"
   outbox_publish_interval: "2s"   # 不变量 §4:player.update 事务出箱 at-least-once
   outbox_batch_size: 128
+
+# Model-B 回调身份与玩家 SessionToken / DSTicket 完全分域。battle-result 只持有 DS callback
+# verifier 材料，不持有任何玩家签票私钥；普通 stable/canary 发布不轮换本 secret/keyset。
+ds_auth:
+  mode: "enforce"
+  authority_mode: "redis"
+  issuer: "pandora-ds-control"
+  audience: "pandora-ds"
+  active_heartbeat_max_age: "30s"
+  secret: "__DS_CALLBACK_HS256_SECRET_AT_LEAST_32_BYTES__"
+  fence:
+    etcd_endpoints: ["__ETCD_ENDPOINT_1__:2379", "__ETCD_ENDPOINT_2__:2379"]
+    etcd_prefix: "/pandora/ds-auth/"
+    etcd_lease_ttl_sec: 15
+    etcd_dial_timeout: "5s"
+    keyset_revision: "__IMMUTABLE_DS_AUTH_KEYSET_REVISION__"

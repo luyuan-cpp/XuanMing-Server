@@ -67,9 +67,13 @@ function New-TestOrdinaryFixedConfig([string]$Kid, [int]$Revision) {
     $data = [ordered]@{}
     foreach ($service in @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')) {
         $text = if ($service -ceq 'login') {
-            "login:`n  ds_ticket:`n    active_kid: `"$Kid`"`n    keyset_revision: `"$Revision`"`nserver:`n  addr: 0.0.0.0"
+            "login:`n  ds_ticket:`n    private_key_file: `"/run/secrets/pandora-dsticket/private.pem`"`n" +
+            "    active_kid: `"$Kid`"`n    ttl: `"120s`"`n" +
+            "    jwks_file: `"/run/config/pandora-dsticket/jwks.json`"`n" +
+            "    keyset_revision: `"$Revision`"`nserver:`n  addr: 0.0.0.0"
         } else {
-            "ds_ticket:`n  active_kid: `"$Kid`"`nserver:`n  addr: 0.0.0.0"
+            "ds_ticket:`n  private_key_file: `"/run/secrets/pandora-dsticket/private.pem`"`n" +
+            "  active_kid: `"$Kid`"`n  ttl: `"120s`"`nserver:`n  addr: 0.0.0.0"
         }
         $data["$service.yaml"] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
     }
@@ -348,9 +352,16 @@ function Assert-OnlineHmacGateOrdering([string]$OnlineSource) {
 function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTicket) {
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-contract-test-' + [guid]::NewGuid().ToString('N') + '.yaml')
     try {
-        [System.IO.File]::WriteAllText($tmp, $Manifest, [System.Text.UTF8Encoding]::new($false))
+        # 只把本次 jsonpath 需要的 Kind 交给 kubectl client parser；online render 还包含
+        # Istio CRD，测试机未安装 CRD 时不应让无关 discovery 阻断 Deployment/Fleet 纯结构契约。
+        $wantedKind = if ($Fleet) { 'Fleet' } else { 'Deployment' }
+        $documents = @([regex]::Split($Manifest, '(?m)^---\s*$') | Where-Object {
+            $_ -cmatch ('(?m)^kind:\s*' + [regex]::Escape($wantedKind) + '\s*$')
+        })
+        if ($documents.Count -eq 0) { throw "测试 manifest 缺 Kind=$wantedKind。" }
+        [System.IO.File]::WriteAllText($tmp, ($documents -join "`n---`n"), [System.Text.UTF8Encoding]::new($false))
         $jsonPath = if ($Fleet) {
-            '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.template.spec.containers[*].image}{"\t"}{.spec.template.spec.template.spec.containers[*].imagePullPolicy}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.labels.pandora\.dev/release-track}{"\n"}'
+            '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.template.spec.containers[*].image}{"\t"}{.spec.template.spec.template.spec.containers[*].imagePullPolicy}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/release-track}{"\n"}'
         } elseif ($DSTicket) {
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket")].secret.secretName}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket-jwks")].configMap.name}{"\n"}'
         } else {
@@ -470,6 +481,15 @@ Assert-True ($unrelatedParentScope.DeploymentObjects.Count -eq 0 -and
     $unrelatedParentScope.FleetObjects.Count -eq 0 -and
     $unrelatedParentScope.LegacyControllerObjects.Count -eq 0) `
     '不带 signer/DS/DSTicket 线索的无关 parent 不应误报'
+Assert-True (Test-PandoraOnlineDSTicketReferenceName 'pandora-dsticket-signer-r01') `
+    '畸形 signer 保留前缀也必须进入 ordinary parent clue'
+Assert-True (Test-PandoraOnlineDSTicketReferenceName 'pandora-dsticket-jwks-r0') `
+    '畸形 JWKS 保留前缀也必须进入 ordinary parent clue'
+Assert-Throws {
+    Assert-PandoraOrdinaryDSTicketControllerScope `
+        -DeploymentObjects @((New-TestOrdinaryParentDeployment -Name 'rogue-malformed-prefix' `
+            -DirectSecret 'pandora-dsticket-signer-r01')) -FleetObjects @()
+} 'unknown Deployment 使用畸形保留 signer 前缀仍必须阻断'
 Assert-Throws {
     Assert-PandoraOrdinaryDSTicketControllerScope `
         -DeploymentObjects @((New-TestOrdinaryParentDeployment -Name 'login-old' `
@@ -739,6 +759,7 @@ $snapshotFunction = @($startFunctions | Where-Object Name -CEQ 'Get-OnlineLiveDS
 $lockEnterFunction = @($startFunctions | Where-Object Name -CEQ 'Enter-OnlineDSTicketOperationLock')
 $lockHeldFunction = @($startFunctions | Where-Object Name -CEQ 'Assert-OnlineDSTicketOperationLockHeld')
 $lockExitFunction = @($startFunctions | Where-Object Name -CEQ 'Exit-OnlineDSTicketOperationLock')
+$legacyConfigScanFunction = @($startFunctions | Where-Object Name -CEQ 'Test-HasLegacyPandoraConfigMapRef')
 Assert-True ($runtimeFunction.Count -eq 1) '必须有唯一 New-OnlineRuntimeOverlay'
 Assert-True ($fleetApplyFunction.Count -eq 1) '必须有唯一 Apply-FleetManifest'
 Assert-True ($onlineFunction.Count -eq 1) '必须有唯一 Invoke-Online'
@@ -746,6 +767,39 @@ Assert-True ($ordinaryStateFunction.Count -eq 1) '必须有唯一 Assert-OnlineO
 Assert-True ($snapshotFunction.Count -eq 1) '必须有唯一完整 DSTicket 快照函数'
 Assert-True ($lockEnterFunction.Count -eq 1 -and $lockHeldFunction.Count -eq 1 -and $lockExitFunction.Count -eq 1) `
     '普通发布必须有唯一锁获取/持有权复查/释放入口'
+Assert-True ($legacyConfigScanFunction.Count -eq 1) '必须有唯一旧 pandora-config 引用扫描函数'
+Assert-True ($legacyConfigScanFunction[0].Extent.Text.Contains(
+        'if ($Node -is [System.Collections.IEnumerable])')) `
+    '旧 ConfigMap 扫描必须先逐项遍历 JSON 数组，不能递归数组的 SyncRoot'
+Assert-True (-not $legacyConfigScanFunction[0].Extent.Text.Contains(
+        '$Node -isnot [pscustomobject]')) `
+    '[pscustomobject] 类型加速器也匹配 Object[]，不得用它排除 JSON 数组'
+Assert-True ($legacyConfigScanFunction[0].Extent.Text.Contains('$Node.GetType().IsValueType')) `
+    '旧 ConfigMap 扫描必须把 DateTime/TimeSpan/enum 等值类型视为叶子'
+Invoke-Expression $legacyConfigScanFunction[0].Extent.Text
+$legacyArrayFixture = [pscustomobject]@{
+    restartedAt = [datetime]'2026-07-13T13:15:00Z'
+    template = [pscustomobject]@{
+        spec = [pscustomobject]@{
+            volumes = @(
+                [pscustomobject]@{ secret = [pscustomobject]@{ secretName = 'pandora-config' } },
+                [pscustomobject]@{ configMap = [pscustomobject]@{ name = 'pandora-config' } }
+            )
+        }
+    }
+}
+$secretOnlyArrayFixture = [pscustomobject]@{
+    restartedAt = [datetime]'2026-07-13T13:15:00Z'
+    template = [pscustomobject]@{
+        spec = [pscustomobject]@{
+            volumes = @([pscustomobject]@{ secret = [pscustomobject]@{ secretName = 'pandora-config' } })
+        }
+    }
+}
+Assert-True (Test-HasLegacyPandoraConfigMapRef $legacyArrayFixture) `
+    '数组中的旧 ConfigMap 引用必须被发现'
+Assert-True (-not (Test-HasLegacyPandoraConfigMapRef $secretOnlyArrayFixture)) `
+    '只引用 Secret 的数组不得误报旧 ConfigMap'
 Assert-True ($runtimeFunction[0].Extent.Text.Contains(
         '[System.IO.File]::WriteAllText((Join-Path $runtime $dsticketPatchName), $dsticketPatch')) `
     'runtime overlay 必须在 kubectl kustomize 前写出 Login DSTicket revision patch'
@@ -788,7 +842,8 @@ Assert-True ($rotationContractSource.Contains('if ($LegacyControllerObjects.Coun
 Assert-True (-not $snapshotSource.Contains('Where-Object { $null -eq $_.metadata.deletionTimestamp }')) `
     '完整 DSTicket 快照不得过滤 terminating 对象'
 
-$hardGate = $onlineSource.IndexOf('online 生产验票阻断', [StringComparison]::Ordinal)
+$secureRequired = $onlineSource.IndexOf('Assert-PandoraDsAuthHttpsEndpoints $DsFenceEtcdEndpoints', [StringComparison]::Ordinal)
+$canonicalPreflight = $onlineSource.IndexOf("任何 registry/K8s 写前只读验证 canonical green", [StringComparison]::Ordinal)
 $lockAcquire = $onlineSource.IndexOf('$dsticketOperationLock = Enter-OnlineDSTicketOperationLock', [StringComparison]::Ordinal)
 $lockedState = $onlineSource.IndexOf('$lockedOrdinaryState = Assert-OnlineOrdinaryDSTicketState', [StringComparison]::Ordinal)
 $configWrite = $onlineSource.IndexOf('Apply-PandoraConfigSecret -KubeContext $ctx', [StringComparison]::Ordinal)
@@ -796,13 +851,19 @@ $fleetWrite = $onlineSource.IndexOf('Apply-AgonesManifests -BattleDsImage', [Str
 $deploymentWrite = $onlineSource.IndexOf('kubectl @kubectlContextArgs apply -k $runtimeOverlayDir', [StringComparison]::Ordinal)
 $finalState = $onlineSource.IndexOf('$finalOrdinaryState = Assert-OnlineOrdinaryDSTicketState', [StringComparison]::Ordinal)
 $lockRelease = $onlineSource.IndexOf('Exit-OnlineDSTicketOperationLock', [StringComparison]::Ordinal)
-foreach ($position in @($hardGate, $lockAcquire, $lockedState, $configWrite, $fleetWrite, $deploymentWrite, $finalState, $lockRelease)) {
+foreach ($position in @($secureRequired, $canonicalPreflight, $lockAcquire, $lockedState, $configWrite, $fleetWrite, $deploymentWrite, $finalState, $lockRelease)) {
     Assert-True ($position -ge 0) '互斥锁顺序契约 marker 必须存在'
 }
-Assert-True ($hardGate -lt $lockAcquire -and $lockAcquire -lt $lockedState -and $lockedState -lt $configWrite -and
+Assert-True ($secureRequired -lt $canonicalPreflight -and $canonicalPreflight -lt $lockAcquire -and
+    $lockAcquire -lt $lockedState -and $lockedState -lt $configWrite -and
     $configWrite -lt $fleetWrite -and $fleetWrite -lt $deploymentWrite -and $deploymentWrite -lt $finalState -and
     $finalState -lt $lockRelease) `
-    '生产硬门后才获取锁；锁内重验早于所有 DSTicket 写，终验早于释放'
+    'secure required=2 + canonical green 前置审计后才获取锁；锁内重验早于所有 DSTicket 写，终验早于释放'
+Assert-True (-not $onlineSource.Contains('online 生产验票阻断')) '已完成真 Agones/UE E2E 后不得保留旧 DSTicket 假阻断'
+Assert-True ($onlineSource.Contains('replace -f $greenPatchPath') -and
+    $onlineSource.Contains('"$($svc.Name)-ds-auth-green"') -and
+    $onlineSource.Contains('-CanonicalGreen:($Env -eq ''prod'')')) `
+    'prod 普通发布必须 CAS replace/restart/status canonical green，不能重启 dormant blue'
 Assert-True ($lockExitFunction[0].Extent.Text.Contains("kind = 'DeleteOptions'") -and
     $lockExitFunction[0].Extent.Text.Contains('preconditions') -and
     $lockExitFunction[0].Extent.Text.Contains('uid = $held.Uid') -and
@@ -917,6 +978,15 @@ foreach ($fleetCase in $fleetCases) {
     $fleetRows = Get-TestContractRows -Manifest $fleet -Fleet
     Assert-PandoraFleetManifestContract -Manifest $fleet -ContractRows $fleetRows -PinnedImage $fleetPin `
         -ContainerName $containerName -ExpectedTrack $fleetCase.Track -ExpectedFleetName $fleetCase.Name
+    $maxPlayersEnv = @([regex]::Matches($fleet, '(?ms)^\s*-\s*name:\s*PANDORA_DS_MAX_PLAYERS\s*\r?\n\s*value:\s*"([0-9]+)"\s*$'))
+    if ($fleetName -like '*hub*') {
+        Assert-True ($maxPlayersEnv.Count -eq 1 -and $maxPlayersEnv[0].Groups[1].Value -eq '500') `
+            'Hub stable/canary Fleet 必须且只能注入 PANDORA_DS_MAX_PLAYERS=500'
+    }
+    else {
+        Assert-True ($maxPlayersEnv.Count -eq 0) `
+            'Battle Fleet 不得继承 Hub 的 PANDORA_DS_MAX_PLAYERS'
+    }
 
     $oneLayerMissing = [regex]::Replace($fleet,
         '(?m)^\s*pandora\.dev/image-digest:\s*["'']?' + [regex]::Escape($digest) + '["'']?\s*$',
@@ -926,6 +996,20 @@ foreach ($fleetCase in $fleetCases) {
         Assert-PandoraFleetManifestContract -Manifest $oneLayerMissing -ContractRows $rows -PinnedImage $fleetPin `
             -ContainerName $containerName -ExpectedTrack $fleetCase.Track -ExpectedFleetName $fleetCase.Name
     } 'Fleet 少一层 annotation'
+    $trackMetadataLines = @([regex]::Matches($fleet,
+            '(?m)^\s*pandora\.dev/release-track:\s*(?:stable|canary)\s*$'))
+    Assert-True ($trackMetadataLines.Count -eq 5) `
+        'Fleet 必须有 Fleet label、GameServer label/annotation、Pod label/annotation 五处 release-track'
+    foreach ($annotationIndex in @(2, 4)) {
+        $missingTrackAnnotation = $fleet.Remove(
+            $trackMetadataLines[$annotationIndex].Index, $trackMetadataLines[$annotationIndex].Length)
+        Assert-Throws {
+            $rows = Get-TestContractRows -Manifest $missingTrackAnnotation -Fleet
+            Assert-PandoraFleetManifestContract -Manifest $missingTrackAnnotation -ContractRows $rows `
+                -PinnedImage $fleetPin -ContainerName $containerName -ExpectedTrack $fleetCase.Track `
+                -ExpectedFleetName $fleetCase.Name
+        } "Fleet 少 release-track annotation(index=$annotationIndex)"
+    }
     Assert-Throws {
         Assert-PandoraFleetManifestContract -Manifest ($fleet + "`nenv:`n- name: PANDORA_DS_TICKET_SECRET") -ContractRows $fleetRows -PinnedImage $fleetPin `
             -ContainerName $containerName -ExpectedTrack $fleetCase.Track -ExpectedFleetName $fleetCase.Name
@@ -968,6 +1052,22 @@ foreach ($fleetCase in $fleetCases) {
         Assert-Throws { Assert-PandoraFleetNoPlayerSigningMaterial -Manifest $smuggle } `
             'Fleet 私钥/HMAC 材料变体必须机械阻断'
     }
+}
+
+# Inventory/DS terminal 仍是独立静态候选；真实 E2E 与激活状态机未闭合前，普通 online 不得默认 apply。
+$onlineKustomizationRaw = Get-Content -LiteralPath (Join-Path $ProjectRoot 'deploy/k8s/overlays/online/kustomization.yaml') -Raw
+foreach ($component in @('mesh-shared-identity', 'inventory-mesh/identity', 'inventory-mesh/gate',
+        'inventory-mesh/enforce', 'ds-terminal-mesh')) {
+    Assert-True (-not $onlineKustomizationRaw.Contains($component)) "ordinary online 不得引用静态候选 component=$component"
+}
+$onlineRenderLines = @(& kubectl kustomize (Join-Path $ProjectRoot 'deploy/k8s/overlays/online') 2>&1)
+Assert-True ($LASTEXITCODE -eq 0) "online kustomize render 必须成功:$($onlineRenderLines -join [Environment]::NewLine)"
+$onlineRender = $onlineRenderLines -join "`n"
+foreach ($marker in @(
+    'pandora-inventory-exact-allow', 'pandora-inventory-mtls', 'pandora-inventory-mesh-deployments',
+    'allow-inventory-grpc', 'pandora-ds-terminal-release-exact-deny',
+    'pandora-ds-allocator-terminal-permissive', 'PANDORA_ISTIO_REVISION_REQUIRED')) {
+    Assert-True (-not $onlineRender.Contains($marker)) "ordinary online render 不得包含未激活静态候选 marker=$marker"
 }
 
 Write-Host 'online_manifest_contract_test: PASS' -ForegroundColor Green

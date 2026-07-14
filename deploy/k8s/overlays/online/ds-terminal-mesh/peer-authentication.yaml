@@ -1,0 +1,13 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: pandora-ds-allocator-terminal-permissive
+  namespace: pandora
+spec:
+  selector:
+    matchLabels:
+      app: ds-allocator
+  # 本轮只给 terminal ReleaseBattle 建立工作负载身份门；现有 Heartbeat、Allocate、
+  # Resolve、GM 等调用尚未全量迁入 mesh，不能用 STRICT 一刀切断。
+  mtls:
+    mode: PERMISSIVE

@@ -2,6 +2,7 @@ package dsauthfence
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -143,9 +144,11 @@ func TestLeaseLossAndWatchCloseFence(t *testing.T) {
 }
 
 func TestCapabilityAuditExactSet(t *testing.T) {
-	cap := Capability{Service: "hub_allocator", InstanceUID: "uid", WriterEpoch: 2, ImageDigest: testDigest, KeysetRevision: "r1"}
-	policy := AuditPolicy{RequiredServices: map[string]int{"hub_allocator": 1}, TargetEpoch: 2, KeysetRevision: "r1", AllowedDigests: map[string]struct{}{testDigest: {}}}
+	cap := Capability{Service: "hub_allocator", InstanceUID: "uid", WriterEpoch: 2, ImageDigest: testDigest, KeysetRevision: "r1", EtcdIdentityRevision: "r7", Features: []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1"}}
+	policy := AuditPolicy{RequiredServices: map[string]int{"hub_allocator": 1}, TargetEpoch: 2, KeysetRevision: "r1", AllowedDigests: map[string]struct{}{testDigest: {}}, ExpectedDigests: map[string]string{"hub_allocator": testDigest}}
 	policy.RequiredInstances = map[string]map[string]struct{}{"hub_allocator": {"uid": {}}}
+	policy.RequiredFeatures = map[string]map[string]struct{}{"hub_allocator": {"hub-reservation-ledger-v1": {}, "hub-heartbeat-capacity-v1": {}}}
+	policy.EtcdIdentityRevision = "r7"
 	if got := AuditCapabilities([]LiveCapability{{Capability: cap, LeaseID: 1, Key: "/pandora/ds-auth/capabilities/hub_allocator/uid"}}, policy); len(got) != 0 {
 		t.Fatalf("unexpected findings: %v", got)
 	}
@@ -154,6 +157,59 @@ func TestCapabilityAuditExactSet(t *testing.T) {
 	got := AuditCapabilities([]LiveCapability{{Capability: cap, LeaseID: 1, Key: "/pandora/ds-auth/capabilities/hub_allocator/uid"}}, policy)
 	if strings.Join(got, " ") == "" {
 		t.Fatal("expected findings")
+	}
+	cap.WriterEpoch = 2
+	cap.Features = append(cap.Features, "not canonical")
+	policy.RequiredServices["hub_allocator"] = 1
+	got = AuditCapabilities([]LiveCapability{{Capability: cap, LeaseID: 1, Key: "/pandora/ds-auth/capabilities/hub_allocator/uid"}}, policy)
+	if !strings.Contains(strings.Join(got, " "), "非 canonical") {
+		t.Fatalf("malformed live capability feature accepted: %v", got)
+	}
+	cap.Features = []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1", "unexpected-feature-v1"}
+	got = AuditCapabilities([]LiveCapability{{Capability: cap, LeaseID: 1, Key: "/pandora/ds-auth/capabilities/hub_allocator/uid"}}, policy)
+	if !strings.Contains(strings.Join(got, " "), "未批准") {
+		t.Fatalf("extra live capability feature accepted: %v", got)
+	}
+	cap.Features = []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1"}
+	got = AuditCapabilities([]LiveCapability{{Capability: cap, LeaseID: 1, Key: "/wrong/capabilities/hub_allocator/uid"}}, policy)
+	if !strings.Contains(strings.Join(got, " "), "key 与 payload") {
+		t.Fatalf("capability outside the configured prefix accepted: %v", got)
+	}
+	cap.ImageDigest = "sha256:" + strings.Repeat("b", 64)
+	policy.AllowedDigests[cap.ImageDigest] = struct{}{}
+	got = AuditCapabilities([]LiveCapability{{Capability: cap, LeaseID: 1, Key: "/pandora/ds-auth/capabilities/hub_allocator/uid"}}, policy)
+	if !strings.Contains(strings.Join(got, " "), "service expected") {
+		t.Fatalf("digest from another allowed service accepted: %v", got)
+	}
+}
+
+func TestCapabilityFeaturesAreValidatedWithoutMutatingCaller(t *testing.T) {
+	features := []string{"z-feature-v1", "a-feature-v1"}
+	cfg := validConfig()
+	cfg.Features = features
+	backend := &fakeBackend{epoch: 1, found: true, watch: make(chan RequiredEvent)}
+	holder, err := Start(context.Background(), backend, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer holder.Close()
+	if got := strings.Join(features, ","); got != "z-feature-v1,a-feature-v1" {
+		t.Fatalf("caller feature slice mutated: %s", got)
+	}
+	var capability Capability
+	if err := json.Unmarshal(backend.value, &capability); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(capability.Features, ","); got != "z-feature-v1,a-feature-v1" {
+		t.Fatalf("capability features=%s", got)
+	}
+
+	for _, invalid := range [][]string{{"bad feature"}, {"ok-feature-v1", "ok-feature-v1"}, {"UPPER-v1"}} {
+		cfg := validConfig()
+		cfg.Features = invalid
+		if _, err := Start(context.Background(), &fakeBackend{epoch: 1, found: true, watch: make(chan RequiredEvent)}, cfg); err == nil {
+			t.Fatalf("accepted invalid features %v", invalid)
+		}
 	}
 }
 
@@ -173,5 +229,27 @@ func TestParseEpochAndExpectedServices(t *testing.T) {
 	instances, err := ParseExpectedInstances("hub_allocator=uid-a|uid-b,player_locator=uid-c")
 	if err != nil || len(instances["hub_allocator"]) != 2 {
 		t.Fatalf("instances=%v err=%v", instances, err)
+	}
+	features, err := ParseRequiredFeatures("hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1,battle_result=battle-terminal-outbox-v1")
+	if err != nil || len(features["hub_allocator"]) != 2 {
+		t.Fatalf("features=%v err=%v", features, err)
+	}
+	for _, raw := range []string{
+		"hub_allocator=bad feature",
+		"hub_allocator=hub-reservation-ledger-v1|hub-reservation-ledger-v1",
+		"hub_allocator=x,hub_allocator=y",
+	} {
+		if _, err := ParseRequiredFeatures(raw); err == nil {
+			t.Fatalf("accepted invalid required features %q", raw)
+		}
+	}
+	digests, err := ParseExpectedDigests("hub_allocator=" + testDigest + ",player_locator=" + testDigest)
+	if err != nil || digests["hub_allocator"] != testDigest {
+		t.Fatalf("digests=%v err=%v", digests, err)
+	}
+	for _, raw := range []string{"", "hub_allocator=latest", "hub_allocator=" + testDigest + ",hub_allocator=" + testDigest, "bad/name=" + testDigest} {
+		if _, err := ParseExpectedDigests(raw); err == nil {
+			t.Fatalf("accepted invalid expected digest %q", raw)
+		}
 	}
 }

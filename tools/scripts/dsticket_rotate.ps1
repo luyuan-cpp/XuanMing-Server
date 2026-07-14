@@ -180,8 +180,8 @@ function Get-PandoraSignerSnapshot {
         $name = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $deployment 'metadata') 'name')
         $podSpec = Get-PandoraRotationProperty (Get-PandoraRotationProperty `
             (Get-PandoraRotationProperty $deployment 'spec') 'template') 'spec'
-        $signerReferences = @(Get-PandoraDSTicketSignerSecretReferences $podSpec)
-        return $script:PandoraDSTicketSignerNames -ccontains $name -or $signerReferences.Count -gt 0
+        $hasDSTicketClue = Test-PandoraDSTicketDSPodSpecClue $podSpec
+        return $script:PandoraDSTicketSignerNames -ccontains $name -or $hasDSTicketClue
     })
     $replicaSets = @(Get-PandoraKubeListItems replicasets pandora | Where-Object {
         $rs = $_
@@ -192,10 +192,10 @@ function Get-PandoraSignerSnapshot {
             ForEach-Object { [string](Get-PandoraRotationProperty $_ 'name') })
         $podSpec = Get-PandoraRotationProperty (Get-PandoraRotationProperty `
             (Get-PandoraRotationProperty $rs 'spec') 'template') 'spec'
-        $privateReferences = @(Get-PandoraDSTicketSignerSecretReferences $podSpec)
+        $hasDSTicketClue = Test-PandoraDSTicketDSPodSpecClue $podSpec
         return $script:PandoraDSTicketSignerNames -ccontains $app -or
             @($owners | Where-Object { $script:PandoraDSTicketSignerNames -ccontains $_ }).Count -gt 0 -or
-            $privateReferences.Count -gt 0
+            $hasDSTicketClue
     })
     return [pscustomobject]@{
         Deployments = $deployments
@@ -278,6 +278,12 @@ function Get-PandoraDeploymentBundle {
         $jwksName = [string]$volumes[$jwksIndex].configMap.name
         if ([string]::IsNullOrWhiteSpace($jwksName)) { throw 'Deployment/login dsticket-jwks 必须是 ConfigMap volume。' }
     }
+    $referenceFailures = @(Test-PandoraDSTicketSignerPodSpecReferenceContract -Spec $deployment.spec.template.spec `
+        -ServiceName $Name -ExpectedConfigSecret $configName -ExpectedSignerSecret $signerName `
+        -ExpectedLoginJwks $jwksName -ObjectName "Deployment/$Name")
+    if ($referenceFailures.Count -gt 0) {
+        throw "Deployment/$Name prewrite bundle 引用/consumer 门禁失败:$($referenceFailures -join '; ')"
+    }
     return [pscustomobject]@{
         Deployment = $deployment; Name = $Name; Volumes = $volumes
         ConfigIndex = $confIndex; SignerIndex = $signerIndex; JwksIndex = $jwksIndex
@@ -291,7 +297,15 @@ function Assert-PandoraConfigReferenceContract {
     if ($Name -ceq 'pandora-config') {
         Assert-PandoraDSTicketConfigSecretContract $secret $ExpectedKid $ExpectedRevision
     } else {
-        $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $secret $ExpectedRevision $ExpectedKid
+        # 每次 phase gate 都从当前 fixed 重投影完整 data；不只信任 immutable 对象的 self-hash，
+        # 关闭 Ensure 后同名 Secret 被 delete/recreate 的 ABA 窗口。source RV 只作审计，不要求相等。
+        $fixed = Get-PandoraKubeObject 'secret/pandora-config' pandora
+        $fixedContract = Get-PandoraDSTicketConfigSubcontract $fixed
+        $expected = New-PandoraDSTicketRevisionedConfigSecretObject -SourceSecret $fixed `
+            -Revision $ExpectedRevision -ActiveKid $ExpectedKid `
+            -AllowedCurrentActiveKids @($fixedContract.ActiveKid)
+        $expectedHash = [string]$expected.metadata.annotations.'pandora.dev/dsticket-config-data-sha256'
+        $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $secret $ExpectedRevision $ExpectedKid $expectedHash
     }
 }
 
@@ -482,21 +496,37 @@ function Invoke-PandoraGuardedWrite {
 function Ensure-PandoraRevisionedConfigSecret {
     param([int]$Revision, [string]$ActiveKid, [string[]]$AllowedSourceKids)
     $name = "pandora-config-dsticket-r$Revision"
+    $source = Get-PandoraKubeObject 'secret/pandora-config' pandora
+    $expected = New-PandoraDSTicketRevisionedConfigSecretObject -SourceSecret $source -Revision $Revision `
+        -ActiveKid $ActiveKid -AllowedCurrentActiveKids $AllowedSourceKids
+    $expectedHash = [string]$expected.metadata.annotations.'pandora.dev/dsticket-config-data-sha256'
     $existing = Get-PandoraKubeObject "secret/$name" pandora -IgnoreNotFound
     if ($null -ne $existing) {
-        $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $existing $Revision $ActiveKid
+        $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $existing $Revision $ActiveKid $expectedHash
         return $existing
     }
-    $source = Get-PandoraKubeObject 'secret/pandora-config' pandora
-    $object = New-PandoraDSTicketRevisionedConfigSecretObject -SourceSecret $source -Revision $Revision `
-        -ActiveKid $ActiveKid -AllowedCurrentActiveKids $AllowedSourceKids
-    $json = $object | ConvertTo-Json -Depth 100 -Compress
-    Invoke-PandoraGuardedWrite -Action "create immutable Secret/$name（完整复制 data）" -Operation {
+    Invoke-PandoraGuardedWrite -Action "create/核对 immutable Secret/$name（当前 fixed 完整 data 投影）" -Operation {
+        # guarded gate 之后重新读取 fixed 并投影，避免 source read→create 窗口把陈旧/篡改 data 固化。
+        $guardedSource = Get-PandoraKubeObject 'secret/pandora-config' pandora
+        $guardedObject = New-PandoraDSTicketRevisionedConfigSecretObject -SourceSecret $guardedSource -Revision $Revision `
+            -ActiveKid $ActiveKid -AllowedCurrentActiveKids $AllowedSourceKids
+        $guardedHash = [string]$guardedObject.metadata.annotations.'pandora.dev/dsticket-config-data-sha256'
+        $concurrent = Get-PandoraKubeObject "secret/$name" pandora -IgnoreNotFound
+        if ($null -ne $concurrent) {
+            $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $concurrent $Revision $ActiveKid $guardedHash
+            return
+        }
+        $null = Assert-PandoraDSTicketOperationLockHeld
+        $json = $guardedObject | ConvertTo-Json -Depth 100 -Compress
         $null = Invoke-PandoraKubectl -Arguments @('create', '-f', '-', '-o', 'name') `
             -Action "create Secret/$name" -InputJson $json
     }
     $live = Get-PandoraKubeObject "secret/$name" pandora
-    $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $live $Revision $ActiveKid
+    $validationSource = Get-PandoraKubeObject 'secret/pandora-config' pandora
+    $validationExpected = New-PandoraDSTicketRevisionedConfigSecretObject -SourceSecret $validationSource -Revision $Revision `
+        -ActiveKid $ActiveKid -AllowedCurrentActiveKids $AllowedSourceKids
+    $validationHash = [string]$validationExpected.metadata.annotations.'pandora.dev/dsticket-config-data-sha256'
+    $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $live $Revision $ActiveKid $validationHash
     return $live
 }
 
@@ -658,17 +688,13 @@ function Assert-PandoraNoSignerUsesFixedConfig {
     }
     foreach ($pod in $snapshot.Pods) {
         $meta = $pod.metadata
-        $volumes = @($pod.spec.volumes)
-        $signerRefs = @($volumes | Where-Object {
-            [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $_ 'secret') 'secretName') `
-                -imatch '^pandora-dsticket(?:-signer-r[1-9][0-9]*)?$'
-        })
-        if ($signerRefs.Count -eq 0) { continue }
-        $fixedRefs = @($volumes | Where-Object {
-            [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $_ 'secret') 'secretName') -ceq 'pandora-config'
+        $podSpec = Get-PandoraRotationProperty $pod 'spec'
+        if (-not (Test-PandoraDSTicketDSPodSpecClue $podSpec)) { continue }
+        $fixedRefs = @(Get-PandoraDSTicketSignerConfigSecretReferences $podSpec | Where-Object {
+            $_.Name -ceq 'pandora-config'
         })
         if ($fixedRefs.Count -gt 0) {
-            throw "Pod/$($meta.name)（含 terminating/错标 Pod）同时引用 signer Secret 与 fixed pandora-config，不能安全回填。"
+            throw "Pod/$($meta.name)（含 terminating/错标/全引用 consumer）同时使用 DSTicket material 与 fixed pandora-config，不能安全回填。"
         }
     }
 }
@@ -697,9 +723,13 @@ function Set-PandoraFixedConfigTerminalState {
     $null = $secret.metadata.PSObject.Properties.Remove('managedFields')
     $json = $secret | ConvertTo-Json -Depth 100 -Compress
     Invoke-PandoraGuardedWrite -Action "CAS replace fixed pandora-config 到 terminal r$RetireRevision" -Operation {
+        # 入口检查后仍可能异步补出 Pod；replace 前按 direct/projected/env/envFrom 全引用重扫。
+        Assert-PandoraNoSignerUsesFixedConfig
+        $null = Assert-PandoraDSTicketOperationLockHeld
         $null = Invoke-PandoraKubectl -Arguments @('replace', '-f', '-', '-o', 'name') `
             -Action 'replace fixed pandora-config(resourceVersion CAS)' -InputJson $json
     }
+    Assert-PandoraNoSignerUsesFixedConfig
     $live = Get-PandoraKubeObject 'secret/pandora-config' pandora
     Assert-PandoraDSTicketConfigSecretContract $live $Material.NewKid $RetireRevision
     $liveContract = Get-PandoraDSTicketConfigSubcontract $live
@@ -711,13 +741,37 @@ function Set-PandoraFixedConfigTerminalState {
     return $liveContract.Sha256
 }
 
+function Assert-PandoraActivationRuntimeState {
+    param([Parameter(Mandatory = $true)]$Material, [switch]$RequireMarker)
+    $marker = Get-PandoraRotationMarker
+    if ($RequireMarker) {
+        if ($null -eq $marker) { throw 'promote exact runtime 缺 activation marker。' }
+        $null = Assert-PandoraDSTicketActivationMarkerContract -MarkerObject $marker `
+            -StageRevision $StageRevision -PromoteRevision $PromoteRevision -RetireRevision $RetireRevision `
+            -OldSignerRevision $OldSignerRevision -OldKid $Material.OldKid -NewKid $Material.NewKid
+    } elseif ($null -ne $marker) {
+        throw 'promote exact runtime 写前发现 activation marker 已存在。'
+    }
+    $configs = Get-PandoraConfigMapForAll "pandora-config-dsticket-r$PromoteRevision"
+    foreach ($name in $script:PandoraDSTicketSignerNames) {
+        Assert-PandoraConfigReferenceContract $configs[$name] $Material.NewKid $PromoteRevision
+    }
+    $snapshot = Get-PandoraSignerSnapshot
+    $ds = Get-PandoraLiveDSGateSnapshot
+    Assert-PandoraDSTicketRuntimeObjectGate -DeploymentObjects $snapshot.Deployments `
+        -ReplicaSetObjects $snapshot.ReplicaSets -SignerPodObjects $snapshot.Pods `
+        -FleetObjects $ds.Fleets -GameServerObjects $ds.GameServers `
+        -GameServerSetObjects $ds.GameServerSets -DSPodObjects $ds.Pods `
+        -SignerRevision $PromoteRevision -LoginKeysetRevision $PromoteRevision `
+        -ExpectedConfigSecretByDeployment $configs -DSRevision $StageRevision
+    return $marker
+}
+
 function New-PandoraActivationMarker {
     param([Parameter(Mandatory = $true)]$Material)
     $existing = Get-PandoraRotationMarker
     if ($null -ne $existing) {
-        $null = Assert-PandoraDSTicketActivationMarkerContract -MarkerObject $existing `
-            -StageRevision $StageRevision -PromoteRevision $PromoteRevision -RetireRevision $RetireRevision `
-            -OldSignerRevision $OldSignerRevision -OldKid $Material.OldKid -NewKid $Material.NewKid
+        $null = Assert-PandoraActivationRuntimeState $Material -RequireMarker
         return
     }
     $marker = New-PandoraDSTicketActivationMarkerObject -StageRevision $StageRevision `
@@ -725,13 +779,13 @@ function New-PandoraActivationMarker {
         -OldKid $Material.OldKid -NewKid $Material.NewKid
     $json = $marker | ConvertTo-Json -Depth 30 -Compress
     Invoke-PandoraGuardedWrite -Action "create immutable activation marker/$($marker.metadata.name)" -Operation {
+        $null = Assert-PandoraActivationRuntimeState $Material
+        # exact runtime 全量读取可能较慢；真正 create 前再次紧邻证明仍持有同一 UID/RV 锁。
+        $null = Assert-PandoraDSTicketOperationLockHeld
         $null = Invoke-PandoraKubectl -Arguments @('create', '-f', '-', '-o', 'name') `
             -Action 'create DSTicket activation marker' -InputJson $json
     }
-    $live = Get-PandoraRotationMarker
-    $null = Assert-PandoraDSTicketActivationMarkerContract -MarkerObject $live `
-        -StageRevision $StageRevision -PromoteRevision $PromoteRevision -RetireRevision $RetireRevision `
-        -OldSignerRevision $OldSignerRevision -OldKid $Material.OldKid -NewKid $Material.NewKid
+    $null = Assert-PandoraActivationRuntimeState $Material -RequireMarker
 }
 
 function Get-PandoraTerminalMarker {
@@ -745,9 +799,7 @@ function New-PandoraTerminalMarker {
     $activation = Get-PandoraRotationMarker
     if ($null -eq $activation) { throw '缺 activation marker，禁止创建/核对 terminal marker。' }
     if ($null -ne $existing) {
-        $null = Assert-PandoraDSTicketTerminalMarkerContract -MarkerObject $existing `
-            -PromoteRevision $PromoteRevision -RetireRevision $RetireRevision -ActiveKid $Material.NewKid `
-            -FixedConfigContractSha256 $FixedContractSha256 -ActivationMarkerObject $activation
+        $null = Assert-PandoraTerminalMarkerRuntimeState $Material $FixedContractSha256 -RequireMarker
         return
     }
     $marker = New-PandoraDSTicketTerminalMarkerObject -PromoteRevision $PromoteRevision `
@@ -755,13 +807,13 @@ function New-PandoraTerminalMarker {
         -FixedConfigContractSha256 $FixedContractSha256
     $json = $marker | ConvertTo-Json -Depth 30 -Compress
     Invoke-PandoraGuardedWrite -Action "create immutable terminal marker/$($marker.metadata.name)" -Operation {
+        $null = Assert-PandoraTerminalMarkerRuntimeState $Material $FixedContractSha256
+        # exact terminal 全态读取后再次紧邻核同一锁，避免慢 gate 后锁已漂移仍写 immutable marker。
+        $null = Assert-PandoraDSTicketOperationLockHeld
         $null = Invoke-PandoraKubectl -Arguments @('create', '-f', '-', '-o', 'name') `
             -Action 'create DSTicket terminal marker' -InputJson $json
     }
-    $live = Get-PandoraTerminalMarker
-    $null = Assert-PandoraDSTicketTerminalMarkerContract -MarkerObject $live `
-        -PromoteRevision $PromoteRevision -RetireRevision $RetireRevision -ActiveKid $Material.NewKid `
-        -FixedConfigContractSha256 $FixedContractSha256 -ActivationMarkerObject $activation
+    $null = Assert-PandoraTerminalMarkerRuntimeState $Material $FixedContractSha256 -RequireMarker
 }
 
 function Get-PandoraConfigMapForAll([string]$Name) {
@@ -800,6 +852,29 @@ function Assert-PandoraTerminalRuntimeState {
             -ActivationMarkers $audit.Activations -TerminalMarkers $audit.Terminals -FixedConfigSecret $fixed
     }
     return $subcontract
+}
+
+function Assert-PandoraTerminalMarkerRuntimeState {
+    param(
+        [Parameter(Mandatory = $true)]$Material,
+        [Parameter(Mandatory = $true)][string]$FixedContractSha256,
+        [switch]$RequireMarker
+    )
+    $activation = Get-PandoraRotationMarker
+    if ($null -eq $activation) { throw 'terminal exact runtime 缺 activation marker。' }
+    $terminal = Get-PandoraTerminalMarker
+    if ($RequireMarker) {
+        if ($null -eq $terminal) { throw 'terminal exact runtime 缺 terminal marker。' }
+    } elseif ($null -ne $terminal) {
+        throw 'terminal exact runtime 写前发现 terminal marker 已存在。'
+    }
+    $subcontract = Assert-PandoraTerminalRuntimeState $Material -RequireMarker:$RequireMarker
+    if ($subcontract.Sha256 -cne $FixedContractSha256) {
+        throw "terminal exact runtime fixed 子契约 hash=$($subcontract.Sha256) expected=$FixedContractSha256。"
+    }
+    $fixed = Get-PandoraKubeObject 'secret/pandora-config' pandora
+    Assert-PandoraDSTicketFixedTerminalAnnotations -FixedConfigSecret $fixed -ConfigContract $subcontract -Require
+    return $terminal
 }
 
 function Invoke-PandoraStagePhase {

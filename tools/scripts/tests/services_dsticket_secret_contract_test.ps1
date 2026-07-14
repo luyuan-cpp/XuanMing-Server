@@ -102,4 +102,19 @@ Assert-Throws {
     Assert-ServicesDSTicketSecretContract -Manifest ($manifest.Replace('pandora-dsticket-signer-r1', 'pandora-dsticket-signer-r2'))
 } 'base signer/JWKS revision 分裂必须阻断'
 
+$matchmakerSource = Get-Content -LiteralPath (Join-Path $ProjectRoot 'services/matchmaking/matchmaker/cmd/matchmaker/main.go') -Raw
+Assert-True ($matchmakerSource.Contains('ds_allocator_requires_ds_ticket_v2')) `
+    '真实 ds_allocator 链必须 fail-closed 要求 Model-B RS256 signer'
+Assert-True (-not $matchmakerSource.Contains('legacySigner')) `
+    'matchmaker 真实 DS 票据链不得静默构造 legacy HS256 signer'
+Assert-True ($matchmakerSource.Contains('NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, nil, v2Signer')) `
+    'matchmaker 必须只把 RS256 signer 注入真实 DS 分配器'
+$dsAuthSource = Get-Content -LiteralPath (Join-Path $ProjectRoot 'pkg/middleware/dsauth.go') -Raw
+Assert-True ($dsAuthSource.Contains('(*auth.DSCallbackSigner, error)') -and
+    $dsAuthSource.Contains('(*auth.DSCallbackVerifier, error)') -and
+    $dsAuthSource.Contains('auth.NewDSCallbackSigner') -and $dsAuthSource.Contains('auth.NewDSCallbackVerifier')) `
+    'DS callback 配置工厂必须只暴露专用信任域类型'
+Assert-True (-not $dsAuthSource.Contains('func NewDSCallbackSignerFromConf(cfg config.DSAuthConf) (*auth.Signer')) `
+    'DS callback 工厂不得回退宽泛玩家令牌 Signer 类型'
+
 Write-Host 'services_dsticket_secret_contract_test: PASS' -ForegroundColor Green

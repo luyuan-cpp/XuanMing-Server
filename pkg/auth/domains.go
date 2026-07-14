@@ -16,7 +16,10 @@
 // 用域类型;等全部调用方迁完后再收缩旧类型的方法集。
 package auth
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ── Session 域 ───────────────────────────────────────────────────────────────
 
@@ -70,6 +73,9 @@ type DSCallbackSigner struct {
 
 // NewDSCallbackSigner 用 DS 回调面 HS256 配置(ds_auth,与玩家面密钥集合必须不相交)构造。
 func NewDSCallbackSigner(cfg Config) (*DSCallbackSigner, error) {
+	if cfg.Issuer != DSCallbackIssuer || cfg.Audience != DSCallbackAudience {
+		return nil, fmt.Errorf("auth: DS callback signer requires issuer=%q audience=%q", DSCallbackIssuer, DSCallbackAudience)
+	}
 	s, err := NewSigner(cfg)
 	if err != nil {
 		return nil, err
@@ -104,6 +110,9 @@ type DSCallbackVerifier struct {
 
 // NewDSCallbackVerifier 用 DS 回调面 HS256 配置构造。
 func NewDSCallbackVerifier(cfg Config) (*DSCallbackVerifier, error) {
+	if cfg.Issuer != DSCallbackIssuer || cfg.Audience != DSCallbackAudience {
+		return nil, fmt.Errorf("auth: DS callback verifier requires issuer=%q audience=%q", DSCallbackIssuer, DSCallbackAudience)
+	}
 	v, err := NewVerifier(cfg)
 	if err != nil {
 		return nil, err

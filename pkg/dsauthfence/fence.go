@@ -22,6 +22,8 @@ import (
 	"time"
 )
 
+var capabilityFeaturePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{2,63}$`)
+
 const (
 	// ProtocolEpochV2 是 Redis active/pending 完整凭据协议版本。
 	ProtocolEpochV2 uint32 = 2
@@ -49,6 +51,8 @@ type Config struct {
 	WriterEpoch    uint32
 	LeaseTTLSec    int64
 	DialTimeout    time.Duration
+	Security       ClientSecurity
+	Features       []string
 }
 
 // RuntimeConfig 是业务 main 已有配置可直接映射的部分；不可变 Pod 身份只从环境读取。
@@ -60,10 +64,15 @@ type RuntimeConfig struct {
 	LeaseTTLSec    int64
 	DialTimeout    time.Duration
 	WriterEpoch    uint32
+	Features       []string
 }
 
 // AcquireRuntime 从 Downward API 环境组装完整身份并启动 fence；绝不回退 hostname 或 image tag。
 func AcquireRuntime(ctx context.Context, runtime RuntimeConfig) (*Holder, error) {
+	security, err := ClientSecurityFromEnv()
+	if err != nil {
+		return nil, err
+	}
 	return Acquire(ctx, Config{
 		Endpoints:      runtime.Endpoints,
 		Prefix:         runtime.Prefix,
@@ -74,17 +83,21 @@ func AcquireRuntime(ctx context.Context, runtime RuntimeConfig) (*Holder, error)
 		WriterEpoch:    runtime.WriterEpoch,
 		LeaseTTLSec:    runtime.LeaseTTLSec,
 		DialTimeout:    runtime.DialTimeout,
+		Security:       security,
+		Features:       runtime.Features,
 	})
 }
 
 // Capability 是写入 etcd lease key 的审计记录。
 type Capability struct {
-	Service        string `json:"service"`
-	InstanceUID    string `json:"instance_uid"`
-	WriterEpoch    uint32 `json:"writer_epoch"`
-	ImageDigest    string `json:"image_digest"`
-	KeysetRevision string `json:"keyset_revision"`
-	StartedAtMs    int64  `json:"started_at_ms"`
+	Service              string   `json:"service"`
+	InstanceUID          string   `json:"instance_uid"`
+	WriterEpoch          uint32   `json:"writer_epoch"`
+	ImageDigest          string   `json:"image_digest"`
+	KeysetRevision       string   `json:"keyset_revision"`
+	EtcdIdentityRevision string   `json:"etcd_identity_revision,omitempty"`
+	StartedAtMs          int64    `json:"started_at_ms"`
+	Features             []string `json:"features,omitempty"`
 }
 
 // RequiredEvent 是 required key 的有序 watch 事件。
@@ -151,12 +164,14 @@ func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
 	}
 
 	capability := Capability{
-		Service:        cfg.Service,
-		InstanceUID:    cfg.InstanceUID,
-		WriterEpoch:    cfg.WriterEpoch,
-		ImageDigest:    cfg.ImageDigest,
-		KeysetRevision: cfg.KeysetRevision,
-		StartedAtMs:    time.Now().UnixMilli(),
+		Service:              cfg.Service,
+		InstanceUID:          cfg.InstanceUID,
+		WriterEpoch:          cfg.WriterEpoch,
+		ImageDigest:          cfg.ImageDigest,
+		KeysetRevision:       cfg.KeysetRevision,
+		EtcdIdentityRevision: cfg.Security.IdentityRevision,
+		StartedAtMs:          time.Now().UnixMilli(),
+		Features:             append([]string(nil), cfg.Features...),
 	}
 	payload, err := json.Marshal(capability)
 	if err != nil {
@@ -276,6 +291,24 @@ func validate(cfg Config) error {
 	}
 	if cfg.KeysetRevision == "" {
 		return errors.New("dsauthfence: empty keyset revision")
+	}
+	if err := validateFeatures(cfg.Features); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateFeatures(features []string) error {
+	seen := make(map[string]struct{}, len(features))
+	for _, feature := range features {
+		if feature == "" || strings.TrimSpace(feature) != feature ||
+			!capabilityFeaturePattern.MatchString(feature) {
+			return fmt.Errorf("dsauthfence: invalid capability feature")
+		}
+		if _, exists := seen[feature]; exists {
+			return fmt.Errorf("dsauthfence: duplicate capability feature")
+		}
+		seen[feature] = struct{}{}
 	}
 	return nil
 }

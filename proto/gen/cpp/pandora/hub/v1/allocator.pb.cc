@@ -71,6 +71,18 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
         // ::pandora::hub::v1::HubMigrateEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::hub::v1::AcknowledgeAdmissionRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::hub::v1::AcknowledgeAdmissionResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::hub::v1::AcknowledgeDepartureRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::hub::v1::AcknowledgeDepartureResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::hub::v1::HubReservationStorageRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
+        // ::pandora::hub::v1::HubConnectedOwnershipStorageRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -1296,11 +1308,11 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_._has_bits_),
       0, // no _extensions_
-      18, 248,  // max_field_number, fast_idx_mask
+      22, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294705152,  // skipmap
+      4290772992,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      18,  // num_field_entries
+      22,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1383,10 +1395,22 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
       {::_pbi::TcParser::FastUS2,
        {402, 6, 0,
         PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.release_track_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // int32 reported_connected_count = 19 [json_name = "reportedConnectedCount"];
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reported_connected_count_)}},
+      // int32 reserved_count = 20 [json_name = "reservedCount"];
+      {::_pbi::TcParser::FastV32S2,
+       {416, 19, 0,
+        PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reserved_count_)}},
+      // int32 connected_ownership_count = 21 [json_name = "connectedOwnershipCount"];
+      {::_pbi::TcParser::FastV32S2,
+       {424, 20, 0,
+        PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.connected_ownership_count_)}},
+      // uint32 reported_max_players = 22 [json_name = "reportedMaxPlayers"];
+      {::_pbi::TcParser::FastV32S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reported_max_players_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1435,6 +1459,14 @@ constexpr HubShardStorageRecord::ParseTableT_ HubShardStorageRecord::InternalGen
       {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_writer_epoch_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string release_track = 18 [json_name = "releaseTrack"];
       {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.release_track_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // int32 reported_connected_count = 19 [json_name = "reportedConnectedCount"];
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reported_connected_count_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      // int32 reserved_count = 20 [json_name = "reservedCount"];
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reserved_count_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      // int32 connected_ownership_count = 21 [json_name = "connectedOwnershipCount"];
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.connected_ownership_count_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      // uint32 reported_max_players = 22 [json_name = "reportedMaxPlayers"];
+      {PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reported_max_players_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1487,7 +1519,11 @@ inline constexpr HubShardStorageRecord::Impl_::Impl_(
         auth_epoch_{0u},
         current_token_gen_{::uint64_t{0u}},
         last_verified_gen_{::uint64_t{0u}},
-        last_verified_writer_epoch_{0u} {}
+        last_verified_writer_epoch_{0u},
+        reported_connected_count_{0},
+        reserved_count_{0},
+        connected_ownership_count_{0},
+        reported_max_players_{0u} {}
 
 template <typename>
 constexpr HubShardStorageRecord::HubShardStorageRecord(::_pbi::ConstantInitialized,
@@ -1577,6 +1613,221 @@ const ::_pbi::ClassData* HubShardStorageRecord_get_class_data() {
   return HubShardStorageRecord_globals_.GetClassData();
 #else
   return HubShardStorageRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class HubReservationStorageRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<HubReservationStorageRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_._has_bits_);
+};
+
+constexpr HubReservationStorageRecord::ParseTableT_ HubReservationStorageRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      9, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966784,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      9,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::hub::v1::HubReservationStorageRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubReservationStorageRecord, _impl_.player_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.player_id_)}},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.assignment_id_)}},
+      // string hub_pod_name = 3 [json_name = "hubPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.hub_pod_name_)}},
+      // string hub_instance_uid = 4 [json_name = "hubInstanceUid"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.hub_instance_uid_)}},
+      // uint32 auth_epoch = 5 [json_name = "authEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubReservationStorageRecord, _impl_.auth_epoch_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.auth_epoch_)}},
+      // uint32 auth_writer_epoch = 6 [json_name = "authWriterEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubReservationStorageRecord, _impl_.auth_writer_epoch_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.auth_writer_epoch_)}},
+      // int64 created_at_ms = 7 [json_name = "createdAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubReservationStorageRecord, _impl_.created_at_ms_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.created_at_ms_)}},
+      // int64 expires_at_ms = 8 [json_name = "expiresAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubReservationStorageRecord, _impl_.expires_at_ms_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.expires_at_ms_)}},
+      // int64 assignment_expires_at_ms = 9 [json_name = "assignmentExpiresAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubReservationStorageRecord, _impl_.assignment_expires_at_ms_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.assignment_expires_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.assignment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_pod_name = 3 [json_name = "hubPodName"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_instance_uid = 4 [json_name = "hubInstanceUid"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.hub_instance_uid_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 auth_epoch = 5 [json_name = "authEpoch"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.auth_epoch_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 auth_writer_epoch = 6 [json_name = "authWriterEpoch"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.auth_writer_epoch_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // int64 created_at_ms = 7 [json_name = "createdAtMs"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // int64 expires_at_ms = 8 [json_name = "expiresAtMs"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.expires_at_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // int64 assignment_expires_at_ms = 9 [json_name = "assignmentExpiresAtMs"];
+      {PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.assignment_expires_at_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\52\0\15\14\20\0\0\0\0\0\0\0\0\0\0\0"
+      "pandora.hub.v1.HubReservationStorageRecord"
+      "assignment_id"
+      "hub_pod_name"
+      "hub_instance_uid"
+    }},
+  };
+}
+
+
+inline constexpr HubReservationStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_instance_uid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        auth_epoch_{0u},
+        auth_writer_epoch_{0u},
+        created_at_ms_{::int64_t{0}},
+        expires_at_ms_{::int64_t{0}},
+        assignment_expires_at_ms_{::int64_t{0}} {}
+
+template <typename>
+constexpr HubReservationStorageRecord::HubReservationStorageRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL HubReservationStorageRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) HubReservationStorageRecord(arena);
+}
+constexpr auto HubReservationStorageRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HubReservationStorageRecord), alignof(HubReservationStorageRecord));
+}
+constexpr auto HubReservationStorageRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &HubReservationStorageRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<HubReservationStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &HubReservationStorageRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<HubReservationStorageRecord>(), &HubReservationStorageRecord::ByteSizeLong,
+              &HubReservationStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[25],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct HubReservationStorageRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr HubReservationStorageRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 HubReservationStorageRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(HubReservationStorageRecord::InternalGenerateClassData_(
+            _default, &HubReservationStorageRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<HubReservationStorageRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~HubReservationStorageRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) HubReservationStorageRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<HubReservationStorageRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(HubReservationStorageRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST HubReservationStorageRecordGlobalsTypeInternal HubReservationStorageRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* HubReservationStorageRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return HubReservationStorageRecord_globals_.GetClassData();
+#else
+  return HubReservationStorageRecord_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2376,6 +2627,236 @@ const ::_pbi::ClassData* HubDSCredential_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class HubConnectedOwnershipStorageRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<HubConnectedOwnershipStorageRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_._has_bits_);
+};
+
+constexpr HubConnectedOwnershipStorageRecord::ParseTableT_ HubConnectedOwnershipStorageRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      11, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294965248,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      11,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::hub::v1::HubConnectedOwnershipStorageRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.player_id_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.player_id_)}},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.assignment_id_)}},
+      // string admission_id = 3 [json_name = "admissionId"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admission_id_)}},
+      // string hub_pod_name = 4 [json_name = "hubPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.hub_pod_name_)}},
+      // string hub_instance_uid = 5 [json_name = "hubInstanceUid"];
+      {::_pbi::TcParser::FastUS1,
+       {42, 3, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.hub_instance_uid_)}},
+      // uint32 auth_epoch = 6 [json_name = "authEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.auth_epoch_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.auth_epoch_)}},
+      // uint32 auth_writer_epoch = 7 [json_name = "authWriterEpoch"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.auth_writer_epoch_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.auth_writer_epoch_)}},
+      // int64 admitted_at_ms = 8 [json_name = "admittedAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.admitted_at_ms_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admitted_at_ms_)}},
+      // int64 last_seen_ms = 9 [json_name = "lastSeenMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.last_seen_ms_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.last_seen_ms_)}},
+      // int64 expires_at_ms = 10 [json_name = "expiresAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.expires_at_ms_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.expires_at_ms_)}},
+      // uint64 admission_seq = 11 [json_name = "admissionSeq"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HubConnectedOwnershipStorageRecord, _impl_.admission_seq_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admission_seq_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.assignment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string admission_id = 3 [json_name = "admissionId"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admission_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_pod_name = 4 [json_name = "hubPodName"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_instance_uid = 5 [json_name = "hubInstanceUid"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.hub_instance_uid_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 auth_epoch = 6 [json_name = "authEpoch"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.auth_epoch_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 auth_writer_epoch = 7 [json_name = "authWriterEpoch"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.auth_writer_epoch_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // int64 admitted_at_ms = 8 [json_name = "admittedAtMs"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admitted_at_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // int64 last_seen_ms = 9 [json_name = "lastSeenMs"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.last_seen_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // int64 expires_at_ms = 10 [json_name = "expiresAtMs"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.expires_at_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // uint64 admission_seq = 11 [json_name = "admissionSeq"];
+      {PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admission_seq_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\61\0\15\14\14\20\0\0\0\0\0\0\0\0\0\0"
+      "pandora.hub.v1.HubConnectedOwnershipStorageRecord"
+      "assignment_id"
+      "admission_id"
+      "hub_pod_name"
+      "hub_instance_uid"
+    }},
+  };
+}
+
+
+inline constexpr HubConnectedOwnershipStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        admission_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_instance_uid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        auth_epoch_{0u},
+        auth_writer_epoch_{0u},
+        admitted_at_ms_{::int64_t{0}},
+        last_seen_ms_{::int64_t{0}},
+        expires_at_ms_{::int64_t{0}},
+        admission_seq_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr HubConnectedOwnershipStorageRecord::HubConnectedOwnershipStorageRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL HubConnectedOwnershipStorageRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) HubConnectedOwnershipStorageRecord(arena);
+}
+constexpr auto HubConnectedOwnershipStorageRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HubConnectedOwnershipStorageRecord), alignof(HubConnectedOwnershipStorageRecord));
+}
+constexpr auto HubConnectedOwnershipStorageRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &HubConnectedOwnershipStorageRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<HubConnectedOwnershipStorageRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &HubConnectedOwnershipStorageRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<HubConnectedOwnershipStorageRecord>(), &HubConnectedOwnershipStorageRecord::ByteSizeLong,
+              &HubConnectedOwnershipStorageRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[26],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct HubConnectedOwnershipStorageRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr HubConnectedOwnershipStorageRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 HubConnectedOwnershipStorageRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(HubConnectedOwnershipStorageRecord::InternalGenerateClassData_(
+            _default, &HubConnectedOwnershipStorageRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<HubConnectedOwnershipStorageRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~HubConnectedOwnershipStorageRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) HubConnectedOwnershipStorageRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<HubConnectedOwnershipStorageRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST HubConnectedOwnershipStorageRecordGlobalsTypeInternal HubConnectedOwnershipStorageRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* HubConnectedOwnershipStorageRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return HubConnectedOwnershipStorageRecord_globals_.GetClassData();
+#else
+  return HubConnectedOwnershipStorageRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class HubAssignmentStorageRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<HubAssignmentStorageRecord>()._impl_._has_bits_);
@@ -2860,11 +3341,11 @@ constexpr HeartbeatRequest::ParseTableT_ HeartbeatRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_._has_bits_),
       0, // no _extensions_
-      10, 56,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966720,  // skipmap
+      4294965696,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2877,50 +3358,66 @@ constexpr HeartbeatRequest::ParseTableT_ HeartbeatRequest::InternalGenerateParse
       {::_pbi::TcParser::MiniParse, {}},
       // string hub_pod_name = 1 [json_name = "hubPodName"];
       {::_pbi::TcParser::FastUS1,
-       {10, 0, 0,
+       {10, 1, 0,
         PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.hub_pod_name_)}},
       // int32 player_count = 2 [json_name = "playerCount"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HeartbeatRequest, _impl_.player_count_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HeartbeatRequest, _impl_.player_count_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_count_)}},
       // float cpu_pct = 3 [json_name = "cpuPct"];
       {::_pbi::TcParser::FastF32S1,
-       {29, 3, 0,
+       {29, 4, 0,
         PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.cpu_pct_)}},
       // float mem_mb = 4 [json_name = "memMb"];
       {::_pbi::TcParser::FastF32S1,
-       {37, 5, 0,
+       {37, 6, 0,
         PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.mem_mb_)}},
       // string state = 5 [json_name = "state"];
       {::_pbi::TcParser::FastUS1,
-       {42, 1, 0,
+       {42, 2, 0,
         PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.state_)}},
       // int64 ts_ms = 6 [json_name = "tsMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HeartbeatRequest, _impl_.ts_ms_), 4>(),
-       {48, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(HeartbeatRequest, _impl_.ts_ms_), 5>(),
+       {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.ts_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // repeated uint64 player_ids = 10 [json_name = "playerIds"];
+      {::_pbi::TcParser::FastV64P1,
+       {82, 0, 0,
+        PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_ids_)}},
+      // uint32 max_players = 11 [json_name = "maxPlayers"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(HeartbeatRequest, _impl_.max_players_), 7>(),
+       {88, 7, 0,
+        PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.max_players_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // string hub_pod_name = 1 [json_name = "hubPodName"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int32 player_count = 2 [json_name = "playerCount"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_count_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
       // float cpu_pct = 3 [json_name = "cpuPct"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.cpu_pct_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.cpu_pct_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // float mem_mb = 4 [json_name = "memMb"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.mem_mb_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.mem_mb_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
       // string state = 5 [json_name = "state"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.state_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.state_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int64 ts_ms = 6 [json_name = "tsMs"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.ts_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.ts_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // repeated uint64 player_ids = 10 [json_name = "playerIds"];
-      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // uint32 max_players = 11 [json_name = "maxPlayers"];
+      {PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.max_players_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\37\14\0\0\0\5\0\0"
+      "\37\14\0\0\0\5\0\0\0\0\0\0\0\0\0\0"
       "pandora.hub.v1.HeartbeatRequest"
       "hub_pod_name"
       "state"
@@ -2933,6 +3430,12 @@ inline constexpr HeartbeatRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::pandora::hub::v1::HeartbeatRequest,
+            PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_)>()
+         }
+        ,
+        _player_ids_cached_byte_size_{0},
         hub_pod_name_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
@@ -2943,12 +3446,7 @@ inline constexpr HeartbeatRequest::Impl_::Impl_(
         cpu_pct_{0},
         ts_ms_{::int64_t{0}},
         mem_mb_{0},
-        player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::pandora::hub::v1::HeartbeatRequest,
-            PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_)>()
-         }
-        ,
-        _player_ids_cached_byte_size_{0} {}
+        max_players_{0u} {}
 
 template <typename>
 constexpr HeartbeatRequest::HeartbeatRequest(::_pbi::ConstantInitialized,
@@ -3388,6 +3886,668 @@ const ::_pbi::ClassData* AssignHubRequest_get_class_data() {
   return AssignHubRequest_globals_.GetClassData();
 #else
   return AssignHubRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AcknowledgeDepartureResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AcknowledgeDepartureResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_._has_bits_);
+};
+
+constexpr AcknowledgeDepartureResponse::ParseTableT_ AcknowledgeDepartureResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::hub::v1::AcknowledgeDepartureResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool departed = 2 [json_name = "departed"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AcknowledgeDepartureResponse, _impl_.departed_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_.departed_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AcknowledgeDepartureResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool departed = 2 [json_name = "departed"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_.departed_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AcknowledgeDepartureResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
+        departed_{false} {}
+
+template <typename>
+constexpr AcknowledgeDepartureResponse::AcknowledgeDepartureResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AcknowledgeDepartureResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AcknowledgeDepartureResponse(arena);
+}
+constexpr auto AcknowledgeDepartureResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AcknowledgeDepartureResponse), alignof(AcknowledgeDepartureResponse));
+}
+constexpr auto AcknowledgeDepartureResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AcknowledgeDepartureResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AcknowledgeDepartureResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AcknowledgeDepartureResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AcknowledgeDepartureResponse>(), &AcknowledgeDepartureResponse::ByteSizeLong,
+              &AcknowledgeDepartureResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[24],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AcknowledgeDepartureResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AcknowledgeDepartureResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AcknowledgeDepartureResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AcknowledgeDepartureResponse::InternalGenerateClassData_(
+            _default, &AcknowledgeDepartureResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeDepartureResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AcknowledgeDepartureResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AcknowledgeDepartureResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeDepartureResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AcknowledgeDepartureResponseGlobalsTypeInternal AcknowledgeDepartureResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AcknowledgeDepartureResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AcknowledgeDepartureResponse_globals_.GetClassData();
+#else
+  return AcknowledgeDepartureResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AcknowledgeDepartureRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AcknowledgeDepartureRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_._has_bits_);
+};
+
+constexpr AcknowledgeDepartureRequest::ParseTableT_ AcknowledgeDepartureRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::hub::v1::AcknowledgeDepartureRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeDepartureRequest, _impl_.player_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.player_id_)}},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.assignment_id_)}},
+      // string hub_pod_name = 3 [json_name = "hubPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.hub_pod_name_)}},
+      // string admission_id = 4 [json_name = "admissionId"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.admission_id_)}},
+      // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeDepartureRequest, _impl_.admission_seq_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.admission_seq_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.assignment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_pod_name = 3 [json_name = "hubPodName"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string admission_id = 4 [json_name = "admissionId"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.admission_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.admission_seq_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\52\0\15\14\14\0\0\0"
+      "pandora.hub.v1.AcknowledgeDepartureRequest"
+      "assignment_id"
+      "hub_pod_name"
+      "admission_id"
+    }},
+  };
+}
+
+
+inline constexpr AcknowledgeDepartureRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        admission_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        admission_seq_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr AcknowledgeDepartureRequest::AcknowledgeDepartureRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AcknowledgeDepartureRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AcknowledgeDepartureRequest(arena);
+}
+constexpr auto AcknowledgeDepartureRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AcknowledgeDepartureRequest), alignof(AcknowledgeDepartureRequest));
+}
+constexpr auto AcknowledgeDepartureRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AcknowledgeDepartureRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AcknowledgeDepartureRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AcknowledgeDepartureRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AcknowledgeDepartureRequest>(), &AcknowledgeDepartureRequest::ByteSizeLong,
+              &AcknowledgeDepartureRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[23],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AcknowledgeDepartureRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AcknowledgeDepartureRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AcknowledgeDepartureRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AcknowledgeDepartureRequest::InternalGenerateClassData_(
+            _default, &AcknowledgeDepartureRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeDepartureRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AcknowledgeDepartureRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AcknowledgeDepartureRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeDepartureRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AcknowledgeDepartureRequestGlobalsTypeInternal AcknowledgeDepartureRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AcknowledgeDepartureRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AcknowledgeDepartureRequest_globals_.GetClassData();
+#else
+  return AcknowledgeDepartureRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AcknowledgeAdmissionResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AcknowledgeAdmissionResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_._has_bits_);
+};
+
+constexpr AcknowledgeAdmissionResponse::ParseTableT_ AcknowledgeAdmissionResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::hub::v1::AcknowledgeAdmissionResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool admitted = 2 [json_name = "admitted"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AcknowledgeAdmissionResponse, _impl_.admitted_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_.admitted_)}},
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AcknowledgeAdmissionResponse, _impl_.code_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_.code_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_.code_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool admitted = 2 [json_name = "admitted"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_.admitted_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AcknowledgeAdmissionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        code_{static_cast< ::pandora::common::v1::ErrCode >(0)},
+        admitted_{false} {}
+
+template <typename>
+constexpr AcknowledgeAdmissionResponse::AcknowledgeAdmissionResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AcknowledgeAdmissionResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AcknowledgeAdmissionResponse(arena);
+}
+constexpr auto AcknowledgeAdmissionResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AcknowledgeAdmissionResponse), alignof(AcknowledgeAdmissionResponse));
+}
+constexpr auto AcknowledgeAdmissionResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AcknowledgeAdmissionResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AcknowledgeAdmissionResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AcknowledgeAdmissionResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AcknowledgeAdmissionResponse>(), &AcknowledgeAdmissionResponse::ByteSizeLong,
+              &AcknowledgeAdmissionResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[22],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AcknowledgeAdmissionResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AcknowledgeAdmissionResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AcknowledgeAdmissionResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AcknowledgeAdmissionResponse::InternalGenerateClassData_(
+            _default, &AcknowledgeAdmissionResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeAdmissionResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AcknowledgeAdmissionResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AcknowledgeAdmissionResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeAdmissionResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AcknowledgeAdmissionResponseGlobalsTypeInternal AcknowledgeAdmissionResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AcknowledgeAdmissionResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AcknowledgeAdmissionResponse_globals_.GetClassData();
+#else
+  return AcknowledgeAdmissionResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AcknowledgeAdmissionRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AcknowledgeAdmissionRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_._has_bits_);
+};
+
+constexpr AcknowledgeAdmissionRequest::ParseTableT_ AcknowledgeAdmissionRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::pandora::hub::v1::AcknowledgeAdmissionRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.player_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.player_id_)}},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.assignment_id_)}},
+      // string hub_pod_name = 3 [json_name = "hubPodName"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.hub_pod_name_)}},
+      // string admission_id = 4 [json_name = "admissionId"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_id_)}},
+      // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AcknowledgeAdmissionRequest, _impl_.admission_seq_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_seq_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1 [json_name = "playerId"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string assignment_id = 2 [json_name = "assignmentId"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.assignment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string hub_pod_name = 3 [json_name = "hubPodName"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.hub_pod_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string admission_id = 4 [json_name = "admissionId"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+      {PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_seq_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\52\0\15\14\14\0\0\0"
+      "pandora.hub.v1.AcknowledgeAdmissionRequest"
+      "assignment_id"
+      "hub_pod_name"
+      "admission_id"
+    }},
+  };
+}
+
+
+inline constexpr AcknowledgeAdmissionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        assignment_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        hub_pod_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        admission_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        admission_seq_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr AcknowledgeAdmissionRequest::AcknowledgeAdmissionRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AcknowledgeAdmissionRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AcknowledgeAdmissionRequest(arena);
+}
+constexpr auto AcknowledgeAdmissionRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AcknowledgeAdmissionRequest), alignof(AcknowledgeAdmissionRequest));
+}
+constexpr auto AcknowledgeAdmissionRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AcknowledgeAdmissionRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AcknowledgeAdmissionRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AcknowledgeAdmissionRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AcknowledgeAdmissionRequest>(), &AcknowledgeAdmissionRequest::ByteSizeLong,
+              &AcknowledgeAdmissionRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[21],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AcknowledgeAdmissionRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AcknowledgeAdmissionRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AcknowledgeAdmissionRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AcknowledgeAdmissionRequest::InternalGenerateClassData_(
+            _default, &AcknowledgeAdmissionRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeAdmissionRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AcknowledgeAdmissionRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AcknowledgeAdmissionRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AcknowledgeAdmissionRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AcknowledgeAdmissionRequestGlobalsTypeInternal AcknowledgeAdmissionRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AcknowledgeAdmissionRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AcknowledgeAdmissionRequest_globals_.GetClassData();
+#else
+  return AcknowledgeAdmissionRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4086,7 +5246,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.hub_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_count_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.cpu_pct_),
@@ -4094,13 +5254,15 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.state_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.ts_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_),
-        0,
-        2,
-        3,
-        5,
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.max_players_),
         1,
+        3,
         4,
         6,
+        2,
+        5,
+        0,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatResponse, _impl_._has_bits_),
         11, // hasbit index offset
@@ -4122,7 +5284,7 @@ const ::uint32_t
         7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_._has_bits_),
-        21, // hasbit index offset
+        25, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.hub_pod_name_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.hub_addr_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.region_),
@@ -4141,6 +5303,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.auth_epoch_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.last_verified_writer_epoch_),
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.release_track_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.reported_connected_count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.reserved_count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.connected_ownership_count_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubShardStorageRecord, _impl_.reported_max_players_),
         0,
         1,
         2,
@@ -4159,6 +5325,10 @@ const ::uint32_t
         14,
         17,
         6,
+        18,
+        19,
+        20,
+        21,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubDSCredential, _impl_._has_bits_),
         11, // hasbit index offset
@@ -4259,6 +5429,92 @@ const ::uint32_t
         7,
         4,
         8,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.assignment_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.hub_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.admission_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionRequest, _impl_.admission_seq_),
+        3,
+        0,
+        1,
+        2,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeAdmissionResponse, _impl_.admitted_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureRequest, _impl_.assignment_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureRequest, _impl_.hub_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureRequest, _impl_.admission_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureRequest, _impl_.admission_seq_),
+        3,
+        0,
+        1,
+        2,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureResponse, _impl_.code_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::AcknowledgeDepartureResponse, _impl_.departed_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_._has_bits_),
+        12, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.assignment_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.hub_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.hub_instance_uid_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.auth_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.auth_writer_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.created_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.expires_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubReservationStorageRecord, _impl_.assignment_expires_at_ms_),
+        3,
+        0,
+        1,
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_._has_bits_),
+        14, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.assignment_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.admission_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.hub_pod_name_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.hub_instance_uid_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.auth_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.auth_writer_epoch_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.admitted_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.last_seen_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.expires_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HubConnectedOwnershipStorageRecord, _impl_.admission_seq_),
+        4,
+        0,
+        1,
+        2,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
 };
 
 static const ::_pbi::MigrationSchema
@@ -4278,12 +5534,18 @@ static const ::_pbi::MigrationSchema
         {110, sizeof(::pandora::hub::v1::ListHubsRequest)},
         {115, sizeof(::pandora::hub::v1::ListHubsResponse)},
         {122, sizeof(::pandora::hub::v1::HeartbeatRequest)},
-        {139, sizeof(::pandora::hub::v1::HeartbeatResponse)},
-        {158, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
-        {197, sizeof(::pandora::hub::v1::HubDSCredential)},
-        {216, sizeof(::pandora::hub::v1::HubShardAuthStorageRecord)},
-        {243, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
-        {276, sizeof(::pandora::hub::v1::HubMigrateEvent)},
+        {141, sizeof(::pandora::hub::v1::HeartbeatResponse)},
+        {160, sizeof(::pandora::hub::v1::HubShardStorageRecord)},
+        {207, sizeof(::pandora::hub::v1::HubDSCredential)},
+        {226, sizeof(::pandora::hub::v1::HubShardAuthStorageRecord)},
+        {253, sizeof(::pandora::hub::v1::HubAssignmentStorageRecord)},
+        {286, sizeof(::pandora::hub::v1::HubMigrateEvent)},
+        {307, sizeof(::pandora::hub::v1::AcknowledgeAdmissionRequest)},
+        {320, sizeof(::pandora::hub::v1::AcknowledgeAdmissionResponse)},
+        {327, sizeof(::pandora::hub::v1::AcknowledgeDepartureRequest)},
+        {340, sizeof(::pandora::hub::v1::AcknowledgeDepartureResponse)},
+        {347, sizeof(::pandora::hub::v1::HubReservationStorageRecord)},
+        {368, sizeof(::pandora::hub::v1::HubConnectedOwnershipStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4308,6 +5570,12 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::pandora::hub::v1::HubShardAuthStorageRecord_globals_,
         &::pandora::hub::v1::HubAssignmentStorageRecord_globals_,
         &::pandora::hub::v1::HubMigrateEvent_globals_,
+        &::pandora::hub::v1::AcknowledgeAdmissionRequest_globals_,
+        &::pandora::hub::v1::AcknowledgeAdmissionResponse_globals_,
+        &::pandora::hub::v1::AcknowledgeDepartureRequest_globals_,
+        &::pandora::hub::v1::AcknowledgeDepartureResponse_globals_,
+        &::pandora::hub::v1::HubReservationStorageRecord_globals_,
+        &::pandora::hub::v1::HubConnectedOwnershipStorageRecord_globals_,
 };
 const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -4353,40 +5621,46 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "e\")\n\017ListHubsRequest\022\026\n\006region\030\001 \001(\tR\006re"
     "gion\"o\n\020ListHubsResponse\022.\n\004code\030\001 \001(\0162\032"
     ".pandora.common.v1.ErrCodeR\004code\022+\n\004hubs"
-    "\030\002 \003(\0132\027.pandora.hub.v1.HubInfoR\004hubs\"\327\001"
+    "\030\002 \003(\0132\027.pandora.hub.v1.HubInfoR\004hubs\"\370\001"
     "\n\020HeartbeatRequest\022 \n\014hub_pod_name\030\001 \001(\t"
     "R\nhubPodName\022!\n\014player_count\030\002 \001(\005R\013play"
     "erCount\022\027\n\007cpu_pct\030\003 \001(\002R\006cpuPct\022\025\n\006mem_"
     "mb\030\004 \001(\002R\005memMb\022\024\n\005state\030\005 \001(\tR\005state\022\023\n"
     "\005ts_ms\030\006 \001(\003R\004tsMs\022\035\n\nplayer_ids\030\n \003(\004R\t"
-    "playerIdsJ\004\010\007\020\n\"\204\003\n\021HeartbeatResponse\022.\n"
-    "\004code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR"
-    "\004code\022\030\n\007command\030\002 \001(\tR\007command\022#\n\rgrace"
-    "_seconds\030\003 \001(\005R\014graceSeconds\022,\n\022accepted"
-    "_token_gen\030\n \001(\004R\020acceptedTokenGen\022,\n\022ac"
-    "cepted_token_jti\030\013 \001(\tR\020acceptedTokenJti"
-    "\0222\n\025accepted_instance_uid\030\014 \001(\tR\023accepte"
-    "dInstanceUid\0226\n\027accepted_protocol_epoch\030"
-    "\r \001(\rR\025acceptedProtocolEpoch\0222\n\025accepted"
-    "_writer_epoch\030\016 \001(\rR\023acceptedWriterEpoch"
-    "J\004\010\004\020\n\"\265\005\n\025HubShardStorageRecord\022 \n\014hub_"
-    "pod_name\030\001 \001(\tR\nhubPodName\022\031\n\010hub_addr\030\002"
-    " \001(\tR\007hubAddr\022\026\n\006region\030\003 \001(\tR\006region\022\031\n"
-    "\010shard_id\030\004 \001(\rR\007shardId\022!\n\014player_count"
-    "\030\005 \001(\005R\013playerCount\022\032\n\010capacity\030\006 \001(\005R\010c"
-    "apacity\022\024\n\005state\030\007 \001(\tR\005state\022*\n\021last_he"
-    "artbeat_ms\030\010 \001(\003R\017lastHeartbeatMs\022\"\n\rcre"
-    "ated_at_ms\030\t \001(\003R\013createdAtMs\022*\n\021drainin"
-    "g_since_ms\030\n \001(\003R\017drainingSinceMs\022/\n\024cur"
-    "rent_token_exp_ms\030\013 \001(\004R\021currentTokenExp"
-    "Ms\022*\n\021current_token_gen\030\014 \001(\004R\017currentTo"
-    "kenGen\022*\n\021last_verified_gen\030\r \001(\004R\017lastV"
-    "erifiedGen\022*\n\021last_verified_jti\030\016 \001(\tR\017l"
-    "astVerifiedJti\022%\n\016gameserver_uid\030\017 \001(\tR\r"
-    "gameserverUid\022\035\n\nauth_epoch\030\020 \001(\rR\tauthE"
-    "poch\022;\n\032last_verified_writer_epoch\030\021 \001(\r"
-    "R\027lastVerifiedWriterEpoch\022#\n\rrelease_tra"
-    "ck\030\022 \001(\tR\014releaseTrack\"\356\001\n\017HubDSCredenti"
+    "playerIds\022\037\n\013max_players\030\013 \001(\rR\nmaxPlaye"
+    "rsJ\004\010\007\020\n\"\204\003\n\021HeartbeatResponse\022.\n\004code\030\001"
+    " \001(\0162\032.pandora.common.v1.ErrCodeR\004code\022\030"
+    "\n\007command\030\002 \001(\tR\007command\022#\n\rgrace_second"
+    "s\030\003 \001(\005R\014graceSeconds\022,\n\022accepted_token_"
+    "gen\030\n \001(\004R\020acceptedTokenGen\022,\n\022accepted_"
+    "token_jti\030\013 \001(\tR\020acceptedTokenJti\0222\n\025acc"
+    "epted_instance_uid\030\014 \001(\tR\023acceptedInstan"
+    "ceUid\0226\n\027accepted_protocol_epoch\030\r \001(\rR\025"
+    "acceptedProtocolEpoch\0222\n\025accepted_writer"
+    "_epoch\030\016 \001(\rR\023acceptedWriterEpochJ\004\010\004\020\n\""
+    "\204\007\n\025HubShardStorageRecord\022 \n\014hub_pod_nam"
+    "e\030\001 \001(\tR\nhubPodName\022\031\n\010hub_addr\030\002 \001(\tR\007h"
+    "ubAddr\022\026\n\006region\030\003 \001(\tR\006region\022\031\n\010shard_"
+    "id\030\004 \001(\rR\007shardId\022!\n\014player_count\030\005 \001(\005R"
+    "\013playerCount\022\032\n\010capacity\030\006 \001(\005R\010capacity"
+    "\022\024\n\005state\030\007 \001(\tR\005state\022*\n\021last_heartbeat"
+    "_ms\030\010 \001(\003R\017lastHeartbeatMs\022\"\n\rcreated_at"
+    "_ms\030\t \001(\003R\013createdAtMs\022*\n\021draining_since"
+    "_ms\030\n \001(\003R\017drainingSinceMs\022/\n\024current_to"
+    "ken_exp_ms\030\013 \001(\004R\021currentTokenExpMs\022*\n\021c"
+    "urrent_token_gen\030\014 \001(\004R\017currentTokenGen\022"
+    "*\n\021last_verified_gen\030\r \001(\004R\017lastVerified"
+    "Gen\022*\n\021last_verified_jti\030\016 \001(\tR\017lastVeri"
+    "fiedJti\022%\n\016gameserver_uid\030\017 \001(\tR\rgameser"
+    "verUid\022\035\n\nauth_epoch\030\020 \001(\rR\tauthEpoch\022;\n"
+    "\032last_verified_writer_epoch\030\021 \001(\rR\027lastV"
+    "erifiedWriterEpoch\022#\n\rrelease_track\030\022 \001("
+    "\tR\014releaseTrack\0228\n\030reported_connected_co"
+    "unt\030\023 \001(\005R\026reportedConnectedCount\022%\n\016res"
+    "erved_count\030\024 \001(\005R\rreservedCount\022:\n\031conn"
+    "ected_ownership_count\030\025 \001(\005R\027connectedOw"
+    "nershipCount\0220\n\024reported_max_players\030\026 \001"
+    "(\rR\022reportedMaxPlayers\"\356\001\n\017HubDSCredenti"
     "al\022\020\n\003gen\030\001 \001(\004R\003gen\022\020\n\003jti\030\002 \001(\tR\003jti\022\025"
     "\n\006exp_ms\030\003 \001(\004R\005expMs\022\020\n\003kid\030\004 \001(\tR\003kid\022"
     "!\n\014instance_uid\030\005 \001(\tR\013instanceUid\022%\n\016pr"
@@ -4427,27 +5701,69 @@ const char descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto[] AB
     "odName\022\036\n\013to_shard_id\030\006 \001(\rR\ttoShardId\022#"
     "\n\rgrace_seconds\030\007 \001(\005R\014graceSeconds\022\026\n\006r"
     "eason\030\010 \001(\tR\006reason\022\023\n\005ts_ms\030\t \001(\003R\004tsMs"
-    "*\304\001\n\014HubAuthPhase\022\036\n\032HUB_AUTH_PHASE_UNSP"
-    "ECIFIED\020\000\022\034\n\030HUB_AUTH_PHASE_BOOTSTRAP\020\001\022"
-    "\031\n\025HUB_AUTH_PHASE_ACTIVE\020\002\022\033\n\027HUB_AUTH_P"
-    "HASE_ROTATING\020\003\022\036\n\032HUB_AUTH_PHASE_QUARAN"
-    "TINED\020\004\022\036\n\032HUB_AUTH_PHASE_TERMINATING\020\0052"
-    "\361\004\n\023HubAllocatorService\022P\n\tAssignHub\022 .p"
-    "andora.hub.v1.AssignHubRequest\032!.pandora"
-    ".hub.v1.AssignHubResponse\022S\n\nReleaseHub\022"
-    "!.pandora.hub.v1.ReleaseHubRequest\032\".pan"
-    "dora.hub.v1.ReleaseHubResponse\022V\n\013Transf"
-    "erHub\022\".pandora.hub.v1.TransferHubReques"
-    "t\032#.pandora.hub.v1.TransferHubResponse\022M"
-    "\n\010ListHubs\022\037.pandora.hub.v1.ListHubsRequ"
-    "est\032 .pandora.hub.v1.ListHubsResponse\022P\n"
-    "\tHeartbeat\022 .pandora.hub.v1.HeartbeatReq"
-    "uest\032!.pandora.hub.v1.HeartbeatResponse\022"
-    "Y\n\014ListHubLines\022#.pandora.hub.v1.ListHub"
-    "LinesRequest\032$.pandora.hub.v1.ListHubLin"
-    "esResponse\022_\n\016TransferToLine\022%.pandora.h"
-    "ub.v1.TransferToLineRequest\032&.pandora.hu"
-    "b.v1.TransferToLineResponseb\006proto3"
+    "\"\311\001\n\033AcknowledgeAdmissionRequest\022\033\n\tplay"
+    "er_id\030\001 \001(\004R\010playerId\022#\n\rassignment_id\030\002"
+    " \001(\tR\014assignmentId\022 \n\014hub_pod_name\030\003 \001(\t"
+    "R\nhubPodName\022!\n\014admission_id\030\004 \001(\tR\013admi"
+    "ssionId\022#\n\radmission_seq\030\005 \001(\004R\014admissio"
+    "nSeq\"j\n\034AcknowledgeAdmissionResponse\022.\n\004"
+    "code\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004"
+    "code\022\032\n\010admitted\030\002 \001(\010R\010admitted\"\311\001\n\033Ack"
+    "nowledgeDepartureRequest\022\033\n\tplayer_id\030\001 "
+    "\001(\004R\010playerId\022#\n\rassignment_id\030\002 \001(\tR\014as"
+    "signmentId\022 \n\014hub_pod_name\030\003 \001(\tR\nhubPod"
+    "Name\022!\n\014admission_id\030\004 \001(\tR\013admissionId\022"
+    "#\n\radmission_seq\030\005 \001(\004R\014admissionSeq\"j\n\034"
+    "AcknowledgeDepartureResponse\022.\n\004code\030\001 \001"
+    "(\0162\032.pandora.common.v1.ErrCodeR\004code\022\032\n\010"
+    "departed\030\002 \001(\010R\010departed\"\367\002\n\033HubReservat"
+    "ionStorageRecord\022\033\n\tplayer_id\030\001 \001(\004R\010pla"
+    "yerId\022#\n\rassignment_id\030\002 \001(\tR\014assignment"
+    "Id\022 \n\014hub_pod_name\030\003 \001(\tR\nhubPodName\022(\n\020"
+    "hub_instance_uid\030\004 \001(\tR\016hubInstanceUid\022\035"
+    "\n\nauth_epoch\030\005 \001(\rR\tauthEpoch\022*\n\021auth_wr"
+    "iter_epoch\030\006 \001(\rR\017authWriterEpoch\022\"\n\rcre"
+    "ated_at_ms\030\007 \001(\003R\013createdAtMs\022\"\n\rexpires"
+    "_at_ms\030\010 \001(\003R\013expiresAtMs\0227\n\030assignment_"
+    "expires_at_ms\030\t \001(\003R\025assignmentExpiresAt"
+    "Ms\"\261\003\n\"HubConnectedOwnershipStorageRecor"
+    "d\022\033\n\tplayer_id\030\001 \001(\004R\010playerId\022#\n\rassign"
+    "ment_id\030\002 \001(\tR\014assignmentId\022!\n\014admission"
+    "_id\030\003 \001(\tR\013admissionId\022 \n\014hub_pod_name\030\004"
+    " \001(\tR\nhubPodName\022(\n\020hub_instance_uid\030\005 \001"
+    "(\tR\016hubInstanceUid\022\035\n\nauth_epoch\030\006 \001(\rR\t"
+    "authEpoch\022*\n\021auth_writer_epoch\030\007 \001(\rR\017au"
+    "thWriterEpoch\022$\n\016admitted_at_ms\030\010 \001(\003R\014a"
+    "dmittedAtMs\022 \n\014last_seen_ms\030\t \001(\003R\nlastS"
+    "eenMs\022\"\n\rexpires_at_ms\030\n \001(\003R\013expiresAtM"
+    "s\022#\n\radmission_seq\030\013 \001(\004R\014admissionSeq*\304"
+    "\001\n\014HubAuthPhase\022\036\n\032HUB_AUTH_PHASE_UNSPEC"
+    "IFIED\020\000\022\034\n\030HUB_AUTH_PHASE_BOOTSTRAP\020\001\022\031\n"
+    "\025HUB_AUTH_PHASE_ACTIVE\020\002\022\033\n\027HUB_AUTH_PHA"
+    "SE_ROTATING\020\003\022\036\n\032HUB_AUTH_PHASE_QUARANTI"
+    "NED\020\004\022\036\n\032HUB_AUTH_PHASE_TERMINATING\020\0052\327\006"
+    "\n\023HubAllocatorService\022P\n\tAssignHub\022 .pan"
+    "dora.hub.v1.AssignHubRequest\032!.pandora.h"
+    "ub.v1.AssignHubResponse\022S\n\nReleaseHub\022!."
+    "pandora.hub.v1.ReleaseHubRequest\032\".pando"
+    "ra.hub.v1.ReleaseHubResponse\022V\n\013Transfer"
+    "Hub\022\".pandora.hub.v1.TransferHubRequest\032"
+    "#.pandora.hub.v1.TransferHubResponse\022M\n\010"
+    "ListHubs\022\037.pandora.hub.v1.ListHubsReques"
+    "t\032 .pandora.hub.v1.ListHubsResponse\022P\n\tH"
+    "eartbeat\022 .pandora.hub.v1.HeartbeatReque"
+    "st\032!.pandora.hub.v1.HeartbeatResponse\022q\n"
+    "\024AcknowledgeAdmission\022+.pandora.hub.v1.A"
+    "cknowledgeAdmissionRequest\032,.pandora.hub"
+    ".v1.AcknowledgeAdmissionResponse\022q\n\024Ackn"
+    "owledgeDeparture\022+.pandora.hub.v1.Acknow"
+    "ledgeDepartureRequest\032,.pandora.hub.v1.A"
+    "cknowledgeDepartureResponse\022Y\n\014ListHubLi"
+    "nes\022#.pandora.hub.v1.ListHubLinesRequest"
+    "\032$.pandora.hub.v1.ListHubLinesResponse\022_"
+    "\n\016TransferToLine\022%.pandora.hub.v1.Transf"
+    "erToLineRequest\032&.pandora.hub.v1.Transfe"
+    "rToLineResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps[1] = {
@@ -4457,13 +5773,13 @@ static ::absl::once_flag descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto = {
     false,
     false,
-    5475,
+    7383,
     descriptor_table_protodef_pandora_2fhub_2fv1_2fallocator_2eproto,
     "pandora/hub/v1/allocator.proto",
     &descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_once,
     descriptor_table_pandora_2fhub_2fv1_2fallocator_2eproto_deps,
     1,
-    21,
+    27,
     schemas,
     file_message_globals,
     TableStruct_pandora_2fhub_2fv1_2fallocator_2eproto::offsets,
@@ -8183,8 +9499,6 @@ PROTOBUF_NDEBUG_INLINE HeartbeatRequest::Impl_::Impl_(
     [[maybe_unused]] const ::pandora::hub::v1::HeartbeatRequest& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        hub_pod_name_(arena, from.hub_pod_name_),
-        state_(arena, from.state_),
         player_ids_ {
           visibility, ::_pbi::InternalMetadataOffset::Build<
               ::pandora::hub::v1::HeartbeatRequest,
@@ -8192,7 +9506,9 @@ PROTOBUF_NDEBUG_INLINE HeartbeatRequest::Impl_::Impl_(
           , from.player_ids_
         }
         ,
-        _player_ids_cached_byte_size_{0} {}
+        _player_ids_cached_byte_size_{0},
+        hub_pod_name_(arena, from.hub_pod_name_),
+        state_(arena, from.state_) {}
 
 HeartbeatRequest::HeartbeatRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -8212,9 +9528,9 @@ HeartbeatRequest::HeartbeatRequest(
                offsetof(Impl_, player_count_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_count_),
-           offsetof(Impl_, mem_mb_) -
+           offsetof(Impl_, max_players_) -
                offsetof(Impl_, player_count_) +
-               sizeof(Impl_::mem_mb_));
+               sizeof(Impl_::max_players_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HeartbeatRequest)
 }
@@ -8222,23 +9538,23 @@ PROTOBUF_NDEBUG_INLINE HeartbeatRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        hub_pod_name_(arena),
-        state_(arena),
         player_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::pandora::hub::v1::HeartbeatRequest,
             PROTOBUF_FIELD_OFFSET(::pandora::hub::v1::HeartbeatRequest, _impl_.player_ids_)>()
          }
         ,
-        _player_ids_cached_byte_size_{0} {}
+        _player_ids_cached_byte_size_{0},
+        hub_pod_name_(arena),
+        state_(arena) {}
 
 inline void HeartbeatRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_count_),
            0,
-           offsetof(Impl_, mem_mb_) -
+           offsetof(Impl_, max_players_) -
                offsetof(Impl_, player_count_) +
-               sizeof(Impl_::mem_mb_));
+               sizeof(Impl_::max_players_));
 }
 HeartbeatRequest::~HeartbeatRequest() {
   // @@protoc_insertion_point(destructor:pandora.hub.v1.HeartbeatRequest)
@@ -8290,21 +9606,21 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
+      _impl_.player_ids_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.state_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.player_count_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.mem_mb_) -
-        reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.mem_mb_));
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      _impl_.player_ids_.Clear();
-    }
+        reinterpret_cast<char*>(&_impl_.max_players_) -
+        reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.max_players_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -8330,7 +9646,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // string hub_pod_name = 1 [json_name = "hubPodName"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_hub_pod_name().empty()) {
       const ::std::string& _s = this_._internal_hub_pod_name();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -8340,7 +9656,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   }
 
   // int32 player_count = 2 [json_name = "playerCount"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_player_count() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<2>(
@@ -8349,7 +9665,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   }
 
   // float cpu_pct = 3 [json_name = "cpuPct"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_cpu_pct()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -8358,7 +9674,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   }
 
   // float mem_mb = 4 [json_name = "memMb"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_mem_mb()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -8367,7 +9683,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   }
 
   // string state = 5 [json_name = "state"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_state().empty()) {
       const ::std::string& _s = this_._internal_state();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -8377,7 +9693,7 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   }
 
   // int64 ts_ms = 6 [json_name = "tsMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_ts_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<6>(
@@ -8386,13 +9702,22 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
   }
 
   // repeated uint64 player_ids = 10 [json_name = "playerIds"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._player_ids_cached_byte_size_.Get();
       if (byte_size > 0) {
         target = stream->WriteUInt64Packed(
             10, this_._internal_player_ids(), byte_size, target);
       }
+    }
+  }
+
+  // uint32 max_players = 11 [json_name = "maxPlayers"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_max_players() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_max_players(), target);
     }
   }
 
@@ -8421,53 +9746,60 @@ PROTOBUF_NOINLINE void HeartbeatRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
-    // string hub_pod_name = 1 [json_name = "hubPodName"];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated uint64 player_ids = 10 [json_name = "playerIds"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_ids(), 1,
+              this_._impl_._player_ids_cached_byte_size_);
+    }
+    // string hub_pod_name = 1 [json_name = "hubPodName"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_hub_pod_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_hub_pod_name());
       }
     }
     // string state = 5 [json_name = "state"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_state().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_state());
       }
     }
     // int32 player_count = 2 [json_name = "playerCount"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_player_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_player_count());
       }
     }
     // float cpu_pct = 3 [json_name = "cpuPct"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_cpu_pct()) != 0) {
         total_size += 5;
       }
     }
     // int64 ts_ms = 6 [json_name = "tsMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_ts_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_ts_ms());
       }
     }
     // float mem_mb = 4 [json_name = "memMb"];
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_mem_mb()) != 0) {
         total_size += 5;
       }
     }
-    // repeated uint64 player_ids = 10 [json_name = "playerIds"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      total_size +=
-          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
-              this_._internal_player_ids(), 1,
-              this_._impl_._player_ids_cached_byte_size_);
+    // uint32 max_players = 11 [json_name = "maxPlayers"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_max_players() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_players());
+      }
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -8487,8 +9819,11 @@ void HeartbeatRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!from._internal_hub_pod_name().empty()) {
         _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
       } else {
@@ -8497,7 +9832,7 @@ void HeartbeatRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_state().empty()) {
         _this->_internal_set_state(from._internal_state());
       } else {
@@ -8506,28 +9841,30 @@ void HeartbeatRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_player_count() != 0) {
         _this->_impl_.player_count_ = from._impl_.player_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_cpu_pct()) != 0) {
         _this->_impl_.cpu_pct_ = from._impl_.cpu_pct_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_ts_ms() != 0) {
         _this->_impl_.ts_ms_ = from._impl_.ts_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_mem_mb()) != 0) {
         _this->_impl_.mem_mb_ = from._impl_.mem_mb_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      _this->_internal_mutable_player_ids()->MergeFrom(from._internal_player_ids());
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_max_players() != 0) {
+        _this->_impl_.max_players_ = from._impl_.max_players_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -8549,15 +9886,15 @@ void HeartbeatRequest::InternalSwap(HeartbeatRequest* PROTOBUF_RESTRICT PROTOBUF
   ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.state_, &other->_impl_.state_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.mem_mb_)
-      + sizeof(HeartbeatRequest::_impl_.mem_mb_)
+      PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.max_players_)
+      + sizeof(HeartbeatRequest::_impl_.max_players_)
       - PROTOBUF_FIELD_OFFSET(HeartbeatRequest, _impl_.player_count_)>(
           reinterpret_cast<char*>(&_impl_.player_count_),
           reinterpret_cast<char*>(&other->_impl_.player_count_));
-  _impl_.player_ids_.InternalSwap(&other->_impl_.player_ids_);
 }
 
 ::google::protobuf::Metadata HeartbeatRequest::GetMetadata() const {
@@ -9020,9 +10357,9 @@ HubShardStorageRecord::HubShardStorageRecord(
                offsetof(Impl_, shard_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, shard_id_),
-           offsetof(Impl_, last_verified_writer_epoch_) -
+           offsetof(Impl_, reported_max_players_) -
                offsetof(Impl_, shard_id_) +
-               sizeof(Impl_::last_verified_writer_epoch_));
+               sizeof(Impl_::reported_max_players_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HubShardStorageRecord)
 }
@@ -9043,9 +10380,9 @@ inline void HubShardStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, shard_id_),
            0,
-           offsetof(Impl_, last_verified_writer_epoch_) -
+           offsetof(Impl_, reported_max_players_) -
                offsetof(Impl_, shard_id_) +
-               sizeof(Impl_::last_verified_writer_epoch_));
+               sizeof(Impl_::reported_max_players_));
 }
 HubShardStorageRecord::~HubShardStorageRecord() {
   // @@protoc_insertion_point(destructor:pandora.hub.v1.HubShardStorageRecord)
@@ -9131,10 +10468,10 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.current_token_gen_) -
         reinterpret_cast<char*>(&_impl_.player_count_)) + sizeof(_impl_.current_token_gen_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     ::memset(&_impl_.last_verified_gen_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.last_verified_writer_epoch_) -
-        reinterpret_cast<char*>(&_impl_.last_verified_gen_)) + sizeof(_impl_.last_verified_writer_epoch_));
+        reinterpret_cast<char*>(&_impl_.reported_max_players_) -
+        reinterpret_cast<char*>(&_impl_.last_verified_gen_)) + sizeof(_impl_.reported_max_players_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -9328,6 +10665,42 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
     }
   }
 
+  // int32 reported_connected_count = 19 [json_name = "reportedConnectedCount"];
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_reported_connected_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteInt32ToArray(
+          19, this_._internal_reported_connected_count(), target);
+    }
+  }
+
+  // int32 reserved_count = 20 [json_name = "reservedCount"];
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_reserved_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteInt32ToArray(
+          20, this_._internal_reserved_count(), target);
+    }
+  }
+
+  // int32 connected_ownership_count = 21 [json_name = "connectedOwnershipCount"];
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_connected_ownership_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteInt32ToArray(
+          21, this_._internal_connected_ownership_count(), target);
+    }
+  }
+
+  // uint32 reported_max_players = 22 [json_name = "reportedMaxPlayers"];
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_reported_max_players() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_reported_max_players(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -9469,7 +10842,7 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     // uint64 last_verified_gen = 13 [json_name = "lastVerifiedGen"];
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_last_verified_gen() != 0) {
@@ -9482,6 +10855,34 @@ PROTOBUF_NOINLINE void HubShardStorageRecord::Clear() {
       if (this_._internal_last_verified_writer_epoch() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_last_verified_writer_epoch());
+      }
+    }
+    // int32 reported_connected_count = 19 [json_name = "reportedConnectedCount"];
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_reported_connected_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::Int32Size(
+                                        this_._internal_reported_connected_count());
+      }
+    }
+    // int32 reserved_count = 20 [json_name = "reservedCount"];
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_reserved_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::Int32Size(
+                                        this_._internal_reserved_count());
+      }
+    }
+    // int32 connected_ownership_count = 21 [json_name = "connectedOwnershipCount"];
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_connected_ownership_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::Int32Size(
+                                        this_._internal_connected_ownership_count());
+      }
+    }
+    // uint32 reported_max_players = 22 [json_name = "reportedMaxPlayers"];
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_reported_max_players() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_reported_max_players());
       }
     }
   }
@@ -9614,7 +11015,7 @@ void HubShardStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_last_verified_gen() != 0) {
         _this->_impl_.last_verified_gen_ = from._impl_.last_verified_gen_;
@@ -9623,6 +11024,26 @@ void HubShardStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_last_verified_writer_epoch() != 0) {
         _this->_impl_.last_verified_writer_epoch_ = from._impl_.last_verified_writer_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_reported_connected_count() != 0) {
+        _this->_impl_.reported_connected_count_ = from._impl_.reported_connected_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_reserved_count() != 0) {
+        _this->_impl_.reserved_count_ = from._impl_.reserved_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_connected_ownership_count() != 0) {
+        _this->_impl_.connected_ownership_count_ = from._impl_.connected_ownership_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_reported_max_players() != 0) {
+        _this->_impl_.reported_max_players_ = from._impl_.reported_max_players_;
       }
     }
   }
@@ -9653,8 +11074,8 @@ void HubShardStorageRecord::InternalSwap(HubShardStorageRecord* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gameserver_uid_, &other->_impl_.gameserver_uid_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.last_verified_writer_epoch_)
-      + sizeof(HubShardStorageRecord::_impl_.last_verified_writer_epoch_)
+      PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.reported_max_players_)
+      + sizeof(HubShardStorageRecord::_impl_.reported_max_players_)
       - PROTOBUF_FIELD_OFFSET(HubShardStorageRecord, _impl_.shard_id_)>(
           reinterpret_cast<char*>(&_impl_.shard_id_),
           reinterpret_cast<char*>(&other->_impl_.shard_id_));
@@ -11686,6 +13107,2098 @@ void HubMigrateEvent::InternalSwap(HubMigrateEvent* PROTOBUF_RESTRICT PROTOBUF_N
 }
 
 ::google::protobuf::Metadata HubMigrateEvent::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AcknowledgeAdmissionRequest::AcknowledgeAdmissionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeAdmissionRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.AcknowledgeAdmissionRequest)
+}
+PROTOBUF_NDEBUG_INLINE AcknowledgeAdmissionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::hub::v1::AcknowledgeAdmissionRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        assignment_id_(arena, from.assignment_id_),
+        hub_pod_name_(arena, from.hub_pod_name_),
+        admission_id_(arena, from.admission_id_) {}
+
+AcknowledgeAdmissionRequest::AcknowledgeAdmissionRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AcknowledgeAdmissionRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeAdmissionRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AcknowledgeAdmissionRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, admission_seq_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::admission_seq_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.AcknowledgeAdmissionRequest)
+}
+PROTOBUF_NDEBUG_INLINE AcknowledgeAdmissionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        assignment_id_(arena),
+        hub_pod_name_(arena),
+        admission_id_(arena) {}
+
+inline void AcknowledgeAdmissionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, admission_seq_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::admission_seq_));
+}
+AcknowledgeAdmissionRequest::~AcknowledgeAdmissionRequest() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  SharedDtor(*this);
+}
+inline void AcknowledgeAdmissionRequest::SharedDtor(MessageLite& self) {
+  AcknowledgeAdmissionRequest& this_ = static_cast<AcknowledgeAdmissionRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.assignment_id_.Destroy();
+  this_._impl_.hub_pod_name_.Destroy();
+  this_._impl_.admission_id_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AcknowledgeAdmissionRequest_class_data_ =
+        AcknowledgeAdmissionRequest::InternalGenerateClassData_(AcknowledgeAdmissionRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeAdmissionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeAdmissionRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AcknowledgeAdmissionRequest_class_data_.tc_table);
+  return AcknowledgeAdmissionRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeAdmissionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeAdmissionRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AcknowledgeAdmissionRequest_globals_));
+  return AcknowledgeAdmissionRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AcknowledgeAdmissionRequest::ParseTableT_
+    AcknowledgeAdmissionRequest::_table_ =
+        AcknowledgeAdmissionRequest::InternalGenerateParseTable_(AcknowledgeAdmissionRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AcknowledgeAdmissionRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.assignment_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.admission_id_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.admission_seq_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.admission_seq_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AcknowledgeAdmissionRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AcknowledgeAdmissionRequest& this_ = static_cast<const AcknowledgeAdmissionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AcknowledgeAdmissionRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AcknowledgeAdmissionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string assignment_id = 2 [json_name = "assignmentId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_assignment_id().empty()) {
+      const ::std::string& _s = this_._internal_assignment_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeAdmissionRequest.assignment_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string hub_pod_name = 3 [json_name = "hubPodName"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_hub_pod_name().empty()) {
+      const ::std::string& _s = this_._internal_hub_pod_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeAdmissionRequest.hub_pod_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string admission_id = 4 [json_name = "admissionId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_admission_id().empty()) {
+      const ::std::string& _s = this_._internal_admission_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeAdmissionRequest.admission_id");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_admission_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_admission_seq(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AcknowledgeAdmissionRequest::ByteSizeLong(const MessageLite& base) {
+  const AcknowledgeAdmissionRequest& this_ = static_cast<const AcknowledgeAdmissionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AcknowledgeAdmissionRequest::ByteSizeLong() const {
+  const AcknowledgeAdmissionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string assignment_id = 2 [json_name = "assignmentId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_assignment_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_assignment_id());
+      }
+    }
+    // string hub_pod_name = 3 [json_name = "hubPodName"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_hub_pod_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_pod_name());
+      }
+    }
+    // string admission_id = 4 [json_name = "admissionId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_admission_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_admission_id());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_admission_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_admission_seq());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AcknowledgeAdmissionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AcknowledgeAdmissionRequest*>(&to_msg);
+  auto& from = static_cast<const AcknowledgeAdmissionRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_assignment_id().empty()) {
+        _this->_internal_set_assignment_id(from._internal_assignment_id());
+      } else {
+        if (_this->_impl_.assignment_id_.IsDefault()) {
+          _this->_internal_set_assignment_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_hub_pod_name().empty()) {
+        _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
+      } else {
+        if (_this->_impl_.hub_pod_name_.IsDefault()) {
+          _this->_internal_set_hub_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_admission_id().empty()) {
+        _this->_internal_set_admission_id(from._internal_admission_id());
+      } else {
+        if (_this->_impl_.admission_id_.IsDefault()) {
+          _this->_internal_set_admission_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_admission_seq() != 0) {
+        _this->_impl_.admission_seq_ = from._impl_.admission_seq_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AcknowledgeAdmissionRequest::CopyFrom(const AcknowledgeAdmissionRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.AcknowledgeAdmissionRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AcknowledgeAdmissionRequest::InternalSwap(AcknowledgeAdmissionRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.assignment_id_, &other->_impl_.assignment_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.admission_id_, &other->_impl_.admission_id_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.admission_seq_)
+      + sizeof(AcknowledgeAdmissionRequest::_impl_.admission_seq_)
+      - PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionRequest, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata AcknowledgeAdmissionRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AcknowledgeAdmissionResponse::AcknowledgeAdmissionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeAdmissionResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.AcknowledgeAdmissionResponse)
+}
+AcknowledgeAdmissionResponse::AcknowledgeAdmissionResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AcknowledgeAdmissionResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeAdmissionResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE AcknowledgeAdmissionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void AcknowledgeAdmissionResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, code_),
+           0,
+           offsetof(Impl_, admitted_) -
+               offsetof(Impl_, code_) +
+               sizeof(Impl_::admitted_));
+}
+AcknowledgeAdmissionResponse::~AcknowledgeAdmissionResponse() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  SharedDtor(*this);
+}
+inline void AcknowledgeAdmissionResponse::SharedDtor(MessageLite& self) {
+  AcknowledgeAdmissionResponse& this_ = static_cast<AcknowledgeAdmissionResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AcknowledgeAdmissionResponse_class_data_ =
+        AcknowledgeAdmissionResponse::InternalGenerateClassData_(AcknowledgeAdmissionResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeAdmissionResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeAdmissionResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AcknowledgeAdmissionResponse_class_data_.tc_table);
+  return AcknowledgeAdmissionResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeAdmissionResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeAdmissionResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AcknowledgeAdmissionResponse_globals_));
+  return AcknowledgeAdmissionResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AcknowledgeAdmissionResponse::ParseTableT_
+    AcknowledgeAdmissionResponse::_table_ =
+        AcknowledgeAdmissionResponse::InternalGenerateParseTable_(AcknowledgeAdmissionResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AcknowledgeAdmissionResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.code_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.admitted_) -
+        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.admitted_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AcknowledgeAdmissionResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AcknowledgeAdmissionResponse& this_ = static_cast<const AcknowledgeAdmissionResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AcknowledgeAdmissionResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AcknowledgeAdmissionResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // bool admitted = 2 [json_name = "admitted"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_admitted() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_admitted(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AcknowledgeAdmissionResponse::ByteSizeLong(const MessageLite& base) {
+  const AcknowledgeAdmissionResponse& this_ = static_cast<const AcknowledgeAdmissionResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AcknowledgeAdmissionResponse::ByteSizeLong() const {
+  const AcknowledgeAdmissionResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+    // bool admitted = 2 [json_name = "admitted"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_admitted() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AcknowledgeAdmissionResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AcknowledgeAdmissionResponse*>(&to_msg);
+  auto& from = static_cast<const AcknowledgeAdmissionResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_admitted() != 0) {
+        _this->_impl_.admitted_ = from._impl_.admitted_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AcknowledgeAdmissionResponse::CopyFrom(const AcknowledgeAdmissionResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.AcknowledgeAdmissionResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AcknowledgeAdmissionResponse::InternalSwap(AcknowledgeAdmissionResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_.admitted_)
+      + sizeof(AcknowledgeAdmissionResponse::_impl_.admitted_)
+      - PROTOBUF_FIELD_OFFSET(AcknowledgeAdmissionResponse, _impl_.code_)>(
+          reinterpret_cast<char*>(&_impl_.code_),
+          reinterpret_cast<char*>(&other->_impl_.code_));
+}
+
+::google::protobuf::Metadata AcknowledgeAdmissionResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AcknowledgeDepartureRequest::AcknowledgeDepartureRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeDepartureRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.AcknowledgeDepartureRequest)
+}
+PROTOBUF_NDEBUG_INLINE AcknowledgeDepartureRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::hub::v1::AcknowledgeDepartureRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        assignment_id_(arena, from.assignment_id_),
+        hub_pod_name_(arena, from.hub_pod_name_),
+        admission_id_(arena, from.admission_id_) {}
+
+AcknowledgeDepartureRequest::AcknowledgeDepartureRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AcknowledgeDepartureRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeDepartureRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AcknowledgeDepartureRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, admission_seq_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::admission_seq_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.AcknowledgeDepartureRequest)
+}
+PROTOBUF_NDEBUG_INLINE AcknowledgeDepartureRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        assignment_id_(arena),
+        hub_pod_name_(arena),
+        admission_id_(arena) {}
+
+inline void AcknowledgeDepartureRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, admission_seq_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::admission_seq_));
+}
+AcknowledgeDepartureRequest::~AcknowledgeDepartureRequest() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.AcknowledgeDepartureRequest)
+  SharedDtor(*this);
+}
+inline void AcknowledgeDepartureRequest::SharedDtor(MessageLite& self) {
+  AcknowledgeDepartureRequest& this_ = static_cast<AcknowledgeDepartureRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.assignment_id_.Destroy();
+  this_._impl_.hub_pod_name_.Destroy();
+  this_._impl_.admission_id_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AcknowledgeDepartureRequest_class_data_ =
+        AcknowledgeDepartureRequest::InternalGenerateClassData_(AcknowledgeDepartureRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeDepartureRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeDepartureRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AcknowledgeDepartureRequest_class_data_.tc_table);
+  return AcknowledgeDepartureRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeDepartureRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeDepartureRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AcknowledgeDepartureRequest_globals_));
+  return AcknowledgeDepartureRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AcknowledgeDepartureRequest::ParseTableT_
+    AcknowledgeDepartureRequest::_table_ =
+        AcknowledgeDepartureRequest::InternalGenerateParseTable_(AcknowledgeDepartureRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AcknowledgeDepartureRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.AcknowledgeDepartureRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.assignment_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.admission_id_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.admission_seq_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.admission_seq_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AcknowledgeDepartureRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AcknowledgeDepartureRequest& this_ = static_cast<const AcknowledgeDepartureRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AcknowledgeDepartureRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AcknowledgeDepartureRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.AcknowledgeDepartureRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string assignment_id = 2 [json_name = "assignmentId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_assignment_id().empty()) {
+      const ::std::string& _s = this_._internal_assignment_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeDepartureRequest.assignment_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string hub_pod_name = 3 [json_name = "hubPodName"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_hub_pod_name().empty()) {
+      const ::std::string& _s = this_._internal_hub_pod_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeDepartureRequest.hub_pod_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string admission_id = 4 [json_name = "admissionId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_admission_id().empty()) {
+      const ::std::string& _s = this_._internal_admission_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.AcknowledgeDepartureRequest.admission_id");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_admission_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_admission_seq(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.AcknowledgeDepartureRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AcknowledgeDepartureRequest::ByteSizeLong(const MessageLite& base) {
+  const AcknowledgeDepartureRequest& this_ = static_cast<const AcknowledgeDepartureRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AcknowledgeDepartureRequest::ByteSizeLong() const {
+  const AcknowledgeDepartureRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.AcknowledgeDepartureRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string assignment_id = 2 [json_name = "assignmentId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_assignment_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_assignment_id());
+      }
+    }
+    // string hub_pod_name = 3 [json_name = "hubPodName"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_hub_pod_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_pod_name());
+      }
+    }
+    // string admission_id = 4 [json_name = "admissionId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_admission_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_admission_id());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 admission_seq = 5 [json_name = "admissionSeq"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_admission_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_admission_seq());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AcknowledgeDepartureRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AcknowledgeDepartureRequest*>(&to_msg);
+  auto& from = static_cast<const AcknowledgeDepartureRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.AcknowledgeDepartureRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_assignment_id().empty()) {
+        _this->_internal_set_assignment_id(from._internal_assignment_id());
+      } else {
+        if (_this->_impl_.assignment_id_.IsDefault()) {
+          _this->_internal_set_assignment_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_hub_pod_name().empty()) {
+        _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
+      } else {
+        if (_this->_impl_.hub_pod_name_.IsDefault()) {
+          _this->_internal_set_hub_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_admission_id().empty()) {
+        _this->_internal_set_admission_id(from._internal_admission_id());
+      } else {
+        if (_this->_impl_.admission_id_.IsDefault()) {
+          _this->_internal_set_admission_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_admission_seq() != 0) {
+        _this->_impl_.admission_seq_ = from._impl_.admission_seq_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AcknowledgeDepartureRequest::CopyFrom(const AcknowledgeDepartureRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.AcknowledgeDepartureRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AcknowledgeDepartureRequest::InternalSwap(AcknowledgeDepartureRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.assignment_id_, &other->_impl_.assignment_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.admission_id_, &other->_impl_.admission_id_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.admission_seq_)
+      + sizeof(AcknowledgeDepartureRequest::_impl_.admission_seq_)
+      - PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureRequest, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata AcknowledgeDepartureRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AcknowledgeDepartureResponse::AcknowledgeDepartureResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeDepartureResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.AcknowledgeDepartureResponse)
+}
+AcknowledgeDepartureResponse::AcknowledgeDepartureResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AcknowledgeDepartureResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AcknowledgeDepartureResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE AcknowledgeDepartureResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void AcknowledgeDepartureResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, code_),
+           0,
+           offsetof(Impl_, departed_) -
+               offsetof(Impl_, code_) +
+               sizeof(Impl_::departed_));
+}
+AcknowledgeDepartureResponse::~AcknowledgeDepartureResponse() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.AcknowledgeDepartureResponse)
+  SharedDtor(*this);
+}
+inline void AcknowledgeDepartureResponse::SharedDtor(MessageLite& self) {
+  AcknowledgeDepartureResponse& this_ = static_cast<AcknowledgeDepartureResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AcknowledgeDepartureResponse_class_data_ =
+        AcknowledgeDepartureResponse::InternalGenerateClassData_(AcknowledgeDepartureResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeDepartureResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeDepartureResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AcknowledgeDepartureResponse_class_data_.tc_table);
+  return AcknowledgeDepartureResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AcknowledgeDepartureResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AcknowledgeDepartureResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AcknowledgeDepartureResponse_globals_));
+  return AcknowledgeDepartureResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AcknowledgeDepartureResponse::ParseTableT_
+    AcknowledgeDepartureResponse::_table_ =
+        AcknowledgeDepartureResponse::InternalGenerateParseTable_(AcknowledgeDepartureResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AcknowledgeDepartureResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.AcknowledgeDepartureResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.code_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.departed_) -
+        reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.departed_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AcknowledgeDepartureResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AcknowledgeDepartureResponse& this_ = static_cast<const AcknowledgeDepartureResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AcknowledgeDepartureResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AcknowledgeDepartureResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.AcknowledgeDepartureResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_code(), target);
+    }
+  }
+
+  // bool departed = 2 [json_name = "departed"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_departed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_departed(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.AcknowledgeDepartureResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AcknowledgeDepartureResponse::ByteSizeLong(const MessageLite& base) {
+  const AcknowledgeDepartureResponse& this_ = static_cast<const AcknowledgeDepartureResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AcknowledgeDepartureResponse::ByteSizeLong() const {
+  const AcknowledgeDepartureResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.AcknowledgeDepartureResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_code() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_code());
+      }
+    }
+    // bool departed = 2 [json_name = "departed"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_departed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AcknowledgeDepartureResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AcknowledgeDepartureResponse*>(&to_msg);
+  auto& from = static_cast<const AcknowledgeDepartureResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.AcknowledgeDepartureResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_code() != 0) {
+        _this->_impl_.code_ = from._impl_.code_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_departed() != 0) {
+        _this->_impl_.departed_ = from._impl_.departed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AcknowledgeDepartureResponse::CopyFrom(const AcknowledgeDepartureResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.AcknowledgeDepartureResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AcknowledgeDepartureResponse::InternalSwap(AcknowledgeDepartureResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_.departed_)
+      + sizeof(AcknowledgeDepartureResponse::_impl_.departed_)
+      - PROTOBUF_FIELD_OFFSET(AcknowledgeDepartureResponse, _impl_.code_)>(
+          reinterpret_cast<char*>(&_impl_.code_),
+          reinterpret_cast<char*>(&other->_impl_.code_));
+}
+
+::google::protobuf::Metadata AcknowledgeDepartureResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+HubReservationStorageRecord::HubReservationStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, HubReservationStorageRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.HubReservationStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE HubReservationStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::hub::v1::HubReservationStorageRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        assignment_id_(arena, from.assignment_id_),
+        hub_pod_name_(arena, from.hub_pod_name_),
+        hub_instance_uid_(arena, from.hub_instance_uid_) {}
+
+HubReservationStorageRecord::HubReservationStorageRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const HubReservationStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, HubReservationStorageRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HubReservationStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, assignment_expires_at_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::assignment_expires_at_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HubReservationStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE HubReservationStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        assignment_id_(arena),
+        hub_pod_name_(arena),
+        hub_instance_uid_(arena) {}
+
+inline void HubReservationStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, assignment_expires_at_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::assignment_expires_at_ms_));
+}
+HubReservationStorageRecord::~HubReservationStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.HubReservationStorageRecord)
+  SharedDtor(*this);
+}
+inline void HubReservationStorageRecord::SharedDtor(MessageLite& self) {
+  HubReservationStorageRecord& this_ = static_cast<HubReservationStorageRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.assignment_id_.Destroy();
+  this_._impl_.hub_pod_name_.Destroy();
+  this_._impl_.hub_instance_uid_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull HubReservationStorageRecord_class_data_ =
+        HubReservationStorageRecord::InternalGenerateClassData_(HubReservationStorageRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HubReservationStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HubReservationStorageRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(HubReservationStorageRecord_class_data_.tc_table);
+  return HubReservationStorageRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HubReservationStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HubReservationStorageRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&HubReservationStorageRecord_globals_));
+  return HubReservationStorageRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const HubReservationStorageRecord::ParseTableT_
+    HubReservationStorageRecord::_table_ =
+        HubReservationStorageRecord::InternalGenerateParseTable_(HubReservationStorageRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void HubReservationStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.HubReservationStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.assignment_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.hub_instance_uid_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.expires_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.expires_at_ms_));
+  }
+  _impl_.assignment_expires_at_ms_ = ::int64_t{0};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL HubReservationStorageRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const HubReservationStorageRecord& this_ = static_cast<const HubReservationStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL HubReservationStorageRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const HubReservationStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.HubReservationStorageRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string assignment_id = 2 [json_name = "assignmentId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_assignment_id().empty()) {
+      const ::std::string& _s = this_._internal_assignment_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubReservationStorageRecord.assignment_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string hub_pod_name = 3 [json_name = "hubPodName"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_hub_pod_name().empty()) {
+      const ::std::string& _s = this_._internal_hub_pod_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubReservationStorageRecord.hub_pod_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string hub_instance_uid = 4 [json_name = "hubInstanceUid"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_hub_instance_uid().empty()) {
+      const ::std::string& _s = this_._internal_hub_instance_uid();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubReservationStorageRecord.hub_instance_uid");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint32 auth_epoch = 5 [json_name = "authEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_auth_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_auth_epoch(), target);
+    }
+  }
+
+  // uint32 auth_writer_epoch = 6 [json_name = "authWriterEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_auth_writer_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_auth_writer_epoch(), target);
+    }
+  }
+
+  // int64 created_at_ms = 7 [json_name = "createdAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_created_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<7>(
+              stream, this_._internal_created_at_ms(), target);
+    }
+  }
+
+  // int64 expires_at_ms = 8 [json_name = "expiresAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_expires_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<8>(
+              stream, this_._internal_expires_at_ms(), target);
+    }
+  }
+
+  // int64 assignment_expires_at_ms = 9 [json_name = "assignmentExpiresAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_assignment_expires_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<9>(
+              stream, this_._internal_assignment_expires_at_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.HubReservationStorageRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t HubReservationStorageRecord::ByteSizeLong(const MessageLite& base) {
+  const HubReservationStorageRecord& this_ = static_cast<const HubReservationStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t HubReservationStorageRecord::ByteSizeLong() const {
+  const HubReservationStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.HubReservationStorageRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string assignment_id = 2 [json_name = "assignmentId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_assignment_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_assignment_id());
+      }
+    }
+    // string hub_pod_name = 3 [json_name = "hubPodName"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_hub_pod_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_pod_name());
+      }
+    }
+    // string hub_instance_uid = 4 [json_name = "hubInstanceUid"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_hub_instance_uid().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_instance_uid());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 auth_epoch = 5 [json_name = "authEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_auth_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_auth_epoch());
+      }
+    }
+    // uint32 auth_writer_epoch = 6 [json_name = "authWriterEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_auth_writer_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_auth_writer_epoch());
+      }
+    }
+    // int64 created_at_ms = 7 [json_name = "createdAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_created_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_created_at_ms());
+      }
+    }
+    // int64 expires_at_ms = 8 [json_name = "expiresAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_expires_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_expires_at_ms());
+      }
+    }
+  }
+   {
+    // int64 assignment_expires_at_ms = 9 [json_name = "assignmentExpiresAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_assignment_expires_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_assignment_expires_at_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void HubReservationStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<HubReservationStorageRecord*>(&to_msg);
+  auto& from = static_cast<const HubReservationStorageRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.HubReservationStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_assignment_id().empty()) {
+        _this->_internal_set_assignment_id(from._internal_assignment_id());
+      } else {
+        if (_this->_impl_.assignment_id_.IsDefault()) {
+          _this->_internal_set_assignment_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_hub_pod_name().empty()) {
+        _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
+      } else {
+        if (_this->_impl_.hub_pod_name_.IsDefault()) {
+          _this->_internal_set_hub_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_hub_instance_uid().empty()) {
+        _this->_internal_set_hub_instance_uid(from._internal_hub_instance_uid());
+      } else {
+        if (_this->_impl_.hub_instance_uid_.IsDefault()) {
+          _this->_internal_set_hub_instance_uid("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_auth_epoch() != 0) {
+        _this->_impl_.auth_epoch_ = from._impl_.auth_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_auth_writer_epoch() != 0) {
+        _this->_impl_.auth_writer_epoch_ = from._impl_.auth_writer_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_created_at_ms() != 0) {
+        _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_expires_at_ms() != 0) {
+        _this->_impl_.expires_at_ms_ = from._impl_.expires_at_ms_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_assignment_expires_at_ms() != 0) {
+      _this->_impl_.assignment_expires_at_ms_ = from._impl_.assignment_expires_at_ms_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void HubReservationStorageRecord::CopyFrom(const HubReservationStorageRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.HubReservationStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HubReservationStorageRecord::InternalSwap(HubReservationStorageRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.assignment_id_, &other->_impl_.assignment_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_instance_uid_, &other->_impl_.hub_instance_uid_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.assignment_expires_at_ms_)
+      + sizeof(HubReservationStorageRecord::_impl_.assignment_expires_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(HubReservationStorageRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata HubReservationStorageRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+HubConnectedOwnershipStorageRecord::HubConnectedOwnershipStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, HubConnectedOwnershipStorageRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE HubConnectedOwnershipStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::pandora::hub::v1::HubConnectedOwnershipStorageRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        assignment_id_(arena, from.assignment_id_),
+        admission_id_(arena, from.admission_id_),
+        hub_pod_name_(arena, from.hub_pod_name_),
+        hub_instance_uid_(arena, from.hub_instance_uid_) {}
+
+HubConnectedOwnershipStorageRecord::HubConnectedOwnershipStorageRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const HubConnectedOwnershipStorageRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, HubConnectedOwnershipStorageRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HubConnectedOwnershipStorageRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, admission_seq_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::admission_seq_));
+
+  // @@protoc_insertion_point(copy_constructor:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+}
+PROTOBUF_NDEBUG_INLINE HubConnectedOwnershipStorageRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        assignment_id_(arena),
+        admission_id_(arena),
+        hub_pod_name_(arena),
+        hub_instance_uid_(arena) {}
+
+inline void HubConnectedOwnershipStorageRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, admission_seq_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::admission_seq_));
+}
+HubConnectedOwnershipStorageRecord::~HubConnectedOwnershipStorageRecord() {
+  // @@protoc_insertion_point(destructor:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  SharedDtor(*this);
+}
+inline void HubConnectedOwnershipStorageRecord::SharedDtor(MessageLite& self) {
+  HubConnectedOwnershipStorageRecord& this_ = static_cast<HubConnectedOwnershipStorageRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.assignment_id_.Destroy();
+  this_._impl_.admission_id_.Destroy();
+  this_._impl_.hub_pod_name_.Destroy();
+  this_._impl_.hub_instance_uid_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull HubConnectedOwnershipStorageRecord_class_data_ =
+        HubConnectedOwnershipStorageRecord::InternalGenerateClassData_(HubConnectedOwnershipStorageRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HubConnectedOwnershipStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HubConnectedOwnershipStorageRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(HubConnectedOwnershipStorageRecord_class_data_.tc_table);
+  return HubConnectedOwnershipStorageRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HubConnectedOwnershipStorageRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HubConnectedOwnershipStorageRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&HubConnectedOwnershipStorageRecord_globals_));
+  return HubConnectedOwnershipStorageRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const HubConnectedOwnershipStorageRecord::ParseTableT_
+    HubConnectedOwnershipStorageRecord::_table_ =
+        HubConnectedOwnershipStorageRecord::InternalGenerateParseTable_(HubConnectedOwnershipStorageRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void HubConnectedOwnershipStorageRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.assignment_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.admission_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.hub_pod_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.hub_instance_uid_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.admitted_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.admitted_at_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.last_seen_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.admission_seq_) -
+        reinterpret_cast<char*>(&_impl_.last_seen_ms_)) + sizeof(_impl_.admission_seq_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL HubConnectedOwnershipStorageRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const HubConnectedOwnershipStorageRecord& this_ = static_cast<const HubConnectedOwnershipStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL HubConnectedOwnershipStorageRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const HubConnectedOwnershipStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1 [json_name = "playerId"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string assignment_id = 2 [json_name = "assignmentId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_assignment_id().empty()) {
+      const ::std::string& _s = this_._internal_assignment_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubConnectedOwnershipStorageRecord.assignment_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string admission_id = 3 [json_name = "admissionId"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_admission_id().empty()) {
+      const ::std::string& _s = this_._internal_admission_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubConnectedOwnershipStorageRecord.admission_id");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string hub_pod_name = 4 [json_name = "hubPodName"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_hub_pod_name().empty()) {
+      const ::std::string& _s = this_._internal_hub_pod_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubConnectedOwnershipStorageRecord.hub_pod_name");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string hub_instance_uid = 5 [json_name = "hubInstanceUid"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_hub_instance_uid().empty()) {
+      const ::std::string& _s = this_._internal_hub_instance_uid();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.hub.v1.HubConnectedOwnershipStorageRecord.hub_instance_uid");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint32 auth_epoch = 6 [json_name = "authEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_auth_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_auth_epoch(), target);
+    }
+  }
+
+  // uint32 auth_writer_epoch = 7 [json_name = "authWriterEpoch"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_auth_writer_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_auth_writer_epoch(), target);
+    }
+  }
+
+  // int64 admitted_at_ms = 8 [json_name = "admittedAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_admitted_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<8>(
+              stream, this_._internal_admitted_at_ms(), target);
+    }
+  }
+
+  // int64 last_seen_ms = 9 [json_name = "lastSeenMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_last_seen_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<9>(
+              stream, this_._internal_last_seen_ms(), target);
+    }
+  }
+
+  // int64 expires_at_ms = 10 [json_name = "expiresAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_expires_at_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<10>(
+              stream, this_._internal_expires_at_ms(), target);
+    }
+  }
+
+  // uint64 admission_seq = 11 [json_name = "admissionSeq"];
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_admission_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_admission_seq(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t HubConnectedOwnershipStorageRecord::ByteSizeLong(const MessageLite& base) {
+  const HubConnectedOwnershipStorageRecord& this_ = static_cast<const HubConnectedOwnershipStorageRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t HubConnectedOwnershipStorageRecord::ByteSizeLong() const {
+  const HubConnectedOwnershipStorageRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string assignment_id = 2 [json_name = "assignmentId"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_assignment_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_assignment_id());
+      }
+    }
+    // string admission_id = 3 [json_name = "admissionId"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_admission_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_admission_id());
+      }
+    }
+    // string hub_pod_name = 4 [json_name = "hubPodName"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_hub_pod_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_pod_name());
+      }
+    }
+    // string hub_instance_uid = 5 [json_name = "hubInstanceUid"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_hub_instance_uid().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_hub_instance_uid());
+      }
+    }
+    // uint64 player_id = 1 [json_name = "playerId"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 auth_epoch = 6 [json_name = "authEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_auth_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_auth_epoch());
+      }
+    }
+    // uint32 auth_writer_epoch = 7 [json_name = "authWriterEpoch"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_auth_writer_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_auth_writer_epoch());
+      }
+    }
+    // int64 admitted_at_ms = 8 [json_name = "admittedAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_admitted_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_admitted_at_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // int64 last_seen_ms = 9 [json_name = "lastSeenMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_last_seen_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_last_seen_ms());
+      }
+    }
+    // int64 expires_at_ms = 10 [json_name = "expiresAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_expires_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_expires_at_ms());
+      }
+    }
+    // uint64 admission_seq = 11 [json_name = "admissionSeq"];
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_admission_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_admission_seq());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void HubConnectedOwnershipStorageRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<HubConnectedOwnershipStorageRecord*>(&to_msg);
+  auto& from = static_cast<const HubConnectedOwnershipStorageRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_assignment_id().empty()) {
+        _this->_internal_set_assignment_id(from._internal_assignment_id());
+      } else {
+        if (_this->_impl_.assignment_id_.IsDefault()) {
+          _this->_internal_set_assignment_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_admission_id().empty()) {
+        _this->_internal_set_admission_id(from._internal_admission_id());
+      } else {
+        if (_this->_impl_.admission_id_.IsDefault()) {
+          _this->_internal_set_admission_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_hub_pod_name().empty()) {
+        _this->_internal_set_hub_pod_name(from._internal_hub_pod_name());
+      } else {
+        if (_this->_impl_.hub_pod_name_.IsDefault()) {
+          _this->_internal_set_hub_pod_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_hub_instance_uid().empty()) {
+        _this->_internal_set_hub_instance_uid(from._internal_hub_instance_uid());
+      } else {
+        if (_this->_impl_.hub_instance_uid_.IsDefault()) {
+          _this->_internal_set_hub_instance_uid("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_auth_epoch() != 0) {
+        _this->_impl_.auth_epoch_ = from._impl_.auth_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_auth_writer_epoch() != 0) {
+        _this->_impl_.auth_writer_epoch_ = from._impl_.auth_writer_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_admitted_at_ms() != 0) {
+        _this->_impl_.admitted_at_ms_ = from._impl_.admitted_at_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_last_seen_ms() != 0) {
+        _this->_impl_.last_seen_ms_ = from._impl_.last_seen_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_expires_at_ms() != 0) {
+        _this->_impl_.expires_at_ms_ = from._impl_.expires_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_admission_seq() != 0) {
+        _this->_impl_.admission_seq_ = from._impl_.admission_seq_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void HubConnectedOwnershipStorageRecord::CopyFrom(const HubConnectedOwnershipStorageRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:pandora.hub.v1.HubConnectedOwnershipStorageRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HubConnectedOwnershipStorageRecord::InternalSwap(HubConnectedOwnershipStorageRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.assignment_id_, &other->_impl_.assignment_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.admission_id_, &other->_impl_.admission_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_pod_name_, &other->_impl_.hub_pod_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hub_instance_uid_, &other->_impl_.hub_instance_uid_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.admission_seq_)
+      + sizeof(HubConnectedOwnershipStorageRecord::_impl_.admission_seq_)
+      - PROTOBUF_FIELD_OFFSET(HubConnectedOwnershipStorageRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata HubConnectedOwnershipStorageRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

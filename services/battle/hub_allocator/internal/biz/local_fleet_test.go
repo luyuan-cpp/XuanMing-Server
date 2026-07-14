@@ -113,6 +113,30 @@ func TestLocalFleetExtraEnvCannotOverrideLocalProfile(t *testing.T) {
 	}
 }
 
+func TestHubMapURLWithMaxPlayers(t *testing.T) {
+	tests := []struct {
+		name, input, want string
+		capacity          int32
+		wantErr           bool
+	}{
+		{"append", "/Game/Hub?game=/Script/Pandora.PandoraHubGameMode", "/Game/Hub?game=/Script/Pandora.PandoraHubGameMode?MaxPlayers=500", 500, false},
+		{"exact-existing", "/Game/Hub?MaxPlayers=500?game=HubGM", "/Game/Hub?MaxPlayers=500?game=HubGM", 500, false},
+		{"mismatch", "/Game/Hub?MaxPlayers=16", "", 500, true},
+		{"duplicate", "/Game/Hub?MaxPlayers=500?maxplayers=500", "", 500, true},
+		{"noncanonical-leading-zero", "/Game/Hub?MaxPlayers=0500", "", 500, true},
+		{"noncanonical-plus", "/Game/Hub?MaxPlayers=+500", "", 500, true},
+		{"invalid-capacity", "/Game/Hub", "", 0, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := hubMapURLWithMaxPlayers(tc.input, tc.capacity)
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Fatalf("got=%q err=%v, want=%q wantErr=%v", got, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+}
+
 func lastEnvValue(env []string, key string) string {
 	for i := len(env) - 1; i >= 0; i-- {
 		parts := strings.SplitN(env[i], "=", 2)

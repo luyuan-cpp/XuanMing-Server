@@ -37,7 +37,8 @@ function Get-PandoraRotationNamedItems {
 function Get-PandoraDSTicketSignerSecretReferences {
     param([Parameter(Mandatory = $true)]$Spec)
     $references = [System.Collections.Generic.List[object]]::new()
-    $pattern = '^pandora-dsticket(?:-signer-r[1-9][0-9]*)?$'
+    # 所有非 JWKS 的 pandora-dsticket* Secret 名均属于保留私钥域；规范层再要求 exact target。
+    $pattern = '^pandora-dsticket(?!-jwks(?:-|$))'
     foreach ($volume in @(Get-PandoraRotationProperty $Spec 'volumes' @())) {
         $volumeName = [string](Get-PandoraRotationProperty $volume 'name')
         $directName = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $volume 'secret') 'secretName')
@@ -77,11 +78,60 @@ function Get-PandoraDSTicketSignerSecretReferences {
     return [object[]]$references.ToArray()
 }
 
+function Get-PandoraDSTicketSignerConfigSecretReferences {
+    param([Parameter(Mandatory = $true)]$Spec)
+    $references = [System.Collections.Generic.List[object]]::new()
+    $pattern = '^pandora-config(?:$|-dsticket(?:-|$))'
+    foreach ($volume in @(Get-PandoraRotationProperty $Spec 'volumes' @())) {
+        $volumeName = [string](Get-PandoraRotationProperty $volume 'name')
+        $directName = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $volume 'secret') 'secretName')
+        if ($directName -imatch $pattern) {
+            $references.Add([pscustomobject]@{ Kind = 'DirectVolume'; Name = $directName; Location = "volume/$volumeName" })
+        }
+        foreach ($source in @(Get-PandoraRotationProperty (Get-PandoraRotationProperty $volume 'projected') 'sources' @())) {
+            $projectedName = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $source 'secret') 'name')
+            if ($projectedName -imatch $pattern) {
+                $references.Add([pscustomobject]@{ Kind = 'ProjectedVolume'; Name = $projectedName; Location = "volume/$volumeName/projected" })
+            }
+        }
+    }
+    foreach ($containerGroup in @(
+        [pscustomobject]@{ Kind = 'container'; Items = @(Get-PandoraRotationProperty $Spec 'containers' @()) },
+        [pscustomobject]@{ Kind = 'initContainer'; Items = @(Get-PandoraRotationProperty $Spec 'initContainers' @()) },
+        [pscustomobject]@{ Kind = 'ephemeralContainer'; Items = @(Get-PandoraRotationProperty $Spec 'ephemeralContainers' @()) }
+    )) {
+        foreach ($container in @($containerGroup.Items)) {
+            $containerName = [string](Get-PandoraRotationProperty $container 'name')
+            foreach ($env in @(Get-PandoraRotationProperty $container 'env' @())) {
+                $secretName = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty `
+                    (Get-PandoraRotationProperty $env 'valueFrom') 'secretKeyRef') 'name')
+                if ($secretName -imatch $pattern) {
+                    $references.Add([pscustomobject]@{
+                        Kind = 'EnvSecretKeyRef'; Name = $secretName
+                        Location = "$($containerGroup.Kind)/$containerName/env/$([string](Get-PandoraRotationProperty $env 'name'))"
+                    })
+                }
+            }
+            foreach ($envFrom in @(Get-PandoraRotationProperty $container 'envFrom' @())) {
+                $secretName = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $envFrom 'secretRef') 'name')
+                if ($secretName -imatch $pattern) {
+                    $references.Add([pscustomobject]@{
+                        Kind = 'EnvFromSecretRef'; Name = $secretName
+                        Location = "$($containerGroup.Kind)/$containerName/envFrom"
+                    })
+                }
+            }
+        }
+    }
+    return [object[]]$references.ToArray()
+}
+
 function Get-PandoraDSTicketForbiddenPrivateReferences {
     param([Parameter(Mandatory = $true)]$Spec)
     $references = [System.Collections.Generic.List[object]]::new()
     $forbiddenEnvPattern = '^PANDORA_(?:DS_TICKET_SECRET|JWT_SECRET|PLAYER_JWT_SECRET|DSTICKET_(?:SECRET|HMAC|PRIVATE(?:_KEY)?|SIGNING(?:_KEY)?))$'
     $forbiddenValuePattern = '-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"kty"\s*:\s*"oct"|/run/secrets/pandora-dsticket|/etc/pandora/dsticket/private'
+    $forbiddenKeyPattern = '(?:^|[-_./])(?:private(?:[-_]?key)?(?:\.pem)?|signing(?:[-_]?key)?|jwt(?:[-_]?secret)?|hmac|oct)(?:$|[-_./])'
     foreach ($containerGroup in @(
         [pscustomobject]@{ Kind = 'Container'; Items = @(Get-PandoraRotationProperty $Spec 'containers' @()) },
         [pscustomobject]@{ Kind = 'InitContainer'; Items = @(Get-PandoraRotationProperty $Spec 'initContainers' @()) },
@@ -104,6 +154,14 @@ function Get-PandoraDSTicketForbiddenPrivateReferences {
                         Location = "$($containerGroup.Kind)/$containerName/env/$envName"
                     })
                 }
+                $secretKey = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty `
+                    (Get-PandoraRotationProperty $env 'valueFrom') 'secretKeyRef') 'key')
+                if ($secretKey -imatch $forbiddenKeyPattern) {
+                    $references.Add([pscustomobject]@{
+                        Kind = "Forbidden$($containerGroup.Kind)SecretKey"; Name = $secretKey
+                        Location = "$($containerGroup.Kind)/$containerName/env/$envName/secretKeyRef"
+                    })
+                }
             }
             foreach ($mount in @(Get-PandoraRotationProperty $container 'volumeMounts' @())) {
                 $mountPath = [string](Get-PandoraRotationProperty $mount 'mountPath')
@@ -118,6 +176,28 @@ function Get-PandoraDSTicketForbiddenPrivateReferences {
     }
     foreach ($volume in @(Get-PandoraRotationProperty $Spec 'volumes' @())) {
         $volumeName = [string](Get-PandoraRotationProperty $volume 'name')
+        foreach ($item in @(Get-PandoraRotationProperty (Get-PandoraRotationProperty $volume 'secret') 'items' @())) {
+            $key = [string](Get-PandoraRotationProperty $item 'key')
+            $path = [string](Get-PandoraRotationProperty $item 'path')
+            if ($key -imatch $forbiddenKeyPattern -or $path -imatch $forbiddenKeyPattern) {
+                $references.Add([pscustomobject]@{
+                    Kind = 'ForbiddenSecretVolumeItem'; Name = if ($key) { $key } else { $path }
+                    Location = "volume/$volumeName/secret/items"
+                })
+            }
+        }
+        foreach ($source in @(Get-PandoraRotationProperty (Get-PandoraRotationProperty $volume 'projected') 'sources' @())) {
+            foreach ($item in @(Get-PandoraRotationProperty (Get-PandoraRotationProperty $source 'secret') 'items' @())) {
+                $key = [string](Get-PandoraRotationProperty $item 'key')
+                $path = [string](Get-PandoraRotationProperty $item 'path')
+                if ($key -imatch $forbiddenKeyPattern -or $path -imatch $forbiddenKeyPattern) {
+                    $references.Add([pscustomobject]@{
+                        Kind = 'ForbiddenProjectedSecretItem'; Name = if ($key) { $key } else { $path }
+                        Location = "volume/$volumeName/projected/secret/items"
+                    })
+                }
+            }
+        }
         $secretProviderClass = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty `
             (Get-PandoraRotationProperty $volume 'csi') 'volumeAttributes') 'secretProviderClass')
         if ($secretProviderClass -imatch 'dsticket') {
@@ -133,7 +213,8 @@ function Get-PandoraDSTicketForbiddenPrivateReferences {
 function Get-PandoraDSTicketVerifierMaterialReferences {
     param([Parameter(Mandatory = $true)]$Spec)
     $references = [System.Collections.Generic.List[object]]::new()
-    $configMapPattern = '^pandora-dsticket-jwks(?:-r[1-9][0-9]*)?$'
+    # pandora-dsticket-jwks* 为保留公钥域；r0/r01/backup 等畸形名也必须先进入 related gate。
+    $configMapPattern = '^pandora-dsticket-jwks(?:-|$)'
     foreach ($volume in @(Get-PandoraRotationProperty $Spec 'volumes' @())) {
         $volumeName = [string](Get-PandoraRotationProperty $volume 'name')
         $directName = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $volume 'configMap') 'name')
@@ -203,6 +284,95 @@ function Get-PandoraDSTicketVerifierMaterialReferences {
         }
     }
     return [object[]]$references.ToArray()
+}
+
+function Test-PandoraDSTicketSignerPodSpecReferenceContract {
+    param(
+        [Parameter(Mandatory = $true)]$Spec,
+        [Parameter(Mandatory = $true)][string]$ServiceName,
+        [Parameter(Mandatory = $true)][string]$ExpectedConfigSecret,
+        [Parameter(Mandatory = $true)][string]$ExpectedSignerSecret,
+        [AllowEmptyString()][string]$ExpectedLoginJwks = '',
+        [Parameter(Mandatory = $true)][string]$ObjectName
+    )
+    $failures = [System.Collections.Generic.List[string]]::new()
+    $configReferences = @(Get-PandoraDSTicketSignerConfigSecretReferences $Spec)
+    if ($configReferences.Count -ne 1 -or $configReferences[0].Kind -cne 'DirectVolume' -or
+        $configReferences[0].Location -cne 'volume/conf' -or $configReferences[0].Name -cne $ExpectedConfigSecret) {
+        $failures.Add("$ObjectName config 引用必须恰为一个 DirectVolume:volume/conf:$ExpectedConfigSecret；检测到 $($configReferences.Count) 个")
+    }
+    $signerReferences = @(Get-PandoraDSTicketSignerSecretReferences $Spec)
+    if ($signerReferences.Count -ne 1 -or $signerReferences[0].Kind -cne 'DirectVolume' -or
+        $signerReferences[0].Location -cne 'volume/dsticket' -or $signerReferences[0].Name -cne $ExpectedSignerSecret) {
+        $failures.Add("$ObjectName signer 私钥引用必须恰为一个 DirectVolume:volume/dsticket:$ExpectedSignerSecret；检测到 $($signerReferences.Count) 个")
+    }
+
+    $containers = @(Get-PandoraRotationProperty $Spec 'containers' @())
+    $mainContainers = @(Get-PandoraRotationNamedItems $containers $ServiceName)
+    if ($mainContainers.Count -ne 1) { $failures.Add("$ObjectName 主容器 $ServiceName 数量=$($mainContainers.Count)") }
+    $relatedMounts = [System.Collections.Generic.List[object]]::new()
+    foreach ($containerGroup in @(
+        [pscustomobject]@{ Kind = 'container'; Items = $containers },
+        [pscustomobject]@{ Kind = 'initContainer'; Items = @(Get-PandoraRotationProperty $Spec 'initContainers' @()) },
+        [pscustomobject]@{ Kind = 'ephemeralContainer'; Items = @(Get-PandoraRotationProperty $Spec 'ephemeralContainers' @()) }
+    )) {
+        foreach ($container in @($containerGroup.Items)) {
+            $containerName = [string](Get-PandoraRotationProperty $container 'name')
+            foreach ($mount in @(Get-PandoraRotationProperty $container 'volumeMounts' @())) {
+                $mountName = [string](Get-PandoraRotationProperty $mount 'name')
+                $mountPath = [string](Get-PandoraRotationProperty $mount 'mountPath')
+                if ($mountName -cin @('conf', 'dsticket', 'dsticket-jwks') -or
+                    $mountPath -cin @('/app/etc/cluster.yaml', '/run/secrets/pandora-dsticket', '/run/config/pandora-dsticket')) {
+                    $relatedMounts.Add([pscustomobject]@{
+                        Group = $containerGroup.Kind; Container = $containerName; Name = $mountName; Path = $mountPath
+                        SubPath = [string](Get-PandoraRotationProperty $mount 'subPath')
+                        ReadOnly = (Get-PandoraRotationProperty $mount 'readOnly' $false)
+                    })
+                }
+            }
+        }
+    }
+    $confMounts = @($relatedMounts | Where-Object {
+        $_.Group -ceq 'container' -and $_.Container -ceq $ServiceName -and $_.Name -ceq 'conf' -and
+        $_.Path -ceq '/app/etc/cluster.yaml' -and $_.SubPath -ceq "$ServiceName.yaml" -and $_.ReadOnly -eq $true
+    })
+    $signerMounts = @($relatedMounts | Where-Object {
+        $_.Group -ceq 'container' -and $_.Container -ceq $ServiceName -and $_.Name -ceq 'dsticket' -and
+        $_.Path -ceq '/run/secrets/pandora-dsticket' -and [string]::IsNullOrWhiteSpace($_.SubPath) -and $_.ReadOnly -eq $true
+    })
+    $jwksMounts = @($relatedMounts | Where-Object {
+        $_.Group -ceq 'container' -and $_.Container -ceq $ServiceName -and $_.Name -ceq 'dsticket-jwks' -and
+        $_.Path -ceq '/run/config/pandora-dsticket' -and [string]::IsNullOrWhiteSpace($_.SubPath) -and $_.ReadOnly -eq $true
+    })
+    $expectedMountCount = if ($ServiceName -ceq 'login') { 3 } else { 2 }
+    if ($confMounts.Count -ne 1 -or $signerMounts.Count -ne 1 -or
+        ($ServiceName -ceq 'login' -and $jwksMounts.Count -ne 1) -or
+        ($ServiceName -cne 'login' -and $jwksMounts.Count -ne 0) -or
+        $relatedMounts.Count -ne $expectedMountCount) {
+        $failures.Add("$ObjectName signer consumer mount 必须只由主容器 $ServiceName 使用 canonical conf/dsticket$(if ($ServiceName -ceq 'login') { '/jwks' } else { '' })；检测到 related=$($relatedMounts.Count)")
+    }
+
+    $verifierReferences = @(Get-PandoraDSTicketVerifierMaterialReferences $Spec)
+    if ($ServiceName -ceq 'login') {
+        $allowedVerifier = @($verifierReferences | Where-Object {
+            ($_.Kind -ceq 'ConfigMapVolume' -and $_.Name -ceq $ExpectedLoginJwks -and $_.Location -ceq 'volume/dsticket-jwks') -or
+            ($_.Kind -ceq 'VerifierMount' -and $_.Name -ceq 'dsticket-jwks' -and $_.Location -ceq 'container/login/mount')
+        })
+        if ([string]::IsNullOrWhiteSpace($ExpectedLoginJwks) -or $verifierReferences.Count -ne 2 -or $allowedVerifier.Count -ne 2) {
+            $failures.Add("$ObjectName Login verifier 只能是 target direct volume + 主容器 canonical mount；检测到 $($verifierReferences.Count) 个引用")
+        }
+    } elseif ($verifierReferences.Count -ne 0) {
+        $failures.Add("$ObjectName 非 Login signer 禁止 verifier 引用；检测到 $($verifierReferences.Count) 个")
+    }
+    $forbiddenReferences = @(Get-PandoraDSTicketForbiddenPrivateReferences $Spec)
+    $canonicalPrivateMount = @($forbiddenReferences | Where-Object {
+        $_.Kind -ceq 'ForbiddenContainerMount' -and $_.Name -ceq 'dsticket' -and
+        $_.Location -ceq "Container/$ServiceName/mount//run/secrets/pandora-dsticket"
+    })
+    if ($forbiddenReferences.Count -ne 1 -or $canonicalPrivateMount.Count -ne 1) {
+        $failures.Add("$ObjectName 检测到 canonical 主容器 mount 之外的 signer/private/oct/CSI 输入")
+    }
+    return @($failures)
 }
 
 function Test-PandoraDSTicketDSPodSpecClue {
@@ -487,6 +657,7 @@ function Assert-PandoraDSTicketRetireMaterialContract {
 function Get-PandoraDSTicketConfigSectionContract {
     param(
         [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][ValidateSet('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')][string]$ServiceName,
         [switch]$RequireKeysetRevision
     )
     if ([string]::IsNullOrWhiteSpace($Text)) { throw '服务配置为空。' }
@@ -499,6 +670,25 @@ function Get-PandoraDSTicketConfigSectionContract {
     if ($sectionIndexes.Count -ne 1) { throw "服务配置 ds_ticket 节数量=$($sectionIndexes.Count)，应为 1。" }
     $start = [int]$sectionIndexes[0]
     $baseIndent = [regex]::Match($lines[$start], '^ *').Value.Length
+    if ($ServiceName -ceq 'login') {
+        $loginIndexes = @(for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -cmatch '^login:\s*(?:#.*)?$') { $i }
+        })
+        if ($loginIndexes.Count -ne 1 -or $baseIndent -ne 2) {
+            throw 'login.yaml 的 ds_ticket 必须恰为顶级 login: 的 2 空格直接子节。'
+        }
+        $loginStart = [int]$loginIndexes[0]
+        $loginEnd = $lines.Count
+        for ($i = $loginStart + 1; $i -lt $lines.Count; $i++) {
+            if ([string]::IsNullOrWhiteSpace($lines[$i]) -or $lines[$i] -cmatch '^\s*#') { continue }
+            if ([regex]::Match($lines[$i], '^ *').Value.Length -eq 0) { $loginEnd = $i; break }
+        }
+        if ($start -le $loginStart -or $start -ge $loginEnd) {
+            throw 'login.yaml 的 ds_ticket 不在顶级 login: 节内。'
+        }
+    } elseif ($baseIndent -ne 0) {
+        throw "$ServiceName.yaml 的 ds_ticket 必须是顶级 0 缩进节。"
+    }
     $childIndent = ' ' * ($baseIndent + 2)
     $end = $lines.Count
     for ($i = $start + 1; $i -lt $lines.Count; $i++) {
@@ -508,11 +698,20 @@ function Get-PandoraDSTicketConfigSectionContract {
     }
     $activePattern = '^' + [regex]::Escape($childIndent) + 'active_kid:\s*"(?<value>[A-Za-z0-9_-]{43})"(?<suffix>\s*(?:#.*)?)$'
     $revisionPattern = '^' + [regex]::Escape($childIndent) + 'keyset_revision:\s*"(?<value>[1-9][0-9]*)"(?<suffix>\s*(?:#.*)?)$'
+    $privatePattern = '^' + [regex]::Escape($childIndent) + 'private_key_file:\s*"(?<value>[^"]+)"\s*(?:#.*)?$'
+    $ttlPattern = '^' + [regex]::Escape($childIndent) + 'ttl:\s*"(?<value>[^"]+)"\s*(?:#.*)?$'
+    $jwksPattern = '^' + [regex]::Escape($childIndent) + 'jwks_file:\s*"(?<value>[^"]+)"\s*(?:#.*)?$'
     $active = @()
     $revision = @()
+    $private = @()
+    $ttl = @()
+    $jwks = @()
     for ($i = $start + 1; $i -lt $end; $i++) {
         if ($lines[$i] -cmatch $activePattern) { $active += $i }
         if ($lines[$i] -cmatch $revisionPattern) { $revision += $i }
+        if ($lines[$i] -cmatch $privatePattern) { $private += $i }
+        if ($lines[$i] -cmatch $ttlPattern) { $ttl += $i }
+        if ($lines[$i] -cmatch $jwksPattern) { $jwks += $i }
     }
     if ($active.Count -ne 1) { throw "ds_ticket.active_kid 字段数量=$($active.Count)，应为 1 个直接子字段。" }
     if ($RequireKeysetRevision -and $revision.Count -ne 1) {
@@ -520,6 +719,31 @@ function Get-PandoraDSTicketConfigSectionContract {
     }
     if (-not $RequireKeysetRevision -and $revision.Count -gt 1) {
         throw 'ds_ticket.keyset_revision 重复。'
+    }
+    if ($private.Count -ne 1 -or
+        [regex]::Match($lines[[int]$private[0]], $privatePattern).Groups['value'].Value -cne '/run/secrets/pandora-dsticket/private.pem') {
+        throw 'ds_ticket.private_key_file 必须恰为 /run/secrets/pandora-dsticket/private.pem。'
+    }
+    if ($ttl.Count -ne 1) { throw 'ds_ticket.ttl 必须恰有一个显式 duration。' }
+    $ttlText = [regex]::Match($lines[[int]$ttl[0]], $ttlPattern).Groups['value'].Value
+    if ($ttlText -cnotmatch '^(?:[0-9]+(?:\.[0-9]+)?(?:ns|us|µs|ms|s|m|h))+$') {
+        throw "ds_ticket.ttl=$ttlText 不是受支持的 Go duration。"
+    }
+    [decimal]$ttlSeconds = 0
+    foreach ($part in [regex]::Matches($ttlText, '(?<number>[0-9]+(?:\.[0-9]+)?)(?<unit>ns|us|µs|ms|s|m|h)')) {
+        $number = [decimal]::Parse($part.Groups['number'].Value, [Globalization.CultureInfo]::InvariantCulture)
+        [decimal]$factor = switch ($part.Groups['unit'].Value) {
+            'ns' { 0.000000001 }; 'us' { 0.000001 }; 'µs' { 0.000001 }; 'ms' { 0.001 }
+            's' { 1 }; 'm' { 60 }; 'h' { 3600 }
+        }
+        $ttlSeconds += $number * $factor
+    }
+    if ($ttlSeconds -le 0 -or $ttlSeconds -gt 180) {
+        throw "ds_ticket.ttl=$ttlText 超出 0 < ttl <= 180s。"
+    }
+    if ($ServiceName -ceq 'login' -and ($jwks.Count -ne 1 -or
+        [regex]::Match($lines[[int]$jwks[0]], $jwksPattern).Groups['value'].Value -cne '/run/config/pandora-dsticket/jwks.json')) {
+        throw 'login.ds_ticket.jwks_file 必须恰为 /run/config/pandora-dsticket/jwks.json。'
     }
     $activeMatch = [regex]::Match($lines[[int]$active[0]], $activePattern)
     $revisionValue = 0
@@ -544,11 +768,13 @@ function Get-PandoraDSTicketConfigSectionContract {
 function Set-PandoraDSTicketConfigText {
     param(
         [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][ValidateSet('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')][string]$ServiceName,
         [Parameter(Mandatory = $true)][string]$ActiveKid,
         [ValidateRange(0, 2147483647)][int]$KeysetRevision = 0
     )
     if ($ActiveKid -cnotmatch '^[A-Za-z0-9_-]{43}$') { throw '目标 DSTicket active kid 非法。' }
-    $section = Get-PandoraDSTicketConfigSectionContract -Text $Text -RequireKeysetRevision:($KeysetRevision -gt 0)
+    $section = Get-PandoraDSTicketConfigSectionContract -Text $Text -ServiceName $ServiceName `
+        -RequireKeysetRevision:($KeysetRevision -gt 0)
     $lines = [string[]]$section.Lines.Clone()
     $lines[$section.ActiveIndex] = $section.ChildIndent + 'active_kid: "' + $ActiveKid + '"' + $section.ActiveSuffix
     if ($KeysetRevision -gt 0) {
@@ -568,6 +794,10 @@ function Get-PandoraDSTicketConfigSecretUpdatedData {
         [string]$SecretObject.metadata.namespace -cne 'pandora') {
         throw '服务配置对象必须是 pandora/Secret/pandora-config。'
     }
+    if (-not [string]::IsNullOrWhiteSpace([string](Get-PandoraRotationProperty `
+        (Get-PandoraRotationProperty $SecretObject 'metadata') 'deletionTimestamp'))) {
+        throw 'pandora/Secret/pandora-config 正在删除，禁止生成更新数据。'
+    }
     if ($AllowedCurrentActiveKids.Count -lt 1) { throw 'AllowedCurrentActiveKids 不能为空。' }
     $source = Get-PandoraRotationProperty $SecretObject 'data'
     $updated = [ordered]@{}
@@ -579,11 +809,12 @@ function Get-PandoraDSTicketConfigSecretUpdatedData {
         }
         try { $text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([string]$updated[$key])) }
         catch { throw "Secret/pandora-config/$key 不是合法 base64:$($_.Exception.Message)" }
-        $section = Get-PandoraDSTicketConfigSectionContract -Text $text -RequireKeysetRevision:($service -ceq 'login')
+        $section = Get-PandoraDSTicketConfigSectionContract -Text $text -ServiceName $service `
+            -RequireKeysetRevision:($service -ceq 'login')
         if ($AllowedCurrentActiveKids -cnotcontains $section.ActiveKid) {
             throw "Secret/pandora-config/$key 当前 active_kid=$($section.ActiveKid) 不在本阶段允许集合内。"
         }
-        $next = Set-PandoraDSTicketConfigText -Text $text -ActiveKid $ActiveKid `
+        $next = Set-PandoraDSTicketConfigText -Text $text -ServiceName $service -ActiveKid $ActiveKid `
             -KeysetRevision $(if ($service -ceq 'login') { $LoginKeysetRevision } else { 0 })
         $updated[$key] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($next))
     }
@@ -594,8 +825,18 @@ function Assert-PandoraDSTicketConfigSecretContract {
     param(
         [Parameter(Mandatory = $true)]$SecretObject,
         [Parameter(Mandatory = $true)][string]$ExpectedActiveKid,
-        [Parameter(Mandatory = $true)][int]$ExpectedLoginKeysetRevision
+        [Parameter(Mandatory = $true)][int]$ExpectedLoginKeysetRevision,
+        [string]$ExpectedName = 'pandora-config'
     )
+    $metadata = Get-PandoraRotationProperty $SecretObject 'metadata'
+    if ([string](Get-PandoraRotationProperty $SecretObject 'kind') -cne 'Secret' -or
+        [string](Get-PandoraRotationProperty $metadata 'name') -cne $ExpectedName -or
+        [string](Get-PandoraRotationProperty $metadata 'namespace') -cne 'pandora') {
+        throw "配置对象必须是 pandora/Secret/$ExpectedName。"
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string](Get-PandoraRotationProperty $metadata 'deletionTimestamp'))) {
+        throw "pandora/Secret/$ExpectedName 正在删除，禁止作为 signer 配置。"
+    }
     $data = Get-PandoraRotationProperty $SecretObject 'data'
     foreach ($service in $script:PandoraDSTicketSignerNames) {
         $key = "$service.yaml"
@@ -603,7 +844,8 @@ function Assert-PandoraDSTicketConfigSecretContract {
         if ([string]::IsNullOrWhiteSpace($encoded)) { throw "Secret/pandora-config 缺 $key。" }
         try { $text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) }
         catch { throw "Secret/pandora-config/$key 不是合法 base64:$($_.Exception.Message)" }
-        $section = Get-PandoraDSTicketConfigSectionContract -Text $text -RequireKeysetRevision:($service -ceq 'login')
+        $section = Get-PandoraDSTicketConfigSectionContract -Text $text -ServiceName $service `
+            -RequireKeysetRevision:($service -ceq 'login')
         if ($section.ActiveKid -cne $ExpectedActiveKid) {
             throw "Secret/pandora-config/$key active_kid=$($section.ActiveKid)，expected=$ExpectedActiveKid。"
         }
@@ -615,6 +857,16 @@ function Assert-PandoraDSTicketConfigSecretContract {
 
 function Get-PandoraDSTicketConfigSubcontract {
     param([Parameter(Mandatory = $true)]$SecretObject)
+    $metadata = Get-PandoraRotationProperty $SecretObject 'metadata'
+    if ([string](Get-PandoraRotationProperty $SecretObject 'kind') -cne 'Secret' -or
+        [string](Get-PandoraRotationProperty $metadata 'name') -cne 'pandora-config' -or
+        [string](Get-PandoraRotationProperty $metadata 'namespace') -cne 'pandora') {
+        throw 'DSTicket fixed 子契约对象必须是 pandora/Secret/pandora-config。'
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string](Get-PandoraRotationProperty `
+        $metadata 'deletionTimestamp'))) {
+        throw 'fixed pandora/Secret/pandora-config 正在删除，禁止读取 DSTicket 子契约。'
+    }
     $data = Get-PandoraRotationProperty $SecretObject 'data'
     $rows = [System.Collections.Generic.List[string]]::new()
     $kids = [System.Collections.Generic.List[string]]::new()
@@ -624,7 +876,8 @@ function Get-PandoraDSTicketConfigSubcontract {
         if ([string]::IsNullOrWhiteSpace($encoded)) { throw "配置 Secret 缺 $service.yaml。" }
         try { $text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) }
         catch { throw "配置 Secret/$service.yaml base64 非法:$($_.Exception.Message)" }
-        $section = Get-PandoraDSTicketConfigSectionContract $text -RequireKeysetRevision:($service -ceq 'login')
+        $section = Get-PandoraDSTicketConfigSectionContract $text -ServiceName $service `
+            -RequireKeysetRevision:($service -ceq 'login')
         $kids.Add($section.ActiveKid)
         $rows.Add("$service.active_kid=$($section.ActiveKid)")
         if ($service -ceq 'login') {
@@ -707,7 +960,8 @@ function Assert-PandoraDSTicketRevisionedConfigSecretContract {
     param(
         [Parameter(Mandatory = $true)]$SecretObject,
         [Parameter(Mandatory = $true)][int]$ExpectedRevision,
-        [Parameter(Mandatory = $true)][string]$ExpectedActiveKid
+        [Parameter(Mandatory = $true)][string]$ExpectedActiveKid,
+        [string]$ExpectedDataSha256 = ''
     )
     $name = "pandora-config-dsticket-r$ExpectedRevision"
     if ([string]$SecretObject.kind -cne 'Secret' -or [string]$SecretObject.metadata.name -cne $name -or
@@ -715,7 +969,7 @@ function Assert-PandoraDSTicketRevisionedConfigSecretContract {
         throw "DSTicket 阶段配置必须是 immutable pandora/Secret/$name。"
     }
     Assert-PandoraDSTicketConfigSecretContract -SecretObject $SecretObject -ExpectedActiveKid $ExpectedActiveKid `
-        -ExpectedLoginKeysetRevision $ExpectedRevision
+        -ExpectedLoginKeysetRevision $ExpectedRevision -ExpectedName $name
     $hash = Get-PandoraSecretDataSha256 -Data $SecretObject.data
     $annotations = $SecretObject.metadata.annotations
     if ([string](Get-PandoraRotationProperty $annotations 'pandora.dev/dsticket-config-revision') -cne [string]$ExpectedRevision -or
@@ -723,6 +977,10 @@ function Assert-PandoraDSTicketRevisionedConfigSecretContract {
         [string](Get-PandoraRotationProperty $annotations 'pandora.dev/dsticket-config-data-sha256') -cne $hash -or
         [string]::IsNullOrWhiteSpace([string](Get-PandoraRotationProperty $annotations 'pandora.dev/dsticket-config-source-resource-version'))) {
         throw "Secret/$name annotation/hash 与完整 data 不一致。"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedDataSha256) -and
+        ($ExpectedDataSha256 -cnotmatch '^[0-9a-f]{64}$' -or $hash -cne $ExpectedDataSha256)) {
+        throw "Secret/$name 完整 data hash=$hash 与当前 fixed pandora-config 投影=$ExpectedDataSha256 不一致。"
     }
     return [pscustomobject]@{ Revision = $ExpectedRevision; ActiveKid = $ExpectedActiveKid; DataSha256 = $hash }
 }
@@ -795,9 +1053,7 @@ function Test-PandoraDSTicketWorkloadSpecRevision {
         }
     }
     foreach ($reference in @(Get-PandoraDSTicketSignerSecretReferences $Spec)) {
-        if ($reference.Kind -cne 'DirectVolume') {
-            $failures.Add("$ObjectName 检测到禁止的 signer Secret/$($reference.Name) 引用($($reference.Kind):$($reference.Location))")
-        }
+        $failures.Add("$ObjectName 检测到禁止的 signer Secret/$($reference.Name) 引用($($reference.Kind):$($reference.Location))")
     }
     return @($failures)
 }
@@ -1476,6 +1732,15 @@ function Test-PandoraDSTicketReplicaSetRevisionGate {
             $signerReferences[0].Name -cne $expectedSignerSecret) {
             $failures.Add("Deployment/$name signer 私钥引用必须恰为一个 DirectVolume:volume/dsticket:$expectedSignerSecret；检测到 $($signerReferences.Count) 个")
         }
+        $expectedConfig = if ($ExpectedConfigSecretByDeployment.ContainsKey($name)) {
+            [string]$ExpectedConfigSecretByDeployment[$name]
+        } else { 'pandora-config' }
+        $expectedJwks = if ($name -ceq 'login') { "pandora-dsticket-jwks-r$LoginKeysetRevision" } else { '' }
+        foreach ($failure in @(Test-PandoraDSTicketSignerPodSpecReferenceContract -Spec $deploymentPodSpec `
+            -ServiceName $name -ExpectedConfigSecret $expectedConfig -ExpectedSignerSecret $expectedSignerSecret `
+            -ExpectedLoginJwks $expectedJwks -ObjectName "Deployment/$name")) {
+            $failures.Add($failure)
+        }
     }
     $seen = @{}
     foreach ($replicaSet in @($ReplicaSetObjects)) {
@@ -1537,6 +1802,12 @@ function Test-PandoraDSTicketReplicaSetRevisionGate {
             -not (Test-PandoraDeploymentVolumeReference $asDeployment dsticket-jwks configMap "pandora-dsticket-jwks-r$LoginKeysetRevision")) {
             $failures.Add("$where 非零但未引用目标 Login JWKS r$LoginKeysetRevision")
         }
+        $expectedJwks = if ($deploymentName -ceq 'login') { "pandora-dsticket-jwks-r$LoginKeysetRevision" } else { '' }
+        foreach ($failure in @(Test-PandoraDSTicketSignerPodSpecReferenceContract -Spec $replicaSetPodSpec `
+            -ServiceName $deploymentName -ExpectedConfigSecret $expectedConfig -ExpectedSignerSecret $expectedSignerSecret `
+            -ExpectedLoginJwks $expectedJwks -ObjectName $where)) {
+            $failures.Add($failure)
+        }
     }
     foreach ($deploymentName in $deploymentByName.Keys) {
         $replicas = Get-PandoraNonNegativeControllerCount `
@@ -1591,8 +1862,8 @@ function Assert-PandoraDSTicketSignerDeploymentGate {
         $pod = $_
         $app = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty `
             (Get-PandoraRotationProperty $pod 'metadata') 'labels') 'app')
-        $hasSignerReference = @(Get-PandoraDSTicketSignerSecretReferences (Get-PandoraRotationProperty $pod 'spec')).Count -gt 0
-        return $script:PandoraDSTicketSignerNames -ccontains $app -or $hasSignerReference
+        $hasDSTicketClue = Test-PandoraDSTicketDSPodSpecClue (Get-PandoraRotationProperty $pod 'spec')
+        return $script:PandoraDSTicketSignerNames -ccontains $app -or $hasDSTicketClue
     })
     foreach ($pod in $signerLikePods) {
         $podMeta = Get-PandoraRotationProperty $pod 'metadata'
@@ -1601,6 +1872,16 @@ function Assert-PandoraDSTicketSignerDeploymentGate {
         if ($script:PandoraDSTicketSignerNames -cnotcontains $app) {
             $failures.Add("Pod/$podName 挂载 DSTicket signer Secret 但 app='$app' 不是受管 signer（孤儿/错标 Pod）")
             continue
+        }
+        $expectedConfig = if ($ExpectedConfigSecretByDeployment.ContainsKey($app)) {
+            [string]$ExpectedConfigSecretByDeployment[$app]
+        } else { 'pandora-config' }
+        $expectedJwks = if ($app -ceq 'login') { $loginConfigMap } else { '' }
+        foreach ($failure in @(Test-PandoraDSTicketSignerPodSpecReferenceContract `
+            -Spec (Get-PandoraRotationProperty $pod 'spec') -ServiceName $app `
+            -ExpectedConfigSecret $expectedConfig -ExpectedSignerSecret $secretName `
+            -ExpectedLoginJwks $expectedJwks -ObjectName "Pod/$podName")) {
+            $failures.Add($failure)
         }
         $privateReferences = @(Get-PandoraDSTicketSignerSecretReferences (Get-PandoraRotationProperty $pod 'spec'))
         if ($privateReferences.Count -ne 1 -or $privateReferences[0].Kind -cne 'DirectVolume' -or
@@ -1715,6 +1996,29 @@ function Assert-PandoraDSTicketSignerDeploymentGate {
         }
     }
     if ($failures.Count -gt 0) { throw "DSTicket signer rollout 门禁失败:$($failures -join '; ')" }
+}
+
+function Assert-PandoraDSTicketRuntimeObjectGate {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$DeploymentObjects,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$ReplicaSetObjects,
+        [Parameter(Mandatory = $true)][object[]]$SignerPodObjects,
+        [Parameter(Mandatory = $true)][object[]]$FleetObjects,
+        [Parameter(Mandatory = $true)][object[]]$GameServerObjects,
+        [Parameter(Mandatory = $true)][object[]]$GameServerSetObjects,
+        [Parameter(Mandatory = $true)][object[]]$DSPodObjects,
+        [Parameter(Mandatory = $true)][int]$SignerRevision,
+        [Parameter(Mandatory = $true)][int]$LoginKeysetRevision,
+        [Parameter(Mandatory = $true)][hashtable]$ExpectedConfigSecretByDeployment,
+        [Parameter(Mandatory = $true)][int]$DSRevision
+    )
+    Assert-PandoraDSTicketSignerDeploymentGate -DeploymentObjects $DeploymentObjects `
+        -ReplicaSetObjects $ReplicaSetObjects -PodObjects $SignerPodObjects `
+        -SignerRevision $SignerRevision -LoginKeysetRevision $LoginKeysetRevision `
+        -ExpectedConfigSecretByDeployment $ExpectedConfigSecretByDeployment
+    $null = Assert-PandoraDSTicketLiveDSRevisionGate -FleetObjects $FleetObjects `
+        -GameServerObjects $GameServerObjects -GameServerSetObjects $GameServerSetObjects `
+        -PodObjects $DSPodObjects -TargetRevision $DSRevision
 }
 
 function Get-PandoraDSTicketMarkerCreationTime {
@@ -2099,7 +2403,11 @@ function Assert-PandoraDSTicketRotationTransitionHistoryState {
     if ($isTerminal) {
         $oldData = Get-PandoraDSTicketConfigSecretUpdatedData -SecretObject $FixedConfigSecret -ActiveKid $OldKid `
             -LoginKeysetRevision $OldSignerRevision -AllowedCurrentActiveKids @($NewKid)
-        $historicalFixed = [pscustomobject]@{ data = [pscustomobject]$oldData }
+        $historicalFixed = [pscustomobject]@{
+            kind = 'Secret'
+            metadata = [pscustomobject]@{ name = 'pandora-config'; namespace = 'pandora' }
+            data = [pscustomobject]$oldData
+        }
     }
     $previous = Assert-PandoraDSTicketOrdinaryMarkerState -RequestedRevision $OldSignerRevision `
         -ActivationMarkers $previousActivations -TerminalMarkers $previousTerminals -FixedConfigSecret $historicalFixed

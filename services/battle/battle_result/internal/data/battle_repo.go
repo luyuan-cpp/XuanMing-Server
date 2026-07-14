@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -44,13 +45,43 @@ type DropOutboxRecord struct {
 	ItemConfigIDs []uint32 // 本局该玩家所获白名单内装备 config id(每个发一件实例)
 }
 
+// TerminalReleaseRecord 是正常结算的持久终态回收证明。
+//
+// 本记录只能由 ReportResult 完成 callback Guard + Redis active 校验后构造，并与
+// battles / battle_player_stats 同一 MySQL 事务提交。Auth* 是“服务端校验时刻”的
+// 完整凭据证明；relay 时允许该 token 已过期或 gen/jti 已轮换，但 stable identity
+// (match/allocation/pod/UID/epoch/writer fence)必须仍精确一致。
+type TerminalReleaseRecord struct {
+	ID              uint64
+	MatchID         uint64
+	AllocationID    string
+	DSPodName       string
+	GameserverUID   string
+	InstanceEpoch   uint32
+	AuthGen         uint64
+	AuthJTI         string
+	AuthExpMs       int64
+	AuthKid         string
+	AuthTokenSHA256 string
+	AuthWriterEpoch uint32
+	AuthorizedAtMs  int64
+	ReleaseAfterMs  int64
+	// ReleasedAtMs>0 是阶段1“永久 Redis terminal + UID delete 已明确成功”的
+	// MySQL durable ACK。只有该状态才允许阶段2给墓碑设 TTL并删除本行。
+	ReleasedAtMs int64
+	CreatedAtMs  int64
+}
+
 // BattleRepo 是 battle_result 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type BattleRepo interface {
-	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox + battle_drop_outbox。
-	// 四者原子提交(不变量 §4:落库、待发布段位事件、待发放装备掉落不会半成功)。
+	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox +
+	// battle_drop_outbox + 可选 terminal_release_outbox。
+	// 五者原子提交(不变量 §4:落库、业务出箱、终态资源回收不会半成功)。
 	// 幂等:match_id 已存在 → 返回 (true, nil),不重复写(两路出箱也不写)。
 	// dropOutbox 可为空(无掉落 / ABANDONED)。
-	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord) (alreadyRecorded bool, err error)
+	// terminalRelease 仅正常的、已完成 Model-B 鉴权的同步 ReportResult 非空；ABANDONED
+	// 已由 ds_allocator 先回收，不得写 completed 终态行。
+	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord, terminalRelease *TerminalReleaseRecord) (alreadyRecorded bool, err error)
 	// GetResult 读一场对局结算(含全部玩家战绩)。not found → (nil, false, nil)。
 	GetResult(ctx context.Context, matchID uint64) (*battlev1.BattleResult, bool, error)
 	// ListPlayerHistory 倒序列出玩家参与的对局(ended_at_ms < beforeMs,最多 limit 条)。
@@ -64,6 +95,13 @@ type BattleRepo interface {
 	FetchDropOutbox(ctx context.Context, limit int) ([]DropOutboxRecord, error)
 	// DeleteDropOutbox 删除已成功发放的掉落出箱行。
 	DeleteDropOutbox(ctx context.Context, id int64) error
+	// FetchTerminalReleaseOutbox 只取已经到达客户端通知宽限窗的终态行。
+	FetchTerminalReleaseOutbox(ctx context.Context, limit int, nowMs int64) ([]TerminalReleaseRecord, error)
+	// MarkTerminalReleaseReleased 是 UID 条件回收明确成功后的 durable phase-1 ACK。
+	// CAS 只允许 0→releasedAtMs；false 表示已由并发 worker 推进或行已不存在。
+	MarkTerminalReleaseReleased(ctx context.Context, id uint64, releasedAtMs int64) (bool, error)
+	// DeleteTerminalReleaseOutbox 只在 released 行的 finalize-only RPC 明确成功后 ACK。
+	DeleteTerminalReleaseOutbox(ctx context.Context, id uint64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -76,7 +114,7 @@ func NewMySQLBattleRepo(db *sql.DB) *MySQLBattleRepo {
 	return &MySQLBattleRepo{db: db}
 }
 
-func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord) (bool, error) {
+func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord, terminalRelease *TerminalReleaseRecord) (bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "begin tx: %v", err)
@@ -158,6 +196,27 @@ VALUES (?, ?, ?, ?)`
 		}
 	}
 
+	// 正常结算的终态回收证明必须与战绩原子提交。它不是 DS 可填写的业务字段，
+	// 调用方已从 Guard + Redis active 的同一服务端快照构造并验证完整性。
+	if terminalRelease != nil {
+		const insTerminalRelease = `INSERT INTO terminal_release_outbox
+(match_id, allocation_id, ds_pod_name, gameserver_uid, instance_epoch,
+ auth_gen, auth_jti, auth_exp_ms, auth_kid, auth_token_sha256, auth_writer_epoch,
+ authorized_at_ms, release_after_ms, created_at_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		if _, terr := tx.ExecContext(ctx, insTerminalRelease,
+			result.GetMatchId(), terminalRelease.AllocationID, terminalRelease.DSPodName,
+			terminalRelease.GameserverUID, terminalRelease.InstanceEpoch,
+			terminalRelease.AuthGen, terminalRelease.AuthJTI, terminalRelease.AuthExpMs,
+			terminalRelease.AuthKid, terminalRelease.AuthTokenSHA256, terminalRelease.AuthWriterEpoch,
+			terminalRelease.AuthorizedAtMs, terminalRelease.ReleaseAfterMs, nowMs,
+		); terr != nil {
+			return false, errcode.New(errcode.ErrBattleResultDBWrite,
+				"insert terminal release outbox match=%d allocation=%s: %v",
+				result.GetMatchId(), terminalRelease.AllocationID, terr)
+		}
+	}
+
 	if cerr := tx.Commit(); cerr != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
 	}
@@ -235,6 +294,88 @@ func (r *MySQLBattleRepo) DeleteDropOutbox(ctx context.Context, id int64) error 
 	}
 	return nil
 }
+
+// FetchTerminalReleaseOutbox 按到期时间/id 取一批待终态回收行。
+func (r *MySQLBattleRepo) FetchTerminalReleaseOutbox(ctx context.Context, limit int, nowMs int64) ([]TerminalReleaseRecord, error) {
+	if limit <= 0 {
+		limit = 128
+	}
+	if nowMs <= 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	const q = `SELECT id, match_id, allocation_id, ds_pod_name, gameserver_uid, instance_epoch,
+auth_gen, auth_jti, auth_exp_ms, auth_kid, auth_token_sha256, auth_writer_epoch,
+authorized_at_ms, release_after_ms, released_at_ms, created_at_ms
+FROM terminal_release_outbox
+WHERE release_after_ms <= ?
+ORDER BY release_after_ms ASC, id ASC
+LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, q, nowMs, limit)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "query terminal release outbox: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]TerminalReleaseRecord, 0, limit)
+	for rows.Next() {
+		var rec TerminalReleaseRecord
+		if err := rows.Scan(
+			&rec.ID, &rec.MatchID, &rec.AllocationID, &rec.DSPodName, &rec.GameserverUID,
+			&rec.InstanceEpoch, &rec.AuthGen, &rec.AuthJTI, &rec.AuthExpMs, &rec.AuthKid,
+			&rec.AuthTokenSHA256, &rec.AuthWriterEpoch, &rec.AuthorizedAtMs,
+			&rec.ReleaseAfterMs, &rec.ReleasedAtMs, &rec.CreatedAtMs,
+		); err != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan terminal release outbox: %v", err)
+		}
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate terminal release outbox: %v", err)
+	}
+	return out, nil
+}
+
+// MarkTerminalReleaseReleased 持久化阶段1 ACK。它必须发生在 Redis 永久 terminal
+// 与 UID-precondition delete 明确成功之后、任何 Redis TTL 恢复之前。
+func (r *MySQLBattleRepo) MarkTerminalReleaseReleased(ctx context.Context, id uint64, releasedAtMs int64) (bool, error) {
+	if id == 0 || releasedAtMs <= 0 {
+		return false, errcode.New(errcode.ErrInvalidArg, "terminal release mark requires id/time")
+	}
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE terminal_release_outbox SET released_at_ms=? WHERE id=? AND released_at_ms=0`,
+		releasedAtMs, id)
+	if err != nil {
+		return false, fmt.Errorf("mark terminal release released: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("mark terminal release rows affected: %w", err)
+	}
+	return affected == 1, nil
+}
+
+// DeleteTerminalReleaseOutbox 是阶段2 finalize 的 ACK。外部回收或 finalize 结果未知时绝不能调用。
+func (r *MySQLBattleRepo) DeleteTerminalReleaseOutbox(ctx context.Context, id uint64) error {
+	if id == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "terminal release outbox id required")
+	}
+	res, err := r.db.ExecContext(ctx, deleteTerminalReleaseOutboxSQL, id)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "delete terminal release outbox id=%d: %v", id, err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "delete terminal release rows affected id=%d: %v", id, err)
+	}
+	// 0 = 已被并发 worker 删除，或仍是 pending（WHERE 前置条件保护它不被误删）；
+	// 两者都按幂等 no-op。PK 保证 >1 是结构/驱动异常，必须 fail-closed。
+	if affected > 1 {
+		return errcode.New(errcode.ErrInternal, "delete terminal release id=%d affected=%d", id, affected)
+	}
+	return nil
+}
+
+const deleteTerminalReleaseOutboxSQL = `DELETE FROM terminal_release_outbox WHERE id = ? AND released_at_ms > 0`
 
 // encodeConfigIDs 把 item_config_id 列表编码成 CSV(如 "5001,5002"),存 drop 出箱。
 func encodeConfigIDs(ids []uint32) string {

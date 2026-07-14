@@ -119,7 +119,7 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	var res *biz.HeartbeatResult
 	if cred != nil {
 		// Model B 权威模式:走 ActivateHeartbeat 单事务线性化点(stale fail-closed)。
-		res, err = s.uc.HeartbeatWithCredential(ctx, req.GetHubPodName(), req.GetPlayerCount(), req.GetState(), req.GetTsMs(), &biz.HubCredential{
+		res, err = s.uc.HeartbeatWithCredential(ctx, req.GetHubPodName(), req.GetPlayerCount(), req.GetPlayerIds(), req.GetMaxPlayers(), req.GetState(), req.GetTsMs(), &biz.HubCredential{
 			InstanceUID:   cred.InstanceUID,
 			ProtocolEpoch: cred.ProtocolEpoch,
 			Gen:           cred.Gen,
@@ -155,6 +155,54 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 		AcceptedProtocolEpoch: res.AcceptedProtocolEpoch,
 		AcceptedWriterEpoch:   res.AcceptedWriterEpoch,
 	}, nil
+}
+
+// AcknowledgeAdmission 只接受 :8444 DS callback credential；请求里的 player/assignment
+// 仍须由 Redis reservation + 当前 active instance identity 二次核验。
+func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.AcknowledgeAdmissionRequest) (*hubv1.AcknowledgeAdmissionResponse, error) {
+	if !s.modelBAuthority || req.GetPlayerId() == 0 || req.GetAssignmentId() == "" ||
+		req.GetHubPodName() == "" || req.GetAdmissionId() == "" || req.GetAdmissionSeq() == 0 {
+		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	_, cred, err := s.dsGuard.CheckHubCredential(ctx, pmw.DSScope{
+		Type: auth.DSTypeHub, Pod: req.GetHubPodName(), RequireToken: true,
+	})
+	if err != nil {
+		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
+	}
+	if cred == nil {
+		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	result, err := s.uc.AcknowledgeAdmission(ctx, req.GetPlayerId(), req.GetAssignmentId(),
+		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), hubCredentialFromGuard(cred))
+	if err != nil {
+		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
+	}
+	return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted}, nil
+}
+
+// AcknowledgeDeparture exact 删除当前 admission owner；Conflict 返回 OK+departed=false，
+// 让旧连接停止重试且不影响已接管的新连接。
+func (s *HubService) AcknowledgeDeparture(ctx context.Context, req *hubv1.AcknowledgeDepartureRequest) (*hubv1.AcknowledgeDepartureResponse, error) {
+	if !s.modelBAuthority || req.GetPlayerId() == 0 || req.GetAssignmentId() == "" ||
+		req.GetHubPodName() == "" || req.GetAdmissionId() == "" || req.GetAdmissionSeq() == 0 {
+		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	_, cred, err := s.dsGuard.CheckHubCredential(ctx, pmw.DSScope{
+		Type: auth.DSTypeHub, Pod: req.GetHubPodName(), RequireToken: true,
+	})
+	if err != nil {
+		return &hubv1.AcknowledgeDepartureResponse{Code: toProtoCode(err)}, nil
+	}
+	if cred == nil {
+		return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+	result, err := s.uc.AcknowledgeDeparture(ctx, req.GetPlayerId(), req.GetAssignmentId(),
+		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), hubCredentialFromGuard(cred))
+	if err != nil {
+		return &hubv1.AcknowledgeDepartureResponse{Code: toProtoCode(err)}, nil
+	}
+	return &hubv1.AcknowledgeDepartureResponse{Code: commonv1.ErrCode_OK, Departed: result.Departed}, nil
 }
 
 // ListHubLines 列出玩家当前 region 可切换的大厅线路(玩家侧,player_id 取自 JWT sub)。
@@ -205,4 +253,14 @@ func (s *HubService) TransferToLine(ctx context.Context, req *hubv1.TransferToLi
 // toProtoCode 把 pkg/errcode 1:1 映射成 proto enum(数值相同)。
 func toProtoCode(err error) commonv1.ErrCode {
 	return commonv1.ErrCode(errcode.As(err))
+}
+
+func hubCredentialFromGuard(cred *pmw.VerifiedCredential) *biz.HubCredential {
+	if cred == nil {
+		return nil
+	}
+	return &biz.HubCredential{
+		InstanceUID: cred.InstanceUID, ProtocolEpoch: cred.ProtocolEpoch, Gen: cred.Gen,
+		JTI: cred.JTI, TokenSHA256: cred.TokenSHA256, Kid: cred.Kid, WriterEpoch: cred.WriterEpoch,
+	}
 }

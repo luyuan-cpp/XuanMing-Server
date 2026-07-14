@@ -9,10 +9,15 @@ package biz
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 
@@ -24,18 +29,23 @@ import (
 
 // fakeRepo 是内存版 data.BattleRepo,按 match_id 唯一(模拟 unique 幂等)+内存出箱。
 type fakeRepo struct {
-	store      map[uint64]*battlev1.BattleResult
-	saveErr    error
-	saveCnt    int
-	outbox     []data.OutboxRecord     // player.update 待发布,按 ID 升序
-	dropOutbox []data.DropOutboxRecord // 装备掉落待发放,按 ID 升序(W5 ④)
-	nextID     int64
-	nextDropID int64
+	store                     map[uint64]*battlev1.BattleResult
+	saveErr                   error
+	saveCnt                   int
+	outbox                    []data.OutboxRecord     // player.update 待发布,按 ID 升序
+	dropOutbox                []data.DropOutboxRecord // 装备掉落待发放,按 ID 升序(W5 ④)
+	nextID                    int64
+	nextDropID                int64
+	terminalOutbox            []data.TerminalReleaseRecord
+	nextTerminalID            uint64
+	terminalDeleteErr         error
+	terminalMarkErr           error
+	terminalMarkCommitThenErr bool
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{store: map[uint64]*battlev1.BattleResult{}} }
 
-func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, outbox []data.OutboxRecord, dropOutbox []data.DropOutboxRecord) (bool, error) {
+func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, outbox []data.OutboxRecord, dropOutbox []data.DropOutboxRecord, terminalRelease *data.TerminalReleaseRecord) (bool, error) {
 	r.saveCnt++
 	if r.saveErr != nil {
 		return false, r.saveErr
@@ -57,6 +67,13 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 			ID: r.nextDropID, MatchID: result.GetMatchId(), PlayerID: d.PlayerID,
 			ItemConfigIDs: append([]uint32(nil), d.ItemConfigIDs...),
 		})
+	}
+	if terminalRelease != nil {
+		r.nextTerminalID++
+		rec := *terminalRelease
+		rec.ID = r.nextTerminalID
+		rec.CreatedAtMs = time.Now().UnixMilli()
+		r.terminalOutbox = append(r.terminalOutbox, rec)
 	}
 	return false, nil
 }
@@ -113,6 +130,59 @@ func (r *fakeRepo) DeleteDropOutbox(_ context.Context, id int64) error {
 		}
 	}
 	return nil
+}
+
+func (r *fakeRepo) FetchTerminalReleaseOutbox(_ context.Context, limit int, nowMs int64) ([]data.TerminalReleaseRecord, error) {
+	out := make([]data.TerminalReleaseRecord, 0, len(r.terminalOutbox))
+	for _, rec := range r.terminalOutbox {
+		if rec.ReleaseAfterMs <= nowMs {
+			out = append(out, rec)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) DeleteTerminalReleaseOutbox(_ context.Context, id uint64) error {
+	if r.terminalDeleteErr != nil {
+		return r.terminalDeleteErr
+	}
+	for i, rec := range r.terminalOutbox {
+		if rec.ID == id {
+			if rec.ReleasedAtMs <= 0 {
+				return nil // 模拟 SQL WHERE released_at_ms > 0 的 pending 防删前置条件。
+			}
+			r.terminalOutbox = append(r.terminalOutbox[:i], r.terminalOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *fakeRepo) MarkTerminalReleaseReleased(_ context.Context, id uint64, releasedAtMs int64) (bool, error) {
+	for i := range r.terminalOutbox {
+		if r.terminalOutbox[i].ID != id {
+			continue
+		}
+		if r.terminalOutbox[i].ReleasedAtMs != 0 {
+			return false, nil
+		}
+		if r.terminalMarkCommitThenErr {
+			r.terminalOutbox[i].ReleasedAtMs = releasedAtMs
+			return false, errors.New("mysql phase1 ACK response unknown")
+		}
+		if r.terminalMarkErr != nil {
+			return false, r.terminalMarkErr
+		}
+		r.terminalOutbox[i].ReleasedAtMs = releasedAtMs
+		return true, nil
+	}
+	if r.terminalMarkErr != nil {
+		return false, r.terminalMarkErr
+	}
+	return false, nil
 }
 
 // fakePusher 捕获 player.update 事件;failFirst>0 时前 failFirst 次推送返错(模拟 Kafka 不可用),
@@ -182,8 +252,8 @@ type simpleErr string
 
 func (e simpleErr) Error() string { return string(e) }
 
-func newTestUsecase(repo *fakeRepo, pusher PlayerUpdatePusher) *BattleResultUsecase {
-	cfg := conf.BattleConf{EloKFactor: 32, BaseMMR: 1500}
+func newTestUsecase(repo data.BattleRepo, pusher PlayerUpdatePusher) *BattleResultUsecase {
+	cfg := conf.BattleConf{EloKFactor: 32, BaseMMR: 1500, TerminalReleaseGrace: config.Duration(5 * time.Second)}
 	return NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), pusher, nil, cfg)
 }
 
@@ -574,6 +644,433 @@ func TestOutboxNilPusherNoLoss(t *testing.T) {
 	}
 	if len(repo.outbox) != 4 {
 		t.Fatalf("nil pusher must not lose outbox, got %d", len(repo.outbox))
+	}
+}
+
+type fakeTerminalRelay struct {
+	calls             []data.TerminalReleaseRecord
+	failFirst         int
+	failErr           error
+	finalizeCalls     []data.TerminalReleaseRecord
+	finalizeFailFirst int
+	finalizeErr       error
+}
+
+// concurrentTerminalRepo 模拟多个 battle_result 副本共享同一张 MySQL outbox。
+// 只覆写 worker 会调用的三个方法；其余 BattleRepo 方法由嵌入的 fakeRepo 提供。
+type concurrentTerminalRepo struct {
+	*fakeRepo
+	mu          sync.Mutex
+	markCalls   int
+	markWins    int
+	deleteCalls int
+}
+
+func (r *concurrentTerminalRepo) FetchTerminalReleaseOutbox(_ context.Context, limit int, nowMs int64) ([]data.TerminalReleaseRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]data.TerminalReleaseRecord, 0, len(r.terminalOutbox))
+	for _, rec := range r.terminalOutbox {
+		if rec.ReleaseAfterMs <= nowMs {
+			out = append(out, rec)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (r *concurrentTerminalRepo) MarkTerminalReleaseReleased(_ context.Context, id uint64, releasedAtMs int64) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.markCalls++
+	for i := range r.terminalOutbox {
+		if r.terminalOutbox[i].ID != id || r.terminalOutbox[i].ReleasedAtMs != 0 {
+			continue
+		}
+		r.terminalOutbox[i].ReleasedAtMs = releasedAtMs
+		r.markWins++
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r *concurrentTerminalRepo) DeleteTerminalReleaseOutbox(_ context.Context, id uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.deleteCalls++
+	for i, rec := range r.terminalOutbox {
+		if rec.ID == id && rec.ReleasedAtMs > 0 {
+			r.terminalOutbox = append(r.terminalOutbox[:i], r.terminalOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *concurrentTerminalRepo) terminalState() (rows int, releasedAt int64, markCalls, markWins, deleteCalls int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rows = len(r.terminalOutbox)
+	if rows > 0 {
+		releasedAt = r.terminalOutbox[0].ReleasedAtMs
+	}
+	return rows, releasedAt, r.markCalls, r.markWins, r.deleteCalls
+}
+
+// barrierTerminalRelay 强制两个 worker 都拿到同一个 phase 快照后再返回 RPC，
+// 从而稳定覆盖并发 phase1 CAS 与并发 finalize/delete，而不是依赖调度时序。
+type barrierTerminalRelay struct {
+	mu            sync.Mutex
+	want          int
+	releaseCalls  int
+	finalizeCalls int
+	releaseReady  chan struct{}
+	finalizeReady chan struct{}
+}
+
+func newBarrierTerminalRelay(want int) *barrierTerminalRelay {
+	return &barrierTerminalRelay{
+		want: want, releaseReady: make(chan struct{}), finalizeReady: make(chan struct{}),
+	}
+}
+
+func (r *barrierTerminalRelay) ReleaseTerminal(ctx context.Context, _ data.TerminalReleaseRecord) error {
+	r.mu.Lock()
+	r.releaseCalls++
+	if r.releaseCalls == r.want {
+		close(r.releaseReady)
+	}
+	ready := r.releaseReady
+	r.mu.Unlock()
+	select {
+	case <-ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (r *barrierTerminalRelay) FinalizeTerminal(ctx context.Context, _ data.TerminalReleaseRecord) error {
+	r.mu.Lock()
+	r.finalizeCalls++
+	if r.finalizeCalls == r.want {
+		close(r.finalizeReady)
+	}
+	ready := r.finalizeReady
+	r.mu.Unlock()
+	select {
+	case <-ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (r *barrierTerminalRelay) counts() (release, finalize int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.releaseCalls, r.finalizeCalls
+}
+
+func (r *fakeTerminalRelay) FinalizeTerminal(_ context.Context, rec data.TerminalReleaseRecord) error {
+	r.finalizeCalls = append(r.finalizeCalls, rec)
+	if len(r.finalizeCalls) <= r.finalizeFailFirst {
+		if r.finalizeErr != nil {
+			return r.finalizeErr
+		}
+		return errors.New("Redis finalize result unknown")
+	}
+	return nil
+}
+
+func (r *fakeTerminalRelay) ReleaseTerminal(_ context.Context, rec data.TerminalReleaseRecord) error {
+	r.calls = append(r.calls, rec)
+	if len(r.calls) <= r.failFirst {
+		if r.failErr != nil {
+			return r.failErr
+		}
+		return errors.New("redis or k8s result unknown")
+	}
+	return nil
+}
+
+func terminalProof(matchID uint64, pod, jti string, gen uint64) data.TerminalReleaseRecord {
+	nowMs := time.Now().UnixMilli()
+	return data.TerminalReleaseRecord{
+		MatchID: matchID, AllocationID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		DSPodName: pod, GameserverUID: "uid-900", InstanceEpoch: 3,
+		AuthGen: gen, AuthJTI: jti, AuthExpMs: nowMs + 60_000,
+		AuthKid: "kid-1", AuthTokenSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		AuthWriterEpoch: auth.DSAuthWriterEpochV2, AuthorizedAtMs: nowMs,
+	}
+}
+
+func terminalResult(matchID uint64, pod string) *battlev1.BattleResult {
+	return &battlev1.BattleResult{
+		MatchId: matchID, DsPodName: pod, WinnerTeam: winnerTeamA, EndedAtMs: time.Now().UnixMilli(),
+		Stats: []*battlev1.PlayerStats{{PlayerId: 1, Team: 0}, {PlayerId: 2, Team: 1}},
+	}
+}
+
+func TestTerminalReleaseProofCommitsWithBattleAndGrace(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newTestUsecase(repo, &fakePusher{})
+	proof := terminalProof(800, "battle-800", "old-jti", 7)
+	before := time.Now().UnixMilli()
+	already, err := uc.ReportAuthorizedResult(context.Background(), terminalResult(800, "battle-800"), proof)
+	if err != nil || already {
+		t.Fatalf("authorized report already=%v err=%v", already, err)
+	}
+	if len(repo.store) != 1 || len(repo.terminalOutbox) != 1 {
+		t.Fatalf("battle/outbox not committed together: battles=%d terminal=%d", len(repo.store), len(repo.terminalOutbox))
+	}
+	got := repo.terminalOutbox[0]
+	if got.AuthJTI != "old-jti" || got.AuthGen != 7 || got.AuthorizedAtMs != proof.AuthorizedAtMs {
+		t.Fatalf("persisted proof drifted: %+v", got)
+	}
+	if got.ReleaseAfterMs < before+5_000 {
+		t.Fatalf("release grace missing: release_after=%d before=%d", got.ReleaseAfterMs, before)
+	}
+}
+
+func TestTerminalReleaseDBFailureNeverReturnsSuccess(t *testing.T) {
+	repo := newFakeRepo()
+	repo.saveErr = errors.New("mysql commit failed")
+	uc := newTestUsecase(repo, &fakePusher{})
+	if already, err := uc.ReportAuthorizedResult(
+		context.Background(), terminalResult(801, "battle-801"), terminalProof(801, "battle-801", "j1", 1),
+	); err == nil || already {
+		t.Fatalf("DB failure was accepted: already=%v err=%v", already, err)
+	}
+	if len(repo.store) != 0 || len(repo.terminalOutbox) != 0 {
+		t.Fatalf("DB failure left partial state: battles=%d terminal=%d", len(repo.store), len(repo.terminalOutbox))
+	}
+}
+
+func TestTerminalReleaseOldProofSurvivesCredentialRotationReplay(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newTestUsecase(repo, &fakePusher{})
+	result := terminalResult(802, "battle-802")
+	oldProof := terminalProof(802, "battle-802", "old-jti", 7)
+	if already, err := uc.ReportAuthorizedResult(context.Background(), result, oldProof); err != nil || already {
+		t.Fatalf("first report already=%v err=%v", already, err)
+	}
+	newProof := terminalProof(802, "battle-802", "new-jti", 8)
+	if already, err := uc.ReportAuthorizedResult(context.Background(), proto.Clone(result).(*battlev1.BattleResult), newProof); err != nil || !already {
+		t.Fatalf("rotated replay already=%v err=%v", already, err)
+	}
+	if len(repo.terminalOutbox) != 1 {
+		t.Fatalf("rotated replay wrote another terminal row: %d", len(repo.terminalOutbox))
+	}
+	if got := repo.terminalOutbox[0]; got.AuthGen != oldProof.AuthGen || got.AuthJTI != oldProof.AuthJTI {
+		t.Fatalf("rotated replay replaced durable proof: got gen=%d jti=%q", got.AuthGen, got.AuthJTI)
+	}
+}
+
+func TestTerminalReleaseRetriesUnknownAndAckFailure(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newTestUsecase(repo, &fakePusher{})
+	if _, err := uc.ReportAuthorizedResult(
+		context.Background(), terminalResult(803, "battle-803"), terminalProof(803, "battle-803", "j1", 1),
+	); err != nil {
+		t.Fatal(err)
+	}
+	// 跳过通知宽限窗，直接测试 worker 故障矩阵。
+	repo.terminalOutbox[0].ReleaseAfterMs = time.Now().Add(-time.Second).UnixMilli()
+	relay := &fakeTerminalRelay{failFirst: 1}
+	uc.SetTerminalReleaseRelay(relay)
+	if n, err := uc.publishTerminalReleaseBatch(context.Background()); err != nil || n != 0 {
+		t.Fatalf("unknown round n=%d err=%v", n, err)
+	}
+	if len(repo.terminalOutbox) != 1 {
+		t.Fatal("unknown Redis/K8s result ACKed outbox")
+	}
+
+	// phase1 明确成功后只把 MySQL 行 durable 推进为 released，绝不在同轮 finalize/delete。
+	if n, err := uc.publishTerminalReleaseBatch(context.Background()); err != nil || n != 0 {
+		t.Fatalf("phase1 mark round n=%d err=%v", n, err)
+	}
+	if len(repo.terminalOutbox) != 1 || repo.terminalOutbox[0].ReleasedAtMs <= 0 ||
+		len(relay.calls) != 2 || len(relay.finalizeCalls) != 0 {
+		t.Fatalf("phase1 durable state invalid: rows=%+v release_calls=%d finalize_calls=%d",
+			repo.terminalOutbox, len(relay.calls), len(relay.finalizeCalls))
+	}
+
+	repo.terminalDeleteErr = errors.New("mysql ACK failed")
+	if n, err := uc.publishTerminalReleaseBatch(context.Background()); err == nil || n != 0 {
+		t.Fatalf("finalize ACK failure round n=%d err=%v", n, err)
+	}
+	if len(repo.terminalOutbox) != 1 || len(relay.calls) != 2 || len(relay.finalizeCalls) != 1 {
+		t.Fatalf("finalize ACK failure lost retry state: rows=%d release_calls=%d finalize_calls=%d",
+			len(repo.terminalOutbox), len(relay.calls), len(relay.finalizeCalls))
+	}
+
+	repo.terminalDeleteErr = nil
+	if n, err := uc.publishTerminalReleaseBatch(context.Background()); err != nil || n != 1 {
+		t.Fatalf("recovery round n=%d err=%v", n, err)
+	}
+	if len(repo.terminalOutbox) != 0 || len(relay.calls) != 2 || len(relay.finalizeCalls) != 2 {
+		t.Fatalf("recovery did not close: rows=%d release_calls=%d finalize_calls=%d",
+			len(repo.terminalOutbox), len(relay.calls), len(relay.finalizeCalls))
+	}
+}
+
+func TestTerminalReleasePhase1DBMarkFailureSurvivesWorkerRestart(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newTestUsecase(repo, &fakePusher{})
+	if _, err := uc.ReportAuthorizedResult(
+		context.Background(), terminalResult(805, "battle-805"), terminalProof(805, "battle-805", "j1", 1),
+	); err != nil {
+		t.Fatal(err)
+	}
+	repo.terminalOutbox[0].ReleaseAfterMs = time.Now().Add(-time.Second).UnixMilli()
+	firstRelay := &fakeTerminalRelay{}
+	uc.SetTerminalReleaseRelay(firstRelay)
+	repo.terminalMarkErr = errors.New("mysql unavailable after UID delete")
+	if n, err := uc.publishTerminalReleaseBatch(context.Background()); err == nil || n != 0 {
+		t.Fatalf("uncommitted mark failure n=%d err=%v", n, err)
+	}
+	if repo.terminalOutbox[0].ReleasedAtMs != 0 || len(firstRelay.calls) != 1 || len(firstRelay.finalizeCalls) != 0 {
+		t.Fatalf("uncommitted mark advanced phase: row=%+v relay=%+v", repo.terminalOutbox[0], firstRelay)
+	}
+
+	// 模拟进程重启：DB 行仍是 pending，必须安全重放 phase1 UID delete，不可直接 finalize。
+	repo.terminalMarkErr = nil
+	restartedRelay := &fakeTerminalRelay{}
+	restarted := newTestUsecase(repo, &fakePusher{})
+	restarted.SetTerminalReleaseRelay(restartedRelay)
+	if n, err := restarted.publishTerminalReleaseBatch(context.Background()); err != nil || n != 0 {
+		t.Fatalf("restart phase1 n=%d err=%v", n, err)
+	}
+	if repo.terminalOutbox[0].ReleasedAtMs <= 0 || len(restartedRelay.calls) != 1 || len(restartedRelay.finalizeCalls) != 0 {
+		t.Fatalf("restart did not durable-mark phase1: row=%+v relay=%+v", repo.terminalOutbox[0], restartedRelay)
+	}
+	if n, err := restarted.publishTerminalReleaseBatch(context.Background()); err != nil || n != 1 {
+		t.Fatalf("restart finalize n=%d err=%v", n, err)
+	}
+}
+
+func TestTerminalReleaseCommittedMarkUnknownRestartsAtFinalizeOnly(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newTestUsecase(repo, &fakePusher{})
+	if _, err := uc.ReportAuthorizedResult(
+		context.Background(), terminalResult(806, "battle-806"), terminalProof(806, "battle-806", "j1", 1),
+	); err != nil {
+		t.Fatal(err)
+	}
+	repo.terminalOutbox[0].ReleaseAfterMs = time.Now().Add(-time.Second).UnixMilli()
+	repo.terminalMarkCommitThenErr = true
+	firstRelay := &fakeTerminalRelay{}
+	uc.SetTerminalReleaseRelay(firstRelay)
+	if n, err := uc.publishTerminalReleaseBatch(context.Background()); err == nil || n != 0 {
+		t.Fatalf("commit-then-response-loss n=%d err=%v", n, err)
+	}
+	if repo.terminalOutbox[0].ReleasedAtMs <= 0 || len(firstRelay.calls) != 1 {
+		t.Fatalf("committed mark not visible: row=%+v calls=%d", repo.terminalOutbox[0], len(firstRelay.calls))
+	}
+
+	// 新进程按 durable DB state 只调 finalize，绝不再碰 Kubernetes delete。
+	repo.terminalMarkCommitThenErr = false
+	restartedRelay := &fakeTerminalRelay{}
+	restarted := newTestUsecase(repo, &fakePusher{})
+	restarted.SetTerminalReleaseRelay(restartedRelay)
+	if n, err := restarted.publishTerminalReleaseBatch(context.Background()); err != nil || n != 1 {
+		t.Fatalf("restart finalize-only n=%d err=%v", n, err)
+	}
+	if len(restartedRelay.calls) != 0 || len(restartedRelay.finalizeCalls) != 1 || len(repo.terminalOutbox) != 0 {
+		t.Fatalf("restart repeated K8s or failed close: release=%d finalize=%d rows=%d",
+			len(restartedRelay.calls), len(restartedRelay.finalizeCalls), len(repo.terminalOutbox))
+	}
+}
+
+func TestTerminalReleaseConcurrentWorkersCASThenFinalizeOnly(t *testing.T) {
+	base := newFakeRepo()
+	proof := terminalProof(807, "battle-807", "j1", 1)
+	proof.ID = 1
+	proof.ReleaseAfterMs = time.Now().Add(-time.Second).UnixMilli()
+	base.terminalOutbox = []data.TerminalReleaseRecord{proof}
+	repo := &concurrentTerminalRepo{fakeRepo: base}
+	relay := newBarrierTerminalRelay(2)
+	workers := []*BattleResultUsecase{
+		newTestUsecase(repo, &fakePusher{}),
+		newTestUsecase(repo, &fakePusher{}),
+	}
+	for _, worker := range workers {
+		worker.SetTerminalReleaseRelay(relay)
+	}
+
+	runRound := func() []error {
+		errs := make([]error, len(workers))
+		var wg sync.WaitGroup
+		wg.Add(len(workers))
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		for i, worker := range workers {
+			go func(i int, worker *BattleResultUsecase) {
+				defer wg.Done()
+				_, errs[i] = worker.publishTerminalReleaseBatch(ctx)
+			}(i, worker)
+		}
+		wg.Wait()
+		return errs
+	}
+
+	for i, err := range runRound() {
+		if err != nil {
+			t.Fatalf("phase1 worker %d: %v", i, err)
+		}
+	}
+	rows, releasedAt, markCalls, markWins, deleteCalls := repo.terminalState()
+	releaseCalls, finalizeCalls := relay.counts()
+	if rows != 1 || releasedAt <= 0 || markCalls != 2 || markWins != 1 || deleteCalls != 0 {
+		t.Fatalf("phase1 CAS state rows=%d released=%d mark_calls=%d wins=%d deletes=%d",
+			rows, releasedAt, markCalls, markWins, deleteCalls)
+	}
+	if releaseCalls != 2 || finalizeCalls != 0 {
+		t.Fatalf("phase1 relay calls release=%d finalize=%d", releaseCalls, finalizeCalls)
+	}
+
+	for i, err := range runRound() {
+		if err != nil {
+			t.Fatalf("phase2 worker %d: %v", i, err)
+		}
+	}
+	rows, _, markCalls, markWins, deleteCalls = repo.terminalState()
+	releaseCalls, finalizeCalls = relay.counts()
+	if rows != 0 || markCalls != 2 || markWins != 1 || deleteCalls != 2 {
+		t.Fatalf("phase2 DB state rows=%d mark_calls=%d wins=%d deletes=%d",
+			rows, markCalls, markWins, deleteCalls)
+	}
+	if releaseCalls != 2 || finalizeCalls != 2 {
+		t.Fatalf("phase2 repeated K8s path: release=%d finalize=%d", releaseCalls, finalizeCalls)
+	}
+}
+
+func TestTerminalReleaseUIDMismatchNeverACKsOutbox(t *testing.T) {
+	repo := newFakeRepo()
+	uc := newTestUsecase(repo, &fakePusher{})
+	if _, err := uc.ReportAuthorizedResult(
+		context.Background(), terminalResult(804, "battle-804"), terminalProof(804, "battle-804", "j1", 1),
+	); err != nil {
+		t.Fatal(err)
+	}
+	repo.terminalOutbox[0].ReleaseAfterMs = time.Now().Add(-time.Second).UnixMilli()
+	relay := &fakeTerminalRelay{
+		failFirst: 100,
+		failErr: errcode.New(errcode.ErrDSAllocationFailed,
+			"allocation/UID/epoch changed before UID-precondition release"),
+	}
+	uc.SetTerminalReleaseRelay(relay)
+	for attempt := 0; attempt < 2; attempt++ {
+		if n, err := uc.publishTerminalReleaseBatch(context.Background()); err != nil || n != 0 {
+			t.Fatalf("UID mismatch attempt=%d n=%d err=%v", attempt, n, err)
+		}
+	}
+	if len(repo.terminalOutbox) != 1 || len(relay.calls) != 2 {
+		t.Fatalf("UID mismatch ACKed or stopped retrying: rows=%d calls=%d",
+			len(repo.terminalOutbox), len(relay.calls))
 	}
 }
 

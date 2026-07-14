@@ -5,8 +5,8 @@
 //   - proto Request/Response ↔ biz 入参/出参互转
 //   - errcode.Code → commonv1.ErrCode 1:1 映射
 //
-// 说明:ReportResult 同步上报(测试 / 兼容用),正常链路走 kafka 消费;
-// 调用方为后端内部 / 运维,不从 ctx 取 player_id。
+// 说明:Model-B 的 ReportResult 是正常唯一结算入口，必须经 DS callback Guard + Redis
+// active 校验；无凭据 Kafka battle.result 只允许 legacy/off。调用方不从 ctx 取 player_id。
 package service
 
 import (
@@ -14,11 +14,13 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/biz"
+	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
 )
 
 // BattleResultService 实现 battlev1.BattleResultServiceServer。
@@ -56,24 +58,34 @@ func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.Re
 	if err != nil {
 		return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
 	}
+	var terminalRelease *data.TerminalReleaseRecord
 	if s.battleCredentialChecker != nil {
 		if credential == nil || req.GetResult().GetDsPodName() == "" || req.GetResult().GetDsPodName() != credential.Pod {
 			return &battlev1.ReportResultResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 		}
-		if err := s.battleCredentialChecker.CheckActive(ctx, req.GetResult().GetMatchId(), credential); err != nil {
+		proof, err := s.battleCredentialChecker.AuthorizeResult(ctx, req.GetResult().GetMatchId(), credential)
+		if err != nil {
 			return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
 		}
+		terminalRelease = &proof
 	}
-	already, err := s.uc.ReportResult(ctx, req.GetResult())
+	var already bool
+	if terminalRelease != nil {
+		already, err = s.uc.ReportAuthorizedResult(ctx, req.GetResult(), *terminalRelease)
+	} else {
+		already, err = s.uc.ReportResult(ctx, req.GetResult())
+	}
 	if err != nil {
 		return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
 	}
-	if s.battleCredentialChecker != nil {
-		// DB 幂等落库成功后，必须再把完整 active tuple 写成同槽 result receipt。
-		// receipt 失败时不回 OK；DS 用同一结果重试会命中 DB 幂等，再次完成 receipt。
+	if s.battleCredentialChecker != nil && !already {
+		// immediate receipt 只是低延迟优化。MySQL 已把同一鉴权证明与战绩原子写入
+		// terminal_release_outbox；即使这里因响应丢失、Redis 抖动或 token 临界过期失败，
+		// 也必须回 OK，后台 relay 会用持久证明完成 terminal CAS + UID 回收。
 		if err := s.battleCredentialChecker.MarkResultRecorded(
 			ctx, req.GetResult().GetMatchId(), credential); err != nil {
-			return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
+			plog.With(ctx).Warnw("msg", "battle_result_receipt_deferred_to_outbox",
+				"match_id", req.GetResult().GetMatchId(), "err", err)
 		}
 	}
 	return &battlev1.ReportResultResponse{Code: commonv1.ErrCode_OK, AlreadyRecorded: already}, nil

@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-mesh
+  namespace: pandora
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper, inventory] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-gateway
+  namespace: pandora
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: NotIn, values: [mysql, redis, kafka, etcd, zookeeper, inventory] }

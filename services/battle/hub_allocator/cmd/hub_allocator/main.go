@@ -204,6 +204,17 @@ func main() {
 	// modelBAuthority:Model B「Redis 唯一授权权威」(§7)仅在 agones + enforce + authority_mode=redis
 	// 三者齐备时启用。启用后签发走两阶段 pending 凭据 + authRepo,legacy 代际镜像门由 Model B 取代关闭。
 	modelBAuthority := cfg.Mode == conf.ModeAgones && dsEnforce && cfg.DSAuth.AuthorityModeRedis()
+	if modelBAuthority {
+		const dsVerifierMaxLeeway = 15 * time.Second
+		reservationTTL := cfg.Hub.ReservationTTL.Std()
+		minimumReservationTTL := dstV2.TTL() + dsVerifierMaxLeeway
+		if reservationTTL < minimumReservationTTL || reservationTTL > cfg.Hub.AssignmentTTL.Std() {
+			helper.Errorw("msg", "hub_reservation_ttl_invalid", "reservation_ttl", reservationTTL,
+				"minimum", minimumReservationTTL, "assignment_ttl", cfg.Hub.AssignmentTTL.Std(),
+				"hint", "reservation_ttl must cover DSTicket TTL + 15s verifier leeway and not exceed assignment_ttl")
+			os.Exit(1)
+		}
+	}
 	// hubAuthRepo:Model B 授权记录仓(agones+enforce+redis 时构造,注入 fleet 与 usecase)。
 	var hubAuthRepo data.HubAuthRepo
 	// authRecordTTL:授权记录 Redis TTL(>= 令牌 TTL,常驻 Hub 心跳持续刷新;与代际计数器同量级)。
@@ -472,10 +483,15 @@ func main() {
 
 	// 任何后台 reconcile/sweep 与 RPC server 启动前先取得 capability。失败进程零业务写。
 	if cfg.DSAuth.AuthorityModeRedis() {
+		var features []string
+		if modelBAuthority {
+			features = []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1"}
+		}
 		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
 			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
 			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
 			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			Features:    features,
 			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
 		})
 		if err != nil {

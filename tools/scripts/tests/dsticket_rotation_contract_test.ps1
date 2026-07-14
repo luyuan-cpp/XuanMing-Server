@@ -143,12 +143,28 @@ function New-TestSignerDeployment([string]$Name, [int]$SignerRevision, [int]$Log
             name = 'dsticket-jwks'; configMap = [pscustomobject]@{ name = "pandora-dsticket-jwks-r$LoginRevision" }
         }
     }
+    $mounts = @(
+        [pscustomobject]@{
+            name = 'conf'; mountPath = '/app/etc/cluster.yaml'; subPath = "$Name.yaml"; readOnly = $true
+        },
+        [pscustomobject]@{
+            name = 'dsticket'; mountPath = '/run/secrets/pandora-dsticket'; readOnly = $true
+        }
+    )
+    if ($Name -ceq 'login') {
+        $mounts += [pscustomobject]@{
+            name = 'dsticket-jwks'; mountPath = '/run/config/pandora-dsticket'; readOnly = $true
+        }
+    }
     return [pscustomobject]@{
         kind = 'Deployment'
         metadata = [pscustomobject]@{ name = $Name; namespace = 'pandora'; uid = "deployment-$Name"; generation = 7 }
         spec = [pscustomobject]@{
             replicas = 1; strategy = [pscustomobject]@{ type = 'RollingUpdate' }
-            template = [pscustomobject]@{ spec = [pscustomobject]@{ volumes = $volumes } }
+            template = [pscustomobject]@{ spec = [pscustomobject]@{
+                containers = @([pscustomobject]@{ name = $Name; volumeMounts = $mounts })
+                volumes = $volumes
+            } }
         }
         status = [pscustomobject]@{
             observedGeneration = 7; updatedReplicas = 1; readyReplicas = 1; availableReplicas = 1; unavailableReplicas = 0
@@ -277,6 +293,72 @@ try {
 
     # pandora-config 只改四个 signer 的 DSTicket 字段，保留其它 data。
     $configSecret = New-TestConfigSecret $stage.OldKid 1
+    $deletingConfigSecret = Copy-TestObject $configSecret
+    $deletingConfigSecret.metadata | Add-Member -NotePropertyName deletionTimestamp -NotePropertyValue '2026-07-13T12:00:00Z'
+    Assert-Throws {
+        Get-PandoraDSTicketConfigSecretUpdatedData -SecretObject $deletingConfigSecret -ActiveKid $stage.OldKid `
+            -LoginKeysetRevision 2 -AllowedCurrentActiveKids @($stage.OldKid)
+    } 'fixed pandora-config deletionTimestamp 时禁止生成更新数据' '正在删除'
+    Assert-Throws {
+        Get-PandoraDSTicketConfigSubcontract $deletingConfigSecret
+    } 'fixed pandora-config deletionTimestamp 时禁止读取子契约' '正在删除'
+    Assert-Throws {
+        Assert-PandoraDSTicketConfigSecretContract $deletingConfigSecret $stage.OldKid 1
+    } 'fixed pandora-config deletionTimestamp 时通用 signer 配置契约也阻断' '正在删除'
+    $wrongFixedKind = Copy-TestObject $configSecret; $wrongFixedKind.kind = 'ConfigMap'
+    $wrongFixedName = Copy-TestObject $configSecret; $wrongFixedName.metadata.name = 'pandora-config-forged'
+    $wrongFixedNamespace = Copy-TestObject $configSecret; $wrongFixedNamespace.metadata.namespace = 'default'
+    foreach ($wrongIdentity in @($wrongFixedKind, $wrongFixedName, $wrongFixedNamespace)) {
+        Assert-Throws { Get-PandoraDSTicketConfigSubcontract $wrongIdentity } `
+            'fixed 子契约 wrong kind/name/namespace 必须阻断' '必须是 pandora/Secret/pandora-config'
+        Assert-Throws {
+            Assert-PandoraDSTicketOrdinaryMarkerState 1 @() @() $wrongIdentity
+        } 'ordinary marker state 不得绕过 fixed identity' '必须是 pandora/Secret/pandora-config'
+    }
+    $revisionedProjected = New-PandoraDSTicketRevisionedConfigSecretObject -SourceSecret $configSecret `
+        -Revision 2 -ActiveKid $stage.OldKid -AllowedCurrentActiveKids @($stage.OldKid)
+    $revisionedProjectedObject = [pscustomobject]($revisionedProjected | ConvertTo-Json -Depth 50 | ConvertFrom-Json)
+    $projectedDataHash = Get-PandoraSecretDataSha256 $revisionedProjectedObject.data
+    $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $revisionedProjectedObject 2 $stage.OldKid $projectedDataHash
+    $staleRevisioned = Copy-TestObject $revisionedProjectedObject
+    $staleRevisioned.data.'unrelated.yaml' = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('tampered: true'))
+    $staleRevisioned.metadata.annotations.'pandora.dev/dsticket-config-data-sha256' = `
+        Get-PandoraSecretDataSha256 $staleRevisioned.data
+    $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $staleRevisioned 2 $stage.OldKid
+    Assert-Throws {
+        Assert-PandoraDSTicketRevisionedConfigSecretContract $staleRevisioned 2 $stage.OldKid $projectedDataHash
+    } 'self-consistent stale revisioned Secret 仍须匹配当前 fixed 完整 data 投影' '当前 fixed pandora-config 投影'
+    $sourceRvDrift = Copy-TestObject $revisionedProjectedObject
+    $sourceRvDrift.metadata.annotations.'pandora.dev/dsticket-config-source-resource-version' = '999'
+    $null = Assert-PandoraDSTicketRevisionedConfigSecretContract $sourceRvDrift 2 $stage.OldKid $projectedDataHash
+
+    $nestedMatchmaker = Copy-TestObject $configSecret
+    $matchmakerText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($nestedMatchmaker.data.'matchmaker.yaml'))
+    $nestedMatchmakerText = "unused:`n" + (($matchmakerText -split '\r?\n' | ForEach-Object { "  $_" }) -join "`n")
+    $nestedMatchmaker.data.'matchmaker.yaml' = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($nestedMatchmakerText))
+    Assert-Throws {
+        Assert-PandoraDSTicketConfigSecretContract $nestedMatchmaker $stage.OldKid 1
+    } 'matchmaker ds_ticket 藏入 unused 下必须阻断' '必须是顶级'
+    $topLevelLogin = Copy-TestObject $configSecret
+    $topLevelLoginText = "ds_ticket:`n  private_key_file: `"/run/secrets/pandora-dsticket/private.pem`"`n" +
+        "  active_kid: `"$($stage.OldKid)`"`n  ttl: `"120s`"`n" +
+        "  jwks_file: `"/run/config/pandora-dsticket/jwks.json`"`n  keyset_revision: `"1`"`nserver:`n  addr: 0.0.0.0"
+    $topLevelLogin.data.'login.yaml' = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($topLevelLoginText))
+    Assert-Throws {
+        Assert-PandoraDSTicketConfigSecretContract $topLevelLogin $stage.OldKid 1
+    } 'Login ds_ticket 移到顶级必须阻断' '顶级 login'
+    $badPrivatePath = Copy-TestObject $configSecret
+    $badPrivateText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($badPrivatePath.data.'matchmaker.yaml')).Replace(
+        '/run/secrets/pandora-dsticket/private.pem', '/tmp/private.pem')
+    $badPrivatePath.data.'matchmaker.yaml' = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($badPrivateText))
+    Assert-Throws { Assert-PandoraDSTicketConfigSecretContract $badPrivatePath $stage.OldKid 1 } `
+        'private_key_file 非 canonical 路径必须阻断' 'private_key_file'
+    $badTTL = Copy-TestObject $configSecret
+    $badTTLText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($badTTL.data.'hub-allocator.yaml')).Replace(
+        'ttl: "120s"', 'ttl: "181s"')
+    $badTTL.data.'hub-allocator.yaml' = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($badTTLText))
+    Assert-Throws { Assert-PandoraDSTicketConfigSecretContract $badTTL $stage.OldKid 1 } `
+        'ttl 超过 180s 必须阻断' '0 < ttl <= 180s'
     $stageData = Get-PandoraDSTicketConfigSecretUpdatedData -SecretObject $configSecret -ActiveKid $stage.OldKid `
         -LoginKeysetRevision 2 -AllowedCurrentActiveKids @($stage.OldKid)
     $configSecret.data = [pscustomobject]$stageData
@@ -352,6 +434,109 @@ try {
         Assert-PandoraDSTicketLiveDSRevisionGate -FleetObjects $fleets -GameServerObjects $gameServers `
             -GameServerSetObjects $gameServerSets -PodObjects $privateInput -TargetRevision 2
     } 'DS 禁止 signer/private 输入' 'signer/private/oct'
+    $forbiddenContainerMutants = @(
+        [pscustomobject]@{ Group = 'initContainers'; Container = [pscustomobject]@{
+            name = 'init-player-secret'; env = @([pscustomobject]@{ name = 'PANDORA_PLAYER_JWT_SECRET'; value = 'x' })
+        } },
+        [pscustomobject]@{ Group = 'ephemeralContainers'; Container = [pscustomobject]@{
+            name = 'debug-ds-secret'; env = @([pscustomobject]@{ name = 'PANDORA_DS_TICKET_SECRET'; value = 'x' })
+        } },
+        [pscustomobject]@{ Group = 'initContainers'; Container = [pscustomobject]@{
+            name = 'init-private-name'; env = @([pscustomobject]@{ name = 'PANDORA_DSTICKET_PRIVATE_KEY'; value = 'x' })
+        } },
+        [pscustomobject]@{ Group = 'initContainers'; Container = [pscustomobject]@{
+            name = 'init-pem'; env = @([pscustomobject]@{ name = 'OPAQUE'; value = '-----BEGIN PRIVATE KEY-----' })
+        } },
+        [pscustomobject]@{ Group = 'ephemeralContainers'; Container = [pscustomobject]@{
+            name = 'debug-oct'; env = @([pscustomobject]@{ name = 'OPAQUE'; value = '{"kty":"oct"}' })
+        } },
+        [pscustomobject]@{ Group = 'ephemeralContainers'; Container = [pscustomobject]@{
+            name = 'debug-private-mount'; volumeMounts = @([pscustomobject]@{ name = 'opaque'; mountPath = '/etc/pandora/dsticket/private' })
+        } }
+    )
+    foreach ($mutant in $forbiddenContainerMutants) {
+        $mutatedPods = Copy-TestObject $pods
+        $mutatedPods[0].spec | Add-Member -NotePropertyName $mutant.Group -NotePropertyValue @($mutant.Container)
+        Assert-Throws {
+            Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $mutatedPods 2
+        } "$($mutant.Group) forbidden signer/private 输入必须阻断" 'signer/private/oct'
+    }
+    $initOldVerifier = Copy-TestObject $pods
+    $initOldVerifier[0].spec.volumes += [pscustomobject]@{
+        name = 'old-projected-jwks'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+            configMap = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r1' }
+        }) }
+    }
+    $initOldVerifier[0].spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'old-verifier-init'; volumeMounts = @([pscustomobject]@{ name = 'old-projected-jwks'; mountPath = '/keys' })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $initOldVerifier 2
+    } 'canonical r2 不能掩盖 init projected old r1' '非 canonical verifier'
+    $sidecarOldVerifier = Copy-TestObject $pods
+    $sidecarOldVerifier[0].spec.containers += [pscustomobject]@{
+        name = 'old-verifier-sidecar'; envFrom = @([pscustomobject]@{
+            configMapRef = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r1' }
+        })
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $sidecarOldVerifier 2
+    } 'canonical r2 不能掩盖 sidecar envFrom old r1' '非 canonical verifier'
+    $csiVerifier = Copy-TestObject $pods
+    $csiVerifier[0].spec.volumes += [pscustomobject]@{
+        name = 'external-dsticket'; csi = [pscustomobject]@{
+            driver = 'secrets-store.csi.k8s.io'
+            volumeAttributes = [pscustomobject]@{ secretProviderClass = 'Pandora-DSTicket-External' }
+        }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $csiVerifier 2
+    } 'external secret-store CSI DSTicket 输入必须阻断' 'ForbiddenCSIVolume'
+    $opaqueDirectPrivate = Copy-TestObject $pods
+    $opaqueDirectPrivate[0].spec.volumes += [pscustomobject]@{
+        name = 'opaque-secret'; secret = [pscustomobject]@{
+            secretName = 'unrelated-name'; items = @([pscustomobject]@{ key = 'private.pem'; path = 'renamed' })
+        }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $opaqueDirectPrivate 2
+    } 'opaque direct Secret items private.pem 必须阻断' 'ForbiddenSecretVolumeItem'
+    $opaqueProjectedPrivate = Copy-TestObject $pods
+    $opaqueProjectedPrivate[0].spec.volumes += [pscustomobject]@{
+        name = 'opaque-projected'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+            secret = [pscustomobject]@{
+                name = 'unrelated-name'; items = @([pscustomobject]@{ key = 'renamed'; path = 'keys/signing_key' })
+            }
+        }) }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $opaqueProjectedPrivate 2
+    } 'opaque projected Secret items signing path 必须阻断' 'ForbiddenProjectedSecretItem'
+    $opaqueEnvPrivate = Copy-TestObject $pods
+    $opaqueEnvPrivate[0].spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'opaque-key-loader'; env = @([pscustomobject]@{
+            name = 'FOO'; valueFrom = [pscustomobject]@{
+                secretKeyRef = [pscustomobject]@{ name = 'unrelated-name'; key = 'jwt_secret' }
+            }
+        })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $opaqueEnvPrivate 2
+    } 'opaque init secretKeyRef jwt_secret 必须阻断' 'ForbiddenInitContainerSecretKey'
+    $malformedSignerPrefix = Copy-TestObject $pods
+    $malformedSignerPrefix[0].spec.volumes += [pscustomobject]@{
+        name = 'malformed-private'; secret = [pscustomobject]@{ secretName = 'pandora-dsticket-signer-r01' }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $malformedSignerPrefix 2
+    } '畸形 signer 保留前缀必须进入 DS fail-closed gate' 'pandora-dsticket-signer-r01'
+    $malformedJwksPrefix = Copy-TestObject $pods
+    $malformedJwksPrefix[0].spec.volumes += [pscustomobject]@{
+        name = 'malformed-public'; configMap = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r0' }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate $fleets $gameServers $gameServerSets $malformedJwksPrefix 2
+    } '畸形 JWKS 保留前缀必须进入 DS fail-closed gate' '非 canonical verifier'
     $orphan = New-TestDSPod 'orphan-battle-ds' 'pandora-battle-stable' 2
     $orphan.metadata.labels.'agones.dev/gameserver' = 'missing-owner'
     Assert-Throws {
@@ -439,6 +624,63 @@ try {
         })
     }
     Assert-True (Test-PandoraDSTicketDSPodSpecClue $projectedPrivateClue) 'projected legacy signer Secret 也属于 DS/parent 相关线索'
+    $secretBackedVerifier = [pscustomobject]@{
+        containers = @([pscustomobject]@{
+            name = 'renamed-public-verifier'
+            env = @([pscustomobject]@{
+                name = 'OPAQUE'; valueFrom = [pscustomobject]@{
+                    secretKeyRef = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r1'; key = 'jwks.json' }
+                }
+            })
+            envFrom = @([pscustomobject]@{ secretRef = [pscustomobject]@{ name = 'pandora-dsticket-jwks' } })
+        })
+        volumes = @(
+            [pscustomobject]@{ name = 'direct-public'; secret = [pscustomobject]@{ secretName = 'pandora-dsticket-jwks-r1' } },
+            [pscustomobject]@{ name = 'projected-public'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+                secret = [pscustomobject]@{ name = 'pandora-dsticket-jwks' }
+            }) } }
+        )
+    }
+    $secretVerifierReferences = @(Get-PandoraDSTicketVerifierMaterialReferences $secretBackedVerifier)
+    foreach ($kind in @('JWKSSecretVolume', 'ProjectedJWKSSecret', 'VerifierEnv', 'VerifierEnvFrom')) {
+        Assert-True (@($secretVerifierReferences | Where-Object { $_.Kind -ceq $kind }).Count -eq 1) "Secret-backed JWKS $kind 线索捕获"
+    }
+    Assert-True (Test-PandoraDSTicketDSPodSpecClue $secretBackedVerifier) 'Secret-backed public JWKS 四类引用属于 related clue'
+    $forbiddenUnknownSpec = [pscustomobject]@{
+        containers = @([pscustomobject]@{ name = 'renamed-worker' })
+        initContainers = @([pscustomobject]@{
+            name = 'private-init'; env = @([pscustomobject]@{ name = 'PANDORA_PLAYER_JWT_SECRET'; value = 'x' })
+        })
+        ephemeralContainers = @([pscustomobject]@{
+            name = 'private-debug'; volumeMounts = @([pscustomobject]@{ name = 'opaque'; mountPath = '/run/secrets/pandora-dsticket' })
+        })
+        volumes = @([pscustomobject]@{
+            name = 'external-private'; csi = [pscustomobject]@{
+                volumeAttributes = [pscustomobject]@{ secretProviderClass = 'pandora-dsticket-private' }
+            }
+        })
+    }
+    Assert-True (Test-PandoraDSTicketDSPodSpecClue $forbiddenUnknownSpec) 'init/ephemeral/CSI forbidden 输入属于 unknown parent related clue'
+    $lateFixedConsumerSpec = [pscustomobject]@{
+        containers = @([pscustomobject]@{
+            name = 'late-consumer'
+            env = @([pscustomobject]@{ name = 'PANDORA_JWT_SECRET'; value = 'legacy' })
+            envFrom = @([pscustomobject]@{ secretRef = [pscustomobject]@{ name = 'pandora-config' } })
+        })
+        volumes = @()
+    }
+    Assert-True (Test-PandoraDSTicketDSPodSpecClue $lateFixedConsumerSpec) `
+        '入口检查后补出的 inline signer consumer 必须属于 broader clue'
+    $lateFixedRefs = @(Get-PandoraDSTicketSignerConfigSecretReferences $lateFixedConsumerSpec | Where-Object {
+        $_.Name -ceq 'pandora-config'
+    })
+    Assert-True ($lateFixedRefs.Count -eq 1 -and $lateFixedRefs[0].Kind -ceq 'EnvFromSecretRef') `
+        '晚到 Pod 的 envFrom fixed config 必须被全引用 NoSigner gate 捕获'
+    $forbiddenRogueFleet = New-TestFleet 'opaque-forbidden-parent' 2
+    $forbiddenRogueFleet.spec.template.spec.template.spec = $forbiddenUnknownSpec
+    Assert-Throws {
+        Assert-PandoraDSTicketLiveDSRevisionGate @($fleets + $forbiddenRogueFleet) $gameServers $gameServerSets $pods 2
+    } '仅有 forbidden init/ephemeral/CSI 的 unknown Fleet 也必须阻断' '未知 DSTicket/DS parent'
     foreach ($capacity in @(0, 1)) {
         $projectedOrphanGSS = New-TestGameServerSet "rogue-projected-gss-$capacity" 'pandora-battle-stable' 1 $capacity
         $projectedOrphanGSS.metadata.ownerReferences = @()
@@ -477,6 +719,192 @@ try {
     Assert-PandoraDSTicketSignerDeploymentGate -DeploymentObjects $deployments -ReplicaSetObjects $replicaSets `
         -PodObjects $signerPods `
         -SignerRevision 3 -LoginKeysetRevision 3
+    $extraSignerDeployment = Copy-TestObject $deployments
+    $extraSignerDeployment[0].spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'old-signer-init'
+        envFrom = @([pscustomobject]@{ secretRef = [pscustomobject]@{ name = 'pandora-dsticket-signer-r1' } })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $extraSignerDeployment $replicaSets $signerPods 3 3
+    } 'Deployment canonical r3 不能掩盖 init old signer r1' 'Deployment/login signer 私钥引用'
+    $extraSignerReplicaSet = Copy-TestObject $replicaSets
+    $extraSignerReplicaSet[1].spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'old-signer-init'
+        env = @([pscustomobject]@{
+            name = 'OPAQUE'; valueFrom = [pscustomobject]@{
+                secretKeyRef = [pscustomobject]@{ name = 'pandora-dsticket-signer-r1'; key = 'private.pem' }
+            }
+        })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments $extraSignerReplicaSet $signerPods 3 3
+    } '非零 RS canonical r3 不能掩盖 init old signer r1' '非零但未引用目标 signer Secret'
+    $shadowConfigDeployment = Copy-TestObject $deployments
+    $shadowConfigDeployment[0].spec.template.spec.volumes += [pscustomobject]@{
+        name = 'shadow-config'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+            secret = [pscustomobject]@{ name = 'pandora-config' }
+        }) }
+    }
+    $shadowConfigDeployment[0].spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'shadow-config-init'; envFrom = @([pscustomobject]@{ secretRef = [pscustomobject]@{ name = 'pandora-config' } })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $shadowConfigDeployment $replicaSets $signerPods 3 3
+    } 'Deployment canonical conf 不能掩盖 init envFrom/projected shadow fixed config' 'config 引用必须恰为一个'
+    $shadowConfigReplicaSet = Copy-TestObject $replicaSets
+    $shadowConfigReplicaSet[1].spec.template.spec.volumes += [pscustomobject]@{
+        name = 'shadow-config'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+            secret = [pscustomobject]@{ name = 'pandora-config-dsticket-r1' }
+        }) }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments $shadowConfigReplicaSet $signerPods 3 3
+    } '非零 RS canonical conf 不能掩盖 projected old phase config' 'config 引用必须恰为一个'
+    $shadowConfigPod = Copy-TestObject $signerPods
+    $shadowConfigPod[2].spec.volumes += [pscustomobject]@{
+        name = 'shadow-config'; secret = [pscustomobject]@{ secretName = 'pandora-config' }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments $replicaSets $shadowConfigPod 3 3
+    } 'Running Pod canonical conf 不能掩盖额外 direct fixed config' 'config 引用必须恰为一个'
+    $deploymentMountReuse = Copy-TestObject $deployments
+    $deploymentMountReuse[0].spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'key-reuser'; volumeMounts = @([pscustomobject]@{ name = 'dsticket'; mountPath = '/tmp/key'; readOnly = $true })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deploymentMountReuse $replicaSets $signerPods 3 3
+    } 'Deployment initContainer 复用 canonical dsticket volume 必须阻断' 'consumer mount'
+    $replicaSetMountReuse = Copy-TestObject $replicaSets
+    $replicaSetMountReuse[1].spec.template.spec | Add-Member -NotePropertyName ephemeralContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'key-reuser'; volumeMounts = @([pscustomobject]@{ name = 'dsticket'; mountPath = '/tmp/key'; readOnly = $true })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments $replicaSetMountReuse $signerPods 3 3
+    } '非零 RS ephemeralContainer 复用 canonical dsticket volume 必须阻断' 'consumer mount'
+    $podMountReuse = Copy-TestObject $signerPods
+    $podMountReuse[3].spec.containers += [pscustomobject]@{
+        name = 'key-reuser'; volumeMounts = @([pscustomobject]@{ name = 'dsticket'; mountPath = '/tmp/key'; readOnly = $true })
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments $replicaSets $podMountReuse 3 3
+    } 'Running Pod sidecar 复用 canonical dsticket volume 必须阻断' 'consumer mount'
+    $loginOldVerifier = Copy-TestObject $deployments
+    $loginOldVerifier[0].spec.template.spec.volumes += [pscustomobject]@{
+        name = 'old-verifier'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+            configMap = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r0' }
+        }) }
+    }
+    $loginOldVerifier[0].spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'old-verifier-init'; envFrom = @([pscustomobject]@{
+            configMapRef = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r1' }
+        })
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $loginOldVerifier $replicaSets $signerPods 3 3
+    } 'Login canonical r3 不能掩盖 init projected/envFrom old或畸形 JWKS' 'Login verifier'
+    $malformedSignerDeployment = Copy-TestObject $deployments
+    $malformedSignerDeployment[1].spec.template.spec.volumes += [pscustomobject]@{
+        name = 'backup-private'; secret = [pscustomobject]@{ secretName = 'pandora-dsticket-backup' }
+    }
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $malformedSignerDeployment $replicaSets $signerPods 3 3
+    } 'signer 保留前缀 backup 也必须作为额外私钥引用阻断' 'signer 私钥引用'
+
+    $runtimeConfigs = @{}
+    foreach ($name in $script:PandoraDSTicketSignerNames) { $runtimeConfigs[$name] = 'pandora-config' }
+    Assert-PandoraDSTicketRuntimeObjectGate $deployments $replicaSets $signerPods `
+        $fleets $gameServers $gameServerSets $pods 3 3 $runtimeConfigs 2
+    $mixedPromotedDeployments = Copy-TestObject $deployments
+    $mixedPromotedDeployments[0].spec.template.spec.volumes[1].secret.secretName = 'pandora-dsticket-signer-r1'
+    Assert-Throws {
+        Assert-PandoraDSTicketRuntimeObjectGate $mixedPromotedDeployments $replicaSets $signerPods `
+            $fleets $gameServers $gameServerSets $pods 3 3 $runtimeConfigs 2
+    } 'activation marker 写前 before/promoted 混合 signer 状态必须阻断' 'signer'
+    $terminalDriftFleets = Copy-TestObject $fleets
+    $terminalDriftFleets[0].spec.template.spec.template.spec.containers[0].env[1].value = '1'
+    $terminalDriftFleets[0].spec.template.spec.template.spec.volumes[0].configMap.name = 'pandora-dsticket-jwks-r1'
+    Assert-Throws {
+        Assert-PandoraDSTicketRuntimeObjectGate $deployments $replicaSets $signerPods `
+            $terminalDriftFleets $gameServers $gameServerSets $pods 3 3 $runtimeConfigs 2
+    } 'terminal marker 写前 DS 从 target 漂回旧 revision 必须阻断' 'Fleet/pandora-battle-stable'
+    $unknownZeroDeployment = [pscustomobject]@{
+        kind = 'Deployment'
+        metadata = [pscustomobject]@{
+            name = 'opaque-zero-private'; namespace = 'pandora'; uid = 'deployment-opaque-zero-private'; generation = 1
+        }
+        spec = [pscustomobject]@{
+            replicas = 0; strategy = [pscustomobject]@{ type = 'RollingUpdate' }
+            template = [pscustomobject]@{ spec = [pscustomobject]@{
+                containers = @([pscustomobject]@{ name = 'opaque-worker' })
+                initContainers = @([pscustomobject]@{
+                    name = 'legacy-private-init'; env = @(
+                        [pscustomobject]@{ name = 'PANDORA_JWT_SECRET'; value = 'legacy' },
+                        [pscustomobject]@{ name = 'OPAQUE'; value = '-----BEGIN PRIVATE KEY-----' }
+                    )
+                })
+                volumes = @()
+            } }
+        }
+        status = [pscustomobject]@{
+            observedGeneration = 1; updatedReplicas = 0; readyReplicas = 0; availableReplicas = 0; unavailableReplicas = 0
+        }
+    }
+    Assert-True (Test-PandoraDSTicketDSPodSpecClue $unknownZeroDeployment.spec.template.spec) `
+        'zero unknown Deployment 的 legacy env/inline private 属于 broader signer clue'
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate @($deployments + $unknownZeroDeployment) $replicaSets $signerPods 3 3
+    } 'zero unknown Deployment 即使无标准 signer Secret 也阻断' '未知 DSTicket signer parent'
+    $orphanClueReplicaSet = [pscustomobject]@{
+        kind = 'ReplicaSet'
+        metadata = [pscustomobject]@{
+            name = 'opaque-orphan-rs'; namespace = 'pandora'; uid = 'uid-opaque-orphan-rs'
+            labels = [pscustomobject]@{ app = 'opaque' }; ownerReferences = @()
+        }
+        spec = [pscustomobject]@{
+            replicas = 0; template = [pscustomobject]@{ spec = [pscustomobject]@{
+                containers = @([pscustomobject]@{ name = 'opaque-worker' })
+                ephemeralContainers = @([pscustomobject]@{
+                    name = 'private-debug'; volumeMounts = @([pscustomobject]@{
+                        name = 'opaque-private'; mountPath = '/run/secrets/pandora-dsticket'
+                    })
+                })
+                volumes = @([pscustomobject]@{
+                    name = 'opaque-private'; csi = [pscustomobject]@{
+                        volumeAttributes = [pscustomobject]@{ secretProviderClass = 'pandora-dsticket-legacy' }
+                    }
+                })
+            } }
+        }
+        status = [pscustomobject]@{ replicas = 0; readyReplicas = 0; availableReplicas = 0; fullyLabeledReplicas = 0 }
+    }
+    Assert-True (Test-PandoraDSTicketDSPodSpecClue $orphanClueReplicaSet.spec.template.spec) `
+        'orphan RS 的 CSI/private mount 属于 broader signer clue'
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments @($replicaSets + $orphanClueReplicaSet) $signerPods 3 3
+    } '无标准 signer Secret 的 orphan RS 也阻断' 'controller owner'
+    $orphanCluePod = [pscustomobject]@{
+        kind = 'Pod'
+        metadata = [pscustomobject]@{
+            name = 'opaque-orphan-pod'; namespace = 'pandora'; labels = [pscustomobject]@{ app = 'opaque' }; ownerReferences = @()
+        }
+        spec = [pscustomobject]@{
+            containers = @([pscustomobject]@{
+                name = 'opaque-worker'; env = @([pscustomobject]@{ name = 'PANDORA_DS_TICKET_SECRET'; value = 'legacy' })
+                envFrom = @([pscustomobject]@{ configMapRef = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r1' } })
+            })
+            volumes = @([pscustomobject]@{
+                name = 'old-public'; projected = [pscustomobject]@{ sources = @([pscustomobject]@{
+                    configMap = [pscustomobject]@{ name = 'pandora-dsticket-jwks-r1' }
+                }) }
+            })
+        }
+        status = [pscustomobject]@{ phase = 'Running'; conditions = @([pscustomobject]@{ type = 'Ready'; status = 'True' }) }
+    }
+    Assert-True (Test-PandoraDSTicketDSPodSpecClue $orphanCluePod.spec) `
+        'orphan Pod 的 legacy env/old JWKS projected-env 属于 broader signer clue'
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate $deployments $replicaSets @($signerPods + $orphanCluePod) 3 3
+    } '无标准 signer Secret 的 orphan Pod 也阻断' '不是受管 signer'
     $notReady = Copy-TestObject $signerPods
     $notReady[2].status.conditions[0].status = 'False'
     Assert-Throws {
@@ -547,7 +975,12 @@ try {
     } 'signer Pod 所有 controller refs 总数必须为一' '恰有一个'
     $zeroOldRS = New-TestSignerReplicaSet login 1 1 pandora-config 0
     $zeroOldRS.metadata.name = 'login-old-zero-rs'; $zeroOldRS.metadata.uid = 'uid-login-old-zero-rs'
-    $zeroOldRS.spec.template.spec.volumes = @() # 安全零容量历史 RS 可留旧/legacy template。
+    $zeroOldRS.spec.template.spec.volumes = @()
+    $zeroOldRS.spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @([pscustomobject]@{
+        name = 'historical-old-signer'; envFrom = @([pscustomobject]@{
+            secretRef = [pscustomobject]@{ name = 'pandora-dsticket-signer-r1' }
+        })
+    }) # 安全零容量历史 RS 可留旧/legacy/额外引用 template。
     $null = Assert-PandoraDSTicketSignerDeploymentGate $deployments @($replicaSets + $zeroOldRS) $signerPods 3 3
     $nonzeroOldRS = New-TestSignerReplicaSet login 1 1 pandora-config 1
     $nonzeroOldRS.metadata.name = 'login-old-live-rs'; $nonzeroOldRS.metadata.uid = 'uid-login-old-live-rs'
@@ -654,6 +1087,12 @@ try {
             $stage.OldKid $stage.NewKid @($markerObject) @() $transitionTerminalFixed -AllowTerminalFixed
         Assert-True ($afterCAS.State -ceq 'retire-terminal-fixed-transition') "fixed CAS 后第 $handoff 个 signer handoff guard 可继续"
     }
+    $wrongTransitionIdentity = Copy-TestObject $transitionTerminalFixed
+    $wrongTransitionIdentity.metadata.namespace = 'default'
+    Assert-Throws {
+        Assert-PandoraDSTicketRotationTransitionHistoryState 2 3 4 1 $stage.OldKid $stage.NewKid `
+            @($markerObject) @() $wrongTransitionIdentity -AllowTerminalFixed
+    } 'transition historical fixed 必须保留 exact identity' '必须是 pandora/Secret/pandora-config'
     $wrongTransitionRevision = New-TestConfigSecret $stage.NewKid 3
     Assert-Throws {
         Assert-PandoraDSTicketRotationTransitionHistoryState 2 3 4 1 $stage.OldKid $stage.NewKid `
@@ -755,10 +1194,68 @@ try {
         -not $contractText.Contains('[Parameter(Mandatory = $true)][DateTimeOffset]$ActivatedAt') -and
         -not $contractText.Contains('[Parameter(Mandatory = $true)][DateTimeOffset]$CompletedAt')) `
         'guarded-write 延迟不得写坏 immutable marker；激活/完成只取真实 creationTimestamp'
+    $activationBody = $newActivationBody.Groups['body'].Value
+    $activationGuard = $activationBody.IndexOf('Invoke-PandoraGuardedWrite', [StringComparison]::Ordinal)
+    $activationExact = $activationBody.IndexOf('Assert-PandoraActivationRuntimeState $Material', $activationGuard, [StringComparison]::Ordinal)
+    $activationLock = $activationBody.IndexOf('Assert-PandoraDSTicketOperationLockHeld', $activationExact, [StringComparison]::Ordinal)
+    $activationCreate = $activationBody.IndexOf('Invoke-PandoraKubectl', $activationLock, [StringComparison]::Ordinal)
+    $activationPost = $activationBody.IndexOf('Assert-PandoraActivationRuntimeState $Material -RequireMarker', $activationCreate, [StringComparison]::Ordinal)
+    Assert-True ($activationGuard -ge 0 -and $activationExact -gt $activationGuard -and
+        $activationLock -gt $activationExact -and $activationCreate -gt $activationLock -and $activationPost -gt $activationCreate) `
+        'activation marker 必须 exact promoted 全态→紧邻锁→create→exact postcheck'
+    $terminalBodyText = $newTerminalBody.Groups['body'].Value
+    $terminalGuard = $terminalBodyText.IndexOf('Invoke-PandoraGuardedWrite', [StringComparison]::Ordinal)
+    $terminalExact = $terminalBodyText.IndexOf('Assert-PandoraTerminalMarkerRuntimeState $Material $FixedContractSha256', $terminalGuard, [StringComparison]::Ordinal)
+    $terminalLock = $terminalBodyText.IndexOf('Assert-PandoraDSTicketOperationLockHeld', $terminalExact, [StringComparison]::Ordinal)
+    $terminalCreate = $terminalBodyText.IndexOf('Invoke-PandoraKubectl', $terminalLock, [StringComparison]::Ordinal)
+    $terminalPost = $terminalBodyText.IndexOf('Assert-PandoraTerminalMarkerRuntimeState $Material $FixedContractSha256 -RequireMarker', $terminalCreate, [StringComparison]::Ordinal)
+    Assert-True ($terminalGuard -ge 0 -and $terminalExact -gt $terminalGuard -and
+        $terminalLock -gt $terminalExact -and $terminalCreate -gt $terminalLock -and $terminalPost -gt $terminalCreate) `
+        'terminal marker 必须 exact terminal 全态→紧邻锁→create→exact postcheck'
+    $ensureFunction = [regex]::Match($rotateText, '(?ms)^function Ensure-PandoraRevisionedConfigSecret \{(?<body>.*?)^\}')
+    $configReferenceFunction = [regex]::Match($rotateText, '(?ms)^function Assert-PandoraConfigReferenceContract \{(?<body>.*?)^\}')
+    Assert-True ($ensureFunction.Success -and
+        $ensureFunction.Groups['body'].Value.Contains('$guardedSource = Get-PandoraKubeObject ''secret/pandora-config'' pandora') -and
+        $ensureFunction.Groups['body'].Value.Contains('$validationSource = Get-PandoraKubeObject ''secret/pandora-config'' pandora') -and
+        $configReferenceFunction.Success -and
+        $configReferenceFunction.Groups['body'].Value.Contains('New-PandoraDSTicketRevisionedConfigSecretObject') -and
+        $configReferenceFunction.Groups['body'].Value.Contains('$expectedHash')) `
+        'revisioned config existing/create/readback/每次 phase gate 均须从当前 fixed 重投影 full-data hash'
+    $ensureBody = $ensureFunction.Groups['body'].Value
+    $ensureSource = $ensureBody.IndexOf('$guardedSource = Get-PandoraKubeObject ''secret/pandora-config'' pandora', [StringComparison]::Ordinal)
+    $ensureTargetAbsence = $ensureBody.IndexOf('$concurrent = Get-PandoraKubeObject', $ensureSource, [StringComparison]::Ordinal)
+    $ensureFinalLock = $ensureBody.IndexOf('Assert-PandoraDSTicketOperationLockHeld', $ensureTargetAbsence, [StringComparison]::Ordinal)
+    $ensureCreate = $ensureBody.IndexOf('Invoke-PandoraKubectl', $ensureFinalLock, [StringComparison]::Ordinal)
+    Assert-True ($ensureSource -ge 0 -and $ensureTargetAbsence -gt $ensureSource -and
+        $ensureFinalLock -gt $ensureTargetAbsence -and $ensureCreate -gt $ensureFinalLock) `
+        'revisioned config create 必须 guarded source→target absence→紧邻锁→create'
+    $noFixedFunction = [regex]::Match($rotateText, '(?ms)^function Assert-PandoraNoSignerUsesFixedConfig \{(?<body>.*?)^\}')
+    $fixedTerminalFunction = [regex]::Match($rotateText, '(?ms)^function Set-PandoraFixedConfigTerminalState \{(?<body>.*?)^\}')
+    Assert-True ($noFixedFunction.Success -and
+        $noFixedFunction.Groups['body'].Value.Contains('Test-PandoraDSTicketDSPodSpecClue') -and
+        $noFixedFunction.Groups['body'].Value.Contains('Get-PandoraDSTicketSignerConfigSecretReferences')) `
+        'fixed handoff 的 Pod 重扫必须覆盖 broader DSTicket clue 与 direct/projected/env/envFrom config 引用'
+    $fixedTerminalBody = $fixedTerminalFunction.Groups['body'].Value
+    $fixedGuard = $fixedTerminalBody.IndexOf('Invoke-PandoraGuardedWrite', [StringComparison]::Ordinal)
+    $fixedPrecheck = $fixedTerminalBody.IndexOf('Assert-PandoraNoSignerUsesFixedConfig', $fixedGuard, [StringComparison]::Ordinal)
+    $fixedFinalLock = $fixedTerminalBody.IndexOf('Assert-PandoraDSTicketOperationLockHeld', $fixedPrecheck, [StringComparison]::Ordinal)
+    $fixedReplace = $fixedTerminalBody.IndexOf('Invoke-PandoraKubectl', $fixedFinalLock, [StringComparison]::Ordinal)
+    $fixedPostcheck = $fixedTerminalBody.IndexOf('Assert-PandoraNoSignerUsesFixedConfig', $fixedReplace, [StringComparison]::Ordinal)
+    Assert-True ($fixedTerminalFunction.Success -and $fixedGuard -ge 0 -and
+        $fixedPrecheck -gt $fixedGuard -and $fixedFinalLock -gt $fixedPrecheck -and
+        $fixedReplace -gt $fixedFinalLock -and $fixedPostcheck -gt $fixedReplace) `
+        'fixed handoff 必须 guarded write→全引用 NoSigner→紧邻锁→replace→全引用 postcheck'
     Assert-True ($rotateText.Contains('Get-PandoraKubeListItems deployments pandora') -and
         $rotateText.Contains('Get-PandoraKubeListItems fleets.agones.dev default') -and
         $rotateText.Contains('未知/漂移的 DSTicket 审计 marker')) `
         'rotation 必须全量扫描 parent controller 与未知审计 marker'
+    $signerSnapshotFunction = [regex]::Match($rotateText, '(?ms)^function Get-PandoraSignerSnapshot \{(?<body>.*?)^\}')
+    $signerGateFunction = [regex]::Match($contractText, '(?ms)^function Assert-PandoraDSTicketSignerDeploymentGate \{(?<body>.*?)^\}')
+    Assert-True ($signerSnapshotFunction.Success -and
+        [regex]::Matches($signerSnapshotFunction.Groups['body'].Value, 'Test-PandoraDSTicketDSPodSpecClue').Count -eq 2 -and
+        $signerGateFunction.Success -and
+        $signerGateFunction.Groups['body'].Value.Contains('Test-PandoraDSTicketDSPodSpecClue')) `
+        'signer Deployment/RS snapshot 与 Pod gate 必须统一纳入 broader DSTicket clue'
     $promoteFunction = [regex]::Match($rotateText, '(?ms)^function Invoke-PandoraPromotePhase \{(?<body>.*?)^\}')
     Assert-True ($promoteFunction.Success -and
         $promoteFunction.Groups['body'].Value.IndexOf('Assert-PandoraPromotePreflight', [StringComparison]::Ordinal) -lt

@@ -84,6 +84,15 @@ type BattleExpectedInstance struct {
 	InstanceEpoch uint32
 }
 
+// BattleResultAuthorizationProof 是 battle_result 已在服务端完成 Guard + Redis active
+// 校验并持久化进 MySQL outbox 的证明。AuthorizedAtMs 必须早于 ExpMs；relay 当前时刻
+// 可以晚于 ExpMs。普通 credential gen/jti 轮换不改变 stable GameServer identity，
+// 因而不会阻断已提交结算的资源回收。
+type BattleResultAuthorizationProof struct {
+	Credential     BattleCredentialIdentity
+	AuthorizedAtMs int64
+}
+
 // BattleQuarantineExpected 防旧运维请求误隔离同名重建实例：allocation_id 与完整 active
 // credential 必须在同一事务中仍匹配，才允许紧急吊销。
 type BattleQuarantineExpected struct {
@@ -232,6 +241,13 @@ type BattleAuthRepo interface {
 	CheckHeartbeatFresh(context.Context, uint64, int64) (bool, error)
 	AbandonIfStale(context.Context, uint64, int64, time.Duration, time.Duration) (BattleAbandonResult, error)
 	TerminateExpected(context.Context, uint64, BattleExpectedInstance, string, time.Duration, time.Duration) (bool, error)
+	// TerminateResultExpected 只接受 MySQL terminal-release outbox 的持久证明；它把
+	// receipt 与 ended 终态在同一 Redis CAS 写成永久墓碑。当前 gen/jti 可已轮换，
+	// stable identity 与 writer fence 必须仍精确一致。
+	TerminateResultExpected(context.Context, uint64, BattleExpectedInstance, BattleResultAuthorizationProof) (bool, error)
+	// ExpireResultTerminatedExpected 只能在 UID 条件 Release 明确成功后给上述永久墓碑
+	// 恢复有界审计 TTL。response unknown 时墓碑保持永久，供 outbox 重试重认。
+	ExpireResultTerminatedExpected(context.Context, uint64, BattleExpectedInstance, BattleResultAuthorizationProof, time.Duration) (bool, error)
 	QuarantineExpected(context.Context, uint64, BattleQuarantineExpected, time.Duration, time.Duration) (BattleQuarantineResult, error)
 	// FencePreactiveReleaseExpected 在任何外部 ReleaseExpected 前把未激活实例原子锁成
 	// 永久 release-pending；ACTIVE/ready 赢家不可进入该状态。
@@ -1411,6 +1427,226 @@ func (r *RedisBattleAuthRepo) TerminateExpected(ctx context.Context, matchID uin
 	return false, errcode.New(errcode.ErrInternal, "battle %d terminate cas retry exhausted", matchID)
 }
 
+// TerminateResultExpected 是正常结算 outbox 的 Redis 线性化点。与旧 TerminateExpected
+// 不同，它不要求 relay 时 callback token 仍未过期，也不要求 outbox 的 gen/jti 仍是
+// current active；MySQL 行证明该凭据在 AuthorizedAtMs 已通过服务端校验。当前 Redis
+// stable identity 与 writer fence 必须一致，allocation/UID 漂移零副作用。
+func (r *RedisBattleAuthRepo) TerminateResultExpected(
+	ctx context.Context,
+	matchID uint64,
+	expected BattleExpectedInstance,
+	proof BattleResultAuthorizationProof,
+) (bool, error) {
+	if r == nil || r.rdb == nil || r.now == nil {
+		return false, errcode.New(errcode.ErrUnavailable, "battle terminal result authority unavailable")
+	}
+	nowMs := r.now().UnixMilli()
+	if !validBattleResultAuthorizationProof(matchID, expected, proof, nowMs) {
+		return false, errcode.New(errcode.ErrInvalidArg, "battle terminal result proof is incomplete")
+	}
+	aKey, bKey := battleAuthKey(matchID), battleKey(matchID)
+	rKey := dsauthrecord.BattleResultReceiptKey(matchID)
+	for attempt := 0; attempt < battleAuthCASRetries; attempt++ {
+		fenced := false
+		var bizErr error
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			battleRaw, err := tx.Get(ctx, bKey).Bytes()
+			if err == redis.Nil {
+				bizErr = errcode.New(errcode.ErrInvalidState, "battle %d projection missing before terminal release", matchID)
+				return bizErr
+			}
+			if err != nil {
+				return err
+			}
+			battle, err := unmarshalBattle(matchID, battleRaw)
+			if err != nil {
+				return err
+			}
+			if !battleResultStableProjectionMatches(battle, expected, proof) || battle.GetState() == "abandoned" {
+				bizErr = errcode.New(errcode.ErrUnauthorized, "battle %d stable identity changed before terminal release", matchID)
+				return bizErr
+			}
+
+			var authRecord *dsv1.BattleDSAuthStorageRecord
+			authRaw, authErr := tx.Get(ctx, aKey).Bytes()
+			switch {
+			case authErr == redis.Nil:
+				// callback auth TTL 可以早于 BattleTTL。只在 projection 仍携带精确 stable
+				// identity + writer=2 时重建“只可终止”的 auth 墓碑；phase=TERMINATING
+				// 保证旧/泄漏 token 永远不能借此恢复写权限。
+				authRecord = terminalAuthFromResultProof(matchID, battle, proof, nowMs)
+			case authErr != nil:
+				return authErr
+			default:
+				authRecord = &dsv1.BattleDSAuthStorageRecord{}
+				if err := unmarshalBattleAuth(matchID, authRaw, authRecord); err != nil {
+					return err
+				}
+				if !battleResultStableAuthorityMatches(authRecord, battle, expected) {
+					bizErr = errcode.New(errcode.ErrUnauthorized, "battle %d authority changed before terminal release", matchID)
+					return bizErr
+				}
+			}
+
+			recordedAtMs := proof.AuthorizedAtMs
+			receipt := dsauthrecord.NewBattleResultReceipt(
+				matchID, expected.AllocationID, proof.Credential.PodName,
+				proof.Credential.InstanceUID, proof.Credential.InstanceEpoch,
+				proof.Credential.Gen, proof.Credential.JTI, int64(proof.Credential.ExpMs),
+				proof.Credential.Kid, proof.Credential.TokenSHA256,
+				proof.Credential.WriterEpoch, recordedAtMs)
+			if oldRaw, oldErr := tx.Get(ctx, rKey).Bytes(); oldErr == nil {
+				old, decodeErr := dsauthrecord.UnmarshalBattleResultReceipt(oldRaw)
+				if decodeErr != nil || !old.Valid(nowMs) || !old.SameCredential(receipt) {
+					bizErr = errcode.New(errcode.ErrUnauthorized, "battle %d terminal receipt belongs to another proof", matchID)
+					return bizErr
+				}
+				// immediate receipt 可能在 DB commit 后写入，保留其真实 recorded_at。
+				receipt.RecordedAtMs = old.RecordedAtMs
+			} else if oldErr != redis.Nil {
+				return oldErr
+			}
+
+			authRecord.Phase = dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING
+			authRecord.Pending = nil
+			authRecord.PendingStartedMs = 0
+			authRecord.DeliveredRv = ""
+			authRecord.UpdatedAtMs = nowMs
+			battle.State = "ended"
+			aPayload, err := proto.Marshal(authRecord)
+			if err != nil {
+				return err
+			}
+			bPayload, err := marshalBattle(battle)
+			if err != nil {
+				return err
+			}
+			rPayload, err := dsauthrecord.MarshalBattleResultReceipt(receipt)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				// UID Release 结果明确前，三键均为永久墓碑；任何 timeout/崩溃都可重入。
+				pipe.Set(ctx, aKey, aPayload, 0)
+				pipe.Set(ctx, bKey, bPayload, 0)
+				pipe.Set(ctx, rKey, rPayload, 0)
+				return nil
+			})
+			fenced = err == nil
+			return err
+		}, aKey, bKey, rKey)
+		if txErr == redis.TxFailedErr {
+			continue
+		}
+		if txErr != nil {
+			if bizErr != nil {
+				return false, bizErr
+			}
+			return false, txErr
+		}
+		return fenced, nil
+	}
+	return false, errcode.New(errcode.ErrInternal, "battle %d terminal result cas retry exhausted", matchID)
+}
+
+// ExpireResultTerminatedExpected 只在 K8s UID 条件删除明确成功、且 battle_result 已
+// durable CAS released_at_ms 后调用。它只确认同 proof 并恢复 tombstone TTL，绝不再次
+// 触碰 Kubernetes；response 丢失后可安全重放，三键已跨 TTL 全部消失也幂等成功。
+func (r *RedisBattleAuthRepo) ExpireResultTerminatedExpected(
+	ctx context.Context,
+	matchID uint64,
+	expected BattleExpectedInstance,
+	proof BattleResultAuthorizationProof,
+	retention time.Duration,
+) (bool, error) {
+	if r == nil || r.rdb == nil || r.now == nil || retention <= 0 ||
+		!validBattleResultAuthorizationProof(matchID, expected, proof, r.now().UnixMilli()) {
+		return false, errcode.New(errcode.ErrInvalidArg, "battle terminal result expire requires proof and retention")
+	}
+	aKey, bKey := battleAuthKey(matchID), battleKey(matchID)
+	rKey := dsauthrecord.BattleResultReceiptKey(matchID)
+	for attempt := 0; attempt < battleAuthCASRetries; attempt++ {
+		expired := false
+		var bizErr error
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			authRaw, authErr := tx.Get(ctx, aKey).Bytes()
+			battleRaw, battleErr := tx.Get(ctx, bKey).Bytes()
+			receiptRaw, receiptErr := tx.Get(ctx, rKey).Bytes()
+			authMissing, battleMissing, receiptMissing :=
+				authErr == redis.Nil, battleErr == redis.Nil, receiptErr == redis.Nil
+			if authMissing && battleMissing && receiptMissing {
+				// 上一次 finalize 可能已经成功但响应丢失，MySQL released 行尚未 DELETE；
+				// TTL 到期后三键全无等价于 cleanup 已完成，按幂等成功重认。仍通过
+				// WATCH+EXEC no-op 锁定“确实同时为空”的线性化快照。
+				_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					pipe.Exists(ctx, aKey, bKey, rKey)
+					return nil
+				})
+				expired = err == nil
+				return err
+			}
+			if authErr != nil || battleErr != nil || receiptErr != nil {
+				if (authErr != nil && authErr != redis.Nil) ||
+					(battleErr != nil && battleErr != redis.Nil) ||
+					(receiptErr != nil && receiptErr != redis.Nil) {
+					for _, readErr := range []error{authErr, battleErr, receiptErr} {
+						if readErr != nil && readErr != redis.Nil {
+							return readErr
+						}
+					}
+				}
+				bizErr = errcode.New(errcode.ErrInvalidState,
+					"battle %d terminal tombstone partially missing", matchID)
+				return bizErr
+			}
+			authRecord := &dsv1.BattleDSAuthStorageRecord{}
+			if err := unmarshalBattleAuth(matchID, authRaw, authRecord); err != nil {
+				return err
+			}
+			battle, err := unmarshalBattle(matchID, battleRaw)
+			if err != nil {
+				return err
+			}
+			if !battleResultStableAuthorityMatches(authRecord, battle, expected) ||
+				authRecord.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+				battle.GetState() != "ended" {
+				bizErr = errcode.New(errcode.ErrUnauthorized, "battle %d terminal tombstone changed", matchID)
+				return bizErr
+			}
+			receipt, err := dsauthrecord.UnmarshalBattleResultReceipt(receiptRaw)
+			if err != nil || !receipt.Valid(r.now().UnixMilli()) || !receiptMatchesResultProof(receipt, matchID, expected, proof) {
+				bizErr = errcode.New(errcode.ErrUnauthorized, "battle %d terminal receipt changed", matchID)
+				return bizErr
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Expire(ctx, aKey, retention)
+				pipe.Expire(ctx, bKey, retention)
+				pipe.Expire(ctx, rKey, retention)
+				return nil
+			})
+			expired = err == nil
+			return err
+		}, aKey, bKey, rKey)
+		if txErr == redis.TxFailedErr {
+			continue
+		}
+		if txErr != nil {
+			if bizErr != nil {
+				return false, bizErr
+			}
+			return false, txErr
+		}
+		if !expired {
+			return false, nil
+		}
+		if err := r.rdb.ZRem(ctx, activeKey, matchID).Err(); err != nil {
+			return true, err
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrInternal, "battle %d terminal result expire cas retry exhausted", matchID)
+}
+
 // FencePreactiveReleaseExpected 是未激活分配回收的线性化点。它不删除任何权威键，
 // 而是先把 battle 置为不可路由的 release-pending，并把已有 auth 锁成 TERMINATING；
 // 两键在同一 EXEC 内写成永久。外部 ReleaseExpected 超时/响应未知时，该墓碑会一直
@@ -1715,6 +1951,107 @@ func expectedBattleInstanceMatches(
 		authRecord.AllocationId == expected.AllocationID && battle.AllocationId == expected.AllocationID &&
 		authRecord.InstanceUid == expected.InstanceUID && battle.GameserverUid == expected.InstanceUID &&
 		authRecord.InstanceEpoch == expected.InstanceEpoch && battle.InstanceEpoch == expected.InstanceEpoch
+}
+
+func validBattleResultAuthorizationProof(
+	matchID uint64,
+	expected BattleExpectedInstance,
+	proof BattleResultAuthorizationProof,
+	nowMs int64,
+) bool {
+	id := proof.Credential
+	return matchID != 0 && completeExpectedBattleInstance(expected) && nowMs > 0 &&
+		proof.AuthorizedAtMs > 0 && proof.AuthorizedAtMs <= nowMs &&
+		id.ExpMs <= uint64(1<<63-1) && proof.AuthorizedAtMs < int64(id.ExpMs) &&
+		id.PodName != "" && id.InstanceUID == expected.InstanceUID &&
+		id.InstanceEpoch == expected.InstanceEpoch && id.Gen > 0 && id.JTI != "" &&
+		id.ExpMs > 0 && id.Kid != "" && id.TokenSHA256 != "" &&
+		id.WriterEpoch == BattleDSWriterEpochV2
+}
+
+func battleResultStableProjectionMatches(
+	battle *dsv1.BattleStorageRecord,
+	expected BattleExpectedInstance,
+	proof BattleResultAuthorizationProof,
+) bool {
+	if battle == nil || (battle.GetState() != "ready" && battle.GetState() != "running" && battle.GetState() != "ended") {
+		return false
+	}
+	id := proof.Credential
+	return battle.GetMatchId() != 0 && battle.GetAllocationId() == expected.AllocationID &&
+		battle.GetDsPodName() == id.PodName && battle.GetGameserverUid() == expected.InstanceUID &&
+		battle.GetInstanceEpoch() == expected.InstanceEpoch &&
+		battle.GetLastVerifiedGen() > 0 && battle.GetLastVerifiedJti() != "" &&
+		battle.GetLastVerifiedWriterEpoch() == BattleDSWriterEpochV2
+}
+
+func battleResultStableAuthorityMatches(
+	authRecord *dsv1.BattleDSAuthStorageRecord,
+	battle *dsv1.BattleStorageRecord,
+	expected BattleExpectedInstance,
+) bool {
+	if !battleAuthRecordV2Exact(authRecord) || !expectedBattleInstanceMatches(authRecord, battle, expected) ||
+		authRecord.GetPhase() == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_QUARANTINED ||
+		authRecord.GetActive() == nil {
+		return false
+	}
+	active := authRecord.GetActive()
+	if active.GetGen() == 0 || active.GetJti() == "" || active.GetExpMs() == 0 ||
+		active.GetKid() == "" || active.GetTokenSha256() == "" ||
+		active.GetInstanceUid() != expected.InstanceUID ||
+		active.GetInstanceEpoch() != expected.InstanceEpoch ||
+		active.GetWriterEpoch() != BattleDSWriterEpochV2 || authRecord.GetHighWaterGen() < active.GetGen() {
+		return false
+	}
+	if pending := authRecord.GetPending(); pending != nil &&
+		(pending.GetInstanceUid() != expected.InstanceUID || pending.GetInstanceEpoch() != expected.InstanceEpoch ||
+			pending.GetWriterEpoch() != BattleDSWriterEpochV2) {
+		return false
+	}
+	switch authRecord.GetPhase() {
+	case dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE, dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ROTATING:
+		// current active/projection 仍需自洽，但允许它已经从 outbox proof 的 gen/jti 轮换。
+		return battleActiveProjectionStructurallyConsistent(authRecord, battle)
+	case dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING:
+		return battle.GetState() == "ended"
+	default:
+		return false
+	}
+}
+
+func terminalAuthFromResultProof(
+	matchID uint64,
+	battle *dsv1.BattleStorageRecord,
+	proof BattleResultAuthorizationProof,
+	nowMs int64,
+) *dsv1.BattleDSAuthStorageRecord {
+	id := proof.Credential
+	return &dsv1.BattleDSAuthStorageRecord{
+		MatchId: matchID, DsPodName: id.PodName, InstanceUid: id.InstanceUID,
+		InstanceEpoch: id.InstanceEpoch, Phase: dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING,
+		Active: &dsv1.BattleDSCredential{
+			Gen: id.Gen, Jti: id.JTI, ExpMs: id.ExpMs, Kid: id.Kid,
+			InstanceUid: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
+			TokenSha256: id.TokenSHA256, WriterEpoch: id.WriterEpoch,
+		},
+		HighWaterGen: max(id.Gen, battle.GetLastVerifiedGen()), UpdatedAtMs: nowMs,
+		RequiredWriterEpoch: BattleDSWriterEpochV2, AllocationId: battle.GetAllocationId(),
+		LastActiveHeartbeatMs: battle.GetLastHeartbeatMs(),
+	}
+}
+
+func receiptMatchesResultProof(
+	receipt dsauthrecord.BattleResultReceipt,
+	matchID uint64,
+	expected BattleExpectedInstance,
+	proof BattleResultAuthorizationProof,
+) bool {
+	id := proof.Credential
+	want := dsauthrecord.NewBattleResultReceipt(
+		matchID, expected.AllocationID, id.PodName, id.InstanceUID, id.InstanceEpoch,
+		id.Gen, id.JTI, int64(id.ExpMs), id.Kid, id.TokenSHA256, id.WriterEpoch,
+		receipt.RecordedAtMs)
+	return receipt.SameCredential(want)
 }
 
 func validateBattleCredential(c *dsv1.BattleDSCredential, nowMs int64) error {

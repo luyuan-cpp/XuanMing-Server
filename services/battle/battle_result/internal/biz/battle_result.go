@@ -1,7 +1,7 @@
 // Package biz 是 battle_result 服务的业务逻辑层(W4 ③,2026-06-06)。
 //
 // 职责(docs/design/go-services.md §2.13):
-//   - 消费 pandora.battle.result → 幂等落库(不变量 §2,unique match_id)
+//   - Model-B 同步 ReportResult / legacy battle.result → 幂等落库(不变量 §2,unique match_id)
 //   - MMR 在此算(Elo,DS 不可信,不变量 §6),落 battle_player_stats.mmr_delta
 //   - 消费 pandora.ds.lifecycle 的 ABANDONED → 写 abandoned 补偿记录(不变量 §4)
 //   - 落库同事务写 player.update 出箱 → 后台发布器可靠投递(不变量 §4)
@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
@@ -63,6 +64,15 @@ type MatchReleaser interface {
 	ReleaseMatch(ctx context.Context, matchID uint64, playerIDs []uint64) error
 }
 
+// TerminalReleaseRelay 把 MySQL 持久证明交给 ds_allocator 的两阶段控制面：
+// ReleaseTerminal 只做永久 Redis terminal/receipt CAS + UID precondition Release；
+// FinalizeTerminal 只在 MySQL 已 durable 标记 released 后给同 proof 墓碑恢复 TTL。
+// 任一超时/未知结果都必须返回 error 让 outbox 保留重试。
+type TerminalReleaseRelay interface {
+	ReleaseTerminal(context.Context, data.TerminalReleaseRecord) error
+	FinalizeTerminal(context.Context, data.TerminalReleaseRecord) error
+}
+
 // InstanceGranter 把战斗装备掉落幂等发放到 inventory(GrantInstances,W5 ④)。
 //
 // 由后台 RunDropPublisher 调用:发放失败 → 返回 error → drop 出箱行保留下轮重试
@@ -94,11 +104,12 @@ func (s *StaticMMRReader) GetMMR(_ context.Context, _ uint64) (int, error) { ret
 
 // BattleResultUsecase 是 battle_result 业务逻辑核心。
 type BattleResultUsecase struct {
-	repo     data.BattleRepo
-	mmr      MMRReader
-	pusher   PlayerUpdatePusher
-	releaser MatchReleaser
-	cfg      conf.BattleConf
+	repo          data.BattleRepo
+	mmr           MMRReader
+	pusher        PlayerUpdatePusher
+	releaser      MatchReleaser
+	cfg           conf.BattleConf
+	terminalRelay TerminalReleaseRelay
 
 	// granter 把战斗装备掉落幂等发放到 inventory(W5 ④,nil-safe)。
 	// nil = inventory_addr 未配 → 不启动 RunDropPublisher,掉落出箱积压不丢。
@@ -151,6 +162,13 @@ func (u *BattleResultUsecase) SetMailSender(m MailSender) {
 	u.mailSender = m
 }
 
+// SetTerminalReleaseRelay 注入 Model-B 正常结算终态回收 relay。
+// authority_mode=redis 的 main 在 schema probe 成功后必须注入；nil 时 worker 不启动，
+// 但已存在 outbox 行绝不会被删除。
+func (u *BattleResultUsecase) SetTerminalReleaseRelay(relay TerminalReleaseRelay) {
+	u.terminalRelay = relay
+}
+
 // releaseMatch 落库成功后通知 matchmaker 释放本局撮合状态。best-effort:实现缺省 / 失败
 // 仅 Warn,绝不影响结算落库(弱依赖,不变量:结算是权威路径,释放只是清残留)。
 func (u *BattleResultUsecase) releaseMatch(ctx context.Context, result *battlev1.BattleResult) {
@@ -173,6 +191,20 @@ func (u *BattleResultUsecase) releaseMatch(ctx context.Context, result *battlev1
 // ReportResult 落一场对局结算(消费 battle.result / 同步 RPC 共用)。
 // 返回 alreadyRecorded:true 表示幂等命中,本次跳过(不算错误)。
 func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1.BattleResult) (bool, error) {
+	return u.reportResult(ctx, result, nil)
+}
+
+// ReportAuthorizedResult 是 Redis-authority 同步入口。terminalRelease 必须来自 service
+// 已完成 Guard + active 校验的服务端快照；它与战绩同事务提交，不从 BattleResult 请求体补值。
+func (u *BattleResultUsecase) ReportAuthorizedResult(
+	ctx context.Context,
+	result *battlev1.BattleResult,
+	terminalRelease data.TerminalReleaseRecord,
+) (bool, error) {
+	return u.reportResult(ctx, result, &terminalRelease)
+}
+
+func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord) (bool, error) {
 	if result == nil || result.GetMatchId() == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
@@ -199,6 +231,14 @@ func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1
 
 	// MMR 算完才组装出箱(携带最终 mmr_delta);与落库同事务原子提交(不变量 §4)。
 	abandoned := result.GetOutcome() == battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED
+	if abandoned && terminalRelease != nil {
+		return false, errcode.New(errcode.ErrInvalidArg, "completed terminal release proof cannot settle abandoned match %d", result.GetMatchId())
+	}
+	if terminalRelease != nil {
+		if err := prepareTerminalRelease(result, terminalRelease, u.cfg.TerminalReleaseGrace.Std()); err != nil {
+			return false, err
+		}
+	}
 	outbox, err := u.buildOutbox(result, abandoned)
 	if err != nil {
 		return false, err
@@ -211,7 +251,7 @@ func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1
 		dropOutbox = u.buildDropOutbox(result)
 	}
 
-	already, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox)
+	already, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox, terminalRelease)
 	if err != nil {
 		return false, err
 	}
@@ -231,13 +271,31 @@ func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1
 	// 结算落库成功 → 通知 matchmaker 释放本局撮合状态(玩家回 Hub 可立刻再匹配)。
 	u.releaseMatch(ctx, result)
 
-	// 注:battle_result 不主动回收战斗 DS。DS 生命周期归 ds_allocator 与 DS 自身拥有 —— DS 收到
-	// 本响应 OK 后才 ended 心跳 → 通知客户端回大厅 → 自身 Agones Shutdown;ds_allocator 凭 ended 心跳
-	// (本地 killStrandedDS taskkill / Agones 自停 + Fleet 重建)+ 15s 心跳超时 sweep 兜底回收。
-	// 历史教训(2026-07-03):battle_result 在本同步响应路径直接调 ReleaseBattle=taskkill/DELETE,
-	// 会抢在 DS 把 OK 回调走完、通知客户端回大厅之前把 DS 杀掉 → 客户端永远收不到回大厅通知,
-	// 卡战斗态。故此处不再回收 DS(回收的代价只是账本多等 ~15s sweep 对齐,无害)。
+	// 不在同步响应路径回收 DS。Model-B 的 terminal_release_outbox 会等待宽限窗，让 DS
+	// 收到 OK 并通知客户端；响应丢失/令牌过期也会在宽限后由服务端可靠回收。
 	return false, nil
+}
+
+func prepareTerminalRelease(result *battlev1.BattleResult, rec *data.TerminalReleaseRecord, grace time.Duration) error {
+	if result == nil || rec == nil || rec.MatchID == 0 || rec.MatchID != result.GetMatchId() ||
+		rec.AllocationID == "" || rec.DSPodName == "" || rec.DSPodName != result.GetDsPodName() ||
+		rec.GameserverUID == "" || rec.InstanceEpoch == 0 || rec.AuthGen == 0 ||
+		rec.AuthJTI == "" || rec.AuthExpMs <= 0 || rec.AuthKid == "" ||
+		rec.AuthTokenSHA256 == "" || rec.AuthWriterEpoch != auth.DSAuthWriterEpochV2 ||
+		rec.AuthorizedAtMs <= 0 || rec.AuthorizedAtMs >= rec.AuthExpMs || rec.ReleasedAtMs != 0 {
+		return errcode.New(errcode.ErrUnauthorized, "terminal release proof is incomplete or not bound to result")
+	}
+	if grace < 5*time.Second || grace > 2*time.Minute {
+		return errcode.New(errcode.ErrInvalidState, "terminal release grace is outside [5s,2m]")
+	}
+	nowMs := time.Now().UnixMilli()
+	if rec.AuthorizedAtMs > nowMs {
+		return errcode.New(errcode.ErrUnauthorized, "terminal release authorization time is in the future")
+	}
+	rec.ReleaseAfterMs = nowMs + grace.Milliseconds()
+	rec.ReleasedAtMs = 0 // 只允许 phase1 worker 经 MySQL CAS 推进，调用方不能伪造。
+	rec.CreatedAtMs = 0  // MySQL writer owns created_at_ms; caller不能伪造。
+	return nil
 }
 
 // ── HandleAbandoned:DS 崩溃补偿 ───────────────────────────────────────────────
@@ -272,7 +330,7 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 		return err
 	}
 
-	already, err := u.repo.SaveResult(ctx, result, outbox, nil)
+	already, err := u.repo.SaveResult(ctx, result, outbox, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -478,6 +536,105 @@ func (u *BattleResultUsecase) publishOutboxBatch(ctx context.Context) (int, erro
 func (u *BattleResultUsecase) outboxBatchSize() int {
 	if u.cfg.OutboxBatchSize > 0 {
 		return u.cfg.OutboxBatchSize
+	}
+	return 128
+}
+
+// ── Battle terminal-release 事务出箱(Model-B)────────────────────────────────
+
+// RunTerminalReleasePublisher 启动正常结算资源回收 worker。它只能在 MySQL schema
+// probe、relay 构造和 dsauth capability 获取全部成功后启动。单行失败保留重试，不阻塞
+// 同批其它对局；UID precondition 与 ds_allocator Redis CAS 保证多副本/响应丢失幂等。
+func (u *BattleResultUsecase) RunTerminalReleasePublisher(ctx context.Context) {
+	if u.terminalRelay == nil {
+		plog.With(ctx).Infow("msg", "terminal_release_publisher_disabled")
+		return
+	}
+	interval := u.cfg.TerminalReleaseInterval.Std()
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	plog.With(ctx).Infow("msg", "terminal_release_publisher_started",
+		"interval", interval.String(), "batch", u.terminalReleaseBatchSize())
+	for {
+		select {
+		case <-ctx.Done():
+			plog.With(ctx).Infow("msg", "terminal_release_publisher_stopped")
+			return
+		case <-ticker.C:
+			if n, err := u.publishTerminalReleaseBatch(ctx); err != nil {
+				plog.With(ctx).Warnw("msg", "terminal_release_batch_failed", "finalized", n, "err", err)
+			}
+		}
+	}
+}
+
+func (u *BattleResultUsecase) publishTerminalReleaseBatch(ctx context.Context) (int, error) {
+	if u.terminalRelay == nil {
+		return 0, nil
+	}
+	recs, err := u.repo.FetchTerminalReleaseOutbox(ctx, u.terminalReleaseBatchSize(), time.Now().UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	finalized := 0
+	for _, rec := range recs {
+		if rec.ReleasedAtMs < 0 {
+			return finalized, errcode.New(errcode.ErrInvalidState,
+				"terminal release outbox id=%d has invalid released_at_ms", rec.ID)
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if rec.ReleasedAtMs == 0 {
+			err := u.terminalRelay.ReleaseTerminal(callCtx, rec)
+			cancel()
+			if err != nil {
+				// Redis/K8s unknown 绝不能推进 DB phase；永久墓碑/原始行保留重试。
+				plog.With(ctx).Warnw("msg", "terminal_release_phase1_failed",
+					"match_id", rec.MatchID, "allocation_id", rec.AllocationID,
+					"pod", rec.DSPodName, "err", err)
+				continue
+			}
+			marked, err := u.repo.MarkTerminalReleaseReleased(ctx, rec.ID, time.Now().UnixMilli())
+			if err != nil {
+				// UID delete 已成功但 durable ACK 未知：phase1 绝不 expire Redis。
+				// 下轮按 DB 真实状态重读；0 则重放 UID delete，>0 则进入 finalize。
+				return finalized, err
+			}
+			if !marked {
+				plog.With(ctx).Debugw("msg", "terminal_release_phase1_already_advanced",
+					"match_id", rec.MatchID, "outbox_id", rec.ID)
+			}
+			continue
+		}
+
+		err := u.terminalRelay.FinalizeTerminal(callCtx, rec)
+		cancel()
+		if err != nil {
+			// finalize 响应未知绝不能 DELETE released 行；重试只校验/Expire 同 proof，
+			// 绝不再次删除 K8s。若 TTL 已自然清空全部墓碑，服务端按幂等成功返回。
+			plog.With(ctx).Warnw("msg", "terminal_release_finalize_failed",
+				"match_id", rec.MatchID, "allocation_id", rec.AllocationID,
+				"pod", rec.DSPodName, "err", err)
+			continue
+		}
+		if err := u.repo.DeleteTerminalReleaseOutbox(ctx, rec.ID); err != nil {
+			// finalize 已成功但 DB delete 失败：released 行保留。下一轮只重放
+			// finalize；即使墓碑 TTL 已过、三键都不存在，也会幂等重认成功。
+			return finalized, err
+		}
+		finalized++
+	}
+	if finalized > 0 {
+		plog.With(ctx).Infow("msg", "terminal_release_outbox_finalized", "count", finalized)
+	}
+	return finalized, nil
+}
+
+func (u *BattleResultUsecase) terminalReleaseBatchSize() int {
+	if u.cfg.TerminalReleaseBatchSize > 0 {
+		return u.cfg.TerminalReleaseBatchSize
 	}
 	return 128
 }

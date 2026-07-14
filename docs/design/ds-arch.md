@@ -58,7 +58,7 @@
 |---|---|---|
 | 各业务服务 → kafka | 生产推送事件 | push 服务消费 → server stream 推给客户端 |
 | push → kafka | 消费推送 topics | 转发到客户端 stream |
-| Battle DS → battle_result(via kafka) | Kafka(at-least-once)| 战斗结算上报 |
+| Battle DS → battle_result | 同步 gRPC-Web `ReportResult` | Guard + Redis active 授权后结算；生产不消费无凭据 `pandora.battle.result` |
 
 #### 服务发现 / 配置
 
@@ -469,16 +469,20 @@ Client:
 Battle DS 战斗结束
    ▼
 Battle DS:
-   - kafka 发 pandora.battle.result
-   - 发 state="ended" 的 BattleHeartbeat
+   - 同步 ReportResult(DS callback token；后端重算并事务落库)
+   - 可发 state="ended" 的 BattleHeartbeat/客户端 BattleEnded（只影响通知体验）
    - 给客户端 RPC: BattleEnded{result, hub_ds_addr, hub_ticket}
    - 留短暂窗口给客户端回大厅
    - StopBattleHeartbeat
-   - Agones Shutdown 回收 Pod
+   - 可请求 Agones Shutdown；服务端持久 release outbox 是权威回收兜底
 ```
 
-**当前实现补充**:正常结算不走后端主动 `ReleaseBattle`;`ReleaseBattle` RPC 仍保留为幂等管理接口,
-但当前无 matchmaker / battle_result 生产调用方。异常路径由 `ds_allocator` 心跳 sweep 兜底:
+**当前实现补充**：正常结算采用服务端驱动的两阶段 durable release。`battle_result` 把结算与原始
+Model-B proof 同一 MySQL 事务提交；宽限窗后调用 `ReleaseBattle(reason=completed)`，由
+`ds_allocator` 建永久 Redis terminal/receipt 墓碑并按 UID precondition 回收 GameServer，随后 MySQL
+CAS `released_at_ms`。下一轮 `reason=completed-finalize` 只给 exact-proof 墓碑恢复 TTL，不再删除
+Kubernetes，最后仅删除 released outbox。响应丢失/DB mark 或 delete 失败均按 durable phase 重放；
+match-id-only Model-B release 拒绝。异常路径仍由 `ds_allocator` 心跳 sweep 兜底：
 Battle DS 超过 15s 未心跳会标 `abandoned`、释放 pod,并投递 `pandora.ds.lifecycle` 给
 `battle_result` 做段位回滚补偿。完整回收生命周期见 [`agones-dev.md`](agones-dev.md) §2.3
 「Battle DS 回收生命周期」。

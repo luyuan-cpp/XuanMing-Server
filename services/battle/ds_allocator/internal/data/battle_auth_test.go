@@ -107,6 +107,10 @@ func identityFor(pod string, c *dsv1.BattleDSCredential) BattleCredentialIdentit
 	}
 }
 
+func resultAuthorizationProof(id BattleCredentialIdentity, authorizedAtMs int64) BattleResultAuthorizationProof {
+	return BattleResultAuthorizationProof{Credential: id, AuthorizedAtMs: authorizedAtMs}
+}
+
 func prepareAndStage(t *testing.T, f *battleAuthFixture, matchID uint64, allocationID, pod, uid string, delivered bool) (*dsv1.BattleDSCredential, BattleCredentialIdentity) {
 	t.Helper()
 	seed, err := f.auth.PrepareCredential(context.Background(), authBinding(matchID, allocationID, pod, uid))
@@ -1095,6 +1099,141 @@ func TestBattleAuthReceiptWinsRaceAgainstPendingPromotion(t *testing.T) {
 	ended.State = "ended"
 	if result, err := f.auth.ActivateHeartbeat(ctx, matchID, first, ended); err != nil || !result.Terminal || result.Battle.GetState() != "ended" {
 		t.Fatalf("original receipt credential could not finish: result=%+v err=%v", result, err)
+	}
+}
+
+func TestBattleAuthTerminalResultAllowsExpiredProofAfterActiveRotation(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	const matchID = uint64(760)
+	const allocationID = "alloc-terminal-rotation"
+	const pod = "pod-terminal-rotation"
+	const uid = "uid-terminal-rotation"
+	seedModelBBattle(t, f, matchID, allocationID, pod)
+
+	_, first := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
+	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, first, activateInput()); err != nil {
+		t.Fatal(err)
+	}
+	proof := resultAuthorizationProof(first, f.now.UnixMilli())
+	expected := BattleExpectedInstance{
+		AllocationID: allocationID, InstanceUID: uid, InstanceEpoch: first.InstanceEpoch,
+	}
+
+	// 模拟 ReportResult 已提交 MySQL 后 callback credential 正常轮换。outbox 必须保留
+	// 最初通过鉴权的 proof，不能被当前 active gen/jti 替换，也不能因旧 token 过期卡回收。
+	f.setNow(f.now.Add(5 * time.Minute))
+	_, second := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
+	if second.Gen <= first.Gen || second.JTI == first.JTI || second.InstanceEpoch != first.InstanceEpoch {
+		t.Fatalf("rotation fixture invalid: first=%+v second=%+v", first, second)
+	}
+	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, second, activateInput()); err != nil {
+		t.Fatalf("promote rotated credential: %v", err)
+	}
+	f.setNow(time.UnixMilli(int64(first.ExpMs) + time.Second.Milliseconds()))
+
+	terminated, err := f.auth.TerminateResultExpected(ctx, matchID, expected, proof)
+	if err != nil || !terminated {
+		t.Fatalf("expired old proof after rotation: terminated=%v err=%v", terminated, err)
+	}
+	snapshot, err := f.auth.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+		snapshot.Battle.GetState() != "ended" || snapshot.Auth.GetActive().GetGen() != second.Gen {
+		t.Fatalf("terminal snapshot=%+v err=%v", snapshot, err)
+	}
+	receiptRaw, err := f.rdb.Get(ctx, dsauthrecord.BattleResultReceiptKey(matchID)).Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := dsauthrecord.UnmarshalBattleResultReceipt(receiptRaw)
+	if err != nil || receipt.Gen != first.Gen || receipt.JTI != first.JTI || receipt.Gen == second.Gen {
+		t.Fatalf("terminal receipt replaced original proof: receipt=%+v err=%v", receipt, err)
+	}
+	// response 丢失后的同 proof 重放仍成功，且只有 UID 条件释放明确成功后才恢复 TTL。
+	if terminated, err = f.auth.TerminateResultExpected(ctx, matchID, expected, proof); err != nil || !terminated {
+		t.Fatalf("terminal proof retry: terminated=%v err=%v", terminated, err)
+	}
+	if expired, err := f.auth.ExpireResultTerminatedExpected(ctx, matchID, expected, proof, testTTL); err != nil || !expired {
+		t.Fatalf("expire confirmed tombstone: expired=%v err=%v", expired, err)
+	}
+	if authTTL, battleTTL, receiptTTL := f.mr.TTL(battleAuthKey(matchID)), f.mr.TTL(battleKey(matchID)), f.mr.TTL(dsauthrecord.BattleResultReceiptKey(matchID)); authTTL <= 0 || battleTTL <= 0 || receiptTTL <= 0 {
+		t.Fatalf("confirmed tombstone TTLs: auth=%v battle=%v receipt=%v", authTTL, battleTTL, receiptTTL)
+	}
+	// finalize 响应丢失且 MySQL released 行未删，可能跨过完整 retention；三键全无
+	// 代表 cleanup 已完成，finalize-only 重放必须幂等成功。
+	f.mr.FastForward(testTTL + time.Second)
+	if expired, err := f.auth.ExpireResultTerminatedExpected(ctx, matchID, expected, proof, testTTL); err != nil || !expired {
+		t.Fatalf("post-TTL finalize retry: expired=%v err=%v", expired, err)
+	}
+}
+
+func TestBattleAuthTerminalResultStableIdentityDriftHasZeroSideEffects(t *testing.T) {
+	ctx := context.Background()
+	f := newBattleAuthFixture(t)
+	const matchID = uint64(761)
+	const allocationID = "alloc-terminal-drift"
+	const pod = "pod-terminal-drift"
+	const uid = "uid-terminal-drift"
+	seedModelBBattle(t, f, matchID, allocationID, pod)
+	_, active := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
+	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, active, activateInput()); err != nil {
+		t.Fatal(err)
+	}
+	baseExpected := BattleExpectedInstance{
+		AllocationID: allocationID, InstanceUID: uid, InstanceEpoch: active.InstanceEpoch,
+	}
+	baseProof := resultAuthorizationProof(active, f.now.UnixMilli())
+	authBefore := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
+	battleBefore := rawRedisBytes(t, f.rdb, battleKey(matchID))
+	authTTLBefore := f.rdb.TTL(ctx, battleAuthKey(matchID)).Val()
+	battleTTLBefore := f.rdb.TTL(ctx, battleKey(matchID)).Val()
+
+	tests := []struct {
+		name     string
+		expected BattleExpectedInstance
+		proof    BattleResultAuthorizationProof
+	}{
+		{name: "allocation", expected: func() BattleExpectedInstance {
+			e := baseExpected
+			e.AllocationID = "alloc-rebuilt"
+			return e
+		}(), proof: baseProof},
+		{name: "uid", expected: func() BattleExpectedInstance {
+			e := baseExpected
+			e.InstanceUID = "uid-rebuilt"
+			return e
+		}(), proof: func() BattleResultAuthorizationProof {
+			p := baseProof
+			p.Credential.InstanceUID = "uid-rebuilt"
+			return p
+		}()},
+		{name: "epoch", expected: func() BattleExpectedInstance {
+			e := baseExpected
+			e.InstanceEpoch++
+			return e
+		}(), proof: func() BattleResultAuthorizationProof {
+			p := baseProof
+			p.Credential.InstanceEpoch++
+			return p
+		}()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			terminated, err := f.auth.TerminateResultExpected(ctx, matchID, tc.expected, tc.proof)
+			if terminated || errcode.As(err) != errcode.ErrUnauthorized {
+				t.Fatalf("drift accepted: terminated=%v code=%v err=%v", terminated, errcode.As(err), err)
+			}
+			if !bytes.Equal(authBefore, rawRedisBytes(t, f.rdb, battleAuthKey(matchID))) ||
+				!bytes.Equal(battleBefore, rawRedisBytes(t, f.rdb, battleKey(matchID))) ||
+				f.rdb.TTL(ctx, battleAuthKey(matchID)).Val() != authTTLBefore ||
+				f.rdb.TTL(ctx, battleKey(matchID)).Val() != battleTTLBefore ||
+				f.mr.Exists(dsauthrecord.BattleResultReceiptKey(matchID)) {
+				t.Fatal("stable identity drift mutated auth/battle/TTL/receipt")
+			}
+			if _, err := f.rdb.ZScore(ctx, activeKey, fmt.Sprint(matchID)).Result(); err != nil {
+				t.Fatalf("stable identity drift removed retry index: %v", err)
+			}
+		})
 	}
 }
 

@@ -60,3 +60,37 @@ CREATE TABLE IF NOT EXISTS `battle_drop_outbox` (
     UNIQUE KEY `uk_match_player` (`match_id`, `player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 战斗装备掉落事务出箱(at-least-once 幂等发放 GrantInstances,W5 ④)';
+
+-- ── Battle 结算终态回收事务出箱(Model-B,2026-07-13)──────────────────────────
+--
+-- 正常结算请求通过 callback Guard + Redis active 校验后，battle_result 把服务端
+-- authorized_at_ms 与完整凭据身份、稳定 GameServer 身份写入本表；本行与 battles /
+-- battle_player_stats 同事务提交。后台 relay 在宽限窗后依次执行：Redis 终态 CAS +
+-- receipt → Kubernetes UID precondition 回收 → MySQL CAS released_at_ms；第二阶段再给
+-- Redis 永久墓碑设有限 TTL并 DELETE 本行。外部回收成功但 DB ACK 长期失败时，Redis
+-- 绝不先过期，避免 outbox 尚在却永远失去 proof 的跨存储崩溃窗。
+--
+-- auth_gen/jti 记录“当时通过校验的凭据证明”，不是回收时必须仍为 current 的代际；
+-- 回收只允许 stable identity(match/allocation/pod/uid/epoch/writer fence)仍一致。
+CREATE TABLE IF NOT EXISTS `terminal_release_outbox` (
+    `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `match_id`          BIGINT UNSIGNED NOT NULL,
+    `allocation_id`     CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `ds_pod_name`       VARCHAR(253) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `gameserver_uid`    VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `instance_epoch`    INT UNSIGNED NOT NULL,
+    `auth_gen`          BIGINT UNSIGNED NOT NULL,
+    `auth_jti`          VARCHAR(256) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `auth_exp_ms`       BIGINT NOT NULL,
+    `auth_kid`          VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `auth_token_sha256` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `auth_writer_epoch` INT UNSIGNED NOT NULL,
+    `authorized_at_ms`  BIGINT NOT NULL,
+    `release_after_ms`  BIGINT NOT NULL,
+    `released_at_ms`    BIGINT NOT NULL DEFAULT 0,
+    `created_at_ms`     BIGINT NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_terminal_release_match` (`match_id`),
+    KEY `idx_terminal_release_due` (`release_after_ms`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Battle Model-B 正常结算终态回收事务出箱';

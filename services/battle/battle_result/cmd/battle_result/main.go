@@ -1,7 +1,8 @@
 // Pandora battle_result 服务入口(W4 ③,2026-06-06)。
 //
-// 职责:消费 pandora.battle.result 幂等落库 + 算 MMR(不变量 §2/§6),
-// 消费 pandora.ds.lifecycle 的 ABANDONED 做 DS 崩溃补偿(不变量 §4),
+// 职责:Model-B 经受 Guard + Redis active 校验的同步 ReportResult 幂等落库并算 MMR；
+// legacy/off 才可选消费 pandora.battle.result。始终消费 pandora.ds.lifecycle 的
+// ABANDONED 做 DS 崩溃补偿(不变量 §4),
 // 落库同事务写 player.update 出箱 + 后台发布器可靠投递(W4 ⑨ 不变量 §4),
 // 并提供战绩查询 RPC。
 //
@@ -14,7 +15,7 @@
 //  6. player.update kafka producer(弱依赖:broker 不通则 warn;player.update 已写事务出箱,
 //     producer/broker 不可用时出箱积压不丢,等 producer 可用后由发布器补发,当前需重启/重配)
 //  7. 装配 BattleResultUsecase → BattleResultService → gRPC/HTTP server
-//  8. 按 ConsumeTopics 每 topic 一个 KafkaConsumer,handler 按 topic 路由
+//  8. 按 ConsumeTopics 每 topic 一个 KafkaConsumer；Model-B 只允许 ds.lifecycle
 //  9. kratos.New(...).Run() 阻塞
 package main
 
@@ -139,6 +140,24 @@ func main() {
 
 	// 6. 装配链
 	repo := data.NewMySQLBattleRepo(db)
+	var terminalRelay *data.GrpcTerminalReleaseRelay
+	if cfg.DSAuth.AuthorityModeRedis() {
+		// 只有精确 v2 schema 已迁移，才允许构造 relay、注册 capability、接收结算。
+		// 不能让新副本先 Ready 后在首个 ReportResult 才发现表缺失。
+		probeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		probeErr := repo.ValidateTerminalReleaseSchema(probeCtx)
+		cancel()
+		if probeErr != nil {
+			helper.Errorw("msg", "terminal_release_schema_invalid", "err", probeErr,
+				"hint", "先执行 pandora_battle/000002_terminal_release_outbox migration")
+			os.Exit(1)
+		}
+		terminalRelay = data.NewGrpcTerminalReleaseRelay(cfg.Battle.DSAllocatorAddr)
+		defer func() { _ = terminalRelay.Close() }()
+		helper.Infow("msg", "terminal_release_dependencies_ready",
+			"ds_allocator_addr", cfg.Battle.DSAllocatorAddr,
+			"grace", cfg.Battle.TerminalReleaseGrace.String())
+	}
 
 	// 6.0 matchmaker releaser(弱依赖:MatchmakerAddr 空 → 不通知释放,仅 Warn 不阻断落库)
 	// 用于结算/废弃落库后调 matchmaker.ReleaseMatch 释放残留撮合状态,
@@ -154,12 +173,14 @@ func main() {
 			"hint", "matchmaker_addr 未配置 → 结算后不通知 matchmaker 释放撮合状态(玩家可能需等 TTL 才能再次匹配)")
 	}
 
-	// 战斗 DS 回收不由 battle_result 主动触发:DS 生命周期归 ds_allocator 与 DS 自身拥有 ——
-	// DS 收到 ReportResult OK 后才 ended 心跳 → 通知客户端回大厅 → 自身 Agones Shutdown;
-	// ds_allocator 凭 ended 心跳(本地 killStrandedDS taskkill / Agones 自停 + Fleet 重建)+
-	// 15s 心跳超时 sweep 兜底回收。历史教训(2026-07-03):battle_result 在结算响应路径同步调
-	// ReleaseBattle=taskkill/DELETE,抢在 DS 通知客户端回大厅之前把 DS 杀了 → 客户端卡战斗态。
+	// 战斗 DS 绝不在 ReportResult 同步响应路径回收。Model-B 把完整服务端 proof 与战绩
+	// 同事务写 terminal outbox，先留 grace 让 DS 通知客户端，再由 worker 经 ds_allocator
+	// 做永久 terminal + UID delete → MySQL durable ACK → finalize TTL。ended 心跳仍可低延迟
+	// 收尾，但资源安全不依赖客户端/DS 一定收到响应。
 	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, releaser, cfg.Battle)
+	if terminalRelay != nil {
+		uc.SetTerminalReleaseRelay(terminalRelay)
+	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)
@@ -242,6 +263,7 @@ func main() {
 			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
 			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
 			WriterEpoch: dsauthfence.ProtocolEpochV2,
+			Features:    []string{"battle-terminal-outbox-v1"},
 			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
 		})
 		if err != nil {
@@ -259,6 +281,9 @@ func main() {
 	// publisher/consumer 都会产生外部副作用；capability 未取得前禁止启动。
 	go uc.RunOutboxPublisher(pubCtx)
 	go uc.RunDropPublisher(pubCtx)
+	if terminalRelay != nil {
+		go uc.RunTerminalReleasePublisher(pubCtx)
+	}
 	for _, kc := range consumers {
 		kc.Start()
 	}

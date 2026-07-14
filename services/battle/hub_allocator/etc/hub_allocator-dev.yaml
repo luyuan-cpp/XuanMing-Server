@@ -85,6 +85,8 @@ hub:
   shard_ttl: "30m"
   # assignment_ttl: 玩家→分片归属 Redis key TTL(每次 Assign/Transfer 刷新)
   assignment_ttl: "30m"
+  # reservation_ttl: 必须覆盖 B1 DSTicket 最长 3m + DS 验票 leeway 15s，且不超过 assignment_ttl
+  reservation_ttl: "3m15s"
   # default_region: AssignHub 未指定 region 时的兜底分区
   default_region: "cn"
   # default_capacity: 单分片人数上限(大厅 500 人/实例)

@@ -21,7 +21,8 @@ type Config struct {
 	// DSTicket 是玩家 DSTicket v2(RS256 非对称,方案 B)签发配置。private_key_file 非空
 	// 即启用:battle 票据改由 auth.DSTicketSigner 签发并绑死到唯一 DS 实例
 	// (ds_allocator 必须回填 gameserver_uid / instance_epoch / allocation_id,
-	// 缺失时 fail-closed 拒签)。留空 = 沿用 legacy HS256 DSTicket(dev/local-off 行为不变)。
+	// 缺失时 fail-closed 拒签)。只要配置真实 ds_allocator_addr，本项就是必填，禁止
+	// 回退 legacy HS256；只有不连分配器的 Stub 纯本地模式不会签正式票。
 	DSTicket config.DSTicketConf `yaml:"ds_ticket,omitempty" json:"ds_ticket,omitempty"`
 }
 

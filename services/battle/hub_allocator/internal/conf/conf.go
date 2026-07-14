@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
@@ -174,6 +175,10 @@ type HubConf struct {
 	// AssignmentTTL 玩家→分片归属 Redis key TTL(默认 30min,每次 Assign/Transfer 刷新)。
 	AssignmentTTL config.Duration `yaml:"assignment_ttl,omitempty" json:"assignment_ttl,omitempty"`
 
+	// ReservationTTL 从 allocator 签票前占位到 Hub DS Admission ACK 的绝对 lease。
+	// Model B 启动时机械校验 >= DSTicket 有效窗(+DS 侧 15s leeway)且 <= AssignmentTTL。
+	ReservationTTL config.Duration `yaml:"reservation_ttl,omitempty" json:"reservation_ttl,omitempty"`
+
 	// DefaultRegion AssignHub 未指定 region 时的兜底分区(默认 "global")。
 	DefaultRegion string `yaml:"default_region,omitempty" json:"default_region,omitempty"`
 
@@ -250,6 +255,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Hub.AssignmentTTL == 0 {
 		c.Hub.AssignmentTTL = config.Duration(30 * time.Minute)
+	}
+	if c.Hub.ReservationTTL == 0 {
+		c.Hub.ReservationTTL = config.Duration(auth.DSTicketMaxTTL + 15*time.Second)
 	}
 	if c.Hub.DefaultRegion == "" {
 		c.Hub.DefaultRegion = "global"

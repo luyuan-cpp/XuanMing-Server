@@ -30,13 +30,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	HubAllocatorService_AssignHub_FullMethodName      = "/pandora.hub.v1.HubAllocatorService/AssignHub"
-	HubAllocatorService_ReleaseHub_FullMethodName     = "/pandora.hub.v1.HubAllocatorService/ReleaseHub"
-	HubAllocatorService_TransferHub_FullMethodName    = "/pandora.hub.v1.HubAllocatorService/TransferHub"
-	HubAllocatorService_ListHubs_FullMethodName       = "/pandora.hub.v1.HubAllocatorService/ListHubs"
-	HubAllocatorService_Heartbeat_FullMethodName      = "/pandora.hub.v1.HubAllocatorService/Heartbeat"
-	HubAllocatorService_ListHubLines_FullMethodName   = "/pandora.hub.v1.HubAllocatorService/ListHubLines"
-	HubAllocatorService_TransferToLine_FullMethodName = "/pandora.hub.v1.HubAllocatorService/TransferToLine"
+	HubAllocatorService_AssignHub_FullMethodName            = "/pandora.hub.v1.HubAllocatorService/AssignHub"
+	HubAllocatorService_ReleaseHub_FullMethodName           = "/pandora.hub.v1.HubAllocatorService/ReleaseHub"
+	HubAllocatorService_TransferHub_FullMethodName          = "/pandora.hub.v1.HubAllocatorService/TransferHub"
+	HubAllocatorService_ListHubs_FullMethodName             = "/pandora.hub.v1.HubAllocatorService/ListHubs"
+	HubAllocatorService_Heartbeat_FullMethodName            = "/pandora.hub.v1.HubAllocatorService/Heartbeat"
+	HubAllocatorService_AcknowledgeAdmission_FullMethodName = "/pandora.hub.v1.HubAllocatorService/AcknowledgeAdmission"
+	HubAllocatorService_AcknowledgeDeparture_FullMethodName = "/pandora.hub.v1.HubAllocatorService/AcknowledgeDeparture"
+	HubAllocatorService_ListHubLines_FullMethodName         = "/pandora.hub.v1.HubAllocatorService/ListHubLines"
+	HubAllocatorService_TransferToLine_FullMethodName       = "/pandora.hub.v1.HubAllocatorService/TransferToLine"
 )
 
 // HubAllocatorServiceClient is the client API for HubAllocatorService service.
@@ -48,6 +50,14 @@ type HubAllocatorServiceClient interface {
 	TransferHub(ctx context.Context, in *TransferHubRequest, opts ...grpc.CallOption) (*TransferHubResponse, error)
 	ListHubs(ctx context.Context, in *ListHubsRequest, opts ...grpc.CallOption) (*ListHubsResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	// AcknowledgeAdmission 仅由 Hub DS 在 InitNewPlayer 真正接纳玩家后调用。
+	// 它把同一 assignment 的 reservation 原子消费为 connected ownership；调用必须走
+	// :8444 并携带当前 active Hub DS callback credential，不能由玩家或后端普通调用伪造。
+	AcknowledgeAdmission(ctx context.Context, in *AcknowledgeAdmissionRequest, opts ...grpc.CallOption) (*AcknowledgeAdmissionResponse, error)
+	// AcknowledgeDeparture 仅由 Hub DS 在同一已接纳连接 Logout 时调用。完整
+	// player/assignment/admission identity 精确删除 connected ownership；旧连接晚到的
+	// Logout 绝不能删除同 assignment 已被新 admission_id 替换的所有权。
+	AcknowledgeDeparture(ctx context.Context, in *AcknowledgeDepartureRequest, opts ...grpc.CallOption) (*AcknowledgeDepartureResponse, error)
 	// ListHubLines 列出玩家当前 region 可切换的大厅线路(客户端可见视图,隐藏 pod 名/内部地址)。
 	ListHubLines(ctx context.Context, in *ListHubLinesRequest, opts ...grpc.CallOption) (*ListHubLinesResponse, error)
 	// TransferToLine 玩家主动切换到指定线路(换实例,AB 互不可见)。带护栏:
@@ -113,6 +123,26 @@ func (c *hubAllocatorServiceClient) Heartbeat(ctx context.Context, in *Heartbeat
 	return out, nil
 }
 
+func (c *hubAllocatorServiceClient) AcknowledgeAdmission(ctx context.Context, in *AcknowledgeAdmissionRequest, opts ...grpc.CallOption) (*AcknowledgeAdmissionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcknowledgeAdmissionResponse)
+	err := c.cc.Invoke(ctx, HubAllocatorService_AcknowledgeAdmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubAllocatorServiceClient) AcknowledgeDeparture(ctx context.Context, in *AcknowledgeDepartureRequest, opts ...grpc.CallOption) (*AcknowledgeDepartureResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcknowledgeDepartureResponse)
+	err := c.cc.Invoke(ctx, HubAllocatorService_AcknowledgeDeparture_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hubAllocatorServiceClient) ListHubLines(ctx context.Context, in *ListHubLinesRequest, opts ...grpc.CallOption) (*ListHubLinesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListHubLinesResponse)
@@ -142,6 +172,14 @@ type HubAllocatorServiceServer interface {
 	TransferHub(context.Context, *TransferHubRequest) (*TransferHubResponse, error)
 	ListHubs(context.Context, *ListHubsRequest) (*ListHubsResponse, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	// AcknowledgeAdmission 仅由 Hub DS 在 InitNewPlayer 真正接纳玩家后调用。
+	// 它把同一 assignment 的 reservation 原子消费为 connected ownership；调用必须走
+	// :8444 并携带当前 active Hub DS callback credential，不能由玩家或后端普通调用伪造。
+	AcknowledgeAdmission(context.Context, *AcknowledgeAdmissionRequest) (*AcknowledgeAdmissionResponse, error)
+	// AcknowledgeDeparture 仅由 Hub DS 在同一已接纳连接 Logout 时调用。完整
+	// player/assignment/admission identity 精确删除 connected ownership；旧连接晚到的
+	// Logout 绝不能删除同 assignment 已被新 admission_id 替换的所有权。
+	AcknowledgeDeparture(context.Context, *AcknowledgeDepartureRequest) (*AcknowledgeDepartureResponse, error)
 	// ListHubLines 列出玩家当前 region 可切换的大厅线路(客户端可见视图,隐藏 pod 名/内部地址)。
 	ListHubLines(context.Context, *ListHubLinesRequest) (*ListHubLinesResponse, error)
 	// TransferToLine 玩家主动切换到指定线路(换实例,AB 互不可见)。带护栏:
@@ -170,6 +208,12 @@ func (UnimplementedHubAllocatorServiceServer) ListHubs(context.Context, *ListHub
 }
 func (UnimplementedHubAllocatorServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedHubAllocatorServiceServer) AcknowledgeAdmission(context.Context, *AcknowledgeAdmissionRequest) (*AcknowledgeAdmissionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AcknowledgeAdmission not implemented")
+}
+func (UnimplementedHubAllocatorServiceServer) AcknowledgeDeparture(context.Context, *AcknowledgeDepartureRequest) (*AcknowledgeDepartureResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AcknowledgeDeparture not implemented")
 }
 func (UnimplementedHubAllocatorServiceServer) ListHubLines(context.Context, *ListHubLinesRequest) (*ListHubLinesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListHubLines not implemented")
@@ -287,6 +331,42 @@ func _HubAllocatorService_Heartbeat_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HubAllocatorService_AcknowledgeAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcknowledgeAdmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubAllocatorServiceServer).AcknowledgeAdmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HubAllocatorService_AcknowledgeAdmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubAllocatorServiceServer).AcknowledgeAdmission(ctx, req.(*AcknowledgeAdmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HubAllocatorService_AcknowledgeDeparture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcknowledgeDepartureRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubAllocatorServiceServer).AcknowledgeDeparture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HubAllocatorService_AcknowledgeDeparture_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubAllocatorServiceServer).AcknowledgeDeparture(ctx, req.(*AcknowledgeDepartureRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HubAllocatorService_ListHubLines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListHubLinesRequest)
 	if err := dec(in); err != nil {
@@ -349,6 +429,14 @@ var HubAllocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Heartbeat",
 			Handler:    _HubAllocatorService_Heartbeat_Handler,
+		},
+		{
+			MethodName: "AcknowledgeAdmission",
+			Handler:    _HubAllocatorService_AcknowledgeAdmission_Handler,
+		},
+		{
+			MethodName: "AcknowledgeDeparture",
+			Handler:    _HubAllocatorService_AcknowledgeDeparture_Handler,
 		},
 		{
 			MethodName: "ListHubLines",

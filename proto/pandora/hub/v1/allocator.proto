@@ -20,7 +20,15 @@ service HubAllocatorService {
   rpc ReleaseHub(ReleaseHubRequest) returns (ReleaseHubResponse);
   rpc TransferHub(TransferHubRequest) returns (TransferHubResponse);
   rpc ListHubs(ListHubsRequest) returns (ListHubsResponse);
-   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // Hub DS 每 5s 主动调
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // Hub DS 每 5s 主动调
+  // AcknowledgeAdmission 仅由 Hub DS 在 InitNewPlayer 真正接纳玩家后调用。
+  // 它把同一 assignment 的 reservation 原子消费为 connected ownership；调用必须走
+  // :8444 并携带当前 active Hub DS callback credential，不能由玩家或后端普通调用伪造。
+  rpc AcknowledgeAdmission(AcknowledgeAdmissionRequest) returns (AcknowledgeAdmissionResponse);
+  // AcknowledgeDeparture 仅由 Hub DS 在同一已接纳连接 Logout 时调用。完整
+  // player/assignment/admission identity 精确删除 connected ownership；旧连接晚到的
+  // Logout 绝不能删除同 assignment 已被新 admission_id 替换的所有权。
+  rpc AcknowledgeDeparture(AcknowledgeDepartureRequest) returns (AcknowledgeDepartureResponse);
 
   // ===== 玩家侧(经 Envoy :8443 客户端面,jwt_authn 注入 x-pandora-player-id)=====
   // 这两个方法 player_id 一律取自 JWT sub(服务端从 ctx 读),不信请求体,
@@ -134,7 +142,7 @@ message ListHubsResponse {
 
 // ===== Heartbeat(单向 unary,Hub DS 每 5s 调一次)=====
 
- message HeartbeatRequest {
+message HeartbeatRequest {
   string hub_pod_name = 1;
   int32  player_count = 2;
   float  cpu_pct      = 3;
@@ -147,6 +155,10 @@ message ListHubsResponse {
   // hub_allocator 转发给 player_locator 做 HUB 位置 TTL 续期(在线保活);
   // DS 崩溃/玩家拔线 → 停报 → locator 30s 自然过期 = 好友视角离线。
   repeated uint64 player_ids = 10;
+  // max_players 是本 Hub DS 当前 GameSession.MaxPlayers 的实际值。
+  // Model B 在任何心跳副作用前要求 >0 且与 shard.capacity 精确相等；不一致时不刷新
+  // active 心跳、不翻 ready、不改 reported count，防 allocator=500 / UE=16 的容量假证明。
+  uint32 max_players = 11;
 }
 
 message HeartbeatResponse {
@@ -229,6 +241,15 @@ message HubShardStorageRecord {
   // release_track 来自 GameServer metadata 的实际发布轨(stable/canary)。分配与迁移
   // 必须始终留在同一轨；空值只代表滚动升级前的旧记录，业务层迁移为 stable。
   string release_track = 18;
+  // Model B 容量投影：player_count 不再被心跳实报直接覆盖，而是严格派生为
+  // connected_ownership_count + reserved_count。reported_connected_count 只作 DS 实报审计；
+  // admission/session ledger 才是容量权威。
+  int32 reported_connected_count = 19;
+  int32 reserved_count = 20;
+  int32 connected_ownership_count = 21;
+  // 最近一次被 active credential 接纳的 Heartbeat 所报 GameSession.MaxPlayers。
+  // ready/routable 必须满足 reported_max_players == capacity > 0。
+  uint32 reported_max_players = 22;
 }
 
 // ===== Model B DS 回调授权状态机(decision-revisit-ds-callback-auth §7)=====
@@ -340,4 +361,82 @@ message HubMigrateEvent {
   int32  grace_seconds   = 7;   // 倒计时(秒),到点强制切换
   string reason          = 8;   // "consolidation" | "maintenance"
   int64  ts_ms           = 9;
+}
+
+// ===== Hub reservation/admission 容量账（additive，统一追加在文件末尾）=====
+
+// AcknowledgeAdmission 仅 :8444 Hub DS callback 面使用。
+message AcknowledgeAdmissionRequest {
+  // player_id / assignment_id 来自已在 DS 本地验签通过的 Hub DSTicket。
+  // 服务端仍会用 Redis reservation + assignment identity 核验，绝不只信请求体。
+  uint64 player_id = 1;
+  string assignment_id = 2;
+  // hub_pod_name 必须与 callback credential 的 sub 完全一致。
+  string hub_pod_name = 3;
+  // 同一次 PostLogin 的小写 RFC4122 UUIDv4；响应未知时重试必须复用。
+  string admission_id = 4;
+  // Hub DS 进程内单调递增连接序号；同一次 PostLogin 重试固定复用。
+  // 新 owner 只有 admission_seq 更大时才能替换旧 owner，防迟到旧 ACK 反向夺回。
+  uint64 admission_seq = 5;
+}
+
+message AcknowledgeAdmissionResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // true 表示同一 assignment 已经从 reservation 转为 connected ownership；
+  // 响应丢失后以相同身份重试会幂等返回 true，不重复计数。
+  bool admitted = 2;
+}
+
+// AcknowledgeDeparture 与 AcknowledgeAdmission 走同一 :8444 Hub DS callback 鉴权面。
+message AcknowledgeDepartureRequest {
+  uint64 player_id = 1;
+  string assignment_id = 2;
+  string hub_pod_name = 3;
+  string admission_id = 4;
+  // 必须与待删除 connected owner 的 admission_seq 精确一致。
+  uint64 admission_seq = 5;
+}
+
+message AcknowledgeDepartureResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // true 表示该 exact admission 已删除，或同一 exact identity 已经不存在（幂等重试）。
+  // 若 assignment 当前属于另一个 admission_id，则返回 false 且零副作用。
+  bool departed = 2;
+}
+
+// HubReservationStorageRecord 是尚未真正进场玩家的有界 reservation lease。
+// value 存于 `pandora:hub:reservations:{pod}` HASH(field=assignment_id)，绝不外发客户端；
+// 绝对到期索引存同 slot 的 `pandora:hub:reservation-expiry:{pod}` ZSET。
+message HubReservationStorageRecord {
+  uint64 player_id = 1;
+  string assignment_id = 2;
+  string hub_pod_name = 3;
+  string hub_instance_uid = 4;
+  uint32 auth_epoch = 5;
+  uint32 auth_writer_epoch = 6;
+  int64 created_at_ms = 7;
+  int64 expires_at_ms = 8;
+  // 对应 assignment key 的绝对到期（审计/迁移护栏）；reservation 消费后 connected ownership
+  // 新格式不按时间自动过期。Heartbeat 缺少 assignment/admission identity，不能据漏报释放。
+  int64 assignment_expires_at_ms = 9;
+}
+
+// HubConnectedOwnershipStorageRecord 是已由 Hub DS 真接纳 ACK 证明的连接所有权。
+// value 存于 `pandora:hub:sessions:{pod}` HASH(field=assignment_id)。Heartbeat 只有 player_id、
+// 没有 assignment/admission identity，因此只能审计，不能因某次/多次漏报删除 ownership；
+// session 只由 exact AcknowledgeDeparture、Release/Transfer 或 UID teardown 删除。
+message HubConnectedOwnershipStorageRecord {
+  uint64 player_id = 1;
+  string assignment_id = 2;
+  string admission_id = 3;
+  string hub_pod_name = 4;
+  string hub_instance_uid = 5;
+  uint32 auth_epoch = 6;
+  uint32 auth_writer_epoch = 7;
+  int64 admitted_at_ms = 8;
+  int64 last_seen_ms = 9;
+  // 新格式恒为 0（不自动过期）。读取端仅为滚动升级兼容清理 expires_at_ms>0 的旧/未来格式。
+  int64 expires_at_ms = 10;
+  // Hub DS 进程内单调连接序号；与 admission_id 联合确定 owner，防乱序旧 ACK/Logout。
+  uint64 admission_seq = 11;
 }

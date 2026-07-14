@@ -532,6 +532,12 @@ func (r *RedisHubRepo) ClearTransferCooldown(ctx context.Context, playerID uint6
 // 心跳必须在调用本函数前 fail-closed 返回,零变更)。
 func applyHeartbeatToShard(rec *hubv1.HubShardStorageRecord, playerCount int32, state string, tsMs int64) {
 	rec.PlayerCount = playerCount
+	applyHeartbeatStateToShard(rec, state, tsMs)
+}
+
+// applyHeartbeatStateToShard 是 Model B 专用状态更新：容量 player_count 由 reservation+
+// connected ownership ledger 派生，绝不接受 DS reported count 覆盖。
+func applyHeartbeatStateToShard(rec *hubv1.HubShardStorageRecord, state string, tsMs int64) {
 	switch {
 	case rec.State == "warming":
 		// 首个通过 Guard/授权的心跳即「DS 已就绪且可信」的直接证据:warming → ready。

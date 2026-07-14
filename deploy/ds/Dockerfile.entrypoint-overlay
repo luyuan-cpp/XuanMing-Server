@@ -1,0 +1,12 @@
+# Pandora DS 本地离线验收用的入口脚本覆盖层。
+#
+# 完整发布镜像仍必须由 Dockerfile + 当前 LinuxServer stage 重建；本文件只用于 UE 内容与
+# 运行依赖完全未变、但需要在断网环境验证 entrypoint 安全修复的场景。BASE_IMAGE 必须是
+# 已存在的本地 Pandora DS 镜像，构建时配合 --pull=false --network=none，禁止把该派生层
+# 冒充完整 UE 重打包产物。
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# 基础镜像已创建 uid/gid 10001 的 pandora 用户。COPY 在构建器侧执行，不需要容器 root；
+# 显式 owner/mode 保持非 root 入口可执行。
+COPY --chown=10001:10001 --chmod=0755 entrypoint.sh /home/pandora/entrypoint.sh

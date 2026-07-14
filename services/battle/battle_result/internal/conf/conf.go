@@ -48,6 +48,21 @@ type BattleConf struct {
 	// OutboxBatchSize 每轮发布取多少条出箱记录(默认 128)。
 	OutboxBatchSize int `yaml:"outbox_batch_size,omitempty" json:"outbox_batch_size,omitempty"`
 
+	// DSAllocatorAddr 终态回收 relay 的内部 gRPC 地址。authority_mode=redis 时为强依赖；
+	// worker 只向不暴露在 :8444 的 ReleaseBattle 发送 MySQL 持久证明。
+	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
+
+	// TerminalReleaseInterval 持久终态回收 outbox 的轮询间隔(默认 2s)。
+	TerminalReleaseInterval config.Duration `yaml:"terminal_release_interval,omitempty" json:"terminal_release_interval,omitempty"`
+
+	// TerminalReleaseBatchSize 每轮最多处理的终态回收行数(默认 128)。
+	TerminalReleaseBatchSize int `yaml:"terminal_release_batch_size,omitempty" json:"terminal_release_batch_size,omitempty"`
+
+	// TerminalReleaseGrace ReportResult 事务提交后，强制 UID 回收前留给 DS 收响应、
+	// 通知客户端回大厅的宽限窗(默认 15s)。资源安全不依赖 DS ended ACK；响应丢失时
+	// 宽限到期仍由 worker 回收。
+	TerminalReleaseGrace config.Duration `yaml:"terminal_release_grace,omitempty" json:"terminal_release_grace,omitempty"`
+
 	// ── 战斗装备掉落回写 W5 ④ ──
 
 	// InventoryAddr inventory 服务 gRPC 地址(弱依赖:空 → 关闭掉落回写,不发放战斗装备掉落)。
@@ -94,6 +109,15 @@ func (c *Config) Defaults() {
 	if c.Battle.OutboxBatchSize <= 0 {
 		c.Battle.OutboxBatchSize = 128
 	}
+	if c.Battle.TerminalReleaseInterval.Std() <= 0 {
+		c.Battle.TerminalReleaseInterval = config.Duration(2 * time.Second)
+	}
+	if c.Battle.TerminalReleaseBatchSize <= 0 {
+		c.Battle.TerminalReleaseBatchSize = 128
+	}
+	if c.Battle.TerminalReleaseGrace.Std() <= 0 {
+		c.Battle.TerminalReleaseGrace = config.Duration(15 * time.Second)
+	}
 	if c.Battle.DropPublishInterval.Std() <= 0 {
 		c.Battle.DropPublishInterval = config.Duration(2 * time.Second)
 	}
@@ -115,6 +139,16 @@ func (c *Config) Defaults() {
 func (c *Config) ValidateRedisAuthorityIngress() error {
 	if !c.DSAuth.AuthorityModeRedis() {
 		return nil
+	}
+	if c.Battle.DSAllocatorAddr == "" {
+		return fmt.Errorf("battle_result: authority_mode=redis requires battle.ds_allocator_addr for terminal release outbox relay")
+	}
+	if c.Battle.TerminalReleaseInterval.Std() <= 0 || c.Battle.TerminalReleaseBatchSize <= 0 {
+		return fmt.Errorf("battle_result: terminal release worker interval/batch must be positive")
+	}
+	grace := c.Battle.TerminalReleaseGrace.Std()
+	if grace < 5*time.Second || grace > 2*time.Minute {
+		return fmt.Errorf("battle_result: terminal_release_grace must be within [5s,2m]")
 	}
 	for _, topic := range c.Battle.ConsumeTopics {
 		if topic == kafkax.TopicBattleResult {

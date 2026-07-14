@@ -42,9 +42,44 @@ type CredentialIdentity struct {
 // AssignmentInstanceIdentity 是赢得 assignment CAS 后退座所需的稳定实例身份。
 // 凭据 gen/jti 可在“校验 assignment→CAS 删除”之间正常轮换；UID/epoch/writer 不可变。
 type AssignmentInstanceIdentity struct {
+	PlayerID      uint64
+	AssignmentID  string
 	InstanceUID   string
 	ProtocolEpoch uint32
 	WriterEpoch   uint32
+}
+
+// ReservationIdentity 是逐 assignment 容量 lease 的稳定身份。凭据 gen/jti 会平滑轮换，
+// reservation/session 只绑定不会在同一 GameServer 生命周期内变化的 UID/epoch/writer。
+type ReservationIdentity struct {
+	PlayerID              uint64
+	AssignmentID          string
+	InstanceUID           string
+	ProtocolEpoch         uint32
+	WriterEpoch           uint32
+	ExpiresAtMs           int64
+	AssignmentExpiresAtMs int64
+}
+
+// AdmissionResult 是 Hub DS 真接纳 ACK 的幂等结果。
+type AdmissionResult struct {
+	Admitted          bool
+	AlreadyAdmitted   bool
+	Conflict          bool
+	ReservedCount     int32
+	ConnectedCount    int32
+	CapacityOccupancy int32
+}
+
+// DepartureResult 是 Hub DS exact Logout ACK 的结果。Conflict=true 表示同 assignment
+// 已由另一个 admission_id 接管；旧连接晚到 Logout 必须零副作用停止重试。
+type DepartureResult struct {
+	Departed          bool
+	AlreadyDeparted   bool
+	Conflict          bool
+	ReservedCount     int32
+	ConnectedCount    int32
+	CapacityOccupancy int32
 }
 
 // errAuthStale:Model B 授权校验失败(无授权记录 / uid|epoch 不符 / gen 非当前 / 凭据不匹配)。
@@ -91,18 +126,24 @@ type HubAuthRepo interface {
 	// reconcile 拓扑再重试,保证 promote 与 ready 始终同事务。stale/相位锁定/都不匹配 → errAuthStale(零变更)。
 	// authTTL/shardTTL 分别用于两键(CE8:授权记录不被 shardTTL 缩短)。
 	ActivateHeartbeat(ctx context.Context, pod string, id CredentialIdentity, in ActivateHeartbeatInput) (ActivateResult, error)
-	// ReserveRoutableSeat 是 Model B 原子最终分配门(审核二轮 CE6/CE9):在 authKey + shardKey 同 slot
-	// 单事务里同时确认 phase∈{ACTIVE,ROTATING}、active 元组完整未过期、active==shard.last_verified、
-	// uid/epoch 一致、shard ready、非 draining/stopping、心跳新鲜、容量未满,然后原子 seat++,返回本次
-	// reserve 绑定的完整元组。杜绝「先检查授权、后单独占座」竞态(CE6)。
-	ReserveRoutableSeat(ctx context.Context, pod string, nowMs, maxHeartbeatAgeMs int64, shardTTL time.Duration) (ReserveResult, error)
-	// ReleaseRoutableSeat 仅当 expected 完整 active tuple 仍为当前权威且分片投影匹配时原子退座。
-	// 防同名 Pod 重建/轮换后,旧 assignment 的延迟 Release 误减新实例席位。
-	ReleaseRoutableSeat(ctx context.Context, pod string, expected CredentialIdentity, shardTTL time.Duration) (bool, error)
+	// ReserveAssignment 在 auth+shard+reservation/session 同 {pod} slot 事务中清理到期 lease、
+	// 核验 active/projection/MaxPlayers/心跳与容量，再按 (player,assignment,UID,epoch,writer)
+	// 创建或刷新逐 reservation；若同 assignment 已是 connected ownership 则幂等成功且不重复计数。
+	ReserveAssignment(ctx context.Context, pod string, reservation ReservationIdentity, nowMs, maxHeartbeatAgeMs int64, shardTTL time.Duration) (ReserveResult, error)
+	// AcknowledgeAdmission 由持当前 active callback credential 的 Hub DS 在真接纳后调用；
+	// reservation->connected ownership 与容量投影在同槽一次 EXEC 完成，响应丢失重试幂等。
+	AcknowledgeAdmission(ctx context.Context, pod string, credential CredentialIdentity, reservation ReservationIdentity,
+		admissionID string, admissionSeq uint64, nowMs int64, shardTTL time.Duration) (AdmissionResult, error)
+	// AcknowledgeDeparture 仅删除完整 (player,assignment,admission,pod,UID,epoch,writer)
+	// identity 对应的 connected ownership。同 assignment 新 admission 已接管时返回 Conflict 且零副作用。
+	AcknowledgeDeparture(ctx context.Context, pod string, credential CredentialIdentity, reservation ReservationIdentity,
+		admissionID string, admissionSeq uint64, nowMs int64, shardTTL time.Duration) (DepartureResult, error)
 	// ReleaseAssignmentSeat 在同一 auth+shard 事务里用稳定 UID/epoch/writer 对齐当前
 	// active+last_verified 后退座；供已经赢得跨 slot assignment CAS 的调用者使用，
 	// 封住 CAS 前后普通 token 轮换导致“归属已删但旧 tuple 退座失败”的容量泄漏。
 	ReleaseAssignmentSeat(ctx context.Context, pod string, expected AssignmentInstanceIdentity, shardTTL time.Duration) (bool, error)
+	// RemoveCapacityLedger 删除已确认回收分片的 reservation/session 派生键；只由 RemoveShard 后调用。
+	RemoveCapacityLedger(ctx context.Context, pod string) error
 	// CheckRoutable 是 ReserveRoutableSeat 的只读版本(不 seat++):幂等重签 / 复用已有归属时校验目标
 	// 分片当前是否可路由并取回当前 active 元组,供比对归属记录钉的元组是否仍等于当前 active(实例漂移即失效)。
 	CheckRoutable(ctx context.Context, pod string, nowMs, maxHeartbeatAgeMs int64) (ReserveResult, error)

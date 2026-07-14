@@ -28,7 +28,7 @@ func Acquire(ctx context.Context, cfg Config) (*Holder, error) {
 	if err := validate(cfg); err != nil {
 		return nil, err
 	}
-	cli, err := clientv3.New(clientv3.Config{Endpoints: cfg.Endpoints, DialTimeout: cfg.DialTimeout})
+	cli, err := newEtcdClient(cfg.Endpoints, cfg.DialTimeout, cfg.Prefix, cfg.Security)
 	if err != nil {
 		return nil, fmt.Errorf("dsauthfence: dial etcd: %w", err)
 	}

@@ -1,0 +1,47 @@
+# DS terminal 静态候选不依赖尚未激活的 Inventory component，自行声明 battle-result
+# principal 与纯 revision 注入；仍禁止 inject=true 同时命中 default/revision webhook。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: battle-result
+  namespace: pandora
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        istio.io/rev: PANDORA_ISTIO_REVISION_REQUIRED
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    spec:
+      serviceAccountName: pandora-battle-result
+      automountServiceAccountToken: false
+      containers:
+        - name: battle-result
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+---
+# ds-allocator 保留 pandora-allocator ServiceAccount，Agones UID 条件回收依赖其权限；
+# 只用同一发布参数替换 revision sentinel，不创建或复用玩家/DS callback 密钥。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ds-allocator
+  namespace: pandora
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        istio.io/rev: PANDORA_ISTIO_REVISION_REQUIRED
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    spec:
+      serviceAccountName: pandora-allocator

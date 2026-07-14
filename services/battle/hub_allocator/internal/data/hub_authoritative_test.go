@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
@@ -34,8 +35,14 @@ const activateAuthTTL = 48 * time.Hour
 
 // activateInput 组装心跳负载:authTTL 48h(远长于 shardTTL 30m,CE8),shardTTL=testTTL。
 func activateInput(playerCount int32, state string, tsMs int64) ActivateHeartbeatInput {
+	playerIDs := make([]uint64, playerCount)
+	for i := range playerIDs {
+		playerIDs[i] = uint64(i + 1)
+	}
 	return ActivateHeartbeatInput{
 		PlayerCount: playerCount,
+		PlayerIDs:   playerIDs,
+		MaxPlayers:  500,
 		State:       state,
 		TsMs:        tsMs,
 		AuthTTL:     activateAuthTTL,
@@ -72,7 +79,8 @@ func TestActivate_PromoteFlipsShardSameTx(t *testing.T) {
 		t.Fatalf("auth after activate: active=gen7 pending=nil ACTIVE; got %+v", auth)
 	}
 	shard, _, _ := shardRepoFor(repo).GetShard(ctx, pod)
-	if shard.State != "ready" || shard.PlayerCount != 3 || shard.LastVerifiedGen != 7 ||
+	if shard.State != "ready" || shard.PlayerCount != 0 || shard.ReportedConnectedCount != 3 ||
+		shard.LastVerifiedGen != 7 ||
 		shard.LastVerifiedJti != "j7" || shard.GameserverUid != "uid-A" || shard.AuthEpoch != 1 {
 		t.Fatalf("shard must be ready + last_verified projected by active tuple, got %+v", shard)
 	}
@@ -106,10 +114,10 @@ func TestActivate_PromoteFlipsShardSameTx(t *testing.T) {
 	if _, err := repo.ActivateHeartbeat(ctx, pod, idBadUID, activateInput(9, "", now+3000)); errcode.As(err) != errcode.ErrUnauthorized {
 		t.Fatalf("uid mismatch must be rejected, got %v", err)
 	}
-	// stale/uid 拒绝后 player_count 不被污染(仍是上次幂等心跳的 5)。
+	// stale/uid 拒绝后权威 player_count 仍由空 ledger 派生为 0；实报审计停在上次合法值 5。
 	shard2, _, _ := shardRepoFor(repo).GetShard(ctx, pod)
-	if shard2.PlayerCount != 5 {
-		t.Fatalf("rejected heartbeats must not mutate shard, want count=5 got %d", shard2.PlayerCount)
+	if shard2.PlayerCount != 0 || shard2.ReportedConnectedCount != 5 {
+		t.Fatalf("rejected heartbeats must not mutate shard, got %+v", shard2)
 	}
 }
 
@@ -214,8 +222,10 @@ func TestReleaseAssignmentSeatSurvivesCredentialRotationButRejectsUIDDrift(t *te
 	if _, err := repo.ActivateHeartbeat(ctx, pod, id8, activateInput(3, "ready", now+1000)); err != nil {
 		t.Fatal(err)
 	}
+	stable := firstConnectedAssignmentIdentity(t, repo, pod)
 
-	bad := AssignmentInstanceIdentity{InstanceUID: "uid-rebuilt", ProtocolEpoch: 1, WriterEpoch: testWriterEpoch}
+	bad := stable
+	bad.InstanceUID = "uid-rebuilt"
 	before, _ := repo.rdb.Get(ctx, shardKey(pod)).Bytes()
 	ttlBefore := mr.TTL(shardKey(pod))
 	if released, err := repo.ReleaseAssignmentSeat(ctx, pod, bad, testTTL); err != nil || released {
@@ -226,7 +236,6 @@ func TestReleaseAssignmentSeatSurvivesCredentialRotationButRejectsUIDDrift(t *te
 		t.Fatal("wrong UID stable release mutated shard bytes or TTL")
 	}
 
-	stable := AssignmentInstanceIdentity{InstanceUID: "uid-A", ProtocolEpoch: 1, WriterEpoch: testWriterEpoch}
 	if released, err := repo.ReleaseAssignmentSeat(ctx, pod, stable, testTTL); err != nil || !released {
 		t.Fatalf("same instance release after rotation=%v err=%v", released, err)
 	}
@@ -310,13 +319,21 @@ func TestReserveRoutableSeat_Gates(t *testing.T) {
 
 	maxAge := int64(30_000)
 
-	// 正常可路由 → OK,seat++。
-	r1, err := repo.ReserveRoutableSeat(ctx, pod, now, maxAge, testTTL)
+	reservation := ReservationIdentity{
+		PlayerID: 101, AssignmentID: uuid.NewString(), InstanceUID: "uid-A",
+		ProtocolEpoch: 1, WriterEpoch: testWriterEpoch,
+		ExpiresAtMs: now + 60_000, AssignmentExpiresAtMs: now + 120_000,
+	}
+	// 正常可路由 → 创建逐 assignment reservation，投影 occupancy+1。
+	r1, err := repo.ReserveAssignment(ctx, pod, reservation, now, maxAge, testTTL)
 	if err != nil || !r1.OK || r1.PlayerCount != 1 || r1.ActiveGen != 7 || r1.InstanceUID != "uid-A" {
 		t.Fatalf("routable reserve must seat++ & return tuple, got %+v err=%v", r1, err)
 	}
 	// 心跳陈旧(now 远超 last_hb+maxAge)→ 不可路由。
-	r2, err := repo.ReserveRoutableSeat(ctx, pod, now+maxAge+1, maxAge, testTTL)
+	staleReservation := reservation
+	staleReservation.AssignmentID = uuid.NewString()
+	staleReservation.PlayerID++
+	r2, err := repo.ReserveAssignment(ctx, pod, staleReservation, now+maxAge+1, maxAge, testTTL)
 	if err != nil {
 		t.Fatalf("reserve stale-hb: %v", err)
 	}
@@ -326,19 +343,23 @@ func TestReserveRoutableSeat_Gates(t *testing.T) {
 
 	// last_verified 被改坏(实例漂移 / 未被当前 active 投影)→ 不可路由。
 	bumpShard(t, repo, pod, func(s *hubv1.HubShardStorageRecord) { s.LastVerifiedGen = 999 })
-	r3, _ := repo.ReserveRoutableSeat(ctx, pod, now, maxAge, testTTL)
+	r3, _ := repo.ReserveAssignment(ctx, pod, staleReservation, now, maxAge, testTTL)
 	if r3.OK || r3.Reason != "shard-not-verified-by-active" {
 		t.Fatalf("shard not verified by active must block, got %+v", r3)
 	}
 	// 修回并把 state 改 draining → 不可路由。
 	bumpShard(t, repo, pod, func(s *hubv1.HubShardStorageRecord) { s.LastVerifiedGen = 7; s.State = "draining" })
-	r4, _ := repo.ReserveRoutableSeat(ctx, pod, now, maxAge, testTTL)
+	r4, _ := repo.ReserveAssignment(ctx, pod, staleReservation, now, maxAge, testTTL)
 	if r4.OK || r4.Reason != "shard-not-ready" {
 		t.Fatalf("draining shard must block, got %+v", r4)
 	}
-	// 修回 ready 但坐满 → shard-full。
-	bumpShard(t, repo, pod, func(s *hubv1.HubShardStorageRecord) { s.State = "ready"; s.PlayerCount = s.Capacity })
-	r5, _ := repo.ReserveRoutableSeat(ctx, pod, now, maxAge, testTTL)
+	// 修回 ready，并把容量缩到现有一条 reservation → 新 assignment 被 shard-full 拒绝。
+	bumpShard(t, repo, pod, func(s *hubv1.HubShardStorageRecord) {
+		s.State = "ready"
+		s.Capacity = 1
+		s.ReportedMaxPlayers = 1
+	})
+	r5, _ := repo.ReserveAssignment(ctx, pod, staleReservation, now, maxAge, testTTL)
 	if r5.OK || r5.Reason != "shard-full" {
 		t.Fatalf("full shard must block, got %+v", r5)
 	}
@@ -428,14 +449,23 @@ func TestV2RejectsLowAndFutureWriterAcrossAllHubAuthorityPaths(t *testing.T) {
 				t.Fatalf("V2 ActivateHeartbeat code=%v err=%v", errcode.As(err), err)
 			}
 			nowMs := time.Now().UnixMilli()
-			if out, err := repo.ReserveRoutableSeat(ctx, pod, nowMs, 30_000, testTTL); err != nil || out.OK {
-				t.Fatalf("V2 ReserveRoutableSeat out=%+v err=%v", out, err)
+			reservation := ReservationIdentity{
+				PlayerID: 101, AssignmentID: uuid.NewString(), InstanceUID: "uid-A",
+				ProtocolEpoch: 1, WriterEpoch: testWriterEpoch,
+				ExpiresAtMs: nowMs + 60_000, AssignmentExpiresAtMs: nowMs + 120_000,
+			}
+			if out, err := repo.ReserveAssignment(ctx, pod, reservation, nowMs, 30_000, testTTL); err != nil || out.OK {
+				t.Fatalf("V2 ReserveAssignment out=%+v err=%v", out, err)
 			}
 			if out, err := repo.CheckRoutable(ctx, pod, nowMs, 30_000); err != nil || out.OK {
 				t.Fatalf("V2 CheckRoutable out=%+v err=%v", out, err)
 			}
-			if released, err := repo.ReleaseRoutableSeat(ctx, pod, id, testTTL); err != nil || released {
-				t.Fatalf("V2 ReleaseRoutableSeat released=%v err=%v", released, err)
+			if released, err := repo.ReleaseAssignmentSeat(ctx, pod, AssignmentInstanceIdentity{
+				PlayerID: reservation.PlayerID, AssignmentID: reservation.AssignmentID,
+				InstanceUID: reservation.InstanceUID, ProtocolEpoch: reservation.ProtocolEpoch,
+				WriterEpoch: reservation.WriterEpoch,
+			}, testTTL); err != nil || released {
+				t.Fatalf("V2 ReleaseAssignmentSeat released=%v err=%v", released, err)
 			}
 			if result, err := repo.QuarantineExpected(ctx, pod, id, activateAuthTTL, testTTL); err == nil || result.AuthQuarantined || result.ProjectionDrained {
 				t.Fatalf("V2 QuarantineExpected result=%+v err=%v", result, err)
@@ -522,10 +552,46 @@ func activateReady(t *testing.T, repo *RedisHubAuthRepo, pod string, nowMs int64
 		t.Fatalf("stage: %v", err)
 	}
 	seedWarmingShard(t, repo, pod, nowMs)
+	for i := int32(0); i < initialSeat; i++ {
+		assignmentID := uuid.NewString()
+		rec := &hubv1.HubConnectedOwnershipStorageRecord{
+			PlayerId: uint64(i + 1), AssignmentId: assignmentID, AdmissionId: uuid.NewString(),
+			HubPodName: pod, HubInstanceUid: "uid-A", AuthEpoch: 1, AuthWriterEpoch: testWriterEpoch,
+			AdmittedAtMs: nowMs, LastSeenMs: nowMs, AdmissionSeq: uint64(i + 1),
+		}
+		payload, err := proto.Marshal(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.rdb.HSet(ctx, sessionsKey(pod), assignmentID, payload).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	idOK := CredentialIdentity{Gen: 7, JTI: "j7", InstanceUID: "uid-A", ProtocolEpoch: 1, TokenSHA256: "sha-j7", Kid: "kid-1", WriterEpoch: testWriterEpoch}
 	if _, err := repo.ActivateHeartbeat(ctx, pod, idOK, activateInput(initialSeat, "", nowMs)); err != nil {
 		t.Fatalf("activate ready: %v", err)
 	}
+}
+
+func firstConnectedAssignmentIdentity(t *testing.T, repo *RedisHubAuthRepo, pod string) AssignmentInstanceIdentity {
+	t.Helper()
+	rawByAssignment, err := repo.rdb.HGetAll(context.Background(), sessionsKey(pod)).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for assignmentID, raw := range rawByAssignment {
+		rec := &hubv1.HubConnectedOwnershipStorageRecord{}
+		if err := proto.Unmarshal([]byte(raw), rec); err != nil {
+			t.Fatal(err)
+		}
+		return AssignmentInstanceIdentity{
+			PlayerID: rec.GetPlayerId(), AssignmentID: assignmentID,
+			InstanceUID: rec.GetHubInstanceUid(), ProtocolEpoch: rec.GetAuthEpoch(),
+			WriterEpoch: rec.GetAuthWriterEpoch(),
+		}
+	}
+	t.Fatal("expected at least one connected ownership record")
+	return AssignmentInstanceIdentity{}
 }
 
 // bumpShard 就地改分片镜像字段(测试用,绕过业务门直接改存储态以构造边界)。

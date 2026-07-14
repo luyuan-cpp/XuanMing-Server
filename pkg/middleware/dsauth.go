@@ -122,12 +122,18 @@ type DSScope struct {
 
 // DSCallbackGuard 校验 DS 回调令牌 + 范围绑定。nil Guard 等价 mode=off(未配置服务零改动)。
 type DSCallbackGuard struct {
-	verifier *auth.Verifier
+	verifier DSCallbackTokenVerifier
 	mode     DSAuthMode
 }
 
+// DSCallbackTokenVerifier 是 Guard 唯一可见的验签方法集；玩家 Session/DSTicket 方法
+// 不进入本信任域。生产 wiring 使用 *auth.DSCallbackVerifier。
+type DSCallbackTokenVerifier interface {
+	VerifyDSCallback(token string) (*auth.DSCallbackClaims, error)
+}
+
 // NewDSCallbackGuard 构造守卫。mode != off 时 verifier 必须非 nil。
-func NewDSCallbackGuard(verifier *auth.Verifier, mode DSAuthMode) (*DSCallbackGuard, error) {
+func NewDSCallbackGuard(verifier DSCallbackTokenVerifier, mode DSAuthMode) (*DSCallbackGuard, error) {
 	if mode != DSAuthOff && verifier == nil {
 		return nil, fmt.Errorf("ds_auth: mode=%s requires verifier (ds_auth.secret)", mode)
 	}
@@ -283,11 +289,11 @@ func verifiedCredentialFromClaims(ctx context.Context, claims *auth.DSCallbackCl
 
 // NewDSCallbackSignerFromConf 按 ds_auth 配置构造 DS 回调令牌签发器。
 // Secret 未配 → (nil, nil) 表示本服务不签发(调用方跳过注入)。
-func NewDSCallbackSignerFromConf(cfg config.DSAuthConf) (*auth.Signer, error) {
+func NewDSCallbackSignerFromConf(cfg config.DSAuthConf) (*auth.DSCallbackSigner, error) {
 	if cfg.Secret == "" {
 		return nil, nil
 	}
-	return auth.NewSigner(auth.Config{
+	return auth.NewDSCallbackSigner(auth.Config{
 		Issuer:   cfg.Issuer,
 		Audience: cfg.Audience,
 		Secret:   []byte(cfg.Secret),
@@ -298,7 +304,7 @@ func NewDSCallbackSignerFromConf(cfg config.DSAuthConf) (*auth.Signer, error) {
 // Secret 未配 → (nil, nil)(调用方据此跳过验签,如 agones 续期只看外置 exp)。
 // 供签发侧(hub_allocator)在续期判据里实测 annotation 令牌确实验签通过,挡住空 / 损坏 /
 // 旧密钥(轮换后)签发的令牌被“exp 未近 + 有 token 字段”误判为可用(审核 P1)。
-func NewDSCallbackVerifierFromConf(cfg config.DSAuthConf) (*auth.Verifier, error) {
+func NewDSCallbackVerifierFromConf(cfg config.DSAuthConf) (*auth.DSCallbackVerifier, error) {
 	if cfg.Secret == "" {
 		return nil, nil
 	}
@@ -306,7 +312,7 @@ func NewDSCallbackVerifierFromConf(cfg config.DSAuthConf) (*auth.Verifier, error
 	if err != nil {
 		return nil, err
 	}
-	return auth.NewVerifier(auth.Config{
+	return auth.NewDSCallbackVerifier(auth.Config{
 		Issuer:            cfg.Issuer,
 		Audience:          cfg.Audience,
 		Secret:            []byte(cfg.Secret),
@@ -332,7 +338,7 @@ func NewDSCallbackGuardFromConf(cfg config.DSAuthConf) (*DSCallbackGuard, error)
 	if err != nil {
 		return nil, err
 	}
-	verifier, err := auth.NewVerifier(auth.Config{
+	verifier, err := auth.NewDSCallbackVerifier(auth.Config{
 		Issuer:            cfg.Issuer,
 		Audience:          cfg.Audience,
 		Secret:            []byte(cfg.Secret),

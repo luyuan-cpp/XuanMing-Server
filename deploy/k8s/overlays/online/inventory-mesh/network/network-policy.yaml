@@ -1,0 +1,23 @@
+# 仅供经真实分阶段激活的 Inventory mesh candidate 使用；普通 online overlay 不引用本 component。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-inventory-grpc
+  namespace: pandora
+spec:
+  podSelector:
+    matchLabels: { app: inventory }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: In, values: [auction, trade, mail, leaderboard, battle-result] }
+        - namespaceSelector:
+            matchLabels:
+              pandora.dev/role: ingress-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: pandora-edge-envoy
+      ports:
+        - { protocol: TCP, port: 50015 }

@@ -124,6 +124,10 @@ data:
                   # Hub DS 心跳(Hub DS 每 5s 主动调)
                   - match: { path: "/pandora.hub.v1.HubAllocatorService/Heartbeat" }
                     route: { cluster: hub_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.hub.v1.HubAllocatorService/AcknowledgeAdmission" }
+                    route: { cluster: hub_allocator_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.hub.v1.HubAllocatorService/AcknowledgeDeparture" }
+                    route: { cluster: hub_allocator_cluster, timeout: 15s, idle_timeout: 60s }
                   # 战斗 DS 心跳(战斗 DS 每 5s 主动调)
                   - match: { path: "/pandora.ds.v1.DSAllocatorService/Heartbeat" }
                     route: { cluster: ds_allocator_cluster, timeout: 15s, idle_timeout: 60s }

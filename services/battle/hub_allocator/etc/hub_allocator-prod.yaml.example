@@ -44,6 +44,7 @@ hub:
   sweep_interval: "5s"
   shard_ttl: "30m"
   assignment_ttl: "30m"
+  reservation_ttl: "3m15s"      # >= DSTicket TTL + 15s，且 <= assignment_ttl
   default_region: "global"
   default_capacity: 500           # 大厅 500 人/实例
   # autoscale_enabled / consolidation_enabled 仅在 agones.enabled=true(下方,真 Fleet scaler)时生效。

@@ -69,6 +69,20 @@ message AllocateBattleResponse {
 message ReleaseBattleRequest {
   uint64 match_id = 1;
   string reason   = 2;  // "completed" | "abandoned" | "crash"
+  // authority_mode=redis 下 ReleaseBattle 只接受 terminal_release_outbox relay 传入的
+  // 持久证明，禁止按 match_id 临时回读当前实例后回收。以下字段全部来自
+  // ReportResult 完成 Guard + Redis active 校验时的服务端快照，不得由 DS 请求体补值。
+  string allocation_id       = 3;
+  string ds_pod_name         = 4;
+  string gameserver_uid      = 5;
+  uint32 instance_epoch      = 6;
+  uint64 auth_gen            = 7;
+  string auth_jti            = 8;
+  int64 auth_exp_ms          = 9;
+  string auth_kid            = 10;
+  string auth_token_sha256   = 11;
+  uint32 auth_writer_epoch   = 12;
+  int64 authorized_at_ms     = 13;
 }
 
 message ReleaseBattleResponse {

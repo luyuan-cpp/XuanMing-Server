@@ -94,8 +94,10 @@ param(
     [switch]$AllowDevSecrets
 )
 
-# 公开 dev 共享密钥:仅供本机 / docker-mock 链路,绝不能进生产产物。
+# 两个公开 dev 密钥只供本机 / docker-mock 链路,绝不能进生产产物。即使是 dev，
+# 玩家 Session 与 DS callback 也必须保持不同 keyset，才能让 Model-B 的域隔离门禁真实生效。
 $DevPublicSecret = 'pandora-dev-jwt-secret-change-me-32!'
+$DevDsCallbackSecret = 'pandora-dev-ds-callback-secret-change-me-32!'
 
 
 $ErrorActionPreference = 'Stop'
@@ -127,9 +129,9 @@ $DsSecretToInject = $null
 function Assert-ProdSecret([string]$val, [string]$flag, [string]$envName) {
     if ([string]::IsNullOrWhiteSpace($val)) {
         throw "[FATAL] -Prod 生产模式必须提供 $flag:传 $flag 或设环境变量 $envName。" +
-              " 拒绝把公开 dev 密钥 '$DevPublicSecret' 写进生产配置(§5/P0 安全审核)。"
+              ' 拒绝把公开 dev 密钥写进生产配置(§5/P0 安全审核)。'
     }
-    if ($val -eq $DevPublicSecret) {
+    if ($val -eq $DevPublicSecret -or $val -eq $DevDsCallbackSecret) {
         throw "[FATAL] -Prod 生产模式的 $flag 不能等于公开 dev 密钥。请换成 CI/CD 注入的真密钥。"
     }
     if ([System.Text.Encoding]::UTF8.GetByteCount($val) -lt 32) {
@@ -157,7 +159,7 @@ if ($Prod) {
         if ($Secret -match '[\x00-\x1F\x7F-\x9F]') { throw '[FATAL] -Secret 含 C0/C1 控制字符,不能安全写入 YAML。' }
         $PlayerSecretToInject = $Secret
     }
-    if (-not [string]::IsNullOrWhiteSpace($DsSecret) -and $DsSecret -ne $DevPublicSecret) {
+    if (-not [string]::IsNullOrWhiteSpace($DsSecret) -and $DsSecret -ne $DevDsCallbackSecret) {
         if ([System.Text.Encoding]::UTF8.GetByteCount($DsSecret) -lt 32) { throw "[FATAL] -DsSecret 至少需要 32 字节(HS256)。" }
         if ($DsSecret -match '[\x00-\x1F\x7F-\x9F]') { throw '[FATAL] -DsSecret 含 C0/C1 控制字符,不能安全写入 YAML。' }
         $DsSecretToInject = $DsSecret
@@ -173,7 +175,7 @@ function Assert-AdditionalSecret([string]$val, [string]$flag, [string]$primaryVa
     if ($null -eq $primaryVal) {
         throw "[FATAL] 提供了 $flag 但对应主密钥 $primaryFlag 未注入真密钥;轮换旧密钥只能与真主密钥搭配。"
     }
-    if ($val -eq $DevPublicSecret) { throw "[FATAL] $flag 不能等于公开 dev 密钥。" }
+    if ($val -eq $DevPublicSecret -or $val -eq $DevDsCallbackSecret) { throw "[FATAL] $flag 不能等于公开 dev 密钥。" }
     if ([System.Text.Encoding]::UTF8.GetByteCount($val) -lt 32) { throw "[FATAL] $flag 至少需要 32 字节(HS256)。" }
     if ($val -match '[\x00-\x1F\x7F-\x9F]') { throw "[FATAL] $flag 含 C0/C1 控制字符,多为误带的尾部空白,已拒绝。" }
     return $val
@@ -190,16 +192,18 @@ if ($Prod -and ($null -ne $PlayerAdditionalToInject -or $null -ne $DsAdditionalT
     throw '[FATAL] -Prod 暂不允许玩家面/DS 面 additional_secrets：轮换决策仍待人拍板，现有代码仅可非生产验证。' +
           '请先批准并更新 decision-revisit-player-jwt-key-rotation.md / decision-revisit-ds-key-rotation.md，再移除此生产门。'
 }
-$allInjected = @(
-    @{ n = '-Secret(玩家面)';               v = $PlayerSecretToInject },
+$effectivePlayerPrimary = if ($null -ne $PlayerSecretToInject) { $PlayerSecretToInject } else { $DevPublicSecret }
+$effectiveDsPrimary = if ($null -ne $DsSecretToInject) { $DsSecretToInject } else { $DevDsCallbackSecret }
+$allEffective = @(
+    @{ n = '玩家面 primary';                  v = $effectivePlayerPrimary },
     @{ n = '-SecretAdditional(玩家面兼容)';    v = $PlayerAdditionalToInject },
-    @{ n = '-DsSecret(DS 回调面)';           v = $DsSecretToInject },
+    @{ n = 'DS 回调面 primary';                v = $effectiveDsPrimary },
     @{ n = '-DsSecretAdditional(DS 回调面兼容)'; v = $DsAdditionalToInject }
 ) | Where-Object { $null -ne $_.v }
-for ($i = 0; $i -lt $allInjected.Count; $i++) {
-    for ($j = $i + 1; $j -lt $allInjected.Count; $j++) {
-        if ($allInjected[$i].v -ceq $allInjected[$j].v) {
-            throw "[FATAL] $($allInjected[$i].n) 与 $($allInjected[$j].n) 不得相同(P0:玩家面/DS 回调面/新旧轮换密钥必须各自独立)。"
+for ($i = 0; $i -lt $allEffective.Count; $i++) {
+    for ($j = $i + 1; $j -lt $allEffective.Count; $j++) {
+        if ($allEffective[$i].v -ceq $allEffective[$j].v) {
+            throw "[FATAL] $($allEffective[$i].n) 与 $($allEffective[$j].n) 不得相同(P0:玩家面/DS 回调面/新旧轮换密钥必须各自独立)。"
         }
     }
 }
@@ -255,7 +259,17 @@ if ($DsAuthorityModeToInject -eq 'redis') {
     if ($DsAuthModeToInject -ne 'enforce') { throw '[FATAL] authority_mode=redis 必须同时显式使用 ds_auth.mode=enforce。' }
     if ($DsFenceEndpoints.Count -eq 0) { throw '[FATAL] authority_mode=redis 必须提供 -DsFenceEtcdEndpoints。' }
     foreach ($endpoint in $DsFenceEndpoints) {
-        if ($endpoint -cnotmatch '^[A-Za-z0-9._:\-\[\]]+$') { throw "[FATAL] 非法 fence etcd endpoint:$endpoint" }
+        if ($Prod) {
+            $uri = $null
+            if (-not [Uri]::TryCreate($endpoint, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'https' -or
+                $endpoint -cnotmatch '^https://(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9._-]+):[1-9][0-9]{0,4}$' -or
+                -not [string]::IsNullOrEmpty($uri.UserInfo) -or $uri.AbsolutePath -cne '/' -or
+                -not [string]::IsNullOrEmpty($uri.Query) -or -not [string]::IsNullOrEmpty($uri.Fragment)) {
+                throw "[FATAL] Prod fence etcd endpoint 必须是 canonical https://host:port:$endpoint"
+            }
+        } elseif ($endpoint -cnotmatch '^[A-Za-z0-9._:\-\[\]]+$') {
+            throw "[FATAL] 非法 fence etcd endpoint:$endpoint"
+        }
     }
     if ([string]::IsNullOrWhiteSpace($DsFenceKeysetRevision) -or $DsFenceKeysetRevision -cnotmatch '^[A-Za-z0-9._-]+$') {
         throw '[FATAL] authority_mode=redis 必须提供不可变 -DsFenceKeysetRevision(仅字母数字._-)。'
@@ -274,7 +288,7 @@ if ($DsAuthorityModeToInject -eq 'redis') {
 if ($AllocatorMode -eq 'agones' -and -not $Prod) {
     if (-not $AllowDevSecrets) {
         throw "[FATAL] -AllocatorMode agones 指向真 Linux DS 链路,必须显式二选一:线上加 -Prod 并提供两把真密钥;" +
-              " 本地 minikube 自测加 -AllowDevSecrets 显式承认沿用公开 dev 密钥 '$DevPublicSecret'。" +
+              ' 本地 minikube 自测加 -AllowDevSecrets 显式承认沿用两套独立的公开 dev 密钥。' +
               " 不再从 -AllocatorAdvertiseHost 推断本地(生产也会配 advertise host,推断会让生产绕过 -Prod 泄露 dev 密钥)。"
     }
     Write-Host "[WARN] agones + -AllowDevSecrets:沿用公开 dev 密钥,仅限本地 minikube 自测,勿部署到真集群。" -ForegroundColor Yellow
@@ -799,7 +813,12 @@ function Convert-Secret([string]$ServiceName, [string]$Text) {
     }
     if ($expectsDs) {
         if ($null -ne $DsSecretToInject) { $Text = Set-YamlSectionSecret $ServiceName $Text 'ds_auth' $DsSecretToInject }
-        else { Assert-YamlSectionSecret $ServiceName $Text 'ds_auth' $DevPublicSecret }
+        else {
+            # committed dev 模板仍以历史共享值作为唯一可接受输入；生成产物必须把 DS callback
+            # 域确定性改写为另一把公开 dev key，避免本地 Model-B 因跨域复用而 fail-closed。
+            Assert-YamlSectionSecret $ServiceName $Text 'ds_auth' $DevPublicSecret
+            $Text = Set-YamlSectionSecret $ServiceName $Text 'ds_auth' $DevDsCallbackSecret
+        }
         if ($null -ne $DsAdditionalToInject) { $Text = Add-YamlSectionAdditionalSecrets $ServiceName $Text 'ds_auth' $DsAdditionalToInject }
         else { Assert-NoYamlSectionAdditionalSecrets $ServiceName $Text 'ds_auth' }
         if ($null -ne $DsAuthModeToInject) { $Text = Set-YamlDsAuthMode $ServiceName $Text $DsAuthModeToInject }
@@ -1054,7 +1073,7 @@ function Assert-GeneratedSet {
 
     # 不只搜索 dev 文本：逐节点核对最终 jwt/ds_auth 值，防格式漂移、替换 0 次或跨段误写仍通过。
     $expectedPlayerValue = if ($null -ne $PlayerSecretToInject) { $PlayerSecretToInject } else { $DevPublicSecret }
-    $expectedDsValue = if ($null -ne $DsSecretToInject) { $DsSecretToInject } else { $DevPublicSecret }
+    $expectedDsValue = if ($null -ne $DsSecretToInject) { $DsSecretToInject } else { $DevDsCallbackSecret }
     foreach ($svc in $Services) {
         $yaml = Get-Content -LiteralPath (Join-Path $StageDir "$($svc.Name).yaml") -Raw
         if ($PlayerSecretServiceNames -contains $svc.Name) {

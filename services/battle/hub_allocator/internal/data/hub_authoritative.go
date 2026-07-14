@@ -26,6 +26,8 @@ import (
 // ActivateHeartbeatInput 是 ActivateHeartbeat 的心跳负载(与凭据身份分开,便于 biz 组装)。
 type ActivateHeartbeatInput struct {
 	PlayerCount int32
+	PlayerIDs   []uint64
+	MaxPlayers  uint32
 	State       string
 	TsMs        int64
 	AuthTTL     time.Duration // 授权键 TTL(CE8:必须用 authTTL,不能用 shardTTL 缩短授权寿命)
@@ -89,7 +91,21 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 		id.Kid == "" || id.WriterEpoch != authpkg.DSAuthWriterEpochV2 {
 		return ActivateResult{}, errAuthStale
 	}
+	if in.PlayerCount < 0 || in.MaxPlayers == 0 || len(in.PlayerIDs) != int(in.PlayerCount) {
+		return ActivateResult{}, errcode.New(errcode.ErrInvalidArg, "hub heartbeat count/max_players invalid")
+	}
+	seenPlayers := make(map[uint64]struct{}, len(in.PlayerIDs))
+	for _, playerID := range in.PlayerIDs {
+		if playerID == 0 {
+			return ActivateResult{}, errcode.New(errcode.ErrInvalidArg, "hub heartbeat player_ids contains zero")
+		}
+		if _, exists := seenPlayers[playerID]; exists {
+			return ActivateResult{}, errcode.New(errcode.ErrInvalidArg, "hub heartbeat player_ids contains duplicate")
+		}
+		seenPlayers[playerID] = struct{}{}
+	}
 	aKey, sKey := authKey(pod), shardKey(pod)
+	watchKeys := append([]string{aKey, sKey}, capacityLedgerKeys(pod)...)
 	// 权威心跳时刻只取服务端接收时间。请求 ts_ms 仅可用于遥测，绝不能决定 TTL/新鲜度，
 	// 否则一个未来时间戳可让失联 DS 长期保持可分配。
 	serverNowMs := time.Now().UnixMilli()
@@ -149,6 +165,24 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 			if uerr != nil {
 				return uerr
 			}
+			// MaxPlayers 是 DS 运行时 GameSession 的真实值。必须在 promote、心跳时间、
+			// ready/state、ledger cleanup 等任何副作用之前与 allocator capacity 精确相等。
+			if shard.GetCapacity() <= 0 || int64(in.MaxPlayers) != int64(shard.GetCapacity()) {
+				bizErr = errcode.New(errcode.ErrInvalidState,
+					"hub heartbeat max_players=%d does not match capacity=%d", in.MaxPlayers, shard.GetCapacity())
+				return bizErr
+			}
+			ledger, lerr := loadHubCapacityLedger(ctx, tx, pod, shard.GetCapacity())
+			if lerr != nil {
+				return lerr
+			}
+			// Heartbeat 只清 reservation 绝对过期、旧格式 session 到期和 UID 漂移；
+			// player_ids 缺席绝不能释放 connected ownership。
+			pruneHubCapacityLedger(ledger, pod, auth.GetInstanceUid(), auth.GetProtocolEpoch(),
+				authpkg.DSAuthWriterEpochV2, serverNowMs)
+			if lerr := syncShardCapacityProjection(shard, ledger); lerr != nil {
+				return lerr
+			}
 			// ⑥ promote(若匹配 pending):active=pending,清 pending,phase=ACTIVE。
 			if promote {
 				auth.Active = auth.Pending
@@ -161,7 +195,9 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 			auth.UpdatedAtMs = serverNowMs
 			auth.LastActiveHeartbeatMs = serverNowMs
 			// ⑦ 应用心跳到分片镜像(warming→ready 等)+ 投影 active 元组(与 promote 同事务)。
-			applyHeartbeatToShard(shard, in.PlayerCount, in.State, serverNowMs)
+			applyHeartbeatStateToShard(shard, in.State, serverNowMs)
+			shard.ReportedConnectedCount = in.PlayerCount
+			shard.ReportedMaxPlayers = in.MaxPlayers
 			shard.LastVerifiedGen = auth.Active.Gen
 			shard.LastVerifiedJti = auth.Active.Jti
 			shard.GameserverUid = auth.InstanceUid
@@ -175,8 +211,12 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 			if merr != nil {
 				return merr
 			}
-			// ⑧ 一次 EXEC 写两键(各自 TTL:CE8 授权键用 authTTL,分片键用 shardTTL)。
+			// ⑧ 一次 EXEC 写 auth+shard+ledger(各自 TTL:CE8 授权键用 authTTL,
+			// 分片键用 shardTTL；ledger retention 按单项绝对 expiry)。
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				if err := writeHubCapacityLedger(ctx, pipe, pod, ledger); err != nil {
+					return err
+				}
 				pipe.Set(ctx, aKey, authPayload, in.AuthTTL)
 				pipe.Set(ctx, sKey, shardPayload, in.ShardTTL)
 				return nil
@@ -192,7 +232,7 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 			out.ProtocolEpoch = auth.ProtocolEpoch
 			out.WriterEpoch = auth.Active.WriterEpoch
 			return nil
-		}, aKey, sKey)
+		}, watchKeys...)
 		if txErr == nil {
 			if out.ShardFound {
 				// 全局索引(与 {pod} 不同 slot,独立命令,幂等):心跳高频,失败下次即补。
@@ -215,7 +255,8 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 // ReserveRoutableSeat 见 HubAuthRepo 接口注释。单事务(authKey+shardKey 同 slot):同时确认授权
 // active + 分片 ready + 元组一致 + 心跳新鲜 + 未满,然后原子 seat++。任一条件不满足 → OK=false(零变更)。
 func (r *RedisHubAuthRepo) ReserveRoutableSeat(ctx context.Context, pod string, nowMs, maxHeartbeatAgeMs int64, shardTTL time.Duration) (ReserveResult, error) {
-	return r.routable(ctx, pod, nowMs, maxHeartbeatAgeMs, shardTTL, true)
+	return ReserveResult{Reason: "deprecated-use-reserve-assignment"},
+		errcode.New(errcode.ErrInvalidState, "integer hub seat reservation is disabled")
 }
 
 // CheckRoutable 是 ReserveRoutableSeat 的只读版本(不 seat++,不写键)。
@@ -390,6 +431,10 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 			if uerr != nil {
 				return uerr
 			}
+			if reason := modelBRoutableReason(auth, shard, pod, nowMs, maxHeartbeatAgeMs, nil); reason != "" {
+				out.Reason = reason
+				return nil
+			}
 			if shard.State != "ready" {
 				out.Reason = "shard-not-ready"
 				return nil
@@ -556,7 +601,7 @@ func (r *RedisHubAuthRepo) ReleaseRoutableSeat(ctx context.Context, pod string, 
 // ReleaseAssignmentSeat 只允许同一 GameServer UID/epoch 的当前 V2 active 投影退座。
 // assignment key 与 {pod} slot 不同，调用方先 CAS 删除归属；本事务不再要求旧 gen/jti
 // 等于当前 active，从而允许 CAS 窗口内的普通凭据轮换，同时 UID 重建仍零变更。
-func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(
+func (r *RedisHubAuthRepo) releaseAssignmentSeatLegacy(
 	ctx context.Context,
 	pod string,
 	expected AssignmentInstanceIdentity,

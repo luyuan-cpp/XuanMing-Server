@@ -65,10 +65,14 @@ battle:
   # 释放残留撮合状态(player→ticket claim + 票据 + match 镜像),修复"结算返回 Hub 后
   # 玩家无法再次匹配(StartMatch 4002)"。弱依赖:懒连接,matchmaker 未起时仅 Warn 不阻断落库。
   matchmaker_addr: "127.0.0.1:50011"
-  # 注:battle_result 不配 ds_allocator_addr —— 不主动回收战斗 DS。DS 生命周期归 ds_allocator +
-  # DS 自身:DS 收到结算 OK 后 ended 心跳 → 通知客户端回大厅 → 自停,ds_allocator 凭 ended 心跳
-  # (本地 taskkill / Agones 自停)+ 15s 心跳超时 sweep 兜底回收。历史教训(2026-07-03):battle_result
-  # 在结算响应路径同步 taskkill DS 会抢在通知客户端回大厅之前杀掉 DS → 客户端卡战斗态。
+  # Model-B 正常结算终态回收：ReportResult 鉴权快照与 battles/stats 同事务写
+  # terminal_release_outbox；宽限 15s 给 DS 通知客户端，随后 worker 经 ds_allocator 做
+  # Redis terminal/receipt CAS + UID precondition 回收。它不在同步响应路径杀 DS。
+  # legacy/off 下不写 terminal outbox，本地址不会产生回收副作用。
+  ds_allocator_addr: "127.0.0.1:50020"
+  terminal_release_interval: "2s"
+  terminal_release_batch_size: 128
+  terminal_release_grace: "15s"
   # W4 ⑨ player.update 事务出箱发布器:落库同事务写出箱 → 后台轮询投递 Kafka(at-least-once 不变量 §4)
   outbox_publish_interval: "2s"
   outbox_batch_size: 128

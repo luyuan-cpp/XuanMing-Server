@@ -412,6 +412,52 @@ function Stop-HostInfraContainersForK8s {
     if ($LASTEXITCODE -ne 0) { throw '停止 k8s 模式不需要的宿主基础设施容器失败' }
     Write-Ok '宿主 compose 基础设施已停止(k8s 使用集群内 infra)'
 }
+
+# `docker compose up --force-recreate` 会先停旧 Envoy 再立即创建新容器。Docker Desktop
+# 在 Windows 上偶尔晚几秒才释放 8443/8444/9901；直接 up 会因此报 "ports are not available"，
+# 即使 K8s rollout 和全部 gRPC health 已经成功。显式 stop 并观察端口释放后再 recreate。
+# Compose 默认 project 名可能在多个 checkout 之间碰撞，因此不能只凭 service/project 名 stop。
+# 必须先验证 service 标签与规范化 config_files 标签都精确属于当前仓库，再按不可变 container ID
+# 停止；标签不匹配或端口仍占用都 fail-fast，绝不杀 Docker backend 或猜测性停止其它容器。
+function Stop-EnvoyForRecreate {
+    $containerIds = @(docker compose -f $ComposeFile --env-file $EnvFile ps -aq envoy 2>$null |
+        ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    if ($LASTEXITCODE -ne 0) { throw '查询当前 compose envoy 容器失败' }
+
+    $expectedConfigFile = [IO.Path]::GetFullPath($ComposeFile)
+    foreach ($containerId in $containerIds) {
+        $labelsJson = docker inspect --format '{{json .Config.Labels}}' $containerId 2>$null
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace("$labelsJson")) {
+            throw "读取 envoy 容器标签失败:$containerId"
+        }
+        try { $labels = "$labelsJson" | ConvertFrom-Json -ErrorAction Stop } catch {
+            throw "envoy 容器标签不是有效 JSON:$containerId"
+        }
+        $serviceLabel = [string]$labels.'com.docker.compose.service'
+        $configFilesLabel = [string]$labels.'com.docker.compose.project.config_files'
+        try { $actualConfigFile = [IO.Path]::GetFullPath($configFilesLabel) } catch {
+            throw "envoy 容器 config_files 标签不是有效路径:$containerId"
+        }
+        if ($serviceLabel -cne 'envoy' -or
+            -not $actualConfigFile.Equals($expectedConfigFile, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "拒绝停止不属于当前 compose 文件的容器:$containerId service=$serviceLabel config_files=$configFilesLabel"
+        }
+
+        docker stop --time 10 $containerId | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "停止已验证的旧 envoy 容器失败:$containerId" }
+    }
+
+    foreach ($port in @(8443, 8444, 9901)) {
+        for ($i = 0; $i -lt 40 -and (Get-PortListenerPid $port); $i++) {
+            Start-Sleep -Milliseconds 250
+        }
+        $ownerPid = Get-PortListenerPid $port
+        if ($ownerPid) {
+            throw "旧 envoy 停止后端口 $port 仍未释放(占用者 $(Get-ProcDesc $ownerPid));拒绝误杀进程,请检查 docker ps"
+        }
+    }
+    Write-Ok '旧 Envoy 已停止，8443/8444/9901 已释放'
+}
 Write-Ok "port-forward context 已锁定:$KubeContext"
 
 Ensure-File $ComposeFile
@@ -436,6 +482,7 @@ Invoke-BridgeHealthSweep
 
 Write-Step "[4/4] 启 docker envoy(:8443 / :8444)"
 # envoy.yaml 是静态配置,挂载文件变化不会让既有 Envoy 进程自动重读;每次桥接显式重建容器。
+Stop-EnvoyForRecreate
 docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate envoy
 if ($LASTEXITCODE -ne 0) { throw 'envoy 容器启动失败' }
 

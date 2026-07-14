@@ -102,6 +102,16 @@ param(
     [string]$DsAuthorityMode = '',
     [string]$DsFenceEtcdEndpoints = $env:PANDORA_DS_AUTH_FENCE_ETCD_ENDPOINTS,
     [string]$DsFenceKeysetRevision = $env:PANDORA_DS_AUTH_KEYSET_REVISION,
+    # 生产 DS auth etcd 身份材料只接受外部文件路径；脚本绝不创建、修改或打印其内容。
+    [string]$DsFenceEtcdIdentityRevision = $env:PANDORA_DS_AUTH_ETCD_IDENTITY_REVISION,
+    [string]$DsFenceEtcdServerName = $env:PANDORA_DS_AUTH_ETCD_SERVER_NAME,
+    [string]$DsFenceEtcdAuditorCAFile = $env:PANDORA_DS_AUTH_ETCD_AUDITOR_CA_FILE,
+    [string]$DsFenceEtcdAuditorCertFile = $env:PANDORA_DS_AUTH_ETCD_AUDITOR_CERT_FILE,
+    [string]$DsFenceEtcdAuditorKeyFile = $env:PANDORA_DS_AUTH_ETCD_AUDITOR_KEY_FILE,
+    [string]$DsFenceEtcdAuditorIdentity = $env:PANDORA_DS_AUTH_ETCD_AUDITOR_IDENTITY,
+    [string]$DsFenceEtcdForbiddenReadPrefix = $env:PANDORA_DS_AUTH_ETCD_FORBIDDEN_READ_PREFIX,
+    [string]$DsFenceEtcdAuditorUsernameFile = $env:PANDORA_DS_AUTH_ETCD_AUDITOR_USERNAME_FILE,
+    [string]$DsFenceEtcdAuditorPasswordFile = $env:PANDORA_DS_AUTH_ETCD_AUDITOR_PASSWORD_FILE,
     # DSTicket v2(方案 B,RS256)active kid:online 可选显式期望值；实际值永远从
     # immutable Secret 私钥 + JWKS 顶层 active_kid 对账得到，不读 keys[0]。
     [string]$DsTicketActiveKid = $env:PANDORA_DSTICKET_ACTIVE_KID,
@@ -114,6 +124,7 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir   = $PSScriptRoot
 $ProjectRoot = (Resolve-Path "$ScriptDir/../..").Path
 . (Join-Path $ScriptDir 'lib/online_manifest_contract.ps1')
+. (Join-Path $ScriptDir 'lib/ds_auth_activation_contract.ps1')
 . (Join-Path $ScriptDir 'lib/dsticket_keyset_contract.ps1')
 . (Join-Path $ScriptDir 'lib/dsticket_rotation_contract.ps1')
 # rotation contract 自身在加载期开启 StrictMode；start.ps1 是历史运维入口，
@@ -379,11 +390,8 @@ function Assert-LocalDsAuthBaseline {
                 throw "DS auth required_writer_epoch 缺失；当前不是 fresh minikube，只读预检拒绝把 missing 当 1。请审计状态或显式 -Reset。"
             }
             Write-Info '检测到 fresh minikube 且 required_writer_epoch 缺失，执行唯一一次 CAS bootstrap=1...'
-            # dsauth-activate 在 bootstrap 分支前仍会校验这两个必填参数；它们不参与
-            # BootstrapRequired 的 CAS，此处只给固定 dev 审计占位，不作为生产 capability 证明。
-            $devDigest = 'sha256:' + ('0' * 64)
+            # bootstrap 只初始化 required_writer_epoch baseline，不接收或伪造 capability 审计参数。
             $bootLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
-                --keyset-revision $script:LocalDsFenceKeysetRevision --allowed-image-digests $devDigest `
                 --bootstrap --apply 2>&1)
             if ($LASTEXITCODE -ne 0) {
                 throw "fresh minikube required_writer_epoch CAS bootstrap 失败:$($bootLines -join [Environment]::NewLine)"
@@ -621,7 +629,7 @@ function Get-OnlineLiveDSTicketRevisionRows {
     $namespace = Get-OnlineOptionalKubectlJsonObject -KubeContext $KubeContext `
         -Arguments @('get', "namespace/$K8sNamespace", '--ignore-not-found', '-o', 'json') `
         -Action "读取 Namespace/$K8sNamespace"
-    if ($null -ne $namespace -and -not [string]::IsNullOrWhiteSpace([string]$namespace.metadata.deletionTimestamp)) {
+    if ($null -ne $namespace -and (Test-PandoraKubernetesObjectDeleting $namespace)) {
         throw "Namespace/$K8sNamespace 正在终止，拒绝普通发布。"
     }
 
@@ -651,7 +659,7 @@ function Get-OnlineLiveDSTicketRevisionRows {
             $looksLikeMarker = $name -cmatch '^pandora-dsticket-(?:activation-signer-r|retired-r)' -or
                 $component -ceq 'dsticket-rotation-audit'
             if (-not $looksLikeMarker) { continue }
-            if (-not [string]::IsNullOrWhiteSpace([string]$configMap.metadata.deletionTimestamp)) {
+            if (Test-PandoraKubernetesObjectDeleting $configMap) {
                 throw "DSTicket marker ConfigMap/$name 正在终止，拒绝普通发布。"
             }
             if ($name -cmatch '^pandora-dsticket-activation-signer-r[1-9][0-9]*$') {
@@ -843,7 +851,14 @@ function New-OnlineRuntimeOverlay {
         [Parameter(Mandatory = $true)][string[]]$ServiceNames,
         [Parameter(Mandatory = $true)][string[]]$WriterServices,
         [Parameter(Mandatory = $true)][string]$EnvironmentName,
-        [Parameter(Mandatory = $true)][ValidateRange(1, 2147483647)][int]$DSTicketKeysetRevision
+        [Parameter(Mandatory = $true)][ValidateRange(1, 2147483647)][int]$DSTicketKeysetRevision,
+        [string]$EtcdIdentityRevision = '',
+        [string]$EtcdServerName = '',
+        [string]$EtcdForbiddenReadPrefix = '',
+        [hashtable]$EtcdPasswordAuthByService = @{},
+        [hashtable]$GreenDesiredReplicas = @{},
+        [hashtable]$GreenDeploymentObjects = @{},
+        [switch]$CanonicalDsAuthGreen
     )
     $parent = Split-Path -Parent $SourceOverlay
     $runtime = Join-Path $parent ('.online-runtime-' + $EnvironmentName + '-' + [guid]::NewGuid().ToString('N'))
@@ -855,8 +870,16 @@ function New-OnlineRuntimeOverlay {
         $dsticketPatchName = 'dsticket-keyset-login.yaml'
         $dsticketSignerServices = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
         $dsticketSignerPatchNames = @($dsticketSignerServices | ForEach-Object { "dsticket-signer-$_.yaml" })
+        $etcdIdentityPatchNames = if ([string]::IsNullOrWhiteSpace($EtcdIdentityRevision)) { @() } else {
+            @($WriterServices | ForEach-Object { "ds-auth-etcd-identity-$_.yaml" })
+        }
+        $terminalPatchNames = if ($CanonicalDsAuthGreen) {
+            @($WriterServices | ForEach-Object { "ds-auth-dormant-$_.yaml" }) +
+            @($WriterServices | ForEach-Object { "ds-auth-service-green-$_.yaml" })
+        } else { @() }
         $text = Add-PandoraWriterPatchEntries -Kustomization $text -WriterServices $WriterServices `
-            -AdditionalPatchPaths (@($dsticketPatchName) + $dsticketSignerPatchNames)
+            -AdditionalPatchPaths (@($dsticketPatchName) + $dsticketSignerPatchNames + $etcdIdentityPatchNames +
+                $terminalPatchNames)
         [System.IO.File]::WriteAllText($kustomizationPath, $text, [System.Text.UTF8Encoding]::new($false))
         foreach ($writer in $WriterServices) {
             $patchText = New-PandoraWriterDigestPatch -Service $writer -Digest ([string]$Digests[$writer])
@@ -867,6 +890,37 @@ function New-OnlineRuntimeOverlay {
         foreach ($signer in $dsticketSignerServices) {
             $signerPatch = New-PandoraDSTicketSignerSecretRevisionPatch -Service $signer -Revision $DSTicketKeysetRevision
             [System.IO.File]::WriteAllText((Join-Path $runtime "dsticket-signer-$signer.yaml"), $signerPatch, [System.Text.UTF8Encoding]::new($false))
+        }
+        if (-not [string]::IsNullOrWhiteSpace($EtcdIdentityRevision)) {
+            foreach ($writer in $WriterServices) {
+                if (-not $EtcdPasswordAuthByService.ContainsKey($writer)) { throw "缺 writer/$writer etcd password-auth contract。" }
+                $identityPatch = New-PandoraDsAuthEtcdIdentityPatch -App $writer -Revision $EtcdIdentityRevision `
+                    -ServerName $EtcdServerName -ForbiddenReadPrefix $EtcdForbiddenReadPrefix `
+                    -UsesPasswordAuth ([bool]$EtcdPasswordAuthByService[$writer])
+                [System.IO.File]::WriteAllText((Join-Path $runtime "ds-auth-etcd-identity-$writer.yaml"), $identityPatch, [System.Text.UTF8Encoding]::new($false))
+            }
+        }
+        $greenPatchPaths = @{}
+        if ($CanonicalDsAuthGreen) {
+            if ([string]::IsNullOrWhiteSpace($EtcdIdentityRevision)) { throw 'canonical green 必须配置 etcd identity revision。' }
+            foreach ($writer in $WriterServices) {
+                if (-not $GreenDesiredReplicas.ContainsKey($writer)) { throw "缺 canonical green/$writer desired replicas。" }
+                if (-not $GreenDeploymentObjects.ContainsKey($writer)) { throw "缺 canonical green/$writer live Deployment object。" }
+                $dormantPatch = New-PandoraDsAuthDormantBluePatch -App $writer
+                [System.IO.File]::WriteAllText((Join-Path $runtime "ds-auth-dormant-$writer.yaml"), $dormantPatch, [System.Text.UTF8Encoding]::new($false))
+                $servicePatch = New-PandoraDsAuthGreenServicePatch -App $writer
+                [System.IO.File]::WriteAllText((Join-Path $runtime "ds-auth-service-green-$writer.yaml"), $servicePatch, [System.Text.UTF8Encoding]::new($false))
+                $pin = New-PandoraPinnedImageReference -Reference ($Registry.TrimEnd('/') + "/pandora/$writer") -Digest ([string]$Digests[$writer])
+                $greenObject = New-PandoraDsAuthCanonicalGreenObject -LiveDeployment $GreenDeploymentObjects[$writer] `
+                    -App $writer -Revision $EtcdIdentityRevision `
+                    -ServerName $EtcdServerName -ForbiddenReadPrefix $EtcdForbiddenReadPrefix `
+                    -UsesPasswordAuth ([bool]$EtcdPasswordAuthByService[$writer]) `
+                    -DesiredReplicas ([int]$GreenDesiredReplicas[$writer]) -PinnedImage $pin -Digest ([string]$Digests[$writer])
+                $greenPatchPath = Join-Path $runtime "ds-auth-green-release-$writer.json"
+                $greenJSON = $greenObject | ConvertTo-Json -Depth 40
+                [System.IO.File]::WriteAllText($greenPatchPath, $greenJSON, [System.Text.UTF8Encoding]::new($false))
+                $greenPatchPaths[$writer] = $greenPatchPath
+            }
         }
         $renderedLines = @(& kubectl kustomize $runtime 2>&1)
         if ($LASTEXITCODE -ne 0) {
@@ -881,7 +935,7 @@ function New-OnlineRuntimeOverlay {
         Assert-PandoraRenderedOnlineContract -ContractRows $contractRows -Pins $pins -Digests $Digests -ServiceNames $ServiceNames -WriterServices $WriterServices
         $dsticketRows = Get-PandoraDSTicketSignerContractRows -Manifest $rendered
         Assert-PandoraDSTicketSignerRevisionContract -ContractRows $dsticketRows -Revision $DSTicketKeysetRevision
-        return [pscustomobject]@{ Path = $runtime; Rendered = $rendered }
+        return [pscustomobject]@{ Path = $runtime; Rendered = $rendered; GreenPatchPaths = $greenPatchPaths }
     } catch {
         if (Test-Path -LiteralPath $runtime -PathType Container) {
             $resolved = [System.IO.Path]::GetFullPath($runtime)
@@ -894,27 +948,201 @@ function New-OnlineRuntimeOverlay {
     }
 }
 
+function Get-OnlineDsAuthEndpointUIDs([string]$KubeContext, [string]$ServiceName, $Service, $ExpectedPods) {
+    $slices = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'endpointslices', '-n', $K8sNamespace, '-l', "kubernetes.io/service-name=$ServiceName", '-o', 'json') `
+        -Action "回读 Service/$ServiceName EndpointSlice"
+    return Get-PandoraDsAuthVerifiedEndpointUIDSet $slices $Service $ExpectedPods $K8sNamespace
+}
+
+function Get-OnlineDsAuthCanonicalState {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string[]]$WriterServices,
+        [Parameter(Mandatory = $true)][string]$Revision,
+        [Parameter(Mandatory = $true)][string]$ServerName,
+        [Parameter(Mandatory = $true)][string]$ForbiddenReadPrefix,
+        [hashtable]$ExpectedDigests = @{}
+    )
+    $capabilityNames = @{
+        'login' = 'login'; 'player-locator' = 'player_locator'; 'ds-allocator' = 'ds_allocator'
+        'hub-allocator' = 'hub_allocator'; 'battle-result' = 'battle_result'
+    }
+    $counts = [ordered]@{}
+    $instances = [ordered]@{}
+    $allowed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $serviceDigests = [ordered]@{}
+    $passwordAuth = @{}
+    $desiredReplicas = @{}
+    $greenDeploymentObjects = @{}
+    foreach ($writer in $WriterServices) {
+        $secretName = Get-PandoraDsAuthIdentitySecretName $writer $Revision
+        $secret = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "secret/$secretName", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "终态回读 DS auth etcd identity Secret/$secretName"
+        $contract = Assert-PandoraDsAuthIdentitySecretContract $secret $writer $Revision
+        $passwordAuth[$writer] = [bool]$contract.UsesPasswordAuth
+
+        $blue = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "deployment/$writer", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "回读 dormant blue Deployment/$writer"
+        if ([int]$blue.spec.replicas -ne 0 -or [string]$blue.spec.selector.matchLabels.app -cne $writer -or
+            [string]$blue.spec.selector.matchLabels.'pandora.dev/ds-auth-writer-set' -cne 'blue' -or
+            [string]$blue.spec.selector.matchLabels.'pandora.dev/ds-auth-writer-epoch' -cne '1' -or
+            @($blue.spec.selector.matchLabels.PSObject.Properties).Count -ne 3) {
+            throw "Deployment/$writer 不是 exact dormant blue epoch=1。"
+        }
+        $bluePods = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-l', "app=$writer,pandora.dev/ds-auth-writer-set=blue", '-o', 'json') `
+            -Action "回读 dormant blue writer/$writer Pod"
+        if (@($bluePods.items).Count -ne 0) { throw "writer/$writer blue Pod 必须为 0。" }
+
+        $greenName = "$writer-ds-auth-green"
+        $deployment = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "deployment/$greenName", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "回读 canonical green Deployment/$greenName"
+        $desiredRaw = [string]$deployment.metadata.annotations.'pandora.dev/ds-auth-green-desired-replicas'
+        if ($desiredRaw -cnotmatch '^[1-9][0-9]?$') { throw "Deployment/$greenName desired replicas annotation 非 canonical。" }
+        $want = [int]$desiredRaw
+        $desiredReplicas[$writer] = $want
+        $greenDeploymentObjects[$writer] = $deployment
+        if ([int]$deployment.spec.replicas -ne $want -or [string]$deployment.spec.selector.matchLabels.app -cne $writer -or
+            [string]$deployment.spec.selector.matchLabels.'pandora.dev/ds-auth-writer-set' -cne 'green' -or
+            [string]$deployment.spec.selector.matchLabels.'pandora.dev/ds-auth-writer-epoch' -cne '2' -or
+            @($deployment.spec.selector.matchLabels.PSObject.Properties).Count -ne 3) {
+            throw "Deployment/$greenName immutable selector/replicas 不是 canonical green。"
+        }
+        $template = [pscustomobject]@{ metadata = $deployment.spec.template.metadata; spec = $deployment.spec.template.spec }
+        Assert-PandoraDsAuthIdentityPodContract $template $writer $Revision $ServerName $ForbiddenReadPrefix ([bool]$contract.UsesPasswordAuth)
+        if ($want -lt 1 -or [int]$deployment.status.readyReplicas -ne $want -or [int]$deployment.status.updatedReplicas -ne $want) {
+            throw "writer/$greenName rollout 未稳定。"
+        }
+        $templateDigest = [string]$deployment.spec.template.metadata.annotations.'pandora.dev/image-digest'
+        if ($templateDigest -cnotmatch '^sha256:[0-9a-f]{64}$') { throw "writer/$greenName template digest 非 immutable。" }
+        if ($ExpectedDigests.Count -gt 0 -and [string]$ExpectedDigests[$writer] -cne $templateDigest) { throw "writer/$greenName 未命中本次 release digest。" }
+        $podList = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-l', "app=$writer,pandora.dev/ds-auth-writer-set=green", '-o', 'json') `
+            -Action "回读 canonical green writer/$writer Pod"
+        $pods = @($podList.items | Where-Object { -not (Test-PandoraKubernetesObjectDeleting $_) })
+        if ($pods.Count -ne $want) { throw "writer/$writer live Pod 数不等于 desired。" }
+        $uids = [System.Collections.Generic.List[string]]::new()
+        foreach ($pod in $pods) {
+            Assert-PandoraDsAuthIdentityPodContract $pod $writer $Revision $ServerName $ForbiddenReadPrefix ([bool]$contract.UsesPasswordAuth)
+            if ([string]$pod.metadata.labels.'pandora.dev/ds-auth-writer-epoch' -cne '2') { throw "writer/$writer Pod epoch 不是 2。" }
+            if ($writer -in @('battle-result', 'ds-allocator')) { Assert-PandoraDsTerminalMeshPodContract $pod $writer }
+            $status = @($pod.status.containerStatuses | Where-Object name -eq $writer)
+            if ($status.Count -ne 1 -or -not ([string]$status[0].imageID).EndsWith($templateDigest, [StringComparison]::Ordinal)) {
+                throw "writer/$writer Pod imageID 未命中 canonical green digest。"
+            }
+            $uids.Add([string]$pod.metadata.uid)
+        }
+        $serviceObject = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', "service/$writer", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "回读 canonical green Service/$writer"
+        if ([string]$serviceObject.spec.selector.app -cne $writer -or
+            [string]$serviceObject.spec.selector.'pandora.dev/ds-auth-writer-set' -cne 'green' -or
+            [string]$serviceObject.spec.selector.'pandora.dev/ds-auth-writer-epoch' -cne '2' -or
+            @($serviceObject.spec.selector.PSObject.Properties).Count -ne 3) { throw "Service/$writer selector 不是 exact canonical green。" }
+        $endpointUIDs = Get-OnlineDsAuthEndpointUIDs -KubeContext $KubeContext -ServiceName $writer `
+            -Service $serviceObject -ExpectedPods $pods
+        if ($endpointUIDs.Count -ne $uids.Count) { throw "Service/$writer Endpoint UID 数不等于 green Pod。" }
+        foreach ($uid in $uids) { if (-not $endpointUIDs.Contains($uid)) { throw "Service/$writer Endpoint UID 集不等于 green Pod。" } }
+        $capabilityName = [string]$capabilityNames[$writer]
+        $counts[$capabilityName] = $want
+        $instances[$capabilityName] = (@($uids | Sort-Object) -join '|')
+        $null = $allowed.Add($templateDigest)
+        $serviceDigests[$capabilityName] = $templateDigest
+    }
+    $peer = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'peerauthentication.security.istio.io/pandora-ds-allocator-terminal-permissive', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '终态回读 ReleaseBattle PeerAuthentication'
+    $policy = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'authorizationpolicy.security.istio.io/pandora-ds-terminal-release-exact-deny', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '终态回读 ReleaseBattle AuthorizationPolicy'
+    $service = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'service/ds-allocator', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '终态回读 ds-allocator gRPC Service'
+    Assert-PandoraDsTerminalMeshPolicyContract $peer $policy $service
+
+    return [pscustomobject]@{
+        ExpectedServices = (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+        ExpectedInstances = (($instances.Keys | ForEach-Object { "$_=$($instances[$_])" }) -join ',')
+        AllowedDigests = (@($allowed | Sort-Object) -join ',')
+        ExpectedDigests = (($serviceDigests.Keys | ForEach-Object { "$_=$($serviceDigests[$_])" }) -join ',')
+        PasswordAuth = $passwordAuth
+        DesiredReplicas = $desiredReplicas
+        GreenDeploymentObjects = $greenDeploymentObjects
+    }
+}
+
+function Invoke-OnlineDsAuthCapabilityAudit {
+    param(
+        [Parameter(Mandatory = $true)]$State,
+        [Parameter(Mandatory = $true)][string]$EtcdEndpoints,
+        [Parameter(Mandatory = $true)][string]$KeysetRevision,
+        [Parameter(Mandatory = $true)][string]$Revision,
+        [Parameter(Mandatory = $true)][string[]]$SecureGoArgs
+    )
+    $deadline = [datetime]::UtcNow.AddSeconds(45)
+    Push-Location $ProjectRoot
+    try {
+        do {
+            & go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $EtcdEndpoints `
+                --expected-services $State.ExpectedServices --expected-instances $State.ExpectedInstances `
+                --expected-epoch 2 --target-epoch 2 --keyset-revision $KeysetRevision `
+                --etcd-identity-revision $Revision --allowed-image-digests $State.AllowedDigests `
+                --expected-image-digests $State.ExpectedDigests `
+                --required-features $script:PandoraDsAuthRequiredFeatures @SecureGoArgs
+            if ($LASTEXITCODE -eq 0) { return }
+            if ([datetime]::UtcNow -ge $deadline) { throw 'online writer exact capability/features 终态审计失败。' }
+            Start-Sleep -Seconds 2
+        } while ($true)
+    } finally { Pop-Location }
+}
+
+function Assert-OnlineDsAuthRuntimeAndCapabilities {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string[]]$WriterServices,
+        [Parameter(Mandatory = $true)][string]$Revision,
+        [Parameter(Mandatory = $true)][string]$ServerName,
+        [Parameter(Mandatory = $true)][string]$ForbiddenReadPrefix,
+        [Parameter(Mandatory = $true)][string]$EtcdEndpoints,
+        [Parameter(Mandatory = $true)][string]$KeysetRevision,
+        [Parameter(Mandatory = $true)][string[]]$SecureGoArgs,
+        [hashtable]$ExpectedDigests = @{}
+    )
+    $state = Get-OnlineDsAuthCanonicalState -KubeContext $KubeContext -WriterServices $WriterServices `
+        -Revision $Revision -ServerName $ServerName -ForbiddenReadPrefix $ForbiddenReadPrefix -ExpectedDigests $ExpectedDigests
+    Invoke-OnlineDsAuthCapabilityAudit -State $state -EtcdEndpoints $EtcdEndpoints -KeysetRevision $KeysetRevision `
+        -Revision $Revision -SecureGoArgs $SecureGoArgs
+    return $state
+}
+
 function Assert-OnlineDeploymentImageState {
     param(
         [Parameter(Mandatory = $true)][string]$KubeContext,
         [Parameter(Mandatory = $true)][hashtable]$Pins,
         [Parameter(Mandatory = $true)][hashtable]$Digests,
-        [Parameter(Mandatory = $true)][string[]]$WriterServices
+        [Parameter(Mandatory = $true)][string[]]$WriterServices,
+        [switch]$CanonicalGreen
     )
     foreach ($svc in (Get-ServiceList)) {
         $name = [string]$svc.Name
+        $deploymentName = if ($CanonicalGreen -and $WriterServices -contains $name) { "$name-ds-auth-green" } else { $name }
         $deployment = Get-KubectlJsonObject -KubeContext $KubeContext `
-            -Arguments @('get', "deployment/$name", '-n', $K8sNamespace, '-o', 'json') `
-            -Action "回读 Deployment/$name 镜像"
+            -Arguments @('get', "deployment/$deploymentName", '-n', $K8sNamespace, '-o', 'json') `
+            -Action "回读 Deployment/$deploymentName 镜像"
         $want = [int]$deployment.spec.replicas
         if ([int]$deployment.status.updatedReplicas -ne $want -or [int]$deployment.status.readyReplicas -ne $want -or
             [int]$deployment.status.availableReplicas -ne $want -or [int]$deployment.status.unavailableReplicas -ne 0) {
-            throw "Deployment/$name rollout 未稳定到 $want 个新副本。"
+            throw "Deployment/$deploymentName rollout 未稳定到 $want 个新副本。"
         }
+        $podSelector = if ($CanonicalGreen -and $WriterServices -contains $name) { "app=$name,pandora.dev/ds-auth-writer-set=green" } else { "app=$name" }
         $pods = Get-KubectlJsonObject -KubeContext $KubeContext `
-            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-l', "app=$name", '-o', 'json') `
-            -Action "回读 Deployment/$name Pod"
-        $live = @($pods.items | Where-Object { $null -eq $_.metadata.deletionTimestamp })
+            -Arguments @('get', 'pods', '-n', $K8sNamespace, '-l', $podSelector, '-o', 'json') `
+            -Action "回读 Deployment/$deploymentName Pod"
+        $live = @($pods.items | Where-Object { -not (Test-PandoraKubernetesObjectDeleting $_) })
         if ($live.Count -ne $want) { throw "Deployment/$name 非终止 Pod 数=$($live.Count)，expected=$want。" }
         foreach ($pod in $live) {
             $containers = @($pod.spec.containers | Where-Object name -eq $name)
@@ -958,7 +1186,7 @@ function Wait-OnlineReadyFleetImageState {
         $desired = [int]$fleetObject.spec.replicas
         $reportedTotal = [int]$fleetObject.status.replicas
         $reportedReady = [int]$fleetObject.status.readyReplicas
-        $liveServers = @($list.items | Where-Object { $null -eq $_.metadata.deletionTimestamp })
+        $liveServers = @($list.items | Where-Object { -not (Test-PandoraKubernetesObjectDeleting $_) })
         $ready = @($liveServers | Where-Object { [string]$_.status.state -ceq 'Ready' })
         $allocated = @($liveServers | Where-Object { [string]$_.status.state -ceq 'Allocated' })
         $reserved = @($liveServers | Where-Object { [string]$_.status.state -ceq 'Reserved' })
@@ -1023,8 +1251,13 @@ function Get-WorkloadTemplateVolumes($item) {
 }
 
 function Test-HasLegacyPandoraConfigMapRef($Node) {
-    if ($null -eq $Node -or $Node -is [string] -or $Node.GetType().IsPrimitive) { return $false }
-    if ($Node -is [System.Collections.IEnumerable] -and $Node -isnot [pscustomobject]) {
+    # ConvertFrom-Json 会把 restartedAt 等 ISO 字符串还原为 DateTime。DateTime 不是 primitive，
+    # 但它和 TimeSpan/enum 等值类型的适配属性会不断产生新的值；继续递归同样会溢出。
+    if ($null -eq $Node -or $Node -is [string] -or $Node.GetType().IsValueType) { return $false }
+    # PowerShell 的 [pscustomobject] 类型加速器对 Object[] 也会返回 true；旧条件因此把 JSON
+    # 数组当普通对象遍历，并沿数组的 SyncRoot 自引用无限递归，最终让 Resume 在 rollout 后
+    # 报 call depth overflow。字符串已在上面排除，其余 IEnumerable 必须先逐项处理。
+    if ($Node -is [System.Collections.IEnumerable]) {
         foreach ($entry in $Node) {
             if (Test-HasLegacyPandoraConfigMapRef $entry) { return $true }
         }
@@ -2044,7 +2277,10 @@ function Invoke-K8s {
     Build-AllImages
 
     Write-Step "[6/8] 把镜像 load 进 minikube(强制刷新固定 :dev tag)"
-    Sync-ImagesToMinikube -Images (Get-ServiceImages)
+    # 与 DS 镜像同样显式钉死本次已校验的本地 profile。不能依赖 minikube 的
+    # active profile：它可能与已锁定的 kubectl context 不同，导致新业务镜像被 load
+    # 到另一个本地集群，而当前集群随后只重启出旧 :dev 镜像。
+    Sync-ImagesToMinikube -Images (Get-ServiceImages) -MinikubeArgs @('-p', $mkProfile)
 
     Write-Step "[7/8] 部署业务服务"
     kubectl @kubectlContextArgs apply -k $servicesDir
@@ -2397,14 +2633,27 @@ function Invoke-Online {
     }
     Write-Ok "生产密钥预检通过:玩家面 / DS 回调面为两把独立真密钥,边缘 JWKS 已校验。"
 
-    if ($Env -eq 'prod') {
-        throw 'online prod 的 DS auth etcd mTLS/custom CA/ACL 只读身份尚未在五 writer 与预检工具中闭环；禁止用明文 endpoint 或无身份读取冒充生产 fencing。本次未 push、未 apply。'
-    }
-
+    $writerServices = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
+    $secureDsAuthGoArgs = @()
+    $onlineDsAuthState = $null
     Write-Step '只读验证 DS auth required_writer_epoch 已显式建立'
+    $requiredMin = 1
+    $requiredMax = 2
+    if ($Env -eq 'prod') {
+        $null = Assert-PandoraDsAuthHttpsEndpoints $DsFenceEtcdEndpoints
+        Assert-PandoraDsAuthEtcdRevision $DsFenceEtcdIdentityRevision
+        $secureDsAuthGoArgs = @(Get-PandoraDsAuthSecureGoArgs $DsFenceEtcdAuditorCAFile `
+            $DsFenceEtcdAuditorCertFile $DsFenceEtcdAuditorKeyFile $DsFenceEtcdServerName `
+            $DsFenceEtcdAuditorIdentity $DsFenceEtcdIdentityRevision $DsFenceEtcdForbiddenReadPrefix `
+            $DsFenceEtcdAuditorUsernameFile $DsFenceEtcdAuditorPasswordFile)
+        # 普通生产发布只允许复用已完成一次性 1→2 激活的终态，绝不在发布流程调用 activate/换身份。
+        $requiredMin = 2
+        $requiredMax = 2
+    }
     Push-Location $ProjectRoot
     try {
-        & go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $DsFenceEtcdEndpoints --min-epoch 1 --max-epoch 2
+        & go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $DsFenceEtcdEndpoints `
+            --min-epoch $requiredMin --max-epoch $requiredMax @secureDsAuthGoArgs
         $requiredExit = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -2413,18 +2662,25 @@ function Invoke-Online {
         throw 'DS auth required_writer_epoch 不存在、非法或 etcd 不可线性读取；已在 BuildPush/Secret/Fleet/Deployment 前停止。' +
               '禁止把缺 key 默认成 1。fresh 集群须先走经 Claude 审核的显式 baseline bootstrap；当前 BootstrapRequired 仍有删除后回退风险，不能自动调用。'
     }
+    # 2026-07-13 的真实本地验收只证明了旧 K1 镜像上的正向准入与篡改拒绝；加入票据日志
+    # 脱敏入口后，重试的 UE 未到达 DS 认证入口，K1→K2→K2-only（含 K1 旧票耗尽）没有完成。
+    # 同轮 Inventory / DS-terminal Istio 素材也仅为独立候选，未安装或激活。不得把静态清单、
+    # 单阶段结果或 ready Fleet 冒充完整生产验收；在补齐真链路前保持所有 online 写入为零。
+    throw 'online 零写阻断：DSTicket K1→K2→K2-only 真 Kubernetes/UE E2E 尚未完成，' +
+          'Inventory/DS-terminal mesh 也未独立激活。当前不得 BuildPush、写 Secret/Fleet/Deployment 或发布生产。'
 
-    # DSTicket 方案 B(RS256 纯本地验签)已拍板并在代码层落地(签发方 v2 + UE 验票/Ready 门 +
-    # Fleet JWKS 清单),但**尚未通过真 DS 端到端验证**(UE 侧未编译、未在真集群跑通 v2 准入)。
-    # 按本门口径「只能在 UE 验票方案完成并通过真 DS 测试后移除」:验证闭环前保持阻断,
-    # 不能由运维 ACK 绕过。验证清单:真 DS Fleet 带 JWKS Ready → v2 票进人 → 篡改票被拒 →
-    # 租约/排空门生效。完成后由 Claude 移除本 throw(digest 管线在下方,已测试就绪)。
-    throw 'online 生产验票阻断:DSTicket 方案 B 代码已落地但未经真 DS 端到端验证(UE 未编译/未跑真集群 v2 准入)。请先在本地 minikube agones 链路完成验证清单,再由 Claude 移除本门。当前 Fleet 禁止注入玩家 HMAC/私钥,本次未 push、未 apply。'
+    if ($Env -eq 'prod') {
+        Write-Step '任何 registry/K8s 写前只读验证 canonical green、blue=0、Endpoint UID 与运行时 capability/features'
+        $onlineDsAuthState = Assert-OnlineDsAuthRuntimeAndCapabilities -KubeContext $ctx `
+            -WriterServices $writerServices -Revision $DsFenceEtcdIdentityRevision `
+            -ServerName $DsFenceEtcdServerName -ForbiddenReadPrefix $DsFenceEtcdForbiddenReadPrefix `
+            -EtcdEndpoints $DsFenceEtcdEndpoints -KeysetRevision $DsFenceKeysetRevision `
+            -SecureGoArgs $secureDsAuthGoArgs
+        Write-Ok '生产 DS auth mTLS/CN/AuthStatus/ACL、immutable identity、canonical green 与 capability/features 前置审计通过。'
+    }
 
-    # 以下 digest 管线已完整实现并由纯函数/mutant 测试覆盖；上面的 DSTicket 硬门只能在 UE
-    # 验票方案完成并通过真 DS 测试后由 Claude 移除，不能由运维 ACK 绕过。
+    # 上述真链路闭环并由 Claude 复审后，才允许移除零写门并进入以下 immutable digest 管线。
     $serviceNames = @((Get-ServiceList) | ForEach-Object { [string]$_.Name })
-    $writerServices = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     $registryRoot = $Registry.Trim().TrimEnd('/')
     $goDigests = @{}
     $goPins = @{}
@@ -2501,9 +2757,21 @@ function Invoke-Online {
     $hubCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryHubDsImage)) { 0 } else { $HubCanaryReplicas }
 
     Write-Step '生成独占 runtime overlay，并验证 20 个 digest pin + 5 个 writer annotation'
-    $runtimeOverlay = New-OnlineRuntimeOverlay -SourceOverlay $overlay -Registry $registryRoot `
-        -Digests $goDigests -ServiceNames $serviceNames -WriterServices $writerServices -EnvironmentName $Env `
-        -DSTicketKeysetRevision $dstTicketRevision
+    $runtimeOverlayArgs = @{
+        SourceOverlay = $overlay; Registry = $registryRoot; Digests = $goDigests
+        ServiceNames = $serviceNames; WriterServices = $writerServices; EnvironmentName = $Env
+        DSTicketKeysetRevision = $dstTicketRevision
+    }
+    if ($Env -eq 'prod') {
+        $runtimeOverlayArgs.EtcdIdentityRevision = $DsFenceEtcdIdentityRevision
+        $runtimeOverlayArgs.EtcdServerName = $DsFenceEtcdServerName
+        $runtimeOverlayArgs.EtcdForbiddenReadPrefix = $DsFenceEtcdForbiddenReadPrefix
+        $runtimeOverlayArgs.EtcdPasswordAuthByService = $onlineDsAuthState.PasswordAuth
+        $runtimeOverlayArgs.GreenDesiredReplicas = $onlineDsAuthState.DesiredReplicas
+        $runtimeOverlayArgs.GreenDeploymentObjects = $onlineDsAuthState.GreenDeploymentObjects
+        $runtimeOverlayArgs.CanonicalDsAuthGreen = $true
+    }
+    $runtimeOverlay = New-OnlineRuntimeOverlay @runtimeOverlayArgs
     $runtimeOverlayDir = $runtimeOverlay.Path
     foreach ($fleetCheck in @(
         @{ File = '20-fleet-battle.yaml'; Pin = $battlePin; Container = 'pandora-battle-ds'; Track = 'stable'; Name = 'pandora-battle-stable' },
@@ -2519,9 +2787,6 @@ function Invoke-Online {
             -ExpectedFleetName $fleetCheck.Name
     }
 
-    Write-Step "应用已校验的集群版配置 Secret(namespace $K8sNamespace,allocator=agones)"
-    kubectl @kubectlContextArgs apply -f (Join-Path $ProjectRoot 'deploy/k8s/services/00-namespace.yaml')
-    Assert-LastExit 'kubectl apply 00-namespace'
     # 本地构建/registry 解析均在锁外；通过全部生产硬门后，在第一笔 DSTicket
     # 相关集群写前原子 create-only 抢锁。rotation 同样使用此锁，消除 preflight->apply TOCTOU。
     $dsticketOperationLock = Enter-OnlineDSTicketOperationLock -KubeContext $ctx
@@ -2561,6 +2826,10 @@ function Invoke-Online {
     }
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     Write-Ok "DSTicket 锁内权威门禁通过:r$dstTicketRevision state=$($lockedOrdinaryState.State)。"
+    Write-Step "应用已校验的 namespace 基线($K8sNamespace)"
+    kubectl @kubectlContextArgs apply -f (Join-Path $ProjectRoot 'deploy/k8s/services/00-namespace.yaml')
+    Assert-LastExit 'kubectl apply 00-namespace'
+    $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     # 生产配置含两把真 HS256 密钥,用 Secret 承载(P0:严禁把真密钥写进明文 ConfigMap)。
     Apply-PandoraConfigSecret -KubeContext $ctx -ConfigDir $onlineConfigDir -Action 'kubectl apply secret pandora-config'
 
@@ -2581,6 +2850,19 @@ function Invoke-Online {
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     kubectl @kubectlContextArgs apply -k $runtimeOverlayDir
     Assert-LastExit 'kubectl apply -k runtime online overlay'
+    if ($Env -eq 'prod') {
+        # green 是 epoch=2 后唯一 canonical writer；blue 已由 runtime overlay 固定 replicas=0。
+        # patch 携带预检 resourceVersion + exact immutable selector/desired，冲突即停，不回切 blue。
+        foreach ($writer in $writerServices) {
+            $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
+            $greenPatchPath = [string]$runtimeOverlay.GreenPatchPaths[$writer]
+            if ([string]::IsNullOrWhiteSpace($greenPatchPath) -or -not (Test-Path -LiteralPath $greenPatchPath -PathType Leaf)) {
+                throw "缺 canonical green/$writer release patch。"
+            }
+            kubectl @kubectlContextArgs replace -f $greenPatchPath
+            Assert-LastExit "CAS replace canonical green Deployment/$writer-ds-auth-green"
+        }
+    }
 
     # Secret 传播(审核 P1 #4):pandora-config 以 subPath 挂载,Secret 内容更新不会热感知;
     # 且镜像 tag 不变时 apply -k 判定 pod 模板 unchanged 不触发 rollout → Pod 继续用旧密钥/旧配置。
@@ -2589,14 +2871,26 @@ function Invoke-Online {
     Write-Step "rollout restart 业务 Deployment(传播更新后的 pandora-config Secret)"
     foreach ($svc in (Get-ServiceList)) {
         $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
-        kubectl @kubectlContextArgs rollout restart deploy/$($svc.Name) -n $K8sNamespace
-        Assert-LastExit "rollout restart $($svc.Name)(Secret 传播)"
+        $deploymentName = if ($Env -eq 'prod' -and $writerServices -contains [string]$svc.Name) { "$($svc.Name)-ds-auth-green" } else { [string]$svc.Name }
+        kubectl @kubectlContextArgs rollout restart "deploy/$deploymentName" -n $K8sNamespace
+        Assert-LastExit "rollout restart $deploymentName(Secret 传播)"
     }
     foreach ($svc in (Get-ServiceList)) {
-        kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
-        Assert-LastExit "rollout status $($svc.Name)(Secret 传播后未就绪,查:kubectl describe/logs)"
+        $deploymentName = if ($Env -eq 'prod' -and $writerServices -contains [string]$svc.Name) { "$($svc.Name)-ds-auth-green" } else { [string]$svc.Name }
+        kubectl @kubectlContextArgs rollout status "deploy/$deploymentName" -n $K8sNamespace --timeout=180s
+        Assert-LastExit "rollout status $deploymentName(Secret 传播后未就绪,查:kubectl describe/logs)"
     }
-    Assert-OnlineDeploymentImageState -KubeContext $ctx -Pins $goPins -Digests $goDigests -WriterServices $writerServices
+    Assert-OnlineDeploymentImageState -KubeContext $ctx -Pins $goPins -Digests $goDigests `
+        -WriterServices $writerServices -CanonicalGreen:($Env -eq 'prod')
+    if ($Env -eq 'prod') {
+        Write-Step '终态复核 canonical green/blue=0/Endpoint UID 与 runtime capability/features'
+        $onlineDsAuthState = Assert-OnlineDsAuthRuntimeAndCapabilities -KubeContext $ctx `
+            -WriterServices $writerServices -Revision $DsFenceEtcdIdentityRevision `
+            -ServerName $DsFenceEtcdServerName -ForbiddenReadPrefix $DsFenceEtcdForbiddenReadPrefix `
+            -EtcdEndpoints $DsFenceEtcdEndpoints -KeysetRevision $DsFenceKeysetRevision `
+            -SecureGoArgs $secureDsAuthGoArgs -ExpectedDigests $goDigests
+        Write-Ok 'canonical green 普通发布终态审计通过；无 blue writer、无额外 capability。'
+    }
     Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-battle-stable' -Container 'pandora-battle-ds' `
         -Pin $battlePin -Digest $battleDescriptor.Digest -ExpectedTrack stable
     Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-battle-canary' -Container 'pandora-battle-ds' `

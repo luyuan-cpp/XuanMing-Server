@@ -1,0 +1,13 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: pandora-inventory-mtls
+  namespace: pandora
+  annotations:
+    pandora.dev/migration-phase: enforce
+spec:
+  selector:
+    matchLabels:
+      app: inventory
+  mtls:
+    mode: STRICT
