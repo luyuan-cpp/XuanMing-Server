@@ -419,7 +419,15 @@ function Assert-NoLegacyDsFleets {
     $legacy = [System.Collections.Generic.List[string]]::new()
     foreach ($name in @('pandora-battle', 'pandora-hub')) {
         $lines = @(& kubectl --context $KubeContext get "fleet/$name" -n default --ignore-not-found -o name 2>&1)
-        if ($LASTEXITCODE -ne 0) { throw "读取 legacy Fleet/$name 失败:$($lines -join [Environment]::NewLine)" }
+        if ($LASTEXITCODE -ne 0) {
+            $errText = (($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine)
+            # 全新集群(如 -Reset 后)Agones 尚未安装,Fleet CRD 不存在。CRD 都没有就不可能残留
+            # legacy Fleet,视为“无”继续,而非当成读取失败中止。
+            if ($errText -match '(?i)the server doesn''t have a resource type\s+"?fleet"?') {
+                continue
+            }
+            throw "读取 legacy Fleet/$name 失败:$errText"
+        }
         if (-not [string]::IsNullOrWhiteSpace((($lines | ForEach-Object { $_.ToString() }) -join '').Trim())) {
             $legacy.Add($name)
         }
