@@ -7,7 +7,7 @@
     1) 本机(能联网):pwsh tools/scripts/export_images.ps1 -Build  → 得到 pandora-images.tar
     2) 拷 tar 到目标机
     3) 目标机(本脚本):pwsh tools/scripts/import_images.ps1 -In <tar 路径>
-    4) 目标机双击「策划一键启动-含战斗.cmd」即可(镜像已在本地,不再联网拉)
+    4) 目标机双击一键启动 .cmd 即可(镜像已在本地,不再联网拉)
 
 .EXAMPLE
   pwsh tools/scripts/import_images.ps1 -In D:\pandora-images.tar
@@ -49,4 +49,4 @@ if ($LASTEXITCODE -ne 0) { throw "docker load 失败。" }
 Write-Ok "导入完成。当前 pandora/* 镜像:"
 docker images "pandora/*"
 Write-Host ""
-Write-Info "接着双击「策划一键启动-含战斗.cmd」即可(镜像已在本地,不会再联网拉业务镜像)。"
+Write-Info "接着双击一键启动 .cmd 即可(镜像已在本地,不会再联网拉业务镜像)。"

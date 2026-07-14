@@ -13,10 +13,14 @@
 
 ## 二、日常使用
 
-| 操作 | 双击这个文件 |
+| 操作 | 怎么做 |
 |---|---|
-| 启动整套后端 | `策划一键启动.cmd`(仓库根目录) |
-| 停止 | `策划一键停止.cmd` |
+| 启动整套后端 | 命令行执行 `pwsh tools/scripts/play.ps1`(docker 模式,DS=mock) |
+| 停止 | 命令行执行 `pwsh tools/scripts/play.ps1 -Stop`;旧机器遗留的含战斗环境双击 `策划一键停止.cmd` 清理 |
+
+> 【已废弃 2026-07-14】「策划一键启动-含战斗.cmd」已删除:Windows DS 只在开发机
+> `local` 模式下启动;要真实战斗请直接用客户端连**内网 k8s 服务器**
+> (服务器机双击 `内网服务器一键启动-k8s集群.cmd`)。
 
 - **首次启动**:会在容器内编译镜像,稍慢(几分钟),请耐心等。
 - **之后启动**:复用缓存,很快。
@@ -33,12 +37,12 @@ TLS 超时 / EOF / 403),**不用做任何额外操作**:仓库里带了离线镜
 你要做的只有:
 
 1. `git pull` / `svn update` 确保拿到最新的 `deploy/offline-images/pandora-images.tar`。
-2. 双击「策划一键启动-含战斗.cmd」即可(脚本自动导入离线镜像 + 起服务,无需手动命令)。
+2. 双击一键启动脚本即可(脚本自动导入离线镜像 + 起服务,无需手动命令)。
 
 > 离线包由能联网的机器用 `pwsh tools/scripts/export_images.ps1 -Build` 生成并提交。
 > 基础设施(mysql/redis/kafka 等)不在包内;若目标机基础设施也拉不到,在联网机用
 > `-IncludeInfra -Out D:\pandora-full-images.tar` 另打仓库外的大包，不能覆盖仓库受管业务包。
-> 若这台机器其实能联网、想强制重新构建最新镜像:命令行加 `-Rebuild`(如 `pwsh tools/scripts/start.ps1 -Mode battle -Rebuild`)。
+> 若这台机器其实能联网、想强制重新构建最新镜像:命令行加 `-Rebuild`(如 `pwsh tools/scripts/start.ps1 -Mode docker -Rebuild`)。
 
 ## 四、常见问题
 

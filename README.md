@@ -51,16 +51,15 @@ pwsh tools/scripts/start.ps1
 # 也可双击仓库根的 start.cmd(无参数 = local 模式)
 ```
 
-UE 本机联调可以直接用同版本发行版 Editor 当客户端:先启动 `local`/`play.ps1 -Battle`,
-再在 Editor 里 Play/New Editor Window/Standalone 登录即可进 Hub DS。不是必须启动已打包
-Windows client;打包 client 主要用于更接近发行环境的最终回归。也可用:
+UE 本机联调可以直接用同版本发行版 Editor 当客户端:先启动 `local`(宿主 exec Windows DS)
+或 `k8s`(Agones 真 Linux DS),再在 Editor 里 Play/New Editor Window/Standalone 登录即可进
+ Hub DS。不是必须启动已打包 Windows client;打包 client 主要用于更接近发行环境的最终回归。
 当前本机约定:`F:\work\Pandora-Client-SVN\Pandora` 用源码引擎出 WindowsServer DS 包,
 `C:\work\Pandora-Client-SVN\Pandora` 用发行版 Editor/客户端登录、匹配、进战斗。
 
-```powershell
-pwsh tools/scripts/play.ps1 -Battle -OpenEditor
-pwsh tools/scripts/play.ps1 -Battle -OpenClient
-```
+> 【已废弃 2026-07-14】含战斗混合模式(`play.ps1 -Battle` / `start.ps1 -Mode battle`,宿主
+> exec Windows DS)已退役:Windows DS 只保留给 `local` 断点调试,其他要真 DS 一律 `k8s`。
+> 清理旧机器遗留环境用 `play.ps1 -Battle -Stop`。见 `docs/design/decision-revisit-retire-battle-mode.md`。
 
 五种启动方式(`-Mode`):
 

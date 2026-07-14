@@ -8,7 +8,7 @@
     1) 本机(能联网)跑本脚本 → 构建 20 个 pandora/*:dev + 打包成 pandora-images.tar
     2) U 盘 / 共享盘 把 tar 拷到目标机
     3) 目标机跑 import_images.ps1 → docker load 进本地
-    4) 目标机双击「策划一键启动-含战斗.cmd」即可(镜像已在本地,不再联网拉)
+    4) 目标机双击一键启动 .cmd 即可(镜像已在本地,不再联网拉)
 
   默认只打包 20 个业务镜像(pandora/*:dev)。基础设施(mysql/redis/kafka/etcd/
   prometheus/grafana/loki/alloy/envoy)一般目标机已经拉到过并在跑;若目标机是全新环境、
@@ -369,4 +369,4 @@ Write-Ok "打包完成:$Out(${sizeMB} MB)"
 Write-Host ""
 Write-Info "下一步(拷到目标机后,在目标机上跑):"
 Write-Info "  pwsh tools/scripts/import_images.ps1 -In <拷过去的 pandora-images.tar 路径>"
-Write-Info "导入后目标机双击「策划一键启动-含战斗.cmd」即可(镜像已在本地,不再联网拉)。"
+Write-Info "导入后目标机双击一键启动 .cmd 即可(镜像已在本地,不再联网拉)。"

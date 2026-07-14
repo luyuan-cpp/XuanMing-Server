@@ -3,9 +3,13 @@ chcp 65001 >nul
 rem ============================================================
 rem  Pandora backend  planner one-click stop (double-click to run)
 rem ------------------------------------------------------------
-rem  Stops the whole backend started by the planner one-click start .cmd
-rem  (17 business containers + 2 host allocators + local Windows DS).
-rem  Data volumes (MySQL/Redis etc.) are kept; data persists for next start.
+rem  The battle mode (with-battle one-click start) was RETIRED on 2026-07-14:
+rem  Windows DS now only runs in local mode (start.ps1 -Mode local, debugging);
+rem  real DS goes through k8s + Agones (Linux DS). See
+rem  docs/design/decision-revisit-retire-battle-mode.md.
+rem  This script is kept ONLY to clean up a leftover battle stack on machines
+rem  that ran the old with-battle build (17 business containers + 2 host
+rem  allocators + local Windows DS). Data volumes (MySQL/Redis etc.) are kept.
 rem ============================================================
 setlocal
 cd /d "%~dp0"

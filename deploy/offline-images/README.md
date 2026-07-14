@@ -32,7 +32,8 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode incontainer
 
 ```powershell
 # 1) svn update / git pull 拿到本目录的 pandora-images.tar
-# 2) 直接双击「策划一键启动-含战斗.cmd」即可 —— 启动脚本会自动检测并导入离线镜像,无需手动命令。
+# 2) 直接双击一键启动 .cmd 即可 —— 启动脚本会自动检测并导入离线镜像,无需手动命令。
+#    (含战斗 battle 模式已于 2026-07-14 废弃;真 DS 用 内网服务器一键启动-k8s集群.cmd)
 ```
 
 启动脚本(`start.ps1` 的 `Build-AllImages`)会判定:本机缺业务镜像 + 无 golang 构建基础镜像
@@ -48,7 +49,7 @@ setx PANDORA_OFFLINE 1      # 只需执行一次;之后新开的终端 / 双击 
 ```
 
 设了 `PANDORA_OFFLINE=1` 后,启动脚本直接导入离线包 → 校验齐全 → 起服务,**不联网、不构建、不受 DNS 影响**。
-需要临时构建最新代码时,加 `-Rebuild` 覆盖(如 `pwsh tools/scripts/start.ps1 -Mode battle -Rebuild`)。
+需要临时构建最新代码时,加 `-Rebuild` 覆盖(如 `pwsh tools/scripts/start.ps1 -Mode docker -Rebuild`)。
 
 手动导入(可选,一般用不到):
 

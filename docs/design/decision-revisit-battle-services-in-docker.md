@@ -5,7 +5,12 @@
 > 旧问题 / 硬约束 / 新方案 / 风险 / 迁移成本 / 验收,并记录方案 A 第一版编排落地边界。
 > 决策级别:编排 / 运维链路(start.ps1 / run_services.ps1 / docker-compose),不改业务逻辑与不变量。
 >
-> 状态:**已拍板,方案 A 第一版已落地,待真 DS 端到端验收**(2026-07-01 分析,同日实施)。
+> 状态:**已被推翻(2026-07-14)** —— battle 混合模式退役:Windows DS 只保留给 `-Mode local`
+> 断点调试,其他要真 DS 的场景一律 k8s + Agones(Linux DS)。含战斗双击入口已删,
+> `-Mode battle` 仅剩 `-Down`/`-Status` 用于清理遗留环境。
+> 见 `decision-revisit-retire-battle-mode.md`。以下为历史记录。
+>
+> 历史状态:已拍板,方案 A 第一版已落地,待真 DS 端到端验收(2026-07-01 分析,同日实施)。
 > 决策:采用**混合模式(方案 1)** —— 17 个业务服务进 docker,`ds_allocator` + `hub_allocator`
 > 留宿主(仍靠宿主 `go build` 拉起,不分发预编译 exe)。已改 5 个编排文件,见文末「落地记录」。
 

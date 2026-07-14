@@ -393,3 +393,24 @@
   离线 linux/amd64 `-race`，以及 Guild 12 个真实 MySQL 集成/并发场景、Social v2 2 个迁移场景已通过；
   post-redaction K1 尚未到达认证入口，K2 未执行。
   真实 Kubernetes/外部 edge/metrics/probe/CNI/五条补偿链滚动验收尚未执行，不宣称生产可激活。
+
+## 2026-07-14:battle 混合模式退役(Windows DS 只保留 local 断点调试)
+
+- 决策(`docs/design/decision-revisit-retire-battle-mode.md`,推翻 2026-07-01
+  `decision-revisit-battle-services-in-docker.md`):Windows DS 只在 `start.ps1 -Mode local`
+  (断点调试)下由宿主 exec 启动;其他一切要真 DS 的场景一律 k8s + Agones(Linux DS,
+  `-Mode k8s` / 内网服务器一键启动-k8s集群.cmd)。`docker`/`intranet` 维持 DS=mock 不变。
+- 已删双击入口:`策划一键启动-含战斗.cmd`、`内网服务器一键启动-含战斗.cmd`。两个停止 .cmd
+  (`策划一键停止.cmd`、`内网服务器一键停止.cmd`)保留,仅用于清理旧机器遗留的 battle 栈。
+- `start.ps1 -Mode battle` 启动/Resume 一律拒绝并指路 k8s(exit 1);`-Down`/`-Status` 保留
+  (清理/查看遗留环境),`-Reset` 只清理不再重启。`play.ps1 -Battle` 启动同样拒绝,仅
+  `-Battle -Stop`/`-Battle -Status` 可用;play.ps1 删除 battle 专属函数
+  (Resolve-LanIp 副本/Get-LocalDsExePath/Confirm-HubDsUp/Resolve-LocalDsExe/
+  Ensure-GoInstalled/Test-BattlePrerequisites)。`gen_cluster_config.ps1 -HostAllocators`
+  参数暂留(已无调用方,下次触碰该脚本时移除)。
+- 文档同步:README、`docs/ops/planner-quickstart.md`、`deploy/offline-images/README.md`、
+  `tools/scripts/README.md`、export/import_images.ps1 提示语均已改口径;旧决策文档头部已标
+  「已被推翻(2026-07-14)」。
+- 验证:两个 ps1 通过 AST 解析零错误;`start.ps1 -Mode battle` 与 `play.ps1 -Battle` 冒烟
+  确认拒绝且 exit 1;`play.ps1 -Battle -Status` 透传正常。未 commit/push(Codex 收尾)。
+

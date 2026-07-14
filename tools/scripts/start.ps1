@@ -11,8 +11,10 @@
                              用 -Env test|prod 区分「测试服集群」与「生产 kbs 集群」(不同 kube-context)
 
   还有两个本地联调辅助模式:
-    battle   含战斗混合版 —— 18 个业务服务跑 docker,ds_allocator + hub_allocator 跑宿主(需 exec Windows DS);
-                             进真实 Hub/Battle DS。play.ps1 -Battle[ -Intranet] 走这个;策划机不用起 go 服务。
+    battle   【已废弃,2026-07-14】原含战斗混合版(18 业务容器 + 宿主 allocator exec Windows DS)。
+                             Windows DS 只保留给 local 断点调试;要真 DS 一律用 k8s(Agones Linux DS)。
+                             仅 -Down/-Status 可用(清理/查看旧机器遗留环境),启动会拒绝。
+                             见 docs/design/decision-revisit-retire-battle-mode.md。
     k8s      本地 minikube 联调 Agones —— 本机起 minikube + Agones,验证真 Linux DS 链路;DS=agones(默认 advertise 本机局域网 IP + 自动宿主桥接/UDP 中继)
 
   启动前会检查必要工具(go / docker / kubectl / minikube)。默认只提示缺失项,不改本机环境;
@@ -1532,11 +1534,9 @@ function Resolve-Prerequisites([string]$mode) {
             if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'battle' {
-            # 含战斗混合版:18 业务服务跑 docker,只有 ds/hub allocator 跑宿主(需 Go build 这 2 个 + exec Windows DS)。
-            if (-not (Ensure-Go))     { $allOk = $false }
+            # battle 模式已废弃(decision-revisit-retire-battle-mode.md):仅保留 -Down/-Status
+            # 清理/查看旧机器遗留环境,前置只需 Docker(不再要求 Go / mkcert)。
             if (-not (Ensure-Docker)) { $allOk = $false }
-            # Envoy 本地 TLS 证书(客户端面 :8443 / 内网策划连接)靠 mkcert 自动签发 / 装共享 CA。
-            if (-not (Ensure-Tool -Name 'mkcert' -CheckCmd 'mkcert' -WingetId 'FiloSottile.mkcert' -ManualUrl 'https://github.com/FiloSottile/mkcert#installation')) { $allOk = $false }
         }
         'k8s' {
             if (-not (Ensure-Docker)) { $allOk = $false }
@@ -1686,67 +1686,26 @@ function Invoke-Intranet {
     Write-Warn "DS=mock(无真实 DS);需真实战斗/大厅 DS 请用 -Mode online(Agones)。"
 }
 
-# ===== battle 模式(含战斗混合版:18 业务服务跑 docker + ds/hub allocator 跑宿主)=====
-# 为什么混合:战斗/大厅 DS 是 Windows PandoraServer.exe,跑不进 Linux 容器;
-# ds_allocator(mode=local)与 hub_allocator 要在本机 exec 这个 .exe,故这 2 个服务必须留宿主,
-# 其余 18 个纯业务服务进 docker(策划服务器机器不用为它们装 Go / 逐个 build)。
-# 网络:Envoy(容器)所有上游本就走 host.docker.internal:500XX,18 个容器把端口发布到宿主、
-# 2 个 allocator 直接绑宿主端口 —— 从 Envoy / 跨边界视角两者等价。容器里的 matchmaker/login/
-# battle_result 经 gen_cluster_config.ps1 -HostAllocators 把 allocator 地址改指 host.docker.internal。
-# DS 广告地址(PANDORA_DS_ADVERTISE_HOST,本机自测=127.0.0.1 / 内网=局域网 IP)由 play.ps1 注入环境变量,
-# 宿主 allocator 子进程继承 —— 与旧 local 战斗链路一致。
+# ===== battle 模式【已废弃 2026-07-14】(原:含战斗混合版,18 业务容器 + 宿主 allocator exec Windows DS)=====
+# 决策(docs/design/decision-revisit-retire-battle-mode.md):Windows DS 只保留给 -Mode local 断点调试,
+# 其他一切要真 DS 的场景一律 -Mode k8s(Agones Linux DS)。本函数仅保留 -Down 分支,
+# 用于清理旧机器上遗留的 battle 栈(18 容器 + 2 宿主 allocator);启动路径一律拒绝。
 function Invoke-Battle {
-    # compose 服务名(连字符)。这 2 个改跑宿主,不进容器。
-    $hostAllocCompose = @('ds-allocator', 'hub-allocator')
-    $containerSvcs = @((Get-ServiceList | Where-Object { $hostAllocCompose -notcontains $_.Name }).Name)
-
     if ($Down) {
-        Write-Step "停止含战斗版(宿主 allocator + 业务容器 + 基础设施)"
+        Write-Step "停止含战斗版遗留环境(宿主 allocator + 业务容器 + 基础设施)"
         & "$ScriptDir/run_services.ps1" -Action down 2>$null
         docker compose -f $ComposeServices down
         & "$ScriptDir/dev_down.ps1"
         return
     }
 
-    Write-Step "battle 模式:18 个业务服务(docker) + ds/hub allocator(宿主,exec Windows DS)"
-
-    # 清理可能冲突的残留:上一轮 local 的宿主 go 进程、上一轮 docker 的 allocator 容器(会抢 50020/50021)。
-    Write-Info "先停掉可能残留的宿主 go 服务与业务容器(避免端口冲突)..."
-    & "$ScriptDir/run_services.ps1" -Action down 2>$null
-    docker compose -f $ComposeServices down 2>$null | Out-Null
-
-    # Envoy 客户端面:仅当 DS advertise 指向局域网(非回环)时才开放 8443;
-    # DS 面 8444 默认仍只绑本机。admin 9901 恒绑本机。
-    $battleAdv =
-        if (-not [string]::IsNullOrWhiteSpace($AdvertiseHost)) { $AdvertiseHost.Trim() }
-        elseif (-not [string]::IsNullOrWhiteSpace($env:PANDORA_DS_ADVERTISE_HOST)) { $env:PANDORA_DS_ADVERTISE_HOST.Trim() }
-        else { '' }
-    # battle 模式真 DS 在本机 exec(DS→Envoy 走 127.0.0.1),故 DS 面 8444 无需局域网开放;
-    # 仅客户端面 8443 按 advertise 是否局域网决定。DS 面默认本机(除非 -ExposeDsFace)。
-    $battleClientBind = if (-not [string]::IsNullOrWhiteSpace($battleAdv) -and $battleAdv -ne '127.0.0.1') { '0.0.0.0' } else { '127.0.0.1' }
-    Set-EdgeBindHost $battleClientBind
-
-    Write-Step "[1/5] 基础设施(建 pandora-net)"
-    & "$ScriptDir/dev_up.ps1"
-    if ($LASTEXITCODE -ne 0) { throw "基础设施启动失败" }
-
-    Write-Step "[2/5] 生成集群版配置(allocator 跑宿主:matchmaker/login/battle_result 经 host.docker.internal 回连)"
-    & "$ScriptDir/gen_cluster_config.ps1" -HostAllocators
-
-    Write-Step "[3/5] 构建 18 个业务服务镜像(不含 ds/hub allocator)"
-    Build-AllImages -Only $containerSvcs
-
-    Write-Step "[4/5] 启动 18 个业务服务容器"
-    docker compose -f $ComposeServices up -d @containerSvcs
-    if ($LASTEXITCODE -ne 0) { throw "业务服务容器启动失败" }
-
-    Write-Step "[5/5] 宿主启动 ds_allocator + hub_allocator(mode=local,匹配成局 exec Windows DS)"
-    # run_services 用下划线服务名;mode=local 从 etc/*-dev.yaml 读,DS 广告地址走 play.ps1 注入的环境变量。
-    & "$ScriptDir/run_services.ps1" -Only ds_allocator, hub_allocator
-    if ($LASTEXITCODE -ne 0) { throw "宿主 allocator 启动失败" }
-
-    Write-Host ""
-    Write-Ok "battle 模式已启动:18 业务容器 + 2 宿主 allocator。查看:pwsh tools/scripts/start.ps1 -Mode battle -Status"
+    Write-Err "battle 模式已废弃(2026-07-14):Windows DS 只在 -Mode local(断点调试)启动。"
+    Write-Host "       要进真实 Hub/Battle DS 请用 k8s + Agones(Linux DS):" -ForegroundColor Yellow
+    Write-Host "         本机联调:  pwsh tools/scripts/start.ps1 -Mode k8s" -ForegroundColor Yellow
+    Write-Host "         内网服务器:双击 内网服务器一键启动-k8s集群.cmd" -ForegroundColor Yellow
+    Write-Host "       清理本机遗留的 battle 环境:pwsh tools/scripts/start.ps1 -Mode battle -Down" -ForegroundColor Yellow
+    Write-Host "       详见 docs/design/decision-revisit-retire-battle-mode.md" -ForegroundColor DarkGray
+    exit 1
 }
 
 
@@ -3417,8 +3376,8 @@ function Invoke-Resume {
             Invoke-Local
         }
         'battle' {
-            Write-Info "含战斗混合版恢复:重新拉起 18 业务容器 + 2 宿主 allocator。"
-            Invoke-Battle
+            Write-Err "battle 模式已废弃,无可恢复项;清理遗留环境用 -Mode battle -Down,真 DS 用 -Mode k8s -Resume。"
+            exit 1
         }
         { $_ -in 'docker', 'intranet' } {
             Write-Info "重启已停的容器(不加 --build,不重建镜像)..."
@@ -3473,10 +3432,11 @@ function Invoke-Reset {
             Invoke-Local
         }
         'battle' {
+            # 已废弃:只做清理,不再重新启动(decision-revisit-retire-battle-mode.md)。
             & "$ScriptDir/run_services.ps1" -Action down 2>$null
             docker compose -f $ComposeServices down -v 2>$null
             & "$ScriptDir/dev_down.ps1" 2>$null
-            Invoke-Battle
+            Write-Ok "battle 遗留环境已清理。battle 模式已废弃,真 DS 请用 -Mode k8s。"
         }
         'docker' {
             docker compose -f $ComposeServices down -v 2>$null
@@ -3497,9 +3457,10 @@ function Show-Status {
     switch ($Mode) {
         'local'  { & "$ScriptDir/run_services.ps1" -Action status }
         'battle' {
-            Write-Step "业务服务容器(18 个,不含 ds/hub allocator)"
+            Write-Warn "battle 模式已废弃(仅用于查看/清理遗留环境;真 DS 用 -Mode k8s)。"
+            Write-Step "业务服务容器(遗留)"
             docker compose -f $ComposeServices ps
-            Write-Step "宿主 allocator + 其它宿主 go 进程"
+            Write-Step "宿主 allocator + 其它宿主 go 进程(遗留)"
             & "$ScriptDir/run_services.ps1" -Action status
         }
         { $_ -in 'docker', 'intranet' } {
