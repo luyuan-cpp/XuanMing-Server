@@ -988,23 +988,30 @@ Redis authority 下无凭据的 `pandora.battle.result` consumer 已由启动校
 单入口，不能再让消息 handler 直接调用 `ReportResult` 绕过 active/receipt。若未来恢复 topic，消息本身
 必须携带可核验 Model-B 身份并进入同一 MySQL outbox 状态机，需另行设计。
 
-#### 7.16.3 locator 不可判定时不能先分配 Hub 再做后置通知
+#### 7.16.3 locator 不可判定时不能先分配 Hub 再做后置通知(2026-07-14 状态更新)
 
-**反例**：玩家仍在 Battle X，locator 保存 `BATTLE(X)`，但 login 的三次
-`GetBattleLocation` 都因 locator/网络故障返回 error。现有 `battle-reconnect.md §2.3` 明确选择弱依赖
-降级：login 先 `AssignHub`（已占 seat 并签 Hub 票），之后才 best-effort `NotifyLoginPending`。后者即使
-被 BATTLE fence 拒绝，也撤不回已发出的 Hub assignment/ticket；Hub 在线 admission 当前只核 DS active
-与 assignment，不核玩家 placement。因此玩家可同时持有 Battle 与可用 Hub 归属。“locator 数据没被
-覆盖”不等于没有误分配，不能用后置通知或下次自愈闭环。
+**历史反例**：玩家仍在 Battle X，locator 保存 `BATTLE(X)`，但 login 的三次
+`GetBattleLocation` 都因 locator/网络故障返回 error。若 login 随后 `AssignHub`（占 seat 并签 Hub 票），
+再 best-effort `NotifyLoginPending`,后者即使被 BATTLE fence 拒绝也撤不回 assignment/ticket；Hub admission
+只核 DS active 与 assignment,不核玩家 placement。因此玩家可同时持有 Battle 与可用 Hub 归属。
 
-当前已修的范围仅是：locator **已明确返回 `InBattle=true`** 后，roster/Redis/签票任一失败均返回
-unavailable，不再继续 Hub 链。locator 本身不可判定时的既有 availability 决策未被暗改。
+**当前 Login 状态**：候选 A 已在 B1 模式实现。`require_hub_assignment_binding=true` 时,locator 未配置、
+查询失败或 `NotifyLoginPending` 失败都返回 unavailable,且发生在 `AssignHub` 之前；Redis authority 的集群
+配置生成器会开启此门。对应回归测试覆盖“未配置 locator”“locator 查询失败”“LOGIN_PENDING 失败”下
+Hub assigner 零调用。本地/off 模式显式关闭该门时仍保留弱降级,不能拿该 profile 证明生产安全。
+
+**尚未闭环的旁路**：`IssueDSTicket(ds_type="hub")` 没有复用上述 B1/locator/LOGIN_PENDING 门,而是直接
+`ResolveHubEndpoint → AssignHub`。客户端 Battle 直连失败和 30s 重连超时都会调用它,所以本节的原始
+双归属反例仍能从该入口发生。另外,DS→locator 刷新是 best-effort；若连续失败到 key 正常过期,
+`GetBattleLocation` 会成功返回非 BATTLE 而不是 error,B1 也不会查询 live roster,仍可能误走 Hub。
+详见 `battle-reconnect.md` §6.2、§6.3.1、§7.3 A/J。
 
 候选：
 
-- **A. 未知即拒绝(最小安全门)**：查询重试后仍不可判定，Login 返回 unavailable，不 AssignHub、不签
-  Hub 票、不写 LOGIN_PENDING。实现与反证最小，代价是 locator 故障会阻断登录；可作为生产激活前的
-  最低安全基线，但改变既有“locator 弱依赖”可用性决策，仍需人确认。
+- **A. 未知即拒绝(已用于 B1 Login,仍须覆盖所有 Hub 签票入口)**：查询重试后仍不可判定,返回
+  unavailable,不 AssignHub、不签 Hub 票、不写 LOGIN_PENDING。下一步必须把相同门下沉到
+  `IssueDSTicket(hub)` 和 Hub 最终 admission,并能区分“权威证明不在 Battle”与“placement key 缺失”,
+  避免新调用方或 TTL 缺口再次旁路。
 - **B. 版本化 placement lease + admission 最终门(独立推荐的标准方案)**：把玩家 placement 作为单一
   权威记录；login 先以 `(player_id,operation_id,expected_version)` CAS 取得有界 `HUB_PENDING` lease，
   仅非 active Battle 才成功。随后才 reserve seat/签票，并把 `placement_version/operation_id` 绑定进
@@ -1015,10 +1022,35 @@ unavailable，不再继续 Hub 链。locator 本身不可判定时的既有 avai
 - **C. 维持后置 Notify/Hub join 再对账**：assignment 与票已经产生，且对账故障本身不可判定；只能
   缩短错误窗口，不能证明一人一 DS，拒绝作为生产闭环。
 
-若批准 A，至少新增 locator timeout/error 下 Hub assigner 调用次数、seat/assignment/LOGIN_PENDING
-全零测试。若批准 B，还需 additive proto/票据 claim、login/hub_allocator/player_locator/UE 接线，覆盖
+候选 A 的 Login 负例已存在；仍须新增 `IssueDSTicket(hub)` 在 active/unknown placement 下
+Hub assigner、seat、assignment、票据全零测试,以及 Hub admission placement/fence 负例。若批准 B，还需
+additive proto/票据 claim、login/hub_allocator/player_locator/UE 接线，覆盖
 两次并发 Login、Battle↔Hub 竞态、reserve 成功后 CAS/响应丢失、补偿崩溃重启、旧 placement version
 入场、assignment future unknown fields 与 Redis Cluster 跨 slot；未完成前生产 Apply 继续禁止。
+
+**决策状态（2026-07-14）**：已人工批准候选 B 为最终方案（版本化 placement lease + admission
+最终门），按“先服务端后客户端”的分阶段程序推进；C 拒绝。同日先落地 P0 止血
+（候选 A 下沉到全部 Hub 签票入口）：
+
+- login `ResolveHubEndpoint`（即 `IssueDSTicket(hub)` 实现）与 `SelectRole` 前新增
+  `guardHubRouteAgainstActiveBattle` 三态权威门（**2026-07-15 Codex 复审修正**：改为显式
+  `InspectBattleRoute` 三态 ACTIVE/TERMINAL/UNKNOWN，不再把 `AuthorizeBattleTicket` 的通用
+  `ErrPermissionDeny` 当终态证明——roster 漂移/非成员/记录缺失都会折叠进该码，误当放行证据
+  仍是双归属）：locator BATTLE 且权威判 ACTIVE → `ErrInvalidState` 零副作用拒绝（不 AssignHub、
+  不写 role、不签票）；locator BATTLE 且投影记录显式终态（state ∈ {ended, abandoned} 且
+  match_id 一致）→ TERMINAL，唯一放行路径（正常结算回大厅不受影响）；其余一切
+  （roster 漂移/非成员 PermissionDeny、记录缺失、stale 心跳、match 不符、Redis/网络错误、
+  locator 查询失败、未接权威）→ UNKNOWN，locator 已明确 InBattle 时不分 profile 一律
+  `ErrUnavailable` fail-closed；local/off 仅对“locator 查询失败”保留历史弱降级。
+  负例测试见 `services/account/login/internal/biz/hub_route_gate_test.go`
+  （含 roster 漂移拒绝、显式终局放行、SelectRole 零 role 落库、TOCTOU 并发终局切换）与
+  `services/account/login/internal/data/battle_ticket_authorizer_test.go` 三态矩阵。
+- 客户端同日移除 `FallbackToHubViaIssueDSTicket`：battle 直连失败/本地 30s 超时不再自切大厅，
+  改为权威重查循环（退避重登，去向由 LoginResponse 决定），超窗只升级可取消 UI。
+- **P0 已知取舍**：对局进行中“主动退出回大厅”入口（若有）会被本门拒绝——主动放弃必须先由
+  服务端执行显式离局事务（roster 移除/placement 推进），属候选 B 阶段工作；正常结算路径不受影响
+  （DS 上报终局后 roster 权威判非 live，门放行）。§7.3 J（locator TTL 缺口误判非 BATTLE）
+  同样待候选 B 根治。
 
 #### 7.16.4 Hub 实报在线数不能覆盖尚未入场的 reservation（P1 生产阻断）
 

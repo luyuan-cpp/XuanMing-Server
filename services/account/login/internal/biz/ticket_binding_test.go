@@ -377,7 +377,9 @@ func TestLoginBindingActivationNeverFallsBackToSelfSignedHubTicket(t *testing.T)
 			HubPodName: "hub-cn-1",
 			ShardID:    1,
 		}}
-		uc := newTestUsecase(t, hub)
+		// P0 Hub 路由门(2026-07-14):B1 下 ResolveHubEndpoint 必须先由 locator 证明玩家
+		// 不在 battle 才能签票;本子用例只验证绑定票透传,注入“不在战斗”的 notifier 过门。
+		uc := newTestUsecaseWithNotifier(t, hub, &fakeNotifier{})
 		bound, _, err := uc.signer.SignBoundHubDSTicket(1001, 0, 0, 0, "bound-allocator-jti", auth.DSTicketBinding{
 			DSPodName:       "hub-cn-1",
 			DSInstanceUID:   "uid-a",

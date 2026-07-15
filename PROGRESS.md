@@ -414,3 +414,31 @@
 - 验证:两个 ps1 通过 AST 解析零错误;`start.ps1 -Mode battle` 与 `play.ps1 -Battle` 冒烟
   确认拒绝且 exit 1;`play.ps1 -Battle -Status` 透传正常。未 commit/push(Codex 收尾)。
 
+## 2026-07-14:任意时点断线/切后台 DS 迁移复核(未闭环)
+
+- 复核范围覆盖 Login/SelectRole/Hub travel+Admission、排队/确认/分配/READY、Battle 首次握手、局内
+  断线、杀进程重登与结算回 Hub。已确认 Battle-aware Login、B1 locator fail-closed、Hub
+  reservation/session ledger、matchmaker liveness/claim healing、allocator/outbox 和 locator fence 等
+  服务端恢复骨架存在；这些机制不能等同于“任意时间点绝不卡死”。
+- 发现安全阻断：`IssueDSTicket(hub)` 直接 `ResolveHubEndpoint → AssignHub`,绕过 Login 的
+  locator/B1/LOGIN_PENDING 门。客户端掉线而 Battle DS 健康时,roster 会继续续租 BATTLE；当前客户端
+  30s 超时却直接申请 Hub 票。Hub admission 又未核 placement,可出现玩家已进 Hub、locator 仍为 BATTLE
+  的双归属/后续匹配异常。
+- 发现客户端阻断：READY 在无 LocalPlayerController 时先写去重态并停轮询,后续同地址不再连接；
+  杀进程后 Login 直连 Battle 未恢复 MatchModel 的 match_id/Hub 上下文,结算回 Hub 可直接失败；
+  `ReturnToHubDs` 在请求前清匹配态,失败后重试会丢 fence。前后台/HTTP 黑洞、真实 UDP Admission、
+  杀进程全矩阵仍无 UE 自动化 E2E。
+- 发现匹配持久恢复阻断：StartMatch 三步写的失败回滚复用玩家请求 ctx,可留未入队 body+claim；最后一人
+  Confirm 后的 DS 分配/READY/locator/push 仍同步绑在该玩家 RPC ctx；allocator error 未先 CAS FAILED,
+  expire scanner 遇瞬态锁错误却移除 active。上述窗口会让 QUEUEING/ALLOCATING 状态脱离恢复索引直到
+  30min TTL。结算后的 match claim 释放又是 best-effort,DB 已提交而释放失败时幂等重报不会重试清理,
+  玩家回 Hub 后仍可能被 AlreadyMatching 挡住。
+- B1 只覆盖 locator 查询报错的 fail-closed；若 DS→locator best-effort 刷新连续失败到 key 正常过期,
+  Login 会把“未找到 BATTLE”当成可进 Hub,不会用 live roster 作第二证明。签 Hub 票与 Hub Admission 仍需
+  统一的权威 placement/terminal 最终门。
+- 验证：account login、player locator、matchmaker、hub allocator、ds allocator、battle result 六个相关
+  Go module 的现有测试均通过；本轮另复跑相关 biz/data/service 目标包也全绿。现有测试未覆盖上述
+  ctx-cancel、active-index、release-response-loss 与 Hub/Battle 双归属反例,所以不能据此改判为已闭环。
+- 已纠正 `battle-reconnect.md` §6/§7 的旧绝对结论,补“不卡死”定义、阻断反例和必跑矩阵；同步更新
+  `ds-arch.md` §9.2 与 `decision-revisit-ds-callback-auth.md` §7.16.3。当前结论明确为**代码尚未全部完成**；
+  本轮仅做审计与文档收口,未修改服务端/客户端业务代码,未 commit/push。

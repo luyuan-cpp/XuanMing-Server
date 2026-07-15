@@ -71,6 +71,71 @@ func TestRedisBattleTicketAuthorizerLegacyRosterAndZeroMutation(t *testing.T) {
 	}
 }
 
+// TestInspectBattleRouteExplicitThreeState 覆盖 Hub 门三态权威判定(Codex 复审 P0,2026-07-15):
+// 只有显式终态(ended/abandoned)返回 TERMINAL;记录缺失、roster 漂移、stale、match 不符
+// 一律 UNKNOWN——它们在 AuthorizeBattleTicket 里都折叠成 ErrPermissionDeny,不得当终态证明。
+func TestInspectBattleRouteExplicitThreeState(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	now := time.Unix(1_800_000_000, 0)
+	authorizer := NewRedisBattleTicketAuthorizer(rdb, false, 30*time.Second)
+	authorizer.now = func() time.Time { return now }
+	ctx := context.Background()
+	const matchID = uint64(9001)
+	key := admissionBattleProjectionKey(matchID)
+
+	assertRoute := func(name string, playerID uint64, wantState BattleRouteState, wantCode errcode.Code) {
+		t.Helper()
+		state, err := authorizer.InspectBattleRoute(ctx, playerID, matchID)
+		if state != wantState {
+			t.Fatalf("%s: state=%v, want %v (err=%v)", name, state, wantState, err)
+		}
+		if wantState == BattleRouteUnknown {
+			if errcode.As(err) != wantCode {
+				t.Fatalf("%s: code=%v err=%v, want %v", name, errcode.As(err), err, wantCode)
+			}
+		} else if err != nil {
+			t.Fatalf("%s: unexpected err %v", name, err)
+		}
+	}
+
+	// 记录缺失 → UNKNOWN(可能是终局清理,也可能是 TTL 漂移;无版本化 lease 不可区分)。
+	assertRoute("missing projection", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
+
+	record := &dsv1.BattleStorageRecord{
+		MatchId: matchID, DsPodName: "pandora-battle-9001", DsAddr: "127.0.0.1:7801",
+		State: "running", PlayerIds: []uint64{1001},
+		LastHeartbeatMs: now.Add(-time.Second).UnixMilli(),
+	}
+	setAdmissionProto(t, mr, key, record)
+
+	// live roster 成员 → ACTIVE。
+	assertRoute("live member", 1001, BattleRouteActive, 0)
+	// running 但玩家非成员(roster 漂移)→ UNKNOWN,绝不可判 TERMINAL。
+	assertRoute("roster drift non-member", 9999, BattleRouteUnknown, errcode.ErrUnavailable)
+
+	// stale 心跳 → UNKNOWN(DS 可能崩溃,不能证明终局)。
+	record.LastHeartbeatMs = now.Add(-time.Minute).UnixMilli()
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("stale heartbeat", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
+
+	// 显式终态 ended/abandoned → TERMINAL(唯一放行证明,与成员身份无关)。
+	record.State = "ended"
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("ended member", 1001, BattleRouteTerminal, 0)
+	assertRoute("ended non-member", 9999, BattleRouteTerminal, 0)
+	record.State = "abandoned"
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("abandoned", 1001, BattleRouteTerminal, 0)
+
+	// match_id 不符(投影被其它对局覆写)→ UNKNOWN。
+	record.State = "ended"
+	record.MatchId = 42
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("match mismatch", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
+}
+
 func TestRedisBattleTicketAuthorizerModelBRequiresExactActiveProjection(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})

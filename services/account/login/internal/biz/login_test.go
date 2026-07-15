@@ -60,7 +60,19 @@ type loginBattleAuthorizerFake struct {
 	err         error
 	target      data.BattleTicketTarget
 	returnEmpty bool
+
+	// ---- InspectBattleRoute(Hub 门三态)可控项 ----
+	// routeStates 非空:按调用序依次弹出(TOCTOU 并发终局切换场景)。
+	// routeErr 非 nil:恒返 (Unknown, routeErr)。
+	// routeState 显式非 Unknown:恒返 (routeState, nil)。
+	// 都未设:err 非 nil → (Unknown, err)；否则 (Active, nil)。
+	routeStates []data.BattleRouteState
+	routeErr    error
+	routeState  data.BattleRouteState
+	routeCalls  int
 }
+
+var _ data.BattleRouteInspector = (*loginBattleAuthorizerFake)(nil)
 
 func (f *loginBattleAuthorizerFake) AuthorizeBattleTicket(context.Context, uint64, uint64) (data.BattleTicketTarget, error) {
 	if f.err != nil {
@@ -73,6 +85,25 @@ func (f *loginBattleAuthorizerFake) AuthorizeBattleTicket(context.Context, uint6
 		f.target = data.BattleTicketTarget{DSAddr: "10.1.2.3:7000", PodName: "battle-test"}
 	}
 	return f.target, nil
+}
+
+func (f *loginBattleAuthorizerFake) InspectBattleRoute(context.Context, uint64, uint64) (data.BattleRouteState, error) {
+	f.routeCalls++
+	if len(f.routeStates) > 0 {
+		s := f.routeStates[0]
+		f.routeStates = f.routeStates[1:]
+		return s, nil
+	}
+	if f.routeErr != nil {
+		return data.BattleRouteUnknown, f.routeErr
+	}
+	if f.routeState != data.BattleRouteUnknown {
+		return f.routeState, nil
+	}
+	if f.err != nil {
+		return data.BattleRouteUnknown, f.err
+	}
+	return data.BattleRouteActive, nil
 }
 
 type fakeHubAssigner struct {

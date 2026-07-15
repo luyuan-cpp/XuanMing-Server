@@ -34,6 +34,33 @@ type BattleTicketAuthorizer interface {
 	AuthorizeBattleTicket(context.Context, uint64, uint64) (BattleTicketTarget, error)
 }
 
+// BattleRouteState 是 Hub 签票门的显式三态判定结果(P0 修复 2026-07-15):
+// 通用 ErrPermissionDeny 不得再被当作“对局已终态”的证明——它同时覆盖
+// roster 漂移/非成员/记录缺失/stale 心跳,那些都只能是 UNKNOWN。
+type BattleRouteState int
+
+const (
+	// BattleRouteUnknown:无法权威判定(记录缺失/非成员漂移/stale 心跳/Redis 错误)。
+	// 调用方在 locator 阳性 BATTLE 信号下必须 fail-closed。
+	BattleRouteUnknown BattleRouteState = iota
+	// BattleRouteActive:玩家确属 live 对局(ready/running + 成员 + 心跳新鲜)。
+	BattleRouteActive
+	// BattleRouteTerminal:权威记录显式终态(ended/abandoned)——唯一允许 Hub 的证明。
+	BattleRouteTerminal
+)
+
+// BattleRouteInspector 是可选能力接口:Hub 签票门用它区分“仍在活局/已终局/不可判定”。
+// 未实现本接口的 authorizer 一律按 UNKNOWN fail-closed。
+type BattleRouteInspector interface {
+	InspectBattleRoute(ctx context.Context, playerID, matchID uint64) (BattleRouteState, error)
+}
+
+// 战斗投影记录的显式终态(与 ds_allocator 状态机常量一致;TerminateExpected 写入)。
+const (
+	battleStateEnded     = "ended"
+	battleStateAbandoned = "abandoned"
+)
+
 type RedisBattleTicketAuthorizer struct {
 	rdb             redis.UniversalClient
 	requireModelB   bool
@@ -84,6 +111,55 @@ func (c *RedisBattleTicketAuthorizer) AuthorizeBattleTicket(
 		return BattleTicketTarget{}, errcode.New(errcode.ErrPermissionDeny, "player is not authorized for battle ticket target")
 	}
 	return battleTicketTarget(battle), nil
+}
+
+// InspectBattleRoute 是 Hub 签票门的显式三态权威判定(P0 修复 2026-07-15):
+//
+//	TERMINAL:投影记录存在、match_id 一致且 state ∈ {ended, abandoned}——唯一允许 Hub 的证明。
+//	ACTIVE  :liveRosterAllows(ready/running + 成员 + 心跳新鲜)。
+//	UNKNOWN :其余一切——记录缺失(redis.Nil,可能是终局清理也可能是 TTL 漂移,不可区分)、
+//	         match_id 不匹配、running 但玩家非成员(roster 漂移)、stale 心跳(DS 可能崩溃)、
+//	         Redis/解码错误。调用方必须 fail-closed。
+//
+// 注意与 AuthorizeBattleTicket 的区别:后者把上述 UNKNOWN 情形折叠进 ErrPermissionDeny
+// (签票语义"不给票"正确),但作为 Hub 放行证明会把 roster 漂移误判成终局(Codex 复审 P0)。
+func (c *RedisBattleTicketAuthorizer) InspectBattleRoute(
+	ctx context.Context,
+	playerID, matchID uint64,
+) (BattleRouteState, error) {
+	if playerID == 0 || matchID == 0 {
+		return BattleRouteUnknown, errcode.New(errcode.ErrInvalidArg, "battle route inspection requires player and match")
+	}
+	if c == nil || c.rdb == nil || c.now == nil {
+		return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable, "battle route authority unavailable")
+	}
+	payload, err := c.rdb.Get(ctx, admissionBattleProjectionKey(matchID)).Bytes()
+	if err == redis.Nil {
+		// 记录缺失 ≠ 终态:可能是终局后清理,也可能是 DS 续期失败导致 TTL 漂移(活局仍在)。
+		// 没有版本化 placement lease 前无法区分,一律 UNKNOWN。
+		return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
+			"battle projection missing; cannot prove match %d is terminal", matchID)
+	}
+	if err != nil {
+		return BattleRouteUnknown, errcode.NewCause(errcode.ErrUnavailable, err, "read battle route projection failed")
+	}
+	battle := &dsv1.BattleStorageRecord{}
+	if err := proto.Unmarshal(payload, battle); err != nil {
+		return BattleRouteUnknown, errcode.NewCause(errcode.ErrUnavailable, err, "decode battle route projection failed")
+	}
+	if battle.GetMatchId() != matchID {
+		return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
+			"battle projection match mismatch (want %d got %d)", matchID, battle.GetMatchId())
+	}
+	if battle.GetState() == battleStateEnded || battle.GetState() == battleStateAbandoned {
+		return BattleRouteTerminal, nil
+	}
+	if c.liveRosterAllows(battle, playerID, matchID) {
+		return BattleRouteActive, nil
+	}
+	// 非终态且非可证明 live:running 但非成员(漂移)/stale 心跳/warming 等中间态,全部不可判定。
+	return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
+		"battle route not provably terminal (state=%q)", battle.GetState())
 }
 
 func (c *RedisBattleTicketAuthorizer) authorizeModelB(

@@ -585,7 +585,15 @@ pandora_ds_grpc_call_duration_ms_bucket{service,method}
 ### 9.2 客户端崩溃
 
 - DS 检测 NetDriver 超时 60s → 销毁玩家 actor + 通知 player_locator
-- 客户端重启登录 → login → 颁发新票据 → 重连 Hub
+- 客户端重启后统一从 `Login` 恢复,但目的地由服务端权威 placement 决定,不是一律回 Hub:
+  - locator+roster 证明玩家仍处于 active `BATTLE(match_id)` → 现签新 Battle 票,直连原 Battle DS。
+  - 由 terminal/placement 权威证明已非 BATTLE → 按选角/Hub 分配链取得新 Hub 地址与一次性票据。
+  - placement 不可判定 → fail-closed 返回 unavailable,恢复后重试;不得降级签 Hub 票。仅“locator key
+    不存在”目前还不能排除 live roster,这是待修阻断而非非 BATTLE 证明。
+- 客户端断线不等于 Battle DS 心跳丢失。健康 Battle DS 会按整局 roster 继续续租 BATTLE;客户端本地
+  30s 重连计时不能作为“对局已结束”的依据。
+- 任意时点断线/切后台的完整审计、当前阻断反例和验收矩阵见
+  [`battle-reconnect.md`](battle-reconnect.md) §7。2026-07-14 复核状态为**未闭环**,不得宣称代码已全部完成。
 
 ### 9.3 网络抖动
 

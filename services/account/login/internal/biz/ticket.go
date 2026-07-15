@@ -259,6 +259,24 @@ func (u *TicketUsecase) IssueBattleDSTicketAtCell(
 	return result, nil
 }
 
+// InspectBattleRoute 实现 BattleTicketIssuer 的显式三态判定入口(P0 修复 2026-07-15):
+// 委托给 data.BattleRouteInspector(RedisBattleTicketAuthorizer 实现)。不签票、零副作用。
+// authorizer 未接/不支持三态检查 → UNKNOWN fail-closed(绝不退回把 ErrPermissionDeny 当终态)。
+func (u *TicketUsecase) InspectBattleRoute(ctx context.Context, playerID, matchID uint64) (data.BattleRouteState, error) {
+	if playerID == 0 || matchID == 0 {
+		return data.BattleRouteUnknown, errcode.New(errcode.ErrInvalidArg, "battle route check requires player and match")
+	}
+	if u == nil || u.battleAuthorizer == nil {
+		return data.BattleRouteUnknown, errcode.New(errcode.ErrUnavailable, "battle route roster authority unavailable")
+	}
+	inspector, ok := u.battleAuthorizer.(data.BattleRouteInspector)
+	if !ok {
+		return data.BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
+			"battle route authority does not support explicit terminal inspection")
+	}
+	return inspector.InspectBattleRoute(ctx, playerID, matchID)
+}
+
 // issueBattleDSTicketV2 用 v2 签发器签实例绑定 battle 票(RS256,方案 B)。
 func (u *TicketUsecase) issueBattleDSTicketV2(
 	ctx context.Context,
