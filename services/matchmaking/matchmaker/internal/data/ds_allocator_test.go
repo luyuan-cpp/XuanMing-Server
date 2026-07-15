@@ -3,7 +3,9 @@ package data
 import (
 	"testing"
 
+	"github.com/luyuancpp/pandora/pkg/placement"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
+	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/model"
 )
 
 func TestIsB1BoundBattleResponse(t *testing.T) {
@@ -30,7 +32,7 @@ func TestIsB1BoundBattleResponse(t *testing.T) {
 
 func TestSignBattleTicketWithoutSignerFailsClosed(t *testing.T) {
 	g := &GrpcDSAllocator{}
-	if _, err := g.SignBattleTicket(t.Context(), 42, 9001); err == nil {
+	if _, err := g.SignBattleTicket(t.Context(), 42, 9001, &model.BattleAllocation{}, placement.Binding{}); err == nil {
 		t.Fatal("SignBattleTicket() without any signer must fail closed")
 	}
 }

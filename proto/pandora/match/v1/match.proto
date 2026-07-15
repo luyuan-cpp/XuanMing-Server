@@ -26,6 +26,8 @@ service MatchService {
   // 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不带玩家 JWT,
   // 按 match_id(+ 兜底 player_ids)操作,非玩家鉴权路径。幂等:重复调用 / 已释放均安全。
   rpc ReleaseMatch(ReleaseMatchRequest) returns (ReleaseMatchResponse);
+  // 内部恢复权威读取：login 合并 placement 时使用，不直接暴露给客户端。
+  rpc ResolvePlayerMatchContext(ResolvePlayerMatchContextRequest) returns (ResolvePlayerMatchContextResponse);
 }
 
 enum MatchStage {
@@ -36,6 +38,44 @@ enum MatchStage {
   MATCH_STAGE_ALLOCATING  = 4;  // 拉 DS 中
   MATCH_STAGE_READY       = 5;  // DS 就绪,可以连
   MATCH_STAGE_FAILED      = 6;
+}
+
+// MatchAllocationPhase 是 ALLOCATING 阶段的持久推进游标。
+// MatchStage 决定客户端可见阶段；本枚举只供服务端 worker 在进程重启、RPC 取消后续跑。
+enum MatchAllocationPhase {
+  MATCH_ALLOCATION_PHASE_UNSPECIFIED = 0;
+  MATCH_ALLOCATION_PHASE_PENDING     = 1;  // 已由最后一次确认提交，等待 worker
+  MATCH_ALLOCATION_PHASE_REQUESTING  = 2;  // 可幂等重放 AllocateBattle(match_id)
+  MATCH_ALLOCATION_PHASE_COMPLETED   = 3;  // READY 已持久化
+  MATCH_ALLOCATION_PHASE_FAILED      = 4;  // 已明确失败并转 MATCH_STAGE_FAILED
+}
+
+// MatchStartPhase 是 StartMatch 持久 saga 的推进阶段。RPC 只负责落 ACCEPTED；
+// 后台 worker 完成票据主体、成员 claim 与最终入队，进程重启后可从任一阶段续跑。
+enum MatchStartPhase {
+  MATCH_START_PHASE_UNSPECIFIED  = 0;
+  MATCH_START_PHASE_ACCEPTED     = 1;
+  MATCH_START_PHASE_TICKET_READY = 2;
+  MATCH_START_PHASE_CLAIMING     = 3;
+  MATCH_START_PHASE_CLAIMS_READY = 4;
+  MATCH_START_PHASE_QUEUED       = 5;
+  MATCH_START_PHASE_COMPENSATING = 6;
+  MATCH_START_PHASE_FAILED       = 7;
+}
+
+enum PlayerMatchContextState {
+  PLAYER_MATCH_CONTEXT_STATE_UNSPECIFIED = 0; // UNKNOWN：读取错误/索引漂移/坏记录
+  PLAYER_MATCH_CONTEXT_STATE_NONE        = 1; // start index 与 player claim 均明确不存在
+  PLAYER_MATCH_CONTEXT_STATE_ACTIVE      = 2;
+}
+
+enum PlayerMatchResumeStage {
+  PLAYER_MATCH_RESUME_STAGE_UNSPECIFIED = 0;
+  PLAYER_MATCH_RESUME_STAGE_STARTING    = 1;
+  PLAYER_MATCH_RESUME_STAGE_QUEUED      = 2;
+  PLAYER_MATCH_RESUME_STAGE_CONFIRMING  = 3;
+  PLAYER_MATCH_RESUME_STAGE_ALLOCATING  = 4;
+  PLAYER_MATCH_RESUME_STAGE_READY       = 5;
 }
 
 message StartMatchRequest {
@@ -92,6 +132,22 @@ message ReleaseMatchRequest {
 
 message ReleaseMatchResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+message ResolvePlayerMatchContextRequest {
+  uint64 player_id = 1;
+}
+
+message ResolvePlayerMatchContextResponse {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerMatchContextState state = 2;
+  PlayerMatchResumeStage stage = 3;
+  uint64 ticket_id = 4;
+  uint64 match_id = 5;
+  string battle_ds_addr = 6;
+  string battle_ticket = 7;
+  uint64 placement_version = 8;
+  string placement_operation_id = 9;
 }
 
 message MatchProgress {
@@ -184,4 +240,57 @@ message MatchStorageRecord {
   // 9 reserved
   reserved 9;
   uint32                            map_id              = 10;  // 本局副本编号(从票据继承),透传到 AllocateBattle 选 DS 关卡
+  // durable allocation job（仅服务端存储，不直接返回客户端）。
+  // operation_id 是跨 matchmaker / placement 重试稳定的 UUIDv4 幂等键；旧记录为空时
+  // 由 worker 在 ALLOCATING 的 CAS 内生成并持久化，后续重试只能复用。
+  string                            allocation_operation_id = 11;
+  MatchAllocationPhase              allocation_phase       = 12;
+  uint32                            allocation_attempt      = 13;
+  int64                             allocation_next_attempt_at_ms = 14;
+  MatchBattleTargetStorageRecord    battle_target = 15;
+}
+
+message MatchPlayerPlacementBindingStorageRecord {
+  uint64 player_id = 1;
+  uint64 placement_version = 2;
+  string operation_id = 3;
+  uint64 source_match_id = 4;
+}
+
+message MatchBattleTargetStorageRecord {
+  string ds_addr = 1;
+  string ds_pod_name = 2;
+  string ds_instance_uid = 3;
+  uint32 ds_instance_epoch = 4;
+  string allocation_id = 5;
+  string release_track = 6;
+  repeated MatchPlayerPlacementBindingStorageRecord player_bindings = 7;
+}
+
+// MatchStartOperationStorageRecord 是 StartMatch 的 Redis 持久 saga。
+// operation_id / lease_token 均为 UUIDv4；lease 只防多 leader 重叠推进，不承载业务真相。
+message MatchStartOperationStorageRecord {
+  string                            operation_id             = 1;
+  uint64                            ticket_id                = 2;
+  uint64                            team_id                  = 3;
+  uint64                            captain_id               = 4;
+  repeated MatchMemberStorageRecord members                  = 5;
+  int32                             avg_mmr                  = 6;
+  uint32                            map_id                   = 7;
+  MatchStartPhase                   phase                    = 8;
+  repeated uint64                   claimed_player_ids       = 9;
+  uint32                            attempt                  = 10;
+  int64                             next_attempt_at_ms       = 11;
+  string                            lease_token              = 12;
+  int64                             lease_deadline_ms        = 13;
+  int64                             created_at_ms            = 14;
+}
+
+// MatchReleaseStorageRecord 是 battle_result→matchmaker 释放 outbox 的 payload。
+// MySQL 行以 match_id 唯一，重复结算会补建缺失行而不会重复释放新一局 claim。
+message MatchReleaseStorageRecord {
+  string          operation_id = 1;
+  uint64          match_id     = 2;
+  repeated uint64 player_ids    = 3;
+  int64           created_at_ms = 4;
 }

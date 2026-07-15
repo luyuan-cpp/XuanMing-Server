@@ -66,6 +66,15 @@ service LoginService {
       body: "*"
     };
   }
+
+  // GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
+  // 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
+  rpc GetResumeContext(GetResumeContextRequest) returns (GetResumeContextResponse) {
+    option (google.api.http) = {
+      post: "/v1/resume/context"
+      body: "*"
+    };
+  }
 }
 
 // ===== 登录 =====
@@ -110,6 +119,41 @@ message LoginResponse {
   // 客户端登录后进选角界面,用此值预选中上次角色;确认后调 SelectRole。
   // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
   uint32 selected_role_id = 11;
+  ResumeContext resume_context = 12;
+}
+
+enum ResumeRoute {
+  RESUME_ROUTE_UNSPECIFIED = 0;
+  RESUME_ROUTE_HUB = 1;
+  RESUME_ROUTE_BATTLE = 2;
+  RESUME_ROUTE_UNKNOWN = 3;
+}
+
+enum ResumeMatchStage {
+  RESUME_MATCH_STAGE_UNSPECIFIED = 0;
+  RESUME_MATCH_STAGE_NONE = 1;
+  RESUME_MATCH_STAGE_QUEUED = 2;
+  RESUME_MATCH_STAGE_CONFIRMING = 3;
+  RESUME_MATCH_STAGE_ALLOCATING = 4;
+  RESUME_MATCH_STAGE_READY = 5;
+  RESUME_MATCH_STAGE_RUNNING = 6;
+}
+
+message ResumeContext {
+  ResumeRoute route = 1;
+  uint64 match_id = 2;
+  ResumeMatchStage match_stage = 3;
+  uint64 placement_version = 4;
+  string operation_id = 5;
+}
+
+message GetResumeContextRequest {
+  string session_token = 1;
+}
+
+message GetResumeContextResponse {
+  pandora.common.v1.ErrCode code = 1;
+  ResumeContext context = 2;
 }
 
 message LogoutRequest {
@@ -157,12 +201,19 @@ message DSTicket {
   uint32 ds_instance_epoch    = 19;
   string allocation_id       = 20;
   string release_track       = 21;
+  // 版本化 placement lease；Hub strict admission 必须与当前 placement/assignment 精确相等。
+  uint64 placement_version   = 22;
+  string placement_operation_id = 23;
+  uint64 source_match_id     = 24;
 }
 
 message IssueDSTicketRequest {
   string session_token = 1;
   string ds_type       = 2;  // "hub" | "battle"
-  uint64 target_id     = 3;  // battle match_id,hub 为 0
+  // battle:目标 match_id；hub:从 Battle 返回时必须传 source_match_id，服务端仍会
+  // 与 durable placement + 签名 terminal/leave proof 精确核对，不能把本字段当权威。
+  // 已稳定在 Hub 的普通重签可传 0。
+  uint64 target_id     = 3;
 }
 
 message IssueDSTicketResponse {

@@ -14,10 +14,12 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/data"
+	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/model"
 )
 
 // ── 测试桩 ────────────────────────────────────────────────────────────────────
@@ -143,6 +145,16 @@ type fixture struct {
 	cfg     conf.MatchConf
 }
 
+type allowPlacement struct{}
+
+func (allowPlacement) PrepareBattlePlacement(_ context.Context, operationID string, _ uint64, playerIDs []uint64, _ *model.BattleAllocation) (map[uint64]placement.Binding, error) {
+	bindings := make(map[uint64]placement.Binding, len(playerIDs))
+	for _, playerID := range playerIDs {
+		bindings[playerID] = placement.Binding{Version: 1, OperationID: operationID}
+	}
+	return bindings, nil
+}
+
 func newFixture(t *testing.T, firstMatchID uint64) *fixture {
 	return newFixtureWith(t, firstMatchID, nil)
 }
@@ -169,7 +181,22 @@ func newFixtureWith(t *testing.T, firstMatchID uint64, mutate func(*conf.MatchCo
 	locator := newMockLocator()
 	idGen := &fakeIDGen{next: firstMatchID}
 	uc := NewMatchUsecase(repo, nil, pusher, NewStubDSAllocator("127.0.0.1:7777"), idGen, locator, c.Match)
+	uc.SetPlacementCoordinator(allowPlacement{})
 	return &fixture{repo: repo, pusher: pusher, locator: locator, uc: uc, cfg: c.Match}
+}
+
+func (f *fixture) advanceStarts(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if err := f.uc.advanceStartOperationsOnce(ctx); err != nil {
+		t.Fatalf("advanceStartOperationsOnce: %v", err)
+	}
+}
+
+func (f *fixture) advanceAllocations(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if err := f.uc.advanceAllocationsOnce(ctx); err != nil {
+		t.Fatalf("advanceAllocationsOnce: %v", err)
+	}
 }
 
 // seedTicket 写一张票据并声明其全体成员归属。
@@ -272,6 +299,7 @@ func TestStartMatch_FailOpenWhenLocatorUnavailable(t *testing.T) {
 	if id != 7003 {
 		t.Fatalf("StartMatch returned ticket %d, want 7003", id)
 	}
+	f.advanceStarts(t, ctx)
 	if _, found, _ := f.repo.GetTicket(ctx, 7003); !found {
 		t.Fatalf("ticket not written under fail-open")
 	}
@@ -337,6 +365,7 @@ func TestConfirmMatch_AllAccept_Ready(t *testing.T) {
 			t.Fatalf("confirm player %d: %v", i, err)
 		}
 	}
+	f.advanceAllocations(t, ctx)
 
 	m, found, _ := f.repo.GetMatch(ctx, 999)
 	if !found {
@@ -478,6 +507,7 @@ func TestLocatorState_MatchingThenBattle(t *testing.T) {
 			t.Fatalf("confirm player %d: %v", i, err)
 		}
 	}
+	f.advanceAllocations(t, ctx)
 	m, _, _ := f.repo.GetMatch(ctx, 999)
 	for i := uint64(1); i <= 10; i++ {
 		pod, ok := f.locator.battleOf(i)
@@ -547,6 +577,7 @@ func TestConfirmMatch_OfflineMember_FailsAndRequeues(t *testing.T) {
 			t.Fatalf("confirm player %d: %v", i, err)
 		}
 	}
+	f.advanceAllocations(t, ctx)
 
 	m, found, _ := f.repo.GetMatch(ctx, 999)
 	if !found || m.Stage != stageFailed {
@@ -589,6 +620,7 @@ func TestConfirmMatch_LivenessQueryError_ProceedsReady(t *testing.T) {
 			t.Fatalf("confirm player %d: %v", i, err)
 		}
 	}
+	f.advanceAllocations(t, ctx)
 	m, found, _ := f.repo.GetMatch(ctx, 999)
 	if !found || m.Stage != stageReady {
 		t.Fatalf("match stage = %v found=%v, want READY (liveness check skipped on error)", m.GetStage(), found)
@@ -683,6 +715,7 @@ func TestLivenessGate_DisabledByDefault_NoOfflineJudgement(t *testing.T) {
 			t.Fatalf("confirm player %d: %v", i, err)
 		}
 	}
+	f.advanceAllocations(t, ctx)
 	m, found, _ := f.repo.GetMatch(ctx, 999)
 	if !found || m.Stage != stageReady {
 		t.Fatalf("match stage = %v found=%v, want READY (liveness gate disabled)", m.GetStage(), found)
@@ -865,8 +898,8 @@ func TestExpireOnce_AllocatingWithinGrace_Kept(t *testing.T) {
 	}
 }
 
-// ALLOCATING 超宽限期(分配副本崩溃)→ 判失败,票据退回队列,玩家不再卡死。
-func TestExpireOnce_AllocatingBeyondGrace_Fails(t *testing.T) {
+// ALLOCATING 是 durable job；无论多久都不能用本地超时把外部未知结果推断为失败。
+func TestExpireOnce_AllocatingLongRunning_Kept(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 999)
 	// deadline 已过 61s > allocatingGrace(60s)
@@ -876,12 +909,12 @@ func TestExpireOnce_AllocatingBeyondGrace_Fails(t *testing.T) {
 		t.Fatalf("expireOnce: %v", err)
 	}
 	m, found, _ := f.repo.GetMatch(ctx, 999)
-	if !found || m.Stage != stageFailed {
-		t.Fatalf("stage = %v found=%v, want FAILED", m.GetStage(), found)
+	if !found || m.Stage != stageAllocating {
+		t.Fatalf("stage = %v found=%v, want ALLOCATING", m.GetStage(), found)
 	}
 	left, _ := f.repo.RangeQueueTickets(ctx)
-	if len(left) != 2 {
-		t.Fatalf("queue = %v, want 2 tickets requeued", left)
+	if len(left) != 0 {
+		t.Fatalf("queue = %v, want no speculative requeue", left)
 	}
 }
 
@@ -891,15 +924,17 @@ func TestOnAllConfirmed_LateReady_DoesNotOverrideFailed(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 999)
 	seedAllocatingMatch(t, ctx, f, 999, time.Now().UnixMilli()-61_000)
-	if err := f.uc.expireOnce(ctx); err != nil {
-		t.Fatalf("expireOnce: %v", err)
+	if err := f.repo.UpdateMatchWithLock(ctx, 999, f.cfg.OptimisticRetry, func(m *matchv1.MatchStorageRecord) error {
+		m.Stage = stageFailed
+		return nil
+	}, f.cfg.MatchTTL.Std()); err != nil {
+		t.Fatalf("set failed: %v", err)
 	}
-	m, _, _ := f.repo.GetMatch(ctx, 999)
-
-	// 迟到的 onAllConfirmed(拿的是失败前的 ALLOCATING 快照)
-	stale := cloneMatch(m)
+	stale, _, _ := f.repo.GetMatch(ctx, 999)
 	stale.Stage = stageAllocating
-	f.uc.onAllConfirmed(ctx, stale)
+	if err := f.uc.advanceAllocation(ctx, stale); err != nil {
+		t.Fatalf("advance stale: %v", err)
+	}
 
 	got, found, _ := f.repo.GetMatch(ctx, 999)
 	if !found || got.Stage != stageFailed {
@@ -982,6 +1017,7 @@ func TestStartMatch_HealsStaleClaim(t *testing.T) {
 	if id != 7010 {
 		t.Fatalf("ticket = %d, want 7010", id)
 	}
+	f.advanceStarts(t, ctx)
 	if got, found, _ := f.repo.GetPlayerTicket(ctx, captain); !found || got != 7010 {
 		t.Fatalf("claim = %d found=%v, want 7010", got, found)
 	}

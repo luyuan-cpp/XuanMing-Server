@@ -28,6 +28,9 @@ type BattleLocation struct {
 	InBattle   bool
 	MatchID    uint64
 	BattleAddr string // battle DS 直连地址(locator 的 battle_pod 存的就是 ds_addr)
+	// PresenceState is retained for conservative placement migration. MATCHING
+	// and BATTLE are never interpreted as NOT_BATTLE; UNSPECIFIED is UNKNOWN.
+	PresenceState locatorv1.LocationState
 }
 
 // LocationNotifier 给 login.biz 上报玩家"登录中"状态 + 查询玩家当前是否在战斗中。
@@ -93,11 +96,12 @@ func (n *GrpcLocationNotifier) GetBattleLocation(ctx context.Context, playerID u
 	loc := resp.GetLocation()
 	if loc.GetState() != locatorv1.LocationState_LOCATION_STATE_BATTLE ||
 		loc.GetMatchId() == 0 || loc.GetBattlePod() == "" {
-		return BattleLocation{}, nil
+		return BattleLocation{PresenceState: loc.GetState(), MatchID: loc.GetMatchId()}, nil
 	}
 	return BattleLocation{
 		InBattle:   true,
 		MatchID:    loc.GetMatchId(),
 		BattleAddr: loc.GetBattlePod(),
+		PresenceState: loc.GetState(),
 	}, nil
 }

@@ -17,10 +17,12 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/model"
 )
 
 // GrpcDSAllocator 用 ds_allocator 服务 gRPC client 实现 biz.DSAllocator。
@@ -63,7 +65,7 @@ func (g *GrpcDSAllocator) Close() error {
 // AllocateBattle 调 ds_allocator.AllocateBattle 拉战斗 DS,再为每个玩家签 battle DSTicket。
 // mapID 为本局副本编号(来自 match 记录):非 0 时按局透传给 ds_allocator 选副本地图;
 // 为 0(旧客户端 / 未选)时回退到静态默认 g.mapID,保持向后兼容。
-func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32) (string, map[uint64]string, error) {
+func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32) (*model.BattleAllocation, error) {
 	effectiveMapID := mapID
 	if effectiveMapID == 0 {
 		effectiveMapID = g.mapID
@@ -75,50 +77,50 @@ func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, pl
 		GameMode:  g.gameMode,
 	})
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK || resp.GetDsAddr() == "" {
-		return "", nil, errcode.New(errcode.ErrDSAllocationFailed,
+		return nil, errcode.New(errcode.ErrDSAllocationFailed,
 			"ds_allocator returned code=%d addr=%q for match %d", resp.GetCode(), resp.GetDsAddr(), matchID)
 	}
+	target, terr := battleTargetFromResponse(resp, matchID)
+	if terr != nil {
+		return nil, terr
+	}
+	allocation := &model.BattleAllocation{
+		Address: resp.GetDsAddr(),
+		Target: placement.Target{
+			PodName:       target.DSPodName,
+			InstanceUID:   target.DSInstanceUID,
+			InstanceEpoch: target.DSInstanceEpoch,
+			AllocationID:  target.AllocationID,
+			ReleaseTrack:  target.ReleaseTrack,
+		},
+	}
+	return allocation, nil
+}
 
+func (g *GrpcDSAllocator) SignBattleTickets(
+	ctx context.Context,
+	matchID uint64,
+	playerIDs []uint64,
+	allocation *model.BattleAllocation,
+	bindings map[uint64]placement.Binding,
+) (map[uint64]string, error) {
 	tickets := make(map[uint64]string, len(playerIDs))
-	if g.v2 != nil {
-		// v2(方案 B):票据绑死到 ds_allocator 权威快照里的唯一 DS 实例。
-		// 旧 ds_allocator 未回填实例身份时 fail-closed 拒签(绝不退回无绑定票)。
-		target, terr := battleTargetFromResponse(resp, matchID)
-		if terr != nil {
-			return "", nil, terr
+	for _, playerID := range playerIDs {
+		binding, ok := bindings[playerID]
+		if !ok || !binding.Complete() {
+			return nil, errcode.New(errcode.ErrDSAllocationFailed,
+				"missing placement binding for player %d match %d", playerID, matchID)
 		}
-		for _, pid := range playerIDs {
-			token, _, serr := g.v2.SignBattleTicket(pid, 0, 0, uuid.NewString(), target)
-			if serr != nil {
-				return "", nil, errcode.New(errcode.ErrDSAllocationFailed,
-					"sign v2 battle ticket for player %d match %d failed: %v", pid, matchID, serr)
-			}
-			tickets[pid] = token
+		token, err := g.SignBattleTicket(ctx, playerID, matchID, allocation, binding)
+		if err != nil {
+			return nil, err
 		}
-		return resp.GetDsAddr(), tickets, nil
+		tickets[playerID] = token
 	}
-	// 新 allocator 返回实例绑定字段，说明目标属于 B1 权威链路；此时未配置
-	// RS256 signer 必须拒绝，而不是悄悄降级签一张可跨实例复用的 HS256 票。
-	if isB1BoundBattleResponse(resp) {
-		return "", nil, errcode.New(errcode.ErrDSAllocationFailed,
-			"ds_allocator returned a B1-bound target but matchmaker has no RS256 DSTicket signer, match %d", matchID)
-	}
-	if g.signer == nil {
-		return "", nil, errcode.New(errcode.ErrDSAllocationFailed,
-			"matchmaker has no DSTicket signer, match %d", matchID)
-	}
-	for _, pid := range playerIDs {
-		token, _, serr := g.signer.SignDSTicket(pid, auth.DSTypeBattle, matchID, uuid.NewString())
-		if serr != nil {
-			return "", nil, errcode.New(errcode.ErrDSAllocationFailed,
-				"sign battle ticket for player %d match %d failed: %v", pid, matchID, serr)
-		}
-		tickets[pid] = token
-	}
-	return resp.GetDsAddr(), tickets, nil
+	return tickets, nil
 }
 
 func isB1BoundBattleResponse(resp *dsv1.AllocateBattleResponse) bool {
@@ -155,46 +157,22 @@ func battleTargetFromFields(
 	}, nil
 }
 
-// SignBattleTicket 给（重连 / 换设备的）玩家现签一张新的 battle DSTicket（新 jti）。
-// 实现 biz.DSAllocator：复用与 AllocateBattle 同一个 signer / 同样的 claims（dsType=battle + match_id），
-// 只是每次新 uuid jti。GetMatchProgress 在 READY 阶段下发它，支持换手机 / 掉线重连。
-//
-// v2 启用时：重连票同样必须带实例绑定。这里调用只读 ResolveBattleTarget；
-// ds_allocator 会在同一权威快照核验 ReadyAuthorized + roster membership，绝不创建
-// allocation claim 或调用 Agones。取不到完整身份时 fail-closed，绝不退回无绑定票。
-func (g *GrpcDSAllocator) SignBattleTicket(ctx context.Context, playerID, matchID uint64) (string, error) {
-	if g.v2 != nil {
-		resp, err := g.cli.ResolveBattleTarget(ctx, &dsv1.ResolveBattleTargetRequest{
-			MatchId: matchID, PlayerId: playerID,
-		})
-		if err != nil {
-			return "", errcode.New(errcode.ErrDSAllocationFailed,
-				"re-sign v2 battle ticket: 回查 DS 实例身份失败, player %d match %d: %v", playerID, matchID, err)
-		}
-		if resp.GetCode() != commonv1.ErrCode_OK {
-			return "", errcode.New(errcode.ErrDSAllocationFailed,
-				"re-sign v2 battle ticket: ds_allocator code=%d, player %d match %d", resp.GetCode(), playerID, matchID)
-		}
-		target, terr := battleTargetFromFields(resp.GetDsPodName(), resp.GetGameserverUid(),
-			resp.GetInstanceEpoch(), resp.GetAllocationId(), resp.GetReleaseTrack(), matchID)
-		if terr != nil {
-			return "", terr
-		}
-		token, _, serr := g.v2.SignBattleTicket(playerID, 0, 0, uuid.NewString(), target)
-		if serr != nil {
-			return "", errcode.New(errcode.ErrDSAllocationFailed,
-				"re-sign v2 battle ticket for player %d match %d failed: %v", playerID, matchID, serr)
-		}
-		return token, nil
-	}
-	if g.signer == nil {
+// SignBattleTicket 只使用 READY match 持久化的 exact target + per-player placement binding。
+// 不再临时回查一个缺 binding 的 roster 目标，也不允许降级 legacy HMAC 票。
+func (g *GrpcDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64, allocation *model.BattleAllocation, binding placement.Binding) (string, error) {
+	if g.v2 == nil || allocation == nil || !allocation.Target.CompleteBattle() || !binding.Complete() {
 		return "", errcode.New(errcode.ErrDSAllocationFailed,
-			"matchmaker has no DSTicket signer, player %d match %d", playerID, matchID)
+			"complete v2 target/placement binding required, player %d match %d", playerID, matchID)
 	}
-	token, _, err := g.signer.SignDSTicket(playerID, auth.DSTypeBattle, matchID, uuid.NewString())
+	target := auth.DSTicketTarget{
+		DSPodName: allocation.Target.PodName, DSInstanceUID: allocation.Target.InstanceUID,
+		DSInstanceEpoch: allocation.Target.InstanceEpoch, ReleaseTrack: allocation.Target.ReleaseTrack,
+		MatchID: matchID, AllocationID: allocation.Target.AllocationID, Placement: binding,
+	}
+	token, _, err := g.v2.SignBattleTicket(playerID, 0, 0, uuid.NewString(), target)
 	if err != nil {
 		return "", errcode.New(errcode.ErrDSAllocationFailed,
-			"re-sign battle ticket for player %d match %d failed: %v", playerID, matchID, err)
+			"sign bound v2 battle ticket for player %d match %d failed: %v", playerID, matchID, err)
 	}
 	return token, nil
 }

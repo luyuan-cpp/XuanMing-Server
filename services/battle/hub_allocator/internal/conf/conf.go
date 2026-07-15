@@ -231,6 +231,10 @@ type HubConf struct {
 	// LocatorAddr player_locator gRPC 地址(玩家切线护栏:战斗/匹配中禁切)。
 	// 弱依赖:留空则跳过位置检查(locator 抖动不硬阻断低危的大厅切线)。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
+	// PlacementMode: off -> shadow -> enforce staged rollout. Enforce requires LocatorAddr
+	// and makes Bind/Admission Commit a hard dependency.
+	PlacementMode string `yaml:"placement_mode,omitempty" json:"placement_mode,omitempty"`
+	PlacementHubTransferProofSecret string `yaml:"placement_hub_transfer_proof_secret,omitempty" json:"placement_hub_transfer_proof_secret,omitempty"`
 }
 
 // Defaults 填默认值。

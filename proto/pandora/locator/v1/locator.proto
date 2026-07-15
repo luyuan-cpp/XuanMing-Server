@@ -39,6 +39,20 @@ service PlayerLocatorService {
   // 只缩不涨(记录剩余 TTL 已小于 grace 时不动)。绝不立即置 OFFLINE:
   // grace 窗口内玩家重连 → PostLogin SetLocationHub 重写记录,状态自愈。
   rpc ReportDisconnect(ReportDisconnectRequest) returns (ReportDisconnectResponse);
+
+  // GetPlacement 读取不随 presence TTL 消失的玩家 DS 权威归属。记录缺失返回
+  // found=false（UNKNOWN），调用方不得把它解释成“已不在 Battle”。
+  rpc GetPlacement(GetPlacementRequest) returns (GetPlacementResponse);
+  // BeginPlacementTransition 以玩家 placement 单键为线性化点开始一次切换。
+  // 当前只开放 BATTLE->HUB，且必须携带显式 terminal/leave proof。
+  rpc BeginPlacementTransition(BeginPlacementTransitionRequest) returns (BeginPlacementTransitionResponse);
+  // BindPlacementTarget 把 allocator 选出的唯一 DS/assignment 绑定到同一 version+operation。
+  rpc BindPlacementTarget(BindPlacementTargetRequest) returns (BindPlacementTargetResponse);
+  // CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
+  rpc CommitPlacementAdmission(CommitPlacementAdmissionRequest) returns (CommitPlacementAdmissionResponse);
+  // BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
+  // 永远不是 bootstrap 证明，已有记录则只能同 operation 幂等重放。
+  rpc BootstrapPlacement(BootstrapPlacementRequest) returns (BootstrapPlacementResponse);
 }
 
 enum LocationState {
@@ -125,6 +139,137 @@ message ReportDisconnectResponse {
   // shrunk: 是否实际缩短了 TTL(false = 记录不存在 / 非 HUB 态 / pod 不匹配 /
   // 剩余 TTL 已更短,均属正常路径);仅观测用。
   bool shrunk = 2;
+}
+
+// PlacementRoute 是持久 placement 的逻辑路由；UNKNOWN 不是 HUB。
+enum PlacementRoute {
+  PLACEMENT_ROUTE_UNSPECIFIED = 0;
+  PLACEMENT_ROUTE_HUB = 1;
+  PLACEMENT_ROUTE_BATTLE = 2;
+}
+
+// PlacementTransitionState 区分已经提交的唯一归属与尚未 Admission 的切换。
+enum PlacementTransitionState {
+  PLACEMENT_TRANSITION_STATE_UNSPECIFIED = 0;
+  PLACEMENT_TRANSITION_STATE_STABLE = 1;
+  PLACEMENT_TRANSITION_STATE_PENDING = 2;
+}
+
+// PlacementProofType 是离开 Battle 的显式、可审计证明类型。
+enum PlacementProofType {
+  PLACEMENT_PROOF_TYPE_UNSPECIFIED = 0;
+  PLACEMENT_PROOF_TYPE_MATCH_TERMINAL = 1;
+  PLACEMENT_PROOF_TYPE_PLAYER_LEAVE = 2;
+  PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP = 3;
+  PLACEMENT_PROOF_TYPE_MATCH_START = 4;
+  PLACEMENT_PROOF_TYPE_HUB_TRANSFER = 5;
+}
+
+// PlayerPlacementStorageRecord 持久化在 Redis
+// `pandora:placement:{<player_id>}` protobuf value 中，无 Redis TTL。
+// read-modify-write 必须保留 unknown fields，version 只能通过 CAS 单调推进。
+message PlayerPlacementStorageRecord {
+  uint64 player_id = 1;
+  PlacementRoute current_route = 2;
+  PlacementRoute target_route = 3;
+  PlacementTransitionState transition_state = 4;
+  uint64 version = 5;
+  string operation_id = 6;
+  uint64 match_id = 7;
+  uint64 source_match_id = 8;
+  string ds_pod_name = 9;
+  string ds_instance_uid = 10;
+  string hub_assignment_id = 11;
+  int64 updated_at_ms = 12;
+  int64 lease_deadline_ms = 13;
+  PlacementProofType proof_type = 14;
+  string proof_id = 15;
+  string admission_id = 16;
+  uint64 target_match_id = 17;
+  uint32 ds_instance_epoch = 18;
+  string allocation_id = 19;
+  string release_track = 20;
+}
+
+message GetPlacementRequest {
+  uint64 player_id = 1;
+}
+
+message GetPlacementResponse {
+  pandora.common.v1.ErrCode code = 1;
+  bool found = 2;
+  PlayerPlacementStorageRecord placement = 3;
+}
+
+message BeginPlacementTransitionRequest {
+  uint64 player_id = 1;
+  uint64 expected_version = 2;
+  PlacementRoute target_route = 3;
+  string operation_id = 4;
+  uint64 source_match_id = 5;
+  PlacementProofType proof_type = 6;
+  string proof_id = 7;
+  int64 lease_deadline_ms = 8;
+  uint64 target_match_id = 9;
+  string proof_signature = 10;
+}
+
+message BeginPlacementTransitionResponse {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerPlacementStorageRecord placement = 2;
+}
+
+message BindPlacementTargetRequest {
+  uint64 player_id = 1;
+  uint64 placement_version = 2;
+  string operation_id = 3;
+  PlacementRoute target_route = 4;
+  string ds_pod_name = 5;
+  string ds_instance_uid = 6;
+  string hub_assignment_id = 7;
+  uint64 target_match_id = 8;
+  uint32 ds_instance_epoch = 9;
+  string allocation_id = 10;
+  string release_track = 11;
+}
+
+message BindPlacementTargetResponse {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerPlacementStorageRecord placement = 2;
+}
+
+message CommitPlacementAdmissionRequest {
+  uint64 player_id = 1;
+  uint64 placement_version = 2;
+  string operation_id = 3;
+  PlacementRoute target_route = 4;
+  string ds_pod_name = 5;
+  string ds_instance_uid = 6;
+  string hub_assignment_id = 7;
+  string admission_id = 8;
+  uint64 target_match_id = 9;
+  uint32 ds_instance_epoch = 10;
+  string allocation_id = 11;
+  string release_track = 12;
+}
+
+message CommitPlacementAdmissionResponse {
+  pandora.common.v1.ErrCode code = 1;
+  bool committed = 2;
+  PlayerPlacementStorageRecord placement = 3;
+}
+
+message BootstrapPlacementRequest {
+  uint64 player_id = 1;
+  string operation_id = 2;
+  string proof_id = 3;
+  string proof_signature = 4;
+  int64 lease_deadline_ms = 5;
+}
+
+message BootstrapPlacementResponse {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerPlacementStorageRecord placement = 2;
 }
 
 // PresenceStatus 是好友在线态的「粗粒度降采样」状态(§13.4.4)。

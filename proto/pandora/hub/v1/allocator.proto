@@ -51,6 +51,10 @@ message AssignHubRequest {
   // >0 时覆盖已存归属的 role_id(换角色重进);0 = 调用方不知角色,保留已存值。
   // uint32 配置表 ID(CfgRole.Id,非 snowflake 业务 ID,CLAUDE.md §9.12)。
   uint32 role_id   = 4;
+  // 版本化 placement lease。三项必须全有或全无；strict 模式下缺失即拒绝。
+  uint64 placement_version = 5;
+  string placement_operation_id = 6;
+  uint64 source_match_id = 7;
 }
 
 message AssignHubResponse {
@@ -59,6 +63,8 @@ message AssignHubResponse {
   string hub_ticket  = 3;  // JWT
   string hub_pod_name = 4;
   uint32 shard_id    = 5;
+  uint64 placement_version = 6;
+  string placement_operation_id = 7;
 }
 
 message ReleaseHubRequest {
@@ -338,6 +344,11 @@ message HubAssignmentStorageRecord {
   uint32 auth_writer_epoch = 14; // 分配时 active 凭据的 writer epoch
   // 玩家首次分配时持久化实际命中的发布轨；后续重登/切线/整合保持粘性。
   string release_track = 15;
+  // 归属与持久 placement transition 的精确绑定（additive）。
+  uint64 placement_version = 16;
+  string placement_operation_id = 17;
+  uint64 source_match_id = 18;
+  uint32 placement_proof_type = 19;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====
@@ -378,6 +389,10 @@ message AcknowledgeAdmissionRequest {
   // Hub DS 进程内单调递增连接序号；同一次 PostLogin 重试固定复用。
   // 新 owner 只有 admission_seq 更大时才能替换旧 owner，防迟到旧 ACK 反向夺回。
   uint64 admission_seq = 5;
+  // 来自 DS 已在线核验票据的 trusted claims；服务端仍会与 assignment/placement 权威复核。
+  uint64 placement_version = 6;
+  string placement_operation_id = 7;
+  uint64 source_match_id = 8;
 }
 
 message AcknowledgeAdmissionResponse {
@@ -385,6 +400,10 @@ message AcknowledgeAdmissionResponse {
   // true 表示同一 assignment 已经从 reservation 转为 connected ownership；
   // 响应丢失后以相同身份重试会幂等返回 true，不重复计数。
   bool admitted = 2;
+  // true 表示对应 version+operation 已通过最终 placement CAS，DS 才可打开 spawn gate。
+  bool placement_committed = 3;
+  uint64 placement_version = 4;
+  string placement_operation_id = 5;
 }
 
 // AcknowledgeDeparture 与 AcknowledgeAdmission 走同一 :8444 Hub DS callback 鉴权面。

@@ -18,6 +18,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 
@@ -52,7 +53,9 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 	if req.GetPlayerId() == 0 {
 		return &hubv1.AssignHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId())
+	res, err := s.uc.AssignHubWithPlacement(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId(),
+		placement.Binding{Version: req.GetPlacementVersion(), OperationID: req.GetPlacementOperationId(),
+			SourceMatchID: req.GetSourceMatchId()})
 	if err != nil {
 		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
 	}
@@ -62,6 +65,8 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 		HubTicket:  res.HubTicket,
 		HubPodName: res.HubPodName,
 		ShardId:    res.ShardID,
+		PlacementVersion: res.Placement.Version,
+		PlacementOperationId: res.Placement.OperationID,
 	}, nil
 }
 
@@ -173,12 +178,16 @@ func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.Acknow
 	if cred == nil {
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	result, err := s.uc.AcknowledgeAdmission(ctx, req.GetPlayerId(), req.GetAssignmentId(),
-		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), hubCredentialFromGuard(cred))
+	result, err := s.uc.AcknowledgeAdmissionWithPlacement(ctx, req.GetPlayerId(), req.GetAssignmentId(),
+		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(),
+		placement.Binding{Version: req.GetPlacementVersion(), OperationID: req.GetPlacementOperationId(),
+			SourceMatchID: req.GetSourceMatchId()}, hubCredentialFromGuard(cred))
 	if err != nil {
 		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
 	}
-	return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted}, nil
+	return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted,
+		PlacementCommitted: result.PlacementCommitted, PlacementVersion: result.Placement.Version,
+		PlacementOperationId: result.Placement.OperationID}, nil
 }
 
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 返回 OK+departed=false，

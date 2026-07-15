@@ -24,6 +24,7 @@ type LocatorService struct {
 	locatorv1.UnimplementedPlayerLocatorServiceServer
 
 	uc *biz.LocatorUsecase
+	placementUC *biz.PlacementUsecase
 
 	// dsGuard DS 回调令牌守卫(审核 P1 #1);nil = 未启用(mode=off)。
 	dsGuard *middleware.DSCallbackGuard
@@ -37,6 +38,8 @@ type LocatorService struct {
 func NewLocatorService(uc *biz.LocatorUsecase) *LocatorService {
 	return &LocatorService{uc: uc}
 }
+
+func (s *LocatorService) SetPlacementUsecase(uc *biz.PlacementUsecase) { s.placementUC = uc }
 
 // SetDSCallbackGuard 注入 DS 回调令牌守卫(main 按 ds_auth 配置构建;nil 表示 off)。
 func (s *LocatorService) SetDSCallbackGuard(g *middleware.DSCallbackGuard) { s.dsGuard = g }
@@ -191,6 +194,81 @@ func (s *LocatorService) ClearLocation(ctx context.Context, req *locatorv1.Clear
 		return &locatorv1.ClearLocationResponse{Code: toProtoCode(err)}, nil
 	}
 	return &locatorv1.ClearLocationResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+func (s *LocatorService) GetPlacement(ctx context.Context, req *locatorv1.GetPlacementRequest) (*locatorv1.GetPlacementResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.GetPlacementResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	rec, found, err := s.placementUC.Get(ctx, req.GetPlayerId())
+	if err != nil {
+		return &locatorv1.GetPlacementResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.GetPlacementResponse{Code: commonv1.ErrCode_OK, Found: found, Placement: rec}, nil
+}
+
+func (s *LocatorService) BeginPlacementTransition(ctx context.Context, req *locatorv1.BeginPlacementTransitionRequest) (*locatorv1.BeginPlacementTransitionResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.BeginPlacementTransitionResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	rec, err := s.placementUC.Begin(ctx, biz.BeginPlacementInput{
+		PlayerID: req.GetPlayerId(), ExpectedVersion: req.GetExpectedVersion(), TargetRoute: req.GetTargetRoute(),
+		OperationID: req.GetOperationId(), SourceMatchID: req.GetSourceMatchId(), ProofType: req.GetProofType(),
+		ProofID: req.GetProofId(), LeaseDeadlineMs: req.GetLeaseDeadlineMs(), TargetMatchID: req.GetTargetMatchId(),
+		ProofSignature: req.GetProofSignature(),
+	})
+	if err != nil {
+		return &locatorv1.BeginPlacementTransitionResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.BeginPlacementTransitionResponse{Code: commonv1.ErrCode_OK, Placement: rec}, nil
+}
+
+func (s *LocatorService) BindPlacementTarget(ctx context.Context, req *locatorv1.BindPlacementTargetRequest) (*locatorv1.BindPlacementTargetResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.BindPlacementTargetResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	rec, err := s.placementUC.Bind(ctx, biz.BindPlacementInput{
+		PlayerID: req.GetPlayerId(), Version: req.GetPlacementVersion(), OperationID: req.GetOperationId(),
+		TargetRoute: req.GetTargetRoute(), PodName: req.GetDsPodName(), InstanceUID: req.GetDsInstanceUid(),
+		AssignmentID: req.GetHubAssignmentId(), TargetMatchID: req.GetTargetMatchId(),
+		InstanceEpoch: req.GetDsInstanceEpoch(), AllocationID: req.GetAllocationId(), ReleaseTrack: req.GetReleaseTrack(),
+	})
+	if err != nil {
+		return &locatorv1.BindPlacementTargetResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.BindPlacementTargetResponse{Code: commonv1.ErrCode_OK, Placement: rec}, nil
+}
+
+func (s *LocatorService) CommitPlacementAdmission(ctx context.Context, req *locatorv1.CommitPlacementAdmissionRequest) (*locatorv1.CommitPlacementAdmissionResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.CommitPlacementAdmissionResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	rec, err := s.placementUC.Commit(ctx, biz.CommitPlacementInput{
+		BindPlacementInput: biz.BindPlacementInput{
+			PlayerID: req.GetPlayerId(), Version: req.GetPlacementVersion(), OperationID: req.GetOperationId(),
+			TargetRoute: req.GetTargetRoute(), PodName: req.GetDsPodName(), InstanceUID: req.GetDsInstanceUid(),
+			AssignmentID: req.GetHubAssignmentId(), TargetMatchID: req.GetTargetMatchId(),
+			InstanceEpoch: req.GetDsInstanceEpoch(), AllocationID: req.GetAllocationId(), ReleaseTrack: req.GetReleaseTrack(),
+		}, AdmissionID: req.GetAdmissionId(),
+	})
+	if err != nil {
+		return &locatorv1.CommitPlacementAdmissionResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.CommitPlacementAdmissionResponse{Code: commonv1.ErrCode_OK, Committed: true, Placement: rec}, nil
+}
+
+func (s *LocatorService) BootstrapPlacement(ctx context.Context, req *locatorv1.BootstrapPlacementRequest) (*locatorv1.BootstrapPlacementResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.BootstrapPlacementResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	rec, err := s.placementUC.Bootstrap(ctx, biz.BootstrapPlacementInput{
+		PlayerID: req.GetPlayerId(), OperationID: req.GetOperationId(), ProofID: req.GetProofId(),
+		ProofSignature: req.GetProofSignature(), LeaseDeadlineMs: req.GetLeaseDeadlineMs(),
+	})
+	if err != nil {
+		return &locatorv1.BootstrapPlacementResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.BootstrapPlacementResponse{Code: commonv1.ErrCode_OK, Placement: rec}, nil
 }
 
 // toProtoCode 把 pkg/errcode 转成 proto enum(跟 login 一致)。

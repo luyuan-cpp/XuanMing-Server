@@ -20,6 +20,7 @@ import (
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
 // HubAssignment 是 AssignHub 的产出(client 视角最小字段)。
@@ -28,6 +29,7 @@ type HubAssignment struct {
 	HubTicket  string // hub_allocator 签的 hub DSTicket(JWT)
 	HubPodName string
 	ShardID    uint32
+	Placement placement.Binding
 }
 
 // HubAssigner 给 login.biz 分配大厅 DS 分片。
@@ -37,6 +39,11 @@ type HubAssignment struct {
 // hub 票据 claim 并更新归属镜像;0 = 未选角/保留 allocator 已存值。
 type HubAssigner interface {
 	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*HubAssignment, error)
+}
+
+type PlacementHubAssigner interface {
+	AssignHubWithPlacement(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32,
+		binding placement.Binding) (*HubAssignment, error)
 }
 
 // GrpcHubAssigner 实现 HubAssigner,内嵌 grpc client。
@@ -59,11 +66,19 @@ func NewGrpcHubAssigner(conn *grpc.ClientConn) *GrpcHubAssigner {
 //
 // 登录时玩家尚未组队,teamID 一般为 0;region 由 login 配置给出(空 = 让 allocator 选最空分片)。
 func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*HubAssignment, error) {
+	return a.AssignHubWithPlacement(ctx, playerID, region, teamID, roleID, placement.Binding{})
+}
+
+func (a *GrpcHubAssigner) AssignHubWithPlacement(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32,
+	binding placement.Binding) (*HubAssignment, error) {
 	req := &hubv1.AssignHubRequest{
 		PlayerId: playerID,
 		Region:   region,
 		TeamId:   teamID,
 		RoleId:   roleID,
+		PlacementVersion: binding.Version,
+		PlacementOperationId: binding.OperationID,
+		SourceMatchId: binding.SourceMatchID,
 	}
 	resp, err := a.client.AssignHub(ctx, req)
 	if err != nil {
@@ -77,5 +92,7 @@ func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region
 		HubTicket:  resp.GetHubTicket(),
 		HubPodName: resp.GetHubPodName(),
 		ShardID:    resp.GetShardId(),
+		Placement: placement.Binding{Version: resp.GetPlacementVersion(),
+			OperationID: resp.GetPlacementOperationId(), SourceMatchID: binding.SourceMatchID},
 	}, nil
 }

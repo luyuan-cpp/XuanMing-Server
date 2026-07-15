@@ -41,6 +41,10 @@ type fakeRepo struct {
 	terminalDeleteErr         error
 	terminalMarkErr           error
 	terminalMarkCommitThenErr bool
+	matchReleaseOutbox        []data.MatchReleaseRecord
+	nextMatchReleaseID        uint64
+	matchReleaseDeferErr      error
+	matchReleaseDeleteErr     error
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{store: map[uint64]*battlev1.BattleResult{}} }
@@ -51,7 +55,8 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 		return false, r.saveErr
 	}
 	if _, ok := r.store[result.GetMatchId()]; ok {
-		return true, nil // 幂等命中(两路出箱都不写)
+		r.ensureFakeMatchRelease(result.GetMatchId(), r.store[result.GetMatchId()].GetStats())
+		return true, nil // 幂等命中会恢复缺失 release outbox，其它出箱不重复
 	}
 	r.store[result.GetMatchId()] = proto.Clone(result).(*battlev1.BattleResult)
 	for _, o := range outbox {
@@ -75,7 +80,25 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 		rec.CreatedAtMs = time.Now().UnixMilli()
 		r.terminalOutbox = append(r.terminalOutbox, rec)
 	}
+	r.ensureFakeMatchRelease(result.GetMatchId(), result.GetStats())
 	return false, nil
+}
+
+func (r *fakeRepo) ensureFakeMatchRelease(matchID uint64, stats []*battlev1.PlayerStats) {
+	for _, rec := range r.matchReleaseOutbox {
+		if rec.MatchID == matchID {
+			return
+		}
+	}
+	r.nextMatchReleaseID++
+	playerIDs := make([]uint64, 0, len(stats))
+	for _, stat := range stats {
+		playerIDs = append(playerIDs, stat.GetPlayerId())
+	}
+	r.matchReleaseOutbox = append(r.matchReleaseOutbox, data.MatchReleaseRecord{
+		ID: r.nextMatchReleaseID, OperationID: "00000000-0000-4000-8000-000000000001",
+		MatchID: matchID, PlayerIDs: playerIDs, CreatedAtMs: time.Now().UnixMilli(),
+	})
 }
 
 func (r *fakeRepo) GetResult(_ context.Context, matchID uint64) (*battlev1.BattleResult, bool, error) {
@@ -185,6 +208,47 @@ func (r *fakeRepo) MarkTerminalReleaseReleased(_ context.Context, id uint64, rel
 	return false, nil
 }
 
+func (r *fakeRepo) FetchMatchReleaseOutbox(_ context.Context, limit int, nowMs int64) ([]data.MatchReleaseRecord, error) {
+	out := make([]data.MatchReleaseRecord, 0, len(r.matchReleaseOutbox))
+	for _, rec := range r.matchReleaseOutbox {
+		if rec.NextAttemptAtMs <= nowMs {
+			copyRec := rec
+			copyRec.PlayerIDs = append([]uint64(nil), rec.PlayerIDs...)
+			out = append(out, copyRec)
+		}
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) DeferMatchReleaseOutbox(_ context.Context, id uint64, nextAttemptAtMs int64) error {
+	if r.matchReleaseDeferErr != nil {
+		return r.matchReleaseDeferErr
+	}
+	for i := range r.matchReleaseOutbox {
+		if r.matchReleaseOutbox[i].ID == id {
+			r.matchReleaseOutbox[i].AttemptCount++
+			r.matchReleaseOutbox[i].NextAttemptAtMs = nextAttemptAtMs
+		}
+	}
+	return nil
+}
+
+func (r *fakeRepo) DeleteMatchReleaseOutbox(_ context.Context, id uint64) error {
+	if r.matchReleaseDeleteErr != nil {
+		return r.matchReleaseDeleteErr
+	}
+	for i, rec := range r.matchReleaseOutbox {
+		if rec.ID == id {
+			r.matchReleaseOutbox = append(r.matchReleaseOutbox[:i], r.matchReleaseOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
 // fakePusher 捕获 player.update 事件;failFirst>0 时前 failFirst 次推送返错(模拟 Kafka 不可用),
 // failAt>0 时第 failAt 次调用单次返错(模拟一批中途失败)。
 type fakePusher struct {
@@ -192,6 +256,20 @@ type fakePusher struct {
 	failFirst int
 	failAt    int
 	calls     int
+}
+
+type fakeMatchReleaser struct {
+	calls int
+	err   error
+	match uint64
+	ids   []uint64
+}
+
+func (r *fakeMatchReleaser) ReleaseMatch(_ context.Context, matchID uint64, playerIDs []uint64) error {
+	r.calls++
+	r.match = matchID
+	r.ids = append([]uint64(nil), playerIDs...)
+	return r.err
 }
 
 type capturedPush struct {
@@ -644,6 +722,47 @@ func TestOutboxNilPusherNoLoss(t *testing.T) {
 	}
 	if len(repo.outbox) != 4 {
 		t.Fatalf("nil pusher must not lose outbox, got %d", len(repo.outbox))
+	}
+}
+
+func TestMatchReleaseOutboxRetriesAndACKsOnlySuccess(t *testing.T) {
+	releaser := &fakeMatchReleaser{err: errors.New("matchmaker unavailable")}
+	uc, repo := reportFour(t, nil)
+	uc.releaser = releaser
+	if len(repo.matchReleaseOutbox) != 1 {
+		t.Fatalf("match release outbox rows=%d want=1", len(repo.matchReleaseOutbox))
+	}
+	if n, err := uc.publishMatchReleaseBatch(context.Background()); err == nil || n != 0 {
+		t.Fatalf("failed release must retain row: n=%d err=%v", n, err)
+	}
+	if len(repo.matchReleaseOutbox) != 1 || repo.matchReleaseOutbox[0].AttemptCount != 1 {
+		t.Fatalf("failed release row lost/not deferred: %+v", repo.matchReleaseOutbox)
+	}
+
+	// 让测试行重新到期并恢复下游；明确成功后才 ACK。
+	repo.matchReleaseOutbox[0].NextAttemptAtMs = 0
+	releaser.err = nil
+	if n, err := uc.publishMatchReleaseBatch(context.Background()); err != nil || n != 1 {
+		t.Fatalf("successful release: n=%d err=%v", n, err)
+	}
+	if len(repo.matchReleaseOutbox) != 0 {
+		t.Fatalf("successful release must ACK row: %+v", repo.matchReleaseOutbox)
+	}
+	if releaser.match != 700 || len(releaser.ids) != 4 {
+		t.Fatalf("release payload wrong: match=%d ids=%v", releaser.match, releaser.ids)
+	}
+}
+
+func TestIdempotentReplayRestoresMissingMatchReleaseOutbox(t *testing.T) {
+	uc, repo := reportFour(t, nil)
+	repo.matchReleaseOutbox = nil // 模拟历史 best-effort 已丢释放任务
+	result := proto.Clone(repo.store[700]).(*battlev1.BattleResult)
+	already, err := uc.ReportResult(context.Background(), result)
+	if err != nil || !already {
+		t.Fatalf("idempotent replay: already=%v err=%v", already, err)
+	}
+	if len(repo.matchReleaseOutbox) != 1 || repo.matchReleaseOutbox[0].MatchID != 700 {
+		t.Fatalf("idempotent replay did not restore release row: %+v", repo.matchReleaseOutbox)
 	}
 }
 

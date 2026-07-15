@@ -281,6 +281,7 @@ func main() {
 	// publisher/consumer 都会产生外部副作用；capability 未取得前禁止启动。
 	go uc.RunOutboxPublisher(pubCtx)
 	go uc.RunDropPublisher(pubCtx)
+	go uc.RunMatchReleasePublisher(pubCtx)
 	if terminalRelay != nil {
 		go uc.RunTerminalReleasePublisher(pubCtx)
 	}

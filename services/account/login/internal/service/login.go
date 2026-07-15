@@ -77,7 +77,22 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		MatchId:      res.MatchID,
 		// 选角权威化(2026-07-08):玩家当前已选角色(0=从未选过),客户端选角界面预选中用。
 		SelectedRoleId: res.SelectedRoleID,
+		ResumeContext: resumeContextToProto(res.Resume),
 	}, nil
+}
+
+func (s *LoginService) GetResumeContext(ctx context.Context, req *loginv1.GetResumeContextRequest) (*loginv1.GetResumeContextResponse, error) {
+	out, err := s.loginUC.GetResumeContext(ctx, req.GetSessionToken())
+	if err != nil {
+		return &loginv1.GetResumeContextResponse{Code: toProtoCode(err)}, nil
+	}
+	return &loginv1.GetResumeContextResponse{Code: commonv1.ErrCode_OK, Context: resumeContextToProto(out)}, nil
+}
+
+func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
+	return &loginv1.ResumeContext{Route: in.Route, MatchId: in.MatchID,
+		MatchStage: in.MatchStage, PlacementVersion: in.PlacementVersion,
+		OperationId: in.OperationID}
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。
@@ -128,7 +143,10 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 	// + 全新一次性票据。结算返回大厅必须走这条路,以应对 Hub DS 被 Agones 重建/换端口/换分片
 	// (客户端登录时缓存的旧地址会失效)。battle 票据仍由 ticketUC 仅签发(地址来自 matchmaker)。
 	if req.GetDsType() == "hub" {
-		addr, ticket, _, err := s.loginUC.ResolveHubEndpoint(ctx, playerID)
+		// target_id carries the source match while returning from Battle. The
+		// server checks it against durable placement and a signed terminal/leave
+		// proof; it is never itself treated as authority.
+		addr, ticket, _, err := s.loginUC.ResolveHubEndpointFromMatch(ctx, playerID, req.GetTargetId())
 		if err != nil {
 			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
 		}
@@ -214,6 +232,9 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 			DsInstanceEpoch: claims.DSInstanceEpoch,
 			AllocationId:    claims.AllocationID,
 			ReleaseTrack:    claims.ReleaseTrack,
+			PlacementVersion: claims.PlacementVersion,
+			PlacementOperationId: claims.PlacementOperationID,
+			SourceMatchId: claims.SourceMatchID,
 		},
 	}, nil
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
 // Config 是 login 服务的完整配置。
@@ -92,6 +93,10 @@ type LoginConf struct {
 	// addr 为空 → 不调,回退自签 hub 票据 + MockHubDSAddr(便于本机不起 hub_allocator 也能跑通 login)。
 	Hub HubClientConf `yaml:"hub,omitempty" json:"hub,omitempty"`
 
+	// Matchmaker is the canonical durable match/start-operation reader used by
+	// resume routing and conservative placement backfill. Enforce requires it.
+	Matchmaker MatchmakerClientConf `yaml:"matchmaker,omitempty" json:"matchmaker,omitempty"`
+
 	// AllowedRoleIDs 是选角白名单(选角权威化 2026-07-08,SelectRole RPC 服务端校验)。
 	// 对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
 	// 非空 = 严格白名单;空 = fail-closed,SelectRole 一律拒绝(防改包客户端签任意 role_id
@@ -101,6 +106,10 @@ type LoginConf struct {
 	// DevAllowAnyRole 开发期选角宽松开关(默认 false,⚠️ 严禁上生产)。
 	// 为 true 且 AllowedRoleIDs 为空时,SelectRole 只校验 role_id 非 0(配合客户端配置表快速迭代)。
 	DevAllowAnyRole bool `yaml:"dev_allow_any_role,omitempty" json:"dev_allow_any_role,omitempty"`
+	// PlacementMode is rolled out off -> shadow -> enforce. Enforce makes durable
+	// placement mandatory for Hub assignment, ticket verification, and resume routing.
+	PlacementMode string `yaml:"placement_mode,omitempty" json:"placement_mode,omitempty"`
+	PlacementBootstrapProofSecret string `yaml:"placement_bootstrap_proof_secret,omitempty" json:"placement_bootstrap_proof_secret,omitempty"`
 }
 
 // LocatorClientConf 是 login 调 player_locator 的客户端参数。
@@ -118,6 +127,10 @@ type HubClientConf struct {
 
 	// Region 传给 AssignHub 的大厅区服(空 = 让 hub_allocator 选最空分片)。
 	Region string `yaml:"region,omitempty" json:"region,omitempty"`
+}
+
+type MatchmakerClientConf struct {
+	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 }
 
 // JWTConf 是 login 签发 SessionToken / DSTicket 的 JWT 参数。
@@ -213,6 +226,11 @@ func (c *Config) Validate() error {
 		if len(c.Login.HubAssignmentFence.EtcdEndpoints) == 0 || c.Login.HubAssignmentFence.KeysetRevision == "" {
 			return fmt.Errorf("login.require_hub_assignment_binding=true requires login.hub_assignment_fence etcd endpoints/keyset revision")
 		}
+	}
+	if mode, err := placement.ParseMode(c.Login.PlacementMode); err != nil {
+		return err
+	} else if mode == placement.ModeEnforce && c.Login.Matchmaker.Addr == "" {
+		return fmt.Errorf("login.placement_mode=enforce requires login.matchmaker.addr")
 	}
 	return nil
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/killswitch"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
@@ -149,6 +150,29 @@ func main() {
 		defer func() { _ = closeCell() }()
 	}
 	svc := service.NewLocatorService(uc)
+	placementRepo := data.NewRedisPlacementRepo(rdb)
+	proofSecret := func(env, fallback string) string { if v := os.Getenv(env); v != "" { return v }; return fallback }
+	var proofVerifier biz.PlacementProofVerifier
+	proofKeys := map[int32]string{
+		placement.ProofAccountBootstrap: proofSecret("PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET", cfg.Locator.PlacementAccountBootstrapProofSecret),
+		placement.ProofMatchStart: proofSecret("PANDORA_PLACEMENT_MATCH_START_SECRET", cfg.Locator.PlacementMatchStartProofSecret),
+		placement.ProofMatchTerminal: proofSecret("PANDORA_PLACEMENT_BATTLE_EXIT_SECRET", cfg.Locator.PlacementBattleExitProofSecret),
+		placement.ProofPlayerLeave: proofSecret("PANDORA_PLACEMENT_BATTLE_EXIT_SECRET", cfg.Locator.PlacementBattleExitProofSecret),
+		placement.ProofHubTransfer: proofSecret("PANDORA_PLACEMENT_HUB_TRANSFER_SECRET", cfg.Locator.PlacementHubTransferProofSecret),
+	}
+	keyring, err := placement.NewProofKeyring(proofKeys)
+	if err != nil {
+		helper.Errorw("msg", "placement_proof_keyring_invalid", "err", err)
+		os.Exit(1)
+	}
+	if len(proofKeys) > 0 {
+		proofVerifier = keyring
+		if proofKeys[placement.ProofAccountBootstrap] != "" || proofKeys[placement.ProofMatchStart] != "" ||
+			proofKeys[placement.ProofMatchTerminal] != "" || proofKeys[placement.ProofHubTransfer] != "" {
+			helper.Infow("msg", "placement_proof_verifier_ready")
+		}
+	}
+	svc.SetPlacementUsecase(biz.NewPlacementUsecase(placementRepo, proofVerifier))
 
 	// 4.2 DS 回调令牌守卫(审核 P1 #1):校验 Hub DS 经 :8444 的 SetLocation/ReportDisconnect。
 	// mode=off(默认)→ dsGuard 为 nil,不校验。

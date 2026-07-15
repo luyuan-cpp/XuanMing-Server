@@ -34,6 +34,7 @@ import (
 	jwt "github.com/golang-jwt/jwt/v5"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
 // DSType 区分票据签的是哪种 DS。
@@ -97,6 +98,9 @@ type DSTicketClaims struct {
 	DSCredentialJTI string `json:"ds_credential_jti,omitempty"`
 	HubAssignmentID string `json:"hub_assignment_id,omitempty"`
 	DSWriterEpoch   uint32 `json:"ds_writer_epoch,omitempty"`
+	PlacementVersion uint64 `json:"placement_version,omitempty"`
+	PlacementOperationID string `json:"placement_operation_id,omitempty"`
+	SourceMatchID uint64 `json:"source_match_id,omitempty"`
 }
 
 // DSTicketBinding 是 hub DSTicket 的实例/归属绑定。零值表示旧兼容票据；非零时六项必须完整，
@@ -109,6 +113,9 @@ type DSTicketBinding struct {
 	CredentialJTI   string
 	HubAssignmentID string
 	WriterEpoch     uint32
+	PlacementVersion uint64
+	PlacementOperationID string
+	SourceMatchID uint64
 }
 
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
@@ -439,6 +446,9 @@ func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, re
 		DSCredentialJTI: binding.CredentialJTI,
 		HubAssignmentID: binding.HubAssignmentID,
 		DSWriterEpoch:   binding.WriterEpoch,
+		PlacementVersion: binding.PlacementVersion,
+		PlacementOperationID: binding.PlacementOperationID,
+		SourceMatchID: binding.SourceMatchID,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	str, err := t.SignedString(s.cfg.Secret)
@@ -450,12 +460,17 @@ func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, re
 
 func (b DSTicketBinding) empty() bool {
 	return b.DSPodName == "" && b.DSInstanceUID == "" && b.ProtocolEpoch == 0 &&
-		b.CredentialGen == 0 && b.CredentialJTI == "" && b.HubAssignmentID == "" && b.WriterEpoch == 0
+		b.CredentialGen == 0 && b.CredentialJTI == "" && b.HubAssignmentID == "" && b.WriterEpoch == 0 &&
+		b.PlacementVersion == 0 && b.PlacementOperationID == "" && b.SourceMatchID == 0
 }
 
 func (b DSTicketBinding) complete() bool {
-	return b.DSPodName != "" && b.DSInstanceUID != "" && b.ProtocolEpoch > 0 &&
-		b.CredentialGen > 0 && b.CredentialJTI != "" && b.HubAssignmentID != "" && b.WriterEpoch > 0
+	if b.DSPodName == "" || b.DSInstanceUID == "" || b.ProtocolEpoch == 0 ||
+		b.CredentialGen == 0 || b.CredentialJTI == "" || b.HubAssignmentID == "" || b.WriterEpoch == 0 {
+		return false
+	}
+	return (b.PlacementVersion == 0 && b.PlacementOperationID == "" && b.SourceMatchID == 0) ||
+		(b.PlacementVersion > 0 && placement.ValidOperationID(b.PlacementOperationID))
 }
 
 // SignDSCallback 签发 DS 回调服务令牌(方向:DS→后端;详见 DSCallbackClaims 注释)。
@@ -682,6 +697,9 @@ func (v *Verifier) VerifyDSTicket(token string) (*DSTicketClaims, error) {
 		CredentialJTI:   claims.DSCredentialJTI,
 		HubAssignmentID: claims.HubAssignmentID,
 		WriterEpoch:     claims.DSWriterEpoch,
+		PlacementVersion: claims.PlacementVersion,
+		PlacementOperationID: claims.PlacementOperationID,
+		SourceMatchID: claims.SourceMatchID,
 	}
 	if !binding.empty() && (claims.DSType != string(DSTypeHub) || !binding.complete()) {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket has incomplete or invalid hub binding")

@@ -30,11 +30,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchService_StartMatch_FullMethodName       = "/pandora.match.v1.MatchService/StartMatch"
-	MatchService_CancelMatch_FullMethodName      = "/pandora.match.v1.MatchService/CancelMatch"
-	MatchService_ConfirmMatch_FullMethodName     = "/pandora.match.v1.MatchService/ConfirmMatch"
-	MatchService_GetMatchProgress_FullMethodName = "/pandora.match.v1.MatchService/GetMatchProgress"
-	MatchService_ReleaseMatch_FullMethodName     = "/pandora.match.v1.MatchService/ReleaseMatch"
+	MatchService_StartMatch_FullMethodName                = "/pandora.match.v1.MatchService/StartMatch"
+	MatchService_CancelMatch_FullMethodName               = "/pandora.match.v1.MatchService/CancelMatch"
+	MatchService_ConfirmMatch_FullMethodName              = "/pandora.match.v1.MatchService/ConfirmMatch"
+	MatchService_GetMatchProgress_FullMethodName          = "/pandora.match.v1.MatchService/GetMatchProgress"
+	MatchService_ReleaseMatch_FullMethodName              = "/pandora.match.v1.MatchService/ReleaseMatch"
+	MatchService_ResolvePlayerMatchContext_FullMethodName = "/pandora.match.v1.MatchService/ResolvePlayerMatchContext"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -50,6 +51,8 @@ type MatchServiceClient interface {
 	// 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不带玩家 JWT,
 	// 按 match_id(+ 兜底 player_ids)操作,非玩家鉴权路径。幂等:重复调用 / 已释放均安全。
 	ReleaseMatch(ctx context.Context, in *ReleaseMatchRequest, opts ...grpc.CallOption) (*ReleaseMatchResponse, error)
+	// 内部恢复权威读取：login 合并 placement 时使用，不直接暴露给客户端。
+	ResolvePlayerMatchContext(ctx context.Context, in *ResolvePlayerMatchContextRequest, opts ...grpc.CallOption) (*ResolvePlayerMatchContextResponse, error)
 }
 
 type matchServiceClient struct {
@@ -110,6 +113,16 @@ func (c *matchServiceClient) ReleaseMatch(ctx context.Context, in *ReleaseMatchR
 	return out, nil
 }
 
+func (c *matchServiceClient) ResolvePlayerMatchContext(ctx context.Context, in *ResolvePlayerMatchContextRequest, opts ...grpc.CallOption) (*ResolvePlayerMatchContextResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolvePlayerMatchContextResponse)
+	err := c.cc.Invoke(ctx, MatchService_ResolvePlayerMatchContext_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations should embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -123,6 +136,8 @@ type MatchServiceServer interface {
 	// 后端内部接口(battle_result 结算落库后调用),不经 Envoy / 不带玩家 JWT,
 	// 按 match_id(+ 兜底 player_ids)操作,非玩家鉴权路径。幂等:重复调用 / 已释放均安全。
 	ReleaseMatch(context.Context, *ReleaseMatchRequest) (*ReleaseMatchResponse, error)
+	// 内部恢复权威读取：login 合并 placement 时使用，不直接暴露给客户端。
+	ResolvePlayerMatchContext(context.Context, *ResolvePlayerMatchContextRequest) (*ResolvePlayerMatchContextResponse, error)
 }
 
 // UnimplementedMatchServiceServer should be embedded to have
@@ -146,6 +161,9 @@ func (UnimplementedMatchServiceServer) GetMatchProgress(context.Context, *GetMat
 }
 func (UnimplementedMatchServiceServer) ReleaseMatch(context.Context, *ReleaseMatchRequest) (*ReleaseMatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReleaseMatch not implemented")
+}
+func (UnimplementedMatchServiceServer) ResolvePlayerMatchContext(context.Context, *ResolvePlayerMatchContextRequest) (*ResolvePlayerMatchContextResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolvePlayerMatchContext not implemented")
 }
 func (UnimplementedMatchServiceServer) testEmbeddedByValue() {}
 
@@ -257,6 +275,24 @@ func _MatchService_ReleaseMatch_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_ResolvePlayerMatchContext_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolvePlayerMatchContextRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ResolvePlayerMatchContext(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ResolvePlayerMatchContext_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ResolvePlayerMatchContext(ctx, req.(*ResolvePlayerMatchContextRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -283,6 +319,10 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseMatch",
 			Handler:    _MatchService_ReleaseMatch_Handler,
+		},
+		{
+			MethodName: "ResolvePlayerMatchContext",
+			Handler:    _MatchService_ResolvePlayerMatchContext_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

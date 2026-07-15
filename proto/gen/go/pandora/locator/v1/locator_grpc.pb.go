@@ -25,14 +25,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlayerLocatorService_SetLocation_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/SetLocation"
-	PlayerLocatorService_GetLocation_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/GetLocation"
-	PlayerLocatorService_BatchGetLocation_FullMethodName    = "/pandora.locator.v1.PlayerLocatorService/BatchGetLocation"
-	PlayerLocatorService_SubscribePresence_FullMethodName   = "/pandora.locator.v1.PlayerLocatorService/SubscribePresence"
-	PlayerLocatorService_UnsubscribePresence_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
-	PlayerLocatorService_ClearLocation_FullMethodName       = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
-	PlayerLocatorService_RefreshHubLocations_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/RefreshHubLocations"
-	PlayerLocatorService_ReportDisconnect_FullMethodName    = "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
+	PlayerLocatorService_SetLocation_FullMethodName              = "/pandora.locator.v1.PlayerLocatorService/SetLocation"
+	PlayerLocatorService_GetLocation_FullMethodName              = "/pandora.locator.v1.PlayerLocatorService/GetLocation"
+	PlayerLocatorService_BatchGetLocation_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/BatchGetLocation"
+	PlayerLocatorService_SubscribePresence_FullMethodName        = "/pandora.locator.v1.PlayerLocatorService/SubscribePresence"
+	PlayerLocatorService_UnsubscribePresence_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
+	PlayerLocatorService_ClearLocation_FullMethodName            = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
+	PlayerLocatorService_RefreshHubLocations_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/RefreshHubLocations"
+	PlayerLocatorService_ReportDisconnect_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
+	PlayerLocatorService_GetPlacement_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/GetPlacement"
+	PlayerLocatorService_BeginPlacementTransition_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/BeginPlacementTransition"
+	PlayerLocatorService_BindPlacementTarget_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/BindPlacementTarget"
+	PlayerLocatorService_CommitPlacementAdmission_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/CommitPlacementAdmission"
+	PlayerLocatorService_BootstrapPlacement_FullMethodName       = "/pandora.locator.v1.PlayerLocatorService/BootstrapPlacement"
 )
 
 // PlayerLocatorServiceClient is the client API for PlayerLocatorService service.
@@ -68,6 +73,19 @@ type PlayerLocatorServiceClient interface {
 	// 只缩不涨(记录剩余 TTL 已小于 grace 时不动)。绝不立即置 OFFLINE:
 	// grace 窗口内玩家重连 → PostLogin SetLocationHub 重写记录,状态自愈。
 	ReportDisconnect(ctx context.Context, in *ReportDisconnectRequest, opts ...grpc.CallOption) (*ReportDisconnectResponse, error)
+	// GetPlacement 读取不随 presence TTL 消失的玩家 DS 权威归属。记录缺失返回
+	// found=false（UNKNOWN），调用方不得把它解释成“已不在 Battle”。
+	GetPlacement(ctx context.Context, in *GetPlacementRequest, opts ...grpc.CallOption) (*GetPlacementResponse, error)
+	// BeginPlacementTransition 以玩家 placement 单键为线性化点开始一次切换。
+	// 当前只开放 BATTLE->HUB，且必须携带显式 terminal/leave proof。
+	BeginPlacementTransition(ctx context.Context, in *BeginPlacementTransitionRequest, opts ...grpc.CallOption) (*BeginPlacementTransitionResponse, error)
+	// BindPlacementTarget 把 allocator 选出的唯一 DS/assignment 绑定到同一 version+operation。
+	BindPlacementTarget(ctx context.Context, in *BindPlacementTargetRequest, opts ...grpc.CallOption) (*BindPlacementTargetResponse, error)
+	// CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
+	CommitPlacementAdmission(ctx context.Context, in *CommitPlacementAdmissionRequest, opts ...grpc.CallOption) (*CommitPlacementAdmissionResponse, error)
+	// BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
+	// 永远不是 bootstrap 证明，已有记录则只能同 operation 幂等重放。
+	BootstrapPlacement(ctx context.Context, in *BootstrapPlacementRequest, opts ...grpc.CallOption) (*BootstrapPlacementResponse, error)
 }
 
 type playerLocatorServiceClient struct {
@@ -158,6 +176,56 @@ func (c *playerLocatorServiceClient) ReportDisconnect(ctx context.Context, in *R
 	return out, nil
 }
 
+func (c *playerLocatorServiceClient) GetPlacement(ctx context.Context, in *GetPlacementRequest, opts ...grpc.CallOption) (*GetPlacementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlacementResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_GetPlacement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) BeginPlacementTransition(ctx context.Context, in *BeginPlacementTransitionRequest, opts ...grpc.CallOption) (*BeginPlacementTransitionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginPlacementTransitionResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_BeginPlacementTransition_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) BindPlacementTarget(ctx context.Context, in *BindPlacementTargetRequest, opts ...grpc.CallOption) (*BindPlacementTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindPlacementTargetResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_BindPlacementTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) CommitPlacementAdmission(ctx context.Context, in *CommitPlacementAdmissionRequest, opts ...grpc.CallOption) (*CommitPlacementAdmissionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitPlacementAdmissionResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_CommitPlacementAdmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerLocatorServiceClient) BootstrapPlacement(ctx context.Context, in *BootstrapPlacementRequest, opts ...grpc.CallOption) (*BootstrapPlacementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BootstrapPlacementResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_BootstrapPlacement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerLocatorServiceServer is the server API for PlayerLocatorService service.
 // All implementations should embed UnimplementedPlayerLocatorServiceServer
 // for forward compatibility.
@@ -191,6 +259,19 @@ type PlayerLocatorServiceServer interface {
 	// 只缩不涨(记录剩余 TTL 已小于 grace 时不动)。绝不立即置 OFFLINE:
 	// grace 窗口内玩家重连 → PostLogin SetLocationHub 重写记录,状态自愈。
 	ReportDisconnect(context.Context, *ReportDisconnectRequest) (*ReportDisconnectResponse, error)
+	// GetPlacement 读取不随 presence TTL 消失的玩家 DS 权威归属。记录缺失返回
+	// found=false（UNKNOWN），调用方不得把它解释成“已不在 Battle”。
+	GetPlacement(context.Context, *GetPlacementRequest) (*GetPlacementResponse, error)
+	// BeginPlacementTransition 以玩家 placement 单键为线性化点开始一次切换。
+	// 当前只开放 BATTLE->HUB，且必须携带显式 terminal/leave proof。
+	BeginPlacementTransition(context.Context, *BeginPlacementTransitionRequest) (*BeginPlacementTransitionResponse, error)
+	// BindPlacementTarget 把 allocator 选出的唯一 DS/assignment 绑定到同一 version+operation。
+	BindPlacementTarget(context.Context, *BindPlacementTargetRequest) (*BindPlacementTargetResponse, error)
+	// CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
+	CommitPlacementAdmission(context.Context, *CommitPlacementAdmissionRequest) (*CommitPlacementAdmissionResponse, error)
+	// BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
+	// 永远不是 bootstrap 证明，已有记录则只能同 operation 幂等重放。
+	BootstrapPlacement(context.Context, *BootstrapPlacementRequest) (*BootstrapPlacementResponse, error)
 }
 
 // UnimplementedPlayerLocatorServiceServer should be embedded to have
@@ -223,6 +304,21 @@ func (UnimplementedPlayerLocatorServiceServer) RefreshHubLocations(context.Conte
 }
 func (UnimplementedPlayerLocatorServiceServer) ReportDisconnect(context.Context, *ReportDisconnectRequest) (*ReportDisconnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportDisconnect not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) GetPlacement(context.Context, *GetPlacementRequest) (*GetPlacementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlacement not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) BeginPlacementTransition(context.Context, *BeginPlacementTransitionRequest) (*BeginPlacementTransitionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BeginPlacementTransition not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) BindPlacementTarget(context.Context, *BindPlacementTargetRequest) (*BindPlacementTargetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BindPlacementTarget not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) CommitPlacementAdmission(context.Context, *CommitPlacementAdmissionRequest) (*CommitPlacementAdmissionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitPlacementAdmission not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) BootstrapPlacement(context.Context, *BootstrapPlacementRequest) (*BootstrapPlacementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BootstrapPlacement not implemented")
 }
 func (UnimplementedPlayerLocatorServiceServer) testEmbeddedByValue() {}
 
@@ -388,6 +484,96 @@ func _PlayerLocatorService_ReportDisconnect_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerLocatorService_GetPlacement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlacementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).GetPlacement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_GetPlacement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).GetPlacement(ctx, req.(*GetPlacementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_BeginPlacementTransition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPlacementTransitionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).BeginPlacementTransition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_BeginPlacementTransition_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).BeginPlacementTransition(ctx, req.(*BeginPlacementTransitionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_BindPlacementTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindPlacementTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).BindPlacementTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_BindPlacementTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).BindPlacementTarget(ctx, req.(*BindPlacementTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_CommitPlacementAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitPlacementAdmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).CommitPlacementAdmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_CommitPlacementAdmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).CommitPlacementAdmission(ctx, req.(*CommitPlacementAdmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlayerLocatorService_BootstrapPlacement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BootstrapPlacementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).BootstrapPlacement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_BootstrapPlacement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).BootstrapPlacement(ctx, req.(*BootstrapPlacementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerLocatorService_ServiceDesc is the grpc.ServiceDesc for PlayerLocatorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -426,6 +612,26 @@ var PlayerLocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportDisconnect",
 			Handler:    _PlayerLocatorService_ReportDisconnect_Handler,
+		},
+		{
+			MethodName: "GetPlacement",
+			Handler:    _PlayerLocatorService_GetPlacement_Handler,
+		},
+		{
+			MethodName: "BeginPlacementTransition",
+			Handler:    _PlayerLocatorService_BeginPlacementTransition_Handler,
+		},
+		{
+			MethodName: "BindPlacementTarget",
+			Handler:    _PlayerLocatorService_BindPlacementTarget_Handler,
+		},
+		{
+			MethodName: "CommitPlacementAdmission",
+			Handler:    _PlayerLocatorService_CommitPlacementAdmission_Handler,
+		},
+		{
+			MethodName: "BootstrapPlacement",
+			Handler:    _PlayerLocatorService_BootstrapPlacement_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

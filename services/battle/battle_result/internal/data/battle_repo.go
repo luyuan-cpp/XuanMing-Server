@@ -18,8 +18,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
+	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 )
 
 // OutboxRecord 是一条待发布的 player.update 事务出箱记录(W4 ⑨,不变量 §4)。
@@ -72,6 +76,18 @@ type TerminalReleaseRecord struct {
 	CreatedAtMs  int64
 }
 
+// MatchReleaseRecord 是 battle_result→matchmaker 的持久事务 outbox 行。
+// payload 是 MatchReleaseStorageRecord；调用明确成功才 ACK 删除，未知/失败只延期。
+type MatchReleaseRecord struct {
+	ID              uint64
+	OperationID     string
+	MatchID         uint64
+	PlayerIDs       []uint64
+	AttemptCount    uint32
+	NextAttemptAtMs int64
+	CreatedAtMs     int64
+}
+
 // BattleRepo 是 battle_result 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type BattleRepo interface {
 	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox +
@@ -102,6 +118,9 @@ type BattleRepo interface {
 	MarkTerminalReleaseReleased(ctx context.Context, id uint64, releasedAtMs int64) (bool, error)
 	// DeleteTerminalReleaseOutbox 只在 released 行的 finalize-only RPC 明确成功后 ACK。
 	DeleteTerminalReleaseOutbox(ctx context.Context, id uint64) error
+	FetchMatchReleaseOutbox(ctx context.Context, limit int, nowMs int64) ([]MatchReleaseRecord, error)
+	DeferMatchReleaseOutbox(ctx context.Context, id uint64, nextAttemptAtMs int64) error
+	DeleteMatchReleaseOutbox(ctx context.Context, id uint64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -137,7 +156,21 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	)
 	if err != nil {
 		if isDupErr(err) {
-			// 幂等命中:同 match_id 已落库,本次跳过(不变量 §2)
+			// 幂等重放仍须恢复可能缺失的 match release outbox。玩家列表只信已落库
+			// battle_player_stats，不信本次可能被篡改/不完整的重复 payload。
+			playerIDs, qerr := loadMatchPlayerIDsTx(ctx, tx, result.GetMatchId())
+			if qerr != nil {
+				return false, errcode.New(errcode.ErrBattleResultDBWrite,
+					"load idempotent match release players match=%d: %v", result.GetMatchId(), qerr)
+			}
+			if ierr := insertMatchReleaseOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, time.Now().UnixMilli()); ierr != nil {
+				return false, errcode.New(errcode.ErrBattleResultDBWrite,
+					"restore match release outbox match=%d: %v", result.GetMatchId(), ierr)
+			}
+			if cerr := tx.Commit(); cerr != nil {
+				return false, errcode.New(errcode.ErrBattleResultDBWrite,
+					"commit idempotent match release match=%d: %v", result.GetMatchId(), cerr)
+			}
 			return true, nil
 		}
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert battles match=%d: %v", result.GetMatchId(), err)
@@ -217,10 +250,57 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		}
 	}
 
+	playerIDs := make([]uint64, 0, len(result.GetStats()))
+	for _, stat := range result.GetStats() {
+		if stat.GetPlayerId() != 0 {
+			playerIDs = append(playerIDs, stat.GetPlayerId())
+		}
+	}
+	if err := insertMatchReleaseOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, nowMs); err != nil {
+		return false, errcode.New(errcode.ErrBattleResultDBWrite,
+			"insert match release outbox match=%d: %v", result.GetMatchId(), err)
+	}
+
 	if cerr := tx.Commit(); cerr != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
 	}
 	return false, nil
+}
+
+func loadMatchPlayerIDsTx(ctx context.Context, tx *sql.Tx, matchID uint64) ([]uint64, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT player_id FROM battle_player_stats WHERE match_id = ? ORDER BY player_id ASC`, matchID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var playerIDs []uint64
+	for rows.Next() {
+		var playerID uint64
+		if err := rows.Scan(&playerID); err != nil {
+			return nil, err
+		}
+		playerIDs = append(playerIDs, playerID)
+	}
+	return playerIDs, rows.Err()
+}
+
+func insertMatchReleaseOutboxTx(ctx context.Context, tx *sql.Tx, matchID uint64, playerIDs []uint64, nowMs int64) error {
+	record := &matchv1.MatchReleaseStorageRecord{
+		OperationId: uuid.NewString(),
+		MatchId:     matchID,
+		PlayerIds:   playerIDs,
+		CreatedAtMs: nowMs,
+	}
+	payload, err := proto.Marshal(record)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO match_release_outbox
+(match_id, payload, next_attempt_at_ms, attempt_count, created_at_ms)
+VALUES (?, ?, 0, 0, ?)
+ON DUPLICATE KEY UPDATE match_id = VALUES(match_id)`, matchID, payload, nowMs)
+	return err
 }
 
 // FetchOutbox 按 id 升序取最多 limit 条待发布出箱记录(FIFO 保序)。
@@ -371,6 +451,87 @@ func (r *MySQLBattleRepo) DeleteTerminalReleaseOutbox(ctx context.Context, id ui
 	// 两者都按幂等 no-op。PK 保证 >1 是结构/驱动异常，必须 fail-closed。
 	if affected > 1 {
 		return errcode.New(errcode.ErrInternal, "delete terminal release id=%d affected=%d", id, affected)
+	}
+	return nil
+}
+
+func (r *MySQLBattleRepo) FetchMatchReleaseOutbox(ctx context.Context, limit int, nowMs int64) ([]MatchReleaseRecord, error) {
+	if limit <= 0 {
+		limit = 128
+	}
+	if nowMs <= 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT id, payload, attempt_count, next_attempt_at_ms, created_at_ms
+FROM match_release_outbox
+WHERE next_attempt_at_ms <= ?
+ORDER BY next_attempt_at_ms ASC, id ASC
+LIMIT ?`, nowMs, limit)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "query match release outbox: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]MatchReleaseRecord, 0, limit)
+	for rows.Next() {
+		var (
+			rec     MatchReleaseRecord
+			payload []byte
+		)
+		if err := rows.Scan(&rec.ID, &payload, &rec.AttemptCount, &rec.NextAttemptAtMs, &rec.CreatedAtMs); err != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan match release outbox: %v", err)
+		}
+		storage := &matchv1.MatchReleaseStorageRecord{}
+		if err := proto.Unmarshal(payload, storage); err != nil {
+			return nil, errcode.New(errcode.ErrInternal, "decode match release outbox id=%d: %v", rec.ID, err)
+		}
+		if storage.GetMatchId() == 0 || storage.GetOperationId() == "" {
+			return nil, errcode.New(errcode.ErrInternal, "invalid match release outbox id=%d", rec.ID)
+		}
+		rec.OperationID = storage.GetOperationId()
+		rec.MatchID = storage.GetMatchId()
+		rec.PlayerIDs = append([]uint64(nil), storage.GetPlayerIds()...)
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate match release outbox: %v", err)
+	}
+	return out, nil
+}
+
+func (r *MySQLBattleRepo) DeferMatchReleaseOutbox(ctx context.Context, id uint64, nextAttemptAtMs int64) error {
+	if id == 0 || nextAttemptAtMs <= 0 {
+		return errcode.New(errcode.ErrInvalidArg, "match release defer requires id/time")
+	}
+	res, err := r.db.ExecContext(ctx, `UPDATE match_release_outbox
+SET attempt_count = attempt_count + 1, next_attempt_at_ms = ?
+WHERE id = ?`, nextAttemptAtMs, id)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "defer match release outbox id=%d: %v", id, err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "defer match release rows affected id=%d: %v", id, err)
+	}
+	if affected > 1 {
+		return errcode.New(errcode.ErrInternal, "defer match release id=%d affected=%d", id, affected)
+	}
+	return nil
+}
+
+func (r *MySQLBattleRepo) DeleteMatchReleaseOutbox(ctx context.Context, id uint64) error {
+	if id == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "match release outbox id required")
+	}
+	res, err := r.db.ExecContext(ctx, `DELETE FROM match_release_outbox WHERE id = ?`, id)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "delete match release outbox id=%d: %v", id, err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "delete match release rows affected id=%d: %v", id, err)
+	}
+	if affected > 1 {
+		return errcode.New(errcode.ErrInternal, "delete match release id=%d affected=%d", id, affected)
 	}
 	return nil
 }

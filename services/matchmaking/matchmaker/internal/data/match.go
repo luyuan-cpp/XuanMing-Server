@@ -16,6 +16,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -51,6 +53,13 @@ func activeKeyFor(namespace string) string {
 	return "pandora:match:" + namespace + ":active"
 }
 
+func startActiveKeyFor(namespace string) string {
+	if namespace == "" {
+		return "pandora:match:start:active"
+	}
+	return "pandora:match:" + namespace + ":start:active"
+}
+
 // CreateMatch 中 activeKey ZADD 的有界重试参数:matchKey 已 SET 成功后,ZADD 幂等,
 // 用短退避吸收 Redis 瞬时抖动,耗尽才删 matchKey 回滚(见 CreateMatch 注释)。
 const (
@@ -65,6 +74,12 @@ const (
 func ticketKey(ticketID uint64) string { return fmt.Sprintf("pandora:match:ticket:%d", ticketID) }
 func matchKey(matchID uint64) string   { return fmt.Sprintf("pandora:match:{%d}", matchID) }
 func playerKey(playerID uint64) string { return fmt.Sprintf("pandora:match:player:%d", playerID) }
+func startOperationKey(ticketID uint64) string {
+	return fmt.Sprintf("pandora:match:start:{%d}", ticketID)
+}
+func startPlayerKey(playerID uint64) string {
+	return fmt.Sprintf("pandora:match:start:player:%d", playerID)
+}
 
 // ── 接口 ──────────────────────────────────────────────────────────────────────
 
@@ -115,6 +130,20 @@ type MatchRepo interface {
 	// RangeQueueTickets 按 avg_mmr 升序返回 queue 中全部 ticket_id。
 	RangeQueueTickets(ctx context.Context) ([]uint64, error)
 
+	// CreateStartOperation 持久化 StartMatch saga 后登记派生 due 索引。operation record 是权威；
+	// 索引写失败可由跨 Redis Cluster 全 master 的 reconciler 重建。
+	CreateStartOperation(ctx context.Context, op *matchv1.MatchStartOperationStorageRecord, ttl time.Duration) error
+	GetStartOperation(ctx context.Context, ticketID uint64) (*matchv1.MatchStartOperationStorageRecord, bool, error)
+	UpdateStartOperationWithLock(ctx context.Context, ticketID uint64, maxRetry int, fn func(*matchv1.MatchStartOperationStorageRecord) error, ttl time.Duration) error
+	EnsureStartActive(ctx context.Context, ticketID uint64, scoreMs int64) error
+	RangeDueStartOperations(ctx context.Context, nowMs int64) ([]uint64, error)
+	RemoveStartActive(ctx context.Context, ticketID uint64) error
+	DeleteStartOperation(ctx context.Context, ticketID uint64) error
+	ScanStartOperationIDs(ctx context.Context, count int64) ([]uint64, error)
+	ClaimStartPlayer(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) (existing uint64, claimed bool, err error)
+	GetStartPlayerOperation(ctx context.Context, playerID uint64) (ticketID uint64, found bool, err error)
+	DeleteStartPlayerIfMatches(ctx context.Context, playerID, ticketID uint64) error
+
 	// CreateMatch 写 match proto bytes(TTL=matchTTL)并 ZADD 进 active(score=confirm_deadline_ms)。
 	CreateMatch(ctx context.Context, match *matchv1.MatchStorageRecord, matchTTL time.Duration) error
 	// GetMatch 读 match。not found 返 (nil, false, nil)。
@@ -123,6 +152,13 @@ type MatchRepo interface {
 	UpdateMatchWithLock(ctx context.Context, matchID uint64, maxRetry int, fn func(*matchv1.MatchStorageRecord) error, matchTTL time.Duration) error
 	// RemoveActive 把 match 移出 active ZSET(确认期结束,不再超时扫描)。
 	RemoveActive(ctx context.Context, matchID uint64) error
+	// EnsureActive 幂等重建 active 索引。canonical match record 是权威，ZSET 只是可重建索引。
+	EnsureActive(ctx context.Context, matchID uint64, scoreMs int64) error
+	// RangeActiveMatches 返回 active 索引当前全部 match_id，供 durable allocation worker 推进。
+	RangeActiveMatches(ctx context.Context) ([]uint64, error)
+	// ScanMatchIDs 遍历 Redis Cluster 全部 master 的 canonical match records，供 reconciler
+	// 修复丢失 active 索引；不能用 UniversalClient.Scan（它在 Cluster 只扫一个节点）。
+	ScanMatchIDs(ctx context.Context, count int64) ([]uint64, error)
 	// ExpireMatch 改短 match key TTL(终态保留供客户端查询)并移出 active。
 	ExpireMatch(ctx context.Context, matchID uint64, ttl time.Duration) error
 	// DeleteMatch 硬删 match 镜像并移出 active ZSET(对局结算/废弃后释放撮合状态)。
@@ -138,6 +174,7 @@ type RedisMatchRepo struct {
 	rdb       redis.UniversalClient
 	queueKey  string // 按 game_mode 命名空间化的 queue 索引 ZSET
 	activeKey string // 按 game_mode 命名空间化的 active 索引 ZSET
+	startKey  string // StartMatch durable saga 的 due 索引 ZSET
 }
 
 // NewRedisMatchRepo 构造 RedisMatchRepo。
@@ -149,6 +186,7 @@ func NewRedisMatchRepo(rdb redis.UniversalClient, namespace string) *RedisMatchR
 		rdb:       rdb,
 		queueKey:  queueKeyFor(namespace),
 		activeKey: activeKeyFor(namespace),
+		startKey:  startActiveKeyFor(namespace),
 	}
 }
 
@@ -403,6 +441,213 @@ func (r *RedisMatchRepo) RangeQueueTickets(ctx context.Context) ([]uint64, error
 	return out, nil
 }
 
+// --- StartMatch durable saga ---
+
+func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.MatchStartOperationStorageRecord, ttl time.Duration) error {
+	payload, err := marshalStartOperation(op)
+	if err != nil {
+		return err
+	}
+	key := startOperationKey(op.GetTicketId())
+	ok, err := r.rdb.SetNX(ctx, key, payload, ttl).Result()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		existing, found, gerr := r.GetStartOperation(ctx, op.GetTicketId())
+		if gerr != nil {
+			return gerr
+		}
+		if !found || existing.GetOperationId() != op.GetOperationId() {
+			return errcode.New(errcode.ErrMatchConcurrent, "start operation ticket %d already exists", op.GetTicketId())
+		}
+	}
+
+	// player→start-op 是 Resume/并发 Start 的派生索引。record 已先持久化，所以这里即使
+	// Redis 瞬态失败也按“已受理”返回，由 saga/reconciler 重建；明确撞上另一 operation
+	// 则把本 op 持久改为 COMPENSATING，绝不让 caller 收到冲突后它又偷偷入队。
+	for _, member := range op.GetMembers() {
+		existing, claimed, cerr := r.ClaimStartPlayer(ctx, member.GetPlayerId(), op.GetTicketId(), ttl)
+		if cerr != nil {
+			break
+		}
+		if !claimed && existing != op.GetTicketId() {
+			op.Phase = matchv1.MatchStartPhase_MATCH_START_PHASE_COMPENSATING
+			failedPayload, merr := marshalStartOperation(op)
+			if merr == nil {
+				_ = r.rdb.Set(ctx, key, failedPayload, ttl).Err()
+			}
+			_ = r.rdb.ZAdd(ctx, r.startKey, redis.Z{Score: float64(time.Now().UnixMilli()), Member: op.GetTicketId()}).Err()
+			return errcode.New(errcode.ErrMatchAlreadyMatching,
+				"player %d already has start operation %d", member.GetPlayerId(), existing)
+		}
+	}
+
+	// record 已经是可恢复的 canonical 接受点。due 索引失败时不回滚 record，也不能向
+	// caller 谎报未受理；全 master reconciler 会把它补回。这里做与 CreateMatch 相同的有界重试。
+	z := redis.Z{Score: float64(op.GetNextAttemptAtMs()), Member: op.GetTicketId()}
+	var zerr error
+	for attempt := 0; attempt < createMatchZAddRetry; attempt++ {
+		if zerr = r.rdb.ZAdd(ctx, r.startKey, z).Err(); zerr == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(createMatchZAddBackoff):
+		}
+	}
+	return nil
+}
+
+func (r *RedisMatchRepo) ClaimStartPlayer(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) (uint64, bool, error) {
+	key := startPlayerKey(playerID)
+	value := strconv.FormatUint(ticketID, 10)
+	for attempt := 0; attempt < 2; attempt++ {
+		ok, err := r.rdb.SetNX(ctx, key, value, ttl).Result()
+		if err != nil {
+			return 0, false, err
+		}
+		if ok {
+			return ticketID, true, nil
+		}
+		current, err := r.rdb.Get(ctx, key).Result()
+		if err == redis.Nil {
+			continue
+		}
+		if err != nil {
+			return 0, false, err
+		}
+		existing, err := strconv.ParseUint(current, 10, 64)
+		if err != nil {
+			return 0, false, err
+		}
+		if existing == ticketID {
+			if err := refreshClaimScript.Run(ctx, r.rdb, []string{key}, value, ttl.Milliseconds()).Err(); err != nil {
+				return 0, false, err
+			}
+		}
+		return existing, false, nil
+	}
+	return 0, false, errcode.New(errcode.ErrMatchConcurrent, "claim start player %d concurrent", playerID)
+}
+
+func (r *RedisMatchRepo) GetStartPlayerOperation(ctx context.Context, playerID uint64) (uint64, bool, error) {
+	value, err := r.rdb.Get(ctx, startPlayerKey(playerID)).Result()
+	if err == redis.Nil {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	ticketID, err := strconv.ParseUint(value, 10, 64)
+	if err != nil || ticketID == 0 {
+		return 0, false, fmt.Errorf("start player %d bad ticket id %q", playerID, value)
+	}
+	return ticketID, true, nil
+}
+
+func (r *RedisMatchRepo) DeleteStartPlayerIfMatches(ctx context.Context, playerID, ticketID uint64) error {
+	return deleteClaimScript.Run(ctx, r.rdb, []string{startPlayerKey(playerID)}, strconv.FormatUint(ticketID, 10)).Err()
+}
+
+func (r *RedisMatchRepo) GetStartOperation(ctx context.Context, ticketID uint64) (*matchv1.MatchStartOperationStorageRecord, bool, error) {
+	b, err := r.rdb.Get(ctx, startOperationKey(ticketID)).Bytes()
+	if err == redis.Nil {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	rec, err := unmarshalStartOperation(ticketID, b)
+	if err != nil {
+		return nil, false, err
+	}
+	return rec, true, nil
+}
+
+func (r *RedisMatchRepo) UpdateStartOperationWithLock(
+	ctx context.Context,
+	ticketID uint64,
+	maxRetry int,
+	fn func(*matchv1.MatchStartOperationStorageRecord) error,
+	ttl time.Duration,
+) error {
+	key := startOperationKey(ticketID)
+	for attempt := 0; attempt <= maxRetry; attempt++ {
+		var fnErr error
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			b, err := tx.Get(ctx, key).Bytes()
+			if err == redis.Nil {
+				return errcode.New(errcode.ErrMatchNotFound, "start operation %d not found", ticketID)
+			}
+			if err != nil {
+				return err
+			}
+			op, err := unmarshalStartOperation(ticketID, b)
+			if err != nil {
+				return err
+			}
+			if fnErr = fn(op); fnErr != nil {
+				return fnErr
+			}
+			payload, err := marshalStartOperation(op)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, key, payload, ttl)
+				return nil
+			})
+			return err
+		}, key)
+		if txErr == nil {
+			return nil
+		}
+		if txErr == fnErr && fnErr != nil {
+			return fnErr
+		}
+		if txErr == redis.TxFailedErr {
+			continue
+		}
+		return txErr
+	}
+	return errcode.New(errcode.ErrMatchConcurrent, "start operation %d update concurrent retry exhausted", ticketID)
+}
+
+func (r *RedisMatchRepo) EnsureStartActive(ctx context.Context, ticketID uint64, scoreMs int64) error {
+	return r.rdb.ZAdd(ctx, r.startKey, redis.Z{Score: float64(scoreMs), Member: ticketID}).Err()
+}
+
+func (r *RedisMatchRepo) RangeDueStartOperations(ctx context.Context, nowMs int64) ([]uint64, error) {
+	vals, err := r.rdb.ZRangeByScore(ctx, r.startKey, &redis.ZRangeBy{
+		Min: "-inf",
+		Max: strconv.FormatInt(nowMs, 10),
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	return parseMatchIDs("start active", vals)
+}
+
+func (r *RedisMatchRepo) RemoveStartActive(ctx context.Context, ticketID uint64) error {
+	return r.rdb.ZRem(ctx, r.startKey, ticketID).Err()
+}
+
+func (r *RedisMatchRepo) DeleteStartOperation(ctx context.Context, ticketID uint64) error {
+	zerr := r.rdb.ZRem(ctx, r.startKey, ticketID).Err()
+	derr := r.rdb.Del(ctx, startOperationKey(ticketID)).Err()
+	return errors.Join(zerr, derr)
+}
+
+func (r *RedisMatchRepo) ScanStartOperationIDs(ctx context.Context, count int64) ([]uint64, error) {
+	keys, err := scanAllMasters(ctx, r.rdb, "pandora:match:start:{*}", count)
+	if err != nil {
+		return nil, err
+	}
+	return parseIDsFromKeys(keys, "pandora:match:start:{", "start operation")
+}
+
 // --- match ---
 
 func (r *RedisMatchRepo) CreateMatch(ctx context.Context, match *matchv1.MatchStorageRecord, matchTTL time.Duration) error {
@@ -508,6 +753,26 @@ func (r *RedisMatchRepo) RemoveActive(ctx context.Context, matchID uint64) error
 	return r.rdb.ZRem(ctx, r.activeKey, matchID).Err()
 }
 
+func (r *RedisMatchRepo) EnsureActive(ctx context.Context, matchID uint64, scoreMs int64) error {
+	return r.rdb.ZAdd(ctx, r.activeKey, redis.Z{Score: float64(scoreMs), Member: matchID}).Err()
+}
+
+func (r *RedisMatchRepo) RangeActiveMatches(ctx context.Context) ([]uint64, error) {
+	vals, err := r.rdb.ZRange(ctx, r.activeKey, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	return parseMatchIDs("active", vals)
+}
+
+func (r *RedisMatchRepo) ScanMatchIDs(ctx context.Context, count int64) ([]uint64, error) {
+	keys, err := scanAllMasters(ctx, r.rdb, "pandora:match:{*}", count)
+	if err != nil {
+		return nil, err
+	}
+	return parseIDsFromKeys(keys, "pandora:match:{", "match")
+}
+
 func (r *RedisMatchRepo) ExpireMatch(ctx context.Context, matchID uint64, ttl time.Duration) error {
 	// Cluster 兼容:matchKey 与 activeKey 不同 slot,拆为独立命令。
 	if err := r.rdb.Expire(ctx, matchKey(matchID), ttl).Err(); err != nil {
@@ -534,12 +799,87 @@ func (r *RedisMatchRepo) RangeExpiredMatches(ctx context.Context, nowMs int64) (
 	if err != nil {
 		return nil, err
 	}
+	return parseMatchIDs("active", vals)
+}
+
+func parseMatchIDs(index string, vals []string) ([]uint64, error) {
 	out := make([]uint64, 0, len(vals))
 	for _, v := range vals {
 		id, perr := strconv.ParseUint(v, 10, 64)
 		if perr != nil {
-			return nil, fmt.Errorf("active bad match_id %q: %w", v, perr)
+			return nil, fmt.Errorf("%s bad match_id %q: %w", index, v, perr)
 		}
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+type redisScanner interface {
+	Scan(ctx context.Context, cursor uint64, match string, count int64) *redis.ScanCmd
+}
+
+// scanAllMasters 完整遍历 Redis Cluster 每个 master。UniversalClient.Scan 在 Cluster
+// 只会发给单一节点，会永久漏掉其他 slot 上的 canonical record，不能用于恢复索引。
+func scanAllMasters(ctx context.Context, client redis.UniversalClient, pattern string, count int64) ([]string, error) {
+	if count <= 0 {
+		count = 128
+	}
+	var (
+		mu   sync.Mutex
+		keys []string
+	)
+	scan := func(ctx context.Context, node redisScanner) error {
+		cursor := uint64(0)
+		for {
+			batch, next, err := node.Scan(ctx, cursor, pattern, count).Result()
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			keys = append(keys, batch...)
+			mu.Unlock()
+			cursor = next
+			if cursor == 0 {
+				return nil
+			}
+		}
+	}
+
+	var err error
+	switch c := client.(type) {
+	case *redis.ClusterClient:
+		err = c.ForEachMaster(ctx, func(ctx context.Context, node *redis.Client) error {
+			return scan(ctx, node)
+		})
+	case *redis.Ring:
+		err = c.ForEachShard(ctx, func(ctx context.Context, node *redis.Client) error {
+			return scan(ctx, node)
+		})
+	default:
+		err = scan(ctx, client)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+func parseIDsFromKeys(keys []string, prefix, index string) ([]uint64, error) {
+	seen := make(map[uint64]struct{}, len(keys))
+	out := make([]uint64, 0, len(keys))
+	for _, key := range keys {
+		if !strings.HasPrefix(key, prefix) || !strings.HasSuffix(key, "}") {
+			continue
+		}
+		raw := strings.TrimSuffix(strings.TrimPrefix(key, prefix), "}")
+		id, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || id == 0 {
+			continue
+		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
 		out = append(out, id)
 	}
 	return out, nil
@@ -573,6 +913,27 @@ func marshalMatch(m *matchv1.MatchStorageRecord) ([]byte, error) {
 		return nil, fmt.Errorf("nil match")
 	}
 	return proto.Marshal(m)
+}
+
+func marshalStartOperation(op *matchv1.MatchStartOperationStorageRecord) ([]byte, error) {
+	if op == nil {
+		return nil, fmt.Errorf("nil start operation")
+	}
+	return proto.Marshal(op)
+}
+
+func unmarshalStartOperation(ticketID uint64, payload []byte) (*matchv1.MatchStartOperationStorageRecord, error) {
+	rec := &matchv1.MatchStartOperationStorageRecord{}
+	if err := proto.Unmarshal(payload, rec); err != nil {
+		return nil, fmt.Errorf("start operation %d bad proto: %w", ticketID, err)
+	}
+	if rec.TicketId == 0 {
+		rec.TicketId = ticketID
+	}
+	if rec.TicketId != ticketID {
+		return nil, fmt.Errorf("start operation %d id mismatch: %d", ticketID, rec.TicketId)
+	}
+	return rec, nil
 }
 
 func unmarshalMatch(matchID uint64, payload []byte) (*matchv1.MatchStorageRecord, error) {

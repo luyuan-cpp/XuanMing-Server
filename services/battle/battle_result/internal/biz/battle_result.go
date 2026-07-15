@@ -22,6 +22,7 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -59,7 +60,7 @@ type PlayerUpdatePusher interface {
 // StartMatch 会撞上残留 claim 报 ErrMatchAlreadyMatching(4002)。battle_result 落库后
 // 主动调此接口让 matchmaker 彻底释放,玩家回 Hub 即可立刻再次匹配。
 //
-// best-effort 弱依赖:实现可为 nil(matchmaker 地址未配),调用失败仅 Warn 不影响结算落库。
+// 调用由 MySQL match_release_outbox worker 执行；失败/未知保留行重试，明确成功才 ACK。
 type MatchReleaser interface {
 	ReleaseMatch(ctx context.Context, matchID uint64, playerIDs []uint64) error
 }
@@ -129,7 +130,7 @@ type BattleResultUsecase struct {
 
 // NewBattleResultUsecase 构造。pusher 可为 nil:player.update 已写事务出箱,
 // pusher/producer 不可用时出箱积压不丢,等 producer 可用后由发布器补发(当前需重启/重配)。
-// releaser 可为 nil:matchmaker 地址未配时跳过对局状态释放(best-effort 弱依赖)。
+// releaser 可为 nil:matchmaker 地址未配时 outbox 持久积压，配置恢复并重启后继续发送。
 func NewBattleResultUsecase(repo data.BattleRepo, mmr MMRReader, pusher PlayerUpdatePusher, releaser MatchReleaser, cfg conf.BattleConf) *BattleResultUsecase {
 	if mmr == nil {
 		mmr = NewStaticMMRReader(cfg.BaseMMR)
@@ -167,23 +168,6 @@ func (u *BattleResultUsecase) SetMailSender(m MailSender) {
 // 但已存在 outbox 行绝不会被删除。
 func (u *BattleResultUsecase) SetTerminalReleaseRelay(relay TerminalReleaseRelay) {
 	u.terminalRelay = relay
-}
-
-// releaseMatch 落库成功后通知 matchmaker 释放本局撮合状态。best-effort:实现缺省 / 失败
-// 仅 Warn,绝不影响结算落库(弱依赖,不变量:结算是权威路径,释放只是清残留)。
-func (u *BattleResultUsecase) releaseMatch(ctx context.Context, result *battlev1.BattleResult) {
-	if u.releaser == nil {
-		return
-	}
-	playerIDs := make([]uint64, 0, len(result.GetStats()))
-	for _, s := range result.GetStats() {
-		if pid := s.GetPlayerId(); pid != 0 {
-			playerIDs = append(playerIDs, pid)
-		}
-	}
-	if err := u.releaser.ReleaseMatch(ctx, result.GetMatchId(), playerIDs); err != nil {
-		plog.With(ctx).Warnw("msg", "match_release_failed", "match_id", result.GetMatchId(), "err", err)
-	}
 }
 
 // ── ReportResult:幂等落库 + MMR ─────────────────────────────────────────────
@@ -268,9 +252,6 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 	// router 为 nil(单 Cell)→ 不打,行为不变;跨 region 桥 / 多 region topic 回流路径属 infra(§11.1)。
 	u.logSettlementRouting(ctx, result)
 
-	// 结算落库成功 → 通知 matchmaker 释放本局撮合状态(玩家回 Hub 可立刻再匹配)。
-	u.releaseMatch(ctx, result)
-
 	// 不在同步响应路径回收 DS。Model-B 的 terminal_release_outbox 会等待宽限窗，让 DS
 	// 收到 OK 并通知客户端；响应丢失/令牌过期也会在宽限后由服务端可靠回收。
 	return false, nil
@@ -341,10 +322,8 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 	}
 	plog.With(ctx).Infow("msg", "battle_abandoned_recorded", "match_id", matchID, "players", len(playerIDs))
 
-	// 废弃对局补偿落库成功 → 同样释放撮合状态(玩家可立刻再匹配)。
-	// 注意:这里不调 releaseDS——ABANDONED 事件正是 ds_allocator sweep 发来的,它已回收 pod 并
-	// 用 ExpireBattle 有意保留镜像供查询/诊断;再调 ReleaseBattle 会提前删除该诊断镜像。
-	u.releaseMatch(ctx, result)
+	// matchmaker 释放由同事务 match_release_outbox 异步可靠推进。这里不调 releaseDS：
+	// ABANDONED 事件来自 ds_allocator sweep，它已经回收 pod 并保留诊断镜像。
 	return nil
 }
 
@@ -538,6 +517,76 @@ func (u *BattleResultUsecase) outboxBatchSize() int {
 		return u.cfg.OutboxBatchSize
 	}
 	return 128
+}
+
+// ── matchmaker release 事务出箱 ──────────────────────────────────────────────
+
+func matchReleaseRetryDelay(attempt uint32) time.Duration {
+	shift := attempt
+	if shift > 6 {
+		shift = 6
+	}
+	d := time.Second * time.Duration(1<<shift)
+	if d > time.Minute {
+		return time.Minute
+	}
+	return d
+}
+
+// RunMatchReleasePublisher 可靠释放 matchmaker 的 ticket/claim/match 状态。SaveResult
+// 与 outbox 同事务；RPC 失败或响应未知只延期，明确成功后才删除行。
+func (u *BattleResultUsecase) RunMatchReleasePublisher(ctx context.Context) {
+	interval := u.cfg.OutboxPublishInterval.Std()
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	plog.With(ctx).Infow("msg", "match_release_publisher_started", "interval", interval.String(), "batch", u.outboxBatchSize())
+	for {
+		select {
+		case <-ctx.Done():
+			plog.With(ctx).Infow("msg", "match_release_publisher_stopped")
+			return
+		case <-ticker.C:
+			if n, err := u.publishMatchReleaseBatch(ctx); err != nil {
+				plog.With(ctx).Warnw("msg", "match_release_batch_failed", "released", n, "err", err)
+			}
+		}
+	}
+}
+
+func (u *BattleResultUsecase) publishMatchReleaseBatch(ctx context.Context) (int, error) {
+	if u.releaser == nil {
+		return 0, nil
+	}
+	nowMs := time.Now().UnixMilli()
+	recs, err := u.repo.FetchMatchReleaseOutbox(ctx, u.outboxBatchSize(), nowMs)
+	if err != nil {
+		return 0, err
+	}
+	released := 0
+	var joined error
+	for _, rec := range recs {
+		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		rerr := u.releaser.ReleaseMatch(callCtx, rec.MatchID, rec.PlayerIDs)
+		cancel()
+		if rerr != nil {
+			nextMs := time.Now().Add(matchReleaseRetryDelay(rec.AttemptCount)).UnixMilli()
+			if derr := u.repo.DeferMatchReleaseOutbox(ctx, rec.ID, nextMs); derr != nil {
+				joined = errors.Join(joined, rerr, derr)
+			} else {
+				joined = errors.Join(joined, rerr)
+			}
+			continue
+		}
+		if derr := u.repo.DeleteMatchReleaseOutbox(ctx, rec.ID); derr != nil {
+			joined = errors.Join(joined, derr)
+			continue
+		}
+		released++
+	}
+	return released, joined
 }
 
 // ── Battle terminal-release 事务出箱(Model-B)────────────────────────────────
