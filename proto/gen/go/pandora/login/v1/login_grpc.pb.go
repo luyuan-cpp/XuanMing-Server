@@ -32,11 +32,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LoginService_Login_FullMethodName          = "/pandora.login.v1.LoginService/Login"
-	LoginService_Logout_FullMethodName         = "/pandora.login.v1.LoginService/Logout"
-	LoginService_IssueDSTicket_FullMethodName  = "/pandora.login.v1.LoginService/IssueDSTicket"
-	LoginService_SelectRole_FullMethodName     = "/pandora.login.v1.LoginService/SelectRole"
-	LoginService_VerifyDSTicket_FullMethodName = "/pandora.login.v1.LoginService/VerifyDSTicket"
+	LoginService_Login_FullMethodName            = "/pandora.login.v1.LoginService/Login"
+	LoginService_Logout_FullMethodName           = "/pandora.login.v1.LoginService/Logout"
+	LoginService_IssueDSTicket_FullMethodName    = "/pandora.login.v1.LoginService/IssueDSTicket"
+	LoginService_SelectRole_FullMethodName       = "/pandora.login.v1.LoginService/SelectRole"
+	LoginService_VerifyDSTicket_FullMethodName   = "/pandora.login.v1.LoginService/VerifyDSTicket"
+	LoginService_GetResumeContext_FullMethodName = "/pandora.login.v1.LoginService/GetResumeContext"
 )
 
 // LoginServiceClient is the client API for LoginService service.
@@ -63,6 +64,9 @@ type LoginServiceClient interface {
 	// VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
 	// ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
 	VerifyDSTicket(ctx context.Context, in *VerifyDSTicketRequest, opts ...grpc.CallOption) (*VerifyDSTicketResponse, error)
+	// GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
+	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
+	GetResumeContext(ctx context.Context, in *GetResumeContextRequest, opts ...grpc.CallOption) (*GetResumeContextResponse, error)
 }
 
 type loginServiceClient struct {
@@ -123,6 +127,16 @@ func (c *loginServiceClient) VerifyDSTicket(ctx context.Context, in *VerifyDSTic
 	return out, nil
 }
 
+func (c *loginServiceClient) GetResumeContext(ctx context.Context, in *GetResumeContextRequest, opts ...grpc.CallOption) (*GetResumeContextResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResumeContextResponse)
+	err := c.cc.Invoke(ctx, LoginService_GetResumeContext_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LoginServiceServer is the server API for LoginService service.
 // All implementations should embed UnimplementedLoginServiceServer
 // for forward compatibility.
@@ -147,6 +161,9 @@ type LoginServiceServer interface {
 	// VerifyDSTicket 立即完成型,DS 内部用(不暴露 HTTP path 给客户端)
 	// ⚠️ Envoy 应该用 ext_authz / route 限制此 path 只允许内网
 	VerifyDSTicket(context.Context, *VerifyDSTicketRequest) (*VerifyDSTicketResponse, error)
+	// GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
+	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
+	GetResumeContext(context.Context, *GetResumeContextRequest) (*GetResumeContextResponse, error)
 }
 
 // UnimplementedLoginServiceServer should be embedded to have
@@ -170,6 +187,9 @@ func (UnimplementedLoginServiceServer) SelectRole(context.Context, *SelectRoleRe
 }
 func (UnimplementedLoginServiceServer) VerifyDSTicket(context.Context, *VerifyDSTicketRequest) (*VerifyDSTicketResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyDSTicket not implemented")
+}
+func (UnimplementedLoginServiceServer) GetResumeContext(context.Context, *GetResumeContextRequest) (*GetResumeContextResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetResumeContext not implemented")
 }
 func (UnimplementedLoginServiceServer) testEmbeddedByValue() {}
 
@@ -281,6 +301,24 @@ func _LoginService_VerifyDSTicket_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginService_GetResumeContext_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResumeContextRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).GetResumeContext(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_GetResumeContext_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).GetResumeContext(ctx, req.(*GetResumeContextRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LoginService_ServiceDesc is the grpc.ServiceDesc for LoginService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -307,6 +345,10 @@ var LoginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyDSTicket",
 			Handler:    _LoginService_VerifyDSTicket_Handler,
+		},
+		{
+			MethodName: "GetResumeContext",
+			Handler:    _LoginService_GetResumeContext_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

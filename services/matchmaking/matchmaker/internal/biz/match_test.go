@@ -29,6 +29,27 @@ type mockPusher struct {
 	events []*matchv1.MatchProgressEvent
 }
 
+type captureResumeAllocator struct {
+	DSAllocator
+	playerID   uint64
+	matchID    uint64
+	allocation model.BattleAllocation
+	binding    placement.Binding
+}
+
+func (a *captureResumeAllocator) SignBattleTicket(
+	_ context.Context,
+	playerID, matchID uint64,
+	allocation *model.BattleAllocation,
+	binding placement.Binding,
+) (string, error) {
+	a.playerID, a.matchID, a.binding = playerID, matchID, binding
+	if allocation != nil {
+		a.allocation = *allocation
+	}
+	return "canonical-ready-resume-ticket", nil
+}
+
 func (m *mockPusher) PushMatchProgress(_ context.Context, _ uint64, to []uint64, payload []byte) (int, error) {
 	var e matchv1.MatchProgressEvent
 	if err := proto.Unmarshal(payload, &e); err == nil {
@@ -183,6 +204,221 @@ func newFixtureWith(t *testing.T, firstMatchID uint64, mutate func(*conf.MatchCo
 	uc := NewMatchUsecase(repo, nil, pusher, NewStubDSAllocator("127.0.0.1:7777"), idGen, locator, c.Match)
 	uc.SetPlacementCoordinator(allowPlacement{})
 	return &fixture{repo: repo, pusher: pusher, locator: locator, uc: uc, cfg: c.Match}
+}
+
+func TestResolvePlayerMatchContext_StartSagaHandsOffToQueued(t *testing.T) {
+	f := newFixture(t, 9000)
+	ctx := context.Background()
+	const playerID = uint64(4201)
+	if _, err := f.uc.StartMatch(ctx, 9101, 9101, playerID, 0); err != nil {
+		t.Fatal(err)
+	}
+	starting, err := f.uc.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || starting.GetState() != matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE ||
+		starting.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_STARTING || starting.GetTicketId() != 9101 {
+		t.Fatalf("STARTING context = %+v err=%v", starting, err)
+	}
+	if err := f.uc.advanceStartOperationsOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := f.uc.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || queued.GetState() != matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE ||
+		queued.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED || queued.GetTicketId() != 9101 {
+		t.Fatalf("QUEUED context = %+v err=%v", queued, err)
+	}
+	if _, found, err := f.repo.GetStartOperation(ctx, 9101); err != nil || found {
+		t.Fatalf("queued handoff must explicitly delete start operation: found=%v err=%v", found, err)
+	}
+}
+
+func TestCancelMatchCommitsAgainstEveryPreQueueStartPhase(t *testing.T) {
+	preQueuePhases := []matchv1.MatchStartPhase{
+		matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED,
+		matchv1.MatchStartPhase_MATCH_START_PHASE_TICKET_READY,
+		matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMING,
+		matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMS_READY,
+	}
+	for i, phase := range preQueuePhases {
+		phase := phase
+		t.Run(phase.String(), func(t *testing.T) {
+			f := newFixture(t, 9200+uint64(i))
+			ctx := context.Background()
+			playerID := uint64(4300 + i)
+			ticketID := uint64(9300 + i)
+			if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+				t.Fatal(err)
+			}
+			op, found, err := f.repo.GetStartOperation(ctx, ticketID)
+			if err != nil || !found {
+				t.Fatalf("start operation missing: found=%v err=%v", found, err)
+			}
+			if phase != matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED {
+				if err := f.repo.CreateTicketRecord(ctx, ticketFromStartOperation(op), f.uc.ticketTTL()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if phase == matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMING ||
+				phase == matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMS_READY {
+				if owner, claimed, err := f.repo.ClaimPlayer(ctx, playerID, ticketID, f.uc.ticketTTL()); err != nil || (!claimed && owner != ticketID) {
+					t.Fatalf("claim player: owner=%d claimed=%v err=%v", owner, claimed, err)
+				}
+			}
+			if err := f.repo.UpdateStartOperationWithLock(ctx, ticketID, f.cfg.OptimisticRetry,
+				func(rec *matchv1.MatchStartOperationStorageRecord) error {
+					rec.Phase = phase
+					rec.LeaseToken = "worker-that-must-be-fenced"
+					rec.LeaseDeadlineMs = time.Now().Add(time.Minute).UnixMilli()
+					return nil
+				}, f.uc.ticketTTL()); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := f.uc.CancelMatch(ctx, playerID); err != nil {
+				t.Fatalf("cancel STARTING phase %s: %v", phase, err)
+			}
+			cancelled, found, err := f.repo.GetStartOperation(ctx, ticketID)
+			if err != nil || !found {
+				t.Fatalf("cancelled operation missing: found=%v err=%v", found, err)
+			}
+			if cancelled.GetPhase() != matchv1.MatchStartPhase_MATCH_START_PHASE_COMPENSATING ||
+				cancelled.GetLeaseToken() != "" || cancelled.GetLeaseDeadlineMs() != 0 {
+				t.Fatalf("cancel did not durably fence worker: %+v", cancelled)
+			}
+			resume, err := f.uc.ResolvePlayerMatchContext(ctx, playerID)
+			if err != nil || resume.GetState() != matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_UNSPECIFIED {
+				t.Fatalf("compensating resume must remain UNKNOWN: %+v err=%v", resume, err)
+			}
+
+			if err := f.uc.advanceStartOperation(ctx, cancelled); err != nil {
+				t.Fatalf("advance compensation: %v", err)
+			}
+			failed, found, err := f.repo.GetStartOperation(ctx, ticketID)
+			if err != nil || !found || failed.GetPhase() != matchv1.MatchStartPhase_MATCH_START_PHASE_FAILED {
+				t.Fatalf("operation not terminal FAILED: found=%v op=%+v err=%v", found, failed, err)
+			}
+			if owner, found, err := f.repo.GetStartPlayerOperation(ctx, playerID); err != nil || found {
+				t.Fatalf("start-player index survived: owner=%d found=%v err=%v", owner, found, err)
+			}
+			if owner, found, err := f.repo.GetPlayerTicket(ctx, playerID); err != nil || found {
+				t.Fatalf("player claim survived: owner=%d found=%v err=%v", owner, found, err)
+			}
+			if _, found, err := f.repo.GetTicket(ctx, ticketID); err != nil || found {
+				t.Fatalf("ticket survived compensation: found=%v err=%v", found, err)
+			}
+		})
+	}
+}
+
+func TestResolvePlayerMatchContext_CrossModeCanonicalAndDrift(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	pveRepo := data.NewRedisMatchRepo(rdb, "pve_coop")
+	pvpRepo := data.NewRedisMatchRepo(rdb, "pvp")
+	var c conf.Config
+	c.Defaults()
+	resumeAllocator := &captureResumeAllocator{DSAllocator: NewStubDSAllocator("127.0.0.1:7777")}
+	resolver := NewMatchUsecase(pvpRepo, nil, nil, resumeAllocator, &fakeIDGen{next: 1}, nil, c.Match)
+
+	const playerID, ticketID, matchID = uint64(52), uint64(9201), uint64(9301)
+	ticket := &matchv1.MatchTicketStorageRecord{
+		TicketId: ticketID, TeamId: ticketID, MatchId: matchID,
+		Members:  []*matchv1.MatchMemberStorageRecord{{PlayerId: playerID, TeamId: ticketID}},
+		GameMode: "pve_coop",
+	}
+	if err := pveRepo.AddTicket(ctx, ticket, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if existing, claimed, err := pveRepo.ClaimPlayer(ctx, playerID, ticketID, time.Hour); err != nil || !claimed || existing != ticketID {
+		t.Fatalf("claim: existing=%d claimed=%v err=%v", existing, claimed, err)
+	}
+	opID := "9849ab5b-2ecf-4fc3-983d-2d8df53cc009"
+	m := &matchv1.MatchStorageRecord{
+		MatchId: matchID, Stage: matchv1.MatchStage_MATCH_STAGE_CONFIRM,
+		TicketIds: []uint64{ticketID}, ConfirmDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
+		Members:               []*matchv1.MatchMemberStorageRecord{{PlayerId: playerID, TeamId: ticketID}},
+		AllocationOperationId: opID,
+		GameMode:              "pve_coop",
+	}
+	if err := pveRepo.CreateMatch(ctx, m, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := resolver.CancelMatch(ctx, playerID); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("wrong-mode CancelMatch must fail closed, got %v", err)
+	}
+	if err := resolver.ConfirmMatch(ctx, playerID, matchID, true); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("wrong-mode ConfirmMatch must fail closed, got %v", err)
+	}
+	if err := resolver.reconcileActiveOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := pvpRepo.RangeActiveMatches(ctx); err != nil || len(ids) != 0 {
+		t.Fatalf("PVP reconciler adopted PVE active job: ids=%v err=%v", ids, err)
+	}
+
+	confirming, err := resolver.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || confirming.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_CONFIRMING || confirming.GetMatchId() != matchID {
+		t.Fatalf("cross-mode CONFIRMING = %+v err=%v", confirming, err)
+	}
+	if confirming.GetGameMode() != "pve_coop" {
+		t.Fatalf("cross-mode resolver lost canonical game_mode: %+v", confirming)
+	}
+	if err := pveRepo.UpdateMatchWithLock(ctx, matchID, 2, func(rec *matchv1.MatchStorageRecord) error {
+		rec.Stage = matchv1.MatchStage_MATCH_STAGE_ALLOCATING
+		return nil
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	allocating, err := resolver.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || allocating.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_ALLOCATING {
+		t.Fatalf("cross-mode ALLOCATING = %+v err=%v", allocating, err)
+	}
+	if err := pveRepo.UpdateMatchWithLock(ctx, matchID, 2, func(rec *matchv1.MatchStorageRecord) error {
+		rec.Stage = matchv1.MatchStage_MATCH_STAGE_READY
+		rec.BattleDsAddr = "10.0.0.8:7777"
+		rec.BattleTarget = &matchv1.MatchBattleTargetStorageRecord{
+			DsAddr: rec.BattleDsAddr, DsPodName: "battle-1", DsInstanceUid: "uid-1",
+			DsInstanceEpoch: 7, AllocationId: "alloc-1", ReleaseTrack: "stable",
+			PlayerBindings: []*matchv1.MatchPlayerPlacementBindingStorageRecord{{
+				PlayerId: playerID, PlacementVersion: 12, OperationId: opID,
+			}},
+		}
+		return nil
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	ready, err := resolver.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || ready.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY ||
+		ready.GetPlacementVersion() != 12 || ready.GetPlacementOperationId() != opID {
+		t.Fatalf("cross-mode READY = %+v err=%v", ready, err)
+	}
+	if ready.GetBattleDsAddr() != "10.0.0.8:7777" || ready.GetBattleTicket() != "canonical-ready-resume-ticket" {
+		t.Fatalf("READY resolver did not return freshly bound route credential: %+v", ready)
+	}
+	if resumeAllocator.playerID != playerID || resumeAllocator.matchID != matchID ||
+		resumeAllocator.binding.Version != 12 || resumeAllocator.binding.OperationID != opID ||
+		resumeAllocator.allocation.Address != "10.0.0.8:7777" ||
+		resumeAllocator.allocation.Target.PodName != "battle-1" ||
+		resumeAllocator.allocation.Target.InstanceUID != "uid-1" ||
+		resumeAllocator.allocation.Target.InstanceEpoch != 7 ||
+		resumeAllocator.allocation.Target.AllocationID != "alloc-1" ||
+		resumeAllocator.allocation.Target.ReleaseTrack != "stable" {
+		t.Fatalf("READY re-sign input was not canonical exact target+binding: %+v %+v",
+			resumeAllocator.allocation, resumeAllocator.binding)
+	}
+
+	if err := pveRepo.DeleteMatch(ctx, matchID); err != nil {
+		t.Fatal(err)
+	}
+	drift, err := resolver.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || drift.GetState() != matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_UNSPECIFIED {
+		t.Fatalf("broken ticket->match edge must be UNKNOWN: %+v err=%v", drift, err)
+	}
 }
 
 func (f *fixture) advanceStarts(t *testing.T, ctx context.Context) {
@@ -365,6 +601,12 @@ func TestConfirmMatch_AllAccept_Ready(t *testing.T) {
 			t.Fatalf("confirm player %d: %v", i, err)
 		}
 	}
+	allocating, found, err := f.repo.GetMatch(ctx, 999)
+	if err != nil || !found || allocating.GetStage() != stageAllocating ||
+		!placement.ValidOperationID(allocating.GetAllocationOperationId()) {
+		t.Fatalf("durable allocation operation not UUIDv4: found=%v match=%+v err=%v", found, allocating, err)
+	}
+	stableOperationID := allocating.GetAllocationOperationId()
 	f.advanceAllocations(t, ctx)
 
 	m, found, _ := f.repo.GetMatch(ctx, 999)
@@ -376,6 +618,15 @@ func TestConfirmMatch_AllAccept_Ready(t *testing.T) {
 	}
 	if m.BattleDsAddr == "" {
 		t.Fatal("battle_ds_addr empty")
+	}
+	if m.GetAllocationOperationId() != stableOperationID || m.GetBattleTarget() == nil ||
+		len(m.GetBattleTarget().GetPlayerBindings()) != 10 {
+		t.Fatalf("READY target/bindings were not persisted with stable operation: %+v", m)
+	}
+	for _, binding := range m.GetBattleTarget().GetPlayerBindings() {
+		if binding.GetPlacementVersion() == 0 || binding.GetOperationId() != stableOperationID {
+			t.Fatalf("player binding drifted from allocation operation: %+v", binding)
+		}
 	}
 	if got := f.pusher.lastStageFor(1); got != stageReady {
 		t.Fatalf("player 1 last push stage = %v, want READY", got)
@@ -1144,6 +1395,19 @@ type faultyReserveRepo struct {
 	failOnCall int // 第几次 ReserveTicket 调用返回错误(1-based);0 表示全部失败
 }
 
+type faultyPersistRepo struct {
+	data.MatchRepo
+	failRemaining int
+}
+
+func (r *faultyPersistRepo) PersistPlayerClaim(ctx context.Context, playerID, ticketID uint64) error {
+	if r.failRemaining > 0 {
+		r.failRemaining--
+		return errors.New("injected persist failure")
+	}
+	return r.MatchRepo.PersistPlayerClaim(ctx, playerID, ticketID)
+}
+
 func (r *faultyReserveRepo) ReserveTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ttl time.Duration) error {
 	r.calls++
 	if r.failOnCall == 0 || r.calls == r.failOnCall {
@@ -1201,6 +1465,58 @@ func TestFormMatch_ReserveFailsMidway_RollsBackNoMatch(t *testing.T) {
 		if ticket.MatchId != 0 {
 			t.Fatalf("ticket %d match_id = %d, want 0", 100+i, ticket.MatchId)
 		}
+	}
+}
+
+func TestFormMatchClaimPersistFailureKeepsCompleteCanonicalGraphAndPublishesNothing(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	for i := uint64(1); i <= 10; i++ {
+		f.seedTicket(t, ctx, 100+i, []uint64{i}, 1000)
+	}
+	faulty := &faultyPersistRepo{MatchRepo: f.repo, failRemaining: 1}
+	uc := NewMatchUsecase(faulty, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"),
+		&fakeIDGen{next: 999}, nil, f.cfg)
+
+	sideA := make([]*matchv1.MatchTicketStorageRecord, 0, 5)
+	sideB := make([]*matchv1.MatchTicketStorageRecord, 0, 5)
+	for i := uint64(1); i <= 10; i++ {
+		ticket, found, err := f.repo.GetTicket(ctx, 100+i)
+		if err != nil || !found {
+			t.Fatalf("get ticket %d: found=%v err=%v", 100+i, found, err)
+		}
+		if i <= 5 {
+			sideA = append(sideA, ticket)
+		} else {
+			sideB = append(sideB, ticket)
+		}
+	}
+	if err := uc.formMatch(ctx, sideA, sideB); err == nil {
+		t.Fatal("claim persistence failure must stop FOUND publication")
+	}
+	m, found, err := f.repo.GetMatch(ctx, 999)
+	if err != nil || !found {
+		t.Fatalf("canonical retry graph missing: found=%v err=%v", found, err)
+	}
+	left, err := f.repo.RangeQueueTickets(ctx)
+	if err != nil || len(left) != 0 {
+		t.Fatalf("partial reservation remained visible in queue: ids=%v err=%v", left, err)
+	}
+	for i := uint64(1); i <= 10; i++ {
+		ticket, ticketFound, getErr := f.repo.GetTicket(ctx, 100+i)
+		if getErr != nil || !ticketFound || ticket.GetMatchId() != 999 {
+			t.Fatalf("ticket %d not durably reserved: found=%v ticket=%+v err=%v",
+				100+i, ticketFound, ticket, getErr)
+		}
+	}
+	f.pusher.mu.Lock()
+	eventCount := len(f.pusher.events)
+	f.pusher.mu.Unlock()
+	if eventCount != 0 {
+		t.Fatalf("FOUND/CONFIRM published before claims durable: events=%d", eventCount)
+	}
+	if err := uc.ensureMatchDiscovery(ctx, m); err != nil {
+		t.Fatalf("reconciler could not finish exact graph: %v", err)
 	}
 }
 

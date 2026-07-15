@@ -7,9 +7,8 @@ server:
   grpc:
     network: tcp
     addr: ":50011"
-    # 必须 > ds_allocator AllocateBattle 总预算(allocate 5s + ready_wait 10s + 余量 ≈ 20s):
-    # ConfirmMatch 末尾同步调 ds_allocator.AllocateBattle,handler ctx 透传给对端;本端
-    # timeout 小于对端预算会先砍断 ConfirmMatch,既拿不到结果也让对端清理来不及收尾。
+    # 普通玩家 RPC 上限。ConfirmMatch 只持久 CAS ALLOCATING；AllocateBattle 由服务生命周期
+    # durable worker 使用独立有界 ctx 推进，不能继承玩家断线/请求取消。
     timeout: "22s"
     # enable_reflection 不写 = false
   http:
@@ -40,7 +39,13 @@ snowflake:
 match:
   team_addr: "team.pandora.svc.cluster.local:50010"
   ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"
+  hub_allocator_addr: "hub-allocator.pandora.svc.cluster.local:50021"
   locator_addr: "player-locator.pandora.svc.cluster.local:50006"
+  # 生产由 PANDORA_PLACEMENT_MATCH_START_SECRET 优先覆盖；禁止提交真实密钥。
+  placement_match_start_proof_secret: "replace-via-pandora-config-secret-min-32-bytes"
+  # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback / placement key。
+  match_resume_auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B__"
+  match_resume_auth_audience: "matchmaker:5v5_ranked"
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
   # ❗ 前提：UE Hub DS 心跳捎带 player_ids 续期 locator HUB 位置，且 hub_allocator 必须配 locator_addr
   # (转发续期的必经一环)，否则在线玩家 30s 后会被误判离线、扫掉排队票据。
@@ -50,8 +55,8 @@ match:
   game_mode: "5v5_ranked"
   confirm_timeout: "15s"
   match_interval: "2s"
-  ticket_ttl: "30m"
-  match_ttl: "30m"
+  ticket_ttl: "30m" # 仅显式终态后的留存；非终态 ticket/claim 持久
+  match_ttl: "30m"  # 仅显式终态后的留存；非终态 match 持久
   team_size: 5
   mmr_base_window: 200
   mmr_widen_per_sec: 20

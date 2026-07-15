@@ -11,7 +11,7 @@ server:
   grpc:
     network: tcp
     addr: ":50011"
-    timeout: "22s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(≈20s 预算)+余量
+    timeout: "22s"              # 普通 RPC 上限；ConfirmMatch 只持久 CAS ALLOCATING，不同步等待 DS
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
@@ -45,8 +45,16 @@ match:
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:50020"
+  # READY 前逐玩家等待 Hub exact eviction + Departure/UID teardown。
+  hub_allocator_addr: "127.0.0.1:50021"
   # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报 + StartMatch 前置查战斗态）;留空不上报也不拦截
   locator_addr: "127.0.0.1:50006"
+  # HUB→BATTLE placement proof；公开 dev 值，生产由配置生成器覆盖。
+  placement_match_start_proof_secret: "pandora-dev-placement-match-start-key-v1!"
+  # Login→Matchmaker internal resume RPC only. Shared Redis consumes each
+  # signed nonce once across replicas.
+  match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"
+  match_resume_auth_audience: "matchmaker:5v5_ranked"
   # battle_gate_fail_open: locator 查询失败时"战斗中禁止匹配"检查的降级策略
   #   false（默认，生产安全 / fail-closed）：locator 查询失败则拒绝入队(ERR_UNAVAILABLE)，避免抖动时绕过保护
   #   true（仅本地单服务联调）：只跑 matchmaker、不起 player_locator 时，locator 查询失败仅告警后放行
@@ -65,9 +73,9 @@ match:
   confirm_timeout: "15s"
   # match_interval: 后台撮合循环扫描间隔
   match_interval: "2s"
-  # ticket_ttl: 排队票据 Redis key TTL(防僵尸票据)
+  # ticket_ttl: 仅显式终态后的票据留存期；QUEUEING/CONFIRM/ALLOCATING/READY 均持久，由 saga 清理
   ticket_ttl: "30m"
-  # match_ttl: 已撮合 match Redis key TTL
+  # match_ttl: 仅显式终态后的 match 查询留存期；非终态 match 不靠 TTL 自愈
   match_ttl: "30m"
   # team_size: 本地端到端测试使用 1v1;正式 5v5 改回 5
   team_size: 1

@@ -77,7 +77,7 @@ func (s *LoginService) Login(ctx context.Context, req *loginv1.LoginRequest) (*l
 		MatchId:      res.MatchID,
 		// 选角权威化(2026-07-08):玩家当前已选角色(0=从未选过),客户端选角界面预选中用。
 		SelectedRoleId: res.SelectedRoleID,
-		ResumeContext: resumeContextToProto(res.Resume),
+		ResumeContext:  resumeContextToProto(res.Resume),
 	}, nil
 }
 
@@ -92,7 +92,11 @@ func (s *LoginService) GetResumeContext(ctx context.Context, req *loginv1.GetRes
 func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 	return &loginv1.ResumeContext{Route: in.Route, MatchId: in.MatchID,
 		MatchStage: in.MatchStage, PlacementVersion: in.PlacementVersion,
-		OperationId: in.OperationID}
+		OperationId: in.OperationID, PlacementState: in.PlacementState,
+		DsPodName: in.Target.PodName, DsInstanceUid: in.Target.InstanceUID,
+		HubAssignmentId: in.Target.AssignmentID, DsInstanceEpoch: in.Target.InstanceEpoch,
+		AllocationId: in.Target.AllocationID, ReleaseTrack: in.Target.ReleaseTrack,
+		GameMode: in.GameMode}
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。
@@ -157,6 +161,14 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 		}, nil
 	}
 
+	if req.GetDsType() == "battle" {
+		_, ticket, _, err := s.loginUC.ResolveBattleEndpoint(ctx, playerID, req.GetTargetId())
+		if err != nil {
+			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
+		}
+		return &loginv1.IssueDSTicketResponse{Code: commonv1.ErrCode_OK, Ticket: ticket}, nil
+	}
+
 	res, err := s.ticketUC.IssueDSTicket(ctx, playerID, req.GetDsType(), req.GetTargetId())
 	if err != nil {
 		return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
@@ -212,29 +224,29 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 	return &loginv1.VerifyDSTicketResponse{
 		Code: commonv1.ErrCode_OK,
 		Claims: &loginv1.DSTicket{
-			PlayerId:        claims.PlayerID,
-			MatchId:         claims.MatchID,
-			IssuedAtMs:      claims.IssuedAtMs,
-			ExpiresAtMs:     claims.ExpiresAtMs,
-			DsType:          claims.DSType,
-			Jti:             claims.JTI,
-			RegionId:        claims.RegionID,
-			CellId:          claims.CellID,
-			RoleId:          claims.RoleID,
-			DsPodName:       claims.DSPodName,
-			DsInstanceUid:   claims.DSInstanceUID,
-			DsProtocolEpoch: claims.DSProtocolEpoch,
-			DsCredentialGen: claims.DSCredentialGen,
-			DsCredentialJti: claims.DSCredentialJTI,
-			HubAssignmentId: claims.HubAssignmentID,
-			DsWriterEpoch:   claims.DSWriterEpoch,
-			DstVer:          uint32(claims.Version),
-			DsInstanceEpoch: claims.DSInstanceEpoch,
-			AllocationId:    claims.AllocationID,
-			ReleaseTrack:    claims.ReleaseTrack,
-			PlacementVersion: claims.PlacementVersion,
+			PlayerId:             claims.PlayerID,
+			MatchId:              claims.MatchID,
+			IssuedAtMs:           claims.IssuedAtMs,
+			ExpiresAtMs:          claims.ExpiresAtMs,
+			DsType:               claims.DSType,
+			Jti:                  claims.JTI,
+			RegionId:             claims.RegionID,
+			CellId:               claims.CellID,
+			RoleId:               claims.RoleID,
+			DsPodName:            claims.DSPodName,
+			DsInstanceUid:        claims.DSInstanceUID,
+			DsProtocolEpoch:      claims.DSProtocolEpoch,
+			DsCredentialGen:      claims.DSCredentialGen,
+			DsCredentialJti:      claims.DSCredentialJTI,
+			HubAssignmentId:      claims.HubAssignmentID,
+			DsWriterEpoch:        claims.DSWriterEpoch,
+			DstVer:               uint32(claims.Version),
+			DsInstanceEpoch:      claims.DSInstanceEpoch,
+			AllocationId:         claims.AllocationID,
+			ReleaseTrack:         claims.ReleaseTrack,
+			PlacementVersion:     claims.PlacementVersion,
 			PlacementOperationId: claims.PlacementOperationID,
-			SourceMatchId: claims.SourceMatchID,
+			SourceMatchId:        claims.SourceMatchID,
 		},
 	}, nil
 }

@@ -36,6 +36,7 @@ const (
 	PlayerLocatorService_GetPlacement_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/GetPlacement"
 	PlayerLocatorService_BeginPlacementTransition_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/BeginPlacementTransition"
 	PlayerLocatorService_BindPlacementTarget_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/BindPlacementTarget"
+	PlayerLocatorService_RetargetPlacementTarget_FullMethodName  = "/pandora.locator.v1.PlayerLocatorService/RetargetPlacementTarget"
 	PlayerLocatorService_CommitPlacementAdmission_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/CommitPlacementAdmission"
 	PlayerLocatorService_BootstrapPlacement_FullMethodName       = "/pandora.locator.v1.PlayerLocatorService/BootstrapPlacement"
 )
@@ -81,6 +82,9 @@ type PlayerLocatorServiceClient interface {
 	BeginPlacementTransition(ctx context.Context, in *BeginPlacementTransitionRequest, opts ...grpc.CallOption) (*BeginPlacementTransitionResponse, error)
 	// BindPlacementTarget 把 allocator 选出的唯一 DS/assignment 绑定到同一 version+operation。
 	BindPlacementTarget(ctx context.Context, in *BindPlacementTargetRequest, opts ...grpc.CallOption) (*BindPlacementTargetResponse, error)
+	// RetargetPlacementTarget 只能在 Admission 前、旧 target 的权威不可用证明通过时，
+	// 原子推进 version/operation 并把完整 old target 换为完整 new target。TTL 本身不是证明。
+	RetargetPlacementTarget(ctx context.Context, in *RetargetPlacementTargetRequest, opts ...grpc.CallOption) (*RetargetPlacementTargetResponse, error)
 	// CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
 	CommitPlacementAdmission(ctx context.Context, in *CommitPlacementAdmissionRequest, opts ...grpc.CallOption) (*CommitPlacementAdmissionResponse, error)
 	// BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
@@ -206,6 +210,16 @@ func (c *playerLocatorServiceClient) BindPlacementTarget(ctx context.Context, in
 	return out, nil
 }
 
+func (c *playerLocatorServiceClient) RetargetPlacementTarget(ctx context.Context, in *RetargetPlacementTargetRequest, opts ...grpc.CallOption) (*RetargetPlacementTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetargetPlacementTargetResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_RetargetPlacementTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *playerLocatorServiceClient) CommitPlacementAdmission(ctx context.Context, in *CommitPlacementAdmissionRequest, opts ...grpc.CallOption) (*CommitPlacementAdmissionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CommitPlacementAdmissionResponse)
@@ -267,6 +281,9 @@ type PlayerLocatorServiceServer interface {
 	BeginPlacementTransition(context.Context, *BeginPlacementTransitionRequest) (*BeginPlacementTransitionResponse, error)
 	// BindPlacementTarget 把 allocator 选出的唯一 DS/assignment 绑定到同一 version+operation。
 	BindPlacementTarget(context.Context, *BindPlacementTargetRequest) (*BindPlacementTargetResponse, error)
+	// RetargetPlacementTarget 只能在 Admission 前、旧 target 的权威不可用证明通过时，
+	// 原子推进 version/operation 并把完整 old target 换为完整 new target。TTL 本身不是证明。
+	RetargetPlacementTarget(context.Context, *RetargetPlacementTargetRequest) (*RetargetPlacementTargetResponse, error)
 	// CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
 	CommitPlacementAdmission(context.Context, *CommitPlacementAdmissionRequest) (*CommitPlacementAdmissionResponse, error)
 	// BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
@@ -313,6 +330,9 @@ func (UnimplementedPlayerLocatorServiceServer) BeginPlacementTransition(context.
 }
 func (UnimplementedPlayerLocatorServiceServer) BindPlacementTarget(context.Context, *BindPlacementTargetRequest) (*BindPlacementTargetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BindPlacementTarget not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) RetargetPlacementTarget(context.Context, *RetargetPlacementTargetRequest) (*RetargetPlacementTargetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RetargetPlacementTarget not implemented")
 }
 func (UnimplementedPlayerLocatorServiceServer) CommitPlacementAdmission(context.Context, *CommitPlacementAdmissionRequest) (*CommitPlacementAdmissionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitPlacementAdmission not implemented")
@@ -538,6 +558,24 @@ func _PlayerLocatorService_BindPlacementTarget_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerLocatorService_RetargetPlacementTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetargetPlacementTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).RetargetPlacementTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_RetargetPlacementTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).RetargetPlacementTarget(ctx, req.(*RetargetPlacementTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlayerLocatorService_CommitPlacementAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CommitPlacementAdmissionRequest)
 	if err := dec(in); err != nil {
@@ -624,6 +662,10 @@ var PlayerLocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BindPlacementTarget",
 			Handler:    _PlayerLocatorService_BindPlacementTarget_Handler,
+		},
+		{
+			MethodName: "RetargetPlacementTarget",
+			Handler:    _PlayerLocatorService_RetargetPlacementTarget_Handler,
 		},
 		{
 			MethodName: "CommitPlacementAdmission",

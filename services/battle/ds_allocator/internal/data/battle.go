@@ -91,6 +91,17 @@ type BattleRepo interface {
 	RangeStaleBattles(ctx context.Context, thresholdMs int64) ([]uint64, error)
 	// RangeActiveBattles 返回 active ZSET 中全部 match_id(ListBattles 用)。
 	RangeActiveBattles(ctx context.Context) ([]uint64, error)
+	// EnsurePlayerDeparture 以 placement operation_id + exact source GameServer tuple 幂等
+	// 建立 Battle→Hub 物理离场单。没有 credential-bound active snapshot ACK 或 exact
+	// UID teardown proof 时只能返回 pending，禁止用 TTL/键缺失推导离场。
+	EnsurePlayerDeparture(ctx context.Context, expected BattlePlayerDepartureExpected) (BattlePlayerDepartureResult, error)
+	// ReconcilePlayerDepartures 只供已验证 Battle DS credential 的心跳调用。
+	// snapshotPresent=false 时绝不提交 departed（滚动更新 fail-closed）。
+	ReconcilePlayerDepartures(ctx context.Context, matchID uint64, source BattleDepartureSource,
+		snapshotPresent bool, activePlayerIDs []uint64, acknowledgedDepartureIDs []string) ([]*dsv1.BattleEvictionOrder, error)
+	// RecordInstanceTeardown 只能在外部 UID 条件 Release 明确成功后调用。
+	// 它与 journal 同 slot 原子提交，使源 DS 整体销毁成为离场证明。
+	RecordInstanceTeardown(ctx context.Context, matchID uint64, source BattleDepartureSource) error
 }
 
 // ── Redis 实现 ────────────────────────────────────────────────────────────────

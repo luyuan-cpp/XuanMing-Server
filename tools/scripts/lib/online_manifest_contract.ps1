@@ -8,6 +8,25 @@ $script:PandoraImagePinPattern = '^(?<repository>[^\s@]+)@(?<digest>sha256:[0-9a
 $script:PandoraWriterServices = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
 $script:PandoraPlayerHmacServices = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 $script:PandoraDsCallbackHmacServices = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator')
+$script:PandoraPlacementDomains = [ordered]@{
+    AccountBootstrap = @(
+        @{ Service = 'login'; Section = 'login'; Child = 'placement_bootstrap_proof_secret' },
+        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_account_bootstrap_proof_secret' })
+    MatchStart = @(
+        @{ Service = 'matchmaker'; Section = 'match'; Child = 'placement_match_start_proof_secret' },
+        @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'placement_match_start_proof_secret' },
+        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_match_start_proof_secret' })
+    BattleExit = @(
+        @{ Service = 'battle-result'; Section = 'battle'; Child = 'placement_battle_exit_proof_secret' },
+        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_exit_proof_secret' })
+    HubTransfer = @(
+        @{ Service = 'hub-allocator'; Section = 'hub'; Child = 'placement_hub_transfer_proof_secret' },
+        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret' })
+}
+$script:PandoraMatchResumeAuthBindings = @(
+    @{ Service = 'login'; Section = 'login'; Child = 'match_resume_auth_secret' },
+    @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
+    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' })
 
 # 普通 online 发布的 HMAC 连续性契约。所有函数只返回 SHA256 指纹，不把解析出的密钥
 # 放进异常或日志；密钥轮换必须由独立流程完成，不能借普通 Stable/Canary 发布切换。
@@ -206,6 +225,151 @@ function Assert-PandoraOnlineHmacContinuity {
     }
     if (-not (Test-PandoraStringSequenceEqual $live.DsCallback.AdditionalSha256 $candidate.DsCallback.AdditionalSha256)) {
         throw '普通 online 发布检测到 DS callback additional keyset 变化；必须走独立换钥流程，本次未 push/apply。'
+    }
+    return $candidate
+}
+
+# Placement proof 是已持久化 transition/outbox 的验签根。普通发布若误换任意一把 key，
+# 冷启动恢复会把原本合法的 terminal/start proof 判成 UNKNOWN。这里严格解析每个 writer 与
+# locator 的直接 YAML 子项，只返回 SHA256 指纹，并要求四个权限域彼此及与两套 HMAC 隔离。
+function Get-PandoraYamlDirectStringSha256 {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServiceName,
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$SectionName,
+        [Parameter(Mandatory = $true)][string]$ChildName
+    )
+    [string[]]$lines = [regex]::Split($Text, '\r?\n')
+    $sectionPattern = '^([ ]*)' + [regex]::Escape($SectionName) + ':[ \t]*(?:#.*)?$'
+    $sectionIndexes = @(
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -cmatch $sectionPattern) { $i }
+        }
+    )
+    if ($sectionIndexes.Count -ne 1) {
+        throw "$ServiceName.$SectionName 必须恰好有一个节点；拒绝普通发布。"
+    }
+    $sectionIndex = [int]$sectionIndexes[0]
+    $sectionIndent = [regex]::Match($lines[$sectionIndex], $sectionPattern).Groups[1].Value.Length
+    $sectionEnd = $lines.Count
+    for ($i = $sectionIndex + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -cmatch '^\s*$' -or $lines[$i] -cmatch '^[ ]*#') { continue }
+        $indent = [regex]::Match($lines[$i], '^([ ]*)').Groups[1].Value.Length
+        if ($indent -le $sectionIndent) { $sectionEnd = $i; break }
+    }
+    $directIndent = [int]::MaxValue
+    for ($i = $sectionIndex + 1; $i -lt $sectionEnd; $i++) {
+        if ($lines[$i] -cmatch '^\s*$' -or $lines[$i] -cmatch '^[ ]*#') { continue }
+        $indent = [regex]::Match($lines[$i], '^([ ]*)').Groups[1].Value.Length
+        if ($indent -gt $sectionIndent -and $indent -lt $directIndent) { $directIndent = $indent }
+    }
+    if ($directIndent -eq [int]::MaxValue) { throw "$ServiceName.$SectionName 是空节点；拒绝普通发布。" }
+
+    $childPattern = '^' + (' ' * $directIndent) + [regex]::Escape($ChildName) +
+        '[ \t]*:[ \t]*(?<json>"(?:\\.|[^"\\])*")[ \t]*(?:#.*)?$'
+    $matches = @(
+        for ($i = $sectionIndex + 1; $i -lt $sectionEnd; $i++) {
+            $match = [regex]::Match($lines[$i], $childPattern)
+            if ($match.Success) { $match }
+        }
+    )
+    if ($matches.Count -ne 1) {
+        throw "$ServiceName.$SectionName.$ChildName 必须是唯一直接双引号字符串子项；拒绝普通发布。"
+    }
+    $value = ConvertFrom-PandoraJsonStringScalar -Json $matches[0].Groups['json'].Value `
+        -Where "$ServiceName.$SectionName.$ChildName"
+    if ([string]::IsNullOrEmpty($value)) {
+        throw "$ServiceName.$SectionName.$ChildName 为空；拒绝普通发布。"
+    }
+    return Get-PandoraSecretSha256 -Value $value
+}
+
+function Get-PandoraOnlinePlacementContract {
+    param([Parameter(Mandatory = $true)][System.Collections.IDictionary]$Configs)
+    $contract = [ordered]@{}
+    foreach ($domain in $script:PandoraPlacementDomains.GetEnumerator()) {
+        $baseline = ''
+        foreach ($binding in @($domain.Value)) {
+            $service = [string]$binding.Service
+            if (-not $Configs.Contains($service) -or [string]::IsNullOrWhiteSpace([string]$Configs[$service])) {
+                throw "placement $($domain.Key) 连续性检查缺 $service 配置；拒绝普通发布。"
+            }
+            $current = Get-PandoraYamlDirectStringSha256 -ServiceName $service `
+                -Text ([string]$Configs[$service]) -SectionName ([string]$binding.Section) `
+                -ChildName ([string]$binding.Child)
+            if ([string]::IsNullOrEmpty($baseline)) { $baseline = $current; continue }
+            if ($current -cne $baseline) {
+                throw "placement $($domain.Key) proof key 在 writer/locator 间不一致；拒绝普通发布。"
+            }
+        }
+        $contract[$domain.Key] = $baseline
+    }
+    $placementSet = @($contract.Values)
+    if (@($placementSet | Sort-Object -Unique).Count -ne $placementSet.Count) {
+        throw '四个 placement proof 权限域不得复用 key；拒绝普通发布。'
+    }
+    $hmac = Get-PandoraOnlineHmacContract -Configs $Configs
+    $hmacSet = @($hmac.Player.PrimarySha256) + @($hmac.Player.AdditionalSha256) +
+        @($hmac.DsCallback.PrimarySha256) + @($hmac.DsCallback.AdditionalSha256)
+    if (@($placementSet | Where-Object { $hmacSet -contains $_ }).Count -gt 0) {
+        throw 'placement proof key 不得与玩家 Session/DS callback HMAC keyset 相交；拒绝普通发布。'
+    }
+    $matchResumeAuth = Get-PandoraOnlineMatchResumeAuthContract -Configs $Configs
+    if ($placementSet -contains $matchResumeAuth) {
+        throw 'Match resume service identity key 不得与 placement proof key 相交；拒绝普通发布。'
+    }
+    return [pscustomobject]$contract
+}
+
+function Get-PandoraOnlineMatchResumeAuthContract {
+    param([Parameter(Mandatory = $true)][System.Collections.IDictionary]$Configs)
+    $baseline = ''
+    foreach ($binding in $script:PandoraMatchResumeAuthBindings) {
+        $service = [string]$binding.Service
+        if (-not $Configs.Contains($service) -or [string]::IsNullOrWhiteSpace([string]$Configs[$service])) {
+            throw "Match resume service identity 连续性检查缺 $service 配置；拒绝普通发布。"
+        }
+        $current = Get-PandoraYamlDirectStringSha256 -ServiceName $service `
+            -Text ([string]$Configs[$service]) -SectionName ([string]$binding.Section) `
+            -ChildName ([string]$binding.Child)
+        if ([string]::IsNullOrEmpty($baseline)) { $baseline = $current; continue }
+        if ($current -cne $baseline) {
+            throw 'Login/Matchmaker 的 Match resume service identity key 不一致；拒绝普通发布。'
+        }
+    }
+    $hmac = Get-PandoraOnlineHmacContract -Configs $Configs
+    $hmacSet = @($hmac.Player.PrimarySha256) + @($hmac.Player.AdditionalSha256) +
+        @($hmac.DsCallback.PrimarySha256) + @($hmac.DsCallback.AdditionalSha256)
+    if ($hmacSet -contains $baseline) {
+        throw 'Match resume service identity key 不得与玩家 Session/DS callback HMAC keyset 相交；拒绝普通发布。'
+    }
+    return $baseline
+}
+
+function Assert-PandoraOnlineMatchResumeAuthContinuity {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$LiveConfigs,
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$CandidateConfigs
+    )
+    $live = Get-PandoraOnlineMatchResumeAuthContract -Configs $LiveConfigs
+    $candidate = Get-PandoraOnlineMatchResumeAuthContract -Configs $CandidateConfigs
+    if ($live -cne $candidate) {
+        throw '普通 online 发布检测到 Match resume service identity key 变化；必须走独立换钥流程，本次未 push/apply。'
+    }
+    return $candidate
+}
+
+function Assert-PandoraOnlinePlacementContinuity {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$LiveConfigs,
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$CandidateConfigs
+    )
+    $live = Get-PandoraOnlinePlacementContract -Configs $LiveConfigs
+    $candidate = Get-PandoraOnlinePlacementContract -Configs $CandidateConfigs
+    foreach ($domain in $script:PandoraPlacementDomains.Keys) {
+        if ([string]$live.$domain -cne [string]$candidate.$domain) {
+            throw "普通 online 发布检测到 placement $domain proof key 变化；必须走独立换钥/证明迁移流程，本次未 push/apply。"
+        }
     }
     return $candidate
 }

@@ -2,21 +2,26 @@
 
 > 玩家已匹配进入 battle DS 后掉线,重新登录应直接回到那场对局的 battle DS,而不是被丢回大厅。
 > 本文记录该能力的设计与落地(服务级决策,CLAUDE.md §5/§7)。
+>
+> **状态(2026-07-15)**:第一阶段基于短 TTL locator 的方案已升级为持久版本化 placement +
+> Admission 最终门 + durable saga/outbox + UE 单写者 Coordinator。§1~§2.2 保留问题演进背景；
+> 当前权威语义以 §2.3、§7.3.1 和 `decision-revisit-ds-callback-auth.md` §7.16.3 为准。
 
 ## 1. 问题与定性
 
 **现象**:玩家匹配成功、进入 battle DS 后网络掉线,重新登录只拿到 Hub DS 地址,被送回大厅,原对局对他而言"消失"。
 
-**定性**:这是**已知设计缺口(gap),不是 bug**。零件都在,只是没接进登录链路:
+**定性**:这是 2026-07-14 确认的**历史设计缺口**，2026-07-15 已在代码层闭环。原始缺口是:
 
-- `player_locator` 已有 `LOCATION_STATE_BATTLE` 态,且 `battle_pod` 字段存的就是 **battle DS 地址**(matchmaker 成局时用 `ds_addr` 写入,唯一标识 DS)。
-- matchmaker 已能为重连/换设备的玩家现签新 battle 票(`GetMatchProgress(match_id=0)` 重连兜底 + `SignBattleTicket`),但仅覆盖 **进战斗前**(READY 及之前)。
-- **login 不查玩家当前位置**,无论玩家在不在战斗中都只返回 Hub 地址。
-- **BATTLE 位置只在成局时写一次**,locator TTL 默认 30s,整局(最长 `BattleTTL`)期间无人续期 → 30s 后过期,长对局根本查不到。
+- `player_locator` 当时只有短 TTL `LOCATION_STATE_BATTLE` presence；它不是可靠的业务归属记录。
+- matchmaker 当时能在 READY 现签 Battle 票，但未给冷启动暴露完整匹配/placement 上下文。
+- login 当时不查玩家权威归属，无论玩家是否在战斗中都只返回 Hub 地址。
+- BATTLE presence 当时可能在 30s 后过期，错误地把“看不见”当成“已离开 Battle”。
 
-## 2. 方案(选定)
+## 2. 方案演进与最终选定
 
-**登录时检测 BATTLE + ds_allocator 心跳续期 BATTLE 位置**,两处协同改动:
+第一阶段采用“登录检测 BATTLE + ds_allocator 心跳续期 BATTLE presence”止血；最终方案增加无 TTL 的
+版本化 placement，presence 只用于在线/监控，不再决定路由。
 
 ### 2.1 login 侧:登录检测 BATTLE 直接下发重连信息
 
@@ -34,9 +39,9 @@
 - 否则(不在战斗)走原有 hub 流程,`battle_*` 字段留空。
 
 **客户端契约**:`LoginResponse.battle_ds_addr` 非空 → 直连 battle DS 重连;为空 → 走 hub。
-battle DS 已结束但位置/票据尚未清理时,客户端连 battle DS 会被拒；`IssueDSTicket(hub)` 的 service
-路径确会重新调用 Hub allocator 并返回地址+票，但在 §7.16.3 placement 最终门完成前，它不能证明玩家
-已权威离开 Battle，不得把这条回退描述成一人一 DS 的安全闭环。
+battle DS 已结束但客户端仍持旧票时，旧票会因 terminal tombstone/placement version 不匹配被拒；客户端
+重新读取 `ResumeContext`。只有 terminal/leave proof 已推进 placement，`IssueDSTicket(hub)` 才能进入 Hub
+assignment；UNKNOWN 不产生 seat、assignment 或 ticket。
 
 ### 2.2 ds_allocator 侧:心跳续期玩家 BATTLE 位置 TTL
 
@@ -47,27 +52,24 @@ ds_allocator 从 Redis 镜像 `BattleStorageRecord` 取 `player_ids` + `ds_addr`
 - DS heartbeat 与 locator refresh 持续成功时，BATTLE 位置在整局内续期，登录重连检测对长对局有效。
 - **弱依赖**:locator 不可用只 Warn,不影响心跳与对局。
 - 续期用**独立 detached ctx**(不随心跳 RPC ctx 取消),fire-and-forget,不给心跳响应加尾延迟。
-- 对局进入 `ended/abandoned` 后心跳走终态分支不再续期,位置约 30s 后自然过期
-  (给赛后短窗重连留余量,过期后客户端连不上自动回大厅)。
+- 对局进入 `ended/abandoned` 后心跳不再续期 presence；路由切换不等待这 30s TTL，而由 BattleResult
+  terminal tombstone + exit-proof outbox 显式推进 placement。
 
-### 2.3 降级语义:查询失败 ≠ 不在战斗(B1 Login 已 fail-closed)
+### 2.3 最终降级语义:查询失败/记录缺失 ≠ 不在战斗
 
 两种结果必须区分:
 
 | 结果/配置 | 含义 | 行为与安全性 |
 |---|---|---|
-| locator 返回明确 HUB/LOGIN_PENDING 等非 Battle 状态 | 玩家当前不在战斗 | 进入 Hub 链;B1 下先成功写 LOGIN_PENDING,再 AssignHub |
-| locator 返回空记录/不完整 Battle 记录 | 可能已离线,也可能是 best-effort 续租连续失败 | 当前也映射成 `!InBattle` 并走 Hub;**未闭环**,见 §7.3 J |
-| locator 查询失败/未配置 + B1 开启 | 玩家真实状态**未知** | 返回 unavailable;Hub assigner/seat/ticket/LOGIN_PENDING 均不得产生 |
-| locator 查询失败 + B1 关闭 | 本地/off profile 的显式可用性降级 | 可能误进 Hub,不能证明一人一 DS,不得用于生产安全结论 |
+| placement 为 STABLE/PENDING HUB，且 proof/version/operation 可核 | 玩家当前权威去向为 Hub | 按相同 operation 恢复 assignment/签票；Admission 再做最终 CAS |
+| placement 为 STABLE/PENDING BATTLE(match)，且 canonical match target 可核 | 玩家仍属该 Battle | 只现签 exact Battle 票；不得 AssignHub |
+| placement 空记录、损坏、依赖查询失败或与 match/roster 不一致 | 玩家真实状态 **UNKNOWN** | 返回 unavailable 并退避重查；Hub seat/assignment/ticket/spawn 全零副作用 |
+| 短 TTL locator/presence 缺失 | 只说明未观测到在线心跳 | 不改变 placement，不允许作为 Hub proof |
 
-2026-07-14 状态:`require_hub_assignment_binding=true` 已实现“未知即拒绝”,Redis authority 的集群配置
-生成器会开启该门;对应负例测试断言 Hub assigner 零调用。查询使用有界重试,瞬态恢复后仍可返回 Battle。
-
-该修复只覆盖 `Login`。`IssueDSTicket(hub)` 仍可绕过 locator/B1 直接 AssignHub,Hub admission 也尚未核
-placement,所以整条 DS 迁移仍未闭环;见 §6.2、§7.3 A 及
-`decision-revisit-ds-callback-auth.md` §7.16.3。locator 的 BATTLE fence 只能防止值被覆盖,不能撤销已经
-产生并可准入的 Hub assignment/ticket。
+2026-07-15 状态:`Login`、`SelectRole`、`IssueDSTicket(hub)`、Hub transfer/drain 与 Hub/Battle Admission
+都使用同一 placement 门；配置生成器在 apply 前和锁内校验四类 proof key、内部 resume-auth key 的
+continuity/不复用。对应负例测试断言 UNKNOWN/旧 version/错误 operation 下 assigner、seat、ticket、spawn
+均无副作用。
 
 ### 2.4 不变量合规(CLAUDE.md §9)
 
@@ -75,8 +77,8 @@ placement,所以整条 DS 迁移仍未闭环;见 §6.2、§7.3 A 及
 - **§16 不停服更新**:不引入任何"必须停服"依赖;新老副本同时在线时,旧 login 副本不填
   battle 字段(客户端回退 hub),新副本填——双向兼容。
 - **§14 客户端只拿最小视图**:只回 `battle_ds_addr/battle_ticket/match_id`,不外露 `StorageRecord`。
-- **§1 一人一 DS**:B1 Login 对 active/unknown placement 均 fail-closed,且 BATTLE→BATTLE 只接受同
-  match 续期；但 `IssueDSTicket(hub)`/Hub admission 旁路仍是 §7.3 A blocker,本节不得宣称完整满足。
+- **§1 一人一 DS**:所有 Hub 签票与 Hub/Battle Admission 对 active/unknown placement fail-closed；
+  BATTLE→BATTLE 只接受同 match/operation/target，终局 tombstone 阻止旧 match 复活。
 - **§11 业务 ID uint64**:`match_id` 为 uint64。
 
 ## 3. 落地清单
@@ -207,8 +209,8 @@ roster 续租玩家的 `BATTLE(match_id)` 位置。正确恢复顺序是:
 3. 只有服务端明确判定已非 BATTLE,或显式离局事务已经用 `match_id` fence 完成
    `BATTLE → HUB_PENDING/HUB`,才允许签发新的 Hub 地址和一次性票据。
 
-`IssueDSTicket(hub)` 自身也必须执行同一 placement 门,不能把安全性只寄托在调用方。当前实现尚未满足,
-见 §7.3 阻断项 A。
+`IssueDSTicket(hub)` 自身也执行同一 placement 门，Hub Admission 再校验 ticket 中的
+version/operation/target；不能把安全性只寄托在调用方。反例与当前实现见 §7.3 A/§7.3.1。
 
 ### 6.3 断线重连 timer(建议,提升体验)
 
@@ -218,7 +220,7 @@ roster 续租玩家的 `BATTLE(match_id)` 位置。正确恢复顺序是:
 - **前台重试提示窗口 ~30s**;它只是客户端体验阈值,不是 BATTLE 权威状态的 TTL,超时后按 §6.3.1
   重新判定去向。
 - **幂等**:`Login` 可安全重复调(同 account 稳定 player_id)。
-- **只重试 Login 才是安全入口**:B1 模式会按 locator+roster 判定 Battle/Hub;客户端不得在本地超时后
+- **只重试 Login/ResumeContext 才是安全入口**:服务端按 placement+canonical match 判定 Battle/Hub;客户端不得在本地超时后
   自行把目的地改成 Hub。
 
 #### 6.3.1 重连超时后如何真回到大厅(必须)
@@ -236,67 +238,81 @@ roster 续租玩家的 `BATTLE(match_id)` 位置。正确恢复顺序是:
 5. 所有 in-flight Login/IssueTicket 回调必须按 recovery generation 丢弃迟到结果,避免 Battle/Hub 两次
    `ClientTravel` 竞态。
 
-当前客户端超时后直接 `IssueDSTicket(hub)`;当前服务端该接口又未检查 active BATTLE,因此本节是
-**目标契约,不是已完成事实**。
+2026-07-15 已按上述流程实现：超时不再直接回 Hub，服务端 `IssueDSTicket(hub)` 与最终 Admission
+都检查 placement；UNKNOWN 继续退避，session 过期先完整 Login 换新。
 
-### 6.4 客户端不需要改的
+### 6.4 保持兼容的部分
 
-- **proto**:后端已 regen;cpp pb 同步到 UE `Source/Pandora/Generated/Proto/` 由 Codex 执行,
-  客户端不手改 proto,只是 regen 后多出 `battle_ds_addr/battle_ticket/match_id` 三个可读字段。
+- **proto**:新字段全部 additive，Go/C++ 都由生成器输出；旧 tag 不复用。老客户端不认识
+  `ResumeContext` 时仍可按原 Login 三字段分流，服务端安全门不依赖客户端版本。
 - **鉴权 / 连接框架**:battle_ticket 与 hub_ticket 同一套 JWT 握手机制,走现有通道即可。
 
-### 6.5 UE 侧落地清单(交接给客户端窗口)
+### 6.5 UE 侧落地清单（2026-07-15 已完成）
 
 1. `LoginResponse` 处理:按 §6.1 分流(battle_ds_addr 非空 → 连 battle,否则连 hub)。
 2. battle DS 握手改用 `battle_ticket`;透传 `match_id` 供 HUD / 重连对账。
 3. 直连 battle 失败 → §6.2 权威重判;active BATTLE 继续回原局,不得无条件切 Hub。
 4. 断线重连 timer:§6.3 指数退避 + 前后台恢复 + generation 防迟到回调;30s 只升级 UI,不改权威去向。
 5. 老版本兼容:字段为空时行为与今天完全一致(纯进大厅),无需为兼容做额外分支。
+6. `UMyDsRecoveryCoordinator` 成为唯一 DS travel writer，接入 foreground、World BeginPlay、push close、
+   `OnTravelFailure`、`OnNetworkFailure` 与 session renewal；Account/Match model 不再直接 travel。
 
-## 7. 全链路断线/切后台审计:任意时间点掉线会不会卡死(2026-07-14 复核)
+## 7. 全链路断线/切后台审计:任意时间点掉线会不会卡死(2026-07-15 修复复核)
 
 > 审计问题:玩家在「登录 → 选角 → 进 Hub DS」或「匹配 → READY → 进 Battle DS」的
 > **任意时间点**切后台、断网或杀进程,回来后能否自动/可操作地恢复,并且最终只进入一个权威 DS?
 >
-> **当前结论:未通过,代码尚未全部做完。** 正常重登、服务端清理/幂等和多数故障恢复机制已经存在,
-> 但下面 A~J 有可复现的静态代码反例,真实 UE 任意时点故障注入 E2E 也未完成。不得再宣称
-> “每个断点都不会卡死”或“最终一定能切进 DS”。
+> **当前结论:代码层闭环已完成,生产环境验收尚未完成。** 2026-07-14 发现的 A~J 静态反例已按
+> §7.3.1 的单一权威 placement、持久 saga/outbox 和 UE 单写者恢复协调器修复,相关 Go/UE 自动化与
+> 编译门通过。真实移动端前后台、UDP Admission、Redis/K8s/Agones 故障注入仍是发布前验收项；
+> 因此可以宣称“代码不会靠 TTL 静默自愈、失败会进入权威重试或显式登录态”，不能宣称“已在生产验证”。
 
 这里的“不卡死”必须同时满足:恢复动作有界、切后台再前台后继续推进、杀进程后可由服务端权威态恢复、
 失败后存在可见且可重复的入口、迟到回调不触发相互竞争的 travel,以及任何时刻最多只有一个可准入 DS。
 
-### 7.1 逐断点审计表
+### 7.1 逐断点审计表（2026-07-15）
 
 | # | 故障注入点 | 已有机制 | 复核状态 |
 |---|---|---|---|
-| 1 | Login / SelectRole 请求在飞时断网或挂起 | UE 正常 HTTP backend 有连接/活动超时并走完成回调;模型回调会复位 in-flight | **部分**:项目没有前后台恢复接线和黑洞/挂起 Automation;`SendUnary` 也未检查 `ProcessRequest()` 返回值,不能用“~30s 必回调”作全平台绝对证明 |
-| 2 | Hub `ClientTravel` / PreLogin / Admission 中断 | Hub 连接失败会复位 `ConnectingTarget`;任意新 World BeginPlay 再兜底复位;Hub reservation/session ledger 防重复占座 | **部分**:静态恢复路径存在,缺真实 UE UDP/Admission 故障注入 |
-| 3 | 已在 Hub 后断线 | locator TTL/fence、Hub reservation/session ledger 有单测 | **部分**:真 UE Logout/Admission response-loss E2E 仍缺 |
-| 4 | StartMatch 三步写任一点请求取消 | ticket body → player claims → queue 的顺序避免正常并发双票 | **未通过,见 G**:回滚复用已取消 ctx,可留下“有 body/claim、无 queue”的 30min 幽灵票 |
-| 5 | 最后一人 Confirm 后断线/切后台 | ALLOCATING 有 60s 扫描宽限,allocator/失败路径有部分单测 | **未通过,见 G/H**:DS 分配和 READY finalize 仍绑玩家 RPC ctx;错误路径可把 ALLOCATING 移出恢复索引 |
-| 6 | READY push 丢失或后台恢复 | push + 3s polling;轮询 READY 会刷新 Battle 票 jti | **未通过,见 C/G**:无 PC 时同地址永久去重;locator BATTLE 写和 push 也可能随最后确认者 ctx 取消 |
-| 7 | 匹配驱动的 Battle 首次握手失败 | `FMyBattleConnectRetryPolicy` 对部分握手失败透明重试 | **部分**:有纯策略测试,没有跨 world/前后台真连接测试;耗尽后仍依赖重新登录恢复 |
-| 8 | 登录驱动的 Battle 直连失败 | P0(2026-07-14)已改权威重查循环;服务端 Hub 签票门已封旁路 | **部分,见 A/J**:签票旁路已封,但 admission 最终门与 TTL 缺口待候选 B |
-| 9 | Battle 局内掉线 | GameInstance 级 timer 指数退避 Login;服务端按 roster 保持 BATTLE 并现签重连票;P0 后超窗口只升级 UI 不自切 Hub | **部分,见 F/J**:迟到回调仍可竞争 travel;locator key 缺失仍可误判 Hub |
-| 10 | Battle 中杀进程再启动 | Login 在 locator BATTLE 时再核 roster并直回原 Battle | **入口部分覆盖,出口未闭环,见 D/J**:locator 缺失会漏判;直连分支未恢复 MatchModel 上下文 |
-| 11 | 结算、回 Hub、再次匹配 | 正常链会带 `fence_match_id`;battle terminal release 有持久 outbox | **未通过,见 D/E/I**:客户端回 Hub 不可安全重试;match claim 释放仍是 best-effort,失败可挡住新匹配 30min |
-| 12 | push stream 本身断开 | 匹配阶段多数时候可由 polling 兜底 | **残余**:`OnStreamClosed` 无自动重订;非轮询消费者依赖重登/重进 Hub |
+| 1 | Login / SelectRole 请求在飞时断网或挂起 | unary 发送失败也完成回调;Coordinator generation/request-seq 使迟到回包失效;foreground 重新读权威态 | **代码通过**;真实移动端 HTTP 黑洞待发布验收 |
+| 2 | Hub `ClientTravel` / PreLogin / Admission 中断 | Hub assignment 是持久恢复日志;票绑定 placement;Admission 成功提交后才开放 spawn gate;响应丢失可同 operation 重试；客户端还必须收到本次 `recovery_attempt` 对应的 Reliable Admission committed RPC | **代码通过**;真实 UDP/PreLogin 故障注入待验 |
+| 3 | 已在 Hub 后断线/切线/排空 | stable assignment、connected owner 与 shard-member index 均不靠 30m TTL；切线先持久化 cleanup，再由旧 Hub 心跳取得 exact eviction，Logout ACK 后才开放目标票/Admission | **代码通过**;真机 Kick/Logout/响应丢失待验 |
+| 4 | StartMatch 任一步请求取消/进程退出 | durable start operation + due index + worker/reconciler;非终态 claim/票不靠 TTL;accepted 后冲突持久补偿 | **代码通过** |
+| 5 | 最后一人 Confirm 后断线/切后台 | RPC 只 CAS `ALLOCATING`;服务 worker checkpoint 精确 allocator target,再完成全 roster placement/READY | **代码通过** |
+| 6 | READY push 丢失或后台恢复 | push + polling + `ResumeContext`;无 PC 保留 pending travel,World/foreground 后继续驱动 | **代码通过** |
+| 7 | 匹配驱动的 Battle 首次握手失败 | 唯一 Coordinator 接管 network/travel failure,旧 generation 失效并重读权威 placement | **代码通过**;真实跨 world UDP 待验 |
+| 8 | 登录驱动的 Battle 直连失败 | Hub 签票和 Admission 共用 placement version/operation 最终门;UNKNOWN 只重试,不会签 Hub 票 | **代码通过** |
+| 9 | Battle 局内掉线 | active Battle 只现签该 Battle 票;30s 仅升级 UI;session 过期完整 Login 换新,凭据不可用则显式回登录页 | **代码通过**;真机长后台待验 |
+| 10 | Battle 中杀进程再启动 | Login/`GetResumeContext` 恢复 route、match stage、version、operation;placement 不因 presence TTL 消失 | **代码通过** |
+| 11 | 结算、回 Hub、再次匹配 | canonical roster 同事务写 release/exit-proof outbox;永久 terminal tombstone 阻止旧 Battle 复活;Hub fence 保留到 ACK | **代码通过** |
+| 12 | push stream 本身断开 | stream 自动重订;匹配阶段仍有 polling/`ResumeContext` 权威兜底 | **代码通过** |
 
-### 7.2 已确认存在的恢复基础
+### 7.2 已完成的恢复基础
 
-1. **Battle-aware Login 的已覆盖部分**:B1(`require_hub_assignment_binding=true`)下 locator 查询报错会
-   fail-closed;返回 active BATTLE 后再核 roster并现签 Battle 票,后续任一步失败都不会继续 AssignHub。
-   locator key 正常缺失的权威性仍是 J 的缺口。
-2. **Hub 容量/准入账本**:assignment、reservation、session 幂等复用和过期释放已有并发/故障单测。
-3. **匹配服务端已有自愈零件**:入队 liveness、部分 stale claim、确认超时、ALLOCATING grace、
-   空局/DS 心跳丢失及 terminal outbox 均有超时、幂等或补偿路径;但 G~I 证明恢复索引/持久化仍不完整。
+1. **Battle-aware Login 与 ResumeContext**:placement 是独立于短 TTL presence 的权威记录；active
+   BATTLE 再核 canonical match context 并现签 Battle 票，UNKNOWN fail-closed。冷启动和前台恢复同时返回
+   route、match stage、placement version 与 operation id；内部 match resolver 使用独立 HMAC+nonce，
+   不接受或转发玩家 JWT。
+2. **Hub 容量/准入账本**:strict assignment、connected session 和 drain member index 持久到显式
+   Departure/cleanup；reservation 才有有界 TTL。Hub→Hub/Release 使用 index-first durable cleanup，
+   assignment CAS、Bind、Departure、phase-clear 任一“已提交但回包丢失”均可重放。删除 Redis session
+   不再被当作 Pawn 已退出：旧 Hub 从 credential-bound Heartbeat 收到 exact
+   `(player,assignment,admission,UID/epoch/writer)` eviction，Kick 后由 Logout 发 Departure proof；目标
+   ticket、push 与 Admission 在 proof 前全部关闭。
+3. **匹配服务端持久恢复**:Start/Confirm/Allocation 都由持久 operation、due/active index 与服务生命周期
+   worker 推进；allocator exact target 在 placement 前 checkpoint，READY 只有在全 roster binding/ticket
+   完整后可见。瞬态错误不删除恢复索引，canonical 记录可重建索引。
 4. **票据刷新**:READY polling 与 Battle 重登录都会现签新 jti,不要求复用已消费/已过期票。
 5. **locator fence**:stale Hub logout 不能覆盖 MATCHING/BATTLE;正常结算路径把 `match_id` 作为
    `fence_match_id` 交给 Hub 更新位置。
 
-这些机制证明“主路径有恢复骨架”,不等于证明“任意时间点绝不卡死”。
+这些机制共同保证：任意失败后玩家要么只能进入唯一权威 DS，要么停在可见、可重试的 UNKNOWN/登录态；
+服务端不会用 presence/claim/ticket TTL 猜测路由，客户端本地超时也不能推进 placement。
 
-### 7.3 当前阻断项(必须完成后才能改成“已闭环”)
+### 7.3 2026-07-14 阻断反例（历史记录）
+
+以下 A~J 保留原始反例，便于以后 code review 继续构造 mutant；它们的 2026-07-15 修复状态与硬门见
+§7.3.1。本节中“必须/待完成”描述的是发现反例时的状态，不再代表当前工作树。
 
 **A. `IssueDSTicket(hub)` 绕过 active-BATTLE 门。** login service 的 hub 分支直接
 `ResolveHubEndpoint → AssignHub`,不执行 Login 的 locator/B1/`NotifyLoginPending` 顺序,也不核
@@ -310,8 +326,8 @@ roster 续租玩家的 `BATTLE(match_id)` 位置。正确恢复顺序是:
 > 一致,唯一放行路径;其余一切——roster 漂移/非成员 PermissionDeny、记录缺失、stale、错误——
 > UNKNOWN 一律 fail-closed。复审前曾把通用 `ErrPermissionDeny` 当终态证明,roster 漂移会被误放行,
 > 已修正),负例测试见 `login/internal/biz/hub_route_gate_test.go`(含 TOCTOU 并发终局切换、
-> SelectRole 零 role 落库)。签票旁路已封;但 Hub 最终 admission 的
-> placement/fence 最终门与 J 的 TTL 缺口仍待候选 B(已拍板,见 decision 文档 §7.16.3),本项未全闭环。
+> SelectRole 零 role 落库)。2026-07-15 又完成 Hub Admission placement Commit、版本票据和持久 assignment
+> 恢复日志；A/J 最终状态见 §7.3.1。
 > 取舍:对局进行中的“主动退出回大厅”会被本门拒绝,需候选 B 的显式离局事务;正常结算不受影响。
 
 **B. 30s 本地超时被误当成 Battle 已结束。** 客户端掉线不影响健康 Battle DS 的业务心跳;roster 仍含
@@ -321,7 +337,7 @@ roster 续租玩家的 `BATTLE(match_id)` 位置。正确恢复顺序是:
 > 窗口到期只触发一次 `OnBattleReconnectTimedOut`(可取消恢复面板)并降频到封顶间隔继续退避重登;
 > battle 直连失败/无 PC 同样转权威重查;重连中收到无 battle 的 LoginResponse 视为服务端权威
 > 大厅路由,接受并走正常登录分流;新增 `AbandonBattleReconnect` 供玩家主动放弃(回登录,不绕路由)。
-> 待 UE 编译验证;J 的服务端 TTL 缺口仍待候选 B。
+> 2026-07-15 UE 全量 Editor 编译与恢复 Automation 已通过；服务端 TTL 缺口由持久 placement 根治。
 
 **C. READY 时无 PlayerController 会永久去重。** `HandleBattleReady` 在实际 `ClientTravel` 前先停 polling、
 写 `PendingBattleDsAddr`;`ConnectToBattleDs` 无 PC 时只返回。之后相同 READY 被去重,World BeginPlay 也不
@@ -360,12 +376,46 @@ best-effort 刷新连续失败到 key 正常过期,查询会成功返回非 BATT
 需要权威 placement lease,或在非 BATTLE/缺失时用可证明的 roster/terminal 状态排除 active Battle;
 Hub 签票与 admission 必须执行相同最终门。
 
+#### 7.3.1 2026-07-15 修复闭环
+
+| 原反例 | 当前硬门 |
+|---|---|
+| A / J 双归属与 TTL 误判 | `player_locator` 持久版本化 placement 成为唯一权威；presence TTL 只表示网络在线。Hub/Battle ticket 同时绑定 `version + operation_id + target identity + source_match_id`，Hub `AcknowledgeAdmission` 和 Battle Admission 都校验当前 binding，旧版本票即使未过期也拒绝。|
+| B 本地超时改路由 | 30s 只升级 UI/降低重试频率；Coordinator 重新调用 Login/`GetResumeContext`，只有服务端明确 HUB 才能 Hub travel。|
+| C READY 无 PC | Coordinator 保留 pending target/ticket；World BeginPlay、foreground 和退避 ticker 继续驱动，只有实际发起 travel 后才提交 attempt。|
+| D 冷启动丢上下文 | additive `ResumeContext` 返回 `route/match_id/match_stage/placement_version/operation_id`，同步恢复 Account/Match model。Login→match resolver 使用独立服务 HMAC、exact method/audience/player 绑定和共享 Redis nonce 防重放。|
+| E 回 Hub 不可重试 | fence、operation、placement binding 保留到 Hub Admission 提交确认；ticket、PC、travel 或 ACK 任一步失败均由同一 operation 幂等恢复。|
+| F 竞争 travel | GameInstance 级 `UMyDsRecoveryCoordinator` 是唯一 DS `ClientTravel` writer；每个回调同时校验 generation、request sequence 和 expected phase，前台/network/travel failure 先使旧 generation 失效。|
+| G Start/Confirm 绑 RPC ctx | Start 是持久 operation + worker；durable ACCEPTED 后不再向调用方返回“未受理”。Confirm 只 CAS 到 ALLOCATING，服务 worker checkpoint allocator exact target 后独立完成 placement/READY。|
+| H active 索引丢失 | Redis 瞬态错误保留 due/active；只有 READY/FAILED/记录不存在才移除。reconciler 从 canonical operation/match 重建索引；失败先持久 CAS terminal。|
+| I 释放吞错 | BattleResult 用 canonical roster 做精确成员校验，并在结果事务内写 `match_release_outbox` 与 `battle_exit_proof_outbox`；失败/幂等重放持续重试，claim 使用 compare-delete。|
+| 终局与旧 Battle 复活竞态 | 每个 canonical roster 成员先写无 TTL、版本无关的 signed terminal tombstone，再推进版本化 exit proof；旧 Match 的 Begin/Bind/Admission 与 tombstone 同 Redis slot 原子观察并 fail-closed。|
+| Hub 切线/排空崩溃与双 Pawn | source exact identity、target binding 和 cleanup phase 随 assignment CAS 持久化，并用永久 exact index 供重启扫描；target Bind 成功后才给 source DS 下发 exact eviction，只有 source Logout `AcknowledgeDeparture` 或确认的 GameServer UID teardown 才能完成 phase。Redis capacity release 本身不是物理离场证明。|
+
+实现约束：
+
+1. `UMyAccountModel`、`UMyMatchModel` 不得直接出现 DS `ClientTravel`；静态门只允许
+   `MyDsRecoveryCoordinator.cpp` 调用。
+2. placement、terminal tombstone、非终态 start claim/ticket 和恢复 operation 不得以 TTL 作为业务终态；
+   必须由显式 terminal、Admission ACK 或持久 worker 清理。
+3. 对局仍 active 时，客户端“主动放弃”不能自行进入 Hub。若产品需要中途投降/离局，必须新增服务端
+   roster/placement terminal 或 leave proof；当前安全行为是拒绝并继续恢复原 Battle。
+4. session 过期时，内存中仍有登录凭据则走完整 Login 换新再恢复 placement；冷启动无凭据或凭据被拒绝时
+   转显式登录页，不无限重放旧 token，也不绕到 Hub。
+5. UNKNOWN、Redis/locator/match resolver 故障和凭据校验失败都只能暂时不可用；不能 AssignHub、签票或
+   放开 spawn gate。最终不变量是：**唯一权威 DS，或者明确可重试/可登录状态；绝不双 Admission，绝不静默等 TTL。**
+6. strict Hub assignment 与 shard-member reverse index 的 TTL 必须为 0；只允许 exact Departure、
+   Release tombstone、transfer cleanup 或确认的 UID teardown 删除。长后台/长连接不得从 drain 枚举消失。
+7. cleanup 的 source-complete 只能表示 physical Departure proof，不能由删除 Redis connected ledger 推断。
+   live session 必须返回 `DepartureRequired`，并保持 target ticket/push/Admission gate。
+
 ### 7.4 必跑验收矩阵
 
 | 注入阶段 | 最低通过条件 |
 |---|---|
 | Login、SelectRole 请求前/中/响应丢失 | foreground 后自动恢复或按钮可重试;所有 in-flight 有界释放;只产生一个 session/seat |
 | Hub ticket 已签、UDP/PreLogin/Admission 任一点失败 | 不提前生成 Pawn/写 HUB;重登获得唯一新路由;旧 reservation 有界回收 |
+| Hub 切线/Release/drain 在 assignment CAS、Bind、source Kick/Departure、phase-clear 前后崩溃或丢包 | 重启只恢复同一 target/op；source Pawn 未 exact Departure 前 target 无 ticket/push/session；完成后 source session=0、target session=1；长连 member 仍可排空 |
 | StartMatch body/每个 claim/queue 写入前后取消 ctx | 不留未入队 claim;重试可复用或清理原 operation;恢复扫描不只依赖 queue ZSET |
 | CONFIRMING→ALLOCATING→READY 任一点取消/allocator error/Redis error | durable worker 独立完成或 CAS FAILED;active 索引不因瞬态错误丢失;客户端有界看到 READY/FAILED |
 | READY 后切后台、换 world、暂无 PC | 待连接任务跨生命周期保留;恢复 PC 后继续 travel,或权威失败后明确重排 |

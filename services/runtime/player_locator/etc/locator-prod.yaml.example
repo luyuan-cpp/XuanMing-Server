@@ -27,3 +27,8 @@ snowflake:
 
 locator:
   location_ttl: "30s"             # 不变量 §1:玩家位置 30s heartbeat,SetLocation 刷 TTL
+  # locator 是唯一 verifier，拿四把分权 key；各 writer 只拿自己的那一把。
+  placement_account_bootstrap_proof_secret: "__PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET_32B__"
+  placement_match_start_proof_secret: "__PLACEMENT_MATCH_START_SECRET_32B__"
+  placement_battle_exit_proof_secret: "__PLACEMENT_BATTLE_EXIT_SECRET_32B__"
+  placement_hub_transfer_proof_secret: "__PLACEMENT_HUB_TRANSFER_SECRET_32B__"

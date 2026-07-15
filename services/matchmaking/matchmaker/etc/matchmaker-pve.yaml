@@ -19,7 +19,7 @@ server:
   grpc:
     network: tcp
     addr: ":50018"
-    timeout: "60s"              # ConfirmMatch 同步等 ds_allocator AllocateBattle(allocate 5s+ready_wait 45s ≈55s 预算)+余量
+    timeout: "60s"              # 普通 RPC 上限；ConfirmMatch 不同步等待 DS，allocation worker 独立推进
     enable_reflection: true     # dev 开;prod 关(零值=false)
     max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
   http:
@@ -52,12 +52,17 @@ match:
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(成局后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:50020"
+  hub_allocator_addr: "127.0.0.1:50021"
   # ds_allocate_timeout: 调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
   # 该 RPC 服务端阻塞等 DS ready 心跳(agones allocate 5s + ready_wait 45s + 余量),
   # 必须 ≥ ds_allocator 侧 server.grpc.timeout(60s),否则客户端先超时白等
   ds_allocate_timeout: "60s"
   # locator_addr: player_locator 服务 gRPC 直连地址(位置上报 + StartMatch 前置查战斗态)
   locator_addr: "127.0.0.1:50006"
+  # HUB→BATTLE placement proof；与 PVP writer 同权限域，生产由配置生成器覆盖。
+  placement_match_start_proof_secret: "pandora-dev-placement-match-start-key-v1!"
+  match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"
+  match_resume_auth_audience: "matchmaker:pve_coop"
   battle_gate_fail_open: false
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 + 成局最终门)。
   # UE Hub DS player_ids 保活链 2026-07-08 已实机联调验证,故开启;回归失败先关再排查(见 matchmaker-dev.yaml)。
@@ -70,8 +75,8 @@ match:
   confirm_timeout: "15s"
   # match_interval: 后台循环扫描间隔(solo 路径也由它驱动开局)
   match_interval: "2s"
-  ticket_ttl: "30m"
-  match_ttl: "30m"
+  ticket_ttl: "30m" # 仅显式终态后的留存；非终态 ticket/claim 持久
+  match_ttl: "30m"  # 仅显式终态后的留存；非终态 match 持久
   # team_size: PVE 单队人数上限(1~5 人整队直进;StartMatch 拒绝超编队伍)
   team_size: 5
   # enable_solo_match: PVE 核心开关——每张票(单人/整队)立即成局直接拉 DS,不撮合不确认。

@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"crypto/subtle"
+	"sort"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
@@ -100,13 +101,31 @@ func (c *redisBattleCredentialStateChecker) AuthorizeResult(
 		subtle.ConstantTimeCompare([]byte(active.GetTokenSha256()), []byte(cred.TokenSHA256)) != 1 {
 		return data.TerminalReleaseRecord{}, errcode.New(errcode.ErrUnauthorized, "battle credential does not match active authority")
 	}
+	playerIDs, err := canonicalBattleRoster(battle.GetPlayerIds())
+	if err != nil {
+		return data.TerminalReleaseRecord{}, err
+	}
 	return data.TerminalReleaseRecord{
 		MatchID: matchID, AllocationID: rec.GetAllocationId(), DSPodName: cred.Pod,
 		GameserverUID: cred.InstanceUID, InstanceEpoch: cred.ProtocolEpoch,
 		AuthGen: cred.Gen, AuthJTI: cred.JTI, AuthExpMs: cred.ExpMs, AuthKid: cred.Kid,
 		AuthTokenSHA256: cred.TokenSHA256, AuthWriterEpoch: cred.WriterEpoch,
-		AuthorizedAtMs: nowMs,
+		AuthorizedAtMs: nowMs, PlayerIDs: playerIDs,
 	}, nil
+}
+
+func canonicalBattleRoster(raw []uint64) ([]uint64, error) {
+	if len(raw) == 0 {
+		return nil, errcode.New(errcode.ErrUnauthorized, "battle authority roster is missing")
+	}
+	out := append([]uint64(nil), raw...)
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	for i, playerID := range out {
+		if playerID == 0 || (i > 0 && out[i-1] == playerID) {
+			return nil, errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
+		}
+	}
+	return out, nil
 }
 
 func (c *redisBattleCredentialStateChecker) MarkResultRecorded(

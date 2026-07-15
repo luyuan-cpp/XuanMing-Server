@@ -56,6 +56,12 @@ login:
   # 选角白名单(⚠️ prod 必填):对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
   # 留空 = fail-closed,SelectRole 全部拒绝(dev_allow_any_role 默认 false,严禁上生产)。
   allowed_role_ids: [__ROLE_ID_1__, __ROLE_ID_2__]
+  placement_mode: "enforce"
+  # 独立于玩家/DS callback key；生产由 pandora-config Secret 或同名环境变量注入。
+  placement_bootstrap_proof_secret: "__PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET_32B__"
+  # 独立 Login→Matchmaker 服务身份 key；生产生成器拒绝与其它信任域复用。
+  match_resume_auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B__"
+  match_resume_auth_audience: "matchmaker:5v5_ranked"
   jwt:
     issuer: "pandora-login"
     audience: "pandora-client"
@@ -69,6 +75,8 @@ login:
   hub:
     addr: "hub-allocator.pandora.svc.cluster.local:50021"
     region: ""
+  matchmaker:
+    addr: "matchmaker.pandora.svc.cluster.local:50011"
 
 # 生产实际配置由 gen_cluster_config.ps1 原子注入 enforce/redis + fence；本模板保持
 # off/legacy，避免脱离 Activation 流程手工填半套配置后误以为已启用在线入场权威。

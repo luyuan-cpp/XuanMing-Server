@@ -139,12 +139,33 @@ enum ResumeMatchStage {
   RESUME_MATCH_STAGE_RUNNING = 6;
 }
 
+// ResumePlacementState distinguishes an admitted route from an in-flight
+// transition. A route alone is never sufficient proof that ClientTravel /
+// Admission completed: HUB_PENDING still routes toward Hub but must retain the
+// operation/fence and retry.
+enum ResumePlacementState {
+  RESUME_PLACEMENT_STATE_UNSPECIFIED = 0;
+  RESUME_PLACEMENT_STATE_PENDING = 1;
+  RESUME_PLACEMENT_STATE_STABLE = 2;
+}
+
 message ResumeContext {
   ResumeRoute route = 1;
   uint64 match_id = 2;
   ResumeMatchStage match_stage = 3;
   uint64 placement_version = 4;
   string operation_id = 5;
+  ResumePlacementState placement_state = 6;
+  string ds_pod_name = 7;
+  string ds_instance_uid = 8;
+  string hub_assignment_id = 9;
+  uint32 ds_instance_epoch = 10;
+  string allocation_id = 11;
+  string release_track = 12;
+  // Canonical matchmaker namespace (for example 5v5_ranked / pve_coop).
+  // Cold-start clients must restore the matching route header before any
+  // Cancel/Confirm/GetProgress mutation.
+  string game_mode = 13;
 }
 
 message GetResumeContextRequest {

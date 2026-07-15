@@ -31,14 +31,18 @@ import (
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
 	klog "github.com/go-kratos/kratos/v2/log"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
+	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
+	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -140,7 +144,17 @@ func main() {
 
 	// 6. 装配链
 	repo := data.NewMySQLBattleRepo(db)
+	schemaCtx, schemaCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := repo.ValidateRecoveryOutboxSchema(schemaCtx); err != nil {
+		schemaCancel()
+		helper.Errorw("msg", "battle_recovery_outbox_schema_invalid", "err", err,
+			"hint", "apply pandora_battle migrations 000003_match_release_outbox and 000004_battle_exit_proof_outbox")
+		os.Exit(1)
+	}
+	schemaCancel()
 	var terminalRelay *data.GrpcTerminalReleaseRelay
+	var battleExitAuthority *data.BattleExitProofRelay
+	var authRedis redis.UniversalClient
 	if cfg.DSAuth.AuthorityModeRedis() {
 		// 只有精确 v2 schema 已迁移，才允许构造 relay、注册 capability、接收结算。
 		// 不能让新副本先 Ready 后在首个 ReportResult 才发现表缺失。
@@ -154,12 +168,45 @@ func main() {
 		}
 		terminalRelay = data.NewGrpcTerminalReleaseRelay(cfg.Battle.DSAllocatorAddr)
 		defer func() { _ = terminalRelay.Close() }()
+
+		rc := cfg.Node.RedisClient
+		if rc.Host == "" && len(rc.Addrs) == 0 {
+			helper.Errorw("msg", "battle_auth_redis_required")
+			os.Exit(1)
+		}
+		authRedis = redisx.NewUniversalClient(rc)
+		defer func() { _ = authRedis.Close() }()
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := authRedis.Ping(pingCtx).Err(); err != nil {
+			pingCancel()
+			helper.Errorw("msg", "battle_auth_redis_ping_failed", "err", err)
+			os.Exit(1)
+		}
+		pingCancel()
+		proofSecret := os.Getenv("PANDORA_PLACEMENT_BATTLE_EXIT_SECRET")
+		if proofSecret == "" {
+			proofSecret = cfg.Battle.PlacementBattleExitProofSecret
+		}
+		proofSigner, signerErr := placement.NewProofSigner(proofSecret)
+		if signerErr != nil {
+			helper.Errorw("msg", "placement_battle_exit_signer_invalid", "err", signerErr,
+				"hint", "set dedicated PANDORA_PLACEMENT_BATTLE_EXIT_SECRET or battle.placement_battle_exit_proof_secret")
+			os.Exit(1)
+		}
+		locatorConn := grpcclient.MustDialInsecure(cfg.Battle.LocatorAddr)
+		defer func() { _ = locatorConn.Close() }()
+		battleExitAuthority = data.NewBattleExitProofRelay(
+			locatorv1.NewPlayerLocatorServiceClient(locatorConn), authRedis, proofSigner)
 		helper.Infow("msg", "terminal_release_dependencies_ready",
 			"ds_allocator_addr", cfg.Battle.DSAllocatorAddr,
 			"grace", cfg.Battle.TerminalReleaseGrace.String())
 	}
 
-	// 6.0 matchmaker releaser(弱依赖:MatchmakerAddr 空 → 不通知释放,仅 Warn 不阻断落库)
+	// 6.0 matchmaker releaser. Redis authority treats this as a startup
+	// dependency: match/ticket/player claims are durable and intentionally have
+	// no non-terminal TTL, so silently disabling the outbox consumer would
+	// strand every settled player indefinitely. Local legacy profiles retain the
+	// old weak-dependency behavior for isolated development.
 	// 用于结算/废弃落库后调 matchmaker.ReleaseMatch 释放残留撮合状态,
 	// 修复"结算返回 Hub 后玩家无法再次匹配(StartMatch 4002)"。
 	var releaser biz.MatchReleaser
@@ -169,8 +216,13 @@ func main() {
 		releaser = mr
 		helper.Infow("msg", "match_releaser_grpc", "matchmaker_addr", cfg.Battle.MatchmakerAddr)
 	} else {
+		if cfg.DSAuth.AuthorityModeRedis() {
+			helper.Errorw("msg", "match_releaser_required",
+				"hint", "Redis authority requires battle.matchmaker_addr; durable claims have no fallback TTL")
+			os.Exit(1)
+		}
 		helper.Warnw("msg", "match_releaser_disabled",
-			"hint", "matchmaker_addr 未配置 → 结算后不通知 matchmaker 释放撮合状态(玩家可能需等 TTL 才能再次匹配)")
+			"hint", "local legacy profile only: matchmaker_addr is empty and match release publisher is disabled")
 	}
 
 	// 战斗 DS 绝不在 ReportResult 同步响应路径回收。Model-B 把完整服务端 proof 与战绩
@@ -180,6 +232,9 @@ func main() {
 	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, releaser, cfg.Battle)
 	if terminalRelay != nil {
 		uc.SetTerminalReleaseRelay(terminalRelay)
+	}
+	if battleExitAuthority != nil {
+		uc.SetBattleExitProofAuthority(battleExitAuthority)
 	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
@@ -215,20 +270,6 @@ func main() {
 
 	svc := service.NewBattleResultService(uc)
 	if cfg.DSAuth.AuthorityModeRedis() {
-		rc := cfg.Node.RedisClient
-		if rc.Host == "" && len(rc.Addrs) == 0 {
-			helper.Errorw("msg", "battle_auth_redis_required")
-			os.Exit(1)
-		}
-		authRedis := redisx.NewUniversalClient(rc)
-		defer func() { _ = authRedis.Close() }()
-		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		if err := authRedis.Ping(pingCtx).Err(); err != nil {
-			cancel()
-			helper.Errorw("msg", "battle_auth_redis_ping_failed", "err", err)
-			os.Exit(1)
-		}
-		cancel()
 		svc.SetBattleCredentialStateChecker(service.NewBattleCredentialStateChecker(
 			data.NewRedisBattleAuthReader(authRedis), cfg.DSAuth.ActiveHeartbeatMaxAge.Std()))
 		helper.Infow("msg", "battle_active_credential_checker_ready", "authority_mode", "redis")
@@ -282,6 +323,9 @@ func main() {
 	go uc.RunOutboxPublisher(pubCtx)
 	go uc.RunDropPublisher(pubCtx)
 	go uc.RunMatchReleasePublisher(pubCtx)
+	if battleExitAuthority != nil {
+		go uc.RunBattleExitProofPublisher(pubCtx)
+	}
 	if terminalRelay != nil {
 		go uc.RunTerminalReleasePublisher(pubCtx)
 	}

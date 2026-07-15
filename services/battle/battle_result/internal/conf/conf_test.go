@@ -21,6 +21,7 @@ func TestValidateRedisAuthorityIngressRejectsLegacyBattleResultTopic(t *testing.
 
 	cfg.Battle.ConsumeTopics = []string{kafkax.TopicDSLifecycle}
 	cfg.Battle.DSAllocatorAddr = "ds-allocator:50020"
+	cfg.Battle.LocatorAddr = "player-locator:50006"
 	if err := cfg.ValidateRedisAuthorityIngress(); err != nil {
 		t.Fatalf("lifecycle-only config: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestProductionExampleIsModelBOnly(t *testing.T) {
 	if len(cfg.Battle.ConsumeTopics) != 1 || cfg.Battle.ConsumeTopics[0] != kafkax.TopicDSLifecycle {
 		t.Fatalf("prod consume topics=%v", cfg.Battle.ConsumeTopics)
 	}
-	if cfg.Node.RedisClient.Host == "" || cfg.Battle.DSAllocatorAddr == "" {
+	if cfg.Node.RedisClient.Host == "" || cfg.Battle.DSAllocatorAddr == "" || cfg.Battle.LocatorAddr == "" {
 		t.Fatal("prod Model-B Redis/terminal relay dependency missing")
 	}
 	if err := cfg.DSAuth.ValidateRedisFence(); err != nil {

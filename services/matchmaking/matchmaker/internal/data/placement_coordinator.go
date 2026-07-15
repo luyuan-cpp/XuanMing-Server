@@ -50,11 +50,27 @@ func (c *GrpcPlacementCoordinator) PrepareBattlePlacement(
 		allocation == nil || allocation.Address == "" || !allocation.Target.CompleteBattle() {
 		return nil, errcode.New(errcode.ErrInvalidArg, "complete battle placement operation required")
 	}
-	bindings := make(map[uint64]placement.Binding, len(playerIDs))
+	seen := make(map[uint64]struct{}, len(playerIDs))
 	for _, playerID := range playerIDs {
 		if playerID == 0 {
 			return nil, errcode.New(errcode.ErrInvalidArg, "battle placement contains zero player_id")
 		}
+		if _, duplicate := seen[playerID]; duplicate {
+			return nil, errcode.New(errcode.ErrInvalidArg, "battle placement contains duplicate player %d", playerID)
+		}
+		seen[playerID] = struct{}{}
+	}
+	// Best-effort batch preflight catches an already-conflicting/UNKNOWN later
+	// player before the first Begin has any side effect.  It cannot replace each
+	// per-player CAS (sources may race after this read), so preparePlayer re-reads
+	// and the durable exact-operation retry remains the correctness mechanism.
+	for _, playerID := range playerIDs {
+		if _, err := c.readBattleBeginVersion(ctx, playerID, operationID, matchID); err != nil {
+			return nil, fmt.Errorf("preflight battle placement player=%d match=%d: %w", playerID, matchID, err)
+		}
+	}
+	bindings := make(map[uint64]placement.Binding, len(playerIDs))
+	for _, playerID := range playerIDs {
 		binding, err := c.preparePlayer(ctx, playerID, operationID, matchID, allocation.Target)
 		if err != nil {
 			return nil, fmt.Errorf("prepare battle placement player=%d match=%d: %w", playerID, matchID, err)
@@ -71,30 +87,9 @@ func (c *GrpcPlacementCoordinator) preparePlayer(
 	matchID uint64,
 	target placement.Target,
 ) (placement.Binding, error) {
-	getResp, err := c.client.GetPlacement(ctx, &locatorv1.GetPlacementRequest{PlayerId: playerID})
+	expectedVersion, err := c.readBattleBeginVersion(ctx, playerID, operationID, matchID)
 	if err != nil {
 		return placement.Binding{}, err
-	}
-	if getResp.GetCode() != commonv1.ErrCode_OK {
-		return placement.Binding{}, errcode.New(errcode.Code(getResp.GetCode()), "GetPlacement code=%d", getResp.GetCode())
-	}
-	if !getResp.GetFound() || getResp.GetPlacement() == nil {
-		return placement.Binding{}, errcode.New(errcode.ErrLocatorNotFound, "placement is UNKNOWN")
-	}
-	current := getResp.GetPlacement()
-	expectedVersion := current.GetVersion()
-	if sameBattlePendingOperation(current, operationID, matchID) {
-		if current.GetVersion() <= 1 {
-			return placement.Binding{}, errcode.New(errcode.ErrLocatorConflict, "pending placement has invalid version")
-		}
-		expectedVersion = current.GetVersion() - 1
-	} else {
-		if current.GetTransitionState() != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE ||
-			current.GetCurrentRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || current.GetMatchId() != 0 {
-			return placement.Binding{}, errcode.New(errcode.ErrLocatorConflict,
-				"expected stable HUB, got route=%s transition=%s version=%d operation=%q",
-				current.GetCurrentRoute(), current.GetTransitionState(), current.GetVersion(), current.GetOperationId())
-		}
 	}
 
 	// Begin 对同 operation 是幂等续租：即使此前已 Begin/Bind，outage 后也先用同一
@@ -126,7 +121,7 @@ func (c *GrpcPlacementCoordinator) preparePlayer(
 	if beginResp.GetCode() != commonv1.ErrCode_OK || beginResp.GetPlacement() == nil {
 		return placement.Binding{}, errcode.New(errcode.Code(beginResp.GetCode()), "BeginPlacementTransition code=%d", beginResp.GetCode())
 	}
-	current = beginResp.GetPlacement()
+	current := beginResp.GetPlacement()
 	if !sameBattlePendingOperation(current, operationID, matchID) {
 		return placement.Binding{}, errcode.New(errcode.ErrLocatorConflict, "BeginPlacementTransition returned another operation")
 	}
@@ -143,6 +138,7 @@ func (c *GrpcPlacementCoordinator) preparePlayer(
 		DsInstanceEpoch:  target.InstanceEpoch,
 		AllocationId:     target.AllocationID,
 		ReleaseTrack:     target.ReleaseTrack,
+		LeaseDeadlineMs:  time.Now().Add(c.leaseTTL).UnixMilli(),
 	})
 	if err != nil {
 		return placement.Binding{}, err
@@ -157,6 +153,40 @@ func (c *GrpcPlacementCoordinator) preparePlayer(
 		return placement.Binding{}, errcode.New(errcode.ErrLocatorConflict, "BindPlacementTarget returned incomplete/different target")
 	}
 	return placement.Binding{Version: bound.GetVersion(), OperationID: operationID}, nil
+}
+
+func (c *GrpcPlacementCoordinator) readBattleBeginVersion(
+	ctx context.Context,
+	playerID uint64,
+	operationID string,
+	matchID uint64,
+) (uint64, error) {
+	getResp, err := c.client.GetPlacement(ctx, &locatorv1.GetPlacementRequest{PlayerId: playerID})
+	if err != nil {
+		return 0, err
+	}
+	if getResp.GetCode() != commonv1.ErrCode_OK {
+		return 0, errcode.New(errcode.Code(getResp.GetCode()), "GetPlacement code=%d", getResp.GetCode())
+	}
+	if !getResp.GetFound() || getResp.GetPlacement() == nil {
+		return 0, errcode.New(errcode.ErrLocatorNotFound, "placement is UNKNOWN")
+	}
+	current := getResp.GetPlacement()
+	expectedVersion := current.GetVersion()
+	if sameBattlePendingOperation(current, operationID, matchID) {
+		if current.GetVersion() <= 1 {
+			return 0, errcode.New(errcode.ErrLocatorConflict, "pending placement has invalid version")
+		}
+		expectedVersion = current.GetVersion() - 1
+	} else {
+		if current.GetTransitionState() != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE ||
+			current.GetCurrentRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || current.GetMatchId() != 0 {
+			return 0, errcode.New(errcode.ErrLocatorConflict,
+				"expected stable HUB, got route=%s transition=%s version=%d operation=%q",
+				current.GetCurrentRoute(), current.GetTransitionState(), current.GetVersion(), current.GetOperationId())
+		}
+	}
+	return expectedVersion, nil
 }
 
 func sameBattlePendingOperation(rec *locatorv1.PlayerPlacementStorageRecord, operationID string, matchID uint64) bool {

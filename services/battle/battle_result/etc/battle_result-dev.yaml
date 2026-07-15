@@ -70,6 +70,9 @@ battle:
   # Redis terminal/receipt CAS + UID precondition 回收。它不在同步响应路径杀 DS。
   # legacy/off 下不写 terminal outbox，本地址不会产生回收副作用。
   ds_allocator_addr: "127.0.0.1:50020"
+  # Battle→Hub durable exit proof relay；公开 dev 值，生产由配置生成器覆盖。
+  locator_addr: "127.0.0.1:50006"
+  placement_battle_exit_proof_secret: "pandora-dev-placement-battle-exit-key-v1!"
   terminal_release_interval: "2s"
   terminal_release_batch_size: 128
   terminal_release_grace: "15s"

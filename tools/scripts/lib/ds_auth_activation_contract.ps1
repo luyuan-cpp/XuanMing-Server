@@ -6,7 +6,7 @@ Set-StrictMode -Version Latest
 
 $script:PandoraDsAuthWriterApps = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
 $script:PandoraDsAuthRequiredFeatures =
-    'hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1,' +
+    'hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1|hub-owner-cleanup-v1|hub-physical-eviction-v1,' +
     'ds_allocator=battle-release-expected-tuple-v1,' +
     'battle_result=battle-terminal-outbox-v1'
 $script:PandoraDsAuthIdentityMountPath = '/run/secrets/pandora/ds-auth-etcd'

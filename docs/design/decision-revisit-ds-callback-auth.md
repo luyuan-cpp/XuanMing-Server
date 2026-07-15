@@ -988,19 +988,19 @@ Redis authority 下无凭据的 `pandora.battle.result` consumer 已由启动校
 单入口，不能再让消息 handler 直接调用 `ReportResult` 绕过 active/receipt。若未来恢复 topic，消息本身
 必须携带可核验 Model-B 身份并进入同一 MySQL outbox 状态机，需另行设计。
 
-#### 7.16.3 locator 不可判定时不能先分配 Hub 再做后置通知(2026-07-14 状态更新)
+#### 7.16.3 locator 不可判定时不能先分配 Hub 再做后置通知(2026-07-15 已实施)
 
 **历史反例**：玩家仍在 Battle X，locator 保存 `BATTLE(X)`，但 login 的三次
 `GetBattleLocation` 都因 locator/网络故障返回 error。若 login 随后 `AssignHub`（占 seat 并签 Hub 票），
 再 best-effort `NotifyLoginPending`,后者即使被 BATTLE fence 拒绝也撤不回 assignment/ticket；Hub admission
 只核 DS active 与 assignment,不核玩家 placement。因此玩家可同时持有 Battle 与可用 Hub 归属。
 
-**当前 Login 状态**：候选 A 已在 B1 模式实现。`require_hub_assignment_binding=true` 时,locator 未配置、
+**2026-07-14 Login 状态（历史）**：候选 A 已在 B1 模式实现。`require_hub_assignment_binding=true` 时,locator 未配置、
 查询失败或 `NotifyLoginPending` 失败都返回 unavailable,且发生在 `AssignHub` 之前；Redis authority 的集群
 配置生成器会开启此门。对应回归测试覆盖“未配置 locator”“locator 查询失败”“LOGIN_PENDING 失败”下
 Hub assigner 零调用。本地/off 模式显式关闭该门时仍保留弱降级,不能拿该 profile 证明生产安全。
 
-**尚未闭环的旁路**：`IssueDSTicket(ds_type="hub")` 没有复用上述 B1/locator/LOGIN_PENDING 门,而是直接
+**2026-07-14 尚未闭环的旁路（历史反例）**：`IssueDSTicket(ds_type="hub")` 没有复用上述 B1/locator/LOGIN_PENDING 门,而是直接
 `ResolveHubEndpoint → AssignHub`。客户端 Battle 直连失败和 30s 重连超时都会调用它,所以本节的原始
 双归属反例仍能从该入口发生。另外,DS→locator 刷新是 best-effort；若连续失败到 key 正常过期,
 `GetBattleLocation` 会成功返回非 BATTLE 而不是 error,B1 也不会查询 live roster,仍可能误走 Hub。
@@ -1051,6 +1051,39 @@ additive proto/票据 claim、login/hub_allocator/player_locator/UE 接线，覆
   服务端执行显式离局事务（roster 移除/placement 推进），属候选 B 阶段工作；正常结算路径不受影响
   （DS 上报终局后 roster 权威判非 live，门放行）。§7.3 J（locator TTL 缺口误判非 BATTLE）
   同样待候选 B 根治。
+
+**实施状态（2026-07-15）**：候选 B 已按服务端先行原则落地，以上“待/尚未”文字仅保留决策历史，
+当前代码硬门如下：
+
+1. `player_locator` 保存无 presence TTL 的版本化 placement；记录缺失/解析失败/权威依赖错误均为
+   UNKNOWN，不再解释成“可进 Hub”。每次 Hub↔Battle 推进都使用 CAS version 与 UUID operation。
+2. Hub/Battle DSTicket additive 绑定 placement version、operation、目标 DS identity 与 source match；
+   login、matchmaker 和 allocator 只从 canonical binding 签票。旧 version ticket 即使仍在 `exp` 内也不能准入。
+3. Hub assignment 在 Commit/Admission ACK 前后都是持久 canonical owner（TTL=0）；Hub DS 在 PreLogin 后必须调用
+   placement-aware `AcknowledgeAdmission`，只有 exact binding Commit 成功才开放 spawn gate。ACK 响应丢失
+   可用相同 admission/operation 重放；稳定 owner 不再回退到 30m TTL。客户端只有收到本次
+   `recovery_attempt` 对应的 Reliable Admission committed RPC 才可把该次 Hub travel 判成功。
+4. BattleResult 先为 canonical roster 写无 TTL signed terminal tombstone，再由 outbox CAS 精确
+   `BATTLE(match)`/`PENDING→BATTLE(match)` 到 Hub pending。Locator 的 Match Begin/Bind/Admission 与
+   tombstone 同 slot 原子观察，旧局不能在终局后复活。
+5. Login 的 `GetResumeContext` 覆盖 HUB/BATTLE/QUEUED/CONFIRMING/ALLOCATING/READY/RUNNING；内部
+   match context RPC 使用独立 HMAC+timestamp+nonce，绑定 caller、PVP/PVE audience、exact method 与 player，
+   Matchmaker 用共享 Redis SETNX 防跨副本重放，不转发玩家 authorization。
+6. UE 只允许 `UMyDsRecoveryCoordinator` 发起 DS `ClientTravel`；本地超时、前后台、network/travel failure、
+   session 过期均重新读取权威路由，不能自行推进 placement 或直接回 Hub。
+7. Hub→Hub、drain 与 Release 共用 index-first durable owner-cleanup：source exact identity、target Bind
+   与 phase 均持久化；assignment CAS/Bind/Departure/phase-clear 的未知结果由重启 reconciler 幂等恢复。
+   target ticket、migration push、Admission 在 cleanup 完成前 fail-closed。
+8. connected ledger 删除不是旧 Pawn 离场证明。source Hub 只从绑定当前 Model-B credential 的 Heartbeat
+   接收 exact eviction order，核对本地 `(player,assignment,admission)` 后 Kick；标准 Logout 发
+   `AcknowledgeDeparture` 才完成 physical proof。allocator 的 exact seat release 只回收 reservation；
+   live connected owner 返回 `DepartureRequired`。stable shard-member index 同样持久到显式 cleanup，
+   防止 30m 长连玩家从 drain 枚举消失。
+
+发布判定从“代码阻断”改为“环境验收阻断”：相关单元/并发/故障注入测试与 UE 编译/Automation 通过后，
+仍须跑真实移动端前后台、UDP Admission、Redis/K8s/Agones 故障矩阵。未跑真实矩阵不能宣称生产已验证，
+但不得再把 presence/assignment/claim TTL 当恢复机制。对局中的主动离局仍需独立的服务端 terminal/leave
+业务授权；客户端主动放弃只能回登录界面，不能绕过 active Battle placement。
 
 #### 7.16.4 Hub 实报在线数不能覆盖尚未入场的 reservation（P1 生产阻断）
 

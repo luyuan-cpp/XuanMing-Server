@@ -48,6 +48,9 @@ service PlayerLocatorService {
   rpc BeginPlacementTransition(BeginPlacementTransitionRequest) returns (BeginPlacementTransitionResponse);
   // BindPlacementTarget 把 allocator 选出的唯一 DS/assignment 绑定到同一 version+operation。
   rpc BindPlacementTarget(BindPlacementTargetRequest) returns (BindPlacementTargetResponse);
+  // RetargetPlacementTarget 只能在 Admission 前、旧 target 的权威不可用证明通过时，
+  // 原子推进 version/operation 并把完整 old target 换为完整 new target。TTL 本身不是证明。
+  rpc RetargetPlacementTarget(RetargetPlacementTargetRequest) returns (RetargetPlacementTargetResponse);
   // CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
   rpc CommitPlacementAdmission(CommitPlacementAdmissionRequest) returns (CommitPlacementAdmissionResponse);
   // BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
@@ -165,6 +168,13 @@ enum PlacementProofType {
   PLACEMENT_PROOF_TYPE_HUB_TRANSFER = 5;
 }
 
+enum PlacementTargetUnavailableReason {
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_UNSPECIFIED = 0;
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_INSTANCE_TERMINATED = 1;
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_RESERVATION_EXPIRED_UNUSED = 2;
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_ALLOCATION_REVOKED = 3;
+}
+
 // PlayerPlacementStorageRecord 持久化在 Redis
 // `pandora:placement:{<player_id>}` protobuf value 中，无 Redis TTL。
 // read-modify-write 必须保留 unknown fields，version 只能通过 CAS 单调推进。
@@ -189,6 +199,9 @@ message PlayerPlacementStorageRecord {
   uint32 ds_instance_epoch = 18;
   string allocation_id = 19;
   string release_track = 20;
+  uint32 retarget_count = 21;
+  string last_retarget_proof_id = 22;
+  PlacementTargetUnavailableReason last_retarget_reason = 23;
 }
 
 message GetPlacementRequest {
@@ -231,9 +244,44 @@ message BindPlacementTargetRequest {
   uint32 ds_instance_epoch = 9;
   string allocation_id = 10;
   string release_track = 11;
+  // Exact target owner may monotonically renew a still-PENDING lease.  This is
+  // never authority to change version/op/route/target; stale allocators lose
+  // that full-tuple comparison before the deadline can be updated.
+  int64 lease_deadline_ms = 12;
 }
 
 message BindPlacementTargetResponse {
+  pandora.common.v1.ErrCode code = 1;
+  PlayerPlacementStorageRecord placement = 2;
+}
+
+message PlacementTargetIdentity {
+  string ds_pod_name = 1;
+  string ds_instance_uid = 2;
+  string hub_assignment_id = 3;
+  uint32 ds_instance_epoch = 4;
+  string allocation_id = 5;
+  string release_track = 6;
+}
+
+message RetargetPlacementTargetRequest {
+  uint64 player_id = 1;
+  uint64 placement_version = 2;
+  string operation_id = 3;
+  PlacementRoute target_route = 4;
+  uint64 target_match_id = 5;
+  PlacementTargetIdentity expected_target = 6;
+  uint64 replacement_version = 7;
+  string replacement_operation_id = 8;
+  PlacementTargetIdentity replacement_target = 9;
+  PlacementProofType proof_type = 10;
+  PlacementTargetUnavailableReason reason = 11;
+  string proof_id = 12;
+  string proof_signature = 13;
+  int64 lease_deadline_ms = 14;
+}
+
+message RetargetPlacementTargetResponse {
   pandora.common.v1.ErrCode code = 1;
   PlayerPlacementStorageRecord placement = 2;
 }

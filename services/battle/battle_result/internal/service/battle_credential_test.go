@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
@@ -98,7 +100,7 @@ func futureWriterBattleTokenAndAuthority(t *testing.T) (string, *dsv1.BattleDSAu
 	battle := &dsv1.BattleStorageRecord{
 		MatchId: 9, DsPodName: "battle-9", State: "running", AllocationId: "alloc-9",
 		GameserverUid: "uid-9", InstanceEpoch: 3, LastVerifiedGen: 7,
-		LastVerifiedJti: "j7", LastVerifiedWriterEpoch: 3,
+		LastVerifiedJti: "j7", LastVerifiedWriterEpoch: 3, PlayerIds: []uint64{1, 2},
 	}
 	return token, authRecord, battle
 }
@@ -175,6 +177,7 @@ func TestBattleCredentialStateCheckerStrictTuple(t *testing.T) {
 				MatchId: 9, DsPodName: "battle-9", State: "running", AllocationId: "alloc-9",
 				GameserverUid: "uid-9", InstanceEpoch: 3, LastVerifiedGen: 7,
 				LastVerifiedJti: "j7", LastVerifiedWriterEpoch: auth.DSAuthWriterEpochV2,
+				PlayerIds: []uint64{1, 2},
 			}
 			reader := &battleAuthReaderStub{rec: rec, battle: battle, found: true}
 			if tc.mutate != nil {
@@ -291,6 +294,24 @@ func (*serviceBattleRepo) MarkTerminalReleaseReleased(context.Context, uint64, i
 	return false, nil
 }
 func (*serviceBattleRepo) DeleteTerminalReleaseOutbox(context.Context, uint64) error { return nil }
+func (*serviceBattleRepo) FetchMatchReleaseOutbox(context.Context, int, int64) ([]data.MatchReleaseRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) DeferMatchReleaseOutbox(context.Context, uint64, int64) error { return nil }
+func (*serviceBattleRepo) DeleteMatchReleaseOutbox(context.Context, uint64) error       { return nil }
+func (*serviceBattleRepo) FetchBattleExitProofOutbox(context.Context, int, int64) ([]data.BattleExitProofRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) PrepareBattleExitProofOutbox(context.Context, data.BattleExitProofRecord, placement.BattleExitProof) (bool, error) {
+	return false, nil
+}
+func (*serviceBattleRepo) DeferBattleExitProofOutbox(context.Context, uint64, int64) error {
+	return nil
+}
+func (*serviceBattleRepo) MarkBattleExitProofSuperseded(context.Context, uint64, int64) error {
+	return nil
+}
+func (*serviceBattleRepo) DeleteBattleExitProofOutbox(context.Context, uint64) error { return nil }
 
 type guardedReportFixture struct {
 	svc    *BattleResultService
@@ -342,6 +363,7 @@ func newGuardedReportFixture(t *testing.T) *guardedReportFixture {
 			MatchId: 9, DsPodName: "battle-9", State: "running", AllocationId: "alloc-9",
 			GameserverUid: "uid-9", InstanceEpoch: 3, LastVerifiedGen: 7,
 			LastVerifiedJti: "j7", LastVerifiedWriterEpoch: auth.DSAuthWriterEpochV2,
+			PlayerIds: []uint64{1, 2},
 		},
 	}
 	repo := &serviceBattleRepo{}
@@ -422,6 +444,51 @@ func TestReportResultDBCommitFailureNeverReturnsOKOrWritesReceipt(t *testing.T) 
 	}
 }
 
+func TestReportResultRejectsRosterDriftBeforeAnySideEffect(t *testing.T) {
+	tests := []struct {
+		name  string
+		stats []*battlev1.PlayerStats
+	}{
+		{name: "missing canonical player", stats: []*battlev1.PlayerStats{{PlayerId: 1, Team: 0}}},
+		{name: "outsider replaces canonical player", stats: []*battlev1.PlayerStats{{PlayerId: 1, Team: 0}, {PlayerId: 3, Team: 1}}},
+		{name: "duplicate canonical player", stats: []*battlev1.PlayerStats{{PlayerId: 1, Team: 0}, {PlayerId: 1, Team: 1}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGuardedReportFixture(t)
+			req := proto.Clone(f.req).(*battlev1.ReportResultRequest)
+			req.Result.Stats = tc.stats
+			resp, err := f.svc.ReportResult(guardedReportContext(f.token), req)
+			if err != nil || resp.GetCode() != commonv1.ErrCode_ERR_UNAUTHORIZED {
+				t.Fatalf("response=%+v err=%v", resp, err)
+			}
+			if f.repo.saved || f.repo.terminal != nil || f.reader.recorded != 0 {
+				t.Fatalf("rejected roster leaked side effects: saved=%v terminal=%+v receipt_calls=%d",
+					f.repo.saved, f.repo.terminal, f.reader.recorded)
+			}
+		})
+	}
+}
+
+func TestBattleCredentialRejectsCorruptAuthorityRoster(t *testing.T) {
+	for _, roster := range [][]uint64{nil, {0, 1}, {1, 1}} {
+		cred, rec := validBattleCredential()
+		battle := &dsv1.BattleStorageRecord{
+			MatchId: 9, DsPodName: "battle-9", State: "running", AllocationId: "alloc-9",
+			GameserverUid: "uid-9", InstanceEpoch: 3, LastVerifiedGen: 7,
+			LastVerifiedJti: "j7", LastVerifiedWriterEpoch: auth.DSAuthWriterEpochV2,
+			PlayerIds: roster,
+		}
+		checker := &redisBattleCredentialStateChecker{
+			reader: &battleAuthReaderStub{rec: rec, battle: battle, found: true},
+			now:    func() time.Time { return battleCredentialNow }, maxActiveHeartbeatAge: 30 * time.Second,
+		}
+		if _, err := checker.AuthorizeResult(context.Background(), 9, cred); errcode.As(err) != errcode.ErrUnauthorized {
+			t.Fatalf("roster=%v code=%v err=%v", roster, errcode.As(err), err)
+		}
+	}
+}
+
 func TestReportResultRotatedCredentialReplayDoesNotReplaceDurableProof(t *testing.T) {
 	f := newGuardedReportFixture(t)
 	first, err := f.svc.ReportResult(guardedReportContext(f.token), f.req)
@@ -453,7 +520,7 @@ func TestReportResultRotatedCredentialReplayDoesNotReplaceDurableProof(t *testin
 	if f.reader.recorded != 1 {
 		t.Fatalf("idempotent replay rewrote immediate receipt: calls=%d", f.reader.recorded)
 	}
-	if f.repo.terminal == nil || *f.repo.terminal != original ||
+	if f.repo.terminal == nil || !reflect.DeepEqual(*f.repo.terminal, original) ||
 		f.repo.terminal.AuthGen != 7 || f.repo.terminal.AuthJTI != "j7" {
 		t.Fatalf("rotated replay replaced durable proof: before=%+v after=%+v", original, f.repo.terminal)
 	}

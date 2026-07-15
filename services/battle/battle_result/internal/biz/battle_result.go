@@ -30,6 +30,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 	"google.golang.org/protobuf/proto"
@@ -63,6 +64,15 @@ type PlayerUpdatePusher interface {
 // 调用由 MySQL match_release_outbox worker 执行；失败/未知保留行重试，明确成功才 ACK。
 type MatchReleaser interface {
 	ReleaseMatch(ctx context.Context, matchID uint64, playerIDs []uint64) error
+}
+
+// BattleExitProofAuthority first publishes a version-free terminal tombstone
+// for every roster member, then derives/relays a version-bound placement proof
+// only for players whose exact route still needs cancellation/return-to-Hub.
+type BattleExitProofAuthority interface {
+	RelayTerminalFence(context.Context, uint64, uint64, placement.BattleExitProof) error
+	PrepareTerminalProof(context.Context, data.BattleExitProofRecord) (placement.BattleExitProof, bool, error)
+	RelayTerminalProof(context.Context, uint64, uint64, placement.BattleExitProof) error
 }
 
 // TerminalReleaseRelay 把 MySQL 持久证明交给 ds_allocator 的两阶段控制面：
@@ -105,12 +115,13 @@ func (s *StaticMMRReader) GetMMR(_ context.Context, _ uint64) (int, error) { ret
 
 // BattleResultUsecase 是 battle_result 业务逻辑核心。
 type BattleResultUsecase struct {
-	repo          data.BattleRepo
-	mmr           MMRReader
-	pusher        PlayerUpdatePusher
-	releaser      MatchReleaser
-	cfg           conf.BattleConf
-	terminalRelay TerminalReleaseRelay
+	repo                     data.BattleRepo
+	mmr                      MMRReader
+	pusher                   PlayerUpdatePusher
+	releaser                 MatchReleaser
+	cfg                      conf.BattleConf
+	terminalRelay            TerminalReleaseRelay
+	battleExitProofAuthority BattleExitProofAuthority
 
 	// granter 把战斗装备掉落幂等发放到 inventory(W5 ④,nil-safe)。
 	// nil = inventory_addr 未配 → 不启动 RunDropPublisher,掉落出箱积压不丢。
@@ -170,6 +181,10 @@ func (u *BattleResultUsecase) SetTerminalReleaseRelay(relay TerminalReleaseRelay
 	u.terminalRelay = relay
 }
 
+func (u *BattleResultUsecase) SetBattleExitProofAuthority(authority BattleExitProofAuthority) {
+	u.battleExitProofAuthority = authority
+}
+
 // ── ReportResult:幂等落库 + MMR ─────────────────────────────────────────────
 
 // ReportResult 落一场对局结算(消费 battle.result / 同步 RPC 共用)。
@@ -185,7 +200,45 @@ func (u *BattleResultUsecase) ReportAuthorizedResult(
 	result *battlev1.BattleResult,
 	terminalRelease data.TerminalReleaseRecord,
 ) (bool, error) {
+	if err := validateAuthorizedResultRoster(result, terminalRelease.PlayerIDs); err != nil {
+		return false, err
+	}
 	return u.reportResult(ctx, result, &terminalRelease)
+}
+
+// validateAuthorizedResultRoster binds every settlement side effect to the
+// canonical BattleStorageRecord roster captured by the credential checker.
+// Equality is set-based because stat order is not an authority signal, while
+// duplicate stats, omissions and outsiders are all rejected before MMR/DB work.
+func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative []uint64) error {
+	if result == nil || len(authoritative) == 0 || len(result.GetStats()) != len(authoritative) {
+		return errcode.New(errcode.ErrUnauthorized, "battle result roster does not match authority")
+	}
+	want := make(map[uint64]struct{}, len(authoritative))
+	for _, playerID := range authoritative {
+		if playerID == 0 {
+			return errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
+		}
+		if _, duplicate := want[playerID]; duplicate {
+			return errcode.New(errcode.ErrUnauthorized, "battle authority roster is invalid")
+		}
+		want[playerID] = struct{}{}
+	}
+	seen := make(map[uint64]struct{}, len(result.GetStats()))
+	for _, stat := range result.GetStats() {
+		playerID := stat.GetPlayerId()
+		if playerID == 0 {
+			return errcode.New(errcode.ErrUnauthorized, "battle result roster contains an invalid player")
+		}
+		if _, duplicate := seen[playerID]; duplicate {
+			return errcode.New(errcode.ErrUnauthorized, "battle result roster contains a duplicate player")
+		}
+		if _, member := want[playerID]; !member {
+			return errcode.New(errcode.ErrUnauthorized, "battle result roster contains an unauthorized player")
+		}
+		seen[playerID] = struct{}{}
+	}
+	return nil
 }
 
 func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord) (bool, error) {
@@ -263,7 +316,8 @@ func prepareTerminalRelease(result *battlev1.BattleResult, rec *data.TerminalRel
 		rec.GameserverUID == "" || rec.InstanceEpoch == 0 || rec.AuthGen == 0 ||
 		rec.AuthJTI == "" || rec.AuthExpMs <= 0 || rec.AuthKid == "" ||
 		rec.AuthTokenSHA256 == "" || rec.AuthWriterEpoch != auth.DSAuthWriterEpochV2 ||
-		rec.AuthorizedAtMs <= 0 || rec.AuthorizedAtMs >= rec.AuthExpMs || rec.ReleasedAtMs != 0 {
+		rec.AuthorizedAtMs <= 0 || rec.AuthorizedAtMs >= rec.AuthExpMs || rec.ReleasedAtMs != 0 ||
+		len(rec.PlayerIDs) == 0 {
 		return errcode.New(errcode.ErrUnauthorized, "terminal release proof is incomplete or not bound to result")
 	}
 	if grace < 5*time.Second || grace > 2*time.Minute {
@@ -587,6 +641,95 @@ func (u *BattleResultUsecase) publishMatchReleaseBatch(ctx context.Context) (int
 		released++
 	}
 	return released, joined
+}
+
+// RunBattleExitProofPublisher durably publishes a per-player Battle→Hub
+// terminal proof. MySQL preparation always precedes Redis, so a crash or unknown
+// relay result retries one immutable UUID/signature rather than re-signing.
+func (u *BattleResultUsecase) RunBattleExitProofPublisher(ctx context.Context) {
+	if u.battleExitProofAuthority == nil {
+		return
+	}
+	interval := u.cfg.OutboxPublishInterval.Std()
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := u.publishBattleExitProofBatch(ctx); err != nil {
+				plog.With(ctx).Warnw("msg", "battle_exit_proof_batch_failed", "err", err)
+			}
+		}
+	}
+}
+
+func (u *BattleResultUsecase) publishBattleExitProofBatch(ctx context.Context) (int, error) {
+	if u.battleExitProofAuthority == nil {
+		return 0, nil
+	}
+	recs, err := u.repo.FetchBattleExitProofOutbox(ctx, u.outboxBatchSize(), time.Now().UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	published := 0
+	var joined error
+	for _, rec := range recs {
+		// The match tombstone is version-independent and must exist for every
+		// roster member before placement is inspected. In particular, STABLE HUB
+		// is not proof that a delayed ALLOCATING worker cannot race in later.
+		fenceCtx, fenceCancel := context.WithTimeout(ctx, 5*time.Second)
+		fenceErr := u.battleExitProofAuthority.RelayTerminalFence(
+			fenceCtx, rec.PlayerID, rec.MatchID, rec.Proof)
+		fenceCancel()
+		if fenceErr != nil {
+			joined = errors.Join(joined, fenceErr, u.repo.DeferBattleExitProofOutbox(ctx, rec.ID,
+				time.Now().Add(matchReleaseRetryDelay(rec.AttemptCount)).UnixMilli()))
+			continue
+		}
+		if !rec.Prepared {
+			callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			proof, superseded, prepareErr := u.battleExitProofAuthority.PrepareTerminalProof(callCtx, rec)
+			cancel()
+			if prepareErr != nil {
+				joined = errors.Join(joined, prepareErr, u.repo.DeferBattleExitProofOutbox(ctx, rec.ID,
+					time.Now().Add(matchReleaseRetryDelay(rec.AttemptCount)).UnixMilli()))
+				continue
+			}
+			if superseded {
+				joined = errors.Join(joined, u.repo.MarkBattleExitProofSuperseded(ctx, rec.ID, time.Now().UnixMilli()))
+				continue
+			}
+			persisted, persistErr := u.repo.PrepareBattleExitProofOutbox(ctx, rec, proof)
+			if persistErr != nil {
+				joined = errors.Join(joined, persistErr, u.repo.DeferBattleExitProofOutbox(ctx, rec.ID,
+					time.Now().Add(matchReleaseRetryDelay(rec.AttemptCount)).UnixMilli()))
+				continue
+			}
+			if !persisted {
+				continue // another worker owns the immutable persisted payload
+			}
+			rec.Proof, rec.Prepared = proof, true
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		relayErr := u.battleExitProofAuthority.RelayTerminalProof(callCtx, rec.PlayerID, rec.MatchID, rec.Proof)
+		cancel()
+		if relayErr != nil {
+			joined = errors.Join(joined, relayErr, u.repo.DeferBattleExitProofOutbox(ctx, rec.ID,
+				time.Now().Add(matchReleaseRetryDelay(rec.AttemptCount)).UnixMilli()))
+			continue
+		}
+		if deleteErr := u.repo.DeleteBattleExitProofOutbox(ctx, rec.ID); deleteErr != nil {
+			joined = errors.Join(joined, deleteErr)
+			continue
+		}
+		published++
+	}
+	return published, joined
 }
 
 // ── Battle terminal-release 事务出箱(Model-B)────────────────────────────────

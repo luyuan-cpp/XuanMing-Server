@@ -10,7 +10,9 @@ $OutDirRerun = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-reru
 $OutDirRotation = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-rotation-' + [guid]::NewGuid().ToString('N'))
 $OutDirDrift = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-drift-' + [guid]::NewGuid().ToString('N'))
 $OutDirOverlap = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-overlap-' + [guid]::NewGuid().ToString('N'))
-$OutDirs = @($OutDir, $OutDirRerun, $OutDirRotation, $OutDirDrift, $OutDirOverlap)
+$OutDirPlacement = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-placement-' + [guid]::NewGuid().ToString('N'))
+$OutDirMatchAuth = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-matchauth-' + [guid]::NewGuid().ToString('N'))
+$OutDirs = @($OutDir, $OutDirRerun, $OutDirRotation, $OutDirDrift, $OutDirOverlap, $OutDirPlacement, $OutDirMatchAuth)
 
 . $HmacContractLib
 
@@ -31,12 +33,22 @@ function Invoke-B1Generator {
         [string]$DsSecret = '',
         [string]$PlayerAdditional = '',
         [string]$DsAdditional = '',
+        [string]$PlacementBootstrap = '',
+        [string]$PlacementMatchStart = '',
+        [string]$PlacementBattleExit = '',
+        [string]$PlacementHubTransfer = '',
+        [string]$MatchResumeAuth = '',
         [switch]$ExpectFailure
     )
     & pwsh -NoProfile -File $Generator -OutDir $TargetDir -AllocatorMode agones `
         -AllocatorAdvertiseHost 127.0.0.1 -AllowDevSecrets `
         -Secret $PlayerSecret -DsSecret $DsSecret `
         -SecretAdditional $PlayerAdditional -DsSecretAdditional $DsAdditional `
+        -PlacementAccountBootstrapSecret $PlacementBootstrap `
+        -PlacementMatchStartSecret $PlacementMatchStart `
+        -PlacementBattleExitSecret $PlacementBattleExit `
+        -PlacementHubTransferSecret $PlacementHubTransfer `
+        -MatchResumeAuthSecret $MatchResumeAuth `
         -DsAuthMode enforce -DsAuthorityMode redis -DsFenceEtcdEndpoints 'etcd.pandora.svc:2379' `
         -DsFenceKeysetRevision 'pandora-ds-auth-v2-local-r1' `
         -DsTicketActiveKid ('A' * 43) -DsTicketKeysetRevision 7 `
@@ -70,6 +82,10 @@ try {
     Assert-True ($devHmac.Player.AdditionalSha256.Count -eq 0 -and
         $devHmac.DsCallback.AdditionalSha256.Count -eq 0) '默认 dev 不应凭空生成 additional key'
     Assert-PandoraOnlineHmacContinuity -LiveConfigs $devConfigs -CandidateConfigs $rerunConfigs | Out-Null
+    $devPlacement = Get-PandoraOnlinePlacementContract -Configs $devConfigs
+    Assert-PandoraOnlinePlacementContinuity -LiveConfigs $devConfigs -CandidateConfigs $rerunConfigs | Out-Null
+    $devMatchAuth = Get-PandoraOnlineMatchResumeAuthContract -Configs $devConfigs
+    Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $devConfigs -CandidateConfigs $rerunConfigs | Out-Null
 
     # 非生产轮换验证也必须覆盖 primary/additional 的完整跨域不相交集合。
     $testPlayerPrimary = 'test-player-primary-hmac-0123456789abcdef'
@@ -125,6 +141,75 @@ try {
         Assert-True ($yaml.Contains('keyset_revision: "pandora-ds-auth-v2-local-r1"')) "$service callback keyset revision 漂移"
     }
 
+    # Agones 真实 DS 链默认开启严格 placement，且 writer 只拿自身 key、locator 拿四把。
+    $loginPlacement = Get-Content -LiteralPath (Join-Path $OutDir 'login.yaml') -Raw
+    $hubPlacement = Get-Content -LiteralPath (Join-Path $OutDir 'hub-allocator.yaml') -Raw
+    Assert-True ($loginPlacement.Contains('placement_mode: "enforce"')) 'Login placement_mode 未严格开启'
+    Assert-True ($hubPlacement.Contains('placement_mode: "enforce"')) 'Hub placement_mode 未严格开启'
+    $placementKeys = [ordered]@{
+        Bootstrap = 'placement-bootstrap-test-key-0123456789abcdef'
+        MatchStart = 'placement-match-start-test-key-0123456789abcdef'
+        BattleExit = 'placement-battle-exit-test-key-0123456789abcdef'
+        HubTransfer = 'placement-hub-transfer-test-key-0123456789abcdef'
+    }
+    Invoke-B1Generator -TargetDir $OutDirPlacement `
+        -PlacementBootstrap $placementKeys.Bootstrap -PlacementMatchStart $placementKeys.MatchStart `
+        -PlacementBattleExit $placementKeys.BattleExit -PlacementHubTransfer $placementKeys.HubTransfer
+    $placementExpected = @{
+        'login.yaml' = @($placementKeys.Bootstrap)
+        'matchmaker.yaml' = @($placementKeys.MatchStart)
+        'matchmaker-pve.yaml' = @($placementKeys.MatchStart)
+        'battle-result.yaml' = @($placementKeys.BattleExit)
+        'hub-allocator.yaml' = @($placementKeys.HubTransfer)
+        'player-locator.yaml' = @($placementKeys.Bootstrap, $placementKeys.MatchStart,
+            $placementKeys.BattleExit, $placementKeys.HubTransfer)
+    }
+    foreach ($entry in $placementExpected.GetEnumerator()) {
+        $yaml = Get-Content -LiteralPath (Join-Path $OutDirPlacement $entry.Key) -Raw
+        foreach ($key in $entry.Value) { Assert-True ($yaml.Contains($key)) "$($entry.Key) 缺 placement 分权 key" }
+    }
+    $explicitPlacementConfigs = Get-B1HmacConfigs $OutDirPlacement
+    $explicitPlacement = Get-PandoraOnlinePlacementContract -Configs $explicitPlacementConfigs
+    Assert-True ($explicitPlacement.AccountBootstrap -cne $devPlacement.AccountBootstrap) `
+        '显式 placement 候选必须实际改变 account-bootstrap key'
+    Assert-Throws {
+        Assert-PandoraOnlinePlacementContinuity -LiveConfigs $devConfigs `
+            -CandidateConfigs $explicitPlacementConfigs | Out-Null
+    } '普通发布必须拒绝 placement proof key 漂移'
+
+    # 即使生成器产物被外部流程单点改写，writer/locator 不一致也必须在 apply 前失败。
+    $mismatchedPlacementConfigs = [ordered]@{}
+    foreach ($entry in $explicitPlacementConfigs.GetEnumerator()) {
+        $mismatchedPlacementConfigs[$entry.Key] = [string]$entry.Value
+    }
+    $mismatchedPlacementConfigs['matchmaker'] = $mismatchedPlacementConfigs['matchmaker'].Replace(
+        $placementKeys.MatchStart, 'placement-match-start-drift-0123456789abcdef')
+    Assert-Throws {
+        Get-PandoraOnlinePlacementContract -Configs $mismatchedPlacementConfigs | Out-Null
+    } '普通发布必须拒绝 placement writer/locator 单点漂移'
+    Invoke-B1Generator -TargetDir $OutDirOverlap `
+        -PlacementBootstrap $placementKeys.Bootstrap -PlacementMatchStart $placementKeys.Bootstrap `
+        -PlacementBattleExit $placementKeys.BattleExit -PlacementHubTransfer $placementKeys.HubTransfer -ExpectFailure
+
+    # Login 与两个 Matchmaker writer 必须拿到同一把独立服务身份 key；普通发布禁止静默换钥。
+    $explicitMatchAuth = 'match-resume-auth-test-key-0123456789abcdef'
+    Invoke-B1Generator -TargetDir $OutDirMatchAuth -MatchResumeAuth $explicitMatchAuth
+    $matchAuthConfigs = Get-B1HmacConfigs $OutDirMatchAuth
+    $matchAuthContract = Get-PandoraOnlineMatchResumeAuthContract -Configs $matchAuthConfigs
+    Assert-True ($matchAuthContract -cne $devMatchAuth) '显式 Match resume service key 必须实际改变候选指纹'
+    foreach ($service in @('login', 'matchmaker', 'matchmaker-pve')) {
+        $yaml = Get-Content -LiteralPath (Join-Path $OutDirMatchAuth "$service.yaml") -Raw
+        Assert-True ($yaml.Contains($explicitMatchAuth)) "$service 缺 Match resume service identity key"
+    }
+    Assert-Throws {
+        Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $devConfigs `
+            -CandidateConfigs $matchAuthConfigs | Out-Null
+    } '普通发布必须拒绝 Match resume service identity key 漂移'
+    Invoke-B1Generator -TargetDir $OutDirOverlap -PlayerSecret $testPlayerPrimary `
+        -MatchResumeAuth $testPlayerPrimary -ExpectFailure
+    Invoke-B1Generator -TargetDir $OutDirOverlap -PlacementBootstrap $placementKeys.Bootstrap `
+        -MatchResumeAuth $placementKeys.Bootstrap -ExpectFailure
+
     $battle = Get-Content -LiteralPath (Join-Path $OutDir 'ds-allocator.yaml') -Raw
     foreach ($needle in @(
         'fleet_name: "pandora-battle-stable"', 'canary_fleet_name: "pandora-battle-canary"',
@@ -143,7 +228,7 @@ try {
         $resolved = [System.IO.Path]::GetFullPath($dir)
         $temp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
         if (-not $resolved.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -or
-            (Split-Path -Leaf $resolved) -notmatch '^pandora-gen-b1(?:-(?:rerun|rotation|drift|overlap))?-[0-9a-f]{32}$') {
+            (Split-Path -Leaf $resolved) -notmatch '^pandora-gen-b1(?:-(?:rerun|rotation|drift|overlap|placement|matchauth))?-[0-9a-f]{32}$') {
             throw "拒绝清理未验证测试目录:$resolved"
         }
         Remove-Item -LiteralPath $resolved -Recurse -Force

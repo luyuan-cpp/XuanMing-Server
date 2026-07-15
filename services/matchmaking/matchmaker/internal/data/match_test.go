@@ -8,10 +8,143 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 )
+
+func TestDurableStartOperationAndDiscoveryIndexDoNotExpireAtTicketTTL(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	op := &matchv1.MatchStartOperationStorageRecord{
+		OperationId: "9849ab5b-2ecf-4fc3-983d-2d8df53cc009",
+		TicketId:    701, TeamId: 701, CaptainId: 42,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 42, TeamId: 701}},
+		Phase:   matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED,
+	}
+	if err := repo.CreateStartOperation(ctx, op, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mr.FastForward(2 * time.Second)
+	if _, found, err := repo.GetStartOperation(ctx, 701); err != nil || !found {
+		t.Fatalf("nonterminal start operation expired: found=%v err=%v", found, err)
+	}
+	if ticketID, found, err := repo.GetStartPlayerOperation(ctx, 42); err != nil || !found || ticketID != 701 {
+		t.Fatalf("start discovery index expired: ticket=%d found=%v err=%v", ticketID, found, err)
+	}
+}
+
+func TestCreateStartOperationNeverReturnsBusinessRejectAfterCanonicalAccept(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	if existing, claimed, err := repo.ClaimStartPlayer(ctx, 42, 700, time.Minute); err != nil || !claimed || existing != 700 {
+		t.Fatalf("seed competing start claim: existing=%d claimed=%v err=%v", existing, claimed, err)
+	}
+	op := &matchv1.MatchStartOperationStorageRecord{
+		OperationId: "9849ab5b-2ecf-4fc3-983d-2d8df53cc010",
+		TicketId:    701, TeamId: 701, CaptainId: 42,
+		Members:         []*matchv1.MatchMemberStorageRecord{{PlayerId: 42, TeamId: 701}},
+		Phase:           matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED,
+		NextAttemptAtMs: time.Now().UnixMilli(),
+	}
+	if err := repo.CreateStartOperation(ctx, op, time.Minute); err != nil {
+		t.Fatalf("canonical ACCEPTED was reported as rejected: %v", err)
+	}
+	stored, found, err := repo.GetStartOperation(ctx, 701)
+	if err != nil || !found || stored.GetPhase() != matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED {
+		t.Fatalf("accepted operation missing/drifted: found=%v op=%+v err=%v", found, stored, err)
+	}
+	if existing, found, err := repo.GetStartPlayerOperation(ctx, 42); err != nil || !found || existing != 700 {
+		t.Fatalf("competing owner was overwritten: existing=%d found=%v err=%v", existing, found, err)
+	}
+	active, err := repo.RangeDueStartOperations(ctx, time.Now().Add(time.Minute).UnixMilli())
+	if err != nil || len(active) != 1 || active[0] != 701 {
+		t.Fatalf("accepted conflicting operation not scheduled for compensation: active=%v err=%v", active, err)
+	}
+}
+
+func TestCanonicalMatchDoesNotExpireUntilExplicitTerminalCleanup(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	m := &matchv1.MatchStorageRecord{
+		MatchId: 801, Stage: matchv1.MatchStage_MATCH_STAGE_CONFIRM,
+		ConfirmDeadlineMs: time.Now().Add(time.Minute).UnixMilli(),
+		Members:           []*matchv1.MatchMemberStorageRecord{{PlayerId: 42}},
+	}
+	if err := repo.CreateMatch(ctx, m, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mr.FastForward(2 * time.Second)
+	if _, found, err := repo.GetMatch(ctx, 801); err != nil || !found {
+		t.Fatalf("nonterminal match expired: found=%v err=%v", found, err)
+	}
+	if err := repo.UpdateMatchWithLock(ctx, 801, 1, func(rec *matchv1.MatchStorageRecord) error {
+		rec.Stage = matchv1.MatchStage_MATCH_STAGE_READY
+		return nil
+	}, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mr.FastForward(2 * time.Second)
+	if _, found, err := repo.GetMatch(ctx, 801); err != nil || !found {
+		t.Fatalf("READY match expired: found=%v err=%v", found, err)
+	}
+	if err := repo.ExpireMatch(ctx, 801, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mr.FastForward(2 * time.Second)
+	if _, found, err := repo.GetMatch(ctx, 801); err != nil || found {
+		t.Fatalf("explicitly expired terminal match remains: found=%v err=%v", found, err)
+	}
+}
+
+func TestReservedTicketAndClaimDoNotExpireDuringLongBattle(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	ticket := &matchv1.MatchTicketStorageRecord{TicketId: 901, MatchId: 9901,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 77}}}
+	queued := proto.Clone(ticket).(*matchv1.MatchTicketStorageRecord)
+	queued.MatchId = 0
+	if err := repo.AddTicket(ctx, queued, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if _, claimed, err := repo.ClaimPlayer(ctx, 77, 901, time.Second); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
+	}
+	if err := repo.ReserveTicket(ctx, ticket, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.PersistPlayerClaim(ctx, 77, 901); err != nil {
+		t.Fatal(err)
+	}
+	mr.FastForward(2 * time.Second)
+	if got, found, err := repo.GetTicket(ctx, 901); err != nil || !found || got.GetMatchId() != 9901 {
+		t.Fatalf("reserved ticket expired: found=%v ticket=%+v err=%v", found, got, err)
+	}
+	if got, found, err := repo.GetPlayerTicket(ctx, 77); err != nil || !found || got != 901 {
+		t.Fatalf("reserved claim expired: found=%v ticket=%d err=%v", found, got, err)
+	}
+}
+
+func TestQueuedTicketAndClaimDoNotSilentlyExpire(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	ticket := &matchv1.MatchTicketStorageRecord{TicketId: 902,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 78}}}
+	if err := repo.AddTicket(ctx, ticket, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if _, claimed, err := repo.ClaimPlayer(ctx, 78, 902, time.Second); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
+	}
+	mr.FastForward(24 * time.Hour)
+	if got, found, err := repo.GetTicket(ctx, 902); err != nil || !found || got.GetTicketId() != 902 {
+		t.Fatalf("queued ticket expired: found=%v ticket=%+v err=%v", found, got, err)
+	}
+	if got, found, err := repo.GetPlayerTicket(ctx, 78); err != nil || !found || got != 902 {
+		t.Fatalf("queued claim expired: found=%v ticket=%d err=%v", found, got, err)
+	}
+}
 
 const testTTL = 30 * time.Minute
 
@@ -402,26 +535,38 @@ func TestReserveTicket_CAS(t *testing.T) {
 	}
 }
 
-// TestRefreshPlayerClaim 验证 claim 续期只在仍指向本票据时生效(Lua 原子比较)。
+// TestRefreshPlayerClaim 验证滚动升级 claim 仅在仍指向本票据时移除 TTL。
 func TestRefreshPlayerClaim(t *testing.T) {
 	ctx := context.Background()
 	repo, mr := newRepo(t)
 
-	if _, ok, err := repo.ClaimPlayer(ctx, 1, 100, time.Minute); err != nil || !ok {
-		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	// Simulate a rolling-upgrade key created by the old TTL-backed writer.
+	if err := repo.rdb.Set(ctx, playerKey(1), "100", time.Minute).Err(); err != nil {
+		t.Fatalf("seed legacy claim: %v", err)
 	}
-	// 指向本票据 → 续期到 30min
+	// 指向本票据 → durable，无 TTL。
 	if err := repo.RefreshPlayerClaim(ctx, 1, 100, testTTL); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
-	if ttl := mr.TTL(playerKey(1)); ttl < 20*time.Minute {
-		t.Fatalf("ttl = %v, want ~30min", ttl)
+	if ttl := mr.TTL(playerKey(1)); ttl != 0 {
+		t.Fatalf("ttl = %v, want persistent", ttl)
 	}
 	// 指向别的票据 → 不动(防误续玩家新一局 claim)
 	if err := repo.RefreshPlayerClaim(ctx, 1, 999, time.Hour); err != nil {
 		t.Fatalf("refresh other: %v", err)
 	}
-	if ttl := mr.TTL(playerKey(1)); ttl > 31*time.Minute {
-		t.Fatalf("ttl = %v, should not be extended by wrong ticket", ttl)
+	if ttl := mr.TTL(playerKey(1)); ttl != 0 {
+		t.Fatalf("ttl = %v, wrong ticket mutated durable claim", ttl)
+	}
+}
+
+func TestPersistPlayerClaimRejectsLostOwnership(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	if _, ok, err := repo.ClaimPlayer(ctx, 1, 100, time.Minute); err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	if err := repo.PersistPlayerClaim(ctx, 1, 999); errcode.As(err) != errcode.ErrMatchConcurrent {
+		t.Fatalf("lost owner code=%v err=%v", errcode.As(err), err)
 	}
 }

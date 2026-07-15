@@ -12,8 +12,10 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
@@ -24,8 +26,10 @@ import (
 // MatchService 实现 matchv1.MatchServiceServer。
 type MatchService struct {
 	matchv1.UnimplementedMatchServiceServer
-	uc *biz.MatchUsecase
-	sf snowflakeGen
+	uc             *biz.MatchUsecase
+	resumeResolver playerMatchContextResolver
+	resumeAuth     internalRequestVerifier
+	sf             snowflakeGen
 }
 
 // snowflakeGen 是 snowflake.Node 的最小接口。
@@ -33,9 +37,17 @@ type snowflakeGen interface {
 	Generate() uint64
 }
 
+type playerMatchContextResolver interface {
+	ResolvePlayerMatchContext(context.Context, uint64) (*matchv1.ResolvePlayerMatchContextResponse, error)
+}
+
+type internalRequestVerifier interface {
+	Verify(context.Context, string, uint64) error
+}
+
 // NewMatchService 构造 MatchService。
-func NewMatchService(uc *biz.MatchUsecase, sf snowflakeGen) *MatchService {
-	return &MatchService{uc: uc, sf: sf}
+func NewMatchService(uc *biz.MatchUsecase, sf snowflakeGen, resumeAuth internalRequestVerifier) *MatchService {
+	return &MatchService{uc: uc, resumeResolver: uc, resumeAuth: resumeAuth, sf: sf}
 }
 
 // StartMatch 把队伍加入撮合队列。captain_id 以 JWT ctx 为准。
@@ -123,6 +135,44 @@ func (s *MatchService) ReleaseMatch(ctx context.Context, req *matchv1.ReleaseMat
 		return &matchv1.ReleaseMatchResponse{Code: toProtoCode(err)}, nil
 	}
 	return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
+// ResolvePlayerMatchContext is an internal read used by login while merging
+// placement and durable matchmaking state. The client Envoy exact-path denies it;
+// this application guard rejects player JWTs and requires a fresh request-bound
+// Login service HMAC whose nonce is atomically consumed in shared Redis. READY
+// credentials are generated from
+// the canonical match's persisted exact target + per-player placement binding;
+// Login consumes them for cold reconnect instead of rebuilding a weaker ticket
+// from the short-TTL roster projection.
+func (s *MatchService) ResolvePlayerMatchContext(ctx context.Context, req *matchv1.ResolvePlayerMatchContextRequest) (*matchv1.ResolvePlayerMatchContextResponse, error) {
+	if callerID(ctx) != 0 {
+		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	if req.GetPlayerId() == 0 {
+		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	if s.resumeAuth == nil {
+		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	if err := s.resumeAuth.Verify(ctx, matchv1.MatchService_ResolvePlayerMatchContext_FullMethodName, req.GetPlayerId()); err != nil {
+		code := commonv1.ErrCode_ERR_PERMISSION_DENY
+		if errors.Is(err, internalrpcauth.ErrUnavailable) {
+			code = commonv1.ErrCode_ERR_UNAVAILABLE
+		}
+		plog.With(ctx).Warnw("msg", "resolve_match_context_service_auth_rejected",
+			"player_id", req.GetPlayerId(), "replay_authority_unavailable", code == commonv1.ErrCode_ERR_UNAVAILABLE)
+		return &matchv1.ResolvePlayerMatchContextResponse{Code: code}, nil
+	}
+	if s.resumeResolver == nil {
+		return &matchv1.ResolvePlayerMatchContextResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	resolved, err := s.resumeResolver.ResolvePlayerMatchContext(ctx, req.GetPlayerId())
+	if err != nil {
+		return &matchv1.ResolvePlayerMatchContextResponse{Code: toProtoCode(err)}, nil
+	}
+	resolved.Code = commonv1.ErrCode_OK
+	return resolved, nil
 }
 
 // ── 辅助 ──────────────────────────────────────────────────────────────────────

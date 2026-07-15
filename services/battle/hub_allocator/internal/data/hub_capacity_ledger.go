@@ -9,7 +9,8 @@
 //
 // player_count 只由 session+reservation 条数派生；Heartbeat 的 reported count/list 只写
 // 审计字段，绝不能覆盖 reservation 或推断连接离场。connected ownership 新格式没有时间 TTL，
-// 只由 exact Departure、Release/Transfer 或 UID teardown 删除。所有 protobuf read-modify-write 保留
+// 只由 exact Departure 或已确认的 UID teardown 删除；Release/Transfer 只能下发物理 eviction
+// 并等待该 proof，不能直接删 ledger 冒充 Pawn 已退出。所有 protobuf read-modify-write 保留
 // unknown fields（不变量 §17）。
 package data
 
@@ -676,14 +677,89 @@ func (r *RedisHubAuthRepo) AcknowledgeDeparture(ctx context.Context, pod string,
 	return DepartureResult{}, errcode.New(errcode.ErrInternal, "hub departure %s: cas retry exhausted", pod)
 }
 
-// ReleaseAssignmentSeat 在调用方赢得跨 slot assignment CAS 后，精确删除该 assignment 的
-// reservation 或 connected ownership。普通 credential 轮换不影响 UID/epoch/writer 稳定身份；
-// 同名 Pod 重建后只清旧 ledger，不得递减新实例投影。
+// ReleaseAssignmentSeat 在调用方赢得跨 slot assignment CAS 后，只精确删除尚未 Admission
+// 的 reservation。live connected ownership 不是一条可随意回收的容量记录：它对应旧 Hub
+// 上真实存在的 PlayerController/Pawn，必须由 exact Departure 或确认的 UID teardown 删除。
 func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(ctx context.Context, pod string,
 	expected AssignmentInstanceIdentity, shardTTL time.Duration) (bool, error) {
+	result, err := r.ReleaseAssignmentSeatExact(ctx, pod, expected, shardTTL)
+	return result.Released, err
+}
+
+// InspectAssignmentSeat returns the exact capacity/physical-owner state without
+// mutation. It deliberately does not use TTL or heartbeat absence as departure
+// proof; connected ownership is persistent until Departure/UID teardown.
+func (r *RedisHubAuthRepo) InspectAssignmentSeat(ctx context.Context, pod string,
+	expected AssignmentInstanceIdentity) (AssignmentSeatSnapshot, error) {
+	if pod == "" || expected.PlayerID == 0 || expected.AssignmentID == "" || expected.InstanceUID == "" ||
+		expected.ProtocolEpoch == 0 || expected.WriterEpoch != authpkg.DSAuthWriterEpochV2 {
+		return AssignmentSeatSnapshot{}, errcode.New(errcode.ErrInvalidArg,
+			"complete assignment seat inspection identity required")
+	}
+	identity := ReservationIdentity{
+		PlayerID: expected.PlayerID, AssignmentID: expected.AssignmentID, InstanceUID: expected.InstanceUID,
+		ProtocolEpoch: expected.ProtocolEpoch, WriterEpoch: expected.WriterEpoch,
+	}
+	var reservationCmd, sessionCmd *redis.StringCmd
+	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		reservationCmd = pipe.HGet(ctx, reservationsKey(pod), expected.AssignmentID)
+		sessionCmd = pipe.HGet(ctx, sessionsKey(pod), expected.AssignmentID)
+		return nil
+	})
+	if err != nil && err != redis.Nil {
+		return AssignmentSeatSnapshot{}, err
+	}
+	var reservation *hubv1.HubReservationStorageRecord
+	if raw, getErr := reservationCmd.Bytes(); getErr == nil {
+		reservation = &hubv1.HubReservationStorageRecord{}
+		if decodeErr := proto.Unmarshal(raw, reservation); decodeErr != nil {
+			return AssignmentSeatSnapshot{}, decodeErr
+		}
+	} else if getErr != redis.Nil {
+		return AssignmentSeatSnapshot{}, getErr
+	}
+	var session *hubv1.HubConnectedOwnershipStorageRecord
+	if raw, getErr := sessionCmd.Bytes(); getErr == nil {
+		session = &hubv1.HubConnectedOwnershipStorageRecord{}
+		if decodeErr := proto.Unmarshal(raw, session); decodeErr != nil {
+			return AssignmentSeatSnapshot{}, decodeErr
+		}
+	} else if getErr != redis.Nil {
+		return AssignmentSeatSnapshot{}, getErr
+	}
+	if reservation != nil && session != nil {
+		return AssignmentSeatSnapshot{}, errcode.New(errcode.ErrInvalidState,
+			"assignment exists in reservation and session ledgers")
+	}
+	switch {
+	case reservation == nil && session == nil:
+		return AssignmentSeatSnapshot{AlreadyAbsent: true}, nil
+	case reservation != nil:
+		if !reservationRecordMatches(reservation, pod, identity) {
+			return AssignmentSeatSnapshot{Conflict: true}, nil
+		}
+		return AssignmentSeatSnapshot{Reserved: true,
+			ReservationExpiresAtMs: reservation.GetExpiresAtMs()}, nil
+	default:
+		if !sessionRecordMatches(session, pod, identity) || session.GetAdmissionId() == "" ||
+			session.GetAdmissionSeq() == 0 {
+			return AssignmentSeatSnapshot{Conflict: true}, nil
+		}
+		return AssignmentSeatSnapshot{Connected: true, AdmissionID: session.GetAdmissionId(),
+			AdmissionSeq: session.GetAdmissionSeq()}, nil
+	}
+}
+
+// ReleaseAssignmentSeatExact exposes the states required by a durable cleanup
+// saga. AlreadyAbsent is an idempotent replay success; Conflict means another
+// identity exists. DepartureRequired is the crucial physical fence: a matching
+// connected owner is never deleted here and must be evicted by its source DS.
+func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod string,
+	expected AssignmentInstanceIdentity, shardTTL time.Duration) (ReleaseAssignmentSeatResult, error) {
 	if pod == "" || expected.PlayerID == 0 || expected.AssignmentID == "" || expected.InstanceUID == "" ||
 		expected.ProtocolEpoch == 0 || expected.WriterEpoch != authpkg.DSAuthWriterEpochV2 || shardTTL <= 0 {
-		return false, nil
+		return ReleaseAssignmentSeatResult{}, errcode.New(errcode.ErrInvalidArg,
+			"complete assignment seat release identity required")
 	}
 	identity := ReservationIdentity{
 		PlayerID: expected.PlayerID, AssignmentID: expected.AssignmentID, InstanceUID: expected.InstanceUID,
@@ -692,7 +768,7 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(ctx context.Context, pod string
 	aKey, shardKeyName := authKey(pod), shardKey(pod)
 	watchKeys := append([]string{aKey, shardKeyName}, capacityLedgerKeys(pod)...)
 	for attempt := 0; attempt < hubAuthCASRetries; attempt++ {
-		released := false
+		out := ReleaseAssignmentSeatResult{}
 		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			var reservation *hubv1.HubReservationStorageRecord
 			if raw, err := tx.HGet(ctx, reservationsKey(pod), expected.AssignmentID).Bytes(); err == nil {
@@ -714,10 +790,19 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(ctx context.Context, pod string
 			}
 			reservationMatches := reservationRecordMatches(reservation, pod, identity)
 			sessionMatches := sessionRecordMatches(session, pod, identity)
-			if reservationMatches && sessionMatches {
+			if reservation != nil && session != nil {
 				return errcode.New(errcode.ErrInvalidState, "assignment exists in reservation and session ledgers")
 			}
+			if reservation == nil && session == nil {
+				out.AlreadyAbsent = true
+				return nil
+			}
 			if !reservationMatches && !sessionMatches {
+				out.Conflict = true
+				return nil
+			}
+			if sessionMatches {
+				out.DepartureRequired = true
 				return nil
 			}
 
@@ -753,17 +838,12 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(ctx context.Context, pod string
 				shard.GetLastVerifiedWriterEpoch() == expected.WriterEpoch
 			if !currentProjection {
 				_, err := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					if reservationMatches {
-						pipe.HDel(ctx, reservationsKey(pod), expected.AssignmentID)
-						pipe.ZRem(ctx, reservationExpiryKey(pod), expected.AssignmentID)
-					} else {
-						pipe.HDel(ctx, sessionsKey(pod), expected.AssignmentID)
-						pipe.ZRem(ctx, sessionExpiryKey(pod), expected.AssignmentID)
-					}
+					pipe.HDel(ctx, reservationsKey(pod), expected.AssignmentID)
+					pipe.ZRem(ctx, reservationExpiryKey(pod), expected.AssignmentID)
 					return nil
 				})
 				if err == nil {
-					released = true
+					out.Released = true
 				}
 				return err
 			}
@@ -774,13 +854,9 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(ctx context.Context, pod string
 			}
 			pruneHubCapacityLedger(ledger, pod, expected.InstanceUID, expected.ProtocolEpoch,
 				expected.WriterEpoch, time.Now().UnixMilli())
-			if reservationMatches {
-				// target 可能刚被 expiry prune 从内存视图删除；底层精确记录仍是本次读到并
-				// 匹配的那个，继续提交整个 ledger 才能真正清掉它并修正 projection。
-				delete(ledger.reservations, expected.AssignmentID)
-			} else {
-				delete(ledger.sessions, expected.AssignmentID)
-			}
+			// target 可能刚被 expiry prune 从内存视图删除；底层精确记录仍是本次读到并
+			// 匹配的那个，继续提交整个 ledger 才能真正清掉它并修正 projection。
+			delete(ledger.reservations, expected.AssignmentID)
 			if err := syncShardCapacityProjection(shard, ledger); err != nil {
 				return err
 			}
@@ -796,16 +872,17 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeat(ctx context.Context, pod string
 				return nil
 			})
 			if err == nil {
-				released = true
+				out.Released = true
 			}
 			return err
 		}, watchKeys...)
 		if txErr == redis.TxFailedErr {
 			continue
 		}
-		return released, txErr
+		return out, txErr
 	}
-	return false, errcode.New(errcode.ErrInternal, "hub assignment release %s: cas retry exhausted", pod)
+	return ReleaseAssignmentSeatResult{}, errcode.New(errcode.ErrInternal,
+		"hub assignment release %s: cas retry exhausted", pod)
 }
 
 // RemoveCapacityLedger 仅在分片已被确认回收后清派生账；活分片绝不调用。

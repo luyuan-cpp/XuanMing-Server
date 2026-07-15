@@ -23,6 +23,53 @@ type Proof struct {
 	OperationID     string
 }
 
+// TargetUnavailableReason is an allocator assertion about an exact PENDING
+// target. A lease timeout by itself is never authority to retarget.
+type TargetUnavailableReason int32
+
+const (
+	TargetUnavailableUnknown TargetUnavailableReason = iota
+	TargetUnavailableInstanceTerminated
+	TargetUnavailableReservationExpiredUnused
+	TargetUnavailableAllocationRevoked
+)
+
+// TargetUnavailableProof authorizes one exact old-target -> new-target CAS.
+// Its domain is separate from transition Proof, so signatures cannot be
+// replayed across Begin and Retarget even when a route-scoped key is shared.
+type TargetUnavailableProof struct {
+	PlayerID               uint64
+	PlacementVersion       uint64
+	OperationID            string
+	TargetRoute            int32
+	TargetMatchID          uint64
+	ExpectedTarget         Target
+	ReplacementVersion     uint64
+	ReplacementOperationID string
+	ReplacementTarget      Target
+	ProofType              int32
+	Reason                 TargetUnavailableReason
+	ProofID                string
+}
+
+func (p TargetUnavailableProof) canonical() string {
+	return strings.Join([]string{
+		"pandora-placement-target-unavailable-v1",
+		strconv.FormatUint(p.PlayerID, 10), strconv.FormatUint(p.PlacementVersion, 10),
+		p.OperationID, strconv.FormatInt(int64(p.TargetRoute), 10),
+		strconv.FormatUint(p.TargetMatchID, 10),
+		p.ExpectedTarget.PodName, p.ExpectedTarget.InstanceUID,
+		strconv.FormatUint(uint64(p.ExpectedTarget.InstanceEpoch), 10),
+		p.ExpectedTarget.AssignmentID, p.ExpectedTarget.AllocationID, p.ExpectedTarget.ReleaseTrack,
+		strconv.FormatUint(p.ReplacementVersion, 10), p.ReplacementOperationID,
+		p.ReplacementTarget.PodName, p.ReplacementTarget.InstanceUID,
+		strconv.FormatUint(uint64(p.ReplacementTarget.InstanceEpoch), 10),
+		p.ReplacementTarget.AssignmentID, p.ReplacementTarget.AllocationID,
+		p.ReplacementTarget.ReleaseTrack, strconv.FormatInt(int64(p.ProofType), 10),
+		strconv.FormatInt(int64(p.Reason), 10), p.ProofID,
+	}, "\n")
+}
+
 func (p Proof) canonical() string {
 	return strings.Join([]string{
 		strconv.FormatUint(p.PlayerID, 10), strconv.FormatUint(p.ExpectedVersion, 10),
@@ -50,6 +97,22 @@ func (s *ProofSigner) Sign(p Proof) string {
 }
 
 func (s *ProofSigner) Verify(p Proof, signature string) bool {
+	provided, err := base64.RawURLEncoding.DecodeString(signature)
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, s.secret)
+	_, _ = mac.Write([]byte(p.canonical()))
+	return hmac.Equal(provided, mac.Sum(nil))
+}
+
+func (s *ProofSigner) SignTargetUnavailable(p TargetUnavailableProof) string {
+	mac := hmac.New(sha256.New, s.secret)
+	_, _ = mac.Write([]byte(p.canonical()))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (s *ProofSigner) VerifyTargetUnavailable(p TargetUnavailableProof, signature string) bool {
 	provided, err := base64.RawURLEncoding.DecodeString(signature)
 	if err != nil {
 		return false
@@ -87,4 +150,12 @@ func (k *ProofKeyring) Verify(p Proof, signature string) bool {
 	}
 	signer := k.byType[p.ProofType]
 	return signer != nil && signer.Verify(p, signature)
+}
+
+func (k *ProofKeyring) VerifyTargetUnavailable(p TargetUnavailableProof, signature string) bool {
+	if k == nil {
+		return false
+	}
+	signer := k.byType[p.ProofType]
+	return signer != nil && signer.VerifyTargetUnavailable(p, signature)
 }

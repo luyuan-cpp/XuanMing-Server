@@ -513,7 +513,8 @@ func main() {
 	if cfg.DSAuth.AuthorityModeRedis() {
 		var features []string
 		if modelBAuthority {
-			features = []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1"}
+			features = []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1",
+				"hub-owner-cleanup-v1", "hub-physical-eviction-v1"}
 		}
 		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
 			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,

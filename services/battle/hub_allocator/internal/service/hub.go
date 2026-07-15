@@ -60,12 +60,12 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
 	}
 	return &hubv1.AssignHubResponse{
-		Code:       commonv1.ErrCode_OK,
-		HubDsAddr:  res.HubDSAddr,
-		HubTicket:  res.HubTicket,
-		HubPodName: res.HubPodName,
-		ShardId:    res.ShardID,
-		PlacementVersion: res.Placement.Version,
+		Code:                 commonv1.ErrCode_OK,
+		HubDsAddr:            res.HubDSAddr,
+		HubTicket:            res.HubTicket,
+		HubPodName:           res.HubPodName,
+		ShardId:              res.ShardID,
+		PlacementVersion:     res.Placement.Version,
 		PlacementOperationId: res.Placement.OperationID,
 	}, nil
 }
@@ -150,7 +150,7 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 	// 在线保活:把心跳捎带的在场 player_ids 转发 locator 续 HUB 位置 TTL
 	// (biz 内 goroutine 异步 + 独立超时,locator 抖动不拖慢心跳响应)。
 	s.uc.RefreshHubPresence(ctx, req.GetHubPodName(), req.GetPlayerIds(), pmw.DSBearerToken(ctx))
-	return &hubv1.HeartbeatResponse{
+	response := &hubv1.HeartbeatResponse{
 		Code:                  commonv1.ErrCode_OK,
 		Command:               res.Command,
 		GraceSeconds:          res.GraceSeconds,
@@ -159,7 +159,18 @@ func (s *HubService) Heartbeat(ctx context.Context, req *hubv1.HeartbeatRequest)
 		AcceptedInstanceUid:   res.AcceptedInstanceUID,
 		AcceptedProtocolEpoch: res.AcceptedProtocolEpoch,
 		AcceptedWriterEpoch:   res.AcceptedWriterEpoch,
-	}, nil
+	}
+	for _, order := range res.EvictionOrders {
+		response.EvictionOrders = append(response.EvictionOrders, &hubv1.HubEvictionOrder{
+			PlayerId: order.PlayerID, AssignmentId: order.AssignmentID,
+			AdmissionId: order.AdmissionID, AdmissionSeq: order.AdmissionSeq,
+			SourceInstanceUid:   order.SourceInstanceUID,
+			SourceProtocolEpoch: order.SourceProtocolEpoch,
+			SourceWriterEpoch:   order.SourceWriterEpoch,
+			CleanupAssignmentId: order.CleanupAssignmentID,
+		})
+	}
+	return response, nil
 }
 
 // AcknowledgeAdmission 只接受 :8444 DS callback credential；请求里的 player/assignment

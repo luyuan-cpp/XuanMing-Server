@@ -66,12 +66,12 @@ type DSTicketClaims struct {
 	HubAssignmentID string
 	DSWriterEpoch   uint32
 	// v2(RS256/B1)稳定实例绑定。legacy 票据为零值。
-	DSInstanceEpoch uint32
-	AllocationID    string
-	ReleaseTrack    string
-	PlacementVersion uint64
+	DSInstanceEpoch      uint32
+	AllocationID         string
+	ReleaseTrack         string
+	PlacementVersion     uint64
 	PlacementOperationID string
-	SourceMatchID uint64
+	SourceMatchID        uint64
 }
 
 // verifiedDSTicket 是 legacy HS256 与 v2 RS256 在 Login 内部的统一、只读视图。
@@ -95,13 +95,13 @@ type verifiedDSTicket struct {
 	AllocationID    string
 	HubAssignmentID string
 	// legacy Model-B callback credential binding（v2 有意不携带）。
-	DSProtocolEpoch uint32
-	DSCredentialGen uint64
-	DSCredentialJTI string
-	DSWriterEpoch   uint32
-	PlacementVersion uint64
+	DSProtocolEpoch      uint32
+	DSCredentialGen      uint64
+	DSCredentialJTI      string
+	DSWriterEpoch        uint32
+	PlacementVersion     uint64
 	PlacementOperationID string
-	SourceMatchID uint64
+	SourceMatchID        uint64
 }
 
 // TicketUsecase 处理 DSTicket 的签发 / 校验。
@@ -129,8 +129,8 @@ type TicketUsecase struct {
 	v2Signer *auth.DSTicketSigner
 	// v2Verifier 供 Login VerifyDSTicket 在线端点使用；非 nil 同时机械激活玩家票
 	// RS256-only。B1 DS 正常准入仍本地验签，不依赖此在线调用。
-	v2Verifier *auth.DSTicketVerifier
-	placementMode placement.Mode
+	v2Verifier       *auth.DSTicketVerifier
+	placementMode    placement.Mode
 	placementChecker data.PlacementAdmissionChecker
 }
 
@@ -554,29 +554,29 @@ func (u *TicketUsecase) verifyDSTicket(
 		"jti", claims.JTI, "ds_pod", dsPodName)
 
 	out := &DSTicketClaims{
-		Version:         claims.Version,
-		PlayerID:        claims.PlayerID,
-		MatchID:         claims.MatchID,
-		DSType:          claims.DSType,
-		JTI:             claims.JTI,
-		IssuedAtMs:      claims.IssuedAtMs,
-		ExpiresAtMs:     claims.ExpiresAtMs,
-		RegionID:        claims.RegionID,
-		CellID:          claims.CellID,
-		RoleID:          claims.RoleID,
-		DSPodName:       claims.DSPodName,
-		DSInstanceUID:   claims.DSInstanceUID,
-		DSProtocolEpoch: claims.DSProtocolEpoch,
-		DSCredentialGen: claims.DSCredentialGen,
-		DSCredentialJTI: claims.DSCredentialJTI,
-		HubAssignmentID: claims.HubAssignmentID,
-		DSWriterEpoch:   claims.DSWriterEpoch,
-		DSInstanceEpoch: claims.DSInstanceEpoch,
-		AllocationID:    claims.AllocationID,
-		ReleaseTrack:    claims.ReleaseTrack,
-		PlacementVersion: claims.PlacementVersion,
+		Version:              claims.Version,
+		PlayerID:             claims.PlayerID,
+		MatchID:              claims.MatchID,
+		DSType:               claims.DSType,
+		JTI:                  claims.JTI,
+		IssuedAtMs:           claims.IssuedAtMs,
+		ExpiresAtMs:          claims.ExpiresAtMs,
+		RegionID:             claims.RegionID,
+		CellID:               claims.CellID,
+		RoleID:               claims.RoleID,
+		DSPodName:            claims.DSPodName,
+		DSInstanceUID:        claims.DSInstanceUID,
+		DSProtocolEpoch:      claims.DSProtocolEpoch,
+		DSCredentialGen:      claims.DSCredentialGen,
+		DSCredentialJTI:      claims.DSCredentialJTI,
+		HubAssignmentID:      claims.HubAssignmentID,
+		DSWriterEpoch:        claims.DSWriterEpoch,
+		DSInstanceEpoch:      claims.DSInstanceEpoch,
+		AllocationID:         claims.AllocationID,
+		ReleaseTrack:         claims.ReleaseTrack,
+		PlacementVersion:     claims.PlacementVersion,
 		PlacementOperationID: claims.PlacementOperationID,
-		SourceMatchID: claims.SourceMatchID,
+		SourceMatchID:        claims.SourceMatchID,
 	}
 	return out, nil
 }
@@ -841,8 +841,18 @@ func (u *TicketUsecase) commitBattlePlacementAdmission(
 		return nil
 	}
 	plog.With(ctx).Warnw("msg", "battle_placement_admission_rejected", "mode", u.placementMode.String(),
-		"player_id", func() uint64 { if claims == nil { return 0 }; return claims.PlayerID }(),
-		"match_id", func() uint64 { if claims == nil { return 0 }; return claims.MatchID }(), "err", err)
+		"player_id", func() uint64 {
+			if claims == nil {
+				return 0
+			}
+			return claims.PlayerID
+		}(),
+		"match_id", func() uint64 {
+			if claims == nil {
+				return 0
+			}
+			return claims.MatchID
+		}(), "err", err)
 	if u.placementMode == placement.ModeShadow {
 		return nil
 	}

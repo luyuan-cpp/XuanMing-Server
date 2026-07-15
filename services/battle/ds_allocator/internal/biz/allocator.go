@@ -118,8 +118,12 @@ type AllocatorUsecase struct {
 	repo      data.BattleRepo
 	alloc     GameServerAllocator
 	cfg       conf.AllocatorConf
-	lifecycle DSLifecyclePusher // 可为 nil(kafka 不可用时静默不发 abandoned 事件)
-	locator   LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
+	lifecycle DSLifecyclePusher // 可为 nil；仅显式 local/off 开发配置允许 best-effort 降级
+	// lifecycleRequired 在 Redis authority / 生产 enforce 路径为 true。即便启动装配
+	// 被未来改坏，nil publisher 也只能保留 active outbox 重试，绝不能把 abandoned
+	// 当作已恢复并 Expire 掉 Battle fence。
+	lifecycleRequired bool
+	locator           LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
 
 	// Model B 仅在 agones+enforce+authority_mode=redis 时由 main 注入。Redis authRepo 是
 	// 唯一授权权威；K8s annotation 只投递 pending 凭据。
@@ -148,8 +152,24 @@ func NewAllocatorUsecase(repo data.BattleRepo, alloc GameServerAllocator, cfg co
 	return &AllocatorUsecase{repo: repo, alloc: alloc, cfg: cfg}
 }
 
-// SetLifecyclePusher 注入 ds.lifecycle 事件发送器(main 在 kafka 就绪时调用,弱依赖)。
+// SetLifecyclePusher 注入 ds.lifecycle 事件发送器(main 在 Kafka 就绪时调用)。
 func (u *AllocatorUsecase) SetLifecyclePusher(p DSLifecyclePusher) { u.lifecycle = p }
+
+// SetLifecyclePusherRequired 把生产发布策略注入业务层。Redis authority 在
+// EnableRedisAuthority 内还会无条件打开此门，避免调用方漏配。
+func (u *AllocatorUsecase) SetLifecyclePusherRequired(required bool) {
+	u.lifecycleRequired = required
+}
+
+// ValidateLifecyclePusherReady 是启动装配的最后一道门。配置宣称可靠发布时，只有
+// 非 nil publisher 才允许启动 sweep/RPC。
+func (u *AllocatorUsecase) ValidateLifecyclePusherReady() error {
+	if u.lifecycleRequired && u.lifecycle == nil {
+		return errcode.New(errcode.ErrInvalidState,
+			"reliable ds.lifecycle publisher is required before allocator startup")
+	}
+	return nil
+}
 
 // SetLocationRefresher 注入 BATTLE 位置续期器(main 在 locator_addr 已配时调用,弱依赖)。
 func (u *AllocatorUsecase) SetLocationRefresher(r LocationRefresher) { u.locator = r }
@@ -174,6 +194,7 @@ func (u *AllocatorUsecase) EnableRedisAuthority(
 	u.dsSigner = signer
 	u.dsCredentialTTL = tokenTTL
 	u.modelB = true
+	u.lifecycleRequired = true
 	return nil
 }
 
@@ -691,7 +712,7 @@ func (u *AllocatorUsecase) cleanupAllocatedBattle(
 				"allocation_id", allocationID)
 			return
 		}
-		if rerr := u.releaseGameServer(cleanupCtx, podName, allocation); rerr != nil {
+		if rerr := u.releaseGameServer(cleanupCtx, matchID, podName, allocation); rerr != nil {
 			// ReleaseExpected timeout/unknown 必须保留永久 fence；不得 purge。
 			plog.With(ctx).Warnw("msg", "ready_wait_cleanup_release_unconfirmed", "match_id", matchID,
 				"pod", podName, "err", rerr)
@@ -712,24 +733,36 @@ func (u *AllocatorUsecase) cleanupAllocatedBattle(
 	if !deleted || podName == "" {
 		return
 	}
-	if rerr := u.releaseGameServer(cleanupCtx, podName, allocation); rerr != nil {
+	if rerr := u.releaseGameServer(cleanupCtx, matchID, podName, allocation); rerr != nil {
 		plog.With(ctx).Warnw("msg", "ready_wait_cleanup_release_failed", "match_id", matchID, "pod", podName, "err", rerr)
 	}
 }
 
 func (u *AllocatorUsecase) releaseGameServer(
 	ctx context.Context,
+	matchID uint64,
 	podName string,
 	allocation *data.AuthoritativeGameServerAllocation,
 ) error {
 	if !u.modelB {
 		return u.alloc.Release(ctx, podName)
 	}
-	if allocation == nil {
+	if matchID == 0 || allocation == nil || allocation.InstanceUID == "" ||
+		allocation.InstanceEpoch == 0 || allocation.AllocationID == "" || podName == "" ||
+		allocation.PodName != podName {
 		return errcode.New(errcode.ErrInvalidState,
-			"battle Model B release requires expected GameServer UID")
+			"battle Model B release requires complete expected GameServer tuple")
 	}
-	return u.authoritativeAlloc.ReleaseExpected(ctx, allocation)
+	if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
+		return err
+	}
+	// 外部 UID 条件回收明确成功后先写 durable teardown proof，再允许
+	// 上层 purge/expire battle+auth。proof 写失败必须整体返错保留永久
+	// release fence；后续重试 ReleaseExpected(404 幂等成功)可补齐证明。
+	return u.repo.RecordInstanceTeardown(ctx, matchID, data.BattleDepartureSource{
+		DSPodName: podName, GameServerUID: allocation.InstanceUID,
+		InstanceEpoch: allocation.InstanceEpoch, AllocationID: allocation.AllocationID,
+	})
 }
 
 // reconcilePreactiveRelease 幂等完成永久 pre-active release fence → UID 条件删除 → purge。
@@ -755,7 +788,7 @@ func (u *AllocatorUsecase) reconcilePreactiveRelease(
 		PodName: battle.GetDsPodName(), InstanceUID: battle.GetGameserverUid(),
 		InstanceEpoch: battle.GetInstanceEpoch(), AllocationID: battle.GetAllocationId(),
 	}
-	if err := u.releaseGameServer(ctx, battle.GetDsPodName(), allocation); err != nil {
+	if err := u.releaseGameServer(ctx, battle.GetMatchId(), battle.GetDsPodName(), allocation); err != nil {
 		plog.With(ctx).Warnw("msg", "preactive_release_unconfirmed", "match_id", battle.GetMatchId(),
 			"allocation_id", battle.GetAllocationId(), "err", err)
 		return false
@@ -840,7 +873,7 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 		PodName: podName, InstanceUID: expected.InstanceUID,
 		InstanceEpoch: expected.InstanceEpoch, AllocationID: expected.AllocationID,
 	}
-	if err := u.releaseGameServer(ctx, podName, allocation); err != nil {
+	if err := u.releaseGameServer(ctx, matchID, podName, allocation); err != nil {
 		plog.With(ctx).Warnw("msg", "terminal_gameserver_release_unconfirmed",
 			"match_id", matchID, "allocation_id", expected.AllocationID, "pod", podName, "err", err)
 		return errcode.NewCause(errcode.ErrUnavailable, err,
@@ -895,6 +928,7 @@ type HeartbeatResult struct {
 	AcceptedInstanceUID   string
 	AcceptedInstanceEpoch uint32
 	AcceptedWriterEpoch   uint32
+	EvictionOrders        []*dsv1.BattleEvictionOrder
 }
 
 // RedisAuthorityEnabled 供 service/gm 选择严格 Model B 路径；开启后不存在 legacy fallback。
@@ -908,10 +942,34 @@ func (u *AllocatorUsecase) HeartbeatAuthorized(
 	id data.BattleCredentialIdentity,
 	playerCount int32,
 	state string,
+	tsMs int64,
+) (*HeartbeatResult, error) {
+	return u.HeartbeatAuthorizedWithPlayers(ctx, matchID, id, playerCount, state, tsMs,
+		false, nil, nil)
+}
+
+// HeartbeatAuthorizedWithPlayers 是 Battle→Hub 物理离场闭环心跳。只有
+// snapshotPresent=true 的新 DS 才能用完整可信 active-player 快照提交
+// departure；旧 DS 的 proto3 零值始终 fail-closed，但仍可收到 order 等待升级/
+// source UID teardown。
+func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
+	ctx context.Context,
+	matchID uint64,
+	id data.BattleCredentialIdentity,
+	playerCount int32,
+	state string,
 	_ int64,
+	snapshotPresent bool,
+	activePlayerIDs []uint64,
+	acknowledgedDepartureIDs []string,
 ) (*HeartbeatResult, error) {
 	if !u.modelB {
 		return nil, errcode.New(errcode.ErrInvalidState, "battle Redis authority is not enabled")
+	}
+	if snapshotPresent && playerCount != int32(len(activePlayerIDs)) {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"battle heartbeat player_count=%d does not match active snapshot=%d",
+			playerCount, len(activePlayerIDs))
 	}
 	out, err := u.authRepo.ActivateHeartbeat(ctx, matchID, id, data.BattleHeartbeatInput{
 		PlayerCount:        playerCount,
@@ -935,6 +993,17 @@ func (u *AllocatorUsecase) HeartbeatAuthorized(
 			"pod", id.PodName, "uid", id.InstanceUID, "epoch", id.InstanceEpoch,
 			"gen", id.Gen, "jti", id.JTI, "writer_epoch", id.WriterEpoch)
 	}
+	if out.Battle != nil && out.Battle.GetAllocationId() != "" {
+		orders, reconcileErr := u.repo.ReconcilePlayerDepartures(ctx, matchID,
+			data.BattleDepartureSource{
+				DSPodName: id.PodName, GameServerUID: id.InstanceUID,
+				InstanceEpoch: id.InstanceEpoch, AllocationID: out.Battle.GetAllocationId(),
+			}, snapshotPresent, activePlayerIDs, acknowledgedDepartureIDs)
+		if reconcileErr != nil {
+			return nil, reconcileErr
+		}
+		result.EvictionOrders = orders
+	}
 	if out.FirstAbandon && out.Battle != nil {
 		finished := u.finishEmptyAbandon(ctx, matchID, out.Battle.DsPodName,
 			out.Battle.GameserverUid, out.Battle.AllocationId, out.Battle.InstanceEpoch,
@@ -951,6 +1020,19 @@ func (u *AllocatorUsecase) HeartbeatAuthorized(
 		u.refreshBattleLocations(ctx, out.Battle.PlayerIds, matchID, out.Battle.DsAddr)
 	}
 	return result, nil
+}
+
+// EnsurePlayerDeparture 是 Login/Hub 签发 Hub ticket 前的物理源离场门。
+// pending 是正常可重试结果，不是成功；只有 Departed=true 才能继续 Hub。
+func (u *AllocatorUsecase) EnsurePlayerDeparture(
+	ctx context.Context,
+	expected data.BattlePlayerDepartureExpected,
+) (data.BattlePlayerDepartureResult, error) {
+	if !u.modelB {
+		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrUnavailable,
+			"battle physical departure requires Redis authority")
+	}
+	return u.repo.EnsurePlayerDeparture(ctx, expected)
 }
 
 // Heartbeat 处理 DS 上报(单向 unary,DS 每 5s 调)。刷新 last_heartbeat_ms + 状态。
@@ -1117,7 +1199,7 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 			InstanceEpoch: instanceEpoch,
 		}
 	}
-	if rerr := u.releaseGameServer(ctx, podName, expected); rerr != nil {
+	if rerr := u.releaseGameServer(ctx, matchID, podName, expected); rerr != nil {
 		plog.With(ctx).Warnw("msg", "empty_abandon_release_failed", "match_id", matchID, "pod", podName, "err", rerr)
 		if u.modelB {
 			// 永久 TERMINATING fence 留在 Redis；不得继续投递/Expire 后让墓碑消失。
@@ -1211,8 +1293,8 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 //
 // W4 ⑧ 可靠补偿(不变量 §4 DS 崩溃必有补偿):
 // 把 active ZSET 自身当作补偿事件的「outbox」——abandoned 的对局在 ds.lifecycle 事件
-// 成功投递前**不移出 active**,故下一轮 sweep 会再次命中并重试投递;只有投递成功(或未配置
-// kafka 的 best-effort 回退)才 ExpireBattle 移出 active。配合 battle_result 幂等消费
+// 成功投递前**不移出 active**,故下一轮 sweep 会再次命中并重试投递;只有投递成功(或显式
+// local/off 开发配置的 best-effort 回退)才 ExpireBattle 移出 active。配合 battle_result 幂等消费
 // (不变量 §2),整条补偿链是 at-least-once 闭环,可穿越 Kafka 临时不可用。
 //
 // legacy 天然上界靠 UpdateBattleKeepTTL(KEEPTTL)。Model B 则在任何外部 Release 前
@@ -1318,7 +1400,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				plog.With(ctx).Warnw("msg", "model_b_sweep_index_cleanup_failed",
 					"match_id", mid, "err", terminateErr)
 			}
-			if rerr := u.releaseGameServer(ctx, b.DsPodName, &data.AuthoritativeGameServerAllocation{
+			if rerr := u.releaseGameServer(ctx, mid, b.DsPodName, &data.AuthoritativeGameServerAllocation{
 				PodName: b.DsPodName, InstanceUID: b.GameserverUid, AllocationID: b.AllocationId,
 				InstanceEpoch: b.InstanceEpoch,
 			}); rerr != nil {
@@ -1408,7 +1490,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			}
 			plog.With(ctx).Infow("msg", "battle_abandoned_heartbeat_timeout", "match_id", mid, "pod", podName)
 		}
-		// 投递 abandoned 补偿事件:成功(或未配 kafka 的 best-effort 回退)才移出 active;
+		// 投递 abandoned 补偿事件:成功(或显式 local/off 开发回退)才移出 active;
 		// 失败则保留在 active,下一轮 sweep 重试(可靠补偿,不变量 §4)。
 		if u.deliverAbandoned(ctx, mid, podName, playerIDs, mapID, gameMode) {
 			// 终态镜像保留一段供查询,移出 active 不再扫描
@@ -1423,14 +1505,21 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 // deliverAbandoned 发 DSLifecycleEvent{phase=ABANDONED} 给 battle_result 做玩家段位回滚补偿。
 //
 // 返回值语义(给 sweepOnce 决定是否移出 active):
-//   - true  → 可移出 active:已成功投递,或未配置 kafka(无补偿通道)走 best-effort 回退。
+//   - true  → 可移出 active:已成功投递,或显式 local/off 开发配置未接 Kafka。
 //   - false → 投递失败,保留在 active 下一轮 sweep 重试(可靠补偿,不变量 §4)。
 //
-// 未配置 kafka 时返回 true 而非把对局永久卡在 active:此时显式选择了「无补偿通道」,
-// abandoned 镜像仍落 Redis 供查;若卡在 active 只会每轮 sweep 重复回收且无人消费。
+// 生产 required 但 publisher 意外为 nil 时必须返回 false：这是一道独立于 main 启动
+// 校验的 fail-closed 保险，禁止 abandoned 在没有 match release / exit proof 时被过期。
 func (u *AllocatorUsecase) deliverAbandoned(ctx context.Context, matchID uint64, podName string, playerIDs []uint64, mapID uint32, gameMode string) bool {
 	if u.lifecycle == nil {
-		return true // 未配置补偿通道:best-effort 回退,直接移出 active
+		if u.lifecycleRequired {
+			plog.With(ctx).Errorw("msg", "ds_lifecycle_publisher_missing_fail_closed",
+				"match_id", matchID, "hint", "retain active recovery outbox; restart with a healthy Kafka producer")
+			return false
+		}
+		plog.With(ctx).Warnw("msg", "ds_lifecycle_disabled_dev_best_effort",
+			"match_id", matchID, "hint", "local/off development only; no battle_result recovery event will be produced")
+		return true
 	}
 	evt := &dsv1.DSLifecycleEvent{
 		MatchId:   matchID,

@@ -310,6 +310,38 @@ func (m *mockLifecycle) PublishLifecycle(_ context.Context, evt *dsv1.DSLifecycl
 	return nil
 }
 
+func TestLifecycleStartupGateAndDeliveryFailClosed(t *testing.T) {
+	uc, _ := newUsecase(t)
+	uc.SetLifecyclePusherRequired(true)
+	if err := uc.ValidateLifecyclePusherReady(); err == nil {
+		t.Fatal("required lifecycle publisher must be present before startup")
+	}
+	if delivered := uc.deliverAbandoned(context.Background(), 7, "battle-7", []uint64{1}, 1, "ranked"); delivered {
+		t.Fatal("missing required publisher must retain the recovery outbox")
+	}
+
+	life := &mockLifecycle{}
+	uc.SetLifecyclePusher(life)
+	if err := uc.ValidateLifecyclePusherReady(); err != nil {
+		t.Fatalf("ready lifecycle publisher rejected: %v", err)
+	}
+	if delivered := uc.deliverAbandoned(context.Background(), 7, "battle-7", []uint64{1}, 1, "ranked"); !delivered {
+		t.Fatal("healthy required publisher should complete delivery")
+	}
+}
+
+func TestEnableRedisAuthorityAutomaticallyRequiresLifecyclePublisher(t *testing.T) {
+	uc, _, mr := newUsecaseWithAlloc(t, &authoritativeTestAllocator{})
+	enableModelBForTest(t, uc, mr)
+	if err := uc.ValidateLifecyclePusherReady(); err == nil {
+		t.Fatal("Redis authority must require lifecycle publication even if main forgot to set policy")
+	}
+	uc.SetLifecyclePusher(&mockLifecycle{})
+	if err := uc.ValidateLifecyclePusherReady(); err != nil {
+		t.Fatalf("Redis authority rejected installed lifecycle publisher: %v", err)
+	}
+}
+
 func TestAllocateBattle(t *testing.T) {
 	uc, repo := newUsecase(t)
 
@@ -1646,6 +1678,30 @@ func TestSweepMarksAbandoned(t *testing.T) {
 	ids, _ := repo.RangeActiveBattles(ctx)
 	if len(ids) != 0 {
 		t.Fatalf("active should be empty after sweep, got %v", ids)
+	}
+}
+
+func TestSweepMissingRequiredLifecyclePublisherRetainsRecoveryOutbox(t *testing.T) {
+	ctx := context.Background()
+	alloc := &countingAllocator{inner: NewMockGameServerAllocator(testCfg())}
+	uc, repo, _ := newUsecaseWithAlloc(t, alloc)
+	uc.SetLifecyclePusherRequired(true)
+
+	allocateReady(t, uc, repo, 70, []uint64{10, 20}, 1, "5v5_ranked")
+	backdate(t, repo, 70)
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	rec, found, err := repo.GetBattle(ctx, 70)
+	if err != nil || !found || rec.GetState() != stateAbandoned {
+		t.Fatalf("abandoned record missing: found=%v record=%+v err=%v", found, rec, err)
+	}
+	ids, err := repo.RangeActiveBattles(ctx)
+	if err != nil || len(ids) != 1 || ids[0] != 70 {
+		t.Fatalf("missing publisher silently completed recovery: active=%v err=%v", ids, err)
+	}
+	if alloc.releases != 1 {
+		t.Fatalf("initial abandoned transition should release once, releases=%d", alloc.releases)
 	}
 }
 

@@ -33,6 +33,11 @@ locator:
   # infra.md §3.2 表中 30s heartbeat。SetLocation 每次刷 TTL,30s 不刷 → 视为离线。
   # W3 ⑥ 起可直接 yaml 写字符串:
   location_ttl: "30s"
+  # placement proof 按 writer 分权；这里只提交公开 dev 值，生产由配置生成器覆盖。
+  placement_account_bootstrap_proof_secret: "pandora-dev-placement-bootstrap-key-v1!"
+  placement_match_start_proof_secret: "pandora-dev-placement-match-start-key-v1!"
+  placement_battle_exit_proof_secret: "pandora-dev-placement-battle-exit-key-v1!"
+  placement_hub_transfer_proof_secret: "pandora-dev-placement-hub-transfer-key-v1!"
 
 # 好友在线态订阅推送 fan-out(docs/design/friend-distributed-scaling.md §13.4 / §13.5)。
 # 2026-06-19:默认 enabled=false(§13.7「先拉后推」)。开启需配 kafka.brokers(往

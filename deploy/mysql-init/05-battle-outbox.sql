@@ -108,3 +108,22 @@ CREATE TABLE IF NOT EXISTS `match_release_outbox` (
     KEY `idx_match_release_due` (`next_attempt_at_ms`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Battle 结算后可靠释放 match/ticket/player claim';
+
+-- 每玩家 Battle→Hub 终态证明。初始行与 battles/stats 同事务提交；worker
+-- 从 player_locator 读取精确 stable BATTLE version 后把 UUIDv4/HMAC proof CAS
+-- 写回 payload，再无 TTL 地 relay 到 Redis。成功才删，未知结果重试同一 payload。
+CREATE TABLE IF NOT EXISTS `battle_exit_proof_outbox` (
+    `id`                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `match_id`           BIGINT UNSIGNED NOT NULL,
+    `player_id`          BIGINT UNSIGNED NOT NULL,
+    `payload`            VARBINARY(2048) NOT NULL COMMENT 'battle_result internal immutable proof JSON',
+    `prepared`           TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    `next_attempt_at_ms` BIGINT NOT NULL DEFAULT 0,
+    `attempt_count`      INT UNSIGNED NOT NULL DEFAULT 0,
+    `superseded_at_ms`   BIGINT NOT NULL DEFAULT 0,
+    `created_at_ms`      BIGINT NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_battle_exit_match_player` (`match_id`, `player_id`),
+    KEY `idx_battle_exit_due` (`superseded_at_ms`, `next_attempt_at_ms`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Battle terminal/leave placement proof durable relay';

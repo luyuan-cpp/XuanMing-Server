@@ -16,9 +16,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -28,6 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -83,6 +86,10 @@ func main() {
 	cfg.Defaults()
 	if err := cfg.DSAuth.ValidateRedisFence(); err != nil {
 		helper.Errorw("msg", "ds_auth_fence_config_invalid", "err", err)
+		os.Exit(1)
+	}
+	if err := cfg.ValidateLifecyclePublicationConfig(); err != nil {
+		helper.Errorw("msg", "ds_lifecycle_config_invalid", "err", err)
 		os.Exit(1)
 	}
 
@@ -219,6 +226,8 @@ func main() {
 			"mode", cfg.Mode, "hint", "mode=mock,用确定性假地址(无真实 DS)")
 	}
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
+	lifecycleRequired := cfg.RequiresReliableLifecyclePublication()
+	uc.SetLifecyclePusherRequired(lifecycleRequired)
 	releasePolicy, policyErr := releasetrack.New(cfg.Agones.CanaryPercent, cfg.Agones.CanarySeed)
 	if policyErr != nil {
 		helper.Errorw("msg", "battle_release_track_policy_invalid", "err", policyErr)
@@ -242,23 +251,32 @@ func main() {
 		uc.SetKillOrphanOnStop(true)
 	}
 
-	// 4.1 ds.lifecycle producer(弱依赖:心跳超时 abandoned → 通知 battle_result 段位回滚补偿,不变量 §4)
-	if len(cfg.Kafka.Brokers) > 0 {
-		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicDSLifecycle)
-		if perr != nil {
-			helper.Warnw("msg", "ds_lifecycle_producer_init_failed", "err", perr,
-				"hint", "abandoned 事件将不发送,abandoned 镜像仍落 Redis 供查")
-		} else {
-			defer func() { _ = producer.Close() }()
-			uc.SetLifecyclePusher(&dsLifecyclePusher{p: producer})
-			helper.Infow("msg", "ds_lifecycle_producer_ready", "topic", kafkax.TopicDSLifecycle)
-		}
+	// 4.1 ds.lifecycle producer。Redis authority / Agones+enforce 下是恢复强依赖：
+	// abandoned 必须抵达 battle_result，后者才会持久化 match release + battle exit proof。
+	// 只有显式 local/off 开发配置允许无 Kafka，并打出清晰降级告警。
+	lifecycleInit, lifecycleErr := initializeLifecyclePublication(cfg, func(kcfg pconfig.KafkaConfig, topic string) (rawLifecycleProducer, error) {
+		return kafkax.NewKeyOrderedProducer(kcfg, topic)
+	})
+	if lifecycleErr != nil {
+		helper.Errorw("msg", "ds_lifecycle_producer_required_but_unavailable", "err", lifecycleErr)
+		os.Exit(1)
+	}
+	if lifecycleInit.producer != nil {
+		defer func() { _ = lifecycleInit.producer.Close() }()
+		uc.SetLifecyclePusher(lifecycleInit.pusher)
+		helper.Infow("msg", "ds_lifecycle_producer_ready", "topic", kafkax.TopicDSLifecycle,
+			"required", lifecycleRequired)
 	} else {
-		helper.Warnw("msg", "kafka_brokers_empty", "hint", "ds.lifecycle abandoned 事件禁用")
+		helper.Warnw("msg", "ds_lifecycle_disabled_dev_only", "reason", lifecycleInit.disabledReason,
+			"hint", "only local/off development may run without abandoned recovery publication")
+	}
+	if err := uc.ValidateLifecyclePusherReady(); err != nil {
+		helper.Errorw("msg", "ds_lifecycle_startup_gate_failed", "err", err)
+		os.Exit(1)
 	}
 
-	// 4.2 player_locator 客户端(弱依赖:心跳时续期玩家 BATTLE 位置 TTL,支持断线重连直连回原
-	// battle DS,docs/design/battle-reconnect.md §2.2)。locator_addr 留空 → 不续期,不影响对局。
+	// 4.2 player_locator 客户端(弱依赖):只续期短 TTL BATTLE presence/监控；断线恢复
+	// 的唯一权威是持久 placement。locator_addr 留空不续期 presence，也不得把玩家降级到 Hub。
 	if cfg.LocatorAddr != "" {
 		conn := grpcclient.MustDialInsecure(cfg.LocatorAddr)
 		defer func() { _ = conn.Close() }()
@@ -266,7 +284,7 @@ func main() {
 		helper.Infow("msg", "locator_client_ready", "locator_addr", cfg.LocatorAddr)
 	} else {
 		helper.Warnw("msg", "locator_addr_empty",
-			"hint", "BATTLE 位置不续期,长对局中途掉线重登可能退化为回大厅(仍可回大厅,不阻断)")
+			"hint", "BATTLE presence 不续期；权威 placement 保持不变，恢复必须继续 fail-closed/重试")
 	}
 
 	svc := service.NewAllocatorService(uc)
@@ -356,7 +374,7 @@ func main() {
 // dsLifecyclePusher 把 biz.DSLifecyclePusher 适配到 kafkax.KeyOrderedProducer。
 // key=match_id(不变量 §9 同对局事件保序)。
 type dsLifecyclePusher struct {
-	p *kafkax.KeyOrderedProducer
+	p rawLifecycleProducer
 }
 
 func (d *dsLifecyclePusher) PublishLifecycle(ctx context.Context, evt *dsv1.DSLifecycleEvent) error {
@@ -365,4 +383,55 @@ func (d *dsLifecyclePusher) PublishLifecycle(ctx context.Context, evt *dsv1.DSLi
 		return err
 	}
 	return d.p.SendRaw(ctx, strconv.FormatUint(evt.GetMatchId(), 10), payload)
+}
+
+// rawLifecycleProducer 是启动测试可替换的 Kafka 最小能力面。
+type rawLifecycleProducer interface {
+	SendRaw(context.Context, string, []byte) error
+	Close() error
+}
+
+type lifecyclePublicationInit struct {
+	pusher         biz.DSLifecyclePusher
+	producer       rawLifecycleProducer
+	disabledReason string
+}
+
+// initializeLifecyclePublication 把“生产必须成功初始化、开发可显式降级”的决策集中在
+// 一个可单测的启动函数里，避免 main 的后续重构重新引入 warn-and-continue。
+func initializeLifecyclePublication(
+	cfg conf.Config,
+	factory func(pconfig.KafkaConfig, string) (rawLifecycleProducer, error),
+) (lifecyclePublicationInit, error) {
+	required := cfg.RequiresReliableLifecyclePublication()
+	configured := false
+	for _, broker := range cfg.Kafka.Brokers {
+		if len(strings.TrimSpace(broker)) > 0 {
+			configured = true
+			break
+		}
+	}
+	if !configured {
+		if required {
+			return lifecyclePublicationInit{}, fmt.Errorf("reliable %s producer is required but kafka.brokers is empty", kafkax.TopicDSLifecycle)
+		}
+		return lifecyclePublicationInit{disabledReason: "kafka.brokers is empty"}, nil
+	}
+	producer, err := factory(cfg.Kafka, kafkax.TopicDSLifecycle)
+	if err != nil {
+		if required {
+			return lifecyclePublicationInit{}, fmt.Errorf("initialize required %s producer: %w", kafkax.TopicDSLifecycle, err)
+		}
+		return lifecyclePublicationInit{disabledReason: "optional producer initialization failed: " + err.Error()}, nil
+	}
+	if producer == nil {
+		if required {
+			return lifecyclePublicationInit{}, fmt.Errorf("initialize required %s producer: factory returned nil", kafkax.TopicDSLifecycle)
+		}
+		return lifecyclePublicationInit{disabledReason: "optional producer factory returned nil"}, nil
+	}
+	return lifecyclePublicationInit{
+		pusher:   &dsLifecyclePusher{p: producer},
+		producer: producer,
+	}, nil
 }

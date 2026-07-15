@@ -17,7 +17,7 @@
 #                                                                              # 本地 minikube(docker driver)+ udp-relay 回程
 #   pwsh tools/scripts/gen_cluster_config.ps1 -HostAllocators                  # 混合模式:容器服务回连宿主 allocator
 #   pwsh tools/scripts/gen_cluster_config.ps1 -AllocatorMode agones -Prod -Secret <玩家面密钥> -DsSecret <DS回调面密钥>
-#                                                                              # 生产:注入两把独立真 HS256 密钥
+#                                                                              # 生产还必须注入四把 placement key + 独立 Match resume service key
 #
 # ⚠️ 安全(§5 审核):生产判定**只看 -Prod**(不再从 -AllocatorAdvertiseHost 推断,避免线上配了
 #    advertise host 就被误判为 dev 而放行公开 dev 密钥)。-Prod 时必须提供**两把**真密钥:
@@ -25,6 +25,9 @@
 #    各自非空 / ≠dev / ≥32B、且**彼此不同**(P0 审核:同一密钥覆盖玩家 JWT 与 DS 回调 = 泄露即互通);
 #    也可分别用环境变量 PANDORA_JWT_SECRET / PANDORA_DS_JWT_SECRET。注入后在 <OutDir>/envoy-jwks.json
 #    产出匹配玩家面密钥的 Envoy JWKS + 校验 committed envoy.yaml。
+#    placement 另需 account-bootstrap / match-start / battle-exit / hub-transfer 四把独立 ≥32B key，
+#    对应 PANDORA_PLACEMENT_*_SECRET；Login→Matchmaker 另用 PANDORA_MATCH_RESUME_AUTH_SECRET；
+#    生成器拒绝全部权限域之间的密钥复用。
 #
 # 三条链路与 allocator 模式的对应(由 start.ps1 驱动):
 #   本地 windows (-Mode local)  → dev yaml 原样 mode=local,不过本生成器(宿主 exec Windows DS)
@@ -49,6 +52,18 @@ param(
     # player_locator 校验 DS→后端回调令牌)。**必须与玩家面 -Secret 不同**——两把同值时,泄露玩家
     # 面密钥即可伪造 DS 回调令牌绕过范围绑定(审核 P0:生产不得用同一密钥覆盖玩家 JWT 与 DS 回调)。
     [string]$DsSecret = $env:PANDORA_DS_JWT_SECRET,
+    # 版本化 placement 的四个写权限域必须使用彼此独立的 HMAC key。生产从 Secret
+    # manager 注入；生成产物只把每个 writer 所需的子集写进 pandora-config Secret。
+    [string]$PlacementAccountBootstrapSecret = $env:PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET,
+    [string]$PlacementMatchStartSecret = $env:PANDORA_PLACEMENT_MATCH_START_SECRET,
+    [string]$PlacementBattleExitSecret = $env:PANDORA_PLACEMENT_BATTLE_EXIT_SECRET,
+    [string]$PlacementHubTransferSecret = $env:PANDORA_PLACEMENT_HUB_TRANSFER_SECRET,
+    # Login→Matchmaker ResolvePlayerMatchContext 的唯一服务身份 key。请求 HMAC 绑定
+    # method/player/timestamp/nonce，Matchmaker 用共享 Redis SETNX 防跨副本重放。
+    [string]$MatchResumeAuthSecret = $env:PANDORA_MATCH_RESUME_AUTH_SECRET,
+    # 版本化 placement rollout：生产默认 enforce；shadow 只用于先服务端后客户端的短期灰度。
+    [ValidateSet('', 'off', 'shadow', 'enforce')]
+    [string]$PlacementMode = '',
     # 玩家面轮换兼容密钥(可选,仅非生产验证):写进 login/hub/matchmaker 的
     # jwt.additional_secrets(仅验签不签发)并进 Envoy JWKS 第二把 key。阶段①它是待启用的新 key，
     # 阶段②它是待清退的旧 key，不能固定理解成“旧密钥”。生产暂由下方待决策门拒绝。
@@ -98,6 +113,13 @@ param(
 # 玩家 Session 与 DS callback 也必须保持不同 keyset，才能让 Model-B 的域隔离门禁真实生效。
 $DevPublicSecret = 'pandora-dev-jwt-secret-change-me-32!'
 $DevDsCallbackSecret = 'pandora-dev-ds-callback-secret-change-me-32!'
+$DevPlacementSecrets = [ordered]@{
+    AccountBootstrap = 'pandora-dev-placement-bootstrap-key-v1!'
+    MatchStart       = 'pandora-dev-placement-match-start-key-v1!'
+    BattleExit       = 'pandora-dev-placement-battle-exit-key-v1!'
+    HubTransfer      = 'pandora-dev-placement-hub-transfer-key-v1!'
+}
+$DevMatchResumeAuthSecret = 'pandora-dev-match-resume-auth-key-v1!'
 
 
 $ErrorActionPreference = 'Stop'
@@ -206,6 +228,98 @@ for ($i = 0; $i -lt $allEffective.Count; $i++) {
             throw "[FATAL] $($allEffective[$i].n) 与 $($allEffective[$j].n) 不得相同(P0:玩家面/DS 回调面/新旧轮换密钥必须各自独立)。"
         }
     }
+}
+
+# ===== placement proof key 分权 =====
+# 四个 writer 只拿各自 key；locator 作为唯一 verifier 拿四把。生产不允许缺 key、公开 dev key、
+# 跨域复用或与玩家/DS callback key 复用。非生产未提供时使用确定性的公开 dev key。
+function Resolve-PlacementSecret {
+    param(
+        [string]$Value,
+        [string]$DevValue,
+        [string]$Flag,
+        [string]$EnvName
+    )
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        if ($Prod) {
+            throw "[FATAL] -Prod 必须提供 $Flag 或环境变量 $EnvName；placement writer 不允许无 proof key 启动。"
+        }
+        return $DevValue
+    }
+    if ([System.Text.Encoding]::UTF8.GetByteCount($Value) -lt 32) {
+        throw "[FATAL] $Flag 至少需要 32 字节。"
+    }
+    if ($Value -match '[\x00-\x1F\x7F-\x9F]') {
+        throw "[FATAL] $Flag 含控制字符，拒绝写入 YAML。"
+    }
+    if ($Prod -and ($DevPlacementSecrets.Values -contains $Value -or
+        $Value -ceq $DevPublicSecret -or $Value -ceq $DevDsCallbackSecret)) {
+        throw "[FATAL] $Flag 不能使用仓库公开 dev key。"
+    }
+    return $Value
+}
+
+$EffectivePlacementSecrets = [ordered]@{
+    AccountBootstrap = Resolve-PlacementSecret $PlacementAccountBootstrapSecret $DevPlacementSecrets.AccountBootstrap `
+        '-PlacementAccountBootstrapSecret' 'PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET'
+    MatchStart = Resolve-PlacementSecret $PlacementMatchStartSecret $DevPlacementSecrets.MatchStart `
+        '-PlacementMatchStartSecret' 'PANDORA_PLACEMENT_MATCH_START_SECRET'
+    BattleExit = Resolve-PlacementSecret $PlacementBattleExitSecret $DevPlacementSecrets.BattleExit `
+        '-PlacementBattleExitSecret' 'PANDORA_PLACEMENT_BATTLE_EXIT_SECRET'
+    HubTransfer = Resolve-PlacementSecret $PlacementHubTransferSecret $DevPlacementSecrets.HubTransfer `
+        '-PlacementHubTransferSecret' 'PANDORA_PLACEMENT_HUB_TRANSFER_SECRET'
+}
+$EffectiveMatchResumeAuthSecret = if ([string]::IsNullOrWhiteSpace($MatchResumeAuthSecret)) {
+    if ($Prod) {
+        throw '[FATAL] -Prod 必须提供 -MatchResumeAuthSecret 或 PANDORA_MATCH_RESUME_AUTH_SECRET；内部 READY 凭据读取不得匿名开放。'
+    }
+    $DevMatchResumeAuthSecret
+} else {
+    if ([System.Text.Encoding]::UTF8.GetByteCount($MatchResumeAuthSecret) -lt 32) {
+        throw '[FATAL] -MatchResumeAuthSecret 至少需要 32 字节。'
+    }
+    if ($MatchResumeAuthSecret -match '[\x00-\x1F\x7F-\x9F]') {
+        throw '[FATAL] -MatchResumeAuthSecret 含控制字符，拒绝写入 YAML。'
+    }
+    if ($Prod -and $MatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) {
+        throw '[FATAL] -Prod 的 Match resume service key 不能使用仓库公开 dev key。'
+    }
+    $MatchResumeAuthSecret
+}
+$allAuthoritySecrets = @(
+    @{ n = '玩家面 primary'; v = $effectivePlayerPrimary },
+    @{ n = '玩家面 additional'; v = $PlayerAdditionalToInject },
+    @{ n = 'DS 回调面 primary'; v = $effectiveDsPrimary },
+    @{ n = 'DS 回调面 additional'; v = $DsAdditionalToInject },
+    @{ n = 'placement account bootstrap'; v = $EffectivePlacementSecrets.AccountBootstrap },
+    @{ n = 'placement match start'; v = $EffectivePlacementSecrets.MatchStart },
+    @{ n = 'placement battle exit'; v = $EffectivePlacementSecrets.BattleExit },
+    @{ n = 'placement hub transfer'; v = $EffectivePlacementSecrets.HubTransfer },
+    @{ n = 'Match resume service identity'; v = $EffectiveMatchResumeAuthSecret }
+) | Where-Object { $null -ne $_.v }
+for ($i = 0; $i -lt $allAuthoritySecrets.Count; $i++) {
+    for ($j = $i + 1; $j -lt $allAuthoritySecrets.Count; $j++) {
+        if ($allAuthoritySecrets[$i].v -ceq $allAuthoritySecrets[$j].v) {
+            throw "[FATAL] $($allAuthoritySecrets[$i].n) 与 $($allAuthoritySecrets[$j].n) 不得复用同一密钥。"
+        }
+    }
+}
+
+# 生产默认严格门；shadow 只允许显式短期灰度，off 永不允许生产。真实 Agones 的本地
+# 验证链默认同样 enforce；mock/local 模板保持 off，除非调用方显式要求。
+$PlacementModeToInject = $null
+if ($Prod) {
+    if ($PlacementMode -eq 'off') {
+        throw '[FATAL] -Prod 不允许 placement_mode=off。使用 shadow 做短期兼容观测，完成服务端发布后切 enforce。'
+    }
+    $PlacementModeToInject = if ([string]::IsNullOrWhiteSpace($PlacementMode)) { 'enforce' } else { $PlacementMode }
+    if ($PlacementModeToInject -eq 'shadow') {
+        Write-Host '[WARN] 生产 placement_mode=shadow：只记录漂移，不构成唯一 DS 最终门；仅限发布顺序中的短期灰度。' -ForegroundColor Yellow
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($PlacementMode)) {
+    $PlacementModeToInject = $PlacementMode
+} elseif ($AllocatorMode -eq 'agones') {
+    $PlacementModeToInject = 'enforce'
 }
 
 # ===== ds_auth.mode 改写决策(二审 A#2 + 三审 P1-3)=====
@@ -339,6 +453,22 @@ $PlayerSecretServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allo
 $DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator')
 # DSTicket v2(方案 B)签发方清单(与决策文档 §7.2 私钥暴露面一致):恰好等于玩家面 jwt 清单。
 $DsTicketServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
+$PlacementSecretBindings = @(
+    @{ Service = 'login'; Section = 'login'; Child = 'placement_bootstrap_proof_secret'; Kind = 'AccountBootstrap' },
+    @{ Service = 'matchmaker'; Section = 'match'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
+    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
+    @{ Service = 'battle-result'; Section = 'battle'; Child = 'placement_battle_exit_proof_secret'; Kind = 'BattleExit' },
+    @{ Service = 'hub-allocator'; Section = 'hub'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' },
+    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_account_bootstrap_proof_secret'; Kind = 'AccountBootstrap' },
+    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
+    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_exit_proof_secret'; Kind = 'BattleExit' },
+    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' }
+)
+$MatchResumeAuthSecretBindings = @(
+    @{ Service = 'login'; Section = 'login'; Child = 'match_resume_auth_secret' },
+    @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
+    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' }
+)
 
 # 精确定位 YAML 节点的直接子项(默认 `secret`,也用于 `mode`)。不使用跨段 `.*?`：那会在 jwt 缺 secret 时越过同级
 # ds_auth 段，把玩家密钥写进 DS 域。这里只接受 dev 模板约定的双引号标量；格式漂移必须人工审查。
@@ -436,6 +566,47 @@ function Set-YamlSectionSecret {
         throw "[FATAL] $ServiceName.$SectionName.secret 不等于权威 dev 模板值,拒绝把未知旧值静默覆盖。"
     }
     $location.Lines[$location.SecretIndex] = $location.Prefix + '"' + (ConvertTo-YamlDoubleQuoted $NewValue) + '"' + $location.Suffix
+    return ($location.Lines -join $location.Newline)
+}
+
+function Set-YamlDirectString {
+    param(
+        [string]$ServiceName,
+        [string]$Text,
+        [string]$SectionName,
+        [string]$ChildName,
+        [string]$ExpectedTemplateValue,
+        [string]$NewValue
+    )
+    $location = Get-YamlSectionSecretLocation $ServiceName $Text $SectionName $ChildName
+    if ($location.RawValue -cne (ConvertTo-YamlDoubleQuoted $ExpectedTemplateValue)) {
+        throw "[FATAL] $ServiceName.$SectionName.$ChildName 不等于权威 dev 模板值，拒绝覆盖未知配置。"
+    }
+    $location.Lines[$location.SecretIndex] = $location.Prefix + '"' + (ConvertTo-YamlDoubleQuoted $NewValue) + '"' + $location.Suffix
+    return ($location.Lines -join $location.Newline)
+}
+
+function Assert-YamlDirectString {
+    param(
+        [string]$ServiceName,
+        [string]$Text,
+        [string]$SectionName,
+        [string]$ChildName,
+        [string]$ExpectedValue
+    )
+    $location = Get-YamlSectionSecretLocation $ServiceName $Text $SectionName $ChildName
+    if ($location.RawValue -cne (ConvertTo-YamlDoubleQuoted $ExpectedValue)) {
+        throw "[FATAL] $ServiceName.$SectionName.$ChildName 与期望 placement proof key 不一致。"
+    }
+}
+
+function Set-YamlPlacementMode {
+    param([string]$ServiceName, [string]$Text, [string]$SectionName, [string]$NewMode)
+    $location = Get-YamlSectionSecretLocation $ServiceName $Text $SectionName 'placement_mode'
+    if ($location.RawValue -cnotin @('off', 'shadow', 'enforce')) {
+        throw "[FATAL] $ServiceName.$SectionName.placement_mode 旧值非法。"
+    }
+    $location.Lines[$location.SecretIndex] = $location.Prefix + '"' + $NewMode + '"' + $location.Suffix
     return ($location.Lines -join $location.Newline)
 }
 
@@ -832,6 +1003,31 @@ function Convert-Secret([string]$ServiceName, [string]$Text) {
         if ($AllocatorMode -eq 'agones') { $Text = Add-YamlDsTicketSection $ServiceName $Text }
         else { Assert-NoYamlDsTicketSection $ServiceName $Text }
     }
+    foreach ($binding in @($PlacementSecretBindings | Where-Object Service -CEQ $ServiceName)) {
+        $devValue = [string]$DevPlacementSecrets[$binding.Kind]
+        $effectiveValue = [string]$EffectivePlacementSecrets[$binding.Kind]
+        if ($effectiveValue -ceq $devValue) {
+            Assert-YamlDirectString $ServiceName $Text $binding.Section $binding.Child $devValue
+        } else {
+            $Text = Set-YamlDirectString $ServiceName $Text $binding.Section $binding.Child $devValue $effectiveValue
+        }
+    }
+    foreach ($binding in @($MatchResumeAuthSecretBindings | Where-Object Service -CEQ $ServiceName)) {
+        if ($EffectiveMatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) {
+            Assert-YamlDirectString $ServiceName $Text $binding.Section $binding.Child $DevMatchResumeAuthSecret
+        } else {
+            $Text = Set-YamlDirectString $ServiceName $Text $binding.Section $binding.Child `
+                $DevMatchResumeAuthSecret $EffectiveMatchResumeAuthSecret
+        }
+    }
+    if ($ServiceName -ceq 'login') {
+        if ($null -ne $PlacementModeToInject) { $Text = Set-YamlPlacementMode $ServiceName $Text 'login' $PlacementModeToInject }
+        else { Assert-YamlDirectString $ServiceName $Text 'login' 'placement_mode' 'off' }
+    }
+    if ($ServiceName -ceq 'hub-allocator') {
+        if ($null -ne $PlacementModeToInject) { $Text = Set-YamlPlacementMode $ServiceName $Text 'hub' $PlacementModeToInject }
+        else { Assert-YamlDirectString $ServiceName $Text 'hub' 'placement_mode' 'off' }
+    }
     return $Text
 }
 # Sync-EnvoyJwks:注入真密钥时,必须同步 Envoy 客户端面(:8443)的 local_jwks,否则 login 用新密钥
@@ -1095,6 +1291,22 @@ function Assert-GeneratedSet {
             if ($AllocatorMode -eq 'agones') { Assert-YamlDsTicketSection $svc.Name $yaml }
             else { Assert-NoYamlDsTicketSection $svc.Name $yaml }
         }
+        foreach ($binding in @($PlacementSecretBindings | Where-Object Service -CEQ $svc.Name)) {
+            Assert-YamlDirectString $svc.Name $yaml $binding.Section $binding.Child `
+                ([string]$EffectivePlacementSecrets[$binding.Kind])
+        }
+        foreach ($binding in @($MatchResumeAuthSecretBindings | Where-Object Service -CEQ $svc.Name)) {
+            Assert-YamlDirectString $svc.Name $yaml $binding.Section $binding.Child `
+                $EffectiveMatchResumeAuthSecret
+        }
+        if ($svc.Name -ceq 'login') {
+            Assert-YamlDirectString $svc.Name $yaml 'login' 'placement_mode' `
+                $(if ($null -ne $PlacementModeToInject) { $PlacementModeToInject } else { 'off' })
+        }
+        if ($svc.Name -ceq 'hub-allocator') {
+            Assert-YamlDirectString $svc.Name $yaml 'hub' 'placement_mode' `
+                $(if ($null -ne $PlacementModeToInject) { $PlacementModeToInject } else { 'off' })
+        }
         if ($svc.Name -eq 'battle-result') {
             if ($DsAuthorityModeToInject -eq 'redis') {
                 Assert-BattleResultConsumeTopics $yaml @('pandora.ds.lifecycle')
@@ -1324,4 +1536,4 @@ finally {
     }
 }
 
-Write-Host "[ OK ] 生成并事务发布 $($yamlNames.Count) 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators, player_secret=$(if ($null -ne $PlayerSecretToInject) { '真密钥' } else { 'dev' }), ds_secret=$(if ($null -ne $DsSecretToInject) { '真密钥' } else { 'dev' })) -> $OutDir" -ForegroundColor Green
+Write-Host "[ OK ] 生成并事务发布 $($yamlNames.Count) 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators, player_secret=$(if ($null -ne $PlayerSecretToInject) { '真密钥' } else { 'dev' }), ds_secret=$(if ($null -ne $DsSecretToInject) { '真密钥' } else { 'dev' }), match_resume_auth=$(if ($EffectiveMatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) { 'dev' } else { '真密钥' })) -> $OutDir" -ForegroundColor Green

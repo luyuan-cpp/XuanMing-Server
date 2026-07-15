@@ -5,7 +5,7 @@
 //	pandora:hub:shard:{<hub_pod_name>}  → HubShardStorageRecord proto bytes(hashtag 锁 slot),TTL=ShardTTL
 //	pandora:hub:shards                  → SET(成员=hub_pod_name),ListHubs / 候选分片遍历
 //	pandora:hub:active                  → ZSET(score=last_heartbeat_ms,member=hub_pod_name),心跳超时扫描
-//	pandora:hub:player:<player_id>      → HubAssignmentStorageRecord proto bytes(不变量 §1 一人一 hub),TTL=AssignmentTTL
+//	pandora:hub:player:<player_id>      → HubAssignmentStorageRecord proto bytes(不变量 §1 一人一 hub),strict admitted owner 无 TTL
 //	pandora:hub:team:<team_id>          → string(hub_pod_name),队友同分片提示,TTL=AssignmentTTL
 //
 // 分片 player_count 写用 WATCH/MULTI/EXEC 乐观锁,冲突重试耗尽返 ErrHubNoAvailable。
@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -27,8 +28,9 @@ import (
 // ── key 模板 ─────────────────────────────────────────────────────────────────
 
 const (
-	shardsSetKey = "pandora:hub:shards"
-	activeKey    = "pandora:hub:active"
+	shardsSetKey           = "pandora:hub:shards"
+	activeKey              = "pandora:hub:active"
+	transferCleanupPodsKey = "pandora:hub:transfer_cleanup:pods"
 )
 
 func shardKey(pod string) string       { return fmt.Sprintf("pandora:hub:shard:{%s}", pod) }
@@ -45,6 +47,41 @@ func transferCooldownKey(playerID uint64) string {
 // hashtag {pod} 与 shardKey 同 slot,强制整合时按分片枚举玩家做服务端权威搬迁。
 // best-effort:漂移不影响正确性(双通道中 Hub DS drain 心跳指令兼底漏听的玩家)。
 func membersKey(pod string) string { return fmt.Sprintf("pandora:hub:shard:members:{%s}", pod) }
+
+// transferCleanupKey 与 source shard 同 hashtag。注册顺序固定为全局 pod 索引 →
+// per-pod exact ref → assignment CAS；因此 CAS 成功前崩溃至多留下可安全识别的 orphan，
+// CAS 成功后绝不会缺 reconciler 索引。pod 索引是持久 superset，不因空集合删除，避免
+// 并发 register 与“最后一项删除”竞态造成漏扫。
+func transferCleanupKey(pod string) string {
+	return fmt.Sprintf("pandora:hub:transfer_cleanup:{%s}", pod)
+}
+
+type TransferCleanupRef struct {
+	PlayerID           uint64
+	TargetAssignmentID string
+}
+
+func (r TransferCleanupRef) valid() bool {
+	return r.PlayerID != 0 && strings.TrimSpace(r.TargetAssignmentID) != "" &&
+		!strings.Contains(r.TargetAssignmentID, ":")
+}
+
+func encodeTransferCleanupRef(r TransferCleanupRef) string {
+	return strconv.FormatUint(r.PlayerID, 10) + ":" + r.TargetAssignmentID
+}
+
+func decodeTransferCleanupRef(raw string) (TransferCleanupRef, bool) {
+	player, assignmentID, ok := strings.Cut(raw, ":")
+	if !ok || assignmentID == "" {
+		return TransferCleanupRef{}, false
+	}
+	playerID, err := strconv.ParseUint(player, 10, 64)
+	if err != nil {
+		return TransferCleanupRef{}, false
+	}
+	ref := TransferCleanupRef{PlayerID: playerID, TargetAssignmentID: assignmentID}
+	return ref, ref.valid()
+}
 
 // ── 接口 ──────────────────────────────────────────────────────────────────────
 
@@ -93,12 +130,20 @@ type HubRepo interface {
 	// SetTeamShard 写队伍同分片提示(TTL=assignmentTTL)。
 	SetTeamShard(ctx context.Context, teamID uint64, pod string, assignmentTTL time.Duration) error
 
-	// AddShardMember 把 player_id 记入分片成员反向索引(强制整合枚举玩家用),TTL=assignmentTTL。
+	// AddShardMember 把 player_id 记入分片成员反向索引(强制整合枚举玩家用)。ttl<=0
+	// 表示持久化到 explicit Departure/assignment cleanup，避免长连玩家从 drain 枚举消失。
 	AddShardMember(ctx context.Context, pod string, playerID uint64, assignmentTTL time.Duration) error
 	// RemoveShardMember 把 player_id 移出分片成员反向索引。
 	RemoveShardMember(ctx context.Context, pod string, playerID uint64) error
 	// ListShardMembers 列出分片成员反向索引中的 player_id(强制整合时遍历待迁玩家)。
 	ListShardMembers(ctx context.Context, pod string) ([]uint64, error)
+
+	// RegisterTransferCleanup 必须在切换 assignment CAS 前成功。ref 绑定目标 assignment_id，
+	// CAS loser 只能删除自己的 ref，不能误删并发 winner。记录无 TTL；route/cleanup 不依赖过期。
+	RegisterTransferCleanup(ctx context.Context, sourcePod string, ref TransferCleanupRef) error
+	RemoveTransferCleanup(ctx context.Context, sourcePod string, ref TransferCleanupRef) error
+	ListTransferCleanupPods(ctx context.Context) ([]string, error)
+	ListTransferCleanups(ctx context.Context, sourcePod string) ([]TransferCleanupRef, error)
 
 	// TryTransferCooldown 玩家主动切线防刷占坑(SET NX EX,TTL=cooldown)。
 	// 冷却窗口内首次切线返 (true, nil) 并占坑;窗口内再切返 (false, nil)(应拒绝)。
@@ -476,7 +521,11 @@ func (r *RedisHubRepo) AddShardMember(ctx context.Context, pod string, playerID 
 	key := membersKey(pod)
 	_, err := r.rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.SAdd(ctx, key, strconv.FormatUint(playerID, 10))
-		pipe.Expire(ctx, key, assignmentTTL)
+		if assignmentTTL > 0 {
+			pipe.Expire(ctx, key, assignmentTTL)
+		} else {
+			pipe.Persist(ctx, key)
+		}
 		return nil
 	})
 	return err
@@ -498,6 +547,46 @@ func (r *RedisHubRepo) ListShardMembers(ctx context.Context, pod string) ([]uint
 			continue // 脏成员,跳过
 		}
 		out = append(out, pid)
+	}
+	return out, nil
+}
+
+func (r *RedisHubRepo) RegisterTransferCleanup(ctx context.Context, sourcePod string, ref TransferCleanupRef) error {
+	if strings.TrimSpace(sourcePod) == "" || !ref.valid() {
+		return errcode.New(errcode.ErrInvalidArg, "complete Hub transfer cleanup ref required")
+	}
+	// Global index first. If either command has an unknown result, callers must
+	// not publish assignment; any orphan is removed by the reconciler.
+	if err := r.rdb.SAdd(ctx, transferCleanupPodsKey, sourcePod).Err(); err != nil {
+		return err
+	}
+	return r.rdb.SAdd(ctx, transferCleanupKey(sourcePod), encodeTransferCleanupRef(ref)).Err()
+}
+
+func (r *RedisHubRepo) RemoveTransferCleanup(ctx context.Context, sourcePod string, ref TransferCleanupRef) error {
+	if strings.TrimSpace(sourcePod) == "" || !ref.valid() {
+		return errcode.New(errcode.ErrInvalidArg, "complete Hub transfer cleanup ref required")
+	}
+	return r.rdb.SRem(ctx, transferCleanupKey(sourcePod), encodeTransferCleanupRef(ref)).Err()
+}
+
+func (r *RedisHubRepo) ListTransferCleanupPods(ctx context.Context) ([]string, error) {
+	return r.rdb.SMembers(ctx, transferCleanupPodsKey).Result()
+}
+
+func (r *RedisHubRepo) ListTransferCleanups(ctx context.Context, sourcePod string) ([]TransferCleanupRef, error) {
+	if strings.TrimSpace(sourcePod) == "" {
+		return nil, errcode.New(errcode.ErrInvalidArg, "source Hub pod required")
+	}
+	raw, err := r.rdb.SMembers(ctx, transferCleanupKey(sourcePod)).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TransferCleanupRef, 0, len(raw))
+	for _, item := range raw {
+		if ref, ok := decodeTransferCleanupRef(item); ok {
+			out = append(out, ref)
+		}
 	}
 	return out, nil
 }

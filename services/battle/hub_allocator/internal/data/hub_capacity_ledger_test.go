@@ -377,6 +377,105 @@ func TestExpiredReservationReleaseStillCommitsExactCleanup(t *testing.T) {
 	}
 }
 
+func TestReleaseAssignmentSeatExactThreeStatesAndConflictIsReadOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		admitted bool
+	}{
+		{name: "reservation", admitted: false},
+		{name: "connected-session", admitted: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			repo, mr := newAuthRepo(t)
+			pod := "pandora-hub-exact-release-" + tc.name
+			now := time.Now().UnixMilli()
+			activateReady(t, repo, pod, now, 0)
+			now = time.Now().UnixMilli() + 1
+			reservation := capacityTestReservation(101, uuid.NewString(), now)
+			mustReserveCapacity(t, repo, pod, reservation, now)
+			ledgerKey := reservationsKey(pod)
+			admissionID := ""
+			if tc.admitted {
+				admissionID = uuid.NewString()
+				admission, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+					admissionID, 1, now+1, testTTL)
+				if err != nil || !admission.Admitted {
+					t.Fatalf("admission=%+v err=%v", admission, err)
+				}
+				ledgerKey = sessionsKey(pod)
+			}
+
+			expected := AssignmentInstanceIdentity{
+				PlayerID: reservation.PlayerID, AssignmentID: reservation.AssignmentID,
+				InstanceUID: reservation.InstanceUID, ProtocolEpoch: reservation.ProtocolEpoch,
+				WriterEpoch: reservation.WriterEpoch,
+			}
+			recordBefore, err := repo.rdb.HGet(ctx, ledgerKey, reservation.AssignmentID).Bytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			shardBefore, err := repo.rdb.Get(ctx, shardKey(pod)).Bytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ledgerTTLBefore, shardTTLBefore := mr.TTL(ledgerKey), mr.TTL(shardKey(pod))
+
+			conflicting := expected
+			conflicting.PlayerID++
+			conflict, err := repo.ReleaseAssignmentSeatExact(ctx, pod, conflicting, testTTL)
+			if err != nil || !conflict.Conflict || conflict.Released || conflict.AlreadyAbsent {
+				t.Fatalf("conflict result=%+v err=%v", conflict, err)
+			}
+			recordAfter, err := repo.rdb.HGet(ctx, ledgerKey, reservation.AssignmentID).Bytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			shardAfter, err := repo.rdb.Get(ctx, shardKey(pod)).Bytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(recordAfter, recordBefore) || !bytes.Equal(shardAfter, shardBefore) ||
+				mr.TTL(ledgerKey) != ledgerTTLBefore || mr.TTL(shardKey(pod)) != shardTTLBefore {
+				t.Fatal("identity conflict mutated the canonical seat or shard projection")
+			}
+
+			released, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL)
+			if tc.admitted {
+				if err != nil || !released.DepartureRequired || released.Released ||
+					released.AlreadyAbsent || released.Conflict {
+					t.Fatalf("connected owner must require departure: result=%+v err=%v", released, err)
+				}
+				unchanged, readErr := repo.rdb.HGet(ctx, ledgerKey, reservation.AssignmentID).Bytes()
+				if readErr != nil || !bytes.Equal(unchanged, recordBefore) {
+					t.Fatalf("departure-required release mutated live owner: err=%v", readErr)
+				}
+				departure, departureErr := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(),
+					reservation, admissionID, 1, now+2, testTTL)
+				if departureErr != nil || !departure.Departed {
+					t.Fatalf("physical departure=%+v err=%v", departure, departureErr)
+				}
+			} else if err != nil || !released.Released || released.DepartureRequired ||
+				released.AlreadyAbsent || released.Conflict {
+				t.Fatalf("released result=%+v err=%v", released, err)
+			}
+			if exists, err := repo.rdb.HExists(ctx, ledgerKey, reservation.AssignmentID).Result(); err != nil || exists {
+				t.Fatalf("exact seat remained exists=%v err=%v", exists, err)
+			}
+			shard, _, err := shardRepoFor(repo).GetShard(ctx, pod)
+			if err != nil || shard.GetPlayerCount() != 0 || shard.GetReservedCount() != 0 ||
+				shard.GetConnectedOwnershipCount() != 0 {
+				t.Fatalf("release projection=%+v err=%v", shard, err)
+			}
+
+			absent, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL)
+			if err != nil || absent.Released || !absent.AlreadyAbsent || absent.Conflict {
+				t.Fatalf("already-absent result=%+v err=%v", absent, err)
+			}
+		})
+	}
+}
+
 func TestMaxPlayersMismatchUsesInvalidStateCode(t *testing.T) {
 	repo, _ := newAuthRepo(t)
 	const pod = "pandora-hub-max-code"

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
@@ -108,8 +109,12 @@ type LoginConf struct {
 	DevAllowAnyRole bool `yaml:"dev_allow_any_role,omitempty" json:"dev_allow_any_role,omitempty"`
 	// PlacementMode is rolled out off -> shadow -> enforce. Enforce makes durable
 	// placement mandatory for Hub assignment, ticket verification, and resume routing.
-	PlacementMode string `yaml:"placement_mode,omitempty" json:"placement_mode,omitempty"`
+	PlacementMode                 string `yaml:"placement_mode,omitempty" json:"placement_mode,omitempty"`
 	PlacementBootstrapProofSecret string `yaml:"placement_bootstrap_proof_secret,omitempty" json:"placement_bootstrap_proof_secret,omitempty"`
+	// MatchResumeAuthSecret is a dedicated Login→Matchmaker service identity
+	// key. It must not overlap player JWT, DS callback or placement proof keys.
+	MatchResumeAuthSecret   string `yaml:"match_resume_auth_secret,omitempty" json:"match_resume_auth_secret,omitempty"`
+	MatchResumeAuthAudience string `yaml:"match_resume_auth_audience,omitempty" json:"match_resume_auth_audience,omitempty"`
 }
 
 // LocatorClientConf 是 login 调 player_locator 的客户端参数。
@@ -231,6 +236,19 @@ func (c *Config) Validate() error {
 		return err
 	} else if mode == placement.ModeEnforce && c.Login.Matchmaker.Addr == "" {
 		return fmt.Errorf("login.placement_mode=enforce requires login.matchmaker.addr")
+	}
+	if c.Login.Matchmaker.Addr != "" {
+		if err := internalrpcauth.ValidateSecret(c.Login.MatchResumeAuthSecret); err != nil {
+			return fmt.Errorf("login.match_resume_auth_secret invalid: %w", err)
+		}
+		if err := internalrpcauth.ValidateIdentity(c.Login.MatchResumeAuthAudience); err != nil {
+			return fmt.Errorf("login.match_resume_auth_audience invalid: %w", err)
+		}
+		if c.Login.MatchResumeAuthSecret == c.Login.JWT.Secret ||
+			c.Login.MatchResumeAuthSecret == c.DSAuth.Secret ||
+			c.Login.MatchResumeAuthSecret == c.Login.PlacementBootstrapProofSecret {
+			return fmt.Errorf("login.match_resume_auth_secret must use an independent trust-domain key")
+		}
 	}
 	return nil
 }

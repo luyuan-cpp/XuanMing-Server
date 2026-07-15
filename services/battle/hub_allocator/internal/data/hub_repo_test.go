@@ -361,3 +361,135 @@ func TestTeamShard_Roundtrip(t *testing.T) {
 		t.Fatalf("team shard mismatch: %s", pod)
 	}
 }
+
+func TestShardMemberZeroTTLPersistsUntilExactRemoval(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const pod = "pandora-hub-global-1"
+	if err := repo.AddShardMember(ctx, pod, 1001, 0); err != nil {
+		t.Fatalf("add persistent member: %v", err)
+	}
+	key := membersKey(pod)
+	if ttl := mr.TTL(key); ttl != 0 {
+		t.Fatalf("strict member index must have no TTL, got %s", ttl)
+	}
+	mr.FastForward(24 * time.Hour)
+	if members, err := repo.ListShardMembers(ctx, pod); err != nil || len(members) != 1 || members[0] != 1001 {
+		t.Fatalf("long-connected member vanished: members=%v err=%v", members, err)
+	}
+	if err := repo.RemoveShardMember(ctx, pod, 1001); err != nil {
+		t.Fatalf("exact member removal: %v", err)
+	}
+	if members, err := repo.ListShardMembers(ctx, pod); err != nil || len(members) != 0 {
+		t.Fatalf("removed member remained: members=%v err=%v", members, err)
+	}
+}
+
+func TestTransferCleanupIndexRegisterListRemoveAndOrphanPrecision(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	const sourceA = "pandora-hub-global-source-a"
+	const sourceB = "pandora-hub-global-source-b"
+	refsA := []TransferCleanupRef{
+		{PlayerID: 1001, TargetAssignmentID: "target-assignment-a"},
+		{PlayerID: 1001, TargetAssignmentID: "target-assignment-b"},
+		{PlayerID: 1002, TargetAssignmentID: "target-assignment-a"},
+	}
+	refB := TransferCleanupRef{PlayerID: 2001, TargetAssignmentID: "target-assignment-c"}
+
+	for _, ref := range refsA {
+		if err := repo.RegisterTransferCleanup(ctx, sourceA, ref); err != nil {
+			t.Fatalf("register source A ref=%+v: %v", ref, err)
+		}
+	}
+	// Registration is a SET operation. An ACK retry must not duplicate work.
+	if err := repo.RegisterTransferCleanup(ctx, sourceA, refsA[0]); err != nil {
+		t.Fatalf("duplicate register: %v", err)
+	}
+	if err := repo.RegisterTransferCleanup(ctx, sourceB, refB); err != nil {
+		t.Fatalf("register source B: %v", err)
+	}
+
+	// The index is deliberately written before assignment CAS. These entries
+	// are therefore valid, discoverable orphans and must not invent assignments.
+	for _, playerID := range []uint64{1001, 1002, 2001} {
+		if assignment, found, err := repo.GetAssignment(ctx, playerID); err != nil || found || assignment != nil {
+			t.Fatalf("cleanup registration created assignment player=%d found=%v assignment=%+v err=%v",
+				playerID, found, assignment, err)
+		}
+	}
+
+	pods, err := repo.ListTransferCleanupPods(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	podSet := make(map[string]bool, len(pods))
+	for _, pod := range pods {
+		podSet[pod] = true
+	}
+	if len(podSet) != 2 || !podSet[sourceA] || !podSet[sourceB] {
+		t.Fatalf("cleanup pod index=%v", pods)
+	}
+
+	assertRefs := func(want ...TransferCleanupRef) {
+		t.Helper()
+		got, listErr := repo.ListTransferCleanups(ctx, sourceA)
+		if listErr != nil {
+			t.Fatal(listErr)
+		}
+		gotSet := make(map[string]bool, len(got))
+		for _, ref := range got {
+			gotSet[encodeTransferCleanupRef(ref)] = true
+		}
+		wantSet := make(map[string]bool, len(want))
+		for _, ref := range want {
+			wantSet[encodeTransferCleanupRef(ref)] = true
+		}
+		if len(gotSet) != len(wantSet) {
+			t.Fatalf("cleanup refs=%+v want=%+v", got, want)
+		}
+		for encoded := range wantSet {
+			if !gotSet[encoded] {
+				t.Fatalf("cleanup refs=%+v missing=%q", got, encoded)
+			}
+		}
+	}
+	assertRefs(refsA...)
+
+	// Same player/different target and different player/same target are distinct
+	// refs. Removing one must never use a prefix match or delete its neighbours.
+	if err := repo.RemoveTransferCleanup(ctx, sourceA, refsA[0]); err != nil {
+		t.Fatalf("remove exact ref: %v", err)
+	}
+	assertRefs(refsA[1], refsA[2])
+	if err := repo.RemoveTransferCleanup(ctx, sourceA, refsA[0]); err != nil {
+		t.Fatalf("idempotent remove: %v", err)
+	}
+	assertRefs(refsA[1], refsA[2])
+
+	for _, ref := range refsA[1:] {
+		if err := repo.RemoveTransferCleanup(ctx, sourceA, ref); err != nil {
+			t.Fatalf("remove remaining ref=%+v: %v", ref, err)
+		}
+	}
+	assertRefs()
+
+	// An empty per-pod set intentionally leaves the global pod as a persistent
+	// superset/orphan. This avoids a last-remove racing a concurrent register;
+	// a later registration under the same source remains discoverable.
+	pods, err = repo.ListTransferCleanupPods(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	podSet = make(map[string]bool, len(pods))
+	for _, pod := range pods {
+		podSet[pod] = true
+	}
+	if !podSet[sourceA] || !podSet[sourceB] {
+		t.Fatalf("empty source pod disappeared from superset index: %v", pods)
+	}
+	if err := repo.RegisterTransferCleanup(ctx, sourceA, refsA[0]); err != nil {
+		t.Fatalf("register after orphan: %v", err)
+	}
+	assertRefs(refsA[0])
+}

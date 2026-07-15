@@ -236,8 +236,19 @@ func TestReleaseAssignmentSeatSurvivesCredentialRotationButRejectsUIDDrift(t *te
 		t.Fatal("wrong UID stable release mutated shard bytes or TTL")
 	}
 
-	if released, err := repo.ReleaseAssignmentSeat(ctx, pod, stable, testTTL); err != nil || !released {
-		t.Fatalf("same instance release after rotation=%v err=%v", released, err)
+	snapshot, err := repo.InspectAssignmentSeat(ctx, pod, stable)
+	if err != nil || !snapshot.Connected || snapshot.AdmissionID == "" || snapshot.AdmissionSeq == 0 {
+		t.Fatalf("connected owner inspection=%+v err=%v", snapshot, err)
+	}
+	if released, err := repo.ReleaseAssignmentSeat(ctx, pod, stable, testTTL); err != nil || released {
+		t.Fatalf("live session must require physical departure, release=%v err=%v", released, err)
+	}
+	departure, err := repo.AcknowledgeDeparture(ctx, pod, id8, ReservationIdentity{
+		PlayerID: stable.PlayerID, AssignmentID: stable.AssignmentID, InstanceUID: stable.InstanceUID,
+		ProtocolEpoch: stable.ProtocolEpoch, WriterEpoch: stable.WriterEpoch,
+	}, snapshot.AdmissionID, snapshot.AdmissionSeq, now+2000, testTTL)
+	if err != nil || !departure.Departed {
+		t.Fatalf("exact physical departure=%+v err=%v", departure, err)
 	}
 	shard, _, _ := shardRepoFor(repo).GetShard(ctx, pod)
 	if shard.GetPlayerCount() != 2 || shard.GetLastVerifiedGen() != 8 || shard.GetLastVerifiedJti() != "j8" {

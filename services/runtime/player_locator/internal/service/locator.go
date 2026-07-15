@@ -12,6 +12,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
@@ -23,7 +24,7 @@ import (
 type LocatorService struct {
 	locatorv1.UnimplementedPlayerLocatorServiceServer
 
-	uc *biz.LocatorUsecase
+	uc          *biz.LocatorUsecase
 	placementUC *biz.PlacementUsecase
 
 	// dsGuard DS 回调令牌守卫(审核 P1 #1);nil = 未启用(mode=off)。
@@ -232,11 +233,40 @@ func (s *LocatorService) BindPlacementTarget(ctx context.Context, req *locatorv1
 		TargetRoute: req.GetTargetRoute(), PodName: req.GetDsPodName(), InstanceUID: req.GetDsInstanceUid(),
 		AssignmentID: req.GetHubAssignmentId(), TargetMatchID: req.GetTargetMatchId(),
 		InstanceEpoch: req.GetDsInstanceEpoch(), AllocationID: req.GetAllocationId(), ReleaseTrack: req.GetReleaseTrack(),
+		LeaseDeadlineMs: req.GetLeaseDeadlineMs(),
 	})
 	if err != nil {
 		return &locatorv1.BindPlacementTargetResponse{Code: toProtoCode(err)}, nil
 	}
 	return &locatorv1.BindPlacementTargetResponse{Code: commonv1.ErrCode_OK, Placement: rec}, nil
+}
+
+func (s *LocatorService) RetargetPlacementTarget(ctx context.Context, req *locatorv1.RetargetPlacementTargetRequest) (*locatorv1.RetargetPlacementTargetResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.RetargetPlacementTargetResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	expected, replacement := req.GetExpectedTarget(), req.GetReplacementTarget()
+	rec, err := s.placementUC.Retarget(ctx, biz.RetargetPlacementInput{
+		PlayerID: req.GetPlayerId(), Version: req.GetPlacementVersion(), OperationID: req.GetOperationId(),
+		TargetRoute: req.GetTargetRoute(), TargetMatchID: req.GetTargetMatchId(),
+		ExpectedTarget: placementTarget(expected), ReplacementVersion: req.GetReplacementVersion(),
+		ReplacementOperationID: req.GetReplacementOperationId(), ReplacementTarget: placementTarget(replacement),
+		ProofType: req.GetProofType(), Reason: req.GetReason(), ProofID: req.GetProofId(),
+		ProofSignature: req.GetProofSignature(), LeaseDeadlineMs: req.GetLeaseDeadlineMs(),
+	})
+	if err != nil {
+		return &locatorv1.RetargetPlacementTargetResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.RetargetPlacementTargetResponse{Code: commonv1.ErrCode_OK, Placement: rec}, nil
+}
+
+func placementTarget(in *locatorv1.PlacementTargetIdentity) placement.Target {
+	if in == nil {
+		return placement.Target{}
+	}
+	return placement.Target{PodName: in.GetDsPodName(), InstanceUID: in.GetDsInstanceUid(),
+		InstanceEpoch: in.GetDsInstanceEpoch(), AssignmentID: in.GetHubAssignmentId(),
+		AllocationID: in.GetAllocationId(), ReleaseTrack: in.GetReleaseTrack()}
 }
 
 func (s *LocatorService) CommitPlacementAdmission(ctx context.Context, req *locatorv1.CommitPlacementAdmissionRequest) (*locatorv1.CommitPlacementAdmissionResponse, error) {

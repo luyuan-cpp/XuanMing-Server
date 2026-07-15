@@ -20,6 +20,10 @@ service DSAllocatorService {
   // GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
   rpc ResolveBattleTarget(ResolveBattleTargetRequest) returns (ResolveBattleTargetResponse);
   rpc ReleaseBattle(ReleaseBattleRequest) returns (ReleaseBattleResponse);
+  // EnsurePlayerDeparture 是 Battle→Hub 的物理离场门。调用方必须携带从
+  // placement/source snapshot 取得的完整实例元组；只在该玩家已从 credential-bound
+  // Battle DS 的可信在线集合消失，或该 exact GameServer UID 已被确认回收后返回 departed。
+  rpc EnsurePlayerDeparture(EnsurePlayerDepartureRequest) returns (EnsurePlayerDepartureResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // DS 每 5s 主动调
   rpc ListBattles(ListBattlesRequest) returns (ListBattlesResponse);
 }
@@ -89,6 +93,50 @@ message ReleaseBattleResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
+// ===== Battle→Hub exact player departure =====
+
+enum BattlePlayerDepartureStatus {
+  BATTLE_PLAYER_DEPARTURE_STATUS_UNSPECIFIED = 0;
+  BATTLE_PLAYER_DEPARTURE_STATUS_PENDING = 1;
+  BATTLE_PLAYER_DEPARTURE_STATUS_DEPARTED = 2;
+  BATTLE_PLAYER_DEPARTURE_STATUS_SOURCE_TORN_DOWN = 3;
+}
+
+message EnsurePlayerDepartureRequest {
+  uint64 match_id = 1;
+  uint64 player_id = 2;
+  // operation_id 来自服务端 placement transition；同 operation 重试幂等，
+  // 不同 operation 不能消费对方的 ACK。
+  string operation_id = 3;
+  string ds_pod_name = 4;
+  string gameserver_uid = 5;
+  uint32 instance_epoch = 6;
+  string allocation_id = 7;
+  // source STABLE BATTLE placement 的版本。旧 version/op 的迟到 RPC 不得
+  // 消费新一轮 Hub transition 的离场证明（ABA fence）。
+  uint64 placement_version = 8;
+}
+
+message EnsurePlayerDepartureResponse {
+  pandora.common.v1.ErrCode code = 1;
+  bool departed = 2;
+  BattlePlayerDepartureStatus status = 3;
+}
+
+// BattleEvictionOrder 只由 allocator 在已验证 active credential 的心跳响应下发。
+// DS 必须踢掉该 exact player；下一次心跳中的完整 active snapshot 不再含他
+// 后 allocator 才提交 departed。
+message BattleEvictionOrder {
+  string departure_id = 1;
+  uint64 match_id = 2;
+  uint64 player_id = 3;
+  string ds_pod_name = 4;
+  string gameserver_uid = 5;
+  uint32 instance_epoch = 6;
+  string allocation_id = 7;
+  uint64 placement_version = 8;
+}
+
 // ===== Heartbeat(单向 unary,DS 每 5s 调一次)=====
 
 // DS 上报状态
@@ -102,6 +150,12 @@ message HeartbeatRequest {
   int64  ts_ms       = 7;
   // 8-9 reserved
   reserved 8 to 9;
+  // 滚动更新门：只有 present=true 才把 active_player_ids 解释为完整可信快照。
+  // 旧 DS 的 proto3 零值绝不能被误解释为“全员已离场”。
+  repeated uint64 active_player_ids = 10;
+  bool active_player_snapshot_present = 11;
+  // DS 仅在执行过 order 且当前快照已不含该 player 时回报。
+  repeated string acknowledged_departure_ids = 12;
 }
 
 // allocator 返回控制指令(DS 在下次 heartbeat 之间消费)
@@ -115,6 +169,7 @@ message HeartbeatResponse {
   string accepted_instance_uid = 12;
   uint32 accepted_instance_epoch = 13;
   uint32 accepted_writer_epoch = 14;
+  repeated BattleEvictionOrder eviction_orders = 15;
 }
 
 // ===== List =====
@@ -209,6 +264,40 @@ message BattleDSAuthStorageRecord {
   string allocation_id = 13;
   // 仅由携带完整 active/pending 凭据的 Model B 心跳以服务端接收时间原子推进。
   int64 last_active_heartbeat_ms = 14;
+}
+
+// 每个 match 一份无 TTL journal，与 battle/auth 共用 {match_id} slot。pending 绝不
+// 依赖 TTL 自愈；departed 记录保留供同 placement operation 幂等重试。
+message BattlePlayerDepartureStorageRecord {
+  string departure_id = 1;
+  uint64 match_id = 2;
+  uint64 player_id = 3;
+  string operation_id = 4;
+  string ds_pod_name = 5;
+  string gameserver_uid = 6;
+  uint32 instance_epoch = 7;
+  string allocation_id = 8;
+  BattlePlayerDepartureStatus status = 9;
+  int64 requested_at_ms = 10;
+  int64 issued_at_ms = 11;
+  int64 departed_at_ms = 12;
+  uint64 placement_version = 13;
+}
+
+message BattlePlayerDepartureJournalStorageRecord {
+  uint64 match_id = 1;
+  repeated BattlePlayerDepartureStorageRecord departures = 2;
+}
+
+// 只在外部 GameServer UID 条件回收得到明确成功后写入。Redis battle key
+// 缺失、心跳超时、TTL 过期都不能代替这份物理 teardown proof。
+message BattleInstanceTeardownStorageRecord {
+  uint64 match_id = 1;
+  string ds_pod_name = 2;
+  string gameserver_uid = 3;
+  uint32 instance_epoch = 4;
+  string allocation_id = 5;
+  int64 torn_down_at_ms = 6;
 }
 
 // ===== 生命周期事件(kafka pandora.ds.lifecycle)=====

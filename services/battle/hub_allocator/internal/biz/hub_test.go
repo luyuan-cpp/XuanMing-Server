@@ -20,13 +20,14 @@ import (
 
 // fakeRepo 是 data.HubRepo 的内存实现(无 Redis)。所有读返回克隆,避免别名污染。
 type fakeRepo struct {
-	mu          sync.Mutex
-	shards      map[string]*hubv1.HubShardStorageRecord
-	active      map[string]int64 // pod → last_heartbeat_ms
-	assignments map[uint64]*hubv1.HubAssignmentStorageRecord
-	teamShards  map[uint64]string
-	members     map[string]map[uint64]bool // pod → set(player_id)
-	cooldowns   map[uint64]bool            // player_id → 切线冷却占坑
+	mu               sync.Mutex
+	shards           map[string]*hubv1.HubShardStorageRecord
+	active           map[string]int64 // pod → last_heartbeat_ms
+	assignments      map[uint64]*hubv1.HubAssignmentStorageRecord
+	teamShards       map[uint64]string
+	members          map[string]map[uint64]bool // pod → set(player_id)
+	cooldowns        map[uint64]bool            // player_id → 切线冷却占坑
+	transferCleanups map[string]map[uint64]map[string]bool
 
 	// setAssignErr 非 nil 时，SetAssignment 直接返回该错误（测试注入失败用）。
 	setAssignErr error
@@ -34,12 +35,13 @@ type fakeRepo struct {
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		shards:      map[string]*hubv1.HubShardStorageRecord{},
-		active:      map[string]int64{},
-		assignments: map[uint64]*hubv1.HubAssignmentStorageRecord{},
-		teamShards:  map[uint64]string{},
-		members:     map[string]map[uint64]bool{},
-		cooldowns:   map[uint64]bool{},
+		shards:           map[string]*hubv1.HubShardStorageRecord{},
+		active:           map[string]int64{},
+		assignments:      map[uint64]*hubv1.HubAssignmentStorageRecord{},
+		teamShards:       map[uint64]string{},
+		members:          map[string]map[uint64]bool{},
+		cooldowns:        map[uint64]bool{},
+		transferCleanups: map[string]map[uint64]map[string]bool{},
 	}
 }
 
@@ -241,6 +243,55 @@ func (f *fakeRepo) ListShardMembers(_ context.Context, pod string) ([]uint64, er
 	out := make([]uint64, 0, len(f.members[pod]))
 	for pid := range f.members[pod] {
 		out = append(out, pid)
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) RegisterTransferCleanup(_ context.Context, sourcePod string, ref data.TransferCleanupRef) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.transferCleanups[sourcePod] == nil {
+		f.transferCleanups[sourcePod] = map[uint64]map[string]bool{}
+	}
+	if f.transferCleanups[sourcePod][ref.PlayerID] == nil {
+		f.transferCleanups[sourcePod][ref.PlayerID] = map[string]bool{}
+	}
+	f.transferCleanups[sourcePod][ref.PlayerID][ref.TargetAssignmentID] = true
+	return nil
+}
+
+func (f *fakeRepo) RemoveTransferCleanup(_ context.Context, sourcePod string, ref data.TransferCleanupRef) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if byPlayer := f.transferCleanups[sourcePod]; byPlayer != nil {
+		if assignments := byPlayer[ref.PlayerID]; assignments != nil {
+			delete(assignments, ref.TargetAssignmentID)
+			if len(assignments) == 0 {
+				delete(byPlayer, ref.PlayerID)
+			}
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) ListTransferCleanupPods(context.Context) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, 0, len(f.transferCleanups))
+	for pod := range f.transferCleanups {
+		out = append(out, pod)
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListTransferCleanups(_ context.Context, sourcePod string) ([]data.TransferCleanupRef, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []data.TransferCleanupRef
+	for playerID, assignments := range f.transferCleanups[sourcePod] {
+		for assignmentID := range assignments {
+			out = append(out, data.TransferCleanupRef{PlayerID: playerID, TargetAssignmentID: assignmentID})
+		}
 	}
 	return out, nil
 }

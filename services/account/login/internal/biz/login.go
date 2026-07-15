@@ -61,15 +61,24 @@ type LoginResult struct {
 	// SelectedRoleID 是玩家当前已选角色(player_roles 表,选角权威化 2026-07-08)。
 	// 0 = 从未选过角。客户端登录后进选角界面用此值预选中;确认后调 SelectRole。
 	SelectedRoleID uint32
-	Resume ResumeContextResult
+	Resume         ResumeContextResult
 }
 
 type ResumeContextResult struct {
-	Route loginv1.ResumeRoute
-	MatchID uint64
-	MatchStage loginv1.ResumeMatchStage
+	Route            loginv1.ResumeRoute
+	MatchID          uint64
+	MatchStage       loginv1.ResumeMatchStage
 	PlacementVersion uint64
-	OperationID string
+	OperationID      string
+	PlacementState   loginv1.ResumePlacementState
+	Target           placement.Target
+	GameMode         string
+	// battleDSAddr/battleTicket 只在 Login biz 内消费，不会映射进公共
+	// ResumeContext。它们由 matchmaker 从 canonical READY match 的 exact
+	// target + per-player placement binding 现签，禁止再用 roster projection
+	// 在 Login 本地拼一张缺 placement 的票。
+	battleDSAddr string
+	battleTicket string
 }
 
 // BattleTicketIssuer 把所有 login 侧 Battle 票据签发统一到带 roster 权威门的入口。
@@ -106,10 +115,10 @@ type LoginUsecase struct {
 	// requireHubAssignmentBinding 激活后禁止 login 自签无归属绑定的 hub 票，也禁止在
 	// hub_allocator 故障/旧版本返回无绑定票时回退；所有 hub 入场票必须由 allocator 权威签发。
 	requireHubAssignmentBinding bool
-	placementMode placement.Mode
-	placementChecker data.PlacementAdmissionChecker
-	placementProofSigner *placement.ProofSigner
-	matchResumeReader data.MatchResumeReader
+	placementMode               placement.Mode
+	placementChecker            data.PlacementAdmissionChecker
+	placementProofSigner        *placement.ProofSigner
+	matchResumeReader           data.MatchResumeReader
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md 三层化地基)。
 	// 可为 nil:单 Cell / dev 部署不路由,登录返回 region/cell = 0。多 Cell 部署由 main
@@ -305,7 +314,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// local/off 保留 locator 弱依赖；B1 归属绑定激活后，必须先由 locator 证明玩家
 	// !InBattle 才能分配 Hub，未配置或查询失败都 fail-closed。
 	if u.placementMode == placement.ModeEnforce {
-		resume, resumeErr := u.resumeContextForPlayer(ctx, playerID)
+		resume, resumeErr := u.authoritativeLoginResume(ctx, playerID)
 		if resumeErr != nil || resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
 			return nil, errcode.NewCause(errcode.ErrUnavailable, resumeErr,
 				"cannot resolve authoritative login route")
@@ -313,6 +322,12 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		if resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_BATTLE {
 			return u.buildPlacementBattleLogin(ctx, playerID, deviceID, sessionToken, sessExpMs,
 				regionID, cellID, resume)
+		}
+		// 在任何 Hub assignment/seat/ticket 副作用前再做一次 canonical
+		// match + placement 合并门。QUEUED/CONFIRMING 只有仍稳定归属 Hub
+		// 才能继续；ALLOCATING/READY/RUNNING/UNKNOWN 全部 fail-closed。
+		if _, gateErr := u.authorizeHubEntry(ctx, playerID, 0, false); gateErr != nil {
+			return nil, gateErr
 		}
 	} else if u.notifier == nil {
 		if u.requireHubAssignmentBinding {
@@ -375,7 +390,25 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		"session_exp_ms", sessExpMs, "hub_ticket_exp_ms", hubExpMs,
 		"region_id", regionID, "cell_id", cellID)
 
-	resume, _ := u.resumeContextForPlayer(ctx, playerID)
+	resume, resumeErr := u.resumeContextForPlayer(ctx, playerID)
+	if u.placementMode == placement.ModeEnforce {
+		if resumeErr != nil || resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
+			// The terminal outbox may have released the canonical match between
+			// the pre-assignment read and this final fence. Recover only through
+			// the exact durable signed exit proof, then re-read both authorities.
+			resume, resumeErr = u.authoritativeLoginResume(ctx, playerID)
+		}
+		if resumeErr != nil || resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
+			return nil, errcode.NewCause(errcode.ErrUnavailable, resumeErr,
+				"authoritative route changed while assigning Hub")
+		}
+		if resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_BATTLE {
+			// The match saga won the race after the initial route read. Never
+			// return the stale Hub ticket/address together with a Battle route.
+			return u.buildPlacementBattleLogin(ctx, playerID, deviceID, sessionToken, sessExpMs,
+				regionID, cellID, resume)
+		}
+	}
 	return &LoginResult{
 		PlayerID:       playerID,
 		SessionToken:   sessionToken,
@@ -386,7 +419,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 		RegionID:       regionID,
 		CellID:         cellID,
 		SelectedRoleID: selectedRoleID,
-		Resume: resume,
+		Resume:         resume,
 	}, nil
 }
 
@@ -410,18 +443,13 @@ func (u *LoginUsecase) buildPlacementBattleLogin(
 		// a second Admission while allocation is unresolved.
 	case loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY,
 		loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING:
-		if u.battleTicketIssuer == nil {
-			return nil, errcode.New(errcode.ErrUnavailable, "battle reconnect ticket authority unavailable")
+		addr, ticket, expMs, err := u.verifyCanonicalBattleResumeTicket(playerID, resume)
+		if err != nil {
+			return nil, err
 		}
-		ticket, err := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
-			ctx, playerID, resume.MatchID, regionID, cellID)
-		if err != nil || ticket == nil || ticket.BattleDSAddr == "" || ticket.Ticket == "" {
-			return nil, errcode.NewCause(errcode.ErrUnavailable, err,
-				"battle reconnect ticket authority unavailable")
-		}
-		result.BattleDSAddr = ticket.BattleDSAddr
-		result.BattleTicket = ticket.Ticket
-		result.BattleTicketExpMs = ticket.ExpiresAtMs
+		result.BattleDSAddr = addr
+		result.BattleTicket = ticket
+		result.BattleTicketExpMs = expMs
 	default:
 		return nil, errcode.New(errcode.ErrUnavailable, "Battle resume stage is not routable")
 	}
@@ -430,6 +458,72 @@ func (u *LoginUsecase) buildPlacementBattleLogin(
 			"player_id", playerID, "device_id", deviceID)
 	}
 	return result, nil
+}
+
+// verifyCanonicalBattleResumeTicket 验证 matchmaker 内部 reader 返回的现签票。
+// 签名、玩家、match 和 placement binding 必须与同一 ResumeContext 精确一致；
+// 任一字段漂移都返回可重试错误，绝不回退 roster projection 自签。
+func (u *LoginUsecase) verifyCanonicalBattleResumeTicket(
+	playerID uint64,
+	resume ResumeContextResult,
+) (addr, ticket string, expMs int64, err error) {
+	if u.v2Verifier == nil || resume.battleDSAddr == "" || resume.battleTicket == "" ||
+		resume.MatchID == 0 || resume.PlacementVersion == 0 || !placement.ValidOperationID(resume.OperationID) {
+		return "", "", 0, errcode.New(errcode.ErrUnavailable,
+			"canonical Battle resume credential incomplete")
+	}
+	claims, verifyErr := u.v2Verifier.Verify(resume.battleTicket)
+	if verifyErr != nil {
+		return "", "", 0, errcode.NewCause(errcode.ErrUnavailable, verifyErr,
+			"verify canonical Battle resume ticket")
+	}
+	if claims.PlayerID() != playerID || claims.DSType != string(auth.DSTypeBattle) ||
+		claims.MatchID != resume.MatchID || claims.PlacementVersion != resume.PlacementVersion ||
+		claims.PlacementOperationID != resume.OperationID {
+		return "", "", 0, errcode.New(errcode.ErrUnavailable,
+			"canonical Battle resume ticket identity mismatch")
+	}
+	return resume.battleDSAddr, resume.battleTicket, claims.ExpiresAt.Time.UnixMilli(), nil
+}
+
+// ResolveBattleEndpoint 为 authenticated IssueDSTicket(battle) 与完整 Login
+// 复用同一条恢复权威链。enforce 下只接受 canonical READY/RUNNING match 的
+// exact target + per-player placement binding 现签票；local/off 才保留 roster
+// projection 兼容路径。
+func (u *LoginUsecase) ResolveBattleEndpoint(
+	ctx context.Context,
+	playerID, matchID uint64,
+) (addr, ticket string, expMs int64, err error) {
+	if playerID == 0 || matchID == 0 {
+		return "", "", 0, errcode.New(errcode.ErrInvalidArg,
+			"Battle endpoint requires player_id and match_id")
+	}
+	if u.placementMode == placement.ModeEnforce {
+		resume, resumeErr := u.authoritativeLoginResume(ctx, playerID)
+		if resumeErr != nil || resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
+			return "", "", 0, errcode.NewCause(errcode.ErrUnavailable, resumeErr,
+				"cannot resolve authoritative Battle route")
+		}
+		if resume.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE || resume.MatchID != matchID ||
+			(resume.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY &&
+				resume.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING) {
+			return "", "", 0, errcode.New(errcode.ErrInvalidState,
+				"requested match is not the authoritative routable Battle")
+		}
+		return u.verifyCanonicalBattleResumeTicket(playerID, resume)
+	}
+	if u.battleTicketIssuer == nil {
+		return "", "", 0, errcode.New(errcode.ErrUnavailable,
+			"battle reconnect ticket authority unavailable")
+	}
+	regionID, cellID := u.routeRegionCell(ctx, playerID)
+	result, issueErr := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
+		ctx, playerID, matchID, regionID, cellID)
+	if issueErr != nil || result == nil || result.BattleDSAddr == "" || result.Ticket == "" {
+		return "", "", 0, errcode.NewCause(errcode.ErrUnavailable, issueErr,
+			"battle reconnect ticket authority unavailable")
+	}
+	return result.BattleDSAddr, result.Ticket, result.ExpiresAtMs, nil
 }
 
 // battleLocationQueryRetries / battleLocationQueryBackoff:BATTLE 位置查询的有界重试
@@ -550,7 +644,91 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 	if err != nil || claims.PlayerID() == 0 {
 		return ResumeContextResult{}, errcode.New(errcode.ErrUnauthorized, "invalid session")
 	}
-	return u.resumeContextForPlayer(ctx, claims.PlayerID())
+	// ResumeContext is the foreground/cold-recovery authority used when the
+	// client still has a valid session and therefore does not perform a full
+	// Login.  It must consume the same exact durable terminal proof as Login;
+	// otherwise match release followed by a disconnected foreground resume
+	// would observe STABLE BATTLE + match NONE as UNKNOWN forever.
+	return u.authoritativeLoginResume(ctx, claims.PlayerID())
+}
+
+// authoritativeLoginResume is the only recovery mutation allowed on the login
+// authority service (full Login and authenticated GetResumeContext).
+// battle_result deliberately releases the canonical match graph after writing
+// its durable per-player exit proof. A process killed in that window restarts
+// with match=NONE and placement=STABLE BATTLE; treating that exact combination
+// as permanent UNKNOWN would strand the player unless the client happened to
+// retain and call a separate ReturnHub operation. We therefore consume only the
+// signed, version-bound proof and then re-read the merged authorities. A missing
+// proof, an active/unknown match, transport error, or any other placement shape
+// remains fail-closed and has zero routing side effects.
+func (u *LoginUsecase) authoritativeLoginResume(ctx context.Context, playerID uint64) (ResumeContextResult, error) {
+	resume, resumeErr := u.resumeContextForPlayer(ctx, playerID)
+	if resumeErr == nil && resume.Route != loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
+		if u.placementMode == placement.ModeEnforce && resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_HUB &&
+			u.placementChecker != nil {
+			// A terminal BATTLE->HUB Begin response may have been lost and its
+			// first lease may have expired during a long app/server outage. The
+			// merged route is still correctly HUB, but AssignHub cannot bind an
+			// expired target. Re-present the exact durable proof/op before any Hub
+			// assignment side effect. Account bootstrap is renewed below with its
+			// exact bootstrap proof/op; Hub->Hub remains owned by hub_allocator.
+			snapshot, err := u.placementChecker.GetPlacement(ctx, playerID)
+			if err != nil {
+				return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN}, err
+			}
+			pendingHub := snapshot.Found &&
+				snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+				snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
+			if pendingHub && snapshot.SourceMatchID != 0 {
+				if err := u.prepareHubPlacement(ctx, playerID, snapshot.SourceMatchID); err != nil {
+					return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN}, err
+				}
+				return u.resumeContextForPlayer(ctx, playerID)
+			}
+			if pendingHub && isAccountBootstrapHubPending(snapshot) {
+				if err := u.renewAccountBootstrapHubPlacement(ctx, playerID, snapshot); err != nil {
+					return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN}, err
+				}
+				return u.resumeContextForPlayer(ctx, playerID)
+			}
+		}
+		return resume, nil
+	}
+	if u.placementMode != placement.ModeEnforce || u.placementChecker == nil || u.matchResumeReader == nil {
+		return resume, resumeErr
+	}
+
+	snapshot, err := u.placementChecker.GetPlacement(ctx, playerID)
+	if err != nil {
+		return resume, err
+	}
+	stableBattle := snapshot.Found &&
+		snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && snapshot.MatchID != 0
+	pendingBattle := snapshot.Found &&
+		snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && snapshot.MatchID == 0 &&
+		snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && snapshot.TargetMatchID != 0
+	if !stableBattle && !pendingBattle {
+		return resume, resumeErr
+	}
+	matchContext, err := u.matchResumeReader.ResolvePlayerMatchContext(ctx, playerID)
+	if err != nil || matchContext.State == data.MatchContextUnknown {
+		return resume, errcode.NewCause(errcode.ErrUnavailable, err,
+			"cannot prove canonical match is released for terminal Login recovery")
+	}
+	if matchContext.State != data.MatchContextNone {
+		return resume, resumeErr
+	}
+	sourceMatchID := snapshot.MatchID
+	if pendingBattle {
+		sourceMatchID = snapshot.TargetMatchID
+	}
+	if err := u.prepareHubPlacement(ctx, playerID, sourceMatchID); err != nil {
+		return resume, err
+	}
+	return u.resumeContextForPlayer(ctx, playerID)
 }
 
 func (u *LoginUsecase) resumeContextForPlayer(ctx context.Context, playerID uint64) (ResumeContextResult, error) {
@@ -562,9 +740,17 @@ func (u *LoginUsecase) resumeContextForPlayer(ctx context.Context, playerID uint
 		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN}, err
 	}
 	out := ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN,
-		PlacementVersion: s.Version, OperationID: s.OperationID}
+		PlacementVersion: s.Version, OperationID: s.OperationID, Target: s.Target}
 	if !s.Found {
 		return out, errcode.New(errcode.ErrUnavailable, "placement is UNKNOWN")
+	}
+	switch s.TransitionState {
+	case locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING:
+		out.PlacementState = loginv1.ResumePlacementState_RESUME_PLACEMENT_STATE_PENDING
+	case locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE:
+		out.PlacementState = loginv1.ResumePlacementState_RESUME_PLACEMENT_STATE_STABLE
+	default:
+		return out, errcode.New(errcode.ErrUnavailable, "placement transition state is UNKNOWN")
 	}
 
 	// Matchmaker's durable start/claim/ticket/match graph is the authority for
@@ -581,20 +767,26 @@ func (u *LoginUsecase) resumeContextForPlayer(ctx context.Context, playerID uint
 	} else {
 		mc.State = data.MatchContextNone
 	}
+	out.GameMode = mc.GameMode
 
 	if mc.State == data.MatchContextActive {
-		out.MatchID = mc.MatchID
 		switch mc.Stage {
 		case data.MatchStageStarting, data.MatchStageQueued:
+			// Before a match is formed, ticket_id is the durable progress/cancel
+			// handle exposed as match_id by the existing client contract.
+			out.MatchID = mc.TicketID
 			out.Route = loginv1.ResumeRoute_RESUME_ROUTE_HUB
 			out.MatchStage = loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED
 		case data.MatchStageConfirming:
+			out.MatchID = mc.MatchID
 			out.Route = loginv1.ResumeRoute_RESUME_ROUTE_HUB
 			out.MatchStage = loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_CONFIRMING
 		case data.MatchStageAllocating:
+			out.MatchID = mc.MatchID
 			out.Route = loginv1.ResumeRoute_RESUME_ROUTE_BATTLE
 			out.MatchStage = loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_ALLOCATING
 		case data.MatchStageReady:
+			out.MatchID = mc.MatchID
 			out.Route = loginv1.ResumeRoute_RESUME_ROUTE_BATTLE
 			out.MatchStage = loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY
 		default:
@@ -624,7 +816,7 @@ func (u *LoginUsecase) resumeContextForPlayer(ctx context.Context, playerID uint
 			return out, nil
 		default:
 			return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN,
-				PlacementVersion: s.Version, OperationID: s.OperationID},
+					PlacementVersion: s.Version, OperationID: s.OperationID},
 				errcode.New(errcode.ErrUnavailable, "match/placement authority drift")
 		}
 	}
@@ -634,7 +826,7 @@ func (u *LoginUsecase) resumeContextForPlayer(ctx context.Context, playerID uint
 	// STABLE BATTLE + READY means Admission already committed and is RUNNING.
 	switch mc.Stage {
 	case data.MatchStageStarting, data.MatchStageQueued, data.MatchStageConfirming:
-		if !stableHub || (mc.MatchID != 0 && s.MatchID != 0 && s.MatchID != mc.MatchID) {
+		if (!stableHub && !pendingHub) || (mc.MatchID != 0 && s.MatchID != 0 && s.MatchID != mc.MatchID) {
 			return out, errcode.New(errcode.ErrUnavailable, "early match stage conflicts with placement")
 		}
 	case data.MatchStageAllocating:
@@ -656,6 +848,8 @@ func (u *LoginUsecase) resumeContextForPlayer(ctx context.Context, playerID uint
 		} else if !pendingBattle || s.TargetMatchID != mc.MatchID || !s.TargetBound {
 			return out, errcode.New(errcode.ErrUnavailable, "READY match lacks exact Battle placement target")
 		}
+		out.battleDSAddr = mc.DSAddr
+		out.battleTicket = mc.BattleTicket
 	}
 	return out, nil
 }
@@ -782,32 +976,85 @@ func (u *LoginUsecase) hubPlacementBinding(ctx context.Context, playerID uint64)
 	return binding, nil
 }
 
+func isAccountBootstrapHubPending(s data.PlacementSnapshot) bool {
+	return s.Found && s.Version == 1 && placement.ValidOperationID(s.OperationID) &&
+		s.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		s.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+		s.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED &&
+		s.MatchID == 0 && s.TargetMatchID == 0 && s.SourceMatchID == 0 &&
+		s.ProofType == locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP &&
+		s.ProofID != ""
+}
+
+// renewAccountBootstrapHubPlacement is the sole renewal path for a bootstrap
+// lease. It never manufactures a replacement operation: every signed field is
+// copied from the durable locator record and the response must echo that exact
+// version/op. Hub-transfer and Battle-exit leases have different proof owners
+// and are deliberately rejected here.
+func (u *LoginUsecase) renewAccountBootstrapHubPlacement(
+	ctx context.Context, playerID uint64, snapshot data.PlacementSnapshot,
+) error {
+	if u.placementChecker == nil || u.placementProofSigner == nil {
+		return errcode.New(errcode.ErrUnavailable, "placement bootstrap authority unavailable")
+	}
+	if playerID == 0 || !isAccountBootstrapHubPending(snapshot) {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"placement is not an exact pending account bootstrap")
+	}
+	expected := placement.Binding{Version: snapshot.Version, OperationID: snapshot.OperationID}
+	proof := placement.Proof{PlayerID: playerID, TargetRoute: placement.RouteHub,
+		ProofType: placement.ProofAccountBootstrap, ProofID: snapshot.ProofID,
+		OperationID: snapshot.OperationID}
+	confirmed, err := u.placementChecker.BootstrapHub(ctx, playerID, snapshot.OperationID, snapshot.ProofID,
+		u.placementProofSigner.Sign(proof), time.Now().Add(10*time.Minute).UnixMilli())
+	if err != nil {
+		return err
+	}
+	if !confirmed.Equal(expected) {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"placement bootstrap renewal response identity mismatch")
+	}
+	return nil
+}
+
 func (u *LoginUsecase) bootstrapHubPlacement(ctx context.Context, playerID uint64, proofID string) error {
 	if u.placementChecker == nil || u.placementProofSigner == nil {
 		return errcode.New(errcode.ErrUnavailable, "placement bootstrap authority unavailable")
 	}
-	if proofID == "" {
-		return errcode.New(errcode.ErrInvalidArg, "placement bootstrap proof_id required")
+	if playerID == 0 || proofID == "" {
+		return errcode.New(errcode.ErrInvalidArg, "placement bootstrap identity required")
+	}
+	snapshot, err := u.placementChecker.GetPlacement(ctx, playerID)
+	if err != nil {
+		return err
+	}
+	if snapshot.Found {
+		if snapshot.ProofID != proofID {
+			return errcode.New(errcode.ErrLocatorConflict,
+				"existing placement bootstrap proof does not match account authority")
+		}
+		return u.renewAccountBootstrapHubPlacement(ctx, playerID, snapshot)
 	}
 	opID := uuid.NewString()
-	// A previous Bootstrap response may have been lost. Reuse the durable
-	// operation identity so the locator can renew the same pending lease rather
-	// than manufacture a second writer operation.
-	if snapshot, err := u.placementChecker.GetPlacement(ctx, playerID); err == nil && snapshot.Found &&
-		snapshot.Version == 1 && placement.ValidOperationID(snapshot.OperationID) {
-		opID = snapshot.OperationID
-	}
 	proof := placement.Proof{PlayerID: playerID, TargetRoute: placement.RouteHub,
 		ProofType: placement.ProofAccountBootstrap, ProofID: proofID, OperationID: opID}
-	_, err := u.placementChecker.BootstrapHub(ctx, playerID, opID, proofID,
+	confirmed, err := u.placementChecker.BootstrapHub(ctx, playerID, opID, proofID,
 		u.placementProofSigner.Sign(proof), time.Now().Add(10*time.Minute).UnixMilli())
-	return err
+	if err != nil {
+		return err
+	}
+	if !confirmed.Equal(placement.Binding{Version: 1, OperationID: opID}) {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"placement bootstrap response identity mismatch")
+	}
+	return nil
 }
 
 // ensurePlacementForLogin supports two auditable creation paths only:
-//   1. this request durably created the account;
-//   2. a pre-placement account is backfilled after both canonical match state
-//      and presence explicitly prove it is not MATCHING/BATTLE.
+//  1. this request durably created the account;
+//  2. a pre-placement account is backfilled after both canonical match state
+//     and presence explicitly prove it is not MATCHING/BATTLE.
+//
 // Missing/conflicting/unreadable authority is UNKNOWN and never bootstraps.
 func (u *LoginUsecase) ensurePlacementForLogin(ctx context.Context, playerID uint64, newlyCreated bool) error {
 	if u.placementChecker == nil || u.placementProofSigner == nil {
@@ -899,6 +1146,120 @@ func (u *LoginUsecase) ResolveHubEndpoint(ctx context.Context, playerID uint64) 
 	return u.ResolveHubEndpointFromMatch(ctx, playerID, 0)
 }
 
+// authorizeHubEntry 是所有 Hub 物理副作用（assignment/seat/role/ticket）的
+// 最终前置门。enforce 下它合并 canonical match graph 与 placement，并对刚读
+// identity 再做一次精确 placement fence：
+//   - ALLOCATING/READY/RUNNING/UNKNOWN 一律拒绝；
+//   - QUEUED/CONFIRMING 仅在 STABLE HUB 时允许；
+//   - BATTLE->HUB 仅 ResolveHubEndpointFromMatch 可携 exact source_match_id
+//     触发 durable terminal/leave proof 恢复。
+//
+// local/off/shadow 保留旧三态 presence 门，供滚动迁移使用。
+func (u *LoginUsecase) authorizeHubEntry(
+	ctx context.Context,
+	playerID, sourceMatchID uint64,
+	allowTerminalTransition bool,
+) (ResumeContextResult, error) {
+	if u.placementMode != placement.ModeEnforce {
+		if err := u.guardHubRouteAgainstActiveBattle(ctx, playerID); err != nil {
+			return ResumeContextResult{}, err
+		}
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
+	}
+	if u.placementChecker == nil || u.matchResumeReader == nil {
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+			errcode.New(errcode.ErrUnavailable, "Hub route authorities unavailable")
+	}
+
+	resume, resumeErr := u.resumeContextForPlayer(ctx, playerID)
+	if resumeErr != nil || resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
+		if !allowTerminalTransition {
+			return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+				errcode.NewCause(errcode.ErrUnavailable, resumeErr,
+					"cannot prove authoritative Hub route")
+		}
+		// 先验证客户端 fence 与当前 stable Battle 精确一致，再允许
+		// authoritativeLoginResume 消费 durable terminal/leave proof。canonical
+		// match 仍 active/unknown 时 authoritativeLoginResume 自身保持零 mutation。
+		before, err := u.placementChecker.GetPlacement(ctx, playerID)
+		if err != nil {
+			return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN}, err
+		}
+		stableBattle := before.Found &&
+			before.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE &&
+			before.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && before.MatchID != 0
+		pendingBattle := before.Found &&
+			before.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+			before.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && before.MatchID == 0 &&
+			before.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && before.TargetMatchID != 0
+		if !stableBattle && !pendingBattle {
+			return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+				errcode.NewCause(errcode.ErrUnavailable, resumeErr,
+					"cannot prove authoritative Hub route")
+		}
+		authoritativeMatchID := before.MatchID
+		if pendingBattle {
+			authoritativeMatchID = before.TargetMatchID
+		}
+		if sourceMatchID == 0 || sourceMatchID != authoritativeMatchID {
+			return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+				errcode.New(errcode.ErrInvalidState,
+					"source match is required and must equal authoritative Battle placement")
+		}
+		resume, resumeErr = u.authoritativeLoginResume(ctx, playerID)
+	} else if resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_HUB {
+		// Lost-response/expired pending Hub operations must renew their exact
+		// durable op before allocator target bind. Stable Hub is a read-only no-op.
+		resume, resumeErr = u.authoritativeLoginResume(ctx, playerID)
+	}
+	if resumeErr != nil || resume.Route == loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN {
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+			errcode.NewCause(errcode.ErrUnavailable, resumeErr,
+				"cannot prove authoritative Hub route")
+	}
+	if resume.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB {
+		return resume, errcode.New(errcode.ErrInvalidState,
+			"authoritative route is Battle (stage=%s)", resume.MatchStage.String())
+	}
+
+	// 最后一次 placement fence 必须仍与合并结果同 version/op；否则 match
+	// worker 已赢得并发切换，旧 Hub 决策不得产生 assignment/seat/ticket。
+	snapshot, err := u.placementChecker.GetPlacement(ctx, playerID)
+	if err != nil {
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN}, err
+	}
+	if !snapshot.Found || snapshot.Version != resume.PlacementVersion ||
+		snapshot.OperationID != resume.OperationID {
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+			errcode.New(errcode.ErrUnavailable, "Hub route placement changed during authorization")
+	}
+	if _, ok := snapshot.HubBinding(); !ok {
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+			errcode.New(errcode.ErrUnavailable, "placement does not authorize Hub")
+	}
+	stableHub := snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
+	switch resume.MatchStage {
+	case loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_NONE:
+		// NONE may be a proof-authorized HUB_PENDING that AssignHub must bind.
+	case loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED,
+		loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_CONFIRMING:
+		if !stableHub {
+			return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+				errcode.New(errcode.ErrUnavailable,
+					"early match stage requires stable Hub placement")
+		}
+	default:
+		return resume, errcode.New(errcode.ErrInvalidState,
+			"match stage does not authorize Hub side effects")
+	}
+	if sourceMatchID != 0 && snapshot.SourceMatchID != sourceMatchID {
+		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_UNKNOWN},
+			errcode.New(errcode.ErrLocatorConflict, "Hub source match fence mismatch")
+	}
+	return resume, nil
+}
+
 // ResolveHubEndpointFromMatch is the settlement/leave return path. sourceMatchID
 // is mandatory while durable placement is still BATTLE and is checked against
 // both the placement record and the signed terminal/leave proof. A response
@@ -907,23 +1268,16 @@ func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID
 	if playerID == 0 {
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
 	}
-	if u.placementMode != placement.ModeOff {
+	// enforce 必须先合并 canonical match + placement，再决定是否可以消费
+	// terminal proof；active/unknown 路径在这里返回，尚未触碰 allocator。
+	if _, gateErr := u.authorizeHubEntry(ctx, playerID, sourceMatchID, true); gateErr != nil {
+		return "", "", 0, gateErr
+	}
+	if u.placementMode == placement.ModeShadow {
 		perr := u.prepareHubPlacement(ctx, playerID, sourceMatchID)
 		if perr != nil {
-			if u.placementMode == placement.ModeEnforce {
-				return "", "", 0, perr
-			}
 			plog.With(ctx).Warnw("msg", "hub_placement_transition_shadow_rejected",
 				"player_id", playerID, "source_match_id", sourceMatchID, "err", perr)
-		}
-	}
-	// Placement is the only routing authority in enforce mode. The short-TTL
-	// locator remains a shadow/legacy guard only and cannot override a durable
-	// signed transition because its absence merely means network presence is
-	// unknown.
-	if u.placementMode != placement.ModeEnforce {
-		if gerr := u.guardHubRouteAgainstActiveBattle(ctx, playerID); gerr != nil {
-			return "", "", 0, gerr
 		}
 	}
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
@@ -946,15 +1300,41 @@ func (u *LoginUsecase) prepareHubPlacement(ctx context.Context, playerID, reques
 		return errcode.New(errcode.ErrLocatorNotFound, "placement is UNKNOWN")
 	}
 	if _, ok := s.HubBinding(); ok {
-		if requestedSourceMatchID != 0 && s.SourceMatchID != 0 && s.SourceMatchID != requestedSourceMatchID {
+		if requestedSourceMatchID != 0 && s.SourceMatchID != requestedSourceMatchID {
 			return errcode.New(errcode.ErrLocatorConflict, "Hub placement source match mismatch")
 		}
-		// A Battle-exit PENDING lease can expire while login/allocator is down.
-		// Re-present the exact signed operation to renew it before target bind.
-		if s.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING && s.SourceMatchID != 0 {
-			return u.renewBattleExitHubPlacement(ctx, playerID, s.SourceMatchID, s)
+		if s.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING {
+			// A target-unavailable retarget has its own allocator-signed lineage and
+			// replacement operation. Replaying the original terminal/bootstrap Begin
+			// would necessarily conflict. AssignHub owns exact retarget replay/lease
+			// renewal before it can publish a ticket.
+			if s.RetargetCount > 0 {
+				if !s.Target.CompleteHub() || s.LastRetargetProofID == "" ||
+					s.LastRetargetReason == locatorv1.PlacementTargetUnavailableReason_PLACEMENT_TARGET_UNAVAILABLE_REASON_UNSPECIFIED {
+					return errcode.New(errcode.ErrUnavailable, "retargeted Hub placement lineage is incomplete")
+				}
+				return nil
+			}
+			// A PENDING lease can expire while login/allocator is down. Renew only
+			// with the proof authority that owns this exact operation; Hub-transfer
+			// source_match_id=0 remains hub_allocator-owned.
+			if s.SourceMatchID != 0 {
+				return u.renewBattleExitHubPlacement(ctx, playerID, s.SourceMatchID, s)
+			}
+			if isAccountBootstrapHubPending(s) {
+				return u.renewAccountBootstrapHubPlacement(ctx, playerID, s)
+			}
 		}
 		return nil
+	}
+	if s.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		s.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && s.MatchID == 0 &&
+		s.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && s.TargetMatchID != 0 {
+		if requestedSourceMatchID == 0 || requestedSourceMatchID != s.TargetMatchID {
+			return errcode.New(errcode.ErrInvalidState,
+				"source match is required and must equal pending Battle target")
+		}
+		return u.renewBattleExitHubPlacement(ctx, playerID, s.TargetMatchID, s)
 	}
 	if s.TransitionState != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE ||
 		s.CurrentRoute != locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE || s.MatchID == 0 {
@@ -978,10 +1358,18 @@ func (u *LoginUsecase) renewBattleExitHubPlacement(
 		return errcode.NewCause(errcode.ErrUnavailable, err,
 			"cannot prove Battle terminal/leave transition")
 	}
+	stableBattle := snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && snapshot.MatchID == matchID &&
+		proof.ExpectedVersion == snapshot.Version
+	pendingHubRetry := snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && snapshot.SourceMatchID == matchID &&
+		proof.ExpectedVersion+1 == snapshot.Version && proof.OperationID == snapshot.OperationID
+	pendingBattleCancellation := snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && snapshot.MatchID == 0 &&
+		snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && snapshot.TargetMatchID == matchID &&
+		proof.ExpectedVersion == snapshot.Version
 	if proof.ExpectedVersion == 0 || proof.OperationID == "" ||
-		(snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE && proof.ExpectedVersion != snapshot.Version) ||
-		(snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING && (proof.ExpectedVersion+1 != snapshot.Version ||
-			proof.OperationID != snapshot.OperationID || snapshot.SourceMatchID != matchID)) {
+		(!stableBattle && !pendingHubRetry && !pendingBattleCancellation) {
 		return errcode.New(errcode.ErrLocatorConflict, "battle exit proof no longer matches placement")
 	}
 	_, err = u.placementChecker.BeginHubFromBattle(ctx, playerID, matchID, proof,
@@ -1083,9 +1471,9 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 	if roleID == 0 {
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "roleID must be > 0")
 	}
-	// P0 止血:SelectRole 也是 Hub 签票入口(成功即交付可准入大厅的地址+票),同样必须
-	// 过 active-BATTLE 三态门,否则改包客户端可在对局中选角拿 Hub 票绕过 Login 主链。
-	if gerr := u.guardHubRouteAgainstActiveBattle(ctx, playerID); gerr != nil {
+	// SelectRole 也是 Hub 物理副作用入口：先合并 canonical match + placement。
+	// ALLOCATING/READY/RUNNING/UNKNOWN 时在 SetRole/AssignHub/签票前返回。
+	if _, gerr := u.authorizeHubEntry(ctx, playerID, 0, false); gerr != nil {
 		return "", "", 0, gerr
 	}
 	if len(u.allowedRoleIDs) > 0 {

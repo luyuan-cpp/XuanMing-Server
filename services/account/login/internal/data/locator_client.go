@@ -99,9 +99,9 @@ func (n *GrpcLocationNotifier) GetBattleLocation(ctx context.Context, playerID u
 		return BattleLocation{PresenceState: loc.GetState(), MatchID: loc.GetMatchId()}, nil
 	}
 	return BattleLocation{
-		InBattle:   true,
-		MatchID:    loc.GetMatchId(),
-		BattleAddr: loc.GetBattlePod(),
+		InBattle:      true,
+		MatchID:       loc.GetMatchId(),
+		BattleAddr:    loc.GetBattlePod(),
 		PresenceState: loc.GetState(),
 	}, nil
 }

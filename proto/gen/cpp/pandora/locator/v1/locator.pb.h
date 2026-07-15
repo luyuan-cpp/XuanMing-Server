@@ -64,6 +64,14 @@ namespace locator {
 namespace v1 {
 enum LocationState : int;
 extern const uint32_t LocationState_internal_data_[];
+enum PlacementProofType : int;
+extern const uint32_t PlacementProofType_internal_data_[];
+enum PlacementRoute : int;
+extern const uint32_t PlacementRoute_internal_data_[];
+enum PlacementTargetUnavailableReason : int;
+extern const uint32_t PlacementTargetUnavailableReason_internal_data_[];
+enum PlacementTransitionState : int;
+extern const uint32_t PlacementTransitionState_internal_data_[];
 enum PresenceStatus : int;
 extern const uint32_t PresenceStatus_internal_data_[];
 class BatchGetLocationRequest;
@@ -90,6 +98,54 @@ extern const ::google::protobuf::internal::ClassDataFull BatchGetLocationRespons
 #else
 extern const BatchGetLocationResponse_LocationsEntry_DoNotUseGlobalsTypeInternal BatchGetLocationResponse_LocationsEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class BeginPlacementTransitionRequest;
+struct BeginPlacementTransitionRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BeginPlacementTransitionRequestGlobalsTypeInternal BeginPlacementTransitionRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BeginPlacementTransitionRequest_class_data_;
+#else
+extern const BeginPlacementTransitionRequestGlobalsTypeInternal BeginPlacementTransitionRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BeginPlacementTransitionResponse;
+struct BeginPlacementTransitionResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BeginPlacementTransitionResponseGlobalsTypeInternal BeginPlacementTransitionResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BeginPlacementTransitionResponse_class_data_;
+#else
+extern const BeginPlacementTransitionResponseGlobalsTypeInternal BeginPlacementTransitionResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BindPlacementTargetRequest;
+struct BindPlacementTargetRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BindPlacementTargetRequestGlobalsTypeInternal BindPlacementTargetRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BindPlacementTargetRequest_class_data_;
+#else
+extern const BindPlacementTargetRequestGlobalsTypeInternal BindPlacementTargetRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BindPlacementTargetResponse;
+struct BindPlacementTargetResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BindPlacementTargetResponseGlobalsTypeInternal BindPlacementTargetResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BindPlacementTargetResponse_class_data_;
+#else
+extern const BindPlacementTargetResponseGlobalsTypeInternal BindPlacementTargetResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BootstrapPlacementRequest;
+struct BootstrapPlacementRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BootstrapPlacementRequestGlobalsTypeInternal BootstrapPlacementRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BootstrapPlacementRequest_class_data_;
+#else
+extern const BootstrapPlacementRequestGlobalsTypeInternal BootstrapPlacementRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BootstrapPlacementResponse;
+struct BootstrapPlacementResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BootstrapPlacementResponseGlobalsTypeInternal BootstrapPlacementResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BootstrapPlacementResponse_class_data_;
+#else
+extern const BootstrapPlacementResponseGlobalsTypeInternal BootstrapPlacementResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ClearLocationRequest;
 struct ClearLocationRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -105,6 +161,22 @@ extern ClearLocationResponseGlobalsTypeInternal ClearLocationResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull ClearLocationResponse_class_data_;
 #else
 extern const ClearLocationResponseGlobalsTypeInternal ClearLocationResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CommitPlacementAdmissionRequest;
+struct CommitPlacementAdmissionRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CommitPlacementAdmissionRequestGlobalsTypeInternal CommitPlacementAdmissionRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CommitPlacementAdmissionRequest_class_data_;
+#else
+extern const CommitPlacementAdmissionRequestGlobalsTypeInternal CommitPlacementAdmissionRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CommitPlacementAdmissionResponse;
+struct CommitPlacementAdmissionResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CommitPlacementAdmissionResponseGlobalsTypeInternal CommitPlacementAdmissionResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CommitPlacementAdmissionResponse_class_data_;
+#else
+extern const CommitPlacementAdmissionResponseGlobalsTypeInternal CommitPlacementAdmissionResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetLocationRequest;
 struct GetLocationRequestGlobalsTypeInternal;
@@ -122,6 +194,22 @@ extern const ::google::protobuf::internal::ClassDataFull GetLocationResponse_cla
 #else
 extern const GetLocationResponseGlobalsTypeInternal GetLocationResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlacementRequest;
+struct GetPlacementRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlacementRequestGlobalsTypeInternal GetPlacementRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlacementRequest_class_data_;
+#else
+extern const GetPlacementRequestGlobalsTypeInternal GetPlacementRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlacementResponse;
+struct GetPlacementResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlacementResponseGlobalsTypeInternal GetPlacementResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlacementResponse_class_data_;
+#else
+extern const GetPlacementResponseGlobalsTypeInternal GetPlacementResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class Location;
 struct LocationGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -129,6 +217,22 @@ extern LocationGlobalsTypeInternal Location_globals_;
 extern const ::google::protobuf::internal::ClassDataFull Location_class_data_;
 #else
 extern const LocationGlobalsTypeInternal Location_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlacementTargetIdentity;
+struct PlacementTargetIdentityGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlacementTargetIdentityGlobalsTypeInternal PlacementTargetIdentity_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlacementTargetIdentity_class_data_;
+#else
+extern const PlacementTargetIdentityGlobalsTypeInternal PlacementTargetIdentity_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlayerPlacementStorageRecord;
+struct PlayerPlacementStorageRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlayerPlacementStorageRecordGlobalsTypeInternal PlayerPlacementStorageRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerPlacementStorageRecord_class_data_;
+#else
+extern const PlayerPlacementStorageRecordGlobalsTypeInternal PlayerPlacementStorageRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class PresenceBatchEvent;
 struct PresenceBatchEventGlobalsTypeInternal;
@@ -177,6 +281,22 @@ extern ReportDisconnectResponseGlobalsTypeInternal ReportDisconnectResponse_glob
 extern const ::google::protobuf::internal::ClassDataFull ReportDisconnectResponse_class_data_;
 #else
 extern const ReportDisconnectResponseGlobalsTypeInternal ReportDisconnectResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RetargetPlacementTargetRequest;
+struct RetargetPlacementTargetRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RetargetPlacementTargetRequestGlobalsTypeInternal RetargetPlacementTargetRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RetargetPlacementTargetRequest_class_data_;
+#else
+extern const RetargetPlacementTargetRequestGlobalsTypeInternal RetargetPlacementTargetRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RetargetPlacementTargetResponse;
+struct RetargetPlacementTargetResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RetargetPlacementTargetResponseGlobalsTypeInternal RetargetPlacementTargetResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RetargetPlacementTargetResponse_class_data_;
+#else
+extern const RetargetPlacementTargetResponseGlobalsTypeInternal RetargetPlacementTargetResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SetLocationRequest;
 struct SetLocationRequestGlobalsTypeInternal;
@@ -235,6 +355,18 @@ template <>
 internal::EnumTraitsT<::pandora::locator::v1::LocationState_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::locator::v1::LocationState>;
 template <>
+internal::EnumTraitsT<::pandora::locator::v1::PlacementProofType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementProofType>;
+template <>
+internal::EnumTraitsT<::pandora::locator::v1::PlacementRoute_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementRoute>;
+template <>
+internal::EnumTraitsT<::pandora::locator::v1::PlacementTargetUnavailableReason_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementTargetUnavailableReason>;
+template <>
+internal::EnumTraitsT<::pandora::locator::v1::PlacementTransitionState_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementTransitionState>;
+template <>
 internal::EnumTraitsT<::pandora::locator::v1::PresenceStatus_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::locator::v1::PresenceStatus>;
 }  // namespace protobuf
@@ -285,6 +417,174 @@ template <>
 [[nodiscard]] inline bool LocationState_Parse(
     ::absl::string_view name, LocationState* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<LocationState>(LocationState_descriptor(), name,
+                                           value);
+}
+enum PlacementRoute : int {
+  PLACEMENT_ROUTE_UNSPECIFIED = 0,
+  PLACEMENT_ROUTE_HUB = 1,
+  PLACEMENT_ROUTE_BATTLE = 2,
+  PlacementRoute_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PlacementRoute_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PlacementRoute_internal_data_[];
+inline constexpr PlacementRoute PlacementRoute_MIN =
+    static_cast<PlacementRoute>(0);
+inline constexpr PlacementRoute PlacementRoute_MAX =
+    static_cast<PlacementRoute>(2);
+[[nodiscard]] inline bool PlacementRoute_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int PlacementRoute_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PlacementRoute_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlacementRoute) {
+  return PlacementRoute_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PlacementRoute_Name(T value) {
+  static_assert(::std::is_same<T, PlacementRoute>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PlacementRoute_Name().");
+  return PlacementRoute_Name(static_cast<PlacementRoute>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& PlacementRoute_Name(PlacementRoute value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<PlacementRoute_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool PlacementRoute_Parse(
+    ::absl::string_view name, PlacementRoute* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PlacementRoute>(PlacementRoute_descriptor(), name,
+                                           value);
+}
+enum PlacementTransitionState : int {
+  PLACEMENT_TRANSITION_STATE_UNSPECIFIED = 0,
+  PLACEMENT_TRANSITION_STATE_STABLE = 1,
+  PLACEMENT_TRANSITION_STATE_PENDING = 2,
+  PlacementTransitionState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PlacementTransitionState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PlacementTransitionState_internal_data_[];
+inline constexpr PlacementTransitionState PlacementTransitionState_MIN =
+    static_cast<PlacementTransitionState>(0);
+inline constexpr PlacementTransitionState PlacementTransitionState_MAX =
+    static_cast<PlacementTransitionState>(2);
+[[nodiscard]] inline bool PlacementTransitionState_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int PlacementTransitionState_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PlacementTransitionState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlacementTransitionState) {
+  return PlacementTransitionState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PlacementTransitionState_Name(T value) {
+  static_assert(::std::is_same<T, PlacementTransitionState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PlacementTransitionState_Name().");
+  return PlacementTransitionState_Name(static_cast<PlacementTransitionState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& PlacementTransitionState_Name(PlacementTransitionState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<PlacementTransitionState_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool PlacementTransitionState_Parse(
+    ::absl::string_view name, PlacementTransitionState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PlacementTransitionState>(PlacementTransitionState_descriptor(), name,
+                                           value);
+}
+enum PlacementProofType : int {
+  PLACEMENT_PROOF_TYPE_UNSPECIFIED = 0,
+  PLACEMENT_PROOF_TYPE_MATCH_TERMINAL = 1,
+  PLACEMENT_PROOF_TYPE_PLAYER_LEAVE = 2,
+  PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP = 3,
+  PLACEMENT_PROOF_TYPE_MATCH_START = 4,
+  PLACEMENT_PROOF_TYPE_HUB_TRANSFER = 5,
+  PlacementProofType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PlacementProofType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PlacementProofType_internal_data_[];
+inline constexpr PlacementProofType PlacementProofType_MIN =
+    static_cast<PlacementProofType>(0);
+inline constexpr PlacementProofType PlacementProofType_MAX =
+    static_cast<PlacementProofType>(5);
+[[nodiscard]] inline bool PlacementProofType_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int PlacementProofType_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PlacementProofType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlacementProofType) {
+  return PlacementProofType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PlacementProofType_Name(T value) {
+  static_assert(::std::is_same<T, PlacementProofType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PlacementProofType_Name().");
+  return PlacementProofType_Name(static_cast<PlacementProofType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& PlacementProofType_Name(PlacementProofType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<PlacementProofType_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool PlacementProofType_Parse(
+    ::absl::string_view name, PlacementProofType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PlacementProofType>(PlacementProofType_descriptor(), name,
+                                           value);
+}
+enum PlacementTargetUnavailableReason : int {
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_UNSPECIFIED = 0,
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_INSTANCE_TERMINATED = 1,
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_RESERVATION_EXPIRED_UNUSED = 2,
+  PLACEMENT_TARGET_UNAVAILABLE_REASON_ALLOCATION_REVOKED = 3,
+  PlacementTargetUnavailableReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PlacementTargetUnavailableReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PlacementTargetUnavailableReason_internal_data_[];
+inline constexpr PlacementTargetUnavailableReason PlacementTargetUnavailableReason_MIN =
+    static_cast<PlacementTargetUnavailableReason>(0);
+inline constexpr PlacementTargetUnavailableReason PlacementTargetUnavailableReason_MAX =
+    static_cast<PlacementTargetUnavailableReason>(3);
+[[nodiscard]] inline bool PlacementTargetUnavailableReason_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int PlacementTargetUnavailableReason_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PlacementTargetUnavailableReason_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlacementTargetUnavailableReason) {
+  return PlacementTargetUnavailableReason_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PlacementTargetUnavailableReason_Name(T value) {
+  static_assert(::std::is_same<T, PlacementTargetUnavailableReason>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PlacementTargetUnavailableReason_Name().");
+  return PlacementTargetUnavailableReason_Name(static_cast<PlacementTargetUnavailableReason>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& PlacementTargetUnavailableReason_Name(PlacementTargetUnavailableReason value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<PlacementTargetUnavailableReason_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool PlacementTargetUnavailableReason_Parse(
+    ::absl::string_view name, PlacementTargetUnavailableReason* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PlacementTargetUnavailableReason>(PlacementTargetUnavailableReason_descriptor(), name,
                                            value);
 }
 enum PresenceStatus : int {
@@ -393,7 +693,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceResponse final :
   [[nodiscard]] static const UnsubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceResponse>(&UnsubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(UnsubscribePresenceResponse& a, UnsubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -594,7 +894,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceRequest final : 
   [[nodiscard]] static const UnsubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceRequest>(&UnsubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(UnsubscribePresenceRequest& a, UnsubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -795,7 +1095,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceResponse final : p
   [[nodiscard]] static const SubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceResponse>(&SubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(SubscribePresenceResponse& a, SubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -996,7 +1296,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceRequest final : pu
   [[nodiscard]] static const SubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceRequest>(&SubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(SubscribePresenceRequest& a, SubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2294,7 +2594,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceChange final : public ::goo
   [[nodiscard]] static const PresenceChange& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceChange>(&PresenceChange_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(PresenceChange& a, PresenceChange& b) { a.Swap(&b); }
   inline void Swap(PresenceChange* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2456,6 +2756,802 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceChange final : public ::goo
     ::uint64_t player_id_;
     ::int64_t ts_ms_;
     int status_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.PlayerPlacementStorageRecord) */ {
+ public:
+  inline PlayerPlacementStorageRecord() : PlayerPlacementStorageRecord(nullptr) {}
+  ~PlayerPlacementStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlayerPlacementStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerPlacementStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PlayerPlacementStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PlayerPlacementStorageRecord(const PlayerPlacementStorageRecord& from) : PlayerPlacementStorageRecord(nullptr, from) {}
+  inline PlayerPlacementStorageRecord(PlayerPlacementStorageRecord&& from) noexcept : PlayerPlacementStorageRecord(nullptr, ::std::move(from)) {}
+  inline PlayerPlacementStorageRecord& operator=(const PlayerPlacementStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlayerPlacementStorageRecord& operator=(PlayerPlacementStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PlayerPlacementStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerPlacementStorageRecord>(&PlayerPlacementStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(PlayerPlacementStorageRecord& a, PlayerPlacementStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(PlayerPlacementStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlayerPlacementStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PlayerPlacementStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayerPlacementStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlayerPlacementStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlayerPlacementStorageRecord& from) { PlayerPlacementStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlayerPlacementStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.PlayerPlacementStorageRecord"; }
+
+  explicit PlayerPlacementStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayerPlacementStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerPlacementStorageRecord& from);
+  PlayerPlacementStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerPlacementStorageRecord&& from) noexcept
+      : PlayerPlacementStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 6,
+    kDsPodNameFieldNumber = 9,
+    kDsInstanceUidFieldNumber = 10,
+    kHubAssignmentIdFieldNumber = 11,
+    kProofIdFieldNumber = 15,
+    kAdmissionIdFieldNumber = 16,
+    kAllocationIdFieldNumber = 19,
+    kReleaseTrackFieldNumber = 20,
+    kLastRetargetProofIdFieldNumber = 22,
+    kPlayerIdFieldNumber = 1,
+    kCurrentRouteFieldNumber = 2,
+    kTargetRouteFieldNumber = 3,
+    kVersionFieldNumber = 5,
+    kMatchIdFieldNumber = 7,
+    kSourceMatchIdFieldNumber = 8,
+    kTransitionStateFieldNumber = 4,
+    kProofTypeFieldNumber = 14,
+    kUpdatedAtMsFieldNumber = 12,
+    kLeaseDeadlineMsFieldNumber = 13,
+    kTargetMatchIdFieldNumber = 17,
+    kDsInstanceEpochFieldNumber = 18,
+    kRetargetCountFieldNumber = 21,
+    kLastRetargetReasonFieldNumber = 23,
+  };
+  // string operation_id = 6 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string ds_pod_name = 9 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_instance_uid = 10 [json_name = "dsInstanceUid"];
+  void clear_ds_instance_uid() ;
+  [[nodiscard]] const ::std::string& ds_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_instance_uid();
+  void set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_instance_uid();
+
+  public:
+  // string hub_assignment_id = 11 [json_name = "hubAssignmentId"];
+  void clear_hub_assignment_id() ;
+  [[nodiscard]] const ::std::string& hub_assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_assignment_id();
+  void set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_assignment_id();
+
+  public:
+  // string proof_id = 15 [json_name = "proofId"];
+  void clear_proof_id() ;
+  [[nodiscard]] const ::std::string& proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_id();
+  void set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_id();
+
+  public:
+  // string admission_id = 16 [json_name = "admissionId"];
+  void clear_admission_id() ;
+  [[nodiscard]] const ::std::string& admission_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_admission_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_admission_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_admission_id();
+  void set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_admission_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_admission_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_admission_id();
+
+  public:
+  // string allocation_id = 19 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
+  // string release_track = 20 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
+  // string last_retarget_proof_id = 22 [json_name = "lastRetargetProofId"];
+  void clear_last_retarget_proof_id() ;
+  [[nodiscard]] const ::std::string& last_retarget_proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_retarget_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_retarget_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_retarget_proof_id();
+  void set_allocated_last_retarget_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_retarget_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_retarget_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_retarget_proof_id();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute current_route = 2 [json_name = "currentRoute"];
+  void clear_current_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute current_route() const;
+  void set_current_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_current_route() const;
+  void _internal_set_current_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute target_route = 3 [json_name = "targetRoute"];
+  void clear_target_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute target_route() const;
+  void set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_target_route() const;
+  void _internal_set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // uint64 version = 5 [json_name = "version"];
+  void clear_version() ;
+  [[nodiscard]] ::uint64_t version() const;
+  void set_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_version() const;
+  void _internal_set_version(::uint64_t value);
+
+  public:
+  // uint64 match_id = 7 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // uint64 source_match_id = 8 [json_name = "sourceMatchId"];
+  void clear_source_match_id() ;
+  [[nodiscard]] ::uint64_t source_match_id() const;
+  void set_source_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_match_id() const;
+  void _internal_set_source_match_id(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementTransitionState transition_state = 4 [json_name = "transitionState"];
+  void clear_transition_state() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementTransitionState transition_state() const;
+  void set_transition_state(::pandora::locator::v1::PlacementTransitionState value);
+
+  private:
+  ::pandora::locator::v1::PlacementTransitionState _internal_transition_state() const;
+  void _internal_set_transition_state(::pandora::locator::v1::PlacementTransitionState value);
+
+  public:
+  // .pandora.locator.v1.PlacementProofType proof_type = 14 [json_name = "proofType"];
+  void clear_proof_type() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementProofType proof_type() const;
+  void set_proof_type(::pandora::locator::v1::PlacementProofType value);
+
+  private:
+  ::pandora::locator::v1::PlacementProofType _internal_proof_type() const;
+  void _internal_set_proof_type(::pandora::locator::v1::PlacementProofType value);
+
+  public:
+  // int64 updated_at_ms = 12 [json_name = "updatedAtMs"];
+  void clear_updated_at_ms() ;
+  [[nodiscard]] ::int64_t updated_at_ms() const;
+  void set_updated_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_updated_at_ms() const;
+  void _internal_set_updated_at_ms(::int64_t value);
+
+  public:
+  // int64 lease_deadline_ms = 13 [json_name = "leaseDeadlineMs"];
+  void clear_lease_deadline_ms() ;
+  [[nodiscard]] ::int64_t lease_deadline_ms() const;
+  void set_lease_deadline_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_lease_deadline_ms() const;
+  void _internal_set_lease_deadline_ms(::int64_t value);
+
+  public:
+  // uint64 target_match_id = 17 [json_name = "targetMatchId"];
+  void clear_target_match_id() ;
+  [[nodiscard]] ::uint64_t target_match_id() const;
+  void set_target_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_match_id() const;
+  void _internal_set_target_match_id(::uint64_t value);
+
+  public:
+  // uint32 ds_instance_epoch = 18 [json_name = "dsInstanceEpoch"];
+  void clear_ds_instance_epoch() ;
+  [[nodiscard]] ::uint32_t ds_instance_epoch() const;
+  void set_ds_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ds_instance_epoch() const;
+  void _internal_set_ds_instance_epoch(::uint32_t value);
+
+  public:
+  // uint32 retarget_count = 21 [json_name = "retargetCount"];
+  void clear_retarget_count() ;
+  [[nodiscard]] ::uint32_t retarget_count() const;
+  void set_retarget_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retarget_count() const;
+  void _internal_set_retarget_count(::uint32_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementTargetUnavailableReason last_retarget_reason = 23 [json_name = "lastRetargetReason"];
+  void clear_last_retarget_reason() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementTargetUnavailableReason last_retarget_reason() const;
+  void set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value);
+
+  private:
+  ::pandora::locator::v1::PlacementTargetUnavailableReason _internal_last_retarget_reason() const;
+  void _internal_set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.PlayerPlacementStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          0, 195,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PlayerPlacementStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr hub_assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr admission_id_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
+    ::google::protobuf::internal::ArenaStringPtr last_retarget_proof_id_;
+    ::uint64_t player_id_;
+    int current_route_;
+    int target_route_;
+    ::uint64_t version_;
+    ::uint64_t match_id_;
+    ::uint64_t source_match_id_;
+    int transition_state_;
+    int proof_type_;
+    ::int64_t updated_at_ms_;
+    ::int64_t lease_deadline_ms_;
+    ::uint64_t target_match_id_;
+    ::uint32_t ds_instance_epoch_;
+    ::uint32_t retarget_count_;
+    int last_retarget_reason_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlacementTargetIdentity final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.PlacementTargetIdentity) */ {
+ public:
+  inline PlacementTargetIdentity() : PlacementTargetIdentity(nullptr) {}
+  ~PlacementTargetIdentity() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlacementTargetIdentity* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlacementTargetIdentity));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PlacementTargetIdentity(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PlacementTargetIdentity(const PlacementTargetIdentity& from) : PlacementTargetIdentity(nullptr, from) {}
+  inline PlacementTargetIdentity(PlacementTargetIdentity&& from) noexcept : PlacementTargetIdentity(nullptr, ::std::move(from)) {}
+  inline PlacementTargetIdentity& operator=(const PlacementTargetIdentity& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlacementTargetIdentity& operator=(PlacementTargetIdentity&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PlacementTargetIdentity& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlacementTargetIdentity>(&PlacementTargetIdentity_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(PlacementTargetIdentity& a, PlacementTargetIdentity& b) { a.Swap(&b); }
+  inline void Swap(PlacementTargetIdentity* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlacementTargetIdentity* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PlacementTargetIdentity* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlacementTargetIdentity>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlacementTargetIdentity& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlacementTargetIdentity& from) { PlacementTargetIdentity::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlacementTargetIdentity* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.PlacementTargetIdentity"; }
+
+  explicit PlacementTargetIdentity(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlacementTargetIdentity(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlacementTargetIdentity& from);
+  PlacementTargetIdentity(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlacementTargetIdentity&& from) noexcept
+      : PlacementTargetIdentity(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDsPodNameFieldNumber = 1,
+    kDsInstanceUidFieldNumber = 2,
+    kHubAssignmentIdFieldNumber = 3,
+    kAllocationIdFieldNumber = 5,
+    kReleaseTrackFieldNumber = 6,
+    kDsInstanceEpochFieldNumber = 4,
+  };
+  // string ds_pod_name = 1 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_instance_uid = 2 [json_name = "dsInstanceUid"];
+  void clear_ds_instance_uid() ;
+  [[nodiscard]] const ::std::string& ds_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_instance_uid();
+  void set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_instance_uid();
+
+  public:
+  // string hub_assignment_id = 3 [json_name = "hubAssignmentId"];
+  void clear_hub_assignment_id() ;
+  [[nodiscard]] const ::std::string& hub_assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_assignment_id();
+  void set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_assignment_id();
+
+  public:
+  // string allocation_id = 5 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
+  // string release_track = 6 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
+  // uint32 ds_instance_epoch = 4 [json_name = "dsInstanceEpoch"];
+  void clear_ds_instance_epoch() ;
+  [[nodiscard]] ::uint32_t ds_instance_epoch() const;
+  void set_ds_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ds_instance_epoch() const;
+  void _internal_set_ds_instance_epoch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.PlacementTargetIdentity)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 120,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PlacementTargetIdentity& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr hub_assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
+    ::uint32_t ds_instance_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2734,6 +3830,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Location final : public ::google::p
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlacementRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.GetPlacementRequest) */ {
+ public:
+  inline GetPlacementRequest() : GetPlacementRequest(nullptr) {}
+  ~GetPlacementRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlacementRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlacementRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlacementRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlacementRequest(const GetPlacementRequest& from) : GetPlacementRequest(nullptr, from) {}
+  inline GetPlacementRequest(GetPlacementRequest&& from) noexcept : GetPlacementRequest(nullptr, ::std::move(from)) {}
+  inline GetPlacementRequest& operator=(const GetPlacementRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlacementRequest& operator=(GetPlacementRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlacementRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlacementRequest>(&GetPlacementRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(GetPlacementRequest& a, GetPlacementRequest& b) { a.Swap(&b); }
+  inline void Swap(GetPlacementRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlacementRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlacementRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlacementRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlacementRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlacementRequest& from) { GetPlacementRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlacementRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.GetPlacementRequest"; }
+
+  explicit GetPlacementRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlacementRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlacementRequest& from);
+  GetPlacementRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlacementRequest&& from) noexcept
+      : GetPlacementRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.GetPlacementRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlacementRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetLocationRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.GetLocationRequest) */ {
  public:
@@ -2928,6 +4225,374 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetLocationRequest final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.CommitPlacementAdmissionRequest) */ {
+ public:
+  inline CommitPlacementAdmissionRequest() : CommitPlacementAdmissionRequest(nullptr) {}
+  ~CommitPlacementAdmissionRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CommitPlacementAdmissionRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CommitPlacementAdmissionRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CommitPlacementAdmissionRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CommitPlacementAdmissionRequest(const CommitPlacementAdmissionRequest& from) : CommitPlacementAdmissionRequest(nullptr, from) {}
+  inline CommitPlacementAdmissionRequest(CommitPlacementAdmissionRequest&& from) noexcept : CommitPlacementAdmissionRequest(nullptr, ::std::move(from)) {}
+  inline CommitPlacementAdmissionRequest& operator=(const CommitPlacementAdmissionRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CommitPlacementAdmissionRequest& operator=(CommitPlacementAdmissionRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CommitPlacementAdmissionRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitPlacementAdmissionRequest>(&CommitPlacementAdmissionRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(CommitPlacementAdmissionRequest& a, CommitPlacementAdmissionRequest& b) { a.Swap(&b); }
+  inline void Swap(CommitPlacementAdmissionRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CommitPlacementAdmissionRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CommitPlacementAdmissionRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CommitPlacementAdmissionRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CommitPlacementAdmissionRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CommitPlacementAdmissionRequest& from) { CommitPlacementAdmissionRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CommitPlacementAdmissionRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.CommitPlacementAdmissionRequest"; }
+
+  explicit CommitPlacementAdmissionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CommitPlacementAdmissionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CommitPlacementAdmissionRequest& from);
+  CommitPlacementAdmissionRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CommitPlacementAdmissionRequest&& from) noexcept
+      : CommitPlacementAdmissionRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 3,
+    kDsPodNameFieldNumber = 5,
+    kDsInstanceUidFieldNumber = 6,
+    kHubAssignmentIdFieldNumber = 7,
+    kAdmissionIdFieldNumber = 8,
+    kAllocationIdFieldNumber = 11,
+    kReleaseTrackFieldNumber = 12,
+    kPlayerIdFieldNumber = 1,
+    kPlacementVersionFieldNumber = 2,
+    kTargetRouteFieldNumber = 4,
+    kDsInstanceEpochFieldNumber = 10,
+    kTargetMatchIdFieldNumber = 9,
+  };
+  // string operation_id = 3 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string ds_pod_name = 5 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_instance_uid = 6 [json_name = "dsInstanceUid"];
+  void clear_ds_instance_uid() ;
+  [[nodiscard]] const ::std::string& ds_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_instance_uid();
+  void set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_instance_uid();
+
+  public:
+  // string hub_assignment_id = 7 [json_name = "hubAssignmentId"];
+  void clear_hub_assignment_id() ;
+  [[nodiscard]] const ::std::string& hub_assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_assignment_id();
+  void set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_assignment_id();
+
+  public:
+  // string admission_id = 8 [json_name = "admissionId"];
+  void clear_admission_id() ;
+  [[nodiscard]] const ::std::string& admission_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_admission_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_admission_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_admission_id();
+  void set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_admission_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_admission_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_admission_id();
+
+  public:
+  // string allocation_id = 11 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
+  // string release_track = 12 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 placement_version = 2 [json_name = "placementVersion"];
+  void clear_placement_version() ;
+  [[nodiscard]] ::uint64_t placement_version() const;
+  void set_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_version() const;
+  void _internal_set_placement_version(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+  void clear_target_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute target_route() const;
+  void set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_target_route() const;
+  void _internal_set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // uint32 ds_instance_epoch = 10 [json_name = "dsInstanceEpoch"];
+  void clear_ds_instance_epoch() ;
+  [[nodiscard]] ::uint32_t ds_instance_epoch() const;
+  void set_ds_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ds_instance_epoch() const;
+  void _internal_set_ds_instance_epoch(::uint32_t value);
+
+  public:
+  // uint64 target_match_id = 9 [json_name = "targetMatchId"];
+  void clear_target_match_id() ;
+  [[nodiscard]] ::uint64_t target_match_id() const;
+  void set_target_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_match_id() const;
+  void _internal_set_target_match_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.CommitPlacementAdmissionRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 160,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CommitPlacementAdmissionRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr hub_assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr admission_id_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
+    ::uint64_t player_id_;
+    ::uint64_t placement_version_;
+    int target_route_;
+    ::uint32_t ds_instance_epoch_;
+    ::uint64_t target_match_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3330,6 +4995,957 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClearLocationRequest final : public
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BootstrapPlacementRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BootstrapPlacementRequest) */ {
+ public:
+  inline BootstrapPlacementRequest() : BootstrapPlacementRequest(nullptr) {}
+  ~BootstrapPlacementRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BootstrapPlacementRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BootstrapPlacementRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BootstrapPlacementRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BootstrapPlacementRequest(const BootstrapPlacementRequest& from) : BootstrapPlacementRequest(nullptr, from) {}
+  inline BootstrapPlacementRequest(BootstrapPlacementRequest&& from) noexcept : BootstrapPlacementRequest(nullptr, ::std::move(from)) {}
+  inline BootstrapPlacementRequest& operator=(const BootstrapPlacementRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BootstrapPlacementRequest& operator=(BootstrapPlacementRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BootstrapPlacementRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BootstrapPlacementRequest>(&BootstrapPlacementRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(BootstrapPlacementRequest& a, BootstrapPlacementRequest& b) { a.Swap(&b); }
+  inline void Swap(BootstrapPlacementRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BootstrapPlacementRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BootstrapPlacementRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BootstrapPlacementRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BootstrapPlacementRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BootstrapPlacementRequest& from) { BootstrapPlacementRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BootstrapPlacementRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BootstrapPlacementRequest"; }
+
+  explicit BootstrapPlacementRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BootstrapPlacementRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BootstrapPlacementRequest& from);
+  BootstrapPlacementRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BootstrapPlacementRequest&& from) noexcept
+      : BootstrapPlacementRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 2,
+    kProofIdFieldNumber = 3,
+    kProofSignatureFieldNumber = 4,
+    kPlayerIdFieldNumber = 1,
+    kLeaseDeadlineMsFieldNumber = 5,
+  };
+  // string operation_id = 2 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string proof_id = 3 [json_name = "proofId"];
+  void clear_proof_id() ;
+  [[nodiscard]] const ::std::string& proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_id();
+  void set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_id();
+
+  public:
+  // string proof_signature = 4 [json_name = "proofSignature"];
+  void clear_proof_signature() ;
+  [[nodiscard]] const ::std::string& proof_signature() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_signature(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_signature();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_signature();
+  void set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_signature() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_signature(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_signature();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // int64 lease_deadline_ms = 5 [json_name = "leaseDeadlineMs"];
+  void clear_lease_deadline_ms() ;
+  [[nodiscard]] ::int64_t lease_deadline_ms() const;
+  void set_lease_deadline_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_lease_deadline_ms() const;
+  void _internal_set_lease_deadline_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BootstrapPlacementRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 88,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BootstrapPlacementRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_signature_;
+    ::uint64_t player_id_;
+    ::int64_t lease_deadline_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindPlacementTargetRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BindPlacementTargetRequest) */ {
+ public:
+  inline BindPlacementTargetRequest() : BindPlacementTargetRequest(nullptr) {}
+  ~BindPlacementTargetRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BindPlacementTargetRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BindPlacementTargetRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BindPlacementTargetRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BindPlacementTargetRequest(const BindPlacementTargetRequest& from) : BindPlacementTargetRequest(nullptr, from) {}
+  inline BindPlacementTargetRequest(BindPlacementTargetRequest&& from) noexcept : BindPlacementTargetRequest(nullptr, ::std::move(from)) {}
+  inline BindPlacementTargetRequest& operator=(const BindPlacementTargetRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BindPlacementTargetRequest& operator=(BindPlacementTargetRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BindPlacementTargetRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BindPlacementTargetRequest>(&BindPlacementTargetRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(BindPlacementTargetRequest& a, BindPlacementTargetRequest& b) { a.Swap(&b); }
+  inline void Swap(BindPlacementTargetRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BindPlacementTargetRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BindPlacementTargetRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BindPlacementTargetRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BindPlacementTargetRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BindPlacementTargetRequest& from) { BindPlacementTargetRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BindPlacementTargetRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BindPlacementTargetRequest"; }
+
+  explicit BindPlacementTargetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BindPlacementTargetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BindPlacementTargetRequest& from);
+  BindPlacementTargetRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BindPlacementTargetRequest&& from) noexcept
+      : BindPlacementTargetRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 3,
+    kDsPodNameFieldNumber = 5,
+    kDsInstanceUidFieldNumber = 6,
+    kHubAssignmentIdFieldNumber = 7,
+    kAllocationIdFieldNumber = 10,
+    kReleaseTrackFieldNumber = 11,
+    kPlayerIdFieldNumber = 1,
+    kPlacementVersionFieldNumber = 2,
+    kTargetRouteFieldNumber = 4,
+    kDsInstanceEpochFieldNumber = 9,
+    kTargetMatchIdFieldNumber = 8,
+    kLeaseDeadlineMsFieldNumber = 12,
+  };
+  // string operation_id = 3 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string ds_pod_name = 5 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_instance_uid = 6 [json_name = "dsInstanceUid"];
+  void clear_ds_instance_uid() ;
+  [[nodiscard]] const ::std::string& ds_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_instance_uid();
+  void set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_instance_uid();
+
+  public:
+  // string hub_assignment_id = 7 [json_name = "hubAssignmentId"];
+  void clear_hub_assignment_id() ;
+  [[nodiscard]] const ::std::string& hub_assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hub_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hub_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hub_assignment_id();
+  void set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hub_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hub_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hub_assignment_id();
+
+  public:
+  // string allocation_id = 10 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
+  // string release_track = 11 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 placement_version = 2 [json_name = "placementVersion"];
+  void clear_placement_version() ;
+  [[nodiscard]] ::uint64_t placement_version() const;
+  void set_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_version() const;
+  void _internal_set_placement_version(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+  void clear_target_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute target_route() const;
+  void set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_target_route() const;
+  void _internal_set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // uint32 ds_instance_epoch = 9 [json_name = "dsInstanceEpoch"];
+  void clear_ds_instance_epoch() ;
+  [[nodiscard]] ::uint32_t ds_instance_epoch() const;
+  void set_ds_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ds_instance_epoch() const;
+  void _internal_set_ds_instance_epoch(::uint32_t value);
+
+  public:
+  // uint64 target_match_id = 8 [json_name = "targetMatchId"];
+  void clear_target_match_id() ;
+  [[nodiscard]] ::uint64_t target_match_id() const;
+  void set_target_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_match_id() const;
+  void _internal_set_target_match_id(::uint64_t value);
+
+  public:
+  // int64 lease_deadline_ms = 12 [json_name = "leaseDeadlineMs"];
+  void clear_lease_deadline_ms() ;
+  [[nodiscard]] ::int64_t lease_deadline_ms() const;
+  void set_lease_deadline_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_lease_deadline_ms() const;
+  void _internal_set_lease_deadline_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BindPlacementTargetRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 143,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BindPlacementTargetRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr hub_assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
+    ::uint64_t player_id_;
+    ::uint64_t placement_version_;
+    int target_route_;
+    ::uint32_t ds_instance_epoch_;
+    ::uint64_t target_match_id_;
+    ::int64_t lease_deadline_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginPlacementTransitionRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BeginPlacementTransitionRequest) */ {
+ public:
+  inline BeginPlacementTransitionRequest() : BeginPlacementTransitionRequest(nullptr) {}
+  ~BeginPlacementTransitionRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BeginPlacementTransitionRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BeginPlacementTransitionRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BeginPlacementTransitionRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BeginPlacementTransitionRequest(const BeginPlacementTransitionRequest& from) : BeginPlacementTransitionRequest(nullptr, from) {}
+  inline BeginPlacementTransitionRequest(BeginPlacementTransitionRequest&& from) noexcept : BeginPlacementTransitionRequest(nullptr, ::std::move(from)) {}
+  inline BeginPlacementTransitionRequest& operator=(const BeginPlacementTransitionRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BeginPlacementTransitionRequest& operator=(BeginPlacementTransitionRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BeginPlacementTransitionRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BeginPlacementTransitionRequest>(&BeginPlacementTransitionRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(BeginPlacementTransitionRequest& a, BeginPlacementTransitionRequest& b) { a.Swap(&b); }
+  inline void Swap(BeginPlacementTransitionRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BeginPlacementTransitionRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BeginPlacementTransitionRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BeginPlacementTransitionRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BeginPlacementTransitionRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BeginPlacementTransitionRequest& from) { BeginPlacementTransitionRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BeginPlacementTransitionRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BeginPlacementTransitionRequest"; }
+
+  explicit BeginPlacementTransitionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BeginPlacementTransitionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BeginPlacementTransitionRequest& from);
+  BeginPlacementTransitionRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BeginPlacementTransitionRequest&& from) noexcept
+      : BeginPlacementTransitionRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 4,
+    kProofIdFieldNumber = 7,
+    kProofSignatureFieldNumber = 10,
+    kPlayerIdFieldNumber = 1,
+    kExpectedVersionFieldNumber = 2,
+    kTargetRouteFieldNumber = 3,
+    kProofTypeFieldNumber = 6,
+    kSourceMatchIdFieldNumber = 5,
+    kLeaseDeadlineMsFieldNumber = 8,
+    kTargetMatchIdFieldNumber = 9,
+  };
+  // string operation_id = 4 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string proof_id = 7 [json_name = "proofId"];
+  void clear_proof_id() ;
+  [[nodiscard]] const ::std::string& proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_id();
+  void set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_id();
+
+  public:
+  // string proof_signature = 10 [json_name = "proofSignature"];
+  void clear_proof_signature() ;
+  [[nodiscard]] const ::std::string& proof_signature() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_signature(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_signature();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_signature();
+  void set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_signature() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_signature(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_signature();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 expected_version = 2 [json_name = "expectedVersion"];
+  void clear_expected_version() ;
+  [[nodiscard]] ::uint64_t expected_version() const;
+  void set_expected_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_version() const;
+  void _internal_set_expected_version(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute target_route = 3 [json_name = "targetRoute"];
+  void clear_target_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute target_route() const;
+  void set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_target_route() const;
+  void _internal_set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // .pandora.locator.v1.PlacementProofType proof_type = 6 [json_name = "proofType"];
+  void clear_proof_type() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementProofType proof_type() const;
+  void set_proof_type(::pandora::locator::v1::PlacementProofType value);
+
+  private:
+  ::pandora::locator::v1::PlacementProofType _internal_proof_type() const;
+  void _internal_set_proof_type(::pandora::locator::v1::PlacementProofType value);
+
+  public:
+  // uint64 source_match_id = 5 [json_name = "sourceMatchId"];
+  void clear_source_match_id() ;
+  [[nodiscard]] ::uint64_t source_match_id() const;
+  void set_source_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_match_id() const;
+  void _internal_set_source_match_id(::uint64_t value);
+
+  public:
+  // int64 lease_deadline_ms = 8 [json_name = "leaseDeadlineMs"];
+  void clear_lease_deadline_ms() ;
+  [[nodiscard]] ::int64_t lease_deadline_ms() const;
+  void set_lease_deadline_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_lease_deadline_ms() const;
+  void _internal_set_lease_deadline_ms(::int64_t value);
+
+  public:
+  // uint64 target_match_id = 9 [json_name = "targetMatchId"];
+  void clear_target_match_id() ;
+  [[nodiscard]] ::uint64_t target_match_id() const;
+  void set_target_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_match_id() const;
+  void _internal_set_target_match_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BeginPlacementTransitionRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 102,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BeginPlacementTransitionRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_signature_;
+    ::uint64_t player_id_;
+    ::uint64_t expected_version_;
+    int target_route_;
+    int proof_type_;
+    ::uint64_t source_match_id_;
+    ::int64_t lease_deadline_ms_;
+    ::uint64_t target_match_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3768,6 +6384,614 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetLocationRequest final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetargetPlacementTargetResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.RetargetPlacementTargetResponse) */ {
+ public:
+  inline RetargetPlacementTargetResponse() : RetargetPlacementTargetResponse(nullptr) {}
+  ~RetargetPlacementTargetResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RetargetPlacementTargetResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RetargetPlacementTargetResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RetargetPlacementTargetResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RetargetPlacementTargetResponse(const RetargetPlacementTargetResponse& from) : RetargetPlacementTargetResponse(nullptr, from) {}
+  inline RetargetPlacementTargetResponse(RetargetPlacementTargetResponse&& from) noexcept : RetargetPlacementTargetResponse(nullptr, ::std::move(from)) {}
+  inline RetargetPlacementTargetResponse& operator=(const RetargetPlacementTargetResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RetargetPlacementTargetResponse& operator=(RetargetPlacementTargetResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RetargetPlacementTargetResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RetargetPlacementTargetResponse>(&RetargetPlacementTargetResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(RetargetPlacementTargetResponse& a, RetargetPlacementTargetResponse& b) { a.Swap(&b); }
+  inline void Swap(RetargetPlacementTargetResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RetargetPlacementTargetResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RetargetPlacementTargetResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RetargetPlacementTargetResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RetargetPlacementTargetResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RetargetPlacementTargetResponse& from) { RetargetPlacementTargetResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RetargetPlacementTargetResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.RetargetPlacementTargetResponse"; }
+
+  explicit RetargetPlacementTargetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RetargetPlacementTargetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RetargetPlacementTargetResponse& from);
+  RetargetPlacementTargetResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RetargetPlacementTargetResponse&& from) noexcept
+      : RetargetPlacementTargetResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.RetargetPlacementTargetResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RetargetPlacementTargetResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RetargetPlacementTargetRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.RetargetPlacementTargetRequest) */ {
+ public:
+  inline RetargetPlacementTargetRequest() : RetargetPlacementTargetRequest(nullptr) {}
+  ~RetargetPlacementTargetRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RetargetPlacementTargetRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RetargetPlacementTargetRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RetargetPlacementTargetRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RetargetPlacementTargetRequest(const RetargetPlacementTargetRequest& from) : RetargetPlacementTargetRequest(nullptr, from) {}
+  inline RetargetPlacementTargetRequest(RetargetPlacementTargetRequest&& from) noexcept : RetargetPlacementTargetRequest(nullptr, ::std::move(from)) {}
+  inline RetargetPlacementTargetRequest& operator=(const RetargetPlacementTargetRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RetargetPlacementTargetRequest& operator=(RetargetPlacementTargetRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RetargetPlacementTargetRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RetargetPlacementTargetRequest>(&RetargetPlacementTargetRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(RetargetPlacementTargetRequest& a, RetargetPlacementTargetRequest& b) { a.Swap(&b); }
+  inline void Swap(RetargetPlacementTargetRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RetargetPlacementTargetRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RetargetPlacementTargetRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RetargetPlacementTargetRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RetargetPlacementTargetRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RetargetPlacementTargetRequest& from) { RetargetPlacementTargetRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RetargetPlacementTargetRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.RetargetPlacementTargetRequest"; }
+
+  explicit RetargetPlacementTargetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RetargetPlacementTargetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RetargetPlacementTargetRequest& from);
+  RetargetPlacementTargetRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RetargetPlacementTargetRequest&& from) noexcept
+      : RetargetPlacementTargetRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 3,
+    kReplacementOperationIdFieldNumber = 8,
+    kProofIdFieldNumber = 12,
+    kProofSignatureFieldNumber = 13,
+    kExpectedTargetFieldNumber = 6,
+    kReplacementTargetFieldNumber = 9,
+    kPlayerIdFieldNumber = 1,
+    kPlacementVersionFieldNumber = 2,
+    kTargetMatchIdFieldNumber = 5,
+    kReplacementVersionFieldNumber = 7,
+    kTargetRouteFieldNumber = 4,
+    kProofTypeFieldNumber = 10,
+    kLeaseDeadlineMsFieldNumber = 14,
+    kReasonFieldNumber = 11,
+  };
+  // string operation_id = 3 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string replacement_operation_id = 8 [json_name = "replacementOperationId"];
+  void clear_replacement_operation_id() ;
+  [[nodiscard]] const ::std::string& replacement_operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_replacement_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_replacement_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_replacement_operation_id();
+  void set_allocated_replacement_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_replacement_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_replacement_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_replacement_operation_id();
+
+  public:
+  // string proof_id = 12 [json_name = "proofId"];
+  void clear_proof_id() ;
+  [[nodiscard]] const ::std::string& proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_id();
+  void set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_id();
+
+  public:
+  // string proof_signature = 13 [json_name = "proofSignature"];
+  void clear_proof_signature() ;
+  [[nodiscard]] const ::std::string& proof_signature() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_signature(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_signature();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_signature();
+  void set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_signature() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_signature(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_signature();
+
+  public:
+  // .pandora.locator.v1.PlacementTargetIdentity expected_target = 6 [json_name = "expectedTarget"];
+  [[nodiscard]] bool has_expected_target()
+      const;
+  void clear_expected_target() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlacementTargetIdentity& expected_target() const;
+  [[nodiscard]] ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE release_expected_target();
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL mutable_expected_target();
+  void set_allocated_expected_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_expected_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE unsafe_arena_release_expected_target();
+
+  private:
+  const ::pandora::locator::v1::PlacementTargetIdentity& _internal_expected_target() const;
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL _internal_mutable_expected_target();
+
+  public:
+  // .pandora.locator.v1.PlacementTargetIdentity replacement_target = 9 [json_name = "replacementTarget"];
+  [[nodiscard]] bool has_replacement_target()
+      const;
+  void clear_replacement_target() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlacementTargetIdentity& replacement_target() const;
+  [[nodiscard]] ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE release_replacement_target();
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL mutable_replacement_target();
+  void set_allocated_replacement_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_replacement_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE unsafe_arena_release_replacement_target();
+
+  private:
+  const ::pandora::locator::v1::PlacementTargetIdentity& _internal_replacement_target() const;
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL _internal_mutable_replacement_target();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 placement_version = 2 [json_name = "placementVersion"];
+  void clear_placement_version() ;
+  [[nodiscard]] ::uint64_t placement_version() const;
+  void set_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_version() const;
+  void _internal_set_placement_version(::uint64_t value);
+
+  public:
+  // uint64 target_match_id = 5 [json_name = "targetMatchId"];
+  void clear_target_match_id() ;
+  [[nodiscard]] ::uint64_t target_match_id() const;
+  void set_target_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_match_id() const;
+  void _internal_set_target_match_id(::uint64_t value);
+
+  public:
+  // uint64 replacement_version = 7 [json_name = "replacementVersion"];
+  void clear_replacement_version() ;
+  [[nodiscard]] ::uint64_t replacement_version() const;
+  void set_replacement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_replacement_version() const;
+  void _internal_set_replacement_version(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+  void clear_target_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute target_route() const;
+  void set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_target_route() const;
+  void _internal_set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // .pandora.locator.v1.PlacementProofType proof_type = 10 [json_name = "proofType"];
+  void clear_proof_type() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementProofType proof_type() const;
+  void set_proof_type(::pandora::locator::v1::PlacementProofType value);
+
+  private:
+  ::pandora::locator::v1::PlacementProofType _internal_proof_type() const;
+  void _internal_set_proof_type(::pandora::locator::v1::PlacementProofType value);
+
+  public:
+  // int64 lease_deadline_ms = 14 [json_name = "leaseDeadlineMs"];
+  void clear_lease_deadline_ms() ;
+  [[nodiscard]] ::int64_t lease_deadline_ms() const;
+  void set_lease_deadline_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_lease_deadline_ms() const;
+  void _internal_set_lease_deadline_ms(::int64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementTargetUnavailableReason reason = 11 [json_name = "reason"];
+  void clear_reason() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementTargetUnavailableReason reason() const;
+  void set_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value);
+
+  private:
+  ::pandora::locator::v1::PlacementTargetUnavailableReason _internal_reason() const;
+  void _internal_set_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.RetargetPlacementTargetRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          2, 125,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RetargetPlacementTargetRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr replacement_operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_signature_;
+    ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE expected_target_;
+    ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE replacement_target_;
+    ::uint64_t player_id_;
+    ::uint64_t placement_version_;
+    ::uint64_t target_match_id_;
+    ::uint64_t replacement_version_;
+    int target_route_;
+    int proof_type_;
+    ::int64_t lease_deadline_ms_;
+    int reason_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.PresenceBatchEvent) */ {
  public:
@@ -3824,7 +7048,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public :
   [[nodiscard]] static const PresenceBatchEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceBatchEvent>(&PresenceBatchEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(PresenceBatchEvent& a, PresenceBatchEvent& b) { a.Swap(&b); }
   inline void Swap(PresenceBatchEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3973,6 +7197,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::pandora::locator::v1::PresenceChange > changes_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlacementResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.GetPlacementResponse) */ {
+ public:
+  inline GetPlacementResponse() : GetPlacementResponse(nullptr) {}
+  ~GetPlacementResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlacementResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlacementResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlacementResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlacementResponse(const GetPlacementResponse& from) : GetPlacementResponse(nullptr, from) {}
+  inline GetPlacementResponse(GetPlacementResponse&& from) noexcept : GetPlacementResponse(nullptr, ::std::move(from)) {}
+  inline GetPlacementResponse& operator=(const GetPlacementResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlacementResponse& operator=(GetPlacementResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlacementResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlacementResponse>(&GetPlacementResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(GetPlacementResponse& a, GetPlacementResponse& b) { a.Swap(&b); }
+  inline void Swap(GetPlacementResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlacementResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlacementResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlacementResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlacementResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlacementResponse& from) { GetPlacementResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlacementResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.GetPlacementResponse"; }
+
+  explicit GetPlacementResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlacementResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlacementResponse& from);
+  GetPlacementResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlacementResponse&& from) noexcept
+      : GetPlacementResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 3,
+    kCodeFieldNumber = 1,
+    kFoundFieldNumber = 2,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 3 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool found = 2 [json_name = "found"];
+  void clear_found() ;
+  [[nodiscard]] bool found() const;
+  void set_found(bool value);
+
+  private:
+  bool _internal_found() const;
+  void _internal_set_found(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.GetPlacementResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlacementResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
+    int code_;
+    bool found_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4191,6 +7646,894 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetLocationResponse final : public 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::pandora::locator::v1::Location* PROTOBUF_NULLABLE location_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.CommitPlacementAdmissionResponse) */ {
+ public:
+  inline CommitPlacementAdmissionResponse() : CommitPlacementAdmissionResponse(nullptr) {}
+  ~CommitPlacementAdmissionResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CommitPlacementAdmissionResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CommitPlacementAdmissionResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CommitPlacementAdmissionResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CommitPlacementAdmissionResponse(const CommitPlacementAdmissionResponse& from) : CommitPlacementAdmissionResponse(nullptr, from) {}
+  inline CommitPlacementAdmissionResponse(CommitPlacementAdmissionResponse&& from) noexcept : CommitPlacementAdmissionResponse(nullptr, ::std::move(from)) {}
+  inline CommitPlacementAdmissionResponse& operator=(const CommitPlacementAdmissionResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CommitPlacementAdmissionResponse& operator=(CommitPlacementAdmissionResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CommitPlacementAdmissionResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitPlacementAdmissionResponse>(&CommitPlacementAdmissionResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(CommitPlacementAdmissionResponse& a, CommitPlacementAdmissionResponse& b) { a.Swap(&b); }
+  inline void Swap(CommitPlacementAdmissionResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CommitPlacementAdmissionResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CommitPlacementAdmissionResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CommitPlacementAdmissionResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CommitPlacementAdmissionResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CommitPlacementAdmissionResponse& from) { CommitPlacementAdmissionResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CommitPlacementAdmissionResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.CommitPlacementAdmissionResponse"; }
+
+  explicit CommitPlacementAdmissionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CommitPlacementAdmissionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CommitPlacementAdmissionResponse& from);
+  CommitPlacementAdmissionResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CommitPlacementAdmissionResponse&& from) noexcept
+      : CommitPlacementAdmissionResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 3,
+    kCodeFieldNumber = 1,
+    kCommittedFieldNumber = 2,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 3 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool committed = 2 [json_name = "committed"];
+  void clear_committed() ;
+  [[nodiscard]] bool committed() const;
+  void set_committed(bool value);
+
+  private:
+  bool _internal_committed() const;
+  void _internal_set_committed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.CommitPlacementAdmissionResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CommitPlacementAdmissionResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
+    int code_;
+    bool committed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BootstrapPlacementResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BootstrapPlacementResponse) */ {
+ public:
+  inline BootstrapPlacementResponse() : BootstrapPlacementResponse(nullptr) {}
+  ~BootstrapPlacementResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BootstrapPlacementResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BootstrapPlacementResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BootstrapPlacementResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BootstrapPlacementResponse(const BootstrapPlacementResponse& from) : BootstrapPlacementResponse(nullptr, from) {}
+  inline BootstrapPlacementResponse(BootstrapPlacementResponse&& from) noexcept : BootstrapPlacementResponse(nullptr, ::std::move(from)) {}
+  inline BootstrapPlacementResponse& operator=(const BootstrapPlacementResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BootstrapPlacementResponse& operator=(BootstrapPlacementResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BootstrapPlacementResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BootstrapPlacementResponse>(&BootstrapPlacementResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(BootstrapPlacementResponse& a, BootstrapPlacementResponse& b) { a.Swap(&b); }
+  inline void Swap(BootstrapPlacementResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BootstrapPlacementResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BootstrapPlacementResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BootstrapPlacementResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BootstrapPlacementResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BootstrapPlacementResponse& from) { BootstrapPlacementResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BootstrapPlacementResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BootstrapPlacementResponse"; }
+
+  explicit BootstrapPlacementResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BootstrapPlacementResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BootstrapPlacementResponse& from);
+  BootstrapPlacementResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BootstrapPlacementResponse&& from) noexcept
+      : BootstrapPlacementResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BootstrapPlacementResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BootstrapPlacementResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindPlacementTargetResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BindPlacementTargetResponse) */ {
+ public:
+  inline BindPlacementTargetResponse() : BindPlacementTargetResponse(nullptr) {}
+  ~BindPlacementTargetResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BindPlacementTargetResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BindPlacementTargetResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BindPlacementTargetResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BindPlacementTargetResponse(const BindPlacementTargetResponse& from) : BindPlacementTargetResponse(nullptr, from) {}
+  inline BindPlacementTargetResponse(BindPlacementTargetResponse&& from) noexcept : BindPlacementTargetResponse(nullptr, ::std::move(from)) {}
+  inline BindPlacementTargetResponse& operator=(const BindPlacementTargetResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BindPlacementTargetResponse& operator=(BindPlacementTargetResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BindPlacementTargetResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BindPlacementTargetResponse>(&BindPlacementTargetResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(BindPlacementTargetResponse& a, BindPlacementTargetResponse& b) { a.Swap(&b); }
+  inline void Swap(BindPlacementTargetResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BindPlacementTargetResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BindPlacementTargetResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BindPlacementTargetResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BindPlacementTargetResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BindPlacementTargetResponse& from) { BindPlacementTargetResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BindPlacementTargetResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BindPlacementTargetResponse"; }
+
+  explicit BindPlacementTargetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BindPlacementTargetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BindPlacementTargetResponse& from);
+  BindPlacementTargetResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BindPlacementTargetResponse&& from) noexcept
+      : BindPlacementTargetResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BindPlacementTargetResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BindPlacementTargetResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BeginPlacementTransitionResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.BeginPlacementTransitionResponse) */ {
+ public:
+  inline BeginPlacementTransitionResponse() : BeginPlacementTransitionResponse(nullptr) {}
+  ~BeginPlacementTransitionResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BeginPlacementTransitionResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BeginPlacementTransitionResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BeginPlacementTransitionResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BeginPlacementTransitionResponse(const BeginPlacementTransitionResponse& from) : BeginPlacementTransitionResponse(nullptr, from) {}
+  inline BeginPlacementTransitionResponse(BeginPlacementTransitionResponse&& from) noexcept : BeginPlacementTransitionResponse(nullptr, ::std::move(from)) {}
+  inline BeginPlacementTransitionResponse& operator=(const BeginPlacementTransitionResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BeginPlacementTransitionResponse& operator=(BeginPlacementTransitionResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BeginPlacementTransitionResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BeginPlacementTransitionResponse>(&BeginPlacementTransitionResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(BeginPlacementTransitionResponse& a, BeginPlacementTransitionResponse& b) { a.Swap(&b); }
+  inline void Swap(BeginPlacementTransitionResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BeginPlacementTransitionResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BeginPlacementTransitionResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BeginPlacementTransitionResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BeginPlacementTransitionResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BeginPlacementTransitionResponse& from) { BeginPlacementTransitionResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BeginPlacementTransitionResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.BeginPlacementTransitionResponse"; }
+
+  explicit BeginPlacementTransitionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BeginPlacementTransitionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BeginPlacementTransitionResponse& from);
+  BeginPlacementTransitionResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BeginPlacementTransitionResponse&& from) noexcept
+      : BeginPlacementTransitionResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.BeginPlacementTransitionResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BeginPlacementTransitionResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
     int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -5503,6 +9846,4462 @@ inline void ReportDisconnectResponse::_internal_set_shrunk(bool value) {
 
 // -------------------------------------------------------------------
 
+// PlayerPlacementStorageRecord
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void PlayerPlacementStorageRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.player_id)
+  return _internal_player_id();
+}
+inline void PlayerPlacementStorageRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.player_id)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// .pandora.locator.v1.PlacementRoute current_route = 2 [json_name = "currentRoute"];
+inline void PlayerPlacementStorageRecord::clear_current_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::current_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.current_route)
+  return _internal_current_route();
+}
+inline void PlayerPlacementStorageRecord::set_current_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_current_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.current_route)
+}
+inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::_internal_current_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.current_route_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_current_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_route_ = value;
+}
+
+// .pandora.locator.v1.PlacementRoute target_route = 3 [json_name = "targetRoute"];
+inline void PlayerPlacementStorageRecord::clear_target_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::target_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.target_route)
+  return _internal_target_route();
+}
+inline void PlayerPlacementStorageRecord::set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_target_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.target_route)
+}
+inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::_internal_target_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.target_route_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = value;
+}
+
+// .pandora.locator.v1.PlacementTransitionState transition_state = 4 [json_name = "transitionState"];
+inline void PlayerPlacementStorageRecord::clear_transition_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.transition_state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::pandora::locator::v1::PlacementTransitionState PlayerPlacementStorageRecord::transition_state() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.transition_state)
+  return _internal_transition_state();
+}
+inline void PlayerPlacementStorageRecord::set_transition_state(::pandora::locator::v1::PlacementTransitionState value) {
+  _internal_set_transition_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.transition_state)
+}
+inline ::pandora::locator::v1::PlacementTransitionState PlayerPlacementStorageRecord::_internal_transition_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementTransitionState>(_impl_.transition_state_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_transition_state(::pandora::locator::v1::PlacementTransitionState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.transition_state_ = value;
+}
+
+// uint64 version = 5 [json_name = "version"];
+inline void PlayerPlacementStorageRecord::clear_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.version)
+  return _internal_version();
+}
+inline void PlayerPlacementStorageRecord::set_version(::uint64_t value) {
+  _internal_set_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.version)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.version_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_ = value;
+}
+
+// string operation_id = 6 [json_name = "operationId"];
+inline void PlayerPlacementStorageRecord::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.operation_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.operation_id)
+}
+
+// uint64 match_id = 7 [json_name = "matchId"];
+inline void PlayerPlacementStorageRecord::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.match_id)
+  return _internal_match_id();
+}
+inline void PlayerPlacementStorageRecord::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.match_id)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// uint64 source_match_id = 8 [json_name = "sourceMatchId"];
+inline void PlayerPlacementStorageRecord::clear_source_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::source_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_match_id)
+  return _internal_source_match_id();
+}
+inline void PlayerPlacementStorageRecord::set_source_match_id(::uint64_t value) {
+  _internal_set_source_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_match_id)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_source_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_match_id_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_match_id_ = value;
+}
+
+// string ds_pod_name = 9 [json_name = "dsPodName"];
+inline void PlayerPlacementStorageRecord::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.ds_pod_name)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.ds_pod_name)
+}
+
+// string ds_instance_uid = 10 [json_name = "dsInstanceUid"];
+inline void PlayerPlacementStorageRecord::clear_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::ds_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_uid)
+  return _internal_ds_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_ds_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.ds_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_ds_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_ds_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_uid)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_ds_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_uid_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_ds_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.ds_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.ds_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_instance_uid_.IsDefault()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_uid)
+}
+
+// string hub_assignment_id = 11 [json_name = "hubAssignmentId"];
+inline void PlayerPlacementStorageRecord::clear_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::hub_assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.hub_assignment_id)
+  return _internal_hub_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_hub_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.hub_assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.hub_assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_hub_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_hub_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.hub_assignment_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_hub_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_assignment_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_hub_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.hub_assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.hub_assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.hub_assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_assignment_id_.IsDefault()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.hub_assignment_id)
+}
+
+// int64 updated_at_ms = 12 [json_name = "updatedAtMs"];
+inline void PlayerPlacementStorageRecord::clear_updated_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::int64_t PlayerPlacementStorageRecord::updated_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.updated_at_ms)
+  return _internal_updated_at_ms();
+}
+inline void PlayerPlacementStorageRecord::set_updated_at_ms(::int64_t value) {
+  _internal_set_updated_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.updated_at_ms)
+}
+inline ::int64_t PlayerPlacementStorageRecord::_internal_updated_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_at_ms_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_updated_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = value;
+}
+
+// int64 lease_deadline_ms = 13 [json_name = "leaseDeadlineMs"];
+inline void PlayerPlacementStorageRecord::clear_lease_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::int64_t PlayerPlacementStorageRecord::lease_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.lease_deadline_ms)
+  return _internal_lease_deadline_ms();
+}
+inline void PlayerPlacementStorageRecord::set_lease_deadline_ms(::int64_t value) {
+  _internal_set_lease_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.lease_deadline_ms)
+}
+inline ::int64_t PlayerPlacementStorageRecord::_internal_lease_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_deadline_ms_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_lease_deadline_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = value;
+}
+
+// .pandora.locator.v1.PlacementProofType proof_type = 14 [json_name = "proofType"];
+inline void PlayerPlacementStorageRecord::clear_proof_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::pandora::locator::v1::PlacementProofType PlayerPlacementStorageRecord::proof_type() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.proof_type)
+  return _internal_proof_type();
+}
+inline void PlayerPlacementStorageRecord::set_proof_type(::pandora::locator::v1::PlacementProofType value) {
+  _internal_set_proof_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.proof_type)
+}
+inline ::pandora::locator::v1::PlacementProofType PlayerPlacementStorageRecord::_internal_proof_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementProofType>(_impl_.proof_type_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_proof_type(::pandora::locator::v1::PlacementProofType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = value;
+}
+
+// string proof_id = 15 [json_name = "proofId"];
+inline void PlayerPlacementStorageRecord::clear_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.proof_id)
+  return _internal_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.proof_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_id_.IsDefault()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.proof_id)
+}
+
+// string admission_id = 16 [json_name = "admissionId"];
+inline void PlayerPlacementStorageRecord::clear_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::admission_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.admission_id)
+  return _internal_admission_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_admission_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.admission_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.admission_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_admission_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_admission_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.admission_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_admission_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admission_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_admission_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.admission_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.admission_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.admission_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.admission_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.admission_id_.IsDefault()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.admission_id)
+}
+
+// uint64 target_match_id = 17 [json_name = "targetMatchId"];
+inline void PlayerPlacementStorageRecord::clear_target_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::target_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.target_match_id)
+  return _internal_target_match_id();
+}
+inline void PlayerPlacementStorageRecord::set_target_match_id(::uint64_t value) {
+  _internal_set_target_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.target_match_id)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_target_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_match_id_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_target_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = value;
+}
+
+// uint32 ds_instance_epoch = 18 [json_name = "dsInstanceEpoch"];
+inline void PlayerPlacementStorageRecord::clear_ds_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t PlayerPlacementStorageRecord::ds_instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_epoch)
+  return _internal_ds_instance_epoch();
+}
+inline void PlayerPlacementStorageRecord::set_ds_instance_epoch(::uint32_t value) {
+  _internal_set_ds_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_epoch)
+}
+inline ::uint32_t PlayerPlacementStorageRecord::_internal_ds_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_epoch_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_ds_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = value;
+}
+
+// string allocation_id = 19 [json_name = "allocationId"];
+inline void PlayerPlacementStorageRecord::clear_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.allocation_id)
+  return _internal_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.allocation_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocation_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.allocation_id)
+}
+
+// string release_track = 20 [json_name = "releaseTrack"];
+inline void PlayerPlacementStorageRecord::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.release_track)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.release_track)
+}
+
+// uint32 retarget_count = 21 [json_name = "retargetCount"];
+inline void PlayerPlacementStorageRecord::clear_retarget_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retarget_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t PlayerPlacementStorageRecord::retarget_count() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.retarget_count)
+  return _internal_retarget_count();
+}
+inline void PlayerPlacementStorageRecord::set_retarget_count(::uint32_t value) {
+  _internal_set_retarget_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.retarget_count)
+}
+inline ::uint32_t PlayerPlacementStorageRecord::_internal_retarget_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retarget_count_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_retarget_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retarget_count_ = value;
+}
+
+// string last_retarget_proof_id = 22 [json_name = "lastRetargetProofId"];
+inline void PlayerPlacementStorageRecord::clear_last_retarget_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_retarget_proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::last_retarget_proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_proof_id)
+  return _internal_last_retarget_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_last_retarget_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  _impl_.last_retarget_proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_last_retarget_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::std::string* _s = _internal_mutable_last_retarget_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_proof_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_last_retarget_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_retarget_proof_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_last_retarget_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_retarget_proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_last_retarget_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_retarget_proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_last_retarget_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  auto* released = _impl_.last_retarget_proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_retarget_proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_last_retarget_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  _impl_.last_retarget_proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_retarget_proof_id_.IsDefault()) {
+    _impl_.last_retarget_proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_proof_id)
+}
+
+// .pandora.locator.v1.PlacementTargetUnavailableReason last_retarget_reason = 23 [json_name = "lastRetargetReason"];
+inline void PlayerPlacementStorageRecord::clear_last_retarget_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_retarget_reason_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::pandora::locator::v1::PlacementTargetUnavailableReason PlayerPlacementStorageRecord::last_retarget_reason() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_reason)
+  return _internal_last_retarget_reason();
+}
+inline void PlayerPlacementStorageRecord::set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value) {
+  _internal_set_last_retarget_reason(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_reason)
+}
+inline ::pandora::locator::v1::PlacementTargetUnavailableReason PlayerPlacementStorageRecord::_internal_last_retarget_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementTargetUnavailableReason>(_impl_.last_retarget_reason_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_retarget_reason_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetPlacementRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void GetPlacementRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetPlacementRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.GetPlacementRequest.player_id)
+  return _internal_player_id();
+}
+inline void GetPlacementRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.GetPlacementRequest.player_id)
+}
+inline ::uint64_t GetPlacementRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GetPlacementRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetPlacementResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void GetPlacementResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode GetPlacementResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.GetPlacementResponse.code)
+  return _internal_code();
+}
+inline void GetPlacementResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.GetPlacementResponse.code)
+}
+inline ::pandora::common::v1::ErrCode GetPlacementResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void GetPlacementResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// bool found = 2 [json_name = "found"];
+inline void GetPlacementResponse::clear_found() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool GetPlacementResponse::found() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.GetPlacementResponse.found)
+  return _internal_found();
+}
+inline void GetPlacementResponse::set_found(bool value) {
+  _internal_set_found(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.GetPlacementResponse.found)
+}
+inline bool GetPlacementResponse::_internal_found() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.found_;
+}
+inline void GetPlacementResponse::_internal_set_found(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 3 [json_name = "placement"];
+inline bool GetPlacementResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void GetPlacementResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& GetPlacementResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& GetPlacementResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.GetPlacementResponse.placement)
+  return _internal_placement();
+}
+inline void GetPlacementResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.GetPlacementResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE GetPlacementResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE GetPlacementResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.GetPlacementResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL GetPlacementResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL GetPlacementResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.GetPlacementResponse.placement)
+  return _msg;
+}
+inline void GetPlacementResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.GetPlacementResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
+// BeginPlacementTransitionRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void BeginPlacementTransitionRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t BeginPlacementTransitionRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.player_id)
+  return _internal_player_id();
+}
+inline void BeginPlacementTransitionRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.player_id)
+}
+inline ::uint64_t BeginPlacementTransitionRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BeginPlacementTransitionRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 expected_version = 2 [json_name = "expectedVersion"];
+inline void BeginPlacementTransitionRequest::clear_expected_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BeginPlacementTransitionRequest::expected_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.expected_version)
+  return _internal_expected_version();
+}
+inline void BeginPlacementTransitionRequest::set_expected_version(::uint64_t value) {
+  _internal_set_expected_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.expected_version)
+}
+inline ::uint64_t BeginPlacementTransitionRequest::_internal_expected_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_version_;
+}
+inline void BeginPlacementTransitionRequest::_internal_set_expected_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_version_ = value;
+}
+
+// .pandora.locator.v1.PlacementRoute target_route = 3 [json_name = "targetRoute"];
+inline void BeginPlacementTransitionRequest::clear_target_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::pandora::locator::v1::PlacementRoute BeginPlacementTransitionRequest::target_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.target_route)
+  return _internal_target_route();
+}
+inline void BeginPlacementTransitionRequest::set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_target_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.target_route)
+}
+inline ::pandora::locator::v1::PlacementRoute BeginPlacementTransitionRequest::_internal_target_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.target_route_);
+}
+inline void BeginPlacementTransitionRequest::_internal_set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = value;
+}
+
+// string operation_id = 4 [json_name = "operationId"];
+inline void BeginPlacementTransitionRequest::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BeginPlacementTransitionRequest::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BeginPlacementTransitionRequest::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BeginPlacementTransitionRequest::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BeginPlacementTransitionRequest.operation_id)
+  return _s;
+}
+inline const ::std::string& BeginPlacementTransitionRequest::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void BeginPlacementTransitionRequest::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BeginPlacementTransitionRequest::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BeginPlacementTransitionRequest::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BeginPlacementTransitionRequest.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BeginPlacementTransitionRequest::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BeginPlacementTransitionRequest.operation_id)
+}
+
+// uint64 source_match_id = 5 [json_name = "sourceMatchId"];
+inline void BeginPlacementTransitionRequest::clear_source_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t BeginPlacementTransitionRequest::source_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.source_match_id)
+  return _internal_source_match_id();
+}
+inline void BeginPlacementTransitionRequest::set_source_match_id(::uint64_t value) {
+  _internal_set_source_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.source_match_id)
+}
+inline ::uint64_t BeginPlacementTransitionRequest::_internal_source_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_match_id_;
+}
+inline void BeginPlacementTransitionRequest::_internal_set_source_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_match_id_ = value;
+}
+
+// .pandora.locator.v1.PlacementProofType proof_type = 6 [json_name = "proofType"];
+inline void BeginPlacementTransitionRequest::clear_proof_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::pandora::locator::v1::PlacementProofType BeginPlacementTransitionRequest::proof_type() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.proof_type)
+  return _internal_proof_type();
+}
+inline void BeginPlacementTransitionRequest::set_proof_type(::pandora::locator::v1::PlacementProofType value) {
+  _internal_set_proof_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.proof_type)
+}
+inline ::pandora::locator::v1::PlacementProofType BeginPlacementTransitionRequest::_internal_proof_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementProofType>(_impl_.proof_type_);
+}
+inline void BeginPlacementTransitionRequest::_internal_set_proof_type(::pandora::locator::v1::PlacementProofType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = value;
+}
+
+// string proof_id = 7 [json_name = "proofId"];
+inline void BeginPlacementTransitionRequest::clear_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BeginPlacementTransitionRequest::proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.proof_id)
+  return _internal_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BeginPlacementTransitionRequest::set_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BeginPlacementTransitionRequest::mutable_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BeginPlacementTransitionRequest.proof_id)
+  return _s;
+}
+inline const ::std::string& BeginPlacementTransitionRequest::_internal_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_id_.Get();
+}
+inline void BeginPlacementTransitionRequest::_internal_set_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BeginPlacementTransitionRequest::_internal_mutable_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BeginPlacementTransitionRequest::release_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BeginPlacementTransitionRequest.proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BeginPlacementTransitionRequest::set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_id_.IsDefault()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BeginPlacementTransitionRequest.proof_id)
+}
+
+// int64 lease_deadline_ms = 8 [json_name = "leaseDeadlineMs"];
+inline void BeginPlacementTransitionRequest::clear_lease_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::int64_t BeginPlacementTransitionRequest::lease_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.lease_deadline_ms)
+  return _internal_lease_deadline_ms();
+}
+inline void BeginPlacementTransitionRequest::set_lease_deadline_ms(::int64_t value) {
+  _internal_set_lease_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.lease_deadline_ms)
+}
+inline ::int64_t BeginPlacementTransitionRequest::_internal_lease_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_deadline_ms_;
+}
+inline void BeginPlacementTransitionRequest::_internal_set_lease_deadline_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = value;
+}
+
+// uint64 target_match_id = 9 [json_name = "targetMatchId"];
+inline void BeginPlacementTransitionRequest::clear_target_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t BeginPlacementTransitionRequest::target_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.target_match_id)
+  return _internal_target_match_id();
+}
+inline void BeginPlacementTransitionRequest::set_target_match_id(::uint64_t value) {
+  _internal_set_target_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.target_match_id)
+}
+inline ::uint64_t BeginPlacementTransitionRequest::_internal_target_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_match_id_;
+}
+inline void BeginPlacementTransitionRequest::_internal_set_target_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = value;
+}
+
+// string proof_signature = 10 [json_name = "proofSignature"];
+inline void BeginPlacementTransitionRequest::clear_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& BeginPlacementTransitionRequest::proof_signature() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionRequest.proof_signature)
+  return _internal_proof_signature();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BeginPlacementTransitionRequest::set_proof_signature(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.proof_signature_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionRequest.proof_signature)
+}
+inline ::std::string* PROTOBUF_NONNULL BeginPlacementTransitionRequest::mutable_proof_signature()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_proof_signature();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BeginPlacementTransitionRequest.proof_signature)
+  return _s;
+}
+inline const ::std::string& BeginPlacementTransitionRequest::_internal_proof_signature() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_signature_.Get();
+}
+inline void BeginPlacementTransitionRequest::_internal_set_proof_signature(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BeginPlacementTransitionRequest::_internal_mutable_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_signature_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BeginPlacementTransitionRequest::release_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BeginPlacementTransitionRequest.proof_signature)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.proof_signature_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BeginPlacementTransitionRequest::set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.proof_signature_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_signature_.IsDefault()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BeginPlacementTransitionRequest.proof_signature)
+}
+
+// -------------------------------------------------------------------
+
+// BeginPlacementTransitionResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void BeginPlacementTransitionResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode BeginPlacementTransitionResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionResponse.code)
+  return _internal_code();
+}
+inline void BeginPlacementTransitionResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BeginPlacementTransitionResponse.code)
+}
+inline ::pandora::common::v1::ErrCode BeginPlacementTransitionResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void BeginPlacementTransitionResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+inline bool BeginPlacementTransitionResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void BeginPlacementTransitionResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& BeginPlacementTransitionResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& BeginPlacementTransitionResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BeginPlacementTransitionResponse.placement)
+  return _internal_placement();
+}
+inline void BeginPlacementTransitionResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.BeginPlacementTransitionResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE BeginPlacementTransitionResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE BeginPlacementTransitionResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BeginPlacementTransitionResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL BeginPlacementTransitionResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL BeginPlacementTransitionResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BeginPlacementTransitionResponse.placement)
+  return _msg;
+}
+inline void BeginPlacementTransitionResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BeginPlacementTransitionResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
+// BindPlacementTargetRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void BindPlacementTargetRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t BindPlacementTargetRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.player_id)
+  return _internal_player_id();
+}
+inline void BindPlacementTargetRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.player_id)
+}
+inline ::uint64_t BindPlacementTargetRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BindPlacementTargetRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 placement_version = 2 [json_name = "placementVersion"];
+inline void BindPlacementTargetRequest::clear_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t BindPlacementTargetRequest::placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.placement_version)
+  return _internal_placement_version();
+}
+inline void BindPlacementTargetRequest::set_placement_version(::uint64_t value) {
+  _internal_set_placement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.placement_version)
+}
+inline ::uint64_t BindPlacementTargetRequest::_internal_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.placement_version_;
+}
+inline void BindPlacementTargetRequest::_internal_set_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = value;
+}
+
+// string operation_id = 3 [json_name = "operationId"];
+inline void BindPlacementTargetRequest::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BindPlacementTargetRequest::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindPlacementTargetRequest::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetRequest.operation_id)
+  return _s;
+}
+inline const ::std::string& BindPlacementTargetRequest::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void BindPlacementTargetRequest::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindPlacementTargetRequest::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetRequest.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindPlacementTargetRequest::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetRequest.operation_id)
+}
+
+// .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+inline void BindPlacementTargetRequest::clear_target_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::pandora::locator::v1::PlacementRoute BindPlacementTargetRequest::target_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.target_route)
+  return _internal_target_route();
+}
+inline void BindPlacementTargetRequest::set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_target_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.target_route)
+}
+inline ::pandora::locator::v1::PlacementRoute BindPlacementTargetRequest::_internal_target_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.target_route_);
+}
+inline void BindPlacementTargetRequest::_internal_set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = value;
+}
+
+// string ds_pod_name = 5 [json_name = "dsPodName"];
+inline void BindPlacementTargetRequest::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BindPlacementTargetRequest::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindPlacementTargetRequest::set_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::mutable_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetRequest.ds_pod_name)
+  return _s;
+}
+inline const ::std::string& BindPlacementTargetRequest::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void BindPlacementTargetRequest::_internal_set_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindPlacementTargetRequest::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetRequest.ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindPlacementTargetRequest::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetRequest.ds_pod_name)
+}
+
+// string ds_instance_uid = 6 [json_name = "dsInstanceUid"];
+inline void BindPlacementTargetRequest::clear_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& BindPlacementTargetRequest::ds_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_uid)
+  return _internal_ds_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindPlacementTargetRequest::set_ds_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.ds_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::mutable_ds_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_ds_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_uid)
+  return _s;
+}
+inline const ::std::string& BindPlacementTargetRequest::_internal_ds_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_uid_.Get();
+}
+inline void BindPlacementTargetRequest::_internal_set_ds_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::_internal_mutable_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindPlacementTargetRequest::release_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.ds_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindPlacementTargetRequest::set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.ds_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_instance_uid_.IsDefault()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_uid)
+}
+
+// string hub_assignment_id = 7 [json_name = "hubAssignmentId"];
+inline void BindPlacementTargetRequest::clear_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& BindPlacementTargetRequest::hub_assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.hub_assignment_id)
+  return _internal_hub_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindPlacementTargetRequest::set_hub_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.hub_assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.hub_assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::mutable_hub_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_hub_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetRequest.hub_assignment_id)
+  return _s;
+}
+inline const ::std::string& BindPlacementTargetRequest::_internal_hub_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_assignment_id_.Get();
+}
+inline void BindPlacementTargetRequest::_internal_set_hub_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::_internal_mutable_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindPlacementTargetRequest::release_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetRequest.hub_assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.hub_assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindPlacementTargetRequest::set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.hub_assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_assignment_id_.IsDefault()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetRequest.hub_assignment_id)
+}
+
+// uint64 target_match_id = 8 [json_name = "targetMatchId"];
+inline void BindPlacementTargetRequest::clear_target_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t BindPlacementTargetRequest::target_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.target_match_id)
+  return _internal_target_match_id();
+}
+inline void BindPlacementTargetRequest::set_target_match_id(::uint64_t value) {
+  _internal_set_target_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.target_match_id)
+}
+inline ::uint64_t BindPlacementTargetRequest::_internal_target_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_match_id_;
+}
+inline void BindPlacementTargetRequest::_internal_set_target_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = value;
+}
+
+// uint32 ds_instance_epoch = 9 [json_name = "dsInstanceEpoch"];
+inline void BindPlacementTargetRequest::clear_ds_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t BindPlacementTargetRequest::ds_instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_epoch)
+  return _internal_ds_instance_epoch();
+}
+inline void BindPlacementTargetRequest::set_ds_instance_epoch(::uint32_t value) {
+  _internal_set_ds_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.ds_instance_epoch)
+}
+inline ::uint32_t BindPlacementTargetRequest::_internal_ds_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_epoch_;
+}
+inline void BindPlacementTargetRequest::_internal_set_ds_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = value;
+}
+
+// string allocation_id = 10 [json_name = "allocationId"];
+inline void BindPlacementTargetRequest::clear_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& BindPlacementTargetRequest::allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.allocation_id)
+  return _internal_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindPlacementTargetRequest::set_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::mutable_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetRequest.allocation_id)
+  return _s;
+}
+inline const ::std::string& BindPlacementTargetRequest::_internal_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocation_id_.Get();
+}
+inline void BindPlacementTargetRequest::_internal_set_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::_internal_mutable_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindPlacementTargetRequest::release_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetRequest.allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindPlacementTargetRequest::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetRequest.allocation_id)
+}
+
+// string release_track = 11 [json_name = "releaseTrack"];
+inline void BindPlacementTargetRequest::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& BindPlacementTargetRequest::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindPlacementTargetRequest::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetRequest.release_track)
+  return _s;
+}
+inline const ::std::string& BindPlacementTargetRequest::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void BindPlacementTargetRequest::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindPlacementTargetRequest::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindPlacementTargetRequest::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetRequest.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindPlacementTargetRequest::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetRequest.release_track)
+}
+
+// int64 lease_deadline_ms = 12 [json_name = "leaseDeadlineMs"];
+inline void BindPlacementTargetRequest::clear_lease_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::int64_t BindPlacementTargetRequest::lease_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetRequest.lease_deadline_ms)
+  return _internal_lease_deadline_ms();
+}
+inline void BindPlacementTargetRequest::set_lease_deadline_ms(::int64_t value) {
+  _internal_set_lease_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetRequest.lease_deadline_ms)
+}
+inline ::int64_t BindPlacementTargetRequest::_internal_lease_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_deadline_ms_;
+}
+inline void BindPlacementTargetRequest::_internal_set_lease_deadline_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BindPlacementTargetResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void BindPlacementTargetResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode BindPlacementTargetResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetResponse.code)
+  return _internal_code();
+}
+inline void BindPlacementTargetResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BindPlacementTargetResponse.code)
+}
+inline ::pandora::common::v1::ErrCode BindPlacementTargetResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void BindPlacementTargetResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+inline bool BindPlacementTargetResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void BindPlacementTargetResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& BindPlacementTargetResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& BindPlacementTargetResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BindPlacementTargetResponse.placement)
+  return _internal_placement();
+}
+inline void BindPlacementTargetResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.BindPlacementTargetResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE BindPlacementTargetResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE BindPlacementTargetResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BindPlacementTargetResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL BindPlacementTargetResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL BindPlacementTargetResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BindPlacementTargetResponse.placement)
+  return _msg;
+}
+inline void BindPlacementTargetResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BindPlacementTargetResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
+// PlacementTargetIdentity
+
+// string ds_pod_name = 1 [json_name = "dsPodName"];
+inline void PlacementTargetIdentity::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PlacementTargetIdentity::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlacementTargetIdentity.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlacementTargetIdentity::set_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlacementTargetIdentity.ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::mutable_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlacementTargetIdentity.ds_pod_name)
+  return _s;
+}
+inline const ::std::string& PlacementTargetIdentity::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void PlacementTargetIdentity::_internal_set_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlacementTargetIdentity::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlacementTargetIdentity.ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlacementTargetIdentity::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlacementTargetIdentity.ds_pod_name)
+}
+
+// string ds_instance_uid = 2 [json_name = "dsInstanceUid"];
+inline void PlacementTargetIdentity::clear_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& PlacementTargetIdentity::ds_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlacementTargetIdentity.ds_instance_uid)
+  return _internal_ds_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlacementTargetIdentity::set_ds_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.ds_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlacementTargetIdentity.ds_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::mutable_ds_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_ds_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlacementTargetIdentity.ds_instance_uid)
+  return _s;
+}
+inline const ::std::string& PlacementTargetIdentity::_internal_ds_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_uid_.Get();
+}
+inline void PlacementTargetIdentity::_internal_set_ds_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::_internal_mutable_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlacementTargetIdentity::release_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlacementTargetIdentity.ds_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.ds_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlacementTargetIdentity::set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.ds_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_instance_uid_.IsDefault()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlacementTargetIdentity.ds_instance_uid)
+}
+
+// string hub_assignment_id = 3 [json_name = "hubAssignmentId"];
+inline void PlacementTargetIdentity::clear_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& PlacementTargetIdentity::hub_assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlacementTargetIdentity.hub_assignment_id)
+  return _internal_hub_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlacementTargetIdentity::set_hub_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.hub_assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlacementTargetIdentity.hub_assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::mutable_hub_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_hub_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlacementTargetIdentity.hub_assignment_id)
+  return _s;
+}
+inline const ::std::string& PlacementTargetIdentity::_internal_hub_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_assignment_id_.Get();
+}
+inline void PlacementTargetIdentity::_internal_set_hub_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::_internal_mutable_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlacementTargetIdentity::release_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlacementTargetIdentity.hub_assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.hub_assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlacementTargetIdentity::set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.hub_assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_assignment_id_.IsDefault()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlacementTargetIdentity.hub_assignment_id)
+}
+
+// uint32 ds_instance_epoch = 4 [json_name = "dsInstanceEpoch"];
+inline void PlacementTargetIdentity::clear_ds_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t PlacementTargetIdentity::ds_instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlacementTargetIdentity.ds_instance_epoch)
+  return _internal_ds_instance_epoch();
+}
+inline void PlacementTargetIdentity::set_ds_instance_epoch(::uint32_t value) {
+  _internal_set_ds_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlacementTargetIdentity.ds_instance_epoch)
+}
+inline ::uint32_t PlacementTargetIdentity::_internal_ds_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_epoch_;
+}
+inline void PlacementTargetIdentity::_internal_set_ds_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = value;
+}
+
+// string allocation_id = 5 [json_name = "allocationId"];
+inline void PlacementTargetIdentity::clear_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& PlacementTargetIdentity::allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlacementTargetIdentity.allocation_id)
+  return _internal_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlacementTargetIdentity::set_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlacementTargetIdentity.allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::mutable_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlacementTargetIdentity.allocation_id)
+  return _s;
+}
+inline const ::std::string& PlacementTargetIdentity::_internal_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocation_id_.Get();
+}
+inline void PlacementTargetIdentity::_internal_set_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::_internal_mutable_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlacementTargetIdentity::release_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlacementTargetIdentity.allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlacementTargetIdentity::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlacementTargetIdentity.allocation_id)
+}
+
+// string release_track = 6 [json_name = "releaseTrack"];
+inline void PlacementTargetIdentity::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& PlacementTargetIdentity::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlacementTargetIdentity.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlacementTargetIdentity::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlacementTargetIdentity.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlacementTargetIdentity.release_track)
+  return _s;
+}
+inline const ::std::string& PlacementTargetIdentity::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void PlacementTargetIdentity::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlacementTargetIdentity::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlacementTargetIdentity::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlacementTargetIdentity.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlacementTargetIdentity::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlacementTargetIdentity.release_track)
+}
+
+// -------------------------------------------------------------------
+
+// RetargetPlacementTargetRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void RetargetPlacementTargetRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t RetargetPlacementTargetRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.player_id)
+  return _internal_player_id();
+}
+inline void RetargetPlacementTargetRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.player_id)
+}
+inline ::uint64_t RetargetPlacementTargetRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void RetargetPlacementTargetRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 placement_version = 2 [json_name = "placementVersion"];
+inline void RetargetPlacementTargetRequest::clear_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t RetargetPlacementTargetRequest::placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.placement_version)
+  return _internal_placement_version();
+}
+inline void RetargetPlacementTargetRequest::set_placement_version(::uint64_t value) {
+  _internal_set_placement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.placement_version)
+}
+inline ::uint64_t RetargetPlacementTargetRequest::_internal_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.placement_version_;
+}
+inline void RetargetPlacementTargetRequest::_internal_set_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = value;
+}
+
+// string operation_id = 3 [json_name = "operationId"];
+inline void RetargetPlacementTargetRequest::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& RetargetPlacementTargetRequest::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RetargetPlacementTargetRequest::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetRequest.operation_id)
+  return _s;
+}
+inline const ::std::string& RetargetPlacementTargetRequest::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void RetargetPlacementTargetRequest::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetRequest.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RetargetPlacementTargetRequest::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.operation_id)
+}
+
+// .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+inline void RetargetPlacementTargetRequest::clear_target_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::pandora::locator::v1::PlacementRoute RetargetPlacementTargetRequest::target_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.target_route)
+  return _internal_target_route();
+}
+inline void RetargetPlacementTargetRequest::set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_target_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.target_route)
+}
+inline ::pandora::locator::v1::PlacementRoute RetargetPlacementTargetRequest::_internal_target_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.target_route_);
+}
+inline void RetargetPlacementTargetRequest::_internal_set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = value;
+}
+
+// uint64 target_match_id = 5 [json_name = "targetMatchId"];
+inline void RetargetPlacementTargetRequest::clear_target_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t RetargetPlacementTargetRequest::target_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.target_match_id)
+  return _internal_target_match_id();
+}
+inline void RetargetPlacementTargetRequest::set_target_match_id(::uint64_t value) {
+  _internal_set_target_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.target_match_id)
+}
+inline ::uint64_t RetargetPlacementTargetRequest::_internal_target_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_match_id_;
+}
+inline void RetargetPlacementTargetRequest::_internal_set_target_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = value;
+}
+
+// .pandora.locator.v1.PlacementTargetIdentity expected_target = 6 [json_name = "expectedTarget"];
+inline bool RetargetPlacementTargetRequest::has_expected_target() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.expected_target_ != nullptr);
+  return value;
+}
+inline void RetargetPlacementTargetRequest::clear_expected_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.expected_target_ != nullptr) _impl_.expected_target_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::pandora::locator::v1::PlacementTargetIdentity& RetargetPlacementTargetRequest::_internal_expected_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlacementTargetIdentity* p = _impl_.expected_target_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlacementTargetIdentity>(&::pandora::locator::v1::PlacementTargetIdentity_globals_);
+}
+inline const ::pandora::locator::v1::PlacementTargetIdentity& RetargetPlacementTargetRequest::expected_target() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.expected_target)
+  return _internal_expected_target();
+}
+inline void RetargetPlacementTargetRequest::unsafe_arena_set_allocated_expected_target(
+    ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.expected_target_);
+  }
+  _impl_.expected_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.expected_target)
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::release_expected_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::locator::v1::PlacementTargetIdentity* released = _impl_.expected_target_;
+  _impl_.expected_target_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::unsafe_arena_release_expected_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetRequest.expected_target)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::locator::v1::PlacementTargetIdentity* temp = _impl_.expected_target_;
+  _impl_.expected_target_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL RetargetPlacementTargetRequest::_internal_mutable_expected_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.expected_target_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlacementTargetIdentity>(GetArena());
+    _impl_.expected_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(p);
+  }
+  return _impl_.expected_target_;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL RetargetPlacementTargetRequest::mutable_expected_target()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::locator::v1::PlacementTargetIdentity* _msg = _internal_mutable_expected_target();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetRequest.expected_target)
+  return _msg;
+}
+inline void RetargetPlacementTargetRequest::set_allocated_expected_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.expected_target_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.expected_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.expected_target)
+}
+
+// uint64 replacement_version = 7 [json_name = "replacementVersion"];
+inline void RetargetPlacementTargetRequest::clear_replacement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replacement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t RetargetPlacementTargetRequest::replacement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_version)
+  return _internal_replacement_version();
+}
+inline void RetargetPlacementTargetRequest::set_replacement_version(::uint64_t value) {
+  _internal_set_replacement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_version)
+}
+inline ::uint64_t RetargetPlacementTargetRequest::_internal_replacement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replacement_version_;
+}
+inline void RetargetPlacementTargetRequest::_internal_set_replacement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replacement_version_ = value;
+}
+
+// string replacement_operation_id = 8 [json_name = "replacementOperationId"];
+inline void RetargetPlacementTargetRequest::clear_replacement_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replacement_operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& RetargetPlacementTargetRequest::replacement_operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_operation_id)
+  return _internal_replacement_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RetargetPlacementTargetRequest::set_replacement_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.replacement_operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::mutable_replacement_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_replacement_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_operation_id)
+  return _s;
+}
+inline const ::std::string& RetargetPlacementTargetRequest::_internal_replacement_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replacement_operation_id_.Get();
+}
+inline void RetargetPlacementTargetRequest::_internal_set_replacement_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replacement_operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::_internal_mutable_replacement_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.replacement_operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::release_replacement_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.replacement_operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.replacement_operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RetargetPlacementTargetRequest::set_allocated_replacement_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.replacement_operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.replacement_operation_id_.IsDefault()) {
+    _impl_.replacement_operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_operation_id)
+}
+
+// .pandora.locator.v1.PlacementTargetIdentity replacement_target = 9 [json_name = "replacementTarget"];
+inline bool RetargetPlacementTargetRequest::has_replacement_target() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.replacement_target_ != nullptr);
+  return value;
+}
+inline void RetargetPlacementTargetRequest::clear_replacement_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.replacement_target_ != nullptr) _impl_.replacement_target_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::pandora::locator::v1::PlacementTargetIdentity& RetargetPlacementTargetRequest::_internal_replacement_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlacementTargetIdentity* p = _impl_.replacement_target_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlacementTargetIdentity>(&::pandora::locator::v1::PlacementTargetIdentity_globals_);
+}
+inline const ::pandora::locator::v1::PlacementTargetIdentity& RetargetPlacementTargetRequest::replacement_target() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_target)
+  return _internal_replacement_target();
+}
+inline void RetargetPlacementTargetRequest::unsafe_arena_set_allocated_replacement_target(
+    ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.replacement_target_);
+  }
+  _impl_.replacement_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_target)
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::release_replacement_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::locator::v1::PlacementTargetIdentity* released = _impl_.replacement_target_;
+  _impl_.replacement_target_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::unsafe_arena_release_replacement_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_target)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::locator::v1::PlacementTargetIdentity* temp = _impl_.replacement_target_;
+  _impl_.replacement_target_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL RetargetPlacementTargetRequest::_internal_mutable_replacement_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.replacement_target_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlacementTargetIdentity>(GetArena());
+    _impl_.replacement_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(p);
+  }
+  return _impl_.replacement_target_;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL RetargetPlacementTargetRequest::mutable_replacement_target()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::pandora::locator::v1::PlacementTargetIdentity* _msg = _internal_mutable_replacement_target();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_target)
+  return _msg;
+}
+inline void RetargetPlacementTargetRequest::set_allocated_replacement_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.replacement_target_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.replacement_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.replacement_target)
+}
+
+// .pandora.locator.v1.PlacementProofType proof_type = 10 [json_name = "proofType"];
+inline void RetargetPlacementTargetRequest::clear_proof_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::pandora::locator::v1::PlacementProofType RetargetPlacementTargetRequest::proof_type() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.proof_type)
+  return _internal_proof_type();
+}
+inline void RetargetPlacementTargetRequest::set_proof_type(::pandora::locator::v1::PlacementProofType value) {
+  _internal_set_proof_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.proof_type)
+}
+inline ::pandora::locator::v1::PlacementProofType RetargetPlacementTargetRequest::_internal_proof_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementProofType>(_impl_.proof_type_);
+}
+inline void RetargetPlacementTargetRequest::_internal_set_proof_type(::pandora::locator::v1::PlacementProofType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = value;
+}
+
+// .pandora.locator.v1.PlacementTargetUnavailableReason reason = 11 [json_name = "reason"];
+inline void RetargetPlacementTargetRequest::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::pandora::locator::v1::PlacementTargetUnavailableReason RetargetPlacementTargetRequest::reason() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.reason)
+  return _internal_reason();
+}
+inline void RetargetPlacementTargetRequest::set_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value) {
+  _internal_set_reason(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.reason)
+}
+inline ::pandora::locator::v1::PlacementTargetUnavailableReason RetargetPlacementTargetRequest::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementTargetUnavailableReason>(_impl_.reason_);
+}
+inline void RetargetPlacementTargetRequest::_internal_set_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = value;
+}
+
+// string proof_id = 12 [json_name = "proofId"];
+inline void RetargetPlacementTargetRequest::clear_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& RetargetPlacementTargetRequest::proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.proof_id)
+  return _internal_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RetargetPlacementTargetRequest::set_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::mutable_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetRequest.proof_id)
+  return _s;
+}
+inline const ::std::string& RetargetPlacementTargetRequest::_internal_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_id_.Get();
+}
+inline void RetargetPlacementTargetRequest::_internal_set_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::_internal_mutable_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::release_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetRequest.proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RetargetPlacementTargetRequest::set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_id_.IsDefault()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.proof_id)
+}
+
+// string proof_signature = 13 [json_name = "proofSignature"];
+inline void RetargetPlacementTargetRequest::clear_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& RetargetPlacementTargetRequest::proof_signature() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.proof_signature)
+  return _internal_proof_signature();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RetargetPlacementTargetRequest::set_proof_signature(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.proof_signature_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.proof_signature)
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::mutable_proof_signature()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_proof_signature();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetRequest.proof_signature)
+  return _s;
+}
+inline const ::std::string& RetargetPlacementTargetRequest::_internal_proof_signature() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_signature_.Get();
+}
+inline void RetargetPlacementTargetRequest::_internal_set_proof_signature(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RetargetPlacementTargetRequest::_internal_mutable_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_signature_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RetargetPlacementTargetRequest::release_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetRequest.proof_signature)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.proof_signature_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RetargetPlacementTargetRequest::set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.proof_signature_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_signature_.IsDefault()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetRequest.proof_signature)
+}
+
+// int64 lease_deadline_ms = 14 [json_name = "leaseDeadlineMs"];
+inline void RetargetPlacementTargetRequest::clear_lease_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::int64_t RetargetPlacementTargetRequest::lease_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetRequest.lease_deadline_ms)
+  return _internal_lease_deadline_ms();
+}
+inline void RetargetPlacementTargetRequest::set_lease_deadline_ms(::int64_t value) {
+  _internal_set_lease_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetRequest.lease_deadline_ms)
+}
+inline ::int64_t RetargetPlacementTargetRequest::_internal_lease_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_deadline_ms_;
+}
+inline void RetargetPlacementTargetRequest::_internal_set_lease_deadline_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RetargetPlacementTargetResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void RetargetPlacementTargetResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode RetargetPlacementTargetResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetResponse.code)
+  return _internal_code();
+}
+inline void RetargetPlacementTargetResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.RetargetPlacementTargetResponse.code)
+}
+inline ::pandora::common::v1::ErrCode RetargetPlacementTargetResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void RetargetPlacementTargetResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+inline bool RetargetPlacementTargetResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void RetargetPlacementTargetResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& RetargetPlacementTargetResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& RetargetPlacementTargetResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.RetargetPlacementTargetResponse.placement)
+  return _internal_placement();
+}
+inline void RetargetPlacementTargetResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.RetargetPlacementTargetResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE RetargetPlacementTargetResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE RetargetPlacementTargetResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.RetargetPlacementTargetResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL RetargetPlacementTargetResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL RetargetPlacementTargetResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.RetargetPlacementTargetResponse.placement)
+  return _msg;
+}
+inline void RetargetPlacementTargetResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.RetargetPlacementTargetResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
+// CommitPlacementAdmissionRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void CommitPlacementAdmissionRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t CommitPlacementAdmissionRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.player_id)
+  return _internal_player_id();
+}
+inline void CommitPlacementAdmissionRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.player_id)
+}
+inline ::uint64_t CommitPlacementAdmissionRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 placement_version = 2 [json_name = "placementVersion"];
+inline void CommitPlacementAdmissionRequest::clear_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t CommitPlacementAdmissionRequest::placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.placement_version)
+  return _internal_placement_version();
+}
+inline void CommitPlacementAdmissionRequest::set_placement_version(::uint64_t value) {
+  _internal_set_placement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.placement_version)
+}
+inline ::uint64_t CommitPlacementAdmissionRequest::_internal_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.placement_version_;
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = value;
+}
+
+// string operation_id = 3 [json_name = "operationId"];
+inline void CommitPlacementAdmissionRequest::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.operation_id)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.operation_id)
+}
+
+// .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+inline void CommitPlacementAdmissionRequest::clear_target_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::pandora::locator::v1::PlacementRoute CommitPlacementAdmissionRequest::target_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.target_route)
+  return _internal_target_route();
+}
+inline void CommitPlacementAdmissionRequest::set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_target_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.target_route)
+}
+inline ::pandora::locator::v1::PlacementRoute CommitPlacementAdmissionRequest::_internal_target_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.target_route_);
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = value;
+}
+
+// string ds_pod_name = 5 [json_name = "dsPodName"];
+inline void CommitPlacementAdmissionRequest::clear_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_pod_name)
+  return _internal_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_pod_name)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_pod_name_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
+    _impl_.ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_pod_name)
+}
+
+// string ds_instance_uid = 6 [json_name = "dsInstanceUid"];
+inline void CommitPlacementAdmissionRequest::clear_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::ds_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_uid)
+  return _internal_ds_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_ds_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.ds_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_ds_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_ds_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_uid)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_ds_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_uid_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_ds_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ds_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.ds_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.ds_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_instance_uid_.IsDefault()) {
+    _impl_.ds_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_uid)
+}
+
+// string hub_assignment_id = 7 [json_name = "hubAssignmentId"];
+inline void CommitPlacementAdmissionRequest::clear_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::hub_assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.hub_assignment_id)
+  return _internal_hub_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_hub_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.hub_assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.hub_assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_hub_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_hub_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.hub_assignment_id)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_hub_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hub_assignment_id_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_hub_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hub_assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hub_assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.hub_assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.hub_assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.hub_assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hub_assignment_id_.IsDefault()) {
+    _impl_.hub_assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.hub_assignment_id)
+}
+
+// string admission_id = 8 [json_name = "admissionId"];
+inline void CommitPlacementAdmissionRequest::clear_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::admission_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.admission_id)
+  return _internal_admission_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_admission_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.admission_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.admission_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_admission_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_admission_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.admission_id)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_admission_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.admission_id_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_admission_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.admission_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_admission_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.admission_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.admission_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_admission_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.admission_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.admission_id_.IsDefault()) {
+    _impl_.admission_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.admission_id)
+}
+
+// uint64 target_match_id = 9 [json_name = "targetMatchId"];
+inline void CommitPlacementAdmissionRequest::clear_target_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t CommitPlacementAdmissionRequest::target_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.target_match_id)
+  return _internal_target_match_id();
+}
+inline void CommitPlacementAdmissionRequest::set_target_match_id(::uint64_t value) {
+  _internal_set_target_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.target_match_id)
+}
+inline ::uint64_t CommitPlacementAdmissionRequest::_internal_target_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_match_id_;
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_target_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = value;
+}
+
+// uint32 ds_instance_epoch = 10 [json_name = "dsInstanceEpoch"];
+inline void CommitPlacementAdmissionRequest::clear_ds_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t CommitPlacementAdmissionRequest::ds_instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_epoch)
+  return _internal_ds_instance_epoch();
+}
+inline void CommitPlacementAdmissionRequest::set_ds_instance_epoch(::uint32_t value) {
+  _internal_set_ds_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.ds_instance_epoch)
+}
+inline ::uint32_t CommitPlacementAdmissionRequest::_internal_ds_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ds_instance_epoch_;
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_ds_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ds_instance_epoch_ = value;
+}
+
+// string allocation_id = 11 [json_name = "allocationId"];
+inline void CommitPlacementAdmissionRequest::clear_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.allocation_id)
+  return _internal_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.allocation_id)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocation_id_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
+    _impl_.allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.allocation_id)
+}
+
+// string release_track = 12 [json_name = "releaseTrack"];
+inline void CommitPlacementAdmissionRequest::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionRequest.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CommitPlacementAdmissionRequest::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionRequest.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionRequest.release_track)
+  return _s;
+}
+inline const ::std::string& CommitPlacementAdmissionRequest::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void CommitPlacementAdmissionRequest::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CommitPlacementAdmissionRequest::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CommitPlacementAdmissionRequest::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionRequest.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CommitPlacementAdmissionRequest::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionRequest.release_track)
+}
+
+// -------------------------------------------------------------------
+
+// CommitPlacementAdmissionResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void CommitPlacementAdmissionResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode CommitPlacementAdmissionResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionResponse.code)
+  return _internal_code();
+}
+inline void CommitPlacementAdmissionResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionResponse.code)
+}
+inline ::pandora::common::v1::ErrCode CommitPlacementAdmissionResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void CommitPlacementAdmissionResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// bool committed = 2 [json_name = "committed"];
+inline void CommitPlacementAdmissionResponse::clear_committed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.committed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool CommitPlacementAdmissionResponse::committed() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionResponse.committed)
+  return _internal_committed();
+}
+inline void CommitPlacementAdmissionResponse::set_committed(bool value) {
+  _internal_set_committed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.CommitPlacementAdmissionResponse.committed)
+}
+inline bool CommitPlacementAdmissionResponse::_internal_committed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.committed_;
+}
+inline void CommitPlacementAdmissionResponse::_internal_set_committed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.committed_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 3 [json_name = "placement"];
+inline bool CommitPlacementAdmissionResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void CommitPlacementAdmissionResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& CommitPlacementAdmissionResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& CommitPlacementAdmissionResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.CommitPlacementAdmissionResponse.placement)
+  return _internal_placement();
+}
+inline void CommitPlacementAdmissionResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.CommitPlacementAdmissionResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE CommitPlacementAdmissionResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE CommitPlacementAdmissionResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.CommitPlacementAdmissionResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL CommitPlacementAdmissionResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL CommitPlacementAdmissionResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.CommitPlacementAdmissionResponse.placement)
+  return _msg;
+}
+inline void CommitPlacementAdmissionResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.CommitPlacementAdmissionResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
+// BootstrapPlacementRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void BootstrapPlacementRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t BootstrapPlacementRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementRequest.player_id)
+  return _internal_player_id();
+}
+inline void BootstrapPlacementRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BootstrapPlacementRequest.player_id)
+}
+inline ::uint64_t BootstrapPlacementRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BootstrapPlacementRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string operation_id = 2 [json_name = "operationId"];
+inline void BootstrapPlacementRequest::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BootstrapPlacementRequest::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementRequest.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BootstrapPlacementRequest::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BootstrapPlacementRequest.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BootstrapPlacementRequest::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BootstrapPlacementRequest.operation_id)
+  return _s;
+}
+inline const ::std::string& BootstrapPlacementRequest::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void BootstrapPlacementRequest::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BootstrapPlacementRequest::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BootstrapPlacementRequest::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BootstrapPlacementRequest.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BootstrapPlacementRequest::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BootstrapPlacementRequest.operation_id)
+}
+
+// string proof_id = 3 [json_name = "proofId"];
+inline void BootstrapPlacementRequest::clear_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BootstrapPlacementRequest::proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementRequest.proof_id)
+  return _internal_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BootstrapPlacementRequest::set_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BootstrapPlacementRequest.proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL BootstrapPlacementRequest::mutable_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BootstrapPlacementRequest.proof_id)
+  return _s;
+}
+inline const ::std::string& BootstrapPlacementRequest::_internal_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_id_.Get();
+}
+inline void BootstrapPlacementRequest::_internal_set_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BootstrapPlacementRequest::_internal_mutable_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BootstrapPlacementRequest::release_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BootstrapPlacementRequest.proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BootstrapPlacementRequest::set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_id_.IsDefault()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BootstrapPlacementRequest.proof_id)
+}
+
+// string proof_signature = 4 [json_name = "proofSignature"];
+inline void BootstrapPlacementRequest::clear_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& BootstrapPlacementRequest::proof_signature() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementRequest.proof_signature)
+  return _internal_proof_signature();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BootstrapPlacementRequest::set_proof_signature(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.proof_signature_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BootstrapPlacementRequest.proof_signature)
+}
+inline ::std::string* PROTOBUF_NONNULL BootstrapPlacementRequest::mutable_proof_signature()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_proof_signature();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BootstrapPlacementRequest.proof_signature)
+  return _s;
+}
+inline const ::std::string& BootstrapPlacementRequest::_internal_proof_signature() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_signature_.Get();
+}
+inline void BootstrapPlacementRequest::_internal_set_proof_signature(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BootstrapPlacementRequest::_internal_mutable_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_signature_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BootstrapPlacementRequest::release_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BootstrapPlacementRequest.proof_signature)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.proof_signature_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BootstrapPlacementRequest::set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.proof_signature_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_signature_.IsDefault()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BootstrapPlacementRequest.proof_signature)
+}
+
+// int64 lease_deadline_ms = 5 [json_name = "leaseDeadlineMs"];
+inline void BootstrapPlacementRequest::clear_lease_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::int64_t BootstrapPlacementRequest::lease_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementRequest.lease_deadline_ms)
+  return _internal_lease_deadline_ms();
+}
+inline void BootstrapPlacementRequest::set_lease_deadline_ms(::int64_t value) {
+  _internal_set_lease_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BootstrapPlacementRequest.lease_deadline_ms)
+}
+inline ::int64_t BootstrapPlacementRequest::_internal_lease_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_deadline_ms_;
+}
+inline void BootstrapPlacementRequest::_internal_set_lease_deadline_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_deadline_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BootstrapPlacementResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void BootstrapPlacementResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode BootstrapPlacementResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementResponse.code)
+  return _internal_code();
+}
+inline void BootstrapPlacementResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.BootstrapPlacementResponse.code)
+}
+inline ::pandora::common::v1::ErrCode BootstrapPlacementResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void BootstrapPlacementResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 2 [json_name = "placement"];
+inline bool BootstrapPlacementResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void BootstrapPlacementResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& BootstrapPlacementResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& BootstrapPlacementResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.BootstrapPlacementResponse.placement)
+  return _internal_placement();
+}
+inline void BootstrapPlacementResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.BootstrapPlacementResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE BootstrapPlacementResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE BootstrapPlacementResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.BootstrapPlacementResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL BootstrapPlacementResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL BootstrapPlacementResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.BootstrapPlacementResponse.placement)
+  return _msg;
+}
+inline void BootstrapPlacementResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.BootstrapPlacementResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
 // SubscribePresenceRequest
 
 // uint64 subscriber_id = 1 [json_name = "subscriberId"];
@@ -5817,6 +14616,30 @@ struct is_proto_enum<::pandora::locator::v1::LocationState> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::LocationState>() {
   return ::pandora::locator::v1::LocationState_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::locator::v1::PlacementRoute> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::PlacementRoute>() {
+  return ::pandora::locator::v1::PlacementRoute_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::locator::v1::PlacementTransitionState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::PlacementTransitionState>() {
+  return ::pandora::locator::v1::PlacementTransitionState_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::locator::v1::PlacementProofType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::PlacementProofType>() {
+  return ::pandora::locator::v1::PlacementProofType_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::locator::v1::PlacementTargetUnavailableReason> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::PlacementTargetUnavailableReason>() {
+  return ::pandora::locator::v1::PlacementTargetUnavailableReason_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::locator::v1::PresenceStatus> : std::true_type {};

@@ -49,6 +49,33 @@ type AssignmentInstanceIdentity struct {
 	WriterEpoch   uint32
 }
 
+// ReleaseAssignmentSeatResult distinguishes an idempotent replay from an
+// identity conflict. A bool cannot safely drive a durable cleanup worker:
+// false previously meant both “already absent” and “a different owner exists”.
+type ReleaseAssignmentSeatResult struct {
+	Released      bool
+	AlreadyAbsent bool
+	Conflict      bool
+	// DepartureRequired means the exact identity is a live connected owner.
+	// Capacity-ledger cleanup is not physical eviction proof and must not delete
+	// it; the source DS must kick the matching connection and ACK Departure (or
+	// its GameServer UID must be authoritatively torn down).
+	DepartureRequired bool
+}
+
+// AssignmentSeatSnapshot is the read-only physical-owner view used by the
+// durable cleanup coordinator. Exactly one of the four state booleans is true.
+// Admission identity is populated only for Connected.
+type AssignmentSeatSnapshot struct {
+	Reserved               bool
+	Connected              bool
+	AlreadyAbsent          bool
+	Conflict               bool
+	ReservationExpiresAtMs int64
+	AdmissionID            string
+	AdmissionSeq           uint64
+}
+
 // ReservationIdentity 是逐 assignment 容量 lease 的稳定身份。凭据 gen/jti 会平滑轮换，
 // reservation/session 只绑定不会在同一 GameServer 生命周期内变化的 UID/epoch/writer。
 type ReservationIdentity struct {
@@ -138,10 +165,18 @@ type HubAuthRepo interface {
 	// identity 对应的 connected ownership。同 assignment 新 admission 已接管时返回 Conflict 且零副作用。
 	AcknowledgeDeparture(ctx context.Context, pod string, credential CredentialIdentity, reservation ReservationIdentity,
 		admissionID string, admissionSeq uint64, nowMs int64, shardTTL time.Duration) (DepartureResult, error)
-	// ReleaseAssignmentSeat 在同一 auth+shard 事务里用稳定 UID/epoch/writer 对齐当前
-	// active+last_verified 后退座；供已经赢得跨 slot assignment CAS 的调用者使用，
-	// 封住 CAS 前后普通 token 轮换导致“归属已删但旧 tuple 退座失败”的容量泄漏。
+	// ReleaseAssignmentSeat 只回收尚未 Admission 的 reservation。live connected owner
+	// 返回 false，必须等 source DS exact Departure/UID teardown；Redis 退座不等于物理退出。
 	ReleaseAssignmentSeat(ctx context.Context, pod string, expected AssignmentInstanceIdentity, shardTTL time.Duration) (bool, error)
+	// ReleaseAssignmentSeatExact 是 durable cleanup/outbox 使用的状态版本。只有 Released 或
+	// AlreadyAbsent 可推进；Conflict fail-closed，DepartureRequired 必须下发 eviction 并等待物理 proof。
+	ReleaseAssignmentSeatExact(ctx context.Context, pod string, expected AssignmentInstanceIdentity,
+		shardTTL time.Duration) (ReleaseAssignmentSeatResult, error)
+	// InspectAssignmentSeat never mutates the ledger. A connected result is the
+	// exact source-DS eviction order; its absence must be proven later by
+	// AcknowledgeDeparture or confirmed UID teardown, never by this reader.
+	InspectAssignmentSeat(ctx context.Context, pod string,
+		expected AssignmentInstanceIdentity) (AssignmentSeatSnapshot, error)
 	// RemoveCapacityLedger 删除已确认回收分片的 reservation/session 派生键；只由 RemoveShard 后调用。
 	RemoveCapacityLedger(ctx context.Context, pod string) error
 	// CheckRoutable 是 ReserveRoutableSeat 的只读版本(不 seat++):幂等重签 / 复用已有归属时校验目标

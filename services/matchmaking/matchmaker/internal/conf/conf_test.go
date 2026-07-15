@@ -35,6 +35,9 @@ func loadConfig(t *testing.T, rel string) conf.Config {
 // PVP 撮合实例:默认部署,走排队撮合(非 solo)。
 func TestConfig_DevPVP(t *testing.T) {
 	cfg := loadConfig(t, "etc/matchmaker-dev.yaml")
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
 	if cfg.Match.EnableSoloMatch {
 		t.Fatalf("PVP 实例必须走撮合(enable_solo_match=false),否则每张票都单独开局")
 	}
@@ -48,12 +51,18 @@ func TestConfig_DevPVP(t *testing.T) {
 func TestConfig_PVE(t *testing.T) {
 	pve := loadConfig(t, "etc/matchmaker-pve.yaml")
 	pvp := loadConfig(t, "etc/matchmaker-dev.yaml")
+	if err := pve.Validate(); err != nil {
+		t.Fatalf("PVE Validate: %v", err)
+	}
 
 	if !pve.Match.EnableSoloMatch {
 		t.Fatalf("PVE 实例必须 enable_solo_match=true(组好队/单人直进副本)")
 	}
 	if pve.Match.GameMode == pvp.Match.GameMode {
 		t.Fatalf("PVE 与 PVP game_mode 相同(%q),撮合池会串", pve.Match.GameMode)
+	}
+	if pve.Match.MatchResumeAuthAudience == pvp.Match.MatchResumeAuthAudience {
+		t.Fatal("PVE 与 PVP Match resume audience 必须隔离，防签名跨部署重放")
 	}
 	if pve.Server.Grpc.Addr == pvp.Server.Grpc.Addr {
 		t.Fatalf("PVE 与 PVP gRPC 端口相同(%q),同机部署会撞端口", pve.Server.Grpc.Addr)
@@ -63,5 +72,18 @@ func TestConfig_PVE(t *testing.T) {
 	}
 	if pve.Match.TeamSize <= 0 {
 		t.Fatalf("team_size 必须 > 0")
+	}
+}
+
+func TestMatchResumeAuthSecretMustBeIndependent(t *testing.T) {
+	cfg := loadConfig(t, "etc/matchmaker-dev.yaml")
+	cfg.Match.MatchResumeAuthSecret = cfg.JWT.Secret
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("player JWT and match resume service identity must not share a key")
+	}
+	cfg = loadConfig(t, "etc/matchmaker-dev.yaml")
+	cfg.Match.MatchResumeAuthSecret = cfg.Match.PlacementMatchStartProofSecret
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("placement writer and match resume service identity must not share a key")
 	}
 }

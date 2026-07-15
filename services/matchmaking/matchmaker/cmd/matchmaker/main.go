@@ -28,12 +28,14 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/leader/etcdleader"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
+	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/biz"
@@ -79,6 +81,10 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if err := cfg.Validate(); err != nil {
+		helper.Errorw("msg", "config_validation_failed", "err", err)
+		os.Exit(1)
+	}
 
 	// 3. Redis(强依赖)
 	// 单实例填 host,Redis Cluster / Sentinel 只填 addrs,两者皆空才算未配置。
@@ -171,7 +177,11 @@ func main() {
 		locator = ln
 		helper.Infow("msg", "locator_notifier_ready", "locator_addr", cfg.Match.LocatorAddr)
 		if cfg.Match.DSAllocatorAddr != "" {
-			proofSigner, perr := placement.NewProofSigner(os.Getenv("PANDORA_PLACEMENT_MATCH_START_SECRET"))
+			proofSecret := os.Getenv("PANDORA_PLACEMENT_MATCH_START_SECRET")
+			if proofSecret == "" {
+				proofSecret = cfg.Match.PlacementMatchStartProofSecret
+			}
+			proofSigner, perr := placement.NewProofSigner(proofSecret)
 			if perr != nil {
 				helper.Errorw("msg", "placement_match_start_signer_invalid", "err", perr,
 					"hint", "set PANDORA_PLACEMENT_MATCH_START_SECRET (>=32 bytes) from secret manager")
@@ -196,6 +206,19 @@ func main() {
 		uc.SetPlacementCoordinator(biz.StubPlacementCoordinator{})
 		helper.Warnw("msg", "battle_placement_stub_enabled", "hint", "local stub allocator only; production is fail-closed")
 	}
+	if cfg.Match.DSAllocatorAddr != "" {
+		if cfg.Match.HubAllocatorAddr == "" {
+			helper.Errorw("msg", "hub_allocator_addr_required_for_physical_departure",
+				"hint", "real Battle READY requires exact ReleaseHub/Departure for every player")
+			os.Exit(1)
+		}
+		hubConn := grpcclient.MustDialInsecure(cfg.Match.HubAllocatorAddr)
+		defer func() { _ = hubConn.Close() }()
+		uc.SetHubDepartureCoordinator(data.NewGrpcHubDepartureCoordinator(
+			hubv1.NewHubAllocatorServiceClient(hubConn)))
+		helper.Infow("msg", "hub_departure_fence_ready",
+			"hub_allocator_addr", cfg.Match.HubAllocatorAddr)
+	}
 
 	// 蜂窝扩容:按 cfg.CellRoute 装配确定性 region/cell 路由(off/static/etcd 统一口）。
 	// 单 Cell(mode 空）→ router=nil,行为不变;多 Cell → 两级撮合 + battle 放置感知 region。
@@ -211,7 +234,19 @@ func main() {
 		helper.Infow("msg", "cellroute_enabled", "mode", cfg.CellRoute.Mode,
 			"self_region", cfg.CellRoute.SelfRegion, "self_cell", cfg.CellRoute.SelfCell)
 	}
-	svc := service.NewMatchService(uc, sf)
+	resumeReplayStore, replayErr := internalrpcauth.NewRedisReplayStore(rdb,
+		"pandora:matchmaker:resolve-context:nonce:")
+	if replayErr != nil {
+		helper.Errorw("msg", "match_resume_replay_store_init_failed", "err", replayErr)
+		os.Exit(1)
+	}
+	resumeAuth, authErr := internalrpcauth.NewVerifier(cfg.Match.MatchResumeAuthSecret,
+		"login", cfg.Match.MatchResumeAuthAudience, 30*time.Second, resumeReplayStore)
+	if authErr != nil {
+		helper.Errorw("msg", "match_resume_service_auth_init_failed", "err", authErr)
+		os.Exit(1)
+	}
+	svc := service.NewMatchService(uc, sf, resumeAuth)
 
 	// 8. gRPC + HTTP
 	grpcSrv := server.NewGRPCServer(&cfg, svc)

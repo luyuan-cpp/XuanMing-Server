@@ -19,6 +19,7 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationLoginServiceGetResumeContext = "/pandora.login.v1.LoginService/GetResumeContext"
 const OperationLoginServiceIssueDSTicket = "/pandora.login.v1.LoginService/IssueDSTicket"
 const OperationLoginServiceLogin = "/pandora.login.v1.LoginService/Login"
 const OperationLoginServiceLogout = "/pandora.login.v1.LoginService/Logout"
@@ -26,6 +27,9 @@ const OperationLoginServiceSelectRole = "/pandora.login.v1.LoginService/SelectRo
 const OperationLoginServiceVerifyDSTicket = "/pandora.login.v1.LoginService/VerifyDSTicket"
 
 type LoginServiceHTTPServer interface {
+	// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
+	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
+	GetResumeContext(context.Context, *GetResumeContextRequest) (*GetResumeContextResponse, error)
 	// IssueDSTicket IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(context.Context, *IssueDSTicketRequest) (*IssueDSTicketResponse, error)
 	// Login Login 立即完成型(synchronous),response 含完整 session_token + hub 地址
@@ -53,6 +57,7 @@ func RegisterLoginServiceHTTPServer(s *http.Server, srv LoginServiceHTTPServer) 
 	r.POST("/v1/ds/ticket/issue", _LoginService_IssueDSTicket0_HTTP_Handler(srv))
 	r.POST("/v1/role/select", _LoginService_SelectRole0_HTTP_Handler(srv))
 	r.POST("/v1/ds/ticket/verify", _LoginService_VerifyDSTicket0_HTTP_Handler(srv))
+	r.POST("/v1/resume/context", _LoginService_GetResumeContext0_HTTP_Handler(srv))
 }
 
 func _LoginService_Login0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
@@ -165,7 +170,32 @@ func _LoginService_VerifyDSTicket0_HTTP_Handler(srv LoginServiceHTTPServer) func
 	}
 }
 
+func _LoginService_GetResumeContext0_HTTP_Handler(srv LoginServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetResumeContextRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationLoginServiceGetResumeContext)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetResumeContext(ctx, req.(*GetResumeContextRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetResumeContextResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type LoginServiceHTTPClient interface {
+	// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
+	// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
+	GetResumeContext(ctx context.Context, req *GetResumeContextRequest, opts ...http.CallOption) (rsp *GetResumeContextResponse, err error)
 	// IssueDSTicket IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据
 	IssueDSTicket(ctx context.Context, req *IssueDSTicketRequest, opts ...http.CallOption) (rsp *IssueDSTicketResponse, err error)
 	// Login Login 立即完成型(synchronous),response 含完整 session_token + hub 地址
@@ -192,6 +222,21 @@ type LoginServiceHTTPClientImpl struct {
 
 func NewLoginServiceHTTPClient(client *http.Client) LoginServiceHTTPClient {
 	return &LoginServiceHTTPClientImpl{client}
+}
+
+// GetResumeContext GetResumeContext 让冷启动/前台恢复重新读取服务端权威路由；客户端不得继续相信
+// 旧地址、旧票据或本地超时推导。match_stage 可由 matchmaker durable saga 后续补齐。
+func (c *LoginServiceHTTPClientImpl) GetResumeContext(ctx context.Context, in *GetResumeContextRequest, opts ...http.CallOption) (*GetResumeContextResponse, error) {
+	var out GetResumeContextResponse
+	pattern := "/v1/resume/context"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationLoginServiceGetResumeContext))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // IssueDSTicket IssueDSTicket 立即完成型,DS 进入前 client 调拿短期票据

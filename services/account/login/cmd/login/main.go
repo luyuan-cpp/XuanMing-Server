@@ -34,10 +34,11 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
@@ -433,9 +434,15 @@ func mustBuildMatchResumeReader(cfg *conf.Config, h kratosHelper) (data.MatchRes
 			"hint", "placement enforce requires login.matchmaker.addr")
 		return nil, nil, "disabled"
 	}
+	signer, err := internalrpcauth.NewSigner(cfg.Login.MatchResumeAuthSecret, "login",
+		cfg.Login.MatchResumeAuthAudience)
+	if err != nil {
+		h.Errorw("msg", "match_resume_service_auth_init_failed", "err", err)
+		os.Exit(1)
+	}
 	conn := grpcclient.MustDialInsecure(addr)
 	h.Infow("msg", "match_resume_reader_dial_ok", "addr", addr)
-	return data.NewGrpcMatchResumeReader(conn), conn, "grpc"
+	return data.NewGrpcMatchResumeReader(conn, signer), conn, "grpc"
 }
 
 // kratosHelper 是 *klog.Helper 的简化接口,避免 main.go 导出泛型。

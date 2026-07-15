@@ -13,8 +13,8 @@ import (
 
 type HubPlacementAdmission struct {
 	PlayerID uint64
-	Binding placement.Binding
-	Target placement.Target
+	Binding  placement.Binding
+	Target   placement.Target
 }
 
 // BattlePlacementAdmission is the exact identity that the Battle DS must
@@ -22,28 +22,31 @@ type HubPlacementAdmission struct {
 // client-supplied routing data: every field comes from the verified ticket
 // and the independently verified active DS credential/roster projection.
 type BattlePlacementAdmission struct {
-	PlayerID   uint64
-	MatchID    uint64
+	PlayerID    uint64
+	MatchID     uint64
 	AdmissionID string
-	Binding    placement.Binding
-	Target     placement.Target
+	Binding     placement.Binding
+	Target      placement.Target
 }
 
 type PlacementSnapshot struct {
-	Found bool
-	CurrentRoute locatorv1.PlacementRoute
-	TargetRoute locatorv1.PlacementRoute
+	Found           bool
+	CurrentRoute    locatorv1.PlacementRoute
+	TargetRoute     locatorv1.PlacementRoute
 	TransitionState locatorv1.PlacementTransitionState
-	Version uint64
-	OperationID string
-	MatchID uint64
-	TargetMatchID uint64
-	SourceMatchID uint64
-	TargetBound bool
+	Version         uint64
+	OperationID     string
+	MatchID         uint64
+	TargetMatchID   uint64
+	SourceMatchID   uint64
+	TargetBound     bool
 	LeaseDeadlineMs int64
-	ProofType locatorv1.PlacementProofType
-	ProofID string
-	Target placement.Target
+	ProofType       locatorv1.PlacementProofType
+	ProofID         string
+	Target          placement.Target
+	RetargetCount   uint32
+	LastRetargetProofID string
+	LastRetargetReason locatorv1.PlacementTargetUnavailableReason
 }
 
 func (s PlacementSnapshot) HubBinding() (placement.Binding, bool) {
@@ -112,7 +115,7 @@ func (g *GrpcPlacementChecker) CommitBattleAdmission(ctx context.Context, in Bat
 		PlayerId: in.PlayerID, PlacementVersion: in.Binding.Version,
 		OperationId: in.Binding.OperationID,
 		TargetRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
-		DsPodName: in.Target.PodName, DsInstanceUid: in.Target.InstanceUID,
+		DsPodName:   in.Target.PodName, DsInstanceUid: in.Target.InstanceUID,
 		AdmissionId: in.AdmissionID, TargetMatchId: in.MatchID,
 		DsInstanceEpoch: in.Target.InstanceEpoch, AllocationId: in.Target.AllocationID,
 		ReleaseTrack: in.Target.ReleaseTrack,
@@ -187,8 +190,10 @@ func (g *GrpcPlacementChecker) GetPlacement(ctx context.Context, playerID uint64
 	return PlacementSnapshot{Found: true, CurrentRoute: rec.GetCurrentRoute(), TargetRoute: rec.GetTargetRoute(),
 		TransitionState: rec.GetTransitionState(), Version: rec.GetVersion(), OperationID: rec.GetOperationId(),
 		MatchID: rec.GetMatchId(), TargetMatchID: rec.GetTargetMatchId(), SourceMatchID: rec.GetSourceMatchId(),
-		TargetBound: rec.GetDsPodName() != "" && rec.GetDsInstanceUid() != "",
+		TargetBound:     rec.GetDsPodName() != "" && rec.GetDsInstanceUid() != "",
 		LeaseDeadlineMs: rec.GetLeaseDeadlineMs(), ProofType: rec.GetProofType(), ProofID: rec.GetProofId(),
+		RetargetCount: rec.GetRetargetCount(), LastRetargetProofID: rec.GetLastRetargetProofId(),
+		LastRetargetReason: rec.GetLastRetargetReason(),
 		Target: placement.Target{PodName: rec.GetDsPodName(), InstanceUID: rec.GetDsInstanceUid(),
 			InstanceEpoch: rec.GetDsInstanceEpoch(), AssignmentID: rec.GetHubAssignmentId(),
 			AllocationID: rec.GetAllocationId(), ReleaseTrack: rec.GetReleaseTrack()}}, nil

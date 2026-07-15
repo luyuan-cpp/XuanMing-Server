@@ -188,6 +188,28 @@ message HeartbeatResponse {
   string accepted_instance_uid = 12;
   uint32 accepted_protocol_epoch = 13;
   uint32 accepted_writer_epoch = 14;
+  // Durable owner cleanup never treats deleting a Redis capacity record as
+  // proof that the old PlayerController/Pawn is gone.  The authoritative
+  // source Hub receives these exact orders on its credential-bound heartbeat,
+  // kicks only the matching local admission, then its normal Logout path sends
+  // AcknowledgeDeparture.  Until that exact ACK (or confirmed GameServer UID
+  // teardown) removes the connected ownership, target tickets/Admission stay
+  // closed.
+  repeated HubEvictionOrder eviction_orders = 15;
+}
+
+message HubEvictionOrder {
+  uint64 player_id = 1;
+  string assignment_id = 2;
+  string admission_id = 3;
+  uint64 admission_seq = 4;
+  string source_instance_uid = 5;
+  uint32 source_protocol_epoch = 6;
+  uint32 source_writer_epoch = 7;
+  // The durable target/tombstone assignment which requested this eviction.
+  // It is diagnostic/fencing context only; the source DS must identify the
+  // physical connection exclusively by fields 1-7.
+  string cleanup_assignment_id = 8;
 }
 
 // ===== 服务端存储快照(CLAUDE.md §5.8)=====
@@ -349,6 +371,22 @@ message HubAssignmentStorageRecord {
   string placement_operation_id = 17;
   uint64 source_match_id = 18;
   uint32 placement_proof_type = 19;
+  // HUB->HUB assignment CAS 同时持久化的旧 owner 清理 saga。旧 connected ownership
+  // 不按 TTL 过期；缺少这些 exact 字段时，进程若在 CAS 后崩溃将永远无法安全退旧 seat。
+  // cleanup_pending=true 时所有 writer 必须先恢复 Bind phase + exact cleanup，禁止覆盖。
+  bool transfer_cleanup_pending = 20;
+  // 仅在同 version/op/target 的 BindPlacementTarget 已确认后置 true。reconciler 在此之前
+  // 绝不能释放 source owner；Bind 回包丢失时重放同 operation 后再推进本字段。
+  bool transfer_target_bound = 21;
+  string transfer_source_hub_pod_name = 22;
+  string transfer_source_assignment_id = 23;
+  string transfer_source_instance_uid = 24;
+  uint32 transfer_source_auth_epoch = 25;
+  uint32 transfer_source_auth_writer_epoch = 26;
+  // ReleaseHub 的 durable tombstone phase。true 时 assignment 仍保留当前 exact owner，
+  // reconciler 必须先 compare-release seat/session，确认 Released/AlreadyAbsent 后才可 CAS DEL。
+  // 任何 Assign/Transfer/Admission 在此期间都只能恢复 cleanup，不能覆盖或重新 Admission。
+  bool release_cleanup_pending = 27;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====
@@ -443,7 +481,8 @@ message HubReservationStorageRecord {
 // HubConnectedOwnershipStorageRecord 是已由 Hub DS 真接纳 ACK 证明的连接所有权。
 // value 存于 `pandora:hub:sessions:{pod}` HASH(field=assignment_id)。Heartbeat 只有 player_id、
 // 没有 assignment/admission identity，因此只能审计，不能因某次/多次漏报删除 ownership；
-// session 只由 exact AcknowledgeDeparture、Release/Transfer 或 UID teardown 删除。
+// live session 只由 exact AcknowledgeDeparture 或已确认的 UID teardown 删除。
+// Release/Transfer 只能要求 source DS 物理踢出并等待 Departure proof，不能直接删本记录。
 message HubConnectedOwnershipStorageRecord {
   uint64 player_id = 1;
   string assignment_id = 2;

@@ -119,6 +119,33 @@ func (s *AllocatorService) ReleaseBattle(ctx context.Context, req *dsv1.ReleaseB
 	return &dsv1.ReleaseBattleResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+// EnsurePlayerDeparture 为 Battle→Hub 签票/准入提供 exact 物理离场证明。
+// departed=false 是必须稍后重试的正常 pending，调用方绝不得继续 Hub 流程。
+func (s *AllocatorService) EnsurePlayerDeparture(
+	ctx context.Context,
+	req *dsv1.EnsurePlayerDepartureRequest,
+) (*dsv1.EnsurePlayerDepartureResponse, error) {
+	if req.GetMatchId() == 0 || req.GetPlayerId() == 0 || req.GetPlacementVersion() == 0 || req.GetOperationId() == "" ||
+		req.GetDsPodName() == "" || req.GetGameserverUid() == "" ||
+		req.GetInstanceEpoch() == 0 || req.GetAllocationId() == "" {
+		return &dsv1.EnsurePlayerDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	res, err := s.uc.EnsurePlayerDeparture(ctx, data.BattlePlayerDepartureExpected{
+		MatchID: req.GetMatchId(), PlayerID: req.GetPlayerId(), PlacementVersion: req.GetPlacementVersion(),
+		OperationID: req.GetOperationId(),
+		Source: data.BattleDepartureSource{
+			DSPodName: req.GetDsPodName(), GameServerUID: req.GetGameserverUid(),
+			InstanceEpoch: req.GetInstanceEpoch(), AllocationID: req.GetAllocationId(),
+		},
+	})
+	if err != nil {
+		return &dsv1.EnsurePlayerDepartureResponse{Code: toProtoCode(err)}, nil
+	}
+	return &dsv1.EnsurePlayerDepartureResponse{
+		Code: commonv1.ErrCode_OK, Departed: res.Departed, Status: res.Status,
+	}, nil
+}
+
 // Heartbeat 处理战斗 DS 心跳上报(DS 每 5s 调)。
 func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatRequest) (*dsv1.HeartbeatResponse, error) {
 	if req.GetMatchId() == 0 {
@@ -138,7 +165,7 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 		if verified == nil || verified.ExpMs <= 0 {
 			return &dsv1.HeartbeatResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 		}
-		res, err = s.uc.HeartbeatAuthorized(ctx, req.GetMatchId(), data.BattleCredentialIdentity{
+		res, err = s.uc.HeartbeatAuthorizedWithPlayers(ctx, req.GetMatchId(), data.BattleCredentialIdentity{
 			PodName:       verified.Pod,
 			InstanceUID:   verified.InstanceUID,
 			InstanceEpoch: verified.ProtocolEpoch,
@@ -148,7 +175,8 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 			Kid:           verified.Kid,
 			TokenSHA256:   verified.TokenSHA256,
 			WriterEpoch:   verified.WriterEpoch,
-		}, req.GetPlayerCount(), req.GetState(), req.GetTsMs())
+		}, req.GetPlayerCount(), req.GetState(), req.GetTsMs(),
+			req.GetActivePlayerSnapshotPresent(), req.GetActivePlayerIds(), req.GetAcknowledgedDepartureIds())
 	} else {
 		// Legacy/off 灰度路径保持既有范围语义；Model B 开启后不会落到这里。
 		if checkErr := s.dsGuard.Check(ctx, middleware.DSScope{
@@ -169,6 +197,7 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 		AcceptedInstanceUid:   res.AcceptedInstanceUID,
 		AcceptedInstanceEpoch: res.AcceptedInstanceEpoch,
 		AcceptedWriterEpoch:   res.AcceptedWriterEpoch,
+		EvictionOrders:        res.EvictionOrders,
 	}, nil
 }
 

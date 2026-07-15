@@ -18,6 +18,13 @@
 | `gen_cluster_config.ps1` | 生成集群版配置(容器地址 / allocator 模式；auction 强制 etcd Snowflake + 跨实例锁) | `start.ps1`(docker/battle 等) |
 | `tidb_up.ps1` | TiDB 集群一键起(社交库可选) | 手动(见 `deploy/tidb-init/README.md`) |
 
+生产生成除了玩家面、DS callback 两把 key，还必须注入四把互不相同的 placement proof key：
+`PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET`、`PANDORA_PLACEMENT_MATCH_START_SECRET`、
+`PANDORA_PLACEMENT_BATTLE_EXIT_SECRET`、`PANDORA_PLACEMENT_HUB_TRANSFER_SECRET`，以及独立的
+Login→Matchmaker 服务身份 key `PANDORA_MATCH_RESUME_AUTH_SECRET`。生成器会拒绝公开 dev key、短 key
+或跨权限域复用；普通 online 发布还会在 apply 前与锁内两次拒绝服务身份 key 漂移。`placement_mode=shadow`
+仅供先服务端后客户端的短期灰度，终态为 `enforce`。
+
 ## 2. k8s / 真 DS 链路
 
 | 脚本 | 用途 | 被谁调用 |

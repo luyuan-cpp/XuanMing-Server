@@ -3,7 +3,7 @@
 // Redis key 模板(所有业务 ID 用 uint64,%d 格式化;<mode> = game_mode,空则退回无模式段的旧全局 key):
 //
 //	pandora:match:<mode>:queue   → ZSET(score=avg_mmr,member=ticket_id),撮合池(按 game_mode 隔离)
-//	pandora:match:ticket:%d      → MatchTicketStorageRecord proto bytes,TTL=TicketTTL
+//	pandora:match:ticket:%d      → MatchTicketStorageRecord proto bytes,非终态持久;显式终态后按 TicketTTL 留存
 //	pandora:match:{%d}           → MatchStorageRecord proto bytes(hashtag 锁 cluster slot)
 //	pandora:match:player:%d      → ticket_id(string,SETNX),落"一人只在一个队列"(故意全局不分模式)
 //	pandora:match:<mode>:active  → ZSET(score=confirm_deadline_ms,member=match_id),确认期超时扫描
@@ -85,7 +85,9 @@ func startPlayerKey(playerID uint64) string {
 
 // MatchRepo 是 matchmaker 数据层抽象。biz 层只依赖此接口,不依赖 redis。
 type MatchRepo interface {
-	// ClaimPlayer 用 SETNX 原子声明 player→ticketID 归属,落"一人只在一个队列"。
+	// ClaimPlayer 用无 TTL 的 SETNX 原子声明 player→ticketID 归属,落"一人只在一个队列"。
+	// QUEUED/CONFIRM/ALLOCATING/READY 都是业务状态，只有显式取消/失败/ReleaseMatch
+	// 可以 compare-delete；网络断开或进程停机绝不能靠 TTL 暗中释放玩家。
 	// 成功返回 (ticketID, true, nil);玩家已在其他票据返回 (existingTicketID, false, nil)。
 	ClaimPlayer(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) (uint64, bool, error)
 	// GetPlayerTicket 查玩家当前所在票据 ID。not found 返 (0, false, nil)。
@@ -95,12 +97,14 @@ type MatchRepo interface {
 	// 旧 claim 自然过期 → 同一玩家新 claim 写入 → 删」的窗口会误删新一局 claim,新票据失去
 	// 归属后玩家可再开第二张票(违反不变量 §1)。幂等:值不匹配/已不存在时不动、不报错。
 	DeletePlayerIndexIfMatches(ctx context.Context, playerID, ticketID uint64) error
-	// RefreshPlayerClaim 仅当 claim 仍指向 ticketID 时刷新其 TTL(Lua 原子比较后 PEXPIRE)。
-	// 票据每次 Requeue 会刷新自身 TTL;claim 不跟着续期的话会先于票据过期,玩家即可再开
-	// 新票据 → 同一玩家两张在队票据 → 可能被撮进两场 match(违反不变量 §1)。
+	// RefreshPlayerClaim 是滚动升级兼容门：仅当 claim 仍指向 ticketID 时 PERSIST。
+	// 新 claim 本来就无 TTL；旧版本遗留 TTL claim 在 Requeue 时升级为 durable。
 	RefreshPlayerClaim(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) error
+	// PersistPlayerClaim removes the cache TTL only if the claim still points at
+	// this ticket. Reserved/READY matches are business state, not expiring presence.
+	PersistPlayerClaim(ctx context.Context, playerID, ticketID uint64) error
 
-	// AddTicket 写票据 proto bytes(TTL=ticketTTL)并 ZADD 进 queue(score=avg_mmr)。
+	// AddTicket 持久写票据 proto bytes(无 TTL)并 ZADD 进 queue(score=avg_mmr)。
 	// 仅供 Requeue / 测试造数据;StartMatch 入队路径必须走 CreateTicketRecord → claims →
 	// EnqueueTicket 三步写序(见 CreateTicketRecord 注释),不准直接 AddTicket。
 	AddTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
@@ -144,7 +148,8 @@ type MatchRepo interface {
 	GetStartPlayerOperation(ctx context.Context, playerID uint64) (ticketID uint64, found bool, err error)
 	DeleteStartPlayerIfMatches(ctx context.Context, playerID, ticketID uint64) error
 
-	// CreateMatch 写 match proto bytes(TTL=matchTTL)并 ZADD 进 active(score=confirm_deadline_ms)。
+	// CreateMatch 持久写 match proto bytes 并 ZADD 进 active(score=confirm_deadline_ms)。
+	// 非终态不能依赖 matchTTL 消失；显式 FAILED/ReleaseMatch 后才按 retention TTL 留存或删除。
 	CreateMatch(ctx context.Context, match *matchv1.MatchStorageRecord, matchTTL time.Duration) error
 	// GetMatch 读 match。not found 返 (nil, false, nil)。
 	GetMatch(ctx context.Context, matchID uint64) (*matchv1.MatchStorageRecord, bool, error)
@@ -192,11 +197,11 @@ func NewRedisMatchRepo(rdb redis.UniversalClient, namespace string) *RedisMatchR
 
 // --- player index ---
 
-func (r *RedisMatchRepo) ClaimPlayer(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) (uint64, bool, error) {
+func (r *RedisMatchRepo) ClaimPlayer(ctx context.Context, playerID, ticketID uint64, _ time.Duration) (uint64, bool, error) {
 	key := playerKey(playerID)
 	val := strconv.FormatUint(ticketID, 10)
 	for attempt := 0; attempt < 2; attempt++ {
-		ok, err := r.rdb.SetNX(ctx, key, val, ttl).Result()
+		ok, err := r.rdb.SetNX(ctx, key, val, 0).Result()
 		if err != nil {
 			return 0, false, err
 		}
@@ -239,17 +244,41 @@ func (r *RedisMatchRepo) DeletePlayerIndexIfMatches(ctx context.Context, playerI
 		strconv.FormatUint(ticketID, 10)).Err()
 }
 
-// refreshClaimScript 仅当 claim 当前值仍是本票据时才续期(原子比较,防误续玩家新一局的 claim)。
+// refreshClaimScript 仅当 claim 当前值仍是本票据时移除旧 TTL。新版本从创建
+// 起就是 persistent；该脚本用于滚动升级期间把旧 claim 原子升级为 durable。
 var refreshClaimScript = redis.NewScript(`
 if redis.call('GET', KEYS[1]) == ARGV[1] then
-  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+  redis.call('PERSIST', KEYS[1])
+  return 1
 end
 return 0`)
 
-func (r *RedisMatchRepo) RefreshPlayerClaim(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) error {
+// persistClaimScript upgrades an old TTL-backed start-saga index without a
+// read/expire/recreate race. Only the same operation may remove its expiry.
+var persistClaimScript = redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('PERSIST', KEYS[1])
+  return 1
+end
+return 0`)
+
+func (r *RedisMatchRepo) RefreshPlayerClaim(ctx context.Context, playerID, ticketID uint64, _ time.Duration) error {
 	return refreshClaimScript.Run(ctx, r.rdb,
 		[]string{playerKey(playerID)},
-		strconv.FormatUint(ticketID, 10), ttl.Milliseconds()).Err()
+		strconv.FormatUint(ticketID, 10)).Err()
+}
+
+func (r *RedisMatchRepo) PersistPlayerClaim(ctx context.Context, playerID, ticketID uint64) error {
+	result, err := persistClaimScript.Run(ctx, r.rdb,
+		[]string{playerKey(playerID)}, strconv.FormatUint(ticketID, 10)).Int()
+	if err != nil {
+		return err
+	}
+	if result != 1 {
+		return errcode.New(errcode.ErrMatchConcurrent,
+			"player %d claim no longer belongs to ticket %d", playerID, ticketID)
+	}
+	return nil
 }
 
 func (r *RedisMatchRepo) GetPlayerTicket(ctx context.Context, playerID uint64) (uint64, bool, error) {
@@ -284,7 +313,10 @@ func (r *RedisMatchRepo) CreateTicketRecord(ctx context.Context, ticket *matchv1
 	if err != nil {
 		return err
 	}
-	return r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, ticketTTL).Err()
+	// A queued ticket is canonical player intent, not presence. Keep it until an
+	// explicit cancel/failure/release path removes it. The duration argument is
+	// retained for interface compatibility and terminal-retention policy only.
+	return r.rdb.Set(ctx, ticketKey(ticket.TicketId), payload, 0).Err()
 }
 
 // EnqueueTicket 见接口注释:ZADD 入 queue(StartMatch 三步写序第 3 步)。幂等。
@@ -340,7 +372,7 @@ func (r *RedisMatchRepo) ReserveTicket(ctx context.Context, ticket *matchv1.Matc
 				return nil
 			}
 			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, payload, ticketTTL)
+				pipe.Set(ctx, key, payload, 0)
 				return nil
 			})
 			return perr
@@ -359,7 +391,8 @@ func (r *RedisMatchRepo) ReserveTicket(ctx context.Context, ticket *matchv1.Matc
 		}
 		// Cluster 兼容:queueKey 与 ticketKey 不同 slot,独立 ZREM 移出池。
 		// 若 ZREM 失败残留队列项,matchOnce 加载时 t.MatchId != 0 会跳过(防重复撞合),不影响正确性。
-		return r.rdb.ZRem(ctx, r.queueKey, ticket.TicketId).Err()
+		_ = r.rdb.ZRem(ctx, r.queueKey, ticket.TicketId).Err()
+		return nil
 	}
 	return errcode.New(errcode.ErrMatchConcurrent, "reserve ticket %d concurrent retry exhausted", ticket.TicketId)
 }
@@ -449,7 +482,9 @@ func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.M
 		return err
 	}
 	key := startOperationKey(op.GetTicketId())
-	ok, err := r.rdb.SetNX(ctx, key, payload, ttl).Result()
+	// ACCEPTED is a business fact, not a cache entry. It must survive longer
+	// than ticketTTL and is deleted/expired only after an explicit terminal.
+	ok, err := r.rdb.SetNX(ctx, key, payload, 0).Result()
 	if err != nil {
 		return err
 	}
@@ -463,23 +498,19 @@ func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.M
 		}
 	}
 
-	// player→start-op 是 Resume/并发 Start 的派生索引。record 已先持久化，所以这里即使
-	// Redis 瞬态失败也按“已受理”返回，由 saga/reconciler 重建；明确撞上另一 operation
-	// 则把本 op 持久改为 COMPENSATING，绝不让 caller 收到冲突后它又偷偷入队。
+	// player→start-op 是 Resume/并发 Start 的派生索引。record 已先持久化，所以从这里
+	// 开始 RPC 只能是“已受理”：Redis 瞬态失败或 preflight 后发生的真实 claim 冲突都
+	// 交给 saga/reconciler。尤其不能在 canonical ACCEPTED 已提交后向 caller 返回业务
+	// 拒绝；否则若 COMPENSATING 写失败，caller 看见失败而 ACCEPTED 记录稍后仍会入队。
+	// Worker 会把冲突可靠 CAS 到 COMPENSATING，并 compare-delete 仅属于本 operation 的
+	// 派生索引；这里的 claim 仅用于尽早建立冷启动 discoverability。
 	for _, member := range op.GetMembers() {
 		existing, claimed, cerr := r.ClaimStartPlayer(ctx, member.GetPlayerId(), op.GetTicketId(), ttl)
 		if cerr != nil {
 			break
 		}
 		if !claimed && existing != op.GetTicketId() {
-			op.Phase = matchv1.MatchStartPhase_MATCH_START_PHASE_COMPENSATING
-			failedPayload, merr := marshalStartOperation(op)
-			if merr == nil {
-				_ = r.rdb.Set(ctx, key, failedPayload, ttl).Err()
-			}
-			_ = r.rdb.ZAdd(ctx, r.startKey, redis.Z{Score: float64(time.Now().UnixMilli()), Member: op.GetTicketId()}).Err()
-			return errcode.New(errcode.ErrMatchAlreadyMatching,
-				"player %d already has start operation %d", member.GetPlayerId(), existing)
+			break
 		}
 	}
 
@@ -500,11 +531,13 @@ func (r *RedisMatchRepo) CreateStartOperation(ctx context.Context, op *matchv1.M
 	return nil
 }
 
-func (r *RedisMatchRepo) ClaimStartPlayer(ctx context.Context, playerID, ticketID uint64, ttl time.Duration) (uint64, bool, error) {
+func (r *RedisMatchRepo) ClaimStartPlayer(ctx context.Context, playerID, ticketID uint64, _ time.Duration) (uint64, bool, error) {
 	key := startPlayerKey(playerID)
 	value := strconv.FormatUint(ticketID, 10)
 	for attempt := 0; attempt < 2; attempt++ {
-		ok, err := r.rdb.SetNX(ctx, key, value, ttl).Result()
+		// This is the only discoverability edge for an in-flight durable saga.
+		// Keep it persistent until QUEUED handoff or compensation compare-deletes it.
+		ok, err := r.rdb.SetNX(ctx, key, value, 0).Result()
 		if err != nil {
 			return 0, false, err
 		}
@@ -523,7 +556,7 @@ func (r *RedisMatchRepo) ClaimStartPlayer(ctx context.Context, playerID, ticketI
 			return 0, false, err
 		}
 		if existing == ticketID {
-			if err := refreshClaimScript.Run(ctx, r.rdb, []string{key}, value, ttl.Milliseconds()).Err(); err != nil {
+			if err := persistClaimScript.Run(ctx, r.rdb, []string{key}, value).Err(); err != nil {
 				return 0, false, err
 			}
 		}
@@ -595,8 +628,13 @@ func (r *RedisMatchRepo) UpdateStartOperationWithLock(
 			if err != nil {
 				return err
 			}
+			retention := time.Duration(0)
+			if op.GetPhase() == matchv1.MatchStartPhase_MATCH_START_PHASE_QUEUED ||
+				op.GetPhase() == matchv1.MatchStartPhase_MATCH_START_PHASE_FAILED {
+				retention = ttl
+			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, payload, ttl)
+				pipe.Set(ctx, key, payload, retention)
 				return nil
 			})
 			return err
@@ -657,12 +695,14 @@ func (r *RedisMatchRepo) CreateMatch(ctx context.Context, match *matchv1.MatchSt
 	}
 	// Cluster 兼容:matchKey{id} 与全局 activeKey 不同 slot。① matchKey 单键 SET 权威落库;
 	// ② activeKey 独立 ZADD 登记确认期超时扫描。
-	if err := r.rdb.Set(ctx, matchKey(match.MatchId), payload, matchTTL).Err(); err != nil {
+	// FOUND/CONFIRM/ALLOCATING/READY are authoritative business states. Their
+	// lifetime cannot be encoded by Redis TTL: explicit FAILED/ReleaseMatch owns
+	// terminal cleanup.
+	if err := r.rdb.Set(ctx, matchKey(match.MatchId), payload, 0).Err(); err != nil {
 		return err
 	}
-	// ZADD 幂等,先有界重试吸收 Redis 瞬时抖动(避免一次网络毛刺就让整场撮合走 rollback);
-	// 耗尽仍失败才 best-effort 删掉刚写入的 matchKey,让上层 rollbackReservations 后不残留
-	// 「match 已建但票据已回队列且不在 active ZSET」的悬空记录(它永远进不了超时扫描 = 死状态)。
+	// ZADD 幂等,先有界重试吸收 Redis 瞬时抖动。canonical match 已持久化后绝不能
+	// 因派生 active 索引失败而删除；全-master reconciler 会重建索引。
 	zadd := redis.Z{Score: float64(match.ConfirmDeadlineMs), Member: match.MatchId}
 	var zerr error
 	for attempt := 0; attempt < createMatchZAddRetry; attempt++ {
@@ -678,8 +718,7 @@ func (r *RedisMatchRepo) CreateMatch(ctx context.Context, match *matchv1.MatchSt
 			break
 		}
 	}
-	_ = r.rdb.Del(ctx, matchKey(match.MatchId)).Err()
-	return zerr
+	return nil
 }
 
 func (r *RedisMatchRepo) GetMatch(ctx context.Context, matchID uint64) (*matchv1.MatchStorageRecord, bool, error) {
@@ -729,7 +768,7 @@ func (r *RedisMatchRepo) UpdateMatchWithLock(
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, payload, matchTTL)
+				pipe.Set(ctx, key, payload, 0)
 				return nil
 			})
 			return err
@@ -774,8 +813,36 @@ func (r *RedisMatchRepo) ScanMatchIDs(ctx context.Context, count int64) ([]uint6
 }
 
 func (r *RedisMatchRepo) ExpireMatch(ctx context.Context, matchID uint64, ttl time.Duration) error {
-	// Cluster 兼容:matchKey 与 activeKey 不同 slot,拆为独立命令。
-	if err := r.rdb.Expire(ctx, matchKey(matchID), ttl).Err(); err != nil {
+	// Cleanup ACK and terminal retention are committed together on the canonical
+	// key. -1 is an internal durable sentinel: reconcilers may remove a FAILED
+	// match from active only after all ticket/claim compensation succeeded.
+	key := matchKey(matchID)
+	err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+		payload, err := tx.Get(ctx, key).Bytes()
+		if err == redis.Nil {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		m, err := unmarshalMatch(matchID, payload)
+		if err != nil {
+			return err
+		}
+		if m.GetStage() == matchv1.MatchStage_MATCH_STAGE_FAILED {
+			m.AllocationNextAttemptAtMs = -1
+		}
+		payload, err = marshalMatch(m)
+		if err != nil {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, key, payload, ttl)
+			return nil
+		})
+		return err
+	}, key)
+	if err != nil {
 		return err
 	}
 	return r.rdb.ZRem(ctx, r.activeKey, matchID).Err()

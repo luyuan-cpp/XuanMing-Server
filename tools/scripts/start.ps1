@@ -2444,12 +2444,15 @@ function Invoke-Online {
     Assert-PandoraImmutableReleaseTag -Tag $Tag -CurrentCommit $currentCommit -RequireCurrentCommit:$BuildPush
 
     # ===== 生产密钥预检(P0 安全审核)=====
-    # 必须在 BuildPush(推镜像到远端 registry)之前就确认两把真密钥齐全 —— 否则可能镜像已推、稍后
+    # 必须在 BuildPush(推镜像到远端 registry)之前就确认玩家、DS callback 与 Match resume
+    # 服务身份三套真密钥齐全 —— 否则可能镜像已推、稍后
     # gen -Prod 才因缺密钥失败,留下「半推 + 未部署」的脏状态。玩家面 / DS 回调面必须分离:
     # 同一把密钥覆盖玩家 JWT 与 DS 回调令牌时,泄露玩家面即可伪造 DS 回调绕过范围绑定。
     $devPubSecret = 'pandora-dev-jwt-secret-change-me-32!'
+    $devMatchResumeSecret = 'pandora-dev-match-resume-auth-key-v1!'
     $playerSec = $env:PANDORA_JWT_SECRET
     $dsSec = $env:PANDORA_DS_JWT_SECRET
+    $matchResumeSec = $env:PANDORA_MATCH_RESUME_AUTH_SECRET
     # additional_secrets 部分接线仅供非生产验证；两份轮换决策未拍板前 online 直接拒绝。
     $playerSecAdd = $env:PANDORA_JWT_SECRET_ADDITIONAL
     $dsSecAdd = $env:PANDORA_DS_JWT_SECRET_ADDITIONAL
@@ -2460,6 +2463,7 @@ function Invoke-Online {
     $secretChecks = @(
         @{ n = 'PANDORA_JWT_SECRET(玩家面)';    v = $playerSec; required = $true },
         @{ n = 'PANDORA_DS_JWT_SECRET(DS 回调面)'; v = $dsSec; required = $true },
+        @{ n = 'PANDORA_MATCH_RESUME_AUTH_SECRET(Login→Matchmaker 服务身份)'; v = $matchResumeSec; required = $true },
         @{ n = 'PANDORA_JWT_SECRET_ADDITIONAL(玩家面轮换兼容密钥)';    v = $playerSecAdd; required = $false },
         @{ n = 'PANDORA_DS_JWT_SECRET_ADDITIONAL(DS 回调面轮换兼容密钥)'; v = $dsSecAdd; required = $false })
     foreach ($p in $secretChecks) {
@@ -2470,6 +2474,7 @@ function Invoke-Online {
             continue
         }
         if ($p.v -eq $devPubSecret) { throw "$($p.n) 不能等于公开 dev 密钥,请换成真密钥。" }
+        if ($p.v -eq $devMatchResumeSecret) { throw "$($p.n) 不能等于公开 Match resume dev 密钥,请换成真密钥。" }
         if ([System.Text.Encoding]::UTF8.GetByteCount($p.v) -lt 32) { throw "$($p.n) 至少需要 32 字节(HS256)。" }
         # C0/C1 控制字符防线(二审 #12):换行/回车/制表等混进密钥会被 YAML 双引号转义后原样进服务,
         # 与运维手里的密钥「看起来相同实际不同」,导致全端验签静默失败。
@@ -2477,7 +2482,7 @@ function Invoke-Online {
             throw "$($p.n) 含控制字符(换行/回车/制表等),多半是复制粘贴事故;已中止(P0)。"
         }
     }
-    # 四把密钥两两不同 + 玩家面/DS 面跨面不相交(P0:任一交叉 = 泄露一面即可伪造另一面)。
+    # 所有已注入 HMAC 两两不同(P0:任一交叉 = 泄露一面即可伪造另一面)。
     $secretPairs = @($secretChecks | Where-Object { -not [string]::IsNullOrWhiteSpace($_.v) })
     for ($i = 0; $i -lt $secretPairs.Count; $i++) {
         for ($j = $i + 1; $j -lt $secretPairs.Count; $j++) {
@@ -2545,7 +2550,11 @@ function Invoke-Online {
             -ExpectedServiceNames $hmacServiceNames
         Assert-PandoraOnlineHmacContinuity -LiveConfigs $liveHmacConfigs `
             -CandidateConfigs $candidateHmacConfigs | Out-Null
-        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / additional keyset 均未变化；不打印指纹）。'
+        Assert-PandoraOnlinePlacementContinuity -LiveConfigs $liveHmacConfigs `
+            -CandidateConfigs $candidateHmacConfigs | Out-Null
+        Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $liveHmacConfigs `
+            -CandidateConfigs $candidateHmacConfigs | Out-Null
+        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / placement proof / Match resume service identity / additional keyset 均未变化；不打印指纹）。'
     } else {
         # 首次 bootstrap 没有 live baseline 可比较；后续普通发布一律走上面的连续性门禁。
         # 若运行中的业务对象仍在但 Secret 被删，不能把它误判成首次 bootstrap。
@@ -2830,6 +2839,10 @@ function Invoke-Online {
         $lockedCandidateHmacConfigs = Get-PandoraGeneratedConfigObject -ConfigDir $onlineConfigDir `
             -ExpectedServiceNames $hmacServiceNames
         Assert-PandoraOnlineHmacContinuity -LiveConfigs $lockedHmacConfigs `
+            -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
+        Assert-PandoraOnlinePlacementContinuity -LiveConfigs $lockedHmacConfigs `
+            -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
+        Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $lockedHmacConfigs `
             -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
     }
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock

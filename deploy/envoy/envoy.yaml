@@ -282,6 +282,12 @@ static_resources:
                   status: 403
                   body:
                     inline_string: "internal rpc"
+              - match:
+                  path: "/pandora.match.v1.MatchService/ResolvePlayerMatchContext"
+                direct_response:
+                  status: 403
+                  body:
+                    inline_string: "internal rpc"
               # PVE 匹配实例路由:客户端带 header `x-pandora-game-mode: pve` → PVE matchmaker(:50018,
               # game_mode=pve_coop + enable_solo_match=true,单人/整队直进副本);不带 = 默认 PVP 撮合实例。
               # 设计既定「一个 game_mode 一个 matchmaker 部署」;同一 gRPC 服务名靠 header 分流是 Envoy 标准做法。

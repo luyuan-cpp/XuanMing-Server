@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 )
 
@@ -17,6 +18,11 @@ import (
 type PlacementRepo interface {
 	GetPlacement(context.Context, uint64) (*locatorv1.PlayerPlacementStorageRecord, bool, error)
 	UpdatePlacement(context.Context, uint64, int, func(*locatorv1.PlayerPlacementStorageRecord, bool) (*locatorv1.PlayerPlacementStorageRecord, error)) (*locatorv1.PlayerPlacementStorageRecord, error)
+	// UpdatePlacementWithBattleTerminalFence watches the durable, version-free
+	// per-player terminal tombstone in the same Redis transaction as placement.
+	// Match-start Begin/Bind/Admission use it so terminal publication cannot race
+	// a placement CAS. Both keys share {playerID}.
+	UpdatePlacementWithBattleTerminalFence(context.Context, uint64, uint64, int, func(*locatorv1.PlayerPlacementStorageRecord, bool) (*locatorv1.PlayerPlacementStorageRecord, error)) (*locatorv1.PlayerPlacementStorageRecord, error)
 }
 
 type RedisPlacementRepo struct {
@@ -59,6 +65,27 @@ func (r *RedisPlacementRepo) UpdatePlacement(
 	maxRetry int,
 	mutate func(*locatorv1.PlayerPlacementStorageRecord, bool) (*locatorv1.PlayerPlacementStorageRecord, error),
 ) (*locatorv1.PlayerPlacementStorageRecord, error) {
+	return r.updatePlacement(ctx, playerID, 0, maxRetry, mutate)
+}
+
+func (r *RedisPlacementRepo) UpdatePlacementWithBattleTerminalFence(
+	ctx context.Context,
+	playerID, matchID uint64,
+	maxRetry int,
+	mutate func(*locatorv1.PlayerPlacementStorageRecord, bool) (*locatorv1.PlayerPlacementStorageRecord, error),
+) (*locatorv1.PlayerPlacementStorageRecord, error) {
+	if matchID == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "battle terminal fence match_id required")
+	}
+	return r.updatePlacement(ctx, playerID, matchID, maxRetry, mutate)
+}
+
+func (r *RedisPlacementRepo) updatePlacement(
+	ctx context.Context,
+	playerID, battleFenceMatchID uint64,
+	maxRetry int,
+	mutate func(*locatorv1.PlayerPlacementStorageRecord, bool) (*locatorv1.PlayerPlacementStorageRecord, error),
+) (*locatorv1.PlayerPlacementStorageRecord, error) {
 	if playerID == 0 || mutate == nil {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id and placement mutator required")
 	}
@@ -66,10 +93,25 @@ func (r *RedisPlacementRepo) UpdatePlacement(
 		maxRetry = 0
 	}
 	key := PlacementKey(playerID)
+	watchKeys := []string{key}
+	if battleFenceMatchID != 0 {
+		watchKeys = append(watchKeys, placement.BattleTerminalFenceKey(playerID, battleFenceMatchID))
+	}
 	for attempt := 0; attempt <= maxRetry; attempt++ {
 		var result *locatorv1.PlayerPlacementStorageRecord
 		var businessErr error
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			if battleFenceMatchID != 0 {
+				exists, err := tx.Exists(ctx, placement.BattleTerminalFenceKey(playerID, battleFenceMatchID)).Result()
+				if err != nil {
+					return err
+				}
+				if exists != 0 {
+					businessErr = errcode.New(errcode.ErrInvalidState,
+						"battle %d has a durable terminal/leave fence", battleFenceMatchID)
+					return businessErr
+				}
+			}
 			cur, found, err := readPlacement(ctx, tx, key)
 			if err != nil {
 				return err
@@ -96,7 +138,7 @@ func (r *RedisPlacementRepo) UpdatePlacement(
 			}
 			result = proto.Clone(next).(*locatorv1.PlayerPlacementStorageRecord)
 			return nil
-		}, key)
+		}, watchKeys...)
 		if err == nil {
 			return result, nil
 		}

@@ -2,6 +2,7 @@
 package conf
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,9 +37,8 @@ type Config struct {
 	Agones    AgonesConf    `yaml:"agones" json:"agones"`
 	LocalDS   LocalDSConf   `yaml:"local_ds" json:"local_ds"`
 
-	// LocatorAddr player_locator gRPC 地址(断线重连:心跳时续期玩家 BATTLE 位置 TTL,
-	// docs/design/battle-reconnect.md §2.2)。留空 → 不续期(弱依赖,不影响心跳/对局,
-	// 但长对局中途掉线重登可能因位置 TTL 过期无法直连回原 battle DS,退化为回大厅)。
+	// LocatorAddr player_locator gRPC 地址，用于心跳续期短 TTL BATTLE presence/监控。
+	// 留空不续期 presence(弱依赖)，但不改变无 TTL 的权威 placement，也绝不能据此回 Hub。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
 
 	// DSAuth DS 回调服务令牌(审核 P1 #1:DS→后端回调认证)。本服务两个角色都用它:
@@ -47,6 +47,30 @@ type Config struct {
 	//   - 校验:Heartbeat / GmService Poll·Ack 按 mode(off/permissive/enforce)验证令牌。
 	// 详见 pkg/config.DSAuthConf、docs/design/decision-revisit-ds-callback-auth.md。
 	DSAuth config.DSAuthConf `yaml:"ds_auth,omitempty" json:"ds_auth,omitempty"`
+}
+
+// RequiresReliableLifecyclePublication 返回 abandoned 是否必须走可靠的
+	// pandora.ds.lifecycle 发布链。Redis authority 是生产授权权威，缺失该链会让
+// BattleResult 无法生成 match release / battle exit proof；Agones+enforce 的
+// legacy 灰度同样属于生产路径，不能以“镜像稍后过期”冒充恢复完成。
+func (c *Config) RequiresReliableLifecyclePublication() bool {
+	return strings.EqualFold(strings.TrimSpace(c.DSAuth.AuthorityMode), "redis") ||
+		(strings.EqualFold(strings.TrimSpace(c.Mode), ModeAgones) &&
+			strings.EqualFold(strings.TrimSpace(c.DSAuth.Mode), "enforce"))
+}
+
+// ValidateLifecyclePublicationConfig 在任何 Redis/Kubernetes 副作用前锁住生产配置。
+// broker 列表中的空白项不算已配置，避免启动后 producer 初始化才发现没有恢复出口。
+func (c *Config) ValidateLifecyclePublicationConfig() error {
+	if !c.RequiresReliableLifecyclePublication() {
+		return nil
+	}
+	for _, broker := range c.Kafka.Brokers {
+		if strings.TrimSpace(broker) != "" {
+			return nil
+		}
+	}
+	return fmt.Errorf("ds_allocator: production authority requires kafka.brokers for reliable %s publication", "pandora.ds.lifecycle")
 }
 
 // LocalDSConf 是「本机拉起 Windows Dedicated Server 进程」的调试后端配置。
