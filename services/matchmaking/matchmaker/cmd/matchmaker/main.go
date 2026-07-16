@@ -32,11 +32,8 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	"github.com/luyuancpp/pandora/pkg/leader/etcdleader"
 	plog "github.com/luyuancpp/pandora/pkg/log"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
-	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
-	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/biz"
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
@@ -176,56 +173,16 @@ func main() {
 	// player_locator gRPC notifier（弱依赖：locator_addr 留空 → 不上报位置）
 	// 撮合成局→MATCHING、全员确认就绪→BATTLE（不变量 §1）
 	var locator biz.LocationNotifier
-	var placementCoordinator biz.PlacementCoordinator
 	if cfg.Match.LocatorAddr != "" {
 		locatorConn := grpcclient.MustDialInsecure(cfg.Match.LocatorAddr)
 		ln := data.NewGrpcLocationNotifier(locatorConn)
 		defer func() { _ = ln.Close() }()
 		locator = ln
 		helper.Infow("msg", "locator_notifier_ready", "locator_addr", cfg.Match.LocatorAddr)
-		if cfg.Match.DSAllocatorAddr != "" {
-			proofSecret := os.Getenv("PANDORA_PLACEMENT_MATCH_START_SECRET")
-			if proofSecret == "" {
-				proofSecret = cfg.Match.PlacementMatchStartProofSecret
-			}
-			proofSigner, perr := placement.NewProofSigner(proofSecret)
-			if perr != nil {
-				helper.Errorw("msg", "placement_match_start_signer_invalid", "err", perr,
-					"hint", "set PANDORA_PLACEMENT_MATCH_START_SECRET (>=32 bytes) from secret manager")
-				os.Exit(1)
-			}
-			placementCoordinator = data.NewGrpcPlacementCoordinator(
-				locatorv1.NewPlayerLocatorServiceClient(locatorConn), proofSigner, cfg.Match.MatchTTL.Std())
-			helper.Infow("msg", "battle_placement_coordinator_ready", "locator_addr", cfg.Match.LocatorAddr)
-		}
 	} else {
-		if cfg.Match.DSAllocatorAddr != "" {
-			helper.Errorw("msg", "locator_addr_required_for_battle_placement",
-				"hint", "real ds_allocator requires strict player_locator Begin/Bind before READY")
-			os.Exit(1)
-		}
 		helper.Warnw("msg", "locator_addr_empty", "hint", "match state (MATCHING/BATTLE) will not be reported to player_locator")
 	}
 	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, sf, locator, cfg.Match)
-	if placementCoordinator != nil {
-		uc.SetPlacementCoordinator(placementCoordinator)
-	} else {
-		uc.SetPlacementCoordinator(biz.StubPlacementCoordinator{})
-		helper.Warnw("msg", "battle_placement_stub_enabled", "hint", "local stub allocator only; production is fail-closed")
-	}
-	if cfg.Match.DSAllocatorAddr != "" {
-		if cfg.Match.HubAllocatorAddr == "" {
-			helper.Errorw("msg", "hub_allocator_addr_required_for_physical_departure",
-				"hint", "real Battle READY requires exact ReleaseHub/Departure for every player")
-			os.Exit(1)
-		}
-		hubConn := grpcclient.MustDialInsecure(cfg.Match.HubAllocatorAddr)
-		defer func() { _ = hubConn.Close() }()
-		uc.SetHubDepartureCoordinator(data.NewGrpcHubDepartureCoordinator(
-			hubv1.NewHubAllocatorServiceClient(hubConn)))
-		helper.Infow("msg", "hub_departure_fence_ready",
-			"hub_allocator_addr", cfg.Match.HubAllocatorAddr)
-	}
 
 	// 蜂窝扩容:按 cfg.CellRoute 装配确定性 region/cell 路由(off/static/etcd 统一口）。
 	// 单 Cell(mode 空）→ router=nil,行为不变;多 Cell → 两级撮合 + battle 放置感知 region。

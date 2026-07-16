@@ -70,7 +70,7 @@ func TestIsB1BoundBattleResponse(t *testing.T) {
 
 func TestSignBattleTicketWithoutSignerFailsClosed(t *testing.T) {
 	g := &GrpcDSAllocator{}
-	if _, err := g.SignBattleTicket(t.Context(), 42, 9001, &model.BattleAllocation{}, placement.Binding{}); err == nil {
+	if _, err := g.SignBattleTicket(t.Context(), 42, 9001, &model.BattleAllocation{}); err == nil {
 		t.Fatal("SignBattleTicket() without any signer must fail closed")
 	}
 }

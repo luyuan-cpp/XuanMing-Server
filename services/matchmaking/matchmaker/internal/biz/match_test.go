@@ -34,16 +34,14 @@ type captureResumeAllocator struct {
 	playerID   uint64
 	matchID    uint64
 	allocation model.BattleAllocation
-	binding    placement.Binding
 }
 
 func (a *captureResumeAllocator) SignBattleTicket(
 	_ context.Context,
 	playerID, matchID uint64,
 	allocation *model.BattleAllocation,
-	binding placement.Binding,
 ) (string, error) {
-	a.playerID, a.matchID, a.binding = playerID, matchID, binding
+	a.playerID, a.matchID = playerID, matchID
 	if allocation != nil {
 		a.allocation = *allocation
 	}
@@ -203,29 +201,6 @@ func (r *progressHandoffRepo) GetStartOperation(
 	return r.MatchRepo.GetStartOperation(ctx, ticketID)
 }
 
-type allowPlacement struct{}
-
-func (allowPlacement) RequireStableHub(context.Context, []uint64) error { return nil }
-
-func (allowPlacement) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
-	return nil
-}
-
-func (allowPlacement) PrepareBattlePlacement(_ context.Context, operationID string, _ uint64, playerIDs []uint64, _ *model.BattleAllocation) (map[uint64]placement.Binding, error) {
-	bindings := make(map[uint64]placement.Binding, len(playerIDs))
-	for _, playerID := range playerIDs {
-		bindings[playerID] = placement.Binding{Version: 1, OperationID: operationID}
-	}
-	return bindings, nil
-}
-
-type rejectingStartPlacement struct {
-	allowPlacement
-	err error
-}
-
-func (p rejectingStartPlacement) RequireStableHub(context.Context, []uint64) error { return p.err }
-
 func newFixture(t *testing.T, firstMatchID uint64) *fixture {
 	return newFixtureWith(t, firstMatchID, nil)
 }
@@ -252,7 +227,6 @@ func newFixtureWith(t *testing.T, firstMatchID uint64, mutate func(*conf.MatchCo
 	locator := newMockLocator()
 	idGen := &fakeIDGen{next: firstMatchID}
 	uc := NewMatchUsecase(repo, nil, pusher, NewStubDSAllocator("127.0.0.1:7777"), idGen, locator, c.Match)
-	uc.SetPlacementCoordinator(allowPlacement{})
 	return &fixture{repo: repo, pusher: pusher, locator: locator, uc: uc, cfg: c.Match}
 }
 
@@ -586,32 +560,27 @@ func TestResolvePlayerMatchContext_CrossModeCanonicalAndDrift(t *testing.T) {
 		rec.BattleTarget = &matchv1.MatchBattleTargetStorageRecord{
 			DsAddr: rec.BattleDsAddr, DsPodName: "battle-1", DsInstanceUid: "uid-1",
 			DsInstanceEpoch: 7, AllocationId: "alloc-1", ReleaseTrack: "stable",
-			PlayerBindings: []*matchv1.MatchPlayerPlacementBindingStorageRecord{{
-				PlayerId: playerID, PlacementVersion: 12, OperationId: opID,
-			}},
 		}
 		return nil
 	}, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	ready, err := resolver.ResolvePlayerMatchContext(ctx, playerID)
-	if err != nil || ready.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY ||
-		ready.GetPlacementVersion() != 12 || ready.GetPlacementOperationId() != opID {
+	if err != nil || ready.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY {
 		t.Fatalf("cross-mode READY = %+v err=%v", ready, err)
 	}
 	if ready.GetBattleDsAddr() != "10.0.0.8:7777" || ready.GetBattleTicket() != "canonical-ready-resume-ticket" {
 		t.Fatalf("READY resolver did not return freshly bound route credential: %+v", ready)
 	}
 	if resumeAllocator.playerID != playerID || resumeAllocator.matchID != matchID ||
-		resumeAllocator.binding.Version != 12 || resumeAllocator.binding.OperationID != opID ||
 		resumeAllocator.allocation.Address != "10.0.0.8:7777" ||
 		resumeAllocator.allocation.Target.PodName != "battle-1" ||
 		resumeAllocator.allocation.Target.InstanceUID != "uid-1" ||
 		resumeAllocator.allocation.Target.InstanceEpoch != 7 ||
 		resumeAllocator.allocation.Target.AllocationID != "alloc-1" ||
 		resumeAllocator.allocation.Target.ReleaseTrack != "stable" {
-		t.Fatalf("READY re-sign input was not canonical exact target+binding: %+v %+v",
-			resumeAllocator.allocation, resumeAllocator.binding)
+		t.Fatalf("READY re-sign input was not canonical exact target: %+v",
+			resumeAllocator.allocation)
 	}
 
 	if err := pveRepo.DeleteMatch(ctx, matchID); err != nil {
@@ -666,85 +635,6 @@ func (f *fixture) seedTicket(t *testing.T, ctx context.Context, ticketID uint64,
 }
 
 // ── 用例 ──────────────────────────────────────────────────────────────────────
-
-// TestStartMatch_RejectsPlayerInBattle 验证 durable placement 是唯一权威：即使短 TTL
-// presence 已缺失（locator 返回非 Battle），STABLE_BATTLE 仍在任何 operation/claim/ticket
-// 之前拒绝，不能因断线 TTL 到期二次入队。
-func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t, 999)
-
-	const captain = uint64(42)
-	f.uc.SetPlacementCoordinator(rejectingStartPlacement{err: errcode.New(errcode.ErrMatchInBattle,
-		"durable STABLE_BATTLE")})
-
-	if _, err := f.uc.StartMatch(ctx, 7001, 7001, captain, 0); err == nil {
-		t.Fatalf("StartMatch: expected error, got nil")
-	} else if code := errcode.As(err); code != errcode.ErrMatchInBattle {
-		t.Fatalf("StartMatch code = %d, want ErrMatchInBattle(%d)", code, errcode.ErrMatchInBattle)
-	}
-
-	// 拦截必须发生在写入之前：既无 player claim，也无 ticket。
-	if _, found, _ := f.repo.GetPlayerTicket(ctx, captain); found {
-		t.Fatalf("player %d claim written despite in-battle rejection", captain)
-	}
-	if _, found, _ := f.repo.GetTicket(ctx, 7001); found {
-		t.Fatalf("ticket written despite in-battle rejection")
-	}
-	if _, found, _ := f.repo.GetStartOperation(ctx, 7001); found {
-		t.Fatalf("start operation written despite in-battle rejection")
-	}
-	if _, found, _ := f.repo.GetStartPlayerOperation(ctx, captain); found {
-		t.Fatalf("start player index written despite in-battle rejection")
-	}
-}
-
-// TestStartMatch_FailClosedWhenPlacementUnavailable 验证 durable authority 的 missing/error
-// 都是 UNKNOWN：StartMatch 零副作用返回可重试错误。
-func TestStartMatch_FailClosedWhenLocatorUnavailable(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t, 999)
-
-	const captain = uint64(43)
-	f.uc.SetPlacementCoordinator(rejectingStartPlacement{err: errcode.New(errcode.ErrUnavailable,
-		"durable placement missing")})
-
-	if _, err := f.uc.StartMatch(ctx, 7002, 7002, captain, 0); err == nil {
-		t.Fatalf("StartMatch: expected fail-closed error, got nil")
-	} else if code := errcode.As(err); code != errcode.ErrUnavailable {
-		t.Fatalf("StartMatch code = %d, want ErrUnavailable(%d)", code, errcode.ErrUnavailable)
-	}
-
-	if _, found, _ := f.repo.GetPlayerTicket(ctx, captain); found {
-		t.Fatalf("player %d claim written despite fail-closed rejection", captain)
-	}
-	if _, found, _ := f.repo.GetTicket(ctx, 7002); found {
-		t.Fatalf("ticket written despite fail-closed rejection")
-	}
-	if _, found, _ := f.repo.GetStartOperation(ctx, 7002); found {
-		t.Fatalf("start operation written despite fail-closed rejection")
-	}
-	if _, found, _ := f.repo.GetStartPlayerOperation(ctx, captain); found {
-		t.Fatalf("start player index written despite fail-closed rejection")
-	}
-}
-
-// BattleGateFailOpen is a legacy presence-only knob.  It must never bypass a
-// missing durable placement authority now that placement owns routing.
-func TestStartMatch_FailOpenWhenLocatorUnavailable(t *testing.T) {
-	ctx := context.Background()
-	f := newFixtureWith(t, 999, func(m *conf.MatchConf) { m.BattleGateFailOpen = true })
-
-	const captain = uint64(44)
-	f.uc.SetPlacementCoordinator(rejectingStartPlacement{err: errcode.New(errcode.ErrUnavailable,
-		"durable placement unavailable")})
-	if _, err := f.uc.StartMatch(ctx, 7003, 7003, captain, 0); errcode.As(err) != errcode.ErrUnavailable {
-		t.Fatalf("legacy fail-open bypassed durable authority: %v", err)
-	}
-	if _, found, _ := f.repo.GetStartOperation(ctx, 7003); found {
-		t.Fatal("legacy fail-open wrote start operation")
-	}
-}
 
 func TestStartMatch_DoesNotTreatStalePresenceAsRoutingAuthority(t *testing.T) {
 	ctx := context.Background()
@@ -833,14 +723,8 @@ func TestConfirmMatch_AllAccept_Ready(t *testing.T) {
 	if m.BattleDsAddr == "" {
 		t.Fatal("battle_ds_addr empty")
 	}
-	if m.GetAllocationOperationId() != stableOperationID || m.GetBattleTarget() == nil ||
-		len(m.GetBattleTarget().GetPlayerBindings()) != 10 {
-		t.Fatalf("READY target/bindings were not persisted with stable operation: %+v", m)
-	}
-	for _, binding := range m.GetBattleTarget().GetPlayerBindings() {
-		if binding.GetPlacementVersion() == 0 || binding.GetOperationId() != stableOperationID {
-			t.Fatalf("player binding drifted from allocation operation: %+v", binding)
-		}
+	if m.GetAllocationOperationId() != stableOperationID || m.GetBattleTarget() == nil {
+		t.Fatalf("READY target was not persisted with stable operation: %+v", m)
 	}
 	if got := f.pusher.lastStageFor(1); got != stageReady {
 		t.Fatalf("player 1 last push stage = %v, want READY", got)

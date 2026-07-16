@@ -39,11 +39,8 @@ snowflake:
 match:
   team_addr: "team.pandora.svc.cluster.local:50010"
   ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"
-  hub_allocator_addr: "hub-allocator.pandora.svc.cluster.local:50021"
   locator_addr: "player-locator.pandora.svc.cluster.local:50006"
-  # 生产由 PANDORA_PLACEMENT_MATCH_START_SECRET 优先覆盖；禁止提交真实密钥。
-  placement_match_start_proof_secret: "replace-via-pandora-config-secret-min-32-bytes"
-  # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback / placement key。
+  # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback key。
   match_resume_auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B__"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
   allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"

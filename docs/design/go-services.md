@@ -238,6 +238,14 @@ LOCATION_MATCHING { match_id }
 LOCATION_BATTLE { match_id, battle_pod }
 ```
 
+**状态查询与存储边界（全局不变量 §9.22 的 locator 落地）**:
+
+- `LOCATION_STATE_HUB` 是**短期权威位置租约**，不是永久玩家业务数据。玩家真正进入 Hub 后，只允许该 Hub DS 上报 `HUB + hub_pod + shard_id`；从 Battle 回流时额外携带 `match_id` 作为 fence，只参与原子迁移校验，通过后不持久化。player_locator 在 Redis 单键保存 HUB 租约并用 TTL 续期。Hub 心跳持续续期，玩家离开 / 断线后停止续期，key 到期才按契约推导为 `OFFLINE`。
+- player_locator 是 Location 的唯一查询入口。login、team、matchmaker、friend 等其他服务需要当前位置时调用 `GetLocation` / `BatchGetLocation`，不得把 `HUB` 再写入自己的 MySQL、Redis 或长期内存状态并据此做决定。允许短 TTL 展示缓存，但必须标记非权威、可失效、可重建，不能参与准入或归属迁移。
+- “优先查询”指业务消费者查询 player_locator 这一统一权威索引，不是每次扫描 / 扇出查询所有 Hub DS。完全不保存位置索引会导致无法确定查询目标、Hub 故障与玩家不在无法区分，并破坏单一 Location 判定。
+- key **确实不存在**可按本接口契约返回 `OFFLINE`；Redis 超时、网络错误或结果不确定必须返回 `UNKNOWN` / `UNAVAILABLE`，不得伪装成 `OFFLINE`。UNKNOWN 不能作为签票、占座、切换归属或放行进场的依据。
+- 只读判断走 `GetLocation` / `BatchGetLocation`；`HUB → MATCHING → BATTLE → HUB` 等关键迁移不得“先 Get 再普通 Set”，必须在同一玩家单键上用事务 / CAS / 条件更新原子校验当前 state、实例、match_id / fence 后再写，避免并发请求同时通过检查。
+
 **关键不变量**:
 - 一个玩家**同一时刻只能在一个 Location**
 - `HUB` 上报来自 hub DS,可能 stale;当前为 `MATCHING` 时拒绝覆盖。

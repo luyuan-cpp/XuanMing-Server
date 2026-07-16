@@ -51,10 +51,6 @@ type BattleConf struct {
 	// DSAllocatorAddr 终态回收 relay 的内部 gRPC 地址。authority_mode=redis 时为强依赖；
 	// worker 只向不暴露在 :8444 的 ReleaseBattle 发送 MySQL 持久证明。
 	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
-	// LocatorAddr and PlacementBattleExitProofSecret drive the durable per-player
-	// Battle→Hub proof outbox. The dedicated environment secret takes precedence.
-	LocatorAddr                    string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
-	PlacementBattleExitProofSecret string `yaml:"placement_battle_exit_proof_secret,omitempty" json:"placement_battle_exit_proof_secret,omitempty"`
 
 	// TerminalReleaseInterval 持久终态回收 outbox 的轮询间隔(默认 2s)。
 	TerminalReleaseInterval config.Duration `yaml:"terminal_release_interval,omitempty" json:"terminal_release_interval,omitempty"`
@@ -146,9 +142,6 @@ func (c *Config) ValidateRedisAuthorityIngress() error {
 	}
 	if c.Battle.DSAllocatorAddr == "" {
 		return fmt.Errorf("battle_result: authority_mode=redis requires battle.ds_allocator_addr for terminal release outbox relay")
-	}
-	if c.Battle.LocatorAddr == "" {
-		return fmt.Errorf("battle_result: authority_mode=redis requires battle.locator_addr for battle exit proof relay")
 	}
 	if c.Battle.TerminalReleaseInterval.Std() <= 0 || c.Battle.TerminalReleaseBatchSize <= 0 {
 		return fmt.Errorf("battle_result: terminal release worker interval/batch must be positive")

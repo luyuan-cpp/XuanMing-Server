@@ -17,7 +17,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/middleware"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
@@ -299,19 +298,6 @@ func (*serviceBattleRepo) FetchMatchReleaseOutbox(context.Context, int, int64) (
 }
 func (*serviceBattleRepo) DeferMatchReleaseOutbox(context.Context, uint64, int64) error { return nil }
 func (*serviceBattleRepo) DeleteMatchReleaseOutbox(context.Context, uint64) error       { return nil }
-func (*serviceBattleRepo) FetchBattleExitProofOutbox(context.Context, int, int64) ([]data.BattleExitProofRecord, error) {
-	return nil, nil
-}
-func (*serviceBattleRepo) PrepareBattleExitProofOutbox(context.Context, data.BattleExitProofRecord, placement.BattleExitProof) (bool, error) {
-	return false, nil
-}
-func (*serviceBattleRepo) DeferBattleExitProofOutbox(context.Context, uint64, int64) error {
-	return nil
-}
-func (*serviceBattleRepo) MarkBattleExitProofSuperseded(context.Context, uint64, int64) error {
-	return nil
-}
-func (*serviceBattleRepo) DeleteBattleExitProofOutbox(context.Context, uint64) error { return nil }
 
 type guardedReportFixture struct {
 	svc    *BattleResultService

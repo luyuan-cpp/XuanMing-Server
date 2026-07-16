@@ -51,9 +51,6 @@ type MatchConf struct {
 	// DSAllocatorAddr 是 ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS)。
 	// 留空则用 StubDSAllocator(W4 ① 行为,返回固定 mock 地址 + mock 票据)。
 	DSAllocatorAddr string `yaml:"ds_allocator_addr,omitempty" json:"ds_allocator_addr,omitempty"`
-	// HubAllocatorAddr is mandatory with a real DS allocator. Match READY is
-	// gated on durable exact ReleaseHub for every roster member.
-	HubAllocatorAddr string `yaml:"hub_allocator_addr,omitempty" json:"hub_allocator_addr,omitempty"`
 	// DSAllocateTimeout 是调 ds_allocator.AllocateBattle 的客户端超时(默认 60s)。
 	// 该 RPC 在 ds_allocator 侧阻塞等 DS ready 心跳(agones allocate 5s + ready_wait 45s + 余量),
 	// 必须覆盖 ds_allocator 的 server.grpc.timeout(60s);不可用 grpcclient.DefaultTimeout(15s),
@@ -62,16 +59,13 @@ type MatchConf struct {
 	// LocatorAddr 是 player_locator 服务 gRPC 直连地址（撮合状态机上报玩家位置：
 	// 成局→MATCHING、就绪→BATTLE，不变量 §1）。留空则不上报（本机不起 locator 也能跑撮合）。
 	LocatorAddr string `yaml:"locator_addr,omitempty" json:"locator_addr,omitempty"`
-	// PlacementMatchStartProofSecret signs the dedicated HUB→BATTLE MATCH_START
-	// proof. Environment PANDORA_PLACEMENT_MATCH_START_SECRET takes precedence.
-	PlacementMatchStartProofSecret string `yaml:"placement_match_start_proof_secret,omitempty" json:"placement_match_start_proof_secret,omitempty"`
 	// MatchResumeAuthSecret authenticates the sole Login→Matchmaker canonical
-	// resume read. It is never shared with player JWT or placement writers.
+	// resume read. It is never shared with player JWT keys.
 	MatchResumeAuthSecret   string `yaml:"match_resume_auth_secret,omitempty" json:"match_resume_auth_secret,omitempty"`
 	MatchResumeAuthAudience string `yaml:"match_resume_auth_audience,omitempty" json:"match_resume_auth_audience,omitempty"`
 	// AllocationAbortAuth authenticates only Matchmaker→DS allocator's exact
-	// pre-admission abort request. It must not reuse placement, Login resume,
-	// player JWT, or DS callback trust-domain keys.
+	// pre-admission abort request. It must not reuse Login resume, player JWT,
+	// or DS callback trust-domain keys.
 	AllocationAbortAuthSecret   string `yaml:"allocation_abort_auth_secret,omitempty" json:"allocation_abort_auth_secret,omitempty"`
 	AllocationAbortAuthAudience string `yaml:"allocation_abort_auth_audience,omitempty" json:"allocation_abort_auth_audience,omitempty"`
 
@@ -211,8 +205,7 @@ func (c *Config) Validate() error {
 	if err := internalrpcauth.ValidateIdentity(c.Match.MatchResumeAuthAudience); err != nil {
 		return fmt.Errorf("match.match_resume_auth_audience invalid: %w", err)
 	}
-	if c.Match.MatchResumeAuthSecret == c.JWT.Secret ||
-		c.Match.MatchResumeAuthSecret == c.Match.PlacementMatchStartProofSecret {
+	if c.Match.MatchResumeAuthSecret == c.JWT.Secret {
 		return fmt.Errorf("match.match_resume_auth_secret must use an independent trust-domain key")
 	}
 	if c.Match.DSAllocatorAddr != "" {
@@ -223,9 +216,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("match.allocation_abort_auth_audience invalid: %w", err)
 		}
 		for name, secret := range map[string]string{
-			"player JWT":            c.JWT.Secret,
-			"placement match-start": c.Match.PlacementMatchStartProofSecret,
-			"Login resume":          c.Match.MatchResumeAuthSecret,
+			"player JWT":   c.JWT.Secret,
+			"Login resume": c.Match.MatchResumeAuthSecret,
 		} {
 			if c.Match.AllocationAbortAuthSecret == secret {
 				return fmt.Errorf("match.allocation_abort_auth_secret must not reuse %s key", name)

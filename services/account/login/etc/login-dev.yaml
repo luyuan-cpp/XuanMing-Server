@@ -83,15 +83,6 @@ login:
   #   false → allowed_role_ids 为空时 SelectRole 一律拒绝(fail-closed,prod 语义)
   dev_allow_any_role: true
 
-  # 版本化 placement 本地模板默认关闭；集群生成器在真实 Agones/生产链路原子切 enforce。
-  # proof key 是公开 dev 值，生产生成器必须用独立 placement master 派生值覆盖。
-  placement_mode: "off"
-  placement_bootstrap_proof_secret: "pandora-dev-placement-bootstrap-key-v1!"
-  # Login→Matchmaker internal resume RPC only. Explicit dev key; never reuse
-  # player JWT, DS callback or placement proof keys.
-  match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"
-  match_resume_auth_audience: "matchmaker:5v5_ranked"
-
   # JWT(W3 ①,2026-06-05):HS256 共享密钥模式。
   # ⚠️ secret 跟 deploy/envoy/envoy.yaml jwt_authn provider 必须一致(envoy 那边
   #    放的是 base64url(secret) 的 JWKS)。可用以下命令算出 base64url:

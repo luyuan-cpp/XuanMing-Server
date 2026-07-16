@@ -91,12 +91,7 @@ func (s *LoginService) GetResumeContext(ctx context.Context, req *loginv1.GetRes
 
 func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 	return &loginv1.ResumeContext{Route: in.Route, MatchId: in.MatchID,
-		MatchStage: in.MatchStage, PlacementVersion: in.PlacementVersion,
-		OperationId: in.OperationID, PlacementState: in.PlacementState,
-		DsPodName: in.Target.PodName, DsInstanceUid: in.Target.InstanceUID,
-		HubAssignmentId: in.Target.AssignmentID, DsInstanceEpoch: in.Target.InstanceEpoch,
-		AllocationId: in.Target.AllocationID, ReleaseTrack: in.Target.ReleaseTrack,
-		GameMode: in.GameMode}
+		MatchStage: in.MatchStage, GameMode: in.GameMode}
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。
@@ -147,9 +142,8 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 	// + 全新一次性票据。结算返回大厅必须走这条路,以应对 Hub DS 被 Agones 重建/换端口/换分片
 	// (客户端登录时缓存的旧地址会失效)。battle 票据仍由 ticketUC 仅签发(地址来自 matchmaker)。
 	if req.GetDsType() == "hub" {
-		// target_id carries the source match while returning from Battle. The
-		// server checks it against durable placement and a signed terminal/leave
-		// proof; it is never itself treated as authority.
+		// target_id 历史上携带来源 match;现在仅作日志参考,路由权威是
+		// locator 租约 + match 三态门(biz.ResolveHubEndpointFromMatch)。
 		addr, ticket, _, err := s.loginUC.ResolveHubEndpointFromMatch(ctx, playerID, req.GetTargetId())
 		if err != nil {
 			return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
@@ -240,13 +234,10 @@ func (s *LoginService) VerifyDSTicket(ctx context.Context, req *loginv1.VerifyDS
 			DsCredentialJti:      claims.DSCredentialJTI,
 			HubAssignmentId:      claims.HubAssignmentID,
 			DsWriterEpoch:        claims.DSWriterEpoch,
-			DstVer:               uint32(claims.Version),
-			DsInstanceEpoch:      claims.DSInstanceEpoch,
-			AllocationId:         claims.AllocationID,
-			ReleaseTrack:         claims.ReleaseTrack,
-			PlacementVersion:     claims.PlacementVersion,
-			PlacementOperationId: claims.PlacementOperationID,
-			SourceMatchId:        claims.SourceMatchID,
+			DstVer:          uint32(claims.Version),
+			DsInstanceEpoch: claims.DSInstanceEpoch,
+			AllocationId:    claims.AllocationID,
+			ReleaseTrack:    claims.ReleaseTrack,
 		},
 	}, nil
 }

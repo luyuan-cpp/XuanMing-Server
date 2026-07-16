@@ -35,14 +35,11 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
-	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
-	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/biz"
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -148,12 +145,11 @@ func main() {
 	if err := repo.ValidateRecoveryOutboxSchema(schemaCtx); err != nil {
 		schemaCancel()
 		helper.Errorw("msg", "battle_recovery_outbox_schema_invalid", "err", err,
-			"hint", "apply pandora_battle migrations 000003_match_release_outbox and 000004_battle_exit_proof_outbox")
+			"hint", "apply pandora_battle migration 000003_match_release_outbox")
 		os.Exit(1)
 	}
 	schemaCancel()
 	var terminalRelay *data.GrpcTerminalReleaseRelay
-	var battleExitAuthority *data.BattleExitProofRelay
 	var authRedis redis.UniversalClient
 	if cfg.DSAuth.AuthorityModeRedis() {
 		// 只有精确 v2 schema 已迁移，才允许构造 relay、注册 capability、接收结算。
@@ -183,20 +179,6 @@ func main() {
 			os.Exit(1)
 		}
 		pingCancel()
-		proofSecret := os.Getenv("PANDORA_PLACEMENT_BATTLE_EXIT_SECRET")
-		if proofSecret == "" {
-			proofSecret = cfg.Battle.PlacementBattleExitProofSecret
-		}
-		proofSigner, signerErr := placement.NewProofSigner(proofSecret)
-		if signerErr != nil {
-			helper.Errorw("msg", "placement_battle_exit_signer_invalid", "err", signerErr,
-				"hint", "set dedicated PANDORA_PLACEMENT_BATTLE_EXIT_SECRET or battle.placement_battle_exit_proof_secret")
-			os.Exit(1)
-		}
-		locatorConn := grpcclient.MustDialInsecure(cfg.Battle.LocatorAddr)
-		defer func() { _ = locatorConn.Close() }()
-		battleExitAuthority = data.NewBattleExitProofRelay(
-			locatorv1.NewPlayerLocatorServiceClient(locatorConn), authRedis, proofSigner)
 		helper.Infow("msg", "terminal_release_dependencies_ready",
 			"ds_allocator_addr", cfg.Battle.DSAllocatorAddr,
 			"grace", cfg.Battle.TerminalReleaseGrace.String())
@@ -232,9 +214,6 @@ func main() {
 	uc := biz.NewBattleResultUsecase(repo, mmr, pusher, releaser, cfg.Battle)
 	if terminalRelay != nil {
 		uc.SetTerminalReleaseRelay(terminalRelay)
-	}
-	if battleExitAuthority != nil {
-		uc.SetBattleExitProofAuthority(battleExitAuthority)
 	}
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
@@ -323,9 +302,6 @@ func main() {
 	go uc.RunOutboxPublisher(pubCtx)
 	go uc.RunDropPublisher(pubCtx)
 	go uc.RunMatchReleasePublisher(pubCtx)
-	if battleExitAuthority != nil {
-		go uc.RunBattleExitProofPublisher(pubCtx)
-	}
 	if terminalRelay != nil {
 		go uc.RunTerminalReleasePublisher(pubCtx)
 	}

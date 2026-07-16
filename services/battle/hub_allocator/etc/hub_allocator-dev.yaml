@@ -117,11 +117,6 @@ hub:
   # locator_addr: player_locator gRPC 地址(玩家切线护栏:战斗/匹配中禁切)。
   # 弱依赖:留空则跳过位置检查。dev 直连 player_locator 服务 gRPC :50006。
   locator_addr: "127.0.0.1:50006"
-  # 版本化 placement 本地模板默认关闭；真实 Agones/生产由集群生成器切 enforce。
-  placement_mode: "off"
-  # Hub→Hub transfer proof；公开 dev 值，生产由配置生成器覆盖。
-  # 同一 Hub authority key；代码以独立 canonical domain 分别签 HubTransfer / HubDeparture。
-  placement_hub_transfer_proof_secret: "pandora-dev-placement-hub-transfer-key-v1!"
   # mock_shard_count: W4 ⑤ MockHubFleetProvider 每 region 种的假分片数
   mock_shard_count: 3
   # mock_hub_addr_host: Mock 分片返回的假 Hub DS host

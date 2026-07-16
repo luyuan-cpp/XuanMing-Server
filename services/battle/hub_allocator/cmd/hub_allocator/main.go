@@ -33,7 +33,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 
@@ -85,15 +84,6 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
-	placementMode, placementModeErr := placement.ParseMode(cfg.Hub.PlacementMode)
-	if placementModeErr != nil {
-		helper.Errorw("msg", "placement_mode_invalid", "err", placementModeErr)
-		os.Exit(1)
-	}
-	if placementMode == placement.ModeEnforce && cfg.Hub.LocatorAddr == "" {
-		helper.Errorw("msg", "placement_enforce_requires_locator")
-		os.Exit(1)
-	}
 	if cfg.DSAuth.AuthorityModeRedis() {
 		if cfg.Mode != conf.ModeAgones {
 			helper.Errorw("msg", "ds_auth_redis_authority_requires_agones", "mode", cfg.Mode)
@@ -412,21 +402,6 @@ func main() {
 		}
 	}
 	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer, v2: dstV2}, cfg.Hub)
-	hubTransferProofSecret := os.Getenv("PANDORA_PLACEMENT_HUB_TRANSFER_SECRET")
-	if hubTransferProofSecret == "" {
-		hubTransferProofSecret = cfg.Hub.PlacementHubTransferProofSecret
-	}
-	if hubTransferProofSecret != "" {
-		proofSigner, proofErr := placement.NewProofSigner(hubTransferProofSecret)
-		if proofErr != nil {
-			helper.Errorw("msg", "hub_transfer_proof_secret_invalid", "err", proofErr)
-			os.Exit(1)
-		}
-		uc.SetPlacementProofSigner(proofSigner)
-	} else if placementMode == placement.ModeEnforce {
-		helper.Errorw("msg", "placement_enforce_requires_hub_transfer_proof_secret")
-		os.Exit(1)
-	}
 	canaryPercent, canarySeed := uint32(0), ""
 	if cfg.Mode == conf.ModeAgones {
 		canaryPercent, canarySeed = cfg.Agones.CanaryPercent, cfg.Agones.CanarySeed
@@ -492,11 +467,8 @@ func main() {
 		conn := grpcclient.MustDialInsecure(cfg.Hub.LocatorAddr)
 		defer func() { _ = conn.Close() }()
 		uc.SetLocationChecker(data.NewGrpcHubLocationChecker(conn))
-		uc.SetPlacementPolicy(placementMode, data.NewGrpcHubPlacementClient(conn))
-		helper.Infow("msg", "locator_client_ready", "locator_addr", cfg.Hub.LocatorAddr,
-			"placement_mode", placementMode.String())
+		helper.Infow("msg", "locator_client_ready", "locator_addr", cfg.Hub.LocatorAddr)
 	} else {
-		uc.SetPlacementPolicy(placementMode, nil)
 		helper.Warnw("msg", "locator_addr_empty",
 			"hint", "玩家切线不做战斗/匹配中检查(弱依赖,DS 侧 SetLocation 仍强制一人一 DS)")
 	}
@@ -604,7 +576,6 @@ func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding 
 			DSInstanceEpoch: binding.ProtocolEpoch,
 			HubAssignmentID: binding.HubAssignmentID,
 			ReleaseTrack:    binding.ReleaseTrack,
-			Placement:       binding.Placement,
 		})
 	}
 	if binding.PodName == "" {
@@ -614,10 +585,7 @@ func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding 
 		DSPodName: binding.PodName, DSInstanceUID: binding.InstanceUID,
 		ProtocolEpoch: binding.ProtocolEpoch, CredentialGen: binding.CredentialGen,
 		CredentialJTI: binding.CredentialJTI, HubAssignmentID: binding.HubAssignmentID,
-		WriterEpoch:          binding.WriterEpoch,
-		PlacementVersion:     binding.Placement.Version,
-		PlacementOperationID: binding.Placement.OperationID,
-		SourceMatchID:        binding.Placement.SourceMatchID,
+		WriterEpoch: binding.WriterEpoch,
 	})
 }
 

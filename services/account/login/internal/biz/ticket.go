@@ -25,7 +25,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
-	"github.com/luyuancpp/pandora/pkg/placement"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
@@ -66,12 +65,9 @@ type DSTicketClaims struct {
 	HubAssignmentID string
 	DSWriterEpoch   uint32
 	// v2(RS256/B1)稳定实例绑定。legacy 票据为零值。
-	DSInstanceEpoch      uint32
-	AllocationID         string
-	ReleaseTrack         string
-	PlacementVersion     uint64
-	PlacementOperationID string
-	SourceMatchID        uint64
+	DSInstanceEpoch uint32
+	AllocationID    string
+	ReleaseTrack    string
 }
 
 // verifiedDSTicket 是 legacy HS256 与 v2 RS256 在 Login 内部的统一、只读视图。
@@ -95,13 +91,10 @@ type verifiedDSTicket struct {
 	AllocationID    string
 	HubAssignmentID string
 	// legacy Model-B callback credential binding（v2 有意不携带）。
-	DSProtocolEpoch      uint32
-	DSCredentialGen      uint64
-	DSCredentialJTI      string
-	DSWriterEpoch        uint32
-	PlacementVersion     uint64
-	PlacementOperationID string
-	SourceMatchID        uint64
+	DSProtocolEpoch uint32
+	DSCredentialGen uint64
+	DSCredentialJTI string
+	DSWriterEpoch   uint32
 }
 
 // TicketUsecase 处理 DSTicket 的签发 / 校验。
@@ -129,9 +122,7 @@ type TicketUsecase struct {
 	v2Signer *auth.DSTicketSigner
 	// v2Verifier 供 Login VerifyDSTicket 在线端点使用；非 nil 同时机械激活玩家票
 	// RS256-only。B1 DS 正常准入仍本地验签，不依赖此在线调用。
-	v2Verifier       *auth.DSTicketVerifier
-	placementMode    placement.Mode
-	placementChecker data.PlacementAdmissionChecker
+	v2Verifier *auth.DSTicketVerifier
 }
 
 // NewTicketUsecase 构造用例。
@@ -161,11 +152,6 @@ func (u *TicketUsecase) SetDSTicketV2Signer(s *auth.DSTicketSigner) {
 // 玩家 DSTicket 验证就机械进入 RS256-only；legacy HS256 只留给完全未启用 v2 的 local/off。
 func (u *TicketUsecase) SetDSTicketV2Verifier(v *auth.DSTicketVerifier) {
 	u.v2Verifier = v
-}
-
-func (u *TicketUsecase) SetPlacementAdmissionPolicy(mode placement.Mode, checker data.PlacementAdmissionChecker) {
-	u.placementMode = mode
-	u.placementChecker = checker
 }
 
 func (u *TicketUsecase) rs256DSTicketProfileEnabled() bool {
@@ -289,17 +275,6 @@ func (u *TicketUsecase) InspectBattleRoute(ctx context.Context, playerID, matchI
 			"battle route authority does not support explicit terminal inspection")
 	}
 	return inspector.InspectBattleRoute(ctx, playerID, matchID)
-}
-
-func (u *TicketUsecase) InspectBattleRouteProof(ctx context.Context, playerID, matchID uint64) (data.BattleRouteState, placement.BattleExitProof, error) {
-	if playerID == 0 || matchID == 0 || u == nil || u.battleAuthorizer == nil {
-		return data.BattleRouteUnknown, placement.BattleExitProof{}, errcode.New(errcode.ErrUnavailable, "battle exit proof authority unavailable")
-	}
-	inspector, ok := u.battleAuthorizer.(data.BattleRouteProofInspector)
-	if !ok {
-		return data.BattleRouteUnknown, placement.BattleExitProof{}, errcode.New(errcode.ErrUnavailable, "battle route authority has no signed proof support")
-	}
-	return inspector.InspectBattleRouteProof(ctx, playerID, matchID)
 }
 
 // issueBattleDSTicketV2 用 v2 签发器签实例绑定 battle 票(RS256,方案 B)。
@@ -464,17 +439,6 @@ func (u *TicketUsecase) verifyDSTicket(
 				markerStatus == data.AdmissionMarkerMissing); err != nil {
 				return nil, err
 			}
-			if err := u.checkPlacementAdmission(ctx, claims); err != nil {
-				return nil, err
-			}
-		} else if claims.DSType == string(auth.DSTypeBattle) {
-			// This is the HUB -> BATTLE linearization point. The caller active
-			// credential, canonical roster and ticket target were all checked
-			// above; commit placement before writing the JTI marker and before the
-			// DS is allowed to open its spawn gate.
-			if err := u.commitBattlePlacementAdmission(ctx, claims, admissionID, admission); err != nil {
-				return nil, err
-			}
 		}
 	} else if claims.Version == auth.DSTicketVersion2 && claims.DSType == string(auth.DSTypeBattle) {
 		if u.battleAuthorizer == nil {
@@ -488,12 +452,6 @@ func (u *TicketUsecase) verifyDSTicket(
 			target.InstanceUID != claims.DSInstanceUID || target.InstanceEpoch != claims.DSInstanceEpoch ||
 			target.AllocationID != claims.AllocationID || target.ReleaseTrack != claims.ReleaseTrack {
 			return nil, errcode.New(errcode.ErrLoginTicketInvalid, "battle v2 ticket no longer matches roster authority")
-		}
-		// Enforced placement requires the online VerifyDSTicket admission path,
-		// because an offline/local verification has neither an admission_id nor
-		// an independently verified active caller identity with which to commit.
-		if err := u.commitBattlePlacementAdmission(ctx, claims, "", nil); err != nil {
-			return nil, err
 		}
 	} else if claims.DSType == string(auth.DSTypeHub) {
 		if claims.Version == auth.DSTicketVersion2 {
@@ -520,9 +478,6 @@ func (u *TicketUsecase) verifyDSTicket(
 			} else if u.requireHubAssignmentBinding {
 				return nil, errcode.New(errcode.ErrLoginTicketInvalid, "hub ticket missing required assignment binding")
 			}
-		}
-		if err := u.checkPlacementAdmission(ctx, claims); err != nil {
-			return nil, err
 		}
 	}
 
@@ -554,29 +509,26 @@ func (u *TicketUsecase) verifyDSTicket(
 		"jti", claims.JTI, "ds_pod", dsPodName)
 
 	out := &DSTicketClaims{
-		Version:              claims.Version,
-		PlayerID:             claims.PlayerID,
-		MatchID:              claims.MatchID,
-		DSType:               claims.DSType,
-		JTI:                  claims.JTI,
-		IssuedAtMs:           claims.IssuedAtMs,
-		ExpiresAtMs:          claims.ExpiresAtMs,
-		RegionID:             claims.RegionID,
-		CellID:               claims.CellID,
-		RoleID:               claims.RoleID,
-		DSPodName:            claims.DSPodName,
-		DSInstanceUID:        claims.DSInstanceUID,
-		DSProtocolEpoch:      claims.DSProtocolEpoch,
-		DSCredentialGen:      claims.DSCredentialGen,
-		DSCredentialJTI:      claims.DSCredentialJTI,
-		HubAssignmentID:      claims.HubAssignmentID,
-		DSWriterEpoch:        claims.DSWriterEpoch,
-		DSInstanceEpoch:      claims.DSInstanceEpoch,
-		AllocationID:         claims.AllocationID,
-		ReleaseTrack:         claims.ReleaseTrack,
-		PlacementVersion:     claims.PlacementVersion,
-		PlacementOperationID: claims.PlacementOperationID,
-		SourceMatchID:        claims.SourceMatchID,
+		Version:         claims.Version,
+		PlayerID:        claims.PlayerID,
+		MatchID:         claims.MatchID,
+		DSType:          claims.DSType,
+		JTI:             claims.JTI,
+		IssuedAtMs:      claims.IssuedAtMs,
+		ExpiresAtMs:     claims.ExpiresAtMs,
+		RegionID:        claims.RegionID,
+		CellID:          claims.CellID,
+		RoleID:          claims.RoleID,
+		DSPodName:       claims.DSPodName,
+		DSInstanceUID:   claims.DSInstanceUID,
+		DSProtocolEpoch: claims.DSProtocolEpoch,
+		DSCredentialGen: claims.DSCredentialGen,
+		DSCredentialJTI: claims.DSCredentialJTI,
+		HubAssignmentID: claims.HubAssignmentID,
+		DSWriterEpoch:   claims.DSWriterEpoch,
+		DSInstanceEpoch: claims.DSInstanceEpoch,
+		AllocationID:    claims.AllocationID,
+		ReleaseTrack:    claims.ReleaseTrack,
 	}
 	return out, nil
 }
@@ -608,8 +560,6 @@ func (u *TicketUsecase) verifyDSTicketSignature(ticket string) (*verifiedDSTicke
 			DSInstanceUID: claims.DSInstanceUID, HubAssignmentID: claims.HubAssignmentID,
 			DSProtocolEpoch: claims.DSProtocolEpoch, DSCredentialGen: claims.DSCredentialGen,
 			DSCredentialJTI: claims.DSCredentialJTI, DSWriterEpoch: claims.DSWriterEpoch,
-			PlacementVersion: claims.PlacementVersion, PlacementOperationID: claims.PlacementOperationID,
-			SourceMatchID: claims.SourceMatchID,
 		}
 		if claims.IssuedAt != nil {
 			out.IssuedAtMs = claims.IssuedAt.UnixMilli()
@@ -633,8 +583,6 @@ func (u *TicketUsecase) verifyDSTicketSignature(ticket string) (*verifiedDSTicke
 			DSPodName: claims.DSPodName, DSInstanceUID: claims.DSInstanceUID,
 			DSInstanceEpoch: claims.DSInstanceEpoch, ReleaseTrack: claims.ReleaseTrack,
 			AllocationID: claims.AllocationID, HubAssignmentID: claims.HubAssignmentID,
-			PlacementVersion: claims.PlacementVersion, PlacementOperationID: claims.PlacementOperationID,
-			SourceMatchID: claims.SourceMatchID,
 		}
 		if claims.IssuedAt != nil {
 			out.IssuedAtMs = claims.IssuedAt.UnixMilli()
@@ -766,95 +714,4 @@ func (u *TicketUsecase) checkHubAssignment(
 		return errcode.New(errcode.ErrUnavailable, "hub assignment checker unavailable")
 	}
 	return u.assignmentChecker.CheckCurrent(ctx, playerID, binding)
-}
-
-// checkPlacementAdmission runs before the JTI marker write. Shadow mode records
-// drift but preserves rolling compatibility; enforce mode fails closed on missing,
-// stale, partial, or unavailable placement authority.
-func (u *TicketUsecase) checkPlacementAdmission(ctx context.Context, claims *verifiedDSTicket) error {
-	if u.placementMode == placement.ModeOff {
-		return nil
-	}
-	var err error
-	if u.placementChecker == nil || claims == nil {
-		err = errcode.New(errcode.ErrUnavailable, "placement admission checker unavailable")
-	} else {
-		err = u.placementChecker.CheckHubAdmission(ctx, data.HubPlacementAdmission{
-			PlayerID: claims.PlayerID,
-			Binding: placement.Binding{Version: claims.PlacementVersion,
-				OperationID: claims.PlacementOperationID, SourceMatchID: claims.SourceMatchID},
-			Target: placement.Target{PodName: claims.DSPodName, InstanceUID: claims.DSInstanceUID,
-				InstanceEpoch: claims.DSInstanceEpoch, AssignmentID: claims.HubAssignmentID,
-				ReleaseTrack: claims.ReleaseTrack},
-		})
-	}
-	if err == nil {
-		return nil
-	}
-	plog.With(ctx).Warnw("msg", "hub_placement_admission_rejected", "mode", u.placementMode.String(),
-		"player_id", claims.PlayerID, "placement_version", claims.PlacementVersion,
-		"placement_operation_id", claims.PlacementOperationID, "err", err)
-	if u.placementMode == placement.ModeShadow {
-		return nil
-	}
-	return err
-}
-
-// commitBattlePlacementAdmission performs the final, idempotent placement CAS
-// before any replay marker side effect. Shadow mode observes rollout drift;
-// enforce mode rejects legacy/partial tickets, offline verification, UNKNOWN
-// placement, stale operations and target conflicts.
-func (u *TicketUsecase) commitBattlePlacementAdmission(
-	ctx context.Context,
-	claims *verifiedDSTicket,
-	admissionID string,
-	admission *data.DSAdmissionBinding,
-) error {
-	if u.placementMode == placement.ModeOff {
-		return nil
-	}
-	var err error
-	if u.placementChecker == nil || claims == nil || admission == nil ||
-		claims.Version != auth.DSTicketVersion2 {
-		err = errcode.New(errcode.ErrUnavailable,
-			"online Battle placement admission authority unavailable")
-	} else {
-		binding := placement.Binding{Version: claims.PlacementVersion,
-			OperationID: claims.PlacementOperationID, SourceMatchID: claims.SourceMatchID}
-		target := placement.Target{PodName: claims.DSPodName, InstanceUID: claims.DSInstanceUID,
-			InstanceEpoch: claims.DSInstanceEpoch, AllocationID: claims.AllocationID,
-			ReleaseTrack: claims.ReleaseTrack}
-		if claims.DSType != string(auth.DSTypeBattle) || claims.MatchID == 0 || admissionID == "" ||
-			admission.DSType != auth.DSTypeBattle || admission.MatchID != claims.MatchID ||
-			admission.PodName != target.PodName || admission.InstanceUID != target.InstanceUID ||
-			admission.ProtocolEpoch != target.InstanceEpoch || admission.AllocationID != target.AllocationID ||
-			admission.ReleaseTrack != target.ReleaseTrack || !slices.Contains(admission.PlayerIDs, claims.PlayerID) {
-			err = errcode.New(errcode.ErrLoginTicketInvalid, "Battle placement admission target mismatch")
-		} else {
-			err = u.placementChecker.CommitBattleAdmission(ctx, data.BattlePlacementAdmission{
-				PlayerID: claims.PlayerID, MatchID: claims.MatchID, AdmissionID: admissionID,
-				Binding: binding, Target: target,
-			})
-		}
-	}
-	if err == nil {
-		return nil
-	}
-	plog.With(ctx).Warnw("msg", "battle_placement_admission_rejected", "mode", u.placementMode.String(),
-		"player_id", func() uint64 {
-			if claims == nil {
-				return 0
-			}
-			return claims.PlayerID
-		}(),
-		"match_id", func() uint64 {
-			if claims == nil {
-				return 0
-			}
-			return claims.MatchID
-		}(), "err", err)
-	if u.placementMode == placement.ModeShadow {
-		return nil
-	}
-	return err
 }

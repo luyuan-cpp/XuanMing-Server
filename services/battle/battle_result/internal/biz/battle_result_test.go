@@ -19,7 +19,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/conf"
@@ -46,8 +45,6 @@ type fakeRepo struct {
 	nextMatchReleaseID        uint64
 	matchReleaseDeferErr      error
 	matchReleaseDeleteErr     error
-	battleExitProofOutbox     []data.BattleExitProofRecord
-	nextBattleExitProofID     uint64
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{store: map[uint64]*battlev1.BattleResult{}} }
@@ -59,7 +56,6 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 	}
 	if _, ok := r.store[result.GetMatchId()]; ok {
 		r.ensureFakeMatchRelease(result.GetMatchId(), r.store[result.GetMatchId()].GetStats())
-		r.ensureFakeBattleExitProof(result.GetMatchId(), r.store[result.GetMatchId()].GetStats())
 		return true, nil // 幂等命中会恢复缺失 release outbox，其它出箱不重复
 	}
 	r.store[result.GetMatchId()] = proto.Clone(result).(*battlev1.BattleResult)
@@ -85,29 +81,7 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 		r.terminalOutbox = append(r.terminalOutbox, rec)
 	}
 	r.ensureFakeMatchRelease(result.GetMatchId(), result.GetStats())
-	r.ensureFakeBattleExitProof(result.GetMatchId(), result.GetStats())
 	return false, nil
-}
-
-func (r *fakeRepo) ensureFakeBattleExitProof(matchID uint64, stats []*battlev1.PlayerStats) {
-	for _, stat := range stats {
-		found := false
-		for _, rec := range r.battleExitProofOutbox {
-			if rec.MatchID == matchID && rec.PlayerID == stat.GetPlayerId() {
-				found = true
-				break
-			}
-		}
-		if found || stat.GetPlayerId() == 0 {
-			continue
-		}
-		r.nextBattleExitProofID++
-		r.battleExitProofOutbox = append(r.battleExitProofOutbox, data.BattleExitProofRecord{
-			ID: r.nextBattleExitProofID, MatchID: matchID, PlayerID: stat.GetPlayerId(),
-			Proof: placement.BattleExitProof{ProofType: placement.ProofMatchTerminal,
-				ProofID: "result:test:match:test"}, CreatedAtMs: time.Now().UnixMilli(),
-		})
-	}
 }
 
 func (r *fakeRepo) ensureFakeMatchRelease(matchID uint64, stats []*battlev1.PlayerStats) {
@@ -278,60 +252,6 @@ func (r *fakeRepo) DeleteMatchReleaseOutbox(_ context.Context, id uint64) error 
 	return nil
 }
 
-func (r *fakeRepo) FetchBattleExitProofOutbox(_ context.Context, limit int, nowMs int64) ([]data.BattleExitProofRecord, error) {
-	out := make([]data.BattleExitProofRecord, 0, len(r.battleExitProofOutbox))
-	for _, rec := range r.battleExitProofOutbox {
-		if rec.NextAttemptAtMs <= nowMs {
-			out = append(out, rec)
-		}
-	}
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
-}
-
-func (r *fakeRepo) PrepareBattleExitProofOutbox(_ context.Context, rec data.BattleExitProofRecord, proof placement.BattleExitProof) (bool, error) {
-	for i := range r.battleExitProofOutbox {
-		if r.battleExitProofOutbox[i].ID == rec.ID && !r.battleExitProofOutbox[i].Prepared {
-			r.battleExitProofOutbox[i].Prepared = true
-			r.battleExitProofOutbox[i].Proof = proof
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (r *fakeRepo) DeferBattleExitProofOutbox(_ context.Context, id uint64, nextAttemptAtMs int64) error {
-	for i := range r.battleExitProofOutbox {
-		if r.battleExitProofOutbox[i].ID == id {
-			r.battleExitProofOutbox[i].AttemptCount++
-			r.battleExitProofOutbox[i].NextAttemptAtMs = nextAttemptAtMs
-		}
-	}
-	return nil
-}
-
-func (r *fakeRepo) MarkBattleExitProofSuperseded(_ context.Context, id uint64, _ int64) error {
-	for i, rec := range r.battleExitProofOutbox {
-		if rec.ID == id {
-			r.battleExitProofOutbox = append(r.battleExitProofOutbox[:i], r.battleExitProofOutbox[i+1:]...)
-			break
-		}
-	}
-	return nil
-}
-
-func (r *fakeRepo) DeleteBattleExitProofOutbox(_ context.Context, id uint64) error {
-	for i, rec := range r.battleExitProofOutbox {
-		if rec.ID == id {
-			r.battleExitProofOutbox = append(r.battleExitProofOutbox[:i], r.battleExitProofOutbox[i+1:]...)
-			break
-		}
-	}
-	return nil
-}
-
 // fakePusher 捕获 player.update 事件;failFirst>0 时前 failFirst 次推送返错(模拟 Kafka 不可用),
 // failAt>0 时第 failAt 次调用单次返错(模拟一批中途失败)。
 type fakePusher struct {
@@ -351,46 +271,6 @@ type fakeMatchReleaser struct {
 type ackLossMatchReleaser struct {
 	calls     int
 	committed bool
-}
-
-type fakeBattleExitAuthority struct {
-	prepareCalls int
-	fenceCalls   int
-	relayCalls   int
-	failFence    int
-	failRelay    int
-	supersede    bool
-	operationIDs []string
-}
-
-func (a *fakeBattleExitAuthority) RelayTerminalFence(_ context.Context, _, _ uint64, _ placement.BattleExitProof) error {
-	a.fenceCalls++
-	if a.failFence > 0 {
-		a.failFence--
-		return errors.New("terminal fence response unknown")
-	}
-	return nil
-}
-
-func (a *fakeBattleExitAuthority) PrepareTerminalProof(_ context.Context, rec data.BattleExitProofRecord) (placement.BattleExitProof, bool, error) {
-	a.prepareCalls++
-	if a.supersede {
-		return placement.BattleExitProof{}, true, nil
-	}
-	proof := placement.BattleExitProof{ExpectedVersion: 7,
-		OperationID: "9849ab5b-2ecf-4fc3-983d-2d8df53cc009",
-		ProofType:   placement.ProofMatchTerminal, ProofID: rec.Proof.ProofID, Signature: "sig"}
-	return proof, false, nil
-}
-
-func (a *fakeBattleExitAuthority) RelayTerminalProof(_ context.Context, _, _ uint64, proof placement.BattleExitProof) error {
-	a.relayCalls++
-	a.operationIDs = append(a.operationIDs, proof.OperationID)
-	if a.failRelay > 0 {
-		a.failRelay--
-		return errors.New("redis response unknown")
-	}
-	return nil
 }
 
 func (r *fakeMatchReleaser) ReleaseMatch(_ context.Context, matchID uint64, playerIDs []uint64) error {
@@ -1156,69 +1036,11 @@ func TestAuthorizedResultRosterMustExactlyMatchCanonicalBattle(t *testing.T) {
 			); errcode.As(err) != errcode.ErrUnauthorized {
 				t.Fatalf("code=%v err=%v", errcode.As(err), err)
 			}
-			if len(repo.store) != 0 || len(repo.terminalOutbox) != 0 || len(repo.matchReleaseOutbox) != 0 || len(repo.battleExitProofOutbox) != 0 {
-				t.Fatalf("rejected roster wrote state: store=%d terminal=%d release=%d exit=%d",
-					len(repo.store), len(repo.terminalOutbox), len(repo.matchReleaseOutbox), len(repo.battleExitProofOutbox))
+			if len(repo.store) != 0 || len(repo.terminalOutbox) != 0 || len(repo.matchReleaseOutbox) != 0 {
+				t.Fatalf("rejected roster wrote state: store=%d terminal=%d release=%d",
+					len(repo.store), len(repo.terminalOutbox), len(repo.matchReleaseOutbox))
 			}
 		})
-	}
-}
-
-func TestBattleExitProofPersistsBeforeRelayAndRetriesSameOperation(t *testing.T) {
-	repo := newFakeRepo()
-	uc := newTestUsecase(repo, &fakePusher{})
-	authority := &fakeBattleExitAuthority{failRelay: 1}
-	uc.SetBattleExitProofAuthority(authority)
-	if _, err := uc.ReportResult(context.Background(), terminalResult(880, "battle-880")); err != nil {
-		t.Fatal(err)
-	}
-	if len(repo.battleExitProofOutbox) != 2 {
-		t.Fatalf("per-player exit proof rows=%d want=2", len(repo.battleExitProofOutbox))
-	}
-	if _, err := uc.publishBattleExitProofBatch(context.Background()); err == nil {
-		t.Fatal("first unknown Redis result must be reported and retained")
-	}
-	if !repo.battleExitProofOutbox[0].Prepared || repo.battleExitProofOutbox[0].Proof.OperationID == "" {
-		t.Fatalf("proof not durably prepared before relay: %+v", repo.battleExitProofOutbox[0])
-	}
-	stableOperation := repo.battleExitProofOutbox[0].Proof.OperationID
-	for i := range repo.battleExitProofOutbox {
-		repo.battleExitProofOutbox[i].NextAttemptAtMs = 0
-	}
-	if _, err := uc.publishBattleExitProofBatch(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if authority.prepareCalls != 2 { // one prepare per player; retry never prepares again
-		t.Fatalf("prepare calls=%d want=2", authority.prepareCalls)
-	}
-	if authority.fenceCalls != 3 { // every attempt fences before inspect/relay; retry is idempotent
-		t.Fatalf("terminal fence calls=%d want=3", authority.fenceCalls)
-	}
-	if len(authority.operationIDs) < 3 || authority.operationIDs[0] != stableOperation || authority.operationIDs[len(authority.operationIDs)-1] != stableOperation {
-		t.Fatalf("relay did not reuse persisted operation: %v", authority.operationIDs)
-	}
-	if len(repo.battleExitProofOutbox) != 0 {
-		t.Fatalf("successful exact relay did not ACK rows: %+v", repo.battleExitProofOutbox)
-	}
-}
-
-func TestBattleTerminalFencePublishesBeforeStableHubSupersede(t *testing.T) {
-	repo := newFakeRepo()
-	uc := newTestUsecase(repo, &fakePusher{})
-	authority := &fakeBattleExitAuthority{supersede: true}
-	uc.SetBattleExitProofAuthority(authority)
-	if _, err := uc.ReportResult(context.Background(), terminalResult(881, "battle-881")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := uc.publishBattleExitProofBatch(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if authority.fenceCalls != 2 || authority.prepareCalls != 2 || authority.relayCalls != 0 {
-		t.Fatalf("stable-Hub ordering fence=%d prepare=%d version_relay=%d",
-			authority.fenceCalls, authority.prepareCalls, authority.relayCalls)
-	}
-	if len(repo.battleExitProofOutbox) != 0 {
-		t.Fatalf("superseded version jobs remained after tombstones: %+v", repo.battleExitProofOutbox)
 	}
 }
 

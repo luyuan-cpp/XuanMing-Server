@@ -10,9 +10,8 @@ import (
 )
 
 // allocationFromStoredTarget reconstructs the exact allocator result checkpointed
-// on the canonical match.  BattleTarget is written before the first placement
-// Begin, so a process restart never has to guess which DS identity partially
-// prepared players were bound to.
+// on the canonical match.  BattleTarget is written before any ticket is signed,
+// so a process restart never has to guess which DS identity was allocated.
 func allocationFromStoredTarget(target *matchv1.MatchBattleTargetStorageRecord) (*model.BattleAllocation, bool) {
 	if target == nil {
 		return nil, false
@@ -41,11 +40,10 @@ func sameBattleAllocation(left, right *model.BattleAllocation) bool {
 
 // checkpointBattleAllocation is the allocation saga's durable handoff:
 //
-//	allocator READY -> CAS exact target on MatchStorageRecord -> placement Begin/Bind
+//	allocator READY -> CAS exact target on MatchStorageRecord -> ticket signing
 //
 // A retry always reuses this checkpoint.  A different target for the same
-// operation is UNKNOWN/conflict and must never be used to overwrite already
-// prepared player placements.
+// operation is UNKNOWN/conflict and must never overwrite the checkpointed DS.
 func (u *MatchUsecase) checkpointBattleAllocation(
 	ctx context.Context,
 	job *matchv1.MatchStorageRecord,
@@ -59,7 +57,7 @@ func (u *MatchUsecase) checkpointBattleAllocation(
 		return nil, errcode.New(errcode.ErrInvalidArg, "complete allocation checkpoint required")
 	}
 
-	expectedTarget := battleTargetStorage(allocation, nil)
+	expectedTarget := battleTargetStorage(allocation)
 	var checkpoint *model.BattleAllocation
 	err := u.repo.UpdateMatchWithLock(ctx, job.GetMatchId(), u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
 		if rec.GetBattleTarget() != nil {
@@ -84,9 +82,6 @@ func (u *MatchUsecase) checkpointBattleAllocation(
 				"match %d allocation operation no longer exact REQUESTING", job.GetMatchId())
 		}
 
-		// Player bindings deliberately remain empty at this checkpoint.  They are
-		// filled only by the READY CAS after every player returned the exact same
-		// operation binding and every ticket was signed.
 		rec.BattleTarget = expectedTarget
 		checkpoint = &model.BattleAllocation{Address: allocation.Address, Target: allocation.Target}
 		return nil
@@ -120,7 +115,7 @@ func (u *MatchUsecase) fenceRequestingAllocationCheckpoint(
 		MatchId: matchID, Stage: stageAllocating,
 		AllocationPhase:       matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING,
 		AllocationOperationId: operationID,
-		BattleTarget:          battleTargetStorage(allocation, nil),
+		BattleTarget:          battleTargetStorage(allocation),
 	}
 	var fenced *matchv1.MatchStorageRecord
 	err := u.repo.UpdateMatchWithLock(ctx, matchID, u.cfg.OptimisticRetry,
@@ -141,34 +136,6 @@ func (u *MatchUsecase) fenceRequestingAllocationCheckpoint(
 			"match %d requesting allocation fence result unknown", matchID)
 	}
 	return fenced, nil
-}
-
-func validatePreparedBindings(operationID string, playerIDs []uint64, bindings map[uint64]placement.Binding) error {
-	if !placement.ValidOperationID(operationID) || len(playerIDs) == 0 || len(bindings) != len(playerIDs) {
-		return errcode.New(errcode.ErrUnavailable, "placement returned an incomplete player binding set")
-	}
-	seen := make(map[uint64]struct{}, len(playerIDs))
-	for _, playerID := range playerIDs {
-		if playerID == 0 {
-			return errcode.New(errcode.ErrInvalidArg, "allocation roster contains zero player_id")
-		}
-		if _, duplicate := seen[playerID]; duplicate {
-			return errcode.New(errcode.ErrInvalidArg, "allocation roster contains duplicate player %d", playerID)
-		}
-		seen[playerID] = struct{}{}
-		binding, ok := bindings[playerID]
-		if !ok || !binding.Complete() || binding.OperationID != operationID {
-			return errcode.New(errcode.ErrUnavailable,
-				"placement binding missing or drifted for player %d", playerID)
-		}
-	}
-	for playerID := range bindings {
-		if _, ok := seen[playerID]; !ok {
-			return errcode.New(errcode.ErrUnavailable,
-				"placement returned outsider binding for player %d", playerID)
-		}
-	}
-	return nil
 }
 
 func validateSignedBattleTickets(playerIDs []uint64, tickets map[uint64]string) error {

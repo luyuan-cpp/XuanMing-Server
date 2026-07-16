@@ -39,7 +39,6 @@ import (
 	jwt "github.com/golang-jwt/jwt/v5"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
-	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
 // DSTicket v2 信任域常量。与 SessionToken(pandora-login → pandora-client)、
@@ -86,9 +85,6 @@ type DSTicketClaimsV2 struct {
 	MatchID         uint64 `json:"match_id,omitempty"`
 	AllocationID    string `json:"allocation_id,omitempty"`
 	HubAssignmentID string `json:"hub_assignment_id,omitempty"`
-	PlacementVersion uint64 `json:"placement_version,omitempty"`
-	PlacementOperationID string `json:"placement_operation_id,omitempty"`
-	SourceMatchID uint64 `json:"source_match_id,omitempty"`
 }
 
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
@@ -118,7 +114,6 @@ type DSTicketTarget struct {
 	// MatchID / AllocationID:battle 票必填;hub 票必空/0。
 	MatchID      uint64
 	AllocationID string
-	Placement placement.Binding
 }
 
 func (t DSTicketTarget) validate(dsType DSType) error {
@@ -127,9 +122,6 @@ func (t DSTicketTarget) validate(dsType DSType) error {
 	}
 	if t.ReleaseTrack != ReleaseTrackStable && t.ReleaseTrack != ReleaseTrackCanary {
 		return fmt.Errorf("auth.DSTicketTarget: invalid release_track %q", t.ReleaseTrack)
-	}
-	if err := t.Placement.ValidateOptional(); err != nil {
-		return fmt.Errorf("auth.DSTicketTarget: %w", err)
 	}
 	switch dsType {
 	case DSTypeHub:
@@ -269,9 +261,6 @@ func (s *DSTicketSigner) sign(playerID uint64, dsType DSType, regionID, cellID, 
 		MatchID:         target.MatchID,
 		AllocationID:    target.AllocationID,
 		HubAssignmentID: target.HubAssignmentID,
-		PlacementVersion: target.Placement.Version,
-		PlacementOperationID: target.Placement.OperationID,
-		SourceMatchID: target.Placement.SourceMatchID,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	t.Header["kid"] = s.kid
@@ -406,8 +395,6 @@ func (v *DSTicketVerifier) Verify(token string) (*DSTicketClaimsV2, error) {
 		HubAssignmentID: claims.HubAssignmentID,
 		MatchID:         claims.MatchID,
 		AllocationID:    claims.AllocationID,
-		Placement: placement.Binding{Version: claims.PlacementVersion,
-			OperationID: claims.PlacementOperationID, SourceMatchID: claims.SourceMatchID},
 	}
 	if err := target.validate(DSType(claims.DSType)); err != nil {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket binding invalid: %v", err)

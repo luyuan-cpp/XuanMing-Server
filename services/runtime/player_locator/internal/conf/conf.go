@@ -38,13 +38,6 @@ type LocatorConf struct {
 	// LocationTTL Redis hash 的 TTL。默认 30s,对齐 infra.md §3.2 表中的 30s heartbeat。
 	// W3 ⑥(2026-06-05):字段改用 config.Duration,etc yaml 可写 "30s" 字符串。
 	LocationTTL config.Duration `yaml:"location_ttl,omitempty" json:"location_ttl,omitempty"`
-	// Independent proof keys enforce least privilege between transition writers.
-	PlacementAccountBootstrapProofSecret string `yaml:"placement_account_bootstrap_proof_secret,omitempty" json:"placement_account_bootstrap_proof_secret,omitempty"`
-	PlacementMatchStartProofSecret       string `yaml:"placement_match_start_proof_secret,omitempty" json:"placement_match_start_proof_secret,omitempty"`
-	PlacementBattleExitProofSecret       string `yaml:"placement_battle_exit_proof_secret,omitempty" json:"placement_battle_exit_proof_secret,omitempty"`
-	PlacementHubTransferProofSecret      string `yaml:"placement_hub_transfer_proof_secret,omitempty" json:"placement_hub_transfer_proof_secret,omitempty"`
-	// Battle departure is intentionally independent from battle terminal/leave authority.
-	PlacementBattleDepartureProofSecret string `yaml:"placement_battle_departure_proof_secret,omitempty" json:"placement_battle_departure_proof_secret,omitempty"`
 }
 
 // PresenceConf 是好友在线态订阅推送 fan-out 的配置

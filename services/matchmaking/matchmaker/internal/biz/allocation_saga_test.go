@@ -23,6 +23,7 @@ type switchingAllocationStub struct {
 	second           model.BattleAllocation
 	allocateCalls    int
 	signCalls        int
+	signFailFirst    bool
 	abortCalls       int
 	abortErr         error
 	abortMatchID     uint64
@@ -73,9 +74,12 @@ func (s *switchingAllocationStub) SignBattleTickets(
 	matchID uint64,
 	playerIDs []uint64,
 	_ *model.BattleAllocation,
-	_ map[uint64]placement.Binding,
 ) (map[uint64]string, error) {
 	s.signCalls++
+	if s.signFailFirst && s.signCalls == 1 {
+		// The real signer may fail after the exact target was checkpointed.
+		return nil, errors.New("injected ticket signing failure after checkpoint")
+	}
 	tickets := make(map[uint64]string, len(playerIDs))
 	for _, playerID := range playerIDs {
 		tickets[playerID] = fmt.Sprintf("ticket-%d-%d", matchID, playerID)
@@ -83,45 +87,11 @@ func (s *switchingAllocationStub) SignBattleTickets(
 	return tickets, nil
 }
 
-func (*switchingAllocationStub) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation, placement.Binding) (string, error) {
+func (*switchingAllocationStub) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
 	return "ticket", nil
 }
 
-type failFirstPlacementBatch struct {
-	calls       int
-	allocations []model.BattleAllocation
-}
-
-func (*failFirstPlacementBatch) RequireStableHub(context.Context, []uint64) error { return nil }
-
-func (*failFirstPlacementBatch) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
-	return nil
-}
-
-func (p *failFirstPlacementBatch) PrepareBattlePlacement(
-	_ context.Context,
-	operationID string,
-	_ uint64,
-	playerIDs []uint64,
-	allocation *model.BattleAllocation,
-) (map[uint64]placement.Binding, error) {
-	p.calls++
-	if allocation != nil {
-		p.allocations = append(p.allocations, *allocation)
-	}
-	if p.calls == 1 {
-		// The real coordinator may already have committed Begin/Bind for an
-		// earlier player before a later player's RPC fails.
-		return nil, errors.New("injected failure after first player was bound")
-	}
-	bindings := make(map[uint64]placement.Binding, len(playerIDs))
-	for _, playerID := range playerIDs {
-		bindings[playerID] = placement.Binding{Version: 8, OperationID: operationID}
-	}
-	return bindings, nil
-}
-
-func TestAllocationSagaCheckpointsExactTargetBeforePartialPlacementAndRestart(t *testing.T) {
+func TestAllocationSagaCheckpointsExactTargetBeforeSigningAndRestartReusesIt(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 9901)
 	seedAllocatingMatch(t, ctx, f, 9901, time.Now().Add(time.Minute).UnixMilli())
@@ -134,24 +104,22 @@ func TestAllocationSagaCheckpointsExactTargetBeforePartialPlacementAndRestart(t 
 		PodName: "battle-b", InstanceUID: "uid-b", InstanceEpoch: 2,
 		AllocationID: "allocation-b", ReleaseTrack: "stable",
 	}}
-	allocator := &switchingAllocationStub{first: first, second: second}
-	placementBatch := &failFirstPlacementBatch{}
+	allocator := &switchingAllocationStub{first: first, second: second, signFailFirst: true}
 	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(placementBatch)
 
 	if err := f.uc.advanceAllocationsOnce(ctx); err == nil {
-		t.Fatal("partial placement failure must keep the durable job retryable")
+		t.Fatal("post-checkpoint signing failure must keep the durable job retryable")
 	}
 	afterFailure, found, err := f.repo.GetMatch(ctx, 9901)
 	if err != nil || !found || afterFailure.GetStage() != stageAllocating {
-		t.Fatalf("partial failure lost ALLOCATING job: found=%v match=%+v err=%v", found, afterFailure, err)
+		t.Fatalf("signing failure lost ALLOCATING job: found=%v match=%+v err=%v", found, afterFailure, err)
 	}
 	checkpoint, complete := allocationFromStoredTarget(afterFailure.GetBattleTarget())
-	if !complete || !sameBattleAllocation(checkpoint, &first) || len(afterFailure.GetBattleTarget().GetPlayerBindings()) != 0 {
-		t.Fatalf("exact target was not checkpointed before placement: %+v", afterFailure.GetBattleTarget())
+	if !complete || !sameBattleAllocation(checkpoint, &first) {
+		t.Fatalf("exact target was not checkpointed before signing: %+v", afterFailure.GetBattleTarget())
 	}
-	if afterFailure.GetBattleDsAddr() != "" || f.pusher.lastStageFor(1) == stageReady || allocator.signCalls != 0 {
-		t.Fatalf("partial placement leaked READY: ds=%q pushed=%s sign_calls=%d",
+	if afterFailure.GetBattleDsAddr() != "" || f.pusher.lastStageFor(1) == stageReady || allocator.signCalls != 1 {
+		t.Fatalf("failed signing leaked READY: ds=%q pushed=%s sign_calls=%d",
 			afterFailure.GetBattleDsAddr(), f.pusher.lastStageFor(1), allocator.signCalls)
 	}
 
@@ -165,9 +133,8 @@ func TestAllocationSagaCheckpointsExactTargetBeforePartialPlacementAndRestart(t 
 		t.Fatal(err)
 	}
 	restarted := NewMatchUsecase(f.repo, nil, f.pusher, allocator, &fakeIDGen{next: 10000}, f.locator, f.cfg)
-	restarted.SetPlacementCoordinator(placementBatch)
 	if err := restarted.advanceAllocationsOnce(ctx); err != nil {
-		t.Fatalf("restart could not resume exact placement operation: %v", err)
+		t.Fatalf("restart could not resume exact allocation operation: %v", err)
 	}
 
 	ready, found, err := f.repo.GetMatch(ctx, 9901)
@@ -178,16 +145,9 @@ func TestAllocationSagaCheckpointsExactTargetBeforePartialPlacementAndRestart(t 
 	if !complete || !sameBattleAllocation(readyTarget, &first) || ready.GetBattleDsAddr() != first.Address {
 		t.Fatalf("READY drifted to a new allocation: %+v", ready.GetBattleTarget())
 	}
-	if allocator.allocateCalls != 1 || allocator.signCalls != 1 || placementBatch.calls != 2 {
-		t.Fatalf("unexpected saga calls: allocate=%d sign=%d placement=%d",
-			allocator.allocateCalls, allocator.signCalls, placementBatch.calls)
-	}
-	if len(placementBatch.allocations) != 2 || !sameBattleAllocation(&placementBatch.allocations[0], &first) ||
-		!sameBattleAllocation(&placementBatch.allocations[1], &first) {
-		t.Fatalf("placement retry did not reuse exact target: %+v", placementBatch.allocations)
-	}
-	if len(ready.GetBattleTarget().GetPlayerBindings()) != len(ready.GetMembers()) {
-		t.Fatalf("READY published without the complete binding set: %+v", ready.GetBattleTarget())
+	if allocator.allocateCalls != 1 || allocator.signCalls != 2 {
+		t.Fatalf("unexpected saga calls: allocate=%d sign=%d",
+			allocator.allocateCalls, allocator.signCalls)
 	}
 }
 
@@ -213,7 +173,7 @@ func TestCheckpointBattleAllocationRejectsAbortingEvenForSameTarget(t *testing.T
 	}
 	if err := f.repo.UpdateMatchWithLock(ctx, 9909, f.cfg.OptimisticRetry,
 		func(rec *matchv1.MatchStorageRecord) error {
-			rec.BattleTarget = battleTargetStorage(allocation, nil)
+			rec.BattleTarget = battleTargetStorage(allocation)
 			return nil
 		}, f.cfg.MatchTTL.Std()); err != nil {
 		t.Fatal(err)
@@ -275,272 +235,33 @@ func (r *abortBeforePostCheckpointFenceRepo) UpdateMatchWithLock(
 	return r.MatchRepo.UpdateMatchWithLock(ctx, matchID, maxRetry, mutate, ttl)
 }
 
-type hookPlacementBatch struct {
-	allowPlacement
-	calls int
-	hook  func() error
-}
-
-func (p *hookPlacementBatch) PrepareBattlePlacement(
-	ctx context.Context,
-	operationID string,
-	matchID uint64,
-	playerIDs []uint64,
-	allocation *model.BattleAllocation,
-) (map[uint64]placement.Binding, error) {
-	p.calls++
-	bindings, err := p.allowPlacement.PrepareBattlePlacement(ctx, operationID, matchID, playerIDs, allocation)
-	if err != nil {
-		return nil, err
-	}
-	if p.hook != nil {
-		if err := p.hook(); err != nil {
-			return nil, err
-		}
-	}
-	return bindings, nil
-}
-
-type hookHubDeparture struct {
-	calls int
-	hook  func() error
-}
-
-func (h *hookHubDeparture) EnsureHubDeparted(context.Context, uint64, string,
-	[]uint64, map[uint64]placement.Binding,
-) error {
-	h.calls++
-	if h.hook != nil {
-		return h.hook()
-	}
-	return nil
-}
-
 func TestAbortFenceStopsPostCheckpointExternalSideEffects(t *testing.T) {
-	t.Run("before placement", func(t *testing.T) {
-		ctx := context.Background()
-		f := newFixture(t, 9930)
-		seedAllocatingMatch(t, ctx, f, 9930, time.Now().Add(time.Minute).UnixMilli())
-		allocation := model.BattleAllocation{Address: "10.0.0.30:7777", Target: placement.Target{
-			PodName: "battle-before-placement", InstanceUID: "uid-before-placement", InstanceEpoch: 30,
-			AllocationID: "allocation-before-placement", ReleaseTrack: "stable"}}
-		allocator := &switchingAllocationStub{first: allocation, second: allocation}
-		placementBatch := &hookPlacementBatch{}
-		hubDeparture := &hookHubDeparture{}
-		f.uc.allocator = allocator
-		f.uc.SetPlacementCoordinator(placementBatch)
-		f.uc.SetHubDepartureCoordinator(hubDeparture)
-		f.uc.repo = &abortBeforePostCheckpointFenceRepo{MatchRepo: f.repo, matchID: 9930}
-		initial, found, err := f.repo.GetMatch(ctx, 9930)
-		if err != nil || !found {
-			t.Fatalf("get initial allocation: found=%v err=%v", found, err)
-		}
-		if err := f.uc.advanceAllocation(ctx, initial); errcode.As(err) != errcode.ErrMatchConcurrent {
-			t.Fatalf("post-checkpoint fence result=%v", err)
-		}
-		current, found, err := f.repo.GetMatch(ctx, 9930)
-		stored, complete := allocationFromStoredTarget(current.GetBattleTarget())
-		if err != nil || !found || current.GetStage() != stageAllocating ||
-			current.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING ||
-			!complete || !sameBattleAllocation(stored, &allocation) || allocator.allocateCalls != 1 ||
-			placementBatch.calls != 0 || hubDeparture.calls != 0 || allocator.signCalls != 0 {
-			t.Fatalf("abort-before-placement leaked side effects: found=%v match=%+v allocate=%d placement=%d departure=%d sign=%d err=%v",
-				found, current, allocator.allocateCalls, placementBatch.calls, hubDeparture.calls, allocator.signCalls, err)
-		}
-		assertAllocationOwnershipIntact(t, ctx, f, 9930)
-	})
-
-	stages := []struct {
-		name              string
-		matchID           uint64
-		abortAfterPrepare bool
-		wantDeparture     int
-	}{
-		{name: "between placement and Hub departure", matchID: 9931, abortAfterPrepare: true},
-		{name: "between Hub departure and ticket signing", matchID: 9932, wantDeparture: 1},
-	}
-	for _, tc := range stages {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			f := newFixture(t, tc.matchID)
-			seedAllocatingMatch(t, ctx, f, tc.matchID, time.Now().Add(time.Minute).UnixMilli())
-			allocation := model.BattleAllocation{Address: "10.0.0.31:7777", Target: placement.Target{
-				PodName: "battle-post-step", InstanceUID: "uid-post-step", InstanceEpoch: 31,
-				AllocationID: "allocation-post-step", ReleaseTrack: "stable"}}
-			allocator := &switchingAllocationStub{first: allocation, second: allocation}
-			abort := func() error {
-				return f.repo.UpdateMatchWithLock(ctx, tc.matchID, f.cfg.OptimisticRetry,
-					func(rec *matchv1.MatchStorageRecord) error {
-						if rec.GetBattleTarget() == nil ||
-							rec.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING {
-							return errors.New("post-checkpoint operation was not REQUESTING")
-						}
-						rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
-						return nil
-					}, f.cfg.MatchTTL.Std())
-			}
-			placementBatch := &hookPlacementBatch{}
-			hubDeparture := &hookHubDeparture{}
-			if tc.abortAfterPrepare {
-				placementBatch.hook = abort
-			} else {
-				hubDeparture.hook = abort
-			}
-			f.uc.allocator = allocator
-			f.uc.SetPlacementCoordinator(placementBatch)
-			f.uc.SetHubDepartureCoordinator(hubDeparture)
-			initial, found, err := f.repo.GetMatch(ctx, tc.matchID)
-			if err != nil || !found {
-				t.Fatalf("get initial allocation: found=%v err=%v", found, err)
-			}
-			if err := f.uc.advanceAllocation(ctx, initial); errcode.As(err) != errcode.ErrMatchConcurrent {
-				t.Fatalf("post-step fence result=%v", err)
-			}
-			current, found, err := f.repo.GetMatch(ctx, tc.matchID)
-			stored, complete := allocationFromStoredTarget(current.GetBattleTarget())
-			if err != nil || !found || current.GetStage() != stageAllocating ||
-				current.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING ||
-				!complete || !sameBattleAllocation(stored, &allocation) || allocator.allocateCalls != 1 ||
-				placementBatch.calls != 1 || hubDeparture.calls != tc.wantDeparture || allocator.signCalls != 0 {
-				t.Fatalf("post-step abort leaked later side effects: found=%v match=%+v allocate=%d placement=%d departure=%d sign=%d err=%v",
-					found, current, allocator.allocateCalls, placementBatch.calls, hubDeparture.calls, allocator.signCalls, err)
-			}
-			assertAllocationOwnershipIntact(t, ctx, f, tc.matchID)
-		})
-	}
-}
-
-type incompletePlacementBatch struct{}
-
-func (incompletePlacementBatch) RequireStableHub(context.Context, []uint64) error { return nil }
-
-func (incompletePlacementBatch) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
-	return nil
-}
-
-func (incompletePlacementBatch) PrepareBattlePlacement(
-	_ context.Context,
-	operationID string,
-	_ uint64,
-	playerIDs []uint64,
-	_ *model.BattleAllocation,
-) (map[uint64]placement.Binding, error) {
-	bindings := make(map[uint64]placement.Binding, len(playerIDs)-1)
-	for _, playerID := range playerIDs[:len(playerIDs)-1] {
-		bindings[playerID] = placement.Binding{Version: 2, OperationID: operationID}
-	}
-	return bindings, nil
-}
-
-type conflictPlacementBatch struct {
-	allowPlacement
-	preflightErr  error
-	prepareErr    error
-	preflightCall int
-	prepareCall   int
-}
-
-func (p *conflictPlacementBatch) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
-	p.preflightCall++
-	return p.preflightErr
-}
-
-func (p *conflictPlacementBatch) PrepareBattlePlacement(
-	_ context.Context,
-	operationID string,
-	_ uint64,
-	playerIDs []uint64,
-	_ *model.BattleAllocation,
-) (map[uint64]placement.Binding, error) {
-	p.prepareCall++
-	if p.prepareErr != nil {
-		return nil, p.prepareErr
-	}
-	bindings := make(map[uint64]placement.Binding, len(playerIDs))
-	for _, playerID := range playerIDs {
-		bindings[playerID] = placement.Binding{Version: 2, OperationID: operationID}
-	}
-	return bindings, nil
-}
-
-func assertPlacementConflictReleasedMatchClaims(t *testing.T, ctx context.Context, f *fixture, matchID uint64) {
-	t.Helper()
-	failed, found, err := f.repo.GetMatch(ctx, matchID)
-	if err != nil || !found || failed.GetStage() != stageFailed ||
-		failed.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED {
-		t.Fatalf("placement conflict not durably FAILED: found=%v match=%+v err=%v", found, failed, err)
-	}
-	for _, ticketID := range []uint64{100, 200} {
-		if _, found, err := f.repo.GetTicket(ctx, ticketID); err != nil || found {
-			t.Fatalf("placement conflict retained ticket %d: found=%v err=%v", ticketID, found, err)
-		}
-	}
-	for playerID := uint64(1); playerID <= 10; playerID++ {
-		if _, found, err := f.repo.GetPlayerTicket(ctx, playerID); err != nil || found {
-			t.Fatalf("placement conflict retained player %d claim: found=%v err=%v", playerID, found, err)
-		}
-	}
-}
-
-func TestAllocationPreflightDefiniteConflictFailsBeforeExternalAllocate(t *testing.T) {
 	ctx := context.Background()
-	f := newFixture(t, 9910)
-	seedAllocatingMatch(t, ctx, f, 9910, time.Now().Add(time.Minute).UnixMilli())
-	allocator := &switchingAllocationStub{first: model.BattleAllocation{Address: "10.0.0.10:7777",
-		Target: placement.Target{PodName: "must-not-start", InstanceUID: "uid-x", InstanceEpoch: 1,
-			AllocationID: "allocation-x", ReleaseTrack: "stable"}}}
-	gate := &conflictPlacementBatch{preflightErr: errcode.New(errcode.ErrLocatorConflict,
-		"player still has authoritative Battle placement")}
+	f := newFixture(t, 9930)
+	seedAllocatingMatch(t, ctx, f, 9930, time.Now().Add(time.Minute).UnixMilli())
+	allocation := model.BattleAllocation{Address: "10.0.0.30:7777", Target: placement.Target{
+		PodName: "battle-before-signing", InstanceUID: "uid-before-signing", InstanceEpoch: 30,
+		AllocationID: "allocation-before-signing", ReleaseTrack: "stable"}}
+	allocator := &switchingAllocationStub{first: allocation, second: allocation}
 	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(gate)
-
-	if err := f.uc.advanceAllocationsOnce(ctx); err == nil || errcode.As(err) != errcode.ErrLocatorConflict {
-		t.Fatalf("definite preflight conflict err=%v", err)
-	}
-	if allocator.allocateCalls != 0 || allocator.signCalls != 0 || gate.preflightCall != 1 || gate.prepareCall != 0 {
-		t.Fatalf("preflight conflict leaked external side effect: allocate=%d sign=%d preflight=%d prepare=%d",
-			allocator.allocateCalls, allocator.signCalls, gate.preflightCall, gate.prepareCall)
-	}
-	assertPlacementConflictReleasedMatchClaims(t, ctx, f, 9910)
-}
-
-func TestPlacementConflictCannotOverwriteChangedUncheckpointedGeneration(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t, 9914)
-	seedAllocatingMatch(t, ctx, f, 9914, time.Now().Add(time.Minute).UnixMilli())
-	operationID := allocationOperationID()
-	if err := f.repo.UpdateMatchWithLock(ctx, 9914, f.cfg.OptimisticRetry,
-		func(rec *matchv1.MatchStorageRecord) error {
-			rec.AllocationOperationId = operationID
-			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING
-			return nil
-		}, f.cfg.MatchTTL.Std()); err != nil {
-		t.Fatal(err)
-	}
-	job, found, err := f.repo.GetMatch(ctx, 9914)
+	f.uc.repo = &abortBeforePostCheckpointFenceRepo{MatchRepo: f.repo, matchID: 9930}
+	initial, found, err := f.repo.GetMatch(ctx, 9930)
 	if err != nil || !found {
-		t.Fatalf("get requesting job: found=%v err=%v", found, err)
+		t.Fatalf("get initial allocation: found=%v err=%v", found, err)
 	}
-	if err := f.repo.UpdateMatchWithLock(ctx, 9914, f.cfg.OptimisticRetry,
-		func(rec *matchv1.MatchStorageRecord) error {
-			// Even a malformed/partially repaired ABORTING generation must never
-			// be overwritten by an older REQUESTING placement result.
-			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
-			return nil
-		}, f.cfg.MatchTTL.Std()); err != nil {
-		t.Fatal(err)
+	if err := f.uc.advanceAllocation(ctx, initial); errcode.As(err) != errcode.ErrMatchConcurrent {
+		t.Fatalf("post-checkpoint fence result=%v", err)
 	}
-	cause := errcode.New(errcode.ErrLocatorConflict, "stale placement conflict")
-	if err := f.uc.failAllocationPlacementConflict(ctx, job, cause); errcode.As(err) != errcode.ErrLocatorConflict {
-		t.Fatalf("stale placement conflict result=%v", err)
-	}
-	current, found, err := f.repo.GetMatch(ctx, 9914)
+	current, found, err := f.repo.GetMatch(ctx, 9930)
+	stored, complete := allocationFromStoredTarget(current.GetBattleTarget())
 	if err != nil || !found || current.GetStage() != stageAllocating ||
 		current.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING ||
-		current.GetAllocationOperationId() != operationID || current.GetBattleTarget() != nil {
-		t.Fatalf("stale placement conflict overwrote generation: found=%v match=%+v err=%v", found, current, err)
+		!complete || !sameBattleAllocation(stored, &allocation) || allocator.allocateCalls != 1 ||
+		allocator.signCalls != 0 {
+		t.Fatalf("abort fence leaked side effects: found=%v match=%+v allocate=%d sign=%d err=%v",
+			found, current, allocator.allocateCalls, allocator.signCalls, err)
 	}
-	assertAllocationOwnershipIntact(t, ctx, f, 9914)
+	assertAllocationOwnershipIntact(t, ctx, f, 9930)
 }
 
 type blockingOfflineLocator struct {
@@ -585,7 +306,7 @@ func TestAllocationLivenessFailureCannotOverwriteCheckpointedAbortingGeneration(
 				!placement.ValidOperationID(rec.GetAllocationOperationId()) {
 				return errors.New("worker did not checkpoint REQUESTING generation")
 			}
-			rec.BattleTarget = battleTargetStorage(&allocation, nil)
+			rec.BattleTarget = battleTargetStorage(&allocation)
 			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
 			return nil
 		}, f.cfg.MatchTTL.Std()); err != nil {
@@ -629,11 +350,11 @@ func (*blockingDefiniteAllocationStub) AbortBattleAllocation(context.Context, ui
 	return errors.New("unexpected allocation abort")
 }
 
-func (*blockingDefiniteAllocationStub) SignBattleTickets(context.Context, uint64, []uint64, *model.BattleAllocation, map[uint64]placement.Binding) (map[uint64]string, error) {
+func (*blockingDefiniteAllocationStub) SignBattleTickets(context.Context, uint64, []uint64, *model.BattleAllocation) (map[uint64]string, error) {
 	return nil, errors.New("unexpected ticket signing")
 }
 
-func (*blockingDefiniteAllocationStub) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation, placement.Binding) (string, error) {
+func (*blockingDefiniteAllocationStub) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
 	return "", errors.New("unexpected ticket signing")
 }
 
@@ -643,10 +364,10 @@ func TestDefinitiveAllocatorFailureCannotOverwriteChangedGeneration(t *testing.T
 		mutate func(*matchv1.MatchStorageRecord, *model.BattleAllocation)
 	}{
 		{name: "checkpointed target", mutate: func(rec *matchv1.MatchStorageRecord, allocation *model.BattleAllocation) {
-			rec.BattleTarget = battleTargetStorage(allocation, nil)
+			rec.BattleTarget = battleTargetStorage(allocation)
 		}},
 		{name: "aborting checkpoint", mutate: func(rec *matchv1.MatchStorageRecord, allocation *model.BattleAllocation) {
-			rec.BattleTarget = battleTargetStorage(allocation, nil)
+			rec.BattleTarget = battleTargetStorage(allocation)
 			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
 		}},
 		{name: "operation changed", mutate: func(rec *matchv1.MatchStorageRecord, _ *model.BattleAllocation) {
@@ -735,11 +456,11 @@ func (s *blockingAbortSuccessAllocator) AbortBattleAllocation(_ context.Context,
 	return nil
 }
 
-func (*blockingAbortSuccessAllocator) SignBattleTickets(context.Context, uint64, []uint64, *model.BattleAllocation, map[uint64]placement.Binding) (map[uint64]string, error) {
+func (*blockingAbortSuccessAllocator) SignBattleTickets(context.Context, uint64, []uint64, *model.BattleAllocation) (map[uint64]string, error) {
 	return nil, errors.New("unexpected ticket signing")
 }
 
-func (*blockingAbortSuccessAllocator) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation, placement.Binding) (string, error) {
+func (*blockingAbortSuccessAllocator) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
 	return "", errors.New("unexpected ticket signing")
 }
 
@@ -758,7 +479,7 @@ func TestAllocationAbortAckCannotFailDriftedTargetSnapshot(t *testing.T) {
 		func(rec *matchv1.MatchStorageRecord) error {
 			rec.AllocationOperationId = operationID
 			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
-			rec.BattleTarget = battleTargetStorage(first, nil)
+			rec.BattleTarget = battleTargetStorage(first)
 			return nil
 		}, f.cfg.MatchTTL.Std()); err != nil {
 		t.Fatal(err)
@@ -779,7 +500,7 @@ func TestAllocationAbortAckCannotFailDriftedTargetSnapshot(t *testing.T) {
 	}
 	if err := f.repo.UpdateMatchWithLock(ctx, 9925, f.cfg.OptimisticRetry,
 		func(rec *matchv1.MatchStorageRecord) error {
-			rec.BattleTarget = battleTargetStorage(second, nil)
+			rec.BattleTarget = battleTargetStorage(second)
 			return nil
 		}, f.cfg.MatchTTL.Std()); err != nil {
 		t.Fatal(err)
@@ -805,40 +526,6 @@ func TestAllocationAbortAckCannotFailDriftedTargetSnapshot(t *testing.T) {
 	assertAllocationOwnershipIntact(t, ctx, f, 9925)
 }
 
-func TestAllocationPrepareDefiniteConflictFailsAndReleasesClaims(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t, 9911)
-	seedAllocatingMatch(t, ctx, f, 9911, time.Now().Add(time.Minute).UnixMilli())
-	allocation := model.BattleAllocation{Address: "10.0.0.11:7777", Target: placement.Target{
-		PodName: "battle-conflict", InstanceUID: "uid-conflict", InstanceEpoch: 2,
-		AllocationID: "allocation-conflict", ReleaseTrack: "stable"}}
-	allocator := &switchingAllocationStub{first: allocation, second: allocation}
-	gate := &conflictPlacementBatch{prepareErr: errcode.New(errcode.ErrLocatorConflict,
-		"placement changed after allocator preflight")}
-	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(gate)
-
-	if err := f.uc.advanceAllocationsOnce(ctx); err == nil || errcode.As(err) != errcode.ErrLocatorConflict {
-		t.Fatalf("definite prepare conflict err=%v", err)
-	}
-	if allocator.allocateCalls != 1 || allocator.signCalls != 0 || gate.preflightCall != 1 || gate.prepareCall != 1 {
-		t.Fatalf("prepare conflict control flow: allocate=%d sign=%d preflight=%d prepare=%d",
-			allocator.allocateCalls, allocator.signCalls, gate.preflightCall, gate.prepareCall)
-	}
-	if allocator.abortCalls != 1 || allocator.abortMatchID != 9911 ||
-		allocator.abortOperationID == "" || !sameBattleAllocation(allocator.abortAllocation, &allocation) {
-		t.Fatalf("prepare conflict did not abort exact checkpoint: calls=%d match=%d op=%q allocation=%+v",
-			allocator.abortCalls, allocator.abortMatchID, allocator.abortOperationID, allocator.abortAllocation)
-	}
-	assertPlacementConflictReleasedMatchClaims(t, ctx, f, 9911)
-	failed, _, _ := f.repo.GetMatch(ctx, 9911)
-	stored, complete := allocationFromStoredTarget(failed.GetBattleTarget())
-	if !complete || !sameBattleAllocation(stored, &allocation) || failed.GetBattleDsAddr() != "" ||
-		f.pusher.lastStageFor(1) == stageReady {
-		t.Fatalf("prepare conflict lost exact cleanup target or leaked READY: %+v", failed)
-	}
-}
-
 func TestAllocationAbortUnknownKeepsFailedSagaActiveAndRestartRetriesExactTarget(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 9912)
@@ -846,12 +533,23 @@ func TestAllocationAbortUnknownKeepsFailedSagaActiveAndRestartRetriesExactTarget
 	allocation := model.BattleAllocation{Address: "10.0.0.12:7777", Target: placement.Target{
 		PodName: "battle-abort", InstanceUID: "uid-abort", InstanceEpoch: 4,
 		AllocationID: "allocation-abort", ReleaseTrack: "stable"}}
+	// A legacy conflict/compensation writer left this generation durably ABORTING
+	// with the exact checkpointed target. The abort saga must drive it to FAILED
+	// only on a definitive allocator ACK.
+	operationID := allocationOperationID()
+	if err := f.repo.UpdateMatchWithLock(ctx, 9912, f.cfg.OptimisticRetry,
+		func(rec *matchv1.MatchStorageRecord) error {
+			rec.AllocationOperationId = operationID
+			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
+			rec.BattleTarget = battleTargetStorage(&allocation)
+			rec.AllocationNextAttemptAtMs = 0
+			return nil
+		}, f.cfg.MatchTTL.Std()); err != nil {
+		t.Fatal(err)
+	}
 	allocator := &switchingAllocationStub{first: allocation, second: allocation,
 		abortErr: errcode.New(errcode.ErrUnavailable, "allocator abort ACK lost")}
-	gate := &conflictPlacementBatch{prepareErr: errcode.New(errcode.ErrLocatorConflict,
-		"placement changed after allocation")}
 	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(gate)
 
 	if err := f.uc.advanceAllocationsOnce(ctx); err == nil {
 		t.Fatal("unknown abort must keep ALLOCATING saga retryable")
@@ -882,7 +580,7 @@ func TestAllocationAbortUnknownKeepsFailedSagaActiveAndRestartRetriesExactTarget
 		t.Fatalf("abort UNKNOWN removed active recovery job: active=%v err=%v", active, activeErr)
 	}
 	firstOperation := allocator.abortOperationID
-	if firstOperation == "" || !sameBattleAllocation(allocator.abortAllocation, &allocation) ||
+	if firstOperation != operationID || !sameBattleAllocation(allocator.abortAllocation, &allocation) ||
 		allocator.signCalls != 0 || f.pusher.lastStageFor(1) == stageReady {
 		t.Fatalf("abort UNKNOWN drift/leak: op=%q allocation=%+v sign=%d stage=%s",
 			firstOperation, allocator.abortAllocation, allocator.signCalls, f.pusher.lastStageFor(1))
@@ -900,7 +598,6 @@ func TestAllocationAbortUnknownKeepsFailedSagaActiveAndRestartRetriesExactTarget
 	}
 	restarted := NewMatchUsecase(f.repo, nil, f.pusher, allocator,
 		&fakeIDGen{next: 20000}, f.locator, f.cfg)
-	restarted.SetPlacementCoordinator(gate)
 	if err := restarted.advanceAllocationsOnce(ctx); err != nil {
 		t.Fatalf("restart abort retry: %v", err)
 	}
@@ -943,7 +640,6 @@ func (a *abortReadyRaceAllocator) AbortBattleAllocation(context.Context, uint64,
 
 func (a *abortReadyRaceAllocator) SignBattleTickets(
 	_ context.Context, matchID uint64, playerIDs []uint64, _ *model.BattleAllocation,
-	_ map[uint64]placement.Binding,
 ) (map[uint64]string, error) {
 	if a.signCalls.Add(1) == 1 {
 		close(a.signStarted)
@@ -956,27 +652,8 @@ func (a *abortReadyRaceAllocator) SignBattleTickets(
 	return tickets, nil
 }
 
-func (*abortReadyRaceAllocator) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation, placement.Binding) (string, error) {
+func (*abortReadyRaceAllocator) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
 	return "ticket", nil
-}
-
-type abortReadyRacePlacement struct{ calls atomic.Int32 }
-
-func (*abortReadyRacePlacement) RequireStableHub(context.Context, []uint64) error { return nil }
-func (*abortReadyRacePlacement) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
-	return nil
-}
-func (p *abortReadyRacePlacement) PrepareBattlePlacement(
-	_ context.Context, operationID string, _ uint64, playerIDs []uint64, _ *model.BattleAllocation,
-) (map[uint64]placement.Binding, error) {
-	if p.calls.Add(1) > 1 {
-		return nil, errcode.New(errcode.ErrLocatorConflict, "concurrent placement contradiction")
-	}
-	bindings := make(map[uint64]placement.Binding, len(playerIDs))
-	for _, playerID := range playerIDs {
-		bindings[playerID] = placement.Binding{Version: 8, OperationID: operationID}
-	}
-	return bindings, nil
 }
 
 func TestAllocationAbortingFencePreventsConcurrentReadyCAS(t *testing.T) {
@@ -990,9 +667,7 @@ func TestAllocationAbortingFencePreventsConcurrentReadyCAS(t *testing.T) {
 		allocation: allocation, signStarted: make(chan struct{}), signProceed: make(chan struct{}),
 		abortStarted: make(chan struct{}), abortProceed: make(chan struct{}),
 	}
-	placementGate := &abortReadyRacePlacement{}
 	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(placementGate)
 
 	first, found, err := f.repo.GetMatch(ctx, 9913)
 	if err != nil || !found {
@@ -1005,10 +680,16 @@ func TestAllocationAbortingFencePreventsConcurrentReadyCAS(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("first worker never reached ticket signing")
 	}
-	// Force a second service replica's retry window while the first has local
-	// signed tickets but has not reached the READY CAS.
+	// A concurrent compensation authority fences this generation into ABORTING
+	// while the first worker holds locally signed tickets but has not reached
+	// the READY CAS.
 	if err := f.repo.UpdateMatchWithLock(ctx, 9913, f.cfg.OptimisticRetry,
 		func(rec *matchv1.MatchStorageRecord) error {
+			if rec.GetBattleTarget() == nil ||
+				rec.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING {
+				return errors.New("first worker did not checkpoint REQUESTING")
+			}
+			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
 			rec.AllocationNextAttemptAtMs = 0
 			return nil
 		}, f.cfg.MatchTTL.Std()); err != nil {
@@ -1060,93 +741,55 @@ func TestAllocationAbortingFencePreventsConcurrentReadyCAS(t *testing.T) {
 	}
 }
 
-type failOnceHubDeparture struct{ calls int }
-
-func (f *failOnceHubDeparture) EnsureHubDeparted(context.Context, uint64, string,
-	[]uint64, map[uint64]placement.Binding) error {
-	f.calls++
-	if f.calls == 1 {
-		return errcode.New(errcode.ErrUnavailable, "old Hub owner still connected")
-	}
-	return nil
+type incompleteTicketSetAllocator struct {
+	allocation model.BattleAllocation
+	signCalls  int
 }
 
-func TestAllocationSagaRetriesHubDepartureFromCheckpointWithoutReallocationOrAbort(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t, 9903)
-	seedAllocatingMatch(t, ctx, f, 9903, time.Now().Add(time.Minute).UnixMilli())
-	allocation := model.BattleAllocation{
-		Address: "10.0.0.4:7777", Target: placement.Target{PodName: "battle-d",
-			InstanceUID: "uid-d", InstanceEpoch: 4, AllocationID: "allocation-d", ReleaseTrack: "stable"}}
-	allocator := &switchingAllocationStub{first: allocation, second: model.BattleAllocation{
-		Address: "10.0.0.99:7777", Target: placement.Target{PodName: "must-not-reallocate",
-			InstanceUID: "must-not-reallocate", InstanceEpoch: 99,
-			AllocationID: "must-not-reallocate", ReleaseTrack: "stable"}}}
-	placementBatch := &hookPlacementBatch{}
-	departure := &failOnceHubDeparture{}
-	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(placementBatch)
-	f.uc.SetHubDepartureCoordinator(departure)
-
-	if err := f.uc.advanceAllocationsOnce(ctx); errcode.As(err) != errcode.ErrUnavailable {
-		t.Fatalf("connected old Hub owner must keep allocation retryable unavailable: %v", err)
-	}
-	pending, found, err := f.repo.GetMatch(ctx, 9903)
-	checkpoint, complete := allocationFromStoredTarget(pending.GetBattleTarget())
-	if err != nil || !found || pending.GetStage() != stageAllocating ||
-		pending.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING ||
-		!complete || !sameBattleAllocation(checkpoint, &allocation) ||
-		pending.GetBattleDsAddr() != "" || allocator.allocateCalls != 1 || allocator.abortCalls != 0 ||
-		allocator.signCalls != 0 || placementBatch.calls != 1 || departure.calls != 1 ||
-		f.pusher.lastStageFor(1) == stageReady {
-		t.Fatalf("departure retry lost checkpoint or leaked READY: found=%v complete=%v match=%+v allocate=%d abort=%d placement=%d departure=%d sign=%d err=%v",
-			found, complete, pending, allocator.allocateCalls, allocator.abortCalls,
-			placementBatch.calls, departure.calls, allocator.signCalls, err)
-	}
-	if err := f.repo.UpdateMatchWithLock(ctx, 9903, f.cfg.OptimisticRetry,
-		func(rec *matchv1.MatchStorageRecord) error { rec.AllocationNextAttemptAtMs = 0; return nil },
-		f.cfg.MatchTTL.Std()); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.uc.advanceAllocationsOnce(ctx); err != nil {
-		t.Fatalf("exact departure retry did not converge: %v", err)
-	}
-	ready, found, err := f.repo.GetMatch(ctx, 9903)
-	readyAllocation, readyComplete := allocationFromStoredTarget(ready.GetBattleTarget())
-	if err != nil || !found || ready.GetStage() != stageReady ||
-		ready.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_COMPLETED ||
-		!readyComplete || !sameBattleAllocation(readyAllocation, &allocation) ||
-		ready.GetBattleDsAddr() != allocation.Address ||
-		len(ready.GetBattleTarget().GetPlayerBindings()) != len(ready.GetMembers()) ||
-		allocator.allocateCalls != 1 || allocator.abortCalls != 0 || allocator.signCalls != 1 ||
-		placementBatch.calls != 2 || departure.calls != 2 || f.pusher.lastStageFor(1) != stageReady {
-		t.Fatalf("durable Hub departure retry result found=%v complete=%v match=%+v allocate=%d abort=%d placement=%d departure=%d sign=%d pushed=%s err=%v",
-			found, readyComplete, ready, allocator.allocateCalls, allocator.abortCalls,
-			placementBatch.calls, departure.calls, allocator.signCalls, f.pusher.lastStageFor(1), err)
-	}
+func (a *incompleteTicketSetAllocator) AllocateBattle(context.Context, uint64, []uint64, uint32) (*model.BattleAllocation, error) {
+	allocation := a.allocation
+	return &allocation, nil
 }
 
-func TestAllocationSagaRejectsIncompleteSuccessfulPlacementBatch(t *testing.T) {
+func (*incompleteTicketSetAllocator) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
+	return errors.New("unexpected allocation abort")
+}
+
+func (a *incompleteTicketSetAllocator) SignBattleTickets(
+	_ context.Context, matchID uint64, playerIDs []uint64, _ *model.BattleAllocation,
+) (map[uint64]string, error) {
+	a.signCalls++
+	tickets := make(map[uint64]string, len(playerIDs)-1)
+	for _, playerID := range playerIDs[:len(playerIDs)-1] {
+		tickets[playerID] = fmt.Sprintf("ticket-%d-%d", matchID, playerID)
+	}
+	return tickets, nil
+}
+
+func (*incompleteTicketSetAllocator) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
+	return "", errors.New("unexpected single ticket signing")
+}
+
+func TestAllocationSagaRejectsIncompleteSignedTicketSet(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 9902)
 	seedAllocatingMatch(t, ctx, f, 9902, time.Now().Add(time.Minute).UnixMilli())
-	allocator := &switchingAllocationStub{first: model.BattleAllocation{
+	allocator := &incompleteTicketSetAllocator{allocation: model.BattleAllocation{
 		Address: "10.0.0.3:7777",
 		Target: placement.Target{PodName: "battle-c", InstanceUID: "uid-c", InstanceEpoch: 3,
 			AllocationID: "allocation-c", ReleaseTrack: "stable"},
 	}}
 	f.uc.allocator = allocator
-	f.uc.SetPlacementCoordinator(incompletePlacementBatch{})
 
 	if err := f.uc.advanceAllocationsOnce(ctx); err == nil {
-		t.Fatal("incomplete binding set must fail closed")
+		t.Fatal("incomplete ticket set must fail closed")
 	}
 	match, found, err := f.repo.GetMatch(ctx, 9902)
 	if err != nil || !found || match.GetStage() != stageAllocating || match.GetBattleDsAddr() != "" {
-		t.Fatalf("incomplete bindings leaked READY: found=%v match=%+v err=%v", found, match, err)
+		t.Fatalf("incomplete ticket set leaked READY: found=%v match=%+v err=%v", found, match, err)
 	}
-	if allocator.signCalls != 0 || f.pusher.lastStageFor(1) == stageReady {
-		t.Fatalf("incomplete bindings reached signer/push: sign_calls=%d stage=%s",
+	if allocator.signCalls != 1 || f.pusher.lastStageFor(1) == stageReady {
+		t.Fatalf("incomplete ticket set reached push: sign_calls=%d stage=%s",
 			allocator.signCalls, f.pusher.lastStageFor(1))
 	}
 }

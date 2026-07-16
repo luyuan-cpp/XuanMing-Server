@@ -498,3 +498,21 @@
   acquired=V3、Hub ready Endpoint 精确 1 个且 UID 唯一匹配；最后再次 capability audit 并写 immutable
   completion marker。required=V3 的只读 Audit 与普通 online release 也必须验证该 completion marker 并把其
   UID/resourceVersion 纳入窗口内不可漂移基线，缺失不得假绿。完整契约见 `docs/design/battle-reconnect.md` §7.8。
+
+## 2026-07-16：no-freeze 需求固化 + 双仓库复核 + 前台恢复缺陷修复
+
+- 需求固化：「进 Hub DS / 匹配进 Battle DS 任意阶段切后台或断网，回来不卡死且能正确回到唯一权威
+  DS」升级为需求级不变量，写入 `CLAUDE.md §9.19` 与 `battle-reconnect.md §7.11`；违反直接拒 PR。
+- 复核范围：服务端 2026-07-14 起全部提交（8ab6c59→1c21311）+ 未提交 §7.10 修复；UE 客户端
+  r1090–r1130（luhailong）+ 未提交 Coordinator/OnlineSession/超时兜底工作树。服务端
+  login / player_locator / ds_allocator / hub_allocator / matchmaker 与 `pkg/placement`、
+  `pkg/battleabort` 全部 `go build + go test` 绿（§7.10 `exactSamePreparedBattlePending` 修复含
+  正/负例）。客户端 unary 超时钳制 5–300s、完成回调恰好一次、Coordinator 各 phase 均有驱动源，
+  OnlineSession exact-driver 清理复核通过。
+- 修复一处 UE 前台恢复缺陷：前台事件原来无条件重启权威重查，从未登录（登录页/离线本地流程）或
+  显式登出/放弃重连后会经 `RenewSessionForRecovery` 无凭据分支强制打开登录关卡，把玩家从当前界面
+  踢走。新增 `ShouldRestartRecoveryOnForeground` 纯判定门（session/重连中/缓存凭据/ReturnHub fence
+  全空则跳过），`ReturnToLogin`/`AbandonBattleReconnect` 显式清 session+缓存凭据；新增 Automation 用例
+  `DsRecovery.ForegroundRestartRequiresRecoverableContext`。PandoraServer Win64 编译通过（Pandora
+  runtime module 含全部修复）；PandoraEditor 目标因本机编辑器 Live Coding 占用未能本轮编译，
+  PandoraTests 新用例待编辑器空闲后随 Editor 构建验证。真实移动端前后台/断网矩阵仍是发布前验收项。

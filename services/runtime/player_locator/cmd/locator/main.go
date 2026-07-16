@@ -14,12 +14,9 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -32,35 +29,22 @@ import (
 	"github.com/luyuancpp/pandora/pkg/killswitch"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/biz"
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/conf"
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/data"
-	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/placementpreflight"
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/server"
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/service"
 )
 
 const serviceName = "player_locator"
 
-var (
-	flagConf               string
-	flagPlacementPreflight bool
-	flagPreflightTimeout   time.Duration
-	flagPreflightScanCount int64
-)
+var flagConf string
 
 func init() {
 	flag.StringVar(&flagConf, "conf", "etc/locator-dev.yaml", "config file path")
-	flag.BoolVar(&flagPlacementPreflight, "placement-preflight", false,
-		"run the read-only all-master placement rollout gate and exit")
-	flag.DurationVar(&flagPreflightTimeout, "placement-preflight-timeout", 10*time.Minute,
-		"hard deadline for the embedded placement rollout gate")
-	flag.Int64Var(&flagPreflightScanCount, "placement-preflight-scan-count", 1000,
-		"Redis SCAN count hint per master for the embedded placement rollout gate")
 }
 
 func main() {
@@ -121,53 +105,6 @@ func main() {
 	}
 	cancel()
 
-	// Recreate prevents old/new locator writers from overlapping, while this
-	// init-container mode mechanically blocks the new writer until every Redis
-	// master is proven free of legacy/malformed placement records. It is the
-	// exact same read-only implementation used by cmd/placement_preflight.
-	if flagPlacementPreflight {
-		if flagPreflightTimeout <= 0 || flagPreflightScanCount <= 0 {
-			helper.Errorw("msg", "placement_preflight_args_invalid",
-				"timeout", flagPreflightTimeout, "scan_count", flagPreflightScanCount)
-			os.Exit(1)
-		}
-		preflightCtx, preflightCancel := context.WithTimeout(context.Background(), flagPreflightTimeout)
-		defer preflightCancel()
-		summary := new(placementpreflight.AuditSummary)
-		if err := placementpreflight.AuditRedis(preflightCtx, rdb, flagPreflightScanCount, summary); err != nil {
-			helper.Errorw("msg", "placement_preflight_audit_failed", "err", err)
-			os.Exit(1)
-		}
-		if summary.Nodes == 0 {
-			helper.Errorw("msg", "placement_preflight_zero_nodes")
-			os.Exit(1)
-		}
-		sort.Slice(summary.Findings, func(i, j int) bool {
-			a, b := summary.Findings[i], summary.Findings[j]
-			if a.Key != b.Key {
-				return a.Key < b.Key
-			}
-			if a.Reason != b.Reason {
-				return a.Reason < b.Reason
-			}
-			return a.Source < b.Source
-		})
-		for _, finding := range summary.Findings {
-			helper.Errorw("msg", "placement_preflight_unsafe_record",
-				"source", finding.Source, "key", finding.Key,
-				"player_id", finding.PlayerID, "reason", finding.Reason)
-		}
-		if len(summary.Findings) != 0 {
-			helper.Errorw("msg", "placement_preflight_blocked",
-				"nodes", summary.Nodes, "records", summary.Records,
-				"skipped_non_record_keys", summary.Skipped, "findings", len(summary.Findings))
-			os.Exit(1)
-		}
-		helper.Infow("msg", "placement_preflight_passed", "nodes", summary.Nodes,
-			"records", summary.Records, "skipped_non_record_keys", summary.Skipped)
-		return
-	}
-
 	// 4. 三层装配
 	repo := data.NewRedisLocationRepo(rdb)
 
@@ -212,50 +149,6 @@ func main() {
 		defer func() { _ = closeCell() }()
 	}
 	svc := service.NewLocatorService(uc)
-	placementRepo := data.NewRedisPlacementRepo(rdb)
-	proofSecret := func(env, fallback string) string {
-		if v := os.Getenv(env); v != "" {
-			return v
-		}
-		return fallback
-	}
-	hubTransferSecret := proofSecret("PANDORA_PLACEMENT_HUB_TRANSFER_SECRET", cfg.Locator.PlacementHubTransferProofSecret)
-	battleDepartureSecret := proofSecret("PANDORA_PLACEMENT_BATTLE_DEPARTURE_SECRET", cfg.Locator.PlacementBattleDepartureProofSecret)
-	authoritySecrets := map[string]string{
-		"account-bootstrap": proofSecret("PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET", cfg.Locator.PlacementAccountBootstrapProofSecret),
-		"match-start":       proofSecret("PANDORA_PLACEMENT_MATCH_START_SECRET", cfg.Locator.PlacementMatchStartProofSecret),
-		"battle-exit":       proofSecret("PANDORA_PLACEMENT_BATTLE_EXIT_SECRET", cfg.Locator.PlacementBattleExitProofSecret),
-		"hub-transfer":      hubTransferSecret,
-		"battle-departure":  battleDepartureSecret,
-	}
-	if err := validatePlacementAuthoritySecrets(authoritySecrets, cfg.DSAuth.Secret); err != nil {
-		helper.Errorw("msg", "placement_proof_authority_invalid", "err", err)
-		os.Exit(1)
-	}
-	var proofVerifier biz.PlacementProofVerifier
-	proofKeys := map[int32]string{
-		placement.ProofAccountBootstrap: authoritySecrets["account-bootstrap"],
-		placement.ProofMatchStart:       authoritySecrets["match-start"],
-		placement.ProofMatchTerminal:    authoritySecrets["battle-exit"],
-		placement.ProofPlayerLeave:      authoritySecrets["battle-exit"],
-		placement.ProofHubTransfer:      hubTransferSecret,
-		placement.ProofHubDeparture:     hubTransferSecret,
-		placement.ProofBattleDeparture:  battleDepartureSecret,
-	}
-	keyring, err := placement.NewProofKeyring(proofKeys)
-	if err != nil {
-		helper.Errorw("msg", "placement_proof_keyring_invalid", "err", err)
-		os.Exit(1)
-	}
-	if len(proofKeys) > 0 {
-		proofVerifier = keyring
-		if proofKeys[placement.ProofAccountBootstrap] != "" || proofKeys[placement.ProofMatchStart] != "" ||
-			proofKeys[placement.ProofMatchTerminal] != "" || proofKeys[placement.ProofHubTransfer] != "" ||
-			proofKeys[placement.ProofBattleDeparture] != "" {
-			helper.Infow("msg", "placement_proof_verifier_ready")
-		}
-	}
-	svc.SetPlacementUsecase(biz.NewPlacementUsecase(placementRepo, proofVerifier))
 
 	// 4.2 DS 回调令牌守卫(审核 P1 #1):校验 Hub DS 经 :8444 的 SetLocation/ReportDisconnect。
 	// mode=off(默认)→ dsGuard 为 nil,不校验。
@@ -324,32 +217,6 @@ func main() {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
 	}
-}
-
-func validatePlacementAuthoritySecrets(authorities map[string]string, dsCallbackSecret string) error {
-	required := []string{"account-bootstrap", "match-start", "battle-exit", "hub-transfer", "battle-departure"}
-	names := make([]string, 0, len(required))
-	for _, name := range required {
-		secret, ok := authorities[name]
-		if !ok {
-			return fmt.Errorf("placement authority %s is missing", name)
-		}
-		if strings.TrimSpace(secret) == "" || len([]byte(secret)) < 32 {
-			return fmt.Errorf("placement authority %s requires an independent key of at least 32 bytes", name)
-		}
-		if dsCallbackSecret != "" && secret == dsCallbackSecret {
-			return fmt.Errorf("placement authority %s reuses the DS callback key", name)
-		}
-		names = append(names, name)
-	}
-	for i := 0; i < len(names); i++ {
-		for j := i + 1; j < len(names); j++ {
-			if authorities[names[i]] == authorities[names[j]] {
-				return fmt.Errorf("placement authorities %s and %s reuse one key", names[i], names[j])
-			}
-		}
-	}
-	return nil
 }
 
 // presencePusher 把 biz.PresencePusher 接口适配到 kafkax.KeyOrderedProducer。

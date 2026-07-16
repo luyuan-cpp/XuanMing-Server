@@ -137,12 +137,11 @@ func (s *MatchService) ReleaseMatch(ctx context.Context, req *matchv1.ReleaseMat
 	return &matchv1.ReleaseMatchResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// ResolvePlayerMatchContext is an internal read used by login while merging
-// placement and durable matchmaking state. The client Envoy exact-path denies it;
+// ResolvePlayerMatchContext is an internal read used by login while resolving
+// durable matchmaking state. The client Envoy exact-path denies it;
 // this application guard rejects player JWTs and requires a fresh request-bound
 // Login service HMAC whose nonce is atomically consumed in shared Redis. READY
-// credentials are generated from
-// the canonical match's persisted exact target + per-player placement binding;
+// credentials are generated from the canonical match's persisted exact target;
 // Login consumes them for cold reconnect instead of rebuilding a weaker ticket
 // from the short-TTL roster projection.
 func (s *MatchService) ResolvePlayerMatchContext(ctx context.Context, req *matchv1.ResolvePlayerMatchContextRequest) (*matchv1.ResolvePlayerMatchContextResponse, error) {

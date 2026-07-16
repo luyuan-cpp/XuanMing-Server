@@ -79,9 +79,6 @@ allocator:
   # Matchmaker→allocator exact pre-admission abort service identity only.
   allocation_abort_auth_secret: "pandora-dev-allocation-abort-auth-key-v1!"
   allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
-  # 独立于 battle terminal/leave 与 DS callback 的物理离场证明密钥。
-  # 线上只通过 PANDORA_PLACEMENT_BATTLE_DEPARTURE_SECRET 注入。
-  placement_battle_departure_proof_secret: "pandora-dev-placement-battle-departure-key-v1!"
   # ready_wait_timeout: AllocateBattle 等 DS 心跳 ready 的最长时间(代码默认 10s)。
   # k8s/minikube 真 Linux DS 冷启动 = Loader GameMode 等 Agones Allocated label → ServerTravel
   # 加载目标地图(松林镇等大图可远超 10s)→ BattleGameMode BeginPlay 才发 ready 心跳,

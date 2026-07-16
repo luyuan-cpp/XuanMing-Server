@@ -81,19 +81,13 @@ func TestMatchResumeAuthSecretMustBeIndependent(t *testing.T) {
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("player JWT and match resume service identity must not share a key")
 	}
-	cfg = loadConfig(t, "etc/matchmaker-dev.yaml")
-	cfg.Match.MatchResumeAuthSecret = cfg.Match.PlacementMatchStartProofSecret
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("placement writer and match resume service identity must not share a key")
-	}
 }
 
 func TestAllocationAbortAuthMustBeDedicatedForRealAllocator(t *testing.T) {
 	base := loadConfig(t, "etc/matchmaker-dev.yaml")
 	for name, reused := range map[string]string{
-		"player-jwt":            base.JWT.Secret,
-		"placement-match-start": base.Match.PlacementMatchStartProofSecret,
-		"login-resume":          base.Match.MatchResumeAuthSecret,
+		"player-jwt":   base.JWT.Secret,
+		"login-resume": base.Match.MatchResumeAuthSecret,
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := base

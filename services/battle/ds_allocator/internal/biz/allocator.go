@@ -124,15 +124,6 @@ type LocationRefresher interface {
 	RefreshBattleLocations(ctx context.Context, playerIDs []uint64, matchID uint64, dsAddr string) error
 }
 
-// BattleDeparturePlacementVerifier 要求 locator Begin 已先线性化为
-// exact PENDING->HUB（新 version/op），并且其持久 source lineage
-// 精确匹配旧 Battle ticket claims。Begin 先 fence 旧票，再等物理离场。
-type BattleDeparturePlacementVerifier interface {
-	VerifyPendingHubBattleDeparture(ctx context.Context, expected data.BattlePlayerDepartureExpected) error
-	ConfirmBattleSourceDeparture(ctx context.Context, expected data.BattlePlayerDepartureExpected,
-		departureID string) error
-}
-
 // AllocatorUsecase 是 ds_allocator 业务逻辑核心。
 type AllocatorUsecase struct {
 	repo      data.BattleRepo
@@ -144,7 +135,6 @@ type AllocatorUsecase struct {
 	// 当作已恢复并 Expire 掉 Battle fence。
 	lifecycleRequired bool
 	locator           LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
-	departureVerifier BattleDeparturePlacementVerifier
 
 	// Model B 仅在 agones+enforce+authority_mode=redis 时由 main 注入。Redis authRepo 是
 	// 唯一授权权威；K8s annotation 只投递 pending 凭据。
@@ -202,12 +192,6 @@ func (u *AllocatorUsecase) ValidateLifecyclePusherReady() error {
 
 // SetLocationRefresher 注入 BATTLE 位置续期器(main 在 locator_addr 已配时调用,弱依赖)。
 func (u *AllocatorUsecase) SetLocationRefresher(r LocationRefresher) { u.locator = r }
-
-// SetBattleDeparturePlacementVerifier 注入持久 placement 读者。未注入时
-// EnsurePlayerDeparture 必须 fail-closed，不影响心跳本身。
-func (u *AllocatorUsecase) SetBattleDeparturePlacementVerifier(v BattleDeparturePlacementVerifier) {
-	u.departureVerifier = v
-}
 
 // SetReleaseTrackPolicy 在启动期注入 match 级确定性 cohort 策略。
 func (u *AllocatorUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
@@ -1643,42 +1627,6 @@ func legacyPodUIDPreflightCredentialMatches(
 			c.GetWriterEpoch() == id.WriterEpoch
 	}
 	return matches(snapshot.Auth.GetActive()) || matches(snapshot.Auth.GetPending())
-}
-
-// EnsurePlayerDeparture 是 Login/Hub 签发 Hub ticket 前的物理源离场门。
-// pending 是正常可重试结果，不是成功；只有 Departed=true 才能继续 Hub。
-func (u *AllocatorUsecase) EnsurePlayerDeparture(
-	ctx context.Context,
-	expected data.BattlePlayerDepartureExpected,
-) (data.BattlePlayerDepartureResult, error) {
-	if !u.modelB {
-		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrUnavailable,
-			"battle physical departure requires Redis authority")
-	}
-	if u.departureVerifier == nil {
-		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrUnavailable,
-			"battle departure placement verifier unavailable")
-	}
-	if err := u.departureVerifier.VerifyPendingHubBattleDeparture(ctx, expected); err != nil {
-		return data.BattlePlayerDepartureResult{}, err
-	}
-	result, err := u.repo.EnsurePlayerDeparture(ctx, expected)
-	if err != nil || !result.Departed {
-		return result, err
-	}
-	// Physical absence is not yet permission to admit Hub. Publish the exact,
-	// signed source-departure attestation into the current PENDING placement
-	// before reporting departed=true to Login. If the RPC response is lost,
-	// the durable journal plus stable departure_id makes the next call replay
-	// the same proof; locator confirmation is exact-CAS and idempotent.
-	if result.DepartureID == "" {
-		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrInvalidState,
-			"battle departure completed without durable departure id")
-	}
-	if err := u.departureVerifier.ConfirmBattleSourceDeparture(ctx, expected, result.DepartureID); err != nil {
-		return data.BattlePlayerDepartureResult{}, err
-	}
-	return result, nil
 }
 
 // Heartbeat 处理 DS 上报(单向 unary,DS 每 5s 调)。刷新 last_heartbeat_ms + 状态。

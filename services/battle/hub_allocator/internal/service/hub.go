@@ -18,7 +18,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	hubv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/hub/v1"
 
@@ -53,20 +52,16 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 	if req.GetPlayerId() == 0 {
 		return &hubv1.AssignHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.AssignHubWithPlacement(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId(),
-		placement.Binding{Version: req.GetPlacementVersion(), OperationID: req.GetPlacementOperationId(),
-			SourceMatchID: req.GetSourceMatchId()})
+	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId())
 	if err != nil {
 		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
 	}
 	return &hubv1.AssignHubResponse{
-		Code:                 commonv1.ErrCode_OK,
-		HubDsAddr:            res.HubDSAddr,
-		HubTicket:            res.HubTicket,
-		HubPodName:           res.HubPodName,
-		ShardId:              res.ShardID,
-		PlacementVersion:     res.Placement.Version,
-		PlacementOperationId: res.Placement.OperationID,
+		Code:       commonv1.ErrCode_OK,
+		HubDsAddr:  res.HubDSAddr,
+		HubTicket:  res.HubTicket,
+		HubPodName: res.HubPodName,
+		ShardId:    res.ShardID,
 	}, nil
 }
 
@@ -81,18 +76,13 @@ func (s *HubService) ReleaseHub(ctx context.Context, req *hubv1.ReleaseHubReques
 	return &hubv1.ReleaseHubResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+// EnsureHubDepartureForBattle：placement 路由体系已删除（硬切），旧调用方一律拒绝。
 func (s *HubService) EnsureHubDepartureForBattle(ctx context.Context,
 	req *hubv1.EnsureHubDepartureForBattleRequest,
 ) (*hubv1.EnsureHubDepartureForBattleResponse, error) {
-	binding := placement.Binding{Version: req.GetPlacementVersion(),
-		OperationID: req.GetPlacementOperationId()}
-	if req.GetPlayerId() == 0 || req.GetMatchId() == 0 || !binding.Complete() {
-		return &hubv1.EnsureHubDepartureForBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
-	}
-	if err := s.uc.EnsureHubDepartureForBattle(ctx, req.GetPlayerId(), req.GetMatchId(), binding); err != nil {
-		return &hubv1.EnsureHubDepartureForBattleResponse{Code: toProtoCode(err)}, nil
-	}
-	return &hubv1.EnsureHubDepartureForBattleResponse{Code: commonv1.ErrCode_OK, Departed: true}, nil
+	return &hubv1.EnsureHubDepartureForBattleResponse{
+		Code: commonv1.ErrCode(errcode.ErrServiceDisabled),
+	}, nil
 }
 
 // TransferHub 跨分片传送(玩家点传送点)。
@@ -203,16 +193,12 @@ func (s *HubService) AcknowledgeAdmission(ctx context.Context, req *hubv1.Acknow
 	if cred == nil {
 		return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
-	result, err := s.uc.AcknowledgeAdmissionWithPlacement(ctx, req.GetPlayerId(), req.GetAssignmentId(),
-		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(),
-		placement.Binding{Version: req.GetPlacementVersion(), OperationID: req.GetPlacementOperationId(),
-			SourceMatchID: req.GetSourceMatchId()}, hubCredentialFromGuard(cred))
+	result, err := s.uc.AcknowledgeAdmission(ctx, req.GetPlayerId(), req.GetAssignmentId(),
+		req.GetHubPodName(), req.GetAdmissionId(), req.GetAdmissionSeq(), hubCredentialFromGuard(cred))
 	if err != nil {
 		return &hubv1.AcknowledgeAdmissionResponse{Code: toProtoCode(err)}, nil
 	}
-	return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted,
-		PlacementCommitted: result.PlacementCommitted, PlacementVersion: result.Placement.Version,
-		PlacementOperationId: result.Placement.OperationID}, nil
+	return &hubv1.AcknowledgeAdmissionResponse{Code: commonv1.ErrCode_OK, Admitted: result.Admitted}, nil
 }
 
 // AcknowledgeDeparture exact 删除当前 admission owner；Conflict 返回 OK+departed=false，

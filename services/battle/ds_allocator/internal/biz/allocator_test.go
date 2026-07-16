@@ -364,29 +364,6 @@ type rejectingFenceRepo struct {
 	fenceCalls atomic.Int32
 }
 
-type battleDeparturePlacementStub struct {
-	verifyErr       error
-	confirmErr      error
-	verifyCalls     atomic.Int32
-	confirmCalls    atomic.Int32
-	lastDepartureID string
-}
-
-func (s *battleDeparturePlacementStub) VerifyPendingHubBattleDeparture(
-	_ context.Context, _ data.BattlePlayerDepartureExpected,
-) error {
-	s.verifyCalls.Add(1)
-	return s.verifyErr
-}
-
-func (s *battleDeparturePlacementStub) ConfirmBattleSourceDeparture(
-	_ context.Context, _ data.BattlePlayerDepartureExpected, departureID string,
-) error {
-	s.confirmCalls.Add(1)
-	s.lastDepartureID = departureID
-	return s.confirmErr
-}
-
 func (r *rejectingFenceRepo) FenceBattleAllocation(context.Context, uint64, string) (bool, error) {
 	r.fenceCalls.Add(1)
 	return false, nil
@@ -502,60 +479,6 @@ func (g *gatedAllocator) Allocate(ctx context.Context, matchID uint64, mapID uin
 
 func (g *gatedAllocator) Release(ctx context.Context, podName string) error {
 	return g.inner.Release(ctx, podName)
-}
-
-func TestEnsurePlayerDeparturePublishesLocatorConfirmationBeforeSuccess(t *testing.T) {
-	ctx := context.Background()
-	uc, repo, _ := newUsecaseWithAlloc(t, NewMockGameServerAllocator(testCfg()))
-	uc.modelB = true // this test exercises only the already-enabled departure path
-	const matchID = uint64(919)
-	battle := &dsv1.BattleStorageRecord{
-		MatchId: matchID, State: stateRunning, PlayerIds: []uint64{10},
-		DsPodName: "battle-919", GameserverUid: "uid-919", InstanceEpoch: 7,
-		AllocationId: "4305dd37-6995-4124-84cd-5dd7d61e3327", ReleaseTrack: "stable", PodUid: "pod-uid-919",
-		LastHeartbeatMs: time.Now().UnixMilli(),
-	}
-	if err := repo.CreateBattle(ctx, battle, time.Hour); err != nil {
-		t.Fatal(err)
-	}
-	teardownSource := data.BattleDepartureSource{
-		DSPodName: "battle-919", GameServerUID: "uid-919", InstanceEpoch: 7,
-		AllocationID: "4305dd37-6995-4124-84cd-5dd7d61e3327", PodUID: "pod-uid-919",
-	}
-	if err := repo.RecordInstanceTeardown(ctx, matchID, teardownSource); err != nil {
-		t.Fatal(err)
-	}
-	expected := data.BattlePlayerDepartureExpected{
-		MatchID: matchID, PlayerID: 10, PlacementVersion: 18,
-		OperationID:            "223e4567-e89b-42d3-a456-426614174001",
-		SourcePlacementVersion: 17,
-		SourceOperationID:      "123e4567-e89b-42d3-a456-426614174000",
-		Source: data.BattleDepartureSource{DSPodName: "battle-919", GameServerUID: "uid-919",
-			InstanceEpoch: 7, AllocationID: "4305dd37-6995-4124-84cd-5dd7d61e3327"},
-	}
-	stub := &battleDeparturePlacementStub{
-		confirmErr: errcode.New(errcode.ErrUnavailable, "locator ACK lost"),
-	}
-	uc.SetBattleDeparturePlacementVerifier(stub)
-
-	if result, err := uc.EnsurePlayerDeparture(ctx, expected); errcode.As(err) != errcode.ErrUnavailable || result.Departed {
-		t.Fatalf("unknown confirmation must fail closed: result=%+v err=%v", result, err)
-	}
-	firstID := stub.lastDepartureID
-	if firstID == "" || stub.verifyCalls.Load() != 1 || stub.confirmCalls.Load() != 1 {
-		t.Fatalf("first attempt verify=%d confirm=%d id=%q", stub.verifyCalls.Load(),
-			stub.confirmCalls.Load(), firstID)
-	}
-
-	// The physical journal is already terminal. A retry must publish the exact
-	// same proof id and only then expose departed=true to Login.
-	stub.confirmErr = nil
-	result, err := uc.EnsurePlayerDeparture(ctx, expected)
-	if err != nil || !result.Departed || result.DepartureID != firstID ||
-		stub.lastDepartureID != firstID || stub.confirmCalls.Load() != 2 {
-		t.Fatalf("retry result=%+v err=%v confirm=%d id=%q first=%q", result, err,
-			stub.confirmCalls.Load(), stub.lastDepartureID, firstID)
-	}
 }
 
 func (c *countingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {

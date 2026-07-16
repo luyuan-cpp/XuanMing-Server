@@ -707,3 +707,30 @@ Entry/Login travel，也不能销毁迟到回调时已经替换的新 driver。
 截至本节记录时，服务端目标 Go 测试与 `pkg/placement` 编译已通过，UE 修复文件已编译；两个 Matchmaker
 镜像正在滚动到本地集群。只有两个真实账号重新匹配并完成 Battle Admission 后，才能把本事故的本地 E2E
 状态标记为通过。
+
+### 7.11 需求固化与 2026-07-16 全链路复核
+
+**需求（硬性，已同步 CLAUDE.md §9.19）**：玩家在进入 Hub DS 或匹配进入 Battle DS 的任意阶段切后台或
+断网，回到前台后不允许出现任何卡死（无人驱动的静默等待、无入口的黑屏/遮罩），且必须能正确回到
+唯一权威 DS 或显式登录态。客户端本地状态永远不改写权威路由；服务端 UNKNOWN 一律 fail-closed 零副作用。
+
+本轮复核范围：服务端 2026-07-14 起全部提交（8ab6c59 → 1c21311）+ 未提交工作树（§7.10 修复），
+UE 客户端 r1090–r1130（luhailong）+ 未提交工作树（Coordinator/OnlineSession/超时兜底面板）。结果：
+
+1. **服务端代码级验证通过**：login/player_locator/ds_allocator/hub_allocator/matchmaker 全部
+   `go build + go test` 绿（含 §7.10 的 `exactSamePreparedBattlePending` 修复及其正/负例）；
+   `pkg/placement`、`pkg/battleabort` 绿。§7.10 的 Prepare replay 与 Allocate preflight 保持两个
+   判定域，confirmed 离场只接受与 checkpoint target 全字段相等的重放。
+2. **客户端断链所有权链路复核通过**：单写者 Coordinator 的 10 个 phase 均有 ticker/回调/前台事件
+   驱动下一步；unary HTTP 超时钳制在 5–300s 且完成回调恰好一次（含 `ProcessRequest()==false` 补发）；
+   OnlineSession 只清理 exact 授权 driver，杀掉逐帧 ConnectionLost 风暴且不执行默认 Entry travel。
+3. **发现并修复一处前台恢复缺陷（UE，未提交工作树）**：`HandleApplicationHasEnteredForeground`
+   原来无条件重启权威重查；从未登录（登录页/离线本地流程）或显式登出/放弃重连后，退避一轮会经
+   `RenewSessionForRecovery` 因无凭据强制 `OpenDefaultLoginLevel`，把玩家从当前界面踢回登录关卡
+   （离线本地城 → 登录页属于体验破坏）。修复：新增纯判定
+   `ShouldRestartRecoveryOnForeground(session, reconnecting, cachedCredentials, fence)`，四者全空时
+   前台跳过重启；`ReturnToLogin` / `AbandonBattleReconnect` 显式清 session + 缓存凭据，保证
+   显式登录态不会被下一次前台恢复静默重放（对应 §7.3.1 实现约束 4 的"显式登录页"语义）。
+   新增 Automation 负/正例：`Pandora.Module.Account.DsRecovery.ForegroundRestartRequiresRecoverableContext`。
+4. **仍未完成（与 §7.5 声明边界一致）**：真实移动端前后台/断网矩阵、真 UDP Admission、
+   Redis Cluster/K8s/Agones 故障注入尚未在生产环境验收；本节只证明代码级闭环。

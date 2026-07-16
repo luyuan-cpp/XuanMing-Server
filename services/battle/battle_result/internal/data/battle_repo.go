@@ -12,7 +12,6 @@ package data
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -23,7 +22,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	battlev1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/battle/v1"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 )
@@ -75,9 +73,9 @@ type TerminalReleaseRecord struct {
 	// PlayerIDs is the immutable authoritative roster copied from the canonical
 	// BattleStorageRecord at authorization time. It is deliberately not a DS
 	// payload field and is not persisted in terminal_release_outbox; SaveResult
-	// uses it in the same transaction to build match-release and exit-proof
-	// outboxes. This prevents a compromised DS from omitting a player or adding
-	// an outsider to recovery side effects.
+	// uses it in the same transaction to build the match-release outbox. This
+	// prevents a compromised DS from omitting a player or adding an outsider to
+	// recovery side effects.
 	PlayerIDs []uint64
 	// ReleasedAtMs>0 是阶段1“永久 Redis terminal + UID delete 已明确成功”的
 	// MySQL durable ACK。只有该状态才允许阶段2给墓碑设 TTL并删除本行。
@@ -95,33 +93,6 @@ type MatchReleaseRecord struct {
 	AttemptCount    uint32
 	NextAttemptAtMs int64
 	CreatedAtMs     int64
-}
-
-// BattleExitProofRecord is a per-player durable terminal proof relay job. The
-// initial SaveResult transaction stores the immutable result identity; a worker
-// later reads authoritative placement and CAS-persistently fills Proof once.
-type BattleExitProofRecord struct {
-	ID              uint64
-	MatchID         uint64
-	PlayerID        uint64
-	Proof           placement.BattleExitProof
-	Prepared        bool
-	AttemptCount    uint32
-	NextAttemptAtMs int64
-	CreatedAtMs     int64
-}
-
-// battleExitProofStorageRecord is intentionally private to battle_result. It
-// is an internal MySQL outbox payload, not part of the player/client protocol.
-type battleExitProofStorageRecord struct {
-	MatchID         uint64 `json:"match_id"`
-	PlayerID        uint64 `json:"player_id"`
-	ExpectedVersion uint64 `json:"expected_version,omitempty"`
-	OperationID     string `json:"operation_id,omitempty"`
-	ProofType       int32  `json:"proof_type"`
-	ProofID         string `json:"proof_id"`
-	Signature       string `json:"signature,omitempty"`
-	CreatedAtMs     int64  `json:"created_at_ms"`
 }
 
 // BattleRepo 是 battle_result 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
@@ -157,11 +128,6 @@ type BattleRepo interface {
 	FetchMatchReleaseOutbox(ctx context.Context, limit int, nowMs int64) ([]MatchReleaseRecord, error)
 	DeferMatchReleaseOutbox(ctx context.Context, id uint64, nextAttemptAtMs int64) error
 	DeleteMatchReleaseOutbox(ctx context.Context, id uint64) error
-	FetchBattleExitProofOutbox(ctx context.Context, limit int, nowMs int64) ([]BattleExitProofRecord, error)
-	PrepareBattleExitProofOutbox(ctx context.Context, rec BattleExitProofRecord, proof placement.BattleExitProof) (bool, error)
-	DeferBattleExitProofOutbox(ctx context.Context, id uint64, nextAttemptAtMs int64) error
-	MarkBattleExitProofSuperseded(ctx context.Context, id uint64, supersededAtMs int64) error
-	DeleteBattleExitProofOutbox(ctx context.Context, id uint64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -179,7 +145,6 @@ func NewMySQLBattleRepo(db *sql.DB) *MySQLBattleRepo {
 func (r *MySQLBattleRepo) ValidateRecoveryOutboxSchema(ctx context.Context) error {
 	checks := []string{
 		`SELECT id, match_id, payload, next_attempt_at_ms, attempt_count, created_at_ms FROM match_release_outbox LIMIT 0`,
-		`SELECT id, match_id, player_id, payload, prepared, next_attempt_at_ms, attempt_count, superseded_at_ms, created_at_ms FROM battle_exit_proof_outbox LIMIT 0`,
 	}
 	for _, query := range checks {
 		rows, err := r.db.QueryContext(ctx, query)
@@ -231,10 +196,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 			if ierr := insertMatchReleaseOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, time.Now().UnixMilli()); ierr != nil {
 				return false, errcode.New(errcode.ErrBattleResultDBWrite,
 					"restore match release outbox match=%d: %v", result.GetMatchId(), ierr)
-			}
-			if ierr := insertBattleExitProofOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, time.Now().UnixMilli()); ierr != nil {
-				return false, errcode.New(errcode.ErrBattleResultDBWrite,
-					"restore battle exit proof outbox match=%d: %v", result.GetMatchId(), ierr)
 			}
 			if cerr := tx.Commit(); cerr != nil {
 				return false, errcode.New(errcode.ErrBattleResultDBWrite,
@@ -332,10 +293,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		return false, errcode.New(errcode.ErrBattleResultDBWrite,
 			"insert match release outbox match=%d: %v", result.GetMatchId(), err)
 	}
-	if err := insertBattleExitProofOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, nowMs); err != nil {
-		return false, errcode.New(errcode.ErrBattleResultDBWrite,
-			"insert battle exit proof outbox match=%d: %v", result.GetMatchId(), err)
-	}
 
 	if cerr := tx.Commit(); cerr != nil {
 		return false, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
@@ -386,30 +343,6 @@ ON DUPLICATE KEY UPDATE
   match_id = VALUES(match_id),
   next_attempt_at_ms = LEAST(next_attempt_at_ms, VALUES(next_attempt_at_ms))`, matchID, payload, nowMs)
 	return err
-}
-
-func insertBattleExitProofOutboxTx(ctx context.Context, tx *sql.Tx, matchID uint64, playerIDs []uint64, nowMs int64) error {
-	proofID := "result:" + strconv.FormatUint(matchID, 10) + ":match:" + strconv.FormatUint(matchID, 10)
-	for _, playerID := range playerIDs {
-		if playerID == 0 {
-			continue
-		}
-		storage := &battleExitProofStorageRecord{
-			MatchID: matchID, PlayerID: playerID, ProofType: placement.ProofMatchTerminal,
-			ProofID: proofID, CreatedAtMs: nowMs,
-		}
-		payload, err := json.Marshal(storage)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO battle_exit_proof_outbox
-(match_id, player_id, payload, prepared, next_attempt_at_ms, attempt_count, superseded_at_ms, created_at_ms)
-VALUES (?, ?, ?, 0, 0, 0, 0, ?)
-ON DUPLICATE KEY UPDATE match_id = VALUES(match_id)`, matchID, playerID, payload, nowMs); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // FetchOutbox 按 id 升序取最多 limit 条待发布出箱记录(FIFO 保序)。
@@ -643,106 +576,6 @@ func (r *MySQLBattleRepo) DeleteMatchReleaseOutbox(ctx context.Context, id uint6
 		return errcode.New(errcode.ErrInternal, "delete match release id=%d affected=%d", id, affected)
 	}
 	return nil
-}
-
-func (r *MySQLBattleRepo) FetchBattleExitProofOutbox(ctx context.Context, limit int, nowMs int64) ([]BattleExitProofRecord, error) {
-	if limit <= 0 {
-		limit = 128
-	}
-	if nowMs <= 0 {
-		nowMs = time.Now().UnixMilli()
-	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id, payload, prepared, attempt_count, next_attempt_at_ms, created_at_ms
-FROM battle_exit_proof_outbox
-WHERE superseded_at_ms = 0 AND next_attempt_at_ms <= ?
-ORDER BY next_attempt_at_ms ASC, id ASC
-LIMIT ?`, nowMs, limit)
-	if err != nil {
-		return nil, errcode.New(errcode.ErrInternal, "query battle exit proof outbox: %v", err)
-	}
-	defer func() { _ = rows.Close() }()
-	out := make([]BattleExitProofRecord, 0, limit)
-	for rows.Next() {
-		var rec BattleExitProofRecord
-		var payload []byte
-		if err := rows.Scan(&rec.ID, &payload, &rec.Prepared, &rec.AttemptCount, &rec.NextAttemptAtMs, &rec.CreatedAtMs); err != nil {
-			return nil, errcode.New(errcode.ErrInternal, "scan battle exit proof outbox: %v", err)
-		}
-		storage := &battleExitProofStorageRecord{}
-		if err := json.Unmarshal(payload, storage); err != nil {
-			return nil, errcode.New(errcode.ErrInternal, "decode battle exit proof outbox id=%d: %v", rec.ID, err)
-		}
-		rec.MatchID, rec.PlayerID = storage.MatchID, storage.PlayerID
-		rec.Proof = placement.BattleExitProof{ExpectedVersion: storage.ExpectedVersion,
-			OperationID: storage.OperationID, ProofType: storage.ProofType,
-			ProofID: storage.ProofID, Signature: storage.Signature}
-		if rec.MatchID == 0 || rec.PlayerID == 0 || rec.Proof.ProofType != placement.ProofMatchTerminal || rec.Proof.ProofID == "" ||
-			(rec.Prepared && (rec.Proof.ExpectedVersion == 0 || !placement.ValidOperationID(rec.Proof.OperationID) || rec.Proof.Signature == "")) ||
-			(!rec.Prepared && (rec.Proof.ExpectedVersion != 0 || rec.Proof.OperationID != "" || rec.Proof.Signature != "")) {
-			return nil, errcode.New(errcode.ErrInternal, "invalid battle exit proof outbox id=%d", rec.ID)
-		}
-		out = append(out, rec)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, errcode.New(errcode.ErrInternal, "iterate battle exit proof outbox: %v", err)
-	}
-	return out, nil
-}
-
-func (r *MySQLBattleRepo) PrepareBattleExitProofOutbox(ctx context.Context, rec BattleExitProofRecord, proof placement.BattleExitProof) (bool, error) {
-	if rec.ID == 0 || rec.MatchID == 0 || rec.PlayerID == 0 || proof.ExpectedVersion == 0 ||
-		!placement.ValidOperationID(proof.OperationID) || proof.ProofType != placement.ProofMatchTerminal ||
-		proof.ProofID != rec.Proof.ProofID || proof.Signature == "" {
-		return false, errcode.New(errcode.ErrInvalidArg, "complete immutable battle exit proof required")
-	}
-	storage := &battleExitProofStorageRecord{MatchID: rec.MatchID, PlayerID: rec.PlayerID,
-		ExpectedVersion: proof.ExpectedVersion, OperationID: proof.OperationID, ProofType: proof.ProofType,
-		ProofID: proof.ProofID, Signature: proof.Signature, CreatedAtMs: rec.CreatedAtMs}
-	payload, err := json.Marshal(storage)
-	if err != nil {
-		return false, err
-	}
-	res, err := r.db.ExecContext(ctx, `UPDATE battle_exit_proof_outbox
-SET payload = ?, prepared = 1
-WHERE id = ? AND prepared = 0 AND superseded_at_ms = 0`, payload, rec.ID)
-	if err != nil {
-		return false, errcode.New(errcode.ErrInternal, "prepare battle exit proof outbox id=%d: %v", rec.ID, err)
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if affected > 1 {
-		return false, errcode.New(errcode.ErrInternal, "prepare battle exit proof id=%d affected=%d", rec.ID, affected)
-	}
-	return affected == 1, nil
-}
-
-func (r *MySQLBattleRepo) DeferBattleExitProofOutbox(ctx context.Context, id uint64, nextAttemptAtMs int64) error {
-	if id == 0 || nextAttemptAtMs <= 0 {
-		return errcode.New(errcode.ErrInvalidArg, "battle exit proof defer requires id/time")
-	}
-	_, err := r.db.ExecContext(ctx, `UPDATE battle_exit_proof_outbox
-SET attempt_count = attempt_count + 1, next_attempt_at_ms = ?
-WHERE id = ? AND superseded_at_ms = 0`, nextAttemptAtMs, id)
-	return err
-}
-
-func (r *MySQLBattleRepo) MarkBattleExitProofSuperseded(ctx context.Context, id uint64, supersededAtMs int64) error {
-	if id == 0 || supersededAtMs <= 0 {
-		return errcode.New(errcode.ErrInvalidArg, "battle exit proof supersede requires id/time")
-	}
-	_, err := r.db.ExecContext(ctx, `UPDATE battle_exit_proof_outbox
-SET superseded_at_ms = ? WHERE id = ? AND superseded_at_ms = 0`, supersededAtMs, id)
-	return err
-}
-
-func (r *MySQLBattleRepo) DeleteBattleExitProofOutbox(ctx context.Context, id uint64) error {
-	if id == 0 {
-		return errcode.New(errcode.ErrInvalidArg, "battle exit proof outbox id required")
-	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM battle_exit_proof_outbox WHERE id = ? AND prepared = 1`, id)
-	return err
 }
 
 const deleteTerminalReleaseOutboxSQL = `DELETE FROM terminal_release_outbox WHERE id = ? AND released_at_ms > 0`

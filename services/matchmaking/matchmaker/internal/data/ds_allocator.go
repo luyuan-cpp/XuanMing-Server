@@ -62,7 +62,7 @@ func NewGrpcDSAllocator(dsAllocatorAddr string, signer *auth.Signer, v2Signer *a
 
 // AbortBattleAllocation invokes the allocator's destructive compensation RPC
 // with a fresh nonce and a signature over the canonical full request. It does
-// not reuse player JWT, placement proof, Login resume, or DS callback keys.
+// not reuse player JWT, Login resume, or DS callback keys.
 func (g *GrpcDSAllocator) AbortBattleAllocation(
 	ctx context.Context,
 	matchID uint64,
@@ -161,16 +161,10 @@ func (g *GrpcDSAllocator) SignBattleTickets(
 	matchID uint64,
 	playerIDs []uint64,
 	allocation *model.BattleAllocation,
-	bindings map[uint64]placement.Binding,
 ) (map[uint64]string, error) {
 	tickets := make(map[uint64]string, len(playerIDs))
 	for _, playerID := range playerIDs {
-		binding, ok := bindings[playerID]
-		if !ok || !binding.Complete() {
-			return nil, errcode.New(errcode.ErrDSAllocationFailed,
-				"missing placement binding for player %d match %d", playerID, matchID)
-		}
-		token, err := g.SignBattleTicket(ctx, playerID, matchID, allocation, binding)
+		token, err := g.SignBattleTicket(ctx, playerID, matchID, allocation)
 		if err != nil {
 			return nil, err
 		}
@@ -213,17 +207,17 @@ func battleTargetFromFields(
 	}, nil
 }
 
-// SignBattleTicket 只使用 READY match 持久化的 exact target + per-player placement binding。
-// 不再临时回查一个缺 binding 的 roster 目标，也不允许降级 legacy HMAC 票。
-func (g *GrpcDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64, allocation *model.BattleAllocation, binding placement.Binding) (string, error) {
-	if g.v2 == nil || allocation == nil || !allocation.Target.CompleteBattle() || !binding.Complete() {
+// SignBattleTicket 只使用 READY match 持久化的 exact target。
+// 不允许降级 legacy HMAC 票。
+func (g *GrpcDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64, allocation *model.BattleAllocation) (string, error) {
+	if g.v2 == nil || allocation == nil || !allocation.Target.CompleteBattle() {
 		return "", errcode.New(errcode.ErrDSAllocationFailed,
-			"complete v2 target/placement binding required, player %d match %d", playerID, matchID)
+			"complete v2 target required, player %d match %d", playerID, matchID)
 	}
 	target := auth.DSTicketTarget{
 		DSPodName: allocation.Target.PodName, DSInstanceUID: allocation.Target.InstanceUID,
 		DSInstanceEpoch: allocation.Target.InstanceEpoch, ReleaseTrack: allocation.Target.ReleaseTrack,
-		MatchID: matchID, AllocationID: allocation.Target.AllocationID, Placement: binding,
+		MatchID: matchID, AllocationID: allocation.Target.AllocationID,
 	}
 	token, _, err := g.v2.SignBattleTicket(playerID, 0, 0, uuid.NewString(), target)
 	if err != nil {

@@ -45,12 +45,8 @@ match:
   team_addr: "127.0.0.1:50010"
   # ds_allocator_addr: ds_allocator 服务 gRPC 直连地址(全员确认后拉战斗 DS);留空用 StubDSAllocator
   ds_allocator_addr: "127.0.0.1:50020"
-  # READY 前逐玩家等待 Hub exact eviction + Departure/UID teardown。
-  hub_allocator_addr: "127.0.0.1:50021"
   # locator_addr: player_locator 服务 gRPC 直连地址（成局→MATCHING / 就绪→BATTLE 位置上报 + StartMatch 前置查战斗态）;留空不上报也不拦截
   locator_addr: "127.0.0.1:50006"
-  # HUB→BATTLE placement proof；公开 dev 值，生产由配置生成器覆盖。
-  placement_match_start_proof_secret: "pandora-dev-placement-match-start-key-v1!"
   # Login→Matchmaker internal resume RPC only. Shared Redis consumes each
   # signed nonce once across replicas.
   match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"

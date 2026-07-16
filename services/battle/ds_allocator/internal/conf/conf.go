@@ -74,24 +74,11 @@ func (c *Config) ValidateLifecyclePublicationConfig() error {
 	return fmt.Errorf("ds_allocator: production authority requires kafka.brokers for reliable %s publication", "pandora.ds.lifecycle")
 }
 
-// BattleDepartureProofSecret returns the effective route-scoped proof key.
-// Environment delivery takes precedence over the development YAML fallback.
-func (c *Config) BattleDepartureProofSecret() string {
-	if value := strings.TrimSpace(os.Getenv("PANDORA_PLACEMENT_BATTLE_DEPARTURE_SECRET")); value != "" {
-		return value
-	}
-	return strings.TrimSpace(c.Allocator.PlacementBattleDepartureProofSecret)
-}
-
-// ValidateBattleDepartureConfig prevents a production allocator from running
-// a physical departure journal that can never publish its mandatory locator
-// confirmation. Missing authority is a startup error, not a TTL fallback.
+// ValidateBattleDepartureConfig: production authority requires locator_addr so
+// battle presence renewal (the only in-battle routing signal) keeps working.
 func (c *Config) ValidateBattleDepartureConfig() error {
 	if c.RequiresReliableLifecyclePublication() && strings.TrimSpace(c.LocatorAddr) == "" {
-		return fmt.Errorf("ds_allocator: production authority requires locator_addr for physical source departure confirmation")
-	}
-	if strings.TrimSpace(c.LocatorAddr) != "" && len(c.BattleDepartureProofSecret()) < 32 {
-		return fmt.Errorf("ds_allocator: locator_addr requires an independent battle departure proof secret of at least 32 bytes")
+		return fmt.Errorf("ds_allocator: production authority requires locator_addr for battle presence renewal")
 	}
 	return nil
 }
@@ -109,8 +96,7 @@ func (c *Config) ValidateAllocationAbortAuthConfig() error {
 	if err := internalrpcauth.ValidateIdentity(c.Allocator.AllocationAbortAuthAudience); err != nil {
 		return fmt.Errorf("ds_allocator: allocator.allocation_abort_auth_audience invalid: %w", err)
 	}
-	if c.Allocator.AllocationAbortAuthSecret == c.DSAuth.Secret ||
-		c.Allocator.AllocationAbortAuthSecret == c.BattleDepartureProofSecret() {
+	if c.Allocator.AllocationAbortAuthSecret == c.DSAuth.Secret {
 		return fmt.Errorf("ds_allocator: allocation abort auth must use an independent trust-domain key")
 	}
 	return nil
@@ -330,11 +316,6 @@ type AllocatorConf struct {
 	// no player, placement, resume, or DS callback flow may receive it.
 	AllocationAbortAuthSecret   string `yaml:"allocation_abort_auth_secret,omitempty" json:"allocation_abort_auth_secret,omitempty"`
 	AllocationAbortAuthAudience string `yaml:"allocation_abort_auth_audience,omitempty" json:"allocation_abort_auth_audience,omitempty"`
-
-	// PlacementBattleDepartureProofSecret signs only physical Battle-source
-	// departure attestations. It must not reuse battle terminal/leave or DS
-	// callback keys. Production should inject the environment override.
-	PlacementBattleDepartureProofSecret string `yaml:"placement_battle_departure_proof_secret,omitempty" json:"placement_battle_departure_proof_secret,omitempty"`
 
 	// HeartbeatTimeout DS 心跳超时阈值(默认 15s,不变量 §4)。
 	// 超过此时长没收到 Heartbeat → 标记 abandoned + 释放(W4 ② 仅释放,补偿留 W4 ③)。

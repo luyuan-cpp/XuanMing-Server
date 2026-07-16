@@ -37,7 +37,6 @@ import (
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
@@ -334,23 +333,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 4.2 player_locator 客户端(弱依赖):只续期短 TTL BATTLE presence/监控；断线恢复
-	// 的唯一权威是持久 placement。locator_addr 留空不续期 presence，也不得把玩家降级到 Hub。
+	// 4.2 player_locator 客户端(弱依赖):续期短 TTL BATTLE presence(玩家在线/战斗中的唯一路由信号)。
+	// locator_addr 留空不续期 presence，长对局中途重登可能因位置过期退化为回大厅。
 	if cfg.LocatorAddr != "" {
-		departureSigner, signerErr := placement.NewProofSigner(cfg.BattleDepartureProofSecret())
-		if signerErr != nil {
-			helper.Errorw("msg", "battle_departure_signer_init_failed", "err", signerErr)
-			os.Exit(1)
-		}
 		conn := grpcclient.MustDialInsecure(cfg.LocatorAddr)
 		defer func() { _ = conn.Close() }()
-		locatorClient := data.NewGrpcLocationRefresher(conn, departureSigner)
+		locatorClient := data.NewGrpcLocationRefresher(conn)
 		uc.SetLocationRefresher(locatorClient)
-		uc.SetBattleDeparturePlacementVerifier(locatorClient)
 		helper.Infow("msg", "locator_client_ready", "locator_addr", cfg.LocatorAddr)
 	} else {
 		helper.Warnw("msg", "locator_addr_empty",
-			"hint", "BATTLE presence 不续期；EnsurePlayerDeparture 无 placement ABA verifier 将 fail-closed/重试")
+			"hint", "BATTLE presence 不续期；玩家战斗中无法被 login 检测到")
 	}
 
 	svc := service.NewAllocatorService(uc)

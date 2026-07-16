@@ -28,11 +28,11 @@ func (s *allocationErrorStub) AbortBattleAllocation(context.Context, uint64, str
 	return nil
 }
 
-func (*allocationErrorStub) SignBattleTickets(context.Context, uint64, []uint64, *model.BattleAllocation, map[uint64]placement.Binding) (map[uint64]string, error) {
+func (*allocationErrorStub) SignBattleTickets(context.Context, uint64, []uint64, *model.BattleAllocation) (map[uint64]string, error) {
 	return nil, errors.New("unexpected ticket signing")
 }
 
-func (*allocationErrorStub) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation, placement.Binding) (string, error) {
+func (*allocationErrorStub) SignBattleTicket(context.Context, uint64, uint64, *model.BattleAllocation) (string, error) {
 	return "", errors.New("unexpected ticket signing")
 }
 
@@ -63,7 +63,6 @@ func TestAutoConfirmCrashBeforeAllocationCommitIsRecoveredFromCanonicalGraph(t *
 	}}
 	allocator := &switchingAllocationStub{first: allocation, second: allocation}
 	uc := NewMatchUsecase(faulty, nil, f.pusher, allocator, &fakeIDGen{next: 9901}, f.locator, f.cfg)
-	uc.SetPlacementCoordinator(allowPlacement{})
 
 	var sideA, sideB []*matchv1.MatchTicketStorageRecord
 	for i := uint64(1); i <= 10; i++ {
@@ -96,7 +95,6 @@ func TestAutoConfirmCrashBeforeAllocationCommitIsRecoveredFromCanonicalGraph(t *
 	// A fresh process only needs the canonical scan; it repairs the missing
 	// claim edge and submits exactly one durable allocation operation.
 	restarted := NewMatchUsecase(f.repo, nil, f.pusher, allocator, &fakeIDGen{next: 10000}, f.locator, f.cfg)
-	restarted.SetPlacementCoordinator(allowPlacement{})
 	if err := restarted.reconcileActiveOnce(ctx); err != nil {
 		t.Fatalf("canonical formation reconciliation failed: %v", err)
 	}
@@ -217,7 +215,6 @@ func TestRedisTransientNeverRemovesActiveAndCanonicalScanRebuildsIt(t *testing.T
 	failing := &failOnceGetMatchRepo{MatchRepo: f.repo, fail: true}
 	worker := NewMatchUsecase(failing, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"),
 		&fakeIDGen{next: 10000}, f.locator, f.cfg)
-	worker.SetPlacementCoordinator(allowPlacement{})
 	if err := worker.advanceAllocationsOnce(ctx); err == nil {
 		t.Fatal("injected Redis transient was hidden")
 	}
@@ -230,7 +227,6 @@ func TestRedisTransientNeverRemovesActiveAndCanonicalScanRebuildsIt(t *testing.T
 	}
 	restarted := NewMatchUsecase(f.repo, nil, f.pusher, NewStubDSAllocator("127.0.0.1:7777"),
 		&fakeIDGen{next: 10001}, f.locator, f.cfg)
-	restarted.SetPlacementCoordinator(allowPlacement{})
 	if err := restarted.reconcileActiveOnce(ctx); err != nil {
 		t.Fatalf("canonical scan failed to rebuild active: %v", err)
 	}
@@ -264,7 +260,6 @@ func TestLastConfirmationSurvivesProcessCrashBeforeAllocationWorker(t *testing.T
 	}
 
 	restarted := NewMatchUsecase(f.repo, nil, f.pusher, allocator, &fakeIDGen{next: 10000}, f.locator, f.cfg)
-	restarted.SetPlacementCoordinator(allowPlacement{})
 	if err := restarted.advanceAllocationsOnce(ctx); err != nil {
 		t.Fatalf("restarted allocation worker failed: %v", err)
 	}

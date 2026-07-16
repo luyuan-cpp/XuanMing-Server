@@ -20,24 +20,6 @@ type StubDSAllocator struct {
 	MockAddr string
 }
 
-// StubPlacementCoordinator 仅供没有真实 ds_allocator/player_locator 的本地联调。
-// production main 在配置真实 allocator 时禁止使用此桩。
-type StubPlacementCoordinator struct{}
-
-func (StubPlacementCoordinator) RequireStableHub(context.Context, []uint64) error { return nil }
-
-func (StubPlacementCoordinator) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
-	return nil
-}
-
-func (StubPlacementCoordinator) PrepareBattlePlacement(_ context.Context, operationID string, _ uint64, playerIDs []uint64, _ *model.BattleAllocation) (map[uint64]placement.Binding, error) {
-	bindings := make(map[uint64]placement.Binding, len(playerIDs))
-	for _, playerID := range playerIDs {
-		bindings[playerID] = placement.Binding{Version: 1, OperationID: operationID}
-	}
-	return bindings, nil
-}
-
 // NewStubDSAllocator 构造打桩分配器。addr 为空时用占位地址。
 func NewStubDSAllocator(addr string) *StubDSAllocator {
 	if addr == "" {
@@ -64,7 +46,7 @@ func (s *StubDSAllocator) AbortBattleAllocation(context.Context, uint64, string,
 	return nil
 }
 
-func (s *StubDSAllocator) SignBattleTickets(_ context.Context, matchID uint64, playerIDs []uint64, _ *model.BattleAllocation, _ map[uint64]placement.Binding) (map[uint64]string, error) {
+func (s *StubDSAllocator) SignBattleTickets(_ context.Context, matchID uint64, playerIDs []uint64, _ *model.BattleAllocation) (map[uint64]string, error) {
 	tickets := make(map[uint64]string, len(playerIDs))
 	for _, pid := range playerIDs {
 		tickets[pid] = fmt.Sprintf("mock-ticket-%d-%d", matchID, pid)
@@ -73,6 +55,6 @@ func (s *StubDSAllocator) SignBattleTickets(_ context.Context, matchID uint64, p
 }
 
 // SignBattleTicket 桩：返回带纳秒后缀的 mock 票，模拟“每次新 jti”。实现 biz.DSAllocator。
-func (s *StubDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64, _ *model.BattleAllocation, _ placement.Binding) (string, error) {
+func (s *StubDSAllocator) SignBattleTicket(_ context.Context, playerID, matchID uint64, _ *model.BattleAllocation) (string, error) {
 	return fmt.Sprintf("mock-ticket-%d-%d-%d", matchID, playerID, time.Now().UnixNano()), nil
 }

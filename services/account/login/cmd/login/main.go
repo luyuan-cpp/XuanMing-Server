@@ -34,14 +34,11 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
-	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
-	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
 	"github.com/luyuancpp/pandora/services/account/login/internal/conf"
@@ -86,15 +83,6 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
-	placementMode, placementModeErr := placement.ParseMode(cfg.Login.PlacementMode)
-	if placementModeErr != nil {
-		helper.Errorw("msg", "placement_mode_invalid", "err", placementModeErr)
-		os.Exit(1)
-	}
-	if placementMode == placement.ModeEnforce && cfg.Login.Locator.Addr == "" {
-		helper.Errorw("msg", "placement_enforce_requires_locator")
-		os.Exit(1)
-	}
 	if err := cfg.Validate(); err != nil {
 		helper.Errorw("msg", "config_validation_failed", "err", err)
 		os.Exit(1)
@@ -140,7 +128,7 @@ func main() {
 	}()
 
 	// locator 客户端(W3 ⑤):addr 为空 → 跳过,Login 仅 Warn 日志
-	locatorNotifier, placementChecker, locatorConn, locatorMode := mustBuildLocatorNotifier(&cfg, helper)
+	locatorNotifier, locatorConn, locatorMode := mustBuildLocatorNotifier(&cfg, helper)
 	defer func() {
 		if locatorConn != nil {
 			_ = locatorConn.Close()
@@ -152,20 +140,6 @@ func main() {
 	defer func() {
 		if hubConn != nil {
 			_ = hubConn.Close()
-		}
-	}()
-
-	matchResumeReader, matchConn, matchMode := mustBuildMatchResumeReader(&cfg, helper)
-	defer func() {
-		if matchConn != nil {
-			_ = matchConn.Close()
-		}
-	}()
-
-	battleDeparture, battleAllocatorConn, battleAllocatorMode := mustBuildBattleDepartureCoordinator(&cfg, helper)
-	defer func() {
-		if battleAllocatorConn != nil {
-			_ = battleAllocatorConn.Close()
 		}
 	}()
 
@@ -193,23 +167,6 @@ func main() {
 	// 6. biz + service 装配
 	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, v2Verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
-	loginUC.SetMatchResumeReader(matchResumeReader)
-	loginUC.SetBattleDepartureCoordinator(battleDeparture)
-	proofSecret := os.Getenv("PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET")
-	if proofSecret == "" {
-		proofSecret = cfg.Login.PlacementBootstrapProofSecret
-	}
-	if proofSecret != "" {
-		proofSigner, proofErr := placement.NewProofSigner(proofSecret)
-		if proofErr != nil {
-			helper.Errorw("msg", "placement_proof_secret_invalid", "err", proofErr)
-			os.Exit(1)
-		}
-		loginUC.SetPlacementProofSigner(proofSigner)
-	} else if placementMode == placement.ModeEnforce {
-		helper.Errorw("msg", "placement_enforce_requires_proof_secret")
-		os.Exit(1)
-	}
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
 			"warn", "password verification disabled + unknown accounts auto-provisioned; NEVER enable in prod")
@@ -258,8 +215,6 @@ func main() {
 		hubAssignmentChecker = data.NewRedisHubAssignmentChecker(rdb)
 	}
 	ticketUC.SetHubAssignmentBindingPolicy(cfg.Login.RequireHubAssignmentBinding, hubAssignmentChecker)
-	ticketUC.SetPlacementAdmissionPolicy(placementMode, placementChecker)
-	loginUC.SetPlacementPolicy(placementMode, placementChecker)
 	if rdb != nil {
 		ticketUC.SetBattleTicketAuthorizer(data.NewRedisBattleTicketAuthorizer(
 			rdb, cfg.DSAuth.AuthorityModeRedis(), cfg.DSAuth.ActiveHeartbeatMaxAge.Std()))
@@ -308,8 +263,6 @@ func main() {
 		"jti_repo", repoEnabled(jtiRepo != nil),
 		"locator_notifier", locatorMode,
 		"hub_assigner", hubMode,
-		"match_resume_reader", matchMode,
-		"battle_departure_coordinator", battleAllocatorMode,
 		"require_hub_assignment_binding", cfg.Login.RequireHubAssignmentBinding,
 		"ds_auth_mode", cfg.DSAuth.Mode,
 		"ds_auth_authority_mode", cfg.DSAuth.AuthorityMode,
@@ -410,16 +363,16 @@ func mustBuildRedisRepos(cfg *conf.Config, h kratosHelper) (data.SessionRepo, da
 // mustBuildLocatorNotifier 按 cfg.Login.Locator.Addr 决定是否拨号到 player_locator。
 // addr 空 → 返回 nil notifier(Login 仅 Warn,不阻断);
 // 拨号失败 → panic(注意:grpcclient.MustDialInsecure 内部 panic,这里语义一致)。
-func mustBuildLocatorNotifier(cfg *conf.Config, h kratosHelper) (data.LocationNotifier, data.PlacementAdmissionChecker, locatorConnLike, string) {
+func mustBuildLocatorNotifier(cfg *conf.Config, h kratosHelper) (data.LocationNotifier, locatorConnLike, string) {
 	addr := cfg.Login.Locator.Addr
 	if addr == "" {
 		h.Warnw("msg", "locator_disabled_in_config",
 			"hint", "set login.locator.addr to 127.0.0.1:50006 to enable LOGIN_PENDING upsert")
-		return nil, nil, nil, "disabled"
+		return nil, nil, "disabled"
 	}
 	conn := grpcclient.MustDialInsecure(addr)
 	h.Infow("msg", "locator_dial_ok", "addr", addr)
-	return data.NewGrpcLocationNotifier(conn), data.NewGrpcPlacementChecker(conn), conn, "grpc"
+	return data.NewGrpcLocationNotifier(conn), conn, "grpc"
 }
 
 // mustBuildHubAssigner 按 cfg.Login.Hub.Addr 决定是否拨号到 hub_allocator(W4 ⑥)。
@@ -435,36 +388,6 @@ func mustBuildHubAssigner(cfg *conf.Config, h kratosHelper) (data.HubAssigner, l
 	conn := grpcclient.MustDialInsecure(addr)
 	h.Infow("msg", "hub_allocator_dial_ok", "addr", addr, "region", cfg.Login.Hub.Region)
 	return data.NewGrpcHubAssigner(conn), conn, "grpc"
-}
-
-func mustBuildMatchResumeReader(cfg *conf.Config, h kratosHelper) (data.MatchResumeReader, locatorConnLike, string) {
-	addr := cfg.Login.Matchmaker.Addr
-	if addr == "" {
-		h.Warnw("msg", "match_resume_reader_disabled_in_config",
-			"hint", "placement enforce requires login.matchmaker.addr")
-		return nil, nil, "disabled"
-	}
-	signer, err := internalrpcauth.NewSigner(cfg.Login.MatchResumeAuthSecret, "login",
-		cfg.Login.MatchResumeAuthAudience)
-	if err != nil {
-		h.Errorw("msg", "match_resume_service_auth_init_failed", "err", err)
-		os.Exit(1)
-	}
-	conn := grpcclient.MustDialInsecure(addr)
-	h.Infow("msg", "match_resume_reader_dial_ok", "addr", addr)
-	return data.NewGrpcMatchResumeReader(conn, signer), conn, "grpc"
-}
-
-func mustBuildBattleDepartureCoordinator(cfg *conf.Config, h kratosHelper) (data.BattleDepartureCoordinator, locatorConnLike, string) {
-	addr := cfg.Login.BattleAllocator.Addr
-	if addr == "" {
-		h.Warnw("msg", "battle_departure_coordinator_disabled_in_config",
-			"hint", "placement enforce requires login.battle_allocator.addr")
-		return nil, nil, "disabled"
-	}
-	conn := grpcclient.MustDialInsecure(addr)
-	h.Infow("msg", "battle_departure_coordinator_dial_ok", "addr", addr)
-	return data.NewGrpcBattleDepartureCoordinator(dsv1.NewDSAllocatorServiceClient(conn)), conn, "grpc"
 }
 
 // kratosHelper 是 *klog.Helper 的简化接口,避免 main.go 导出泛型。

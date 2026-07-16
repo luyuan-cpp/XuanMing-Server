@@ -166,32 +166,13 @@ func (s *AllocatorService) AbortPreactiveBattle(
 	return &dsv1.AbortPreactiveBattleResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
-// EnsurePlayerDeparture 为 Battle→Hub 签票/准入提供 exact 物理离场证明。
-// departed=false 是必须稍后重试的正常 pending，调用方绝不得继续 Hub 流程。
+// EnsurePlayerDeparture：placement 路由体系已删除（硬切），旧调用方一律拒绝。
 func (s *AllocatorService) EnsurePlayerDeparture(
 	ctx context.Context,
 	req *dsv1.EnsurePlayerDepartureRequest,
 ) (*dsv1.EnsurePlayerDepartureResponse, error) {
-	if req.GetMatchId() == 0 || req.GetPlayerId() == 0 || req.GetPlacementVersion() == 0 || req.GetOperationId() == "" ||
-		req.GetSourcePlacementVersion() == 0 || req.GetSourceOperationId() == "" ||
-		req.GetDsPodName() == "" || req.GetGameserverUid() == "" ||
-		req.GetInstanceEpoch() == 0 || req.GetAllocationId() == "" {
-		return &dsv1.EnsurePlayerDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
-	}
-	res, err := s.uc.EnsurePlayerDeparture(ctx, data.BattlePlayerDepartureExpected{
-		MatchID: req.GetMatchId(), PlayerID: req.GetPlayerId(), PlacementVersion: req.GetPlacementVersion(),
-		OperationID: req.GetOperationId(), SourcePlacementVersion: req.GetSourcePlacementVersion(),
-		SourceOperationID: req.GetSourceOperationId(),
-		Source: data.BattleDepartureSource{
-			DSPodName: req.GetDsPodName(), GameServerUID: req.GetGameserverUid(),
-			InstanceEpoch: req.GetInstanceEpoch(), AllocationID: req.GetAllocationId(),
-		},
-	})
-	if err != nil {
-		return &dsv1.EnsurePlayerDepartureResponse{Code: toProtoCode(err)}, nil
-	}
 	return &dsv1.EnsurePlayerDepartureResponse{
-		Code: commonv1.ErrCode_OK, Departed: res.Departed, Status: res.Status,
+		Code: commonv1.ErrCode(errcode.ErrServiceDisabled),
 	}, nil
 }
 

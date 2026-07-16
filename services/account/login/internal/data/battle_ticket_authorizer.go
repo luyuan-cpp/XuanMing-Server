@@ -6,7 +6,6 @@ package data
 import (
 	"context"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
-	"github.com/luyuancpp/pandora/pkg/placement"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
 
@@ -55,10 +53,6 @@ const (
 // 未实现本接口的 authorizer 一律按 UNKNOWN fail-closed。
 type BattleRouteInspector interface {
 	InspectBattleRoute(ctx context.Context, playerID, matchID uint64) (BattleRouteState, error)
-}
-
-type BattleRouteProofInspector interface {
-	InspectBattleRouteProof(ctx context.Context, playerID, matchID uint64) (BattleRouteState, placement.BattleExitProof, error)
 }
 
 // 战斗投影记录的显式终态(与 ds_allocator 状态机常量一致;TerminateExpected 写入)。
@@ -166,38 +160,6 @@ func (c *RedisBattleTicketAuthorizer) InspectBattleRoute(
 	// 非终态且非可证明 live:running 但非成员(漂移)/stale 心跳/warming 等中间态,全部不可判定。
 	return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
 		"battle route not provably terminal (state=%q)", battle.GetState())
-}
-
-func (c *RedisBattleTicketAuthorizer) InspectBattleRouteProof(ctx context.Context, playerID, matchID uint64) (BattleRouteState, placement.BattleExitProof, error) {
-	values, readErr := c.rdb.HGetAll(ctx, placement.BattleExitProofKey(playerID, matchID)).Result()
-	if readErr != nil {
-		return BattleRouteUnknown, placement.BattleExitProof{}, errcode.NewCause(errcode.ErrUnavailable, readErr, "read battle exit proof failed")
-	}
-	if len(values) == 0 {
-		// Without a durable proof, the live projection may still prove ACTIVE;
-		// terminal projection alone is insufficient because the proof relay may
-		// not have committed yet. Missing/stale projection remains UNKNOWN.
-		state, err := c.InspectBattleRoute(ctx, playerID, matchID)
-		if state == BattleRouteActive {
-			return state, placement.BattleExitProof{}, nil
-		}
-		return BattleRouteUnknown, placement.BattleExitProof{}, errcode.NewCause(errcode.ErrUnavailable, err,
-			"durable signed battle exit proof unavailable")
-	}
-	expected, parseErr := strconv.ParseUint(values[placement.BattleExitFieldExpectedVersion], 10, 64)
-	proofType64, typeErr := strconv.ParseInt(values[placement.BattleExitFieldProofType], 10, 32)
-	proof := placement.BattleExitProof{ExpectedVersion: expected,
-		OperationID: values[placement.BattleExitFieldOperationID], ProofType: int32(proofType64),
-		ProofID: values[placement.BattleExitFieldProofID], Signature: values[placement.BattleExitFieldSignature]}
-	if parseErr != nil || typeErr != nil || expected == 0 || !placement.ValidOperationID(proof.OperationID) ||
-		(proof.ProofType != placement.ProofMatchTerminal && proof.ProofType != placement.ProofPlayerLeave) ||
-		proof.ProofID == "" || proof.Signature == "" {
-		return BattleRouteUnknown, placement.BattleExitProof{}, errcode.New(errcode.ErrUnavailable, "durable battle exit proof malformed")
-	}
-	// The projection may already have been released/expired. The durable signed
-	// proof is intentionally sufficient; player_locator verifies its HMAC and
-	// exact stable Battle version/match in the transition CAS.
-	return BattleRouteTerminal, proof, nil
 }
 
 func (c *RedisBattleTicketAuthorizer) authorizeModelB(
