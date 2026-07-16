@@ -610,21 +610,29 @@ V3 audit 对五类 writer 都精确要求该身份，因此旧 login/locator/ds_
 
 发布顺序是硬契约：
 
-1. 在 required V2 下部署全部 V3-capable writer。新 Hub 只注册 lease capability，不启动 RPC、后台 writer，
-   也不进入 Service Endpoint；因此 staging 审计只能按显式 Pod UID 读取 etcd capability，禁止等待 Hub Ready。
-2. 平台创建 immutable `pandora-ds-auth-policy-v3-evidence`，精确绑定 staged service counts、全部 Pod UID、
+1. 平台以强制 HTTPS+mTLS+auth 的 `tools/scripts/prepare_hub_successor_policy.ps1` 在 required V2 下 staging
+   全部 V3-capable writer。它先对 exact-name 五个 Deployment 做 server-side dry-run，逐个回读合并后的 JSON，
+   在任何 apply 前验证 identity Secret/template、immutable image pin、selector/count、locator preflight，以及
+   Hub `replicas: 1 + Recreate`；错误清单不能先制造 writer overlap。新 Hub 只注册 lease capability，不启动
+   RPC、后台 writer，也不进入 Service Endpoint；因此 staging 审计只能按显式 Pod UID 读取 etcd capability，
+   禁止等待 Hub Ready。
+2. prepare 脚本 create-only 创建 immutable `pandora-ds-auth-policy-v3-evidence`，精确绑定 staged service counts、全部 Pod UID、
    每服务 image digest、完整 V3 features、V2/V3 raw、run-id、Kube context/namespace 与
-   `capability-lease-not-service-endpoint-v1` 契约。该 marker 是平台前置交接物：必须使用文档中的 exact
-   schema、`immutable: true`，且不得处于 deletion；脚本不会用普通 ConfigMap 猜测或改写证据。
-3. 运行 `tools/scripts/activate_hub_successor_policy.ps1 -Phase Audit`；通过后再以相同参数运行
+   `capability-lease-not-service-endpoint-v1` 契约。该 marker 必须是 exact schema、`immutable: true`、不得
+   deletion；若已存在只能精确回读，不允许覆盖或用普通 ConfigMap 猜测证据。
+3. 以同一组必填 HTTPS endpoint、CA/cert/key、server/client identity、identity revision 与 forbidden prefix
+   运行 `tools/scripts/activate_hub_successor_policy.ps1 -Phase Audit`；通过后再以相同参数运行
    `-Phase Activate`。V2→V3 是同 writer epoch 的 policy-only CAS：事务同时比较 required raw/modRevision、
    activation lock、create-only record，以及所有 audited capability ModRevision，不依赖 Redis topology provider。
 4. required watch 使 staging 进程 Lost/退出，Kubernetes 重启后只能在 V3 重新拿 capability；脚本在 CAS 与
    immutable record 二次验证后，从固定五个 canonical Deployment/selector 重新派生当前 live Pod UID，要求
    每个 Pod 的唯一 controller ReplicaSet→Deployment 链和目标 writer container Running/imageID，然后审计
-   `acquired_policy_generation=3`。Hub ready Endpoint 在 CAS 前必须精确为 0，CAS 后必须精确为 1 且 UID
-   等于当前唯一 Hub；最终再做一次 acquired-V3 audit，才创建 immutable completion marker。崩溃重跑若已是
-   V3，直接从 record-only proof 和 post-CAS finalize 继续，绝不重跑 V2-only NotReady 门或重复 CAS。
+   `acquired_policy_generation=3`。在解释 Endpoint 数量前，prepare/activate 都必须回读
+   Service/hub-allocator，验证 exact green 三标签 selector（无额外 selector）、ClusterIP/50021 和
+   `publishNotReady=false`；Hub ready Endpoint 在 CAS 前必须精确为 0，CAS 后必须精确为 1 且 UID等于当前
+   唯一 Hub。最终再做一次 acquired-V3 audit，才创建 immutable completion marker。崩溃重跑若已是 V3，
+   直接从 record-only proof 和 post-CAS finalize 继续，绝不重跑 V2-only NotReady 门或重复 CAS；只读 Audit
+   和普通 online release 都必须回读 exact completion marker，缺失不能报告健康。
 
 一次性 evidence 中的 staged UID/digest 只证明激活线性化点，不是普通发布的永久 allowlist。Pod eviction
 换 UID 后，finalize/普通发布使用当次 canonical live UID 与 pinned digest 做审计；仍持续验证原 V2 pod_uid
@@ -640,7 +648,10 @@ ModRevision、锁、空 capability range 和 create-only record，不能手工 `
 五个 writer 的 `pandora.dev/image-digest` Pod-template annotation；rollout 后再逐 Pod 对账 annotation 与
 目标 writer container 的 `imageID`。宿主 buildx manifest-list digest、上次发布遗留 annotation 或 sidecar
 imageID 都不能作为 capability provenance。`-Resume` 不重新构建镜像，只验证节点 tag 与持久 annotation
-一致；发生漂移时 fail-closed，要求走正常构建发布。
+的关系：先等 etcd 并验证 V3 baseline，先 apply 当前清单并回到 Hub `replicas=1 + Recreate`，随后才以
+节点现存的 immutable image config digest 显式重绑五个 Deployment；禁止在旧 RollingUpdate Hub 上先改
+template。统一 rollout 后最终逐 Pod 对账。节点 tag 缺失、digest 非 canonical 或目标 writer container 的
+实际 `imageID` 不一致仍 fail-closed。
 
 ### 7.9 Departure proof 有界保留与 PvE 冷恢复（2026-07-15）
 
@@ -656,3 +667,43 @@ player claim、start operation、ticket 与 match key；Login 使用单一受信
 STARTING/QUEUED/CONFIRMING/ALLOCATING/READY。若把同一全局 authority 当成两个独立来源再做“分歧”判断，
 反而会制造假 split-brain。跨模式测试必须至少覆盖 PvE STARTING，以及 CONFIRMING、ALLOCATING、READY，
 并验证 game-mode/member 授权仍按记录中的 canonical mode 执行。
+
+### 7.10 Hub 离场确认后的 Battle placement 重放（2026-07-16）
+
+本地 K8s 真 UE 复测中，两个账号分别建立了两场 `players=1` 的 PvE solo match；两场都完成 Battle
+GameServer allocation 与 exact target checkpoint，却在约十二秒后被 Matchmaker 主动 abort，因此客户端
+始终拿不到 Battle ticket。服务端顺序证据为：
+
+1. `PrepareBattlePlacement` 首次写入同一 operation 的 `HUB/PENDING → BATTLE`，并 checkpoint exact
+   Battle target；`EnsureHubDepartureForBattle` 暂时返回 retryable pending。
+2. Hub 物理断开及 Departure ACK 完成后，locator 在同一 placement 上写入
+   `source_departure_confirmed=true + HUB_DEPARTURE + proof_id`。
+3. durable allocation worker 用同一 operation、match 与 target 重放 `PrepareBattlePlacement`。旧实现复用
+   只允许“尚未确认、尚未绑定”的 allocation preflight 谓词，因此把合法进度误报为 `ErrLocatorConflict`。
+4. Saga 将该假冲突解释成真正的 placement 竞争，调用 `AbortPreactiveBattle` 回收刚分配的 GameServer；
+   两个账号因而独立复现相同的“匹配成功但进不去”。
+
+修复必须保持两个不同的判定域，不能简单放宽 allocation 前门：
+
+- **Allocate preflight** 继续只接受 exact stable Hub 或完全未绑定、未确认的初始 Pending；已经 checkpoint
+  target 或确认离场的记录绝不能触发第二次 Allocate。
+- **Prepare replay** 只有在 durable operation 已保存完整 Battle target 后，才接受同 operation/match、
+  `HUB/PENDING → BATTLE`、连续 source version/operation、完整 immutable Hub source、canonical departure
+  history、零 admission，以及“全空未确认”或 `true + HUB_DEPARTURE + non-empty proof` 两种确认形态。
+  confirmed 状态的 active target 必须与 checkpoint target 全字段相等；partial/different target、跨
+  operation/match/source lineage 或畸形 marker 仍是 `ErrLocatorConflict`。
+
+durable worker 回归测试必须证明首次 Hub departure pending 后的下一轮：`AllocateBattle=1`、
+`AbortBattleAllocation=0`、沿用原 checkpoint target，最终签票并进入 `READY/COMPLETED`。数据层测试同时
+覆盖 confirmed exact retry 的正例和不同 target/operation/match/source/marker 的零写副作用负例。
+
+同次 UE 日志还暴露了一个放大器：恢复协调器消费 exact disconnect 授权后抑制 UE 默认 `?closed → Entry/Login`
+browse，但旧 OnlineSession 同时跳过 NetDriver cleanup，失败的当前 `GameNetDriver` 继续逐帧广播
+`ConnectionLost`，不断使 recovery generation 失效。自定义 OnlineSession 现在只清理已授权的 exact driver：
+Pending driver 先通过 owning `FWorldContext/PendingNetGame` 身份核对后调用公开的 `CancelPending(World)`；
+当前 driver 只有在 `World->GetNetDriver() == NetDriver` 时才调用 `DestroyNamedNetDriver`。它仍不执行默认
+Entry/Login travel，也不能销毁迟到回调时已经替换的新 driver。
+
+截至本节记录时，服务端目标 Go 测试与 `pkg/placement` 编译已通过，UE 修复文件已编译；两个 Matchmaker
+镜像正在滚动到本地集群。只有两个真实账号重新匹配并完成 Battle Admission 后，才能把本事故的本地 E2E
+状态标记为通过。

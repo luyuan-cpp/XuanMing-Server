@@ -157,6 +157,23 @@ function Assert-LastExit([string]$what) {
     if ($LASTEXITCODE -ne 0) { throw "$what 失败(exit=$LASTEXITCODE)" }
 }
 
+# Agones 尚未安装时自定义资源类型不存在。Down 语义下这等价于无残留对象，
+# 但 --ignore-not-found 只忽略“对象不存在”，不忽略“CRD 不存在”，因此需要单独容错。
+function Invoke-KubectlDeleteTolerateMissingKind {
+    param(
+        [Parameter(Mandatory = $true)][string]$What,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+    $lines = @(& kubectl @Arguments 2>&1)
+    if ($LASTEXITCODE -eq 0) { return }
+    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n")
+    if ($text -match '(?i)the server doesn''t have a resource type' -or $text -match '(?i)no matches for kind') {
+        Write-Skip "$What:目标资源类型不存在(Agones 未安装),无残留可删,跳过。"
+        return
+    }
+    throw "$What 失败(exit=$LASTEXITCODE):$text"
+}
+
 # pandora-config Secret 只收录 20 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
 # OutDir 中其它运维文件也不应被 --from-file=<目录> 意外灌进 Pod Secret。
 function Apply-PandoraConfigSecret {
@@ -1055,6 +1072,9 @@ function Get-OnlineDsAuthCanonicalState {
             @($deployment.spec.selector.matchLabels.PSObject.Properties).Count -ne 3) {
             throw "Deployment/$greenName immutable selector/replicas 不是 canonical green。"
         }
+        if ($writer -ceq 'hub-allocator') {
+            Assert-PandoraHubAllocatorSingleWriterDeploymentContract $deployment
+        }
         $template = [pscustomobject]@{ metadata = $deployment.spec.template.metadata; spec = $deployment.spec.template.spec }
         Assert-PandoraDsAuthIdentityPodContract $template $writer $Revision $ServerName $ForbiddenReadPrefix ([bool]$contract.UsesPasswordAuth)
         if ($want -lt 1 -or [int]$deployment.status.readyReplicas -ne $want -or [int]$deployment.status.updatedReplicas -ne $want) {
@@ -1201,6 +1221,27 @@ function Get-OnlineDsAuthActivationEvidenceState {
     $policyV3Evidence = Assert-PandoraDsAuthPolicyV3EvidenceContract $policyV3Marker `
         ([string]$policyV3Marker.data.expected_services) ([string]$policyV3Marker.data.expected_instances) `
         ([string]$policyV3Marker.data.expected_image_digests) $KubeContext $K8sNamespace
+    $policyV3Counts = @{}
+    foreach ($item in ([string]$policyV3Evidence.ExpectedServices).Split(',')) {
+        $parts = $item.Split('=', 2)
+        if ($parts.Count -ne 2 -or $parts[0] -cnotin @('login', 'player_locator', 'ds_allocator', 'hub_allocator', 'battle_result') -or
+            $parts[1] -cnotmatch '^[1-9][0-9]?$' -or $policyV3Counts.ContainsKey($parts[0])) {
+            throw 'DS auth V3 evidence expected_services is not the exact unique five-service count map.'
+        }
+        $policyV3Counts[$parts[0]] = [int]$parts[1]
+    }
+    if ($policyV3Counts.Count -ne 5 -or [int]$policyV3Counts['hub_allocator'] -ne 1) {
+        throw 'DS auth V3 evidence expected_services is not exact five services with a single Hub.'
+    }
+    $policyV3CompletionName = "pandora-ds-auth-policy-v3-complete-$($policyV3Evidence.RunID)"
+    $policyV3CompletionMarker = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "configmap/$policyV3CompletionName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取 immutable DS auth V3 successor-policy completion marker'
+    $policyV3Completion = Assert-PandoraDsAuthV3CompletionContract $policyV3CompletionMarker `
+        $policyV3CompletionName $K8sNamespace $policyV3Evidence $policyV3Counts
+    if ([int64]$policyV3Completion.CompletedAtUnixMS -lt [int64]$policyV3Evidence.CompletedAtUnixMS) {
+        throw 'DS auth V3 completion predates its immutable staging evidence.'
+    }
     $digest = [string]$evidence.data.evidence_sha256
     $completionMS = [string]$evidence.data.final_completion_time_unix_ms
     if ($evidence.immutable -ne $true -or $switch.immutable -ne $true -or
@@ -1326,6 +1367,11 @@ function Get-OnlineDsAuthActivationEvidenceState {
         PolicyV3RunID = $policyV3Evidence.RunID
         PolicyV3KubeContext = $policyV3Evidence.KubeContext
         PolicyV3Namespace = $policyV3Evidence.Namespace
+        PolicyV3CompletionName = $policyV3Completion.Name
+        PolicyV3CompletionUID = $policyV3Completion.UID
+        PolicyV3CompletionResourceVersion = $policyV3Completion.ResourceVersion
+        PolicyV3CompletionFinalInstances = $policyV3Completion.FinalInstances
+        PolicyV3CompletionCompletedAtUnixMS = $policyV3Completion.CompletedAtUnixMS
     }
 }
 
@@ -1338,7 +1384,9 @@ function Assert-OnlineDsAuthActivationEvidenceUnchanged($Expected, $Actual) {
         'PolicyV3EvidenceUID', 'PolicyV3EvidenceResourceVersion', 'PolicyV3EvidenceSHA256',
         'PolicyV3CompletedAtUnixMS', 'PolicyV3ExpectedServices', 'PolicyV3ExpectedInstances',
         'PolicyV3ExpectedImageDigests', 'PolicyV3RequiredFeatures', 'PolicyV3RunID',
-        'PolicyV3KubeContext', 'PolicyV3Namespace')) {
+        'PolicyV3KubeContext', 'PolicyV3Namespace', 'PolicyV3CompletionName',
+        'PolicyV3CompletionUID', 'PolicyV3CompletionResourceVersion',
+        'PolicyV3CompletionFinalInstances', 'PolicyV3CompletionCompletedAtUnixMS')) {
         if ([string]$Expected.$field -cne [string]$Actual.$field) {
             throw "ordinary release 窗口内 DS auth activation evidence field=$field 漂移。"
         }
@@ -2266,6 +2314,18 @@ function Set-LocalDsAuthImageDigestAnnotations {
         [Parameter(Mandatory = $true)][string]$KubeContext,
         [Parameter(Mandatory = $true)][string]$MinikubeProfile
     )
+    # 修改 template 会触发 rollout；Hub ledger 是单写者，任何 digest patch 前必须
+    # 已由当前清单收敛为 replicas=1 + Recreate，且不能残留 rollingUpdate 配置。
+    $hubLines = @(& kubectl --context $KubeContext -n $K8sNamespace get deployment/hub-allocator -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw '读取 Deployment/hub-allocator strategy 失败。' }
+    try { $hubDeployment = (($hubLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
+    catch { throw "Deployment/hub-allocator JSON 非法:$($_.Exception.Message)" }
+    $rolling = $hubDeployment.spec.strategy.PSObject.Properties['rollingUpdate']
+    if ([int]$hubDeployment.spec.replicas -ne 1 -or
+        [string]$hubDeployment.spec.strategy.type -cne 'Recreate' -or
+        ($null -ne $rolling -and $null -ne $rolling.Value)) {
+        throw 'Hub digest rollout 前必须为 exact replicas=1 + Recreate 且无 rollingUpdate。'
+    }
     $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     foreach ($writer in $writers) {
         $image = "pandora/${writer}:dev"
@@ -2460,12 +2520,14 @@ function Invoke-K8s {
         # Fleet 是启动时 Apply-AgonesManifests 起的,也要停干净(DS Pod 别留着空跑)。
         # 先删 FleetAutoscaler 再删 Fleet:避免删 Fleet 期间 autoscaler 还在按 buffer 补建 GameServer。
         foreach ($fleetFile in @('25-fleetautoscaler-battle.yaml', '31-fleet-hub-canary.yaml', '30-fleet-hub.yaml', '21-fleet-battle-canary.yaml', '20-fleet-battle.yaml')) {
-            kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot "deploy/k8s/agones/$fleetFile") --ignore-not-found 2>$null
-            Assert-LastExit "kubectl delete Fleet $fleetFile"
+            Invoke-KubectlDeleteTolerateMissingKind -What "kubectl delete Fleet $fleetFile" -Arguments @(
+                '--context', $mkProfile, 'delete', '-f', (Join-Path $ProjectRoot "deploy/k8s/agones/$fleetFile"), '--ignore-not-found'
+            )
         }
         # Down 是用户明确要求停掉整套本地 DS，因此也清理旧版单轨对象。
-        kubectl --context $mkProfile delete fleet/pandora-battle fleet/pandora-hub -n default --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete legacy local Fleets'
+        Invoke-KubectlDeleteTolerateMissingKind -What 'kubectl delete legacy local Fleets' -Arguments @(
+            '--context', $mkProfile, 'delete', 'fleet/pandora-battle', 'fleet/pandora-hub', '-n', 'default', '--ignore-not-found'
+        )
         # in-cluster Envoy「DS 面」网关也是启动时 Apply-AgonesManifests 起的(本地专属),一并清理
         kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/16-ds-envoy.yaml') --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete in-cluster Envoy'
@@ -3634,29 +3696,15 @@ function Resume-K8s {
     # /readyz，绝不先等待旧 login/allocator Ready。apiserver 一可读就完成所有 fail-closed 审计，
     # 审计通过后才允许任何业务 Ready 等待、apply 或 rollout。
     Wait-KubeApiServerReady -KubeContext $mkCtx
+    # required policy 的线性审计依赖 etcd；电脑重启后 apiserver Ready 不代表 etcd Pod 已恢复。
+    # 只先等基础设施 etcd，绝不先等可能带旧 capability provenance 的业务 writer。
+    kubectl --context $mkCtx rollout status deploy/etcd -n $K8sNamespace --timeout=120s
+    Assert-LastExit 'etcd 恢复就绪（DS-auth baseline 前）'
     Write-Step 'Resume 最早只读审计（先于旧业务 Ready/apply/rollout）'
     Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx
     Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment
     Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment
     Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:$false
-    # Resume 不构建/加载镜像，因此只能验证磁盘上的节点 tag 与持久 Deployment
-    # annotation 完全一致，不能静默重写 provenance。漂移时要求走正常构建发布。
-    Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile -SkipPodCheck
-
-    Write-Info "等待关键业务 Pod 就绪..."
-    try {
-        kubectl --context $mkCtx rollout status deploy/etcd          -n $K8sNamespace --timeout=120s; Assert-LastExit 'etcd 恢复就绪'
-        kubectl --context $mkCtx rollout status deploy/login         -n $K8sNamespace --timeout=180s; Assert-LastExit 'login 恢复就绪'
-        kubectl --context $mkCtx rollout status deploy/ds-allocator  -n $K8sNamespace --timeout=120s; Assert-LastExit 'ds-allocator 恢复就绪'
-        kubectl --context $mkCtx rollout status deploy/hub-allocator -n $K8sNamespace --timeout=120s; Assert-LastExit 'hub-allocator 恢复就绪'
-    } catch {
-        Write-Err "关键 Deployment 未就绪/不存在($($_.Exception.Message))。"
-        Write-Err "集群多半未部署过或被清过,-Resume 无可恢复对象。请改用全新部署:"
-        Write-Err "  pwsh tools/scripts/start.ps1 -Mode k8s"
-        exit 1
-    }
-    Write-Host ""
-    Write-Ok "集群已恢复。"
 
     # advertise 地址重解析(-AdvertiseHost > env > 局域网 IP)。DHCP 换址后本机 IP 可能已变,
     # 但 Secret 里仍是旧地址 —— 必须重生配置 + 覆盖 Secret + 重启读该地址的 Deployment,
@@ -3684,6 +3732,10 @@ function Resume-K8s {
     $resumeServicesDir = Join-Path $ProjectRoot 'deploy/k8s/services'
     kubectl --context $mkCtx apply -k $resumeServicesDir
     Assert-LastExit 'kubectl apply -k services(Resume:纠正卷源为 Secret)'
+    # 必须先让当前清单把 Hub strategy 收敛为 Recreate，之后才能改 template annotation；
+    # 在旧 RollingUpdate 对象上先 patch digest 会短时启动两个 Hub ledger writer。
+    # Resume 不构建镜像，节点现存 immutable image config digest 是实际 source of truth。
+    Set-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     # Secret 以 subPath 挂载不会热感知:按名 rollout restart 全部 20 个业务 Deployment,
     # 让刷新后的 pandora-config Secret(advertise + 其它配置)在每个 Pod 生效(滚动重启零停机)。
     # 必须逐个等待全部 20 个 Deployment；只等 allocator 会把其余服务的失败误报成“全部传播完成”。

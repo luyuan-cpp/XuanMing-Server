@@ -160,6 +160,141 @@ func exactUnboundBattlePending(playerID, matchID uint64, operationID string) *lo
 	}
 }
 
+func bindBattleTarget(rec *locatorv1.PlayerPlacementStorageRecord, target placement.Target) {
+	rec.DsPodName = target.PodName
+	rec.DsInstanceUid = target.InstanceUID
+	rec.DsInstanceEpoch = target.InstanceEpoch
+	rec.HubAssignmentId = target.AssignmentID
+	rec.AllocationId = target.AllocationID
+	rec.ReleaseTrack = target.ReleaseTrack
+}
+
+func confirmHubSourceDeparture(rec *locatorv1.PlayerPlacementStorageRecord) {
+	rec.SourceDepartureConfirmed = true
+	rec.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE
+	rec.SourceDepartureProofId = "hub-departure:canonical-proof"
+}
+
+func TestPrepareBattlePlacementResumesExactTargetAfterHubDepartureConfirmation(t *testing.T) {
+	signer, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := uuid.NewString()
+	const matchID = uint64(903)
+	target := placement.Target{PodName: "battle-pod-903", InstanceUID: "battle-uid-903",
+		InstanceEpoch: 4, AllocationID: uuid.NewString(), ReleaseTrack: "stable"}
+	confirmed := exactUnboundBattlePending(1, matchID, operationID)
+	bindBattleTarget(confirmed, target)
+	confirmHubSourceDeparture(confirmed)
+	unconfirmed := exactUnboundBattlePending(2, matchID, operationID)
+	bindBattleTarget(unconfirmed, target)
+	fake := &fakePlacementClient{signer: signer, records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{
+		1: confirmed,
+		2: unconfirmed,
+	}}
+	coordinator := NewGrpcPlacementCoordinator(fake, signer, 30*time.Minute)
+	allocation := &model.BattleAllocation{Address: "10.0.0.9:7777", Target: target}
+
+	bindings, err := coordinator.PrepareBattlePlacement(context.Background(), operationID,
+		matchID, []uint64{1, 2}, allocation)
+	if err != nil {
+		t.Fatalf("resume exact prepared placement: %v", err)
+	}
+	if fake.beginCalls != 2 || fake.bindCalls != 2 {
+		t.Fatalf("same operation was not replayed exactly: begin=%d bind=%d",
+			fake.beginCalls, fake.bindCalls)
+	}
+	if binding := bindings[1]; binding.Version != confirmed.GetVersion() ||
+		binding.OperationID != operationID || binding.SourceMatchID != 0 {
+		t.Fatalf("confirmed player binding mismatch: %+v", binding)
+	}
+	if !confirmed.GetSourceDepartureConfirmed() ||
+		confirmed.GetSourceDepartureProofType() != locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE ||
+		confirmed.GetSourceDepartureProofId() != "hub-departure:canonical-proof" {
+		t.Fatalf("same-operation Begin/Bind lost Hub departure confirmation: %+v", confirmed)
+	}
+}
+
+func TestPrepareBattlePlacementRejectsMalformedConfirmedRetryBeforeWrites(t *testing.T) {
+	signer, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := uuid.NewString()
+	const matchID = uint64(904)
+	target := placement.Target{PodName: "battle-pod-904", InstanceUID: "battle-uid-904",
+		InstanceEpoch: 7, AllocationID: uuid.NewString(), ReleaseTrack: "stable"}
+	base := exactUnboundBattlePending(1, matchID, operationID)
+	bindBattleTarget(base, target)
+	confirmHubSourceDeparture(base)
+
+	mutations := []struct {
+		name   string
+		mutate func(*locatorv1.PlayerPlacementStorageRecord)
+	}{
+		{name: "confirmed but target unbound", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			bindBattleTarget(rec, placement.Target{})
+		}},
+		{name: "confirmed with partial target", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			bindBattleTarget(rec, placement.Target{})
+			rec.DsPodName = target.PodName
+		}},
+		{name: "different pod", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.DsPodName = "battle-other"
+		}},
+		{name: "different uid", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.DsInstanceUid = "battle-uid-other"
+		}},
+		{name: "different epoch", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.DsInstanceEpoch++
+		}},
+		{name: "different allocation", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.AllocationId = uuid.NewString()
+		}},
+		{name: "different release track", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.ReleaseTrack = "canary"
+		}},
+		{name: "wrong departure proof type", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPARTURE
+		}},
+		{name: "empty departure proof id", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDepartureProofId = ""
+		}},
+		{name: "unconfirmed with stale proof", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDepartureConfirmed = false
+		}},
+		{name: "different operation", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.OperationId = uuid.NewString()
+		}},
+		{name: "different match", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.TargetMatchId++
+		}},
+		{name: "different source lineage", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourcePlacementVersion--
+		}},
+	}
+	for _, tc := range mutations {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := proto.Clone(base).(*locatorv1.PlayerPlacementStorageRecord)
+			tc.mutate(rec)
+			fake := &fakePlacementClient{signer: signer,
+				records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{1: rec}}
+			coordinator := NewGrpcPlacementCoordinator(fake, signer, 30*time.Minute)
+			allocation := &model.BattleAllocation{Address: "10.0.0.9:7777", Target: target}
+			_, prepareErr := coordinator.PrepareBattlePlacement(context.Background(), operationID,
+				matchID, []uint64{1}, allocation)
+			if prepareErr == nil || errcode.As(prepareErr) != errcode.ErrLocatorConflict {
+				t.Fatalf("malformed confirmed retry did not conflict: %v", prepareErr)
+			}
+			if fake.beginCalls != 0 || fake.bindCalls != 0 {
+				t.Fatalf("malformed retry wrote placement: begin=%d bind=%d",
+					fake.beginCalls, fake.bindCalls)
+			}
+		})
+	}
+}
+
 func TestPreflightBattlePlacementAllowsOnlyExactStableHubOrCanonicalUnboundPending(t *testing.T) {
 	operationID := uuid.NewString()
 	const matchID = uint64(901)

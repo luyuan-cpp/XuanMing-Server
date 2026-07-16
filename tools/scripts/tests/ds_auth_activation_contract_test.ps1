@@ -87,7 +87,7 @@ $completionMarker = [pscustomobject]@{
         completed_at_unix_ms = '1784116860000'
     }
 }
-Assert-PandoraDsAuthV3CompletionContract $completionMarker $completionMarker.metadata.name `
+$null = Assert-PandoraDsAuthV3CompletionContract $completionMarker $completionMarker.metadata.name `
     'pandora' $policyV3Proof $completionCounts
 $badCompletion = Copy-Object $completionMarker
 $badCompletion.metadata.namespace = 'other'
@@ -101,6 +101,18 @@ Assert-Throws {
     Assert-PandoraDsAuthV3CompletionContract $badCompletion $completionMarker.metadata.name `
         'pandora' $policyV3Proof $completionCounts
 } 'completion marker extra service must fail'
+$duplicateCompletion = Copy-Object $completionMarker
+$duplicateCompletion.data.final_instances = 'login=l2,player_locator=p2,ds_allocator=d2,hub_allocator=h2|h2,battle_result=b2'
+Assert-Throws {
+    Assert-PandoraDsAuthV3CompletionContract $duplicateCompletion $completionMarker.metadata.name `
+        'pandora' $policyV3Proof $completionCounts
+} 'completion marker duplicate UID must not collapse into the expected count'
+$crossServiceDuplicate = Copy-Object $completionMarker
+$crossServiceDuplicate.data.final_instances = 'login=shared,player_locator=shared,ds_allocator=d2,hub_allocator=h2,battle_result=b2'
+Assert-Throws {
+    Assert-PandoraDsAuthV3CompletionContract $crossServiceDuplicate $completionMarker.metadata.name `
+        'pandora' $policyV3Proof $completionCounts
+} 'completion marker must reject a Pod UID reused by two services'
 $secret = [pscustomobject]@{
     metadata = [pscustomobject]@{
         name = 'pandora-ds-auth-etcd-ds-allocator-r7'
@@ -384,6 +396,28 @@ $badSlices = Copy-Object $sliceList
 $badSlices.items[0].ports[0].port = 50099
 Assert-Throws { Get-PandoraDsAuthVerifiedEndpointUIDSet $badSlices $endpointService @($endpointPod) 'pandora' } 'EndpointSlice target port drift'
 
+$hubGreenService = [pscustomobject]@{
+    apiVersion = 'v1'; kind = 'Service'
+    metadata = [pscustomobject]@{ name = 'hub-allocator'; namespace = 'pandora'; uid = 'abcdef12-3456' }
+    spec = [pscustomobject]@{
+        type = 'ClusterIP'; clusterIP = '10.96.0.21'
+        selector = [pscustomobject]@{
+            app = 'hub-allocator'; 'pandora.dev/ds-auth-writer-set' = 'green';
+            'pandora.dev/ds-auth-writer-epoch' = '2'
+        }
+        ports = @([pscustomobject]@{ port = 50021; targetPort = 50021; protocol = 'TCP' })
+    }
+}
+Assert-PandoraHubAllocatorGreenServiceContract $hubGreenService 'pandora'
+$badHubService = Copy-Object $hubGreenService
+$badHubService.spec.selector | Add-Member -NotePropertyName attacker -NotePropertyValue route
+Assert-Throws { Assert-PandoraHubAllocatorGreenServiceContract $badHubService 'pandora' } `
+    'Hub zero-endpoint evidence must reject a Service with an extra/drifted selector'
+$badHubService = Copy-Object $hubGreenService
+$badHubService.spec | Add-Member -NotePropertyName publishNotReadyAddresses -NotePropertyValue $true
+Assert-Throws { Assert-PandoraHubAllocatorGreenServiceContract $badHubService 'pandora' } `
+    'Hub Service must not publish NotReady staged candidates'
+
 Assert-True (@(Assert-PandoraDsAuthHttpsEndpoints 'https://etcd-a.internal:2379,https://etcd-b.internal:2379').Count -eq 2) 'canonical etcd endpoints'
 Assert-Throws { Assert-PandoraDsAuthHttpsEndpoints 'http://etcd.internal:2379' } 'plaintext etcd endpoint'
 Assert-Throws { Assert-PandoraDsAuthHttpsEndpoints 'https://etcd.internal' } 'etcd endpoint without explicit port'
@@ -465,6 +499,40 @@ $ordinaryGreen = New-PandoraDsAuthCanonicalGreenObject $snapshotLive 'ds-allocat
     ('registry/pandora/ds-allocator@' + $newDigest) $newDigest
 Assert-True ([string](@($ordinaryGreen.spec.template.spec.volumes | Where-Object name -ceq 'conf')[0].secret.secretName) -ceq
     'pandora-config') 'ordinary epoch2 ds-allocator release must leave activation snapshot and return to current pandora-config'
+
+$liveHubGreen = Copy-Object $liveGreen
+$liveHubGreen.metadata.name = 'hub-allocator-ds-auth-green'
+$liveHubGreen.metadata.labels.app = 'hub-allocator'
+$liveHubGreen.metadata.annotations.'pandora.dev/ds-auth-green-desired-replicas' = '1'
+$liveHubGreen.spec.replicas = 1
+$liveHubGreen.spec.selector.matchLabels.app = 'hub-allocator'
+$liveHubGreen.spec.template.metadata.labels.app = 'hub-allocator'
+$hubMain = @($liveHubGreen.spec.template.spec.containers | Where-Object name -ceq 'ds-allocator')[0]
+$hubMain.name = 'hub-allocator'
+$hubMain.image = 'registry/pandora/hub-allocator@' + $digest
+@($hubMain.env | Where-Object name -ceq 'PANDORA_DS_AUTH_ETCD_CLIENT_IDENTITY')[0].value = 'pandora-hub-allocator'
+@($liveHubGreen.spec.template.spec.volumes | Where-Object name -ceq 'ds-auth-etcd-identity')[0].secret.secretName = `
+    'pandora-ds-auth-etcd-hub-allocator-r7'
+$hubGreenObject = New-PandoraDsAuthCanonicalGreenObject $liveHubGreen 'hub-allocator' 'r7' `
+    'etcd.pandora.internal' '/pandora/acl-negative/' $false 1 `
+    ('registry/pandora/hub-allocator@' + $newDigest) $newDigest
+Assert-PandoraHubAllocatorSingleWriterDeploymentContract $hubGreenObject
+$hubStageProof = Assert-PandoraDsAuthV3GreenStageDeploymentContract $hubGreenObject 'hub-allocator' 'r7' `
+    'etcd.pandora.internal' '/pandora/acl-negative/' $false
+Assert-True ($hubStageProof.DesiredReplicas -eq 1 -and $hubStageProof.Digest -ceq $newDigest) `
+    'server-preview V3 Hub stage contract must bind exact single writer and immutable image digest'
+Assert-True ([int]$hubGreenObject.spec.replicas -eq 1 -and
+    [string]$hubGreenObject.spec.strategy.type -ceq 'Recreate' -and
+    $null -eq $hubGreenObject.spec.strategy.PSObject.Properties['rollingUpdate']) `
+    'ordinary canonical green Hub replacement must force replicas=1/Recreate without preserving RollingUpdate'
+$badHubGreen = Copy-Object $hubGreenObject
+$badHubGreen.spec.strategy = [pscustomobject]@{ type = 'RollingUpdate'; rollingUpdate = [pscustomobject]@{ maxSurge = 1 } }
+Assert-Throws { Assert-PandoraHubAllocatorSingleWriterDeploymentContract $badHubGreen } `
+    'live canonical green Hub RollingUpdate must fail the single-writer contract'
+Assert-Throws {
+    Assert-PandoraDsAuthV3GreenStageDeploymentContract $badHubGreen 'hub-allocator' 'r7' `
+        'etcd.pandora.internal' '/pandora/acl-negative/' $false
+} 'exact-name Hub server-preview with RollingUpdate must fail before mutating apply'
 
 $podUIDGreen = Copy-Object $greenObject
 $podUIDGreen.spec.template.spec | Add-Member -NotePropertyName securityContext -NotePropertyValue ([pscustomobject]@{
@@ -658,6 +726,8 @@ $locatorObject = New-PandoraDsAuthCanonicalGreenObject $locatorLive 'player-loca
     ('registry/pandora/player-locator@' + $newDigest) $newDigest
 Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $locatorObject `
     ('registry/pandora/player-locator@' + $newDigest)
+$null = Assert-PandoraDsAuthV3GreenStageDeploymentContract $locatorObject 'player-locator' 'r7' `
+    'etcd.pandora.internal' '/pandora/acl-negative/' $false
 Assert-True ([string]$locatorObject.spec.strategy.type -ceq 'Recreate' -and
     $null -eq $locatorObject.spec.strategy.PSObject.Properties['rollingUpdate'] -and
     @($locatorObject.spec.template.spec.initContainers).Count -eq 1) `
@@ -730,7 +800,7 @@ Assert-True ($policyV3ActivationSource.Contains("[uint32]`$snapshot.policy_gener
     $policyV3ActivationSource.Contains('$finalInstances = Get-CanonicalWriterInstances $false $true') -and
     $policyV3ActivationSource.LastIndexOf('& go @finalArgs', [StringComparison]::Ordinal) -gt
         $policyV3ActivationSource.LastIndexOf('$finalInstances =', [StringComparison]::Ordinal) -and
-    $policyV3ActivationSource.LastIndexOf('Ensure-V3CompletionMarker $finalInstances', [StringComparison]::Ordinal) -gt
+    $policyV3ActivationSource.LastIndexOf('Assert-OrCreateV3CompletionMarker $finalInstances $true', [StringComparison]::Ordinal) -gt
         $policyV3ActivationSource.LastIndexOf('& go @finalArgs', [StringComparison]::Ordinal)) `
     'V3 retry, exact writer-container imageID, endpoint 0/1 cardinality, and final post-readiness acquired audit are hard gates'
 Assert-True ($activationSource.Contains("'--min-policy-generation', '1', '--max-policy-generation', '2'") -and
@@ -836,8 +906,14 @@ Assert-True ($startSource.Contains('Get-OnlineDsAuthActivationEvidenceState') -a
     $startSource.Contains('--activation-evidence-sha256 $ActivationEvidence.PolicyV3EvidenceSHA256') -and
     $startSource.Contains('--activation-evidence-completed-at-ms $ActivationEvidence.PolicyV3CompletedAtUnixMS') -and
     $startSource.Contains('pandora-ds-auth-activation-v2') -and
-    $startSource.Contains('$script:PandoraDsAuthPolicyV3EvidenceName')) `
-    'ordinary release must preserve V2 proof and separately bind V3 capability audit to immutable successor-policy evidence'
+    $startSource.Contains('$script:PandoraDsAuthPolicyV3EvidenceName') -and
+    $startSource.Contains('pandora-ds-auth-policy-v3-complete-$($policyV3Evidence.RunID)') -and
+    $startSource.Contains('Assert-PandoraDsAuthV3CompletionContract') -and
+    $startSource.Contains('PolicyV3CompletionResourceVersion')) `
+    'ordinary release must preserve V2 proof and bind immutable V3 evidence plus completion into its unchanged baseline'
+Assert-True ($startSource.Contains("if (`$writer -ceq 'hub-allocator')") -and
+    $startSource.Contains('Assert-PandoraHubAllocatorSingleWriterDeploymentContract $deployment')) `
+    'ordinary online canonical-state audit must reject a green Hub that is not replicas=1/Recreate'
 Assert-True (-not $startSource.Contains('State.ExpectedInstances -cne [string]$ActivationEvidence.PolicyV3ExpectedInstances') -and
     -not $startSource.Contains('State.ExpectedDigests -cne [string]$ActivationEvidence.PolicyV3ExpectedImageDigests')) `
     'one-time V3 staging UIDs/digests are provenance, not a permanent allowlist for rescheduled Pods or later pinned releases'
@@ -868,6 +944,30 @@ $onlineEvidenceFunction = $startSource.Substring($onlineEvidenceFunctionStart,
 Assert-True ($onlineEvidenceFunction.Contains('Test-PandoraKubernetesObjectDeleting') -and
     -not $onlineEvidenceFunction.Contains('.metadata.deletionTimestamp')) `
     'healthy immutable markers omit deletionTimestamp and must be checked through the strict-safe deletion helper'
+$successorActivationSource = Get-Content -LiteralPath (Join-Path $ProjectRoot `
+    'tools/scripts/activate_hub_successor_policy.ps1') -Raw
+$successorPrepareSource = Get-Content -LiteralPath (Join-Path $ProjectRoot `
+    'tools/scripts/prepare_hub_successor_policy.ps1') -Raw
+foreach ($source in @($successorActivationSource, $successorPrepareSource)) {
+    Assert-True ($source.Contains('Assert-PandoraDsAuthHttpsEndpoints $EtcdEndpoints') -and
+        $source.Contains('Get-PandoraDsAuthSecureGoArgs $CAFile $CertFile $KeyFile') -and
+        -not $source.Contains('[switch]$RequireMTLS') -and -not $source.Contains('[switch]$RequireAuth')) `
+        'dedicated V2-to-V3 producer/consumer must make HTTPS+mTLS+auth mandatory rather than optional switches'
+}
+Assert-True ($successorActivationSource.Contains('Assert-PandoraHubAllocatorGreenServiceContract $hubService $Namespace') -and
+    $successorPrepareSource.Contains('Assert-PandoraHubAllocatorGreenServiceContract $preStageHubService $Namespace') -and
+    $successorPrepareSource.Contains('Assert-PandoraHubAllocatorGreenServiceContract $hubService $Namespace')) `
+    'producer and consumer must validate the exact canonical green Hub Service before trusting endpoint cardinality'
+$stagePreviewGate = $successorPrepareSource.IndexOf(
+    '$null = Assert-PandoraDsAuthV3GreenStageDeploymentContract', [StringComparison]::Ordinal)
+$mutatingStageApply = $successorPrepareSource.IndexOf(
+    '    & kubectl --context $KubeContext -n $Namespace apply --server-side `', [StringComparison]::Ordinal)
+Assert-True ($successorPrepareSource.Contains("'--dry-run=server'") -and
+    $successorPrepareSource.Contains("'-o', 'json'") -and
+    $stagePreviewGate -ge 0 -and $mutatingStageApply -gt $stagePreviewGate) `
+    'producer must validate each server-side merged JSON candidate before the first mutating stage apply'
+Assert-True ($successorActivationSource.Contains('Assert-OrCreateV3CompletionMarker $currentInstances $false')) `
+    'Audit of an already-required V3 cluster must require and verify the immutable completion marker read-only'
 Assert-True ($startSource.Contains(
     'Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $placementGreen ([string]$goPins[''player-locator''])')) `
     'prod ordinary release must read back and verify canonical green placement preflight after rollout'
@@ -898,9 +998,24 @@ $localDigestFinal = $localK8sBody.LastIndexOf('Assert-LocalDsAuthImageDigestAnno
 Assert-True ($localApply -ge 0 -and $localApply -lt $localDigestPatch -and
     $localDigestPatch -lt $localRollout -and $localRollout -lt $localDigestFinal) `
     'local k8s release must patch node-derived writer digests before rollout and verify every running Pod afterward'
-Assert-True ($startSource.Contains(
-    'Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile -SkipPodCheck')) `
-    'Resume must fail closed on persisted annotation/node-tag drift without rewriting provenance'
+$resumeStart = $startSource.IndexOf('function Resume-K8s {', [StringComparison]::Ordinal)
+$resumeEnd = $startSource.IndexOf('function Invoke-Resume {', $resumeStart, [StringComparison]::Ordinal)
+$resumeBody = $startSource.Substring($resumeStart, $resumeEnd - $resumeStart)
+$resumeEtcdReady = $resumeBody.IndexOf("rollout status deploy/etcd", [StringComparison]::Ordinal)
+$resumeBaseline = $resumeBody.IndexOf('Assert-LocalDsAuthBaseline', [StringComparison]::Ordinal)
+$resumeApply = $resumeBody.IndexOf('kubectl --context $mkCtx apply -k $resumeServicesDir', [StringComparison]::Ordinal)
+$resumeDigestPatch = $resumeBody.IndexOf('Set-LocalDsAuthImageDigestAnnotations', [StringComparison]::Ordinal)
+$resumeRollout = $resumeBody.IndexOf('rollout restart deploy/$($svc.Name)', [StringComparison]::Ordinal)
+Assert-True ($resumeEtcdReady -ge 0 -and $resumeEtcdReady -lt $resumeBaseline -and
+    $resumeBaseline -lt $resumeApply -and $resumeApply -lt $resumeDigestPatch -and
+    $resumeDigestPatch -lt $resumeRollout -and
+    [regex]::Matches($resumeBody, 'Set-LocalDsAuthImageDigestAnnotations').Count -eq 1 -and
+    $resumeBody.Contains('Assert-LocalDsAuthImageDigestAnnotations')) `
+    'Resume must wait etcd before baseline, apply Recreate before repairing node-derived writer provenance, then rollout and verify final Pods'
+Assert-True ($startSource.Contains("get deployment/hub-allocator -o json") -and
+    $startSource.Contains("[string]`$hubDeployment.spec.strategy.type -cne 'Recreate'") -and
+    $startSource.Contains("`$hubDeployment.spec.strategy.PSObject.Properties['rollingUpdate']")) `
+    'local digest template patches must refuse Hub unless replicas=1 Recreate with no rollingUpdate'
 $auditBranch = $activationSource.IndexOf("if (`$Phase -ceq 'Audit')", [StringComparison]::Ordinal)
 $firstApply = $activationSource.IndexOf('Invoke-CapabilityAudit $audit -ApplyEpoch', [StringComparison]::Ordinal)
 Assert-True ($auditBranch -ge 0 -and $firstApply -gt $auditBranch) 'CAS apply must be after Audit early exit'

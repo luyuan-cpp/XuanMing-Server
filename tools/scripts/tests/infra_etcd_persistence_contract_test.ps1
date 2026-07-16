@@ -23,21 +23,23 @@ function Assert-ResumeAuditOrdering([string]$ResumeSource) {
         'Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:$false'
     )
     Assert-True ($apiReady -ge 0) 'Resume 必须先等待 apiserver /readyz'
+    $etcdReady = $ResumeSource.IndexOf('rollout status deploy/etcd', [StringComparison]::Ordinal)
+    Assert-True ($etcdReady -gt $apiReady) 'Resume 必须在 apiserver 后仅等待 infra etcd，才能线性读取 required policy'
     $auditPositions = @()
     foreach ($marker in $auditMarkers) {
         $position = $ResumeSource.IndexOf($marker, [StringComparison]::Ordinal)
         Assert-True ($position -ge 0) "Resume 缺最早只读审计:$marker"
-        Assert-True ($position -gt $apiReady) "审计必须在 apiserver ready 之后:$marker"
+        Assert-True ($position -gt $etcdReady) "审计必须在 apiserver 与 infra etcd ready 之后:$marker"
         $auditPositions += $position
     }
-    $firstBusinessReady = $ResumeSource.IndexOf('rollout status deploy/etcd', [StringComparison]::Ordinal)
+    $firstBusinessReady = $ResumeSource.IndexOf('rollout status deploy/$($svc.Name)', [StringComparison]::Ordinal)
     $firstConfigWrite = $ResumeSource.IndexOf('Apply-PandoraConfigSecret', [StringComparison]::Ordinal)
     $firstApply = $ResumeSource.IndexOf('kubectl --context $mkCtx apply -k', [StringComparison]::Ordinal)
     $firstRestart = $ResumeSource.IndexOf('kubectl --context $mkCtx rollout restart', [StringComparison]::Ordinal)
     foreach ($barrier in @($firstBusinessReady, $firstConfigWrite, $firstApply, $firstRestart)) {
         Assert-True ($barrier -ge 0) 'Resume 顺序测试缺业务等待/写入 marker'
         foreach ($auditPosition in $auditPositions) {
-            Assert-True ($auditPosition -lt $barrier) '所有只读审计必须早于业务 Ready、apply 与 rollout'
+            Assert-True ($auditPosition -lt $barrier) '所有只读审计必须早于业务 writer Ready、apply 与 rollout；infra etcd Ready 是线性读前置'
         }
     }
 }

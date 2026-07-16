@@ -487,12 +487,14 @@
   `acquired_policy_generation/id`；V3 activation 对五类 writer 的 compiled support、V2 staging acquire、
   exact features/Pod UID/digest 与 Hub count=1 全部 fail-closed。V2→V3 是同 writer epoch 的 policy-only
   CAS；fresh local 使用 missing→V3 zero-writer 单事务 genesis，Resume 必须验证同事务 immutable record。
-- 平台必须在 V2 staging 后预创建 exact schema、`immutable: true` 的
-  `pandora-ds-auth-policy-v3-evidence`，绑定 run-id、context/namespace、staged Pod UID/image digest、完整 V3
-  feature policy 与 Hub `capability lease + NotReady + zero ready endpoint` 事实。仓库脚本只读并精确验证该
-  交接物，不会把普通/可变 ConfigMap 当证据。
+- 平台必须通过强制 HTTPS+mTLS+auth 的 `prepare_hub_successor_policy.ps1` 完成 V2 staging：真实 apply 前
+  server-side dry-run 并逐个验证五个合并后 Deployment 的 identity/template/image/selector/count，强制
+  locator preflight 与 Hub `replicas=1 + Recreate`，再 create-only 写 exact immutable
+  `pandora-ds-auth-policy-v3-evidence`。prepare/activate 都会在 Endpoint 0/1 门前验证 Hub Service 的 exact
+  green selector/ClusterIP/50021，避免 selector 漂移伪造零 Endpoint；既有 marker 只能精确回读，不能覆盖。
 - `activate_hub_successor_policy.ps1` 已支持崩溃续跑：required=V2 才执行 pre-CAS 门/CAS；required=V3
   从 record-only proof 继续。post-CAS 从固定五个 canonical Deployment/selector/owner chain 重新派生当前
   live UID（不把历史 marker UID 当永久 allowlist），要求唯一业务 container Running+imageID、所有 capability
   acquired=V3、Hub ready Endpoint 精确 1 个且 UID 唯一匹配；最后再次 capability audit 并写 immutable
-  completion marker。完整契约见 `docs/design/battle-reconnect.md` §7.8。
+  completion marker。required=V3 的只读 Audit 与普通 online release 也必须验证该 completion marker 并把其
+  UID/resourceVersion 纳入窗口内不可漂移基线，缺失不得假绿。完整契约见 `docs/design/battle-reconnect.md` §7.8。

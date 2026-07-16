@@ -182,20 +182,35 @@ function Assert-PandoraDsAuthV3CompletionContract(
         throw 'V3 completion marker completion time is after marker creation.'
     }
     $instances = @{}
+    $allUIDs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($item in ([string]$Marker.data.final_instances).Split(',')) {
         $parts = $item.Split('=', 2)
         if ($parts.Count -ne 2 -or -not $ExpectedCounts.ContainsKey($parts[0]) -or $instances.ContainsKey($parts[0])) {
             throw 'V3 completion final_instances contains an unknown, duplicate, or malformed service.'
         }
-        $uids = @($parts[1].Split('|') | Sort-Object -Unique)
-        if ($uids.Count -ne [int]$ExpectedCounts[$parts[0]] -or
+        $rawUIDs = @($parts[1].Split('|'))
+        $uids = @($rawUIDs | Sort-Object -Unique)
+        if ($rawUIDs.Count -ne $uids.Count -or $uids.Count -ne [int]$ExpectedCounts[$parts[0]] -or
             @($uids | Where-Object { $_ -cnotmatch '^[0-9A-Za-z][0-9A-Za-z._:-]{0,127}$' }).Count -ne 0) {
             throw "V3 completion final_instances count/UID for $($parts[0]) is invalid."
+        }
+        foreach ($uid in $uids) {
+            if (-not $allUIDs.Add([string]$uid)) {
+                throw 'V3 completion final_instances contains a duplicate UID across services.'
+            }
         }
         $instances[$parts[0]] = $true
     }
     if ($instances.Count -ne $ExpectedCounts.Count -or [int]$ExpectedCounts['hub_allocator'] -ne 1) {
         throw 'V3 completion final_instances is not the exact five-service/single-Hub structure.'
+    }
+    return [pscustomobject][ordered]@{
+        Name = [string]$Marker.metadata.name
+        Namespace = [string]$Marker.metadata.namespace
+        UID = [string]$Marker.metadata.uid
+        ResourceVersion = [string]$Marker.metadata.resourceVersion
+        FinalInstances = [string]$Marker.data.final_instances
+        CompletedAtUnixMS = $completedMS
     }
 }
 
@@ -367,6 +382,17 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
     $containers[0].image = $PinnedImage
     $spec.template.metadata.annotations.'pandora.dev/image-digest' = $Digest
 
+    # Hub owns the single-writer successor/placement lease.  An ordinary
+    # canonical-green replacement must never inherit a live RollingUpdate
+    # strategy, because maxSurge would briefly create two Hub writers.
+    if ($App -ceq 'hub-allocator') {
+        if ($DesiredReplicas -ne 1) {
+            throw 'canonical green hub-allocator desired replicas must be exactly 1.'
+        }
+        $spec.replicas = 1
+        $spec.strategy = [pscustomobject]@{ type = 'Recreate' }
+    }
+
     # The one-time epoch activation temporarily pins ds-allocator green to a
     # per-RunId immutable raw snapshot.  A later ordinary epoch-2 release must
     # deliberately return to the current fixed pandora-config Secret; otherwise
@@ -432,7 +458,103 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
     if ($App -ceq 'player-locator') {
         Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $candidate $PinnedImage
     }
+    if ($App -ceq 'hub-allocator') {
+        Assert-PandoraHubAllocatorSingleWriterDeploymentContract $candidate
+    }
     return $candidate
+}
+
+function Assert-PandoraHubAllocatorSingleWriterDeploymentContract($Deployment) {
+    if ([string]$Deployment.apiVersion -cne 'apps/v1' -or [string]$Deployment.kind -cne 'Deployment' -or
+        [string]$Deployment.metadata.name -cnotin @('hub-allocator', 'hub-allocator-ds-auth-green') -or
+        [int]$Deployment.spec.replicas -ne 1 -or [string]$Deployment.spec.strategy.type -cne 'Recreate' -or
+        $null -ne $Deployment.spec.strategy.PSObject.Properties['rollingUpdate']) {
+        throw 'hub-allocator placement/successor writer must be exact replicas=1 with Recreate and no rollingUpdate.'
+    }
+}
+
+function Assert-PandoraHubAllocatorGreenServiceContract($Service, [string]$Namespace = 'pandora') {
+    $selector = $Service.spec.selector
+    $ports = @($Service.spec.ports)
+    $publishNotReady = $Service.spec.PSObject.Properties['publishNotReadyAddresses']
+    if ([string]$Service.apiVersion -cne 'v1' -or [string]$Service.kind -cne 'Service' -or
+        [string]$Service.metadata.name -cne 'hub-allocator' -or
+        [string]$Service.metadata.namespace -cne $Namespace -or
+        [string]$Service.metadata.uid -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        (Test-PandoraKubernetesObjectDeleting $Service) -or
+        [string]$Service.spec.type -cne 'ClusterIP' -or
+        [string]::IsNullOrWhiteSpace([string]$Service.spec.clusterIP) -or
+        [string]$Service.spec.clusterIP -ceq 'None' -or
+        ($null -ne $publishNotReady -and $publishNotReady.Value -eq $true) -or
+        [string]$selector.app -cne 'hub-allocator' -or
+        [string]$selector.'pandora.dev/ds-auth-writer-set' -cne 'green' -or
+        [string]$selector.'pandora.dev/ds-auth-writer-epoch' -cne '2' -or
+        @($selector.PSObject.Properties).Count -ne 3 -or
+        $ports.Count -ne 1 -or [int]$ports[0].port -ne 50021 -or
+        [string]$ports[0].targetPort -cne '50021' -or [string]$ports[0].protocol -cne 'TCP') {
+        throw 'Service/hub-allocator must be the exact canonical green ClusterIP/50021 selector contract.'
+    }
+}
+
+function Assert-PandoraDsAuthV3GreenStageDeploymentContract(
+    $Deployment,
+    [string]$App,
+    [string]$Revision,
+    [string]$ServerName,
+    [string]$ForbiddenReadPrefix,
+    [bool]$UsesPasswordAuth
+) {
+    if ($script:PandoraDsAuthWriterApps -cnotcontains $App) {
+        throw "Unknown V3 staged DS-auth writer app=$App."
+    }
+    $name = "$App-ds-auth-green"
+    $desiredRaw = [string]$Deployment.metadata.annotations.'pandora.dev/ds-auth-green-desired-replicas'
+    $selector = $Deployment.spec.selector.matchLabels
+    if ([string]$Deployment.apiVersion -cne 'apps/v1' -or [string]$Deployment.kind -cne 'Deployment' -or
+        [string]$Deployment.metadata.name -cne $name -or [string]$Deployment.metadata.namespace -cne 'pandora' -or
+        [string]$Deployment.metadata.labels.app -cne $App -or
+        (Test-PandoraKubernetesObjectDeleting $Deployment) -or $desiredRaw -cnotmatch '^[1-9][0-9]?$' -or
+        [int]$Deployment.spec.replicas -ne [int]$desiredRaw -or
+        [string]$selector.app -cne $App -or
+        [string]$selector.'pandora.dev/ds-auth-writer-set' -cne 'green' -or
+        [string]$selector.'pandora.dev/ds-auth-writer-epoch' -cne '2' -or
+        @($selector.PSObject.Properties).Count -ne 3) {
+        throw "Deployment/$name is not an exact canonical staged V3 writer."
+    }
+    foreach ($label in @($selector.PSObject.Properties)) {
+        if ([string]$Deployment.spec.template.metadata.labels.($label.Name) -cne [string]$label.Value) {
+            throw "Deployment/$name template does not carry its exact immutable selector label=$($label.Name)."
+        }
+    }
+    $template = [pscustomobject]@{
+        metadata = $Deployment.spec.template.metadata
+        spec = $Deployment.spec.template.spec
+    }
+    Assert-PandoraDsAuthIdentityPodContract $template $App $Revision $ServerName `
+        $ForbiddenReadPrefix $UsesPasswordAuth
+    $containers = @($Deployment.spec.template.spec.containers | Where-Object { [string]$_.name -ceq $App })
+    if ($containers.Count -ne 1 -or [string]$containers[0].image -cnotmatch '@(sha256:[0-9a-f]{64})$') {
+        throw "Deployment/$name target writer image/template digest is not one exact immutable pin."
+    }
+    $digest = [string]$Matches[1]
+    if ([string]$Deployment.spec.template.metadata.annotations.'pandora.dev/image-digest' -cne $digest) {
+        throw "Deployment/$name target writer image/template digest is not one exact immutable pin."
+    }
+    $pinnedImage = [string]$containers[0].image
+    if ($App -ceq 'hub-allocator') {
+        Assert-PandoraHubAllocatorSingleWriterDeploymentContract $Deployment
+    }
+    if ($App -ceq 'player-locator') {
+        Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $Deployment $pinnedImage
+    }
+    if ($App -in @('battle-result', 'ds-allocator')) {
+        Assert-PandoraDsTerminalMeshTemplateContract $template $App
+    }
+    return [pscustomobject][ordered]@{
+        DesiredReplicas = [int]$desiredRaw
+        Digest = $digest
+        PinnedImage = $pinnedImage
+    }
 }
 
 function Assert-PandoraPlayerLocatorPlacementPreflightObjectContract($Deployment, [string]$ExpectedPinnedImage = '') {

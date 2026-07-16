@@ -141,7 +141,8 @@ func (c *GrpcPlacementCoordinator) PrepareBattlePlacement(
 	// per-player CAS (sources may race after this read), so preparePlayer re-reads
 	// and the durable exact-operation retry remains the correctness mechanism.
 	for _, playerID := range playerIDs {
-		if _, err := c.readBattleBeginVersion(ctx, playerID, operationID, matchID); err != nil {
+		if _, err := c.readBattleBeginVersion(ctx, playerID, operationID, matchID,
+			allocation.Target); err != nil {
 			return nil, fmt.Errorf("preflight battle placement player=%d match=%d: %w", playerID, matchID, err)
 		}
 	}
@@ -224,6 +225,54 @@ func exactSameBattlePending(
 		(target.CompleteBattle() && target.AssignmentID == "")
 }
 
+// exactSamePreparedBattlePending is deliberately used only after the
+// allocator target has been durably checkpointed on the canonical match.  It
+// extends the ordinary same-operation retry shape with the monotonic Hub
+// source-departure confirmation written by player_locator after physical Hub
+// cleanup.  The external allocation preflight must keep using
+// exactSameBattlePending so a bound/confirmed record can never allocate a
+// second Battle DS.
+func exactSamePreparedBattlePending(
+	rec *locatorv1.PlayerPlacementStorageRecord,
+	operationID string,
+	matchID uint64,
+	expectedTarget placement.Target,
+) bool {
+	if !expectedTarget.CompleteBattle() || expectedTarget.AssignmentID != "" ||
+		!sameBattlePendingOperation(rec, operationID, matchID) || rec.GetVersion() <= 1 ||
+		rec.GetCurrentRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || rec.GetMatchId() != 0 ||
+		rec.GetSourceMatchId() != 0 || rec.GetProofType() != locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_MATCH_START ||
+		rec.GetProofId() != operationID || rec.GetUpdatedAtMs() <= 0 ||
+		rec.GetLeaseDeadlineMs() <= rec.GetUpdatedAtMs() || rec.GetAdmissionId() != "" ||
+		rec.GetSourcePlacementVersion() != rec.GetVersion()-1 ||
+		!placement.ValidOperationID(rec.GetSourceOperationId()) || rec.GetSourceOperationId() == rec.GetOperationId() {
+		return false
+	}
+	source := placementSourceTarget(rec)
+	if !source.CompleteHub() || source.AllocationID != "" ||
+		!canonicalDepartureHistory(rec, rec.GetSourcePlacementVersion(), rec.GetSourceOperationId()) {
+		return false
+	}
+	target := placementActiveTarget(rec)
+	departureAbsent := !rec.GetSourceDepartureConfirmed() &&
+		rec.GetSourceDepartureProofType() == locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED &&
+		rec.GetSourceDepartureProofId() == ""
+	departureConfirmed := rec.GetSourceDepartureConfirmed() &&
+		rec.GetSourceDepartureProofType() == locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE &&
+		strings.TrimSpace(rec.GetSourceDepartureProofId()) != ""
+	if departureConfirmed {
+		// Hub departure is only meaningful after this exact Battle target was
+		// bound.  An unbound, partial or different target is a hard conflict.
+		return target.Equal(expectedTarget)
+	}
+	if !departureAbsent {
+		return false
+	}
+	// Before the Hub ACK, a partial batch may contain either an unbound player
+	// or a player already bound to the exact canonical allocation.
+	return target.Equal(placement.Target{}) || target.Equal(expectedTarget)
+}
+
 // preflightBattleAllocation is intentionally stricter than the idempotent
 // Prepare path.  Before there is a durable BattleTarget checkpoint, Allocate
 // may run only from an exact STABLE_HUB or from the exact same Begin record
@@ -302,7 +351,7 @@ func (c *GrpcPlacementCoordinator) preparePlayer(
 	matchID uint64,
 	target placement.Target,
 ) (placement.Binding, error) {
-	expectedVersion, err := c.readBattleBeginVersion(ctx, playerID, operationID, matchID)
+	expectedVersion, err := c.readBattleBeginVersion(ctx, playerID, operationID, matchID, target)
 	if err != nil {
 		return placement.Binding{}, err
 	}
@@ -375,6 +424,7 @@ func (c *GrpcPlacementCoordinator) readBattleBeginVersion(
 	playerID uint64,
 	operationID string,
 	matchID uint64,
+	expectedTarget placement.Target,
 ) (uint64, error) {
 	current, found, err := c.getPlacement(ctx, playerID)
 	if err != nil {
@@ -388,7 +438,7 @@ func (c *GrpcPlacementCoordinator) readBattleBeginVersion(
 			"placement authority returned player %d for requested player %d", current.GetPlayerId(), playerID)
 	}
 	expectedVersion := current.GetVersion()
-	if exactSameBattlePending(current, operationID, matchID) {
+	if exactSamePreparedBattlePending(current, operationID, matchID, expectedTarget) {
 		expectedVersion = current.GetVersion() - 1
 	} else {
 		if !exactStableHub(current) {

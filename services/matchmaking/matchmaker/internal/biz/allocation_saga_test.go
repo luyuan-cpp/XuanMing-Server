@@ -1066,33 +1066,42 @@ func (f *failOnceHubDeparture) EnsureHubDeparted(context.Context, uint64, string
 	[]uint64, map[uint64]placement.Binding) error {
 	f.calls++
 	if f.calls == 1 {
-		return errors.New("old Hub owner still connected")
+		return errcode.New(errcode.ErrUnavailable, "old Hub owner still connected")
 	}
 	return nil
 }
 
-func TestAllocationSagaDoesNotSignOrPublishBeforePhysicalHubDeparture(t *testing.T) {
+func TestAllocationSagaRetriesHubDepartureFromCheckpointWithoutReallocationOrAbort(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 9903)
 	seedAllocatingMatch(t, ctx, f, 9903, time.Now().Add(time.Minute).UnixMilli())
-	allocator := &switchingAllocationStub{first: model.BattleAllocation{
+	allocation := model.BattleAllocation{
 		Address: "10.0.0.4:7777", Target: placement.Target{PodName: "battle-d",
-			InstanceUID: "uid-d", InstanceEpoch: 4, AllocationID: "allocation-d", ReleaseTrack: "stable"}}}
-	placementBatch := &failFirstPlacementBatch{calls: 1}
+			InstanceUID: "uid-d", InstanceEpoch: 4, AllocationID: "allocation-d", ReleaseTrack: "stable"}}
+	allocator := &switchingAllocationStub{first: allocation, second: model.BattleAllocation{
+		Address: "10.0.0.99:7777", Target: placement.Target{PodName: "must-not-reallocate",
+			InstanceUID: "must-not-reallocate", InstanceEpoch: 99,
+			AllocationID: "must-not-reallocate", ReleaseTrack: "stable"}}}
+	placementBatch := &hookPlacementBatch{}
 	departure := &failOnceHubDeparture{}
 	f.uc.allocator = allocator
 	f.uc.SetPlacementCoordinator(placementBatch)
 	f.uc.SetHubDepartureCoordinator(departure)
 
-	if err := f.uc.advanceAllocationsOnce(ctx); err == nil {
-		t.Fatal("connected old Hub owner must keep allocation retryable")
+	if err := f.uc.advanceAllocationsOnce(ctx); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("connected old Hub owner must keep allocation retryable unavailable: %v", err)
 	}
 	pending, found, err := f.repo.GetMatch(ctx, 9903)
+	checkpoint, complete := allocationFromStoredTarget(pending.GetBattleTarget())
 	if err != nil || !found || pending.GetStage() != stageAllocating ||
-		pending.GetBattleDsAddr() != "" || allocator.signCalls != 0 ||
+		pending.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING ||
+		!complete || !sameBattleAllocation(checkpoint, &allocation) ||
+		pending.GetBattleDsAddr() != "" || allocator.allocateCalls != 1 || allocator.abortCalls != 0 ||
+		allocator.signCalls != 0 || placementBatch.calls != 1 || departure.calls != 1 ||
 		f.pusher.lastStageFor(1) == stageReady {
-		t.Fatalf("departure fence leaked READY: found=%v match=%+v sign=%d err=%v",
-			found, pending, allocator.signCalls, err)
+		t.Fatalf("departure retry lost checkpoint or leaked READY: found=%v complete=%v match=%+v allocate=%d abort=%d placement=%d departure=%d sign=%d err=%v",
+			found, complete, pending, allocator.allocateCalls, allocator.abortCalls,
+			placementBatch.calls, departure.calls, allocator.signCalls, err)
 	}
 	if err := f.repo.UpdateMatchWithLock(ctx, 9903, f.cfg.OptimisticRetry,
 		func(rec *matchv1.MatchStorageRecord) error { rec.AllocationNextAttemptAtMs = 0; return nil },
@@ -1103,9 +1112,17 @@ func TestAllocationSagaDoesNotSignOrPublishBeforePhysicalHubDeparture(t *testing
 		t.Fatalf("exact departure retry did not converge: %v", err)
 	}
 	ready, found, err := f.repo.GetMatch(ctx, 9903)
-	if err != nil || !found || ready.GetStage() != stageReady || allocator.signCalls != 1 || departure.calls != 2 {
-		t.Fatalf("departure retry result found=%v match=%+v sign=%d calls=%d err=%v",
-			found, ready, allocator.signCalls, departure.calls, err)
+	readyAllocation, readyComplete := allocationFromStoredTarget(ready.GetBattleTarget())
+	if err != nil || !found || ready.GetStage() != stageReady ||
+		ready.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_COMPLETED ||
+		!readyComplete || !sameBattleAllocation(readyAllocation, &allocation) ||
+		ready.GetBattleDsAddr() != allocation.Address ||
+		len(ready.GetBattleTarget().GetPlayerBindings()) != len(ready.GetMembers()) ||
+		allocator.allocateCalls != 1 || allocator.abortCalls != 0 || allocator.signCalls != 1 ||
+		placementBatch.calls != 2 || departure.calls != 2 || f.pusher.lastStageFor(1) != stageReady {
+		t.Fatalf("durable Hub departure retry result found=%v complete=%v match=%+v allocate=%d abort=%d placement=%d departure=%d sign=%d pushed=%s err=%v",
+			found, readyComplete, ready, allocator.allocateCalls, allocator.abortCalls,
+			placementBatch.calls, departure.calls, allocator.signCalls, f.pusher.lastStageFor(1), err)
 	}
 }
 

@@ -13,12 +13,13 @@ param(
     [string]$EtcdPrefix = '/pandora/ds-auth/',
     [Parameter(Mandatory = $true)][string]$KeysetRevision,
     [Parameter(Mandatory = $true)][string]$EtcdIdentityRevision,
-    [switch]$RequireMTLS,
-    [string]$CAFile = '', [string]$CertFile = '', [string]$KeyFile = '',
-    [string]$ServerName = '', [string]$ClientIdentity = '',
+    [Parameter(Mandatory = $true)][string]$CAFile,
+    [Parameter(Mandatory = $true)][string]$CertFile,
+    [Parameter(Mandatory = $true)][string]$KeyFile,
+    [Parameter(Mandatory = $true)][string]$ServerName,
+    [Parameter(Mandatory = $true)][string]$ClientIdentity,
     [string]$UsernameFile = '', [string]$PasswordFile = '',
-    [switch]$RequireAuth,
-    [string]$ForbiddenReadPrefix = '',
+    [Parameter(Mandatory = $true)][string]$ForbiddenReadPrefix,
     [timespan]$Timeout = ([timespan]::FromSeconds(30))
 )
 
@@ -50,14 +51,19 @@ function Get-ClusterJson([string[]]$Arguments, [string]$Action) {
     catch { throw "$Action did not return JSON:$($_.Exception.Message)" }
 }
 
-function Ensure-V3CompletionMarker([string]$FinalInstances) {
+function Assert-OrCreateV3CompletionMarker([string]$FinalInstances, [bool]$AllowCreate) {
     $name = "pandora-ds-auth-policy-v3-complete-$($policyEvidence.RunID)"
     $existingLines = @(& kubectl --context $KubeContext -n $Namespace get "configmap/$name" `
         --ignore-not-found -o json 2>&1)
     if ($LASTEXITCODE -ne 0) { throw "Read V3 completion marker failed:$($existingLines -join [Environment]::NewLine)" }
     $existingText = ($existingLines -join "`n").Trim()
     if ([string]::IsNullOrWhiteSpace($existingText)) {
-        $nowMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        if (-not $AllowCreate) {
+            throw "Immutable V3 completion marker ConfigMap/$name is required for an existing V3 Audit."
+        }
+        # Kubernetes creationTimestamp has second precision. Floor evidence to
+        # the same precision so a valid create cannot appear to predate proof.
+        $nowMS = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() * 1000
         $object = [pscustomobject][ordered]@{
             apiVersion = 'v1'; kind = 'ConfigMap'
             metadata = [pscustomobject]@{ name = $name; namespace = $Namespace }
@@ -85,7 +91,7 @@ function Ensure-V3CompletionMarker([string]$FinalInstances) {
     }
     try { $marker = ($existingText | ConvertFrom-Json -ErrorAction Stop) }
     catch { throw "V3 completion marker is not JSON:$($_.Exception.Message)" }
-    Assert-PandoraDsAuthV3CompletionContract $marker $name $Namespace $policyEvidence $serviceCountMap
+    return Assert-PandoraDsAuthV3CompletionContract $marker $name $Namespace $policyEvidence $serviceCountMap
 }
 
 $writerSpecs = [ordered]@{
@@ -177,6 +183,12 @@ function Get-CanonicalWriterInstances([bool]$PreCAS, [bool]$RequireHubRoute) {
     $hubPod = @($hubPodList.items | Where-Object { [string]$_.metadata.uid -ceq $currentHubUID })[0]
     $hubReady = @($hubPod.status.conditions | Where-Object {
         [string]$_.type -ceq 'Ready' -and [string]$_.status -ceq 'True' }).Count -eq 1
+    # Endpoint cardinality is meaningful only if the Service itself still
+    # selects the exact canonical green Hub.  A drifted/empty selector could
+    # otherwise manufacture a false pre-CAS zero-endpoint proof.
+    $hubService = Get-ClusterJson @('get', 'service/hub-allocator', '-o', 'json') `
+        'read canonical Hub Service'
+    Assert-PandoraHubAllocatorGreenServiceContract $hubService $Namespace
     $sliceList = Get-ClusterJson @('get', 'endpointslices', '-l',
         'kubernetes.io/service-name=hub-allocator', '-o', 'json') 'read Hub EndpointSlices'
     $readyEndpoints = @($sliceList.items.endpoints | Where-Object { $_.conditions.ready -eq $true })
@@ -190,18 +202,12 @@ function Get-CanonicalWriterInstances([bool]$PreCAS, [bool]$RequireHubRoute) {
     return ($canonical -join ',')
 }
 
-$securityArgs = @()
-if ($RequireMTLS) {
-    $securityArgs += @('--require-mtls', '--ca-file', $CAFile, '--cert-file', $CertFile,
-        '--key-file', $KeyFile, '--server-name', $ServerName,
-        '--client-identity', $ClientIdentity)
-}
-if ($RequireAuth) { $securityArgs += '--require-auth' }
-if (-not [string]::IsNullOrWhiteSpace($UsernameFile)) { $securityArgs += @('--username-file', $UsernameFile) }
-if (-not [string]::IsNullOrWhiteSpace($PasswordFile)) { $securityArgs += @('--password-file', $PasswordFile) }
-if (-not [string]::IsNullOrWhiteSpace($ForbiddenReadPrefix)) {
-    $securityArgs += @('--forbidden-read-prefix', $ForbiddenReadPrefix)
-}
+if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) { throw 'kubectl is required.' }
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw 'go is required.' }
+if ([string]::IsNullOrWhiteSpace($KeysetRevision)) { throw 'KeysetRevision is required.' }
+$null = Assert-PandoraDsAuthHttpsEndpoints $EtcdEndpoints
+$securityArgs = @(Get-PandoraDsAuthSecureGoArgs $CAFile $CertFile $KeyFile $ServerName `
+    $ClientIdentity $EtcdIdentityRevision $ForbiddenReadPrefix $UsernameFile $PasswordFile)
 
 $snapshotArgs = @('run', './pkg/dsauthfence/cmd/dsauth-required',
     '--endpoints', $EtcdEndpoints, '--prefix', $EtcdPrefix,
@@ -223,7 +229,6 @@ function New-V3AuditArgs([string]$Instances, [bool]$ApplyPolicy) {
         '--policy-v3', '--expected-services', $ExpectedServices,
         '--expected-instances', $Instances,
         '--keyset-revision', $KeysetRevision,
-        '--etcd-identity-revision', $EtcdIdentityRevision,
         '--allowed-image-digests', $AllowedImageDigests,
         '--expected-image-digests', $ExpectedImageDigests,
         '--required-features', $script:PandoraDsAuthRequiredFeaturesV3,
@@ -241,14 +246,29 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Cannot linearly read required V2/V3:$($snapshotLines -join [Environment]::NewLine)" }
     try { $snapshot = (($snapshotLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
     catch { throw "Required policy snapshot is not JSON:$($_.Exception.Message)" }
-    $markerJSON = @(& kubectl --context $KubeContext -n $Namespace get "configmap/$EvidenceConfigMap" -o json 2>&1)
+    $markerJSON = @(& kubectl --context $KubeContext -n $Namespace get `
+        "configmap/$script:PandoraDsAuthPolicyV3EvidenceName" -o json 2>&1)
     if ($LASTEXITCODE -ne 0) {
         throw "Platform-precreated immutable V3 evidence ConfigMap is required:$($markerJSON -join [Environment]::NewLine)"
     }
     try { $marker = (($markerJSON -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
     catch { throw "V3 policy evidence is not JSON:$($_.Exception.Message)" }
-    $policyEvidence = Assert-PandoraDsAuthPolicyV3EvidenceContract $marker $ExpectedServices `
-        $ExpectedInstances $ExpectedImageDigests $KubeContext $Namespace
+    $policyEvidence = Assert-PandoraDsAuthPolicyV3EvidenceContract $marker `
+        ([string]$marker.data.expected_services) ([string]$marker.data.expected_instances) `
+        ([string]$marker.data.expected_image_digests) $KubeContext $Namespace
+    $ExpectedServices = $policyEvidence.ExpectedServices
+    $ExpectedInstances = $policyEvidence.ExpectedInstances
+    $ExpectedImageDigests = $policyEvidence.ExpectedImageDigests
+    $instanceMap = Convert-ExactMap $ExpectedInstances 'marker expected_instances'
+    $digestMap = Convert-ExactMap $ExpectedImageDigests 'marker expected_image_digests'
+    $serviceCountMap = Convert-ExactMap $ExpectedServices 'marker expected_services'
+    if ((@($instanceMap.Keys | Sort-Object) -join ',') -cne (@($writerSpecs.Keys | Sort-Object) -join ',') -or
+        (@($digestMap.Keys | Sort-Object) -join ',') -cne (@($writerSpecs.Keys | Sort-Object) -join ',') -or
+        (@($serviceCountMap.Keys | Sort-Object) -join ',') -cne (@($writerSpecs.Keys | Sort-Object) -join ',') -or
+        @($instanceMap['hub_allocator'].Split('|')).Count -ne 1) {
+        throw 'Immutable V3 evidence does not contain the exact five-service/single-Hub maps.'
+    }
+    $AllowedImageDigests = @($digestMap.Values | Sort-Object -Unique) -join ','
     if ([uint32]$snapshot.policy_generation -eq 2) {
         $stagedInstances = Get-CanonicalWriterInstances $true $false
         $preCASArgs = @(New-V3AuditArgs $stagedInstances ($Phase -ceq 'Activate'))
@@ -307,7 +327,7 @@ try {
         # readiness and routing converged.
         & go @finalArgs
         if ($LASTEXITCODE -ne 0) { throw 'Final post-endpoint acquired-policy V3 capability audit failed.' }
-        Ensure-V3CompletionMarker $finalInstances
+        $null = Assert-OrCreateV3CompletionMarker $finalInstances $true
     } else {
         # Audit against an already-V3 cluster is a post-CAS audit and must not
         # stop at the record proof.
@@ -315,5 +335,8 @@ try {
         $currentArgs = @(New-V3AuditArgs $currentInstances $false)
         & go @currentArgs
         if ($LASTEXITCODE -ne 0) { throw 'Existing V3 exact acquired-policy capability audit failed.' }
+        # Existing V3 is healthy only after activation finished all routing and
+        # recorded the immutable completion marker.  Audit is read-only here.
+        $null = Assert-OrCreateV3CompletionMarker $currentInstances $false
     }
 } finally { Pop-Location }
