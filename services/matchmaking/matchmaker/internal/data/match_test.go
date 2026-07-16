@@ -493,6 +493,51 @@ func TestDeleteTicketIfUnmatched_CAS(t *testing.T) {
 	}
 }
 
+func TestDeleteTicketIfMatchRejectsOwnerDrift(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	ticket := &matchv1.MatchTicketStorageRecord{
+		TicketId: 30, TeamId: 30, MatchId: 900, EnqueuedAtMs: 1,
+		Members: []*matchv1.MatchMemberStorageRecord{{PlayerId: 1}},
+	}
+	if err := repo.AddTicket(ctx, ticket, testTTL); err != nil {
+		t.Fatal(err)
+	}
+	deleted, found, current, err := repo.DeleteTicketIfMatch(ctx, 30, 901)
+	if err != nil || deleted || !found || current != 900 {
+		t.Fatalf("owner drift delete: deleted=%v found=%v current=%d err=%v", deleted, found, current, err)
+	}
+	if _, stillFound, _ := repo.GetTicket(ctx, 30); !stillFound {
+		t.Fatal("ticket owned by another match was deleted")
+	}
+	deleted, found, current, err = repo.DeleteTicketIfMatch(ctx, 30, 900)
+	if err != nil || !deleted || !found || current != 900 {
+		t.Fatalf("exact owner delete: deleted=%v found=%v current=%d err=%v", deleted, found, current, err)
+	}
+	if _, stillFound, _ := repo.GetTicket(ctx, 30); stillFound {
+		t.Fatal("exact ticket survived compare-delete")
+	}
+	deleted, found, current, err = repo.DeleteTicketIfMatch(ctx, 30, 900)
+	if err != nil || deleted || found || current != 0 {
+		t.Fatalf("idempotent missing delete: deleted=%v found=%v current=%d err=%v", deleted, found, current, err)
+	}
+}
+
+func TestDeleteTicketIfMatchMissingCanonicalRepairsStaleQueueIndex(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newRepo(t)
+	if err := repo.rdb.ZAdd(ctx, repo.queueKey, redis.Z{Score: 1, Member: uint64(404)}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	deleted, found, current, err := repo.DeleteTicketIfMatch(ctx, 404, 900)
+	if err != nil || deleted || found || current != 0 {
+		t.Fatalf("missing repair: deleted=%v found=%v current=%d err=%v", deleted, found, current, err)
+	}
+	if score, scoreErr := repo.rdb.ZScore(ctx, repo.queueKey, "404").Result(); scoreErr != redis.Nil {
+		t.Fatalf("stale queue member survived: score=%v err=%v", score, scoreErr)
+	}
+}
+
 // TestReserveTicket_CAS 验证预留 CAS:票据已被取消删除 → ErrMatchNotFound;
 // 已被并发预留进其他 match → ErrMatchConcurrent;幂等重预留同一 match 放行。
 func TestReserveTicket_CAS(t *testing.T) {

@@ -24,9 +24,30 @@ import (
 
 var capabilityFeaturePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{2,63}$`)
 
+// ErrTopologyChangeLockProviderUnavailable is a release blocker, not a
+// retryable etcd failure. No provider API/trust root exists in this repository
+// that can prevent Redis failover, reshard, or atomic slot migration across
+// the full preflight-to-CAS window.
+var ErrTopologyChangeLockProviderUnavailable = errors.New(
+	"dsauthfence: authoritative Redis topology-change lock provider is not wired; target epoch CAS is disabled")
+
 const (
 	// ProtocolEpochV2 是 Redis active/pending 完整凭据协议版本。
 	ProtocolEpochV2 uint32 = 2
+	// RequiredPolicyV2 is part of the etcd required value, not deployment
+	// configuration.  An old epoch-2 binary only understands the numeric value
+	// "2" and therefore fails closed when it sees RequiredValueV2.
+	RequiredPolicyV2 = "ds-auth-v2-pod-uid-write-invariant-v1"
+	RequiredValueV2  = "2@" + RequiredPolicyV2
+	// RequiredPolicyV3 advances the immutable control-plane policy while the
+	// Redis/data-plane writer protocol remains epoch 2.  Keeping a new raw value
+	// (rather than mutating V2) is the durable rollback fence: a V2 binary cannot
+	// parse it and therefore cannot reacquire a writer capability.
+	RequiredPolicyV3           = "ds-auth-v2-hub-successor-lease-v1"
+	RequiredValueV3            = "2@" + RequiredPolicyV3
+	RequiredPolicyGenerationV1 = uint32(1)
+	RequiredPolicyGenerationV2 = uint32(2)
+	RequiredPolicyGenerationV3 = uint32(3)
 	// DefaultPrefix 是全局 required 与 capability key 的根前缀。
 	DefaultPrefix = "/pandora/ds-auth/"
 	// DefaultLeaseTTLSec 是 capability 租约 TTL。
@@ -37,6 +58,45 @@ const (
 	EnvPodUID      = "PANDORA_POD_UID"
 	EnvImageDigest = "PANDORA_IMAGE_DIGEST"
 )
+
+// requiredPolicyV2Features is the complete production AcquireRuntime writer
+// set. Keep it exact: adding a service or feature requires a new policy ID,
+// otherwise an old binary could silently rejoin under an existing policy.
+var requiredPolicyV2Features = map[string][]string{
+	"login":          {},
+	"player_locator": {},
+	"ds_allocator": {
+		"battle-release-expected-tuple-v1",
+		"battle-storage-pod-uid-write-invariant-v1",
+	},
+	"hub_allocator": {
+		"hub-reservation-ledger-v1",
+		"hub-heartbeat-capacity-v1",
+		"hub-owner-cleanup-v1",
+		"hub-physical-eviction-v1",
+	},
+	"battle_result": {"battle-terminal-outbox-v1"},
+}
+
+// requiredPolicyV3Features is a new immutable policy set.  Do not add the new
+// feature to requiredPolicyV2Features: doing so would let the same etcd value
+// mean different things to different binaries and reopen rollback.
+var requiredPolicyV3Features = map[string][]string{
+	"login":          {},
+	"player_locator": {},
+	"ds_allocator": {
+		"battle-release-expected-tuple-v1",
+		"battle-storage-pod-uid-write-invariant-v1",
+	},
+	"hub_allocator": {
+		"hub-reservation-ledger-v1",
+		"hub-heartbeat-capacity-v1",
+		"hub-owner-cleanup-v1",
+		"hub-physical-eviction-v1",
+		"hub-successor-lease-v1",
+	},
+	"battle_result": {"battle-terminal-outbox-v1"},
+}
 
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
@@ -90,22 +150,35 @@ func AcquireRuntime(ctx context.Context, runtime RuntimeConfig) (*Holder, error)
 
 // Capability 是写入 etcd lease key 的审计记录。
 type Capability struct {
-	Service              string   `json:"service"`
-	InstanceUID          string   `json:"instance_uid"`
-	WriterEpoch          uint32   `json:"writer_epoch"`
-	ImageDigest          string   `json:"image_digest"`
-	KeysetRevision       string   `json:"keyset_revision"`
-	EtcdIdentityRevision string   `json:"etcd_identity_revision,omitempty"`
-	StartedAtMs          int64    `json:"started_at_ms"`
-	Features             []string `json:"features,omitempty"`
+	Service                   string   `json:"service"`
+	InstanceUID               string   `json:"instance_uid"`
+	WriterEpoch               uint32   `json:"writer_epoch"`
+	SupportedPolicyGeneration uint32   `json:"supported_policy_generation"`
+	SupportedPolicyID         string   `json:"supported_policy_id"`
+	AcquiredPolicyGeneration  uint32   `json:"acquired_policy_generation"`
+	AcquiredPolicyID          string   `json:"acquired_policy_id,omitempty"`
+	ImageDigest               string   `json:"image_digest"`
+	KeysetRevision            string   `json:"keyset_revision"`
+	EtcdIdentityRevision      string   `json:"etcd_identity_revision,omitempty"`
+	StartedAtMs               int64    `json:"started_at_ms"`
+	Features                  []string `json:"features,omitempty"`
 }
 
 // RequiredEvent 是 required key 的有序 watch 事件。
 type RequiredEvent struct {
-	Epoch    uint32
+	State    RequiredState
 	Revision int64
 	Deleted  bool
 	Err      error
+}
+
+// RequiredState is the canonical, versioned etcd fencing value. RawValue is
+// compared byte-for-byte in the capability registration transaction.
+type RequiredState struct {
+	Epoch            uint32
+	PolicyGeneration uint32
+	PolicyID         string
+	RawValue         string
 }
 
 // Lease 是 capability 的存活权。Lost 关闭后进程不得继续处理受保护写请求。
@@ -116,8 +189,8 @@ type Lease interface {
 
 // Backend 隔离 etcd 细节，允许用确定性 fake 验证所有 fail-closed 分支。
 type Backend interface {
-	GetRequired(context.Context, string) (epoch uint32, watchRevision int64, modRevision int64, found bool, err error)
-	AcquireCapability(context.Context, string, string, string, uint32, int64, []byte, int64) (Lease, error)
+	GetRequired(context.Context, string) (state RequiredState, watchRevision int64, modRevision int64, found bool, err error)
+	AcquireCapability(context.Context, string, string, string, string, int64, []byte, int64) (Lease, error)
 	WatchRequired(context.Context, string, int64) <-chan RequiredEvent
 	Close() error
 }
@@ -129,6 +202,7 @@ type Holder struct {
 	cancel  context.CancelFunc
 
 	required    atomic.Uint32
+	policy      atomic.Uint32
 	lost        chan struct{}
 	lostOnce    sync.Once
 	closeOnce   sync.Once
@@ -154,24 +228,32 @@ func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
 		_ = backend.Close()
 		return nil, fmt.Errorf("dsauthfence: linearizable read required: %w", err)
 	}
-	if !found || required == 0 {
+	if !found || required.Epoch == 0 || required.RawValue == "" {
 		_ = backend.Close()
 		return nil, errors.New("dsauthfence: required writer epoch missing; explicit bootstrap is required")
 	}
-	if required > cfg.WriterEpoch {
+	if required.Epoch > cfg.WriterEpoch {
 		_ = backend.Close()
-		return nil, fmt.Errorf("dsauthfence: required writer epoch %d exceeds supported %d", required, cfg.WriterEpoch)
+		return nil, fmt.Errorf("dsauthfence: required writer epoch %d exceeds supported %d", required.Epoch, cfg.WriterEpoch)
+	}
+	if err := validateRequiredPolicyForCapability(required, cfg.Service, cfg.WriterEpoch, cfg.Features); err != nil {
+		_ = backend.Close()
+		return nil, err
 	}
 
 	capability := Capability{
-		Service:              cfg.Service,
-		InstanceUID:          cfg.InstanceUID,
-		WriterEpoch:          cfg.WriterEpoch,
-		ImageDigest:          cfg.ImageDigest,
-		KeysetRevision:       cfg.KeysetRevision,
-		EtcdIdentityRevision: cfg.Security.IdentityRevision,
-		StartedAtMs:          time.Now().UnixMilli(),
-		Features:             append([]string(nil), cfg.Features...),
+		Service:                   cfg.Service,
+		InstanceUID:               cfg.InstanceUID,
+		WriterEpoch:               cfg.WriterEpoch,
+		SupportedPolicyGeneration: RequiredPolicyGenerationV3,
+		SupportedPolicyID:         RequiredPolicyV3,
+		AcquiredPolicyGeneration:  required.PolicyGeneration,
+		AcquiredPolicyID:          required.PolicyID,
+		ImageDigest:               cfg.ImageDigest,
+		KeysetRevision:            cfg.KeysetRevision,
+		EtcdIdentityRevision:      cfg.Security.IdentityRevision,
+		StartedAtMs:               time.Now().UnixMilli(),
+		Features:                  append([]string(nil), cfg.Features...),
 	}
 	payload, err := json.Marshal(capability)
 	if err != nil {
@@ -184,7 +266,7 @@ func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
 		capabilityKey(cfg.Prefix, cfg.Service, cfg.InstanceUID),
 		activationLockKey(cfg.Prefix),
 		requiredKey,
-		required,
+		required.RawValue,
 		requiredModRevision,
 		payload,
 		cfg.LeaseTTLSec,
@@ -197,15 +279,21 @@ func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
 
 	watchCtx, cancel := context.WithCancel(context.Background())
 	h := &Holder{backend: backend, lease: lease, cancel: cancel, lost: make(chan struct{})}
-	h.required.Store(required)
+	h.required.Store(required.Epoch)
+	h.policy.Store(required.PolicyGeneration)
 	watch := backend.WatchRequired(watchCtx, requiredKey, revision+1)
 	go h.monitorLease(lease.Lost())
-	go h.monitorRequired(watch, cfg.WriterEpoch)
+	go h.monitorRequired(watch, cfg.Service, cfg.WriterEpoch, append([]string(nil), cfg.Features...),
+		requiredModRevision, required.PolicyGeneration)
 	return h, nil
 }
 
 // RequiredEpoch 返回本进程已经观察到的全局单调高水位。
 func (h *Holder) RequiredEpoch() uint32 { return h.required.Load() }
+
+// RequiredPolicyGeneration is the immutable control-plane policy generation.
+// V2 and V3 both require data-plane WriterEpoch=2.
+func (h *Holder) RequiredPolicyGeneration() uint32 { return h.policy.Load() }
 
 // Lost 在任何 fencing 条件失效时关闭。调用方必须停止服务并退出。
 func (h *Holder) Lost() <-chan struct{} { return h.lost }
@@ -217,23 +305,35 @@ func (h *Holder) monitorLease(ch <-chan struct{}) {
 	}
 }
 
-func (h *Holder) monitorRequired(ch <-chan RequiredEvent, supported uint32) {
+func (h *Holder) monitorRequired(ch <-chan RequiredEvent, service string, supported uint32, features []string,
+	initialRevision int64, initialPolicyGeneration uint32) {
+	seenRevision := initialRevision
+	seenPolicyGeneration := initialPolicyGeneration
 	for event := range ch {
 		if h.intentional.Load() {
 			return
 		}
-		if event.Err != nil || event.Deleted || event.Epoch == 0 {
+		if event.Err != nil || event.Deleted || event.State.Epoch == 0 || event.State.RawValue == "" {
 			h.signalLost()
 			return
 		}
 		seen := h.required.Load()
-		if event.Epoch < seen || event.Epoch > supported {
+		if event.Revision <= seenRevision || event.State.Epoch < seen || event.State.Epoch > supported ||
+			event.State.PolicyGeneration <= seenPolicyGeneration ||
+			validateRequiredPolicyForCapability(event.State, service, supported, features) != nil {
 			h.signalLost()
 			return
 		}
-		for event.Epoch > seen && !h.required.CompareAndSwap(seen, event.Epoch) {
-			seen = h.required.Load()
-		}
+		// Capability acquisition is CAS-bound to the old raw required value.  Even
+		// for the sole canonical V1→V2, V1→V3, or V2→V3 advance, force process
+		// restart so the replacement capability is acquired against the new raw
+		// value.  Continuing with an old lease would make the audit ambiguous.
+		seenRevision = event.Revision
+		seenPolicyGeneration = event.State.PolicyGeneration
+		h.required.Store(event.State.Epoch)
+		h.policy.Store(event.State.PolicyGeneration)
+		h.signalLost()
+		return
 	}
 	if !h.intentional.Load() {
 		// watch 静默结束也不能继续写；不以重连/旧缓存冒充授权。
@@ -280,6 +380,9 @@ func validate(cfg Config) error {
 	if cfg.Service == "" || strings.Contains(cfg.Service, "/") {
 		return errors.New("dsauthfence: invalid service")
 	}
+	if _, known := requiredPolicyV2Features[cfg.Service]; !known {
+		return fmt.Errorf("dsauthfence: service %q is not in the production writer policy", cfg.Service)
+	}
 	if cfg.InstanceUID == "" || strings.Contains(cfg.InstanceUID, "/") {
 		return errors.New("dsauthfence: invalid instance uid")
 	}
@@ -296,6 +399,66 @@ func validate(cfg Config) error {
 		return err
 	}
 	return nil
+}
+
+func validateRequiredPolicyForCapability(state RequiredState, service string, writerEpoch uint32, features []string) error {
+	if state.RawValue == "" || state.Epoch == 0 {
+		return errors.New("dsauthfence: empty required policy state")
+	}
+	v2Features, known := requiredPolicyV2Features[service]
+	if !known {
+		return fmt.Errorf("dsauthfence: unknown writer service %q", service)
+	}
+	v3Features := requiredPolicyV3Features[service]
+	switch state.PolicyGeneration {
+	case RequiredPolicyGenerationV1:
+		if state.Epoch != 1 || state.RawValue != "1" || state.PolicyID != "" || writerEpoch < 1 {
+			return errors.New("dsauthfence: invalid baseline required policy state")
+		}
+		return nil
+	case RequiredPolicyGenerationV2:
+		if state.Epoch != ProtocolEpochV2 || state.RawValue != RequiredValueV2 ||
+			state.PolicyID != RequiredPolicyV2 || writerEpoch != ProtocolEpochV2 {
+			return errors.New("dsauthfence: required v2 policy or writer epoch mismatch")
+		}
+		if equalFeatureSet(features, v2Features) {
+			return nil
+		}
+		// Staging for the one immutable next policy is exact, not a superset
+		// exception.  It lets the candidate hub writer register under V2 so a
+		// V2→V3 activation can audit it; arbitrary added/removed features fail.
+		if service == "hub_allocator" && equalFeatureSet(features, v3Features) {
+			return nil
+		}
+		return fmt.Errorf("dsauthfence: service %s does not advertise exact V2 or staged V3 features", service)
+	case RequiredPolicyGenerationV3:
+		if state.Epoch != ProtocolEpochV2 || state.RawValue != RequiredValueV3 ||
+			state.PolicyID != RequiredPolicyV3 || writerEpoch != ProtocolEpochV2 {
+			return errors.New("dsauthfence: required v3 policy or writer epoch mismatch")
+		}
+		if !equalFeatureSet(features, v3Features) {
+			return fmt.Errorf("dsauthfence: service %s does not advertise the exact %s feature policy", service, RequiredPolicyV3)
+		}
+		return nil
+	default:
+		return fmt.Errorf("dsauthfence: unsupported required policy generation %d", state.PolicyGeneration)
+	}
+}
+
+func equalFeatureSet(actual, expected []string) bool {
+	if validateFeatures(actual) != nil || validateFeatures(expected) != nil || len(actual) != len(expected) {
+		return false
+	}
+	set := make(map[string]struct{}, len(expected))
+	for _, feature := range expected {
+		set[feature] = struct{}{}
+	}
+	for _, feature := range actual {
+		if _, ok := set[feature]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func validateFeatures(features []string) error {
@@ -332,6 +495,137 @@ func ParseEpoch(raw []byte) (uint32, error) {
 		return 0, fmt.Errorf("invalid epoch %q", s)
 	}
 	return uint32(v), nil
+}
+
+// ParseRequiredState deliberately does not accept naked "2". That byte-level
+// incompatibility is the rollback fence for old epoch-2 binaries.
+func ParseRequiredState(raw []byte) (RequiredState, error) {
+	s := string(raw)
+	switch s {
+	case "1":
+		return RequiredState{Epoch: 1, PolicyGeneration: RequiredPolicyGenerationV1, RawValue: s}, nil
+	case RequiredValueV2:
+		return RequiredState{Epoch: ProtocolEpochV2, PolicyGeneration: RequiredPolicyGenerationV2,
+			PolicyID: RequiredPolicyV2, RawValue: s}, nil
+	case RequiredValueV3:
+		return RequiredState{Epoch: ProtocolEpochV2, PolicyGeneration: RequiredPolicyGenerationV3,
+			PolicyID: RequiredPolicyV3, RawValue: s}, nil
+	default:
+		return RequiredState{}, fmt.Errorf("invalid or unsupported required writer policy %q", s)
+	}
+}
+
+// RequiredValueForPolicyGeneration returns the immutable raw etcd value for a
+// control-plane policy generation.  Generations V2 and V3 deliberately share
+// data-plane WriterEpoch=2.
+func RequiredValueForPolicyGeneration(generation uint32) (string, error) {
+	switch generation {
+	case RequiredPolicyGenerationV1:
+		return "1", nil
+	case RequiredPolicyGenerationV2:
+		return RequiredValueV2, nil
+	case RequiredPolicyGenerationV3:
+		return RequiredValueV3, nil
+	default:
+		return "", fmt.Errorf("unsupported required policy generation %d", generation)
+	}
+}
+
+func requiredPolicyIDForGeneration(generation uint32) (string, error) {
+	switch generation {
+	case RequiredPolicyGenerationV1:
+		return "", nil
+	case RequiredPolicyGenerationV2:
+		return RequiredPolicyV2, nil
+	case RequiredPolicyGenerationV3:
+		return RequiredPolicyV3, nil
+	default:
+		return "", fmt.Errorf("unsupported required policy generation %d", generation)
+	}
+}
+
+func requiredWriterEpochForPolicyGeneration(generation uint32) (uint32, error) {
+	switch generation {
+	case RequiredPolicyGenerationV1:
+		return 1, nil
+	case RequiredPolicyGenerationV2, RequiredPolicyGenerationV3:
+		return ProtocolEpochV2, nil
+	default:
+		return 0, fmt.Errorf("unsupported required policy generation %d", generation)
+	}
+}
+
+func requiredFeaturesForPolicyGeneration(generation uint32) (map[string][]string, error) {
+	switch generation {
+	case RequiredPolicyGenerationV2:
+		return requiredPolicyV2Features, nil
+	case RequiredPolicyGenerationV3:
+		return requiredPolicyV3Features, nil
+	default:
+		return nil, fmt.Errorf("unsupported required policy generation %d", generation)
+	}
+}
+
+// RequiredValueForEpoch returns the sole canonical value for a supported
+// transition. It is intentionally not configurable at runtime.
+func RequiredValueForEpoch(epoch uint32) (string, error) {
+	switch epoch {
+	case 1:
+		return "1", nil
+	case ProtocolEpochV2:
+		return RequiredValueV2, nil
+	default:
+		return "", fmt.Errorf("unsupported required writer epoch %d", epoch)
+	}
+}
+
+// ValidateActivationPolicy makes the activation tool use the same fixed
+// production service/feature policy as runtime Acquire.
+func ValidateActivationPolicy(epoch uint32, services map[string]int, features map[string]map[string]struct{}) error {
+	if epoch != ProtocolEpochV2 {
+		return fmt.Errorf("unsupported activation policy epoch %d", epoch)
+	}
+	return ValidateActivationPolicyGeneration(RequiredPolicyGenerationV2, services, features)
+}
+
+// ValidateActivationPolicyGeneration validates the exact immutable feature
+// policy used by an activation candidate.
+func ValidateActivationPolicyGeneration(generation uint32, services map[string]int,
+	features map[string]map[string]struct{}) error {
+	expectedPolicy, err := requiredFeaturesForPolicyGeneration(generation)
+	if err != nil {
+		return err
+	}
+	policyID, err := requiredPolicyIDForGeneration(generation)
+	if err != nil {
+		return err
+	}
+	if len(services) != len(expectedPolicy) {
+		return fmt.Errorf("activation service set does not match %s", policyID)
+	}
+	for service, expected := range expectedPolicy {
+		if services[service] <= 0 {
+			return fmt.Errorf("activation service %s missing from %s", service, policyID)
+		}
+		actualSet := features[service]
+		if len(actualSet) != len(expected) {
+			return fmt.Errorf("activation feature policy for %s does not match %s", service, policyID)
+		}
+		for _, feature := range expected {
+			if _, ok := actualSet[feature]; !ok {
+				return fmt.Errorf("activation feature policy for %s misses %s", service, feature)
+			}
+		}
+	}
+	if generation == RequiredPolicyGenerationV3 && services["hub_allocator"] != 1 {
+		return fmt.Errorf("activation policy %s requires exactly one hub_allocator writer", policyID)
+	}
+	for service := range features {
+		if _, known := expectedPolicy[service]; !known {
+			return fmt.Errorf("activation feature policy contains unknown service %s", service)
+		}
+	}
+	return nil
 }
 
 // ExpectedServicesHash 对激活清单做确定性摘要，供 activation record 审计。

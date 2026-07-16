@@ -157,7 +157,14 @@ func main() {
 			os.Exit(1)
 		}
 		helper.Infow("msg", "ds_ticket_v2_signer_ready", "kid", v2Signer.Kid(), "ttl", v2Signer.TTL().String())
-		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, nil, v2Signer, cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
+		abortSigner, abortErr := internalrpcauth.NewSigner(cfg.Match.AllocationAbortAuthSecret,
+			serviceName, cfg.Match.AllocationAbortAuthAudience)
+		if abortErr != nil {
+			helper.Errorw("msg", "allocation_abort_service_auth_init_failed", "err", abortErr)
+			os.Exit(1)
+		}
+		ga := data.NewGrpcDSAllocator(cfg.Match.DSAllocatorAddr, nil, v2Signer, abortSigner,
+			cfg.Match.MapId, cfg.Match.GameMode, cfg.Match.DSAllocateTimeout.Std())
 		defer func() { _ = ga.Close() }()
 		allocator = ga
 		helper.Infow("msg", "ds_allocator_grpc_ready", "ds_allocator_addr", cfg.Match.DSAllocatorAddr,

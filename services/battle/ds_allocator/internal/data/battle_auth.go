@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -263,12 +264,26 @@ type BattleAuthRepo interface {
 
 // RedisBattleAuthRepo 是 BattleAuthRepo 的 Redis 实现。
 type RedisBattleAuthRepo struct {
-	rdb redis.UniversalClient
-	now func() time.Time
+	rdb                redis.UniversalClient
+	now                func() time.Time
+	strictModelBWrites atomic.Bool
 }
 
 func NewRedisBattleAuthRepo(rdb redis.UniversalClient) *RedisBattleAuthRepo {
 	return &RedisBattleAuthRepo{rdb: rdb, now: time.Now}
+}
+
+func (r *RedisBattleAuthRepo) EnableStrictModelBWrites() { r.strictModelBWrites.Store(true) }
+
+func (r *RedisBattleAuthRepo) StrictModelBWritesEnabled() bool {
+	return r != nil && r.strictModelBWrites.Load()
+}
+
+func (r *RedisBattleAuthRepo) marshalBattleTransition(previous, next *dsv1.BattleStorageRecord) ([]byte, error) {
+	if r.StrictModelBWritesEnabled() {
+		return marshalBattleTransition(previous, next)
+	}
+	return proto.Marshal(next)
 }
 
 var errBattleAuthStale = errcode.New(errcode.ErrUnauthorized, "battle ds credential not authoritative")
@@ -311,6 +326,7 @@ func (r *RedisBattleAuthRepo) PrepareCredential(ctx context.Context, in BattleAu
 				bizErr = err
 				return err
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			if battle.AllocationId != in.AllocationID || battle.DsPodName != in.PodName ||
 				(battle.GameserverUid != "" && battle.GameserverUid != in.InstanceUID) ||
 				!battleCredentialPreparableState(battle.State) {
@@ -414,7 +430,7 @@ func (r *RedisBattleAuthRepo) PrepareCredential(ctx context.Context, in BattleAu
 			if err != nil {
 				return err
 			}
-			bPayload, err := marshalBattle(battle)
+			bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 			if err != nil {
 				return err
 			}
@@ -643,6 +659,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				bizErr = err
 				return err
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			if !authorityBindingMatches(auth, battle) ||
 				auth.DsPodName != id.PodName || auth.InstanceUid != id.InstanceUID ||
 				auth.InstanceEpoch != id.InstanceEpoch || id.WriterEpoch != BattleDSWriterEpochV2 ||
@@ -721,7 +738,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 				}
 				var bPayload []byte
 				if battle.State == "abandoned" {
-					bPayload, err = marshalBattle(battle)
+					bPayload, err = r.marshalBattleTransition(battleBefore, battle)
 					if err != nil {
 						return err
 					}
@@ -786,7 +803,7 @@ func (r *RedisBattleAuthRepo) ActivateHeartbeat(ctx context.Context, matchID uin
 			if err != nil {
 				return err
 			}
-			bPayload, err := marshalBattle(battle)
+			bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 			if err != nil {
 				return err
 			}
@@ -1078,6 +1095,14 @@ func (r *RedisBattleAuthRepo) QuarantineExpected(
 					return err
 				}
 			}
+			var battleBefore *dsv1.BattleStorageRecord
+			if battleRecord != nil {
+				battleBefore = proto.Clone(battleRecord).(*dsv1.BattleStorageRecord)
+				if invariantErr := validateBattleStorageTransition(battleRecord, battleRecord); r.StrictModelBWritesEnabled() && invariantErr != nil {
+					return errcode.NewCause(errcode.ErrInvalidState, invariantErr,
+						"battle %d quarantine storage invariant failed", matchID)
+				}
+			}
 			projectionMatches := battleProjectionMatchesCredential(authRecord, battleRecord, expected.Credential)
 			authRecord.Phase = dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_QUARANTINED
 			authRecord.Pending = nil
@@ -1093,7 +1118,7 @@ func (r *RedisBattleAuthRepo) QuarantineExpected(
 			}
 			var battlePayload []byte
 			if projectionMatches {
-				battlePayload, err = marshalBattle(battleRecord)
+				battlePayload, err = r.marshalBattleTransition(battleBefore, battleRecord)
 				if err != nil {
 					return err
 				}
@@ -1161,6 +1186,7 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 				bizErr = err
 				return err
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			var auth *dsv1.BattleDSAuthStorageRecord
 			ab, aerr := tx.Get(ctx, aKey).Bytes()
 			switch {
@@ -1184,7 +1210,7 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 					out.AlreadyTerminal = true
 					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 						if battle.State == "abandoned" {
-							payload, marshalErr := marshalBattle(battle)
+							payload, marshalErr := r.marshalBattleTransition(battleBefore, battle)
 							if marshalErr != nil {
 								return marshalErr
 							}
@@ -1208,7 +1234,7 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 					return err
 				}
 				battle.State = "abandoned"
-				bPayload, err := marshalBattle(battle)
+				bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 				if err != nil {
 					return err
 				}
@@ -1254,7 +1280,7 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 					if err != nil {
 						return err
 					}
-					bPayload, err := marshalBattle(battle)
+					bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 					if err != nil {
 						return err
 					}
@@ -1307,7 +1333,7 @@ func (r *RedisBattleAuthRepo) AbandonIfStale(ctx context.Context, matchID uint64
 			if err != nil {
 				return err
 			}
-			bPayload, err := marshalBattle(battle)
+			bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 			if err != nil {
 				return err
 			}
@@ -1361,6 +1387,7 @@ func (r *RedisBattleAuthRepo) TerminateExpected(ctx context.Context, matchID uin
 				}
 				return err
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			if !battleAuthRecordV2Exact(auth) ||
 				!expectedBattleInstanceMatches(auth, battle, expected) {
 				return nil
@@ -1394,7 +1421,7 @@ func (r *RedisBattleAuthRepo) TerminateExpected(ctx context.Context, matchID uin
 			if err != nil {
 				return err
 			}
-			bPayload, err := marshalBattle(battle)
+			bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 			if err != nil {
 				return err
 			}
@@ -1462,6 +1489,7 @@ func (r *RedisBattleAuthRepo) TerminateResultExpected(
 			if err != nil {
 				return err
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			if !battleResultStableProjectionMatches(battle, expected, proof) || battle.GetState() == "abandoned" {
 				bizErr = errcode.New(errcode.ErrUnauthorized, "battle %d stable identity changed before terminal release", matchID)
 				return bizErr
@@ -1517,7 +1545,7 @@ func (r *RedisBattleAuthRepo) TerminateResultExpected(
 			if err != nil {
 				return err
 			}
-			bPayload, err := marshalBattle(battle)
+			bPayload, err := r.marshalBattleTransition(battleBefore, battle)
 			if err != nil {
 				return err
 			}
@@ -1671,6 +1699,7 @@ func (r *RedisBattleAuthRepo) FencePreactiveReleaseExpected(
 				}
 				return err
 			}
+			battleBefore := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			if battle.GetAllocationId() != expected.AllocationID ||
 				battle.GetGameserverUid() != expected.InstanceUID ||
 				(battle.GetState() != "warming" && battle.GetState() != "abandoned" &&
@@ -1703,7 +1732,7 @@ func (r *RedisBattleAuthRepo) FencePreactiveReleaseExpected(
 			}
 
 			battle.State = BattleStatePreactiveReleasePending
-			battlePayload, err := marshalBattle(battle)
+			battlePayload, err := r.marshalBattleTransition(battleBefore, battle)
 			if err != nil {
 				return err
 			}

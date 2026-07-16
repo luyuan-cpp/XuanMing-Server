@@ -69,6 +69,11 @@ type MatchConf struct {
 	// resume read. It is never shared with player JWT or placement writers.
 	MatchResumeAuthSecret   string `yaml:"match_resume_auth_secret,omitempty" json:"match_resume_auth_secret,omitempty"`
 	MatchResumeAuthAudience string `yaml:"match_resume_auth_audience,omitempty" json:"match_resume_auth_audience,omitempty"`
+	// AllocationAbortAuth authenticates only Matchmaker→DS allocator's exact
+	// pre-admission abort request. It must not reuse placement, Login resume,
+	// player JWT, or DS callback trust-domain keys.
+	AllocationAbortAuthSecret   string `yaml:"allocation_abort_auth_secret,omitempty" json:"allocation_abort_auth_secret,omitempty"`
+	AllocationAbortAuthAudience string `yaml:"allocation_abort_auth_audience,omitempty" json:"allocation_abort_auth_audience,omitempty"`
 
 	// BattleGateFailOpen 控制 StartMatch 前置"战斗中禁止匹配"检查在 player_locator 查询失败时的行为。
 	//   - false（默认，生产安全 / fail-closed）：locator 查询失败时拒绝入队（返回 ERR_UNAVAILABLE 让客户端重试），
@@ -209,6 +214,23 @@ func (c *Config) Validate() error {
 	if c.Match.MatchResumeAuthSecret == c.JWT.Secret ||
 		c.Match.MatchResumeAuthSecret == c.Match.PlacementMatchStartProofSecret {
 		return fmt.Errorf("match.match_resume_auth_secret must use an independent trust-domain key")
+	}
+	if c.Match.DSAllocatorAddr != "" {
+		if err := internalrpcauth.ValidateSecret(c.Match.AllocationAbortAuthSecret); err != nil {
+			return fmt.Errorf("match.allocation_abort_auth_secret invalid: %w", err)
+		}
+		if err := internalrpcauth.ValidateIdentity(c.Match.AllocationAbortAuthAudience); err != nil {
+			return fmt.Errorf("match.allocation_abort_auth_audience invalid: %w", err)
+		}
+		for name, secret := range map[string]string{
+			"player JWT":            c.JWT.Secret,
+			"placement match-start": c.Match.PlacementMatchStartProofSecret,
+			"Login resume":          c.Match.MatchResumeAuthSecret,
+		} {
+			if c.Match.AllocationAbortAuthSecret == secret {
+				return fmt.Errorf("match.allocation_abort_auth_secret must not reuse %s key", name)
+			}
+		}
 	}
 	return nil
 }

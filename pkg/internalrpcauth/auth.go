@@ -30,9 +30,11 @@ const (
 	TimestampMetadataKey = "x-pandora-service-timestamp-ms"
 	NonceMetadataKey     = "x-pandora-service-nonce"
 	SignatureMetadataKey = "x-pandora-service-signature"
+	PayloadMetadataKey   = "x-pandora-service-payload-sha256"
 
-	protocolVersion = "pandora-internal-rpc-v1"
-	nonceBytes      = 24
+	protocolVersion        = "pandora-internal-rpc-v1"
+	payloadProtocolVersion = "pandora-internal-rpc-payload-v1"
+	nonceBytes             = 24
 )
 
 var (
@@ -68,6 +70,28 @@ func NewSigner(secret, caller, audience string) (*Signer, error) {
 // SignContext replaces this protocol's outgoing metadata with one fresh,
 // request-bound credential. It never appends duplicate values.
 func (s *Signer) SignContext(ctx context.Context, fullMethod string, subject uint64) (context.Context, error) {
+	return s.signContext(ctx, fullMethod, subject, "")
+}
+
+// SignContextWithPayload additionally binds an application-defined canonical
+// payload to the service identity. Callers must pass exactly the same bytes to
+// Verifier.VerifyWithPayload; this is intended for destructive exact-identity
+// control-plane RPCs whose request body must not be mutable independently of
+// the authenticated method/subject.
+func (s *Signer) SignContextWithPayload(
+	ctx context.Context,
+	fullMethod string,
+	subject uint64,
+	payload []byte,
+) (context.Context, error) {
+	if len(payload) == 0 {
+		return nil, ErrUnauthorized
+	}
+	digest := sha256.Sum256(payload)
+	return s.signContext(ctx, fullMethod, subject, base64.RawURLEncoding.EncodeToString(digest[:]))
+}
+
+func (s *Signer) signContext(ctx context.Context, fullMethod string, subject uint64, payloadDigest string) (context.Context, error) {
 	if s == nil || len(s.secret) < 32 || s.caller == "" || s.audience == "" || fullMethod == "" || subject == 0 {
 		return nil, ErrUnauthorized
 	}
@@ -77,7 +101,11 @@ func (s *Signer) SignContext(ctx context.Context, fullMethod string, subject uin
 	}
 	timestamp := s.now().UTC().UnixMilli()
 	nonce := base64.RawURLEncoding.EncodeToString(nonceRaw)
-	signature := sign(s.secret, canonical(s.caller, s.audience, fullMethod, subject, timestamp, nonce))
+	message := canonical(s.caller, s.audience, fullMethod, subject, timestamp, nonce)
+	if payloadDigest != "" {
+		message = canonicalPayload(s.caller, s.audience, fullMethod, subject, timestamp, nonce, payloadDigest)
+	}
+	signature := sign(s.secret, message)
 
 	md, _ := metadata.FromOutgoingContext(ctx)
 	md = md.Copy()
@@ -91,6 +119,11 @@ func (s *Signer) SignContext(ctx context.Context, fullMethod string, subject uin
 	md.Set(TimestampMetadataKey, strconv.FormatInt(timestamp, 10))
 	md.Set(NonceMetadataKey, nonce)
 	md.Set(SignatureMetadataKey, signature)
+	if payloadDigest == "" {
+		md.Delete(PayloadMetadataKey)
+	} else {
+		md.Set(PayloadMetadataKey, payloadDigest)
+	}
 	return metadata.NewOutgoingContext(ctx, md), nil
 }
 
@@ -134,6 +167,25 @@ func NewVerifier(secret, expectedCaller, expectedAudience string, maxClockSkew t
 // Verify validates and consumes a request credential before protected code is
 // allowed to read state or mint a downstream credential.
 func (v *Verifier) Verify(ctx context.Context, fullMethod string, subject uint64) error {
+	return v.verify(ctx, fullMethod, subject, "")
+}
+
+// VerifyWithPayload verifies the request-bound service credential and consumes
+// its nonce only after the canonical payload digest also matches.
+func (v *Verifier) VerifyWithPayload(
+	ctx context.Context,
+	fullMethod string,
+	subject uint64,
+	payload []byte,
+) error {
+	if len(payload) == 0 {
+		return ErrUnauthorized
+	}
+	digest := sha256.Sum256(payload)
+	return v.verify(ctx, fullMethod, subject, base64.RawURLEncoding.EncodeToString(digest[:]))
+}
+
+func (v *Verifier) verify(ctx context.Context, fullMethod string, subject uint64, expectedPayloadDigest string) error {
 	if v == nil || len(v.secret) < 32 || v.replays == nil || fullMethod == "" || subject == 0 {
 		return ErrUnauthorized
 	}
@@ -169,8 +221,18 @@ func (v *Verifier) Verify(ctx context.Context, fullMethod string, subject uint64
 	if err != nil || len(provided) != sha256.Size {
 		return ErrUnauthorized
 	}
-	expected, _ := base64.RawURLEncoding.DecodeString(sign(v.secret,
-		canonical(caller, audience, fullMethod, subject, timestamp, nonce)))
+	message := canonical(caller, audience, fullMethod, subject, timestamp, nonce)
+	if expectedPayloadDigest != "" {
+		payloadDigest, ok := single(md, PayloadMetadataKey)
+		if !ok || subtle.ConstantTimeCompare([]byte(payloadDigest), []byte(expectedPayloadDigest)) != 1 {
+			return ErrUnauthorized
+		}
+		message = canonicalPayload(caller, audience, fullMethod, subject, timestamp, nonce, payloadDigest)
+	} else if values := md.Get(PayloadMetadataKey); len(values) != 0 {
+		// Do not let a payload-bound credential silently downgrade through Verify.
+		return ErrUnauthorized
+	}
+	expected, _ := base64.RawURLEncoding.DecodeString(sign(v.secret, message))
 	if subtle.ConstantTimeCompare(provided, expected) != 1 {
 		return ErrUnauthorized
 	}
@@ -248,6 +310,24 @@ func canonical(caller, audience, method string, subject uint64, timestamp int64,
 		strconv.FormatUint(subject, 10),
 		strconv.FormatInt(timestamp, 10),
 		nonce,
+	}, "\n")
+}
+
+func canonicalPayload(
+	caller, audience, method string,
+	subject uint64,
+	timestamp int64,
+	nonce, payloadDigest string,
+) string {
+	return strings.Join([]string{
+		payloadProtocolVersion,
+		caller,
+		audience,
+		method,
+		strconv.FormatUint(subject, 10),
+		strconv.FormatInt(timestamp, 10),
+		nonce,
+		payloadDigest,
 	}, "\n")
 }
 

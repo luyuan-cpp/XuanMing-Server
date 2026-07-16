@@ -47,6 +47,36 @@ type terminalRecoveryPlacementFake struct {
 	beginErr   error
 }
 
+type battleDepartureFake struct {
+	calls      int
+	transition placement.Binding
+	source     placement.Binding
+	target     placement.Target
+	checker    *terminalRecoveryPlacementFake
+}
+
+func (f *battleDepartureFake) EnsurePlayerDeparture(_ context.Context, _, _ uint64,
+	transition, source placement.Binding, target placement.Target,
+) error {
+	if f.checker != nil && (f.checker.snapshot.TransitionState != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING ||
+		f.checker.snapshot.TargetRoute != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB) {
+		return errors.New("departure called before pending Hub placement fence")
+	}
+	f.calls++
+	f.transition, f.source, f.target = transition, source, target
+	return nil
+}
+
+func recoveryBattleTarget() placement.Target {
+	return placement.Target{PodName: "battle-801", InstanceUID: "battle-uid-801", InstanceEpoch: 1,
+		AllocationID: "allocation-801", ReleaseTrack: "stable"}
+}
+
+func recoveryHubTarget() placement.Target {
+	return placement.Target{PodName: "hub-1", InstanceUID: "hub-uid-1", InstanceEpoch: 1,
+		AssignmentID: "assignment-1", ReleaseTrack: "stable"}
+}
+
 type bootstrapRecoveryPlacementFake struct {
 	resumePlacementFake
 	bootstrapCalls  int
@@ -79,6 +109,11 @@ func (f *terminalRecoveryPlacementFake) BeginHubFromBattle(_ context.Context, _ 
 	if f.beginErr != nil {
 		return placement.Binding{}, f.beginErr
 	}
+	old := f.snapshot
+	if old.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE {
+		f.snapshot.SourceBinding = placement.Binding{Version: old.Version, OperationID: old.OperationID}
+		f.snapshot.SourceTarget = old.Target
+	}
 	f.snapshot.TargetRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
 	f.snapshot.TransitionState = locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING
 	f.snapshot.Version = proof.ExpectedVersion + 1
@@ -86,6 +121,7 @@ func (f *terminalRecoveryPlacementFake) BeginHubFromBattle(_ context.Context, _ 
 	f.snapshot.SourceMatchID = matchID
 	f.snapshot.TargetMatchID = 0
 	f.snapshot.TargetBound = false
+	f.snapshot.Target = placement.Target{}
 	return placement.Binding{Version: f.snapshot.Version, OperationID: proof.OperationID,
 		SourceMatchID: matchID}, nil
 }
@@ -203,10 +239,13 @@ func TestAuthoritativeLoginResumeConsumesExactTerminalProofAfterMatchRelease(t *
 		Found: true, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE,
 		Version:         6, OperationID: "123e4567-e89b-42d3-a456-426614174000", MatchID: 801,
+		Target: recoveryBattleTarget(),
 	}}}
+	departure := &battleDepartureFake{checker: checker}
 	uc := &LoginUsecase{placementMode: placement.ModeEnforce, placementChecker: checker,
 		matchResumeReader:  &matchResumeFake{context: data.MatchResumeContext{State: data.MatchContextNone}},
-		battleTicketIssuer: &terminalResumeIssuer{state: data.BattleRouteTerminal, proof: proof}}
+		battleTicketIssuer: &terminalResumeIssuer{state: data.BattleRouteTerminal, proof: proof},
+		battleDeparture:    departure}
 
 	got, err := uc.authoritativeLoginResume(context.Background(), 9)
 	if err != nil {
@@ -214,7 +253,10 @@ func TestAuthoritativeLoginResumeConsumesExactTerminalProofAfterMatchRelease(t *
 	}
 	if got.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB || got.MatchID != 801 ||
 		got.PlacementVersion != 7 || got.OperationID != proof.OperationID || checker.beginCalls != 1 ||
-		checker.beginMatch != 801 || checker.beginProof != proof {
+		checker.beginMatch != 801 || checker.beginProof != proof || departure.calls != 1 ||
+		departure.transition.Version != 7 || departure.transition.OperationID != proof.OperationID ||
+		departure.source.Version != 6 || departure.source.OperationID != "123e4567-e89b-42d3-a456-426614174000" ||
+		departure.target != recoveryBattleTarget() {
 		t.Fatalf("resume=%+v checker=%+v", got, checker)
 	}
 }
@@ -228,7 +270,9 @@ func TestAuthoritativeLoginResumeCancelsPendingBattleAfterMatchRelease(t *testin
 		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
 		Version:         7, OperationID: "123e4567-e89b-42d3-a456-426614174000",
-		TargetMatchID: 801, TargetBound: true,
+		TargetMatchID: 801, TargetBound: true, Target: recoveryBattleTarget(),
+		SourceBinding: placement.Binding{Version: 6, OperationID: "023e4567-e89b-42d3-a456-426614174000"},
+		SourceTarget:  recoveryHubTarget(),
 	}}}
 	uc := &LoginUsecase{placementMode: placement.ModeEnforce, placementChecker: checker,
 		matchResumeReader:  &matchResumeFake{context: data.MatchResumeContext{State: data.MatchContextNone}},
@@ -268,10 +312,13 @@ func TestGetResumeContextConsumesExactTerminalProofWithoutFullLogin(t *testing.T
 		Found: true, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE,
 		Version:         6, OperationID: "123e4567-e89b-42d3-a456-426614174000", MatchID: 801,
+		Target: recoveryBattleTarget(),
 	}}}
+	departure := &battleDepartureFake{checker: checker}
 	uc := &LoginUsecase{verifier: verifier, placementMode: placement.ModeEnforce, placementChecker: checker,
 		matchResumeReader:  &matchResumeFake{context: data.MatchResumeContext{State: data.MatchContextNone}},
-		battleTicketIssuer: &terminalResumeIssuer{state: data.BattleRouteTerminal, proof: proof}}
+		battleTicketIssuer: &terminalResumeIssuer{state: data.BattleRouteTerminal, proof: proof},
+		battleDeparture:    departure}
 
 	got, err := uc.GetResumeContext(context.Background(), session)
 	if err != nil || got.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB || got.MatchID != 801 ||
@@ -289,10 +336,14 @@ func TestAuthoritativeLoginResumeRenewsPendingBattleExitBeforeHubAssignment(t *t
 		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
 		Version:         7, OperationID: proof.OperationID, SourceMatchID: 801,
+		SourceBinding: placement.Binding{Version: 6, OperationID: "123e4567-e89b-42d3-a456-426614174000"},
+		SourceTarget:  recoveryBattleTarget(),
 	}}}
+	departure := &battleDepartureFake{checker: checker}
 	uc := &LoginUsecase{placementMode: placement.ModeEnforce, placementChecker: checker,
 		matchResumeReader:  &matchResumeFake{context: data.MatchResumeContext{State: data.MatchContextNone}},
-		battleTicketIssuer: &terminalResumeIssuer{state: data.BattleRouteTerminal, proof: proof}}
+		battleTicketIssuer: &terminalResumeIssuer{state: data.BattleRouteTerminal, proof: proof},
+		battleDeparture:    departure}
 
 	got, err := uc.authoritativeLoginResume(context.Background(), 9)
 	if err != nil || got.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB || got.MatchID != 801 ||

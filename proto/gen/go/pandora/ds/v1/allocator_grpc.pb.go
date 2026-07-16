@@ -32,6 +32,7 @@ const (
 	DSAllocatorService_AllocateBattle_FullMethodName        = "/pandora.ds.v1.DSAllocatorService/AllocateBattle"
 	DSAllocatorService_ResolveBattleTarget_FullMethodName   = "/pandora.ds.v1.DSAllocatorService/ResolveBattleTarget"
 	DSAllocatorService_ReleaseBattle_FullMethodName         = "/pandora.ds.v1.DSAllocatorService/ReleaseBattle"
+	DSAllocatorService_AbortPreactiveBattle_FullMethodName  = "/pandora.ds.v1.DSAllocatorService/AbortPreactiveBattle"
 	DSAllocatorService_EnsurePlayerDeparture_FullMethodName = "/pandora.ds.v1.DSAllocatorService/EnsurePlayerDeparture"
 	DSAllocatorService_Heartbeat_FullMethodName             = "/pandora.ds.v1.DSAllocatorService/Heartbeat"
 	DSAllocatorService_ListBattles_FullMethodName           = "/pandora.ds.v1.DSAllocatorService/ListBattles"
@@ -46,6 +47,11 @@ type DSAllocatorServiceClient interface {
 	// GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
 	ResolveBattleTarget(ctx context.Context, in *ResolveBattleTargetRequest, opts ...grpc.CallOption) (*ResolveBattleTargetResponse, error)
 	ReleaseBattle(ctx context.Context, in *ReleaseBattleRequest, opts ...grpc.CallOption) (*ReleaseBattleResponse, error)
+	// AbortPreactiveBattle is the Matchmaker allocation-saga compensation path.
+	// The caller service identity signature binds the full request body; allocator
+	// only fences and UID-deletes this exact allocation before any Battle ticket
+	// was published. ACK-loss retries are recognized by a durable abort journal.
+	AbortPreactiveBattle(ctx context.Context, in *AbortPreactiveBattleRequest, opts ...grpc.CallOption) (*AbortPreactiveBattleResponse, error)
 	// EnsurePlayerDeparture 是 Battle→Hub 的物理离场门。调用方必须携带从
 	// placement/source snapshot 取得的完整实例元组；只在该玩家已从 credential-bound
 	// Battle DS 的可信在线集合消失，或该 exact GameServer UID 已被确认回收后返回 departed。
@@ -92,6 +98,16 @@ func (c *dSAllocatorServiceClient) ReleaseBattle(ctx context.Context, in *Releas
 	return out, nil
 }
 
+func (c *dSAllocatorServiceClient) AbortPreactiveBattle(ctx context.Context, in *AbortPreactiveBattleRequest, opts ...grpc.CallOption) (*AbortPreactiveBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AbortPreactiveBattleResponse)
+	err := c.cc.Invoke(ctx, DSAllocatorService_AbortPreactiveBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dSAllocatorServiceClient) EnsurePlayerDeparture(ctx context.Context, in *EnsurePlayerDepartureRequest, opts ...grpc.CallOption) (*EnsurePlayerDepartureResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnsurePlayerDepartureResponse)
@@ -131,6 +147,11 @@ type DSAllocatorServiceServer interface {
 	// GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
 	ResolveBattleTarget(context.Context, *ResolveBattleTargetRequest) (*ResolveBattleTargetResponse, error)
 	ReleaseBattle(context.Context, *ReleaseBattleRequest) (*ReleaseBattleResponse, error)
+	// AbortPreactiveBattle is the Matchmaker allocation-saga compensation path.
+	// The caller service identity signature binds the full request body; allocator
+	// only fences and UID-deletes this exact allocation before any Battle ticket
+	// was published. ACK-loss retries are recognized by a durable abort journal.
+	AbortPreactiveBattle(context.Context, *AbortPreactiveBattleRequest) (*AbortPreactiveBattleResponse, error)
 	// EnsurePlayerDeparture 是 Battle→Hub 的物理离场门。调用方必须携带从
 	// placement/source snapshot 取得的完整实例元组；只在该玩家已从 credential-bound
 	// Battle DS 的可信在线集合消失，或该 exact GameServer UID 已被确认回收后返回 departed。
@@ -154,6 +175,9 @@ func (UnimplementedDSAllocatorServiceServer) ResolveBattleTarget(context.Context
 }
 func (UnimplementedDSAllocatorServiceServer) ReleaseBattle(context.Context, *ReleaseBattleRequest) (*ReleaseBattleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReleaseBattle not implemented")
+}
+func (UnimplementedDSAllocatorServiceServer) AbortPreactiveBattle(context.Context, *AbortPreactiveBattleRequest) (*AbortPreactiveBattleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AbortPreactiveBattle not implemented")
 }
 func (UnimplementedDSAllocatorServiceServer) EnsurePlayerDeparture(context.Context, *EnsurePlayerDepartureRequest) (*EnsurePlayerDepartureResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EnsurePlayerDeparture not implemented")
@@ -238,6 +262,24 @@ func _DSAllocatorService_ReleaseBattle_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DSAllocatorService_AbortPreactiveBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AbortPreactiveBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DSAllocatorServiceServer).AbortPreactiveBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DSAllocatorService_AbortPreactiveBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DSAllocatorServiceServer).AbortPreactiveBattle(ctx, req.(*AbortPreactiveBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DSAllocatorService_EnsurePlayerDeparture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EnsurePlayerDepartureRequest)
 	if err := dec(in); err != nil {
@@ -310,6 +352,10 @@ var DSAllocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseBattle",
 			Handler:    _DSAllocatorService_ReleaseBattle_Handler,
+		},
+		{
+			MethodName: "AbortPreactiveBattle",
+			Handler:    _DSAllocatorService_AbortPreactiveBattle_Handler,
 		},
 		{
 			MethodName: "EnsurePlayerDeparture",

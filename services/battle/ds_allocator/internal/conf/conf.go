@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 )
 
 // DS 启动后端模式(标准两模式开关 + 离线兜底)。
@@ -50,7 +51,7 @@ type Config struct {
 }
 
 // RequiresReliableLifecyclePublication 返回 abandoned 是否必须走可靠的
-	// pandora.ds.lifecycle 发布链。Redis authority 是生产授权权威，缺失该链会让
+// pandora.ds.lifecycle 发布链。Redis authority 是生产授权权威，缺失该链会让
 // BattleResult 无法生成 match release / battle exit proof；Agones+enforce 的
 // legacy 灰度同样属于生产路径，不能以“镜像稍后过期”冒充恢复完成。
 func (c *Config) RequiresReliableLifecyclePublication() bool {
@@ -71,6 +72,48 @@ func (c *Config) ValidateLifecyclePublicationConfig() error {
 		}
 	}
 	return fmt.Errorf("ds_allocator: production authority requires kafka.brokers for reliable %s publication", "pandora.ds.lifecycle")
+}
+
+// BattleDepartureProofSecret returns the effective route-scoped proof key.
+// Environment delivery takes precedence over the development YAML fallback.
+func (c *Config) BattleDepartureProofSecret() string {
+	if value := strings.TrimSpace(os.Getenv("PANDORA_PLACEMENT_BATTLE_DEPARTURE_SECRET")); value != "" {
+		return value
+	}
+	return strings.TrimSpace(c.Allocator.PlacementBattleDepartureProofSecret)
+}
+
+// ValidateBattleDepartureConfig prevents a production allocator from running
+// a physical departure journal that can never publish its mandatory locator
+// confirmation. Missing authority is a startup error, not a TTL fallback.
+func (c *Config) ValidateBattleDepartureConfig() error {
+	if c.RequiresReliableLifecyclePublication() && strings.TrimSpace(c.LocatorAddr) == "" {
+		return fmt.Errorf("ds_allocator: production authority requires locator_addr for physical source departure confirmation")
+	}
+	if strings.TrimSpace(c.LocatorAddr) != "" && len(c.BattleDepartureProofSecret()) < 32 {
+		return fmt.Errorf("ds_allocator: locator_addr requires an independent battle departure proof secret of at least 32 bytes")
+	}
+	return nil
+}
+
+// ValidateAllocationAbortAuthConfig makes the destructive Matchmaker abort
+// endpoint a startup dependency of Redis Model-B. Legacy/local modes do not
+// expose a weaker fallback; the RPC itself still fails closed when unwired.
+func (c *Config) ValidateAllocationAbortAuthConfig() error {
+	if !c.DSAuth.AuthorityModeRedis() {
+		return nil
+	}
+	if err := internalrpcauth.ValidateSecret(c.Allocator.AllocationAbortAuthSecret); err != nil {
+		return fmt.Errorf("ds_allocator: allocator.allocation_abort_auth_secret invalid: %w", err)
+	}
+	if err := internalrpcauth.ValidateIdentity(c.Allocator.AllocationAbortAuthAudience); err != nil {
+		return fmt.Errorf("ds_allocator: allocator.allocation_abort_auth_audience invalid: %w", err)
+	}
+	if c.Allocator.AllocationAbortAuthSecret == c.DSAuth.Secret ||
+		c.Allocator.AllocationAbortAuthSecret == c.BattleDepartureProofSecret() {
+		return fmt.Errorf("ds_allocator: allocation abort auth must use an independent trust-domain key")
+	}
+	return nil
 }
 
 // LocalDSConf 是「本机拉起 Windows Dedicated Server 进程」的调试后端配置。
@@ -282,6 +325,17 @@ func (c AgonesConf) DedicatedFleetForTrack(mapID uint32, releaseTrack string) st
 
 // AllocatorConf 是 ds_allocator 服务私有配置。
 type AllocatorConf struct {
+	// AllocationAbortAuth verifies only the payload-bound Matchmaker
+	// pre-admission abort RPC. The caller and verifier share this dedicated key;
+	// no player, placement, resume, or DS callback flow may receive it.
+	AllocationAbortAuthSecret   string `yaml:"allocation_abort_auth_secret,omitempty" json:"allocation_abort_auth_secret,omitempty"`
+	AllocationAbortAuthAudience string `yaml:"allocation_abort_auth_audience,omitempty" json:"allocation_abort_auth_audience,omitempty"`
+
+	// PlacementBattleDepartureProofSecret signs only physical Battle-source
+	// departure attestations. It must not reuse battle terminal/leave or DS
+	// callback keys. Production should inject the environment override.
+	PlacementBattleDepartureProofSecret string `yaml:"placement_battle_departure_proof_secret,omitempty" json:"placement_battle_departure_proof_secret,omitempty"`
+
 	// HeartbeatTimeout DS 心跳超时阈值(默认 15s,不变量 §4)。
 	// 超过此时长没收到 Heartbeat → 标记 abandoned + 释放(W4 ② 仅释放,补偿留 W4 ③)。
 	HeartbeatTimeout config.Duration `yaml:"heartbeat_timeout,omitempty" json:"heartbeat_timeout,omitempty"`

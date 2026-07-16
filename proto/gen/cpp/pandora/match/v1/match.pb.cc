@@ -4210,50 +4210,51 @@ const char descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto[] ABSL
     "\000\022\030\n\024MATCH_STAGE_QUEUEING\020\001\022\025\n\021MATCH_STA"
     "GE_FOUND\020\002\022\027\n\023MATCH_STAGE_CONFIRM\020\003\022\032\n\026M"
     "ATCH_STAGE_ALLOCATING\020\004\022\025\n\021MATCH_STAGE_R"
-    "EADY\020\005\022\026\n\022MATCH_STAGE_FAILED\020\006*\322\001\n\024Match"
+    "EADY\020\005\022\026\n\022MATCH_STAGE_FAILED\020\006*\367\001\n\024Match"
     "AllocationPhase\022&\n\"MATCH_ALLOCATION_PHAS"
     "E_UNSPECIFIED\020\000\022\"\n\036MATCH_ALLOCATION_PHAS"
     "E_PENDING\020\001\022%\n!MATCH_ALLOCATION_PHASE_RE"
     "QUESTING\020\002\022$\n MATCH_ALLOCATION_PHASE_COM"
     "PLETED\020\003\022!\n\035MATCH_ALLOCATION_PHASE_FAILE"
-    "D\020\004*\234\002\n\017MatchStartPhase\022!\n\035MATCH_START_P"
-    "HASE_UNSPECIFIED\020\000\022\036\n\032MATCH_START_PHASE_"
-    "ACCEPTED\020\001\022\"\n\036MATCH_START_PHASE_TICKET_R"
-    "EADY\020\002\022\036\n\032MATCH_START_PHASE_CLAIMING\020\003\022\""
-    "\n\036MATCH_START_PHASE_CLAIMS_READY\020\004\022\034\n\030MA"
-    "TCH_START_PHASE_QUEUED\020\005\022\"\n\036MATCH_START_"
-    "PHASE_COMPENSATING\020\006\022\034\n\030MATCH_START_PHAS"
-    "E_FAILED\020\007*\221\001\n\027PlayerMatchContextState\022*"
-    "\n&PLAYER_MATCH_CONTEXT_STATE_UNSPECIFIED"
-    "\020\000\022#\n\037PLAYER_MATCH_CONTEXT_STATE_NONE\020\001\022"
-    "%\n!PLAYER_MATCH_CONTEXT_STATE_ACTIVE\020\002*\212"
-    "\002\n\026PlayerMatchResumeStage\022)\n%PLAYER_MATC"
-    "H_RESUME_STAGE_UNSPECIFIED\020\000\022&\n\"PLAYER_M"
-    "ATCH_RESUME_STAGE_STARTING\020\001\022$\n PLAYER_M"
-    "ATCH_RESUME_STAGE_QUEUED\020\002\022(\n$PLAYER_MAT"
-    "CH_RESUME_STAGE_CONFIRMING\020\003\022(\n$PLAYER_M"
-    "ATCH_RESUME_STAGE_ALLOCATING\020\004\022#\n\037PLAYER"
-    "_MATCH_RESUME_STAGE_READY\020\005*\242\001\n\022MatchCon"
-    "firmStatus\022$\n MATCH_CONFIRM_STATUS_UNSPE"
-    "CIFIED\020\000\022 \n\034MATCH_CONFIRM_STATUS_PENDING"
-    "\020\001\022!\n\035MATCH_CONFIRM_STATUS_ACCEPTED\020\002\022!\n"
-    "\035MATCH_CONFIRM_STATUS_REJECTED\020\0032\363\004\n\014Mat"
-    "chService\022W\n\nStartMatch\022#.pandora.match."
-    "v1.StartMatchRequest\032$.pandora.match.v1."
-    "StartMatchResponse\022Z\n\013CancelMatch\022$.pand"
-    "ora.match.v1.CancelMatchRequest\032%.pandor"
-    "a.match.v1.CancelMatchResponse\022]\n\014Confir"
-    "mMatch\022%.pandora.match.v1.ConfirmMatchRe"
-    "quest\032&.pandora.match.v1.ConfirmMatchRes"
-    "ponse\022i\n\020GetMatchProgress\022).pandora.matc"
-    "h.v1.GetMatchProgressRequest\032*.pandora.m"
-    "atch.v1.GetMatchProgressResponse\022]\n\014Rele"
-    "aseMatch\022%.pandora.match.v1.ReleaseMatch"
-    "Request\032&.pandora.match.v1.ReleaseMatchR"
-    "esponse\022\204\001\n\031ResolvePlayerMatchContext\0222."
-    "pandora.match.v1.ResolvePlayerMatchConte"
-    "xtRequest\0323.pandora.match.v1.ResolvePlay"
-    "erMatchContextResponseb\006proto3"
+    "D\020\004\022#\n\037MATCH_ALLOCATION_PHASE_ABORTING\020\005"
+    "*\234\002\n\017MatchStartPhase\022!\n\035MATCH_START_PHAS"
+    "E_UNSPECIFIED\020\000\022\036\n\032MATCH_START_PHASE_ACC"
+    "EPTED\020\001\022\"\n\036MATCH_START_PHASE_TICKET_READ"
+    "Y\020\002\022\036\n\032MATCH_START_PHASE_CLAIMING\020\003\022\"\n\036M"
+    "ATCH_START_PHASE_CLAIMS_READY\020\004\022\034\n\030MATCH"
+    "_START_PHASE_QUEUED\020\005\022\"\n\036MATCH_START_PHA"
+    "SE_COMPENSATING\020\006\022\034\n\030MATCH_START_PHASE_F"
+    "AILED\020\007*\221\001\n\027PlayerMatchContextState\022*\n&P"
+    "LAYER_MATCH_CONTEXT_STATE_UNSPECIFIED\020\000\022"
+    "#\n\037PLAYER_MATCH_CONTEXT_STATE_NONE\020\001\022%\n!"
+    "PLAYER_MATCH_CONTEXT_STATE_ACTIVE\020\002*\212\002\n\026"
+    "PlayerMatchResumeStage\022)\n%PLAYER_MATCH_R"
+    "ESUME_STAGE_UNSPECIFIED\020\000\022&\n\"PLAYER_MATC"
+    "H_RESUME_STAGE_STARTING\020\001\022$\n PLAYER_MATC"
+    "H_RESUME_STAGE_QUEUED\020\002\022(\n$PLAYER_MATCH_"
+    "RESUME_STAGE_CONFIRMING\020\003\022(\n$PLAYER_MATC"
+    "H_RESUME_STAGE_ALLOCATING\020\004\022#\n\037PLAYER_MA"
+    "TCH_RESUME_STAGE_READY\020\005*\242\001\n\022MatchConfir"
+    "mStatus\022$\n MATCH_CONFIRM_STATUS_UNSPECIF"
+    "IED\020\000\022 \n\034MATCH_CONFIRM_STATUS_PENDING\020\001\022"
+    "!\n\035MATCH_CONFIRM_STATUS_ACCEPTED\020\002\022!\n\035MA"
+    "TCH_CONFIRM_STATUS_REJECTED\020\0032\363\004\n\014MatchS"
+    "ervice\022W\n\nStartMatch\022#.pandora.match.v1."
+    "StartMatchRequest\032$.pandora.match.v1.Sta"
+    "rtMatchResponse\022Z\n\013CancelMatch\022$.pandora"
+    ".match.v1.CancelMatchRequest\032%.pandora.m"
+    "atch.v1.CancelMatchResponse\022]\n\014ConfirmMa"
+    "tch\022%.pandora.match.v1.ConfirmMatchReque"
+    "st\032&.pandora.match.v1.ConfirmMatchRespon"
+    "se\022i\n\020GetMatchProgress\022).pandora.match.v"
+    "1.GetMatchProgressRequest\032*.pandora.matc"
+    "h.v1.GetMatchProgressResponse\022]\n\014Release"
+    "Match\022%.pandora.match.v1.ReleaseMatchReq"
+    "uest\032&.pandora.match.v1.ReleaseMatchResp"
+    "onse\022\204\001\n\031ResolvePlayerMatchContext\0222.pan"
+    "dora.match.v1.ResolvePlayerMatchContextR"
+    "equest\0323.pandora.match.v1.ResolvePlayerM"
+    "atchContextResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_deps[1] = {
@@ -4263,7 +4264,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto = {
     false,
     false,
-    6430,
+    6467,
     descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto,
     "pandora/match/v1/match.proto",
     &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_once,
@@ -4292,7 +4293,7 @@ MatchAllocationPhase_descriptor() {
   return file_level_enum_descriptors_pandora_2fmatch_2fv1_2fmatch_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t MatchAllocationPhase_internal_data_[] = {
-    327680u, 0u, };
+    393216u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 MatchStartPhase_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto);

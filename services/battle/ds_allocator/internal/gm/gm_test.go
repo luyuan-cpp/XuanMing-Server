@@ -261,8 +261,10 @@ func TestModelBPollAndAckRejectStaleCredentialBeforeSideEffects(t *testing.T) {
 	ctx := context.Background()
 	battleRepo := data.NewRedisBattleRepo(s.rdb)
 	authRepo := data.NewRedisBattleAuthRepo(s.rdb)
+	battleRepo.EnableStrictModelBWrites()
+	authRepo.EnableStrictModelBWrites()
 	const matchID uint64 = 900
-	const allocationID = "alloc-900"
+	const allocationID = "d45dae63-991e-4e96-883a-a4187fa3f848"
 	const pod = "battle-auth-900"
 	claim := &dsv1.BattleStorageRecord{
 		MatchId: matchID, State: "allocating", AllocationId: allocationID,
@@ -275,7 +277,7 @@ func TestModelBPollAndAckRejectStaleCredentialBeforeSideEffects(t *testing.T) {
 	}
 	battle := &dsv1.BattleStorageRecord{
 		MatchId: matchID, DsPodName: pod, DsAddr: "10.0.0.9:7777", State: "warming",
-		AllocationId: allocationID, GameserverUid: "uid-900",
+		AllocationId: allocationID, GameserverUid: "uid-900", PodUid: "pod-uid-900", ReleaseTrack: "stable",
 		AllocatedAtMs: claim.AllocatedAtMs, LastHeartbeatMs: claim.LastHeartbeatMs,
 	}
 	if ok, err := battleRepo.FinalizeBattleAllocation(ctx, battle, time.Hour); err != nil || !ok {

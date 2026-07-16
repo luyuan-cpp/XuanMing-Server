@@ -382,7 +382,9 @@ func insertMatchReleaseOutboxTx(ctx context.Context, tx *sql.Tx, matchID uint64,
 	_, err = tx.ExecContext(ctx, `INSERT INTO match_release_outbox
 (match_id, payload, next_attempt_at_ms, attempt_count, created_at_ms)
 VALUES (?, ?, 0, 0, ?)
-ON DUPLICATE KEY UPDATE match_id = VALUES(match_id)`, matchID, payload, nowMs)
+ON DUPLICATE KEY UPDATE
+  match_id = VALUES(match_id),
+  next_attempt_at_ms = LEAST(next_attempt_at_ms, VALUES(next_attempt_at_ms))`, matchID, payload, nowMs)
 	return err
 }
 

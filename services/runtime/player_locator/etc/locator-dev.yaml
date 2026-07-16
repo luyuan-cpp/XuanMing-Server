@@ -38,6 +38,7 @@ locator:
   placement_match_start_proof_secret: "pandora-dev-placement-match-start-key-v1!"
   placement_battle_exit_proof_secret: "pandora-dev-placement-battle-exit-key-v1!"
   placement_hub_transfer_proof_secret: "pandora-dev-placement-hub-transfer-key-v1!"
+  placement_battle_departure_proof_secret: "pandora-dev-placement-battle-departure-key-v1!"
 
 # 好友在线态订阅推送 fan-out(docs/design/friend-distributed-scaling.md §13.4 / §13.5)。
 # 2026-06-19:默认 enabled=false(§13.7「先拉后推」)。开启需配 kafka.brokers(往

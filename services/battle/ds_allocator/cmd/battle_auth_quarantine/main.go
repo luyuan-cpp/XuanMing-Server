@@ -48,7 +48,7 @@ func main() {
 	if err := client.Ping(ctx).Err(); err != nil {
 		fatal(err)
 	}
-	repo := data.NewRedisBattleAuthRepo(client)
+	repo := newQuarantineRepo(client)
 	expected := data.BattleQuarantineExpected{
 		AllocationID: *allocationID,
 		Credential: data.BattleCredentialIdentity{
@@ -86,6 +86,16 @@ func main() {
 		return
 	}
 	fmt.Printf("Battle match=%d allocation=%s 已进入 QUARANTINED/abandoned 补偿流\n", *matchID, *allocationID)
+}
+
+func newQuarantineRepo(client redis.UniversalClient) *data.RedisBattleAuthRepo {
+	repo := data.NewRedisBattleAuthRepo(client)
+	// This utility is an independent production writer: it does not pass
+	// through AllocatorUsecase.EnableRedisAuthority.  Irreversibly enable the
+	// same Model-B storage invariant before either auditing or applying so
+	// -apply can never rewrite a preflight-unsafe/legacy BattleStorageRecord.
+	repo.EnableStrictModelBWrites()
+	return repo
 }
 
 func split(raw string) []string {

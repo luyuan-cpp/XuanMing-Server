@@ -33,6 +33,19 @@ type fakeRepo struct {
 	setAssignErr error
 }
 
+type emptyObservedFleet struct {
+	observation HubInstanceObservation
+	err         error
+}
+
+func (f *emptyObservedFleet) ListShards(context.Context, string) ([]ShardCandidate, error) {
+	return nil, nil
+}
+
+func (f *emptyObservedFleet) ObserveShardInstance(context.Context, string) (HubInstanceObservation, error) {
+	return f.observation, f.err
+}
+
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		shards:           map[string]*hubv1.HubShardStorageRecord{},
@@ -411,6 +424,34 @@ func newTestUsecase(capacity int32, shardCount int) (*HubUsecase, *fakeRepo, *fa
 	fleet := NewMockHubFleetProvider(cfg)
 	signer := &fakeSigner{}
 	return NewHubUsecase(repo, fleet, signer, cfg), repo, signer
+}
+
+func TestReconcileTopologyCandidateAbsenceRetainsPhysicalOwnerFence(t *testing.T) {
+	cfg := testConf()
+	repo := newFakeRepo()
+	seedShard(repo, "hub-physical", 1, 1)
+	if err := repo.UpdateShardWithLock(context.Background(), "hub-physical", 1,
+		func(s *hubv1.HubShardStorageRecord) error {
+			s.GameserverUid = "uid-live"
+			return nil
+		}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	fleet := &emptyObservedFleet{observation: HubInstanceObservation{
+		GameServerFound: true, GameServerUID: "uid-live", PodFound: true,
+		PodOwnerGameServerUID: "uid-live",
+	}}
+	uc := NewHubUsecase(repo, fleet, &fakeSigner{}, cfg)
+	if err := uc.reconcileShardTopology(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := repo.GetShard(context.Background(), "hub-physical")
+	if err != nil || !found {
+		t.Fatalf("unroutable live shard must remain a physical-owner fence: found=%v err=%v", found, err)
+	}
+	if got.GetState() != stateDraining || got.GetPlayerCount() != 1 || got.GetGameserverUid() != "uid-live" {
+		t.Fatalf("candidate absence must only fence routing, got %+v", got)
+	}
 }
 
 // ── 测试用例 ──────────────────────────────────────────────────────────────────
@@ -942,11 +983,11 @@ func TestHeartbeat_ReviveAfterSweepFalsePositive(t *testing.T) {
 	}
 }
 
-func TestReconcile_ReclaimsEmptyDrainedShardAfterGrace(t *testing.T) {
+func TestReconcile_LogicalGraceCannotErasePhysicalOwnerFence(t *testing.T) {
 	uc, repo, _ := newConsolidationUsecase(30)
 	ctx := context.Background()
 
-	// 一个已排空、draining 且过 grace 的分片 → 应被回收删除。
+	// Logical empty+grace is not GameServer/Pod teardown proof.
 	seedShard(repo, "hub-old", 1, 0)
 	_ = repo.UpdateShardWithLock(ctx, "hub-old", 1, func(s *hubv1.HubShardStorageRecord) error {
 		s.State = stateDraining
@@ -957,8 +998,11 @@ func TestReconcile_ReclaimsEmptyDrainedShardAfterGrace(t *testing.T) {
 	if err := uc.reconcileFleetReplicas(ctx); err != nil {
 		t.Fatalf("reconcile err: %v", err)
 	}
-	if _, found, _ := repo.GetShard(ctx, "hub-old"); found {
-		t.Fatal("empty drained shard past grace should be reclaimed")
+	if _, found, _ := repo.GetShard(ctx, "hub-old"); !found {
+		t.Fatal("logical grace erased the physical-owner fence")
+	}
+	if replicas, err := uc.scaler.GetFleetReplicas(ctx); err != nil || replicas != 3 {
+		t.Fatalf("unproven teardown scaled Fleet in: replicas=%d err=%v", replicas, err)
 	}
 }
 

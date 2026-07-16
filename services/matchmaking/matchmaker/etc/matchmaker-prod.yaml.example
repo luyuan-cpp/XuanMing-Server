@@ -46,6 +46,8 @@ match:
   # 独立 Login→Matchmaker 服务身份 key；不得复用 JWT / DS callback / placement key。
   match_resume_auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B__"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
+  allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"
+  allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   # liveness_gate_enabled: locator 在线判定两道门(队列扫死票 livenessSweep + 成局最终门 findOfflineMembers)。
   # ❗ 前提：UE Hub DS 心跳捎带 player_ids 续期 locator HUB 位置，且 hub_allocator 必须配 locator_addr
   # (转发续期的必经一环)，否则在线玩家 30s 后会被误判离线、扫掉排队票据。

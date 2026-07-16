@@ -127,6 +127,11 @@ type MatchRepo interface {
 	RequeueTicket(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord, ticketTTL time.Duration) error
 	// DeleteTicket 删票据 record + 移出 queue。
 	DeleteTicket(ctx context.Context, ticketID uint64) error
+	// DeleteTicketIfMatch 仅当 ticket 仍精确属于 expectedMatchID 时 WATCH/CAS 删除。
+	// ReleaseMatch 不得在“先读旧 ticket → ticket 被新局复用/改写 → 无条件 DEL”的
+	// 窗口误删新局。missing 是幂等成功的可辨状态；found=true 但 currentMatchID
+	// 不相等必须 fail closed。
+	DeleteTicketIfMatch(ctx context.Context, ticketID, expectedMatchID uint64) (deleted, found bool, currentMatchID uint64, err error)
 	// DeleteTicketIfUnmatched 仅当票据仍未被撮合(match_id==0)时原子删除(WATCH CAS)并移出 queue。
 	// 防 CancelMatch"读到未撮合→删票"与撮合循环 ReserveTicket 之间的竞态窗口。
 	// 返回:(true,0) 已删除;(false,matchID) 已被撮合进 match;(false,0) 票据已不存在。
@@ -408,6 +413,72 @@ func (r *RedisMatchRepo) DeleteTicket(ctx context.Context, ticketID uint64) erro
 		return err
 	}
 	return r.rdb.ZRem(ctx, r.queueKey, ticketID).Err()
+}
+
+func (r *RedisMatchRepo) DeleteTicketIfMatch(ctx context.Context, ticketID, expectedMatchID uint64) (bool, bool, uint64, error) {
+	if expectedMatchID == 0 {
+		return false, false, 0, errcode.New(errcode.ErrInvalidArg, "expected match_id required")
+	}
+	key := ticketKey(ticketID)
+	for attempt := 0; attempt < ticketCASRetry; attempt++ {
+		var found, deleted bool
+		var currentMatchID uint64
+		txErr := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			found, deleted, currentMatchID = false, false, 0
+			b, gerr := tx.Get(ctx, key).Bytes()
+			if gerr == redis.Nil {
+				return nil
+			}
+			if gerr != nil {
+				return gerr
+			}
+			rec, uerr := unmarshalTicket(ticketID, b)
+			if uerr != nil {
+				return uerr
+			}
+			found = true
+			currentMatchID = rec.GetMatchId()
+			if currentMatchID != expectedMatchID {
+				return nil
+			}
+			_, perr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(ctx, key)
+				return nil
+			})
+			if perr == nil {
+				deleted = true
+			}
+			return perr
+		}, key)
+		if txErr == redis.TxFailedErr {
+			continue
+		}
+		if txErr != nil {
+			return false, false, 0, txErr
+		}
+		if !found {
+			// A prior exact delete may have committed while the derived queue ZREM
+			// failed or its response was lost. ticket_id is a globally non-reused
+			// fencing identity, so a missing canonical ticket must still repair the
+			// stale queue member before ReleaseMatch can ACK its outbox row.
+			if zerr := r.rdb.ZRem(ctx, r.queueKey, ticketID).Err(); zerr != nil {
+				return false, false, 0, zerr
+			}
+			return false, false, 0, nil
+		}
+		if !deleted {
+			return false, true, currentMatchID, nil
+		}
+		// queue is a derived cross-slot index. Remove only after the exact ticket
+		// deletion committed; a failure is returned so the release outbox does not
+		// ACK an incompletely cleaned operation.
+		if zerr := r.rdb.ZRem(ctx, r.queueKey, ticketID).Err(); zerr != nil {
+			return true, true, currentMatchID, zerr
+		}
+		return true, true, currentMatchID, nil
+	}
+	return false, false, 0, errcode.New(errcode.ErrMatchConcurrent,
+		"delete ticket %d for match %d concurrent retry exhausted", ticketID, expectedMatchID)
 }
 
 func (r *RedisMatchRepo) DeleteTicketIfUnmatched(ctx context.Context, ticketID uint64) (bool, uint64, error) {

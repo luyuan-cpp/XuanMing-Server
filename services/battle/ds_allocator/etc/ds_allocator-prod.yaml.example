@@ -43,6 +43,8 @@ kafka:
 locator_addr: "player-locator:50006"
 
 allocator:
+  allocation_abort_auth_secret: "__ALLOCATION_ABORT_AUTH_SECRET_32B__"
+  allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   heartbeat_timeout: "15s"        # 不变量 §4
   sweep_interval: "5s"
   battle_ttl: "2h"

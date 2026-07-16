@@ -209,10 +209,28 @@ kind: Deployment
 metadata: { name: player-locator, namespace: pandora, labels: { app: player-locator } }
 spec:
   replicas: 1
+  # Safety gate: a legacy locator Commit can bypass the source-departure hard
+  # gate. Recreate forbids old/new placement writers from overlapping; the
+  # same-image initContainer below runs the read-only all-master preflight and
+  # mechanically blocks every new writer Pod on any unsafe legacy record.
+  strategy:
+    type: Recreate
   selector: { matchLabels: { app: player-locator } }
   template:
     metadata: { labels: { app: player-locator, pandora.dev/ds-auth-writer-epoch: "2" } }
     spec:
+      initContainers:
+        - name: placement-preflight
+          image: pandora/player-locator:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-conf"
+            - "etc/cluster.yaml"
+            - "-placement-preflight"
+            - "-placement-preflight-timeout=10m"
+            - "-placement-preflight-scan-count=1000"
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player-locator.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: "1", memory: 256Mi } }
       containers:
         - name: player-locator
           image: pandora/player-locator:dev
@@ -510,6 +528,10 @@ kind: Deployment
 metadata: { name: hub-allocator, namespace: pandora, labels: { app: hub-allocator } }
 spec:
   replicas: 1
+  # hub-allocator is the sole writer of the assignment/capacity ledger.  A
+  # RollingUpdate briefly runs old+new binaries even at replicas=1; old writers
+  # do not understand successor leases and can reopen the reconnect race.
+  strategy: { type: Recreate }
   selector: { matchLabels: { app: hub-allocator } }
   template:
     metadata: { labels: { app: hub-allocator, pandora.dev/ds-auth-writer-epoch: "2" } }

@@ -48,6 +48,7 @@ enum MatchAllocationPhase {
   MATCH_ALLOCATION_PHASE_REQUESTING  = 2;  // 可幂等重放 AllocateBattle(match_id)
   MATCH_ALLOCATION_PHASE_COMPLETED   = 3;  // READY 已持久化
   MATCH_ALLOCATION_PHASE_FAILED      = 4;  // 已明确失败并转 MATCH_STAGE_FAILED
+  MATCH_ALLOCATION_PHASE_ABORTING    = 5;  // exact target 已 fenced，唯一合法推进是 signed abort 重试
 }
 
 // MatchStartPhase 是 StartMatch 持久 saga 的推进阶段。RPC 只负责落 ACCEPTED；

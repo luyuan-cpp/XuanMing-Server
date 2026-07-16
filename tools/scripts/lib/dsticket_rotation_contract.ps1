@@ -1576,10 +1576,24 @@ function Assert-PandoraDeploymentSafeRollingStrategy {
     $name = [string](Get-PandoraRotationProperty (Get-PandoraRotationProperty $Deployment 'metadata') 'name')
     $spec = Get-PandoraRotationProperty $Deployment 'spec'
     $replicas = [int](Get-PandoraRotationProperty $spec 'replicas' 1)
-    if ($replicas -lt 1) { throw "Deployment/$name replicas=$replicas，不能不停服轮换。" }
     $strategy = Get-PandoraRotationProperty $spec 'strategy'
     $type = [string](Get-PandoraRotationProperty $strategy 'type' 'RollingUpdate')
     if ([string]::IsNullOrWhiteSpace($type)) { $type = 'RollingUpdate' }
+    if ($name -ceq 'hub-allocator') {
+        # hub-allocator writes the assignment/capacity ledger.  During the
+        # successor-lease rollout an old writer cannot overlap a new writer,
+        # so this one signer is deliberately unavailable for the short
+        # Recreate window.  Keep the exception exact; it must never become a
+        # general escape hatch from the signer availability contract.
+        if ($replicas -ne 1 -or $type -cne 'Recreate') {
+            throw "Deployment/$name 必须是 replicas=1 + Recreate 的唯一单写者；检测到 replicas=$replicas strategy=$type。"
+        }
+        if ($null -ne (Get-PandoraRotationProperty $strategy 'rollingUpdate')) {
+            throw "Deployment/$name strategy=Recreate 禁止携带 rollingUpdate。"
+        }
+        return
+    }
+    if ($replicas -lt 1) { throw "Deployment/$name replicas=$replicas，不能不停服轮换。" }
     if ($type -cne 'RollingUpdate') { throw "Deployment/$name strategy=$type，不能不停服轮换。" }
     $rolling = Get-PandoraRotationProperty $strategy 'rollingUpdate'
     $maxUnavailableRaw = Get-PandoraRotationProperty $rolling 'maxUnavailable' '25%'

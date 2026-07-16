@@ -27,14 +27,24 @@ import (
 const (
 	battleDepartureCASRetries = 64
 	maxBattleDepartureOrders  = 1024
+	// BattleDepartureTerminalRetention bounds completed physical proofs without
+	// turning TTL into an authorization decision. Pending/unknown journals stay
+	// permanent; only an exact UID teardown proof and an all-terminal journal
+	// receive this delayed seven-day retention window.
+	BattleDepartureTerminalRetention = 7 * 24 * time.Hour
+	// BattlePlayerCensusCapabilityVersionV1 要求 DS 快照覆盖所有
+	// admission owner，而不是仅 PostLogin ActivePlayers。
+	BattlePlayerCensusCapabilityVersionV1 uint32 = 1
 )
 
 func battleDepartureJournalKey(matchID uint64) string {
 	return fmt.Sprintf("pandora:ds:departures:{%d}", matchID)
 }
 
-func battleInstanceTeardownKey(matchID uint64) string {
-	return fmt.Sprintf("pandora:ds:teardown:{%d}", matchID)
+func battleInstanceTeardownKey(matchID uint64, source BattleDepartureSource) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%d\x00%s",
+		source.DSPodName, source.GameServerUID, source.InstanceEpoch, source.AllocationID)))
+	return fmt.Sprintf("pandora:ds:teardown:{%d}:%s", matchID, hex.EncodeToString(sum[:16]))
 }
 
 // BattleDepartureSource 是 placement/source snapshot 与 Battle Redis authority 都必须精确
@@ -44,6 +54,9 @@ type BattleDepartureSource struct {
 	GameServerUID string
 	InstanceEpoch uint32
 	AllocationID  string
+	// PodUID 只由 allocator 在分配时从 K8s 权威 GET 捕获，
+	// heartbeat/Ensure 不信任调用方传入该值。
+	PodUID string
 }
 
 func (s BattleDepartureSource) valid() bool {
@@ -52,23 +65,30 @@ func (s BattleDepartureSource) valid() bool {
 
 // BattlePlayerDepartureExpected 是 EnsurePlayerDeparture 的完整幂等输入。
 type BattlePlayerDepartureExpected struct {
-	MatchID          uint64
-	PlayerID         uint64
+	MatchID  uint64
+	PlayerID uint64
+	// PlacementVersion/OperationID 是 Begin 后当前 PENDING->HUB 代际。
 	PlacementVersion uint64
 	OperationID      string
-	Source           BattleDepartureSource
+	// Source* 是 Begin 原子捕获的 STABLE BATTLE claims。
+	SourcePlacementVersion uint64
+	SourceOperationID      string
+	Source                 BattleDepartureSource
 }
 
 // BattlePlayerDepartureResult 区分心跳离场与整个 UID teardown，便于观测但
 // 两者都是 Hub ticket/admission 可接受的物理证明。
 type BattlePlayerDepartureResult struct {
-	Departed bool
-	Status   dsv1.BattlePlayerDepartureStatus
+	Departed    bool
+	Status      dsv1.BattlePlayerDepartureStatus
+	DepartureID string
 }
 
 func stableDepartureID(in BattlePlayerDepartureExpected) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%d\x00%d\x00%s",
-		in.MatchID, in.PlayerID, in.PlacementVersion, in.OperationID)))
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%d\x00%d\x00%s\x00%d\x00%s\x00%s\x00%s\x00%d\x00%s",
+		in.MatchID, in.PlayerID, in.PlacementVersion, in.OperationID,
+		in.SourcePlacementVersion, in.SourceOperationID, in.Source.DSPodName,
+		in.Source.GameServerUID, in.Source.InstanceEpoch, in.Source.AllocationID)))
 	return hex.EncodeToString(sum[:16])
 }
 
@@ -90,12 +110,58 @@ func departureSourceEqualsTeardown(source BattleDepartureSource, proof *dsv1.Bat
 	return proof != nil && proof.GetDsPodName() == source.DSPodName &&
 		proof.GetGameserverUid() == source.GameServerUID &&
 		proof.GetInstanceEpoch() == source.InstanceEpoch &&
-		proof.GetAllocationId() == source.AllocationID
+		proof.GetAllocationId() == source.AllocationID && proof.GetPodUid() != "" &&
+		(source.PodUID == "" || proof.GetPodUid() == source.PodUID)
 }
 
 func departureSourceEqualsSource(a, b BattleDepartureSource) bool {
 	return a.DSPodName == b.DSPodName && a.GameServerUID == b.GameServerUID &&
-		a.InstanceEpoch == b.InstanceEpoch && a.AllocationID == b.AllocationID
+		a.InstanceEpoch == b.InstanceEpoch && a.AllocationID == b.AllocationID && a.PodUID == b.PodUID
+}
+
+func departureStatusTerminal(status dsv1.BattlePlayerDepartureStatus) bool {
+	return status == dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_DEPARTED ||
+		status == dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_SOURCE_TORN_DOWN
+}
+
+func departureJournalTerminal(journal *dsv1.BattlePlayerDepartureJournalStorageRecord) bool {
+	if journal == nil {
+		return false
+	}
+	for _, order := range journal.GetDepartures() {
+		if order == nil || !departureStatusTerminal(order.GetStatus()) {
+			return false
+		}
+	}
+	return true
+}
+
+// teardownProofRemainingRetention returns the non-renewable storage window
+// anchored by the first durable teardown write. Legacy TTL=0 proofs are
+// repaired once to the fixed window; already-bounded proofs keep only their
+// remaining time, so retries cannot keep completed matches alive forever.
+func teardownProofRemainingRetention(
+	ctx context.Context, tx redis.Cmdable, key string, found bool,
+) (remaining time.Duration, repairLegacy bool, err error) {
+	if !found {
+		return 0, false, nil
+	}
+	ttl, err := tx.PTTL(ctx, key).Result()
+	if err != nil {
+		return 0, false, err
+	}
+	if ttl > 0 {
+		if ttl > BattleDepartureTerminalRetention {
+			ttl = BattleDepartureTerminalRetention
+		}
+		return ttl, false, nil
+	}
+	// Redis PTTL uses -1 for a persistent key and -2 for an absent key. The
+	// latter means the proof expired during this WATCH attempt and must retry.
+	if ttl == -time.Nanosecond {
+		return BattleDepartureTerminalRetention, true, nil
+	}
+	return 0, false, redis.TxFailedErr
 }
 
 func battleContainsPlayer(battle *dsv1.BattleStorageRecord, playerID uint64) bool {
@@ -127,8 +193,8 @@ func readDepartureJournal(ctx context.Context, tx redis.Cmdable, matchID uint64)
 	return journal, nil
 }
 
-func readTeardownProof(ctx context.Context, tx redis.Cmdable, matchID uint64) (*dsv1.BattleInstanceTeardownStorageRecord, bool, error) {
-	payload, err := tx.Get(ctx, battleInstanceTeardownKey(matchID)).Bytes()
+func readTeardownProof(ctx context.Context, tx redis.Cmdable, matchID uint64, source BattleDepartureSource) (*dsv1.BattleInstanceTeardownStorageRecord, bool, error) {
+	payload, err := tx.Get(ctx, battleInstanceTeardownKey(matchID, source)).Bytes()
 	if err == redis.Nil {
 		return nil, false, nil
 	}
@@ -162,23 +228,33 @@ func (r *RedisBattleRepo) EnsurePlayerDeparture(
 	expected BattlePlayerDepartureExpected,
 ) (BattlePlayerDepartureResult, error) {
 	if expected.MatchID == 0 || expected.PlayerID == 0 || expected.PlacementVersion == 0 ||
-		expected.OperationID == "" || !expected.Source.valid() {
+		expected.OperationID == "" || expected.SourcePlacementVersion == 0 ||
+		expected.SourceOperationID == "" || !expected.Source.valid() {
 		return BattlePlayerDepartureResult{}, errcode.New(errcode.ErrInvalidArg,
 			"complete battle departure operation and source tuple required")
 	}
 	departureID := stableDepartureID(expected)
 	jKey := battleDepartureJournalKey(expected.MatchID)
-	tKey := battleInstanceTeardownKey(expected.MatchID)
+	tKey := battleInstanceTeardownKey(expected.MatchID, expected.Source)
 	bKey := battleKey(expected.MatchID)
 
 	for attempt := 0; attempt < battleDepartureCASRetries; attempt++ {
-		var result BattlePlayerDepartureResult
+		result := BattlePlayerDepartureResult{DepartureID: departureID}
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			journal, err := readDepartureJournal(ctx, tx, expected.MatchID)
 			if err != nil {
 				return err
 			}
-			proof, proofFound, err := readTeardownProof(ctx, tx, expected.MatchID)
+			proof, proofFound, err := readTeardownProof(ctx, tx, expected.MatchID, expected.Source)
+			if err != nil {
+				return err
+			}
+			if proofFound && !departureSourceEqualsTeardown(expected.Source, proof) {
+				return errcode.New(errcode.ErrInvalidState,
+					"battle %d teardown proof tuple conflict", expected.MatchID)
+			}
+			proofRetention, repairProofTTL, err := teardownProofRemainingRetention(
+				ctx, tx, tKey, proofFound)
 			if err != nil {
 				return err
 			}
@@ -194,13 +270,25 @@ func (r *RedisBattleRepo) EnsurePlayerDeparture(
 				if existing.GetMatchId() != expected.MatchID || existing.GetPlayerId() != expected.PlayerID ||
 					existing.GetOperationId() != expected.OperationID ||
 					existing.GetPlacementVersion() != expected.PlacementVersion ||
+					existing.GetSourceOperationId() != expected.SourceOperationID ||
+					existing.GetSourcePlacementVersion() != expected.SourcePlacementVersion ||
 					!departureSourceEqualsRecord(expected.Source, existing) {
 					return errcode.New(errcode.ErrInvalidState,
 						"battle departure idempotency tuple conflict")
 				}
-				if existing.GetStatus() == dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_DEPARTED ||
-					existing.GetStatus() == dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_SOURCE_TORN_DOWN {
-					result = BattlePlayerDepartureResult{Departed: true, Status: existing.GetStatus()}
+				if departureStatusTerminal(existing.GetStatus()) {
+					result.Departed, result.Status = true, existing.GetStatus()
+					if proofFound && departureSourceEqualsTeardown(expected.Source, proof) &&
+						departureJournalTerminal(journal) {
+						_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+							pipe.Expire(ctx, jKey, proofRetention)
+							if repairProofTTL {
+								pipe.Expire(ctx, tKey, BattleDepartureTerminalRetention)
+							}
+							return nil
+						})
+						return err
+					}
 					return nil
 				}
 				if proofFound && departureSourceEqualsTeardown(expected.Source, proof) {
@@ -211,15 +299,22 @@ func (r *RedisBattleRepo) EnsurePlayerDeparture(
 						return err
 					}
 					_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-						pipe.Set(ctx, jKey, payload, 0)
+						ttl := time.Duration(0)
+						if departureJournalTerminal(journal) {
+							ttl = proofRetention
+						}
+						pipe.Set(ctx, jKey, payload, ttl)
+						if repairProofTTL {
+							pipe.Expire(ctx, tKey, BattleDepartureTerminalRetention)
+						}
 						return nil
 					})
 					if err == nil {
-						result = BattlePlayerDepartureResult{Departed: true, Status: existing.GetStatus()}
+						result.Departed, result.Status = true, existing.GetStatus()
 					}
 					return err
 				}
-				result = BattlePlayerDepartureResult{Status: dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_PENDING}
+				result.Status = dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_PENDING
 				return nil
 			}
 
@@ -230,16 +325,19 @@ func (r *RedisBattleRepo) EnsurePlayerDeparture(
 			nowMs := time.Now().UnixMilli()
 			order := &dsv1.BattlePlayerDepartureStorageRecord{
 				DepartureId: departureID, MatchId: expected.MatchID, PlayerId: expected.PlayerID,
-				PlacementVersion: expected.PlacementVersion,
-				OperationId:      expected.OperationID, DsPodName: expected.Source.DSPodName,
-				GameserverUid: expected.Source.GameServerUID, InstanceEpoch: expected.Source.InstanceEpoch,
+				PlacementVersion:       expected.PlacementVersion,
+				OperationId:            expected.OperationID,
+				SourcePlacementVersion: expected.SourcePlacementVersion,
+				SourceOperationId:      expected.SourceOperationID,
+				DsPodName:              expected.Source.DSPodName,
+				GameserverUid:          expected.Source.GameServerUID, InstanceEpoch: expected.Source.InstanceEpoch,
 				AllocationId: expected.Source.AllocationID, RequestedAtMs: nowMs,
 				Status: dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_PENDING,
 			}
 			if proofFound && departureSourceEqualsTeardown(expected.Source, proof) {
 				order.Status = dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_SOURCE_TORN_DOWN
 				order.DepartedAtMs = proof.GetTornDownAtMs()
-				result = BattlePlayerDepartureResult{Departed: true, Status: order.GetStatus()}
+				result.Departed, result.Status = true, order.GetStatus()
 			} else {
 				battlePayload, getErr := tx.Get(ctx, bKey).Bytes()
 				if getErr == redis.Nil {
@@ -261,7 +359,7 @@ func (r *RedisBattleRepo) EnsurePlayerDeparture(
 					return errcode.New(errcode.ErrInvalidState,
 						"player %d not in battle %d authoritative roster", expected.PlayerID, expected.MatchID)
 				}
-				result = BattlePlayerDepartureResult{Status: order.GetStatus()}
+				result.Status = order.GetStatus()
 			}
 			journal.Departures = append(journal.Departures, order)
 			payload, err := marshalDepartureMessage(journal)
@@ -269,7 +367,15 @@ func (r *RedisBattleRepo) EnsurePlayerDeparture(
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, jKey, payload, 0)
+				ttl := time.Duration(0)
+				if proofFound && departureSourceEqualsTeardown(expected.Source, proof) &&
+					departureJournalTerminal(journal) {
+					ttl = proofRetention
+				}
+				pipe.Set(ctx, jKey, payload, ttl)
+				if repairProofTTL {
+					pipe.Expire(ctx, tKey, BattleDepartureTerminalRetention)
+				}
 				return nil
 			})
 			return err
@@ -289,6 +395,8 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 	matchID uint64,
 	source BattleDepartureSource,
 	snapshotPresent bool,
+	censusCapabilityVersion uint32,
+	censusID string,
 	activePlayerIDs []uint64,
 	acknowledgedDepartureIDs []string,
 ) ([]*dsv1.BattleEvictionOrder, error) {
@@ -315,7 +423,12 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 		}
 		acked[departureID] = struct{}{}
 	}
-	if !snapshotPresent && (len(active) != 0 || len(acked) != 0) {
+	if snapshotPresent && (censusCapabilityVersion < BattlePlayerCensusCapabilityVersionV1 || censusID == "") {
+		return nil, errcode.New(errcode.ErrInvalidArg,
+			"complete battle player census requires capability_version>=1 and census_id")
+	}
+	if !snapshotPresent && (len(active) != 0 || len(acked) != 0 ||
+		censusCapabilityVersion != 0 || censusID != "") {
 		return nil, errcode.New(errcode.ErrInvalidArg,
 			"battle active player snapshot payload requires present=true")
 	}
@@ -336,18 +449,29 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 				if order.GetMatchId() != matchID || !departureSourceEqualsRecord(source, order) {
 					continue
 				}
+				acknowledgedBeforeThisCensus := order.GetAcknowledgedAtMs() > 0
 				if _, present := acked[order.GetDepartureId()]; present {
 					knownAcks[order.GetDepartureId()] = struct{}{}
+					if order.GetIssuedAtMs() == 0 {
+						return errcode.New(errcode.ErrInvalidState,
+							"departure %s acknowledged before an order was issued", order.GetDepartureId())
+					}
 					if _, stillActive := active[order.GetPlayerId()]; stillActive {
 						return errcode.New(errcode.ErrInvalidState,
 							"departure %s acknowledged while player %d remains active",
 							order.GetDepartureId(), order.GetPlayerId())
 					}
+					if !acknowledgedBeforeThisCensus {
+						order.AcknowledgedAtMs = nowMs
+						order.AcknowledgedCensusId = censusID
+						changed = true
+					}
 				}
 				if order.GetStatus() != dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_PENDING {
 					continue
 				}
-				if snapshotPresent {
+				if snapshotPresent && acknowledgedBeforeThisCensus &&
+					order.GetAcknowledgedCensusId() != censusID {
 					if _, stillActive := active[order.GetPlayerId()]; !stillActive {
 						order.Status = dsv1.BattlePlayerDepartureStatus_BATTLE_PLAYER_DEPARTURE_STATUS_DEPARTED
 						order.DepartedAtMs = nowMs
@@ -363,7 +487,8 @@ func (r *RedisBattleRepo) ReconcilePlayerDepartures(
 					DepartureId: order.GetDepartureId(), MatchId: order.GetMatchId(),
 					PlayerId: order.GetPlayerId(), DsPodName: order.GetDsPodName(),
 					GameserverUid: order.GetGameserverUid(), InstanceEpoch: order.GetInstanceEpoch(),
-					AllocationId: order.GetAllocationId(), PlacementVersion: order.GetPlacementVersion(),
+					AllocationId: order.GetAllocationId(), PlacementVersion: order.GetSourcePlacementVersion(),
+					OperationId: order.GetSourceOperationId(),
 				})
 			}
 			if snapshotPresent && len(knownAcks) != len(acked) {
@@ -399,18 +524,18 @@ func (r *RedisBattleRepo) RecordInstanceTeardown(
 	matchID uint64,
 	source BattleDepartureSource,
 ) error {
-	if matchID == 0 || !source.valid() {
+	if matchID == 0 || !source.valid() || source.PodUID == "" {
 		return errcode.New(errcode.ErrInvalidArg, "complete battle teardown source tuple required")
 	}
 	jKey := battleDepartureJournalKey(matchID)
-	tKey := battleInstanceTeardownKey(matchID)
+	tKey := battleInstanceTeardownKey(matchID, source)
 	for attempt := 0; attempt < battleDepartureCASRetries; attempt++ {
 		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			journal, err := readDepartureJournal(ctx, tx, matchID)
 			if err != nil {
 				return err
 			}
-			existing, found, err := readTeardownProof(ctx, tx, matchID)
+			existing, found, err := readTeardownProof(ctx, tx, matchID, source)
 			if err != nil {
 				return err
 			}
@@ -418,13 +543,20 @@ func (r *RedisBattleRepo) RecordInstanceTeardown(
 				return errcode.New(errcode.ErrInvalidState,
 					"battle %d teardown proof tuple conflict", matchID)
 			}
+			proofRetention, repairProofTTL, err := teardownProofRemainingRetention(ctx, tx, tKey, found)
+			if err != nil {
+				return err
+			}
+			if !found {
+				proofRetention = BattleDepartureTerminalRetention
+			}
 			nowMs := time.Now().UnixMilli()
 			proof := existing
 			if proof == nil {
 				proof = &dsv1.BattleInstanceTeardownStorageRecord{
 					MatchId: matchID, DsPodName: source.DSPodName, GameserverUid: source.GameServerUID,
 					InstanceEpoch: source.InstanceEpoch, AllocationId: source.AllocationID,
-					TornDownAtMs: nowMs,
+					TornDownAtMs: nowMs, PodUid: source.PodUID,
 				}
 			}
 			journalChanged := false
@@ -435,9 +567,6 @@ func (r *RedisBattleRepo) RecordInstanceTeardown(
 					order.DepartedAtMs = proof.GetTornDownAtMs()
 					journalChanged = true
 				}
-			}
-			if found && !journalChanged {
-				return nil
 			}
 			proofPayload, err := marshalDepartureMessage(proof)
 			if err != nil {
@@ -450,10 +579,29 @@ func (r *RedisBattleRepo) RecordInstanceTeardown(
 					return err
 				}
 			}
+			journalTerminal := departureJournalTerminal(journal)
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, tKey, proofPayload, 0)
+				// A teardown proof is authoritative because ReleaseExpected already
+				// succeeded, not because it has a TTL. Rewriting an old permanent
+				// proof here also repairs pre-retention deployments on idempotent retry.
+				if found {
+					pipe.Set(ctx, tKey, proofPayload, redis.KeepTTL)
+					if repairProofTTL {
+						pipe.Expire(ctx, tKey, BattleDepartureTerminalRetention)
+					}
+				} else {
+					pipe.Set(ctx, tKey, proofPayload, BattleDepartureTerminalRetention)
+				}
 				if journalChanged {
-					pipe.Set(ctx, jKey, journalPayload, 0)
+					if journalTerminal {
+						pipe.Set(ctx, jKey, journalPayload, proofRetention)
+					} else {
+						pipe.Set(ctx, jKey, journalPayload, 0)
+					}
+				} else if journalTerminal {
+					// Idempotent replay bounds a legacy all-terminal journal whose
+					// bytes were already committed with TTL=0.
+					pipe.Expire(ctx, jKey, proofRetention)
 				}
 				return nil
 			})

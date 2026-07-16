@@ -51,36 +51,43 @@ func (u *MatchUsecase) checkpointBattleAllocation(
 	job *matchv1.MatchStorageRecord,
 	allocation *model.BattleAllocation,
 ) (*model.BattleAllocation, error) {
-	if job == nil || job.GetMatchId() == 0 || job.GetAllocationOperationId() == "" ||
+	if job == nil || job.GetMatchId() == 0 || !placement.ValidOperationID(job.GetAllocationOperationId()) ||
+		job.GetStage() != stageAllocating ||
+		job.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING ||
+		job.GetBattleTarget() != nil ||
 		allocation == nil || allocation.Address == "" || !allocation.Target.CompleteBattle() {
 		return nil, errcode.New(errcode.ErrInvalidArg, "complete allocation checkpoint required")
 	}
 
+	expectedTarget := battleTargetStorage(allocation, nil)
 	var checkpoint *model.BattleAllocation
 	err := u.repo.UpdateMatchWithLock(ctx, job.GetMatchId(), u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
-		if rec.GetStage() != stageAllocating || rec.GetAllocationOperationId() != job.GetAllocationOperationId() {
-			return errcode.New(errcode.ErrInvalidState,
-				"match %d allocation operation no longer active", job.GetMatchId())
-		}
 		if rec.GetBattleTarget() != nil {
-			existing, complete := allocationFromStoredTarget(rec.GetBattleTarget())
-			if !complete {
-				return errcode.New(errcode.ErrInvalidState,
-					"match %d has incomplete durable battle target", job.GetMatchId())
-			}
-			if !sameBattleAllocation(existing, allocation) {
+			expected := cloneMatch(job)
+			expected.BattleTarget = expectedTarget
+			if !exactAllocationSnapshot(rec, expected,
+				matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING) {
 				return errcode.New(errcode.ErrMatchConcurrent,
-					"match %d allocation target changed for operation %s",
+					"match %d allocation checkpoint generation changed for operation %s",
 					job.GetMatchId(), job.GetAllocationOperationId())
+			}
+			existing, complete := allocationFromStoredTarget(rec.GetBattleTarget())
+			if !complete || !sameBattleAllocation(existing, allocation) {
+				return errcode.New(errcode.ErrMatchConcurrent,
+					"match %d allocation checkpoint is not the exact allocator result", job.GetMatchId())
 			}
 			checkpoint = existing
 			return nil
+		}
+		if !exactUncheckpointedRequestingAllocation(rec, job) {
+			return errcode.New(errcode.ErrMatchConcurrent,
+				"match %d allocation operation no longer exact REQUESTING", job.GetMatchId())
 		}
 
 		// Player bindings deliberately remain empty at this checkpoint.  They are
 		// filled only by the READY CAS after every player returned the exact same
 		// operation binding and every ticket was signed.
-		rec.BattleTarget = battleTargetStorage(allocation, nil)
+		rec.BattleTarget = expectedTarget
 		checkpoint = &model.BattleAllocation{Address: allocation.Address, Target: allocation.Target}
 		return nil
 	}, u.matchTTL())
@@ -92,6 +99,48 @@ func (u *MatchUsecase) checkpointBattleAllocation(
 			"match %d allocation checkpoint response is unknown", job.GetMatchId())
 	}
 	return checkpoint, nil
+}
+
+// fenceRequestingAllocationCheckpoint is the authorization linearization
+// point immediately before each post-checkpoint external side effect.  The
+// no-op WATCH/CAS is deliberate: either this REQUESTING generation wins before
+// an abort fence, or ABORTING wins and the old worker cannot proceed to the
+// next placement/departure/ticket operation.
+func (u *MatchUsecase) fenceRequestingAllocationCheckpoint(
+	ctx context.Context,
+	matchID uint64,
+	operationID string,
+	allocation *model.BattleAllocation,
+) (*matchv1.MatchStorageRecord, error) {
+	if matchID == 0 || !placement.ValidOperationID(operationID) || allocation == nil ||
+		allocation.Address == "" || !allocation.Target.CompleteBattle() {
+		return nil, errcode.New(errcode.ErrInvalidArg, "complete requesting allocation fence required")
+	}
+	expected := &matchv1.MatchStorageRecord{
+		MatchId: matchID, Stage: stageAllocating,
+		AllocationPhase:       matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING,
+		AllocationOperationId: operationID,
+		BattleTarget:          battleTargetStorage(allocation, nil),
+	}
+	var fenced *matchv1.MatchStorageRecord
+	err := u.repo.UpdateMatchWithLock(ctx, matchID, u.cfg.OptimisticRetry,
+		func(rec *matchv1.MatchStorageRecord) error {
+			if !exactAllocationSnapshot(rec, expected,
+				matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING) {
+				return errcode.New(errcode.ErrMatchConcurrent,
+					"match %d requesting allocation checkpoint changed", matchID)
+			}
+			fenced = cloneMatch(rec)
+			return nil
+		}, u.matchTTL())
+	if err != nil {
+		return nil, err
+	}
+	if fenced == nil {
+		return nil, errcode.New(errcode.ErrUnavailable,
+			"match %d requesting allocation fence result unknown", matchID)
+	}
+	return fenced, nil
 }
 
 func validatePreparedBindings(operationID string, playerIDs []uint64, bindings map[uint64]placement.Binding) error {

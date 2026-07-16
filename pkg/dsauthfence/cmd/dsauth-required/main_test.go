@@ -3,6 +3,8 @@ package main
 import (
 	"math"
 	"testing"
+
+	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 )
 
 func TestValidateRequiredEpoch(t *testing.T) {
@@ -24,6 +26,22 @@ func TestValidateRequiredEpoch(t *testing.T) {
 				t.Fatalf("err=%v shouldFail=%v", err, tc.shouldFail)
 			}
 		})
+	}
+}
+
+func TestValidateRequiredStateDistinguishesV2AndV3AtSameWriterEpoch(t *testing.T) {
+	v2 := dsauthfence.RequiredSnapshot{Epoch: 2, PolicyGeneration: dsauthfence.RequiredPolicyGenerationV2,
+		PolicyID: dsauthfence.RequiredPolicyV2, RawValue: dsauthfence.RequiredValueV2}
+	v3 := dsauthfence.RequiredSnapshot{Epoch: 2, PolicyGeneration: dsauthfence.RequiredPolicyGenerationV3,
+		PolicyID: dsauthfence.RequiredPolicyV3, RawValue: dsauthfence.RequiredValueV3}
+	if err := validateRequiredState(v2, 2, 2, 3, 3); err == nil {
+		t.Fatal("V2 passed a V3-only preflight because writer epochs are equal")
+	}
+	if err := validateRequiredState(v3, 2, 2, 3, 3); err != nil {
+		t.Fatalf("V3 rejected by exact preflight: %v", err)
+	}
+	if _, _, err := checkedPolicyGenerationRange(1, 4); err == nil {
+		t.Fatal("unknown future policy generation range accepted")
 	}
 }
 

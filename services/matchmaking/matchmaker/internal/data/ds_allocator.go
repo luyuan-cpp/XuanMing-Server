@@ -16,7 +16,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/battleabort"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
@@ -32,9 +34,10 @@ type GrpcDSAllocator struct {
 	signer *auth.Signer
 	// v2 非 nil 时启用 DSTicket v2(RS256,方案 B):battle 票绑死 DS 实例
 	// (ds_uid / ds_instance_epoch / allocation_id),不再签 legacy HS256 票。
-	v2       *auth.DSTicketSigner
-	mapID    uint32
-	gameMode string
+	v2        *auth.DSTicketSigner
+	abortAuth *internalrpcauth.Signer
+	mapID     uint32
+	gameMode  string
 }
 
 // NewGrpcDSAllocator 直连 ds_allocator 服务 endpoint(host:port,内网 insecure)。
@@ -42,16 +45,60 @@ type GrpcDSAllocator struct {
 // mapID / gameMode 透传给 ds_allocator。
 // allocateTimeout 是 AllocateBattle 的客户端超时(服务端阻塞等 DS ready 心跳,
 // 需覆盖 agones allocate + ready_wait 预算,不能用 15s 默认值);≤0 时用 grpcclient 默认。
-func NewGrpcDSAllocator(dsAllocatorAddr string, signer *auth.Signer, v2Signer *auth.DSTicketSigner, mapID uint32, gameMode string, allocateTimeout time.Duration) *GrpcDSAllocator {
+func NewGrpcDSAllocator(dsAllocatorAddr string, signer *auth.Signer, v2Signer *auth.DSTicketSigner,
+	abortAuth *internalrpcauth.Signer, mapID uint32, gameMode string, allocateTimeout time.Duration,
+) *GrpcDSAllocator {
 	conn := grpcclient.MustDialInsecureTimeout(dsAllocatorAddr, allocateTimeout)
 	return &GrpcDSAllocator{
-		conn:     conn,
-		cli:      dsv1.NewDSAllocatorServiceClient(conn),
-		signer:   signer,
-		v2:       v2Signer,
-		mapID:    mapID,
-		gameMode: gameMode,
+		conn:      conn,
+		cli:       dsv1.NewDSAllocatorServiceClient(conn),
+		signer:    signer,
+		v2:        v2Signer,
+		abortAuth: abortAuth,
+		mapID:     mapID,
+		gameMode:  gameMode,
 	}
+}
+
+// AbortBattleAllocation invokes the allocator's destructive compensation RPC
+// with a fresh nonce and a signature over the canonical full request. It does
+// not reuse player JWT, placement proof, Login resume, or DS callback keys.
+func (g *GrpcDSAllocator) AbortBattleAllocation(
+	ctx context.Context,
+	matchID uint64,
+	operationID string,
+	allocation *model.BattleAllocation,
+) error {
+	if g.abortAuth == nil || allocation == nil {
+		return errcode.New(errcode.ErrUnavailable,
+			"battle allocation abort service auth unavailable for match %d", matchID)
+	}
+	request := battleabort.Request{MatchID: matchID, OperationID: operationID, Target: allocation.Target}
+	if !request.Complete() {
+		return errcode.New(errcode.ErrInvalidArg,
+			"complete battle allocation abort tuple required for match %d", matchID)
+	}
+	signedCtx, err := g.abortAuth.SignContextWithPayload(ctx,
+		dsv1.DSAllocatorService_AbortPreactiveBattle_FullMethodName,
+		matchID, request.Canonical())
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"sign battle allocation abort for match %d", matchID)
+	}
+	resp, err := g.cli.AbortPreactiveBattle(signedCtx, &dsv1.AbortPreactiveBattleRequest{
+		MatchId: matchID, AllocationOperationId: operationID,
+		DsPodName: allocation.Target.PodName, GameserverUid: allocation.Target.InstanceUID,
+		InstanceEpoch: allocation.Target.InstanceEpoch, AllocationId: allocation.Target.AllocationID,
+		ReleaseTrack: allocation.Target.ReleaseTrack,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()),
+			"ds_allocator abort returned code=%d for match %d", resp.GetCode(), matchID)
+	}
+	return nil
 }
 
 // Close 关闭底层连接。
@@ -79,9 +126,18 @@ func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, pl
 	if err != nil {
 		return nil, err
 	}
-	if resp.GetCode() != commonv1.ErrCode_OK || resp.GetDsAddr() == "" {
+	// Preserve the allocator's authoritative error classification. In particular,
+	// ERR_UNAVAILABLE means the external allocation result is UNKNOWN (for
+	// example the commit/fence response was lost). Collapsing it to
+	// ErrDSAllocationFailed lets the match worker mark the match FAILED and
+	// requeue players while a Battle DS may already exist.
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return nil, errcode.New(errcode.Code(resp.GetCode()),
+			"ds_allocator returned code=%d for match %d", resp.GetCode(), matchID)
+	}
+	if resp.GetDsAddr() == "" {
 		return nil, errcode.New(errcode.ErrDSAllocationFailed,
-			"ds_allocator returned code=%d addr=%q for match %d", resp.GetCode(), resp.GetDsAddr(), matchID)
+			"ds_allocator returned OK with empty addr for match %d", matchID)
 	}
 	target, terr := battleTargetFromResponse(resp, matchID)
 	if terr != nil {

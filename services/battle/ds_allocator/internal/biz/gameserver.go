@@ -37,9 +37,40 @@ type AuthoritativeGameServerAllocator interface {
 		allocation *data.AuthoritativeGameServerAllocation,
 		annotations map[string]string,
 	) (confirmedResourceVersion string, err error)
+	// ResolveExpectedPodUID is the rolling-upgrade preflight for legacy Redis
+	// battle records created before pod_uid was persisted.  It must use an
+	// exact GameServer GET (name + UID + allocation_id binding) followed by an
+	// owned Pod GET and return only that Pod's UID.  Missing/recreated objects
+	// are an error: callers must never guess an identity before delete.
+	ResolveExpectedPodUID(
+		ctx context.Context,
+		allocation *data.AuthoritativeGameServerAllocation,
+	) (podUID string, err error)
 	// ReleaseExpected 用 Kubernetes UID delete precondition 回收本实例；同名 GameServer 已重建
 	// 时必须失败且零删除，禁止旧 cleanup 按名字误杀新实例。
 	ReleaseExpected(ctx context.Context, allocation *data.AuthoritativeGameServerAllocation) error
+}
+
+// UncertainGameServerAllocationResolver is the read-only reconciliation
+// capability used after a GameServerAllocation POST result is unknown.  It
+// must never issue another allocation.  The implementation resolves the
+// immutable allocation_id label and returns either one fully verified
+// GameServer+Pod identity, authoritative absence, or an error for every
+// unknown/ambiguous result.
+//
+// It is deliberately an optional interface instead of another method on
+// AuthoritativeGameServerAllocator: older rolling-version writers and test
+// doubles that do not understand reconciliation remain fail-closed on the
+// permanent allocation_uncertain fence.
+type UncertainGameServerAllocationResolver interface {
+	ResolveAllocationByID(
+		ctx context.Context,
+		matchID uint64,
+		allocationID string,
+		playerIDs []uint64,
+		mapID uint32,
+		gameMode string,
+	) (allocation *data.AuthoritativeGameServerAllocation, found bool, err error)
 }
 
 // MockGameServerAllocator 是 W4 ② 的打桩实现:不连 k8s,按 match_id 计算确定性假地址。

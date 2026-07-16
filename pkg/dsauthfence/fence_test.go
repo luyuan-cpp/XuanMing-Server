@@ -23,6 +23,7 @@ func (l *fakeLease) Close() error          { l.once.Do(func() { close(l.lost) })
 
 type fakeBackend struct {
 	epoch               uint32
+	state               *RequiredState
 	found               bool
 	err                 error
 	watch               chan RequiredEvent
@@ -30,15 +31,29 @@ type fakeBackend struct {
 	key                 string
 	value               []byte
 	requiredEpoch       uint32
+	requiredValue       string
 	requiredModRevision int64
 }
 
-func (f *fakeBackend) GetRequired(context.Context, string) (uint32, int64, int64, bool, error) {
-	return f.epoch, 7, 5, f.found, f.err
+func (f *fakeBackend) GetRequired(context.Context, string) (RequiredState, int64, int64, bool, error) {
+	if f.err != nil || !f.found {
+		return RequiredState{}, 7, 5, f.found, f.err
+	}
+	if f.state != nil {
+		return *f.state, 7, 5, true, nil
+	}
+	value, err := RequiredValueForEpoch(f.epoch)
+	if err != nil {
+		return RequiredState{Epoch: f.epoch, RawValue: "unsupported"}, 7, 5, true, nil
+	}
+	state, err := ParseRequiredState([]byte(value))
+	return state, 7, 5, true, err
 }
-func (f *fakeBackend) AcquireCapability(_ context.Context, key, _, _ string, required uint32, modRevision int64, value []byte, _ int64) (Lease, error) {
+func (f *fakeBackend) AcquireCapability(_ context.Context, key, _, _ string, required string, modRevision int64, value []byte, _ int64) (Lease, error) {
 	f.key, f.value = key, value
-	f.requiredEpoch, f.requiredModRevision = required, modRevision
+	f.requiredValue, f.requiredModRevision = required, modRevision
+	state, _ := ParseRequiredState([]byte(required))
+	f.requiredEpoch = state.Epoch
 	if f.lease == nil {
 		f.lease = newFakeLease()
 	}
@@ -50,7 +65,14 @@ func (f *fakeBackend) WatchRequired(context.Context, string, int64) <-chan Requi
 func (f *fakeBackend) Close() error { return nil }
 
 func validConfig() Config {
-	return Config{Endpoints: []string{"etcd:2379"}, Service: "hub_allocator", InstanceUID: "pod-uid", ImageDigest: testDigest, KeysetRevision: "r1", WriterEpoch: 2}
+	return Config{Endpoints: []string{"etcd:2379"}, Service: "hub_allocator", InstanceUID: "pod-uid", ImageDigest: testDigest, KeysetRevision: "r1", WriterEpoch: 2,
+		Features: []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1", "hub-owner-cleanup-v1", "hub-physical-eviction-v1"}}
+}
+
+func validV3Config() Config {
+	cfg := validConfig()
+	cfg.Features = append(append([]string(nil), cfg.Features...), "hub-successor-lease-v1")
+	return cfg
 }
 
 func TestStartRequiresLinearRequiredKey(t *testing.T) {
@@ -77,8 +99,8 @@ func TestStartFencesCapabilityWithExactRequiredRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = holder.Close() }()
-	if backend.requiredEpoch != 1 || backend.requiredModRevision != 5 {
-		t.Fatalf("capability compare epoch=%d mod_revision=%d", backend.requiredEpoch, backend.requiredModRevision)
+	if backend.requiredEpoch != 1 || backend.requiredValue != "1" || backend.requiredModRevision != 5 {
+		t.Fatalf("capability compare value=%q epoch=%d mod_revision=%d", backend.requiredValue, backend.requiredEpoch, backend.requiredModRevision)
 	}
 }
 
@@ -104,19 +126,15 @@ func TestHolderMonotonicAndFailClosed(t *testing.T) {
 	if holder.RequiredEpoch() != 1 {
 		t.Fatalf("required=%d", holder.RequiredEpoch())
 	}
-	watch <- RequiredEvent{Epoch: 2, Revision: 8}
-	deadline := time.Now().Add(time.Second)
-	for holder.RequiredEpoch() != 2 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if holder.RequiredEpoch() != 2 {
-		t.Fatal("epoch did not advance")
-	}
-	watch <- RequiredEvent{Epoch: 1, Revision: 9}
+	watch <- RequiredEvent{State: RequiredState{Epoch: 2, PolicyGeneration: RequiredPolicyGenerationV2, PolicyID: RequiredPolicyV2, RawValue: RequiredValueV2}, Revision: 8}
 	select {
 	case <-holder.Lost():
 	case <-time.After(time.Second):
-		t.Fatal("rollback did not fence")
+		t.Fatal("forward policy change did not force capability reacquisition")
+	}
+	if holder.RequiredEpoch() != 2 || holder.RequiredPolicyGeneration() != RequiredPolicyGenerationV2 {
+		t.Fatalf("holder did not publish observed forward policy before fencing: epoch=%d generation=%d",
+			holder.RequiredEpoch(), holder.RequiredPolicyGeneration())
 	}
 }
 
@@ -251,5 +269,194 @@ func TestParseEpochAndExpectedServices(t *testing.T) {
 		if _, err := ParseExpectedDigests(raw); err == nil {
 			t.Fatalf("accepted invalid expected digest %q", raw)
 		}
+	}
+}
+
+func TestVersionedRequiredPolicyMechanicallyFencesOldEpoch2Binary(t *testing.T) {
+	if _, err := ParseEpoch([]byte(RequiredValueV2)); err == nil {
+		t.Fatal("old numeric parser accepted the versioned v2 policy value")
+	}
+	state, err := ParseRequiredState([]byte(RequiredValueV2))
+	if err != nil || state.Epoch != ProtocolEpochV2 || state.PolicyGeneration != RequiredPolicyGenerationV2 || state.PolicyID != RequiredPolicyV2 || state.RawValue != RequiredValueV2 {
+		t.Fatalf("versioned state=%+v err=%v", state, err)
+	}
+	v3, err := ParseRequiredState([]byte(RequiredValueV3))
+	if err != nil || v3.Epoch != ProtocolEpochV2 || v3.PolicyGeneration != RequiredPolicyGenerationV3 ||
+		v3.PolicyID != RequiredPolicyV3 || v3.RawValue != RequiredValueV3 {
+		t.Fatalf("versioned V3 state=%+v err=%v", v3, err)
+	}
+	for _, raw := range []string{"2", "2@wrong-policy", "1@" + RequiredPolicyV2, RequiredValueV2 + " ", "3@future"} {
+		if _, err := ParseRequiredState([]byte(raw)); err == nil {
+			t.Fatalf("new parser accepted non-canonical required policy %q", raw)
+		}
+	}
+	if got, err := RequiredValueForEpoch(2); err != nil || got != RequiredValueV2 {
+		t.Fatalf("RequiredValueForEpoch(2)=%q err=%v", got, err)
+	}
+}
+
+func TestStartTargetPolicyRequiresExactServiceFeaturesAndRawCASValue(t *testing.T) {
+	state := RequiredState{Epoch: 2, PolicyGeneration: RequiredPolicyGenerationV2, PolicyID: RequiredPolicyV2, RawValue: RequiredValueV2}
+	backend := &fakeBackend{state: &state, found: true, watch: make(chan RequiredEvent)}
+	holder, err := Start(context.Background(), backend, validConfig())
+	if err != nil {
+		t.Fatalf("exact target policy rejected: %v", err)
+	}
+	defer holder.Close()
+	if backend.requiredValue != RequiredValueV2 {
+		t.Fatalf("registration compared %q, want %q", backend.requiredValue, RequiredValueV2)
+	}
+
+	for name, mutate := range map[string]func(*Config){
+		"missing feature": func(cfg *Config) { cfg.Features = cfg.Features[:len(cfg.Features)-1] },
+		"extra feature":   func(cfg *Config) { cfg.Features = append(cfg.Features, "unexpected-feature-v1") },
+		"unknown service": func(cfg *Config) { cfg.Service = "unknown_writer" },
+		"future writer":   func(cfg *Config) { cfg.WriterEpoch = 3 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := validConfig()
+			mutate(&cfg)
+			copyState := state
+			if _, err := Start(context.Background(), &fakeBackend{state: &copyState, found: true, watch: make(chan RequiredEvent)}, cfg); err == nil {
+				t.Fatal("invalid target capability acquired")
+			}
+		})
+	}
+}
+
+func TestV2AllowsOnlyExactHubV2OrStagedV3AndV3RejectsOldHub(t *testing.T) {
+	v2, _ := ParseRequiredState([]byte(RequiredValueV2))
+	for name, cfg := range map[string]Config{"exact-v2": validConfig(), "exact-staged-v3": validV3Config()} {
+		t.Run(name, func(t *testing.T) {
+			backend := &fakeBackend{state: &v2, found: true, watch: make(chan RequiredEvent)}
+			holder, err := Start(context.Background(), backend, cfg)
+			if err != nil {
+				t.Fatalf("canonical candidate rejected: %v", err)
+			}
+			defer holder.Close()
+			var capability Capability
+			if err := json.Unmarshal(backend.value, &capability); err != nil {
+				t.Fatal(err)
+			}
+			if capability.SupportedPolicyGeneration != RequiredPolicyGenerationV3 ||
+				capability.SupportedPolicyID != RequiredPolicyV3 {
+				t.Fatalf("compiled policy identity missing from capability: %+v", capability)
+			}
+			if capability.AcquiredPolicyGeneration != RequiredPolicyGenerationV2 ||
+				capability.AcquiredPolicyID != RequiredPolicyV2 {
+				t.Fatalf("actual required policy identity missing from capability: %+v", capability)
+			}
+		})
+	}
+	arbitrary := validConfig()
+	arbitrary.Features = append(arbitrary.Features, "unrelated-feature-v1")
+	if _, err := Start(context.Background(), &fakeBackend{state: &v2, found: true, watch: make(chan RequiredEvent)}, arbitrary); err == nil {
+		t.Fatal("arbitrary V2 feature superset was accepted")
+	}
+
+	v3, _ := ParseRequiredState([]byte(RequiredValueV3))
+	if _, err := Start(context.Background(), &fakeBackend{state: &v3, found: true, watch: make(chan RequiredEvent)}, validConfig()); err == nil {
+		t.Fatal("old Hub feature set reacquired under V3")
+	}
+	holder, err := Start(context.Background(), &fakeBackend{state: &v3, found: true, watch: make(chan RequiredEvent)}, validV3Config())
+	if err != nil {
+		t.Fatalf("exact V3 Hub rejected: %v", err)
+	}
+	_ = holder.Close()
+}
+
+func TestV3AuditRejectsOldBinaryEvenWhenFeaturesAndDigestMatch(t *testing.T) {
+	features, err := ParseRequiredFeatures(
+		"hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1|hub-owner-cleanup-v1|hub-physical-eviction-v1|hub-successor-lease-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability := Capability{Service: "hub_allocator", InstanceUID: "uid", WriterEpoch: 2,
+		ImageDigest: testDigest, KeysetRevision: "r1", Features: validV3Config().Features}
+	policy := AuditPolicy{RequiredServices: map[string]int{"hub_allocator": 1},
+		TargetEpoch: 2, TargetPolicyGeneration: RequiredPolicyGenerationV3,
+		ExpectedAcquiredPolicyGeneration: RequiredPolicyGenerationV3,
+		KeysetRevision:                   "r1", AllowedDigests: map[string]struct{}{testDigest: {}},
+		ExpectedDigests: map[string]string{"hub_allocator": testDigest}, RequiredFeatures: features}
+	live := LiveCapability{Capability: capability, LeaseID: 1,
+		Key: capabilityKey(DefaultPrefix, "hub_allocator", "uid")}
+	if findings := AuditCapabilities([]LiveCapability{live}, policy); !strings.Contains(strings.Join(findings, " "), "supported_policy") {
+		t.Fatalf("legacy capability without compiled policy identity passed V3 audit: %v", findings)
+	}
+	live.Capability.SupportedPolicyGeneration = RequiredPolicyGenerationV3
+	live.Capability.SupportedPolicyID = RequiredPolicyV3
+	live.Capability.AcquiredPolicyGeneration = RequiredPolicyGenerationV3
+	live.Capability.AcquiredPolicyID = RequiredPolicyV3
+	if findings := AuditCapabilities([]LiveCapability{live}, policy); len(findings) != 0 {
+		t.Fatalf("exact compiled V3 capability rejected: %v", findings)
+	}
+}
+
+func TestTargetPolicyWatchDeletionTamperAndSameEpochRewriteFence(t *testing.T) {
+	tests := map[string]RequiredEvent{
+		"deletion":        {Deleted: true, Revision: 8},
+		"wrong policy":    {State: RequiredState{Epoch: 2, PolicyID: "wrong", RawValue: "2@wrong"}, Revision: 8},
+		"same epoch edit": {State: RequiredState{Epoch: 1, RawValue: "1"}, Revision: 8},
+	}
+	for name, event := range tests {
+		t.Run(name, func(t *testing.T) {
+			watch := make(chan RequiredEvent, 1)
+			backend := &fakeBackend{epoch: 1, found: true, watch: watch}
+			holder, err := Start(context.Background(), backend, validConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			watch <- event
+			select {
+			case <-holder.Lost():
+			case <-time.After(time.Second):
+				t.Fatal("required policy tamper did not fence")
+			}
+			_ = holder.Close()
+		})
+	}
+}
+
+func TestActivationPolicyIsFixedAndExact(t *testing.T) {
+	services := map[string]int{
+		"login": 1, "player_locator": 1, "ds_allocator": 1, "hub_allocator": 1, "battle_result": 1,
+	}
+	features, err := ParseRequiredFeatures(
+		"hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1|hub-owner-cleanup-v1|hub-physical-eviction-v1," +
+			"ds_allocator=battle-release-expected-tuple-v1|battle-storage-pod-uid-write-invariant-v1," +
+			"battle_result=battle-terminal-outbox-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateActivationPolicy(2, services, features); err != nil {
+		t.Fatalf("canonical activation policy rejected: %v", err)
+	}
+	delete(features["ds_allocator"], "battle-storage-pod-uid-write-invariant-v1")
+	if err := ValidateActivationPolicy(2, services, features); err == nil {
+		t.Fatal("activation policy missing pod_uid invariant was accepted")
+	}
+	delete(services, "battle_result")
+	if err := ValidateActivationPolicy(2, services, features); err == nil {
+		t.Fatal("activation policy missing production writer was accepted")
+	}
+}
+
+func TestV3ActivationRequiresSingleHubWriter(t *testing.T) {
+	services := map[string]int{
+		"login": 1, "player_locator": 1, "ds_allocator": 1, "hub_allocator": 1, "battle_result": 1,
+	}
+	features := make(map[string]map[string]struct{}, len(requiredPolicyV3Features))
+	for service, list := range requiredPolicyV3Features {
+		features[service] = make(map[string]struct{}, len(list))
+		for _, feature := range list {
+			features[service][feature] = struct{}{}
+		}
+	}
+	if err := ValidateActivationPolicyGeneration(RequiredPolicyGenerationV3, services, features); err != nil {
+		t.Fatalf("canonical single-Hub V3 policy rejected: %v", err)
+	}
+	services["hub_allocator"] = 2
+	if err := ValidateActivationPolicyGeneration(RequiredPolicyGenerationV3, services, features); err == nil {
+		t.Fatal("V3 activation accepted two Hub writers despite the Recreate/single-writer contract")
 	}
 }

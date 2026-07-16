@@ -188,6 +188,7 @@ type AuthoritativeGameServerAllocation struct {
 	PodName            string
 	Addr               string
 	InstanceUID        string
+	PodUID             string
 	InstanceEpoch      uint32
 	ResourceVersion    string
 	AllocationID       string
@@ -207,6 +208,23 @@ type gameServerResponse struct {
 
 type gameServerListResponse struct {
 	Items []gameServerResponse `json:"items"`
+}
+
+type k8sOwnerReference struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	UID        string `json:"uid"`
+	Controller bool   `json:"controller"`
+}
+
+type podResponse struct {
+	Metadata struct {
+		Name            string              `json:"name"`
+		UID             string              `json:"uid"`
+		ResourceVersion string              `json:"resourceVersion"`
+		OwnerReferences []k8sOwnerReference `json:"ownerReferences"`
+	} `json:"metadata"`
 }
 
 type jsonPatchOperation struct {
@@ -272,7 +290,8 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 ) (*AuthoritativeGameServerAllocation, error) {
 	parsedAllocationID, parseErr := uuid.Parse(allocationID)
 	if matchID == 0 || parseErr != nil || parsedAllocationID == uuid.Nil ||
-		parsedAllocationID.Version() != uuid.Version(4) || parsedAllocationID.String() != allocationID ||
+		parsedAllocationID.Version() != uuid.Version(4) || parsedAllocationID.Variant() != uuid.RFC4122 ||
+		parsedAllocationID.String() != allocationID ||
 		!releasetrack.Valid(releaseTrack) {
 		return nil, errcode.New(errcode.ErrInvalidArg, "agones: match_id and allocation_id required")
 	}
@@ -314,15 +333,114 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 			"agones: selected gameserver identity/binding incomplete: want_name=%q name=%q uid=%q rv=%q",
 			podName, gs.Metadata.Name, gs.Metadata.UID, gs.Metadata.ResourceVersion)
 	}
+	partial.InstanceUID = gs.Metadata.UID
+	partial.ResourceVersion = gs.Metadata.ResourceVersion
+	pod, err := a.getPod(ctx, podName)
+	if err != nil {
+		return partial, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: strict GET selected pod %s failed: %v", podName, err)
+	}
+	if !podOwnedByGameServer(pod, podName, gs.Metadata.UID) {
+		return partial, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: selected pod identity/owner incomplete: pod=%q pod_uid=%q gameserver_uid=%q",
+			podName, pod.Metadata.UID, gs.Metadata.UID)
+	}
 	return &AuthoritativeGameServerAllocation{
 		PodName:            podName,
 		Addr:               addr,
 		InstanceUID:        gs.Metadata.UID,
+		PodUID:             pod.Metadata.UID,
 		ResourceVersion:    gs.Metadata.ResourceVersion,
 		AllocationID:       allocationID,
 		ReleaseTrack:       actualReleaseTrack,
 		AnnotationsPresent: gs.Metadata.Annotations != nil,
 	}, nil
+}
+
+// ResolveAllocationByID reconciles an allocation whose POST result was
+// unknown.  allocation_id is the idempotency/fencing label written by the GSA
+// request before any credential exists.  This method is strictly read-only:
+// zero objects is authoritative absence, exactly one object must match the
+// complete original match/roster metadata and its owned Pod, and multiple
+// objects are an ambiguity that must be retried/operated manually rather than
+// guessed.
+func (a *AgonesGameServerAllocator) ResolveAllocationByID(
+	ctx context.Context,
+	matchID uint64,
+	allocationID string,
+	playerIDs []uint64,
+	mapID uint32,
+	gameMode string,
+) (*AuthoritativeGameServerAllocation, bool, error) {
+	parsedAllocationID, parseErr := uuid.Parse(allocationID)
+	canonicalPlayers, roster, rosterErr := dsmetadata.CanonicalRoster(playerIDs)
+	if matchID == 0 || parseErr != nil || parsedAllocationID == uuid.Nil ||
+		parsedAllocationID.Version() != uuid.Version(4) || parsedAllocationID.Variant() != uuid.RFC4122 ||
+		parsedAllocationID.String() != allocationID ||
+		rosterErr != nil || len(canonicalPlayers) == 0 {
+		return nil, false, errcode.New(errcode.ErrInvalidArg,
+			"agones: complete uncertain allocation identity required")
+	}
+	selector := battleAllocationMetadataKey + "=" + sanitizeLabelValue(allocationID)
+	listURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers?labelSelector=%s",
+		a.apiServer, a.namespace, url.QueryEscape(selector))
+	body, status, err := a.do(ctx, http.MethodGet, listURL, nil)
+	if err != nil {
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: resolve allocation_id %s: %v", allocationID, err)
+	}
+	if status < 200 || status >= 300 {
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: resolve allocation_id %s http %d: %s",
+			allocationID, status, truncate(body, 256))
+	}
+	var list gameServerListResponse
+	if err := json.Unmarshal(body, &list); err != nil {
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: decode allocation_id %s list: %v", allocationID, err)
+	}
+	switch len(list.Items) {
+	case 0:
+		return nil, false, nil
+	case 1:
+		// Continue below.
+	default:
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: allocation_id %s is ambiguous: gameservers=%d", allocationID, len(list.Items))
+	}
+
+	gs := &list.Items[0]
+	actualTrack := gs.Metadata.Labels[releaseTrackMetadataKey]
+	if gs.Metadata.Name == "" || gs.Metadata.UID == "" || gs.Metadata.ResourceVersion == "" ||
+		gs.Metadata.Labels["pandora.dev/match-id"] != strconv.FormatUint(matchID, 10) ||
+		gs.Metadata.Labels["pandora.dev/map-id"] != strconv.FormatUint(uint64(mapID), 10) ||
+		gs.Metadata.Labels["pandora.dev/game-mode"] != sanitizeLabelValue(gameMode) ||
+		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocationID) ||
+		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocationID ||
+		gs.Metadata.Annotations[battleRosterAnnotationKey] != roster ||
+		!releasetrack.Valid(actualTrack) || gs.Metadata.Annotations[releaseTrackMetadataKey] != actualTrack {
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: allocation_id %s resolved GameServer binding is incomplete or conflicting",
+			allocationID)
+	}
+	pod, err := a.getPod(ctx, gs.Metadata.Name)
+	if err != nil {
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: resolve allocation_id %s pod %s: %v", allocationID, gs.Metadata.Name, err)
+	}
+	if !podOwnedByGameServer(pod, gs.Metadata.Name, gs.Metadata.UID) {
+		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: allocation_id %s associated Pod identity is incomplete", allocationID)
+	}
+	return &AuthoritativeGameServerAllocation{
+		PodName:            gs.Metadata.Name,
+		InstanceUID:        gs.Metadata.UID,
+		PodUID:             pod.Metadata.UID,
+		ResourceVersion:    gs.Metadata.ResourceVersion,
+		AllocationID:       allocationID,
+		ReleaseTrack:       actualTrack,
+		AnnotationsPresent: gs.Metadata.Annotations != nil,
+	}, true, nil
 }
 
 func (a *AgonesGameServerAllocator) allocateWithMetadata(
@@ -523,6 +641,34 @@ func (a *AgonesGameServerAllocator) getGameServer(ctx context.Context, podName s
 	return &gs, nil
 }
 
+func (a *AgonesGameServerAllocator) getPod(ctx context.Context, podName string) (*podResponse, error) {
+	url := fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s", a.apiServer, a.namespace, podName)
+	body, status, err := a.do(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, fmt.Errorf("GET pod http %d: %s", status, truncate(body, 256))
+	}
+	var pod podResponse
+	if err := json.Unmarshal(body, &pod); err != nil {
+		return nil, fmt.Errorf("decode pod: %w", err)
+	}
+	return &pod, nil
+}
+
+func podOwnedByGameServer(pod *podResponse, podName, gameServerUID string) bool {
+	if pod == nil || pod.Metadata.Name != podName || pod.Metadata.UID == "" || gameServerUID == "" {
+		return false
+	}
+	for _, owner := range pod.Metadata.OwnerReferences {
+		if owner.Controller && owner.Kind == "GameServer" && owner.UID == gameServerUID {
+			return true
+		}
+	}
+	return false
+}
+
 func confirmCredentialDelivery(
 	gs *gameServerResponse,
 	allocation *AuthoritativeGameServerAllocation,
@@ -540,8 +686,56 @@ func confirmCredentialDelivery(
 	return nil
 }
 
-// ReleaseExpected 只删除 UID 仍等于本次分配实例的 GameServer。同名对象重建后 UID 变化，
-// apiserver 会拒绝 DeleteOptions precondition，旧 cleanup 不能误杀新实例。
+// ResolveExpectedPodUID performs the only allowed rolling-upgrade backfill
+// for BattleStorageRecord records written before pod_uid existed.  Both
+// Kubernetes objects are read before any delete, and every durable binding is
+// checked.  A missing object or a same-name replacement is deliberately not
+// treated as success because the old Pod UID cannot then be proven.
+func (a *AgonesGameServerAllocator) ResolveExpectedPodUID(
+	ctx context.Context,
+	allocation *AuthoritativeGameServerAllocation,
+) (string, error) {
+	if allocation == nil {
+		return "", errcode.New(errcode.ErrInvalidArg,
+			"agones: pod UID preflight requires gameserver name, uid and allocation_id")
+	}
+	parsedAllocationID, parseErr := uuid.Parse(allocation.AllocationID)
+	if allocation.PodName == "" || allocation.InstanceUID == "" ||
+		parseErr != nil || parsedAllocationID == uuid.Nil || parsedAllocationID.Version() != uuid.Version(4) ||
+		parsedAllocationID.Variant() != uuid.RFC4122 ||
+		parsedAllocationID.String() != allocation.AllocationID {
+		return "", errcode.New(errcode.ErrInvalidArg,
+			"agones: pod UID preflight requires gameserver name, uid and allocation_id")
+	}
+	gs, err := a.getGameServer(ctx, allocation.PodName)
+	if err != nil {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: pod UID preflight gameserver GET failed: %v", err)
+	}
+	if gs.Metadata.Name != allocation.PodName || gs.Metadata.UID != allocation.InstanceUID ||
+		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocation.AllocationID) ||
+		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocation.AllocationID {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: pod UID preflight gameserver identity/binding changed: pod=%q uid=%q allocation_id=%q",
+			gs.Metadata.Name, gs.Metadata.UID, allocation.AllocationID)
+	}
+	pod, err := a.getPod(ctx, allocation.PodName)
+	if err != nil {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: pod UID preflight pod GET failed: %v", err)
+	}
+	if !podOwnedByGameServer(pod, allocation.PodName, allocation.InstanceUID) {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: pod UID preflight owner/identity changed: pod=%q pod_uid=%q gameserver_uid=%q",
+			allocation.PodName, pod.Metadata.UID, allocation.InstanceUID)
+	}
+	return pod.Metadata.UID, nil
+}
+
+// ReleaseExpected 只删除 UID 仍等于本次分配实例的 GameServer。
+// DELETE 2xx 只是 deletion request accepted，不是物理消失证明；本方法
+// 会继续轮询 exact GameServer UID 及分配时捕获的关联 Pod UID，
+// 只有两者都 NotFound/UID changed 才返回 nil。
 func (a *AgonesGameServerAllocator) ReleaseExpected(
 	ctx context.Context,
 	allocation *AuthoritativeGameServerAllocation,
@@ -579,6 +773,16 @@ func (a *AgonesGameServerAllocator) ReleaseExpected(
 	if allocation.PodName == "" {
 		return errcode.New(errcode.ErrInvalidArg, "agones: UID release requires gameserver name")
 	}
+	if allocation.PodUID == "" {
+		// Never capture this only in process memory and then DELETE. A crash after
+		// Kubernetes accepted the delete would lose the Pod UID forever, so a
+		// restarted reconciler could no longer prove that the exact physical Pod
+		// disappeared. New allocations persist PodUID before any external delete;
+		// legacy records must be drained/migrated by the release preflight.
+		return errcode.New(errcode.ErrDSAllocationFailed,
+			"agones: durable associated pod UID required before exact release: pod=%s gameserver_uid=%s",
+			allocation.PodName, allocation.InstanceUID)
+	}
 	body, err := json.Marshal(deleteOptions{
 		APIVersion: "v1", Kind: "DeleteOptions",
 		Preconditions: &deletePreconditions{UID: allocation.InstanceUID},
@@ -588,20 +792,73 @@ func (a *AgonesGameServerAllocator) ReleaseExpected(
 	}
 	url := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
 		a.apiServer, a.namespace, allocation.PodName)
-	respBody, status, err := a.do(ctx, http.MethodDelete, url, body)
-	if err != nil {
+	respBody, status, deleteErr := a.do(ctx, http.MethodDelete, url, body)
+	if confirmErr := a.waitExpectedInstanceGone(ctx, allocation); confirmErr != nil {
 		return errcode.New(errcode.ErrDSAllocationFailed,
-			"agones: expected release %s uid=%s: %v", allocation.PodName, allocation.InstanceUID, err)
-	}
-	if status == http.StatusNotFound {
-		return nil
-	}
-	if status < 200 || status >= 300 {
-		return errcode.New(errcode.ErrDSAllocationFailed,
-			"agones: expected release %s uid=%s http %d: %s",
-			allocation.PodName, allocation.InstanceUID, status, truncate(respBody, 256))
+			"agones: exact release not physically confirmed: pod=%s gs_uid=%s pod_uid=%s delete_status=%d delete_err=%v delete_body=%q confirm_err=%v",
+			allocation.PodName, allocation.InstanceUID, allocation.PodUID, status, deleteErr,
+			truncate(respBody, 128), confirmErr)
 	}
 	return nil
+}
+
+func (a *AgonesGameServerAllocator) waitExpectedInstanceGone(
+	ctx context.Context,
+	allocation *AuthoritativeGameServerAllocation,
+) error {
+	wait := a.allocateTimeout
+	if wait <= 0 {
+		wait = 5 * time.Second
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	gsURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, allocation.PodName)
+	podURL := fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s",
+		a.apiServer, a.namespace, allocation.PodName)
+	var lastGSErr, lastPodErr error
+	for {
+		gsGone, gsErr := a.resourceUIDGone(waitCtx, gsURL, allocation.InstanceUID)
+		podGone, podErr := a.resourceUIDGone(waitCtx, podURL, allocation.PodUID)
+		lastGSErr, lastPodErr = gsErr, podErr
+		if gsErr == nil && podErr == nil && gsGone && podGone {
+			return nil
+		}
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("timeout waiting exact objects gone: gs_gone=%t gs_err=%v pod_gone=%t pod_err=%v: %w",
+				gsGone, lastGSErr, podGone, lastPodErr, waitCtx.Err())
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func (a *AgonesGameServerAllocator) resourceUIDGone(
+	ctx context.Context,
+	resourceURL, expectedUID string,
+) (bool, error) {
+	body, status, err := a.do(ctx, http.MethodGet, resourceURL, nil)
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusNotFound {
+		return true, nil
+	}
+	if status < 200 || status >= 300 {
+		return false, fmt.Errorf("GET exact resource http %d: %s", status, truncate(body, 128))
+	}
+	var object struct {
+		Metadata struct {
+			UID string `json:"uid"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(body, &object); err != nil {
+		return false, fmt.Errorf("decode exact resource identity: %w", err)
+	}
+	if object.Metadata.UID == "" {
+		return false, fmt.Errorf("exact resource missing metadata.uid")
+	}
+	return object.Metadata.UID != expectedUID, nil
 }
 
 // Release DELETE 该 GameServer(Fleet 自动补新);404 视作已释放(幂等)。

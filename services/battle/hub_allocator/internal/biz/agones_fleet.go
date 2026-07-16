@@ -274,6 +274,21 @@ type gsMetadata struct {
 	UID             string `json:"uid"`
 }
 
+type ownerReference struct {
+	Kind string `json:"kind"`
+	UID  string `json:"uid"`
+}
+
+type podMetadata struct {
+	Name            string           `json:"name"`
+	UID             string           `json:"uid"`
+	OwnerReferences []ownerReference `json:"ownerReferences"`
+}
+
+type kubernetesPod struct {
+	Metadata podMetadata `json:"metadata"`
+}
+
 type gameServer struct {
 	Metadata gsMetadata `json:"metadata"`
 	Status   gsStatus   `json:"status"`
@@ -307,6 +322,68 @@ func (a *AgonesHubFleetProvider) ListShards(ctx context.Context, region string) 
 		out = append(out, canary...)
 	}
 	return out, nil
+}
+
+// ObserveShardInstance reads the unfiltered GameServer and its Pod.  It does
+// not use readiness, health, address, release-track, or callback-token gates:
+// those are routing facts, not physical-liveness facts.
+func (a *AgonesHubFleetProvider) ObserveShardInstance(ctx context.Context, pod string) (HubInstanceObservation, error) {
+	if strings.TrimSpace(pod) == "" {
+		return HubInstanceObservation{}, fmt.Errorf("agones: observe hub shard requires pod")
+	}
+	obs := HubInstanceObservation{}
+	gsURL := fmt.Sprintf("%s/apis/agones.dev/v1/namespaces/%s/gameservers/%s",
+		a.apiServer, a.namespace, url.PathEscape(pod))
+	gsBytes, gsStatus, err := a.do(ctx, http.MethodGet, gsURL, nil, "")
+	if err != nil {
+		return HubInstanceObservation{}, fmt.Errorf("agones: observe gameserver %s: %w", pod, err)
+	}
+	switch {
+	case gsStatus == http.StatusNotFound:
+	case gsStatus >= 200 && gsStatus < 300:
+		var gs gameServer
+		if err := json.Unmarshal(gsBytes, &gs); err != nil {
+			return HubInstanceObservation{}, fmt.Errorf("agones: decode observed gameserver %s: %w", pod, err)
+		}
+		if gs.Metadata.Name != pod || gs.Metadata.UID == "" {
+			return HubInstanceObservation{}, fmt.Errorf("agones: observed gameserver %s missing exact identity", pod)
+		}
+		obs.GameServerFound = true
+		obs.GameServerUID = gs.Metadata.UID
+	default:
+		return HubInstanceObservation{}, fmt.Errorf("agones: observe gameserver %s http %d: %s",
+			pod, gsStatus, truncateBody(gsBytes, 256))
+	}
+
+	podURL := fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s",
+		a.apiServer, a.namespace, url.PathEscape(pod))
+	podBytes, podStatus, err := a.do(ctx, http.MethodGet, podURL, nil, "")
+	if err != nil {
+		return HubInstanceObservation{}, fmt.Errorf("agones: observe pod %s: %w", pod, err)
+	}
+	switch {
+	case podStatus == http.StatusNotFound:
+		return obs, nil
+	case podStatus >= 200 && podStatus < 300:
+		var p kubernetesPod
+		if err := json.Unmarshal(podBytes, &p); err != nil {
+			return HubInstanceObservation{}, fmt.Errorf("agones: decode observed pod %s: %w", pod, err)
+		}
+		if p.Metadata.Name != pod || p.Metadata.UID == "" {
+			return HubInstanceObservation{}, fmt.Errorf("agones: observed pod %s missing exact identity", pod)
+		}
+		obs.PodFound = true
+		for _, owner := range p.Metadata.OwnerReferences {
+			if owner.Kind == "GameServer" && owner.UID != "" {
+				obs.PodOwnerGameServerUID = owner.UID
+				break
+			}
+		}
+		return obs, nil
+	default:
+		return HubInstanceObservation{}, fmt.Errorf("agones: observe pod %s http %d: %s",
+			pod, podStatus, truncateBody(podBytes, 256))
+	}
 }
 
 func (a *AgonesHubFleetProvider) listTrackShards(ctx context.Context, region, fleetName, releaseTrack string) ([]ShardCandidate, error) {

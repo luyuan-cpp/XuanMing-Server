@@ -24,6 +24,12 @@ type StubDSAllocator struct {
 // production main 在配置真实 allocator 时禁止使用此桩。
 type StubPlacementCoordinator struct{}
 
+func (StubPlacementCoordinator) RequireStableHub(context.Context, []uint64) error { return nil }
+
+func (StubPlacementCoordinator) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
+	return nil
+}
+
 func (StubPlacementCoordinator) PrepareBattlePlacement(_ context.Context, operationID string, _ uint64, playerIDs []uint64, _ *model.BattleAllocation) (map[uint64]placement.Binding, error) {
 	bindings := make(map[uint64]placement.Binding, len(playerIDs))
 	for _, playerID := range playerIDs {
@@ -52,6 +58,10 @@ func (s *StubDSAllocator) AllocateBattle(_ context.Context, matchID uint64, play
 			ReleaseTrack:  "stable",
 		},
 	}, nil
+}
+
+func (s *StubDSAllocator) AbortBattleAllocation(context.Context, uint64, string, *model.BattleAllocation) error {
+	return nil
 }
 
 func (s *StubDSAllocator) SignBattleTickets(_ context.Context, matchID uint64, playerIDs []uint64, _ *model.BattleAllocation, _ map[uint64]placement.Binding) (map[uint64]string, error) {

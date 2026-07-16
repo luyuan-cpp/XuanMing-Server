@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
@@ -50,7 +51,15 @@ func newRepo(t *testing.T) (*RedisBattleRepo, *miniredis.Miniredis) {
 	t.Cleanup(mr.Close)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
-	return NewRedisBattleRepo(rdb), mr
+	repo := NewRedisBattleRepo(rdb)
+	repo.EnableStrictModelBWrites()
+	return repo, mr
+}
+
+func newStrictRepo(rdb redis.UniversalClient) *RedisBattleRepo {
+	repo := NewRedisBattleRepo(rdb)
+	repo.EnableStrictModelBWrites()
+	return repo
 }
 
 func sampleBattle(matchID uint64, lastHbMs int64) *dsv1.BattleStorageRecord {
@@ -65,6 +74,10 @@ func sampleBattle(matchID uint64, lastHbMs int64) *dsv1.BattleStorageRecord {
 		AllocatedAtMs:   1000,
 		LastHeartbeatMs: lastHbMs,
 		PlayerCount:     3,
+		GameserverUid:   "gameserver-uid-1",
+		AllocationId:    "10000000-0000-4000-8000-000000000001",
+		ReleaseTrack:    "stable",
+		PodUid:          "pod-uid-1",
 	}
 }
 
@@ -193,7 +206,7 @@ func TestClaimBattleTrueConcurrencySingleWinner(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			claim := &dsv1.BattleStorageRecord{
-				MatchId: 77, State: "allocating", AllocationId: fmt.Sprintf("claim-%d", i),
+				MatchId: 77, State: "allocating", AllocationId: uuid.NewString(),
 				AllocatedAtMs: 1000, LastHeartbeatMs: 1000,
 			}
 			claimed, _, err := repo.ClaimBattle(ctx, claim, testTTL)
@@ -218,22 +231,20 @@ func TestFenceBattleAllocationPersistsUntilStrictFencedFinalize(t *testing.T) {
 	ctx := context.Background()
 	repo, mr := newRepo(t)
 	claim := &dsv1.BattleStorageRecord{
-		MatchId: 78, State: "allocating", AllocationId: "alloc-78",
+		MatchId: 78, State: "allocating", AllocationId: "10000000-0000-4000-8000-000000000078",
 		AllocatedAtMs: 1000, LastHeartbeatMs: 1000,
 	}
 	// 新增 RMW 路径必须保留未来版本写入的 unknown fields，满足滚动更新兼容红线。
 	futureWire := []byte{0xa0, 0x06, 0x07} // field 100(varint)=7
 	claim.ProtoReflect().SetUnknown(futureWire)
-	if claimed, _, err := repo.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
-		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
-	}
+	seedRawBattleForInvariant(t, repo, claim, testTTL)
 	if ttl := mr.TTL(battleKey(78)); ttl <= 0 {
 		t.Fatalf("claim should initially expire, ttl=%s", ttl)
 	}
 	if fenced, err := repo.FenceBattleAllocation(ctx, 78, "stale-allocation"); err != nil || fenced {
 		t.Fatalf("stale fence: fenced=%v err=%v", fenced, err)
 	}
-	if fenced, err := repo.FenceBattleAllocation(ctx, 78, "alloc-78"); err != nil || !fenced {
+	if fenced, err := repo.FenceBattleAllocation(ctx, 78, "10000000-0000-4000-8000-000000000078"); err != nil || !fenced {
 		t.Fatalf("owner fence: fenced=%v err=%v", fenced, err)
 	}
 	got, found, err := repo.GetBattle(ctx, 78)
@@ -246,11 +257,12 @@ func TestFenceBattleAllocationPersistsUntilStrictFencedFinalize(t *testing.T) {
 	if unknown := got.ProtoReflect().GetUnknown(); string(unknown) != string(futureWire) {
 		t.Fatalf("fence discarded future protobuf fields: got=%x want=%x", unknown, futureWire)
 	}
-	if deleted, err := repo.DeleteBattleIfAllocationMatches(ctx, 78, "alloc-78", ""); err != nil || deleted {
+	if deleted, err := repo.DeleteBattleIfAllocationMatches(ctx, 78, "10000000-0000-4000-8000-000000000078", ""); err != nil || deleted {
 		t.Fatalf("uncertain claim must reject cleanup: deleted=%v err=%v", deleted, err)
 	}
 	warming := proto.Clone(got).(*dsv1.BattleStorageRecord)
 	warming.State, warming.DsPodName, warming.DsAddr = "warming", "pod-78", "10.0.0.78:7777"
+	warming.GameserverUid, warming.PodUid, warming.ReleaseTrack = "uid-78", "pod-uid-78", "stable"
 	if finalized, err := repo.FinalizeBattleAllocation(ctx, warming, testTTL); err != nil || finalized {
 		t.Fatalf("legacy finalize bypassed persistent fence: finalized=%v err=%v", finalized, err)
 	}
@@ -276,23 +288,22 @@ func TestFinalizeFencedBattleAllocationAppliedResponseLostUsesStrictReadback(t *
 	const matchID = uint64(79)
 	futureWire := []byte{0xf8, 0x07, 0x01}
 	claim := &dsv1.BattleStorageRecord{
-		MatchId: matchID, State: "allocating", AllocationId: "alloc-79",
+		MatchId: matchID, State: "allocating", AllocationId: "10000000-0000-4000-8000-000000000079",
 		AllocatedAtMs: 10, LastHeartbeatMs: 10,
 	}
 	claim.ProtoReflect().SetUnknown(append([]byte(nil), futureWire...))
-	if claimed, _, err := base.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
-		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
-	}
-	if fenced, err := base.FenceBattleAllocation(ctx, matchID, "alloc-79"); err != nil || !fenced {
+	seedRawBattleForInvariant(t, base, claim, testTTL)
+	if fenced, err := base.FenceBattleAllocation(ctx, matchID, "10000000-0000-4000-8000-000000000079"); err != nil || !fenced {
 		t.Fatalf("fence: fenced=%v err=%v", fenced, err)
 	}
 
 	lost := &loseSuccessfulWatchResponseClient{UniversalClient: base.rdb, afterSuccess: cancel}
 	lost.remaining.Store(1)
-	repo := NewRedisBattleRepo(lost)
+	repo := newStrictRepo(lost)
 	warming := &dsv1.BattleStorageRecord{
-		MatchId: matchID, State: "warming", AllocationId: "alloc-79",
+		MatchId: matchID, State: "warming", AllocationId: "10000000-0000-4000-8000-000000000079",
 		DsPodName: "battle-79", DsAddr: "10.0.0.79:7777", GameserverUid: "uid-79",
+		PodUid: "pod-uid-79", ReleaseTrack: "stable",
 		AllocatedAtMs: 20, LastHeartbeatMs: 20,
 	}
 	finalized, err := repo.FinalizeFencedBattleAllocation(ctx, warming, testTTL)
@@ -304,7 +315,7 @@ func TestFinalizeFencedBattleAllocationAppliedResponseLostUsesStrictReadback(t *
 	}
 	verifyCtx := context.Background()
 	got, found, err := base.GetBattle(verifyCtx, matchID)
-	if err != nil || !found || got.GetAllocationId() != "alloc-79" ||
+	if err != nil || !found || got.GetAllocationId() != "10000000-0000-4000-8000-000000000079" ||
 		got.GetGameserverUid() != "uid-79" || got.GetDsPodName() != "battle-79" ||
 		got.GetState() != "warming" {
 		t.Fatalf("strict read-back mismatch: found=%v got=%+v err=%v", found, got, err)
@@ -325,18 +336,19 @@ func TestFinalizeFencedBattleAllocationResponseLostRejectsMismatchedReadback(t *
 	base, mr := newRepo(t)
 	const matchID = uint64(80)
 	claim := &dsv1.BattleStorageRecord{
-		MatchId: matchID, State: "allocating", AllocationId: "alloc-80",
+		MatchId: matchID, State: "allocating", AllocationId: "10000000-0000-4000-8000-000000000080",
 		AllocatedAtMs: 10, LastHeartbeatMs: 10,
 	}
 	if claimed, _, err := base.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
 		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
 	}
-	if fenced, err := base.FenceBattleAllocation(ctx, matchID, "alloc-80"); err != nil || !fenced {
+	if fenced, err := base.FenceBattleAllocation(ctx, matchID, "10000000-0000-4000-8000-000000000080"); err != nil || !fenced {
 		t.Fatalf("fence: fenced=%v err=%v", fenced, err)
 	}
 	warming := &dsv1.BattleStorageRecord{
-		MatchId: matchID, State: "warming", AllocationId: "alloc-80",
+		MatchId: matchID, State: "warming", AllocationId: "10000000-0000-4000-8000-000000000080",
 		DsPodName: "battle-80", DsAddr: "10.0.0.80:7777", GameserverUid: "uid-80",
+		PodUid: "pod-uid-80", ReleaseTrack: "stable",
 		PlayerIds: []uint64{1, 2}, PlayerCount: 2,
 		AllocatedAtMs: 20, LastHeartbeatMs: 20,
 	}
@@ -350,7 +362,7 @@ func TestFinalizeFencedBattleAllocationResponseLostRejectsMismatchedReadback(t *
 				return
 			}
 			current.PlayerIds = []uint64{999}
-			payload, err := marshalBattle(current)
+			payload, err := proto.Marshal(current)
 			if err != nil {
 				hookErr = err
 				return
@@ -359,7 +371,7 @@ func TestFinalizeFencedBattleAllocationResponseLostRejectsMismatchedReadback(t *
 		},
 	}
 	lost.remaining.Store(1)
-	finalized, err := NewRedisBattleRepo(lost).FinalizeFencedBattleAllocation(ctx, warming, testTTL)
+	finalized, err := newStrictRepo(lost).FinalizeFencedBattleAllocation(ctx, warming, testTTL)
 	if hookErr != nil {
 		t.Fatal(hookErr)
 	}
@@ -371,11 +383,52 @@ func TestFinalizeFencedBattleAllocationResponseLostRejectsMismatchedReadback(t *
 	}
 }
 
+func TestFinalizeFencedBattleAllocationRejectsIncompleteReleaseIdentity(t *testing.T) {
+	ctx := context.Background()
+	base, _ := newRepo(t)
+	const matchID = uint64(81)
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: "allocating", AllocationId: "10000000-0000-4000-8000-000000000081",
+		AllocatedAtMs: 10, LastHeartbeatMs: 10,
+	}
+	if claimed, _, err := base.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
+	}
+	if fenced, err := base.FenceBattleAllocation(ctx, matchID, "10000000-0000-4000-8000-000000000081"); err != nil || !fenced {
+		t.Fatalf("fence: fenced=%v err=%v", fenced, err)
+	}
+	complete := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: "warming", AllocationId: "10000000-0000-4000-8000-000000000081",
+		DsPodName: "battle-81", DsAddr: "10.0.0.81:7777", GameserverUid: "uid-81",
+		PodUid: "pod-uid-81", ReleaseTrack: "stable",
+		AllocatedAtMs: 20, LastHeartbeatMs: 20,
+	}
+	for name, mutate := range map[string]func(*dsv1.BattleStorageRecord){
+		"gameserver_uid":  func(b *dsv1.BattleStorageRecord) { b.GameserverUid = "" },
+		"pod_uid":         func(b *dsv1.BattleStorageRecord) { b.PodUid = "" },
+		"release_track":   func(b *dsv1.BattleStorageRecord) { b.ReleaseTrack = "" },
+		"address":         func(b *dsv1.BattleStorageRecord) { b.DsAddr = "" },
+		"premature_epoch": func(b *dsv1.BattleStorageRecord) { b.InstanceEpoch = 1 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := proto.Clone(complete).(*dsv1.BattleStorageRecord)
+			mutate(candidate)
+			if finalized, err := base.FinalizeFencedBattleAllocation(ctx, candidate, testTTL); err == nil || finalized {
+				t.Fatalf("incomplete identity accepted: finalized=%v err=%v", finalized, err)
+			}
+		})
+	}
+	got, found, err := base.GetBattle(ctx, matchID)
+	if err != nil || !found || got.GetState() != BattleStateAllocationUncertain {
+		t.Fatalf("rejected finalize changed fence: found=%v got=%+v err=%v", found, got, err)
+	}
+}
+
 func TestFinalizeAndCleanupAreFencedByAllocationID(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := newRepo(t)
 	claim := &dsv1.BattleStorageRecord{
-		MatchId: 88, State: "allocating", AllocationId: "winner",
+		MatchId: 88, State: "allocating", AllocationId: "10000000-0000-4000-8000-000000000088",
 		AllocatedAtMs: 1000, LastHeartbeatMs: 1000,
 	}
 	claimed, _, err := repo.ClaimBattle(ctx, claim, testTTL)
@@ -383,20 +436,21 @@ func TestFinalizeAndCleanupAreFencedByAllocationID(t *testing.T) {
 		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
 	}
 	loser := proto.Clone(claim).(*dsv1.BattleStorageRecord)
-	loser.State, loser.DsPodName, loser.AllocationId = "warming", "pod-loser", "loser"
+	loser.State, loser.DsPodName, loser.AllocationId = "warming", "pod-loser", "20000000-0000-4000-8000-000000000088"
 	if ok, err := repo.FinalizeBattleAllocation(ctx, loser, testTTL); err != nil || ok {
 		t.Fatalf("stale finalize: ok=%v err=%v", ok, err)
 	}
 	winner := proto.Clone(claim).(*dsv1.BattleStorageRecord)
 	winner.State, winner.DsPodName, winner.DsAddr = "warming", "pod-winner", "127.0.0.1:30088"
+	winner.GameserverUid, winner.PodUid, winner.ReleaseTrack = "uid-winner", "pod-uid-winner", "stable"
 	if ok, err := repo.FinalizeBattleAllocation(ctx, winner, testTTL); err != nil || !ok {
 		t.Fatalf("winner finalize: ok=%v err=%v", ok, err)
 	}
-	if deleted, err := repo.DeleteBattleIfAllocationMatches(ctx, 88, "loser", "pod-loser"); err != nil || deleted {
+	if deleted, err := repo.DeleteBattleIfAllocationMatches(ctx, 88, "20000000-0000-4000-8000-000000000088", "pod-loser"); err != nil || deleted {
 		t.Fatalf("stale cleanup: deleted=%v err=%v", deleted, err)
 	}
 	got, found, err := repo.GetBattle(ctx, 88)
-	if err != nil || !found || got.AllocationId != "winner" || got.DsPodName != "pod-winner" {
+	if err != nil || !found || got.AllocationId != "10000000-0000-4000-8000-000000000088" || got.DsPodName != "pod-winner" {
 		t.Fatalf("winner overwritten/deleted: found=%v got=%+v err=%v", found, got, err)
 	}
 }
@@ -405,15 +459,151 @@ func TestCleanupNeverDeletesReadyWinner(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := newRepo(t)
 	rec := sampleBattle(99, 2000)
-	rec.AllocationId = "winner"
+	rec.AllocationId = "10000000-0000-4000-8000-000000000099"
 	if err := repo.CreateBattle(ctx, rec, testTTL); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	deleted, err := repo.DeleteBattleIfAllocationMatches(ctx, 99, "winner", rec.DsPodName)
+	deleted, err := repo.DeleteBattleIfAllocationMatches(ctx, 99, "10000000-0000-4000-8000-000000000099", rec.DsPodName)
 	if err != nil || deleted {
 		t.Fatalf("ready cleanup must be fenced: deleted=%v err=%v", deleted, err)
 	}
 	if _, found, _ := repo.GetBattle(ctx, 99); !found {
 		t.Fatal("ready record was deleted")
+	}
+}
+
+func TestAllocationUncertainExactReleaseFenceAndTerminalCAS(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const allocationID = "77777777-7777-4777-8777-777777777777"
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 177, State: "allocating", AllocationId: allocationID,
+		PlayerIds: []uint64{10, 20}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1000, LastHeartbeatMs: 1000, PlayerCount: 2,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	resolved := &AuthoritativeGameServerAllocation{
+		PodName: "battle-reconcile-177", InstanceUID: "gs-uid-177", PodUID: "pod-uid-177",
+		ResourceVersion: "301", AllocationID: allocationID, ReleaseTrack: "stable",
+	}
+	if fenced, err := repo.FenceAllocationUncertainRelease(ctx, claim.GetMatchId(), allocationID, resolved); err != nil || !fenced {
+		t.Fatalf("exact release fence: fenced=%t err=%v", fenced, err)
+	}
+	pending, found, err := repo.GetBattle(ctx, claim.GetMatchId())
+	if err != nil || !found || pending.GetState() != BattleStateAllocationReconcileReleasePending ||
+		pending.GetGameserverUid() != resolved.InstanceUID || pending.GetPodUid() != resolved.PodUID ||
+		mr.TTL(battleKey(claim.GetMatchId())) != 0 {
+		t.Fatalf("durable exact release fence found=%t record=%+v ttl=%v err=%v",
+			found, pending, mr.TTL(battleKey(claim.GetMatchId())), err)
+	}
+	if completed, err := repo.CompleteAllocationUncertainRelease(ctx, claim.GetMatchId(),
+		allocationID, "wrong-uid"); err != nil || completed {
+		t.Fatalf("wrong UID completed terminal: completed=%t err=%v", completed, err)
+	}
+	if completed, err := repo.CompleteAllocationUncertainRelease(ctx, claim.GetMatchId(),
+		allocationID, resolved.InstanceUID); err != nil || !completed {
+		t.Fatalf("exact terminal CAS: completed=%t err=%v", completed, err)
+	}
+	terminal, found, err := repo.GetBattle(ctx, claim.GetMatchId())
+	if err != nil || !found || terminal.GetState() != "abandoned" ||
+		terminal.GetGameserverUid() != resolved.InstanceUID || len(terminal.GetPlayerIds()) != 2 ||
+		mr.TTL(battleKey(claim.GetMatchId())) != 0 {
+		t.Fatalf("durable terminal found=%t record=%+v ttl=%v err=%v",
+			found, terminal, mr.TTL(battleKey(claim.GetMatchId())), err)
+	}
+}
+
+func TestAllocationUncertainFenceAndCompleteResponseLossAreRestartSafe(t *testing.T) {
+	ctx := context.Background()
+	base, mr := newRepo(t)
+	const allocationID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 178, State: "allocating", AllocationId: allocationID,
+		PlayerIds: []uint64{10}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1000, LastHeartbeatMs: 1000, PlayerCount: 1,
+	}
+	if claimed, _, err := base.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := base.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	resolved := &AuthoritativeGameServerAllocation{
+		PodName: "battle-reconcile-178", InstanceUID: "gs-uid-178", PodUID: "pod-uid-178",
+		ResourceVersion: "302", AllocationID: allocationID, ReleaseTrack: "stable",
+	}
+	lostFence := &loseSuccessfulWatchResponseClient{UniversalClient: base.rdb}
+	lostFence.remaining.Store(1)
+	if fenced, err := newStrictRepo(lostFence).FenceAllocationUncertainRelease(
+		ctx, claim.GetMatchId(), allocationID, resolved); err == nil {
+		t.Fatalf("simulated fence response loss fenced=%t err=%v", fenced, err)
+	}
+	committed, found, err := base.GetBattle(ctx, claim.GetMatchId())
+	if err != nil || !found || committed.GetState() != BattleStateAllocationReconcileReleasePending ||
+		mr.TTL(battleKey(claim.GetMatchId())) != 0 {
+		t.Fatalf("lost fence response lost commit found=%t record=%+v ttl=%v err=%v",
+			found, committed, mr.TTL(battleKey(claim.GetMatchId())), err)
+	}
+	if fenced, err := base.FenceAllocationUncertainRelease(ctx, claim.GetMatchId(), allocationID, resolved); err != nil || !fenced {
+		t.Fatalf("restart fence replay: fenced=%t err=%v", fenced, err)
+	}
+
+	lostComplete := &loseSuccessfulWatchResponseClient{UniversalClient: base.rdb}
+	lostComplete.remaining.Store(1)
+	if completed, err := newStrictRepo(lostComplete).CompleteAllocationUncertainRelease(
+		ctx, claim.GetMatchId(), allocationID, resolved.InstanceUID); err == nil {
+		t.Fatalf("simulated complete response loss completed=%t err=%v", completed, err)
+	}
+	committed, found, err = base.GetBattle(ctx, claim.GetMatchId())
+	if err != nil || !found || committed.GetState() != "abandoned" ||
+		mr.TTL(battleKey(claim.GetMatchId())) != 0 {
+		t.Fatalf("lost complete response lost terminal found=%t record=%+v ttl=%v err=%v",
+			found, committed, mr.TTL(battleKey(claim.GetMatchId())), err)
+	}
+	if completed, err := base.CompleteAllocationUncertainRelease(ctx, claim.GetMatchId(),
+		allocationID, resolved.InstanceUID); err != nil || !completed {
+		t.Fatalf("restart complete replay: completed=%t err=%v", completed, err)
+	}
+}
+
+func TestAllocationUncertainAuthoritativeEmptyBecomesDurableTerminal(t *testing.T) {
+	ctx := context.Background()
+	repo, mr := newRepo(t)
+	const allocationID = "88888888-8888-4888-8888-888888888888"
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 188, State: "allocating", AllocationId: allocationID,
+		PlayerIds: []uint64{30}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1000, LastHeartbeatMs: 1000, PlayerCount: 1,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, testTTL); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	if completed, err := repo.CompleteAllocationUncertainRelease(ctx, claim.GetMatchId(), allocationID, ""); err != nil || !completed {
+		t.Fatalf("empty terminal CAS: completed=%t err=%v", completed, err)
+	}
+	terminal, found, err := repo.GetBattle(ctx, claim.GetMatchId())
+	if err != nil || !found || terminal.GetState() != "abandoned" ||
+		terminal.GetDsPodName() != "" || terminal.GetGameserverUid() != "" ||
+		mr.TTL(battleKey(claim.GetMatchId())) != 0 {
+		t.Fatalf("empty durable terminal found=%t record=%+v ttl=%v err=%v",
+			found, terminal, mr.TTL(battleKey(claim.GetMatchId())), err)
+	}
+	if marked, err := repo.MarkAllocationUncertainEmptyLifecyclePublished(ctx,
+		claim.GetMatchId(), allocationID); err != nil || !marked {
+		t.Fatalf("empty lifecycle tombstone: marked=%t err=%v", marked, err)
+	}
+	tombstone, found, err := repo.GetBattle(ctx, claim.GetMatchId())
+	if err != nil || !found || tombstone.GetState() != BattleStateAllocationReconcileEmptyTombstone ||
+		mr.TTL(battleKey(claim.GetMatchId())) != 0 {
+		t.Fatalf("permanent empty tombstone found=%t record=%+v ttl=%v err=%v",
+			found, tombstone, mr.TTL(battleKey(claim.GetMatchId())), err)
 	}
 }

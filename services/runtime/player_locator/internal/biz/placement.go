@@ -49,6 +49,22 @@ type CommitPlacementInput struct {
 	AdmissionID string
 }
 
+type ConfirmSourceDepartureInput struct {
+	PlayerID          uint64
+	Version           uint64
+	OperationID       string
+	TargetRoute       locatorv1.PlacementRoute
+	TargetMatchID     uint64
+	SourceVersion     uint64
+	SourceOperationID string
+	SourceRoute       locatorv1.PlacementRoute
+	SourceMatchID     uint64
+	SourceTarget      placement.Target
+	ProofType         locatorv1.PlacementSourceDepartureProofType
+	ProofID           string
+	ProofSignature    string
+}
+
 type RetargetPlacementInput struct {
 	PlayerID               uint64
 	Version                uint64
@@ -68,10 +84,11 @@ type RetargetPlacementInput struct {
 
 // PlacementUsecase owns the durable route state machine.
 type PlacementUsecase struct {
-	repo             data.PlacementRepo
-	now              func() time.Time
-	proofVerifier    PlacementProofVerifier
-	retargetVerifier PlacementTargetUnavailableVerifier
+	repo              data.PlacementRepo
+	now               func() time.Time
+	proofVerifier     PlacementProofVerifier
+	retargetVerifier  PlacementTargetUnavailableVerifier
+	departureVerifier PlacementSourceDepartureVerifier
 }
 
 type PlacementProofVerifier interface {
@@ -82,12 +99,19 @@ type PlacementTargetUnavailableVerifier interface {
 	VerifyTargetUnavailable(placement.TargetUnavailableProof, string) bool
 }
 
+type PlacementSourceDepartureVerifier interface {
+	VerifySourceDeparture(placement.SourceDepartureProof, string) bool
+}
+
 func NewPlacementUsecase(repo data.PlacementRepo, verifier ...PlacementProofVerifier) *PlacementUsecase {
 	u := &PlacementUsecase{repo: repo, now: time.Now}
 	if len(verifier) > 0 {
 		u.proofVerifier = verifier[0]
 		if retargetVerifier, ok := verifier[0].(PlacementTargetUnavailableVerifier); ok {
 			u.retargetVerifier = retargetVerifier
+		}
+		if departureVerifier, ok := verifier[0].(PlacementSourceDepartureVerifier); ok {
+			u.departureVerifier = departureVerifier
 		}
 	}
 	return u
@@ -142,6 +166,7 @@ func (u *PlacementUsecase) Retarget(ctx context.Context, in RetargetPlacementInp
 			next.RetargetCount++
 			next.LastRetargetProofId = in.ProofID
 			next.LastRetargetReason = in.Reason
+			clearSourceDepartureConfirmation(next)
 			return next, nil
 		})
 }
@@ -197,6 +222,167 @@ func setRecordTarget(rec *locatorv1.PlayerPlacementStorageRecord, target placeme
 	rec.DsPodName, rec.DsInstanceUid = target.PodName, target.InstanceUID
 	rec.DsInstanceEpoch, rec.HubAssignmentId = target.InstanceEpoch, target.AssignmentID
 	rec.AllocationId, rec.ReleaseTrack = target.AllocationID, target.ReleaseTrack
+}
+
+func recordSourceTarget(rec *locatorv1.PlayerPlacementStorageRecord) placement.Target {
+	if rec == nil {
+		return placement.Target{}
+	}
+	return placement.Target{PodName: rec.GetSourceDsPodName(), InstanceUID: rec.GetSourceDsInstanceUid(),
+		InstanceEpoch: rec.GetSourceDsInstanceEpoch(), AssignmentID: rec.GetSourceHubAssignmentId(),
+		AllocationID: rec.GetSourceAllocationId(), ReleaseTrack: rec.GetSourceReleaseTrack()}
+}
+
+func setRecordSource(rec *locatorv1.PlayerPlacementStorageRecord, binding placement.Binding,
+	target placement.Target) {
+	rec.SourcePlacementVersion = binding.Version
+	rec.SourceOperationId = binding.OperationID
+	rec.SourceDsPodName = target.PodName
+	rec.SourceDsInstanceUid = target.InstanceUID
+	rec.SourceDsInstanceEpoch = target.InstanceEpoch
+	rec.SourceHubAssignmentId = target.AssignmentID
+	rec.SourceAllocationId = target.AllocationID
+	rec.SourceReleaseTrack = target.ReleaseTrack
+}
+
+func clearRecordSource(rec *locatorv1.PlayerPlacementStorageRecord) {
+	setRecordSource(rec, placement.Binding{}, placement.Target{})
+}
+
+func clearSourceDepartureConfirmation(rec *locatorv1.PlayerPlacementStorageRecord) {
+	if rec == nil {
+		return
+	}
+	rec.SourceDepartureConfirmed = false
+	rec.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED
+	rec.SourceDepartureProofId = ""
+}
+
+// physicalPlacementSource derives the proof authority from the immutable
+// source target, not from transition proof metadata.  In particular, terminal
+// cancellation of a PENDING Battle keeps source_match_id=the cancelled match
+// for logical proof audit while its physical source remains HUB/match=0.
+func physicalPlacementSource(rec *locatorv1.PlayerPlacementStorageRecord) (
+	locatorv1.PlacementRoute, uint64, placement.Target, bool,
+) {
+	if rec == nil {
+		return locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED, 0, placement.Target{}, false
+	}
+	target := recordSourceTarget(rec)
+	switch {
+	case rec.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+		rec.GetMatchId() == 0 && target.CompleteHub() && target.AllocationID == "":
+		return locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB, 0, target, true
+	case rec.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE &&
+		rec.GetMatchId() > 0 && rec.GetSourceMatchId() == rec.GetMatchId() &&
+		target.CompleteBattle() && target.AssignmentID == "":
+		return locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE, rec.GetMatchId(), target, true
+	default:
+		return locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED, 0, placement.Target{}, false
+	}
+}
+
+func sourceDepartureProof(in ConfirmSourceDepartureInput) placement.SourceDepartureProof {
+	return placement.SourceDepartureProof{
+		PlayerID: in.PlayerID, PlacementVersion: in.Version, OperationID: in.OperationID,
+		TargetRoute: int32(in.TargetRoute), TargetMatchID: in.TargetMatchID,
+		SourcePlacementVersion: in.SourceVersion, SourceOperationID: in.SourceOperationID,
+		SourceRoute: int32(in.SourceRoute), SourceMatchID: in.SourceMatchID,
+		SourceTarget: in.SourceTarget, ProofType: int32(in.ProofType), ProofID: in.ProofID,
+	}
+}
+
+func validateSourceDepartureInput(in ConfirmSourceDepartureInput) error {
+	if in.PlayerID == 0 || in.Version == 0 || in.SourceVersion == 0 || in.SourceVersion >= in.Version ||
+		!placement.ValidOperationID(in.OperationID) || !placement.ValidOperationID(in.SourceOperationID) ||
+		in.OperationID == in.SourceOperationID || strings.TrimSpace(in.ProofID) == "" ||
+		strings.TrimSpace(in.ProofSignature) == "" {
+		return errcode.New(errcode.ErrInvalidArg, "complete source-departure identity required")
+	}
+	switch in.TargetRoute {
+	case locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB:
+		if in.TargetMatchID != 0 {
+			return errcode.New(errcode.ErrInvalidArg, "Hub departure target cannot carry match_id")
+		}
+	case locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE:
+		if in.TargetMatchID == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "Battle departure target requires match_id")
+		}
+	default:
+		return errcode.New(errcode.ErrInvalidArg, "source-departure target route required")
+	}
+	switch in.SourceRoute {
+	case locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB:
+		if in.SourceMatchID != 0 || !in.SourceTarget.CompleteHub() || in.SourceTarget.AllocationID != "" ||
+			int32(in.ProofType) != placement.ProofHubDeparture {
+			return errcode.New(errcode.ErrInvalidArg, "Hub physical source requires Hub-departure proof")
+		}
+	case locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE:
+		if in.SourceMatchID == 0 || !in.SourceTarget.CompleteBattle() || in.SourceTarget.AssignmentID != "" ||
+			int32(in.ProofType) != placement.ProofBattleDeparture {
+			return errcode.New(errcode.ErrInvalidArg, "Battle physical source requires Battle-departure proof")
+		}
+	default:
+		return errcode.New(errcode.ErrInvalidArg, "source-departure physical route required")
+	}
+	return nil
+}
+
+// ConfirmSourceDeparture is the Admission-independent physical source gate.
+// It only marks the exact current PENDING version/op/source and is therefore
+// safe to replay after an unknown RPC result.  Retarget and every new Begin
+// clear the marker before a different target can be admitted.
+func (u *PlacementUsecase) ConfirmSourceDeparture(ctx context.Context,
+	in ConfirmSourceDepartureInput,
+) (*locatorv1.PlayerPlacementStorageRecord, error) {
+	if err := validateSourceDepartureInput(in); err != nil {
+		return nil, err
+	}
+	proof := sourceDepartureProof(in)
+	if u.departureVerifier == nil || !u.departureVerifier.VerifySourceDeparture(proof, in.ProofSignature) {
+		return nil, errcode.New(errcode.ErrPermissionDeny, "source-departure proof verification failed")
+	}
+	nowMs := u.now().UnixMilli()
+	update := u.repo.UpdatePlacement
+	if in.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE {
+		update = func(ctx context.Context, playerID uint64, maxRetry int,
+			mutate func(*locatorv1.PlayerPlacementStorageRecord, bool) (*locatorv1.PlayerPlacementStorageRecord, error),
+		) (*locatorv1.PlayerPlacementStorageRecord, error) {
+			return u.repo.UpdatePlacementWithBattleTerminalFence(ctx, playerID, in.TargetMatchID, maxRetry, mutate)
+		}
+	}
+	return update(ctx, in.PlayerID, placementOptimisticRetry,
+		func(cur *locatorv1.PlayerPlacementStorageRecord, found bool) (*locatorv1.PlayerPlacementStorageRecord, error) {
+			if !found {
+				return nil, errcode.New(errcode.ErrLocatorNotFound, "placement is UNKNOWN")
+			}
+			sourceRoute, sourceMatchID, sourceTarget, sourceOK := physicalPlacementSource(cur)
+			if cur.GetTransitionState() != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING ||
+				cur.GetVersion() != in.Version || cur.GetOperationId() != in.OperationID ||
+				cur.GetTargetRoute() != in.TargetRoute || cur.GetTargetMatchId() != in.TargetMatchID ||
+				cur.GetSourcePlacementVersion() != in.SourceVersion ||
+				cur.GetSourceOperationId() != in.SourceOperationID ||
+				!sourceOK || sourceRoute != in.SourceRoute || sourceMatchID != in.SourceMatchID ||
+				!sourceTarget.Equal(in.SourceTarget) ||
+				(cur.GetLeaseDeadlineMs() > 0 && cur.GetLeaseDeadlineMs() <= nowMs) {
+				return nil, errcode.New(errcode.ErrLocatorConflict,
+					"source-departure proof lost exact pending/source CAS")
+			}
+			if cur.GetSourceDepartureConfirmed() {
+				if cur.GetSourceDepartureProofType() != in.ProofType ||
+					cur.GetSourceDepartureProofId() != in.ProofID {
+					return nil, errcode.New(errcode.ErrLocatorConflict,
+						"another source-departure proof already owns this operation")
+				}
+				return proto.Clone(cur).(*locatorv1.PlayerPlacementStorageRecord), nil
+			}
+			next := proto.Clone(cur).(*locatorv1.PlayerPlacementStorageRecord)
+			next.SourceDepartureConfirmed = true
+			next.SourceDepartureProofType = in.ProofType
+			next.SourceDepartureProofId = in.ProofID
+			next.UpdatedAtMs = nowMs
+			return next, nil
+		})
 }
 
 func sameRetargetResult(cur *locatorv1.PlayerPlacementStorageRecord, in RetargetPlacementInput) bool {
@@ -285,7 +471,25 @@ func (u *PlacementUsecase) Begin(ctx context.Context, in BeginPlacementInput) (*
 			if !u.verifyProof(proofSourceRoute(cur, in), in) {
 				return nil, errcode.New(errcode.ErrPermissionDeny, "placement transition proof verification failed")
 			}
+			sourceBinding := placement.Binding{Version: cur.GetVersion(), OperationID: cur.GetOperationId(),
+				SourceMatchID: cur.GetSourceMatchId()}
+			sourceTarget := recordTarget(cur)
+			if cancelPendingBattle {
+				sourceBinding = placement.Binding{Version: cur.GetSourcePlacementVersion(),
+					OperationID: cur.GetSourceOperationId()}
+				sourceTarget = recordSourceTarget(cur)
+			}
+			if !sourceBinding.Complete() ||
+				(cur.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE &&
+					!sourceTarget.CompleteBattle()) ||
+				(cur.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+					!sourceTarget.CompleteHub()) {
+				return nil, errcode.New(errcode.ErrLocatorConflict,
+					"placement begin requires a complete exact physical source")
+			}
 			next := proto.Clone(cur).(*locatorv1.PlayerPlacementStorageRecord)
+			setRecordSource(next, sourceBinding, sourceTarget)
+			clearSourceDepartureConfirmation(next)
 			next.TargetRoute = in.TargetRoute
 			next.TransitionState = locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING
 			next.Version++
@@ -447,6 +651,10 @@ func (u *PlacementUsecase) Commit(ctx context.Context, in CommitPlacementInput) 
 				(cur.GetLeaseDeadlineMs() > 0 && cur.GetLeaseDeadlineMs() <= nowMs) {
 				return nil, errcode.New(errcode.ErrLocatorConflict, "placement admission lost final CAS")
 			}
+			if !isAccountBootstrapPending(cur) && !hasConfirmedPhysicalSourceDeparture(cur) {
+				return nil, errcode.New(errcode.ErrLocatorConflict,
+					"placement admission requires exact confirmed physical source departure")
+			}
 			next := proto.Clone(cur).(*locatorv1.PlayerPlacementStorageRecord)
 			next.CurrentRoute = in.TargetRoute
 			next.TargetRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED
@@ -459,8 +667,49 @@ func (u *PlacementUsecase) Commit(ctx context.Context, in CommitPlacementInput) 
 			next.UpdatedAtMs = nowMs
 			next.LeaseDeadlineMs = 0
 			next.AdmissionId = in.AdmissionID
+			if cur.GetSourceDepartureConfirmed() {
+				next.LastSourceDepartureProofType = cur.GetSourceDepartureProofType()
+				next.LastSourceDepartureProofId = cur.GetSourceDepartureProofId()
+				next.LastSourceDeparturePlacementVersion = cur.GetVersion()
+				next.LastSourceDepartureOperationId = cur.GetOperationId()
+			}
+			clearRecordSource(next)
+			clearSourceDepartureConfirmation(next)
 			return next, nil
 		})
+}
+
+func isAccountBootstrapPending(cur *locatorv1.PlayerPlacementStorageRecord) bool {
+	return cur != nil && cur.GetVersion() == 1 &&
+		cur.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED &&
+		cur.GetMatchId() == 0 && cur.GetSourceMatchId() == 0 &&
+		cur.GetProofType() == locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP &&
+		cur.GetTargetRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+		cur.GetSourcePlacementVersion() == 0 && cur.GetSourceOperationId() == "" &&
+		recordSourceTarget(cur).Equal(placement.Target{}) &&
+		!cur.GetSourceDepartureConfirmed() &&
+		cur.GetSourceDepartureProofType() == locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED &&
+		cur.GetSourceDepartureProofId() == ""
+}
+
+func hasConfirmedPhysicalSourceDeparture(cur *locatorv1.PlayerPlacementStorageRecord) bool {
+	if cur == nil || !cur.GetSourceDepartureConfirmed() ||
+		cur.GetSourcePlacementVersion() == 0 || !placement.ValidOperationID(cur.GetSourceOperationId()) ||
+		strings.TrimSpace(cur.GetSourceDepartureProofId()) == "" {
+		return false
+	}
+	sourceRoute, _, _, ok := physicalPlacementSource(cur)
+	if !ok {
+		return false
+	}
+	switch sourceRoute {
+	case locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB:
+		return int32(cur.GetSourceDepartureProofType()) == placement.ProofHubDeparture
+	case locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE:
+		return int32(cur.GetSourceDepartureProofType()) == placement.ProofBattleDeparture
+	default:
+		return false
+	}
 }
 
 func validatePlacementTarget(in BindPlacementInput) error {
@@ -489,13 +738,26 @@ func samePendingIdentity(cur *locatorv1.PlayerPlacementStorageRecord, in BindPla
 }
 
 func sameCommittedTarget(cur *locatorv1.PlayerPlacementStorageRecord, in BindPlacementInput) bool {
-	return cur.GetVersion() == in.Version && cur.GetOperationId() == in.OperationID &&
-		cur.GetTransitionState() == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE &&
-		cur.GetCurrentRoute() == in.TargetRoute && cur.GetDsPodName() == in.PodName &&
+	if cur == nil || cur.GetVersion() != in.Version || cur.GetOperationId() != in.OperationID ||
+		cur.GetTransitionState() != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE ||
+		cur.GetCurrentRoute() != in.TargetRoute ||
+		cur.GetTargetRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED ||
+		cur.GetLeaseDeadlineMs() != 0 ||
+		cur.GetSourcePlacementVersion() != 0 || cur.GetSourceOperationId() != "" ||
+		!recordSourceTarget(cur).Equal(placement.Target{}) ||
+		cur.GetSourceDepartureConfirmed() ||
+		cur.GetSourceDepartureProofType() != locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED ||
+		cur.GetSourceDepartureProofId() != "" {
+		return false
+	}
+	return cur.GetDsPodName() == in.PodName &&
 		cur.GetDsInstanceUid() == in.InstanceUID && cur.GetDsInstanceEpoch() == in.InstanceEpoch &&
 		cur.GetHubAssignmentId() == in.AssignmentID && cur.GetAllocationId() == in.AllocationID &&
 		cur.GetReleaseTrack() == in.ReleaseTrack &&
-		(in.TargetRoute != locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE || cur.GetMatchId() == in.TargetMatchID)
+		((in.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+			cur.GetMatchId() == 0 && cur.GetTargetMatchId() == 0) ||
+			(in.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE &&
+				cur.GetMatchId() == in.TargetMatchID && cur.GetTargetMatchId() == in.TargetMatchID))
 }
 
 func (u *PlacementUsecase) verifyProof(source locatorv1.PlacementRoute, in BeginPlacementInput) bool {

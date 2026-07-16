@@ -25,20 +25,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlayerLocatorService_SetLocation_FullMethodName              = "/pandora.locator.v1.PlayerLocatorService/SetLocation"
-	PlayerLocatorService_GetLocation_FullMethodName              = "/pandora.locator.v1.PlayerLocatorService/GetLocation"
-	PlayerLocatorService_BatchGetLocation_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/BatchGetLocation"
-	PlayerLocatorService_SubscribePresence_FullMethodName        = "/pandora.locator.v1.PlayerLocatorService/SubscribePresence"
-	PlayerLocatorService_UnsubscribePresence_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
-	PlayerLocatorService_ClearLocation_FullMethodName            = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
-	PlayerLocatorService_RefreshHubLocations_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/RefreshHubLocations"
-	PlayerLocatorService_ReportDisconnect_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
-	PlayerLocatorService_GetPlacement_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/GetPlacement"
-	PlayerLocatorService_BeginPlacementTransition_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/BeginPlacementTransition"
-	PlayerLocatorService_BindPlacementTarget_FullMethodName      = "/pandora.locator.v1.PlayerLocatorService/BindPlacementTarget"
-	PlayerLocatorService_RetargetPlacementTarget_FullMethodName  = "/pandora.locator.v1.PlayerLocatorService/RetargetPlacementTarget"
-	PlayerLocatorService_CommitPlacementAdmission_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/CommitPlacementAdmission"
-	PlayerLocatorService_BootstrapPlacement_FullMethodName       = "/pandora.locator.v1.PlayerLocatorService/BootstrapPlacement"
+	PlayerLocatorService_SetLocation_FullMethodName                     = "/pandora.locator.v1.PlayerLocatorService/SetLocation"
+	PlayerLocatorService_GetLocation_FullMethodName                     = "/pandora.locator.v1.PlayerLocatorService/GetLocation"
+	PlayerLocatorService_BatchGetLocation_FullMethodName                = "/pandora.locator.v1.PlayerLocatorService/BatchGetLocation"
+	PlayerLocatorService_SubscribePresence_FullMethodName               = "/pandora.locator.v1.PlayerLocatorService/SubscribePresence"
+	PlayerLocatorService_UnsubscribePresence_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/UnsubscribePresence"
+	PlayerLocatorService_ClearLocation_FullMethodName                   = "/pandora.locator.v1.PlayerLocatorService/ClearLocation"
+	PlayerLocatorService_RefreshHubLocations_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/RefreshHubLocations"
+	PlayerLocatorService_ReportDisconnect_FullMethodName                = "/pandora.locator.v1.PlayerLocatorService/ReportDisconnect"
+	PlayerLocatorService_GetPlacement_FullMethodName                    = "/pandora.locator.v1.PlayerLocatorService/GetPlacement"
+	PlayerLocatorService_BeginPlacementTransition_FullMethodName        = "/pandora.locator.v1.PlayerLocatorService/BeginPlacementTransition"
+	PlayerLocatorService_BindPlacementTarget_FullMethodName             = "/pandora.locator.v1.PlayerLocatorService/BindPlacementTarget"
+	PlayerLocatorService_RetargetPlacementTarget_FullMethodName         = "/pandora.locator.v1.PlayerLocatorService/RetargetPlacementTarget"
+	PlayerLocatorService_ConfirmPlacementSourceDeparture_FullMethodName = "/pandora.locator.v1.PlayerLocatorService/ConfirmPlacementSourceDeparture"
+	PlayerLocatorService_CommitPlacementAdmission_FullMethodName        = "/pandora.locator.v1.PlayerLocatorService/CommitPlacementAdmission"
+	PlayerLocatorService_BootstrapPlacement_FullMethodName              = "/pandora.locator.v1.PlayerLocatorService/BootstrapPlacement"
 )
 
 // PlayerLocatorServiceClient is the client API for PlayerLocatorService service.
@@ -85,6 +86,9 @@ type PlayerLocatorServiceClient interface {
 	// RetargetPlacementTarget 只能在 Admission 前、旧 target 的权威不可用证明通过时，
 	// 原子推进 version/operation 并把完整 old target 换为完整 new target。TTL 本身不是证明。
 	RetargetPlacementTarget(ctx context.Context, in *RetargetPlacementTargetRequest, opts ...grpc.CallOption) (*RetargetPlacementTargetResponse, error)
+	// ConfirmPlacementSourceDeparture 把 source DS 的物理离场证明绑定到当前 exact PENDING
+	// version/op/source。只有该确认完成，非 bootstrap Admission 才能提交。
+	ConfirmPlacementSourceDeparture(ctx context.Context, in *ConfirmPlacementSourceDepartureRequest, opts ...grpc.CallOption) (*ConfirmPlacementSourceDepartureResponse, error)
 	// CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
 	CommitPlacementAdmission(ctx context.Context, in *CommitPlacementAdmissionRequest, opts ...grpc.CallOption) (*CommitPlacementAdmissionResponse, error)
 	// BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
@@ -220,6 +224,16 @@ func (c *playerLocatorServiceClient) RetargetPlacementTarget(ctx context.Context
 	return out, nil
 }
 
+func (c *playerLocatorServiceClient) ConfirmPlacementSourceDeparture(ctx context.Context, in *ConfirmPlacementSourceDepartureRequest, opts ...grpc.CallOption) (*ConfirmPlacementSourceDepartureResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmPlacementSourceDepartureResponse)
+	err := c.cc.Invoke(ctx, PlayerLocatorService_ConfirmPlacementSourceDeparture_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *playerLocatorServiceClient) CommitPlacementAdmission(ctx context.Context, in *CommitPlacementAdmissionRequest, opts ...grpc.CallOption) (*CommitPlacementAdmissionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CommitPlacementAdmissionResponse)
@@ -284,6 +298,9 @@ type PlayerLocatorServiceServer interface {
 	// RetargetPlacementTarget 只能在 Admission 前、旧 target 的权威不可用证明通过时，
 	// 原子推进 version/operation 并把完整 old target 换为完整 new target。TTL 本身不是证明。
 	RetargetPlacementTarget(context.Context, *RetargetPlacementTargetRequest) (*RetargetPlacementTargetResponse, error)
+	// ConfirmPlacementSourceDeparture 把 source DS 的物理离场证明绑定到当前 exact PENDING
+	// version/op/source。只有该确认完成，非 bootstrap Admission 才能提交。
+	ConfirmPlacementSourceDeparture(context.Context, *ConfirmPlacementSourceDepartureRequest) (*ConfirmPlacementSourceDepartureResponse, error)
 	// CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
 	CommitPlacementAdmission(context.Context, *CommitPlacementAdmissionRequest) (*CommitPlacementAdmissionResponse, error)
 	// BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
@@ -333,6 +350,9 @@ func (UnimplementedPlayerLocatorServiceServer) BindPlacementTarget(context.Conte
 }
 func (UnimplementedPlayerLocatorServiceServer) RetargetPlacementTarget(context.Context, *RetargetPlacementTargetRequest) (*RetargetPlacementTargetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RetargetPlacementTarget not implemented")
+}
+func (UnimplementedPlayerLocatorServiceServer) ConfirmPlacementSourceDeparture(context.Context, *ConfirmPlacementSourceDepartureRequest) (*ConfirmPlacementSourceDepartureResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmPlacementSourceDeparture not implemented")
 }
 func (UnimplementedPlayerLocatorServiceServer) CommitPlacementAdmission(context.Context, *CommitPlacementAdmissionRequest) (*CommitPlacementAdmissionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitPlacementAdmission not implemented")
@@ -576,6 +596,24 @@ func _PlayerLocatorService_RetargetPlacementTarget_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerLocatorService_ConfirmPlacementSourceDeparture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmPlacementSourceDepartureRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerLocatorServiceServer).ConfirmPlacementSourceDeparture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerLocatorService_ConfirmPlacementSourceDeparture_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerLocatorServiceServer).ConfirmPlacementSourceDeparture(ctx, req.(*ConfirmPlacementSourceDepartureRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlayerLocatorService_CommitPlacementAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CommitPlacementAdmissionRequest)
 	if err := dec(in); err != nil {
@@ -666,6 +704,10 @@ var PlayerLocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetargetPlacementTarget",
 			Handler:    _PlayerLocatorService_RetargetPlacementTarget_Handler,
+		},
+		{
+			MethodName: "ConfirmPlacementSourceDeparture",
+			Handler:    _PlayerLocatorService_ConfirmPlacementSourceDeparture_Handler,
 		},
 		{
 			MethodName: "CommitPlacementAdmission",

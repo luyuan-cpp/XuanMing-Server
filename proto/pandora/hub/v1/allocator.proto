@@ -18,6 +18,11 @@ import "pandora/common/v1/errcode.proto";
 service HubAllocatorService {
   rpc AssignHub(AssignHubRequest) returns (AssignHubResponse);
   rpc ReleaseHub(ReleaseHubRequest) returns (ReleaseHubResponse);
+  // Match durable worker uses this operation-bound gate after the exact
+  // BATTLE_PENDING placement exists and before READY/ticket publication.
+  // A delayed request from an older match/version/op cannot release a newer
+  // Hub assignment.
+  rpc EnsureHubDepartureForBattle(EnsureHubDepartureForBattleRequest) returns (EnsureHubDepartureForBattleResponse);
   rpc TransferHub(TransferHubRequest) returns (TransferHubResponse);
   rpc ListHubs(ListHubsRequest) returns (ListHubsResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);  // Hub DS 每 5s 主动调
@@ -73,6 +78,18 @@ message ReleaseHubRequest {
 
 message ReleaseHubResponse {
   pandora.common.v1.ErrCode code = 1;
+}
+
+message EnsureHubDepartureForBattleRequest {
+  uint64 player_id = 1;
+  uint64 match_id = 2;
+  uint64 placement_version = 3;
+  string placement_operation_id = 4;
+}
+
+message EnsureHubDepartureForBattleResponse {
+  pandora.common.v1.ErrCode code = 1;
+  bool departed = 2;
 }
 
 message TransferHubRequest {
@@ -387,6 +404,12 @@ message HubAssignmentStorageRecord {
   // reconciler 必须先 compare-release seat/session，确认 Released/AlreadyAbsent 后才可 CAS DEL。
   // 任何 Assign/Transfer/Admission 在此期间都只能恢复 cleanup，不能覆盖或重新 Admission。
   bool release_cleanup_pending = 27;
+  // Non-zero only when release cleanup is owned by one exact Hub->Battle
+  // placement operation.  These fields turn delayed/replayed match workers
+  // into harmless conflicts instead of an ABA deletion of a later Hub owner.
+  uint64 release_cleanup_match_id = 28;
+  uint64 release_cleanup_placement_version = 29;
+  string release_cleanup_operation_id = 30;
 }
 
 // ===== 服务间事件(Kafka 推送,客户端可见 payload)=====

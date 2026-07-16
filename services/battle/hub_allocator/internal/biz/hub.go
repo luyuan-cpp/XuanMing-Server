@@ -18,6 +18,8 @@ package biz
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -116,9 +118,11 @@ type HubUsecase struct {
 	// 否则授权键被 shardTTL 提前过期会导致「有效凭据被判 stale」)。main 注入(默认 2×HubTokenTTL,floor 48h)。
 	authTTL time.Duration
 	// releasePolicy 只决定无 assignment 玩家首次尝试的轨；实际命中轨写入 assignment 后粘性。
-	releasePolicy        releasetrack.Policy
-	placementMode        placement.Mode
-	placementClient      data.HubPlacementClient
+	releasePolicy   releasetrack.Policy
+	placementMode   placement.Mode
+	placementClient data.HubPlacementClient
+	// One Hub authority key, separate canonical HMAC domains for logical
+	// HubTransfer/Retarget and physical HubDeparture.
 	placementProofSigner *placement.ProofSigner
 }
 
@@ -295,11 +299,14 @@ func (u *HubUsecase) AssignHubWithPlacement(ctx context.Context, playerID uint64
 				return nil, trackErr
 			}
 			effectiveRole = effectiveRoleID(roleID, existing.RoleId)
+			requiresNewPhysicalAdmission := u.placementMode == placement.ModeEnforce &&
+				placementBinding.Complete() &&
+				!placementBinding.Equal(placementBindingFromAssignment(existing))
 			current, reusable, rerr := u.assignmentRoutable(ctx, playerID, existing)
 			if rerr != nil {
 				return nil, rerr // Redis/授权读取失败不能降级成另分配
 			}
-			if reusable || assignmentSameInstance(existing, &current) {
+			if !requiresNewPhysicalAdmission && (reusable || assignmentSameInstance(existing, &current)) {
 				// assignment 可以比 admission ledger 活得更久：clean Logout 会精确删除 session，
 				// 未进场 reservation 也会绝对到期。重签票前必须在 {pod} 同槽事务里重新确保
 				// “已有 session 或新鲜 reservation”；否则会返回一张必被 Admission 拒绝的票。
@@ -330,6 +337,15 @@ func (u *HubUsecase) AssignHubWithPlacement(ctx context.Context, playerID uint64
 					bound, err := u.bindPlacementTarget(ctx, playerID, next)
 					if err != nil {
 						return nil, err
+					}
+					if u.placementMode == placement.ModeEnforce ||
+						(u.placementMode == placement.ModeShadow && placementBindingFromAssignment(bound).Complete()) {
+						// Bind can turn a STABLE same-target placement into a new HubTransfer
+						// operation.  The ticket must never escape while the handoff capability
+						// is still bound to the pre-bind version.
+						if _, ensureErr := u.ensureExistingAssignmentSeat(ctx, playerID, bound, ensured); ensureErr != nil {
+							return nil, ensureErr
+						}
 					}
 					return u.signResult(ctx, playerID, effectiveRole, bound)
 				}
@@ -526,6 +542,9 @@ func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
 			}
 			next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
 			next.ReleaseCleanupPending = true
+			next.ReleaseCleanupMatchId = 0
+			next.ReleaseCleanupPlacementVersion = 0
+			next.ReleaseCleanupOperationId = ""
 			marked, markErr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, next, u.assignmentSagaTTL())
 			if markErr != nil {
 				// Unknown CAS result: retain the ref. Reconciler removes an orphan or
@@ -562,6 +581,382 @@ func (u *HubUsecase) ReleaseHub(ctx context.Context, playerID uint64) error {
 		return nil
 	}
 	return errcode.New(errcode.ErrInternal, "player %d release CAS retry exhausted", playerID)
+}
+
+func exactPendingBattleDeparture(s data.HubPlacementSnapshot, matchID uint64,
+	binding placement.Binding) bool {
+	return s.Found && binding.Complete() && s.Binding.Equal(binding) &&
+		s.SourceBinding.Complete() && s.SourceTarget.CompleteHub() &&
+		releasetrack.Valid(s.SourceTarget.ReleaseTrack) && s.SourceTarget.AllocationID == "" &&
+		s.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && s.CurrentMatchID == 0 &&
+		s.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE &&
+		s.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		s.TargetMatchID == matchID && s.Target.CompleteBattle()
+}
+
+func hubSourceDepartureProof(playerID uint64, snapshot data.HubPlacementSnapshot) (
+	placement.SourceDepartureProof, error,
+) {
+	validTarget := snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+		snapshot.TargetMatchID == 0 && snapshot.Target.CompleteHub() ||
+		snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE &&
+			snapshot.TargetMatchID > 0 && snapshot.Target.CompleteBattle()
+	if playerID == 0 || !snapshot.Found || !snapshot.Binding.Complete() ||
+		!snapshot.SourceBinding.Complete() || snapshot.SourceBinding.Version >= snapshot.Binding.Version ||
+		snapshot.CurrentRoute != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || snapshot.CurrentMatchID != 0 ||
+		snapshot.TransitionState != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING ||
+		!snapshot.SourceTarget.CompleteHub() || snapshot.SourceTarget.AllocationID != "" ||
+		!releasetrack.Valid(snapshot.SourceTarget.ReleaseTrack) || !validTarget {
+		return placement.SourceDepartureProof{}, errcode.New(errcode.ErrLocatorConflict,
+			"locator has no exact pending Hub physical source")
+	}
+	material := fmt.Sprintf("%d\n%d\n%s\n%d\n%d\n%d\n%s\n%s\n%s\n%d\n%s\n%s",
+		playerID, snapshot.Binding.Version, snapshot.Binding.OperationID,
+		snapshot.TargetRoute, snapshot.TargetMatchID,
+		snapshot.SourceBinding.Version, snapshot.SourceBinding.OperationID, snapshot.SourceTarget.PodName,
+		snapshot.SourceTarget.InstanceUID, snapshot.SourceTarget.InstanceEpoch,
+		snapshot.SourceTarget.AssignmentID, snapshot.SourceTarget.ReleaseTrack)
+	digest := sha256.Sum256([]byte(material))
+	return placement.SourceDepartureProof{
+		PlayerID: playerID, PlacementVersion: snapshot.Binding.Version,
+		OperationID: snapshot.Binding.OperationID, TargetRoute: int32(snapshot.TargetRoute),
+		TargetMatchID:          snapshot.TargetMatchID,
+		SourcePlacementVersion: snapshot.SourceBinding.Version,
+		SourceOperationID:      snapshot.SourceBinding.OperationID,
+		SourceRoute:            placement.RouteHub, SourceMatchID: 0,
+		SourceTarget: snapshot.SourceTarget, ProofType: placement.ProofHubDeparture,
+		ProofID: fmt.Sprintf("hub-departure:%x", digest),
+	}, nil
+}
+
+func hubSourceDepartureConfirmationMatches(snapshot data.HubPlacementSnapshot,
+	proof placement.SourceDepartureProof,
+) bool {
+	return snapshot.SourceDepartureConfirmed &&
+		int32(snapshot.SourceDepartureProofType) == placement.ProofHubDeparture &&
+		snapshot.SourceDepartureProofID == proof.ProofID
+}
+
+func sameHubPhysicalSource(expected, actual placement.Target) bool {
+	return expected.PodName != "" && expected.PodName == actual.PodName &&
+		expected.InstanceUID != "" && expected.InstanceUID == actual.InstanceUID &&
+		expected.InstanceEpoch != 0 && expected.InstanceEpoch == actual.InstanceEpoch &&
+		expected.AssignmentID != "" && expected.AssignmentID == actual.AssignmentID &&
+		(expected.ReleaseTrack == "" || expected.ReleaseTrack == actual.ReleaseTrack)
+}
+
+func samePlacementLineage(expected, actual placement.Binding) bool {
+	return expected.Version == actual.Version && expected.OperationID == actual.OperationID
+}
+
+// confirmHubSourceDeparture runs only after the exact source ledger is absent.
+// The assignment cleanup record retains expectedSource until the locator ACK is
+// known, so an RPC response loss replays the same proof id after a restart.
+func (u *HubUsecase) confirmHubSourceDeparture(ctx context.Context, playerID uint64,
+	targetBinding, expectedSourceBinding placement.Binding, expectedSource placement.Target,
+) error {
+	if u.placementMode != placement.ModeEnforce || u.placementClient == nil ||
+		u.placementProofSigner == nil || u.authRepo == nil {
+		return errcode.New(errcode.ErrUnavailable, "Hub source departure authority unavailable")
+	}
+	snapshot, err := u.placementClient.GetHubPlacement(ctx, playerID)
+	if err != nil {
+		return err
+	}
+	proof, err := hubSourceDepartureProof(playerID, snapshot)
+	if err != nil {
+		return err
+	}
+	if !snapshot.Binding.Equal(targetBinding) ||
+		(expectedSourceBinding.Complete() && !samePlacementLineage(expectedSourceBinding, snapshot.SourceBinding)) ||
+		!sameHubPhysicalSource(expectedSource, snapshot.SourceTarget) {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"Hub source departure tuple changed after physical cleanup")
+	}
+	seat, err := u.authRepo.InspectAssignmentSeat(ctx, snapshot.SourceTarget.PodName,
+		data.AssignmentInstanceIdentity{PlayerID: playerID, AssignmentID: snapshot.SourceTarget.AssignmentID,
+			InstanceUID: snapshot.SourceTarget.InstanceUID, ProtocolEpoch: snapshot.SourceTarget.InstanceEpoch,
+			WriterEpoch: auth.DSAuthWriterEpochV2, PlacementVersion: snapshot.SourceBinding.Version,
+			PlacementOperationID: snapshot.SourceBinding.OperationID,
+			SourceMatchID:        snapshot.SourceBinding.SourceMatchID})
+	if err != nil {
+		return err
+	}
+	if seat.Conflict {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"Hub source departure census found a different physical owner")
+	}
+	if !seat.AlreadyAbsent || seat.Reserved || seat.Connected {
+		return errcode.New(errcode.ErrUnavailable,
+			"Hub source departure census has not proved exact absence")
+	}
+	return u.placementClient.ConfirmHubSourceDeparture(ctx, proof,
+		u.placementProofSigner.SignSourceDeparture(proof))
+}
+
+func hubTicketPlacementReady(playerID uint64, snapshot data.HubPlacementSnapshot,
+	binding placement.Binding, target placement.Target, nowMs int64,
+) bool {
+	if playerID == 0 || nowMs <= 0 || !snapshot.Found || !snapshot.Binding.Equal(binding) ||
+		!snapshot.Target.Equal(target) || !target.CompleteHub() {
+		return false
+	}
+	if snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE {
+		return snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB &&
+			snapshot.CurrentMatchID == 0 && snapshot.TargetMatchID == 0 &&
+			snapshot.TargetRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED &&
+			snapshot.LeaseDeadlineMs == 0 && snapshot.SourceBinding.Empty() &&
+			snapshot.SourceTarget.Equal(placement.Target{}) && !snapshot.SourceDepartureConfirmed &&
+			snapshot.SourceDepartureProofType == locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED &&
+			snapshot.SourceDepartureProofID == ""
+	}
+	if snapshot.TransitionState != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING ||
+		snapshot.TargetRoute != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || snapshot.TargetMatchID != 0 ||
+		snapshot.LeaseDeadlineMs <= nowMs {
+		return false
+	}
+	// Account creation has no physical source to evict.
+	if snapshot.Binding.Version == 1 &&
+		snapshot.ProofType == locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED &&
+		snapshot.CurrentMatchID == 0 && binding.SourceMatchID == 0 && snapshot.SourceBinding.Empty() &&
+		snapshot.SourceTarget.Equal(placement.Target{}) && !snapshot.SourceDepartureConfirmed &&
+		snapshot.SourceDepartureProofType == locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED &&
+		snapshot.SourceDepartureProofID == "" {
+		return true
+	}
+	if !snapshot.SourceBinding.Complete() || !snapshot.SourceDepartureConfirmed ||
+		snapshot.SourceBinding.Version >= snapshot.Binding.Version ||
+		snapshot.SourceBinding.OperationID == snapshot.Binding.OperationID ||
+		snapshot.SourceDepartureProofID == "" {
+		return false
+	}
+	if snapshot.SourceTarget.CompleteHub() && snapshot.SourceTarget.AllocationID == "" &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && snapshot.CurrentMatchID == 0 {
+		proof, err := hubSourceDepartureProof(playerID, snapshot)
+		return err == nil && hubSourceDepartureConfirmationMatches(snapshot, proof)
+	}
+	return snapshot.SourceTarget.CompleteBattle() && snapshot.SourceTarget.AssignmentID == "" &&
+		snapshot.CurrentRoute == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE &&
+		snapshot.CurrentMatchID > 0 && snapshot.Binding.SourceMatchID == snapshot.CurrentMatchID &&
+		int32(snapshot.SourceDepartureProofType) == placement.ProofBattleDeparture
+}
+
+func (u *HubUsecase) requireHubTicketPlacementReady(ctx context.Context, playerID uint64,
+	assignment *hubv1.HubAssignmentStorageRecord,
+) error {
+	if u.placementMode != placement.ModeEnforce {
+		return nil
+	}
+	if u.placementClient == nil || assignment == nil {
+		return errcode.New(errcode.ErrUnavailable, "Hub ticket placement authority unavailable")
+	}
+	snapshot, err := u.placementClient.GetHubPlacement(ctx, playerID)
+	if err != nil {
+		return err
+	}
+	if !hubTicketPlacementReady(playerID, snapshot, placementBindingFromAssignment(assignment),
+		placementTargetFromAssignment(assignment), time.Now().UnixMilli()) {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"Hub ticket requires exact committed or source-confirmed placement")
+	}
+	return nil
+}
+
+// assignmentMatchesBattleDepartureSource ties allocator state back to the
+// immutable Hub source captured atomically by player_locator Begin.  The
+// source record stores version/op but deliberately has no nested
+// source_match_id field, so version+operation are the source binding identity;
+// the complete physical target supplies the remaining exact tuple.
+func assignmentMatchesBattleDepartureSource(a *hubv1.HubAssignmentStorageRecord, playerID uint64,
+	s data.HubPlacementSnapshot) bool {
+	return a != nil && a.GetPlayerId() == playerID &&
+		a.GetPlacementVersion() == s.SourceBinding.Version &&
+		a.GetPlacementOperationId() == s.SourceBinding.OperationID &&
+		placementTargetFromAssignment(a).Equal(s.SourceTarget)
+}
+
+// battleDepartureSourceTombstone reconstructs only the immutable fields
+// needed to inspect/evict an exact physical source.  It is used when the
+// canonical assignment key was lost while the persistent per-pod session may
+// still exist.  Treating a missing assignment as departed would strand a Pawn
+// in Hub while publishing the Battle owner.
+func battleDepartureSourceTombstone(playerID, matchID uint64, binding placement.Binding,
+	s data.HubPlacementSnapshot) *hubv1.HubAssignmentStorageRecord {
+	return &hubv1.HubAssignmentStorageRecord{
+		PlayerId: playerID, HubPodName: s.SourceTarget.PodName,
+		HubInstanceUid: s.SourceTarget.InstanceUID, AuthEpoch: s.SourceTarget.InstanceEpoch,
+		AssignmentId: s.SourceTarget.AssignmentID, AuthWriterEpoch: auth.DSAuthWriterEpochV2,
+		ReleaseTrack:     s.SourceTarget.ReleaseTrack,
+		PlacementVersion: s.SourceBinding.Version, PlacementOperationId: s.SourceBinding.OperationID,
+		ReleaseCleanupPending: true, ReleaseCleanupMatchId: matchID,
+		ReleaseCleanupPlacementVersion: binding.Version,
+		ReleaseCleanupOperationId:      binding.OperationID,
+	}
+}
+
+// EnsureHubDepartureForBattle is the operation-bound physical source gate.
+// It deliberately does not reuse ReleaseHub(player): an old ALLOCATING RPC may
+// arrive after terminal recovery assigned a new Hub owner. The second locator
+// read plus exact assignment CAS makes that ABA lose before an eviction order
+// becomes visible.
+func (u *HubUsecase) EnsureHubDepartureForBattle(ctx context.Context, playerID, matchID uint64,
+	binding placement.Binding) error {
+	if playerID == 0 || matchID == 0 || !binding.Complete() ||
+		u.placementMode != placement.ModeEnforce || u.placementClient == nil || u.authRepo == nil {
+		return errcode.New(errcode.ErrInvalidArg,
+			"strict exact Battle placement identity required for Hub departure")
+	}
+	readExact := func() (data.HubPlacementSnapshot, error) {
+		snapshot, err := u.placementClient.GetHubPlacement(ctx, playerID)
+		if err != nil {
+			return data.HubPlacementSnapshot{}, err
+		}
+		if !exactPendingBattleDeparture(snapshot, matchID, binding) {
+			return data.HubPlacementSnapshot{}, errcode.New(errcode.ErrLocatorConflict,
+				"Hub departure operation is no longer the authoritative Battle target")
+		}
+		return snapshot, nil
+	}
+	confirmedExact := func(snapshot data.HubPlacementSnapshot) bool {
+		proof, proofErr := hubSourceDepartureProof(playerID, snapshot)
+		return proofErr == nil && hubSourceDepartureConfirmationMatches(snapshot, proof)
+	}
+	requireConfirmed := func() error {
+		snapshot, readErr := readExact()
+		if readErr != nil {
+			return readErr
+		}
+		if !confirmedExact(snapshot) {
+			return errcode.New(errcode.ErrLocatorConflict,
+				"Hub departure physical cleanup is not confirmed by locator")
+		}
+		return nil
+	}
+	if _, err := readExact(); err != nil {
+		return err
+	}
+	for attempt := 0; attempt < 8; attempt++ {
+		snapshot, readErr := readExact()
+		if readErr != nil {
+			return readErr
+		}
+		assignment, found, err := u.repo.GetAssignment(ctx, playerID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			if confirmedExact(snapshot) {
+				return nil
+			}
+			// The assignment key is not a physical-absence proof. Recreate a
+			// durable cleanup tombstone from locator's immutable source so the
+			// per-pod connected ledger can either prove AlreadyAbsent, release an
+			// unused reservation, or emit an exact eviction order.
+			tombstone := battleDepartureSourceTombstone(playerID, matchID, binding, snapshot)
+			ref := transferCleanupRef(tombstone)
+			if indexErr := u.repo.RegisterTransferCleanup(ctx, tombstone.GetHubPodName(), ref); indexErr != nil {
+				return indexErr
+			}
+			fresh, exactErr := readExact()
+			if exactErr != nil || !fresh.SourceBinding.Equal(snapshot.SourceBinding) ||
+				!fresh.SourceTarget.Equal(snapshot.SourceTarget) {
+				u.removeTransferCleanupRef(ctx, tombstone.GetHubPodName(), ref)
+				if exactErr != nil {
+					return exactErr
+				}
+				return errcode.New(errcode.ErrLocatorConflict,
+					"Hub departure physical source changed before cleanup publication")
+			}
+			marked, markErr := u.repo.CompareAndSwapAssignment(ctx, playerID, nil, tombstone,
+				u.assignmentSagaTTL())
+			if markErr != nil {
+				// Unknown CAS result: retain the exact index so restart can resume
+				// a committed tombstone or remove an orphan safely.
+				return markErr
+			}
+			if !marked {
+				u.removeTransferCleanupRef(ctx, tombstone.GetHubPodName(), ref)
+				continue
+			}
+			_, stillFound, cleanupErr := u.resumeAssignmentCleanup(ctx, playerID,
+				tombstone.GetAssignmentId())
+			if cleanupErr != nil {
+				return cleanupErr
+			}
+			if stillFound {
+				return errcode.New(errcode.ErrInvalidState,
+					"Hub Battle departure source tombstone survived completed cleanup")
+			}
+			return requireConfirmed()
+		}
+		if !assignmentMatchesBattleDepartureSource(assignment, playerID, snapshot) {
+			return errcode.New(errcode.ErrLocatorConflict,
+				"canonical Hub assignment does not match the exact placement source")
+		}
+		if assignment.GetTransferCleanupPending() {
+			_, _, cleanupErr := u.resumeAssignmentCleanup(ctx, playerID, assignment.GetAssignmentId())
+			if cleanupErr != nil {
+				return cleanupErr
+			}
+			continue
+		}
+		if assignment.GetReleaseCleanupPending() {
+			hasBoundOwner := assignment.GetReleaseCleanupMatchId() != 0 ||
+				assignment.GetReleaseCleanupPlacementVersion() != 0 ||
+				assignment.GetReleaseCleanupOperationId() != ""
+			if hasBoundOwner && (assignment.GetReleaseCleanupMatchId() != matchID ||
+				assignment.GetReleaseCleanupPlacementVersion() != binding.Version ||
+				assignment.GetReleaseCleanupOperationId() != binding.OperationID) {
+				return errcode.New(errcode.ErrLocatorConflict,
+					"Hub departure cleanup belongs to another placement operation")
+			}
+			_, stillFound, cleanupErr := u.resumeAssignmentCleanup(ctx, playerID, assignment.GetAssignmentId())
+			if cleanupErr != nil {
+				return cleanupErr
+			}
+			if !stillFound {
+				return requireConfirmed()
+			}
+			continue
+		}
+
+		ref := transferCleanupRef(assignment)
+		if err := u.repo.RegisterTransferCleanup(ctx, assignment.GetHubPodName(), ref); err != nil {
+			return err
+		}
+		next := proto.Clone(assignment).(*hubv1.HubAssignmentStorageRecord)
+		next.ReleaseCleanupPending = true
+		next.ReleaseCleanupMatchId = matchID
+		next.ReleaseCleanupPlacementVersion = binding.Version
+		next.ReleaseCleanupOperationId = binding.OperationID
+		fresh, exactErr := readExact()
+		if exactErr != nil || !assignmentMatchesBattleDepartureSource(assignment, playerID, fresh) {
+			u.removeTransferCleanupRef(ctx, assignment.GetHubPodName(), ref)
+			if exactErr != nil {
+				return exactErr
+			}
+			return errcode.New(errcode.ErrLocatorConflict,
+				"canonical Hub assignment changed from the exact placement source")
+		}
+		marked, markErr := u.repo.CompareAndSwapAssignment(ctx, playerID, assignment, next,
+			u.assignmentSagaTTL())
+		if markErr != nil {
+			return markErr
+		}
+		if !marked {
+			u.removeTransferCleanupRef(ctx, assignment.GetHubPodName(), ref)
+			continue
+		}
+		_, stillFound, cleanupErr := u.resumeAssignmentCleanup(ctx, playerID, assignment.GetAssignmentId())
+		if cleanupErr != nil {
+			return cleanupErr
+		}
+		if !stillFound {
+			return requireConfirmed()
+		}
+	}
+	return errcode.New(errcode.ErrInternal, "Hub Battle departure CAS retry exhausted")
 }
 
 // ── RPC 3:TransferHub ─────────────────────────────────────────────────────────
@@ -652,7 +1047,14 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 				if bindErr != nil {
 					return nil, bindErr
 				}
-				if u.placementMode == placement.ModeEnforce {
+				if u.placementMode == placement.ModeEnforce ||
+					(u.placementMode == placement.ModeShadow && placementBindingFromAssignment(bound).Complete()) {
+					// Bind may have advanced a STABLE same-target assignment to a new
+					// HubTransfer version/operation.  Rotate the pending successor to
+					// that exact canonical lineage before exposing its ticket.
+					if _, ensureErr := u.ensureExistingAssignmentSeat(ctx, playerID, bound, ensured); ensureErr != nil {
+						return nil, ensureErr
+					}
 					var signErr error
 					signedResult, signErr = u.transferResult(ctx, playerID, bound.RoleId, bound)
 					if signErr != nil {
@@ -702,10 +1104,14 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 				newAssignment.PlacementProofType = uint32(placement.ProofHubTransfer)
 			}
 		}
-		signedResult, signErr := u.transferResult(ctx, playerID, assignment.RoleId, newAssignment)
-		if signErr != nil {
-			u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
-			return nil, signErr
+		var signedResult *TransferResult
+		if u.placementMode != placement.ModeEnforce {
+			var signErr error
+			signedResult, signErr = u.transferResult(ctx, playerID, assignment.RoleId, newAssignment)
+			if signErr != nil {
+				u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
+				return nil, signErr
+			}
 		}
 		cleanupRegistered := false
 		if u.placementMode == placement.ModeEnforce {
@@ -730,8 +1136,11 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 			continue
 		}
 		u.addShardMember(ctx, target.HubPodName, playerID)
+		boundAssignment := newAssignment
 		if cleanupRegistered {
-			_, stillFound, cleanupErr := u.resumeAssignmentCleanup(ctx, playerID, newAssignmentID)
+			var stillFound bool
+			var cleanupErr error
+			boundAssignment, stillFound, cleanupErr = u.resumeAssignmentCleanup(ctx, playerID, newAssignmentID)
 			if cleanupErr != nil {
 				return nil, cleanupErr
 			}
@@ -740,11 +1149,18 @@ func (u *HubUsecase) TransferHub(ctx context.Context, playerID uint64, targetHub
 					"Hub transfer assignment disappeared during cleanup")
 			}
 		} else {
-			if _, bindErr := u.bindPlacementTarget(ctx, playerID, newAssignment); bindErr != nil {
-				return nil, bindErr
+			if boundAssignment, err = u.bindPlacementTarget(ctx, playerID, newAssignment); err != nil {
+				return nil, err
 			}
 			u.releaseAssignmentSeat(ctx, assignment)
 			u.removeShardMember(ctx, assignment.HubPodName, playerID)
+		}
+		if u.placementMode == placement.ModeEnforce {
+			var signErr error
+			signedResult, signErr = u.transferResult(ctx, playerID, boundAssignment.RoleId, boundAssignment)
+			if signErr != nil {
+				return nil, signErr
+			}
 		}
 		plog.With(ctx).Infow("msg", "hub_transferred",
 			"player_id", playerID, "from", assignment.HubPodName, "to", target.HubPodName)
@@ -1288,10 +1704,27 @@ func (u *HubUsecase) AcknowledgeAdmissionWithPlacement(ctx context.Context, play
 	if u.placementMode == placement.ModeEnforce && (!requestedPlacement.Complete() || !assignmentPlacement.Complete()) {
 		return nil, errcode.New(errcode.ErrLocatorNotFound, "strict Hub admission requires placement binding")
 	}
+	if u.placementMode == placement.ModeEnforce {
+		if u.placementClient == nil {
+			return nil, errcode.New(errcode.ErrUnavailable,
+				"strict Hub admission placement authority unavailable")
+		}
+		snapshot, placementErr := u.placementClient.GetHubPlacement(ctx, playerID)
+		if placementErr != nil {
+			return nil, placementErr
+		}
+		if !hubTicketPlacementReady(playerID, snapshot, assignmentPlacement,
+			placementTargetFromAssignment(assignment), time.Now().UnixMilli()) {
+			return nil, errcode.New(errcode.ErrLocatorConflict,
+				"Hub admission requires exact committed or source-confirmed placement")
+		}
+	}
 	id := hubCredentialIdentity(cred)
 	reservation := data.ReservationIdentity{
 		PlayerID: playerID, AssignmentID: assignmentID, InstanceUID: cred.InstanceUID,
 		ProtocolEpoch: cred.ProtocolEpoch, WriterEpoch: cred.WriterEpoch,
+		PlacementVersion: assignmentPlacement.Version, PlacementOperationID: assignmentPlacement.OperationID,
+		SourceMatchID: assignmentPlacement.SourceMatchID,
 	}
 	result, err := u.authRepo.AcknowledgeAdmission(ctx, pod, id, reservation,
 		admissionID, admissionSeq, time.Now().UnixMilli(), u.shardTTL())
@@ -1316,31 +1749,19 @@ func (u *HubUsecase) AcknowledgeAdmissionWithPlacement(ctx context.Context, play
 			plog.With(ctx).Warnw("msg", "hub_placement_commit_failed", "mode", u.placementMode.String(),
 				"player_id", playerID, "assignment_id", assignmentID, "admission_id", admissionID, "err", commitErr)
 			if u.placementMode == placement.ModeEnforce {
-				// Unavailable means the commit result is unknown. Keep the exact session so the
-				// DS can retry the same admission id; the spawn gate remains closed. A definite
-				// conflict is compensated immediately.
-				if errcode.As(commitErr) != errcode.ErrUnavailable {
-					_, cleanupErr := u.authRepo.AcknowledgeDeparture(ctx, pod, id, reservation,
-						admissionID, admissionSeq, time.Now().UnixMilli(), u.shardTTL())
-					if cleanupErr != nil {
-						plog.With(ctx).Warnw("msg", "hub_placement_commit_cleanup_failed", "player_id", playerID,
-							"assignment_id", assignmentID, "admission_id", admissionID, "err", cleanupErr)
-					}
-				}
+				// Keep the exact connected session for both unknown and definite
+				// failures. The Hub still has a real PlayerController (with its
+				// spawn gate closed); only DS Kick -> Logout -> exact Departure, or
+				// confirmed GameServer UID teardown, is physical-exit proof.
 				return nil, commitErr
 			}
 		}
 	}
 	// assignment 与 {pod} ledger 不同 slot：ACK 后必须再查一次。若 Transfer/Release
-	// 已赢得 CAS，立即 exact Departure 撤销刚建立的 owner；撤销失败还会由 DS kick→Logout 队列重试。
+	// 已赢得 CAS，保留 exact connected owner 并拒绝开放 spawn gate。DS 收到拒绝后必须
+	// Kick，等 Logout 的物理 proof 才能删除；服务端不能在 PC/Pawn 尚存时自证 Departure。
 	current, stillFound, postErr := u.repo.GetAssignment(ctx, playerID)
 	if postErr != nil || !stillFound || !assignmentMatchesAdmission(current, playerID, assignmentID, pod, cred) {
-		_, cleanupErr := u.authRepo.AcknowledgeDeparture(ctx, pod, id, reservation,
-			admissionID, admissionSeq, time.Now().UnixMilli(), u.shardTTL())
-		if cleanupErr != nil {
-			plog.With(ctx).Warnw("msg", "hub_admission_postcheck_cleanup_failed", "player_id", playerID,
-				"pod", pod, "err", cleanupErr)
-		}
 		if postErr != nil {
 			return nil, postErr
 		}
@@ -1361,12 +1782,6 @@ func (u *HubUsecase) AcknowledgeAdmissionWithPlacement(ctx context.Context, play
 			return nil, persistErr
 		}
 		if !persisted {
-			_, cleanupErr := u.authRepo.AcknowledgeDeparture(ctx, pod, id, reservation,
-				admissionID, admissionSeq, time.Now().UnixMilli(), u.shardTTL())
-			if cleanupErr != nil {
-				plog.With(ctx).Warnw("msg", "hub_admission_owner_persist_cleanup_failed", "player_id", playerID,
-					"pod", pod, "err", cleanupErr)
-			}
 			return nil, errcode.New(errcode.ErrInvalidState,
 				"Hub admission assignment changed during owner persistence")
 		}
@@ -1397,9 +1812,10 @@ func (u *HubUsecase) AcknowledgeDeparture(ctx context.Context, playerID uint64, 
 	if err != nil {
 		return nil, err
 	}
-	if result.Departed {
-		u.removeShardMember(ctx, pod, playerID)
-	}
+	// Departure removes physical connected ownership only. The durable
+	// assignment/member index remains until an exact Release/Transfer phase
+	// replaces or deletes it, so an offline player is still discoverable when
+	// this shard drains.
 	return &AcknowledgeDepartureResult{Departed: result.Departed, Conflict: result.Conflict}, nil
 }
 
@@ -1617,16 +2033,23 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 			plog.With(ctx).Warnw("msg", "reconcile_topology_list_failed", "region", region, "err", lerr)
 			continue // 降级:Fleet 不可用时保留现有镜像
 		}
-		if len(cands) == 0 {
-			continue // 候选为空(Fleet 尚未就绪):不误删现有镜像
-		}
+		// An empty routable list is not physical teardown.  We still walk the
+		// existing mirrors below, mark them unroutable, and require an exact
+		// GameServer+Pod observation before minting teardown proof.
 		live := make(map[string]struct{}, len(cands))
+		presentCandidate := make(map[string]struct{}, len(cands))
 		for _, c := range cands {
+			presentCandidate[c.PodName] = struct{}{}
 			if !c.TokenReady || !releasetrack.Valid(c.ReleaseTrack) {
-				// enforce 下令牌不可用的分片:不计入 live(视同“Fleet 里没有”),其已有 ready 镜像
-				// 会走下面 stale 清理被移除,AssignHub 不再分配;令牌恢复后下轮对账自动补回。
-				// 注意:cands 仍包含它(len(cands)!=0),故本 region“有 hub 但全部令牌失败”时也能进 stale
-				// 清理,而不会被上面 len==0 的 Fleet 空守卫误判保留(审核 P1)。
+				// Credential/release metadata failure removes routing eligibility but
+				// says nothing about the process.  Keep all ownership ledgers and
+				// force a fresh authenticated heartbeat after recovery.
+				_ = u.repo.UpdateShardWithLock(ctx, c.PodName, u.retry(), func(s *hubv1.HubShardStorageRecord) error {
+					if s.State != stateStopping && !(s.State == stateDraining && s.DrainingSinceMs > 0) {
+						s.State = stateWarming
+					}
+					return nil
+				}, u.shardTTL())
 				continue
 			}
 			live[c.PodName] = struct{}{}
@@ -1656,6 +2079,16 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 					if u.requireHeartbeatReady && s.LastHeartbeatMs == 0 &&
 						s.State != stateDraining && s.State != stateStopping {
 						s.State = stateWarming
+					}
+					// Topology/heartbeat-loss draining has no consolidation timestamp.
+					// A routable candidate may re-enter only through a fresh heartbeat;
+					// deliberate scale-in draining (timestamped) remains irreversible.
+					if s.State == stateDraining && s.DrainingSinceMs == 0 {
+						if u.requireHeartbeatReady {
+							s.State = stateWarming
+						} else {
+							s.State = stateReady
+						}
 					}
 					// 令牌代际单调推进(审核 P1 #3/#12):CurrentTokenGen **只增不减**,绝不被 0/低代际清除或回退。
 					// permissive 副本 / annotation 缺失 → 候选 gen=0 → **保持镜像既有代际不变**(不降级已生效的
@@ -1694,7 +2127,11 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 				plog.With(ctx).Warnw("msg", "reconcile_topology_create_failed", "pod", c.PodName, "err", cerr)
 			}
 		}
-		// 清理同 region 的 stale 孤儿(Fleet 已不再返回的 pod):重登玩家命中即自愈重分。
+		// A shard absent from the routable set is retained as a physical-owner
+		// fence.  Candidate absence includes Scheduled/Unhealthy/token failures
+		// and must never erase sessions.  Only an optional exact observer can
+		// record UID-specific teardown proof; durable assignment cleanup consumes
+		// that proof one owner at a time.
 		for _, s := range shards {
 			if s.Region != region {
 				continue
@@ -1702,16 +2139,35 @@ func (u *HubUsecase) reconcileShardTopology(ctx context.Context) error {
 			if _, ok := live[s.HubPodName]; ok {
 				continue
 			}
-			if rerr := u.repo.RemoveShard(ctx, s.HubPodName); rerr != nil {
-				plog.With(ctx).Warnw("msg", "reconcile_topology_remove_stale_failed", "pod", s.HubPodName, "region", region, "err", rerr)
-				continue
-			}
-			if u.authRepo != nil {
-				if lerr := u.authRepo.RemoveCapacityLedger(ctx, s.HubPodName); lerr != nil {
-					plog.With(ctx).Warnw("msg", "reconcile_topology_remove_ledger_failed", "pod", s.HubPodName, "err", lerr)
+			if _, returnedButUnroutable := presentCandidate[s.HubPodName]; !returnedButUnroutable {
+				if rerr := u.repo.UpdateShardWithLock(ctx, s.HubPodName, u.retry(), func(current *hubv1.HubShardStorageRecord) error {
+					if current.State != stateStopping && !(current.State == stateDraining && current.DrainingSinceMs > 0) {
+						current.State = stateDraining
+					}
+					return nil
+				}, u.shardTTL()); rerr != nil && errcode.As(rerr) != errcode.ErrHubNoAvailable {
+					plog.With(ctx).Warnw("msg", "reconcile_topology_fence_stale_failed", "pod", s.HubPodName, "region", region, "err", rerr)
 				}
 			}
-			plog.With(ctx).Warnw("msg", "reconcile_topology_remove_stale", "pod", s.HubPodName, "region", region)
+			observer, observerOK := u.fleet.(HubFleetPhysicalObserver)
+			proofRepo, proofOK := u.authRepo.(data.HubInstanceTeardownProofRepo)
+			if observerOK && proofOK && s.GameserverUid != "" {
+				observation, observeErr := observer.ObserveShardInstance(ctx, s.HubPodName)
+				if observeErr != nil {
+					plog.With(ctx).Warnw("msg", "reconcile_topology_physical_observation_failed",
+						"pod", s.HubPodName, "expected_uid", s.GameserverUid, "err", observeErr)
+				} else if observation.ProvesTeardown(s.GameserverUid) {
+					if proofErr := proofRepo.RecordInstanceTeardownProof(ctx, s.HubPodName,
+						s.GameserverUid, u.assignmentSagaTTL()); proofErr != nil {
+						plog.With(ctx).Warnw("msg", "reconcile_topology_record_teardown_failed",
+							"pod", s.HubPodName, "expected_uid", s.GameserverUid, "err", proofErr)
+					} else {
+						plog.With(ctx).Warnw("msg", "reconcile_topology_exact_uid_teardown_confirmed",
+							"pod", s.HubPodName, "expected_uid", s.GameserverUid,
+							"observed_uid", observation.GameServerUID)
+					}
+				}
+			}
 		}
 	}
 	return nil
@@ -1825,10 +2281,17 @@ func (u *HubUsecase) ensureExistingAssignmentSeat(ctx context.Context, playerID 
 		assignment.GetPlayerId() != playerID || assignment.GetAssignmentId() == "" {
 		return nil, errcode.New(errcode.ErrInvalidState, "hub existing assignment identity is not reusable")
 	}
+	binding := placementBindingFromAssignment(assignment)
+	if u.placementMode == placement.ModeEnforce && !binding.Complete() {
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"hub existing assignment successor requires exact placement binding")
+	}
 	nowMs := time.Now().UnixMilli()
 	res, err := u.authRepo.ReserveAssignment(ctx, assignment.GetHubPodName(), data.ReservationIdentity{
 		PlayerID: playerID, AssignmentID: assignment.GetAssignmentId(), InstanceUID: current.InstanceUID,
 		ProtocolEpoch: current.ProtocolEpoch, WriterEpoch: current.WriterEpoch,
+		PlacementVersion: binding.Version, PlacementOperationID: binding.OperationID,
+		SourceMatchID:         binding.SourceMatchID,
 		ExpiresAtMs:           nowMs + u.reservationTTL().Milliseconds(),
 		AssignmentExpiresAtMs: nowMs + u.assignTTL().Milliseconds(),
 	}, nowMs, u.heartbeatMaxAgeMs(), u.shardTTL())
@@ -2003,11 +2466,8 @@ func (u *HubUsecase) releaseAssignmentSeat(ctx context.Context, assignment *hubv
 		u.releaseFromShard(ctx, assignment.HubPodName)
 		return
 	}
-	released, err := u.authRepo.ReleaseAssignmentSeat(ctx, assignment.HubPodName, data.AssignmentInstanceIdentity{
-		PlayerID: assignment.PlayerId, AssignmentID: assignment.AssignmentId,
-		InstanceUID: assignment.HubInstanceUid, ProtocolEpoch: assignment.AuthEpoch,
-		WriterEpoch: assignment.AuthWriterEpoch,
-	}, u.shardTTL())
+	released, err := u.authRepo.ReleaseAssignmentSeat(ctx, assignment.HubPodName,
+		assignmentInstanceIdentity(assignment), u.shardTTL())
 	if err != nil {
 		plog.With(ctx).Warnw("msg", "hub_assignment_seat_release_failed", "pod", assignment.HubPodName, "err", err)
 	} else if !released {
@@ -2116,8 +2576,11 @@ func assignmentInstanceIdentity(a *hubv1.HubAssignmentStorageRecord) data.Assign
 	if a == nil {
 		return data.AssignmentInstanceIdentity{}
 	}
+	binding := placementBindingFromAssignment(a)
 	return data.AssignmentInstanceIdentity{PlayerID: a.GetPlayerId(), AssignmentID: a.GetAssignmentId(),
-		InstanceUID: a.GetHubInstanceUid(), ProtocolEpoch: a.GetAuthEpoch(), WriterEpoch: a.GetAuthWriterEpoch()}
+		InstanceUID: a.GetHubInstanceUid(), ProtocolEpoch: a.GetAuthEpoch(), WriterEpoch: a.GetAuthWriterEpoch(),
+		PlacementVersion: binding.Version, PlacementOperationID: binding.OperationID,
+		SourceMatchID: binding.SourceMatchID}
 }
 
 func (u *HubUsecase) registerTransferCleanup(ctx context.Context, target,
@@ -2177,6 +2640,15 @@ func (u *HubUsecase) resumeAssignmentCleanup(ctx context.Context, playerID uint6
 		}
 		if current.GetReleaseCleanupPending() {
 			ref := transferCleanupRef(current)
+			hasDepartureBinding := current.GetReleaseCleanupMatchId() != 0 ||
+				current.GetReleaseCleanupPlacementVersion() != 0 ||
+				current.GetReleaseCleanupOperationId() != ""
+			if hasDepartureBinding && (current.GetReleaseCleanupMatchId() == 0 ||
+				current.GetReleaseCleanupPlacementVersion() == 0 ||
+				!placement.ValidOperationID(current.GetReleaseCleanupOperationId())) {
+				return nil, false, errcode.New(errcode.ErrInvalidState,
+					"Hub release cleanup has partial Battle departure binding")
+			}
 			seat, inspectErr := u.authRepo.InspectAssignmentSeat(ctx, current.GetHubPodName(),
 				assignmentInstanceIdentity(current))
 			if inspectErr != nil {
@@ -2185,14 +2657,6 @@ func (u *HubUsecase) resumeAssignmentCleanup(ctx context.Context, playerID uint6
 			if seat.Conflict || (!seat.Reserved && !seat.Connected && !seat.AlreadyAbsent) {
 				return nil, false, errcode.New(errcode.ErrInvalidState,
 					"Hub release cleanup exact owner conflict")
-			}
-			if seat.Connected {
-				// The heartbeat path now exposes an exact eviction order to this
-				// source DS.  Do not delete its Redis session: only its Logout
-				// AcknowledgeDeparture (or confirmed UID teardown) proves that the
-				// PlayerController/Pawn is physically gone.
-				return nil, false, errcode.New(errcode.ErrUnavailable,
-					"waiting for exact source Hub departure acknowledgement")
 			}
 			result, releaseErr := u.authRepo.ReleaseAssignmentSeatExact(ctx, current.GetHubPodName(),
 				assignmentInstanceIdentity(current), u.shardTTL())
@@ -2206,6 +2670,14 @@ func (u *HubUsecase) resumeAssignmentCleanup(ctx context.Context, playerID uint6
 			if result.Conflict || (!result.Released && !result.AlreadyAbsent) {
 				return nil, false, errcode.New(errcode.ErrInvalidState,
 					"Hub release cleanup exact owner conflict")
+			}
+			if hasDepartureBinding {
+				targetBinding := placement.Binding{Version: current.GetReleaseCleanupPlacementVersion(),
+					OperationID: current.GetReleaseCleanupOperationId()}
+				if err := u.confirmHubSourceDeparture(ctx, playerID, targetBinding,
+					placementBindingFromAssignment(current), placementTargetFromAssignment(current)); err != nil {
+					return nil, false, err
+				}
 			}
 			deleted, deleteErr := u.repo.CompareAndSwapAssignment(ctx, playerID, current, nil, 0)
 			if deleteErr != nil {
@@ -2221,7 +2693,9 @@ func (u *HubUsecase) resumeAssignmentCleanup(ctx context.Context, playerID uint6
 		if !current.GetTransferCleanupPending() {
 			if current.GetTransferTargetBound() || current.GetTransferSourceHubPodName() != "" ||
 				current.GetTransferSourceAssignmentId() != "" || current.GetTransferSourceInstanceUid() != "" ||
-				current.GetTransferSourceAuthEpoch() != 0 || current.GetTransferSourceAuthWriterEpoch() != 0 {
+				current.GetTransferSourceAuthEpoch() != 0 || current.GetTransferSourceAuthWriterEpoch() != 0 ||
+				current.GetReleaseCleanupMatchId() != 0 || current.GetReleaseCleanupPlacementVersion() != 0 ||
+				current.GetReleaseCleanupOperationId() != "" {
 				return nil, false, errcode.New(errcode.ErrInvalidState,
 					"Hub assignment has orphan cleanup fields")
 			}
@@ -2265,10 +2739,6 @@ func (u *HubUsecase) resumeAssignmentCleanup(ctx context.Context, playerID uint6
 			return nil, false, errcode.New(errcode.ErrInvalidState,
 				"Hub transfer source cleanup exact owner conflict")
 		}
-		if seat.Connected {
-			return nil, false, errcode.New(errcode.ErrUnavailable,
-				"waiting for exact source Hub departure acknowledgement")
-		}
 		result, releaseErr := u.authRepo.ReleaseAssignmentSeatExact(ctx, source.GetHubPodName(),
 			assignmentInstanceIdentity(source), u.shardTTL())
 		if releaseErr != nil {
@@ -2281,6 +2751,10 @@ func (u *HubUsecase) resumeAssignmentCleanup(ctx context.Context, playerID uint6
 		if result.Conflict || (!result.Released && !result.AlreadyAbsent) {
 			return nil, false, errcode.New(errcode.ErrInvalidState,
 				"Hub transfer source cleanup exact owner conflict")
+		}
+		if err := u.confirmHubSourceDeparture(ctx, playerID, placementBindingFromAssignment(current),
+			placementBindingFromAssignment(source), placementTargetFromAssignment(source)); err != nil {
+			return nil, false, err
 		}
 		next := proto.Clone(current).(*hubv1.HubAssignmentStorageRecord)
 		clearTransferCleanup(next)
@@ -2571,18 +3045,37 @@ func ticketBindingFromAssignment(a *hubv1.HubAssignmentStorageRecord) HubTicketB
 	}
 }
 
-func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*AssignResult, error) {
+func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID uint32,
+	assignment *hubv1.HubAssignmentStorageRecord,
+) (string, int64, error) {
+	if assignment == nil || u.signer == nil {
+		return "", 0, errcode.New(errcode.ErrUnavailable, "Hub ticket signer unavailable")
+	}
 	if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
-		return nil, errcode.New(errcode.ErrInvalidState,
+		return "", 0, errcode.New(errcode.ErrInvalidState,
 			"refuse to sign hub ticket from incomplete writer-v2 assignment")
 	}
-	if u.placementMode == placement.ModeEnforce && !placementBindingFromAssignment(assignment).Complete() {
-		return nil, errcode.New(errcode.ErrInvalidState, "refuse to sign Hub ticket without placement binding")
+	if u.placementMode == placement.ModeEnforce {
+		if !placementBindingFromAssignment(assignment).Complete() {
+			return "", 0, errcode.New(errcode.ErrInvalidState,
+				"refuse to sign Hub ticket without placement binding")
+		}
+		if err := u.requireHubTicketPlacementReady(ctx, playerID, assignment); err != nil {
+			return "", 0, err
+		}
 	}
 	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, ticketBindingFromAssignment(assignment))
 	if err != nil {
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
-		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
+		return "", 0, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
+	}
+	return token, expMs, nil
+}
+
+func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*AssignResult, error) {
+	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment)
+	if err != nil {
+		return nil, err
 	}
 	return &AssignResult{
 		HubDSAddr:   assignment.HubAddr,
@@ -2595,18 +3088,9 @@ func (u *HubUsecase) signResult(ctx context.Context, playerID uint64, roleID uin
 }
 
 func (u *HubUsecase) transferResult(ctx context.Context, playerID uint64, roleID uint32, assignment *hubv1.HubAssignmentStorageRecord) (*TransferResult, error) {
-	if u.authRepo != nil && !assignmentBindingV2Complete(assignment, playerID) {
-		return nil, errcode.New(errcode.ErrInvalidState,
-			"refuse to sign hub transfer ticket from incomplete writer-v2 assignment")
-	}
-	if u.placementMode == placement.ModeEnforce && !placementBindingFromAssignment(assignment).Complete() {
-		return nil, errcode.New(errcode.ErrInvalidState,
-			"refuse to sign Hub transfer ticket without placement binding")
-	}
-	token, expMs, err := u.signer.SignHubTicket(playerID, roleID, ticketBindingFromAssignment(assignment))
+	token, expMs, err := u.signHubTicket(ctx, playerID, roleID, assignment)
 	if err != nil {
-		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
-		return nil, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
+		return nil, err
 	}
 	return &TransferResult{
 		NewHubDSAddr:  assignment.HubAddr,
@@ -2787,6 +3271,12 @@ func (u *HubUsecase) reconcileFleetReplicas(ctx context.Context) error {
 	// ③ 回收已排空且过 grace 的 draining 分片 + 缩容(只在镜像回收后才把 Fleet 降到存活分片数,
 	// 保持 Fleet 副本数与镜像一致,避免缩 Fleet 后留下不可回收的 stale 镜像)。
 	reclaimed := u.reclaimDrainedShards(ctx, shards)
+	if reclaimed == 0 {
+		// Never derive scale-in authority from a missing/short Redis mirror list.
+		// Exact per-instance teardown is the only future path that may return a
+		// positive reclaimed count.
+		return nil
+	}
 	live := int32(len(shards)) - reclaimed
 	desired := current
 	target := live
@@ -2993,8 +3483,16 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 			if bindErr != nil {
 				return false
 			}
-			token, _, signErr := u.signer.SignHubTicket(playerID, bound.GetRoleId(),
-				ticketBindingFromAssignment(bound))
+			if u.placementMode == placement.ModeEnforce ||
+				(u.placementMode == placement.ModeShadow && placementBindingFromAssignment(bound).Complete()) {
+				// As in the interactive re-sign path, a successful bind may advance
+				// the placement operation.  Rotate the successor before publishing the
+				// migration ticket so Admission consumes the exact canonical lineage.
+				if _, ensureErr := u.ensureExistingAssignmentSeat(ctx, playerID, bound, ensured); ensureErr != nil {
+					return false
+				}
+			}
+			token, _, signErr := u.signHubTicket(ctx, playerID, bound.GetRoleId(), bound)
 			if signErr != nil {
 				return false
 			}
@@ -3064,7 +3562,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 	var token string
 	if u.placementMode != placement.ModeEnforce {
 		var terr error
-		token, _, terr = u.signer.SignHubTicket(playerID, assign.RoleId, ticketBindingFromAssignment(newAssign))
+		token, _, terr = u.signHubTicket(ctx, playerID, assign.RoleId, newAssign)
 		if terr != nil {
 			plog.With(ctx).Warnw("msg", "migrate_sign_ticket_failed", "player_id", playerID, "err", terr)
 			u.compensateReservedSeat(ctx, target.HubPodName, playerID, newAssignmentID, seat)
@@ -3107,7 +3605,7 @@ func (u *HubUsecase) migratePlayer(ctx context.Context, playerID uint64, from, t
 	newAssign = bound
 	if u.placementMode == placement.ModeEnforce {
 		var terr error
-		token, _, terr = u.signer.SignHubTicket(playerID, assign.RoleId, ticketBindingFromAssignment(newAssign))
+		token, _, terr = u.signHubTicket(ctx, playerID, assign.RoleId, newAssign)
 		if terr != nil {
 			// Placement is bound but not admitted. Keep both seats and withhold
 			// the event; an exact retry can re-sign without inventing a route.
@@ -3151,12 +3649,15 @@ func (u *HubUsecase) pushMigrate(ctx context.Context, playerID uint64, from, tar
 	}
 }
 
-// reclaimDrainedShards:删除「已排空(player_count<=0)且过 grace」的强制整合 draining 分片。
-// 只回收带 draining_since_ms>0 戳的分片(强制整合排空的),不碰心跳超时标 draining 的死 DS 分片。
+// reclaimDrainedShards intentionally does not erase a mirror merely because a
+// logical drain/grace timer completed.  Fleet scale-in does not select a
+// particular GameServer, and Kubernetes DELETE acceptance is not process
+// teardown.  Until scale-in is upgraded to an exact per-instance teardown
+// saga, correctness wins over resource reclamation: the physical-owner fence
+// stays durable and this function reports zero reclaimed replicas.
 func (u *HubUsecase) reclaimDrainedShards(ctx context.Context, shards []*hubv1.HubShardStorageRecord) int32 {
 	graceMs := int64(u.cfg.MigrateGraceSeconds) * 1000
 	now := time.Now().UnixMilli()
-	var reclaimed int32
 	for _, s := range shards {
 		if s.State != stateDraining || s.PlayerCount > 0 || s.DrainingSinceMs <= 0 {
 			continue
@@ -3164,19 +3665,10 @@ func (u *HubUsecase) reclaimDrainedShards(ctx context.Context, shards []*hubv1.H
 		if now-s.DrainingSinceMs < graceMs {
 			continue // 未过 grace,保持 pod 存活让在场玩家完成倒计时切换
 		}
-		if rerr := u.repo.RemoveShard(ctx, s.HubPodName); rerr != nil {
-			plog.With(ctx).Warnw("msg", "reclaim_remove_shard_failed", "pod", s.HubPodName, "err", rerr)
-			continue
-		}
-		if u.authRepo != nil {
-			if lerr := u.authRepo.RemoveCapacityLedger(ctx, s.HubPodName); lerr != nil {
-				plog.With(ctx).Warnw("msg", "reclaim_remove_ledger_failed", "pod", s.HubPodName, "err", lerr)
-			}
-		}
-		reclaimed++
-		plog.With(ctx).Infow("msg", "hub_shard_reclaimed", "pod", s.HubPodName, "region", s.Region)
+		plog.With(ctx).Warnw("msg", "hub_scalein_waiting_exact_instance_teardown",
+			"pod", s.HubPodName, "region", s.Region, "gameserver_uid", s.GameserverUid)
 	}
-	return reclaimed
+	return 0
 }
 
 // addShardMember / removeShardMember:成员反向索引维护(best-effort,失败仅 Warn 不阻断主流程)。

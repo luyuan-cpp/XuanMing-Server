@@ -45,6 +45,42 @@ type HubFleetProvider interface {
 	ListShards(ctx context.Context, region string) ([]ShardCandidate, error)
 }
 
+// HubInstanceObservation is a physical-liveness observation, deliberately
+// separate from ShardCandidate.  A GameServer can be Scheduled, Unhealthy, or
+// temporarily lack a callback credential while its process/Pod still exists;
+// those states make it unroutable but are not teardown proof.
+type HubInstanceObservation struct {
+	GameServerFound       bool
+	GameServerUID         string
+	PodFound              bool
+	PodOwnerGameServerUID string
+}
+
+// ProvesTeardown returns true only when the exact expected GameServer UID can
+// no longer own either the GameServer object or its Pod.  Unknown/malformed
+// ownership is fail-closed.
+func (o HubInstanceObservation) ProvesTeardown(expectedGameServerUID string) bool {
+	if expectedGameServerUID == "" {
+		return false
+	}
+	if o.GameServerFound && o.GameServerUID == expectedGameServerUID {
+		return false
+	}
+	if o.PodFound {
+		return o.GameServerFound && o.GameServerUID != "" &&
+			o.GameServerUID != expectedGameServerUID &&
+			o.PodOwnerGameServerUID == o.GameServerUID
+	}
+	return !o.GameServerFound || o.GameServerUID != expectedGameServerUID
+}
+
+// HubFleetPhysicalObserver is an optional production capability.  Reconcile
+// may use it to mint an exact UID teardown proof, but absence from
+// HubFleetProvider.ListShards alone must never be treated as physical death.
+type HubFleetPhysicalObserver interface {
+	ObserveShardInstance(ctx context.Context, pod string) (HubInstanceObservation, error)
+}
+
 // HubFleetScaler 是 Hub Fleet 副本扩缩容能力(可选)。
 //
 // **仅真 Agones provider(AgonesHubFleetProvider)实现**。MockHubFleetProvider 刻意不实现本接口:

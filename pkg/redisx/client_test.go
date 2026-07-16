@@ -59,3 +59,18 @@ func TestDeadlineUniversalClientEnablesContextTimeoutOnlyWhenRequested(t *testin
 		t.Fatal("严格截止构造必须启用 ContextTimeoutEnabled")
 	}
 }
+
+func TestUniversalClientWithCredentialsReplacesWriterCredential(t *testing.T) {
+	cfg := config.RedisConf{Host: "127.0.0.1:6379", Password: "writer-password-must-not-be-used"}
+	client := NewUniversalClientWithCredentials(cfg, "dedicated-read-only", "read-only-password")
+	t.Cleanup(func() { _ = client.Close() })
+	single, ok := client.(*redis.Client)
+	if !ok {
+		t.Fatalf("client type = %T, want *redis.Client", client)
+	}
+	if single.Options().Username != "dedicated-read-only" ||
+		single.Options().Password != "read-only-password" ||
+		single.Options().Password == cfg.Password {
+		t.Fatalf("dedicated credential was not an unconditional replacement")
+	}
+}

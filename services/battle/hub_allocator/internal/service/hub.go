@@ -81,6 +81,20 @@ func (s *HubService) ReleaseHub(ctx context.Context, req *hubv1.ReleaseHubReques
 	return &hubv1.ReleaseHubResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+func (s *HubService) EnsureHubDepartureForBattle(ctx context.Context,
+	req *hubv1.EnsureHubDepartureForBattleRequest,
+) (*hubv1.EnsureHubDepartureForBattleResponse, error) {
+	binding := placement.Binding{Version: req.GetPlacementVersion(),
+		OperationID: req.GetPlacementOperationId()}
+	if req.GetPlayerId() == 0 || req.GetMatchId() == 0 || !binding.Complete() {
+		return &hubv1.EnsureHubDepartureForBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	if err := s.uc.EnsureHubDepartureForBattle(ctx, req.GetPlayerId(), req.GetMatchId(), binding); err != nil {
+		return &hubv1.EnsureHubDepartureForBattleResponse{Code: toProtoCode(err)}, nil
+	}
+	return &hubv1.EnsureHubDepartureForBattleResponse{Code: commonv1.ErrCode_OK, Departed: true}, nil
+}
+
 // TransferHub 跨分片传送(玩家点传送点)。
 func (s *HubService) TransferHub(ctx context.Context, req *hubv1.TransferHubRequest) (*hubv1.TransferHubResponse, error) {
 	if req.GetPlayerId() == 0 {

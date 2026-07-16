@@ -4,12 +4,222 @@
 # 生产信任材料和固定 synthetic Job 必须由平台在仓库外预置；证据缺失一律失败。
 Set-StrictMode -Version Latest
 
+function Assert-PandoraRedisTopologyChangeLockProvider(
+    [string]$Checkpoint,
+    [string]$RedisTopology,
+    [string]$RedisConfigIdentity
+) {
+    if ([string]::IsNullOrWhiteSpace($Checkpoint) -or [string]::IsNullOrWhiteSpace($RedisTopology) -or
+        [string]::IsNullOrWhiteSpace($RedisConfigIdentity)) {
+        throw 'Redis topology-change lock provider gate 缺绑定上下文。'
+    }
+    # Deliberate shared fail-closed hook. A future implementation must verify
+    # the same provider-signed/online lease here for both activation and
+    # ordinary release; callers may not replace it with a ConfigMap marker.
+    throw ("RELEASE BLOCKED: authoritative Redis topology-change lock provider 未接线；" +
+        "checkpoint=$Checkpoint topology=$RedisTopology identity=$RedisConfigIdentity。")
+}
+
+function Assert-PandoraPodUIDACLCleanupTimeline(
+    [datetimeoffset]$RequiredCreated,
+    [datetimeoffset]$SwitchCreated,
+    [datetimeoffset]$ProofCompleted,
+    [datetimeoffset]$CompleteCreated
+) {
+    if ($RequiredCreated -gt $SwitchCreated -or $SwitchCreated -gt $ProofCompleted -or
+        $ProofCompleted -gt $CompleteCreated) {
+        throw 'pod_uid ACL cleanup 时间链 required<=switch<=proof<=complete 非法。'
+    }
+}
+
 $script:PandoraDsAuthWriterApps = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
-$script:PandoraDsAuthRequiredFeatures =
+$script:PandoraDsAuthRequiredFeaturesV2 =
     'hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1|hub-owner-cleanup-v1|hub-physical-eviction-v1,' +
-    'ds_allocator=battle-release-expected-tuple-v1,' +
+    'ds_allocator=battle-release-expected-tuple-v1|battle-storage-pod-uid-write-invariant-v1,' +
     'battle_result=battle-terminal-outbox-v1'
+$script:PandoraDsAuthRequiredFeaturesV3 =
+    'hub_allocator=hub-reservation-ledger-v1|hub-heartbeat-capacity-v1|hub-owner-cleanup-v1|hub-physical-eviction-v1|hub-successor-lease-v1,' +
+    'ds_allocator=battle-release-expected-tuple-v1|battle-storage-pod-uid-write-invariant-v1,' +
+    'battle_result=battle-terminal-outbox-v1'
+# Compatibility for the immutable V1->V2 activation script. Never mutate this
+# alias to V3: the V2 policy ID must retain its original exact feature meaning.
+$script:PandoraDsAuthRequiredFeatures = $script:PandoraDsAuthRequiredFeaturesV2
+$script:PandoraDsAuthPolicyV3EvidenceName = 'pandora-ds-auth-policy-v3-evidence'
 $script:PandoraDsAuthIdentityMountPath = '/run/secrets/pandora/ds-auth-etcd'
+$script:PandoraPodUIDReleasePreflightBaseArgs = @(
+    '-conf', 'etc/pod-uid-preflight.yaml', '-pod-uid-release-preflight',
+    '-pod-uid-release-preflight-timeout=10m', '-pod-uid-release-preflight-scan-count=1000'
+)
+
+function Assert-PandoraDsAuthPolicyV3EvidenceContract(
+    $Marker,
+    [string]$ExpectedServices,
+    [string]$ExpectedInstances,
+    [string]$ExpectedImageDigests,
+    [string]$ExpectedKubeContext = '',
+    [string]$ExpectedNamespace = ''
+) {
+    if ($null -eq $Marker -or $Marker.immutable -ne $true) {
+        throw 'DS auth V3 policy evidence ConfigMap must exist and be immutable.'
+    }
+	if ([string]$Marker.metadata.uid -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+		[string]$Marker.metadata.resourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$') {
+		throw 'DS auth V3 policy evidence metadata identity is not canonical.'
+	}
+    $deletingProperty = $Marker.metadata.PSObject.Properties['deletionTimestamp']
+    if ($null -ne $deletingProperty -and -not [string]::IsNullOrWhiteSpace([string]$deletingProperty.Value)) {
+        throw 'DS auth V3 policy evidence ConfigMap is deleting.'
+    }
+    $keys = @('contract', 'run_id', 'kube_context', 'namespace',
+        'from_policy_generation', 'to_policy_generation',
+        'from_required_value', 'to_required_value', 'required_policy_id',
+        'staging_contract', 'expected_services', 'expected_instances',
+        'expected_image_digests', 'required_features', 'evidence_sha256',
+        'completed_at_unix_ms')
+    if ((@($Marker.data.PSObject.Properties.Name | Sort-Object) -join ',') -cne
+        (@($keys | Sort-Object) -join ',')) {
+        throw 'DS auth V3 policy evidence data keys are not the exact contract.'
+    }
+    $completionMS = [int64]0
+    if ([string]$Marker.data.contract -cne 'ds-auth-policy-v3-activation-evidence-v1' -or
+        [string]$Marker.data.run_id -cnotmatch '^[a-z0-9][a-z0-9-]{7,31}$' -or
+        [string]$Marker.data.kube_context -cnotmatch '^[A-Za-z0-9._:-]{1,128}$' -or
+        [string]$Marker.data.namespace -cnotmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$' -or
+        (-not [string]::IsNullOrWhiteSpace($ExpectedKubeContext) -and
+            [string]$Marker.data.kube_context -cne $ExpectedKubeContext) -or
+        (-not [string]::IsNullOrWhiteSpace($ExpectedNamespace) -and
+            [string]$Marker.data.namespace -cne $ExpectedNamespace) -or
+        [string]$Marker.data.from_policy_generation -cne '2' -or
+        [string]$Marker.data.to_policy_generation -cne '3' -or
+        [string]$Marker.data.from_required_value -cne '2@ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$Marker.data.to_required_value -cne '2@ds-auth-v2-hub-successor-lease-v1' -or
+        [string]$Marker.data.required_policy_id -cne 'ds-auth-v2-hub-successor-lease-v1' -or
+        [string]$Marker.data.staging_contract -cne 'capability-lease-not-service-endpoint-v1' -or
+        [string]$Marker.data.required_features -cne $script:PandoraDsAuthRequiredFeaturesV3 -or
+        [string]$Marker.data.expected_services -cne $ExpectedServices -or
+        [string]$Marker.data.expected_instances -cne $ExpectedInstances -or
+        [string]$Marker.data.expected_image_digests -cne $ExpectedImageDigests -or
+        [string]$Marker.data.evidence_sha256 -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        -not [int64]::TryParse([string]$Marker.data.completed_at_unix_ms, [ref]$completionMS) -or
+        $completionMS -le 0) {
+        throw 'DS auth V3 policy evidence does not bind the exact staged capability/policy contract.'
+    }
+    $calculatedEvidence = Get-PandoraDsAuthPolicyV3EvidenceSHA256 $Marker.data
+    if ([string]$Marker.data.evidence_sha256 -cne $calculatedEvidence) {
+        throw 'DS auth V3 policy evidence digest does not match its canonical exact payload.'
+    }
+    $created = [datetimeoffset]::Parse([string]$Marker.metadata.creationTimestamp)
+    if ([datetimeoffset]::FromUnixTimeMilliseconds($completionMS) -gt $created) {
+        throw 'DS auth V3 policy evidence completion time is after immutable marker creation.'
+    }
+    return [pscustomobject][ordered]@{
+        UID = [string]$Marker.metadata.uid
+        ResourceVersion = [string]$Marker.metadata.resourceVersion
+        EvidenceSHA256 = [string]$Marker.data.evidence_sha256
+        CompletedAtUnixMS = $completionMS
+        ExpectedServices = [string]$Marker.data.expected_services
+        ExpectedInstances = [string]$Marker.data.expected_instances
+        ExpectedImageDigests = [string]$Marker.data.expected_image_digests
+        RequiredFeatures = [string]$Marker.data.required_features
+        RunID = [string]$Marker.data.run_id
+        KubeContext = [string]$Marker.data.kube_context
+        Namespace = [string]$Marker.data.namespace
+    }
+}
+
+function Get-PandoraDsAuthPolicyV3EvidenceSHA256($Data) {
+    $fields = @('contract', 'run_id', 'kube_context', 'namespace', 'from_policy_generation',
+        'to_policy_generation', 'from_required_value', 'to_required_value', 'required_policy_id',
+        'staging_contract', 'expected_services', 'expected_instances', 'expected_image_digests',
+        'required_features', 'completed_at_unix_ms')
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($field in $fields) {
+        $value = [string]$Data.$field
+        if ([string]::IsNullOrWhiteSpace($value) -or $value.Contains("`r") -or $value.Contains("`n")) {
+            throw "DS auth V3 evidence canonical field=$field is empty or multiline."
+        }
+        $lines.Add("$field=$value")
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes(($lines -join "`n"))
+        $hex = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+        return "sha256:$hex"
+    } finally { $sha.Dispose() }
+}
+
+function Assert-PandoraDsAuthV3CompletionContract(
+    $Marker,
+    [string]$ExpectedName,
+    [string]$ExpectedNamespace,
+    $PolicyEvidence,
+    [hashtable]$ExpectedCounts
+) {
+    $keys = @('contract', 'run_id', 'required_value', 'policy_generation', 'evidence_uid',
+        'evidence_resource_version', 'evidence_sha256', 'final_instances', 'completed_at_unix_ms')
+    $deleting = $Marker.metadata.PSObject.Properties['deletionTimestamp']
+    $completedMS = [int64]0
+    if ($Marker.immutable -ne $true -or [string]$Marker.metadata.name -cne $ExpectedName -or
+        [string]$Marker.metadata.namespace -cne $ExpectedNamespace -or
+        [string]$Marker.metadata.uid -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$Marker.metadata.resourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        [string]::IsNullOrWhiteSpace([string]$Marker.metadata.creationTimestamp) -or
+        ($null -ne $deleting -and -not [string]::IsNullOrWhiteSpace([string]$deleting.Value)) -or
+        (@($Marker.data.PSObject.Properties.Name | Sort-Object) -join ',') -cne (@($keys | Sort-Object) -join ',') -or
+        [string]$Marker.data.contract -cne 'ds-auth-policy-v3-completion-v1' -or
+        [string]$Marker.data.run_id -cne [string]$PolicyEvidence.RunID -or
+        [string]$Marker.data.required_value -cne '2@ds-auth-v2-hub-successor-lease-v1' -or
+        [string]$Marker.data.policy_generation -cne '3' -or
+        [string]$Marker.data.evidence_uid -cne [string]$PolicyEvidence.UID -or
+        [string]$Marker.data.evidence_resource_version -cne [string]$PolicyEvidence.ResourceVersion -or
+        [string]$Marker.data.evidence_sha256 -cne [string]$PolicyEvidence.EvidenceSHA256 -or
+        -not [int64]::TryParse([string]$Marker.data.completed_at_unix_ms, [ref]$completedMS) -or
+        $completedMS -le 0) {
+        throw 'V3 completion marker metadata/data is not the exact immutable activation contract.'
+    }
+    $created = [datetimeoffset]::Parse([string]$Marker.metadata.creationTimestamp)
+    if ([datetimeoffset]::FromUnixTimeMilliseconds($completedMS) -gt $created) {
+        throw 'V3 completion marker completion time is after marker creation.'
+    }
+    $instances = @{}
+    foreach ($item in ([string]$Marker.data.final_instances).Split(',')) {
+        $parts = $item.Split('=', 2)
+        if ($parts.Count -ne 2 -or -not $ExpectedCounts.ContainsKey($parts[0]) -or $instances.ContainsKey($parts[0])) {
+            throw 'V3 completion final_instances contains an unknown, duplicate, or malformed service.'
+        }
+        $uids = @($parts[1].Split('|') | Sort-Object -Unique)
+        if ($uids.Count -ne [int]$ExpectedCounts[$parts[0]] -or
+            @($uids | Where-Object { $_ -cnotmatch '^[0-9A-Za-z][0-9A-Za-z._:-]{0,127}$' }).Count -ne 0) {
+            throw "V3 completion final_instances count/UID for $($parts[0]) is invalid."
+        }
+        $instances[$parts[0]] = $true
+    }
+    if ($instances.Count -ne $ExpectedCounts.Count -or [int]$ExpectedCounts['hub_allocator'] -ne 1) {
+        throw 'V3 completion final_instances is not the exact five-service/single-Hub structure.'
+    }
+}
+
+function Resolve-PandoraDsAuthV3CanonicalUIDSet(
+    [string]$Service,
+    [string[]]$CurrentUIDs,
+    [int]$Desired,
+    [string[]]$PreCASExpectedUIDs = @(),
+    [switch]$PreCAS
+) {
+    $current = @($CurrentUIDs | Sort-Object -Unique)
+    if ($Desired -le 0 -or $current.Count -ne $Desired -or
+        @($CurrentUIDs).Count -ne $current.Count -or
+        @($current | Where-Object { $_ -cnotmatch '^[0-9A-Za-z][0-9A-Za-z._:-]{0,127}$' }).Count -ne 0) {
+        throw "Canonical non-deleting Pod UID set for $Service is not exact desired=$Desired."
+    }
+    if ($PreCAS) {
+        $expected = @($PreCASExpectedUIDs | Sort-Object -Unique)
+        if ($expected.Count -ne $Desired -or ($current -join '|') -cne ($expected -join '|')) {
+            throw "Pre-CAS canonical Pod UID set for $Service differs from immutable evidence."
+        }
+    }
+    return ($current -join '|')
+}
 
 function Assert-PandoraDsAuthEtcdRevision([string]$Revision) {
     if ($Revision -cnotmatch '^r[1-9][0-9]*$') {
@@ -134,7 +344,7 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
     $greenName = "$App-ds-auth-green"
     if ([string]$LiveDeployment.apiVersion -cne 'apps/v1' -or [string]$LiveDeployment.kind -cne 'Deployment' -or
         [string]$LiveDeployment.metadata.name -cne $greenName -or [string]$LiveDeployment.metadata.namespace -cne 'pandora' -or
-        [string]$LiveDeployment.metadata.resourceVersion -cnotmatch '^[1-9][0-9]*$') {
+        [string]$LiveDeployment.metadata.resourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$') {
         throw 'canonical green live Deployment 身份/resourceVersion 非法。'
     }
     if ([string]$LiveDeployment.metadata.annotations.'pandora.dev/ds-auth-green-desired-replicas' -cne [string]$DesiredReplicas -or
@@ -156,7 +366,58 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
     if ($containers.Count -ne 1) { throw 'canonical green live Deployment 缺唯一业务 container。' }
     $containers[0].image = $PinnedImage
     $spec.template.metadata.annotations.'pandora.dev/image-digest' = $Digest
-    return [pscustomobject]@{
+
+    # The one-time epoch activation temporarily pins ds-allocator green to a
+    # per-RunId immutable raw snapshot.  A later ordinary epoch-2 release must
+    # deliberately return to the current fixed pandora-config Secret; otherwise
+    # rollout restart would silently keep serving the historical snapshot.
+    if ($App -ceq 'ds-allocator') {
+        $confVolumes = @($spec.template.spec.volumes | Where-Object { [string]$_.name -ceq 'conf' })
+        if ($confVolumes.Count -ne 1 -or $null -eq $confVolumes[0].secret) {
+            throw 'canonical green ds-allocator 缺唯一 Secret-backed conf volume。'
+        }
+        $confVolumes[0].secret.secretName = 'pandora-config'
+    }
+
+    # Production serves the epoch=2 canonical green Deployment, while the base
+    # blue Deployment is deliberately dormant. Therefore putting Recreate +
+    # preflight only in services.yaml would be a false gate: an ordinary prod
+    # release replaces/restarts green and could still overlap old/new locator
+    # writers. Build the exact gate into the CAS replacement object itself.
+    if ($App -ceq 'player-locator') {
+        $confVolumes = @($spec.template.spec.volumes | Where-Object {
+            [string]$_.name -ceq 'conf' -and [string]$_.secret.secretName -ceq 'pandora-config'
+        })
+        if ($confVolumes.Count -ne 1) {
+            throw 'canonical green player-locator 缺唯一 pandora-config volume，无法执行 placement preflight。'
+        }
+        $strategy = [pscustomobject]@{ type = 'Recreate' }
+        if ($null -eq $spec.PSObject.Properties['strategy']) {
+            $spec | Add-Member -NotePropertyName strategy -NotePropertyValue $strategy
+        } else {
+            $spec.strategy = $strategy
+        }
+        $preflight = [pscustomobject]@{
+            name = 'placement-preflight'
+            image = $PinnedImage
+            imagePullPolicy = 'IfNotPresent'
+            args = @('-conf', 'etc/cluster.yaml', '-placement-preflight',
+                '-placement-preflight-timeout=10m', '-placement-preflight-scan-count=1000')
+            volumeMounts = @([pscustomobject]@{
+                name = 'conf'; mountPath = '/app/etc/cluster.yaml'; subPath = 'player-locator.yaml'; readOnly = $true
+            })
+            resources = [pscustomobject]@{
+                requests = [pscustomobject]@{ cpu = '25m'; memory = '32Mi' }
+                limits = [pscustomobject]@{ cpu = '1'; memory = '256Mi' }
+            }
+        }
+        if ($null -eq $spec.template.spec.PSObject.Properties['initContainers']) {
+            $spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @($preflight)
+        } else {
+            $spec.template.spec.initContainers = @($preflight)
+        }
+    }
+    $candidate = [pscustomobject]@{
         apiVersion = 'apps/v1'
         kind = 'Deployment'
         metadata = [pscustomobject]@{
@@ -167,6 +428,498 @@ function New-PandoraDsAuthCanonicalGreenObject($LiveDeployment, [string]$App, [s
             annotations = $LiveDeployment.metadata.annotations
         }
         spec = $spec
+    }
+    if ($App -ceq 'player-locator') {
+        Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $candidate $PinnedImage
+    }
+    return $candidate
+}
+
+function Assert-PandoraPlayerLocatorPlacementPreflightObjectContract($Deployment, [string]$ExpectedPinnedImage = '') {
+    if ([string]$Deployment.apiVersion -cne 'apps/v1' -or [string]$Deployment.kind -cne 'Deployment' -or
+        [string]$Deployment.metadata.name -cnotin @('player-locator', 'player-locator-ds-auth-green')) {
+        throw 'placement preflight Deployment 身份非法。'
+    }
+    if ([string]$Deployment.spec.strategy.type -cne 'Recreate' -or
+        $null -ne $Deployment.spec.strategy.PSObject.Properties['rollingUpdate']) {
+        throw 'player-locator placement writer 必须使用 exact Recreate strategy。'
+    }
+    $main = @($Deployment.spec.template.spec.containers | Where-Object { [string]$_.name -ceq 'player-locator' })
+    $init = @($Deployment.spec.template.spec.initContainers)
+    if ($main.Count -ne 1 -or $init.Count -ne 1 -or [string]$init[0].name -cne 'placement-preflight') {
+        throw 'player-locator 必须有唯一主容器和唯一 placement-preflight initContainer。'
+    }
+    $mainImage = [string]$main[0].image
+    if ([string]::IsNullOrWhiteSpace($ExpectedPinnedImage)) { $ExpectedPinnedImage = $mainImage }
+    if ($ExpectedPinnedImage -cnotmatch '@sha256:[0-9a-f]{64}$' -or $mainImage -cne $ExpectedPinnedImage -or
+        [string]$init[0].image -cne $ExpectedPinnedImage) {
+        throw 'player-locator 主容器与 placement-preflight 必须使用同一 immutable digest。'
+    }
+    $commands = @()
+    if ($null -ne $init[0].PSObject.Properties['command']) { $commands = @($init[0].command) }
+    if ([string]$init[0].imagePullPolicy -cne 'IfNotPresent' -or
+        (@($init[0].args) -join ' ') -cne
+            '-conf etc/cluster.yaml -placement-preflight -placement-preflight-timeout=10m -placement-preflight-scan-count=1000' -or
+        $commands.Count -ne 0) {
+        throw 'player-locator placement-preflight image policy/args/ENTRYPOINT 非 canonical。'
+    }
+    $mounts = @($init[0].volumeMounts)
+    if ($mounts.Count -ne 1 -or [string]$mounts[0].name -cne 'conf' -or
+        [string]$mounts[0].mountPath -cne '/app/etc/cluster.yaml' -or
+        [string]$mounts[0].subPath -cne 'player-locator.yaml' -or $mounts[0].readOnly -ne $true) {
+        throw 'player-locator placement-preflight 配置挂载非 canonical read-only contract。'
+    }
+    $confVolumes = @($Deployment.spec.template.spec.volumes | Where-Object {
+        [string]$_.name -ceq 'conf' -and [string]$_.secret.secretName -ceq 'pandora-config'
+    })
+    if ($confVolumes.Count -ne 1) {
+        throw 'player-locator placement-preflight 配置源必须是唯一 pandora-config Secret。'
+    }
+}
+
+# Construct the explicit, one-shot Model-B legacy pod_uid release gate from the
+# exact dormant green ds-allocator image. This is a Job, never an initContainer:
+# the same additive binary must first be rolled out as the epoch=1/blue writer
+# in an earlier release phase so it can backfill exact legacy GameServer
+# identities. This Job only audits; it cannot repair records whose exact K8s
+# objects are already gone. Activation then runs prepare + post-drain proofs.
+function Assert-PandoraPodUIDReleaseConfigEvidence($ConfigEvidence,
+    [ValidateSet('prepare', 'drained', 'final')][string]$Phase) {
+    if ($null -eq $ConfigEvidence -or
+        [string]$ConfigEvidence.SourceSecretName -cne 'pandora-config' -or
+        [string]$ConfigEvidence.SourceSecretUID -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$ConfigEvidence.SourceSecretResourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        [string]$ConfigEvidence.RawConfigSHA256 -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        [string]$ConfigEvidence.RawSnapshotName -cnotmatch '^pandora-dsa-cfg-v2-[a-z0-9][a-z0-9-]{7,23}-[0-9a-f]{12}$' -or
+        [string]$ConfigEvidence.RawSnapshotUID -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$ConfigEvidence.RawSnapshotResourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        [string]$ConfigEvidence.RawSnapshotSHA256 -cne [string]$ConfigEvidence.RawConfigSHA256 -or
+        [string]$ConfigEvidence.ROSecretName -cnotmatch '^pandora-pod-uid-preflight-redis-ro-r[1-9][0-9]*$' -or
+        [string]$ConfigEvidence.ROSecretUID -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$ConfigEvidence.ROSecretResourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        [string]$ConfigEvidence.ROConfigSHA256 -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        [string]$ConfigEvidence.RedisConfigIdentity -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        [string]$ConfigEvidence.RedisConfigTopology -cnotin @('standalone', 'sentinel', 'cluster') -or
+        [string]$ConfigEvidence.HelperSourceSHA256 -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        ($Phase -ceq 'prepare' -and [string]$ConfigEvidence.RedisTargetIdentity -cne 'pending-prepare') -or
+        ($Phase -cne 'prepare' -and [string]$ConfigEvidence.RedisTargetIdentity -cnotmatch '^sha256:[0-9a-f]{64}$')) {
+        throw 'pod_uid preflight config evidence 必须绑定 source/raw snapshot/RO Secret UID+resourceVersion+raw SHA256 与阶段 Redis identity。'
+    }
+}
+
+function New-PandoraPodUIDReleasePreflightJobObject($GreenDeployment, [string]$ActivationRunId,
+    [ValidateSet('prepare', 'drained', 'final')][string]$Phase, [uint32]$TargetEpoch = 2,
+    $ConfigEvidence) {
+    Assert-PandoraPodUIDReleaseConfigEvidence $ConfigEvidence $Phase
+    if ($ActivationRunId -cnotmatch '^[a-z0-9][a-z0-9-]{7,23}$') {
+        throw 'pod_uid preflight ActivationRunId 必须为 8..24 位 canonical 小写身份。'
+    }
+    if ($TargetEpoch -ne 2 -or [string]$GreenDeployment.apiVersion -cne 'apps/v1' -or
+        [string]$GreenDeployment.kind -cne 'Deployment' -or
+        [string]$GreenDeployment.metadata.name -cne 'ds-allocator-ds-auth-green' -or
+        [string]$GreenDeployment.metadata.namespace -cne 'pandora') {
+        throw 'pod_uid preflight 必须从 exact epoch=2 ds-allocator green Deployment 构造。'
+    }
+    $main = @($GreenDeployment.spec.template.spec.containers | Where-Object {
+        [string]$_.name -ceq 'ds-allocator'
+    })
+    if ($main.Count -ne 1) { throw 'pod_uid preflight green template 缺唯一 ds-allocator container。' }
+    $image = [string]$main[0].image
+    $digest = [string]$GreenDeployment.spec.template.metadata.annotations.'pandora.dev/image-digest'
+    if ($digest -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        $image -cnotmatch ('@' + [regex]::Escape($digest) + '$')) {
+        throw 'pod_uid preflight image 必须绑定 green template immutable digest。'
+    }
+    $confVolumes = @($GreenDeployment.spec.template.spec.volumes | Where-Object {
+        [string]$_.name -ceq 'conf' -and [string]$_.secret.secretName -cin @(
+            'pandora-config', [string]$ConfigEvidence.RawSnapshotName)
+    })
+    $confMounts = @($main[0].volumeMounts | Where-Object {
+        [string]$_.name -ceq 'conf' -and [string]$_.mountPath -ceq '/app/etc/cluster.yaml' -and
+        [string]$_.subPath -ceq 'ds-allocator.yaml' -and $_.readOnly -eq $true
+    })
+    if ($confVolumes.Count -ne 1 -or $confMounts.Count -ne 1) {
+        throw 'pod_uid preflight 缺 canonical read-only ds-allocator 配置源。'
+    }
+    if ($Phase -cne 'prepare' -and
+        [string]$confVolumes[0].secret.secretName -cne [string]$ConfigEvidence.RawSnapshotName) {
+        throw 'pod_uid drained/final preflight 要求 green 已绑定 immutable raw config snapshot。'
+    }
+    if ([string]$GreenDeployment.spec.template.spec.serviceAccountName -cne 'pandora-allocator') {
+        throw 'pod_uid preflight 必须沿用受审 pandora-allocator 网络身份。'
+    }
+    if ($null -eq $GreenDeployment.spec.template.spec.PSObject.Properties['securityContext']) {
+        throw 'pod_uid preflight green template 缺 Pod securityContext。'
+    }
+    $podSecurityContext = (($GreenDeployment.spec.template.spec.securityContext |
+        ConvertTo-Json -Depth 20) | ConvertFrom-Json)
+    $imagePullSecrets = @()
+    if ($null -ne $GreenDeployment.spec.template.spec.PSObject.Properties['imagePullSecrets']) {
+        $imagePullSecrets = @(($GreenDeployment.spec.template.spec.imagePullSecrets |
+            ConvertTo-Json -Depth 20) | ConvertFrom-Json)
+    }
+    $podSpec = [ordered]@{
+        serviceAccountName = 'pandora-allocator'
+        automountServiceAccountToken = $false
+        enableServiceLinks = $false
+        restartPolicy = 'Never'
+        securityContext = $podSecurityContext
+        containers = @([ordered]@{
+            name = 'pod-uid-release-preflight'
+            image = $image
+            imagePullPolicy = 'IfNotPresent'
+            args = @($script:PandoraPodUIDReleasePreflightBaseArgs) + @(
+                "-pod-uid-release-preflight-run-id=$ActivationRunId"
+                "-pod-uid-release-preflight-phase=$Phase"
+                "-pod-uid-release-preflight-image-digest=$digest"
+            ) + $(if ($Phase -cne 'prepare') {
+                @("-pod-uid-release-preflight-expected-target-identity=$($ConfigEvidence.RedisTargetIdentity)")
+            } else { @() })
+            env = @(
+                [ordered]@{
+                    name = 'PANDORA_POD_UID_PREFLIGHT_REDIS_USERNAME'
+                    valueFrom = [ordered]@{ secretKeyRef = [ordered]@{
+                        name = [string]$ConfigEvidence.ROSecretName; key = 'username'; optional = $false
+                    } }
+                }
+                [ordered]@{
+                    name = 'PANDORA_POD_UID_PREFLIGHT_REDIS_PASSWORD'
+                    valueFrom = [ordered]@{ secretKeyRef = [ordered]@{
+                        name = [string]$ConfigEvidence.ROSecretName; key = 'password'; optional = $false
+                    } }
+                }
+            )
+            volumeMounts = @([ordered]@{
+                name = 'conf'; mountPath = '/app/etc/pod-uid-preflight.yaml'
+                subPath = 'ds-allocator-preflight.yaml'; readOnly = $true
+            })
+            resources = [ordered]@{
+                requests = [ordered]@{ cpu = '25m'; memory = '32Mi' }
+                limits = [ordered]@{ cpu = '1'; memory = '256Mi' }
+            }
+            securityContext = [ordered]@{
+                allowPrivilegeEscalation = $false
+                readOnlyRootFilesystem = $true
+                runAsNonRoot = $true
+                capabilities = [ordered]@{ drop = @('ALL') }
+            }
+        })
+        volumes = @([ordered]@{
+            name = 'conf'; secret = [ordered]@{
+                secretName = [string]$ConfigEvidence.ROSecretName; optional = $false; defaultMode = 288
+                items = @([ordered]@{ key = 'ds-allocator-preflight.yaml'; path = 'ds-allocator-preflight.yaml' })
+            }
+        })
+    }
+    if ($imagePullSecrets.Count -gt 0) { $podSpec.imagePullSecrets = $imagePullSecrets }
+    $job = [pscustomobject][ordered]@{
+        apiVersion = 'batch/v1'
+        kind = 'Job'
+        metadata = [ordered]@{
+            name = "pandora-pod-uid-preflight-v$TargetEpoch-$ActivationRunId-$Phase"
+            namespace = 'pandora'
+            labels = [ordered]@{
+                'pandora.dev/ds-auth-activation' = [string]$TargetEpoch
+                'pandora.dev/preflight' = 'pod-uid-release'
+                'pandora.dev/preflight-phase' = $Phase
+            }
+            annotations = [ordered]@{
+                'pandora.dev/image-digest' = $digest
+                'pandora.dev/activation-run-id' = $ActivationRunId
+                'pandora.dev/preflight-phase' = $Phase
+                'pandora.dev/source-config-secret-uid' = [string]$ConfigEvidence.SourceSecretUID
+                'pandora.dev/source-config-resource-version' = [string]$ConfigEvidence.SourceSecretResourceVersion
+                'pandora.dev/source-ds-allocator-sha256' = [string]$ConfigEvidence.RawConfigSHA256
+                'pandora.dev/raw-snapshot-name' = [string]$ConfigEvidence.RawSnapshotName
+                'pandora.dev/raw-snapshot-uid' = [string]$ConfigEvidence.RawSnapshotUID
+                'pandora.dev/raw-snapshot-resource-version' = [string]$ConfigEvidence.RawSnapshotResourceVersion
+                'pandora.dev/ro-secret-name' = [string]$ConfigEvidence.ROSecretName
+                'pandora.dev/ro-secret-uid' = [string]$ConfigEvidence.ROSecretUID
+                'pandora.dev/ro-secret-resource-version' = [string]$ConfigEvidence.ROSecretResourceVersion
+                'pandora.dev/ro-config-sha256' = [string]$ConfigEvidence.ROConfigSHA256
+                'pandora.dev/redis-config-identity' = [string]$ConfigEvidence.RedisConfigIdentity
+                'pandora.dev/redis-config-topology' = [string]$ConfigEvidence.RedisConfigTopology
+                'pandora.dev/config-helper-source-sha256' = [string]$ConfigEvidence.HelperSourceSHA256
+                'pandora.dev/redis-target-identity' = [string]$ConfigEvidence.RedisTargetIdentity
+            }
+        }
+        spec = [ordered]@{
+            backoffLimit = 0
+            completions = 1
+            parallelism = 1
+            activeDeadlineSeconds = 660
+            template = [ordered]@{
+                metadata = [ordered]@{
+                    labels = [ordered]@{
+                        app = 'pandora-pod-uid-release-preflight'
+                        'pandora.dev/ds-auth-activation' = [string]$TargetEpoch
+                    }
+                    annotations = [ordered]@{
+                        'sidecar.istio.io/inject' = 'false'
+                        'pandora.dev/raw-snapshot-uid' = [string]$ConfigEvidence.RawSnapshotUID
+                        'pandora.dev/ro-secret-uid' = [string]$ConfigEvidence.ROSecretUID
+                        'pandora.dev/redis-target-identity' = [string]$ConfigEvidence.RedisTargetIdentity
+                    }
+                }
+                spec = $podSpec
+            }
+        }
+    }
+    Assert-PandoraPodUIDReleasePreflightJobContract $job $image $ActivationRunId $Phase $TargetEpoch $ConfigEvidence
+    return $job
+}
+
+function Assert-PandoraPodUIDReleasePreflightJobContract($Job, [string]$ExpectedPinnedImage,
+    [string]$ActivationRunId, [ValidateSet('prepare', 'drained', 'final')][string]$Phase,
+    [uint32]$TargetEpoch = 2, $ConfigEvidence) {
+    Assert-PandoraPodUIDReleaseConfigEvidence $ConfigEvidence $Phase
+    $expectedName = "pandora-pod-uid-preflight-v$TargetEpoch-$ActivationRunId-$Phase"
+    if ([string]$Job.apiVersion -cne 'batch/v1' -or [string]$Job.kind -cne 'Job' -or
+        [string]$Job.metadata.name -cne $expectedName -or [string]$Job.metadata.namespace -cne 'pandora' -or
+        [string]$Job.metadata.labels.'pandora.dev/ds-auth-activation' -cne [string]$TargetEpoch -or
+        [string]$Job.metadata.labels.'pandora.dev/preflight' -cne 'pod-uid-release' -or
+        [string]$Job.metadata.labels.'pandora.dev/preflight-phase' -cne $Phase -or
+        [string]$Job.metadata.annotations.'pandora.dev/activation-run-id' -cne $ActivationRunId -or
+        [string]$Job.metadata.annotations.'pandora.dev/preflight-phase' -cne $Phase -or
+        [string]$Job.metadata.annotations.'pandora.dev/source-config-secret-uid' -cne [string]$ConfigEvidence.SourceSecretUID -or
+        [string]$Job.metadata.annotations.'pandora.dev/source-config-resource-version' -cne [string]$ConfigEvidence.SourceSecretResourceVersion -or
+        [string]$Job.metadata.annotations.'pandora.dev/source-ds-allocator-sha256' -cne [string]$ConfigEvidence.RawConfigSHA256 -or
+        [string]$Job.metadata.annotations.'pandora.dev/raw-snapshot-name' -cne [string]$ConfigEvidence.RawSnapshotName -or
+        [string]$Job.metadata.annotations.'pandora.dev/raw-snapshot-uid' -cne [string]$ConfigEvidence.RawSnapshotUID -or
+        [string]$Job.metadata.annotations.'pandora.dev/raw-snapshot-resource-version' -cne [string]$ConfigEvidence.RawSnapshotResourceVersion -or
+        [string]$Job.metadata.annotations.'pandora.dev/ro-secret-name' -cne [string]$ConfigEvidence.ROSecretName -or
+        [string]$Job.metadata.annotations.'pandora.dev/ro-secret-uid' -cne [string]$ConfigEvidence.ROSecretUID -or
+        [string]$Job.metadata.annotations.'pandora.dev/ro-secret-resource-version' -cne [string]$ConfigEvidence.ROSecretResourceVersion -or
+        [string]$Job.metadata.annotations.'pandora.dev/ro-config-sha256' -cne [string]$ConfigEvidence.ROConfigSHA256 -or
+        [string]$Job.metadata.annotations.'pandora.dev/redis-config-identity' -cne [string]$ConfigEvidence.RedisConfigIdentity -or
+        [string]$Job.metadata.annotations.'pandora.dev/redis-config-topology' -cne [string]$ConfigEvidence.RedisConfigTopology -or
+        [string]$Job.metadata.annotations.'pandora.dev/config-helper-source-sha256' -cne [string]$ConfigEvidence.HelperSourceSHA256 -or
+        [string]$Job.metadata.annotations.'pandora.dev/redis-target-identity' -cne [string]$ConfigEvidence.RedisTargetIdentity -or
+        [string]$Job.spec.template.metadata.annotations.'pandora.dev/raw-snapshot-uid' -cne [string]$ConfigEvidence.RawSnapshotUID -or
+        [string]$Job.spec.template.metadata.annotations.'pandora.dev/ro-secret-uid' -cne [string]$ConfigEvidence.ROSecretUID -or
+        [string]$Job.spec.template.metadata.annotations.'pandora.dev/redis-target-identity' -cne [string]$ConfigEvidence.RedisTargetIdentity) {
+        throw 'pod_uid preflight Job 身份/activation binding 非 canonical。'
+    }
+    $digest = [string]$Job.metadata.annotations.'pandora.dev/image-digest'
+    if ($digest -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        $ExpectedPinnedImage -cnotmatch ('@' + [regex]::Escape($digest) + '$')) {
+        throw 'pod_uid preflight Job 未固定到受审 green digest。'
+    }
+    if ([int]$Job.spec.backoffLimit -ne 0 -or [int]$Job.spec.completions -ne 1 -or
+        [int]$Job.spec.parallelism -ne 1 -or [int]$Job.spec.activeDeadlineSeconds -ne 660) {
+        throw 'pod_uid preflight Job 重试/并发/deadline 非 canonical。'
+    }
+    $jobUID = ''
+    if ($null -ne $Job.metadata.PSObject.Properties['uid']) { $jobUID = [string]$Job.metadata.uid }
+    if ([string]::IsNullOrWhiteSpace($jobUID)) {
+        # Create request 必须让 apiserver 生成 selector；客户端预置即可逃逸
+        # controller UID 绑定。
+        foreach ($forbidden in @('manualSelector', 'selector', 'suspend')) {
+            if ($null -ne $Job.spec.PSObject.Properties[$forbidden]) {
+                throw "pod_uid preflight Job create 请求禁止声明 spec.$forbidden。"
+            }
+        }
+    } else {
+        # batch/v1 apiserver 在存储后会生成 selector，并可能显式回读
+        # manualSelector=false/suspend=false。回读门只接受精确绑定本 Job UID
+        # 的 controller selector，不能继续要求字段 absent，否则真实 K8s 永远失败。
+        if ($jobUID -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+            ($null -ne $Job.spec.PSObject.Properties['manualSelector'] -and
+                [bool]$Job.spec.manualSelector) -or
+            ($null -ne $Job.spec.PSObject.Properties['suspend'] -and [bool]$Job.spec.suspend) -or
+            $null -eq $Job.spec.PSObject.Properties['selector']) {
+            throw 'pod_uid preflight stored Job UID/manualSelector/suspend/selector 非 canonical。'
+        }
+        $selector = $Job.spec.selector
+        $matchExpressions = @()
+        if ($null -ne $selector.PSObject.Properties['matchExpressions']) {
+            $matchExpressions = @($selector.matchExpressions)
+        }
+        $matchLabels = @()
+        if ($null -ne $selector.PSObject.Properties['matchLabels']) {
+            $matchLabels = @($selector.matchLabels.PSObject.Properties)
+        }
+        $allowedControllerLabels = @('batch.kubernetes.io/controller-uid', 'controller-uid')
+        if ($matchExpressions.Count -ne 0 -or $matchLabels.Count -lt 1 -or $matchLabels.Count -gt 2) {
+            throw 'pod_uid preflight stored Job selector 不是 exact controller UID matchLabels。'
+        }
+        foreach ($label in $matchLabels) {
+            if ([string]$label.Name -cnotin $allowedControllerLabels -or
+                [string]$label.Value -cne $jobUID) {
+                throw 'pod_uid preflight stored Job selector 未绑定 exact Job UID。'
+            }
+        }
+    }
+    $podSpec = $Job.spec.template.spec
+    if ([string]$podSpec.restartPolicy -cne 'Never' -or
+        [string]$podSpec.serviceAccountName -cne 'pandora-allocator' -or
+        $podSpec.automountServiceAccountToken -ne $false -or
+        $podSpec.enableServiceLinks -ne $false -or
+        [string]$Job.spec.template.metadata.annotations.'sidecar.istio.io/inject' -cne 'false') {
+        throw 'pod_uid preflight Job Pod 生命周期/身份/sidecar contract 非 canonical。'
+    }
+    $podSecurity = $podSpec.securityContext
+    if ($null -eq $podSecurity -or $podSecurity.runAsNonRoot -ne $true -or
+        [int64]$podSecurity.runAsUser -ne 10001 -or [int64]$podSecurity.runAsGroup -ne 10001 -or
+        [int64]$podSecurity.fsGroup -ne 10001 -or
+        ($null -ne $podSecurity.PSObject.Properties['fsGroupChangePolicy'] -and
+            [string]$podSecurity.fsGroupChangePolicy -cne 'OnRootMismatch')) {
+        throw 'pod_uid preflight Job Pod securityContext 未固定 non-root uid/gid/fsGroup=10001。'
+    }
+    foreach ($hostEscape in @('hostNetwork', 'hostPID', 'hostIPC', 'shareProcessNamespace')) {
+        if ($null -ne $podSpec.PSObject.Properties[$hostEscape] -and [bool]$podSpec.$hostEscape) {
+            throw "pod_uid preflight Job 禁止 $hostEscape=true。"
+        }
+    }
+    foreach ($forbiddenContainers in @('initContainers', 'ephemeralContainers')) {
+        if ($null -ne $podSpec.PSObject.Properties[$forbiddenContainers] -and
+            @($podSpec.$forbiddenContainers).Count -ne 0) {
+            throw "pod_uid release preflight 禁止 $forbiddenContainers。"
+        }
+    }
+    $containers = @($podSpec.containers)
+    $expectedArgs = @($script:PandoraPodUIDReleasePreflightBaseArgs) + @(
+        "-pod-uid-release-preflight-run-id=$ActivationRunId"
+        "-pod-uid-release-preflight-phase=$Phase"
+        "-pod-uid-release-preflight-image-digest=$digest"
+    ) + $(if ($Phase -cne 'prepare') {
+        @("-pod-uid-release-preflight-expected-target-identity=$($ConfigEvidence.RedisTargetIdentity)")
+    } else { @() })
+    if ($containers.Count -ne 1 -or [string]$containers[0].name -cne 'pod-uid-release-preflight' -or
+        [string]$containers[0].image -cne $ExpectedPinnedImage -or
+        [string]$containers[0].imagePullPolicy -cne 'IfNotPresent' -or
+        (@($containers[0].args) -join ' ') -cne (@($expectedArgs) -join ' ')) {
+        throw 'pod_uid preflight Job image/args 非 canonical。'
+    }
+    $containerSecurity = $containers[0].securityContext
+    if ($containerSecurity.allowPrivilegeEscalation -ne $false -or
+        $containerSecurity.readOnlyRootFilesystem -ne $true -or
+        $containerSecurity.runAsNonRoot -ne $true -or
+        ($null -ne $containerSecurity.PSObject.Properties['privileged'] -and
+            [bool]$containerSecurity.privileged) -or
+        ($null -ne $containerSecurity.capabilities.PSObject.Properties['add'] -and
+            @($containerSecurity.capabilities.add).Count -ne 0) -or
+        (@($containerSecurity.capabilities.drop) -join ',') -cne 'ALL') {
+        throw 'pod_uid preflight Job container securityContext 非 canonical。'
+    }
+    if ($null -ne $containers[0].PSObject.Properties['envFrom'] -and @($containers[0].envFrom).Count -ne 0) {
+        throw 'pod_uid preflight Job 禁止 envFrom。'
+    }
+    $env = @($containers[0].env)
+    $expectedEnv = @{
+        'PANDORA_POD_UID_PREFLIGHT_REDIS_USERNAME' = 'username'
+        'PANDORA_POD_UID_PREFLIGHT_REDIS_PASSWORD' = 'password'
+    }
+    if ($env.Count -ne 2) { throw 'pod_uid preflight Job 必须且只能注入 RO Redis username/password。' }
+    foreach ($entry in $env) {
+        $key = [string]$entry.name
+        if (-not $expectedEnv.ContainsKey($key) -or $null -ne $entry.PSObject.Properties['value'] -or
+            [string]$entry.valueFrom.secretKeyRef.name -cne [string]$ConfigEvidence.ROSecretName -or
+            [string]$entry.valueFrom.secretKeyRef.key -cne [string]$expectedEnv[$key] -or
+            $entry.valueFrom.secretKeyRef.optional -ne $false) {
+            throw 'pod_uid preflight Job Redis credential env 非 exact RO Secret keyRef。'
+        }
+    }
+    if ($null -ne $containers[0].PSObject.Properties['command'] -and
+        @($containers[0].command).Count -ne 0) {
+        throw 'pod_uid preflight Job 禁止覆盖 serving image ENTRYPOINT。'
+    }
+    $mounts = @($containers[0].volumeMounts)
+    $volumes = @($podSpec.volumes)
+    if ($mounts.Count -ne 1 -or [string]$mounts[0].name -cne 'conf' -or
+        [string]$mounts[0].mountPath -cne '/app/etc/pod-uid-preflight.yaml' -or
+        [string]$mounts[0].subPath -cne 'ds-allocator-preflight.yaml' -or $mounts[0].readOnly -ne $true -or
+        $volumes.Count -ne 1 -or [string]$volumes[0].name -cne 'conf' -or
+        [string]$volumes[0].secret.secretName -cne [string]$ConfigEvidence.ROSecretName -or
+        $volumes[0].secret.optional -ne $false -or [int]$volumes[0].secret.defaultMode -ne 288 -or
+        @($volumes[0].secret.items).Count -ne 1 -or
+        [string]$volumes[0].secret.items[0].key -cne 'ds-allocator-preflight.yaml' -or
+        [string]$volumes[0].secret.items[0].path -cne 'ds-allocator-preflight.yaml') {
+        throw 'pod_uid preflight Job config mount/source 非 canonical read-only contract。'
+    }
+}
+
+function Assert-PandoraPodUIDReleasePreflightRuntimeContract($Job, $Pod,
+    [string]$ExpectedPinnedImage, [string]$ActivationRunId,
+    [ValidateSet('prepare', 'drained', 'final')][string]$Phase, [uint32]$TargetEpoch,
+    $ConfigEvidence, [datetimeoffset]$NotBefore = [datetimeoffset]::MinValue,
+    [datetimeoffset]$NotAfter = [datetimeoffset]::MaxValue) {
+    Assert-PandoraPodUIDReleasePreflightJobContract $Job $ExpectedPinnedImage `
+        $ActivationRunId $Phase $TargetEpoch $ConfigEvidence
+    if (Test-PandoraKubernetesObjectDeleting $Job) {
+        throw 'pod_uid preflight Job 正在删除，不能作为不可变证据。'
+    }
+    $jobUID = [string]$Job.metadata.uid
+    $podUID = [string]$Pod.metadata.uid
+    if ($jobUID -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        $podUID -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$Pod.metadata.namespace -cne 'pandora' -or
+        (Test-PandoraKubernetesObjectDeleting $Pod)) {
+        throw 'pod_uid preflight Job/Pod UID、namespace 或删除状态非法。'
+    }
+    $owners = @($Pod.metadata.ownerReferences)
+    if ($owners.Count -ne 1 -or [string]$owners[0].apiVersion -cne 'batch/v1' -or
+        [string]$owners[0].kind -cne 'Job' -or [string]$owners[0].name -cne [string]$Job.metadata.name -or
+        [string]$owners[0].uid -cne $jobUID -or $owners[0].controller -ne $true) {
+        throw 'pod_uid preflight Pod 未由 exact Job UID 以 controller=true 唯一拥有。'
+    }
+
+    # Re-run the canonical Job Pod contract over the actual admitted Pod spec.
+    # Kubernetes may add unrelated defaulted Pod fields, but every executable,
+    # credential, image, argument, mount and security field remains exact.
+    $podCarrier = (($Job | ConvertTo-Json -Depth 40) | ConvertFrom-Json)
+    $podCarrier.spec.template.spec = $Pod.spec
+    $podCarrier.spec.template.metadata.annotations = $Pod.metadata.annotations
+    Assert-PandoraPodUIDReleasePreflightJobContract $podCarrier $ExpectedPinnedImage `
+        $ActivationRunId $Phase $TargetEpoch $ConfigEvidence
+
+    $conditions = @($Job.status.conditions)
+    $complete = @($conditions | Where-Object { [string]$_.type -ceq 'Complete' -and [string]$_.status -ceq 'True' })
+    $failed = @($conditions | Where-Object { [string]$_.type -ceq 'Failed' -and [string]$_.status -ceq 'True' })
+    $active = if ($null -eq $Job.status.PSObject.Properties['active']) { 0 } else { [int]$Job.status.active }
+    $failedCount = if ($null -eq $Job.status.PSObject.Properties['failed']) { 0 } else { [int]$Job.status.failed }
+    if ($complete.Count -ne 1 -or $failed.Count -ne 0 -or [int]$Job.status.succeeded -ne 1 -or
+        $active -ne 0 -or $failedCount -ne 0 -or [string]$Pod.status.phase -cne 'Succeeded') {
+        throw 'pod_uid preflight Job/Pod 未以唯一 Succeeded/Complete 状态终止。'
+    }
+    $statuses = @($Pod.status.containerStatuses)
+    if ($statuses.Count -ne 1 -or [string]$statuses[0].name -cne 'pod-uid-release-preflight' -or
+        [string]$statuses[0].image -cne $ExpectedPinnedImage -or [int]$statuses[0].restartCount -ne 0) {
+        throw 'pod_uid preflight Pod containerStatuses 数量/image/restart 非 canonical。'
+    }
+    $digest = [string]$Job.metadata.annotations.'pandora.dev/image-digest'
+    if ([string]$statuses[0].imageID -cnotmatch ([regex]::Escape($digest) + '$')) {
+        throw 'pod_uid preflight Pod imageID 未绑定受审 immutable digest。'
+    }
+    $terminated = $statuses[0].state.terminated
+    if ($null -eq $terminated -or [int]$terminated.exitCode -ne 0 -or
+        [string]$terminated.reason -cne 'Completed') {
+        throw 'pod_uid preflight 唯一容器未以 exit=0/reason=Completed 终止。'
+    }
+    $jobCreated = [datetimeoffset]::MinValue
+    $podCreated = [datetimeoffset]::MinValue
+    $started = [datetimeoffset]::MinValue
+    $finished = [datetimeoffset]::MinValue
+    $completed = [datetimeoffset]::MinValue
+    if (-not [datetimeoffset]::TryParse([string]$Job.metadata.creationTimestamp, [ref]$jobCreated) -or
+        -not [datetimeoffset]::TryParse([string]$Pod.metadata.creationTimestamp, [ref]$podCreated) -or
+        -not [datetimeoffset]::TryParse([string]$terminated.startedAt, [ref]$started) -or
+        -not [datetimeoffset]::TryParse([string]$terminated.finishedAt, [ref]$finished) -or
+        -not [datetimeoffset]::TryParse([string]$Job.status.completionTime, [ref]$completed) -or
+        $jobCreated -lt $NotBefore -or $jobCreated -gt $podCreated -or
+        $podCreated -gt $started -or $started -gt $finished -or $finished -gt $completed -or
+        $completed -gt $NotAfter) {
+        throw 'pod_uid preflight Job/Pod/container/completion 时间链非法或越过 activation 窗口。'
+    }
+    return [pscustomobject][ordered]@{
+        JobName = [string]$Job.metadata.name
+        JobUID = $jobUID
+        PodName = [string]$Pod.metadata.name
+        PodUID = $podUID
+        CompletionTime = $completed.ToUniversalTime().ToString('o')
+        CompletionTimeUnixMS = $completed.ToUnixTimeMilliseconds()
+        ImageDigest = $digest
+        ImageID = [string]$statuses[0].imageID
     }
 }
 

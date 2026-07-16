@@ -68,6 +68,8 @@ enum PlacementProofType : int;
 extern const uint32_t PlacementProofType_internal_data_[];
 enum PlacementRoute : int;
 extern const uint32_t PlacementRoute_internal_data_[];
+enum PlacementSourceDepartureProofType : int;
+extern const uint32_t PlacementSourceDepartureProofType_internal_data_[];
 enum PlacementTargetUnavailableReason : int;
 extern const uint32_t PlacementTargetUnavailableReason_internal_data_[];
 enum PlacementTransitionState : int;
@@ -177,6 +179,22 @@ extern CommitPlacementAdmissionResponseGlobalsTypeInternal CommitPlacementAdmiss
 extern const ::google::protobuf::internal::ClassDataFull CommitPlacementAdmissionResponse_class_data_;
 #else
 extern const CommitPlacementAdmissionResponseGlobalsTypeInternal CommitPlacementAdmissionResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ConfirmPlacementSourceDepartureRequest;
+struct ConfirmPlacementSourceDepartureRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ConfirmPlacementSourceDepartureRequestGlobalsTypeInternal ConfirmPlacementSourceDepartureRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ConfirmPlacementSourceDepartureRequest_class_data_;
+#else
+extern const ConfirmPlacementSourceDepartureRequestGlobalsTypeInternal ConfirmPlacementSourceDepartureRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ConfirmPlacementSourceDepartureResponse;
+struct ConfirmPlacementSourceDepartureResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ConfirmPlacementSourceDepartureResponseGlobalsTypeInternal ConfirmPlacementSourceDepartureResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ConfirmPlacementSourceDepartureResponse_class_data_;
+#else
+extern const ConfirmPlacementSourceDepartureResponseGlobalsTypeInternal ConfirmPlacementSourceDepartureResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetLocationRequest;
 struct GetLocationRequestGlobalsTypeInternal;
@@ -360,6 +378,9 @@ internal::EnumTraitsT<::pandora::locator::v1::PlacementProofType_internal_data_>
 template <>
 internal::EnumTraitsT<::pandora::locator::v1::PlacementRoute_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementRoute>;
+template <>
+internal::EnumTraitsT<::pandora::locator::v1::PlacementSourceDepartureProofType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementSourceDepartureProofType>;
 template <>
 internal::EnumTraitsT<::pandora::locator::v1::PlacementTargetUnavailableReason_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::locator::v1::PlacementTargetUnavailableReason>;
@@ -587,6 +608,42 @@ template <>
   return ::google::protobuf::internal::ParseNamedEnum<PlacementTargetUnavailableReason>(PlacementTargetUnavailableReason_descriptor(), name,
                                            value);
 }
+enum PlacementSourceDepartureProofType : int {
+  PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED = 0,
+  PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE = 101,
+  PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPARTURE = 102,
+  PlacementSourceDepartureProofType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PlacementSourceDepartureProofType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PlacementSourceDepartureProofType_internal_data_[];
+inline constexpr PlacementSourceDepartureProofType PlacementSourceDepartureProofType_MIN =
+    static_cast<PlacementSourceDepartureProofType>(0);
+inline constexpr PlacementSourceDepartureProofType PlacementSourceDepartureProofType_MAX =
+    static_cast<PlacementSourceDepartureProofType>(102);
+[[nodiscard]] inline bool PlacementSourceDepartureProofType_IsValid(int value) {
+  return ::google::protobuf::internal::ValidateEnum(value, PlacementSourceDepartureProofType_internal_data_);
+}
+inline constexpr int PlacementSourceDepartureProofType_ARRAYSIZE = 102 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PlacementSourceDepartureProofType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlacementSourceDepartureProofType) {
+  return PlacementSourceDepartureProofType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PlacementSourceDepartureProofType_Name(T value) {
+  static_assert(::std::is_same<T, PlacementSourceDepartureProofType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PlacementSourceDepartureProofType_Name().");
+  return ::google::protobuf::internal::NameOfEnum(PlacementSourceDepartureProofType_descriptor(), value);
+}
+[[nodiscard]] inline bool PlacementSourceDepartureProofType_Parse(
+    ::absl::string_view name, PlacementSourceDepartureProofType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PlacementSourceDepartureProofType>(PlacementSourceDepartureProofType_descriptor(), name,
+                                           value);
+}
 enum PresenceStatus : int {
   PRESENCE_STATUS_UNSPECIFIED = 0,
   PRESENCE_STATUS_OFFLINE = 1,
@@ -693,7 +750,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceResponse final :
   [[nodiscard]] static const UnsubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceResponse>(&UnsubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(UnsubscribePresenceResponse& a, UnsubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -894,7 +951,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsubscribePresenceRequest final : 
   [[nodiscard]] static const UnsubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsubscribePresenceRequest>(&UnsubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(UnsubscribePresenceRequest& a, UnsubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(UnsubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1095,7 +1152,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceResponse final : p
   [[nodiscard]] static const SubscribePresenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceResponse>(&SubscribePresenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(SubscribePresenceResponse& a, SubscribePresenceResponse& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1296,7 +1353,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribePresenceRequest final : pu
   [[nodiscard]] static const SubscribePresenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubscribePresenceRequest>(&SubscribePresenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(SubscribePresenceRequest& a, SubscribePresenceRequest& b) { a.Swap(&b); }
   inline void Swap(SubscribePresenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2594,7 +2651,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceChange final : public ::goo
   [[nodiscard]] static const PresenceChange& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceChange>(&PresenceChange_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(PresenceChange& a, PresenceChange& b) { a.Swap(&b); }
   inline void Swap(PresenceChange* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2920,6 +2977,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
     kAllocationIdFieldNumber = 19,
     kReleaseTrackFieldNumber = 20,
     kLastRetargetProofIdFieldNumber = 22,
+    kSourceOperationIdFieldNumber = 25,
+    kSourceDsPodNameFieldNumber = 26,
+    kSourceDsInstanceUidFieldNumber = 27,
+    kSourceHubAssignmentIdFieldNumber = 29,
+    kSourceAllocationIdFieldNumber = 30,
+    kSourceReleaseTrackFieldNumber = 31,
     kPlayerIdFieldNumber = 1,
     kCurrentRouteFieldNumber = 2,
     kTargetRouteFieldNumber = 3,
@@ -2933,7 +2996,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
     kTargetMatchIdFieldNumber = 17,
     kDsInstanceEpochFieldNumber = 18,
     kRetargetCountFieldNumber = 21,
+    kSourcePlacementVersionFieldNumber = 24,
     kLastRetargetReasonFieldNumber = 23,
+    kSourceDsInstanceEpochFieldNumber = 28,
+    kSourceDepartureProofIdFieldNumber = 34,
+    kLastSourceDepartureProofIdFieldNumber = 36,
+    kLastSourceDepartureOperationIdFieldNumber = 38,
+    kSourceDepartureConfirmedFieldNumber = 32,
+    kSourceDepartureProofTypeFieldNumber = 33,
+    kLastSourceDeparturePlacementVersionFieldNumber = 37,
+    kLastSourceDepartureProofTypeFieldNumber = 35,
   };
   // string operation_id = 6 [json_name = "operationId"];
   void clear_operation_id() ;
@@ -3070,6 +3142,96 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_last_retarget_proof_id();
 
   public:
+  // string source_operation_id = 25 [json_name = "sourceOperationId"];
+  void clear_source_operation_id() ;
+  [[nodiscard]] const ::std::string& source_operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_operation_id();
+  void set_allocated_source_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_operation_id();
+
+  public:
+  // string source_ds_pod_name = 26 [json_name = "sourceDsPodName"];
+  void clear_source_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& source_ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_ds_pod_name();
+  void set_allocated_source_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_ds_pod_name();
+
+  public:
+  // string source_ds_instance_uid = 27 [json_name = "sourceDsInstanceUid"];
+  void clear_source_ds_instance_uid() ;
+  [[nodiscard]] const ::std::string& source_ds_instance_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_ds_instance_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_ds_instance_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_ds_instance_uid();
+  void set_allocated_source_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_ds_instance_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_ds_instance_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_ds_instance_uid();
+
+  public:
+  // string source_hub_assignment_id = 29 [json_name = "sourceHubAssignmentId"];
+  void clear_source_hub_assignment_id() ;
+  [[nodiscard]] const ::std::string& source_hub_assignment_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_hub_assignment_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_hub_assignment_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_hub_assignment_id();
+  void set_allocated_source_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_hub_assignment_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_hub_assignment_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_hub_assignment_id();
+
+  public:
+  // string source_allocation_id = 30 [json_name = "sourceAllocationId"];
+  void clear_source_allocation_id() ;
+  [[nodiscard]] const ::std::string& source_allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_allocation_id();
+  void set_allocated_source_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_allocation_id();
+
+  public:
+  // string source_release_track = 31 [json_name = "sourceReleaseTrack"];
+  void clear_source_release_track() ;
+  [[nodiscard]] const ::std::string& source_release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_release_track();
+  void set_allocated_source_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_release_track();
+
+  public:
   // uint64 player_id = 1 [json_name = "playerId"];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -3200,6 +3362,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
   void _internal_set_retarget_count(::uint32_t value);
 
   public:
+  // uint64 source_placement_version = 24 [json_name = "sourcePlacementVersion"];
+  void clear_source_placement_version() ;
+  [[nodiscard]] ::uint64_t source_placement_version() const;
+  void set_source_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_placement_version() const;
+  void _internal_set_source_placement_version(::uint64_t value);
+
+  public:
   // .pandora.locator.v1.PlacementTargetUnavailableReason last_retarget_reason = 23 [json_name = "lastRetargetReason"];
   void clear_last_retarget_reason() ;
   [[nodiscard]] ::pandora::locator::v1::PlacementTargetUnavailableReason last_retarget_reason() const;
@@ -3210,13 +3382,108 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
   void _internal_set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value);
 
   public:
+  // uint32 source_ds_instance_epoch = 28 [json_name = "sourceDsInstanceEpoch"];
+  void clear_source_ds_instance_epoch() ;
+  [[nodiscard]] ::uint32_t source_ds_instance_epoch() const;
+  void set_source_ds_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_source_ds_instance_epoch() const;
+  void _internal_set_source_ds_instance_epoch(::uint32_t value);
+
+  public:
+  // string source_departure_proof_id = 34 [json_name = "sourceDepartureProofId"];
+  void clear_source_departure_proof_id() ;
+  [[nodiscard]] const ::std::string& source_departure_proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_departure_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_departure_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_departure_proof_id();
+  void set_allocated_source_departure_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_departure_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_departure_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_departure_proof_id();
+
+  public:
+  // string last_source_departure_proof_id = 36 [json_name = "lastSourceDepartureProofId"];
+  void clear_last_source_departure_proof_id() ;
+  [[nodiscard]] const ::std::string& last_source_departure_proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_source_departure_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_source_departure_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_source_departure_proof_id();
+  void set_allocated_last_source_departure_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_source_departure_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_source_departure_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_source_departure_proof_id();
+
+  public:
+  // string last_source_departure_operation_id = 38 [json_name = "lastSourceDepartureOperationId"];
+  void clear_last_source_departure_operation_id() ;
+  [[nodiscard]] const ::std::string& last_source_departure_operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_source_departure_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_source_departure_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_source_departure_operation_id();
+  void set_allocated_last_source_departure_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_source_departure_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_source_departure_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_source_departure_operation_id();
+
+  public:
+  // bool source_departure_confirmed = 32 [json_name = "sourceDepartureConfirmed"];
+  void clear_source_departure_confirmed() ;
+  [[nodiscard]] bool source_departure_confirmed() const;
+  void set_source_departure_confirmed(bool value);
+
+  private:
+  bool _internal_source_departure_confirmed() const;
+  void _internal_set_source_departure_confirmed(bool value);
+
+  public:
+  // .pandora.locator.v1.PlacementSourceDepartureProofType source_departure_proof_type = 33 [json_name = "sourceDepartureProofType"];
+  void clear_source_departure_proof_type() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementSourceDepartureProofType source_departure_proof_type() const;
+  void set_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value);
+
+  private:
+  ::pandora::locator::v1::PlacementSourceDepartureProofType _internal_source_departure_proof_type() const;
+  void _internal_set_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value);
+
+  public:
+  // uint64 last_source_departure_placement_version = 37 [json_name = "lastSourceDeparturePlacementVersion"];
+  void clear_last_source_departure_placement_version() ;
+  [[nodiscard]] ::uint64_t last_source_departure_placement_version() const;
+  void set_last_source_departure_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_source_departure_placement_version() const;
+  void _internal_set_last_source_departure_placement_version(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementSourceDepartureProofType last_source_departure_proof_type = 35 [json_name = "lastSourceDepartureProofType"];
+  void clear_last_source_departure_proof_type() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementSourceDepartureProofType last_source_departure_proof_type() const;
+  void set_last_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value);
+
+  private:
+  ::pandora::locator::v1::PlacementSourceDepartureProofType _internal_last_source_departure_proof_type() const;
+  void _internal_set_last_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.locator.v1.PlayerPlacementStorageRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          0, 195,
-                          2>;
+      ::google::protobuf::internal::TcParseTable<5, 38,
+                          0, 423,
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -3241,7 +3508,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const PlayerPlacementStorageRecord& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr operation_id_;
     ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
@@ -3252,6 +3519,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
     ::google::protobuf::internal::ArenaStringPtr allocation_id_;
     ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::google::protobuf::internal::ArenaStringPtr last_retarget_proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr source_operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr source_ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr source_ds_instance_uid_;
+    ::google::protobuf::internal::ArenaStringPtr source_hub_assignment_id_;
+    ::google::protobuf::internal::ArenaStringPtr source_allocation_id_;
+    ::google::protobuf::internal::ArenaStringPtr source_release_track_;
     ::uint64_t player_id_;
     int current_route_;
     int target_route_;
@@ -3265,7 +3538,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPlacementStorageRecord final 
     ::uint64_t target_match_id_;
     ::uint32_t ds_instance_epoch_;
     ::uint32_t retarget_count_;
+    ::uint64_t source_placement_version_;
     int last_retarget_reason_;
+    ::uint32_t source_ds_instance_epoch_;
+    ::google::protobuf::internal::ArenaStringPtr source_departure_proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr last_source_departure_proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr last_source_departure_operation_id_;
+    bool source_departure_confirmed_;
+    int source_departure_proof_type_;
+    ::uint64_t last_source_departure_placement_version_;
+    int last_source_departure_proof_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4288,7 +4570,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionRequest fin
   [[nodiscard]] static const CommitPlacementAdmissionRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitPlacementAdmissionRequest>(&CommitPlacementAdmissionRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(CommitPlacementAdmissionRequest& a, CommitPlacementAdmissionRequest& b) { a.Swap(&b); }
   inline void Swap(CommitPlacementAdmissionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5058,7 +5340,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BootstrapPlacementRequest final : p
   [[nodiscard]] static const BootstrapPlacementRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BootstrapPlacementRequest>(&BootstrapPlacementRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(BootstrapPlacementRequest& a, BootstrapPlacementRequest& b) { a.Swap(&b); }
   inline void Swap(BootstrapPlacementRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7048,7 +7330,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PresenceBatchEvent final : public :
   [[nodiscard]] static const PresenceBatchEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PresenceBatchEvent>(&PresenceBatchEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(PresenceBatchEvent& a, PresenceBatchEvent& b) { a.Swap(&b); }
   inline void Swap(PresenceBatchEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7654,6 +7936,608 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetLocationResponse final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmPlacementSourceDepartureResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse) */ {
+ public:
+  inline ConfirmPlacementSourceDepartureResponse() : ConfirmPlacementSourceDepartureResponse(nullptr) {}
+  ~ConfirmPlacementSourceDepartureResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ConfirmPlacementSourceDepartureResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ConfirmPlacementSourceDepartureResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ConfirmPlacementSourceDepartureResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ConfirmPlacementSourceDepartureResponse(const ConfirmPlacementSourceDepartureResponse& from) : ConfirmPlacementSourceDepartureResponse(nullptr, from) {}
+  inline ConfirmPlacementSourceDepartureResponse(ConfirmPlacementSourceDepartureResponse&& from) noexcept : ConfirmPlacementSourceDepartureResponse(nullptr, ::std::move(from)) {}
+  inline ConfirmPlacementSourceDepartureResponse& operator=(const ConfirmPlacementSourceDepartureResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ConfirmPlacementSourceDepartureResponse& operator=(ConfirmPlacementSourceDepartureResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ConfirmPlacementSourceDepartureResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConfirmPlacementSourceDepartureResponse>(&ConfirmPlacementSourceDepartureResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(ConfirmPlacementSourceDepartureResponse& a, ConfirmPlacementSourceDepartureResponse& b) { a.Swap(&b); }
+  inline void Swap(ConfirmPlacementSourceDepartureResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ConfirmPlacementSourceDepartureResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ConfirmPlacementSourceDepartureResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ConfirmPlacementSourceDepartureResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ConfirmPlacementSourceDepartureResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ConfirmPlacementSourceDepartureResponse& from) { ConfirmPlacementSourceDepartureResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ConfirmPlacementSourceDepartureResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.ConfirmPlacementSourceDepartureResponse"; }
+
+  explicit ConfirmPlacementSourceDepartureResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ConfirmPlacementSourceDepartureResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConfirmPlacementSourceDepartureResponse& from);
+  ConfirmPlacementSourceDepartureResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ConfirmPlacementSourceDepartureResponse&& from) noexcept
+      : ConfirmPlacementSourceDepartureResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlacementFieldNumber = 3,
+    kCodeFieldNumber = 1,
+    kConfirmedFieldNumber = 2,
+  };
+  // .pandora.locator.v1.PlayerPlacementStorageRecord placement = 3 [json_name = "placement"];
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlayerPlacementStorageRecord& placement() const;
+  [[nodiscard]] ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE release_placement();
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord& _internal_placement() const;
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // bool confirmed = 2 [json_name = "confirmed"];
+  void clear_confirmed() ;
+  [[nodiscard]] bool confirmed() const;
+  void set_confirmed(bool value);
+
+  private:
+  bool _internal_confirmed() const;
+  void _internal_set_confirmed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ConfirmPlacementSourceDepartureResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE placement_;
+    int code_;
+    bool confirmed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfirmPlacementSourceDepartureRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest) */ {
+ public:
+  inline ConfirmPlacementSourceDepartureRequest() : ConfirmPlacementSourceDepartureRequest(nullptr) {}
+  ~ConfirmPlacementSourceDepartureRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ConfirmPlacementSourceDepartureRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ConfirmPlacementSourceDepartureRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ConfirmPlacementSourceDepartureRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ConfirmPlacementSourceDepartureRequest(const ConfirmPlacementSourceDepartureRequest& from) : ConfirmPlacementSourceDepartureRequest(nullptr, from) {}
+  inline ConfirmPlacementSourceDepartureRequest(ConfirmPlacementSourceDepartureRequest&& from) noexcept : ConfirmPlacementSourceDepartureRequest(nullptr, ::std::move(from)) {}
+  inline ConfirmPlacementSourceDepartureRequest& operator=(const ConfirmPlacementSourceDepartureRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ConfirmPlacementSourceDepartureRequest& operator=(ConfirmPlacementSourceDepartureRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ConfirmPlacementSourceDepartureRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ConfirmPlacementSourceDepartureRequest>(&ConfirmPlacementSourceDepartureRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(ConfirmPlacementSourceDepartureRequest& a, ConfirmPlacementSourceDepartureRequest& b) { a.Swap(&b); }
+  inline void Swap(ConfirmPlacementSourceDepartureRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ConfirmPlacementSourceDepartureRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ConfirmPlacementSourceDepartureRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ConfirmPlacementSourceDepartureRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ConfirmPlacementSourceDepartureRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ConfirmPlacementSourceDepartureRequest& from) { ConfirmPlacementSourceDepartureRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ConfirmPlacementSourceDepartureRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.locator.v1.ConfirmPlacementSourceDepartureRequest"; }
+
+  explicit ConfirmPlacementSourceDepartureRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ConfirmPlacementSourceDepartureRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ConfirmPlacementSourceDepartureRequest& from);
+  ConfirmPlacementSourceDepartureRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ConfirmPlacementSourceDepartureRequest&& from) noexcept
+      : ConfirmPlacementSourceDepartureRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOperationIdFieldNumber = 3,
+    kSourceOperationIdFieldNumber = 7,
+    kProofIdFieldNumber = 12,
+    kProofSignatureFieldNumber = 13,
+    kSourceTargetFieldNumber = 10,
+    kPlayerIdFieldNumber = 1,
+    kPlacementVersionFieldNumber = 2,
+    kTargetMatchIdFieldNumber = 5,
+    kSourcePlacementVersionFieldNumber = 6,
+    kTargetRouteFieldNumber = 4,
+    kSourceRouteFieldNumber = 8,
+    kSourceMatchIdFieldNumber = 9,
+    kProofTypeFieldNumber = 11,
+  };
+  // string operation_id = 3 [json_name = "operationId"];
+  void clear_operation_id() ;
+  [[nodiscard]] const ::std::string& operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_operation_id();
+  void set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_operation_id();
+
+  public:
+  // string source_operation_id = 7 [json_name = "sourceOperationId"];
+  void clear_source_operation_id() ;
+  [[nodiscard]] const ::std::string& source_operation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_source_operation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_source_operation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_source_operation_id();
+  void set_allocated_source_operation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_source_operation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_source_operation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_source_operation_id();
+
+  public:
+  // string proof_id = 12 [json_name = "proofId"];
+  void clear_proof_id() ;
+  [[nodiscard]] const ::std::string& proof_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_id();
+  void set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_id();
+
+  public:
+  // string proof_signature = 13 [json_name = "proofSignature"];
+  void clear_proof_signature() ;
+  [[nodiscard]] const ::std::string& proof_signature() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proof_signature(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proof_signature();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proof_signature();
+  void set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proof_signature() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proof_signature(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proof_signature();
+
+  public:
+  // .pandora.locator.v1.PlacementTargetIdentity source_target = 10 [json_name = "sourceTarget"];
+  [[nodiscard]] bool has_source_target()
+      const;
+  void clear_source_target() ;
+  [[nodiscard]] const ::pandora::locator::v1::PlacementTargetIdentity& source_target() const;
+  [[nodiscard]] ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE release_source_target();
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL mutable_source_target();
+  void set_allocated_source_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_source_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value);
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE unsafe_arena_release_source_target();
+
+  private:
+  const ::pandora::locator::v1::PlacementTargetIdentity& _internal_source_target() const;
+  ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL _internal_mutable_source_target();
+
+  public:
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 placement_version = 2 [json_name = "placementVersion"];
+  void clear_placement_version() ;
+  [[nodiscard]] ::uint64_t placement_version() const;
+  void set_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_version() const;
+  void _internal_set_placement_version(::uint64_t value);
+
+  public:
+  // uint64 target_match_id = 5 [json_name = "targetMatchId"];
+  void clear_target_match_id() ;
+  [[nodiscard]] ::uint64_t target_match_id() const;
+  void set_target_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_match_id() const;
+  void _internal_set_target_match_id(::uint64_t value);
+
+  public:
+  // uint64 source_placement_version = 6 [json_name = "sourcePlacementVersion"];
+  void clear_source_placement_version() ;
+  [[nodiscard]] ::uint64_t source_placement_version() const;
+  void set_source_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_placement_version() const;
+  void _internal_set_source_placement_version(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+  void clear_target_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute target_route() const;
+  void set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_target_route() const;
+  void _internal_set_target_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // .pandora.locator.v1.PlacementRoute source_route = 8 [json_name = "sourceRoute"];
+  void clear_source_route() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementRoute source_route() const;
+  void set_source_route(::pandora::locator::v1::PlacementRoute value);
+
+  private:
+  ::pandora::locator::v1::PlacementRoute _internal_source_route() const;
+  void _internal_set_source_route(::pandora::locator::v1::PlacementRoute value);
+
+  public:
+  // uint64 source_match_id = 9 [json_name = "sourceMatchId"];
+  void clear_source_match_id() ;
+  [[nodiscard]] ::uint64_t source_match_id() const;
+  void set_source_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_match_id() const;
+  void _internal_set_source_match_id(::uint64_t value);
+
+  public:
+  // .pandora.locator.v1.PlacementSourceDepartureProofType proof_type = 11 [json_name = "proofType"];
+  void clear_proof_type() ;
+  [[nodiscard]] ::pandora::locator::v1::PlacementSourceDepartureProofType proof_type() const;
+  void set_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value);
+
+  private:
+  ::pandora::locator::v1::PlacementSourceDepartureProofType _internal_proof_type() const;
+  void _internal_set_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 13,
+                          1, 128,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ConfirmPlacementSourceDepartureRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr source_operation_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_id_;
+    ::google::protobuf::internal::ArenaStringPtr proof_signature_;
+    ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE source_target_;
+    ::uint64_t player_id_;
+    ::uint64_t placement_version_;
+    ::uint64_t target_match_id_;
+    ::uint64_t source_placement_version_;
+    int target_route_;
+    int source_route_;
+    ::uint64_t source_match_id_;
+    int proof_type_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2flocator_2fv1_2flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.locator.v1.CommitPlacementAdmissionResponse) */ {
  public:
@@ -7710,7 +8594,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitPlacementAdmissionResponse fi
   [[nodiscard]] static const CommitPlacementAdmissionResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CommitPlacementAdmissionResponse>(&CommitPlacementAdmissionResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(CommitPlacementAdmissionResponse& a, CommitPlacementAdmissionResponse& b) { a.Swap(&b); }
   inline void Swap(CommitPlacementAdmissionResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7941,7 +8825,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BootstrapPlacementResponse final : 
   [[nodiscard]] static const BootstrapPlacementResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BootstrapPlacementResponse>(&BootstrapPlacementResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(BootstrapPlacementResponse& a, BootstrapPlacementResponse& b) { a.Swap(&b); }
   inline void Swap(BootstrapPlacementResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9852,7 +10736,7 @@ inline void ReportDisconnectResponse::_internal_set_shrunk(bool value) {
 inline void PlayerPlacementStorageRecord::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t PlayerPlacementStorageRecord::player_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.player_id)
@@ -9860,7 +10744,7 @@ inline ::uint64_t PlayerPlacementStorageRecord::player_id() const {
 }
 inline void PlayerPlacementStorageRecord::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.player_id)
 }
 inline ::uint64_t PlayerPlacementStorageRecord::_internal_player_id() const {
@@ -9876,7 +10760,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_player_id(::uint64_t val
 inline void PlayerPlacementStorageRecord::clear_current_route() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_route_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::current_route() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.current_route)
@@ -9884,7 +10768,7 @@ inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::curr
 }
 inline void PlayerPlacementStorageRecord::set_current_route(::pandora::locator::v1::PlacementRoute value) {
   _internal_set_current_route(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.current_route)
 }
 inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::_internal_current_route() const {
@@ -9900,7 +10784,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_current_route(::pandora:
 inline void PlayerPlacementStorageRecord::clear_target_route() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_route_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::target_route() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.target_route)
@@ -9908,7 +10792,7 @@ inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::targ
 }
 inline void PlayerPlacementStorageRecord::set_target_route(::pandora::locator::v1::PlacementRoute value) {
   _internal_set_target_route(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.target_route)
 }
 inline ::pandora::locator::v1::PlacementRoute PlayerPlacementStorageRecord::_internal_target_route() const {
@@ -9924,7 +10808,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_target_route(::pandora::
 inline void PlayerPlacementStorageRecord::clear_transition_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.transition_state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::pandora::locator::v1::PlacementTransitionState PlayerPlacementStorageRecord::transition_state() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.transition_state)
@@ -9932,7 +10816,7 @@ inline ::pandora::locator::v1::PlacementTransitionState PlayerPlacementStorageRe
 }
 inline void PlayerPlacementStorageRecord::set_transition_state(::pandora::locator::v1::PlacementTransitionState value) {
   _internal_set_transition_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.transition_state)
 }
 inline ::pandora::locator::v1::PlacementTransitionState PlayerPlacementStorageRecord::_internal_transition_state() const {
@@ -9948,7 +10832,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_transition_state(::pando
 inline void PlayerPlacementStorageRecord::clear_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t PlayerPlacementStorageRecord::version() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.version)
@@ -9956,7 +10840,7 @@ inline ::uint64_t PlayerPlacementStorageRecord::version() const {
 }
 inline void PlayerPlacementStorageRecord::set_version(::uint64_t value) {
   _internal_set_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.version)
 }
 inline ::uint64_t PlayerPlacementStorageRecord::_internal_version() const {
@@ -10036,7 +10920,7 @@ inline void PlayerPlacementStorageRecord::set_allocated_operation_id(::std::stri
 inline void PlayerPlacementStorageRecord::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t PlayerPlacementStorageRecord::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.match_id)
@@ -10044,7 +10928,7 @@ inline ::uint64_t PlayerPlacementStorageRecord::match_id() const {
 }
 inline void PlayerPlacementStorageRecord::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.match_id)
 }
 inline ::uint64_t PlayerPlacementStorageRecord::_internal_match_id() const {
@@ -10060,7 +10944,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_match_id(::uint64_t valu
 inline void PlayerPlacementStorageRecord::clear_source_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t PlayerPlacementStorageRecord::source_match_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_match_id)
@@ -10068,7 +10952,7 @@ inline ::uint64_t PlayerPlacementStorageRecord::source_match_id() const {
 }
 inline void PlayerPlacementStorageRecord::set_source_match_id(::uint64_t value) {
   _internal_set_source_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_match_id)
 }
 inline ::uint64_t PlayerPlacementStorageRecord::_internal_source_match_id() const {
@@ -10276,7 +11160,7 @@ inline void PlayerPlacementStorageRecord::set_allocated_hub_assignment_id(::std:
 inline void PlayerPlacementStorageRecord::clear_updated_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::int64_t PlayerPlacementStorageRecord::updated_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.updated_at_ms)
@@ -10284,7 +11168,7 @@ inline ::int64_t PlayerPlacementStorageRecord::updated_at_ms() const {
 }
 inline void PlayerPlacementStorageRecord::set_updated_at_ms(::int64_t value) {
   _internal_set_updated_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.updated_at_ms)
 }
 inline ::int64_t PlayerPlacementStorageRecord::_internal_updated_at_ms() const {
@@ -10300,7 +11184,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_updated_at_ms(::int64_t 
 inline void PlayerPlacementStorageRecord::clear_lease_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lease_deadline_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::int64_t PlayerPlacementStorageRecord::lease_deadline_ms() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.lease_deadline_ms)
@@ -10308,7 +11192,7 @@ inline ::int64_t PlayerPlacementStorageRecord::lease_deadline_ms() const {
 }
 inline void PlayerPlacementStorageRecord::set_lease_deadline_ms(::int64_t value) {
   _internal_set_lease_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.lease_deadline_ms)
 }
 inline ::int64_t PlayerPlacementStorageRecord::_internal_lease_deadline_ms() const {
@@ -10324,7 +11208,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_lease_deadline_ms(::int6
 inline void PlayerPlacementStorageRecord::clear_proof_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proof_type_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::pandora::locator::v1::PlacementProofType PlayerPlacementStorageRecord::proof_type() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.proof_type)
@@ -10332,7 +11216,7 @@ inline ::pandora::locator::v1::PlacementProofType PlayerPlacementStorageRecord::
 }
 inline void PlayerPlacementStorageRecord::set_proof_type(::pandora::locator::v1::PlacementProofType value) {
   _internal_set_proof_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.proof_type)
 }
 inline ::pandora::locator::v1::PlacementProofType PlayerPlacementStorageRecord::_internal_proof_type() const {
@@ -10476,7 +11360,7 @@ inline void PlayerPlacementStorageRecord::set_allocated_admission_id(::std::stri
 inline void PlayerPlacementStorageRecord::clear_target_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint64_t PlayerPlacementStorageRecord::target_match_id() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.target_match_id)
@@ -10484,7 +11368,7 @@ inline ::uint64_t PlayerPlacementStorageRecord::target_match_id() const {
 }
 inline void PlayerPlacementStorageRecord::set_target_match_id(::uint64_t value) {
   _internal_set_target_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.target_match_id)
 }
 inline ::uint64_t PlayerPlacementStorageRecord::_internal_target_match_id() const {
@@ -10500,7 +11384,7 @@ inline void PlayerPlacementStorageRecord::_internal_set_target_match_id(::uint64
 inline void PlayerPlacementStorageRecord::clear_ds_instance_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ds_instance_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint32_t PlayerPlacementStorageRecord::ds_instance_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_epoch)
@@ -10508,7 +11392,7 @@ inline ::uint32_t PlayerPlacementStorageRecord::ds_instance_epoch() const {
 }
 inline void PlayerPlacementStorageRecord::set_ds_instance_epoch(::uint32_t value) {
   _internal_set_ds_instance_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.ds_instance_epoch)
 }
 inline ::uint32_t PlayerPlacementStorageRecord::_internal_ds_instance_epoch() const {
@@ -10652,7 +11536,7 @@ inline void PlayerPlacementStorageRecord::set_allocated_release_track(::std::str
 inline void PlayerPlacementStorageRecord::clear_retarget_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retarget_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline ::uint32_t PlayerPlacementStorageRecord::retarget_count() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.retarget_count)
@@ -10660,7 +11544,7 @@ inline ::uint32_t PlayerPlacementStorageRecord::retarget_count() const {
 }
 inline void PlayerPlacementStorageRecord::set_retarget_count(::uint32_t value) {
   _internal_set_retarget_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.retarget_count)
 }
 inline ::uint32_t PlayerPlacementStorageRecord::_internal_retarget_count() const {
@@ -10740,7 +11624,7 @@ inline void PlayerPlacementStorageRecord::set_allocated_last_retarget_proof_id(:
 inline void PlayerPlacementStorageRecord::clear_last_retarget_reason() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_retarget_reason_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline ::pandora::locator::v1::PlacementTargetUnavailableReason PlayerPlacementStorageRecord::last_retarget_reason() const {
   // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_reason)
@@ -10748,7 +11632,7 @@ inline ::pandora::locator::v1::PlacementTargetUnavailableReason PlayerPlacementS
 }
 inline void PlayerPlacementStorageRecord::set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value) {
   _internal_set_last_retarget_reason(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_retarget_reason)
 }
 inline ::pandora::locator::v1::PlacementTargetUnavailableReason PlayerPlacementStorageRecord::_internal_last_retarget_reason() const {
@@ -10758,6 +11642,726 @@ inline ::pandora::locator::v1::PlacementTargetUnavailableReason PlayerPlacementS
 inline void PlayerPlacementStorageRecord::_internal_set_last_retarget_reason(::pandora::locator::v1::PlacementTargetUnavailableReason value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_retarget_reason_ = value;
+}
+
+// uint64 source_placement_version = 24 [json_name = "sourcePlacementVersion"];
+inline void PlayerPlacementStorageRecord::clear_source_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::source_placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_placement_version)
+  return _internal_source_placement_version();
+}
+inline void PlayerPlacementStorageRecord::set_source_placement_version(::uint64_t value) {
+  _internal_set_source_placement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_placement_version)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_source_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_placement_version_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_placement_version_ = value;
+}
+
+// string source_operation_id = 25 [json_name = "sourceOperationId"];
+inline void PlayerPlacementStorageRecord::clear_source_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_operation_id)
+  return _internal_source_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  _impl_.source_operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::std::string* _s = _internal_mutable_source_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_operation_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_operation_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000200U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  auto* released = _impl_.source_operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  }
+  _impl_.source_operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_operation_id_.IsDefault()) {
+    _impl_.source_operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_operation_id)
+}
+
+// string source_ds_pod_name = 26 [json_name = "sourceDsPodName"];
+inline void PlayerPlacementStorageRecord::clear_source_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ds_pod_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_ds_pod_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_pod_name)
+  return _internal_source_ds_pod_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_ds_pod_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  _impl_.source_ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_pod_name)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_ds_pod_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::std::string* _s = _internal_mutable_source_ds_pod_name();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_pod_name)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_ds_pod_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_ds_pod_name_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_ds_pod_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ds_pod_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_ds_pod_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_ds_pod_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_pod_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000400U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  auto* released = _impl_.source_ds_pod_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_ds_pod_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+  _impl_.source_ds_pod_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_ds_pod_name_.IsDefault()) {
+    _impl_.source_ds_pod_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_pod_name)
+}
+
+// string source_ds_instance_uid = 27 [json_name = "sourceDsInstanceUid"];
+inline void PlayerPlacementStorageRecord::clear_source_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ds_instance_uid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_ds_instance_uid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_uid)
+  return _internal_source_ds_instance_uid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_ds_instance_uid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  _impl_.source_ds_instance_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_uid)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_ds_instance_uid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::std::string* _s = _internal_mutable_source_ds_instance_uid();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_uid)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_ds_instance_uid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_ds_instance_uid_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_ds_instance_uid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ds_instance_uid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_ds_instance_uid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_ds_instance_uid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_uid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000800U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  auto* released = _impl_.source_ds_instance_uid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_ds_instance_uid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_ds_instance_uid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  }
+  _impl_.source_ds_instance_uid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_ds_instance_uid_.IsDefault()) {
+    _impl_.source_ds_instance_uid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_uid)
+}
+
+// uint32 source_ds_instance_epoch = 28 [json_name = "sourceDsInstanceEpoch"];
+inline void PlayerPlacementStorageRecord::clear_source_ds_instance_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ds_instance_epoch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::uint32_t PlayerPlacementStorageRecord::source_ds_instance_epoch() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_epoch)
+  return _internal_source_ds_instance_epoch();
+}
+inline void PlayerPlacementStorageRecord::set_source_ds_instance_epoch(::uint32_t value) {
+  _internal_set_source_ds_instance_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_ds_instance_epoch)
+}
+inline ::uint32_t PlayerPlacementStorageRecord::_internal_source_ds_instance_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_ds_instance_epoch_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_ds_instance_epoch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ds_instance_epoch_ = value;
+}
+
+// string source_hub_assignment_id = 29 [json_name = "sourceHubAssignmentId"];
+inline void PlayerPlacementStorageRecord::clear_source_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_hub_assignment_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_hub_assignment_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_hub_assignment_id)
+  return _internal_source_hub_assignment_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_hub_assignment_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  _impl_.source_hub_assignment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_hub_assignment_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_hub_assignment_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::std::string* _s = _internal_mutable_source_hub_assignment_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_hub_assignment_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_hub_assignment_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_hub_assignment_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_hub_assignment_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_hub_assignment_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_hub_assignment_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_hub_assignment_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_hub_assignment_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00001000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  auto* released = _impl_.source_hub_assignment_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_hub_assignment_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_hub_assignment_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  }
+  _impl_.source_hub_assignment_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_hub_assignment_id_.IsDefault()) {
+    _impl_.source_hub_assignment_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_hub_assignment_id)
+}
+
+// string source_allocation_id = 30 [json_name = "sourceAllocationId"];
+inline void PlayerPlacementStorageRecord::clear_source_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_allocation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_allocation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_allocation_id)
+  return _internal_source_allocation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_allocation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  _impl_.source_allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_allocation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_allocation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ::std::string* _s = _internal_mutable_source_allocation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_allocation_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_allocation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_allocation_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_allocation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_allocation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_allocation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_allocation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_allocation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00002000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  auto* released = _impl_.source_allocation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_allocation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  }
+  _impl_.source_allocation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_allocation_id_.IsDefault()) {
+    _impl_.source_allocation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_allocation_id)
+}
+
+// string source_release_track = 31 [json_name = "sourceReleaseTrack"];
+inline void PlayerPlacementStorageRecord::clear_source_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_release_track)
+  return _internal_source_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  _impl_.source_release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ::std::string* _s = _internal_mutable_source_release_track();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_release_track)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_release_track_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00004000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  auto* released = _impl_.source_release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  }
+  _impl_.source_release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_release_track_.IsDefault()) {
+    _impl_.source_release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_release_track)
+}
+
+// bool source_departure_confirmed = 32 [json_name = "sourceDepartureConfirmed"];
+inline void PlayerPlacementStorageRecord::clear_source_departure_confirmed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_departure_confirmed_ = false;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline bool PlayerPlacementStorageRecord::source_departure_confirmed() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_confirmed)
+  return _internal_source_departure_confirmed();
+}
+inline void PlayerPlacementStorageRecord::set_source_departure_confirmed(bool value) {
+  _internal_set_source_departure_confirmed(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_confirmed)
+}
+inline bool PlayerPlacementStorageRecord::_internal_source_departure_confirmed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_departure_confirmed_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_departure_confirmed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_departure_confirmed_ = value;
+}
+
+// .pandora.locator.v1.PlacementSourceDepartureProofType source_departure_proof_type = 33 [json_name = "sourceDepartureProofType"];
+inline void PlayerPlacementStorageRecord::clear_source_departure_proof_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_departure_proof_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::pandora::locator::v1::PlacementSourceDepartureProofType PlayerPlacementStorageRecord::source_departure_proof_type() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_type)
+  return _internal_source_departure_proof_type();
+}
+inline void PlayerPlacementStorageRecord::set_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value) {
+  _internal_set_source_departure_proof_type(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_type)
+}
+inline ::pandora::locator::v1::PlacementSourceDepartureProofType PlayerPlacementStorageRecord::_internal_source_departure_proof_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementSourceDepartureProofType>(_impl_.source_departure_proof_type_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_departure_proof_type_ = value;
+}
+
+// string source_departure_proof_id = 34 [json_name = "sourceDepartureProofId"];
+inline void PlayerPlacementStorageRecord::clear_source_departure_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_departure_proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::source_departure_proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_id)
+  return _internal_source_departure_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_source_departure_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  _impl_.source_departure_proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_source_departure_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ::std::string* _s = _internal_mutable_source_departure_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_source_departure_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_departure_proof_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_source_departure_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_departure_proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_source_departure_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_departure_proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_source_departure_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x80000000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  auto* released = _impl_.source_departure_proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_departure_proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_source_departure_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  }
+  _impl_.source_departure_proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_departure_proof_id_.IsDefault()) {
+    _impl_.source_departure_proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.source_departure_proof_id)
+}
+
+// .pandora.locator.v1.PlacementSourceDepartureProofType last_source_departure_proof_type = 35 [json_name = "lastSourceDepartureProofType"];
+inline void PlayerPlacementStorageRecord::clear_last_source_departure_proof_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_proof_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+}
+inline ::pandora::locator::v1::PlacementSourceDepartureProofType PlayerPlacementStorageRecord::last_source_departure_proof_type() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_type)
+  return _internal_last_source_departure_proof_type();
+}
+inline void PlayerPlacementStorageRecord::set_last_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value) {
+  _internal_set_last_source_departure_proof_type(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_type)
+}
+inline ::pandora::locator::v1::PlacementSourceDepartureProofType PlayerPlacementStorageRecord::_internal_last_source_departure_proof_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementSourceDepartureProofType>(_impl_.last_source_departure_proof_type_);
+}
+inline void PlayerPlacementStorageRecord::_internal_set_last_source_departure_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_proof_type_ = value;
+}
+
+// string last_source_departure_proof_id = 36 [json_name = "lastSourceDepartureProofId"];
+inline void PlayerPlacementStorageRecord::clear_last_source_departure_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::last_source_departure_proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_id)
+  return _internal_last_source_departure_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_last_source_departure_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  _impl_.last_source_departure_proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_last_source_departure_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ::std::string* _s = _internal_mutable_last_source_departure_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_last_source_departure_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_source_departure_proof_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_last_source_departure_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_last_source_departure_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_source_departure_proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_last_source_departure_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[1], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  auto* released = _impl_.last_source_departure_proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_source_departure_proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_last_source_departure_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  }
+  _impl_.last_source_departure_proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_source_departure_proof_id_.IsDefault()) {
+    _impl_.last_source_departure_proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_proof_id)
+}
+
+// uint64 last_source_departure_placement_version = 37 [json_name = "lastSourceDeparturePlacementVersion"];
+inline void PlayerPlacementStorageRecord::clear_last_source_departure_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+}
+inline ::uint64_t PlayerPlacementStorageRecord::last_source_departure_placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_placement_version)
+  return _internal_last_source_departure_placement_version();
+}
+inline void PlayerPlacementStorageRecord::set_last_source_departure_placement_version(::uint64_t value) {
+  _internal_set_last_source_departure_placement_version(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_placement_version)
+}
+inline ::uint64_t PlayerPlacementStorageRecord::_internal_last_source_departure_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_source_departure_placement_version_;
+}
+inline void PlayerPlacementStorageRecord::_internal_set_last_source_departure_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_placement_version_ = value;
+}
+
+// string last_source_departure_operation_id = 38 [json_name = "lastSourceDepartureOperationId"];
+inline void PlayerPlacementStorageRecord::clear_last_source_departure_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline const ::std::string& PlayerPlacementStorageRecord::last_source_departure_operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_operation_id)
+  return _internal_last_source_departure_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerPlacementStorageRecord::set_last_source_departure_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  _impl_.last_source_departure_operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::mutable_last_source_departure_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ::std::string* _s = _internal_mutable_last_source_departure_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_operation_id)
+  return _s;
+}
+inline const ::std::string& PlayerPlacementStorageRecord::_internal_last_source_departure_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_source_departure_operation_id_.Get();
+}
+inline void PlayerPlacementStorageRecord::_internal_set_last_source_departure_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_source_departure_operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerPlacementStorageRecord::_internal_mutable_last_source_departure_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_source_departure_operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerPlacementStorageRecord::release_last_source_departure_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[1], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  auto* released = _impl_.last_source_departure_operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_source_departure_operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerPlacementStorageRecord::set_allocated_last_source_departure_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  }
+  _impl_.last_source_departure_operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_source_departure_operation_id_.IsDefault()) {
+    _impl_.last_source_departure_operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.PlayerPlacementStorageRecord.last_source_departure_operation_id)
 }
 
 // -------------------------------------------------------------------
@@ -13210,6 +14814,706 @@ inline void RetargetPlacementTargetResponse::set_allocated_placement(::pandora::
 
 // -------------------------------------------------------------------
 
+// ConfirmPlacementSourceDepartureRequest
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.player_id)
+  return _internal_player_id();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.player_id)
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 placement_version = 2 [json_name = "placementVersion"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.placement_version)
+  return _internal_placement_version();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_placement_version(::uint64_t value) {
+  _internal_set_placement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.placement_version)
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::_internal_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.placement_version_;
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_version_ = value;
+}
+
+// string operation_id = 3 [json_name = "operationId"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.operation_id)
+  return _internal_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConfirmPlacementSourceDepartureRequest::set_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::mutable_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.operation_id)
+  return _s;
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::_internal_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.operation_id_.Get();
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::_internal_mutable_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureRequest::release_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_allocated_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.operation_id_.IsDefault()) {
+    _impl_.operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.operation_id)
+}
+
+// .pandora.locator.v1.PlacementRoute target_route = 4 [json_name = "targetRoute"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_target_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::pandora::locator::v1::PlacementRoute ConfirmPlacementSourceDepartureRequest::target_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.target_route)
+  return _internal_target_route();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_target_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.target_route)
+}
+inline ::pandora::locator::v1::PlacementRoute ConfirmPlacementSourceDepartureRequest::_internal_target_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.target_route_);
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_target_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_route_ = value;
+}
+
+// uint64 target_match_id = 5 [json_name = "targetMatchId"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_target_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::target_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.target_match_id)
+  return _internal_target_match_id();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_target_match_id(::uint64_t value) {
+  _internal_set_target_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.target_match_id)
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::_internal_target_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_match_id_;
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_target_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_match_id_ = value;
+}
+
+// uint64 source_placement_version = 6 [json_name = "sourcePlacementVersion"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_source_placement_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_placement_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::source_placement_version() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_placement_version)
+  return _internal_source_placement_version();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_source_placement_version(::uint64_t value) {
+  _internal_set_source_placement_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_placement_version)
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::_internal_source_placement_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_placement_version_;
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_source_placement_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_placement_version_ = value;
+}
+
+// string source_operation_id = 7 [json_name = "sourceOperationId"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_source_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_operation_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::source_operation_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_operation_id)
+  return _internal_source_operation_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConfirmPlacementSourceDepartureRequest::set_source_operation_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.source_operation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_operation_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::mutable_source_operation_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_source_operation_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_operation_id)
+  return _s;
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::_internal_source_operation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_operation_id_.Get();
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_source_operation_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_operation_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::_internal_mutable_source_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.source_operation_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureRequest::release_source_operation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_operation_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.source_operation_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.source_operation_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_allocated_source_operation_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.source_operation_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.source_operation_id_.IsDefault()) {
+    _impl_.source_operation_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_operation_id)
+}
+
+// .pandora.locator.v1.PlacementRoute source_route = 8 [json_name = "sourceRoute"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_source_route() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_route_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::pandora::locator::v1::PlacementRoute ConfirmPlacementSourceDepartureRequest::source_route() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_route)
+  return _internal_source_route();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_source_route(::pandora::locator::v1::PlacementRoute value) {
+  _internal_set_source_route(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_route)
+}
+inline ::pandora::locator::v1::PlacementRoute ConfirmPlacementSourceDepartureRequest::_internal_source_route() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementRoute>(_impl_.source_route_);
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_source_route(::pandora::locator::v1::PlacementRoute value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_route_ = value;
+}
+
+// uint64 source_match_id = 9 [json_name = "sourceMatchId"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_source_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::source_match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_match_id)
+  return _internal_source_match_id();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_source_match_id(::uint64_t value) {
+  _internal_set_source_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_match_id)
+}
+inline ::uint64_t ConfirmPlacementSourceDepartureRequest::_internal_source_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_match_id_;
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_source_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_match_id_ = value;
+}
+
+// .pandora.locator.v1.PlacementTargetIdentity source_target = 10 [json_name = "sourceTarget"];
+inline bool ConfirmPlacementSourceDepartureRequest::has_source_target() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.source_target_ != nullptr);
+  return value;
+}
+inline void ConfirmPlacementSourceDepartureRequest::clear_source_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.source_target_ != nullptr) _impl_.source_target_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::pandora::locator::v1::PlacementTargetIdentity& ConfirmPlacementSourceDepartureRequest::_internal_source_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlacementTargetIdentity* p = _impl_.source_target_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlacementTargetIdentity>(&::pandora::locator::v1::PlacementTargetIdentity_globals_);
+}
+inline const ::pandora::locator::v1::PlacementTargetIdentity& ConfirmPlacementSourceDepartureRequest::source_target() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_target)
+  return _internal_source_target();
+}
+inline void ConfirmPlacementSourceDepartureRequest::unsafe_arena_set_allocated_source_target(
+    ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.source_target_);
+  }
+  _impl_.source_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_target)
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureRequest::release_source_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::locator::v1::PlacementTargetIdentity* released = _impl_.source_target_;
+  _impl_.source_target_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureRequest::unsafe_arena_release_source_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_target)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::locator::v1::PlacementTargetIdentity* temp = _impl_.source_target_;
+  _impl_.source_target_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::_internal_mutable_source_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.source_target_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlacementTargetIdentity>(GetArena());
+    _impl_.source_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(p);
+  }
+  return _impl_.source_target_;
+}
+inline ::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::mutable_source_target()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::pandora::locator::v1::PlacementTargetIdentity* _msg = _internal_mutable_source_target();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_target)
+  return _msg;
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_allocated_source_target(::pandora::locator::v1::PlacementTargetIdentity* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.source_target_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.source_target_ = reinterpret_cast<::pandora::locator::v1::PlacementTargetIdentity*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.source_target)
+}
+
+// .pandora.locator.v1.PlacementSourceDepartureProofType proof_type = 11 [json_name = "proofType"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_proof_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::pandora::locator::v1::PlacementSourceDepartureProofType ConfirmPlacementSourceDepartureRequest::proof_type() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_type)
+  return _internal_proof_type();
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value) {
+  _internal_set_proof_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_type)
+}
+inline ::pandora::locator::v1::PlacementSourceDepartureProofType ConfirmPlacementSourceDepartureRequest::_internal_proof_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::locator::v1::PlacementSourceDepartureProofType>(_impl_.proof_type_);
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_proof_type(::pandora::locator::v1::PlacementSourceDepartureProofType value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_type_ = value;
+}
+
+// string proof_id = 12 [json_name = "proofId"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::proof_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_id)
+  return _internal_proof_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConfirmPlacementSourceDepartureRequest::set_proof_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.proof_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::mutable_proof_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_proof_id();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_id)
+  return _s;
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::_internal_proof_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_id_.Get();
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_proof_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::_internal_mutable_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureRequest::release_proof_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.proof_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_allocated_proof_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.proof_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_id_.IsDefault()) {
+    _impl_.proof_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_id)
+}
+
+// string proof_signature = 13 [json_name = "proofSignature"];
+inline void ConfirmPlacementSourceDepartureRequest::clear_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::proof_signature() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_signature)
+  return _internal_proof_signature();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConfirmPlacementSourceDepartureRequest::set_proof_signature(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.proof_signature_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_signature)
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::mutable_proof_signature()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_proof_signature();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_signature)
+  return _s;
+}
+inline const ::std::string& ConfirmPlacementSourceDepartureRequest::_internal_proof_signature() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proof_signature_.Get();
+}
+inline void ConfirmPlacementSourceDepartureRequest::_internal_set_proof_signature(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proof_signature_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureRequest::_internal_mutable_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proof_signature_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureRequest::release_proof_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_signature)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.proof_signature_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConfirmPlacementSourceDepartureRequest::set_allocated_proof_signature(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.proof_signature_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proof_signature_.IsDefault()) {
+    _impl_.proof_signature_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureRequest.proof_signature)
+}
+
+// -------------------------------------------------------------------
+
+// ConfirmPlacementSourceDepartureResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ConfirmPlacementSourceDepartureResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ConfirmPlacementSourceDepartureResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.code)
+  return _internal_code();
+}
+inline void ConfirmPlacementSourceDepartureResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ConfirmPlacementSourceDepartureResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ConfirmPlacementSourceDepartureResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// bool confirmed = 2 [json_name = "confirmed"];
+inline void ConfirmPlacementSourceDepartureResponse::clear_confirmed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirmed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool ConfirmPlacementSourceDepartureResponse::confirmed() const {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.confirmed)
+  return _internal_confirmed();
+}
+inline void ConfirmPlacementSourceDepartureResponse::set_confirmed(bool value) {
+  _internal_set_confirmed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.confirmed)
+}
+inline bool ConfirmPlacementSourceDepartureResponse::_internal_confirmed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.confirmed_;
+}
+inline void ConfirmPlacementSourceDepartureResponse::_internal_set_confirmed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirmed_ = value;
+}
+
+// .pandora.locator.v1.PlayerPlacementStorageRecord placement = 3 [json_name = "placement"];
+inline bool ConfirmPlacementSourceDepartureResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void ConfirmPlacementSourceDepartureResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& ConfirmPlacementSourceDepartureResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::pandora::locator::v1::PlayerPlacementStorageRecord* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::locator::v1::PlayerPlacementStorageRecord>(&::pandora::locator::v1::PlayerPlacementStorageRecord_globals_);
+}
+inline const ::pandora::locator::v1::PlayerPlacementStorageRecord& ConfirmPlacementSourceDepartureResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.placement)
+  return _internal_placement();
+}
+inline void ConfirmPlacementSourceDepartureResponse::unsafe_arena_set_allocated_placement(
+    ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.placement)
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE ConfirmPlacementSourceDepartureResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::pandora::locator::v1::PlayerPlacementStorageRecord>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NONNULL ConfirmPlacementSourceDepartureResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::pandora::locator::v1::PlayerPlacementStorageRecord* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.placement)
+  return _msg;
+}
+inline void ConfirmPlacementSourceDepartureResponse::set_allocated_placement(::pandora::locator::v1::PlayerPlacementStorageRecord* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::pandora::locator::v1::PlayerPlacementStorageRecord*>(value);
+  // @@protoc_insertion_point(field_set_allocated:pandora.locator.v1.ConfirmPlacementSourceDepartureResponse.placement)
+}
+
+// -------------------------------------------------------------------
+
 // CommitPlacementAdmissionRequest
 
 // uint64 player_id = 1 [json_name = "playerId"];
@@ -14640,6 +16944,12 @@ struct is_proto_enum<::pandora::locator::v1::PlacementTargetUnavailableReason> :
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::PlacementTargetUnavailableReason>() {
   return ::pandora::locator::v1::PlacementTargetUnavailableReason_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::locator::v1::PlacementSourceDepartureProofType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::locator::v1::PlacementSourceDepartureProofType>() {
+  return ::pandora::locator::v1::PlacementSourceDepartureProofType_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::locator::v1::PresenceStatus> : std::true_type {};

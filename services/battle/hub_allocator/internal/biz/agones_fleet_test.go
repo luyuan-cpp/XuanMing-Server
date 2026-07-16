@@ -73,6 +73,62 @@ func TestNewAgonesHubFleetProvider_RequiresFleet(t *testing.T) {
 	}
 }
 
+func TestHubInstanceObservationRequiresExactGameServerAndPodTeardown(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		obs  HubInstanceObservation
+		want bool
+	}{
+		{name: "same-gameserver-live", obs: HubInstanceObservation{
+			GameServerFound: true, GameServerUID: "uid-old", PodFound: true, PodOwnerGameServerUID: "uid-old"}},
+		{name: "gameserver-gone-pod-still-old", obs: HubInstanceObservation{
+			PodFound: true, PodOwnerGameServerUID: "uid-old"}},
+		{name: "gameserver-replaced-old-pod-still-old", obs: HubInstanceObservation{
+			GameServerFound: true, GameServerUID: "uid-new", PodFound: true, PodOwnerGameServerUID: "uid-old"}},
+		{name: "both-gone", obs: HubInstanceObservation{}, want: true},
+		{name: "replacement-pod-exact", obs: HubInstanceObservation{
+			GameServerFound: true, GameServerUID: "uid-new", PodFound: true, PodOwnerGameServerUID: "uid-new"}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.obs.ProvesTeardown("uid-old"); got != tc.want {
+				t.Fatalf("ProvesTeardown=%v want=%v obs=%+v", got, tc.want, tc.obs)
+			}
+			if tc.obs.ProvesTeardown("") {
+				t.Fatal("missing expected UID must fail closed")
+			}
+		})
+	}
+}
+
+func TestAgonesObserveShardInstanceReadsUnfilteredGameServerAndPodOwner(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/apis/agones.dev/v1/namespaces/pandora/gameservers/hub-observed":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"metadata": map[string]any{"name": "hub-observed", "uid": "uid-old"},
+				"status":   map[string]any{"state": "Unhealthy"},
+			})
+		case "/api/v1/namespaces/pandora/pods/hub-observed":
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+				"name": "hub-observed", "uid": "pod-uid-old",
+				"ownerReferences": []map[string]any{{"kind": "GameServer", "uid": "uid-old"}},
+			}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	p := newTestFleetProvider(t, srv.URL)
+	obs, err := p.ObserveShardInstance(context.Background(), "hub-observed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !obs.GameServerFound || obs.GameServerUID != "uid-old" || !obs.PodFound ||
+		obs.PodOwnerGameServerUID != "uid-old" || obs.ProvesTeardown("uid-old") {
+		t.Fatalf("unexpected observation: %+v", obs)
+	}
+}
+
 func TestAgonesListShards_OK(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

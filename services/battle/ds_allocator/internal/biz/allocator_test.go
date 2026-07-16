@@ -4,6 +4,7 @@ package biz
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,8 +15,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/battleabort"
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/conf"
 	"github.com/luyuancpp/pandora/services/battle/ds_allocator/internal/data"
@@ -127,6 +130,140 @@ func enableModelBForTest(
 	return authRepo, rdb
 }
 
+func TestEnableRedisAuthorityIrreversiblyActivatesStrictStorageWriters(t *testing.T) {
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	if repo.StrictModelBWritesEnabled() || uc.modelB {
+		t.Fatal("legacy/local test repository started in strict Model-B mode")
+	}
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+	if !repo.StrictModelBWritesEnabled() || !authRepo.StrictModelBWritesEnabled() || !uc.modelB {
+		t.Fatalf("Model-B became visible without both strict writers: battle=%v auth=%v model_b=%v",
+			repo.StrictModelBWritesEnabled(), authRepo.StrictModelBWritesEnabled(), uc.modelB)
+	}
+	// There is intentionally no disable operation. Re-enabling is idempotent
+	// and can never return either writer to legacy semantics.
+	repo.EnableStrictModelBWrites()
+	authRepo.EnableStrictModelBWrites()
+	if !repo.StrictModelBWritesEnabled() || !authRepo.StrictModelBWritesEnabled() {
+		t.Fatal("strict storage gate regressed after idempotent enable")
+	}
+}
+
+func seedActiveModelBLegacyPodUID(
+	t *testing.T,
+	repo *data.RedisBattleRepo,
+	authRepo *data.RedisBattleAuthRepo,
+	rdb *redis.Client,
+	matchID uint64,
+	allocationID, podName, gameServerUID string,
+	playerCount int32,
+) data.BattleCredentialIdentity {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UnixMilli()
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
+		PlayerIds: []uint64{101, 102}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: now, LastHeartbeatMs: now, PlayerCount: playerCount,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim legacy battle: claimed=%v err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, matchID, allocationID); err != nil || !fenced {
+		t.Fatalf("fence legacy battle: fenced=%v err=%v", fenced, err)
+	}
+	warming := proto.Clone(claim).(*dsv1.BattleStorageRecord)
+	warming.State, warming.DsPodName, warming.DsAddr = stateWarming, podName, "10.0.0.95:7777"
+	warming.GameserverUid, warming.PodUid, warming.ReleaseTrack = gameServerUID, "pre-upgrade-pod-uid", "stable"
+	if finalized, err := repo.FinalizeFencedBattleAllocation(ctx, warming, time.Hour); err != nil || !finalized {
+		t.Fatalf("finalize legacy battle: finalized=%v err=%v", finalized, err)
+	}
+	seed, err := authRepo.PrepareCredential(ctx, data.BattleAuthorityBinding{
+		MatchID: matchID, AllocationID: allocationID, PodName: podName, InstanceUID: gameServerUID,
+		RequiredWriterEpoch: data.BattleDSWriterEpochV2, AuthTTL: time.Hour, BattleTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := &dsv1.BattleDSCredential{
+		Gen: seed.Gen, Jti: fmt.Sprintf("legacy-jti-%d", matchID),
+		ExpMs: uint64(time.Now().Add(time.Hour).UnixMilli()), Kid: "legacy-kid",
+		InstanceUid: gameServerUID, InstanceEpoch: seed.InstanceEpoch,
+		TokenSha256: fmt.Sprintf("legacy-sha-%d", matchID), WriterEpoch: data.BattleDSWriterEpochV2,
+	}
+	if _, err := authRepo.StagePending(ctx, data.BattleStageInput{
+		MatchID: matchID, AllocationID: allocationID, Credential: credential, AuthTTL: time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := authRepo.MarkDelivered(ctx, matchID, allocationID, credential, "legacy-rv", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	id := data.BattleCredentialIdentity{
+		PodName: podName, InstanceUID: gameServerUID, InstanceEpoch: seed.InstanceEpoch,
+		Gen: credential.Gen, JTI: credential.Jti, ExpMs: credential.ExpMs, Kid: credential.Kid,
+		TokenSHA256: credential.TokenSha256, WriterEpoch: credential.WriterEpoch,
+	}
+	if _, err := authRepo.ActivateHeartbeat(ctx, matchID, id, data.BattleHeartbeatInput{
+		PlayerCount: playerCount, State: stateRunning, AuthTTL: time.Hour, BattleTTL: time.Hour,
+		EmptyBattleTimeout: time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate bytes written by the immediately preceding binary, before tag 19
+	// existed. The current writer must not be used to create this shape: its
+	// continuous invariant correctly rejects clearing pod_uid.
+	legacy, found, err := repo.GetBattle(ctx, matchID)
+	if err != nil || !found {
+		t.Fatalf("read legacy seed: found=%v err=%v", found, err)
+	}
+	legacy.PodUid = ""
+	if playerCount == 0 {
+		legacy.EmptySinceMs = time.Now().Add(-time.Second).UnixMilli()
+	}
+	payload, err := proto.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rdb.Set(ctx, fmt.Sprintf("pandora:ds:battle:{%d}", matchID), payload, time.Hour).Err(); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func seedPrecredentialModelBBattle(
+	t *testing.T,
+	repo *data.RedisBattleRepo,
+	matchID uint64,
+	allocationID, podName, gameServerUID, podUID string,
+) *data.AuthoritativeGameServerAllocation {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UnixMilli()
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
+		PlayerIds: []uint64{201, 202}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: now, LastHeartbeatMs: now, PlayerCount: 2,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim precredential battle: claimed=%v err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, matchID, allocationID); err != nil || !fenced {
+		t.Fatalf("fence precredential battle: fenced=%v err=%v", fenced, err)
+	}
+	warming := proto.Clone(claim).(*dsv1.BattleStorageRecord)
+	warming.State, warming.DsPodName, warming.DsAddr = stateWarming, podName, "10.0.0.96:7777"
+	warming.GameserverUid, warming.PodUid, warming.ReleaseTrack = gameServerUID, podUID, "stable"
+	if finalized, err := repo.FinalizeFencedBattleAllocation(ctx, warming, time.Hour); err != nil || !finalized {
+		t.Fatalf("finalize precredential battle: finalized=%v err=%v", finalized, err)
+	}
+	return &data.AuthoritativeGameServerAllocation{
+		PodName: podName, InstanceUID: gameServerUID, PodUID: podUID,
+		AllocationID: allocationID, ReleaseTrack: "stable",
+	}
+}
+
 // backdate 把 match 的 last_heartbeat_ms 回拨到远古,模拟心跳超时。
 func backdate(t *testing.T, repo *data.RedisBattleRepo, matchID uint64) {
 	t.Helper()
@@ -161,6 +298,9 @@ type authoritativeTestAllocator struct {
 	allocateErr        error
 	releaseErr         error
 	releaseCheck       func(*data.AuthoritativeGameServerAllocation) error
+	resolvePodUID      string
+	resolvePodUIDErr   error
+	resolvePodUIDCalls atomic.Int32
 }
 
 // timeoutLateApplyAllocator 模拟 apiserver 在 GSA POST 已进入处理后客户端超时，
@@ -170,6 +310,33 @@ type timeoutLateApplyAllocator struct {
 	postStarted chan struct{}
 	returnError chan struct{}
 	lateApplied atomic.Bool
+}
+
+type uncertainResolverTestAllocator struct {
+	authoritativeTestAllocator
+	resolveCalls  atomic.Int32
+	resolveResult *data.AuthoritativeGameServerAllocation
+	resolveFound  bool
+	resolveErr    error
+}
+
+func (a *uncertainResolverTestAllocator) ResolveAllocationByID(
+	_ context.Context,
+	_ uint64,
+	allocationID string,
+	_ []uint64,
+	_ uint32,
+	_ string,
+) (*data.AuthoritativeGameServerAllocation, bool, error) {
+	a.resolveCalls.Add(1)
+	if a.resolveResult == nil {
+		return nil, a.resolveFound, a.resolveErr
+	}
+	out := *a.resolveResult
+	if out.AllocationID == "" {
+		out.AllocationID = allocationID
+	}
+	return &out, a.resolveFound, a.resolveErr
 }
 
 func (a *timeoutLateApplyAllocator) AllocateAuthoritative(
@@ -197,9 +364,40 @@ type rejectingFenceRepo struct {
 	fenceCalls atomic.Int32
 }
 
+type battleDeparturePlacementStub struct {
+	verifyErr       error
+	confirmErr      error
+	verifyCalls     atomic.Int32
+	confirmCalls    atomic.Int32
+	lastDepartureID string
+}
+
+func (s *battleDeparturePlacementStub) VerifyPendingHubBattleDeparture(
+	_ context.Context, _ data.BattlePlayerDepartureExpected,
+) error {
+	s.verifyCalls.Add(1)
+	return s.verifyErr
+}
+
+func (s *battleDeparturePlacementStub) ConfirmBattleSourceDeparture(
+	_ context.Context, _ data.BattlePlayerDepartureExpected, departureID string,
+) error {
+	s.confirmCalls.Add(1)
+	s.lastDepartureID = departureID
+	return s.confirmErr
+}
+
 func (r *rejectingFenceRepo) FenceBattleAllocation(context.Context, uint64, string) (bool, error) {
 	r.fenceCalls.Add(1)
 	return false, nil
+}
+
+func (r *rejectingFenceRepo) EnableStrictModelBWrites() {
+	r.BattleRepo.(data.StrictModelBBattleStorage).EnableStrictModelBWrites()
+}
+
+func (r *rejectingFenceRepo) StrictModelBWritesEnabled() bool {
+	return r.BattleRepo.(data.StrictModelBBattleStorage).StrictModelBWritesEnabled()
 }
 
 func (a *authoritativeTestAllocator) Allocate(context.Context, uint64, uint32, string, string) (string, string, string, error) {
@@ -231,6 +429,7 @@ func (a *authoritativeTestAllocator) AllocateAuthoritative(
 	}
 	return &data.AuthoritativeGameServerAllocation{
 		PodName: "battle-auth-1", Addr: "10.0.0.9:7777", InstanceUID: "uid-auth-1",
+		PodUID:          "pod-uid-auth-1",
 		ResourceVersion: "101", AllocationID: allocationID, ReleaseTrack: releaseTrack, AnnotationsPresent: true,
 	}, nil
 }
@@ -260,6 +459,9 @@ func (a *authoritativeTestAllocator) ReleaseExpected(
 	if allocation == nil || (allocation.InstanceUID == "" && allocation.AllocationID == "") {
 		return errors.New("missing expected UID")
 	}
+	if allocation.InstanceUID != "" && allocation.PodUID == "" {
+		return errors.New("missing durable expected Pod UID")
+	}
 	a.releases.Add(1)
 	if a.releaseCheck != nil {
 		if err := a.releaseCheck(allocation); err != nil {
@@ -267,6 +469,23 @@ func (a *authoritativeTestAllocator) ReleaseExpected(
 		}
 	}
 	return a.releaseErr
+}
+
+func (a *authoritativeTestAllocator) ResolveExpectedPodUID(
+	_ context.Context,
+	allocation *data.AuthoritativeGameServerAllocation,
+) (string, error) {
+	a.resolvePodUIDCalls.Add(1)
+	if a.resolvePodUIDErr != nil {
+		return "", a.resolvePodUIDErr
+	}
+	if a.resolvePodUID != "" {
+		return a.resolvePodUID, nil
+	}
+	if allocation == nil || allocation.InstanceUID == "" {
+		return "", errors.New("missing expected allocation")
+	}
+	return "pod-uid-for-" + allocation.InstanceUID, nil
 }
 
 func (g *gatedAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
@@ -285,6 +504,60 @@ func (g *gatedAllocator) Release(ctx context.Context, podName string) error {
 	return g.inner.Release(ctx, podName)
 }
 
+func TestEnsurePlayerDeparturePublishesLocatorConfirmationBeforeSuccess(t *testing.T) {
+	ctx := context.Background()
+	uc, repo, _ := newUsecaseWithAlloc(t, NewMockGameServerAllocator(testCfg()))
+	uc.modelB = true // this test exercises only the already-enabled departure path
+	const matchID = uint64(919)
+	battle := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: stateRunning, PlayerIds: []uint64{10},
+		DsPodName: "battle-919", GameserverUid: "uid-919", InstanceEpoch: 7,
+		AllocationId: "4305dd37-6995-4124-84cd-5dd7d61e3327", ReleaseTrack: "stable", PodUid: "pod-uid-919",
+		LastHeartbeatMs: time.Now().UnixMilli(),
+	}
+	if err := repo.CreateBattle(ctx, battle, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	teardownSource := data.BattleDepartureSource{
+		DSPodName: "battle-919", GameServerUID: "uid-919", InstanceEpoch: 7,
+		AllocationID: "4305dd37-6995-4124-84cd-5dd7d61e3327", PodUID: "pod-uid-919",
+	}
+	if err := repo.RecordInstanceTeardown(ctx, matchID, teardownSource); err != nil {
+		t.Fatal(err)
+	}
+	expected := data.BattlePlayerDepartureExpected{
+		MatchID: matchID, PlayerID: 10, PlacementVersion: 18,
+		OperationID:            "223e4567-e89b-42d3-a456-426614174001",
+		SourcePlacementVersion: 17,
+		SourceOperationID:      "123e4567-e89b-42d3-a456-426614174000",
+		Source: data.BattleDepartureSource{DSPodName: "battle-919", GameServerUID: "uid-919",
+			InstanceEpoch: 7, AllocationID: "4305dd37-6995-4124-84cd-5dd7d61e3327"},
+	}
+	stub := &battleDeparturePlacementStub{
+		confirmErr: errcode.New(errcode.ErrUnavailable, "locator ACK lost"),
+	}
+	uc.SetBattleDeparturePlacementVerifier(stub)
+
+	if result, err := uc.EnsurePlayerDeparture(ctx, expected); errcode.As(err) != errcode.ErrUnavailable || result.Departed {
+		t.Fatalf("unknown confirmation must fail closed: result=%+v err=%v", result, err)
+	}
+	firstID := stub.lastDepartureID
+	if firstID == "" || stub.verifyCalls.Load() != 1 || stub.confirmCalls.Load() != 1 {
+		t.Fatalf("first attempt verify=%d confirm=%d id=%q", stub.verifyCalls.Load(),
+			stub.confirmCalls.Load(), firstID)
+	}
+
+	// The physical journal is already terminal. A retry must publish the exact
+	// same proof id and only then expose departed=true to Login.
+	stub.confirmErr = nil
+	result, err := uc.EnsurePlayerDeparture(ctx, expected)
+	if err != nil || !result.Departed || result.DepartureID != firstID ||
+		stub.lastDepartureID != firstID || stub.confirmCalls.Load() != 2 {
+		t.Fatalf("retry result=%+v err=%v confirm=%d id=%q first=%q", result, err,
+			stub.confirmCalls.Load(), stub.lastDepartureID, firstID)
+	}
+}
+
 func (c *countingAllocator) Allocate(ctx context.Context, matchID uint64, mapID uint32, gameMode, releaseTrack string) (string, string, string, error) {
 	return c.inner.Allocate(ctx, matchID, mapID, gameMode, releaseTrack)
 }
@@ -299,6 +572,22 @@ type mockLifecycle struct {
 	failFirst int
 	calls     int
 	delivered []uint64
+}
+
+type commitThenErrorLifecycle struct {
+	calls     int
+	delivered []uint64
+	failNext  bool
+}
+
+func (m *commitThenErrorLifecycle) PublishLifecycle(_ context.Context, evt *dsv1.DSLifecycleEvent) error {
+	m.calls++
+	m.delivered = append(m.delivered, evt.GetMatchId())
+	if m.failNext {
+		m.failNext = false
+		return errors.New("Kafka ACK response lost after broker commit")
+	}
+	return nil
 }
 
 func (m *mockLifecycle) PublishLifecycle(_ context.Context, evt *dsv1.DSLifecycleEvent) error {
@@ -618,6 +907,107 @@ func TestBattleModelBCleanupReleaseUnknownKeepsFenceAndCrashRetry(t *testing.T) 
 	}
 }
 
+func TestPrecredentialEpochZeroCrashReleasePurgesWithoutTeardownFabrication(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(823)
+		allocationID  = "cccccccc-1111-4111-8111-111111111111"
+		podName       = "battle-precredential-823"
+		gameServerUID = "gs-precredential-823"
+		podUID        = "pod-precredential-823"
+	)
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		if allocation.InstanceEpoch != 0 || allocation.InstanceUID != gameServerUID ||
+			allocation.PodUID != podUID || allocation.AllocationID != allocationID {
+			return fmt.Errorf("precredential release tuple=%+v", allocation)
+		}
+		return nil
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+	seedPrecredentialModelBBattle(
+		t, repo, matchID, allocationID, podName, gameServerUID, podUID)
+	battle, found, err := repo.GetBattle(ctx, matchID)
+	if err != nil || !found || battle.GetInstanceEpoch() != 0 {
+		t.Fatalf("precredential fixture: found=%v battle=%+v err=%v", found, battle, err)
+	}
+	if !uc.reconcilePreactiveRelease(ctx, battle) {
+		t.Fatal("epoch-zero precredential release did not complete")
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
+		t.Fatalf("epoch-zero precredential release not purged: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.releases.Load() != 1 {
+		t.Fatalf("epoch-zero release calls=%d", allocator.releases.Load())
+	}
+}
+
+func TestPrecredentialEpochZeroCleanupPathPurgesExactAllocation(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(824)
+		allocationID  = "dddddddd-1111-4111-8111-111111111111"
+		podName       = "battle-precredential-824"
+		gameServerUID = "gs-precredential-824"
+		podUID        = "pod-precredential-824"
+	)
+	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+	allocation := seedPrecredentialModelBBattle(
+		t, repo, matchID, allocationID, podName, gameServerUID, podUID)
+	uc.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, allocation)
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.AuthFound || snapshot.BattleFound {
+		t.Fatalf("epoch-zero cleanup not purged: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.releases.Load() != 1 {
+		t.Fatalf("epoch-zero cleanup release calls=%d", allocator.releases.Load())
+	}
+}
+
+func TestPrecredentialEpochZeroReleaseUnknownKeepsPermanentFence(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(825)
+		allocationID  = "eeeeeeee-1111-4111-8111-111111111111"
+		podName       = "battle-precredential-825"
+		gameServerUID = "gs-precredential-825"
+		podUID        = "pod-precredential-825"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered: make(chan map[string]string, 1), releaseErr: errors.New("DELETE ACK lost"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, _ := enableModelBForTest(t, uc, mr)
+	seedPrecredentialModelBBattle(
+		t, repo, matchID, allocationID, podName, gameServerUID, podUID)
+	battle, _, _ := repo.GetBattle(ctx, matchID)
+	if uc.reconcilePreactiveRelease(ctx, battle) {
+		t.Fatal("unknown epoch-zero delete was treated as success")
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.AuthFound || !snapshot.BattleFound ||
+		snapshot.Battle.GetState() != statePreactiveReleasing || snapshot.Battle.GetInstanceEpoch() != 0 {
+		t.Fatalf("unknown epoch-zero release lost fence: snapshot=%+v err=%v", snapshot, err)
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{825}"); ttl != 0 {
+		t.Fatalf("unknown epoch-zero release fence TTL=%v", ttl)
+	}
+	if allocator.releases.Load() != 1 {
+		t.Fatalf("unknown epoch-zero release calls=%d", allocator.releases.Load())
+	}
+	allocator.releaseErr = nil
+	if !uc.reconcilePreactiveRelease(ctx, snapshot.Battle) {
+		t.Fatal("epoch-zero ACK-loss retry did not converge")
+	}
+	if _, found, err := repo.GetBattle(ctx, matchID); err != nil || found {
+		t.Fatalf("epoch-zero retry not purged: found=%v err=%v", found, err)
+	}
+}
+
 func TestBattleModelBTerminalOutboxReleaseUnknownKeepsPermanentTerminatingFence(t *testing.T) {
 	ctx := context.Background()
 	allocator := &authoritativeTestAllocator{
@@ -627,7 +1017,7 @@ func TestBattleModelBTerminalOutboxReleaseUnknownKeepsPermanentTerminatingFence(
 	uc, battleRepo, mr := newUsecaseWithAlloc(t, allocator)
 	authRepo, _ := enableModelBForTest(t, uc, mr)
 	const matchID = uint64(822)
-	const allocationID = "alloc-822"
+	const allocationID = "2717e1e9-e1b5-4841-81fc-5be66f55b3cc"
 	claim := &dsv1.BattleStorageRecord{
 		MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
 		AllocatedAtMs: time.Now().UnixMilli(), LastHeartbeatMs: time.Now().UnixMilli(),
@@ -641,6 +1031,7 @@ func TestBattleModelBTerminalOutboxReleaseUnknownKeepsPermanentTerminatingFence(
 	battle := proto.Clone(claim).(*dsv1.BattleStorageRecord)
 	battle.State, battle.DsPodName, battle.DsAddr = stateWarming, "battle-822", "10.0.0.82:7777"
 	battle.GameserverUid = "uid-822"
+	battle.PodUid, battle.ReleaseTrack = "pod-uid-822", "stable"
 	if finalized, err := battleRepo.FinalizeFencedBattleAllocation(ctx, battle, time.Hour); err != nil || !finalized {
 		t.Fatalf("finalize=%v err=%v", finalized, err)
 	}
@@ -683,6 +1074,9 @@ func TestBattleModelBTerminalOutboxReleaseUnknownKeepsPermanentTerminatingFence(
 		AuthorizedAtMs: time.Now().UnixMilli(),
 	}
 	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		if allocation.PodUID != "pod-uid-822" {
+			return errors.New("terminal release did not use durable Pod UID")
+		}
 		snapshot, err := authRepo.ReadAuthority(ctx, matchID)
 		if err != nil {
 			return err
@@ -751,6 +1145,270 @@ func TestBattleModelBTerminalOutboxReleaseUnknownKeepsPermanentTerminatingFence(
 	}
 }
 
+func TestBattleModelBEmptyPodUIDStopsBeforeCredentialAndFinalize(t *testing.T) {
+	ctx := context.Background()
+	allocator := &authoritativeTestAllocator{
+		delivered: make(chan map[string]string, 1),
+		allocateResult: &data.AuthoritativeGameServerAllocation{
+			PodName: "battle-no-pod-uid", Addr: "10.0.0.91:7777",
+			InstanceUID: "gs-uid-91", ResourceVersion: "91",
+			ReleaseTrack: "stable",
+		},
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	enableModelBForTest(t, uc, mr)
+	if _, err := uc.AllocateBattle(ctx, 891, []uint64{1, 2}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("empty PodUID result=%v code=%v", err, errcode.As(err))
+	}
+	select {
+	case <-allocator.delivered:
+		t.Fatal("empty PodUID reached credential delivery")
+	default:
+	}
+	record, found, err := repo.GetBattle(ctx, 891)
+	if err != nil || !found || record.GetState() != stateAllocationUncertain || record.GetDsPodName() != "" {
+		t.Fatalf("empty PodUID escaped persistent allocation fence: found=%v record=%+v err=%v", found, record, err)
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("empty PodUID triggered unsafe cleanup: releases=%d", allocator.releases.Load())
+	}
+}
+
+func TestLegacyPodUIDBackfillsBeforeEmptyAbandonTerminalFence(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(892)
+		allocationID  = "44444444-4444-4444-8444-444444444444"
+		podName       = "battle-legacy-empty"
+		gameServerUID = "gs-uid-legacy-empty"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered:     make(chan map[string]string, 1),
+		resolvePodUID: "pod-uid-backfilled-empty",
+	}
+	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		if allocation.PodUID != "pod-uid-backfilled-empty" {
+			return fmt.Errorf("release PodUID=%q", allocation.PodUID)
+		}
+		return nil
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.EmptyBattleTimeout = config.Duration(time.Millisecond)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	lifecycle := &mockLifecycle{}
+	uc.SetLifecyclePusher(lifecycle)
+	id := seedActiveModelBLegacyPodUID(
+		t, repo, authRepo, rdb, matchID, allocationID, podName, gameServerUID, 0)
+	result, err := uc.HeartbeatAuthorized(ctx, matchID, id, 0, stateRunning, time.Now().UnixMilli())
+	if err != nil || result == nil || result.Command != commandStop {
+		t.Fatalf("legacy empty abandon result=%+v err=%v", result, err)
+	}
+	if allocator.resolvePodUIDCalls.Load() != 1 || allocator.releases.Load() != 1 {
+		t.Fatalf("legacy empty effects: resolve=%d release=%d",
+			allocator.resolvePodUIDCalls.Load(), allocator.releases.Load())
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || !snapshot.AuthFound || !snapshot.BattleFound ||
+		snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+		snapshot.Battle.GetState() != stateAbandoned ||
+		snapshot.Battle.GetPodUid() != "pod-uid-backfilled-empty" {
+		t.Fatalf("legacy empty terminal snapshot=%+v err=%v", snapshot, err)
+	}
+	if lifecycle.calls != 1 {
+		t.Fatalf("legacy empty lifecycle count=%d", lifecycle.calls)
+	}
+}
+
+func TestLegacyPodUIDBackfillsBeforeCompletedTerminalFence(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(897)
+		allocationID  = "bbbbbbbb-1111-4111-8111-111111111111"
+		podName       = "battle-legacy-completed"
+		gameServerUID = "gs-uid-legacy-completed"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered:     make(chan map[string]string, 1),
+		resolvePodUID: "pod-uid-backfilled-completed",
+	}
+	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		if allocation.PodUID != "pod-uid-backfilled-completed" {
+			return fmt.Errorf("completed release PodUID=%q", allocation.PodUID)
+		}
+		return nil
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	id := seedActiveModelBLegacyPodUID(
+		t, repo, authRepo, rdb, matchID, allocationID, podName, gameServerUID, 1)
+	expected := data.BattleExpectedInstance{
+		AllocationID: allocationID, InstanceUID: gameServerUID, InstanceEpoch: id.InstanceEpoch,
+	}
+	proof := data.BattleResultAuthorizationProof{Credential: id, AuthorizedAtMs: time.Now().UnixMilli()}
+	if err := uc.ReleaseBattleExpected(ctx, matchID, "completed", podName, expected, proof); err != nil {
+		t.Fatalf("legacy completed release: %v", err)
+	}
+	if allocator.resolvePodUIDCalls.Load() != 1 || allocator.releases.Load() != 1 {
+		t.Fatalf("legacy completed effects: resolve=%d release=%d",
+			allocator.resolvePodUIDCalls.Load(), allocator.releases.Load())
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING ||
+		snapshot.Battle.GetState() != stateEnded ||
+		snapshot.Battle.GetPodUid() != "pod-uid-backfilled-completed" {
+		t.Fatalf("legacy completed snapshot=%+v err=%v", snapshot, err)
+	}
+}
+
+func TestLegacyPodUIDPreflightFailureDoesNotAbandonOrFence(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(893)
+		allocationID  = "55555555-5555-4555-8555-555555555555"
+		podName       = "battle-legacy-missing"
+		gameServerUID = "gs-uid-legacy-missing"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered:        make(chan map[string]string, 1),
+		resolvePodUIDErr: errors.New("exact K8s GameServer/Pod missing or recreated"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	uc.cfg.EmptyBattleTimeout = config.Duration(time.Millisecond)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	lifecycle := &mockLifecycle{}
+	uc.SetLifecyclePusher(lifecycle)
+	id := seedActiveModelBLegacyPodUID(
+		t, repo, authRepo, rdb, matchID, allocationID, podName, gameServerUID, 0)
+	if _, err := uc.HeartbeatAuthorized(ctx, matchID, id, 0, stateRunning, time.Now().UnixMilli()); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("missing legacy Pod preflight err=%v code=%v", err, errcode.As(err))
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE ||
+		snapshot.Battle.GetState() != stateRunning || snapshot.Battle.GetPodUid() != "" {
+		t.Fatalf("failed preflight changed authority: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.releases.Load() != 0 || lifecycle.calls != 0 {
+		t.Fatalf("failed preflight side effects: release=%d lifecycle=%d",
+			allocator.releases.Load(), lifecycle.calls)
+	}
+}
+
+func TestLegacyPodUIDStaleSweepPreflightFailureDoesNotTerminate(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(896)
+		allocationID  = "aaaaaaaa-1111-4111-8111-111111111111"
+		podName       = "battle-legacy-stale-missing"
+		gameServerUID = "gs-uid-legacy-stale-missing"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered:        make(chan map[string]string, 1),
+		resolvePodUIDErr: errors.New("legacy stale GameServer was replaced"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	// A future threshold makes the freshly seeded authority stale without
+	// mutating its auth/battle projection consistency.
+	uc.cfg.HeartbeatTimeout = config.Duration(-time.Second)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	seedActiveModelBLegacyPodUID(
+		t, repo, authRepo, rdb, matchID, allocationID, podName, gameServerUID, 1)
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE ||
+		snapshot.Battle.GetState() != stateRunning || snapshot.Battle.GetPodUid() != "" {
+		t.Fatalf("stale preflight failure changed authority: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("stale preflight failure released=%d", allocator.releases.Load())
+	}
+}
+
+func TestLegacyPodUIDBackfillsBeforeAllocationAbortFence(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(894)
+		allocationID  = "66666666-6666-4666-8666-666666666666"
+		podName       = "battle-legacy-abort"
+		gameServerUID = "gs-uid-legacy-abort"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered:     make(chan map[string]string, 1),
+		resolvePodUID: "pod-uid-backfilled-abort",
+	}
+	allocator.releaseCheck = func(allocation *data.AuthoritativeGameServerAllocation) error {
+		if allocation.PodUID != "pod-uid-backfilled-abort" {
+			return fmt.Errorf("abort release PodUID=%q", allocation.PodUID)
+		}
+		return nil
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	lifecycle := &mockLifecycle{}
+	uc.SetLifecyclePusher(lifecycle)
+	id := seedActiveModelBLegacyPodUID(
+		t, repo, authRepo, rdb, matchID, allocationID, podName, gameServerUID, 0)
+	request := battleabort.Request{
+		MatchID: matchID, OperationID: "77777777-7777-4777-8777-777777777777",
+		Target: placement.Target{
+			PodName: podName, InstanceUID: gameServerUID, InstanceEpoch: id.InstanceEpoch,
+			AllocationID: allocationID, ReleaseTrack: "stable",
+		},
+	}
+	if err := uc.AbortPreactiveBattle(ctx, request); err != nil {
+		t.Fatalf("legacy allocation abort: %v", err)
+	}
+	if allocator.resolvePodUIDCalls.Load() != 1 || allocator.releases.Load() != 1 || lifecycle.calls != 1 {
+		t.Fatalf("legacy abort effects: resolve=%d release=%d lifecycle=%d",
+			allocator.resolvePodUIDCalls.Load(), allocator.releases.Load(), lifecycle.calls)
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || !snapshot.BattleFound || snapshot.Battle.GetPodUid() != "pod-uid-backfilled-abort" ||
+		snapshot.Battle.GetState() != stateAbandoned {
+		t.Fatalf("legacy abort snapshot=%+v err=%v", snapshot, err)
+	}
+}
+
+func TestLegacyPodUIDAbortPreflightFailureCreatesNoAbortFence(t *testing.T) {
+	ctx := context.Background()
+	const (
+		matchID       = uint64(895)
+		allocationID  = "88888888-8888-4888-8888-888888888888"
+		podName       = "battle-legacy-abort-missing"
+		gameServerUID = "gs-uid-legacy-abort-missing"
+	)
+	allocator := &authoritativeTestAllocator{
+		delivered:        make(chan map[string]string, 1),
+		resolvePodUIDErr: errors.New("same-name replacement is not the expected Pod"),
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	authRepo, rdb := enableModelBForTest(t, uc, mr)
+	id := seedActiveModelBLegacyPodUID(
+		t, repo, authRepo, rdb, matchID, allocationID, podName, gameServerUID, 0)
+	request := battleabort.Request{
+		MatchID: matchID, OperationID: "99999999-9999-4999-8999-999999999999",
+		Target: placement.Target{
+			PodName: podName, InstanceUID: gameServerUID, InstanceEpoch: id.InstanceEpoch,
+			AllocationID: allocationID, ReleaseTrack: "stable",
+		},
+	}
+	if err := uc.AbortPreactiveBattle(ctx, request); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("legacy abort mismatch err=%v code=%v", err, errcode.As(err))
+	}
+	if _, _, found, err := authRepo.ReadAllocationAbort(ctx, matchID); err != nil || found {
+		t.Fatalf("failed preflight created abort journal: found=%v err=%v", found, err)
+	}
+	snapshot, err := authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || snapshot.Auth.GetPhase() != dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_ACTIVE ||
+		snapshot.Battle.GetState() != stateRunning || snapshot.Battle.GetPodUid() != "" {
+		t.Fatalf("failed abort preflight changed authority: snapshot=%+v err=%v", snapshot, err)
+	}
+	if allocator.releases.Load() != 0 {
+		t.Fatalf("failed abort preflight released=%d", allocator.releases.Load())
+	}
+}
+
 func TestBattleModelB_StrictGETMissingUIDKeepsPersistentFence(t *testing.T) {
 	ctx := context.Background()
 	allocator := &authoritativeTestAllocator{
@@ -793,7 +1451,7 @@ func TestBattleModelB_UnknownUIDKeepsClaimAndBlocksSecondPOST(t *testing.T) {
 	allocator := &authoritativeTestAllocator{
 		delivered: make(chan map[string]string, 1),
 		allocateResult: &data.AuthoritativeGameServerAllocation{
-			PodName: "battle-partial", Addr: "10.0.0.8:7777", AllocationID: "alloc-unknown",
+			PodName: "battle-partial", Addr: "10.0.0.8:7777", AllocationID: "8f9a2819-8fe9-4c50-84d5-4f898d22f770",
 		},
 		allocateErr: errors.New("strict GET timeout"),
 	}
@@ -842,7 +1500,7 @@ func TestBattleModelB_POSTUnknownWithoutPodStillUsesAllocationFence(t *testing.T
 	ctx := context.Background()
 	allocator := &authoritativeTestAllocator{
 		delivered:      make(chan map[string]string, 1),
-		allocateResult: &data.AuthoritativeGameServerAllocation{AllocationID: "alloc-unknown"},
+		allocateResult: &data.AuthoritativeGameServerAllocation{AllocationID: "8f9a2819-8fe9-4c50-84d5-4f898d22f770"},
 		allocateErr:    errors.New("POST timeout after possible apply"),
 	}
 	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
@@ -870,6 +1528,332 @@ func TestBattleModelB_POSTUnknownWithoutPodStillUsesAllocationFence(t *testing.T
 	}
 	if allocator.releases.Load() != 0 {
 		t.Fatalf("unknown POST triggered reconciliation side effect: releases=%d", allocator.releases.Load())
+	}
+}
+
+func TestAllocationUncertainPOSTResponseLossEmptyTerminatesDurably(t *testing.T) {
+	ctx := context.Background()
+	allocator := &uncertainResolverTestAllocator{
+		authoritativeTestAllocator: authoritativeTestAllocator{
+			delivered:   make(chan map[string]string, 1),
+			allocateErr: errors.New("GSA POST response lost"),
+		},
+		resolveFound: false,
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	enableModelBForTest(t, uc, mr)
+	life := &mockLifecycle{}
+	uc.SetLifecyclePusher(life)
+
+	if _, err := uc.AllocateBattle(ctx, 1801, []uint64{11, 12}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("POST response loss err=%v code=%v", err, errcode.As(err))
+	}
+	uncertain, found, err := repo.GetBattle(ctx, 1801)
+	if err != nil || !found || uncertain.GetState() != stateAllocationUncertain {
+		t.Fatalf("uncertain claim found=%t record=%+v err=%v", found, uncertain, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1801"); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("uncertain sweep: %v", err)
+	}
+	terminal, found, err := repo.GetBattle(ctx, 1801)
+	if err != nil || !found || terminal.GetState() != stateAllocationEmptyFence ||
+		terminal.GetAllocationId() != uncertain.GetAllocationId() || len(terminal.GetPlayerIds()) != 2 {
+		t.Fatalf("terminal claim found=%t record=%+v err=%v", found, terminal, err)
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{1801}"); ttl != 0 {
+		t.Fatalf("empty reconciliation must retain a permanent cleanup tombstone, got %v", ttl)
+	}
+	if allocator.authoritativeCalls.Load() != 1 || allocator.resolveCalls.Load() != 1 ||
+		allocator.releases.Load() != 1 || life.calls != 1 || len(life.delivered) != 1 {
+		t.Fatalf("POST=%d resolve=%d release=%d lifecycle_calls=%d delivered=%v",
+			allocator.authoritativeCalls.Load(), allocator.resolveCalls.Load(), allocator.releases.Load(),
+			life.calls, life.delivered)
+	}
+	if ids, err := repo.RangeActiveBattles(ctx); err != nil || len(ids) != 1 || ids[0] != 1801 {
+		t.Fatalf("empty terminal lost permanent cleanup index: ids=%v err=%v", ids, err)
+	}
+
+	// The original timed-out POST may become visible only after the empty LIST
+	// and Kafka ACK. Force the next cleanup pass: it must issue another exact
+	// label release without re-publishing lifecycle or losing the tombstone.
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1801"); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("late-appearance cleanup sweep: %v", err)
+	}
+	if allocator.releases.Load() != 2 || life.calls != 1 {
+		t.Fatalf("late cleanup releases=%d lifecycle_calls=%d, want 2/1",
+			allocator.releases.Load(), life.calls)
+	}
+	still, found, err := repo.GetBattle(ctx, 1801)
+	if err != nil || !found || still.GetState() != stateAllocationEmptyFence ||
+		mr.TTL("pandora:ds:battle:{1801}") != 0 {
+		t.Fatalf("late cleanup lost tombstone found=%t record=%+v ttl=%v err=%v",
+			found, still, mr.TTL("pandora:ds:battle:{1801}"), err)
+	}
+}
+
+func TestAllocationUncertainUniqueResultCapturesExactTupleBeforeRelease(t *testing.T) {
+	ctx := context.Background()
+	const allocationID = "99999999-9999-4999-8999-999999999999"
+	allocator := &uncertainResolverTestAllocator{
+		authoritativeTestAllocator: authoritativeTestAllocator{
+			delivered: make(chan map[string]string, 1),
+			releaseCheck: func(got *data.AuthoritativeGameServerAllocation) error {
+				if got.AllocationID != allocationID || got.PodName != "battle-reconcile-1802" ||
+					got.InstanceUID != "gs-uid-1802" || got.PodUID != "pod-uid-1802" {
+					return errors.New("release did not use exact reconciled GameServer+Pod tuple")
+				}
+				return nil
+			},
+		},
+		resolveFound: true,
+		resolveResult: &data.AuthoritativeGameServerAllocation{
+			PodName: "battle-reconcile-1802", InstanceUID: "gs-uid-1802", PodUID: "pod-uid-1802",
+			ResourceVersion: "401", AllocationID: allocationID, ReleaseTrack: "stable",
+		},
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	enableModelBForTest(t, uc, mr)
+	life := &mockLifecycle{}
+	uc.SetLifecyclePusher(life)
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 1802, State: stateAllocating, AllocationId: allocationID,
+		PlayerIds: []uint64{21, 22}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1, LastHeartbeatMs: 1, PlayerCount: 2,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1802"); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("unique reconcile sweep: %v", err)
+	}
+	terminal, found, err := repo.GetBattle(ctx, 1802)
+	if err != nil || !found || terminal.GetState() != stateAbandoned ||
+		terminal.GetGameserverUid() != "gs-uid-1802" || terminal.GetPodUid() != "pod-uid-1802" {
+		t.Fatalf("exact terminal found=%t record=%+v err=%v", found, terminal, err)
+	}
+	if allocator.resolveCalls.Load() != 1 || allocator.releases.Load() != 1 || len(life.delivered) != 1 {
+		t.Fatalf("resolve=%d release=%d lifecycle=%v",
+			allocator.resolveCalls.Load(), allocator.releases.Load(), life.delivered)
+	}
+}
+
+func TestAllocationUncertainReleaseFenceResumesAfterProcessRestart(t *testing.T) {
+	ctx := context.Background()
+	const allocationID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	allocator := &uncertainResolverTestAllocator{
+		authoritativeTestAllocator: authoritativeTestAllocator{delivered: make(chan map[string]string, 1)},
+		resolveErr:                 errors.New("resolver must not be called after durable exact fence"),
+	}
+	_, repo, mr := newUsecaseWithAlloc(t, allocator)
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 1803, State: stateAllocating, AllocationId: allocationID,
+		PlayerIds: []uint64{31}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1, LastHeartbeatMs: 1, PlayerCount: 1,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	resolved := &data.AuthoritativeGameServerAllocation{
+		PodName: "battle-reconcile-1803", InstanceUID: "gs-uid-1803", PodUID: "pod-uid-1803",
+		ResourceVersion: "501", AllocationID: allocationID, ReleaseTrack: "stable",
+	}
+	if fenced, err := repo.FenceAllocationUncertainRelease(ctx, 1803, allocationID, resolved); err != nil || !fenced {
+		t.Fatalf("durable release fence: fenced=%t err=%v", fenced, err)
+	}
+	// A new usecase instance represents restart after the exact fence committed
+	// but before DELETE/terminal publication.
+	restarted := NewAllocatorUsecase(repo, allocator, testCfg())
+	enableModelBForTest(t, restarted, mr)
+	life := &mockLifecycle{}
+	restarted.SetLifecyclePusher(life)
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1803"); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.sweepOnce(ctx); err != nil {
+		t.Fatalf("restart reconcile sweep: %v", err)
+	}
+	if allocator.resolveCalls.Load() != 0 || allocator.releases.Load() != 1 || len(life.delivered) != 1 {
+		t.Fatalf("restart resolve=%d release=%d lifecycle=%v",
+			allocator.resolveCalls.Load(), allocator.releases.Load(), life.delivered)
+	}
+}
+
+func TestAllocationUncertainDeleteFailureKeepsExactFenceForRestart(t *testing.T) {
+	ctx := context.Background()
+	const allocationID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+	allocator := &uncertainResolverTestAllocator{
+		authoritativeTestAllocator: authoritativeTestAllocator{
+			delivered:  make(chan map[string]string, 1),
+			releaseErr: errors.New("DELETE response unknown"),
+		},
+		resolveFound: true,
+		resolveResult: &data.AuthoritativeGameServerAllocation{
+			PodName: "battle-reconcile-1804", InstanceUID: "gs-uid-1804", PodUID: "pod-uid-1804",
+			ResourceVersion: "601", AllocationID: allocationID, ReleaseTrack: "stable",
+		},
+	}
+	first, repo, mr := newUsecaseWithAlloc(t, allocator)
+	enableModelBForTest(t, first, mr)
+	first.SetLifecyclePusher(&mockLifecycle{})
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 1804, State: stateAllocating, AllocationId: allocationID,
+		PlayerIds: []uint64{51}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1, LastHeartbeatMs: 1, PlayerCount: 1,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1804"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.sweepOnce(ctx); err != nil {
+		t.Fatalf("first sweep: %v", err)
+	}
+	pending, found, err := repo.GetBattle(ctx, 1804)
+	if err != nil || !found || pending.GetState() != stateAllocationReconciling ||
+		pending.GetGameserverUid() != "gs-uid-1804" || mr.TTL("pandora:ds:battle:{1804}") != 0 {
+		t.Fatalf("DELETE failure lost exact fence found=%t record=%+v ttl=%v err=%v",
+			found, pending, mr.TTL("pandora:ds:battle:{1804}"), err)
+	}
+
+	allocator.releaseErr = nil
+	restarted := NewAllocatorUsecase(repo, allocator, testCfg())
+	enableModelBForTest(t, restarted, mr)
+	life := &mockLifecycle{}
+	restarted.SetLifecyclePusher(life)
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1804"); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.sweepOnce(ctx); err != nil {
+		t.Fatalf("restart sweep: %v", err)
+	}
+	terminal, found, err := repo.GetBattle(ctx, 1804)
+	if err != nil || !found || terminal.GetState() != stateAbandoned || len(life.delivered) != 1 {
+		t.Fatalf("restart terminal found=%t record=%+v lifecycle=%v err=%v",
+			found, terminal, life.delivered, err)
+	}
+}
+
+func TestAllocationUncertainKafkaResponseLossRetriesImmutableTerminal(t *testing.T) {
+	ctx := context.Background()
+	const allocationID = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	allocator := &uncertainResolverTestAllocator{
+		authoritativeTestAllocator: authoritativeTestAllocator{delivered: make(chan map[string]string, 1)},
+		resolveFound:               true,
+		resolveResult: &data.AuthoritativeGameServerAllocation{
+			PodName: "battle-reconcile-1805", InstanceUID: "gs-uid-1805", PodUID: "pod-uid-1805",
+			ResourceVersion: "701", AllocationID: allocationID, ReleaseTrack: "stable",
+		},
+	}
+	uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+	enableModelBForTest(t, uc, mr)
+	life := &commitThenErrorLifecycle{failNext: true}
+	uc.SetLifecyclePusher(life)
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: 1805, State: stateAllocating, AllocationId: allocationID,
+		PlayerIds: []uint64{61}, MapId: 1, GameMode: "ranked",
+		AllocatedAtMs: 1, LastHeartbeatMs: 1, PlayerCount: 1,
+	}
+	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+	}
+	if fenced, err := repo.FenceBattleAllocation(ctx, claim.GetMatchId(), allocationID); err != nil || !fenced {
+		t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1805"); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("first sweep: %v", err)
+	}
+	terminal, found, err := repo.GetBattle(ctx, 1805)
+	if err != nil || !found || terminal.GetState() != stateAbandoned ||
+		mr.TTL("pandora:ds:battle:{1805}") != 0 || life.calls != 1 {
+		t.Fatalf("Kafka response loss lost terminal found=%t record=%+v ttl=%v calls=%d err=%v",
+			found, terminal, mr.TTL("pandora:ds:battle:{1805}"), life.calls, err)
+	}
+	if _, err := mr.ZAdd("pandora:ds:active", 0, "1805"); err != nil {
+		t.Fatal(err)
+	}
+	if err := uc.sweepOnce(ctx); err != nil {
+		t.Fatalf("Kafka retry sweep: %v", err)
+	}
+	if life.calls != 2 || len(life.delivered) != 2 || allocator.releases.Load() != 2 {
+		t.Fatalf("Kafka retry calls=%d delivered=%v exact_releases=%d",
+			life.calls, life.delivered, allocator.releases.Load())
+	}
+	if ttl := mr.TTL("pandora:ds:battle:{1805}"); ttl <= 0 {
+		t.Fatalf("ACKed exact terminal missing retention TTL: %v", ttl)
+	}
+}
+
+func TestAllocationUncertainAmbiguousOrAPIUnknownRemainsPermanent(t *testing.T) {
+	for index, tc := range []struct {
+		name string
+		err  error
+	}{
+		{name: "multiple", err: errors.New("allocation_id resolved multiple GameServers")},
+		{name: "api_unknown", err: context.DeadlineExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			matchID := uint64(1810 + index)
+			allocationID := []string{
+				"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+				"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+			}[index]
+			allocator := &uncertainResolverTestAllocator{
+				authoritativeTestAllocator: authoritativeTestAllocator{delivered: make(chan map[string]string, 1)},
+				resolveErr:                 tc.err,
+			}
+			uc, repo, mr := newUsecaseWithAlloc(t, allocator)
+			enableModelBForTest(t, uc, mr)
+			life := &mockLifecycle{}
+			uc.SetLifecyclePusher(life)
+			claim := &dsv1.BattleStorageRecord{
+				MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
+				PlayerIds: []uint64{41}, MapId: 1, GameMode: "ranked",
+				AllocatedAtMs: 1, LastHeartbeatMs: 1, PlayerCount: 1,
+			}
+			if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
+				t.Fatalf("claim: claimed=%t err=%v", claimed, err)
+			}
+			if fenced, err := repo.FenceBattleAllocation(ctx, matchID, allocationID); err != nil || !fenced {
+				t.Fatalf("pre-POST fence: fenced=%t err=%v", fenced, err)
+			}
+			if _, err := mr.ZAdd("pandora:ds:active", 0, fmt.Sprintf("%d", matchID)); err != nil {
+				t.Fatal(err)
+			}
+			before, _ := mr.Get(fmt.Sprintf("pandora:ds:battle:{%d}", matchID))
+			if err := uc.sweepOnce(ctx); err != nil {
+				t.Fatalf("unknown reconcile sweep: %v", err)
+			}
+			after, _ := mr.Get(fmt.Sprintf("pandora:ds:battle:{%d}", matchID))
+			if after != before || mr.TTL(fmt.Sprintf("pandora:ds:battle:{%d}", matchID)) != 0 ||
+				allocator.releases.Load() != 0 || life.calls != 0 {
+				t.Fatalf("unknown result mutated fence: before_equal=%t ttl=%v releases=%d lifecycle=%d",
+					after == before, mr.TTL(fmt.Sprintf("pandora:ds:battle:{%d}", matchID)),
+					allocator.releases.Load(), life.calls)
+			}
+		})
 	}
 }
 
@@ -1017,13 +2001,13 @@ func TestAllocationUncertainLegacyWriterPathsAlsoFailClosed(t *testing.T) {
 	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
 	uc, repo, mr := newUsecaseWithAlloc(t, allocator) // 故意不 EnableRedisAuthority，模拟 legacy 配置副本
 	claim := &dsv1.BattleStorageRecord{
-		MatchId: 808, State: stateAllocating, AllocationId: "alloc-808",
+		MatchId: 808, State: stateAllocating, AllocationId: "846da32b-76b3-49ca-8ddb-ded159354c97",
 		AllocatedAtMs: 1, LastHeartbeatMs: 1,
 	}
 	if claimed, _, err := repo.ClaimBattle(ctx, claim, time.Hour); err != nil || !claimed {
 		t.Fatalf("claim: claimed=%v err=%v", claimed, err)
 	}
-	if fenced, err := repo.FenceBattleAllocation(ctx, 808, "alloc-808"); err != nil || !fenced {
+	if fenced, err := repo.FenceBattleAllocation(ctx, 808, "846da32b-76b3-49ca-8ddb-ded159354c97"); err != nil || !fenced {
 		t.Fatalf("fence: fenced=%v err=%v", fenced, err)
 	}
 	if _, err := mr.ZAdd("pandora:ds:active", 0, "808"); err != nil {
@@ -1066,15 +2050,17 @@ func TestAllocationUncertainLegacyWriterPathsAlsoFailClosed(t *testing.T) {
 func TestPreactiveReleaseLegacyWriterPathsAlsoFailClosed(t *testing.T) {
 	ctx := context.Background()
 	allocator := &authoritativeTestAllocator{delivered: make(chan map[string]string, 1)}
-	uc, repo, mr := newUsecaseWithAlloc(t, allocator) // 故意 legacy 配置
+	uc, _, mr := newUsecaseWithAlloc(t, allocator) // 故意 legacy 配置
 	record := &dsv1.BattleStorageRecord{
-		MatchId: 809, State: statePreactiveReleasing, AllocationId: "alloc-809",
+		MatchId: 809, State: statePreactiveReleasing, AllocationId: "b7488c4e-2b9d-41ab-8e1b-30e798add84c",
 		DsPodName: "battle-809", GameserverUid: "uid-809",
 		AllocatedAtMs: 1, LastHeartbeatMs: 1,
 	}
-	if err := repo.CreateBattle(ctx, record, 0); err != nil {
+	payload, err := proto.Marshal(record)
+	if err != nil {
 		t.Fatal(err)
 	}
+	mr.Set("pandora:ds:battle:{809}", string(payload))
 	rawBefore, _ := mr.Get("pandora:ds:battle:{809}")
 	if _, err := uc.AllocateBattle(ctx, 809, []uint64{1}, 1, "ranked"); err == nil || errcode.As(err) != errcode.ErrUnavailable {
 		t.Fatalf("legacy Allocate release fence err=%v code=%v", err, errcode.As(err))
@@ -1118,7 +2104,7 @@ func TestBattleModelB_SweepReconcilesCrashedAllocatingClaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	claim := &dsv1.BattleStorageRecord{
-		MatchId: 805, State: stateAllocating, AllocationId: "alloc-crashed",
+		MatchId: 805, State: stateAllocating, AllocationId: "a81fe5f1-7176-43dc-8bef-241a616bca56",
 		AllocatedAtMs:   time.Now().Add(-time.Minute).UnixMilli(),
 		LastHeartbeatMs: time.Now().Add(-time.Minute).UnixMilli(),
 	}
@@ -1154,7 +2140,7 @@ func TestBattleModelBSweepReliableCompensationKeepsOutbox(t *testing.T) {
 		t.Fatalf("EnableRedisAuthority: %v", err)
 	}
 	const matchID uint64 = 801
-	const allocationID = "alloc-801"
+	const allocationID = "2116971b-c0c8-4fcf-8302-e82820213c22"
 	const pod = "battle-auth-801"
 	claim := &dsv1.BattleStorageRecord{
 		MatchId: matchID, State: stateAllocating, AllocationId: allocationID,
@@ -1167,6 +2153,7 @@ func TestBattleModelBSweepReliableCompensationKeepsOutbox(t *testing.T) {
 	battle := proto.Clone(claim).(*dsv1.BattleStorageRecord)
 	battle.State, battle.DsPodName, battle.DsAddr, battle.GameserverUid =
 		stateWarming, pod, "10.0.0.9:7777", "uid-801"
+	battle.PodUid, battle.ReleaseTrack = "pod-uid-for-uid-801", "stable"
 	battle.PlayerIds, battle.MapId, battle.GameMode = []uint64{1, 2}, 1, "ranked"
 	if ok, err := battleRepo.FinalizeBattleAllocation(ctx, battle, time.Hour); err != nil || !ok {
 		t.Fatalf("finalize: ok=%v err=%v", ok, err)

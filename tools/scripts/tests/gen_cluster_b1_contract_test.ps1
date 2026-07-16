@@ -12,7 +12,8 @@ $OutDirDrift = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-drif
 $OutDirOverlap = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-overlap-' + [guid]::NewGuid().ToString('N'))
 $OutDirPlacement = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-placement-' + [guid]::NewGuid().ToString('N'))
 $OutDirMatchAuth = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-matchauth-' + [guid]::NewGuid().ToString('N'))
-$OutDirs = @($OutDir, $OutDirRerun, $OutDirRotation, $OutDirDrift, $OutDirOverlap, $OutDirPlacement, $OutDirMatchAuth)
+$OutDirAbortAuth = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-gen-b1-abortauth-' + [guid]::NewGuid().ToString('N'))
+$OutDirs = @($OutDir, $OutDirRerun, $OutDirRotation, $OutDirDrift, $OutDirOverlap, $OutDirPlacement, $OutDirMatchAuth, $OutDirAbortAuth)
 
 . $HmacContractLib
 
@@ -37,7 +38,9 @@ function Invoke-B1Generator {
         [string]$PlacementMatchStart = '',
         [string]$PlacementBattleExit = '',
         [string]$PlacementHubTransfer = '',
+        [string]$PlacementBattleDeparture = '',
         [string]$MatchResumeAuth = '',
+        [string]$AllocationAbortAuth = '',
         [switch]$ExpectFailure
     )
     & pwsh -NoProfile -File $Generator -OutDir $TargetDir -AllocatorMode agones `
@@ -48,7 +51,9 @@ function Invoke-B1Generator {
         -PlacementMatchStartSecret $PlacementMatchStart `
         -PlacementBattleExitSecret $PlacementBattleExit `
         -PlacementHubTransferSecret $PlacementHubTransfer `
+        -PlacementBattleDepartureSecret $PlacementBattleDeparture `
         -MatchResumeAuthSecret $MatchResumeAuth `
+        -AllocationAbortAuthSecret $AllocationAbortAuth `
         -DsAuthMode enforce -DsAuthorityMode redis -DsFenceEtcdEndpoints 'etcd.pandora.svc:2379' `
         -DsFenceKeysetRevision 'pandora-ds-auth-v2-local-r1' `
         -DsTicketActiveKid ('A' * 43) -DsTicketKeysetRevision 7 `
@@ -69,7 +74,34 @@ function Get-B1HmacConfigs([string]$TargetDir) {
     return $configs
 }
 
+function Assert-B1ProdAllocationAbortRejected {
+    param([string]$AllocationAbortAuth = '', [string]$Reason)
+    $generatorArgs = @(
+        '-OutDir', $OutDirOverlap, '-AllocatorMode', 'agones', '-Prod',
+        '-Secret', 'prod-player-key-0123456789abcdef-001',
+        '-DsSecret', 'prod-ds-callback-key-0123456789abcdef-002',
+        '-PlacementAccountBootstrapSecret', 'prod-placement-bootstrap-0123456789abcdef-003',
+        '-PlacementMatchStartSecret', 'prod-placement-match-start-0123456789abcdef-004',
+        '-PlacementBattleExitSecret', 'prod-placement-battle-exit-0123456789abcdef-005',
+        '-PlacementHubTransferSecret', 'prod-placement-hub-transfer-0123456789abcdef-006',
+        '-PlacementBattleDepartureSecret', 'prod-placement-battle-departure-0123456789abcdef-007',
+        '-MatchResumeAuthSecret', 'prod-match-resume-auth-0123456789abcdef-008',
+        '-DsAuthMode', 'enforce', '-DsAuthorityMode', 'redis',
+        '-DsFenceEtcdEndpoints', 'etcd.pandora.svc:2379',
+        '-DsFenceKeysetRevision', 'pandora-ds-auth-v2-prod-r1',
+        '-DsTicketActiveKid', ('P' * 43), '-DsTicketKeysetRevision', '9')
+    if (-not [string]::IsNullOrEmpty($AllocationAbortAuth)) {
+        $generatorArgs += @('-AllocationAbortAuthSecret', $AllocationAbortAuth)
+    }
+    & pwsh -NoProfile -File $Generator @generatorArgs *> $null
+    Assert-True ($LASTEXITCODE -ne 0) $Reason
+}
+
 try {
+    Assert-B1ProdAllocationAbortRejected -Reason 'Prod 必须拒绝缺失 allocation abort key'
+    Assert-B1ProdAllocationAbortRejected `
+        -AllocationAbortAuth 'pandora-dev-allocation-abort-auth-key-v1!' `
+        -Reason 'Prod 必须拒绝公开 allocation abort dev key'
     Invoke-B1Generator -TargetDir $OutDir
     Invoke-B1Generator -TargetDir $OutDirRerun
 
@@ -86,6 +118,8 @@ try {
     Assert-PandoraOnlinePlacementContinuity -LiveConfigs $devConfigs -CandidateConfigs $rerunConfigs | Out-Null
     $devMatchAuth = Get-PandoraOnlineMatchResumeAuthContract -Configs $devConfigs
     Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $devConfigs -CandidateConfigs $rerunConfigs | Out-Null
+    $devAbortAuth = Get-PandoraOnlineAllocationAbortAuthContract -Configs $devConfigs
+    Assert-PandoraOnlineAllocationAbortAuthContinuity -LiveConfigs $devConfigs -CandidateConfigs $rerunConfigs | Out-Null
 
     # 非生产轮换验证也必须覆盖 primary/additional 的完整跨域不相交集合。
     $testPlayerPrimary = 'test-player-primary-hmac-0123456789abcdef'
@@ -141,33 +175,43 @@ try {
         Assert-True ($yaml.Contains('keyset_revision: "pandora-ds-auth-v2-local-r1"')) "$service callback keyset revision 漂移"
     }
 
-    # Agones 真实 DS 链默认开启严格 placement，且 writer 只拿自身 key、locator 拿四把。
+    # Agones 真实 DS 链默认开启严格 placement，且 writer 只拿自身 key、locator 拿全部验证 key。
     $loginPlacement = Get-Content -LiteralPath (Join-Path $OutDir 'login.yaml') -Raw
     $hubPlacement = Get-Content -LiteralPath (Join-Path $OutDir 'hub-allocator.yaml') -Raw
     Assert-True ($loginPlacement.Contains('placement_mode: "enforce"')) 'Login placement_mode 未严格开启'
     Assert-True ($hubPlacement.Contains('placement_mode: "enforce"')) 'Hub placement_mode 未严格开启'
+    Assert-True ([regex]::IsMatch($loginPlacement, '(?ms)^\s{2}battle_allocator:\s*$.*?^\s{4}addr:\s*"ds-allocator:50020"\s*$')) `
+        'Login placement enforce 缺 ds_allocator exact departure RPC 地址'
     $placementKeys = [ordered]@{
         Bootstrap = 'placement-bootstrap-test-key-0123456789abcdef'
         MatchStart = 'placement-match-start-test-key-0123456789abcdef'
         BattleExit = 'placement-battle-exit-test-key-0123456789abcdef'
         HubTransfer = 'placement-hub-transfer-test-key-0123456789abcdef'
+        BattleDeparture = 'placement-battle-departure-test-key-0123456789abcdef'
     }
     Invoke-B1Generator -TargetDir $OutDirPlacement `
         -PlacementBootstrap $placementKeys.Bootstrap -PlacementMatchStart $placementKeys.MatchStart `
-        -PlacementBattleExit $placementKeys.BattleExit -PlacementHubTransfer $placementKeys.HubTransfer
+        -PlacementBattleExit $placementKeys.BattleExit -PlacementHubTransfer $placementKeys.HubTransfer `
+        -PlacementBattleDeparture $placementKeys.BattleDeparture
     $placementExpected = @{
         'login.yaml' = @($placementKeys.Bootstrap)
         'matchmaker.yaml' = @($placementKeys.MatchStart)
         'matchmaker-pve.yaml' = @($placementKeys.MatchStart)
         'battle-result.yaml' = @($placementKeys.BattleExit)
         'hub-allocator.yaml' = @($placementKeys.HubTransfer)
+        'ds-allocator.yaml' = @($placementKeys.BattleDeparture)
         'player-locator.yaml' = @($placementKeys.Bootstrap, $placementKeys.MatchStart,
-            $placementKeys.BattleExit, $placementKeys.HubTransfer)
+            $placementKeys.BattleExit, $placementKeys.HubTransfer, $placementKeys.BattleDeparture)
     }
     foreach ($entry in $placementExpected.GetEnumerator()) {
         $yaml = Get-Content -LiteralPath (Join-Path $OutDirPlacement $entry.Key) -Raw
         foreach ($key in $entry.Value) { Assert-True ($yaml.Contains($key)) "$($entry.Key) 缺 placement 分权 key" }
     }
+    # HubDeparture 与 HubTransfer 是独立签名 domain，但共享唯一 Hub authority key。
+    # Hub 绝不能拿到 BattleDeparture key；Battle→Hub 只能消费 locator 的确认。
+    $hubPlacementYaml = Get-Content -LiteralPath (Join-Path $OutDirPlacement 'hub-allocator.yaml') -Raw
+    Assert-True ($hubPlacementYaml.Contains($placementKeys.HubTransfer)) 'Hub 缺 HubTransfer/HubDeparture authority key'
+    Assert-True (-not $hubPlacementYaml.Contains($placementKeys.BattleDeparture)) 'Hub 不得持有 BattleDeparture authority key'
     $explicitPlacementConfigs = Get-B1HmacConfigs $OutDirPlacement
     $explicitPlacement = Get-PandoraOnlinePlacementContract -Configs $explicitPlacementConfigs
     Assert-True ($explicitPlacement.AccountBootstrap -cne $devPlacement.AccountBootstrap) `
@@ -210,6 +254,35 @@ try {
     Invoke-B1Generator -TargetDir $OutDirOverlap -PlacementBootstrap $placementKeys.Bootstrap `
         -MatchResumeAuth $placementKeys.Bootstrap -ExpectFailure
 
+    # Allocation abort owns destructive exact-GameServer authority. It is
+    # injected into exactly both Matchmakers and DS allocator, has its own
+    # ordinary-release continuity gate, and cannot reuse any adjacent domain.
+    $explicitAbortAuth = 'allocation-abort-test-key-0123456789abcdef'
+    Invoke-B1Generator -TargetDir $OutDirAbortAuth -AllocationAbortAuth $explicitAbortAuth
+    $abortConfigs = Get-B1HmacConfigs $OutDirAbortAuth
+    $abortContract = Get-PandoraOnlineAllocationAbortAuthContract -Configs $abortConfigs
+    Assert-True ($abortContract -cne $devAbortAuth) '显式 allocation abort key 未生效'
+    foreach ($service in @('matchmaker', 'matchmaker-pve', 'ds-allocator')) {
+        $yaml = Get-Content -LiteralPath (Join-Path $OutDirAbortAuth "$service.yaml") -Raw
+        Assert-True ($yaml.Contains($explicitAbortAuth)) "$service 缺 allocation abort key"
+    }
+    foreach ($service in @('login', 'hub-allocator', 'battle-result', 'player-locator')) {
+        $yaml = Get-Content -LiteralPath (Join-Path $OutDirAbortAuth "$service.yaml") -Raw
+        Assert-True (-not $yaml.Contains($explicitAbortAuth)) "$service 不得持有 allocation abort key"
+    }
+    Assert-Throws {
+        Assert-PandoraOnlineAllocationAbortAuthContinuity -LiveConfigs $devConfigs `
+            -CandidateConfigs $abortConfigs | Out-Null
+    } '普通发布必须拒绝 allocation abort key 漂移'
+    Invoke-B1Generator -TargetDir $OutDirOverlap -PlayerSecret $testPlayerPrimary `
+        -AllocationAbortAuth $testPlayerPrimary -ExpectFailure
+    Invoke-B1Generator -TargetDir $OutDirOverlap -DsSecret $testDsPrimary `
+        -AllocationAbortAuth $testDsPrimary -ExpectFailure
+    Invoke-B1Generator -TargetDir $OutDirOverlap -PlacementBootstrap $placementKeys.Bootstrap `
+        -AllocationAbortAuth $placementKeys.Bootstrap -ExpectFailure
+    Invoke-B1Generator -TargetDir $OutDirOverlap -MatchResumeAuth $explicitMatchAuth `
+        -AllocationAbortAuth $explicitMatchAuth -ExpectFailure
+
     $battle = Get-Content -LiteralPath (Join-Path $OutDir 'ds-allocator.yaml') -Raw
     foreach ($needle in @(
         'fleet_name: "pandora-battle-stable"', 'canary_fleet_name: "pandora-battle-canary"',
@@ -228,7 +301,7 @@ try {
         $resolved = [System.IO.Path]::GetFullPath($dir)
         $temp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
         if (-not $resolved.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -or
-            (Split-Path -Leaf $resolved) -notmatch '^pandora-gen-b1(?:-(?:rerun|rotation|drift|overlap|placement|matchauth))?-[0-9a-f]{32}$') {
+            (Split-Path -Leaf $resolved) -notmatch '^pandora-gen-b1(?:-(?:rerun|rotation|drift|overlap|placement|matchauth|abortauth))?-[0-9a-f]{32}$') {
             throw "拒绝清理未验证测试目录:$resolved"
         }
         Remove-Item -LiteralPath $resolved -Recurse -Force

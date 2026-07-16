@@ -12,12 +12,14 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
 
@@ -33,11 +35,32 @@ const fencedFinalizeReadbackTimeout = 3 * time.Second
 // 不能靠 TTL、sweep 或幂等重试把它当成“未分配”后再次 POST。
 const BattleStateAllocationUncertain = "allocation_uncertain"
 
+// BattleStateAllocationReconcileReleasePending means an allocation_id lookup
+// resolved one exact GameServer+Pod identity and that identity was durably
+// captured before the first DELETE.  It has no TTL.  A restart resumes only
+// this exact release and can never issue another GSA POST for the match.
+const BattleStateAllocationReconcileReleasePending = "allocation_reconcile_release_pending"
+
+// BattleStateAllocationReconcileEmptyTombstone is the permanent allocation_id
+// cleanup authority retained after terminal lifecycle publication when the
+// first reconciliation observed no GameServer.  A timed-out GSA POST can still
+// apply after an empty LIST, so this state stays in the active recovery index
+// and repeatedly DeleteCollection+LISTs the immutable label.  It has no TTL and
+// must only be retired by a future explicit quiescence/operator proof.
+const BattleStateAllocationReconcileEmptyTombstone = "allocation_reconcile_empty_tombstone"
+
 // BattleStatePreactiveReleasePending 表示已确认 GameServer UID 的未激活分配正在回收。
 // 该状态与 auth TERMINATING（若 auth 已建立）共同构成外部 ReleaseExpected 之前的
 // 永久墓碑：只有 UID 条件删除被明确确认成功后，才允许按 expected tuple 物理 purge。
 // 它不能带 TTL，否则 release 响应未知后墓碑过期会重新开放同 match 的第二次 GSA POST。
 const BattleStatePreactiveReleasePending = "preactive_release_pending"
+
+// BattleStateAllocationAbortPending is the permanent fence written by the
+// signed Matchmaker allocation-saga abort path.  The exact allocation and
+// operation are recorded in a same-slot journal before Kubernetes is touched;
+// this state is never routable and never expires until UID release and the
+// ABANDONED lifecycle handoff have both been acknowledged.
+const BattleStateAllocationAbortPending = "allocation_abort_pending"
 
 func battleKey(matchID uint64) string { return fmt.Sprintf("pandora:ds:battle:{%d}", matchID) }
 
@@ -96,24 +119,87 @@ type BattleRepo interface {
 	// UID teardown proof 时只能返回 pending，禁止用 TTL/键缺失推导离场。
 	EnsurePlayerDeparture(ctx context.Context, expected BattlePlayerDepartureExpected) (BattlePlayerDepartureResult, error)
 	// ReconcilePlayerDepartures 只供已验证 Battle DS credential 的心跳调用。
-	// snapshotPresent=false 时绝不提交 departed（滚动更新 fail-closed）。
+	// 只有 capability>=v1 的完整 admission-owner census，且 order ACK
+	// 之后的另一份新 census 缺席，才提交 departed。
 	ReconcilePlayerDepartures(ctx context.Context, matchID uint64, source BattleDepartureSource,
-		snapshotPresent bool, activePlayerIDs []uint64, acknowledgedDepartureIDs []string) ([]*dsv1.BattleEvictionOrder, error)
-	// RecordInstanceTeardown 只能在外部 UID 条件 Release 明确成功后调用。
+		snapshotPresent bool, censusCapabilityVersion uint32, censusID string,
+		activePlayerIDs []uint64, acknowledgedDepartureIDs []string) ([]*dsv1.BattleEvictionOrder, error)
+	// RecordInstanceTeardown 只能在外部 GameServer UID 与关联 Pod UID
+	// 都明确 NotFound/changed 后调用。
 	// 它与 journal 同 slot 原子提交，使源 DS 整体销毁成为离场证明。
 	RecordInstanceTeardown(ctx context.Context, matchID uint64, source BattleDepartureSource) error
+}
+
+// StrictModelBBattleStorage is the irreversible epoch-2 write gate. Startup
+// enables it only after the all-master preflight is green and before any
+// Model-B RPC/worker can run. Legacy local/Model-A mode keeps its historical
+// record shape; it cannot claim Redis callback authority.
+type StrictModelBBattleStorage interface {
+	EnableStrictModelBWrites()
+	StrictModelBWritesEnabled() bool
+}
+
+// AllocationUncertainRepo is the additive recovery surface for a Model-B GSA
+// POST with an unknown result.  It is separate from BattleRepo so an older
+// rolling writer/test double cannot accidentally acquire reconciliation write
+// authority; callers must explicitly detect the capability and otherwise keep
+// the permanent allocation_uncertain fence untouched.
+type AllocationUncertainRepo interface {
+	// FenceAllocationUncertainRelease captures the one exact allocation_id
+	// GameServer+Pod tuple and advances allocation_uncertain to a permanent
+	// release-pending state before Kubernetes DELETE.
+	FenceAllocationUncertainRelease(context.Context, uint64, string,
+		*AuthoritativeGameServerAllocation) (bool, error)
+	// CompleteAllocationUncertainRelease advances either an authoritative-empty
+	// allocation_uncertain record (instanceUID="") or an exact release-pending
+	// record to durable ABANDONED.  The caller may invoke it only after
+	// ReleaseExpected has confirmed no matching GameServer remains.
+	CompleteAllocationUncertainRelease(context.Context, uint64, string, string) (bool, error)
+	// MarkAllocationUncertainEmptyLifecyclePublished records Kafka ACK without
+	// discarding the allocation_id cleanup authority. It is used only by the
+	// authoritative-empty path; exact UID cleanup can use normal terminal TTL.
+	MarkAllocationUncertainEmptyLifecyclePublished(context.Context, uint64, string) (bool, error)
+}
+
+// BattleActiveIndexReconciler rebuilds the derived active ZSET from canonical
+// battle records. It is additive so older test doubles/writers cannot acquire
+// recovery authority accidentally; production Redis implements it and the
+// usecase fails closed when the capability is absent.
+type BattleActiveIndexReconciler interface {
+	ReconcileBattleActiveIndex(context.Context, int64) error
 }
 
 // ── Redis 实现 ────────────────────────────────────────────────────────────────
 
 // RedisBattleRepo 是基于 go-redis/v9 的 BattleRepo 实现。
 type RedisBattleRepo struct {
-	rdb redis.UniversalClient
+	rdb                redis.UniversalClient
+	strictModelBWrites atomic.Bool
 }
 
 // NewRedisBattleRepo 构造 RedisBattleRepo。
 func NewRedisBattleRepo(rdb redis.UniversalClient) *RedisBattleRepo {
 	return &RedisBattleRepo{rdb: rdb}
+}
+
+func (r *RedisBattleRepo) EnableStrictModelBWrites() { r.strictModelBWrites.Store(true) }
+
+func (r *RedisBattleRepo) StrictModelBWritesEnabled() bool {
+	return r != nil && r.strictModelBWrites.Load()
+}
+
+func (r *RedisBattleRepo) marshalBattleCreate(record *dsv1.BattleStorageRecord) ([]byte, error) {
+	if r.StrictModelBWritesEnabled() {
+		return marshalBattle(record)
+	}
+	return proto.Marshal(record)
+}
+
+func (r *RedisBattleRepo) marshalBattleTransition(previous, next *dsv1.BattleStorageRecord) ([]byte, error) {
+	if r.StrictModelBWritesEnabled() {
+		return marshalBattleTransition(previous, next)
+	}
+	return proto.Marshal(next)
 }
 
 // ClaimBattle 是 AllocateBattle 的线性化点。先持久化 allocation_id claim，再访问 Agones，
@@ -128,7 +214,7 @@ func (r *RedisBattleRepo) ClaimBattle(
 	if claim == nil || claim.MatchId == 0 || claim.AllocationId == "" || claim.State != "allocating" {
 		return false, nil, errcode.New(errcode.ErrInvalidArg, "invalid battle allocation claim")
 	}
-	payload, err := marshalBattle(claim)
+	payload, err := r.marshalBattleCreate(claim)
 	if err != nil {
 		return false, nil, err
 	}
@@ -194,8 +280,9 @@ func (r *RedisBattleRepo) FenceBattleAllocation(
 			if current.AllocationId != allocationID || current.State != "allocating" {
 				return nil
 			}
+			previous := proto.Clone(current).(*dsv1.BattleStorageRecord)
 			current.State = BattleStateAllocationUncertain
-			payload, merr := marshalBattle(current)
+			payload, merr := r.marshalBattleTransition(previous, current)
 			if merr != nil {
 				return merr
 			}
@@ -221,6 +308,271 @@ func (r *RedisBattleRepo) FenceBattleAllocation(
 	}
 	return false, errcode.New(errcode.ErrDSAllocationFailed,
 		"battle %d pre-allocation fence concurrent retry exhausted", matchID)
+}
+
+func completeResolvedUncertainAllocation(a *AuthoritativeGameServerAllocation, allocationID string) bool {
+	return a != nil && allocationID != "" && a.AllocationID == allocationID &&
+		a.PodName != "" && a.InstanceUID != "" && a.PodUID != "" &&
+		a.ResourceVersion != "" && a.InstanceEpoch == 0 && releasetrack.Valid(a.ReleaseTrack)
+}
+
+func uncertainReleaseTupleMatches(
+	battle *dsv1.BattleStorageRecord,
+	allocationID string,
+	a *AuthoritativeGameServerAllocation,
+) bool {
+	return battle != nil && completeResolvedUncertainAllocation(a, allocationID) &&
+		battle.GetAllocationId() == allocationID && battle.GetDsPodName() == a.PodName &&
+		battle.GetGameserverUid() == a.InstanceUID && battle.GetPodUid() == a.PodUID &&
+		battle.GetInstanceEpoch() == 0 && battle.GetReleaseTrack() == a.ReleaseTrack
+}
+
+// FenceAllocationUncertainRelease persists the exact result of the
+// allocation_id lookup before any external delete.  Auth must still be absent:
+// once credential preparation exists this pre-admission reconciler no longer
+// owns the lifecycle.
+func (r *RedisBattleRepo) FenceAllocationUncertainRelease(
+	ctx context.Context,
+	matchID uint64,
+	allocationID string,
+	allocation *AuthoritativeGameServerAllocation,
+) (bool, error) {
+	if matchID == 0 || !completeResolvedUncertainAllocation(allocation, allocationID) {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"complete resolved uncertain allocation identity required")
+	}
+	bKey, aKey := battleKey(matchID), battleAuthKey(matchID)
+	for attempt := 0; attempt <= 3; attempt++ {
+		fenced := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			if exists, err := tx.Exists(ctx, aKey).Result(); err != nil {
+				return err
+			} else if exists != 0 {
+				return errcode.New(errcode.ErrInvalidState,
+					"battle %d uncertain allocation already has credential authority", matchID)
+			}
+			payload, err := tx.Get(ctx, bKey).Bytes()
+			if err == redis.Nil {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			current, err := unmarshalBattle(matchID, payload)
+			if err != nil {
+				return err
+			}
+			if current.GetState() == BattleStateAllocationReconcileReleasePending {
+				if !uncertainReleaseTupleMatches(current, allocationID, allocation) {
+					return errcode.New(errcode.ErrInvalidState,
+						"battle %d uncertain release tuple conflict", matchID)
+				}
+				pttl, err := tx.PTTL(ctx, bKey).Result()
+				if err != nil {
+					return err
+				}
+				if pttl != -1 {
+					return errcode.New(errcode.ErrInvalidState,
+						"battle %d uncertain release fence is not persistent", matchID)
+				}
+				fenced = true
+				return nil
+			}
+			if current.GetState() != BattleStateAllocationUncertain ||
+				current.GetAllocationId() != allocationID || current.GetDsPodName() != "" ||
+				current.GetGameserverUid() != "" || current.GetPodUid() != "" ||
+				current.GetInstanceEpoch() != 0 {
+				return nil
+			}
+			previous := proto.Clone(current).(*dsv1.BattleStorageRecord)
+			current.State = BattleStateAllocationReconcileReleasePending
+			current.DsPodName = allocation.PodName
+			current.GameserverUid = allocation.InstanceUID
+			current.PodUid = allocation.PodUID
+			current.ReleaseTrack = allocation.ReleaseTrack
+			encoded, err := r.marshalBattleTransition(previous, current)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, bKey, encoded, 0)
+				return nil
+			})
+			fenced = err == nil
+			return err
+		}, aKey, bKey)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if err != nil || !fenced {
+			return fenced, err
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrInternal,
+		"battle %d uncertain release fence concurrent retry exhausted", matchID)
+}
+
+// CompleteAllocationUncertainRelease publishes the durable terminal state
+// only after the caller has confirmed the allocation label is absent.  The
+// empty-result path keeps instanceUID empty; the resolved path must match the
+// tuple captured by FenceAllocationUncertainRelease.  Both forms require no
+// auth key and preserve all roster metadata for the lifecycle outbox.
+func (r *RedisBattleRepo) CompleteAllocationUncertainRelease(
+	ctx context.Context,
+	matchID uint64,
+	allocationID string,
+	instanceUID string,
+) (bool, error) {
+	if matchID == 0 || allocationID == "" {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"match_id and allocation_id required for uncertain release completion")
+	}
+	bKey, aKey := battleKey(matchID), battleAuthKey(matchID)
+	for attempt := 0; attempt <= 3; attempt++ {
+		completed := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			if exists, err := tx.Exists(ctx, aKey).Result(); err != nil {
+				return err
+			} else if exists != 0 {
+				return errcode.New(errcode.ErrInvalidState,
+					"battle %d uncertain completion found credential authority", matchID)
+			}
+			payload, err := tx.Get(ctx, bKey).Bytes()
+			if err == redis.Nil {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			current, err := unmarshalBattle(matchID, payload)
+			if err != nil {
+				return err
+			}
+			if current.GetAllocationId() != allocationID || current.GetInstanceEpoch() != 0 {
+				return nil
+			}
+			exactEmpty := instanceUID == "" && current.GetState() == BattleStateAllocationUncertain &&
+				current.GetDsPodName() == "" && current.GetGameserverUid() == "" && current.GetPodUid() == ""
+			exactResolved := instanceUID != "" &&
+				current.GetState() == BattleStateAllocationReconcileReleasePending &&
+				current.GetGameserverUid() == instanceUID && current.GetDsPodName() != "" &&
+				current.GetPodUid() != "" && releasetrack.Valid(current.GetReleaseTrack())
+			already := current.GetState() == "abandoned" &&
+				((instanceUID == "" && current.GetGameserverUid() == "" && current.GetDsPodName() == "" && current.GetPodUid() == "") ||
+					(instanceUID != "" && current.GetGameserverUid() == instanceUID && current.GetDsPodName() != "" && current.GetPodUid() != ""))
+			if already {
+				pttl, err := tx.PTTL(ctx, bKey).Result()
+				if err != nil {
+					return err
+				}
+				if pttl != -1 {
+					return errcode.New(errcode.ErrInvalidState,
+						"battle %d uncertain terminal fence is not persistent", matchID)
+				}
+				completed = true
+				return nil
+			}
+			if !exactEmpty && !exactResolved {
+				return nil
+			}
+			previous := proto.Clone(current).(*dsv1.BattleStorageRecord)
+			current.State = "abandoned"
+			encoded, err := r.marshalBattleTransition(previous, current)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, bKey, encoded, 0)
+				return nil
+			})
+			completed = err == nil
+			return err
+		}, aKey, bKey)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if err != nil || !completed {
+			return completed, err
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrInternal,
+		"battle %d uncertain release completion concurrent retry exhausted", matchID)
+}
+
+func (r *RedisBattleRepo) MarkAllocationUncertainEmptyLifecyclePublished(
+	ctx context.Context,
+	matchID uint64,
+	allocationID string,
+) (bool, error) {
+	if matchID == 0 || allocationID == "" {
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"match_id and allocation_id required for empty allocation tombstone")
+	}
+	bKey, aKey := battleKey(matchID), battleAuthKey(matchID)
+	for attempt := 0; attempt <= 3; attempt++ {
+		marked := false
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			if exists, err := tx.Exists(ctx, aKey).Result(); err != nil {
+				return err
+			} else if exists != 0 {
+				return errcode.New(errcode.ErrInvalidState,
+					"battle %d empty allocation tombstone found credential authority", matchID)
+			}
+			payload, err := tx.Get(ctx, bKey).Bytes()
+			if err == redis.Nil {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			current, err := unmarshalBattle(matchID, payload)
+			if err != nil {
+				return err
+			}
+			if current.GetAllocationId() != allocationID || current.GetInstanceEpoch() != 0 ||
+				current.GetDsPodName() != "" || current.GetGameserverUid() != "" || current.GetPodUid() != "" {
+				return nil
+			}
+			if current.GetState() == BattleStateAllocationReconcileEmptyTombstone {
+				pttl, err := tx.PTTL(ctx, bKey).Result()
+				if err != nil {
+					return err
+				}
+				if pttl != -1 {
+					return errcode.New(errcode.ErrInvalidState,
+						"battle %d empty allocation tombstone is not persistent", matchID)
+				}
+				marked = true
+				return nil
+			}
+			if current.GetState() != "abandoned" {
+				return nil
+			}
+			previous := proto.Clone(current).(*dsv1.BattleStorageRecord)
+			current.State = BattleStateAllocationReconcileEmptyTombstone
+			encoded, err := r.marshalBattleTransition(previous, current)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, bKey, encoded, 0)
+				return nil
+			})
+			marked = err == nil
+			return err
+		}, aKey, bKey)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		if err != nil || !marked {
+			return marked, err
+		}
+		return true, nil
+	}
+	return false, errcode.New(errcode.ErrInternal,
+		"battle %d empty allocation tombstone concurrent retry exhausted", matchID)
 }
 
 // FinalizeBattleAllocation 只允许 allocation_id 对应的 allocating claim 写成 warming。
@@ -254,6 +606,14 @@ func (r *RedisBattleRepo) finalizeBattleAllocation(
 	if battle == nil || battle.MatchId == 0 || battle.AllocationId == "" || battle.State != "warming" || battle.DsPodName == "" {
 		return false, errcode.New(errcode.ErrInvalidArg, "invalid finalized battle allocation")
 	}
+	if persistent && (battle.DsAddr == "" || battle.GameserverUid == "" || battle.PodUid == "" ||
+		battle.InstanceEpoch != 0 || !releasetrack.Valid(battle.ReleaseTrack)) {
+		// Model-B finalization happens before PrepareCredential assigns the
+		// instance epoch, hence epoch must still be zero.  Every external object
+		// identity needed for a future exact release must already be durable.
+		return false, errcode.New(errcode.ErrInvalidArg,
+			"incomplete authoritative Model-B allocation identity")
+	}
 	if expectedState != "allocating" && expectedState != BattleStateAllocationUncertain {
 		return false, errcode.New(errcode.ErrInvalidArg, "invalid battle allocation source state")
 	}
@@ -281,7 +641,7 @@ func (r *RedisBattleRepo) finalizeBattleAllocation(
 			// 覆盖调用方快照，防旧/并发 writer 在滚动更新中静默丢未来字段。
 			next := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			next.ProtoReflect().SetUnknown(append([]byte(nil), current.ProtoReflect().GetUnknown()...))
-			payload, merr := marshalBattle(next)
+			payload, merr := r.marshalBattleTransition(current, next)
 			if merr != nil {
 				return merr
 			}
@@ -459,7 +819,7 @@ func (r *RedisBattleRepo) DeleteBattleIfAllocationMatches(
 // activeKey 分属不同 slot,不能捆同一事务(否则 CROSSSLOT)。① battleKey 单键 SET 权威落库;
 // ② activeKey 独立 ZADD 登记(必须成功,否则心跳扫描漏这个对局)。两步幂等,失败重试可重入。
 func (r *RedisBattleRepo) CreateBattle(ctx context.Context, battle *dsv1.BattleStorageRecord, battleTTL time.Duration) error {
-	payload, err := marshalBattle(battle)
+	payload, err := r.marshalBattleCreate(battle)
 	if err != nil {
 		return err
 	}
@@ -538,10 +898,11 @@ func (r *RedisBattleRepo) updateWithLock(
 			if err != nil {
 				return err
 			}
+			previous := proto.Clone(battle).(*dsv1.BattleStorageRecord)
 			if fnErr = fn(battle); fnErr != nil {
 				return fnErr
 			}
-			payload, err := marshalBattle(battle)
+			payload, err := r.marshalBattleTransition(previous, battle)
 			if err != nil {
 				return err
 			}
@@ -630,8 +991,8 @@ func parseIDs(vals []string) ([]uint64, error) {
 }
 
 func marshalBattle(b *dsv1.BattleStorageRecord) ([]byte, error) {
-	if b == nil {
-		return nil, fmt.Errorf("nil battle")
+	if err := validateBattleStorageWrite(b); err != nil {
+		return nil, err
 	}
 	return proto.Marshal(b)
 }

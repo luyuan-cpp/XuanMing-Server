@@ -51,6 +51,9 @@ service PlayerLocatorService {
   // RetargetPlacementTarget 只能在 Admission 前、旧 target 的权威不可用证明通过时，
   // 原子推进 version/operation 并把完整 old target 换为完整 new target。TTL 本身不是证明。
   rpc RetargetPlacementTarget(RetargetPlacementTargetRequest) returns (RetargetPlacementTargetResponse);
+  // ConfirmPlacementSourceDeparture 把 source DS 的物理离场证明绑定到当前 exact PENDING
+  // version/op/source。只有该确认完成，非 bootstrap Admission 才能提交。
+  rpc ConfirmPlacementSourceDeparture(ConfirmPlacementSourceDepartureRequest) returns (ConfirmPlacementSourceDepartureResponse);
   // CommitPlacementAdmission 是 DS Admission 打开 spawn gate 前的最终 CAS。
   rpc CommitPlacementAdmission(CommitPlacementAdmissionRequest) returns (CommitPlacementAdmissionResponse);
   // BootstrapPlacement 只在权威账号创建证明通过时创建首条 HUB_PENDING；missing 本身
@@ -175,6 +178,14 @@ enum PlacementTargetUnavailableReason {
   PLACEMENT_TARGET_UNAVAILABLE_REASON_ALLOCATION_REVOKED = 3;
 }
 
+// PlacementSourceDepartureProofType 与逻辑 transition proof 完全分域。
+// 数值 101+ 也避免在共享 keyring 中与 PlacementProofType 发生类型碰撞。
+enum PlacementSourceDepartureProofType {
+  PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED = 0;
+  PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE = 101;
+  PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPARTURE = 102;
+}
+
 // PlayerPlacementStorageRecord 持久化在 Redis
 // `pandora:placement:{<player_id>}` protobuf value 中，无 Redis TTL。
 // read-modify-write 必须保留 unknown fields，version 只能通过 CAS 单调推进。
@@ -202,6 +213,28 @@ message PlayerPlacementStorageRecord {
   uint32 retarget_count = 21;
   string last_retarget_proof_id = 22;
   PlacementTargetUnavailableReason last_retarget_reason = 23;
+  // Exact physical source captured atomically by Begin before target fields
+  // are cleared.  Departure coordinators bind both this immutable source and
+  // the new PENDING version/op; old tickets are fenced before eviction waits.
+  uint64 source_placement_version = 24;
+  string source_operation_id = 25;
+  string source_ds_pod_name = 26;
+  string source_ds_instance_uid = 27;
+  uint32 source_ds_instance_epoch = 28;
+  string source_hub_assignment_id = 29;
+  string source_allocation_id = 30;
+  string source_release_track = 31;
+  // Active confirmation is valid only for this record's current PENDING
+  // version/operation and immutable source tuple. Begin/Retarget clear it.
+  bool source_departure_confirmed = 32;
+  PlacementSourceDepartureProofType source_departure_proof_type = 33;
+  string source_departure_proof_id = 34;
+  // Commit moves the active proof into audit-only fields before clearing the
+  // source. A later transition must never treat these last_* fields as a gate.
+  PlacementSourceDepartureProofType last_source_departure_proof_type = 35;
+  string last_source_departure_proof_id = 36;
+  uint64 last_source_departure_placement_version = 37;
+  string last_source_departure_operation_id = 38;
 }
 
 message GetPlacementRequest {
@@ -284,6 +317,28 @@ message RetargetPlacementTargetRequest {
 message RetargetPlacementTargetResponse {
   pandora.common.v1.ErrCode code = 1;
   PlayerPlacementStorageRecord placement = 2;
+}
+
+message ConfirmPlacementSourceDepartureRequest {
+  uint64 player_id = 1;
+  uint64 placement_version = 2;
+  string operation_id = 3;
+  PlacementRoute target_route = 4;
+  uint64 target_match_id = 5;
+  uint64 source_placement_version = 6;
+  string source_operation_id = 7;
+  PlacementRoute source_route = 8;
+  uint64 source_match_id = 9;
+  PlacementTargetIdentity source_target = 10;
+  PlacementSourceDepartureProofType proof_type = 11;
+  string proof_id = 12;
+  string proof_signature = 13;
+}
+
+message ConfirmPlacementSourceDepartureResponse {
+  pandora.common.v1.ErrCode code = 1;
+  bool confirmed = 2;
+  PlayerPlacementStorageRecord placement = 3;
 }
 
 message CommitPlacementAdmissionRequest {

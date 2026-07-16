@@ -11,25 +11,27 @@ import (
 )
 
 // Mode controls the zero-downtime rollout of placement enforcement.
+// Mode 控制落位强制校验的不停服灰度上线开关。
 type Mode uint8
 
 const (
-	ModeOff Mode = iota
-	ModeShadow
-	ModeEnforce
+	ModeOff     Mode = iota // 关闭：不做落位校验
+	ModeShadow              // 影子模式：只观察记录、不拦截，用于灰度验证
+	ModeEnforce             // 强制模式：校验不过直接拒绝
 )
 
 // Wire enum values are kept here so proof producers do not need to import the
 // locator transport package merely to build a signed canonical statement.
+// 这里保留线上枚举值，让证明(proof)生产方无需 import 定位器传输包即可构造签名的规范化声明。
 const (
-	RouteUnknown int32 = 0
-	RouteHub int32 = 1
-	RouteBattle int32 = 2
-	ProofAccountBootstrap int32 = 3
-	ProofMatchTerminal int32 = 1
-	ProofPlayerLeave int32 = 2
-	ProofMatchStart int32 = 4
-	ProofHubTransfer int32 = 5
+	RouteUnknown          int32 = 0 // 路由未知
+	RouteHub              int32 = 1 // 路由到 Hub DS
+	RouteBattle           int32 = 2 // 路由到 Battle DS
+	ProofAccountBootstrap int32 = 3 // 证明类型：账号首次登录建档
+	ProofMatchTerminal    int32 = 1 // 证明类型：对局结束
+	ProofPlayerLeave      int32 = 2 // 证明类型：玩家离开
+	ProofMatchStart       int32 = 4 // 证明类型：对局开始
+	ProofHubTransfer      int32 = 5 // 证明类型：Hub 间转移
 )
 
 func (m Mode) String() string {
@@ -61,10 +63,12 @@ func ParseMode(raw string) (Mode, error) {
 
 // Binding is copied into a Hub assignment and its signed DS ticket.
 // Complete is deliberately all-or-nothing; partial bindings are never usable.
+// Binding 会被拷贝进 Hub 分配结果及其签名的 DS 票据。
+// 刻意设计成全有或全无(all-or-nothing)——半个绑定永远不可用。
 type Binding struct {
-	Version       uint64
-	OperationID   string
-	SourceMatchID uint64
+	Version       uint64 // 落位记录版本号，单调递增
+	OperationID   string // 操作 ID(规范小写 UUIDv4)，标识本次落位操作
+	SourceMatchID uint64 // 来源对局 ID(从哪个 match 转移过来)
 }
 
 func (b Binding) Empty() bool {
@@ -95,13 +99,14 @@ func ValidOperationID(value string) bool {
 }
 
 // Target is the exact Hub DS identity committed at final Admission.
+// Target 是最终 Admission 时确定的 Hub DS 精确身份。
 type Target struct {
-	PodName      string
-	InstanceUID  string
-	InstanceEpoch uint32
-	AssignmentID string
-	AllocationID string
-	ReleaseTrack string
+	PodName       string // DS Pod 名称
+	InstanceUID   string // 实例 UID，区分同名 Pod 的不同实例
+	InstanceEpoch uint32 // 实例纪元，随实例重启递增
+	AssignmentID  string // Hub 分配 ID
+	AllocationID  string // Battle 分配 ID
+	ReleaseTrack  string // 发布轨道(灰度/正式)
 }
 
 func (t Target) CompleteHub() bool {

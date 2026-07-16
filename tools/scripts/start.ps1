@@ -383,31 +383,42 @@ function Assert-LocalDsAuthBaseline {
         param($endpoint)
         Push-Location $ProjectRoot
         try {
-            $readLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint --min-epoch 1 --max-epoch 2 2>&1)
+            $readLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint `
+                --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
+                --require-v3-activation-record 2>&1)
             $readExit = $LASTEXITCODE
             if ($readExit -eq 0) {
                 $readLines | ForEach-Object { Write-Host $_ }
                 return
             }
             $readText = ($readLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-            if ($readText -notmatch '(?i)required epoch missing') {
-                throw "DS auth baseline 线性读失败（非 missing，禁止 bootstrap）:$readText"
-            }
             if (-not $AllowFreshBootstrap) {
-                throw "DS auth required_writer_epoch 缺失；当前不是 fresh minikube，只读预检拒绝把 missing 当 1。请审计状态或显式 -Reset。"
+                throw "本地 required policy 不是精确 V3；Resume 禁止让 Hub 以 staging-only 卡住。请执行受控 V2->V3 迁移，或显式 -Reset。详情:$readText"
             }
-            Write-Info '检测到 fresh minikube 且 required_writer_epoch 缺失，执行唯一一次 CAS bootstrap=1...'
-            # bootstrap 只初始化 required_writer_epoch baseline，不接收或伪造 capability 审计参数。
-            $bootLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
-                --bootstrap --apply 2>&1)
+            if ($readText -notmatch '(?i)required epoch missing') {
+                throw "fresh 自动 genesis 只接受 missing；检测到 V1/V2/非法状态时拒绝猜测恢复，需 -Reset 或受控 V2->V3 迁移:$readText"
+            }
+            $evidenceText = 'pandora-local-fresh-zero-writer-v1-to-v3/v1'
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try {
+                $evidenceHex = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($evidenceText)))).Replace('-', '').ToLowerInvariant()
+            } finally { $sha.Dispose() }
+            $evidence = "sha256:$evidenceHex"
+            $completedAtMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            Write-Info '在任何 writer 启动前执行 missing->V3 zero-writer genesis 单事务 CAS（同时比较 required/record create-only、activation lock、空 capability prefix）...'
+            $advanceLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                --zero-writer-genesis-v3 --apply --activation-evidence-sha256 $evidence `
+                --activation-evidence-completed-at-ms $completedAtMS 2>&1)
             if ($LASTEXITCODE -ne 0) {
-                throw "fresh minikube required_writer_epoch CAS bootstrap 失败:$($bootLines -join [Environment]::NewLine)"
+                throw "fresh minikube V1->V3 zero-writer CAS 失败:$($advanceLines -join [Environment]::NewLine)"
             }
-            $verifyLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint --min-epoch 1 --max-epoch 1 2>&1)
+            $verifyLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint `
+                --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
+                --require-v3-activation-record 2>&1)
             if ($LASTEXITCODE -ne 0) {
-                throw "bootstrap 后无法线性证明 required_writer_epoch=1:$($verifyLines -join [Environment]::NewLine)"
+                throw "bootstrap 后无法线性证明 required policy 精确 V3:$($verifyLines -join [Environment]::NewLine)"
             }
-            $bootLines | ForEach-Object { Write-Host $_ }
+            $advanceLines | ForEach-Object { Write-Host $_ }
             $verifyLines | ForEach-Object { Write-Host $_ }
         } finally { Pop-Location }
     }
@@ -580,6 +591,18 @@ function Get-PandoraWorkloadContractRows {
     param([Parameter(Mandatory = $true)][string]$Manifest)
     $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.containers[*].image}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\n"}'
     return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'online Deployment manifest')
+}
+
+function Get-PandoraPlacementPreflightContractRows {
+    param([Parameter(Mandatory = $true)][string]$Manifest)
+    $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.strategy.type}{"\t"}{.spec.template.spec.containers[?(@.name=="player-locator")].image}{"\t"}{.spec.template.spec.initContainers[*].name}{"\t"}{.spec.template.spec.initContainers[*].image}{"\t"}{.spec.template.spec.initContainers[*].imagePullPolicy}{"\t"}{.spec.template.spec.initContainers[*].args[*]}{"\t"}{.spec.template.spec.initContainers[*].command[*]}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].name}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].mountPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].subPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].readOnly}{"\n"}'
+    return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'player-locator placement preflight manifest')
+}
+
+function Get-PandoraHubAllocatorSingleWriterContractRows {
+    param([Parameter(Mandatory = $true)][string]$Manifest)
+    $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.replicas}{"\t"}{.spec.strategy.type}{"\t"}{.spec.strategy.rollingUpdate}{"\n"}'
+    return @(Invoke-KubectlClientContract -Manifest $Manifest -JsonPath $jsonPath -Action 'hub-allocator single-writer manifest')
 }
 
 function Get-PandoraDSTicketSignerContractRows {
@@ -948,6 +971,11 @@ function New-OnlineRuntimeOverlay {
         }
         $contractRows = Get-PandoraWorkloadContractRows -Manifest $rendered
         Assert-PandoraRenderedOnlineContract -ContractRows $contractRows -Pins $pins -Digests $Digests -ServiceNames $ServiceNames -WriterServices $WriterServices
+        $placementPreflightRows = Get-PandoraPlacementPreflightContractRows -Manifest $rendered
+        Assert-PandoraPlacementPreflightContract -ContractRows $placementPreflightRows `
+            -PinnedImage ([string]$pins['player-locator'])
+        $hubSingleWriterRows = Get-PandoraHubAllocatorSingleWriterContractRows -Manifest $rendered
+        Assert-PandoraHubAllocatorSingleWriterContract -ContractRows $hubSingleWriterRows
         $dsticketRows = Get-PandoraDSTicketSignerContractRows -Manifest $rendered
         Assert-PandoraDSTicketSignerRevisionContract -ContractRows $dsticketRows -Revision $DSTicketKeysetRevision
         return [pscustomobject]@{ Path = $runtime; Rendered = $rendered; GreenPatchPaths = $greenPatchPaths }
@@ -1096,9 +1124,13 @@ function Invoke-OnlineDsAuthCapabilityAudit {
         [Parameter(Mandatory = $true)][string]$EtcdEndpoints,
         [Parameter(Mandatory = $true)][string]$KeysetRevision,
         [Parameter(Mandatory = $true)][string]$Revision,
-        [Parameter(Mandatory = $true)][string[]]$SecureGoArgs
+        [Parameter(Mandatory = $true)][string[]]$SecureGoArgs,
+        [Parameter(Mandatory = $true)]$ActivationEvidence
     )
     $deadline = [datetime]::UtcNow.AddSeconds(45)
+    if ([string]$ActivationEvidence.PolicyV3RequiredFeatures -cne $script:PandoraDsAuthRequiredFeaturesV3) {
+        throw 'ordinary release V3 evidence feature policy is not canonical.'
+    }
     Push-Location $ProjectRoot
     try {
         do {
@@ -1107,7 +1139,9 @@ function Invoke-OnlineDsAuthCapabilityAudit {
                 --expected-epoch 2 --target-epoch 2 --keyset-revision $KeysetRevision `
                 --etcd-identity-revision $Revision --allowed-image-digests $State.AllowedDigests `
                 --expected-image-digests $State.ExpectedDigests `
-                --required-features $script:PandoraDsAuthRequiredFeatures @SecureGoArgs
+                --required-features $script:PandoraDsAuthRequiredFeaturesV3 --policy-v3 `
+                --activation-evidence-sha256 $ActivationEvidence.PolicyV3EvidenceSHA256 `
+                --activation-evidence-completed-at-ms $ActivationEvidence.PolicyV3CompletedAtUnixMS @SecureGoArgs
             if ($LASTEXITCODE -eq 0) { return }
             if ([datetime]::UtcNow -ge $deadline) { throw 'online writer exact capability/features 终态审计失败。' }
             Start-Sleep -Seconds 2
@@ -1125,13 +1159,190 @@ function Assert-OnlineDsAuthRuntimeAndCapabilities {
         [Parameter(Mandatory = $true)][string]$EtcdEndpoints,
         [Parameter(Mandatory = $true)][string]$KeysetRevision,
         [Parameter(Mandatory = $true)][string[]]$SecureGoArgs,
-        [hashtable]$ExpectedDigests = @{}
+        [hashtable]$ExpectedDigests = @{},
+        [Parameter(Mandatory = $true)]$ActivationEvidence
     )
     $state = Get-OnlineDsAuthCanonicalState -KubeContext $KubeContext -WriterServices $WriterServices `
         -Revision $Revision -ServerName $ServerName -ForbiddenReadPrefix $ForbiddenReadPrefix -ExpectedDigests $ExpectedDigests
     Invoke-OnlineDsAuthCapabilityAudit -State $state -EtcdEndpoints $EtcdEndpoints -KeysetRevision $KeysetRevision `
-        -Revision $Revision -SecureGoArgs $SecureGoArgs
+        -Revision $Revision -SecureGoArgs $SecureGoArgs -ActivationEvidence $ActivationEvidence
     return $state
+}
+
+function Get-OnlineDsAuthActivationEvidenceState {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $lock = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'configmap/pandora-ds-auth-activation-v2', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取 DS auth activation lock'
+    $runID = [string]$lock.data.run_id
+    if ($lock.immutable -ne $true -or $runID -cnotmatch '^[a-z0-9][a-z0-9-]{7,23}$' -or
+        (Test-PandoraKubernetesObjectDeleting $lock)) {
+        throw 'DS auth activation lock 缺 immutable canonical RunId 或正在删除；ordinary release 禁止继续。'
+    }
+    $evidenceName = "pandora-pod-uid-evidence-v2-$runID"
+    $switchName = "pandora-ds-auth-switch-v2-$runID"
+    $cleanupRequiredName = "pandora-pod-uid-acl-cleanup-required-v2-$runID"
+    $cleanupCompleteName = "pandora-pod-uid-acl-cleanup-complete-v2-$runID"
+    $evidence = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "configmap/$evidenceName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取完成的 pod_uid activation evidence'
+    $switch = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "configmap/$switchName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取完成的 DS auth switch marker'
+    $cleanupRequired = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "configmap/$cleanupRequiredName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取 CAS 后临时 Redis ACL cleanup required marker'
+    $cleanupComplete = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "configmap/$cleanupCompleteName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取 CAS 后临时 Redis ACL cleanup complete marker'
+    $policyV3Marker = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "configmap/$script:PandoraDsAuthPolicyV3EvidenceName", '-n', $K8sNamespace, '-o', 'json') `
+        -Action '读取 immutable DS auth V3 successor-policy activation evidence'
+    $policyV3Evidence = Assert-PandoraDsAuthPolicyV3EvidenceContract $policyV3Marker `
+        ([string]$policyV3Marker.data.expected_services) ([string]$policyV3Marker.data.expected_instances) `
+        ([string]$policyV3Marker.data.expected_image_digests) $KubeContext $K8sNamespace
+    $digest = [string]$evidence.data.evidence_sha256
+    $completionMS = [string]$evidence.data.final_completion_time_unix_ms
+    if ($evidence.immutable -ne $true -or $switch.immutable -ne $true -or
+        [string]$evidence.data.contract -cne 'pod-uid-activation-evidence-v1' -or
+        [string]$evidence.data.run_id -cne $runID -or [string]$evidence.data.target_epoch -cne '2' -or
+        [string]$evidence.data.target_required_value -cne '2@ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$evidence.data.required_policy_id -cne 'ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$switch.data.run_id -cne $runID -or $digest -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        $completionMS -cnotmatch '^[1-9][0-9]{12}$' -or
+        (Test-PandoraKubernetesObjectDeleting $evidence) -or
+        (Test-PandoraKubernetesObjectDeleting $switch)) {
+        throw 'DS auth activation 尚未形成 immutable evidence+switch 终态；ordinary release 禁止替换配置。'
+    }
+    $finalCompleted = [datetimeoffset]::FromUnixTimeMilliseconds([int64]$completionMS)
+    $evidenceCreated = [datetimeoffset]::Parse([string]$evidence.metadata.creationTimestamp)
+    $switchCreated = [datetimeoffset]::Parse([string]$switch.metadata.creationTimestamp)
+    if ($finalCompleted -gt $evidenceCreated -or $evidenceCreated -gt $switchCreated) {
+        throw 'DS auth activation 时间链 final<=evidence<=switch 非法；ordinary release 禁止继续。'
+    }
+    foreach ($field in @('pod_uid_source_secret_uid', 'pod_uid_source_secret_resource_version',
+        'pod_uid_raw_config_sha256', 'pod_uid_raw_snapshot_name', 'pod_uid_raw_snapshot_uid',
+        'pod_uid_raw_snapshot_resource_version', 'pod_uid_ro_secret_name', 'pod_uid_ro_secret_uid',
+        'pod_uid_ro_secret_resource_version', 'pod_uid_ro_config_sha256',
+        'pod_uid_redis_config_identity', 'pod_uid_redis_config_topology',
+        'pod_uid_config_helper_source_sha256')) {
+        if ([string]::IsNullOrWhiteSpace([string]$lock.data.$field)) {
+            throw "DS auth activation lock 缺 config binding field=$field。"
+        }
+    }
+    foreach ($binding in ([ordered]@{
+        expected_required_value = '1'
+        target_required_value = '2@ds-auth-v2-pod-uid-write-invariant-v1'
+        required_policy_id = 'ds-auth-v2-pod-uid-write-invariant-v1'
+    }).GetEnumerator()) {
+        if ([string]$lock.data.$($binding.Key) -cne [string]$binding.Value -or
+            [string]$switch.data.$($binding.Key) -cne [string]$binding.Value) {
+            throw "DS auth activation marker 缺 versioned rollback policy binding=$($binding.Key)。"
+        }
+    }
+    $cleanupRequiredKeys = @('contract', 'run_id', 'target_epoch', 'evidence_sha256', 'method',
+        'target_user', 'redis_config_identity', 'redis_topology', 'helper_source_sha256',
+        'ro_secret_uid', 'ro_secret_resource_version', 'target_required_value', 'required_policy_id')
+    $cleanupCompleteKeys = @('contract', 'run_id', 'target_epoch', 'evidence_sha256',
+        'required_marker_uid', 'required_marker_resource_version', 'method', 'target_user',
+        'redis_config_identity', 'redis_topology', 'helper_source_sha256', 'proof_sha256',
+        'visited_nodes', 'completed_at_unix_ms', 'target_required_value', 'required_policy_id')
+    $cleanupCompletedMS = [int64]0
+    if ($cleanupRequired.immutable -ne $true -or $cleanupComplete.immutable -ne $true -or
+        (Test-PandoraKubernetesObjectDeleting $cleanupRequired) -or
+        (Test-PandoraKubernetesObjectDeleting $cleanupComplete) -or
+        [string]$cleanupRequired.metadata.uid -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$cleanupComplete.metadata.uid -cnotmatch '^[0-9a-f][0-9a-f-]{7,127}$' -or
+        [string]$cleanupRequired.metadata.resourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        [string]$cleanupComplete.metadata.resourceVersion -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' -or
+        [string]$cleanupRequired.data.contract -cne 'pod-uid-acl-cleanup-required-v1' -or
+        [string]$cleanupComplete.data.contract -cne 'pod-uid-acl-cleanup-complete-v1' -or
+        [string]$cleanupRequired.data.run_id -cne $runID -or
+        [string]$cleanupComplete.data.run_id -cne $runID -or
+        [string]$cleanupRequired.data.target_epoch -cne '2' -or
+        [string]$cleanupComplete.data.target_epoch -cne '2' -or
+        [string]$cleanupRequired.data.target_required_value -cne '2@ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$cleanupComplete.data.target_required_value -cne '2@ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$cleanupRequired.data.required_policy_id -cne 'ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$cleanupComplete.data.required_policy_id -cne 'ds-auth-v2-pod-uid-write-invariant-v1' -or
+        [string]$cleanupRequired.data.evidence_sha256 -cne $digest -or
+        [string]$cleanupComplete.data.evidence_sha256 -cne $digest -or
+        [string]$cleanupRequired.data.method -cne 'DELUSER' -or
+        [string]$cleanupComplete.data.method -cne 'DELUSER' -or
+        [string]$cleanupRequired.data.target_user -cne 'pandora-pod-uid-release-preflight-ro' -or
+        [string]$cleanupComplete.data.target_user -cne 'pandora-pod-uid-release-preflight-ro' -or
+        [string]$cleanupRequired.data.redis_config_identity -cne [string]$lock.data.pod_uid_redis_config_identity -or
+        [string]$cleanupComplete.data.redis_config_identity -cne [string]$lock.data.pod_uid_redis_config_identity -or
+        [string]$cleanupRequired.data.redis_topology -cne [string]$lock.data.pod_uid_redis_config_topology -or
+        [string]$cleanupComplete.data.redis_topology -cne [string]$lock.data.pod_uid_redis_config_topology -or
+        [string]$cleanupRequired.data.helper_source_sha256 -cne [string]$lock.data.pod_uid_config_helper_source_sha256 -or
+        [string]$cleanupComplete.data.helper_source_sha256 -cne [string]$lock.data.pod_uid_config_helper_source_sha256 -or
+        [string]$cleanupRequired.data.ro_secret_uid -cne [string]$lock.data.pod_uid_ro_secret_uid -or
+        [string]$cleanupRequired.data.ro_secret_resource_version -cne [string]$lock.data.pod_uid_ro_secret_resource_version -or
+        [string]$cleanupComplete.data.required_marker_uid -cne [string]$cleanupRequired.metadata.uid -or
+        [string]$cleanupComplete.data.required_marker_resource_version -cne [string]$cleanupRequired.metadata.resourceVersion -or
+        [string]$cleanupComplete.data.proof_sha256 -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+        [string]$cleanupComplete.data.visited_nodes -cnotmatch '^[1-9][0-9]*$' -or
+        [string]$cleanupComplete.data.completed_at_unix_ms -cnotmatch '^[1-9][0-9]{12}$' -or
+        -not [int64]::TryParse([string]$cleanupComplete.data.completed_at_unix_ms, [ref]$cleanupCompletedMS) -or
+        (@($cleanupRequired.data.PSObject.Properties.Name | Sort-Object) -join ',') -cne
+            (@($cleanupRequiredKeys | Sort-Object) -join ',') -or
+        (@($cleanupComplete.data.PSObject.Properties.Name | Sort-Object) -join ',') -cne
+            (@($cleanupCompleteKeys | Sort-Object) -join ',')) {
+        throw 'DS auth activation CAS 后临时 Redis ACL cleanup 证据缺失/漂移/PENDING；ordinary release 禁止继续。'
+    }
+    $cleanupRequiredCreated = [datetimeoffset]::Parse([string]$cleanupRequired.metadata.creationTimestamp)
+    $cleanupCompleteCreated = [datetimeoffset]::Parse([string]$cleanupComplete.metadata.creationTimestamp)
+    $cleanupProofCompleted = [datetimeoffset]::FromUnixTimeMilliseconds($cleanupCompletedMS)
+    if ($evidenceCreated -gt $cleanupRequiredCreated) {
+        throw 'DS auth activation cleanup 时间链 evidence<=required<=switch<=proof<=complete 非法。'
+    }
+    Assert-PandoraPodUIDACLCleanupTimeline $cleanupRequiredCreated $switchCreated `
+        $cleanupProofCompleted $cleanupCompleteCreated
+    return [pscustomobject][ordered]@{
+        RunID = $runID
+        LockUID = [string]$lock.metadata.uid
+        LockResourceVersion = [string]$lock.metadata.resourceVersion
+        EvidenceUID = [string]$evidence.metadata.uid
+        EvidenceResourceVersion = [string]$evidence.metadata.resourceVersion
+        EvidenceSHA256 = $digest
+        FinalCompletionTimeUnixMS = [int64]$completionMS
+        SwitchUID = [string]$switch.metadata.uid
+        SwitchResourceVersion = [string]$switch.metadata.resourceVersion
+        CleanupRequiredUID = [string]$cleanupRequired.metadata.uid
+        CleanupRequiredResourceVersion = [string]$cleanupRequired.metadata.resourceVersion
+        CleanupCompleteUID = [string]$cleanupComplete.metadata.uid
+        CleanupCompleteResourceVersion = [string]$cleanupComplete.metadata.resourceVersion
+        CleanupProofSHA256 = [string]$cleanupComplete.data.proof_sha256
+        CleanupCompletedAtUnixMS = $cleanupCompletedMS
+        PolicyV3EvidenceUID = $policyV3Evidence.UID
+        PolicyV3EvidenceResourceVersion = $policyV3Evidence.ResourceVersion
+        PolicyV3EvidenceSHA256 = $policyV3Evidence.EvidenceSHA256
+        PolicyV3CompletedAtUnixMS = $policyV3Evidence.CompletedAtUnixMS
+        PolicyV3ExpectedServices = $policyV3Evidence.ExpectedServices
+        PolicyV3ExpectedInstances = $policyV3Evidence.ExpectedInstances
+        PolicyV3ExpectedImageDigests = $policyV3Evidence.ExpectedImageDigests
+        PolicyV3RequiredFeatures = $policyV3Evidence.RequiredFeatures
+        PolicyV3RunID = $policyV3Evidence.RunID
+        PolicyV3KubeContext = $policyV3Evidence.KubeContext
+        PolicyV3Namespace = $policyV3Evidence.Namespace
+    }
+}
+
+function Assert-OnlineDsAuthActivationEvidenceUnchanged($Expected, $Actual) {
+    foreach ($field in @('RunID', 'LockUID', 'LockResourceVersion', 'EvidenceUID',
+        'EvidenceResourceVersion', 'EvidenceSHA256', 'FinalCompletionTimeUnixMS',
+        'SwitchUID', 'SwitchResourceVersion', 'CleanupRequiredUID',
+        'CleanupRequiredResourceVersion', 'CleanupCompleteUID',
+        'CleanupCompleteResourceVersion', 'CleanupProofSHA256', 'CleanupCompletedAtUnixMS',
+        'PolicyV3EvidenceUID', 'PolicyV3EvidenceResourceVersion', 'PolicyV3EvidenceSHA256',
+        'PolicyV3CompletedAtUnixMS', 'PolicyV3ExpectedServices', 'PolicyV3ExpectedInstances',
+        'PolicyV3ExpectedImageDigests', 'PolicyV3RequiredFeatures', 'PolicyV3RunID',
+        'PolicyV3KubeContext', 'PolicyV3Namespace')) {
+        if ([string]$Expected.$field -cne [string]$Actual.$field) {
+            throw "ordinary release 窗口内 DS auth activation evidence field=$field 漂移。"
+        }
+    }
 }
 
 function Assert-OnlineDeploymentImageState {
@@ -2030,6 +2241,96 @@ function Sync-ImagesToMinikube {
     Write-Ok "镜像 tag 已刷新到 minikube($($Images.Count) 个)。"
 }
 
+# DS-auth capability 的 image_digest 必须来自 minikube 节点实际运行的 immutable
+# image config digest，不能沿用旧 Deployment annotation，也不能使用宿主 buildx
+# manifest-list digest。五个 writer 会把该 annotation 通过 Downward API 写入 etcd；
+# annotation 与节点 :dev tag 漂移会让 capability provenance 失真。
+function Get-LocalMinikubeImageDigest {
+    param(
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile,
+        [Parameter(Mandatory = $true)][string]$Image
+    )
+    $lines = @(& minikube -p $MinikubeProfile ssh -- docker image inspect -f '{{.Id}}' $Image 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "minikube 节点读取镜像 digest 失败:$Image`n$($lines -join [Environment]::NewLine)"
+    }
+    $digest = (($lines -join "`n").Trim())
+    if ($digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        throw "minikube 节点镜像 digest 非 canonical sha256:$Image"
+    }
+    return $digest
+}
+
+function Set-LocalDsAuthImageDigestAnnotations {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
+    foreach ($writer in $writers) {
+        $image = "pandora/${writer}:dev"
+        $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image $image
+        $patch = @{
+            spec = @{ template = @{ metadata = @{ annotations = @{
+                'pandora.dev/image-digest' = $digest
+            } } } }
+        } | ConvertTo-Json -Depth 8 -Compress
+        kubectl --context $KubeContext -n $K8sNamespace patch "deployment/$writer" --type merge -p $patch | Out-Null
+        Assert-LastExit "patch $writer minikube immutable image digest"
+        $readback = [string](kubectl --context $KubeContext -n $K8sNamespace get "deployment/$writer" `
+            -o jsonpath='{.spec.template.metadata.annotations.pandora\.dev/image-digest}')
+        Assert-LastExit "readback $writer image digest annotation"
+        if ($readback -cne $digest) {
+            throw "Deployment/$writer image digest annotation 回读不一致。"
+        }
+    }
+    Write-Ok '五个 DS-auth writer 已绑定 minikube 节点实际 immutable image digest。'
+}
+
+function Assert-LocalDsAuthImageDigestAnnotations {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile,
+        [switch]$SkipPodCheck
+    )
+    $writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
+    foreach ($writer in $writers) {
+        $digest = Get-LocalMinikubeImageDigest -MinikubeProfile $MinikubeProfile -Image "pandora/${writer}:dev"
+        $deploymentLines = @(& kubectl --context $KubeContext -n $K8sNamespace get "deployment/$writer" -o json 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "读取 Deployment/$writer 失败。" }
+        try { $deployment = (($deploymentLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
+        catch { throw "Deployment/$writer JSON 非法:$($_.Exception.Message)" }
+        $declared = [string]$deployment.spec.template.metadata.annotations.'pandora.dev/image-digest'
+        if ($declared -cne $digest) {
+            throw "Deployment/$writer 声明 digest 与 minikube 节点 :dev tag 不一致；禁止以伪 provenance 启动。"
+        }
+        if ($SkipPodCheck) { continue }
+
+        $podLines = @(& kubectl --context $KubeContext -n $K8sNamespace get pods -l "app=$writer" -o json 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "读取 $writer Pod 失败。" }
+        try { $podList = (($podLines -join "`n") | ConvertFrom-Json -ErrorAction Stop) }
+        catch { throw "$writer Pod JSON 非法:$($_.Exception.Message)" }
+        $pods = @($podList.items | Where-Object {
+            $deleting = $_.metadata.PSObject.Properties['deletionTimestamp']
+            $null -eq $deleting -or [string]::IsNullOrWhiteSpace([string]$deleting.Value)
+        })
+        if ($pods.Count -ne [int]$deployment.spec.replicas) {
+            throw "$writer live Pod 数与 Deployment replicas 不一致。"
+        }
+        foreach ($pod in $pods) {
+            if ([string]$pod.metadata.annotations.'pandora.dev/image-digest' -cne $digest) {
+                throw "$writer Pod annotation 未命中 minikube immutable digest。"
+            }
+            $statuses = @($pod.status.containerStatuses | Where-Object { [string]$_.name -ceq $writer })
+            if ($statuses.Count -ne 1 -or $null -eq $statuses[0].state.running -or
+                -not ([string]$statuses[0].imageID).EndsWith($digest, [StringComparison]::Ordinal)) {
+                throw "$writer 运行容器 imageID 未命中声明的 minikube immutable digest。"
+            }
+        }
+    }
+    Write-Ok '五个 DS-auth writer Deployment/Pod/imageID provenance 对账通过。'
+}
+
 # ===== 共享:确保 in-cluster Envoy 镜像在 minikube 节点内(离线友好,三级来源)=====
 # 顺序(2026-07-10,回应审核 P1「离线只会在 minikube 节点联网 pull,不复用宿主已有镜像」):
 #   1) minikube 节点已有 → 直接用(cached);
@@ -2292,6 +2593,9 @@ function Invoke-K8s {
     Write-Step "[7/8] 部署业务服务"
     kubectl @kubectlContextArgs apply -k $servicesDir
     Assert-LastExit 'kubectl apply -k services'
+    # capability 的镜像身份必须取自刚 load 进本次 minikube profile 的节点实际 digest。
+    # 先 patch template annotation，再启动/等待 writer；绝不继承上次发布的旧 annotation。
+    Set-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     # 镜像 tag 固定为 :dev,重建/重 load 后 image 字符串不变 -> apply 报 unchanged,旧 Pod 不会换。
     # 按名强制滚动重启这 20 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
     # 确保跑的是刚 build 的新二进制。
@@ -2308,6 +2612,7 @@ function Invoke-K8s {
         kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(新 Pod 未就绪,查:kubectl describe/logs)"
     }
+    Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
 
     Write-Host ""
@@ -2394,6 +2699,13 @@ function Invoke-Online {
         return
     }
 
+    # Shared with activate_ds_auth.ps1. Until the platform supplies a real
+    # Redis/managed-service control-plane lease verifier, every online release
+    # is stopped before build, registry push, kubectl apply, Secret, Fleet, or
+    # Deployment mutation. A ConfigMap marker is not an execution lock.
+    Assert-PandoraRedisTopologyChangeLockProvider `
+        'online-before-build-push-apply' 'not-yet-authoritatively-locked' 'not-yet-authoritatively-bound'
+
     # 任何 Secret/Fleet/Deployment/registry 写入前先拒绝旧单轨 Fleet。Hub 无可靠的自动排空
     # 证明，所以这里只 fail-closed，永不在普通发布中代删。
     Assert-NoLegacyDsFleets -KubeContext $ctx
@@ -2444,15 +2756,17 @@ function Invoke-Online {
     Assert-PandoraImmutableReleaseTag -Tag $Tag -CurrentCommit $currentCommit -RequireCurrentCommit:$BuildPush
 
     # ===== 生产密钥预检(P0 安全审核)=====
-    # 必须在 BuildPush(推镜像到远端 registry)之前就确认玩家、DS callback 与 Match resume
-    # 服务身份三套真密钥齐全 —— 否则可能镜像已推、稍后
+    # 必须在 BuildPush(推镜像到远端 registry)之前就确认玩家、DS callback、Match resume
+    # 与 allocation abort 服务身份四套真密钥齐全 —— 否则可能镜像已推、稍后
     # gen -Prod 才因缺密钥失败,留下「半推 + 未部署」的脏状态。玩家面 / DS 回调面必须分离:
     # 同一把密钥覆盖玩家 JWT 与 DS 回调令牌时,泄露玩家面即可伪造 DS 回调绕过范围绑定。
     $devPubSecret = 'pandora-dev-jwt-secret-change-me-32!'
     $devMatchResumeSecret = 'pandora-dev-match-resume-auth-key-v1!'
+    $devAllocationAbortSecret = 'pandora-dev-allocation-abort-auth-key-v1!'
     $playerSec = $env:PANDORA_JWT_SECRET
     $dsSec = $env:PANDORA_DS_JWT_SECRET
     $matchResumeSec = $env:PANDORA_MATCH_RESUME_AUTH_SECRET
+    $allocationAbortSec = $env:PANDORA_ALLOCATION_ABORT_AUTH_SECRET
     # additional_secrets 部分接线仅供非生产验证；两份轮换决策未拍板前 online 直接拒绝。
     $playerSecAdd = $env:PANDORA_JWT_SECRET_ADDITIONAL
     $dsSecAdd = $env:PANDORA_DS_JWT_SECRET_ADDITIONAL
@@ -2464,6 +2778,7 @@ function Invoke-Online {
         @{ n = 'PANDORA_JWT_SECRET(玩家面)';    v = $playerSec; required = $true },
         @{ n = 'PANDORA_DS_JWT_SECRET(DS 回调面)'; v = $dsSec; required = $true },
         @{ n = 'PANDORA_MATCH_RESUME_AUTH_SECRET(Login→Matchmaker 服务身份)'; v = $matchResumeSec; required = $true },
+        @{ n = 'PANDORA_ALLOCATION_ABORT_AUTH_SECRET(Matchmaker→DS 销毁服务身份)'; v = $allocationAbortSec; required = $true },
         @{ n = 'PANDORA_JWT_SECRET_ADDITIONAL(玩家面轮换兼容密钥)';    v = $playerSecAdd; required = $false },
         @{ n = 'PANDORA_DS_JWT_SECRET_ADDITIONAL(DS 回调面轮换兼容密钥)'; v = $dsSecAdd; required = $false })
     foreach ($p in $secretChecks) {
@@ -2475,6 +2790,7 @@ function Invoke-Online {
         }
         if ($p.v -eq $devPubSecret) { throw "$($p.n) 不能等于公开 dev 密钥,请换成真密钥。" }
         if ($p.v -eq $devMatchResumeSecret) { throw "$($p.n) 不能等于公开 Match resume dev 密钥,请换成真密钥。" }
+        if ($p.v -eq $devAllocationAbortSecret) { throw "$($p.n) 不能等于公开 allocation abort dev 密钥,请换成真密钥。" }
         if ([System.Text.Encoding]::UTF8.GetByteCount($p.v) -lt 32) { throw "$($p.n) 至少需要 32 字节(HS256)。" }
         # C0/C1 控制字符防线(二审 #12):换行/回车/制表等混进密钥会被 YAML 双引号转义后原样进服务,
         # 与运维手里的密钥「看起来相同实际不同」,导致全端验签静默失败。
@@ -2554,7 +2870,9 @@ function Invoke-Online {
             -CandidateConfigs $candidateHmacConfigs | Out-Null
         Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $liveHmacConfigs `
             -CandidateConfigs $candidateHmacConfigs | Out-Null
-        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / placement proof / Match resume service identity / additional keyset 均未变化；不打印指纹）。'
+        Assert-PandoraOnlineAllocationAbortAuthContinuity -LiveConfigs $liveHmacConfigs `
+            -CandidateConfigs $candidateHmacConfigs | Out-Null
+        Write-Ok '普通发布 HMAC 连续性门禁通过（玩家 Session / DS callback / placement proof / Match resume / allocation abort service identity / additional keyset 均未变化；不打印指纹）。'
     } else {
         # 首次 bootstrap 没有 live baseline 可比较；后续普通发布一律走上面的连续性门禁。
         # 若运行中的业务对象仍在但 Secret 被删，不能把它误判成首次 bootstrap。
@@ -2653,6 +2971,7 @@ function Invoke-Online {
     $writerServices = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
     $secureDsAuthGoArgs = @()
     $onlineDsAuthState = $null
+    $onlineDsAuthActivationEvidence = $null
     Write-Step '只读验证 DS auth required_writer_epoch 已显式建立'
     $requiredMin = 1
     $requiredMax = 2
@@ -2670,14 +2989,20 @@ function Invoke-Online {
     Push-Location $ProjectRoot
     try {
         & go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $DsFenceEtcdEndpoints `
-            --min-epoch $requiredMin --max-epoch $requiredMax @secureDsAuthGoArgs
+            --min-epoch $requiredMin --max-epoch $requiredMax `
+            --min-policy-generation 3 --max-policy-generation 3 --require-v3-activation-record @secureDsAuthGoArgs
         $requiredExit = $LASTEXITCODE
     } finally {
         Pop-Location
     }
     if ($requiredExit -ne 0) {
-        throw 'DS auth required_writer_epoch 不存在、非法或 etcd 不可线性读取；已在 BuildPush/Secret/Fleet/Deployment 前停止。' +
-              '禁止把缺 key 默认成 1。fresh 集群须先走经 Claude 审核的显式 baseline bootstrap；当前 BootstrapRequired 仍有删除后回退风险，不能自动调用。'
+        throw 'DS auth required policy 不存在、不是精确 V3、非法或 etcd 不可线性读取；已在 BuildPush/Secret/Fleet/Deployment 前停止。' +
+              '禁止把 missing/V1/V2 默认成 V3。fresh 本地集群只能走 zero-writer genesis；已有 V2 集群须先执行 immutable evidence 绑定的专用 staging→V3 CAS 流程。'
+    }
+    if ($Env -eq 'prod') {
+        # 这是 ordinary release 的最早证据快照。后续锁内、config apply 后和
+        # 终态都只能与它比较，不得在窗口中途重置 baseline。
+        $onlineDsAuthActivationEvidence = Get-OnlineDsAuthActivationEvidenceState -KubeContext $ctx
     }
     # 2026-07-13 的真实本地验收只证明了旧 K1 镜像上的正向准入与篡改拒绝；加入票据日志
     # 脱敏入口后，重试的 UE 未到达 DS 认证入口，K1→K2→K2-only（含 K1 旧票耗尽）没有完成。
@@ -2692,7 +3017,7 @@ function Invoke-Online {
             -WriterServices $writerServices -Revision $DsFenceEtcdIdentityRevision `
             -ServerName $DsFenceEtcdServerName -ForbiddenReadPrefix $DsFenceEtcdForbiddenReadPrefix `
             -EtcdEndpoints $DsFenceEtcdEndpoints -KeysetRevision $DsFenceKeysetRevision `
-            -SecureGoArgs $secureDsAuthGoArgs
+            -SecureGoArgs $secureDsAuthGoArgs -ActivationEvidence $onlineDsAuthActivationEvidence
         Write-Ok '生产 DS auth mTLS/CN/AuthStatus/ACL、immutable identity、canonical green 与 capability/features 前置审计通过。'
     }
 
@@ -2823,6 +3148,10 @@ function Invoke-Online {
     if ([string]$lockedOrdinaryState.State -cne [string]$ordinaryDSTicketState.State) {
         throw "早期预检到锁内重验期间 DSTicket state 已变化:$($ordinaryDSTicketState.State) -> $($lockedOrdinaryState.State)；拒绝用旧候选覆盖。"
     }
+    if ($Env -eq 'prod') {
+        $lockedActivationEvidence = Get-OnlineDsAuthActivationEvidenceState -KubeContext $ctx
+        Assert-OnlineDsAuthActivationEvidenceUnchanged $onlineDsAuthActivationEvidence $lockedActivationEvidence
+    }
     $earlyFixedRV = if ($null -eq $existingConfig) { '' } else { [string]$existingConfig.metadata.resourceVersion }
     $lockedFixedConfig = Get-OnlineOptionalKubectlJsonObject -KubeContext $ctx `
         -Arguments @('get', 'secret/pandora-config', '-n', $K8sNamespace, '--ignore-not-found', '-o', 'json') `
@@ -2845,6 +3174,11 @@ function Invoke-Online {
         Assert-PandoraOnlineMatchResumeAuthContinuity -LiveConfigs $lockedHmacConfigs `
             -CandidateConfigs $lockedCandidateHmacConfigs | Out-Null
     }
+    if ($Env -eq 'prod') {
+        $preConfigActivationEvidence = Get-OnlineDsAuthActivationEvidenceState -KubeContext $ctx
+        Assert-OnlineDsAuthActivationEvidenceUnchanged $onlineDsAuthActivationEvidence $preConfigActivationEvidence
+        Write-Ok 'ordinary release 已确认 DS auth activation immutable evidence+switch 终态；不存在 activation/drain 半窗口。'
+    }
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     Write-Ok "DSTicket 锁内权威门禁通过:r$dstTicketRevision state=$($lockedOrdinaryState.State)。"
     Write-Step "应用已校验的 namespace 基线($K8sNamespace)"
@@ -2853,6 +3187,10 @@ function Invoke-Online {
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     # 生产配置含两把真 HS256 密钥,用 Secret 承载(P0:严禁把真密钥写进明文 ConfigMap)。
     Apply-PandoraConfigSecret -KubeContext $ctx -ConfigDir $onlineConfigDir -Action 'kubectl apply secret pandora-config'
+    if ($Env -eq 'prod') {
+        $postConfigActivationEvidence = Get-OnlineDsAuthActivationEvidenceState -KubeContext $ctx
+        Assert-OnlineDsAuthActivationEvidenceUnchanged $onlineDsAuthActivationEvidence $postConfigActivationEvidence
+    }
 
     Write-Step "apply Agones RBAC + Fleet(真 Linux DS)"
     # 线上 Agones 通常已由集群管理员预装;此处不自动 helm install,只 apply 业务 RBAC/Fleet
@@ -2910,8 +3248,14 @@ function Invoke-Online {
             -WriterServices $writerServices -Revision $DsFenceEtcdIdentityRevision `
             -ServerName $DsFenceEtcdServerName -ForbiddenReadPrefix $DsFenceEtcdForbiddenReadPrefix `
             -EtcdEndpoints $DsFenceEtcdEndpoints -KeysetRevision $DsFenceKeysetRevision `
-            -SecureGoArgs $secureDsAuthGoArgs -ExpectedDigests $goDigests
+            -SecureGoArgs $secureDsAuthGoArgs -ExpectedDigests $goDigests `
+            -ActivationEvidence $onlineDsAuthActivationEvidence
         Write-Ok 'canonical green 普通发布终态审计通过；无 blue writer、无额外 capability。'
+        $placementGreen = Get-KubectlJsonObject -KubeContext $ctx `
+            -Arguments @('get', 'deployment/player-locator-ds-auth-green', '-n', $K8sNamespace, '-o', 'json') `
+            -Action '终态回读 player-locator canonical green placement preflight'
+        Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $placementGreen ([string]$goPins['player-locator'])
+        Write-Ok 'player-locator canonical green Recreate + same-digest placement preflight 终态通过。'
     }
     Wait-OnlineReadyFleetImageState -KubeContext $ctx -Fleet 'pandora-battle-stable' -Container 'pandora-battle-ds' `
         -Pin $battlePin -Digest $battleDescriptor.Digest -ExpectedTrack stable
@@ -2932,6 +3276,10 @@ function Invoke-Online {
     if ([string]::IsNullOrWhiteSpace([string]$finalOrdinaryState.ActiveKid) -or
         [string]$finalOrdinaryState.ActiveKid -cne $finalKeyContract.ActiveKid) {
         throw '普通发布终态 fixed/terminal active kid 与 immutable key material 不一致。'
+    }
+    if ($Env -eq 'prod') {
+        $finalActivationEvidence = Get-OnlineDsAuthActivationEvidenceState -KubeContext $ctx
+        Assert-OnlineDsAuthActivationEvidenceUnchanged $onlineDsAuthActivationEvidence $finalActivationEvidence
     }
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     Write-Ok "DSTicket 普通发布终态验收通过:r$dstTicketRevision state=$($finalOrdinaryState.State)。"
@@ -3291,6 +3639,9 @@ function Resume-K8s {
     Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment
     Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment
     Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:$false
+    # Resume 不构建/加载镜像，因此只能验证磁盘上的节点 tag 与持久 Deployment
+    # annotation 完全一致，不能静默重写 provenance。漂移时要求走正常构建发布。
+    Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile -SkipPodCheck
 
     Write-Info "等待关键业务 Pod 就绪..."
     try {
@@ -3345,6 +3696,7 @@ function Resume-K8s {
         kubectl --context $mkCtx rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(Secret 刷新后未就绪)"
     }
+    Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
     Write-Ok "pandora-config Secret 已刷新为 advertise=$resumeAdvHost 并传播到全部业务 Pod(卷源已确保为 Secret)。"
 

@@ -19,14 +19,23 @@ $script:PandoraPlacementDomains = [ordered]@{
     BattleExit = @(
         @{ Service = 'battle-result'; Section = 'battle'; Child = 'placement_battle_exit_proof_secret' },
         @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_exit_proof_secret' })
+    # HubDeparture uses this same Hub authority key with a separate HMAC message
+    # domain. It is deliberately not a binding in BattleDeparture below.
     HubTransfer = @(
         @{ Service = 'hub-allocator'; Section = 'hub'; Child = 'placement_hub_transfer_proof_secret' },
         @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret' })
+    BattleDeparture = @(
+        @{ Service = 'ds-allocator'; Section = 'allocator'; Child = 'placement_battle_departure_proof_secret' },
+        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_departure_proof_secret' })
 }
 $script:PandoraMatchResumeAuthBindings = @(
     @{ Service = 'login'; Section = 'login'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' })
+$script:PandoraAllocationAbortAuthBindings = @(
+    @{ Service = 'matchmaker'; Section = 'match'; Child = 'allocation_abort_auth_secret' },
+    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'allocation_abort_auth_secret' },
+    @{ Service = 'ds-allocator'; Section = 'allocator'; Child = 'allocation_abort_auth_secret' })
 
 # 普通 online 发布的 HMAC 连续性契约。所有函数只返回 SHA256 指纹，不把解析出的密钥
 # 放进异常或日志；密钥轮换必须由独立流程完成，不能借普通 Stable/Canary 发布切换。
@@ -306,7 +315,7 @@ function Get-PandoraOnlinePlacementContract {
     }
     $placementSet = @($contract.Values)
     if (@($placementSet | Sort-Object -Unique).Count -ne $placementSet.Count) {
-        throw '四个 placement proof 权限域不得复用 key；拒绝普通发布。'
+        throw 'placement proof 权限域不得复用 key；拒绝普通发布。'
     }
     $hmac = Get-PandoraOnlineHmacContract -Configs $Configs
     $hmacSet = @($hmac.Player.PrimarySha256) + @($hmac.Player.AdditionalSha256) +
@@ -317,6 +326,10 @@ function Get-PandoraOnlinePlacementContract {
     $matchResumeAuth = Get-PandoraOnlineMatchResumeAuthContract -Configs $Configs
     if ($placementSet -contains $matchResumeAuth) {
         throw 'Match resume service identity key 不得与 placement proof key 相交；拒绝普通发布。'
+    }
+    $allocationAbortAuth = Get-PandoraOnlineAllocationAbortAuthContract -Configs $Configs
+    if ($placementSet -contains $allocationAbortAuth) {
+        throw 'allocation abort service identity key 不得与 placement proof key 相交；拒绝普通发布。'
     }
     return [pscustomobject]$contract
 }
@@ -355,6 +368,69 @@ function Assert-PandoraOnlineMatchResumeAuthContinuity {
     $candidate = Get-PandoraOnlineMatchResumeAuthContract -Configs $CandidateConfigs
     if ($live -cne $candidate) {
         throw '普通 online 发布检测到 Match resume service identity key 变化；必须走独立换钥流程，本次未 push/apply。'
+    }
+    return $candidate
+}
+
+function Get-PandoraOnlineAllocationAbortAuthContract {
+    param([Parameter(Mandatory = $true)][System.Collections.IDictionary]$Configs)
+    $baseline = ''
+    foreach ($binding in $script:PandoraAllocationAbortAuthBindings) {
+        $service = [string]$binding.Service
+        if (-not $Configs.Contains($service) -or [string]::IsNullOrWhiteSpace([string]$Configs[$service])) {
+            throw "allocation abort service identity 连续性检查缺 $service 配置；拒绝普通发布。"
+        }
+        $current = Get-PandoraYamlDirectStringSha256 -ServiceName $service `
+            -Text ([string]$Configs[$service]) -SectionName ([string]$binding.Section) `
+            -ChildName ([string]$binding.Child)
+        if ([string]::IsNullOrEmpty($baseline)) { $baseline = $current; continue }
+        if ($current -cne $baseline) {
+            throw 'PVP/PVE Matchmaker 与 DS allocator 的 allocation abort service key 不一致；拒绝普通发布。'
+        }
+    }
+    $hmac = Get-PandoraOnlineHmacContract -Configs $Configs
+    $hmacSet = @($hmac.Player.PrimarySha256) + @($hmac.Player.AdditionalSha256) +
+        @($hmac.DsCallback.PrimarySha256) + @($hmac.DsCallback.AdditionalSha256)
+    if ($hmacSet -contains $baseline) {
+        throw 'allocation abort service key 不得与玩家 Session/DS callback HMAC keyset 相交；拒绝普通发布。'
+    }
+    $matchResume = Get-PandoraOnlineMatchResumeAuthContract -Configs $Configs
+    if ($matchResume -ceq $baseline) {
+        throw 'allocation abort service key 不得与 Match resume service identity key 复用；拒绝普通发布。'
+    }
+    # Avoid recursive calls through Get-PandoraOnlinePlacementContract while
+    # still checking every placement authority domain against this key.
+    foreach ($domain in $script:PandoraPlacementDomains.GetEnumerator()) {
+        $domainHash = ''
+        foreach ($binding in $domain.Value) {
+            $service = [string]$binding.Service
+            if (-not $Configs.Contains($service) -or [string]::IsNullOrWhiteSpace([string]$Configs[$service])) {
+                throw "allocation abort/placement distinctness 检查缺 $service 配置；拒绝普通发布。"
+            }
+            $current = Get-PandoraYamlDirectStringSha256 -ServiceName $service `
+                -Text ([string]$Configs[$service]) -SectionName ([string]$binding.Section) `
+                -ChildName ([string]$binding.Child)
+            if ([string]::IsNullOrEmpty($domainHash)) { $domainHash = $current }
+            elseif ($current -cne $domainHash) {
+                throw "placement $($domain.Key) proof key 在 writer/verifier 间不一致；拒绝普通发布。"
+            }
+        }
+        if ($domainHash -ceq $baseline) {
+            throw "allocation abort service key 不得与 placement $($domain.Key) proof key 复用；拒绝普通发布。"
+        }
+    }
+    return $baseline
+}
+
+function Assert-PandoraOnlineAllocationAbortAuthContinuity {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$LiveConfigs,
+        [Parameter(Mandatory = $true)][System.Collections.IDictionary]$CandidateConfigs
+    )
+    $live = Get-PandoraOnlineAllocationAbortAuthContract -Configs $LiveConfigs
+    $candidate = Get-PandoraOnlineAllocationAbortAuthContract -Configs $CandidateConfigs
+    if ($live -cne $candidate) {
+        throw '普通 online 发布检测到 allocation abort service identity key 变化；必须走独立先 verifier 后 emitter 换钥流程，本次未 push/apply。'
     }
     return $candidate
 }
@@ -1411,6 +1487,82 @@ function Assert-PandoraRenderedOnlineContract {
                 throw "writer Deployment/$name Pod annotation=$($deployments[$name].Annotation)，expected=$digest。"
             }
         }
+    }
+}
+
+function Assert-PandoraPlacementPreflightContract {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ContractRows,
+        [Parameter(Mandatory = $true)][string]$PinnedImage
+    )
+    if ([string]::IsNullOrWhiteSpace((Get-PandoraImageDigestFromReference $PinnedImage))) {
+        throw "player-locator placement preflight image 不是 digest pin:$PinnedImage"
+    }
+    $targets = @()
+    foreach ($row in $ContractRows) {
+        if ([string]::IsNullOrWhiteSpace($row)) { continue }
+        $fields = @([regex]::Split($row, "`t"))
+        if ($fields.Count -lt 2 -or $fields[0] -cne 'Deployment' -or $fields[1] -cne 'player-locator') {
+            continue
+        }
+        if ($fields.Count -ne 13) {
+            throw "player-locator preflight kubectl contract 列数=$($fields.Count)，应为 13:$row"
+        }
+        $targets += ,$fields
+    }
+    if ($targets.Count -ne 1) {
+        throw "online 渲染 player-locator placement preflight Deployment 数=$($targets.Count)，应为 1。"
+    }
+    $fields = $targets[0]
+    if ([string]$fields[2] -cne 'Recreate') {
+        throw "Deployment/player-locator strategy=$($fields[2])，placement writer 升级必须为 Recreate。"
+    }
+    if ([string]$fields[3] -cne $PinnedImage) {
+        throw "Deployment/player-locator 主容器 image=$($fields[3])，expected=$PinnedImage。"
+    }
+    if ([string]$fields[4] -cne 'placement-preflight') {
+        throw "Deployment/player-locator initContainer 必须且只能是 placement-preflight；actual=$($fields[4])。"
+    }
+    if ([string]$fields[5] -cne $PinnedImage) {
+        throw "Deployment/player-locator placement-preflight image=$($fields[5])，必须与主容器使用同一 digest=$PinnedImage。"
+    }
+    if ([string]$fields[6] -cne 'IfNotPresent') {
+        throw "Deployment/player-locator placement-preflight imagePullPolicy=$($fields[6])，expected=IfNotPresent。"
+    }
+    $expectedArgs = '-conf etc/cluster.yaml -placement-preflight -placement-preflight-timeout=10m -placement-preflight-scan-count=1000'
+    if ([string]$fields[7] -cne $expectedArgs) {
+        throw "Deployment/player-locator placement-preflight args 非 canonical；actual=$($fields[7])。"
+    }
+    if (-not [string]::IsNullOrEmpty([string]$fields[8])) {
+        throw 'Deployment/player-locator placement-preflight 禁止覆盖 serving image ENTRYPOINT。'
+    }
+    if ([string]$fields[9] -cne 'conf' -or [string]$fields[10] -cne '/app/etc/cluster.yaml' -or
+        [string]$fields[11] -cne 'player-locator.yaml' -or [string]$fields[12] -cne 'true') {
+        throw 'Deployment/player-locator placement-preflight 必须只读挂载 canonical player-locator 配置。'
+    }
+}
+
+function Assert-PandoraHubAllocatorSingleWriterContract {
+    param([Parameter(Mandatory = $true)][string[]]$ContractRows)
+    $targets = @()
+    foreach ($row in $ContractRows) {
+        if ([string]::IsNullOrWhiteSpace($row)) { continue }
+        $fields = @([regex]::Split($row, "`t"))
+        if ($fields.Count -lt 2 -or $fields[0] -cne 'Deployment' -or $fields[1] -cne 'hub-allocator') {
+            continue
+        }
+        if ($fields.Count -ne 5) {
+            throw "hub-allocator single-writer kubectl contract 列数=$($fields.Count)，应为 5:$row"
+        }
+        $targets += ,$fields
+    }
+    if ($targets.Count -ne 1) {
+        throw "online 渲染 hub-allocator Deployment 数=$($targets.Count)，应为 1。"
+    }
+    $fields = $targets[0]
+    if ([string]$fields[2] -cne '1' -or [string]$fields[3] -cne 'Recreate' -or
+        -not [string]::IsNullOrWhiteSpace([string]$fields[4])) {
+        throw "Deployment/hub-allocator 必须精确为 replicas=1 + Recreate 且无 rollingUpdate；actual replicas=$($fields[2]) strategy=$($fields[3]) rollingUpdate=$($fields[4])。"
     }
 }
 

@@ -279,7 +279,7 @@ func (r *admissionPostCheckDriftRepo) GetAssignment(
 	return r.HubRepo.GetAssignment(ctx, playerID)
 }
 
-func TestModelB_AdmissionCrossSlotAssignmentDriftExactCleanup(t *testing.T) {
+func TestModelB_AdmissionCrossSlotDriftWaitsForPhysicalDeparture(t *testing.T) {
 	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
 	ctx := context.Background()
 	const pod = "pandora-hub-global-1"
@@ -298,11 +298,13 @@ func TestModelB_AdmissionCrossSlotAssignmentDriftExactCleanup(t *testing.T) {
 	uc.repo = &admissionPostCheckDriftRepo{
 		HubRepo: repo, playerID: 1001, driftTo: drifted,
 	}
+	admissionID := uuid.NewString()
+	cred := &HubCredential{
+		InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
+	}
 	_, err = uc.AcknowledgeAdmission(ctx, 1001, oldAssignment.GetAssignmentId(), pod,
-		uuid.NewString(), 1, &HubCredential{
-			InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
-			TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
-		})
+		admissionID, 1, cred)
 	if errcode.As(err) != errcode.ErrInvalidState {
 		t.Fatalf("cross-slot drift code=%v err=%v", errcode.As(err), err)
 	}
@@ -311,9 +313,18 @@ func TestModelB_AdmissionCrossSlotAssignmentDriftExactCleanup(t *testing.T) {
 	sessionKeys, _ := mr.HKeys("pandora:hub:sessions:{" + pod + "}")
 	shard, _, _ := repo.GetShard(ctx, pod)
 	if current.GetAssignmentId() != drifted.GetAssignmentId() || len(reservationKeys) != 0 ||
-		len(sessionKeys) != 0 || shard.GetPlayerCount() != 0 {
-		t.Fatalf("post-ACK drift cleanup failed: assignment=%+v reservations=%v sessions=%v shard=%+v",
+		len(sessionKeys) != 1 || sessionKeys[0] != oldAssignment.GetAssignmentId() ||
+		shard.GetPlayerCount() != 1 {
+		t.Fatalf("post-ACK drift must retain physical owner: assignment=%+v reservations=%v sessions=%v shard=%+v",
 			current, reservationKeys, sessionKeys, shard)
+	}
+	departed, departureErr := uc.AcknowledgeDeparture(ctx, 1001, oldAssignment.GetAssignmentId(), pod,
+		admissionID, 1, cred)
+	if departureErr != nil || !departed.Departed || departed.Conflict {
+		t.Fatalf("physical departure result=%+v err=%v", departed, departureErr)
+	}
+	if sessionKeys, _ = mr.HKeys("pandora:hub:sessions:{" + pod + "}"); len(sessionKeys) != 0 {
+		t.Fatalf("exact physical departure left session: %v", sessionKeys)
 	}
 }
 
@@ -509,6 +520,9 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 	}
 	if sessions, _ := mr.HKeys(sessionKey); len(sessions) != 0 {
 		t.Fatalf("clean departure left sessions: %v", sessions)
+	}
+	if members, err := repo.ListShardMembers(ctx, pod); err != nil || len(members) != 1 || members[0] != playerID {
+		t.Fatalf("offline stable assignment disappeared from drain index: members=%v err=%v", members, err)
 	}
 	// Departure 与下一次 5s heartbeat 之间，audit=1 > connected=0 必须安全暂停路由；
 	// 不能为了重登在 DS 尚未证明连接已消失时超发。

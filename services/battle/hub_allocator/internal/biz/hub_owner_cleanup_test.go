@@ -53,6 +53,7 @@ func newOwnerCleanupFixture(t *testing.T) *ownerCleanupFixture {
 		Found: true, Binding: binding,
 		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP,
 	}}
 	proofSigner, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
 	if err != nil {
@@ -95,6 +96,27 @@ func (f *ownerCleanupFixture) restart(repo data.HubRepo, authRepo data.HubAuthRe
 	uc.SetPlacementPolicy(placement.ModeEnforce, f.placement)
 	uc.SetPlacementProofSigner(f.proofSigner)
 	return uc
+}
+
+func (f *ownerCleanupFixture) beginBattleDeparture(t *testing.T, matchID uint64) placement.Binding {
+	t.Helper()
+	binding := placement.Binding{Version: f.source.GetPlacementVersion() + 1,
+		OperationID: "223e4567-e89b-42d3-a456-426614174000"}
+	sourceBinding := placement.Binding{Version: f.source.GetPlacementVersion(),
+		OperationID: f.source.GetPlacementOperationId()}
+	sourceTarget := placementTargetFromAssignment(f.source)
+	f.placement.mu.Lock()
+	f.placement.snapshot = data.HubPlacementSnapshot{
+		Found: true, Binding: binding, SourceBinding: sourceBinding, SourceTarget: sourceTarget,
+		CurrentRoute:    locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		Target: placement.Target{PodName: "battle-pod", InstanceUID: "battle-uid",
+			InstanceEpoch: 9, AllocationID: "battle-allocation", ReleaseTrack: releasetrack.Stable},
+		TargetMatchID: matchID,
+	}
+	f.placement.mu.Unlock()
+	return binding
 }
 
 type commitThenErrorAssignmentRepo struct {
@@ -222,6 +244,14 @@ func TestHubOwnerCleanupRestartRecoversPublicationAndBindResponseLoss(t *testing
 			if err := restarted.reconcileOwnerCleanups(context.Background()); err != nil {
 				t.Fatalf("cleanup after physical departure: %v", err)
 			}
+			f.placement.mu.Lock()
+			confirmed, confirmCalls := f.placement.snapshot.SourceDepartureConfirmed,
+				f.placement.departureCalls
+			f.placement.mu.Unlock()
+			if !confirmed || confirmCalls != 1 {
+				t.Fatalf("restart cleanup did not confirm locator before publication: confirmed=%v calls=%d",
+					confirmed, confirmCalls)
+			}
 			target, found, err = f.repo.GetAssignment(context.Background(), 1001)
 			if err != nil || !found || target.GetTransferCleanupPending() ||
 				target.GetAssignmentId() == f.source.GetAssignmentId() {
@@ -288,6 +318,355 @@ func TestHubOwnerCleanupResponseLossNeverReleasesNewOwner(t *testing.T) {
 		t.Fatalf("orphan cleanup released new target reservation: %v", reservations)
 	}
 	admitRecoveredTarget(t, f, fresh, current)
+}
+
+func TestBattleDepartureMissingAssignmentReconstructsExactPhysicalCleanup(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(801)
+	binding := f.beginBattleDeparture(t, matchID)
+	if swapped, err := f.repo.CompareAndSwapAssignment(ctx, 1001, f.source, nil, 0); err != nil || !swapped {
+		t.Fatalf("remove canonical assignment: swapped=%v err=%v", swapped, err)
+	}
+
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("connected source must wait for exact Departure: %v", err)
+	}
+	if f.placement.departureCalls != 0 {
+		t.Fatalf("assignment miss was treated as departure proof: calls=%d", f.placement.departureCalls)
+	}
+	tombstone, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found || !tombstone.GetReleaseCleanupPending() ||
+		!assignmentMatchesBattleDepartureSource(tombstone, 1001, f.placement.snapshot) {
+		t.Fatalf("exact source tombstone=%+v found=%v err=%v", tombstone, found, err)
+	}
+	assertExactSourceEviction(t, f, f.uc, tombstone)
+	finishSourceDeparture(t, f, f.uc)
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); err != nil {
+		t.Fatalf("departure replay after physical proof: %v", err)
+	}
+	if f.placement.departureCalls != 1 {
+		t.Fatalf("exact cleanup did not confirm once: calls=%d", f.placement.departureCalls)
+	}
+	if _, found, err := f.repo.GetAssignment(ctx, 1001); err != nil || found {
+		t.Fatalf("source tombstone survived completion: found=%v err=%v", found, err)
+	}
+	refs, err := f.repo.ListTransferCleanups(ctx, f.source.GetHubPodName())
+	if err != nil || len(refs) != 0 {
+		t.Fatalf("source cleanup index survived: refs=%+v err=%v", refs, err)
+	}
+}
+
+func TestBattleDepartureLocatorACKLossReplaysStableProofBeforeDeletingTombstone(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(811)
+	binding := f.beginBattleDeparture(t, matchID)
+	finishSourceDeparture(t, f, f.uc)
+	signer := f.uc.signer.(*fakeSigner)
+	baseSignCalls, baseCommitCalls := signer.calls, f.placement.commitCalls
+	f.placement.pendingDepartureCommitErr = errcode.New(errcode.ErrUnavailable,
+		"injected committed source-departure ACK loss")
+
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("committed locator ACK loss=%v", err)
+	}
+	tombstone, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found || !tombstone.GetReleaseCleanupPending() {
+		t.Fatalf("ACK loss did not retain durable cleanup: %+v found=%v err=%v", tombstone, found, err)
+	}
+	f.placement.mu.Lock()
+	firstProofID := f.placement.snapshot.SourceDepartureProofID
+	firstCalls := f.placement.departureCalls
+	f.placement.mu.Unlock()
+	if firstCalls != 1 || firstProofID == "" || signer.calls != baseSignCalls ||
+		f.placement.commitCalls != baseCommitCalls {
+		t.Fatalf("ACK loss calls=%d proof=%q ticket_delta=%d commit_delta=%d", firstCalls, firstProofID,
+			signer.calls-baseSignCalls, f.placement.commitCalls-baseCommitCalls)
+	}
+
+	restarted := f.restart(nil, nil)
+	if err := restarted.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); err != nil {
+		t.Fatalf("idempotent ACK replay: %v", err)
+	}
+	f.placement.mu.Lock()
+	proofIDs := append([]string(nil), f.placement.departureProofIDs...)
+	lastProof := f.placement.lastDepartureProof
+	f.placement.mu.Unlock()
+	if len(proofIDs) != 2 || proofIDs[0] != firstProofID || proofIDs[1] != firstProofID ||
+		lastProof.SourceMatchID != 0 || lastProof.TargetMatchID != matchID {
+		t.Fatalf("departure proof replay was not stable/exact: ids=%v proof=%+v", proofIDs, lastProof)
+	}
+	if _, found, err := f.repo.GetAssignment(ctx, 1001); err != nil || found {
+		t.Fatalf("confirmed cleanup tombstone survived: found=%v err=%v", found, err)
+	}
+}
+
+func TestBattleDepartureLocatorTimeoutHasZeroCleanupConfirmationTicketOrCommit(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(812)
+	binding := f.beginBattleDeparture(t, matchID)
+	signer := f.uc.signer.(*fakeSigner)
+	baseSignCalls, baseCommitCalls := signer.calls, f.placement.commitCalls
+	f.placement.pendingReadErr = errcode.New(errcode.ErrUnavailable, "locator timeout")
+
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("locator timeout code=%v err=%v", errcode.As(err), err)
+	}
+	if f.placement.departureCalls != 0 || signer.calls != baseSignCalls ||
+		f.placement.commitCalls != baseCommitCalls {
+		t.Fatalf("timeout side effects: confirm=%d ticket_delta=%d commit_delta=%d",
+			f.placement.departureCalls, signer.calls-baseSignCalls,
+			f.placement.commitCalls-baseCommitCalls)
+	}
+	current, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found || current.GetAssignmentId() != f.source.GetAssignmentId() ||
+		current.GetReleaseCleanupPending() {
+		t.Fatalf("timeout mutated source assignment: %+v found=%v err=%v", current, found, err)
+	}
+}
+
+func TestBattleDepartureExactInstanceTeardownCanConfirm(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(813)
+	binding := f.beginBattleDeparture(t, matchID)
+	if err := f.authRepo.RecordInstanceTeardownProof(ctx, f.source.GetHubPodName(),
+		f.source.GetHubInstanceUid(), time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); err != nil {
+		t.Fatalf("exact instance teardown did not unlock departure: %v", err)
+	}
+	f.placement.mu.Lock()
+	confirmed, calls := f.placement.snapshot.SourceDepartureConfirmed, f.placement.departureCalls
+	f.placement.mu.Unlock()
+	if !confirmed || calls != 1 {
+		t.Fatalf("teardown confirmation=%v calls=%d", confirmed, calls)
+	}
+	if sessions, _ := f.mr.HKeys("pandora:hub:sessions:{" + f.source.GetHubPodName() + "}"); len(sessions) != 0 {
+		t.Fatalf("torn-down instance session survived: %v", sessions)
+	}
+}
+
+func TestHubDeparturePhysicalLineageIgnoresHistoricalLogicalSourceMatch(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	current, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found {
+		t.Fatalf("source assignment missing: found=%v err=%v", found, err)
+	}
+	next := proto.Clone(current).(*hubv1.HubAssignmentStorageRecord)
+	next.SourceMatchId = 7001 // retained audit from an earlier Battle→Hub transition
+	if swapped, swapErr := f.repo.CompareAndSwapAssignment(ctx, 1001, current, next,
+		f.uc.assignmentSagaTTL()); swapErr != nil || !swapped {
+		t.Fatalf("seed historical source_match_id: swapped=%v err=%v", swapped, swapErr)
+	}
+	f.source = next
+	const matchID = uint64(816)
+	binding := f.beginBattleDeparture(t, matchID)
+	finishSourceDeparture(t, f, f.uc)
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); err != nil {
+		t.Fatalf("historical logical source match blocked physical proof: %v", err)
+	}
+	f.placement.mu.Lock()
+	proof := f.placement.lastDepartureProof
+	f.placement.mu.Unlock()
+	if proof.SourceMatchID != 0 {
+		t.Fatalf("historical logical match leaked into Hub physical proof: %+v", proof)
+	}
+}
+
+func TestTerminalCancellationHubProofUsesPhysicalSourceMatchZero(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const cancelledMatchID = uint64(814)
+	targetBinding := placement.Binding{Version: f.source.GetPlacementVersion() + 1,
+		OperationID: "323e4567-e89b-42d3-a456-426614174000", SourceMatchID: cancelledMatchID}
+	f.placement.mu.Lock()
+	f.placement.snapshot = data.HubPlacementSnapshot{
+		Found: true, Binding: targetBinding,
+		SourceBinding: placement.Binding{Version: f.source.GetPlacementVersion(),
+			OperationID: f.source.GetPlacementOperationId()},
+		SourceTarget:    placementTargetFromAssignment(f.source),
+		CurrentRoute:    locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_MATCH_TERMINAL,
+	}
+	f.placement.target = placement.Target{}
+	f.placement.mu.Unlock()
+	signer := f.uc.signer.(*fakeSigner)
+	baseSignCalls := signer.calls
+
+	if got, err := f.uc.AssignHubWithPlacement(ctx, 1001, "global", 0, 0, targetBinding); errcode.As(err) != errcode.ErrUnavailable || got != nil {
+		t.Fatalf("connected terminal-cancel source published target: got=%+v err=%v", got, err)
+	}
+	if f.placement.departureCalls != 0 || signer.calls != baseSignCalls {
+		t.Fatalf("pre-departure confirm=%d ticket_delta=%d", f.placement.departureCalls,
+			signer.calls-baseSignCalls)
+	}
+	target, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found || !target.GetTransferCleanupPending() {
+		t.Fatalf("terminal-cancel cleanup target=%+v found=%v err=%v", target, found, err)
+	}
+	assertExactSourceEviction(t, f, f.uc, target)
+	finishSourceDeparture(t, f, f.uc)
+	got, err := f.uc.AssignHubWithPlacement(ctx, 1001, "global", 0, 0, targetBinding)
+	if err != nil || got == nil || got.HubTicket == "" {
+		t.Fatalf("terminal-cancel recovery=%+v err=%v", got, err)
+	}
+	f.placement.mu.Lock()
+	proof := f.placement.lastDepartureProof
+	f.placement.mu.Unlock()
+	if proof.SourceMatchID != 0 || proof.TargetMatchID != 0 ||
+		proof.TargetRoute != placement.RouteHub || proof.ProofType != placement.ProofHubDeparture ||
+		proof.PlacementVersion != targetBinding.Version || proof.OperationID != targetBinding.OperationID {
+		t.Fatalf("logical cancelled match leaked into physical Hub proof: %+v", proof)
+	}
+	if signer.calls != baseSignCalls+1 {
+		t.Fatalf("ticket signed before/extra after confirm: delta=%d", signer.calls-baseSignCalls)
+	}
+}
+
+func TestBattleToHubConsumesBattleConfirmationWithoutMintingIt(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	finishSourceDeparture(t, f, f.uc)
+	if err := f.uc.ReleaseHub(ctx, 1001); err != nil {
+		t.Fatalf("remove old Hub assignment: %v", err)
+	}
+	const matchID = uint64(815)
+	targetBinding := placement.Binding{Version: 3,
+		OperationID: "423e4567-e89b-42d3-a456-426614174000", SourceMatchID: matchID}
+	battleSource := placement.Target{PodName: "battle-source", InstanceUID: "battle-source-uid",
+		InstanceEpoch: 5, AllocationID: "battle-source-allocation", ReleaseTrack: releasetrack.Stable}
+	f.placement.mu.Lock()
+	f.placement.snapshot = data.HubPlacementSnapshot{
+		Found: true, Binding: targetBinding,
+		SourceBinding: placement.Binding{Version: 2,
+			OperationID: "523e4567-e89b-42d3-a456-426614174000"},
+		SourceTarget: battleSource,
+		CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE, CurrentMatchID: matchID,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_MATCH_TERMINAL,
+	}
+	f.placement.target = placement.Target{}
+	baseConfirmCalls, baseCommitCalls := f.placement.departureCalls, f.placement.commitCalls
+	f.placement.mu.Unlock()
+	signer := f.uc.signer.(*fakeSigner)
+	baseSignCalls := signer.calls
+
+	if got, err := f.uc.AssignHubWithPlacement(ctx, 1001, "global", 0, 0, targetBinding); errcode.As(err) != errcode.ErrLocatorConflict || got != nil {
+		t.Fatalf("unconfirmed Battle source got Hub ticket: got=%+v err=%v", got, err)
+	}
+	target, found, err := f.repo.GetAssignment(ctx, 1001)
+	if err != nil || !found {
+		t.Fatalf("recoverable target assignment missing: %+v found=%v err=%v", target, found, err)
+	}
+	cred := f.sourceCredential
+	if target.GetHubPodName() != f.source.GetHubPodName() {
+		cred = f.targetCredential
+	}
+	if admitted, admissionErr := f.uc.AcknowledgeAdmissionWithPlacement(ctx, 1001,
+		target.GetAssignmentId(), target.GetHubPodName(), uuid.NewString(), 2, targetBinding, cred); errcode.As(admissionErr) != errcode.ErrLocatorConflict || admitted != nil {
+		t.Fatalf("unconfirmed Battle source reached local Admission: got=%+v err=%v", admitted, admissionErr)
+	}
+	if signer.calls != baseSignCalls || f.placement.departureCalls != baseConfirmCalls ||
+		f.placement.commitCalls != baseCommitCalls {
+		t.Fatalf("Hub forged/progressed Battle departure: ticket_delta=%d confirm_delta=%d commit_delta=%d",
+			signer.calls-baseSignCalls, f.placement.departureCalls-baseConfirmCalls,
+			f.placement.commitCalls-baseCommitCalls)
+	}
+
+	f.placement.mu.Lock()
+	f.placement.snapshot.SourceDepartureConfirmed = true
+	f.placement.snapshot.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPARTURE
+	f.placement.snapshot.SourceDepartureProofID = "battle-departure:815:1001"
+	f.placement.mu.Unlock()
+	assigned, err := f.uc.AssignHubWithPlacement(ctx, 1001, "global", 0, 0, targetBinding)
+	if err != nil || assigned == nil || assigned.HubTicket == "" {
+		t.Fatalf("confirmed Battle source did not publish Hub target: %+v err=%v", assigned, err)
+	}
+	admissionID := uuid.NewString()
+	admitted, err := f.uc.AcknowledgeAdmissionWithPlacement(ctx, 1001,
+		target.GetAssignmentId(), target.GetHubPodName(), admissionID, 2, targetBinding, cred)
+	if err != nil || admitted == nil || !admitted.Admitted || !admitted.PlacementCommitted {
+		t.Fatalf("confirmed Battle source admission=%+v err=%v", admitted, err)
+	}
+	if f.placement.departureCalls != baseConfirmCalls {
+		t.Fatalf("Hub minted Battle proof calls=%d want=%d", f.placement.departureCalls, baseConfirmCalls)
+	}
+}
+
+func TestBattleDepartureMissingAssignmentSucceedsOnlyAfterExactLedgerAbsence(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(802)
+	binding := f.beginBattleDeparture(t, matchID)
+	finishSourceDeparture(t, f, f.uc)
+	if swapped, err := f.repo.CompareAndSwapAssignment(ctx, 1001, f.source, nil, 0); err != nil || !swapped {
+		t.Fatalf("remove canonical assignment: swapped=%v err=%v", swapped, err)
+	}
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); err != nil {
+		t.Fatalf("exact AlreadyAbsent source must converge: %v", err)
+	}
+	if _, found, err := f.repo.GetAssignment(ctx, 1001); err != nil || found {
+		t.Fatalf("temporary cleanup tombstone survived: found=%v err=%v", found, err)
+	}
+	members, err := f.repo.ListShardMembers(ctx, f.source.GetHubPodName())
+	if err != nil || len(members) != 0 {
+		t.Fatalf("stale source member index survived: members=%v err=%v", members, err)
+	}
+}
+
+func TestBattleDepartureRejectsAssignmentABAThatDiffersFromPlacementSource(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(803)
+	binding := f.beginBattleDeparture(t, matchID)
+	aba := proto.Clone(f.source).(*hubv1.HubAssignmentStorageRecord)
+	aba.AssignmentId = uuid.NewString()
+	if swapped, err := f.repo.CompareAndSwapAssignment(ctx, 1001, f.source, aba, f.uc.assignmentSagaTTL()); err != nil || !swapped {
+		t.Fatalf("inject assignment ABA: swapped=%v err=%v", swapped, err)
+	}
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); errcode.As(err) != errcode.ErrLocatorConflict {
+		t.Fatalf("assignment ABA must fail closed: %v", err)
+	}
+	if f.placement.departureCalls != 0 {
+		t.Fatalf("assignment ABA reached locator confirmation: calls=%d", f.placement.departureCalls)
+	}
+	if sessions, _ := f.mr.HKeys("pandora:hub:sessions:{" + f.source.GetHubPodName() + "}"); len(sessions) != 1 || sessions[0] != f.source.GetAssignmentId() {
+		t.Fatalf("ABA attempt changed exact source session: %v", sessions)
+	}
+	refs, err := f.repo.ListTransferCleanups(ctx, f.source.GetHubPodName())
+	if err != nil || len(refs) != 0 {
+		t.Fatalf("ABA attempt published cleanup: refs=%+v err=%v", refs, err)
+	}
+}
+
+func TestBattleDepartureMissingAssignmentWithoutSourceTupleIsUnknown(t *testing.T) {
+	f := newOwnerCleanupFixture(t)
+	ctx := context.Background()
+	const matchID = uint64(804)
+	binding := f.beginBattleDeparture(t, matchID)
+	f.placement.mu.Lock()
+	f.placement.snapshot.SourceTarget = placement.Target{}
+	f.placement.mu.Unlock()
+	if swapped, err := f.repo.CompareAndSwapAssignment(ctx, 1001, f.source, nil, 0); err != nil || !swapped {
+		t.Fatalf("remove canonical assignment: swapped=%v err=%v", swapped, err)
+	}
+	if err := f.uc.EnsureHubDepartureForBattle(ctx, 1001, matchID, binding); errcode.As(err) != errcode.ErrLocatorConflict {
+		t.Fatalf("missing source tuple must remain UNKNOWN: %v", err)
+	}
+	if f.placement.departureCalls != 0 {
+		t.Fatalf("UNKNOWN source reached locator confirmation: calls=%d", f.placement.departureCalls)
+	}
+	if _, found, err := f.repo.GetAssignment(ctx, 1001); err != nil || found {
+		t.Fatalf("malformed source created a tombstone: found=%v err=%v", found, err)
+	}
 }
 
 func TestReleaseHubDurableTombstoneWaitsForPhysicalDeparture(t *testing.T) {

@@ -17,7 +17,7 @@
 #                                                                              # 本地 minikube(docker driver)+ udp-relay 回程
 #   pwsh tools/scripts/gen_cluster_config.ps1 -HostAllocators                  # 混合模式:容器服务回连宿主 allocator
 #   pwsh tools/scripts/gen_cluster_config.ps1 -AllocatorMode agones -Prod -Secret <玩家面密钥> -DsSecret <DS回调面密钥>
-#                                                                              # 生产还必须注入四把 placement key + 独立 Match resume service key
+#                                                                              # 生产还必须注入五把 placement key + 独立 Match resume / allocation abort service key
 #
 # ⚠️ 安全(§5 审核):生产判定**只看 -Prod**(不再从 -AllocatorAdvertiseHost 推断,避免线上配了
 #    advertise host 就被误判为 dev 而放行公开 dev 密钥)。-Prod 时必须提供**两把**真密钥:
@@ -25,8 +25,10 @@
 #    各自非空 / ≠dev / ≥32B、且**彼此不同**(P0 审核:同一密钥覆盖玩家 JWT 与 DS 回调 = 泄露即互通);
 #    也可分别用环境变量 PANDORA_JWT_SECRET / PANDORA_DS_JWT_SECRET。注入后在 <OutDir>/envoy-jwks.json
 #    产出匹配玩家面密钥的 Envoy JWKS + 校验 committed envoy.yaml。
-#    placement 另需 account-bootstrap / match-start / battle-exit / hub-transfer 四把独立 ≥32B key，
+#    placement 另需 account-bootstrap / match-start / battle-exit / hub-transfer /
+#    battle-departure 五把独立 ≥32B key，
 #    对应 PANDORA_PLACEMENT_*_SECRET；Login→Matchmaker 另用 PANDORA_MATCH_RESUME_AUTH_SECRET；
+#    Matchmaker→DS allocator 销毁未入场分配另用 PANDORA_ALLOCATION_ABORT_AUTH_SECRET；
 #    生成器拒绝全部权限域之间的密钥复用。
 #
 # 三条链路与 allocator 模式的对应(由 start.ps1 驱动):
@@ -52,15 +54,19 @@ param(
     # player_locator 校验 DS→后端回调令牌)。**必须与玩家面 -Secret 不同**——两把同值时,泄露玩家
     # 面密钥即可伪造 DS 回调令牌绕过范围绑定(审核 P0:生产不得用同一密钥覆盖玩家 JWT 与 DS 回调)。
     [string]$DsSecret = $env:PANDORA_DS_JWT_SECRET,
-    # 版本化 placement 的四个写权限域必须使用彼此独立的 HMAC key。生产从 Secret
+    # 版本化 placement 的五个写/物理离场权限域必须使用彼此独立的 HMAC key。生产从 Secret
     # manager 注入；生成产物只把每个 writer 所需的子集写进 pandora-config Secret。
     [string]$PlacementAccountBootstrapSecret = $env:PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET,
     [string]$PlacementMatchStartSecret = $env:PANDORA_PLACEMENT_MATCH_START_SECRET,
     [string]$PlacementBattleExitSecret = $env:PANDORA_PLACEMENT_BATTLE_EXIT_SECRET,
     [string]$PlacementHubTransferSecret = $env:PANDORA_PLACEMENT_HUB_TRANSFER_SECRET,
+    [string]$PlacementBattleDepartureSecret = $env:PANDORA_PLACEMENT_BATTLE_DEPARTURE_SECRET,
     # Login→Matchmaker ResolvePlayerMatchContext 的唯一服务身份 key。请求 HMAC 绑定
     # method/player/timestamp/nonce，Matchmaker 用共享 Redis SETNX 防跨副本重放。
     [string]$MatchResumeAuthSecret = $env:PANDORA_MATCH_RESUME_AUTH_SECRET,
+    # Matchmaker(PVP/PVE)→DS allocator AbortPreactiveBattle 的独立 payload-bound HMAC。
+    # 该权限可物理删除精确 GameServer，绝不能与 JWT、DS callback、placement 或 resume 复用。
+    [string]$AllocationAbortAuthSecret = $env:PANDORA_ALLOCATION_ABORT_AUTH_SECRET,
     # 版本化 placement rollout：生产默认 enforce；shadow 只用于先服务端后客户端的短期灰度。
     [ValidateSet('', 'off', 'shadow', 'enforce')]
     [string]$PlacementMode = '',
@@ -118,8 +124,10 @@ $DevPlacementSecrets = [ordered]@{
     MatchStart       = 'pandora-dev-placement-match-start-key-v1!'
     BattleExit       = 'pandora-dev-placement-battle-exit-key-v1!'
     HubTransfer      = 'pandora-dev-placement-hub-transfer-key-v1!'
+    BattleDeparture  = 'pandora-dev-placement-battle-departure-key-v1!'
 }
 $DevMatchResumeAuthSecret = 'pandora-dev-match-resume-auth-key-v1!'
+$DevAllocationAbortAuthSecret = 'pandora-dev-allocation-abort-auth-key-v1!'
 
 
 $ErrorActionPreference = 'Stop'
@@ -231,7 +239,7 @@ for ($i = 0; $i -lt $allEffective.Count; $i++) {
 }
 
 # ===== placement proof key 分权 =====
-# 四个 writer 只拿各自 key；locator 作为唯一 verifier 拿四把。生产不允许缺 key、公开 dev key、
+# 五个权限域的 writer 只拿各自 key；locator 作为唯一 verifier 拿五把。生产不允许缺 key、公开 dev key、
 # 跨域复用或与玩家/DS callback key 复用。非生产未提供时使用确定性的公开 dev key。
 function Resolve-PlacementSecret {
     param(
@@ -268,6 +276,8 @@ $EffectivePlacementSecrets = [ordered]@{
         '-PlacementBattleExitSecret' 'PANDORA_PLACEMENT_BATTLE_EXIT_SECRET'
     HubTransfer = Resolve-PlacementSecret $PlacementHubTransferSecret $DevPlacementSecrets.HubTransfer `
         '-PlacementHubTransferSecret' 'PANDORA_PLACEMENT_HUB_TRANSFER_SECRET'
+    BattleDeparture = Resolve-PlacementSecret $PlacementBattleDepartureSecret $DevPlacementSecrets.BattleDeparture `
+        '-PlacementBattleDepartureSecret' 'PANDORA_PLACEMENT_BATTLE_DEPARTURE_SECRET'
 }
 $EffectiveMatchResumeAuthSecret = if ([string]::IsNullOrWhiteSpace($MatchResumeAuthSecret)) {
     if ($Prod) {
@@ -286,6 +296,23 @@ $EffectiveMatchResumeAuthSecret = if ([string]::IsNullOrWhiteSpace($MatchResumeA
     }
     $MatchResumeAuthSecret
 }
+$EffectiveAllocationAbortAuthSecret = if ([string]::IsNullOrWhiteSpace($AllocationAbortAuthSecret)) {
+    if ($Prod) {
+        throw '[FATAL] -Prod 必须提供 -AllocationAbortAuthSecret 或 PANDORA_ALLOCATION_ABORT_AUTH_SECRET；未入场 GameServer 销毁 RPC 不得使用公开 dev key。'
+    }
+    $DevAllocationAbortAuthSecret
+} else {
+    if ([System.Text.Encoding]::UTF8.GetByteCount($AllocationAbortAuthSecret) -lt 32) {
+        throw '[FATAL] -AllocationAbortAuthSecret 至少需要 32 字节。'
+    }
+    if ($AllocationAbortAuthSecret -match '[\x00-\x1F\x7F-\x9F]') {
+        throw '[FATAL] -AllocationAbortAuthSecret 含控制字符，拒绝写入 YAML。'
+    }
+    if ($Prod -and $AllocationAbortAuthSecret -ceq $DevAllocationAbortAuthSecret) {
+        throw '[FATAL] -Prod 的 allocation abort service key 不能使用仓库公开 dev key。'
+    }
+    $AllocationAbortAuthSecret
+}
 $allAuthoritySecrets = @(
     @{ n = '玩家面 primary'; v = $effectivePlayerPrimary },
     @{ n = '玩家面 additional'; v = $PlayerAdditionalToInject },
@@ -295,7 +322,9 @@ $allAuthoritySecrets = @(
     @{ n = 'placement match start'; v = $EffectivePlacementSecrets.MatchStart },
     @{ n = 'placement battle exit'; v = $EffectivePlacementSecrets.BattleExit },
     @{ n = 'placement hub transfer'; v = $EffectivePlacementSecrets.HubTransfer },
-    @{ n = 'Match resume service identity'; v = $EffectiveMatchResumeAuthSecret }
+    @{ n = 'placement battle departure'; v = $EffectivePlacementSecrets.BattleDeparture },
+    @{ n = 'Match resume service identity'; v = $EffectiveMatchResumeAuthSecret },
+    @{ n = 'allocation abort service identity'; v = $EffectiveAllocationAbortAuthSecret }
 ) | Where-Object { $null -ne $_.v }
 for ($i = 0; $i -lt $allAuthoritySecrets.Count; $i++) {
     for ($j = $i + 1; $j -lt $allAuthoritySecrets.Count; $j++) {
@@ -458,16 +487,25 @@ $PlacementSecretBindings = @(
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
     @{ Service = 'battle-result'; Section = 'battle'; Child = 'placement_battle_exit_proof_secret'; Kind = 'BattleExit' },
+    # HubDeparture 复用 HubTransfer authority key；二者在 Go canonical message 中 domain-separated。
+    # 不给 Hub 注入 BattleDeparture key，避免 Hub 伪造 Battle→Hub 的物理离场证明。
     @{ Service = 'hub-allocator'; Section = 'hub'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' },
     @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_account_bootstrap_proof_secret'; Kind = 'AccountBootstrap' },
     @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
     @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_exit_proof_secret'; Kind = 'BattleExit' },
-    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' }
+    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' },
+    @{ Service = 'ds-allocator'; Section = 'allocator'; Child = 'placement_battle_departure_proof_secret'; Kind = 'BattleDeparture' },
+    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_departure_proof_secret'; Kind = 'BattleDeparture' }
 )
 $MatchResumeAuthSecretBindings = @(
     @{ Service = 'login'; Section = 'login'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' }
+)
+$AllocationAbortAuthSecretBindings = @(
+    @{ Service = 'matchmaker'; Section = 'match'; Child = 'allocation_abort_auth_secret' },
+    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'allocation_abort_auth_secret' },
+    @{ Service = 'ds-allocator'; Section = 'allocator'; Child = 'allocation_abort_auth_secret' }
 )
 
 # 精确定位 YAML 节点的直接子项(默认 `secret`,也用于 `mode`)。不使用跨段 `.*?`：那会在 jwt 缺 secret 时越过同级
@@ -1020,6 +1058,14 @@ function Convert-Secret([string]$ServiceName, [string]$Text) {
                 $DevMatchResumeAuthSecret $EffectiveMatchResumeAuthSecret
         }
     }
+    foreach ($binding in @($AllocationAbortAuthSecretBindings | Where-Object Service -CEQ $ServiceName)) {
+        if ($EffectiveAllocationAbortAuthSecret -ceq $DevAllocationAbortAuthSecret) {
+            Assert-YamlDirectString $ServiceName $Text $binding.Section $binding.Child $DevAllocationAbortAuthSecret
+        } else {
+            $Text = Set-YamlDirectString $ServiceName $Text $binding.Section $binding.Child `
+                $DevAllocationAbortAuthSecret $EffectiveAllocationAbortAuthSecret
+        }
+    }
     if ($ServiceName -ceq 'login') {
         if ($null -ne $PlacementModeToInject) { $Text = Set-YamlPlacementMode $ServiceName $Text 'login' $PlacementModeToInject }
         else { Assert-YamlDirectString $ServiceName $Text 'login' 'placement_mode' 'off' }
@@ -1299,6 +1345,10 @@ function Assert-GeneratedSet {
             Assert-YamlDirectString $svc.Name $yaml $binding.Section $binding.Child `
                 $EffectiveMatchResumeAuthSecret
         }
+        foreach ($binding in @($AllocationAbortAuthSecretBindings | Where-Object Service -CEQ $svc.Name)) {
+            Assert-YamlDirectString $svc.Name $yaml $binding.Section $binding.Child `
+                $EffectiveAllocationAbortAuthSecret
+        }
         if ($svc.Name -ceq 'login') {
             Assert-YamlDirectString $svc.Name $yaml 'login' 'placement_mode' `
                 $(if ($null -ne $PlacementModeToInject) { $PlacementModeToInject } else { 'off' })
@@ -1536,4 +1586,4 @@ finally {
     }
 }
 
-Write-Host "[ OK ] 生成并事务发布 $($yamlNames.Count) 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators, player_secret=$(if ($null -ne $PlayerSecretToInject) { '真密钥' } else { 'dev' }), ds_secret=$(if ($null -ne $DsSecretToInject) { '真密钥' } else { 'dev' }), match_resume_auth=$(if ($EffectiveMatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) { 'dev' } else { '真密钥' })) -> $OutDir" -ForegroundColor Green
+Write-Host "[ OK ] 生成并事务发布 $($yamlNames.Count) 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators, player_secret=$(if ($null -ne $PlayerSecretToInject) { '真密钥' } else { 'dev' }), ds_secret=$(if ($null -ne $DsSecretToInject) { '真密钥' } else { 'dev' }), match_resume_auth=$(if ($EffectiveMatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) { 'dev' } else { '真密钥' }), allocation_abort_auth=$(if ($EffectiveAllocationAbortAuthSecret -ceq $DevAllocationAbortAuthSecret) { 'dev' } else { '真密钥' })) -> $OutDir" -ForegroundColor Green

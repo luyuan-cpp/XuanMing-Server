@@ -1,11 +1,61 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/services/battle/hub_allocator/internal/biz"
 )
+
+func TestKubernetesDeploymentUsesRecreateSingleWriterStrategy(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot resolve test source path")
+	}
+	manifestPath := filepath.Clean(filepath.Join(filepath.Dir(testFile), "..", "..", "..", "..", "..",
+		"deploy", "k8s", "services", "services.yaml"))
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const deploymentMarker = "metadata: { name: hub-allocator, namespace: pandora, labels: { app: hub-allocator } }"
+	start := strings.Index(string(raw), deploymentMarker)
+	if start < 0 {
+		t.Fatal("hub-allocator Deployment not found")
+	}
+	section := string(raw)[start:]
+	if end := strings.Index(section, "\n---"); end >= 0 {
+		section = section[:end]
+	}
+	if !strings.Contains(section, "replicas: 1") ||
+		!strings.Contains(section, "strategy: { type: Recreate }") {
+		t.Fatalf("hub-allocator must be a single-writer Recreate Deployment:\n%s", section)
+	}
+}
+
+func TestHubWriterStagesCapabilityButCannotServeBeforePolicyV3(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(raw)
+	feature := strings.Index(source, `"hub-successor-lease-v1"`)
+	gate := strings.Index(source, "fence.RequiredPolicyGeneration() != dsauthfence.RequiredPolicyGenerationV3")
+	sweep := strings.Index(source, "go uc.RunHeartbeatSweep")
+	serve := strings.Index(source, "app.Run()")
+	if feature < 0 || gate < 0 || sweep < 0 || serve < 0 || gate > sweep || gate > serve {
+		t.Fatalf("Hub must advertise V3 support but block all background/RPC writers while staged: feature=%d gate=%d sweep=%d serve=%d",
+			feature, gate, sweep, serve)
+	}
+	stagingBlock := source[gate:sweep]
+	if !strings.Contains(stagingBlock, "<-fence.Lost()") || !strings.Contains(stagingBlock, "os.Exit(0)") {
+		t.Fatal("staged Hub must wait for the V2->V3 watch event and restart before serving")
+	}
+}
 
 func TestHubTicketSignerB1RS256CompleteBinding(t *testing.T) {
 	privatePEM, publicKey, kid, err := auth.GenerateDSTicketKeyPair()

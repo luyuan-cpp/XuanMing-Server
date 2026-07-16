@@ -336,20 +336,24 @@ function Assert-OnlineHmacGateOrdering([string]$OnlineSource) {
     $liveRead = $OnlineSource.IndexOf('get secret/pandora-config', [StringComparison]::Ordinal)
     $generate = $OnlineSource.IndexOf('& "$ScriptDir/gen_cluster_config.ps1" @genArgs', [StringComparison]::Ordinal)
     $continuity = $OnlineSource.IndexOf('Assert-PandoraOnlineHmacContinuity', [StringComparison]::Ordinal)
+    $abortContinuity = $OnlineSource.IndexOf('Assert-PandoraOnlineAllocationAbortAuthContinuity', [StringComparison]::Ordinal)
     $buildPush = $OnlineSource.IndexOf('if ($BuildPush)', [StringComparison]::Ordinal)
     $runtimeOverlay = $OnlineSource.IndexOf('New-OnlineRuntimeOverlay', [StringComparison]::Ordinal)
     $configApply = $OnlineSource.IndexOf('Apply-PandoraConfigSecret', [StringComparison]::Ordinal)
-    foreach ($position in @($liveRead, $generate, $continuity, $buildPush, $runtimeOverlay, $configApply)) {
+    foreach ($position in @($liveRead, $generate, $continuity, $abortContinuity, $buildPush, $runtimeOverlay, $configApply)) {
         Assert-True ($position -ge 0) 'online HMAC 门禁顺序所需 marker 必须存在'
     }
     Assert-True ($liveRead -lt $generate) '必须先读取 live pandora-config 再生成候选配置'
     Assert-True ($generate -lt $continuity) '必须比较实际生成的候选配置'
     Assert-True ($continuity -lt $buildPush) 'HMAC 连续性门禁必须早于 BuildPush'
+    Assert-True ($abortContinuity -gt $generate -and $abortContinuity -lt $buildPush) `
+        'allocation abort service key 连续性门禁必须在候选生成后、BuildPush 前执行'
     Assert-True ($continuity -lt $runtimeOverlay -and $continuity -lt $configApply) `
         'HMAC 连续性门禁必须早于 runtime overlay 与集群配置写入'
 }
 
-function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTicket) {
+function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTicket, [switch]$PlacementPreflight,
+    [switch]$HubAllocatorSingleWriter) {
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-contract-test-' + [guid]::NewGuid().ToString('N') + '.yaml')
     try {
         # 只把本次 jsonpath 需要的 Kind 交给 kubectl client parser；online render 还包含
@@ -364,6 +368,10 @@ function Get-TestContractRows([string]$Manifest, [switch]$Fleet, [switch]$DSTick
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.template.spec.containers[*].image}{"\t"}{.spec.template.spec.template.spec.containers[*].imagePullPolicy}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\t"}{.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.labels.pandora\.dev/release-track}{"\t"}{.spec.template.spec.template.metadata.annotations.pandora\.dev/release-track}{"\n"}'
         } elseif ($DSTicket) {
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket")].secret.secretName}{"\t"}{.spec.template.spec.volumes[?(@.name=="dsticket-jwks")].configMap.name}{"\n"}'
+        } elseif ($PlacementPreflight) {
+            '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.strategy.type}{"\t"}{.spec.template.spec.containers[?(@.name=="player-locator")].image}{"\t"}{.spec.template.spec.initContainers[*].name}{"\t"}{.spec.template.spec.initContainers[*].image}{"\t"}{.spec.template.spec.initContainers[*].imagePullPolicy}{"\t"}{.spec.template.spec.initContainers[*].args[*]}{"\t"}{.spec.template.spec.initContainers[*].command[*]}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].name}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].mountPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].subPath}{"\t"}{.spec.template.spec.initContainers[*].volumeMounts[*].readOnly}{"\n"}'
+        } elseif ($HubAllocatorSingleWriter) {
+            '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.replicas}{"\t"}{.spec.strategy.type}{"\t"}{.spec.strategy.rollingUpdate}{"\n"}'
         } else {
             '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.template.spec.containers[*].name}{"\t"}{.spec.template.spec.containers[*].image}{"\t"}{.spec.template.metadata.annotations.pandora\.dev/image-digest}{"\n"}'
         }
@@ -920,6 +928,11 @@ try {
     foreach ($name in $services) { $pins[$name] = "registry.example.com:5000/pandora/$name@$($digests[$name])" }
     $contractRows = Get-TestContractRows -Manifest $rendered
     Assert-PandoraRenderedOnlineContract -ContractRows $contractRows -Pins $pins -Digests $digests -ServiceNames $services -WriterServices $writers
+    $placementPreflightRows = Get-TestContractRows -Manifest $rendered -PlacementPreflight
+    Assert-PandoraPlacementPreflightContract -ContractRows $placementPreflightRows `
+        -PinnedImage ([string]$pins['player-locator'])
+    $hubSingleWriterRows = Get-TestContractRows -Manifest $rendered -HubAllocatorSingleWriter
+    Assert-PandoraHubAllocatorSingleWriterContract -ContractRows $hubSingleWriterRows
     $dsticketRows = Get-TestContractRows -Manifest $rendered -DSTicket
     Assert-PandoraDSTicketSignerRevisionContract -ContractRows $dsticketRows -Revision 7
 
@@ -949,6 +962,53 @@ try {
         $rows = Get-TestContractRows -Manifest $initContainerSmuggle
         Assert-PandoraRenderedOnlineContract -ContractRows $rows -Pins $pins -Digests $digests -ServiceNames $services -WriterServices $writers
     } '期望 digest 只在 initContainer 不能掩护 mutable 主容器'
+
+    $preflightIndex = -1
+    for ($i = 0; $i -lt $placementPreflightRows.Count; $i++) {
+        if ($placementPreflightRows[$i] -cmatch '^Deployment\tplayer-locator\t') {
+            $preflightIndex = $i
+            break
+        }
+    }
+    Assert-True ($preflightIndex -ge 0) 'placement preflight 结构行必须存在'
+    foreach ($mutation in @(
+        @{ Name = 'RollingUpdate writer overlap'; Field = 2; Value = 'RollingUpdate' },
+        @{ Name = 'missing preflight init'; Field = 4; Value = '' },
+        @{ Name = 'different preflight digest'; Field = 5; Value = 'registry.example.com:5000/pandora/player-locator@sha256:' + ('f' * 64) },
+        @{ Name = 'preflight mode omitted'; Field = 7; Value = '-conf etc/cluster.yaml' },
+        @{ Name = 'alternate entrypoint'; Field = 8; Value = '/bin/sh' },
+        @{ Name = 'writable config mount'; Field = 12; Value = 'false' }
+    )) {
+        $mutantRows = @($placementPreflightRows)
+        $mutantFields = @([regex]::Split($mutantRows[$preflightIndex], "`t"))
+        $mutantFields[[int]$mutation.Field] = [string]$mutation.Value
+        $mutantRows[$preflightIndex] = $mutantFields -join "`t"
+        Assert-Throws {
+            Assert-PandoraPlacementPreflightContract -ContractRows $mutantRows `
+                -PinnedImage ([string]$pins['player-locator'])
+        } ([string]$mutation.Name)
+    }
+    $hubSingleWriterIndex = -1
+    for ($i = 0; $i -lt $hubSingleWriterRows.Count; $i++) {
+        if ($hubSingleWriterRows[$i] -cmatch '^Deployment\thub-allocator\t') {
+            $hubSingleWriterIndex = $i
+            break
+        }
+    }
+    Assert-True ($hubSingleWriterIndex -ge 0) 'hub-allocator single-writer 结构行必须存在'
+    foreach ($mutation in @(
+        @{ Name = 'hub multi-replica writer'; Field = 2; Value = '2' },
+        @{ Name = 'hub rolling writer overlap'; Field = 3; Value = 'RollingUpdate' },
+        @{ Name = 'hub Recreate carries rollingUpdate'; Field = 4; Value = 'map[maxSurge:1 maxUnavailable:0]' }
+    )) {
+        $mutantRows = @($hubSingleWriterRows)
+        $mutantFields = @([regex]::Split($mutantRows[$hubSingleWriterIndex], "`t"))
+        $mutantFields[[int]$mutation.Field] = [string]$mutation.Value
+        $mutantRows[$hubSingleWriterIndex] = $mutantFields -join "`t"
+        Assert-Throws {
+            Assert-PandoraHubAllocatorSingleWriterContract -ContractRows $mutantRows
+        } ([string]$mutation.Name)
+    }
 }
 finally {
     if (Test-Path -LiteralPath $runtimeOverlay) {

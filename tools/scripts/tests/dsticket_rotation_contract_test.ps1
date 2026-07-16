@@ -156,11 +156,16 @@ function New-TestSignerDeployment([string]$Name, [int]$SignerRevision, [int]$Log
             name = 'dsticket-jwks'; mountPath = '/run/config/pandora-dsticket'; readOnly = $true
         }
     }
+    $strategy = if ($Name -ceq 'hub-allocator') {
+        [pscustomobject]@{ type = 'Recreate' }
+    } else {
+        [pscustomobject]@{ type = 'RollingUpdate' }
+    }
     return [pscustomobject]@{
         kind = 'Deployment'
         metadata = [pscustomobject]@{ name = $Name; namespace = 'pandora'; uid = "deployment-$Name"; generation = 7 }
         spec = [pscustomobject]@{
-            replicas = 1; strategy = [pscustomobject]@{ type = 'RollingUpdate' }
+            replicas = 1; strategy = $strategy
             template = [pscustomobject]@{ spec = [pscustomobject]@{
                 containers = @([pscustomobject]@{ name = $Name; volumeMounts = $mounts })
                 volumes = $volumes
@@ -918,7 +923,30 @@ try {
         Assert-PandoraDSTicketSignerDeploymentGate -DeploymentObjects $recreate -ReplicaSetObjects $replicaSets `
             -PodObjects $signerPods `
             -SignerRevision 3 -LoginKeysetRevision 3
-    } 'Recreate 破坏不停服' 'Recreate'
+    } '非 hub signer 的 Recreate 仍破坏不停服' 'Recreate'
+    $hubRolling = Copy-TestObject $deployments
+    $hubRolling[3].spec.strategy.type = 'RollingUpdate'
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate -DeploymentObjects $hubRolling -ReplicaSetObjects $replicaSets `
+            -PodObjects $signerPods `
+            -SignerRevision 3 -LoginKeysetRevision 3
+    } 'hub-allocator 必须 Recreate 单写发布' '唯一单写者'
+    $hubMultiReplica = Copy-TestObject $deployments
+    $hubMultiReplica[3].spec.replicas = 2
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate -DeploymentObjects $hubMultiReplica -ReplicaSetObjects $replicaSets `
+            -PodObjects $signerPods `
+            -SignerRevision 3 -LoginKeysetRevision 3
+    } 'hub-allocator 禁止多副本 writer' 'replicas=2'
+    $hubRecreateWithRolling = Copy-TestObject $deployments
+    $hubRecreateWithRolling[3].spec.strategy | Add-Member -NotePropertyName rollingUpdate -NotePropertyValue ([pscustomobject]@{
+        maxUnavailable = 0; maxSurge = 1
+    })
+    Assert-Throws {
+        Assert-PandoraDSTicketSignerDeploymentGate -DeploymentObjects $hubRecreateWithRolling -ReplicaSetObjects $replicaSets `
+            -PodObjects $signerPods `
+            -SignerRevision 3 -LoginKeysetRevision 3
+    } 'hub-allocator Recreate 禁止混入 rollingUpdate' '禁止携带 rollingUpdate'
     $unsafeRolling = Copy-TestObject $deployments
     $unsafeRolling[0].spec.strategy | Add-Member -NotePropertyName rollingUpdate -NotePropertyValue ([pscustomobject]@{
         maxUnavailable = 1; maxSurge = 0

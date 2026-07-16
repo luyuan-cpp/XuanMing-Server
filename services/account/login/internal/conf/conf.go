@@ -98,6 +98,10 @@ type LoginConf struct {
 	// resume routing and conservative placement backfill. Enforce requires it.
 	Matchmaker MatchmakerClientConf `yaml:"matchmaker,omitempty" json:"matchmaker,omitempty"`
 
+	// BattleAllocator is the exact Battle physical-departure authority used
+	// before any BATTLE->HUB transition/ticket. It is mandatory in enforce mode.
+	BattleAllocator BattleAllocatorClientConf `yaml:"battle_allocator,omitempty" json:"battle_allocator,omitempty"`
+
 	// AllowedRoleIDs 是选角白名单(选角权威化 2026-07-08,SelectRole RPC 服务端校验)。
 	// 对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
 	// 非空 = 严格白名单;空 = fail-closed,SelectRole 一律拒绝(防改包客户端签任意 role_id
@@ -135,6 +139,10 @@ type HubClientConf struct {
 }
 
 type MatchmakerClientConf struct {
+	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
+}
+
+type BattleAllocatorClientConf struct {
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
 }
 
@@ -234,8 +242,13 @@ func (c *Config) Validate() error {
 	}
 	if mode, err := placement.ParseMode(c.Login.PlacementMode); err != nil {
 		return err
-	} else if mode == placement.ModeEnforce && c.Login.Matchmaker.Addr == "" {
-		return fmt.Errorf("login.placement_mode=enforce requires login.matchmaker.addr")
+	} else if mode == placement.ModeEnforce {
+		if c.Login.Matchmaker.Addr == "" {
+			return fmt.Errorf("login.placement_mode=enforce requires login.matchmaker.addr")
+		}
+		if c.Login.BattleAllocator.Addr == "" {
+			return fmt.Errorf("login.placement_mode=enforce requires login.battle_allocator.addr")
+		}
 	}
 	if c.Login.Matchmaker.Addr != "" {
 		if err := internalrpcauth.ValidateSecret(c.Login.MatchResumeAuthSecret); err != nil {

@@ -87,3 +87,30 @@ func TestMatchResumeAuthSecretMustBeIndependent(t *testing.T) {
 		t.Fatal("placement writer and match resume service identity must not share a key")
 	}
 }
+
+func TestAllocationAbortAuthMustBeDedicatedForRealAllocator(t *testing.T) {
+	base := loadConfig(t, "etc/matchmaker-dev.yaml")
+	for name, reused := range map[string]string{
+		"player-jwt":            base.JWT.Secret,
+		"placement-match-start": base.Match.PlacementMatchStartProofSecret,
+		"login-resume":          base.Match.MatchResumeAuthSecret,
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := base
+			cfg.Match.AllocationAbortAuthSecret = reused
+			if err := cfg.Validate(); err == nil {
+				t.Fatalf("allocation abort key reused %s trust domain", name)
+			}
+		})
+	}
+	cfg := base
+	cfg.Match.AllocationAbortAuthSecret = "short"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("short allocation abort key accepted")
+	}
+	cfg = base
+	cfg.Match.AllocationAbortAuthAudience = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("empty allocation abort audience accepted")
+	}
+}

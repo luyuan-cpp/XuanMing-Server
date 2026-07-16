@@ -37,10 +37,8 @@ func TestPrepareBattlePlacementRetriesPartialBatchWithExactOperation(t *testing.
 		t.Fatal(err)
 	}
 	base := &fakePlacementClient{signer: signer, records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{
-		1: {PlayerId: 1, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-			TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE, Version: 3},
-		2: {PlayerId: 2, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-			TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE, Version: 9},
+		1: exactHubPlacement(1, 3),
+		2: exactHubPlacement(2, 9),
 	}}
 	client := &failSecondBindOnceClient{fakePlacementClient: base}
 	coordinator := NewGrpcPlacementCoordinator(client, signer, 30*time.Minute)
@@ -88,8 +86,7 @@ func TestPrepareBattlePlacementPreflightFindsLaterConflictBeforeAnyBegin(t *test
 		t.Fatal(err)
 	}
 	client := &fakePlacementClient{signer: signer, records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{
-		1: {PlayerId: 1, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-			TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE, Version: 3},
+		1: exactHubPlacement(1, 3),
 		2: {PlayerId: 2, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE, MatchId: 700,
 			TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE, Version: 4},
 	}}

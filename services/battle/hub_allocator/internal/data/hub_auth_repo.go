@@ -42,11 +42,14 @@ type CredentialIdentity struct {
 // AssignmentInstanceIdentity 是赢得 assignment CAS 后退座所需的稳定实例身份。
 // 凭据 gen/jti 可在“校验 assignment→CAS 删除”之间正常轮换；UID/epoch/writer 不可变。
 type AssignmentInstanceIdentity struct {
-	PlayerID      uint64
-	AssignmentID  string
-	InstanceUID   string
-	ProtocolEpoch uint32
-	WriterEpoch   uint32
+	PlayerID             uint64
+	AssignmentID         string
+	InstanceUID          string
+	ProtocolEpoch        uint32
+	WriterEpoch          uint32
+	PlacementVersion     uint64
+	PlacementOperationID string
+	SourceMatchID        uint64
 }
 
 // ReleaseAssignmentSeatResult distinguishes an idempotent replay from an
@@ -79,11 +82,19 @@ type AssignmentSeatSnapshot struct {
 // ReservationIdentity 是逐 assignment 容量 lease 的稳定身份。凭据 gen/jti 会平滑轮换，
 // reservation/session 只绑定不会在同一 GameServer 生命周期内变化的 UID/epoch/writer。
 type ReservationIdentity struct {
-	PlayerID              uint64
-	AssignmentID          string
-	InstanceUID           string
-	ProtocolEpoch         uint32
-	WriterEpoch           uint32
+	PlayerID      uint64
+	AssignmentID  string
+	InstanceUID   string
+	ProtocolEpoch uint32
+	WriterEpoch   uint32
+	// Placement* is optional for a first-time capacity reservation, because the
+	// assignment/placement saga is persisted after the seat is selected.  It is
+	// mandatory at the business layer whenever an existing connected assignment
+	// is re-signed: the successor lease is keyed by this exact version+operation
+	// so a ticket for another placement operation cannot consume it.
+	PlacementVersion      uint64
+	PlacementOperationID  string
+	SourceMatchID         uint64
 	ExpiresAtMs           int64
 	AssignmentExpiresAtMs int64
 }
@@ -185,6 +196,16 @@ type HubAuthRepo interface {
 	// QuarantineExpected 是泄露凭据的紧急 fail-closed 路径。只有 expected 仍精确等于
 	// 当前 active tuple 才把 auth 锁为 QUARANTINED，并在同槽事务把 shard 置 draining。
 	QuarantineExpected(context.Context, string, CredentialIdentity, time.Duration, time.Duration) (QuarantineResult, error)
+}
+
+// HubInstanceTeardownProofRepo is an optional exact-UID proof store used by
+// the topology reconciler.  A proof is minted only after an unfiltered
+// GameServer+Pod observation confirms that the expected UID is physically
+// gone.  It is intentionally separate from HubAuthRepo so older test fakes
+// remain fail-closed (they simply cannot manufacture teardown proof).
+type HubInstanceTeardownProofRepo interface {
+	RecordInstanceTeardownProof(ctx context.Context, pod, instanceUID string, proofTTL time.Duration) error
+	HasInstanceTeardownProof(ctx context.Context, pod, instanceUID string) (bool, error)
 }
 
 // RedisHubAuthRepo 是基于 go-redis/v9 的 HubAuthRepo 实现。

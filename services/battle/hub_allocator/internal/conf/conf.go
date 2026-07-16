@@ -234,6 +234,9 @@ type HubConf struct {
 	// PlacementMode: off -> shadow -> enforce staged rollout. Enforce requires LocatorAddr
 	// and makes Bind/Admission Commit a hard dependency.
 	PlacementMode string `yaml:"placement_mode,omitempty" json:"placement_mode,omitempty"`
+	// One Hub-owned key, two HMAC message domains: logical HubTransfer and
+	// physical HubDeparture. The locator must receive this exact same key; Hub
+	// must never receive the independent BattleDeparture key.
 	PlacementHubTransferProofSecret string `yaml:"placement_hub_transfer_proof_secret,omitempty" json:"placement_hub_transfer_proof_secret,omitempty"`
 }
 

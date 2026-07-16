@@ -151,8 +151,8 @@ type RedisConf struct {
 
 	// Addrs 是 Redis Cluster / Sentinel 多节点地址。
 	//
-	// 留空 = 单实例模式(用 Host)。配置 >=1 个地址 = 集群模式,由 redisx.NewUniversalClient
-	// 构造 ClusterClient(go-redis UniversalClient 会按 Addrs 数量与 MasterName 自动选型)。
+	// 留空 = 单实例模式(用 Host)。MasterName 为空时,Addrs 只有 1 个仍是 standalone,
+	// Addrs >1 才构造 ClusterClient(go-redis UniversalClient 按原始地址数量选型)。
 	// DAU 200万 / 高 CCU 阶段单 Redis 必然成为吞吐与连接数单点,改配 Addrs 上 Redis Cluster,
 	// 分片键用业务 ID(player_id / team_id);详见 docs/design/scale-cellular-20m.md。
 	Addrs []string `yaml:"addrs,omitempty" json:"addrs,omitempty"`

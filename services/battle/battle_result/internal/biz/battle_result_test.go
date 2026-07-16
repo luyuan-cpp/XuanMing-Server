@@ -111,8 +111,11 @@ func (r *fakeRepo) ensureFakeBattleExitProof(matchID uint64, stats []*battlev1.P
 }
 
 func (r *fakeRepo) ensureFakeMatchRelease(matchID uint64, stats []*battlev1.PlayerStats) {
-	for _, rec := range r.matchReleaseOutbox {
-		if rec.MatchID == matchID {
+	for i := range r.matchReleaseOutbox {
+		if r.matchReleaseOutbox[i].MatchID == matchID {
+			// Idempotent result replay preserves the immutable operation payload,
+			// but makes a previously deferred row immediately eligible again.
+			r.matchReleaseOutbox[i].NextAttemptAtMs = 0
 			return
 		}
 	}
@@ -345,6 +348,11 @@ type fakeMatchReleaser struct {
 	ids   []uint64
 }
 
+type ackLossMatchReleaser struct {
+	calls     int
+	committed bool
+}
+
 type fakeBattleExitAuthority struct {
 	prepareCalls int
 	fenceCalls   int
@@ -390,6 +398,17 @@ func (r *fakeMatchReleaser) ReleaseMatch(_ context.Context, matchID uint64, play
 	r.match = matchID
 	r.ids = append([]uint64(nil), playerIDs...)
 	return r.err
+}
+
+func (r *ackLossMatchReleaser) ReleaseMatch(context.Context, uint64, []uint64) error {
+	r.calls++
+	if !r.committed {
+		// The downstream cleanup committed, but the caller cannot distinguish
+		// that fact because the response was lost.
+		r.committed = true
+		return errors.New("release committed but ACK was lost")
+	}
+	return nil
 }
 
 type capturedPush struct {
@@ -873,6 +892,30 @@ func TestMatchReleaseOutboxRetriesAndACKsOnlySuccess(t *testing.T) {
 	}
 }
 
+func TestMatchReleaseOutboxACKLossReplaysCommittedOperation(t *testing.T) {
+	releaser := &ackLossMatchReleaser{}
+	uc, repo := reportFour(t, nil)
+	uc.releaser = releaser
+
+	if n, err := uc.publishMatchReleaseBatch(context.Background()); err == nil || n != 0 {
+		t.Fatalf("unknown ACK must retain outbox: n=%d err=%v", n, err)
+	}
+	if !releaser.committed || releaser.calls != 1 || len(repo.matchReleaseOutbox) != 1 ||
+		repo.matchReleaseOutbox[0].AttemptCount != 1 {
+		t.Fatalf("ACK-loss state not durable: committed=%v calls=%d rows=%+v",
+			releaser.committed, releaser.calls, repo.matchReleaseOutbox)
+	}
+
+	repo.matchReleaseOutbox[0].NextAttemptAtMs = 0
+	if n, err := uc.publishMatchReleaseBatch(context.Background()); err != nil || n != 1 {
+		t.Fatalf("idempotent replay did not ACK: n=%d err=%v", n, err)
+	}
+	if releaser.calls != 2 || len(repo.matchReleaseOutbox) != 0 {
+		t.Fatalf("committed release was not replayed exactly to success: calls=%d rows=%+v",
+			releaser.calls, repo.matchReleaseOutbox)
+	}
+}
+
 func TestIdempotentReplayRestoresMissingMatchReleaseOutbox(t *testing.T) {
 	uc, repo := reportFour(t, nil)
 	repo.matchReleaseOutbox = nil // 模拟历史 best-effort 已丢释放任务
@@ -883,6 +926,24 @@ func TestIdempotentReplayRestoresMissingMatchReleaseOutbox(t *testing.T) {
 	}
 	if len(repo.matchReleaseOutbox) != 1 || repo.matchReleaseOutbox[0].MatchID != 700 {
 		t.Fatalf("idempotent replay did not restore release row: %+v", repo.matchReleaseOutbox)
+	}
+}
+
+func TestIdempotentReplayMakesDeferredMatchReleaseImmediatelyDue(t *testing.T) {
+	uc, repo := reportFour(t, nil)
+	if len(repo.matchReleaseOutbox) != 1 {
+		t.Fatal("missing initial release row")
+	}
+	originalOperation := repo.matchReleaseOutbox[0].OperationID
+	repo.matchReleaseOutbox[0].AttemptCount = 7
+	repo.matchReleaseOutbox[0].NextAttemptAtMs = time.Now().Add(time.Hour).UnixMilli()
+	result := proto.Clone(repo.store[700]).(*battlev1.BattleResult)
+	if already, err := uc.ReportResult(context.Background(), result); err != nil || !already {
+		t.Fatalf("idempotent replay: already=%v err=%v", already, err)
+	}
+	row := repo.matchReleaseOutbox[0]
+	if row.NextAttemptAtMs != 0 || row.AttemptCount != 7 || row.OperationID != originalOperation {
+		t.Fatalf("replay did not revive immutable release operation: %+v", row)
 	}
 }
 

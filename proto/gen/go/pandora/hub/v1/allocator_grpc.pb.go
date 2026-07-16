@@ -30,15 +30,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	HubAllocatorService_AssignHub_FullMethodName            = "/pandora.hub.v1.HubAllocatorService/AssignHub"
-	HubAllocatorService_ReleaseHub_FullMethodName           = "/pandora.hub.v1.HubAllocatorService/ReleaseHub"
-	HubAllocatorService_TransferHub_FullMethodName          = "/pandora.hub.v1.HubAllocatorService/TransferHub"
-	HubAllocatorService_ListHubs_FullMethodName             = "/pandora.hub.v1.HubAllocatorService/ListHubs"
-	HubAllocatorService_Heartbeat_FullMethodName            = "/pandora.hub.v1.HubAllocatorService/Heartbeat"
-	HubAllocatorService_AcknowledgeAdmission_FullMethodName = "/pandora.hub.v1.HubAllocatorService/AcknowledgeAdmission"
-	HubAllocatorService_AcknowledgeDeparture_FullMethodName = "/pandora.hub.v1.HubAllocatorService/AcknowledgeDeparture"
-	HubAllocatorService_ListHubLines_FullMethodName         = "/pandora.hub.v1.HubAllocatorService/ListHubLines"
-	HubAllocatorService_TransferToLine_FullMethodName       = "/pandora.hub.v1.HubAllocatorService/TransferToLine"
+	HubAllocatorService_AssignHub_FullMethodName                   = "/pandora.hub.v1.HubAllocatorService/AssignHub"
+	HubAllocatorService_ReleaseHub_FullMethodName                  = "/pandora.hub.v1.HubAllocatorService/ReleaseHub"
+	HubAllocatorService_EnsureHubDepartureForBattle_FullMethodName = "/pandora.hub.v1.HubAllocatorService/EnsureHubDepartureForBattle"
+	HubAllocatorService_TransferHub_FullMethodName                 = "/pandora.hub.v1.HubAllocatorService/TransferHub"
+	HubAllocatorService_ListHubs_FullMethodName                    = "/pandora.hub.v1.HubAllocatorService/ListHubs"
+	HubAllocatorService_Heartbeat_FullMethodName                   = "/pandora.hub.v1.HubAllocatorService/Heartbeat"
+	HubAllocatorService_AcknowledgeAdmission_FullMethodName        = "/pandora.hub.v1.HubAllocatorService/AcknowledgeAdmission"
+	HubAllocatorService_AcknowledgeDeparture_FullMethodName        = "/pandora.hub.v1.HubAllocatorService/AcknowledgeDeparture"
+	HubAllocatorService_ListHubLines_FullMethodName                = "/pandora.hub.v1.HubAllocatorService/ListHubLines"
+	HubAllocatorService_TransferToLine_FullMethodName              = "/pandora.hub.v1.HubAllocatorService/TransferToLine"
 )
 
 // HubAllocatorServiceClient is the client API for HubAllocatorService service.
@@ -47,6 +48,11 @@ const (
 type HubAllocatorServiceClient interface {
 	AssignHub(ctx context.Context, in *AssignHubRequest, opts ...grpc.CallOption) (*AssignHubResponse, error)
 	ReleaseHub(ctx context.Context, in *ReleaseHubRequest, opts ...grpc.CallOption) (*ReleaseHubResponse, error)
+	// Match durable worker uses this operation-bound gate after the exact
+	// BATTLE_PENDING placement exists and before READY/ticket publication.
+	// A delayed request from an older match/version/op cannot release a newer
+	// Hub assignment.
+	EnsureHubDepartureForBattle(ctx context.Context, in *EnsureHubDepartureForBattleRequest, opts ...grpc.CallOption) (*EnsureHubDepartureForBattleResponse, error)
 	TransferHub(ctx context.Context, in *TransferHubRequest, opts ...grpc.CallOption) (*TransferHubResponse, error)
 	ListHubs(ctx context.Context, in *ListHubsRequest, opts ...grpc.CallOption) (*ListHubsResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
@@ -87,6 +93,16 @@ func (c *hubAllocatorServiceClient) ReleaseHub(ctx context.Context, in *ReleaseH
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReleaseHubResponse)
 	err := c.cc.Invoke(ctx, HubAllocatorService_ReleaseHub_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubAllocatorServiceClient) EnsureHubDepartureForBattle(ctx context.Context, in *EnsureHubDepartureForBattleRequest, opts ...grpc.CallOption) (*EnsureHubDepartureForBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnsureHubDepartureForBattleResponse)
+	err := c.cc.Invoke(ctx, HubAllocatorService_EnsureHubDepartureForBattle_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +185,11 @@ func (c *hubAllocatorServiceClient) TransferToLine(ctx context.Context, in *Tran
 type HubAllocatorServiceServer interface {
 	AssignHub(context.Context, *AssignHubRequest) (*AssignHubResponse, error)
 	ReleaseHub(context.Context, *ReleaseHubRequest) (*ReleaseHubResponse, error)
+	// Match durable worker uses this operation-bound gate after the exact
+	// BATTLE_PENDING placement exists and before READY/ticket publication.
+	// A delayed request from an older match/version/op cannot release a newer
+	// Hub assignment.
+	EnsureHubDepartureForBattle(context.Context, *EnsureHubDepartureForBattleRequest) (*EnsureHubDepartureForBattleResponse, error)
 	TransferHub(context.Context, *TransferHubRequest) (*TransferHubResponse, error)
 	ListHubs(context.Context, *ListHubsRequest) (*ListHubsResponse, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
@@ -199,6 +220,9 @@ func (UnimplementedHubAllocatorServiceServer) AssignHub(context.Context, *Assign
 }
 func (UnimplementedHubAllocatorServiceServer) ReleaseHub(context.Context, *ReleaseHubRequest) (*ReleaseHubResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReleaseHub not implemented")
+}
+func (UnimplementedHubAllocatorServiceServer) EnsureHubDepartureForBattle(context.Context, *EnsureHubDepartureForBattleRequest) (*EnsureHubDepartureForBattleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnsureHubDepartureForBattle not implemented")
 }
 func (UnimplementedHubAllocatorServiceServer) TransferHub(context.Context, *TransferHubRequest) (*TransferHubResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TransferHub not implemented")
@@ -273,6 +297,24 @@ func _HubAllocatorService_ReleaseHub_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HubAllocatorServiceServer).ReleaseHub(ctx, req.(*ReleaseHubRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HubAllocatorService_EnsureHubDepartureForBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureHubDepartureForBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubAllocatorServiceServer).EnsureHubDepartureForBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HubAllocatorService_EnsureHubDepartureForBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubAllocatorServiceServer).EnsureHubDepartureForBattle(ctx, req.(*EnsureHubDepartureForBattleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -417,6 +459,10 @@ var HubAllocatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseHub",
 			Handler:    _HubAllocatorService_ReleaseHub_Handler,
+		},
+		{
+			MethodName: "EnsureHubDepartureForBattle",
+			Handler:    _HubAllocatorService_EnsureHubDepartureForBattle_Handler,
 		},
 		{
 			MethodName: "TransferHub",

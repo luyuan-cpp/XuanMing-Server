@@ -18,15 +18,22 @@ import (
 )
 
 type hubPlacementFake struct {
-	mu             sync.Mutex
-	snapshot       data.HubPlacementSnapshot
-	target         placement.Target
-	beginCalls     int
-	bindCalls      int
-	commitCalls    int
-	retargetCalls  int
-	admissionID    string
-	pendingBindErr error
+	mu                        sync.Mutex
+	snapshot                  data.HubPlacementSnapshot
+	target                    placement.Target
+	beginCalls                int
+	bindCalls                 int
+	commitCalls               int
+	retargetCalls             int
+	departureCalls            int
+	lastDepartureProof        placement.SourceDepartureProof
+	departureProofIDs         []string
+	admissionID               string
+	pendingBindErr            error
+	pendingCommitErr          error
+	pendingReadErr            error
+	pendingDepartureErr       error
+	pendingDepartureCommitErr error
 	// pendingBindCommitErr simulates a Bind that committed remotely but whose
 	// response was lost. It is consumed once; retrying the same target is legal.
 	pendingBindCommitErr error
@@ -35,6 +42,11 @@ type hubPlacementFake struct {
 type failOnceAssignmentCASRepo struct {
 	data.HubRepo
 	failNext bool
+}
+
+type rejectOnceAssignmentCASRepo struct {
+	data.HubRepo
+	rejectNext bool
 }
 
 func (r *failOnceAssignmentCASRepo) CompareAndSwapAssignment(ctx context.Context, playerID uint64,
@@ -47,14 +59,27 @@ func (r *failOnceAssignmentCASRepo) CompareAndSwapAssignment(ctx context.Context
 	return r.HubRepo.CompareAndSwapAssignment(ctx, playerID, expected, next, ttl)
 }
 
+func (r *rejectOnceAssignmentCASRepo) CompareAndSwapAssignment(ctx context.Context, playerID uint64,
+	expected, next *hubv1.HubAssignmentStorageRecord, ttl time.Duration,
+) (bool, error) {
+	if r.rejectNext {
+		r.rejectNext = false
+		return false, nil
+	}
+	return r.HubRepo.CompareAndSwapAssignment(ctx, playerID, expected, next, ttl)
+}
+
 func (f *hubPlacementFake) GetHubPlacement(context.Context, uint64) (data.HubPlacementSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.pendingReadErr != nil {
+		return data.HubPlacementSnapshot{}, f.pendingReadErr
+	}
 	return f.snapshot, nil
 }
 
 func (f *hubPlacementFake) BeginHubTransfer(_ context.Context, _ uint64, expected uint64,
-	op, _, _ string, _ int64) (placement.Binding, error) {
+	op, _, _ string, leaseDeadlineMs int64) (placement.Binding, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.beginCalls++
@@ -64,15 +89,26 @@ func (f *hubPlacementFake) BeginHubTransfer(_ context.Context, _ uint64, expecte
 		f.snapshot.Binding.Version != expected {
 		return placement.Binding{}, errcode.New(errcode.ErrLocatorConflict, "begin source mismatch")
 	}
+	sourceBinding, sourceTarget := f.snapshot.Binding, f.snapshot.Target
+	if sourceTarget.Equal(placement.Target{}) {
+		sourceTarget = f.target
+	}
 	f.snapshot.Binding = placement.Binding{Version: expected + 1, OperationID: op}
+	f.snapshot.SourceBinding = sourceBinding
+	f.snapshot.SourceTarget = sourceTarget
 	f.snapshot.CurrentRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
 	f.snapshot.TargetRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
 	f.snapshot.TransitionState = locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING
+	f.snapshot.ProofType = locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_HUB_TRANSFER
+	f.snapshot.SourceDepartureConfirmed = false
+	f.snapshot.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED
+	f.snapshot.SourceDepartureProofID = ""
+	f.snapshot.LeaseDeadlineMs = leaseDeadlineMs
 	f.target = placement.Target{}
 	return f.snapshot.Binding, nil
 }
 
-func (f *hubPlacementFake) BindHubTarget(_ context.Context, _ uint64, binding placement.Binding, target placement.Target, _ int64) error {
+func (f *hubPlacementFake) BindHubTarget(_ context.Context, _ uint64, binding placement.Binding, target placement.Target, leaseDeadlineMs int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.bindCalls++
@@ -97,6 +133,9 @@ func (f *hubPlacementFake) BindHubTarget(_ context.Context, _ uint64, binding pl
 	}
 	f.target = target
 	f.snapshot.Target = target
+	if leaseDeadlineMs > f.snapshot.LeaseDeadlineMs {
+		f.snapshot.LeaseDeadlineMs = leaseDeadlineMs
+	}
 	if f.pendingBindCommitErr != nil {
 		err := f.pendingBindCommitErr
 		f.pendingBindCommitErr = nil
@@ -105,9 +144,44 @@ func (f *hubPlacementFake) BindHubTarget(_ context.Context, _ uint64, binding pl
 	return nil
 }
 
+func (f *hubPlacementFake) ConfirmHubSourceDeparture(_ context.Context,
+	proof placement.SourceDepartureProof, signature string,
+) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.departureCalls++
+	f.lastDepartureProof = proof
+	f.departureProofIDs = append(f.departureProofIDs, proof.ProofID)
+	if f.pendingDepartureErr != nil {
+		err := f.pendingDepartureErr
+		f.pendingDepartureErr = nil
+		return err
+	}
+	if signature == "" || proof.ProofType != placement.ProofHubDeparture ||
+		proof.SourceRoute != placement.RouteHub || proof.SourceMatchID != 0 ||
+		proof.PlayerID == 0 || proof.PlacementVersion != f.snapshot.Binding.Version ||
+		proof.OperationID != f.snapshot.Binding.OperationID ||
+		proof.TargetRoute != int32(f.snapshot.TargetRoute) ||
+		proof.TargetMatchID != f.snapshot.TargetMatchID ||
+		proof.SourcePlacementVersion != f.snapshot.SourceBinding.Version ||
+		proof.SourceOperationID != f.snapshot.SourceBinding.OperationID ||
+		!proof.SourceTarget.Equal(f.snapshot.SourceTarget) {
+		return errcode.New(errcode.ErrLocatorConflict, "source departure identity mismatch")
+	}
+	f.snapshot.SourceDepartureConfirmed = true
+	f.snapshot.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType(proof.ProofType)
+	f.snapshot.SourceDepartureProofID = proof.ProofID
+	if f.pendingDepartureCommitErr != nil {
+		err := f.pendingDepartureCommitErr
+		f.pendingDepartureCommitErr = nil
+		return err
+	}
+	return nil
+}
+
 func (f *hubPlacementFake) RetargetHubTarget(_ context.Context, _ uint64,
 	expected, replacement placement.Binding, expectedTarget, replacementTarget placement.Target,
-	reason placement.TargetUnavailableReason, proofID, _ string, _ int64,
+	reason placement.TargetUnavailableReason, proofID, _ string, leaseDeadlineMs int64,
 ) (placement.Binding, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -121,6 +195,10 @@ func (f *hubPlacementFake) RetargetHubTarget(_ context.Context, _ uint64,
 	f.snapshot.RetargetCount++
 	f.snapshot.LastRetargetProofID = proofID
 	f.snapshot.LastRetargetReason = locatorv1.PlacementTargetUnavailableReason(reason)
+	f.snapshot.SourceDepartureConfirmed = false
+	f.snapshot.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED
+	f.snapshot.SourceDepartureProofID = ""
+	f.snapshot.LeaseDeadlineMs = leaseDeadlineMs
 	f.target = replacementTarget
 	f.retargetCalls++
 	return replacement, nil
@@ -138,23 +216,22 @@ func TestHubPendingTargetRetargetRequiresExactOldSeatAbsenceAndAdoptsFence(t *te
 		AssignmentId: "assignment-new", HubInstanceUid: "uid-new", AuthEpoch: 5,
 		AuthWriterEpoch: modelBTestWriterEpoch, ReleaseTrack: releasetrack.Stable,
 		PlacementVersion: oldBinding.Version, PlacementOperationId: oldBinding.OperationID,
-		SourceMatchId: oldBinding.SourceMatchID,
-		TransferCleanupPending: true,
-		TransferSourceHubPodName: oldTarget.PodName,
-		TransferSourceAssignmentId: oldTarget.AssignmentID,
-		TransferSourceInstanceUid: oldTarget.InstanceUID,
-		TransferSourceAuthEpoch: oldTarget.InstanceEpoch,
+		SourceMatchId:                 oldBinding.SourceMatchID,
+		TransferCleanupPending:        true,
+		TransferSourceHubPodName:      oldTarget.PodName,
+		TransferSourceAssignmentId:    oldTarget.AssignmentID,
+		TransferSourceInstanceUid:     oldTarget.InstanceUID,
+		TransferSourceAuthEpoch:       oldTarget.InstanceEpoch,
 		TransferSourceAuthWriterEpoch: modelBTestWriterEpoch,
 	}
-	if swapped, err := repo.CompareAndSwapAssignment(context.Background(), playerID, nil, assignment, 0);
-		err != nil || !swapped {
+	if swapped, err := repo.CompareAndSwapAssignment(context.Background(), playerID, nil, assignment, 0); err != nil || !swapped {
 		t.Fatalf("persist replacement assignment: swapped=%v err=%v", swapped, err)
 	}
 	pf := &hubPlacementFake{snapshot: data.HubPlacementSnapshot{Found: true,
 		Binding: oldBinding, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
-		TargetRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
-		Target: oldTarget}, target: oldTarget}
+		Target:          oldTarget}, target: oldTarget}
 	signer, signErr := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
 	if signErr != nil {
 		t.Fatal(signErr)
@@ -188,8 +265,7 @@ func TestHubPendingTargetRetargetRequiresExactOldSeatAbsenceAndAdoptsFence(t *te
 	}
 	stale := proto.Clone(stored).(*hubv1.HubAssignmentStorageRecord)
 	bindAssignmentPlacement(stale, oldBinding)
-	if swapped, casErr := repo.CompareAndSwapAssignment(context.Background(), playerID, stored, stale, 0);
-		casErr != nil || !swapped {
+	if swapped, casErr := repo.CompareAndSwapAssignment(context.Background(), playerID, stored, stale, 0); casErr != nil || !swapped {
 		t.Fatalf("inject stale local binding: swapped=%v err=%v", swapped, casErr)
 	}
 	adopted, adoptErr := uc.bindPlacementTarget(context.Background(), playerID, stale)
@@ -212,6 +288,11 @@ func (f *hubPlacementFake) CommitHubAdmission(_ context.Context, _ uint64, bindi
 	if !f.snapshot.Binding.Equal(binding) || !f.target.Equal(target) {
 		return errcode.New(errcode.ErrLocatorConflict, "commit identity mismatch")
 	}
+	if f.pendingCommitErr != nil {
+		err := f.pendingCommitErr
+		f.pendingCommitErr = nil
+		return err
+	}
 	if f.snapshot.TransitionState == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE {
 		// Same version/op/full target is a legal re-admission even with a new id.
 		return nil
@@ -219,11 +300,308 @@ func (f *hubPlacementFake) CommitHubAdmission(_ context.Context, _ uint64, bindi
 	if f.snapshot.TransitionState != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING {
 		return errcode.New(errcode.ErrLocatorConflict, "commit is not pending")
 	}
+	bootstrap := f.snapshot.Binding.Version == 1 &&
+		f.snapshot.ProofType == locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP &&
+		f.snapshot.SourceBinding.Empty() && f.snapshot.SourceTarget.Equal(placement.Target{})
+	if !bootstrap && !f.snapshot.SourceDepartureConfirmed {
+		return errcode.New(errcode.ErrLocatorConflict, "physical source departure is not confirmed")
+	}
 	f.snapshot.TransitionState = locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE
 	f.snapshot.CurrentRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
+	f.snapshot.CurrentMatchID = 0
 	f.snapshot.TargetRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED
+	f.snapshot.TargetMatchID = 0
+	f.snapshot.LeaseDeadlineMs = 0
+	if f.snapshot.SourceDepartureConfirmed {
+		f.snapshot.LastSourceDepartureProofType = f.snapshot.SourceDepartureProofType
+		f.snapshot.LastSourceDepartureProofID = f.snapshot.SourceDepartureProofID
+		f.snapshot.LastSourceDeparturePlacementVersion = f.snapshot.Binding.Version
+		f.snapshot.LastSourceDepartureOperationID = f.snapshot.Binding.OperationID
+	}
+	f.snapshot.SourceBinding = placement.Binding{}
+	f.snapshot.SourceTarget = placement.Target{}
+	f.snapshot.SourceDepartureConfirmed = false
+	f.snapshot.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED
+	f.snapshot.SourceDepartureProofID = ""
 	f.admissionID = admissionID
 	return nil
+}
+
+type shadowConnectedHubFixture struct {
+	uc         *HubUsecase
+	repo       *data.RedisHubRepo
+	placement  *hubPlacementFake
+	assignment *hubv1.HubAssignmentStorageRecord
+	credential *HubCredential
+	binding    placement.Binding
+	pod        string
+	playerID   uint64
+}
+
+func newShadowConnectedHubFixture(t *testing.T) shadowConnectedHubFixture {
+	t.Helper()
+	uc, repo, authRepo, _ := newModelBUsecase(t, 50, 1)
+	ctx := context.Background()
+	const pod = "pandora-hub-global-1"
+	const playerID = uint64(1001)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 50, now)
+	if err := repo.UpdateShardWithLock(ctx, pod, 8, func(s *hubv1.HubShardStorageRecord) error {
+		s.ReleaseTrack = releasetrack.Stable
+		return nil
+	}, modelBAuthTTL); err != nil {
+		t.Fatalf("set shadow release track: %v", err)
+	}
+	epoch := activate(t, uc, authRepo, pod, "uid-shadow", 42, "j-shadow", now)
+	binding := placement.Binding{Version: 1, OperationID: "123e4567-e89b-42d3-a456-426614174000"}
+	pf := &hubPlacementFake{snapshot: data.HubPlacementSnapshot{Found: true, Binding: binding,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP}}
+	proofSigner, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uc.SetPlacementPolicy(placement.ModeShadow, pf)
+	uc.SetPlacementProofSigner(proofSigner)
+	if assigned, err := uc.AssignHubWithPlacement(ctx, playerID, "global", 0, 0, binding); err != nil || assigned.HubTicket == "" {
+		t.Fatalf("shadow initial assign=%+v err=%v", assigned, err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("shadow assignment found=%v err=%v", found, err)
+	}
+	credential := &HubCredential{InstanceUID: "uid-shadow", ProtocolEpoch: epoch, Gen: 42, JTI: "j-shadow",
+		TokenSHA256: "sha-j-shadow", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch}
+	if admitted, err := uc.AcknowledgeAdmissionWithPlacement(ctx, playerID, assignment.GetAssignmentId(), pod,
+		uuid.NewString(), 1, binding, credential); err != nil || !admitted.Admitted {
+		t.Fatalf("shadow initial admission=%+v err=%v", admitted, err)
+	}
+	return shadowConnectedHubFixture{uc: uc, repo: repo, placement: pf, assignment: assignment,
+		credential: credential, binding: binding, pod: pod, playerID: playerID}
+}
+
+func (f shadowConnectedHubFixture) driftCanonicalTarget(t *testing.T) {
+	t.Helper()
+	other := placementTargetFromAssignment(f.assignment)
+	other.AssignmentID = uuid.NewString()
+	f.placement.mu.Lock()
+	f.placement.target = other
+	f.placement.snapshot.Target = other
+	f.placement.mu.Unlock()
+}
+
+func (f shadowConnectedHubFixture) assertLastPublishedBinding(t *testing.T, expected placement.Binding) {
+	t.Helper()
+	signer, ok := f.uc.signer.(*fakeSigner)
+	if !ok || !signer.lastBinding.Placement.Equal(expected) {
+		t.Fatalf("published ticket placement=%+v expected=%+v", signer.lastBinding.Placement, expected)
+	}
+}
+
+func TestPlacementShadowResignRotatesSuccessorToPublishedBinding(t *testing.T) {
+	t.Run("caller-binding-advance", func(t *testing.T) {
+		f := newShadowConnectedHubFixture(t)
+		next := placement.Binding{Version: f.binding.Version + 1,
+			OperationID: "22222222-2222-4222-8222-222222222222", SourceMatchID: f.binding.SourceMatchID}
+		if resigned, err := f.uc.AssignHubWithPlacement(context.Background(), f.playerID, "global", 0, 0, next); err != nil || resigned.HubTicket == "" {
+			t.Fatalf("shadow caller-binding re-sign=%+v err=%v", resigned, err)
+		}
+		current, found, err := f.repo.GetAssignment(context.Background(), f.playerID)
+		if err != nil || !found || !placementBindingFromAssignment(current).Equal(next) {
+			t.Fatalf("shadow caller-binding owner=%+v found=%v err=%v", current, found, err)
+		}
+		f.assertLastPublishedBinding(t, next)
+		if admitted, err := f.uc.AcknowledgeAdmissionWithPlacement(context.Background(), f.playerID,
+			current.GetAssignmentId(), f.pod, uuid.NewString(), 2, next, f.credential); err != nil || !admitted.Admitted {
+			t.Fatalf("shadow caller-binding re-admission=%+v err=%v", admitted, err)
+		}
+	})
+
+	t.Run("bind-advances-assign", func(t *testing.T) {
+		f := newShadowConnectedHubFixture(t)
+		f.driftCanonicalTarget(t)
+		if resigned, err := f.uc.AssignHubWithPlacement(context.Background(), f.playerID, "global", 0, 0, f.binding); err != nil || resigned.HubTicket == "" {
+			t.Fatalf("shadow bind-advance re-sign=%+v err=%v", resigned, err)
+		}
+		current, found, err := f.repo.GetAssignment(context.Background(), f.playerID)
+		finalBinding := placementBindingFromAssignment(current)
+		if err != nil || !found || finalBinding.Version != f.binding.Version+1 || !finalBinding.Complete() {
+			t.Fatalf("shadow bind-advance owner=%+v found=%v err=%v", current, found, err)
+		}
+		f.assertLastPublishedBinding(t, finalBinding)
+		if admitted, err := f.uc.AcknowledgeAdmissionWithPlacement(context.Background(), f.playerID,
+			current.GetAssignmentId(), f.pod, uuid.NewString(), 2, finalBinding, f.credential); err != nil || !admitted.Admitted {
+			t.Fatalf("shadow bind-advance re-admission=%+v err=%v", admitted, err)
+		}
+	})
+
+	t.Run("bind-advances-same-pod-transfer", func(t *testing.T) {
+		f := newShadowConnectedHubFixture(t)
+		f.driftCanonicalTarget(t)
+		if transferred, err := f.uc.TransferHub(context.Background(), f.playerID, uint64(f.assignment.GetShardId())); err != nil || transferred.NewHubTicket == "" || transferred.NewHubPodName != f.pod {
+			t.Fatalf("shadow same-pod transfer=%+v err=%v", transferred, err)
+		}
+		current, found, err := f.repo.GetAssignment(context.Background(), f.playerID)
+		finalBinding := placementBindingFromAssignment(current)
+		if err != nil || !found || finalBinding.Version != f.binding.Version+1 || !finalBinding.Complete() {
+			t.Fatalf("shadow same-pod owner=%+v found=%v err=%v", current, found, err)
+		}
+		f.assertLastPublishedBinding(t, finalBinding)
+		if admitted, err := f.uc.AcknowledgeAdmissionWithPlacement(context.Background(), f.playerID,
+			current.GetAssignmentId(), f.pod, uuid.NewString(), 2, finalBinding, f.credential); err != nil || !admitted.Admitted {
+			t.Fatalf("shadow same-pod re-admission=%+v err=%v", admitted, err)
+		}
+	})
+}
+
+func TestHubTicketPlacementReadyRejectsMalformedStableAndExpiredPending(t *testing.T) {
+	const playerID = uint64(7199)
+	const nowMs = int64(1_000_000)
+	binding := placement.Binding{Version: 1,
+		OperationID: "123e4567-e89b-42d3-a456-426614174000"}
+	target := placement.Target{
+		PodName:       "hub-1",
+		InstanceUID:   "hub-instance-1",
+		InstanceEpoch: 7,
+		AssignmentID:  "assignment-1",
+		ReleaseTrack:  releasetrack.Stable,
+	}
+	stable := data.HubPlacementSnapshot{
+		Found:           true,
+		Binding:         binding,
+		CurrentRoute:    locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE,
+		Target:          target,
+	}
+	if !hubTicketPlacementReady(playerID, stable, binding, target, nowMs) {
+		t.Fatal("canonical stable Hub placement must be admitted")
+	}
+
+	malformedStable := stable
+	malformedStable.SourceBinding = placement.Binding{Version: 1,
+		OperationID: "123e4567-e89b-42d3-a456-426614174001"}
+	if hubTicketPlacementReady(playerID, malformedStable, binding, target, nowMs) {
+		t.Fatal("stable placement with pending source lineage must fail closed")
+	}
+
+	bootstrap := stable
+	bootstrap.CurrentRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED
+	bootstrap.TargetRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB
+	bootstrap.TransitionState = locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING
+	bootstrap.ProofType = locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP
+	bootstrap.LeaseDeadlineMs = nowMs + 1
+	if !hubTicketPlacementReady(playerID, bootstrap, binding, target, nowMs) {
+		t.Fatal("unexpired canonical account bootstrap must be admitted")
+	}
+	bootstrap.LeaseDeadlineMs = nowMs
+	if hubTicketPlacementReady(playerID, bootstrap, binding, target, nowMs) {
+		t.Fatal("expired pending placement must fail closed")
+	}
+}
+
+func TestPlacementAdmissionCommitConflictWaitsForPhysicalDeparture(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const pod, playerID = "pandora-hub-global-1", uint64(7201)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	if err := repo.UpdateShardWithLock(ctx, pod, 8, func(s *hubv1.HubShardStorageRecord) error {
+		s.ReleaseTrack = releasetrack.Stable
+		return nil
+	}, modelBAuthTTL); err != nil {
+		t.Fatalf("set stable release track: %v", err)
+	}
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	binding := placement.Binding{Version: 1,
+		OperationID: "123e4567-e89b-42d3-a456-426614174000"}
+	pf := &hubPlacementFake{snapshot: data.HubPlacementSnapshot{Found: true, Binding: binding,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP}}
+	uc.SetPlacementPolicy(placement.ModeEnforce, pf)
+	proofSigner, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uc.SetPlacementProofSigner(proofSigner)
+	if _, err = uc.AssignHubWithPlacement(ctx, playerID, "global", 0, 0, binding); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	pf.mu.Lock()
+	pf.pendingCommitErr = errcode.New(errcode.ErrLocatorConflict, "injected definite commit conflict")
+	pf.mu.Unlock()
+	cred := &HubCredential{InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch}
+	admissionID := uuid.NewString()
+	got, admissionErr := uc.AcknowledgeAdmissionWithPlacement(ctx, playerID,
+		assignment.GetAssignmentId(), pod, admissionID, 1, binding, cred)
+	if got != nil || errcode.As(admissionErr) != errcode.ErrLocatorConflict {
+		t.Fatalf("commit conflict admission=%+v err=%v", got, admissionErr)
+	}
+	if sessions, _ := mr.HKeys("pandora:hub:sessions:{" + pod + "}"); len(sessions) != 1 || sessions[0] != assignment.GetAssignmentId() {
+		t.Fatalf("server self-departed a still-connected PC: %v", sessions)
+	}
+	departed, departureErr := uc.AcknowledgeDeparture(ctx, playerID, assignment.GetAssignmentId(), pod,
+		admissionID, 1, cred)
+	if departureErr != nil || !departed.Departed || departed.Conflict {
+		t.Fatalf("physical departure=%+v err=%v", departed, departureErr)
+	}
+}
+
+func TestPlacementAdmissionOwnerCASConflictWaitsForPhysicalDeparture(t *testing.T) {
+	uc, repo, authRepo, mr := newModelBUsecase(t, 500, 1)
+	ctx := context.Background()
+	const pod, playerID = "pandora-hub-global-1", uint64(7202)
+	now := time.Now().UnixMilli()
+	seedWarming(t, repo, pod, 1, 500, now)
+	if err := repo.UpdateShardWithLock(ctx, pod, 8, func(s *hubv1.HubShardStorageRecord) error {
+		s.ReleaseTrack = releasetrack.Stable
+		return nil
+	}, modelBAuthTTL); err != nil {
+		t.Fatalf("set stable release track: %v", err)
+	}
+	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
+	binding := placement.Binding{Version: 1,
+		OperationID: "123e4567-e89b-42d3-a456-426614174001"}
+	pf := &hubPlacementFake{snapshot: data.HubPlacementSnapshot{Found: true, Binding: binding,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP}}
+	uc.SetPlacementPolicy(placement.ModeEnforce, pf)
+	proofSigner, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uc.SetPlacementProofSigner(proofSigner)
+	if _, err = uc.AssignHubWithPlacement(ctx, playerID, "global", 0, 0, binding); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	assignment, found, err := repo.GetAssignment(ctx, playerID)
+	if err != nil || !found {
+		t.Fatalf("assignment found=%v err=%v", found, err)
+	}
+	uc.repo = &rejectOnceAssignmentCASRepo{HubRepo: uc.repo, rejectNext: true}
+	cred := &HubCredential{InstanceUID: "uid-A", ProtocolEpoch: epoch, Gen: 42, JTI: "j42",
+		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch}
+	admissionID := uuid.NewString()
+	got, admissionErr := uc.AcknowledgeAdmissionWithPlacement(ctx, playerID,
+		assignment.GetAssignmentId(), pod, admissionID, 1, binding, cred)
+	if got != nil || errcode.As(admissionErr) != errcode.ErrInvalidState {
+		t.Fatalf("owner CAS conflict admission=%+v err=%v", got, admissionErr)
+	}
+	if sessions, _ := mr.HKeys("pandora:hub:sessions:{" + pod + "}"); len(sessions) != 1 || sessions[0] != assignment.GetAssignmentId() {
+		t.Fatalf("owner CAS conflict self-departed a live PC: %v", sessions)
+	}
+	departed, departureErr := uc.AcknowledgeDeparture(ctx, playerID, assignment.GetAssignmentId(), pod,
+		admissionID, 1, cred)
+	if departureErr != nil || !departed.Departed || departed.Conflict {
+		t.Fatalf("physical departure=%+v err=%v", departed, departureErr)
+	}
 }
 
 func TestPlacementEnforcedHubTransferPersistsOperationAndAllowsReadmission(t *testing.T) {
@@ -246,7 +624,8 @@ func TestPlacementEnforcedHubTransferPersistsOperationAndAllowsReadmission(t *te
 	initial := placement.Binding{Version: 1, OperationID: "123e4567-e89b-42d3-a456-426614174000"}
 	pf := &hubPlacementFake{snapshot: data.HubPlacementSnapshot{Found: true, Binding: initial,
 		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING}}
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP}}
 	proofSigner, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatal(err)
@@ -379,12 +758,26 @@ func TestPlacementEnforcedHubTransferPersistsOperationAndAllowsReadmission(t *te
 	if err != nil || !departure.Departed {
 		t.Fatalf("source physical departure=%+v err=%v", departure, err)
 	}
+	// The app was already backgrounded beyond the legacy assignment TTL above.
+	// Physical disconnect removes only the connected seat; the durable source
+	// member remains discoverable until the exact transfer phase removes it.
+	if members, memberErr := repo.ListShardMembers(ctx, pod1); memberErr != nil ||
+		len(members) != 1 || members[0] != playerID {
+		t.Fatalf("offline transfer owner disappeared from drain index: members=%v err=%v", members, memberErr)
+	}
 	transfer, err = uc.TransferHub(ctx, playerID, 2)
 	if err != nil {
 		t.Fatalf("transfer after exact physical departure: %v", err)
 	}
 	if transfer.NewHubPodName != pod2 || transfer.NewHubTicket == "" {
 		t.Fatalf("transfer result=%+v", transfer)
+	}
+	if members, memberErr := repo.ListShardMembers(ctx, pod1); memberErr != nil || len(members) != 0 {
+		t.Fatalf("completed exact transfer retained source drain member: members=%v err=%v", members, memberErr)
+	}
+	if members, memberErr := repo.ListShardMembers(ctx, pod2); memberErr != nil ||
+		len(members) != 1 || members[0] != playerID {
+		t.Fatalf("completed exact transfer lost target drain member: members=%v err=%v", members, memberErr)
 	}
 	second, found, _ = repo.GetAssignment(ctx, playerID)
 	if !found || second.GetPlacementVersion() != 2 ||
@@ -410,7 +803,13 @@ func TestPlacementEnforcedHubTransferPersistsOperationAndAllowsReadmission(t *te
 	if ttl := mr.TTL(assignmentKey); ttl != 0 {
 		t.Fatalf("committed transfer assignment must remain persistent, ttl=%s", ttl)
 	}
-	// A new connection/admission id to the same stable target must recover.
+	// A new connection/admission id to the same stable target first reissues a
+	// ticket.  That path prepares the exact successor lease; a live session by
+	// itself is intentionally not an Admission capability.
+	if resigned, resignErr := uc.AssignHubWithPlacement(ctx, playerID, "global", 0, 0,
+		secondBinding); resignErr != nil || resigned.HubTicket == "" {
+		t.Fatalf("same target ticket reissue=%+v err=%v", resigned, resignErr)
+	}
 	if got, err := uc.AcknowledgeAdmissionWithPlacement(ctx, playerID, second.GetAssignmentId(), pod2,
 		uuid.NewString(), 3, secondBinding, cred2); err != nil || !got.PlacementCommitted {
 		t.Fatalf("same target re-admission=%+v err=%v", got, err)
@@ -445,7 +844,8 @@ func TestPlacementEnforcedDrainMigrationPublishesOnlyAfterDurableBind(t *testing
 			initial := placement.Binding{Version: 1, OperationID: "123e4567-e89b-42d3-a456-426614174000"}
 			pf := &hubPlacementFake{snapshot: data.HubPlacementSnapshot{Found: true, Binding: initial,
 				TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-				TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING}}
+				TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+				ProofType:       locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_ACCOUNT_BOOTSTRAP}}
 			proofSigner, err := placement.NewProofSigner("0123456789abcdef0123456789abcdef")
 			if err != nil {
 				t.Fatal(err)

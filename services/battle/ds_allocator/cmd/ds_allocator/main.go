@@ -33,9 +33,11 @@ import (
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
@@ -58,6 +60,20 @@ func init() {
 
 func main() {
 	flag.Parse()
+	// The activation controller consumes this mode as exact machine JSON.
+	// Run it before logger setup so stdout contains one JSON value and never a
+	// service banner mixed into the evidence stream.
+	if flagPodUIDReleasePreflightCompareConfigs {
+		if flagPodUIDReleasePreflight {
+			fmt.Fprintln(os.Stderr, "pod_uid config comparison mode conflict")
+			os.Exit(2)
+		}
+		if err := runPodUIDConfigCompare(os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "pod_uid config comparison failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// 1. Logger
 	logger := plog.Setup(serviceName)
@@ -84,12 +100,55 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	// Explicit one-shot release gate used by the strict Model-B activation Job.
+	// It exits before service config validation, allocator wiring, background
+	// workers, or any listener is created. It is deliberately not a Pod init
+	// container: the new writer must be able to run first and backfill safe
+	// legacy identities before operators execute this final activation proof.
+	if flagPodUIDReleasePreflight {
+		if flagPodUIDReleasePreflightTimeout <= 0 || flagPodUIDReleasePreflightScanCount <= 0 {
+			helper.Errorw("msg", "pod_uid_release_preflight_flags_invalid",
+				"timeout", flagPodUIDReleasePreflightTimeout,
+				"scan_count", flagPodUIDReleasePreflightScanCount)
+			_ = c.Close()
+			os.Exit(2)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), flagPodUIDReleasePreflightTimeout)
+		credentials, credentialErr := loadPodUIDPreflightRedisCredentials()
+		if credentialErr != nil {
+			cancel()
+			helper.Errorw("msg", "pod_uid_release_preflight_redis_credentials_invalid", "err", credentialErr)
+			_ = c.Close()
+			os.Exit(1)
+		}
+		err := runPodUIDReleasePreflight(ctx, cfg.Node.RedisClient,
+			flagPodUIDReleasePreflightScanCount, podUIDPreflightEvidence{
+				RunID: flagPodUIDReleasePreflightRunID, Phase: flagPodUIDReleasePreflightPhase,
+				ImageDigest:            flagPodUIDReleasePreflightImageDigest,
+				ExpectedTargetIdentity: flagPodUIDReleasePreflightExpectedTargetIdentity,
+			}, credentials, os.Stdout, os.Stderr)
+		cancel()
+		if err != nil {
+			helper.Errorw("msg", "pod_uid_release_preflight_failed", "err", err)
+			_ = c.Close()
+			os.Exit(1)
+		}
+		return
+	}
 	if err := cfg.DSAuth.ValidateRedisFence(); err != nil {
 		helper.Errorw("msg", "ds_auth_fence_config_invalid", "err", err)
 		os.Exit(1)
 	}
 	if err := cfg.ValidateLifecyclePublicationConfig(); err != nil {
 		helper.Errorw("msg", "ds_lifecycle_config_invalid", "err", err)
+		os.Exit(1)
+	}
+	if err := cfg.ValidateBattleDepartureConfig(); err != nil {
+		helper.Errorw("msg", "battle_departure_config_invalid", "err", err)
+		os.Exit(1)
+	}
+	if err := cfg.ValidateAllocationAbortAuthConfig(); err != nil {
+		helper.Errorw("msg", "allocation_abort_auth_config_invalid", "err", err)
 		os.Exit(1)
 	}
 
@@ -278,17 +337,42 @@ func main() {
 	// 4.2 player_locator 客户端(弱依赖):只续期短 TTL BATTLE presence/监控；断线恢复
 	// 的唯一权威是持久 placement。locator_addr 留空不续期 presence，也不得把玩家降级到 Hub。
 	if cfg.LocatorAddr != "" {
+		departureSigner, signerErr := placement.NewProofSigner(cfg.BattleDepartureProofSecret())
+		if signerErr != nil {
+			helper.Errorw("msg", "battle_departure_signer_init_failed", "err", signerErr)
+			os.Exit(1)
+		}
 		conn := grpcclient.MustDialInsecure(cfg.LocatorAddr)
 		defer func() { _ = conn.Close() }()
-		uc.SetLocationRefresher(data.NewGrpcLocationRefresher(conn))
+		locatorClient := data.NewGrpcLocationRefresher(conn, departureSigner)
+		uc.SetLocationRefresher(locatorClient)
+		uc.SetBattleDeparturePlacementVerifier(locatorClient)
 		helper.Infow("msg", "locator_client_ready", "locator_addr", cfg.LocatorAddr)
 	} else {
 		helper.Warnw("msg", "locator_addr_empty",
-			"hint", "BATTLE presence 不续期；权威 placement 保持不变，恢复必须继续 fail-closed/重试")
+			"hint", "BATTLE presence 不续期；EnsurePlayerDeparture 无 placement ABA verifier 将 fail-closed/重试")
 	}
 
 	svc := service.NewAllocatorService(uc)
 	svc.SetDSCallbackGuard(dsGuard) // DS 回调令牌校验(Heartbeat);nil=off
+	if modelB {
+		abortReplayStore, replayErr := internalrpcauth.NewRedisReplayStore(rdb,
+			"pandora:ds-allocator:allocation-abort:nonce:")
+		if replayErr != nil {
+			helper.Errorw("msg", "allocation_abort_replay_store_init_failed", "err", replayErr)
+			os.Exit(1)
+		}
+		abortVerifier, verifierErr := internalrpcauth.NewVerifier(
+			cfg.Allocator.AllocationAbortAuthSecret, "matchmaker",
+			cfg.Allocator.AllocationAbortAuthAudience, 30*time.Second, abortReplayStore)
+		if verifierErr != nil {
+			helper.Errorw("msg", "allocation_abort_verifier_init_failed", "err", verifierErr)
+			os.Exit(1)
+		}
+		svc.SetAllocationAbortVerifier(abortVerifier)
+		helper.Infow("msg", "allocation_abort_service_auth_ready",
+			"audience", cfg.Allocator.AllocationAbortAuthAudience)
+	}
 
 	// GmService(GM / 运维指令下发):与 ds_allocator 同进程复用 gRPC 端口。
 	// 运维 GM 工具 SendCommand 入 Redis 队列 → 战斗 DS 轮询 PollCommands 拉取执行(如给玩家发道具)。
@@ -315,7 +399,10 @@ func main() {
 			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
 			Service: serviceName, KeysetRevision: cfg.DSAuth.Fence.KeysetRevision,
 			WriterEpoch: dsauthfence.ProtocolEpochV2,
-			Features:    []string{"battle-release-expected-tuple-v1"},
+			Features: []string{
+				"battle-release-expected-tuple-v1",
+				"battle-storage-pod-uid-write-invariant-v1",
+			},
 			LeaseTTLSec: cfg.DSAuth.Fence.EtcdLeaseTTLSec, DialTimeout: cfg.DSAuth.Fence.EtcdDialTimeout.Std(),
 		})
 		if err != nil {

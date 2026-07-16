@@ -60,17 +60,33 @@ func resolveMaintMode(s string) maintnotifications.Mode {
 // slot(用 {hash_tag} 把同一玩家的相关 key 绑定到同一 slot,如 lock:{player:123})。
 // redislock / 多键 ZSET 等改造前必须核对 hash tag,详见 scale-cellular-20m.md 的单 Cell Redis 口径。
 func NewUniversalClient(c config.RedisConf) redis.UniversalClient {
-	return newUniversalClient(c, false)
+	return newUniversalClient(c, false, "", c.Password)
+}
+
+// NewUniversalClientWithCredentials constructs the same topology as
+// NewUniversalClient while deliberately replacing, rather than falling back
+// to, the credentials in c.  One-shot safety tooling uses this to authenticate
+// as a dedicated read-only ACL user even when its endpoint-only config was
+// derived from a writer service config.
+func NewUniversalClientWithCredentials(
+	c config.RedisConf,
+	username, password string,
+) redis.UniversalClient {
+	return newUniversalClient(c, false, username, password)
 }
 
 // NewDeadlineUniversalClient 与 NewUniversalClient 拓扑行为相同，但让 go-redis 把调用方
 // context deadline 计入 socket I/O 截止时间。仅应用在分布式锁等“业务声明的硬等待上限”
 // 必须真实生效的路径；保留原构造的既有行为，避免一次安全修复暗改所有服务的超时语义。
 func NewDeadlineUniversalClient(c config.RedisConf) redis.UniversalClient {
-	return newUniversalClient(c, true)
+	return newUniversalClient(c, true, "", c.Password)
 }
 
-func newUniversalClient(c config.RedisConf, contextTimeoutEnabled bool) redis.UniversalClient {
+func newUniversalClient(
+	c config.RedisConf,
+	contextTimeoutEnabled bool,
+	username, password string,
+) redis.UniversalClient {
 	addrs := c.Addrs
 	if len(addrs) == 0 {
 		addrs = []string{c.Host}
@@ -78,7 +94,8 @@ func newUniversalClient(c config.RedisConf, contextTimeoutEnabled bool) redis.Un
 	return redis.NewUniversalClient(&redis.UniversalOptions{
 		Addrs:        addrs,
 		MasterName:   c.MasterName,
-		Password:     c.Password,
+		Username:     username,
+		Password:     password,
 		DB:           int(c.DB),
 		DialTimeout:  c.DialTimeout.Std(),
 		ReadTimeout:  c.ReadTimeout.Std(),

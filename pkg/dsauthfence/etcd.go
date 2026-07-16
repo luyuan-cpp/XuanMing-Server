@@ -35,25 +35,25 @@ func Acquire(ctx context.Context, cfg Config) (*Holder, error) {
 	return Start(ctx, &etcdBackend{cli: cli}, cfg)
 }
 
-func (b *etcdBackend) GetRequired(ctx context.Context, key string) (uint32, int64, int64, bool, error) {
+func (b *etcdBackend) GetRequired(ctx context.Context, key string) (RequiredState, int64, int64, bool, error) {
 	resp, err := b.cli.Get(ctx, key)
 	if err != nil {
-		return 0, 0, 0, false, err
+		return RequiredState{}, 0, 0, false, err
 	}
 	if len(resp.Kvs) == 0 {
-		return 0, resp.Header.Revision, 0, false, nil
+		return RequiredState{}, resp.Header.Revision, 0, false, nil
 	}
 	if len(resp.Kvs) != 1 {
-		return 0, resp.Header.Revision, 0, false, errors.New("required key returned multiple values")
+		return RequiredState{}, resp.Header.Revision, 0, false, errors.New("required key returned multiple values")
 	}
-	epoch, err := ParseEpoch(resp.Kvs[0].Value)
-	return epoch, resp.Header.Revision, resp.Kvs[0].ModRevision, true, err
+	state, err := ParseRequiredState(resp.Kvs[0].Value)
+	return state, resp.Header.Revision, resp.Kvs[0].ModRevision, true, err
 }
 
 func (b *etcdBackend) AcquireCapability(
 	ctx context.Context,
 	key, lockKey, requiredKey string,
-	expectedRequired uint32,
+	expectedRequiredValue string,
 	expectedRequiredModRevision int64,
 	value []byte,
 	ttl int64,
@@ -69,7 +69,7 @@ func (b *etcdBackend) AcquireCapability(
 			clientv3.Compare(clientv3.CreateRevision(lockKey), "=", 0),
 			// required 的线性读与 capability 注册必须组成同一个 fencing 判定。若两者之间
 			// 已发生激活/回退/删除，本次旧快照注册必须失败，由进程退出后重新启动读取。
-			clientv3.Compare(clientv3.Value(requiredKey), "=", fmt.Sprint(expectedRequired)),
+			clientv3.Compare(clientv3.Value(requiredKey), "=", expectedRequiredValue),
 			clientv3.Compare(clientv3.ModRevision(requiredKey), "=", expectedRequiredModRevision),
 		).
 		Then(clientv3.OpPut(key, string(value), clientv3.WithLease(grant.ID))).
@@ -111,7 +111,7 @@ func (b *etcdBackend) WatchRequired(ctx context.Context, key string, revision in
 			for _, event := range response.Events {
 				item := RequiredEvent{Revision: event.Kv.ModRevision, Deleted: event.Type == clientv3.EventTypeDelete}
 				if !item.Deleted {
-					item.Epoch, item.Err = ParseEpoch(event.Kv.Value)
+					item.State, item.Err = ParseRequiredState(event.Kv.Value)
 				}
 				select {
 				case out <- item:

@@ -118,9 +118,9 @@ func TestBindExactTargetRenewsExpiredLeaseButStaleIdentityCannot(t *testing.T) {
 		AssignmentID: "assignment-a", ReleaseTrack: "stable"}
 	repo := &memoryPlacementRepo{rec: &locatorv1.PlayerPlacementStorageRecord{
 		PlayerId: 7, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE, MatchId: 90,
-		TargetRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
 		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
-		Version: 7, OperationId: op, SourceMatchId: 90,
+		Version:         7, OperationId: op, SourceMatchId: 90,
 		DsPodName: target.PodName, DsInstanceUid: target.InstanceUID,
 		DsInstanceEpoch: target.InstanceEpoch, HubAssignmentId: target.AssignmentID,
 		ReleaseTrack: target.ReleaseTrack, LeaseDeadlineMs: now.Add(-time.Minute).UnixMilli(),
@@ -130,7 +130,7 @@ func TestBindExactTargetRenewsExpiredLeaseButStaleIdentityCannot(t *testing.T) {
 	renewal := now.Add(10 * time.Minute).UnixMilli()
 	in := BindPlacementInput{PlayerID: 7, Version: 7, OperationID: op,
 		TargetRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-		PodName: target.PodName, InstanceUID: target.InstanceUID, InstanceEpoch: target.InstanceEpoch,
+		PodName:     target.PodName, InstanceUID: target.InstanceUID, InstanceEpoch: target.InstanceEpoch,
 		AssignmentID: target.AssignmentID, ReleaseTrack: target.ReleaseTrack, LeaseDeadlineMs: renewal}
 	got, err := uc.Bind(context.Background(), in)
 	if err != nil || got.GetLeaseDeadlineMs() != renewal || !recordTarget(got).Equal(target) {
@@ -164,15 +164,15 @@ func TestCommitStableExactTargetAllowsNewAdmissionID(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			op := "123e4567-e89b-42d3-a456-426614174000"
+			firstID := "123e4567-e89b-42d3-a456-426614174001"
 			repo := &memoryPlacementRepo{rec: &locatorv1.PlayerPlacementStorageRecord{
-				PlayerId: 8, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-				TargetRoute:     tc.route,
-				TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
-				Version:         5, OperationId: op, TargetMatchId: tc.match,
+				PlayerId: 8, CurrentRoute: tc.route, MatchId: tc.match,
+				TargetMatchId:   tc.match,
+				TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE,
+				Version:         5, OperationId: op, AdmissionId: firstID,
 				DsPodName: tc.target.PodName, DsInstanceUid: tc.target.InstanceUID,
 				DsInstanceEpoch: tc.target.InstanceEpoch, HubAssignmentId: tc.target.AssignmentID,
 				AllocationId: tc.target.AllocationID, ReleaseTrack: tc.target.ReleaseTrack,
-				LeaseDeadlineMs: time.Now().Add(time.Hour).UnixMilli(),
 			}}
 			uc := NewPlacementUsecase(repo)
 			bind := BindPlacementInput{PlayerID: 8, Version: 5, OperationID: op,
@@ -180,11 +180,6 @@ func TestCommitStableExactTargetAllowsNewAdmissionID(t *testing.T) {
 				AssignmentID: tc.target.AssignmentID, TargetMatchID: tc.match,
 				InstanceEpoch: tc.target.InstanceEpoch, AllocationID: tc.target.AllocationID,
 				ReleaseTrack: tc.target.ReleaseTrack}
-			firstID := "123e4567-e89b-42d3-a456-426614174001"
-			if _, err := uc.Commit(context.Background(), CommitPlacementInput{
-				BindPlacementInput: bind, AdmissionID: firstID}); err != nil {
-				t.Fatal(err)
-			}
 			secondID := "123e4567-e89b-42d3-a456-426614174002"
 			got, err := uc.Commit(context.Background(), CommitPlacementInput{
 				BindPlacementInput: bind, AdmissionID: secondID})
@@ -214,6 +209,10 @@ func TestTerminalProofCancelsPendingBattleAndAtomicallyInvalidatesOldTicket(t *t
 		ProofId:   "match-start:90", LeaseDeadlineMs: now.Add(time.Hour).UnixMilli(),
 		DsPodName: "battle-90", DsInstanceUid: "battle-uid-90", DsInstanceEpoch: 3,
 		AllocationId: "allocation-90", ReleaseTrack: "stable",
+		SourcePlacementVersion: 4, SourceOperationId: "423e4567-e89b-42d3-a456-426614174004",
+		SourceDsPodName: "hub-source", SourceDsInstanceUid: "hub-source-uid",
+		SourceDsInstanceEpoch: 2, SourceHubAssignmentId: "hub-source-assignment",
+		SourceReleaseTrack: "stable",
 	}}
 	uc := NewPlacementUsecase(repo, signer)
 	uc.now = func() time.Time { return now }

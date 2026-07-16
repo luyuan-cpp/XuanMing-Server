@@ -20,6 +20,11 @@ service DSAllocatorService {
   // GameServerAllocation、不续 TTL；只有目标仍 ReadyAuthorized 且 player 在 roster 时返回。
   rpc ResolveBattleTarget(ResolveBattleTargetRequest) returns (ResolveBattleTargetResponse);
   rpc ReleaseBattle(ReleaseBattleRequest) returns (ReleaseBattleResponse);
+  // AbortPreactiveBattle is the Matchmaker allocation-saga compensation path.
+  // The caller service identity signature binds the full request body; allocator
+  // only fences and UID-deletes this exact allocation before any Battle ticket
+  // was published. ACK-loss retries are recognized by a durable abort journal.
+  rpc AbortPreactiveBattle(AbortPreactiveBattleRequest) returns (AbortPreactiveBattleResponse);
   // EnsurePlayerDeparture 是 Battle→Hub 的物理离场门。调用方必须携带从
   // placement/source snapshot 取得的完整实例元组；只在该玩家已从 credential-bound
   // Battle DS 的可信在线集合消失，或该 exact GameServer UID 已被确认回收后返回 departed。
@@ -93,6 +98,20 @@ message ReleaseBattleResponse {
   pandora.common.v1.ErrCode code = 1;
 }
 
+message AbortPreactiveBattleRequest {
+  uint64 match_id = 1;
+  string allocation_operation_id = 2;
+  string ds_pod_name = 3;
+  string gameserver_uid = 4;
+  uint32 instance_epoch = 5;
+  string allocation_id = 6;
+  string release_track = 7;
+}
+
+message AbortPreactiveBattleResponse {
+  pandora.common.v1.ErrCode code = 1;
+}
+
 // ===== Battle→Hub exact player departure =====
 
 enum BattlePlayerDepartureStatus {
@@ -105,16 +124,20 @@ enum BattlePlayerDepartureStatus {
 message EnsurePlayerDepartureRequest {
   uint64 match_id = 1;
   uint64 player_id = 2;
-  // operation_id 来自服务端 placement transition；同 operation 重试幂等，
-  // 不同 operation 不能消费对方的 ACK。
+  // 当前 PENDING->HUB placement transition 的 version/op。Begin 必须先
+  // 成功，使旧 Battle ticket 立即过期，才能调用本 RPC。
   string operation_id = 3;
   string ds_pod_name = 4;
   string gameserver_uid = 5;
   uint32 instance_epoch = 6;
   string allocation_id = 7;
-  // source STABLE BATTLE placement 的版本。旧 version/op 的迟到 RPC 不得
-  // 消费新一轮 Hub transition 的离场证明（ABA fence）。
+  // 当前 PENDING->HUB placement 的新版本。
   uint64 placement_version = 8;
+  // Begin 原子捕获的 source STABLE BATTLE version/op。驱逐 order
+  // 使用这组 source claims 精确命中旧 Battle admission；journal 同时
+  // 绑定 transition+source 两组代际，防止 ABA/迟到 RPC 复用证明。
+  uint64 source_placement_version = 9;
+  string source_operation_id = 10;
 }
 
 message EnsurePlayerDepartureResponse {
@@ -135,6 +158,7 @@ message BattleEvictionOrder {
   uint32 instance_epoch = 6;
   string allocation_id = 7;
   uint64 placement_version = 8;
+  string operation_id = 9;
 }
 
 // ===== Heartbeat(单向 unary,DS 每 5s 调一次)=====
@@ -150,12 +174,19 @@ message HeartbeatRequest {
   int64  ts_ms       = 7;
   // 8-9 reserved
   reserved 8 to 9;
-  // 滚动更新门：只有 present=true 才把 active_player_ids 解释为完整可信快照。
-  // 旧 DS 的 proto3 零值绝不能被误解释为“全员已离场”。
+  // 滚动更新门：这不是仅 PostLogin active players，而是所有可能
+  // 拥有 admission 的完整 census（pending + admitted cache + controller
+  // claims + active owners）。只有 present=true 且 capability_version>=1
+  // 才可用于离场证明；旧 DS 零值绝不能解释为“全员已离场”。
   repeated uint64 active_player_ids = 10;
   bool active_player_snapshot_present = 11;
   // DS 仅在执行过 order 且当前快照已不含该 player 时回报。
   repeated string acknowledged_departure_ids = 12;
+  uint32 player_census_capability_version = 13;
+  // 每次采样的唯一 ID；同一 RPC 传输重试必须保持不变，下一份
+  // 真实采样必须换新 ID。allocator 用它确保“ACK 之后的另一份
+  // 完整 census”，而不是同一快照/传输重放，才提交 DEPARTED。
+  string player_census_id = 14;
 }
 
 // allocator 返回控制指令(DS 在下次 heartbeat 之间消费)
@@ -222,6 +253,9 @@ message BattleStorageRecord {
   // 实际承载本局的发布轨道，只接受 stable/canary。必须来自已分配 GameServer
   // 权威 metadata/GET 回读，不得按 cohort 意图猜测（canary 可回退 stable）。
   string release_track     = 18;
+  // 分配时从 Pod GET 捕获，并验证 ownerReference UID 等于
+  // gameserver_uid。GameServer DELETE 2xx 后仍要等该 Pod UID 消失/变更。
+  string pod_uid = 19;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====
@@ -272,6 +306,7 @@ message BattlePlayerDepartureStorageRecord {
   string departure_id = 1;
   uint64 match_id = 2;
   uint64 player_id = 3;
+  // PENDING->HUB transition operation/version.
   string operation_id = 4;
   string ds_pod_name = 5;
   string gameserver_uid = 6;
@@ -282,6 +317,14 @@ message BattlePlayerDepartureStorageRecord {
   int64 issued_at_ms = 11;
   int64 departed_at_ms = 12;
   uint64 placement_version = 13;
+  // Begin 捕获的 source Battle placement claims，order 使用这组
+  // source 代际取消准入/踢出 Controller。
+  uint64 source_placement_version = 14;
+  string source_operation_id = 15;
+  // 首次 credential-bound DS ACK 只能证明 order 已执行。必须由
+  // 后续另一份 capability>=1 完整 census 证明缺席才能 DEPARTED。
+  int64 acknowledged_at_ms = 16;
+  string acknowledged_census_id = 17;
 }
 
 message BattlePlayerDepartureJournalStorageRecord {
@@ -298,6 +341,41 @@ message BattleInstanceTeardownStorageRecord {
   uint32 instance_epoch = 4;
   string allocation_id = 5;
   int64 torn_down_at_ms = 6;
+  // 分配时从与 GameServer owner UID 精确关联的 Pod GET 捕获。
+  // teardown 只在 GameServer UID 与该 Pod UID 都 NotFound/changed 后落盘。
+  string pod_uid = 7;
+}
+
+// Permanent ACK-loss journal for a signed Matchmaker pre-admission abort.
+// PENDING is written atomically with the TERMINATING auth/battle fence before
+// Kubernetes is touched; RELEASED is written only after UID delete and
+// lifecycle delivery are both explicitly acknowledged.
+message BattleAllocationAbortStorageRecord {
+  uint64 match_id = 1;
+  string allocation_operation_id = 2;
+  string ds_pod_name = 3;
+  string gameserver_uid = 4;
+  uint32 instance_epoch = 5;
+  string allocation_id = 6;
+  string release_track = 7;
+  int64 requested_at_ms = 8;
+  int64 released_at_ms = 9;
+}
+
+// Permanent proof that the exact physically torn-down allocation has also
+// been durably handed to the ds.lifecycle ABANDONED stream.  It is written
+// only after both the UID/Pod-conditioned teardown proof and the Kafka ACK
+// exist.  release_track is part of the identity: a terminal fence, TTL miss,
+// or teardown proof alone is never sufficient to synthesize an abort ACK.
+message BattleAllocationLifecyclePublishedStorageRecord {
+  uint64 match_id = 1;
+  string ds_pod_name = 2;
+  string gameserver_uid = 3;
+  uint32 instance_epoch = 4;
+  string allocation_id = 5;
+  string release_track = 6;
+  DSLifecyclePhase phase = 7;
+  int64 published_at_ms = 8;
 }
 
 // ===== 生命周期事件(kafka pandora.ds.lifecycle)=====

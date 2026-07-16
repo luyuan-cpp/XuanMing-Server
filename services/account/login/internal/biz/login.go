@@ -119,6 +119,7 @@ type LoginUsecase struct {
 	placementChecker            data.PlacementAdmissionChecker
 	placementProofSigner        *placement.ProofSigner
 	matchResumeReader           data.MatchResumeReader
+	battleDeparture             data.BattleDepartureCoordinator
 
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md 三层化地基)。
 	// 可为 nil:单 Cell / dev 部署不路由,登录返回 region/cell = 0。多 Cell 部署由 main
@@ -146,6 +147,10 @@ type LoginUsecase struct {
 // SetBattleTicketIssuer 在服务启动、对外监听前注入统一的 Battle 票据签发入口。
 func (u *LoginUsecase) SetBattleTicketIssuer(issuer BattleTicketIssuer) {
 	u.battleTicketIssuer = issuer
+}
+
+func (u *LoginUsecase) SetBattleDepartureCoordinator(coordinator data.BattleDepartureCoordinator) {
+	u.battleDeparture = coordinator
 }
 
 // NewLoginUsecase 构造 LoginUsecase。
@@ -1372,9 +1377,41 @@ func (u *LoginUsecase) renewBattleExitHubPlacement(
 		(!stableBattle && !pendingHubRetry && !pendingBattleCancellation) {
 		return errcode.New(errcode.ErrLocatorConflict, "battle exit proof no longer matches placement")
 	}
-	_, err = u.placementChecker.BeginHubFromBattle(ctx, playerID, matchID, proof,
+	// Linearize the route decision first.  The new version atomically fences
+	// every old Battle ticket while preserving the exact source tuple.  Waiting
+	// for physical eviction before Begin would leave a reconnect window in which
+	// the old ticket is still admissible.
+	binding, err := u.placementChecker.BeginHubFromBattle(ctx, playerID, matchID, proof,
 		time.Now().Add(10*time.Minute).UnixMilli())
-	return err
+	if err != nil {
+		return err
+	}
+	pending, err := u.placementChecker.GetPlacement(ctx, playerID)
+	if err != nil {
+		return err
+	}
+	if !pending.Found || pending.TransitionState != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING ||
+		pending.TargetRoute != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || pending.SourceMatchID != matchID ||
+		pending.Version != binding.Version || pending.OperationID != binding.OperationID ||
+		!pending.SourceBinding.Complete() {
+		return errcode.New(errcode.ErrLocatorConflict, "pending Hub transition/source lineage mismatch")
+	}
+	// Cancelling a never-admitted PENDING Battle preserves the physical Hub as
+	// source; Battle Commit loses the version CAS and cannot open spawn.  A true
+	// Battle source must be evicted and then proven absent before Hub allocation.
+	if pending.SourceTarget.CompleteBattle() {
+		if u.battleDeparture == nil {
+			return errcode.New(errcode.ErrUnavailable,
+				"Battle physical departure coordinator unavailable")
+		}
+		if err := u.battleDeparture.EnsurePlayerDeparture(ctx, playerID, matchID,
+			binding, pending.SourceBinding, pending.SourceTarget); err != nil {
+			return err
+		}
+	} else if stableBattle || !pending.SourceTarget.CompleteHub() {
+		return errcode.New(errcode.ErrLocatorConflict, "pending Hub transition has incomplete physical source")
+	}
+	return nil
 }
 
 // guardHubRouteAgainstActiveBattle 是所有非 Login 主链 Hub 签票入口(IssueDSTicket(hub) /

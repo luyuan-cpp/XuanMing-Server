@@ -15,8 +15,92 @@ function Assert-Throws([scriptblock]$Action, [string]$Message) {
 
 function Copy-Object($Value) { return (($Value | ConvertTo-Json -Depth 30) | ConvertFrom-Json) }
 
+Assert-PandoraPodUIDACLCleanupTimeline `
+    ([datetimeoffset]'2026-07-15T12:00:00Z') ([datetimeoffset]'2026-07-15T12:01:00Z') `
+    ([datetimeoffset]'2026-07-15T12:02:00Z') ([datetimeoffset]'2026-07-15T12:03:00Z')
+Assert-Throws {
+    Assert-PandoraPodUIDACLCleanupTimeline `
+        ([datetimeoffset]'2026-07-15T12:00:00Z') ([datetimeoffset]'2026-07-15T12:02:00Z') `
+        ([datetimeoffset]'2026-07-15T12:01:00Z') ([datetimeoffset]'2026-07-15T12:03:00Z')
+} 'pre-switch ACL cleanup proof must never satisfy post-CAS completion'
+$providerContinuation = [System.Collections.Generic.List[string]]::new()
+Assert-Throws {
+    Assert-PandoraRedisTopologyChangeLockProvider 'test-before-write' 'cluster' ('sha256:' + ('a' * 64))
+    $providerContinuation.Add('kubectl-create-patch-scale')
+} 'missing topology provider must throw before any simulated external write'
+Assert-True ($providerContinuation.Count -eq 0) `
+    'topology provider fail-closed hook must prevent the next create/patch/scale action'
+
 $revision = 'r7'
 $digest = 'sha256:' + ('a' * 64)
+$policyV3Services = 'login=1,player_locator=1,ds_allocator=1,hub_allocator=1,battle_result=1'
+$policyV3Instances = 'login=l1,player_locator=p1,ds_allocator=d1,hub_allocator=h1,battle_result=b1'
+$policyV3Digests = 'login=' + $digest + ',player_locator=' + $digest + ',ds_allocator=' + $digest +
+    ',hub_allocator=' + $digest + ',battle_result=' + $digest
+$policyV3Marker = [pscustomobject]@{
+    immutable = $true
+    metadata = [pscustomobject]@{ uid = '12345678-abcd'; resourceVersion = '42'; creationTimestamp = '2026-07-15T12:01:00Z' }
+    data = [pscustomobject][ordered]@{
+        contract = 'ds-auth-policy-v3-activation-evidence-v1'
+        run_id = 'successor-v3-test'; kube_context = 'prod-us-east'; namespace = 'pandora'
+        from_policy_generation = '2'; to_policy_generation = '3'
+        from_required_value = '2@ds-auth-v2-pod-uid-write-invariant-v1'
+        to_required_value = '2@ds-auth-v2-hub-successor-lease-v1'
+        required_policy_id = 'ds-auth-v2-hub-successor-lease-v1'
+        staging_contract = 'capability-lease-not-service-endpoint-v1'
+        expected_services = $policyV3Services; expected_instances = $policyV3Instances
+        expected_image_digests = $policyV3Digests
+        required_features = $script:PandoraDsAuthRequiredFeaturesV3
+        evidence_sha256 = ('sha256:' + ('0' * 64)); completed_at_unix_ms = '1784116800000'
+    }
+}
+$policyV3Marker.data.evidence_sha256 = Get-PandoraDsAuthPolicyV3EvidenceSHA256 $policyV3Marker.data
+$policyV3Proof = Assert-PandoraDsAuthPolicyV3EvidenceContract $policyV3Marker `
+    $policyV3Services $policyV3Instances $policyV3Digests
+Assert-True ($policyV3Proof.EvidenceSHA256 -ceq $policyV3Marker.data.evidence_sha256) 'canonical V3 evidence marker rejected'
+$badPolicyV3Marker = Copy-Object $policyV3Marker
+$badPolicyV3Marker.data.staging_contract = 'service-endpoint-ready'
+Assert-Throws {
+    Assert-PandoraDsAuthPolicyV3EvidenceContract $badPolicyV3Marker `
+        $policyV3Services $policyV3Instances $policyV3Digests
+} 'V3 evidence must bind leased staging capabilities, not Hub readiness'
+Assert-Throws {
+    Resolve-PandoraDsAuthV3CanonicalUIDSet 'hub_allocator' @('uid-new', 'uid-extra') 1 @('uid-old') -PreCAS
+} 'pre-CAS extra canonical Pod must be rejected even when the expected Pod is present elsewhere'
+Assert-Throws {
+    Resolve-PandoraDsAuthV3CanonicalUIDSet 'hub_allocator' @('uid-new') 1 @('uid-old') -PreCAS
+} 'pre-CAS replacement UID must not satisfy immutable staging evidence'
+$rescheduledUID = Resolve-PandoraDsAuthV3CanonicalUIDSet 'hub_allocator' @('uid-new') 1
+Assert-True ($rescheduledUID -ceq 'uid-new') `
+    'post-CAS finalize must derive and accept the current canonical replacement UID instead of marker UID'
+$completionCounts = @{ login = 1; player_locator = 1; ds_allocator = 1; hub_allocator = 1; battle_result = 1 }
+$completionMarker = [pscustomobject]@{
+    immutable = $true
+    metadata = [pscustomobject]@{ name = 'pandora-ds-auth-policy-v3-complete-successor-v3-test'; namespace = 'pandora';
+        uid = 'abcdef12-3456'; resourceVersion = '77'; creationTimestamp = '2026-07-15T12:02:00Z' }
+    data = [pscustomobject][ordered]@{
+        contract = 'ds-auth-policy-v3-completion-v1'; run_id = $policyV3Proof.RunID
+        required_value = '2@ds-auth-v2-hub-successor-lease-v1'; policy_generation = '3'
+        evidence_uid = $policyV3Proof.UID; evidence_resource_version = $policyV3Proof.ResourceVersion
+        evidence_sha256 = $policyV3Proof.EvidenceSHA256
+        final_instances = 'login=l2,player_locator=p2,ds_allocator=d2,hub_allocator=h2,battle_result=b2'
+        completed_at_unix_ms = '1784116860000'
+    }
+}
+Assert-PandoraDsAuthV3CompletionContract $completionMarker $completionMarker.metadata.name `
+    'pandora' $policyV3Proof $completionCounts
+$badCompletion = Copy-Object $completionMarker
+$badCompletion.metadata.namespace = 'other'
+Assert-Throws {
+    Assert-PandoraDsAuthV3CompletionContract $badCompletion $completionMarker.metadata.name `
+        'pandora' $policyV3Proof $completionCounts
+} 'completion marker namespace drift must fail'
+$badCompletion = Copy-Object $completionMarker
+$badCompletion.data.final_instances += ',unknown=u1'
+Assert-Throws {
+    Assert-PandoraDsAuthV3CompletionContract $badCompletion $completionMarker.metadata.name `
+        'pandora' $policyV3Proof $completionCounts
+} 'completion marker extra service must fail'
 $secret = [pscustomobject]@{
     metadata = [pscustomobject]@{
         name = 'pandora-ds-auth-etcd-ds-allocator-r7'
@@ -321,6 +405,10 @@ $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName args -NoteProper
 $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName ports -NotePropertyValue @([pscustomobject]@{ name = 'grpc'; containerPort = 50020 })
 $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName readinessProbe -NotePropertyValue ([pscustomobject]@{ grpc = [pscustomobject]@{ port = 50020 } })
 $greenTemplateSpec.containers[0] | Add-Member -NotePropertyName resources -NotePropertyValue ([pscustomobject]@{ requests = [pscustomobject]@{ cpu = '25m' } })
+$greenTemplateSpec.volumes += [pscustomobject]@{ name = 'conf'; secret = [pscustomobject]@{ secretName = 'pandora-config' } }
+$greenTemplateSpec.containers[0].volumeMounts += [pscustomobject]@{
+    name = 'conf'; mountPath = '/app/etc/cluster.yaml'; subPath = 'ds-allocator.yaml'; readOnly = $true
+}
 $liveGreen = [pscustomobject]@{
     apiVersion = 'apps/v1'; kind = 'Deployment'
     metadata = [pscustomobject]@{
@@ -353,6 +441,13 @@ $newDigest = 'sha256:' + ('b' * 64)
 $greenObject = New-PandoraDsAuthCanonicalGreenObject $liveGreen 'ds-allocator' 'r7' `
     'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 ('registry/pandora/ds-allocator@' + $newDigest) $newDigest
 Assert-True ($greenObject.metadata.resourceVersion -ceq '123') 'canonical green full object keeps CAS resourceVersion'
+$opaqueRVGreen = Copy-Object $liveGreen
+$opaqueRVGreen.metadata.resourceVersion = 'rv:opaque-1'
+$opaqueRVObject = New-PandoraDsAuthCanonicalGreenObject $opaqueRVGreen 'ds-allocator' 'r7' `
+    'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 `
+    ('registry/pandora/ds-allocator@' + $newDigest) $newDigest
+Assert-True ($opaqueRVObject.metadata.resourceVersion -ceq 'rv:opaque-1') `
+    'Kubernetes resourceVersion is opaque and must not be interpreted as decimal'
 Assert-True ($greenObject.spec.replicas -eq 2 -and $greenObject.spec.selector.matchLabels.'pandora.dev/ds-auth-writer-set' -ceq 'green') 'canonical green keeps desired/immutable selector'
 $greenContainer = @($greenObject.spec.template.spec.containers | Where-Object name -ceq 'ds-allocator')[0]
 Assert-True ($greenContainer.args[0] -ceq '-conf' -and $greenContainer.ports[0].containerPort -eq 50020 -and
@@ -362,6 +457,224 @@ Assert-True ($greenObject.spec.template.spec.serviceAccountName -ceq 'pandora-al
     $greenObject.spec.template.metadata.labels.'istio.io/rev' -ceq 'asm-1-22' -and
     @($greenObject.spec.template.metadata.labels.PSObject.Properties | Where-Object Name -CEQ 'sidecar.istio.io/inject').Count -eq 0) `
     'canonical green full object keeps SA/single revision selector without dual injector marker'
+$snapshotLive = Copy-Object $liveGreen
+@($snapshotLive.spec.template.spec.volumes | Where-Object name -ceq 'conf')[0].secret.secretName = `
+    'pandora-dsa-cfg-v2-release-run-01-aaaaaaaaaaaa'
+$ordinaryGreen = New-PandoraDsAuthCanonicalGreenObject $snapshotLive 'ds-allocator' 'r7' `
+    'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 `
+    ('registry/pandora/ds-allocator@' + $newDigest) $newDigest
+Assert-True ([string](@($ordinaryGreen.spec.template.spec.volumes | Where-Object name -ceq 'conf')[0].secret.secretName) -ceq
+    'pandora-config') 'ordinary epoch2 ds-allocator release must leave activation snapshot and return to current pandora-config'
+
+$podUIDGreen = Copy-Object $greenObject
+$podUIDGreen.spec.template.spec | Add-Member -NotePropertyName securityContext -NotePropertyValue ([pscustomobject]@{
+    runAsNonRoot = $true; runAsUser = 10001; runAsGroup = 10001; fsGroup = 10001
+})
+$podUIDMain = @($podUIDGreen.spec.template.spec.containers | Where-Object name -ceq 'ds-allocator')[0]
+$podUIDPrepareConfig = [pscustomobject]@{
+    SourceSecretName = 'pandora-config'
+    SourceSecretUID = '11111111-1111-1111-1111-111111111111'
+    SourceSecretResourceVersion = '101'
+    RawConfigSHA256 = 'sha256:' + ('a' * 64)
+    RawSnapshotName = 'pandora-dsa-cfg-v2-release-run-01-' + ('a' * 12)
+    RawSnapshotUID = '22222222-2222-2222-2222-222222222222'
+    RawSnapshotResourceVersion = '102'
+    RawSnapshotSHA256 = 'sha256:' + ('a' * 64)
+    ROSecretName = 'pandora-pod-uid-preflight-redis-ro-r7'
+    ROSecretUID = '33333333-3333-3333-3333-333333333333'
+    ROSecretResourceVersion = '103'
+    ROConfigSHA256 = 'sha256:' + ('c' * 64)
+    RedisConfigIdentity = 'sha256:' + ('e' * 64)
+    RedisConfigTopology = 'standalone'
+    HelperSourceSHA256 = 'sha256:' + ('f' * 64)
+    RedisTargetIdentity = 'pending-prepare'
+}
+$podUIDJob = New-PandoraPodUIDReleasePreflightJobObject $podUIDGreen 'release-run-01' 'prepare' 2 $podUIDPrepareConfig
+Assert-PandoraPodUIDReleasePreflightJobContract $podUIDJob `
+    ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'prepare' 2 $podUIDPrepareConfig
+Assert-True (@($podUIDJob.spec.template.spec.containers).Count -eq 1 -and
+    $null -eq $podUIDJob.spec.template.spec.PSObject.Properties['initContainers'] -and
+    $podUIDJob.spec.template.spec.automountServiceAccountToken -eq $false) `
+    'pod_uid release preflight is an explicit one-shot Job, never an init container'
+$badPodUIDJob = Copy-Object $podUIDJob
+$badPodUIDJob.spec.template.spec.containers[0].image = 'registry/pandora/ds-allocator@sha256:' + ('c' * 64)
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badPodUIDJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'prepare' 2 $podUIDPrepareConfig
+} 'pod_uid Job image drift'
+$badPodUIDJob = Copy-Object $podUIDJob
+$badPodUIDJob.spec.template.spec.containers[0].args[2] = '-serve'
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badPodUIDJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'prepare' 2 $podUIDPrepareConfig
+} 'pod_uid Job one-shot args bypass'
+$badPodUIDJob = Copy-Object $podUIDJob
+$badPodUIDJob.spec.template.spec | Add-Member -NotePropertyName initContainers -NotePropertyValue @(
+    [pscustomobject]@{ name = 'smuggled-writer' }
+)
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badPodUIDJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'prepare' 2 $podUIDPrepareConfig
+} 'pod_uid Job init container bypass'
+$badPodUIDJob = Copy-Object $podUIDJob
+$badPodUIDJob.spec.template.spec.containers[0].volumeMounts[0].readOnly = $false
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badPodUIDJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'prepare' 2 $podUIDPrepareConfig
+} 'pod_uid Job writable config bypass'
+$podUIDDrainedConfig = Copy-Object $podUIDPrepareConfig
+$podUIDDrainedConfig.RedisTargetIdentity = 'sha256:' + ('d' * 64)
+@($podUIDGreen.spec.template.spec.volumes | Where-Object name -ceq 'conf')[0].secret.secretName = `
+    $podUIDDrainedConfig.RawSnapshotName
+$drainedPodUIDJob = New-PandoraPodUIDReleasePreflightJobObject $podUIDGreen 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+Assert-PandoraPodUIDReleasePreflightJobContract $drainedPodUIDJob `
+    ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+Assert-True ([string]$podUIDJob.metadata.name -cne [string]$drainedPodUIDJob.metadata.name -and
+    [string]$podUIDJob.metadata.labels.'pandora.dev/preflight-phase' -ceq 'prepare' -and
+    [string]$drainedPodUIDJob.metadata.labels.'pandora.dev/preflight-phase' -ceq 'drained' -and
+    (@($drainedPodUIDJob.spec.template.spec.containers[0].args) -join ' ').Contains(
+        '-pod-uid-release-preflight-phase=drained')) `
+    'prepare/drained Jobs are immutable distinct phase-bound evidence'
+$badDrainedJob = Copy-Object $drainedPodUIDJob
+$badDrainedJob.metadata.labels.'pandora.dev/preflight-phase' = 'prepare'
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badDrainedJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'prepare evidence cannot satisfy drained gate'
+$badSelectorJob = Copy-Object $drainedPodUIDJob
+$badSelectorJob.spec | Add-Member -NotePropertyName manualSelector -NotePropertyValue $false
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badSelectorJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'manualSelector must be absent even when false'
+$badSelectorJob = Copy-Object $drainedPodUIDJob
+$badSelectorJob.spec | Add-Member -NotePropertyName selector -NotePropertyValue ([pscustomobject]@{})
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badSelectorJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'selector must be absent'
+$badSelectorJob = Copy-Object $drainedPodUIDJob
+$badSelectorJob.spec | Add-Member -NotePropertyName suspend -NotePropertyValue $false
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badSelectorJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'suspend must be absent even when false'
+
+$completedJob = Copy-Object $drainedPodUIDJob
+$completedJob.metadata | Add-Member -NotePropertyName uid -NotePropertyValue '44444444-4444-4444-4444-444444444444'
+$completedJob.metadata | Add-Member -NotePropertyName resourceVersion -NotePropertyValue '104'
+$completedJob.metadata | Add-Member -NotePropertyName creationTimestamp -NotePropertyValue '2026-07-15T12:00:01Z'
+$completedJob.spec | Add-Member -NotePropertyName manualSelector -NotePropertyValue $false
+$completedJob.spec | Add-Member -NotePropertyName suspend -NotePropertyValue $false
+$completedJob.spec | Add-Member -NotePropertyName selector -NotePropertyValue ([pscustomobject]@{
+    matchLabels = [pscustomobject]@{
+        'batch.kubernetes.io/controller-uid' = $completedJob.metadata.uid
+    }
+})
+$completedJob | Add-Member -NotePropertyName status -NotePropertyValue ([pscustomobject]@{
+    succeeded = 1; completionTime = '2026-07-15T12:00:10Z'
+    conditions = @([pscustomobject]@{ type = 'Complete'; status = 'True' })
+})
+$completedPod = [pscustomobject]@{
+    metadata = [pscustomobject]@{
+        name = 'pandora-pod-uid-preflight-pod'; namespace = 'pandora'
+        uid = '55555555-5555-5555-5555-555555555555'
+        creationTimestamp = '2026-07-15T12:00:02Z'
+        annotations = Copy-Object $completedJob.spec.template.metadata.annotations
+        ownerReferences = @([pscustomobject]@{
+            apiVersion = 'batch/v1'; kind = 'Job'; name = $completedJob.metadata.name
+            uid = $completedJob.metadata.uid; controller = $true
+        })
+    }
+    spec = Copy-Object $completedJob.spec.template.spec
+    status = [pscustomobject]@{
+        phase = 'Succeeded'
+        containerStatuses = @([pscustomobject]@{
+            name = 'pod-uid-release-preflight'
+            image = 'registry/pandora/ds-allocator@' + $newDigest
+            imageID = 'docker-pullable://registry/pandora/ds-allocator@' + $newDigest
+            restartCount = 0
+            state = [pscustomobject]@{ terminated = [pscustomobject]@{
+                exitCode = 0; signal = 0; reason = 'Completed'
+                startedAt = '2026-07-15T12:00:03Z'; finishedAt = '2026-07-15T12:00:09Z'
+            } }
+        })
+    }
+}
+$runtimeEvidence = Assert-PandoraPodUIDReleasePreflightRuntimeContract $completedJob $completedPod `
+    ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig `
+    ([datetimeoffset]'2026-07-15T12:00:00Z') ([datetimeoffset]'2026-07-15T12:00:20Z')
+Assert-True ($runtimeEvidence.JobUID -ceq $completedJob.metadata.uid -and
+    $runtimeEvidence.PodUID -ceq $completedPod.metadata.uid -and
+    $runtimeEvidence.CompletionTimeUnixMS -gt 0) 'runtime evidence binds exact Job/Pod UID and completion'
+$badStoredJob = Copy-Object $completedJob
+$badStoredJob.spec.selector.matchLabels.'batch.kubernetes.io/controller-uid' = `
+    '66666666-6666-6666-6666-666666666666'
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badStoredJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'stored Job generated selector must bind exact Job UID'
+$badStoredJob = Copy-Object $completedJob
+$badStoredJob.spec.manualSelector = $true
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightJobContract $badStoredJob `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'stored Job cannot enable manualSelector'
+$badRuntimePod = Copy-Object $completedPod
+$badRuntimePod.metadata.ownerReferences[0].uid = '66666666-6666-6666-6666-666666666666'
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightRuntimeContract $completedJob $badRuntimePod `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'Pod ownerReference must bind exact Job UID'
+$badRuntimePod = Copy-Object $completedPod
+$badRuntimePod.status.containerStatuses[0].imageID = 'containerd://sha256:' + ('e' * 64)
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightRuntimeContract $completedJob $badRuntimePod `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'Pod imageID must match pinned digest'
+$badRuntimePod = Copy-Object $completedPod
+$badRuntimePod.status.containerStatuses[0].restartCount = 1
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightRuntimeContract $completedJob $badRuntimePod `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'Pod restart count must remain zero'
+$badRuntimePod = Copy-Object $completedPod
+$badRuntimePod.spec | Add-Member -NotePropertyName ephemeralContainers -NotePropertyValue @(
+    [pscustomobject]@{ name = 'smuggled-debugger' }
+)
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightRuntimeContract $completedJob $badRuntimePod `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig
+} 'actual Pod cannot contain an injected ephemeral container'
+Assert-Throws {
+    Assert-PandoraPodUIDReleasePreflightRuntimeContract $completedJob $completedPod `
+        ('registry/pandora/ds-allocator@' + $newDigest) 'release-run-01' 'drained' 2 $podUIDDrainedConfig `
+        ([datetimeoffset]'2026-07-15T12:00:00Z') ([datetimeoffset]'2026-07-15T12:00:05Z')
+} 'Job completion cannot be after switch/CAS bound'
+
+$locatorLive = (($liveGreen | ConvertTo-Json -Depth 40).Replace('ds-allocator', 'player-locator') | ConvertFrom-Json)
+$locatorObject = New-PandoraDsAuthCanonicalGreenObject $locatorLive 'player-locator' 'r7' `
+    'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 `
+    ('registry/pandora/player-locator@' + $newDigest) $newDigest
+Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $locatorObject `
+    ('registry/pandora/player-locator@' + $newDigest)
+Assert-True ([string]$locatorObject.spec.strategy.type -ceq 'Recreate' -and
+    $null -eq $locatorObject.spec.strategy.PSObject.Properties['rollingUpdate'] -and
+    @($locatorObject.spec.template.spec.initContainers).Count -eq 1) `
+    'prod canonical green player-locator replacement must carry exact Recreate + preflight gate'
+$badLocator = Copy-Object $locatorObject
+$badLocator.spec.template.spec.initContainers[0].image = 'registry/pandora/player-locator@sha256:' + ('c' * 64)
+Assert-Throws {
+    Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $badLocator `
+        ('registry/pandora/player-locator@' + $newDigest)
+} 'canonical green rejects placement preflight digest drift'
+$badLocatorLive = Copy-Object $locatorLive
+$badLocatorLive.spec.template.spec.volumes = @($badLocatorLive.spec.template.spec.volumes | Where-Object name -cne 'conf')
+Assert-Throws {
+    New-PandoraDsAuthCanonicalGreenObject $badLocatorLive 'player-locator' 'r7' `
+        'etcd.pandora.internal' '/pandora/acl-negative/' $false 2 `
+        ('registry/pandora/player-locator@' + $newDigest) $newDigest
+} 'canonical green refuses preflight without canonical config source'
 $badGreen = Copy-Object $liveGreen
 $badGreen.spec.selector.matchLabels | Add-Member -NotePropertyName extra -NotePropertyValue smuggled
 Assert-Throws {
@@ -373,8 +686,143 @@ Assert-True ($dormantPatch.Contains('replicas: 0') -and $dormantPatch.Contains('
 Assert-True ($greenServicePatch.Contains('pandora.dev/ds-auth-writer-set: green')) 'canonical Service fixed green selector'
 
 $activationSource = Get-Content -LiteralPath (Join-Path $ProjectRoot 'tools/scripts/activate_ds_auth.ps1') -Raw
+$policyV3ActivationSource = Get-Content -LiteralPath (Join-Path $ProjectRoot `
+    'tools/scripts/activate_hub_successor_policy.ps1') -Raw
+$activationContractSource = Get-Content -LiteralPath (Join-Path $ProjectRoot `
+    'tools/scripts/lib/ds_auth_activation_contract.ps1') -Raw
+Assert-True ($script:PandoraDsAuthRequiredFeatures.Contains(
+    'ds_allocator=battle-release-expected-tuple-v1|battle-storage-pod-uid-write-invariant-v1')) `
+    'epoch2 activation and ordinary release require the continuous battle-storage pod_uid write invariant capability'
+Assert-True ($script:PandoraDsAuthRequiredFeaturesV2 -ceq $script:PandoraDsAuthRequiredFeatures -and
+    -not $script:PandoraDsAuthRequiredFeaturesV2.Contains('hub-successor-lease-v1') -and
+    $script:PandoraDsAuthRequiredFeaturesV3.Contains('hub-successor-lease-v1')) `
+    'V2 feature policy must remain immutable while V3 gets the successor lease feature'
+Assert-True ($policyV3ActivationSource.Contains("--policy-v3") -and
+    $policyV3ActivationSource.Contains('$script:PandoraDsAuthRequiredFeaturesV3') -and
+    $policyV3ActivationSource.Contains('--expected-instances') -and
+    $policyV3ActivationSource.Contains('if ($ApplyPolicy) { $result += ''--apply'' }') -and
+    $policyV3ActivationSource.Contains('Pre-CAS staged Hub must be Running with a capability lease but NotReady') -and
+    $policyV3ActivationSource.IndexOf('Get-CanonicalWriterInstances $true $false', [StringComparison]::Ordinal) -lt
+        $policyV3ActivationSource.IndexOf('& go @preCASArgs', [StringComparison]::Ordinal) -and
+    $policyV3ActivationSource.IndexOf('--require-v3-activation-record', [StringComparison]::Ordinal) -lt
+        $policyV3ActivationSource.IndexOf('$deadline =', [StringComparison]::Ordinal) -and
+    $policyV3ActivationSource.IndexOf('$preCASArgs =', [StringComparison]::Ordinal) -lt
+        $policyV3ActivationSource.IndexOf('rollout status', [StringComparison]::Ordinal) -and
+    $policyV3ActivationSource.LastIndexOf('Get-CanonicalWriterInstances $false $true', [StringComparison]::Ordinal) -gt
+        $policyV3ActivationSource.IndexOf('rollout status', [StringComparison]::Ordinal)) `
+    'V2->V3 proves pre-CAS Hub endpoint absence, verifies durable record first, then acquired-V3 capabilities and post-CAS readiness'
+Assert-True (-not $policyV3ActivationSource.Contains('[string[]]$WriterDeployments') -and
+    @('login-ds-auth-green', 'player-locator-ds-auth-green', 'ds-allocator-ds-auth-green',
+        'hub-allocator-ds-auth-green', 'battle-result-ds-auth-green').Where({
+            $policyV3ActivationSource.Contains($_) }).Count -eq 5 -and
+    $policyV3ActivationSource.Contains("foreach (`$service in `$writerSpecs.Keys)")) `
+    'V3 orchestrator writer Deployment set must be a fixed exact five and cannot be caller-overridden or empty'
+Assert-True ($policyV3ActivationSource.Contains("[uint32]`$snapshot.policy_generation -eq 2") -and
+    $policyV3ActivationSource.Contains("[uint32]`$snapshot.policy_generation -eq 3") -and
+    $policyV3ActivationSource.Contains('Crash/retry after CAS: never rerun the V2-only NotReady/no-endpoint gate') -and
+    $policyV3ActivationSource.Contains("`$statuses.Count -ne 1") -and
+    $policyV3ActivationSource.Contains("[string]`$_.name -ceq `$spec.Container") -and
+    $policyV3ActivationSource.Contains('readyEndpoints.Count -ne 0') -and
+    $policyV3ActivationSource.Contains('readyEndpoints.Count -ne 1') -and
+    $policyV3ActivationSource.IndexOf('$snapshotLines =', [StringComparison]::Ordinal) -lt
+        $policyV3ActivationSource.IndexOf('$markerJSON =', [StringComparison]::Ordinal) -and
+    $policyV3ActivationSource.Contains('$currentInstances = Get-CanonicalWriterInstances $false $false') -and
+    $policyV3ActivationSource.Contains('$finalInstances = Get-CanonicalWriterInstances $false $true') -and
+    $policyV3ActivationSource.LastIndexOf('& go @finalArgs', [StringComparison]::Ordinal) -gt
+        $policyV3ActivationSource.LastIndexOf('$finalInstances =', [StringComparison]::Ordinal) -and
+    $policyV3ActivationSource.LastIndexOf('Ensure-V3CompletionMarker $finalInstances', [StringComparison]::Ordinal) -gt
+        $policyV3ActivationSource.LastIndexOf('& go @finalArgs', [StringComparison]::Ordinal)) `
+    'V3 retry, exact writer-container imageID, endpoint 0/1 cardinality, and final post-readiness acquired audit are hard gates'
+Assert-True ($activationSource.Contains("'--min-policy-generation', '1', '--max-policy-generation', '2'") -and
+    $activationSource.Contains("@('epoch', 'policy_generation', 'policy_id', 'raw_value', 'mod_revision')") -and
+    $activationSource.Contains('[uint32]$snapshot.policy_generation -ne 1') -and
+    $activationSource.Contains('[uint32]$snapshot.policy_generation -ne 2')) `
+    'legacy V1->V2 script must consume the extended required snapshot contract and reject policy V3'
 Assert-True ($activationSource.Contains("[ValidateSet('Audit', 'Activate')][string]`$Phase = 'Audit'")) 'Audit must be default'
+Assert-True ($activationSource.Contains('[Parameter(Mandatory = $true)][string]$PodUIDPreflightRedisSecretRevision') -and
+    $activationSource.Contains('pandora-pod-uid-preflight-redis-ro-$PodUIDPreflightRedisSecretRevision')) `
+    'activation requires an explicit versioned immutable RO Redis Secret revision'
 Assert-True (-not $activationSource.Contains('SyntheticProbeScript')) 'arbitrary synthetic script entry removed'
+Assert-True ($activationSource.Contains('Ensure-PodUIDReleasePreflightJob') -and
+    $activationSource.Contains('Ensure-DrainedPodUIDReleasePreflightJob') -and
+    $activationSource.Contains('Ensure-FinalPodUIDReleasePreflightJob') -and
+    $activationSource.Contains('Ensure-PodUIDActivationEvidenceMarker') -and
+    $activationSource.Contains('Assert-ExistingPodUIDReleasePreflightJob') -and
+    $activationSource.Contains('pod_uid release preflight PASSED: run_id=') -and
+    $activationSource.Contains('findings=0; no data was modified') -and
+    $activationSource.Contains('preflight Job failed closed') -and
+    $activationSource.Contains('preflight Job 等待超时')) `
+    'strict activation must create/wait/read exact pod_uid Job PASS evidence'
+Assert-True ($activationSource.Contains("`$env:GOPROXY = 'off'") -and
+    $activationSource.Contains("`$env:GOTOOLCHAIN = 'local'") -and
+    $activationSource.Contains('go run -mod=readonly ./cmd/ds_allocator') -and
+    $activationSource.Contains('Get-PodUIDConfigCompareSourceSHA256') -and
+    $activationSource.Contains('config_helper_source_sha256')) `
+    'config comparison helper must run dependency-offline and bind the exact release source hash into evidence'
+$preflightCall = $activationSource.LastIndexOf('Ensure-PodUIDReleasePreflightJob', [StringComparison]::Ordinal)
+$activationLock = $activationSource.LastIndexOf("Ensure-ActivationMarker `$ActivationLockName", [StringComparison]::Ordinal)
+$namespaceFence = $activationSource.LastIndexOf('Set-RequiredNamespaceLabels', [StringComparison]::Ordinal)
+Assert-True ($preflightCall -ge 0 -and $preflightCall -lt $activationLock -and $preflightCall -lt $namespaceFence) `
+    'prepare pod_uid Job must hard-block before activation lock and namespace/writer epoch mutations'
+$emptyCapability = $activationSource.LastIndexOf('Invoke-EmptyCapabilityAudit $candidate', [StringComparison]::Ordinal)
+$drainedMarker = $activationSource.LastIndexOf("Ensure-ActivationMarker `$DrainMarkerName", [StringComparison]::Ordinal)
+$drainedPreflight = $activationSource.LastIndexOf('Ensure-DrainedPodUIDReleasePreflightJob $drainNotBefore', [StringComparison]::Ordinal)
+$greenScale = $activationSource.LastIndexOf('Scale-GreenDeploymentsToDesired $candidate', [StringComparison]::Ordinal)
+$epochCAS = $activationSource.LastIndexOf('Invoke-CapabilityAudit $audit -ApplyEpoch', [StringComparison]::Ordinal)
+$greenReady = $activationSource.LastIndexOf("Ensure-ActivationMarker `$GreenReadyMarkerName", [StringComparison]::Ordinal)
+$finalPreflight = $activationSource.LastIndexOf('Ensure-FinalPodUIDReleasePreflightJob $greenReadyNotBefore', [StringComparison]::Ordinal)
+$immutableEvidence = $activationSource.LastIndexOf('Ensure-PodUIDActivationEvidenceMarker $prepareEvidence', [StringComparison]::Ordinal)
+$switchWriter = $activationSource.LastIndexOf('Switch-LiveServicesToGreen', [StringComparison]::Ordinal)
+$finalEvidenceRead = $activationSource.LastIndexOf('Get-PodUIDActivationEvidenceChain $lockMarker', [StringComparison]::Ordinal)
+Assert-True ($emptyCapability -lt $drainedMarker -and $drainedMarker -lt $drainedPreflight -and
+    $drainedPreflight -lt $greenScale -and $greenScale -lt $greenReady -and
+    $greenReady -lt $finalPreflight -and $finalPreflight -lt $immutableEvidence -and
+    $immutableEvidence -lt $switchWriter -and $switchWriter -lt $finalEvidenceRead -and
+    $finalEvidenceRead -lt $epochCAS) `
+    'prepare/drained/final evidence must linearize around zero-writer/green-ready/switch/CAS'
+$idempotentStart = $activationSource.LastIndexOf(
+    'if ([uint32]$snapshot.epoch -eq $TargetEpoch) {', [StringComparison]::Ordinal)
+$idempotentEnd = $activationSource.IndexOf(
+    'if ([uint32]$snapshot.epoch -ne $ExpectedEpoch)', $idempotentStart, [StringComparison]::Ordinal)
+$idempotentBody = $activationSource.Substring($idempotentStart, $idempotentEnd - $idempotentStart)
+Assert-True ($idempotentBody.Contains('Get-PodUIDActivationEvidenceChain') -and
+    -not $idempotentBody.Contains('Ensure-PodUIDReleasePreflightJob') -and
+    -not $idempotentBody.Contains('Ensure-DrainedPodUIDReleasePreflightJob') -and
+    -not $idempotentBody.Contains('Ensure-FinalPodUIDReleasePreflightJob') -and
+    -not $idempotentBody.Contains('Ensure-PodUIDActivationEvidenceMarker')) `
+    'required epoch=2 idempotent branch may only read original triple-phase evidence, never recreate it retroactively'
+Assert-True ($activationSource.Contains(
+        "`$prepareEvidence = Assert-ExistingPodUIDReleasePreflightJob 'prepare'") -and
+    $activationSource.Contains('([datetimeoffset]::MinValue) $lockNotAfter') -and
+    $activationSource.Contains(
+        "`$drainedEvidence = Assert-ExistingPodUIDReleasePreflightJob 'drained'") -and
+    $activationSource.Contains(
+        "`$finalEvidence = Assert-ExistingPodUIDReleasePreflightJob 'final'") -and
+    $activationSource.Contains('switch marker 已存在但 immutable evidence marker 缺失') -and
+    $activationSource.Contains('Assert-LiveServiceTrack blue')) `
+    'in-progress retries must consume original bounded phase evidence and refuse post-switch evidence fabrication'
+$existingLockBranch = $activationSource.IndexOf('if ($null -eq $existingLock) {',
+    $activationSource.IndexOf('Get-SyntheticEvidence prepare', [StringComparison]::Ordinal),
+    [StringComparison]::Ordinal)
+$prepareEvidenceEnd = $activationSource.IndexOf('$configEvidence =', $existingLockBranch,
+    [StringComparison]::Ordinal)
+$prepareRetryBody = $activationSource.Substring($existingLockBranch,
+    $prepareEvidenceEnd - $existingLockBranch)
+Assert-True ($prepareRetryBody.Contains('Ensure-PodUIDReleasePreflightJob') -and
+    $prepareRetryBody.Contains("Assert-ExistingPodUIDReleasePreflightJob 'prepare'") -and
+    $prepareRetryBody.IndexOf('Ensure-PodUIDReleasePreflightJob', [StringComparison]::Ordinal) -lt
+        $prepareRetryBody.IndexOf("Assert-ExistingPodUIDReleasePreflightJob 'prepare'", [StringComparison]::Ordinal)) `
+    'fresh activation may create prepare evidence, but an existing activation lock forces read-only prepare verification'
+$allocatorMainSource = Get-Content -LiteralPath (Join-Path $ProjectRoot `
+    'services/battle/ds_allocator/cmd/ds_allocator/main.go') -Raw
+$allocatorPreflightSource = Get-Content -LiteralPath (Join-Path $ProjectRoot `
+    'services/battle/ds_allocator/cmd/ds_allocator/pod_uid_preflight.go') -Raw
+Assert-True ($allocatorMainSource.Contains('if flagPodUIDReleasePreflight {') -and
+    $allocatorMainSource.IndexOf('if flagPodUIDReleasePreflight {', [StringComparison]::Ordinal) -lt
+        $allocatorMainSource.IndexOf('repo := data.NewRedisBattleRepo', [StringComparison]::Ordinal) -and
+    $allocatorPreflightSource.Contains('"pod-uid-release-preflight"') -and
+    $allocatorPreflightSource.Contains('pod_uid release preflight PASSED:')) `
+    'one-shot ds_allocator command must exit before repo/writer/listener wiring'
 Assert-True ($activationSource.Contains("'--required-features', `$script:PandoraDsAuthRequiredFeatures")) 'required features must have one library source'
 Assert-True ($activationSource.Contains("'--expected-image-digests', `$Audit.ServiceDigests")) `
     'capability audit must bind each service to its own live template digest'
@@ -383,8 +831,76 @@ Assert-True ($activationSource.Contains('ServiceDigests = (($serviceDigests.Keys
 $startSource = Get-Content -LiteralPath (Join-Path $ProjectRoot 'tools/scripts/start.ps1') -Raw
 Assert-True ($startSource.Contains('--expected-image-digests $State.ExpectedDigests')) `
     'ordinary online release final audit must preserve service-level digest binding'
+Assert-True ($startSource.Contains('Get-OnlineDsAuthActivationEvidenceState') -and
+    $startSource.Contains('Assert-OnlineDsAuthActivationEvidenceUnchanged') -and
+    $startSource.Contains('--activation-evidence-sha256 $ActivationEvidence.PolicyV3EvidenceSHA256') -and
+    $startSource.Contains('--activation-evidence-completed-at-ms $ActivationEvidence.PolicyV3CompletedAtUnixMS') -and
+    $startSource.Contains('pandora-ds-auth-activation-v2') -and
+    $startSource.Contains('$script:PandoraDsAuthPolicyV3EvidenceName')) `
+    'ordinary release must preserve V2 proof and separately bind V3 capability audit to immutable successor-policy evidence'
+Assert-True (-not $startSource.Contains('State.ExpectedInstances -cne [string]$ActivationEvidence.PolicyV3ExpectedInstances') -and
+    -not $startSource.Contains('State.ExpectedDigests -cne [string]$ActivationEvidence.PolicyV3ExpectedImageDigests')) `
+    'one-time V3 staging UIDs/digests are provenance, not a permanent allowlist for rescheduled Pods or later pinned releases'
+$initialActivationEvidence = $startSource.IndexOf(
+    '$onlineDsAuthActivationEvidence = Get-OnlineDsAuthActivationEvidenceState',
+    [StringComparison]::Ordinal)
+$initialCapabilityAudit = $startSource.IndexOf(
+    '$onlineDsAuthState = Assert-OnlineDsAuthRuntimeAndCapabilities',
+    [StringComparison]::Ordinal)
+$lockedActivationEvidence = $startSource.IndexOf(
+    '$lockedActivationEvidence = Get-OnlineDsAuthActivationEvidenceState',
+    [StringComparison]::Ordinal)
+$preConfigActivationEvidence = $startSource.IndexOf(
+    '$preConfigActivationEvidence = Get-OnlineDsAuthActivationEvidenceState',
+    [StringComparison]::Ordinal)
+Assert-True ($initialActivationEvidence -ge 0 -and
+    $initialActivationEvidence -lt $initialCapabilityAudit -and
+    $initialCapabilityAudit -lt $lockedActivationEvidence -and
+    $lockedActivationEvidence -lt $preConfigActivationEvidence) `
+    'ordinary release must establish activation evidence before first capability audit and never reset the baseline'
+$onlineEvidenceFunctionStart = $startSource.IndexOf(
+    'function Get-OnlineDsAuthActivationEvidenceState', [StringComparison]::Ordinal)
+$onlineEvidenceFunctionEnd = $startSource.IndexOf(
+    'function Assert-OnlineDsAuthActivationEvidenceUnchanged', $onlineEvidenceFunctionStart,
+    [StringComparison]::Ordinal)
+$onlineEvidenceFunction = $startSource.Substring($onlineEvidenceFunctionStart,
+    $onlineEvidenceFunctionEnd - $onlineEvidenceFunctionStart)
+Assert-True ($onlineEvidenceFunction.Contains('Test-PandoraKubernetesObjectDeleting') -and
+    -not $onlineEvidenceFunction.Contains('.metadata.deletionTimestamp')) `
+    'healthy immutable markers omit deletionTimestamp and must be checked through the strict-safe deletion helper'
+Assert-True ($startSource.Contains(
+    'Assert-PandoraPlayerLocatorPlacementPreflightObjectContract $placementGreen ([string]$goPins[''player-locator''])')) `
+    'prod ordinary release must read back and verify canonical green placement preflight after rollout'
 Assert-True (-not $startSource.Contains('--allowed-image-digests $devDigest')) `
     'fresh local bootstrap must not fabricate capability digest evidence'
+Assert-True ($startSource.Contains('--zero-writer-genesis-v3 --apply') -and
+    $startSource.Contains('--min-policy-generation 3 --max-policy-generation 3') -and
+    $startSource.Contains('--require-v3-activation-record') -and
+    $startSource.Contains('zero-writer genesis 单事务 CAS') -and
+    $startSource.Contains('--required-features $script:PandoraDsAuthRequiredFeaturesV3 --policy-v3')) `
+    'new local/ordinary release paths must require V3 and fresh local must use one crash-safe zero-writer genesis transaction'
+Assert-True ($startSource.Contains('function Get-LocalMinikubeImageDigest') -and
+    $startSource.Contains("minikube -p `$MinikubeProfile ssh -- docker image inspect -f '{{.Id}}' `$Image") -and
+    $startSource.Contains('function Set-LocalDsAuthImageDigestAnnotations') -and
+    $startSource.Contains('function Assert-LocalDsAuthImageDigestAnnotations') -and
+    $startSource.Contains("`$writers = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')") -and
+    $startSource.Contains("'pandora.dev/image-digest' = `$digest") -and
+    $startSource.Contains("Where-Object { [string]`$_.name -ceq `$writer }") -and
+    $startSource.Contains("[string]`$statuses[0].imageID).EndsWith(`$digest, [StringComparison]::Ordinal")) `
+    'local V3 capability provenance must use the target minikube image config digest and exact writer container'
+$localK8sStart = $startSource.IndexOf('function Invoke-K8s {', [StringComparison]::Ordinal)
+$localK8sEnd = $startSource.IndexOf('function Invoke-Online {', $localK8sStart, [StringComparison]::Ordinal)
+$localK8sBody = $startSource.Substring($localK8sStart, $localK8sEnd - $localK8sStart)
+$localApply = $localK8sBody.IndexOf('kubectl @kubectlContextArgs apply -k $servicesDir', [StringComparison]::Ordinal)
+$localDigestPatch = $localK8sBody.IndexOf('Set-LocalDsAuthImageDigestAnnotations', [StringComparison]::Ordinal)
+$localRollout = $localK8sBody.IndexOf('rollout restart deploy/$($svc.Name)', [StringComparison]::Ordinal)
+$localDigestFinal = $localK8sBody.LastIndexOf('Assert-LocalDsAuthImageDigestAnnotations', [StringComparison]::Ordinal)
+Assert-True ($localApply -ge 0 -and $localApply -lt $localDigestPatch -and
+    $localDigestPatch -lt $localRollout -and $localRollout -lt $localDigestFinal) `
+    'local k8s release must patch node-derived writer digests before rollout and verify every running Pod afterward'
+Assert-True ($startSource.Contains(
+    'Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile -SkipPodCheck')) `
+    'Resume must fail closed on persisted annotation/node-tag drift without rewriting provenance'
 $auditBranch = $activationSource.IndexOf("if (`$Phase -ceq 'Audit')", [StringComparison]::Ordinal)
 $firstApply = $activationSource.IndexOf('Invoke-CapabilityAudit $audit -ApplyEpoch', [StringComparison]::Ordinal)
 Assert-True ($auditBranch -ge 0 -and $firstApply -gt $auditBranch) 'CAS apply must be after Audit early exit'
@@ -402,5 +918,57 @@ Assert-True ($activationSource.Contains("op = 'replace'; path = '/spec/selector'
     'live Service switch must CAS-replace the complete selector map'
 Assert-True (-not $activationSource.Contains("`$selectorPatch = @{ `$WriterSetLabel = 'green'")) `
     'live Service switch must not merge a partial selector'
+
+Assert-True ($activationSource.Contains("`$RequiredPolicyV2 = 'ds-auth-v2-pod-uid-write-invariant-v1'") -and
+    $activationSource.Contains('$TargetRequiredValue = "2@$RequiredPolicyV2"') -and
+    $activationSource.Contains("[string]`$snapshot.raw_value -cne `$TargetRequiredValue") -and
+    $activationSource.Contains("[string]`$snapshot.policy_id -cne `$RequiredPolicyV2")) `
+    'PowerShell activation must bind and exact-check the versioned etcd required policy value'
+$topologyBeforePrepare = $activationSource.LastIndexOf(
+    "Assert-RedisTopologyChangeLockProvider `$prepareConfigEvidence 'before-prepare'", [StringComparison]::Ordinal)
+$freshTopologyGate = $activationSource.LastIndexOf(
+    "Assert-RedisTopologyChangeLockProvider `$topologyGateEvidence 'before-prepare'", [StringComparison]::Ordinal)
+$firstActivationWrite = $activationSource.LastIndexOf(
+    'Ensure-RawPodUIDConfigSnapshot $sourceEvidence', [StringComparison]::Ordinal)
+$topologyBeforeCAS = $activationSource.LastIndexOf(
+    "Assert-RedisTopologyChangeLockProvider `$activationEvidence.Config 'before-cas'", [StringComparison]::Ordinal)
+Assert-True ($activationContractSource.Contains('callers may not replace it with a ConfigMap marker') -and
+    $activationSource.Contains('Assert-PandoraRedisTopologyChangeLockProvider $Checkpoint') -and
+    $topologyBeforePrepare -ge 0 -and $topologyBeforePrepare -lt $preflightCall -and
+    $freshTopologyGate -ge 0 -and $freshTopologyGate -lt $firstActivationWrite -and
+    $topologyBeforeCAS -gt $finalEvidenceRead -and $topologyBeforeCAS -lt $epochCAS) `
+    'missing authoritative Redis topology lock provider must fail closed before any fresh write/prepare and immediately before CAS'
+$cleanupRequired = $activationSource.LastIndexOf(
+    'Ensure-PodUIDACLCleanupRequiredMarker $preSwitchActivationEvidence', [StringComparison]::Ordinal)
+$cleanupAfterCAS = $activationSource.LastIndexOf(
+    'Complete-PodUIDACLPostCASCleanup $activationEvidence $switchMarker', [StringComparison]::Ordinal)
+Assert-True ($cleanupRequired -gt $immutableEvidence -and $cleanupRequired -lt $switchWriter -and
+    $cleanupAfterCAS -gt $epochCAS -and
+    $activationSource.Contains('--admin-username-env $RedisACLAdminUsernameEnv') -and
+    $activationSource.Contains('--admin-password-env $RedisACLAdminPasswordEnv') -and
+    $activationSource.Contains('ACL cleanup 仍为 PENDING') -and
+    $activationSource.Contains('Assert-PandoraPodUIDACLCleanupTimeline')) `
+    'temporary Redis ACL user lifecycle must be required pre-switch, deleted/read-back post-CAS, and recoverably pending'
+Assert-True ($idempotentBody.Contains('Complete-PodUIDACLPostCASCleanup') -and
+    $idempotentBody.Contains('RECOVERY COMPLETE, RELEASE STILL BLOCKED')) `
+    'epoch2 Activate retry may perform only the idempotent ACL cleanup recovery and must retain topology release blocker'
+Assert-True ($startSource.Contains('pandora-pod-uid-acl-cleanup-required-v2-$runID') -and
+    $startSource.Contains('pandora-pod-uid-acl-cleanup-complete-v2-$runID') -and
+    $startSource.Contains('CleanupRequiredResourceVersion') -and
+    $startSource.Contains('CleanupCompleteResourceVersion') -and
+    $startSource.Contains('CleanupProofSHA256')) `
+    'ordinary release must lock both post-CAS cleanup markers and their immutable UID/resourceVersion/proof state'
+$onlineFunctionStart = $startSource.IndexOf('function Invoke-Online {', [StringComparison]::Ordinal)
+$onlineFunctionEnd = $startSource.IndexOf('function Build-AllImages', $onlineFunctionStart, [StringComparison]::Ordinal)
+$onlineFunction = $startSource.Substring($onlineFunctionStart, $onlineFunctionEnd - $onlineFunctionStart)
+$onlineTopologyBlock = $onlineFunction.IndexOf(
+    'Assert-PandoraRedisTopologyChangeLockProvider', [StringComparison]::Ordinal)
+$onlineFirstBuild = $onlineFunction.IndexOf('Build-AllImages', [StringComparison]::Ordinal)
+$onlineFirstApply = $onlineFunction.IndexOf('kubectl @kubectlContextArgs apply', [StringComparison]::Ordinal)
+Assert-True ($onlineTopologyBlock -ge 0 -and
+    ($onlineFirstBuild -lt 0 -or $onlineTopologyBlock -lt $onlineFirstBuild) -and
+    ($onlineFirstApply -lt 0 -or $onlineTopologyBlock -lt $onlineFirstApply) -and
+    $onlineFunction.Contains('online-before-build-push-apply')) `
+    'ordinary online release must share the topology provider verifier and block before build/push/apply'
 
 Write-Host 'ds_auth_activation_contract_test: PASS'

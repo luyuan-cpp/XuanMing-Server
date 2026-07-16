@@ -52,6 +52,50 @@ type TargetUnavailableProof struct {
 	ProofID                string
 }
 
+// Source-departure proof types live outside PlacementProofType's logical
+// transition namespace.  Keeping distinct numeric values and a distinct HMAC
+// domain prevents a terminal/transfer signature from being replayed as proof
+// that a physical PlayerController has left its source DS.
+const (
+	ProofHubDeparture    int32 = 101
+	ProofBattleDeparture int32 = 102
+)
+
+// SourceDepartureProof confirms physical absence of the immutable source
+// captured by BeginPlacementTransition.  It binds the current PENDING
+// operation as well as the complete source lineage and DS identity, so an ACK
+// for an old ticket, retarget, match, or same-name replacement cannot unlock a
+// later Admission.
+type SourceDepartureProof struct {
+	PlayerID               uint64
+	PlacementVersion       uint64
+	OperationID            string
+	TargetRoute            int32
+	TargetMatchID          uint64
+	SourcePlacementVersion uint64
+	SourceOperationID      string
+	SourceRoute            int32
+	SourceMatchID          uint64
+	SourceTarget           Target
+	ProofType              int32
+	ProofID                string
+}
+
+func (p SourceDepartureProof) canonical() string {
+	return strings.Join([]string{
+		"pandora-placement-source-departure-v1",
+		strconv.FormatUint(p.PlayerID, 10), strconv.FormatUint(p.PlacementVersion, 10),
+		p.OperationID, strconv.FormatInt(int64(p.TargetRoute), 10),
+		strconv.FormatUint(p.TargetMatchID, 10),
+		strconv.FormatUint(p.SourcePlacementVersion, 10), p.SourceOperationID,
+		strconv.FormatInt(int64(p.SourceRoute), 10), strconv.FormatUint(p.SourceMatchID, 10),
+		p.SourceTarget.PodName, p.SourceTarget.InstanceUID,
+		strconv.FormatUint(uint64(p.SourceTarget.InstanceEpoch), 10),
+		p.SourceTarget.AssignmentID, p.SourceTarget.AllocationID, p.SourceTarget.ReleaseTrack,
+		strconv.FormatInt(int64(p.ProofType), 10), p.ProofID,
+	}, "\n")
+}
+
 func (p TargetUnavailableProof) canonical() string {
 	return strings.Join([]string{
 		"pandora-placement-target-unavailable-v1",
@@ -72,6 +116,7 @@ func (p TargetUnavailableProof) canonical() string {
 
 func (p Proof) canonical() string {
 	return strings.Join([]string{
+		"pandora-placement-transition-v1",
 		strconv.FormatUint(p.PlayerID, 10), strconv.FormatUint(p.ExpectedVersion, 10),
 		strconv.FormatInt(int64(p.SourceRoute), 10), strconv.FormatInt(int64(p.TargetRoute), 10),
 		strconv.FormatUint(p.SourceMatchID, 10), strconv.FormatUint(p.TargetMatchID, 10),
@@ -122,6 +167,22 @@ func (s *ProofSigner) VerifyTargetUnavailable(p TargetUnavailableProof, signatur
 	return hmac.Equal(provided, mac.Sum(nil))
 }
 
+func (s *ProofSigner) SignSourceDeparture(p SourceDepartureProof) string {
+	mac := hmac.New(sha256.New, s.secret)
+	_, _ = mac.Write([]byte(p.canonical()))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (s *ProofSigner) VerifySourceDeparture(p SourceDepartureProof, signature string) bool {
+	provided, err := base64.RawURLEncoding.DecodeString(signature)
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, s.secret)
+	_, _ = mac.Write([]byte(p.canonical()))
+	return hmac.Equal(provided, mac.Sum(nil))
+}
+
 // ProofKeyring enforces least privilege at the locator verifier: each proof
 // type has an independent key, so compromising login cannot mint MATCH_START or
 // terminal/leave authority and compromising a battle worker cannot bootstrap accounts.
@@ -158,4 +219,12 @@ func (k *ProofKeyring) VerifyTargetUnavailable(p TargetUnavailableProof, signatu
 	}
 	signer := k.byType[p.ProofType]
 	return signer != nil && signer.VerifyTargetUnavailable(p, signature)
+}
+
+func (k *ProofKeyring) VerifySourceDeparture(p SourceDepartureProof, signature string) bool {
+	if k == nil {
+		return false
+	}
+	signer := k.byType[p.ProofType]
+	return signer != nil && signer.VerifySourceDeparture(p, signature)
 }

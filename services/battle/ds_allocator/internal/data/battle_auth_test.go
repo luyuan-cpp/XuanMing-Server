@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
@@ -38,9 +39,12 @@ func newBattleAuthFixture(t *testing.T) *battleAuthFixture {
 	t.Cleanup(func() { _ = rdb.Close() })
 	now := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
 	auth := NewRedisBattleAuthRepo(rdb)
+	auth.EnableStrictModelBWrites()
 	auth.now = func() time.Time { return now }
+	battle := NewRedisBattleRepo(rdb)
+	battle.EnableStrictModelBWrites()
 	return &battleAuthFixture{
-		auth: auth, battle: NewRedisBattleRepo(rdb), rdb: rdb, mr: mr, now: now,
+		auth: auth, battle: battle, rdb: rdb, mr: mr, now: now,
 	}
 }
 
@@ -49,7 +53,7 @@ func (f *battleAuthFixture) setNow(now time.Time) {
 	f.auth.now = func() time.Time { return f.now }
 }
 
-func seedModelBBattle(t *testing.T, f *battleAuthFixture, matchID uint64, allocationID, pod string) {
+func seedModelBBattle(t *testing.T, f *battleAuthFixture, matchID uint64, allocationID, pod, uid string) {
 	t.Helper()
 	nowMs := f.now.UnixMilli()
 	b := sampleBattle(matchID, nowMs)
@@ -58,7 +62,9 @@ func seedModelBBattle(t *testing.T, f *battleAuthFixture, matchID uint64, alloca
 	b.AllocationId = allocationID
 	b.AllocatedAtMs = nowMs
 	b.LastHeartbeatMs = nowMs
-	b.GameserverUid = ""
+	b.GameserverUid = uid
+	b.PodUid = "pod-uid-" + uid
+	b.ReleaseTrack = "stable"
 	b.InstanceEpoch = 0
 	b.LastVerifiedGen = 0
 	b.LastVerifiedJti = ""
@@ -141,9 +147,9 @@ func TestBattlePrepareRejectsExistingLowRequiredWriterWithoutMutation(t *testing
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(699)
-	seedModelBBattle(t, f, matchID, "alloc-low", "pod-low")
+	seedModelBBattle(t, f, matchID, "6b11e033-78a2-4010-87c2-b3d9cd053e49", "pod-low", "uid-low")
 	legacy := &dsv1.BattleDSAuthStorageRecord{
-		MatchId: matchID, AllocationId: "alloc-low", DsPodName: "pod-low",
+		MatchId: matchID, AllocationId: "6b11e033-78a2-4010-87c2-b3d9cd053e49", DsPodName: "pod-low",
 		InstanceUid: "uid-low", InstanceEpoch: 1,
 		Phase:               dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_BOOTSTRAP,
 		RequiredWriterEpoch: 1,
@@ -160,7 +166,7 @@ func TestBattlePrepareRejectsExistingLowRequiredWriterWithoutMutation(t *testing
 	authTTLBefore := f.rdb.TTL(ctx, battleAuthKey(matchID)).Val()
 	battleTTLBefore := f.rdb.TTL(ctx, battleKey(matchID)).Val()
 
-	if _, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-low", "pod-low", "uid-low")); errcode.As(err) != errcode.ErrUnauthorized {
+	if _, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "6b11e033-78a2-4010-87c2-b3d9cd053e49", "pod-low", "uid-low")); errcode.As(err) != errcode.ErrUnauthorized {
 		t.Fatalf("low required writer must fail closed, code=%v err=%v", errcode.As(err), err)
 	}
 	authAfter, _ := f.rdb.Get(ctx, battleAuthKey(matchID)).Bytes()
@@ -177,10 +183,10 @@ func TestBattlePreactiveAuthorityRemainsPersistentUntilActivation(t *testing.T) 
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(698)
-	seedModelBBattle(t, f, matchID, "alloc-persist", "pod-persist")
+	seedModelBBattle(t, f, matchID, "04bea9ef-ef26-4de6-8475-b1e973f0a475", "pod-persist", "uid-persist")
 
 	seed, err := f.auth.PrepareCredential(ctx,
-		authBinding(matchID, "alloc-persist", "pod-persist", "uid-persist"))
+		authBinding(matchID, "04bea9ef-ef26-4de6-8475-b1e973f0a475", "pod-persist", "uid-persist"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +200,7 @@ func TestBattlePreactiveAuthorityRemainsPersistentUntilActivation(t *testing.T) 
 	f.mr.SetTTL(battleAuthKey(matchID), time.Hour)
 	f.mr.SetTTL(battleKey(matchID), time.Hour)
 	if _, err := f.auth.StagePending(ctx, BattleStageInput{
-		MatchID: matchID, AllocationID: "alloc-persist", Credential: credential, AuthTTL: testTTL,
+		MatchID: matchID, AllocationID: "04bea9ef-ef26-4de6-8475-b1e973f0a475", Credential: credential, AuthTTL: testTTL,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +211,7 @@ func TestBattlePreactiveAuthorityRemainsPersistentUntilActivation(t *testing.T) 
 	}
 	f.mr.SetTTL(battleAuthKey(matchID), time.Hour)
 	f.mr.SetTTL(battleKey(matchID), time.Hour)
-	if err := f.auth.MarkDelivered(ctx, matchID, "alloc-persist", credential, "rv-persist", testTTL); err != nil {
+	if err := f.auth.MarkDelivered(ctx, matchID, "04bea9ef-ef26-4de6-8475-b1e973f0a475", credential, "rv-persist", testTTL); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range []string{battleAuthKey(matchID), battleKey(matchID)} {
@@ -228,11 +234,11 @@ func TestBattlePreactiveReleaseFencePersistsBeforeExternalRelease(t *testing.T) 
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(697)
-	seedModelBBattle(t, f, matchID, "alloc-release", "pod-release")
+	seedModelBBattle(t, f, matchID, "68120480-b4ec-4075-8e85-b04d0d93ee5f", "pod-release", "uid-release")
 	credential, _ := prepareAndStage(
-		t, f, matchID, "alloc-release", "pod-release", "uid-release", true)
+		t, f, matchID, "68120480-b4ec-4075-8e85-b04d0d93ee5f", "pod-release", "uid-release", true)
 	expected := BattleExpectedInstance{
-		AllocationID: "alloc-release", InstanceUID: "uid-release",
+		AllocationID: "68120480-b4ec-4075-8e85-b04d0d93ee5f", InstanceUID: "uid-release",
 		InstanceEpoch: credential.GetInstanceEpoch(),
 	}
 
@@ -299,14 +305,14 @@ func TestBattlePreactiveReleaseFenceBeforeAuthExists(t *testing.T) {
 	const matchID = uint64(696)
 	battle := sampleBattle(matchID, f.now.UnixMilli())
 	battle.State = "warming"
-	battle.AllocationId = "alloc-no-auth"
+	battle.AllocationId = "4e60de28-eaf6-4f1f-8c4e-0d5ae05e5cba"
 	battle.DsPodName = "pod-no-auth"
 	battle.GameserverUid = "uid-no-auth"
 	battle.InstanceEpoch = 0
 	if err := f.battle.CreateBattle(ctx, battle, testTTL); err != nil {
 		t.Fatal(err)
 	}
-	expected := BattleExpectedInstance{AllocationID: "alloc-no-auth", InstanceUID: "uid-no-auth"}
+	expected := BattleExpectedInstance{AllocationID: "4e60de28-eaf6-4f1f-8c4e-0d5ae05e5cba", InstanceUID: "uid-no-auth"}
 	if fenced, err := f.auth.FencePreactiveReleaseExpected(ctx, matchID, expected); err != nil || !fenced {
 		t.Fatalf("fence without auth=%v err=%v", fenced, err)
 	}
@@ -337,7 +343,7 @@ func TestBattleAuthPrepareCredentialConcurrentMonotonicAndUIDEpoch(t *testing.T)
 		matchID = uint64(701)
 		n       = 24
 	)
-	seedModelBBattle(t, f, matchID, "alloc-a", "battle-pod")
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "battle-pod", "uid-a")
 
 	start := make(chan struct{})
 	seeds := make(chan BattleCredentialSeed, n)
@@ -348,7 +354,7 @@ func TestBattleAuthPrepareCredentialConcurrentMonotonicAndUIDEpoch(t *testing.T)
 		go func() {
 			defer wg.Done()
 			<-start
-			seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-a", "battle-pod", "uid-a"))
+			seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "battle-pod", "uid-a"))
 			if err != nil {
 				errs <- err
 				return
@@ -384,7 +390,9 @@ func TestBattleAuthPrepareCredentialConcurrentMonotonicAndUIDEpoch(t *testing.T)
 	rebuilt := sampleBattle(matchID, f.now.UnixMilli())
 	rebuilt.State = "warming"
 	rebuilt.DsPodName = "battle-pod"
-	rebuilt.AllocationId = "alloc-b"
+	rebuilt.AllocationId = "6c9ac979-8290-4b88-8950-bd6ea7e0d5bb"
+	rebuilt.GameserverUid = "uid-b"
+	rebuilt.PodUid = "pod-uid-uid-b"
 	rebuilt.AllocatedAtMs = f.now.UnixMilli()
 	rebuilt.LastHeartbeatMs = f.now.UnixMilli()
 	payload, err := marshalBattle(rebuilt)
@@ -394,7 +402,7 @@ func TestBattleAuthPrepareCredentialConcurrentMonotonicAndUIDEpoch(t *testing.T)
 	if err := f.rdb.Set(ctx, battleKey(matchID), payload, testTTL).Err(); err != nil {
 		t.Fatal(err)
 	}
-	seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-b", "battle-pod", "uid-b"))
+	seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "6c9ac979-8290-4b88-8950-bd6ea7e0d5bb", "battle-pod", "uid-b"))
 	if err != nil {
 		t.Fatalf("prepare rebuilt UID: %v", err)
 	}
@@ -407,13 +415,13 @@ func TestBattleAuthStageAndMarkDeliveredExpectedTupleCAS(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(702)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-a", "pod-a", "uid-a"))
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cred := credentialFor(f, seed, "uid-a", "one")
-	rec, err := f.auth.StagePending(ctx, BattleStageInput{MatchID: matchID, AllocationID: "alloc-a", Credential: cred, AuthTTL: testTTL})
+	rec, err := f.auth.StagePending(ctx, BattleStageInput{MatchID: matchID, AllocationID: "d8a3fbe5-1831-4fe1-8521-779b4097aa51", Credential: cred, AuthTTL: testTTL})
 	if err != nil {
 		t.Fatalf("stage: %v", err)
 	}
@@ -421,21 +429,21 @@ func TestBattleAuthStageAndMarkDeliveredExpectedTupleCAS(t *testing.T) {
 		t.Fatalf("stage record=%+v", rec)
 	}
 	// 响应丢失后完全相同的 Stage 是幂等成功。
-	if _, err := f.auth.StagePending(ctx, BattleStageInput{MatchID: matchID, AllocationID: "alloc-a", Credential: cred, AuthTTL: testTTL}); err != nil {
+	if _, err := f.auth.StagePending(ctx, BattleStageInput{MatchID: matchID, AllocationID: "d8a3fbe5-1831-4fe1-8521-779b4097aa51", Credential: cred, AuthTTL: testTTL}); err != nil {
 		t.Fatalf("stage retry: %v", err)
 	}
 
 	wrong := proto.Clone(cred).(*dsv1.BattleDSCredential)
 	wrong.ExpMs++ // exp 也是身份字段，不能只比较 gen/jti。
 	before := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
-	if err := f.auth.MarkDelivered(ctx, matchID, "alloc-a", wrong, "rv-wrong", testTTL); errcode.As(err) != errcode.ErrUnauthorized {
+	if err := f.auth.MarkDelivered(ctx, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", wrong, "rv-wrong", testTTL); errcode.As(err) != errcode.ErrUnauthorized {
 		t.Fatalf("wrong expected tuple err=%v", err)
 	}
 	after := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
 	if !bytes.Equal(before, after) {
 		t.Fatal("wrong MarkDelivered mutated auth")
 	}
-	if err := f.auth.MarkDelivered(ctx, matchID, "alloc-a", cred, "rv-good", testTTL); err != nil {
+	if err := f.auth.MarkDelivered(ctx, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", cred, "rv-good", testTTL); err != nil {
 		t.Fatalf("mark delivered: %v", err)
 	}
 	snap, err := f.auth.ReadAuthority(ctx, matchID)
@@ -448,19 +456,19 @@ func TestBattleAuthStageRejectsSupersededIssuedGeneration(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(710)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	seed1, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-a", "pod-a", "uid-a"))
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	seed1, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	seed2, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-a", "pod-a", "uid-a"))
+	seed2, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	oldCred := credentialFor(f, seed1, "uid-a", "old")
 	before := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
 	if _, err := f.auth.StagePending(ctx, BattleStageInput{
-		MatchID: matchID, AllocationID: "alloc-a", Credential: oldCred, AuthTTL: testTTL,
+		MatchID: matchID, AllocationID: "d8a3fbe5-1831-4fe1-8521-779b4097aa51", Credential: oldCred, AuthTTL: testTTL,
 	}); errcode.As(err) != errcode.ErrUnauthorized {
 		t.Fatalf("superseded gen stage err=%v", err)
 	}
@@ -469,12 +477,12 @@ func TestBattleAuthStageRejectsSupersededIssuedGeneration(t *testing.T) {
 	}
 	newCred := credentialFor(f, seed2, "uid-a", "new")
 	if _, err := f.auth.StagePending(ctx, BattleStageInput{
-		MatchID: matchID, AllocationID: "alloc-a", Credential: newCred, AuthTTL: testTTL,
+		MatchID: matchID, AllocationID: "d8a3fbe5-1831-4fe1-8521-779b4097aa51", Credential: newCred, AuthTTL: testTTL,
 	}); err != nil {
 		t.Fatalf("latest gen stage: %v", err)
 	}
 	expected := BattleExpectedInstance{
-		AllocationID: "alloc-a", InstanceUID: "uid-a", InstanceEpoch: seed2.InstanceEpoch,
+		AllocationID: "d8a3fbe5-1831-4fe1-8521-779b4097aa51", InstanceUID: "uid-a", InstanceEpoch: seed2.InstanceEpoch,
 	}
 	if fenced, err := f.auth.FencePreactiveReleaseExpected(ctx, matchID, expected); err != nil || !fenced {
 		t.Fatalf("bootstrap cleanup fenced=%v err=%v", fenced, err)
@@ -491,8 +499,8 @@ func TestBattleAuthActivateRequiresDeliveredAndStrictFullTupleZeroMutation(t *te
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(703)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	cred, id := prepareAndStage(t, f, matchID, "alloc-a", "pod-a", "uid-a", false)
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	cred, id := prepareAndStage(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a", false)
 
 	beforeAuth := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
 	beforeBattle := rawRedisBytes(t, f.rdb, battleKey(matchID))
@@ -503,7 +511,7 @@ func TestBattleAuthActivateRequiresDeliveredAndStrictFullTupleZeroMutation(t *te
 		!bytes.Equal(beforeBattle, rawRedisBytes(t, f.rdb, battleKey(matchID))) {
 		t.Fatal("undelivered activation mutated authority")
 	}
-	if err := f.auth.MarkDelivered(ctx, matchID, "alloc-a", cred, "rv-good", testTTL); err != nil {
+	if err := f.auth.MarkDelivered(ctx, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", cred, "rv-good", testTTL); err != nil {
 		t.Fatal(err)
 	}
 
@@ -563,9 +571,9 @@ func TestBattleV2RejectsLowAndFutureWriterWithoutAnyAuthoritySideEffect(t *testi
 			ctx := context.Background()
 			f := newBattleAuthFixture(t)
 			const matchID uint64 = 720
-			const allocationID = "alloc-720"
+			const allocationID = "89d23603-ae10-4ee7-8313-a33d10c29514"
 			const pod = "battle-720"
-			seedModelBBattle(t, f, matchID, allocationID, pod)
+			seedModelBBattle(t, f, matchID, allocationID, pod, "uid-720")
 			active, id := prepareAndStage(t, f, matchID, allocationID, pod, "uid-720", true)
 			if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 				t.Fatalf("activate v2 fixture: %v", err)
@@ -672,8 +680,8 @@ func TestBattleAuthActivateConcurrentSinglePromotion(t *testing.T) {
 		matchID = uint64(704)
 		n       = 12
 	)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	_, id := prepareAndStage(t, f, matchID, "alloc-a", "pod-a", "uid-a", true)
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	_, id := prepareAndStage(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a", true)
 
 	start := make(chan struct{})
 	var first atomic.Int32
@@ -709,8 +717,8 @@ func TestBattleAuthPopCommandsChecksProjectionAndFullTupleBeforePop(t *testing.T
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(705)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	_, id := prepareAndStage(t, f, matchID, "alloc-a", "pod-a", "uid-a", true)
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	_, id := prepareAndStage(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -757,19 +765,19 @@ func TestBattleAuthPreactiveReleaseFenceCannotCaptureActivatedWinner(t *testing.
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(706)
-	seedModelBBattle(t, f, matchID, "winner", "pod-a")
-	_, id := prepareAndStage(t, f, matchID, "winner", "pod-a", "uid-a", true)
+	seedModelBBattle(t, f, matchID, "4221a0fc-3dfb-4d83-8dc3-a13f6c72d233", "pod-a", "uid-a")
+	_, id := prepareAndStage(t, f, matchID, "4221a0fc-3dfb-4d83-8dc3-a13f6c72d233", "pod-a", "uid-a", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 		t.Fatal(err)
 	}
 	if fenced, err := f.auth.FencePreactiveReleaseExpected(ctx, matchID, BattleExpectedInstance{
-		AllocationID: "loser", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
+		AllocationID: "cc8a30ea-6fac-4d1b-8350-3e5a9001bbac", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
 	}); err != nil || fenced {
 		t.Fatalf("loser cleanup fenced=%v err=%v", fenced, err)
 	}
 	// 即使旧 wait 使用了相同 allocation_id，ACTIVE/ready 赢家也不可被 cleanup API 捕获。
 	expected := BattleExpectedInstance{
-		AllocationID: "winner", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
+		AllocationID: "4221a0fc-3dfb-4d83-8dc3-a13f6c72d233", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
 	}
 	if fenced, err := f.auth.FencePreactiveReleaseExpected(ctx, matchID, expected); err != nil || fenced {
 		t.Fatalf("late cleanup fenced active winner=%v err=%v", fenced, err)
@@ -778,8 +786,8 @@ func TestBattleAuthPreactiveReleaseFenceCannotCaptureActivatedWinner(t *testing.
 		t.Fatal("active winner battle was deleted")
 	}
 	for _, wrong := range []BattleExpectedInstance{
-		{AllocationID: "winner", InstanceUID: "uid-rebuilt", InstanceEpoch: id.InstanceEpoch},
-		{AllocationID: "winner", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch + 1},
+		{AllocationID: "4221a0fc-3dfb-4d83-8dc3-a13f6c72d233", InstanceUID: "uid-rebuilt", InstanceEpoch: id.InstanceEpoch},
+		{AllocationID: "4221a0fc-3dfb-4d83-8dc3-a13f6c72d233", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch + 1},
 	} {
 		beforeAuth := rawRedisBytes(t, f.rdb, battleAuthKey(matchID))
 		beforeBattle := rawRedisBytes(t, f.rdb, battleKey(matchID))
@@ -828,10 +836,10 @@ func TestBattleAuthActivationRacesPreactiveReleaseFenceSingleWinner(t *testing.T
 	f := newBattleAuthFixture(t)
 	for i := uint64(0); i < 20; i++ {
 		matchID := uint64(730) + i
-		allocationID := fmt.Sprintf("alloc-race-release-%d", i)
+		allocationID := uuid.NewString()
 		pod := fmt.Sprintf("pod-race-release-%d", i)
 		uid := fmt.Sprintf("uid-race-release-%d", i)
-		seedModelBBattle(t, f, matchID, allocationID, pod)
+		seedModelBBattle(t, f, matchID, allocationID, pod, uid)
 		credential, id := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
 		expected := BattleExpectedInstance{
 			AllocationID: allocationID, InstanceUID: uid, InstanceEpoch: credential.GetInstanceEpoch(),
@@ -891,8 +899,8 @@ func TestBattleAuthStaleZSetCannotAbandonFreshAuthority(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(707)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	_, id := prepareAndStage(t, f, matchID, "alloc-a", "pod-a", "uid-a", true)
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	_, id := prepareAndStage(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -934,7 +942,7 @@ func TestBattleAuthStaleZSetCannotAbandonFreshAuthority(t *testing.T) {
 		t.Fatalf("terminated active still accepted: %v", err)
 	}
 	expected := BattleExpectedInstance{
-		AllocationID: "alloc-a", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
+		AllocationID: "d8a3fbe5-1831-4fe1-8521-779b4097aa51", InstanceUID: id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
 	}
 	if expired, err := f.auth.ExpireTerminatedExpected(
 		ctx, matchID, expected, testTTL, testTTL); err != nil || !expired {
@@ -949,7 +957,7 @@ func TestBattleAuthAbandonMissingAuthWarmingHalfFailure(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(712)
-	seedModelBBattle(t, f, matchID, "alloc-half", "pod-half")
+	seedModelBBattle(t, f, matchID, "b952759c-e53f-4f08-8331-44dcacabb086", "pod-half", "uid-half")
 	result, err := f.auth.AbandonIfStale(ctx, matchID, f.now.UnixMilli(), testTTL, testTTL)
 	if err != nil || !result.Abandoned || result.Battle == nil || result.Battle.State != "abandoned" {
 		t.Fatalf("missing-auth warming abandon=%+v err=%v", result, err)
@@ -966,8 +974,8 @@ func TestBattleAuthHeartbeatTerminalLocksAuthInSameTransaction(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(708)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	_, id := prepareAndStage(t, f, matchID, "alloc-a", "pod-a", "uid-a", true)
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	_, id := prepareAndStage(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -983,7 +991,7 @@ func TestBattleAuthHeartbeatTerminalLocksAuthInSameTransaction(t *testing.T) {
 		t.Fatalf("rejected ended changed authority: %+v err=%v", preReceipt, err)
 	}
 	receipt := dsauthrecord.NewBattleResultReceipt(
-		matchID, "alloc-a", id.PodName, id.InstanceUID, id.InstanceEpoch, id.Gen, id.JTI,
+		matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", id.PodName, id.InstanceUID, id.InstanceEpoch, id.Gen, id.JTI,
 		int64(id.ExpMs), id.Kid, id.TokenSHA256, id.WriterEpoch, f.now.UnixMilli())
 	receiptRaw, err := dsauthrecord.MarshalBattleResultReceipt(receipt)
 	if err != nil {
@@ -1022,13 +1030,13 @@ func TestBattleAuthReceiptFencesCredentialRotation(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(713)
-	seedModelBBattle(t, f, matchID, "alloc-r", "pod-r")
-	_, first := prepareAndStage(t, f, matchID, "alloc-r", "pod-r", "uid-r", true)
+	seedModelBBattle(t, f, matchID, "90fd9260-9005-47e4-8365-575e50297517", "pod-r", "uid-r")
+	_, first := prepareAndStage(t, f, matchID, "90fd9260-9005-47e4-8365-575e50297517", "pod-r", "uid-r", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, first, activateInput()); err != nil {
 		t.Fatal(err)
 	}
 	receipt := dsauthrecord.NewBattleResultReceipt(
-		matchID, "alloc-r", first.PodName, first.InstanceUID, first.InstanceEpoch,
+		matchID, "90fd9260-9005-47e4-8365-575e50297517", first.PodName, first.InstanceUID, first.InstanceEpoch,
 		first.Gen, first.JTI, int64(first.ExpMs), first.Kid, first.TokenSHA256,
 		first.WriterEpoch, f.now.UnixMilli())
 	receiptRaw, err := dsauthrecord.MarshalBattleResultReceipt(receipt)
@@ -1039,7 +1047,7 @@ func TestBattleAuthReceiptFencesCredentialRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-r", "pod-r", "uid-r")); errcode.As(err) != errcode.ErrInvalidState {
+	if _, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "90fd9260-9005-47e4-8365-575e50297517", "pod-r", "uid-r")); errcode.As(err) != errcode.ErrInvalidState {
 		t.Fatalf("receipt did not fence credential preparation: %v", err)
 	}
 	ended := activateInput()
@@ -1054,28 +1062,28 @@ func TestBattleAuthReceiptWinsRaceAgainstPendingPromotion(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(714)
-	seedModelBBattle(t, f, matchID, "alloc-race", "pod-race")
-	_, first := prepareAndStage(t, f, matchID, "alloc-race", "pod-race", "uid-race", true)
+	seedModelBBattle(t, f, matchID, "167c81e3-92fc-4432-8284-e4fb6dc93638", "pod-race", "uid-race")
+	_, first := prepareAndStage(t, f, matchID, "167c81e3-92fc-4432-8284-e4fb6dc93638", "pod-race", "uid-race", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, first, activateInput()); err != nil {
 		t.Fatal(err)
 	}
 
-	seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "alloc-race", "pod-race", "uid-race"))
+	seed, err := f.auth.PrepareCredential(ctx, authBinding(matchID, "167c81e3-92fc-4432-8284-e4fb6dc93638", "pod-race", "uid-race"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	secondCredential := credentialFor(f, seed, "uid-race", "pending-before-result")
 	if _, err := f.auth.StagePending(ctx, BattleStageInput{
-		MatchID: matchID, AllocationID: "alloc-race", Credential: secondCredential, AuthTTL: testTTL,
+		MatchID: matchID, AllocationID: "167c81e3-92fc-4432-8284-e4fb6dc93638", Credential: secondCredential, AuthTTL: testTTL,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.auth.MarkDelivered(ctx, matchID, "alloc-race", secondCredential, "rv-pending", testTTL); err != nil {
+	if err := f.auth.MarkDelivered(ctx, matchID, "167c81e3-92fc-4432-8284-e4fb6dc93638", secondCredential, "rv-pending", testTTL); err != nil {
 		t.Fatal(err)
 	}
 
 	receipt := dsauthrecord.NewBattleResultReceipt(
-		matchID, "alloc-race", first.PodName, first.InstanceUID, first.InstanceEpoch,
+		matchID, "167c81e3-92fc-4432-8284-e4fb6dc93638", first.PodName, first.InstanceUID, first.InstanceEpoch,
 		first.Gen, first.JTI, int64(first.ExpMs), first.Kid, first.TokenSHA256,
 		first.WriterEpoch, f.now.UnixMilli())
 	receiptRaw, err := dsauthrecord.MarshalBattleResultReceipt(receipt)
@@ -1106,10 +1114,10 @@ func TestBattleAuthTerminalResultAllowsExpiredProofAfterActiveRotation(t *testin
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(760)
-	const allocationID = "alloc-terminal-rotation"
+	const allocationID = "a34f3289-b63f-4631-8efd-b97568c04117"
 	const pod = "pod-terminal-rotation"
 	const uid = "uid-terminal-rotation"
-	seedModelBBattle(t, f, matchID, allocationID, pod)
+	seedModelBBattle(t, f, matchID, allocationID, pod, uid)
 
 	_, first := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, first, activateInput()); err != nil {
@@ -1171,10 +1179,10 @@ func TestBattleAuthTerminalResultStableIdentityDriftHasZeroSideEffects(t *testin
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(761)
-	const allocationID = "alloc-terminal-drift"
+	const allocationID = "39284eb8-b8db-4537-89f1-098516787a38"
 	const pod = "pod-terminal-drift"
 	const uid = "uid-terminal-drift"
-	seedModelBBattle(t, f, matchID, allocationID, pod)
+	seedModelBBattle(t, f, matchID, allocationID, pod, uid)
 	_, active := prepareAndStage(t, f, matchID, allocationID, pod, uid, true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, active, activateInput()); err != nil {
 		t.Fatal(err)
@@ -1195,7 +1203,7 @@ func TestBattleAuthTerminalResultStableIdentityDriftHasZeroSideEffects(t *testin
 	}{
 		{name: "allocation", expected: func() BattleExpectedInstance {
 			e := baseExpected
-			e.AllocationID = "alloc-rebuilt"
+			e.AllocationID = "9d783949-ab89-418c-8920-9946d3240a17"
 			return e
 		}(), proof: baseProof},
 		{name: "uid", expected: func() BattleExpectedInstance {
@@ -1241,15 +1249,15 @@ func TestBattleAuthQuarantineExpectedFullTuple(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(709)
-	seedModelBBattle(t, f, matchID, "alloc-q", "pod-q")
-	_, id := prepareAndStage(t, f, matchID, "alloc-q", "pod-q", "uid-q", true)
+	seedModelBBattle(t, f, matchID, "95016eef-53b4-4b91-89bc-7f055821622f", "pod-q", "uid-q")
+	_, id := prepareAndStage(t, f, matchID, "95016eef-53b4-4b91-89bc-7f055821622f", "pod-q", "uid-q", true)
 	if _, err := f.auth.ActivateHeartbeat(ctx, matchID, id, activateInput()); err != nil {
 		t.Fatal(err)
 	}
 	wrong := id
 	wrong.JTI = "stale"
 	if result, err := f.auth.QuarantineExpected(ctx, matchID, BattleQuarantineExpected{
-		AllocationID: "alloc-q", Credential: wrong,
+		AllocationID: "95016eef-53b4-4b91-89bc-7f055821622f", Credential: wrong,
 	}, testTTL, testTTL); err != nil || result.AuthQuarantined {
 		t.Fatalf("stale quarantine result=%+v err=%v", result, err)
 	}
@@ -1275,7 +1283,7 @@ func TestBattleAuthQuarantineExpectedFullTuple(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result, err := f.auth.QuarantineExpected(ctx, matchID, BattleQuarantineExpected{
-		AllocationID: "alloc-q", Credential: id,
+		AllocationID: "95016eef-53b4-4b91-89bc-7f055821622f", Credential: id,
 	}, testTTL, testTTL); err != nil || !result.AuthQuarantined || result.ProjectionAbandoned {
 		t.Fatalf("drifted projection quarantine result=%+v err=%v", result, err)
 	}
@@ -1293,7 +1301,7 @@ func TestBattleAuthQuarantineExpectedFullTuple(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result, err := f.auth.QuarantineExpected(ctx, matchID, BattleQuarantineExpected{
-		AllocationID: "alloc-q", Credential: id,
+		AllocationID: "95016eef-53b4-4b91-89bc-7f055821622f", Credential: id,
 	}, testTTL, testTTL); err != nil || !result.AuthQuarantined || !result.ProjectionAbandoned {
 		t.Fatalf("quarantine result=%+v err=%v", result, err)
 	}
@@ -1332,7 +1340,7 @@ func TestBattleAuthQuarantineExpectedFullTuple(t *testing.T) {
 	battleBytesBefore := rawRedisBytes(t, f.rdb, battleKey(matchID))
 	counterBefore := rawRedisBytes(t, f.rdb, battleAuthGenKey(matchID))
 	if _, err := f.auth.PrepareCredential(
-		ctx, authBinding(matchID, "alloc-q", "pod-q", "uid-rebuilt")); errcode.As(err) != errcode.ErrUnauthorized {
+		ctx, authBinding(matchID, "95016eef-53b4-4b91-89bc-7f055821622f", "pod-q", "uid-rebuilt")); errcode.As(err) != errcode.ErrUnauthorized {
 		t.Fatalf("different UID bypassed quarantine tombstone: %v", err)
 	}
 	if !bytes.Equal(authBytesBefore, rawRedisBytes(t, f.rdb, battleAuthKey(matchID))) ||
@@ -1347,8 +1355,8 @@ func TestBattleAuthHeartbeatEmptyAbandonHasSingleCASWinner(t *testing.T) {
 	ctx := context.Background()
 	f := newBattleAuthFixture(t)
 	const matchID = uint64(711)
-	seedModelBBattle(t, f, matchID, "alloc-a", "pod-a")
-	_, id := prepareAndStage(t, f, matchID, "alloc-a", "pod-a", "uid-a", true)
+	seedModelBBattle(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
+	_, id := prepareAndStage(t, f, matchID, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a", true)
 	in := activateInput()
 	in.PlayerCount = 0
 	in.EmptyBattleTimeout = time.Minute
@@ -1375,7 +1383,7 @@ func TestBattleAuthHeartbeatEmptyAbandonHasSingleCASWinner(t *testing.T) {
 
 func TestBattleAuthRedisFailureIsFailClosed(t *testing.T) {
 	f := newBattleAuthFixture(t)
-	seedModelBBattle(t, f, 709, "alloc-a", "pod-a")
+	seedModelBBattle(t, f, 709, "d8a3fbe5-1831-4fe1-8521-779b4097aa51", "pod-a", "uid-a")
 	f.mr.Close()
 	if _, err := f.auth.ReadAuthority(context.Background(), 709); err == nil {
 		t.Fatal("Redis failure unexpectedly returned authority")

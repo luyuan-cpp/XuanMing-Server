@@ -166,7 +166,50 @@ type fixture struct {
 	cfg     conf.MatchConf
 }
 
+// progressHandoffRepo 在 GetMatchProgress 完成第一次 Match/Ticket miss 后，
+// 精确模拟 worker 的“先写 Ticket、后删 StartOperation”交接。
+type progressHandoffRepo struct {
+	data.MatchRepo
+	op   *matchv1.MatchStartOperationStorageRecord
+	ttl  time.Duration
+	once sync.Once
+	err  error
+}
+
+func (r *progressHandoffRepo) GetStartOperation(
+	ctx context.Context,
+	ticketID uint64,
+) (*matchv1.MatchStartOperationStorageRecord, bool, error) {
+	r.once.Do(func() {
+		if r.op == nil || r.op.GetTicketId() != ticketID {
+			r.err = errors.New("handoff test operation mismatch")
+			return
+		}
+		if err := r.MatchRepo.CreateTicketRecord(ctx, ticketFromStartOperation(r.op), r.ttl); err != nil {
+			r.err = err
+			return
+		}
+		for _, member := range r.op.GetMembers() {
+			if err := r.MatchRepo.DeleteStartPlayerIfMatches(ctx, member.GetPlayerId(), ticketID); err != nil {
+				r.err = err
+				return
+			}
+		}
+		r.err = r.MatchRepo.DeleteStartOperation(ctx, ticketID)
+	})
+	if r.err != nil {
+		return nil, false, r.err
+	}
+	return r.MatchRepo.GetStartOperation(ctx, ticketID)
+}
+
 type allowPlacement struct{}
+
+func (allowPlacement) RequireStableHub(context.Context, []uint64) error { return nil }
+
+func (allowPlacement) PreflightBattlePlacement(context.Context, string, uint64, []uint64) error {
+	return nil
+}
 
 func (allowPlacement) PrepareBattlePlacement(_ context.Context, operationID string, _ uint64, playerIDs []uint64, _ *model.BattleAllocation) (map[uint64]placement.Binding, error) {
 	bindings := make(map[uint64]placement.Binding, len(playerIDs))
@@ -175,6 +218,13 @@ func (allowPlacement) PrepareBattlePlacement(_ context.Context, operationID stri
 	}
 	return bindings, nil
 }
+
+type rejectingStartPlacement struct {
+	allowPlacement
+	err error
+}
+
+func (p rejectingStartPlacement) RequireStableHub(context.Context, []uint64) error { return p.err }
 
 func newFixture(t *testing.T, firstMatchID uint64) *fixture {
 	return newFixtureWith(t, firstMatchID, nil)
@@ -228,6 +278,132 @@ func TestResolvePlayerMatchContext_StartSagaHandsOffToQueued(t *testing.T) {
 	}
 	if _, found, err := f.repo.GetStartOperation(ctx, 9101); err != nil || found {
 		t.Fatalf("queued handoff must explicitly delete start operation: found=%v err=%v", found, err)
+	}
+}
+
+func TestGetMatchProgress_ReadsAcceptedDurableStartOperationBeforeTicketExists(t *testing.T) {
+	f := newFixture(t, 9000)
+	ctx := context.Background()
+	const (
+		playerID = uint64(4211)
+		ticketID = uint64(9111)
+	)
+	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 7); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := f.repo.GetTicket(ctx, ticketID); err != nil || found {
+		t.Fatalf("worker 前不应已有 canonical ticket: found=%v err=%v", found, err)
+	}
+
+	progress, err := f.uc.GetMatchProgress(ctx, playerID, ticketID)
+	if err != nil {
+		t.Fatalf("accepted start operation 不应瞬时返回 4001: %v", err)
+	}
+	if progress.GetMatchId() != ticketID || progress.GetStage() != stageQueueing {
+		t.Fatalf("progress=%+v, want ticket=%d stage=QUEUEING", progress, ticketID)
+	}
+	withoutHandle, err := f.uc.GetMatchProgress(ctx, playerID, 0)
+	if err != nil || withoutHandle.GetMatchId() != ticketID || withoutHandle.GetStage() != stageQueueing {
+		t.Fatalf("丢失句柄后的 durable start 恢复 = %+v err=%v", withoutHandle, err)
+	}
+
+	if _, err := f.uc.GetMatchProgress(ctx, playerID+1, ticketID); errcode.As(err) != errcode.ErrMatchNotFound {
+		t.Fatalf("非成员读取 start operation = %v, want ErrMatchNotFound", err)
+	}
+}
+
+func TestGetMatchProgress_ProjectsEveryDurableStartPhase(t *testing.T) {
+	tests := []struct {
+		phase     matchv1.MatchStartPhase
+		wantStage matchv1.MatchStage
+		wantCode  errcode.Code
+	}{
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED, stageQueueing, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_TICKET_READY, stageQueueing, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMING, stageQueueing, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMS_READY, stageQueueing, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_QUEUED, stageQueueing, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_COMPENSATING, stageFailed, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_FAILED, stageFailed, errcode.OK},
+		{matchv1.MatchStartPhase_MATCH_START_PHASE_UNSPECIFIED, 0, errcode.ErrUnavailable},
+	}
+	for i, tc := range tests {
+		tc := tc
+		t.Run(tc.phase.String(), func(t *testing.T) {
+			f := newFixture(t, 9400+uint64(i))
+			ctx := context.Background()
+			playerID := uint64(4400 + i)
+			ticketID := uint64(9500 + i)
+			if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.repo.UpdateStartOperationWithLock(ctx, ticketID, f.cfg.OptimisticRetry,
+				func(rec *matchv1.MatchStartOperationStorageRecord) error {
+					rec.Phase = tc.phase
+					return nil
+				}, f.uc.ticketTTL()); err != nil {
+				t.Fatal(err)
+			}
+
+			progress, err := f.uc.GetMatchProgress(ctx, playerID, ticketID)
+			if tc.wantCode != errcode.OK {
+				if errcode.As(err) != tc.wantCode {
+					t.Fatalf("phase=%s err=%v, want code=%d", tc.phase, err, tc.wantCode)
+				}
+				return
+			}
+			if err != nil || progress.GetMatchId() != ticketID || progress.GetStage() != tc.wantStage {
+				t.Fatalf("phase=%s progress=%+v err=%v", tc.phase, progress, err)
+			}
+		})
+	}
+}
+
+func TestGetMatchProgress_ClosesStartOperationToTicketHandoffRace(t *testing.T) {
+	f := newFixture(t, 9600)
+	ctx := context.Background()
+	const (
+		playerID = uint64(4501)
+		ticketID = uint64(9601)
+	)
+	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+		t.Fatal(err)
+	}
+	op, found, err := f.repo.GetStartOperation(ctx, ticketID)
+	if err != nil || !found {
+		t.Fatalf("start operation missing: found=%v err=%v", found, err)
+	}
+	f.uc.repo = &progressHandoffRepo{MatchRepo: f.repo, op: op, ttl: f.uc.ticketTTL()}
+
+	progress, err := f.uc.GetMatchProgress(ctx, playerID, ticketID)
+	if err != nil || progress.GetMatchId() != ticketID || progress.GetStage() != stageQueueing {
+		t.Fatalf("handoff race returned progress=%+v err=%v", progress, err)
+	}
+}
+
+func TestGetMatchProgress_AuthorizesStartOperationMemberBeforeMode(t *testing.T) {
+	f := newFixture(t, 9700)
+	ctx := context.Background()
+	const (
+		playerID = uint64(4601)
+		ticketID = uint64(9701)
+	)
+	if _, err := f.uc.StartMatch(ctx, ticketID, ticketID, playerID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.repo.UpdateStartOperationWithLock(ctx, ticketID, f.cfg.OptimisticRetry,
+		func(rec *matchv1.MatchStartOperationStorageRecord) error {
+			rec.GameMode = "foreign-mode"
+			return nil
+		}, f.uc.ticketTTL()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.uc.GetMatchProgress(ctx, playerID+1, ticketID); errcode.As(err) != errcode.ErrMatchNotFound {
+		t.Fatalf("非成员在 mode 校验前未被隐藏: %v", err)
+	}
+	if _, err := f.uc.GetMatchProgress(ctx, playerID, ticketID); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("成员读取 foreign mode = %v, want ErrInvalidState", err)
 	}
 }
 
@@ -324,6 +500,32 @@ func TestResolvePlayerMatchContext_CrossModeCanonicalAndDrift(t *testing.T) {
 	c.Defaults()
 	resumeAllocator := &captureResumeAllocator{DSAllocator: NewStubDSAllocator("127.0.0.1:7777")}
 	resolver := NewMatchUsecase(pvpRepo, nil, nil, resumeAllocator, &fakeIDGen{next: 1}, nil, c.Match)
+
+	// Login intentionally talks to the PVP-audience endpoint only. Start/player
+	// discovery keys are global canonical records, so that reader must still see
+	// a PVE operation before its Ticket exists; a second audience/query is not
+	// required and would turn identical shared authority into false split-brain.
+	const pveStartingPlayer, pveStartingTicket = uint64(51), uint64(9199)
+	if err := pveRepo.CreateStartOperation(ctx, &matchv1.MatchStartOperationStorageRecord{
+		OperationId: "9849ab5b-2ecf-4fc3-983d-2d8df53cc008",
+		TicketId:    pveStartingTicket, TeamId: pveStartingTicket, CaptainId: pveStartingPlayer,
+		Members:  []*matchv1.MatchMemberStorageRecord{{PlayerId: pveStartingPlayer, TeamId: pveStartingTicket}},
+		Phase:    matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED,
+		GameMode: "pve_coop",
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	starting, err := resolver.ResolvePlayerMatchContext(ctx, pveStartingPlayer)
+	if err != nil || starting.GetStage() != matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_STARTING ||
+		starting.GetTicketId() != pveStartingTicket || starting.GetGameMode() != "pve_coop" {
+		t.Fatalf("cross-mode PVE STARTING = %+v err=%v", starting, err)
+	}
+	if err := pveRepo.DeleteStartOperation(ctx, pveStartingTicket); err != nil {
+		t.Fatal(err)
+	}
+	if err := pveRepo.DeleteStartPlayerIfMatches(ctx, pveStartingPlayer, pveStartingTicket); err != nil {
+		t.Fatal(err)
+	}
 
 	const playerID, ticketID, matchID = uint64(52), uint64(9201), uint64(9301)
 	ticket := &matchv1.MatchTicketStorageRecord{
@@ -465,16 +667,16 @@ func (f *fixture) seedTicket(t *testing.T, ctx context.Context, ticketID uint64,
 
 // ── 用例 ──────────────────────────────────────────────────────────────────────
 
-// TestStartMatch_RejectsPlayerInBattle 验证本提交核心：队伍成员正处于 BATTLE 时，
-// StartMatch 返回 ErrMatchInBattle，且不写票据 / 不声明 claim（战斗中禁止重复匹配，不变量 §1）。
+// TestStartMatch_RejectsPlayerInBattle 验证 durable placement 是唯一权威：即使短 TTL
+// presence 已缺失（locator 返回非 Battle），STABLE_BATTLE 仍在任何 operation/claim/ticket
+// 之前拒绝，不能因断线 TTL 到期二次入队。
 func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 999)
 
 	const captain = uint64(42)
-	f.locator.mu.Lock()
-	f.locator.inBattle[captain] = true
-	f.locator.mu.Unlock()
+	f.uc.SetPlacementCoordinator(rejectingStartPlacement{err: errcode.New(errcode.ErrMatchInBattle,
+		"durable STABLE_BATTLE")})
 
 	if _, err := f.uc.StartMatch(ctx, 7001, 7001, captain, 0); err == nil {
 		t.Fatalf("StartMatch: expected error, got nil")
@@ -489,19 +691,23 @@ func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
 	if _, found, _ := f.repo.GetTicket(ctx, 7001); found {
 		t.Fatalf("ticket written despite in-battle rejection")
 	}
+	if _, found, _ := f.repo.GetStartOperation(ctx, 7001); found {
+		t.Fatalf("start operation written despite in-battle rejection")
+	}
+	if _, found, _ := f.repo.GetStartPlayerOperation(ctx, captain); found {
+		t.Fatalf("start player index written despite in-battle rejection")
+	}
 }
 
-// TestStartMatch_FailClosedWhenLocatorUnavailable 验证 fail-closed 生产路径：
-// player_locator 查询失败时（默认 BattleGateFailOpen=false），StartMatch 拒绝入队并返回
-// ErrUnavailable，且不写票据 / claim，避免 locator 抖动叠加旧 claim 过期时绕过保护。
+// TestStartMatch_FailClosedWhenPlacementUnavailable 验证 durable authority 的 missing/error
+// 都是 UNKNOWN：StartMatch 零副作用返回可重试错误。
 func TestStartMatch_FailClosedWhenLocatorUnavailable(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 999)
 
 	const captain = uint64(43)
-	f.locator.mu.Lock()
-	f.locator.queryErr = errors.New("locator down")
-	f.locator.mu.Unlock()
+	f.uc.SetPlacementCoordinator(rejectingStartPlacement{err: errcode.New(errcode.ErrUnavailable,
+		"durable placement missing")})
 
 	if _, err := f.uc.StartMatch(ctx, 7002, 7002, captain, 0); err == nil {
 		t.Fatalf("StartMatch: expected fail-closed error, got nil")
@@ -515,32 +721,40 @@ func TestStartMatch_FailClosedWhenLocatorUnavailable(t *testing.T) {
 	if _, found, _ := f.repo.GetTicket(ctx, 7002); found {
 		t.Fatalf("ticket written despite fail-closed rejection")
 	}
+	if _, found, _ := f.repo.GetStartOperation(ctx, 7002); found {
+		t.Fatalf("start operation written despite fail-closed rejection")
+	}
+	if _, found, _ := f.repo.GetStartPlayerOperation(ctx, captain); found {
+		t.Fatalf("start player index written despite fail-closed rejection")
+	}
 }
 
-// TestStartMatch_FailOpenWhenLocatorUnavailable 验证 dev 弱依赖开关：
-// 显式打开 BattleGateFailOpen 后，locator 查询失败仅告警并放行，票据 / claim 正常写入。
+// BattleGateFailOpen is a legacy presence-only knob.  It must never bypass a
+// missing durable placement authority now that placement owns routing.
 func TestStartMatch_FailOpenWhenLocatorUnavailable(t *testing.T) {
 	ctx := context.Background()
 	f := newFixtureWith(t, 999, func(m *conf.MatchConf) { m.BattleGateFailOpen = true })
 
 	const captain = uint64(44)
-	f.locator.mu.Lock()
-	f.locator.queryErr = errors.New("locator down")
-	f.locator.mu.Unlock()
+	f.uc.SetPlacementCoordinator(rejectingStartPlacement{err: errcode.New(errcode.ErrUnavailable,
+		"durable placement unavailable")})
+	if _, err := f.uc.StartMatch(ctx, 7003, 7003, captain, 0); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("legacy fail-open bypassed durable authority: %v", err)
+	}
+	if _, found, _ := f.repo.GetStartOperation(ctx, 7003); found {
+		t.Fatal("legacy fail-open wrote start operation")
+	}
+}
 
-	id, err := f.uc.StartMatch(ctx, 7003, 7003, captain, 0)
-	if err != nil {
-		t.Fatalf("StartMatch fail-open: unexpected error: %v", err)
-	}
-	if id != 7003 {
-		t.Fatalf("StartMatch returned ticket %d, want 7003", id)
-	}
-	f.advanceStarts(t, ctx)
-	if _, found, _ := f.repo.GetTicket(ctx, 7003); !found {
-		t.Fatalf("ticket not written under fail-open")
-	}
-	if got, found, _ := f.repo.GetPlayerTicket(ctx, captain); !found || got != 7003 {
-		t.Fatalf("player claim = %d found=%v, want ticket 7003", got, found)
+func TestStartMatch_DoesNotTreatStalePresenceAsRoutingAuthority(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t, 999)
+	const captain = uint64(45)
+	f.locator.mu.Lock()
+	f.locator.inBattle[captain] = true // stale TTL projection contradicts durable STABLE_HUB
+	f.locator.mu.Unlock()
+	if id, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0); err != nil || id != 7004 {
+		t.Fatalf("stale presence overrode durable Hub placement: id=%d err=%v", id, err)
 	}
 }
 

@@ -514,7 +514,7 @@ func main() {
 		var features []string
 		if modelBAuthority {
 			features = []string{"hub-reservation-ledger-v1", "hub-heartbeat-capacity-v1",
-				"hub-owner-cleanup-v1", "hub-physical-eviction-v1"}
+				"hub-owner-cleanup-v1", "hub-physical-eviction-v1", "hub-successor-lease-v1"}
 		}
 		fence, err := dsauthfence.AcquireRuntime(context.Background(), dsauthfence.RuntimeConfig{
 			Endpoints: cfg.DSAuth.Fence.EtcdEndpoints, Prefix: cfg.DSAuth.Fence.EtcdPrefix,
@@ -528,6 +528,15 @@ func main() {
 			os.Exit(1)
 		}
 		defer func() { _ = fence.Close() }()
+		if fence.RequiredPolicyGeneration() != dsauthfence.RequiredPolicyGenerationV3 {
+			helper.Warnw("msg", "ds_auth_fence_staging_only",
+				"required_policy_generation", fence.RequiredPolicyGeneration(),
+				"required_policy", dsauthfence.RequiredPolicyV3,
+				"hint", "capability 仅供 V3 激活审计；V3 生效并触发 Lost/重启前禁止启动 RPC 与后台 writer")
+			<-fence.Lost()
+			_ = fence.Close()
+			os.Exit(0)
+		}
 		go func() {
 			<-fence.Lost()
 			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止旧 writer 在失租/epoch 回退后继续写")
@@ -605,10 +614,10 @@ func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding 
 		DSPodName: binding.PodName, DSInstanceUID: binding.InstanceUID,
 		ProtocolEpoch: binding.ProtocolEpoch, CredentialGen: binding.CredentialGen,
 		CredentialJTI: binding.CredentialJTI, HubAssignmentID: binding.HubAssignmentID,
-		WriterEpoch: binding.WriterEpoch,
-		PlacementVersion: binding.Placement.Version,
+		WriterEpoch:          binding.WriterEpoch,
+		PlacementVersion:     binding.Placement.Version,
 		PlacementOperationID: binding.Placement.OperationID,
-		SourceMatchID: binding.Placement.SourceMatchID,
+		SourceMatchID:        binding.Placement.SourceMatchID,
 	})
 }
 

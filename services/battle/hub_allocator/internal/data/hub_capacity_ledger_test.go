@@ -30,6 +30,14 @@ func capacityTestReservation(playerID uint64, assignmentID string, nowMs int64) 
 	}
 }
 
+func capacityTestPlacedReservation(playerID uint64, assignmentID string, nowMs int64) ReservationIdentity {
+	reservation := capacityTestReservation(playerID, assignmentID, nowMs)
+	reservation.PlacementVersion = 7
+	reservation.PlacementOperationID = "11111111-1111-4111-8111-111111111111"
+	reservation.SourceMatchID = 9001
+	return reservation
+}
+
 func mustReserveCapacity(t *testing.T, repo *RedisHubAuthRepo, pod string,
 	reservation ReservationIdentity, nowMs int64) ReserveResult {
 	t.Helper()
@@ -113,6 +121,9 @@ func TestAdmissionSequenceResponseLossDelayedOldAckAndLogout(t *testing.T) {
 	if err != nil || !retry.Admitted || !retry.AlreadyAdmitted || retry.CapacityOccupancy != 1 {
 		t.Fatalf("response-loss retry=%+v err=%v", retry, err)
 	}
+	// Every new physical owner must consume a successor prepared by the ticket
+	// issuance path; a live old session alone is not an admission capability.
+	mustReserveCapacity(t, repo, pod, reservation, now+2)
 	replacement, err := repo.AcknowledgeAdmission(ctx, pod, credential, reservation, newAdmissionID, 20, now+3, testTTL)
 	if err != nil || !replacement.Admitted || replacement.CapacityOccupancy != 1 {
 		t.Fatalf("new connection replacement=%+v err=%v", replacement, err)
@@ -149,6 +160,495 @@ func TestAdmissionSequenceResponseLossDelayedOldAckAndLogout(t *testing.T) {
 		newAdmissionID, 20, now+7, testTTL)
 	if err != nil || !idempotent.Departed || !idempotent.AlreadyDeparted || idempotent.Conflict {
 		t.Fatalf("departure response-loss retry=%+v err=%v", idempotent, err)
+	}
+}
+
+func TestSuccessorLeaseOldDepartureBeforeNewAdmission(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newAuthRepo(t)
+	const pod = "pandora-hub-successor-departure-first"
+	now := time.Now().UnixMilli()
+	activateReady(t, repo, pod, now, 0)
+	now = time.Now().UnixMilli() + 1
+	reservation := capacityTestPlacedReservation(101, uuid.NewString(), now)
+	credential := capacityTestCredential()
+	oldAdmissionID, newAdmissionID := uuid.NewString(), uuid.NewString()
+	mustReserveCapacity(t, repo, pod, reservation, now)
+	if admitted, err := repo.AcknowledgeAdmission(ctx, pod, credential, reservation,
+		oldAdmissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+		t.Fatalf("old admission=%+v err=%v", admitted, err)
+	}
+
+	// IssueDSTicket while the old owner is still connected prepares one exact
+	// successor but must not double-count the physical seat.
+	mustReserveCapacity(t, repo, pod, reservation, now+2)
+	if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 1 {
+		t.Fatalf("successor count=%d", count)
+	}
+	shard, _, _ := shardRepoFor(repo).GetShard(ctx, pod)
+	if shard.GetPlayerCount() != 1 || shard.GetReservedCount() != 0 ||
+		shard.GetConnectedOwnershipCount() != 1 {
+		t.Fatalf("connected successor double-counted capacity: %+v", shard)
+	}
+
+	departed, err := repo.AcknowledgeDeparture(ctx, pod, credential, reservation,
+		oldAdmissionID, 10, now+3, testTTL)
+	if err != nil || !departed.Departed || departed.Conflict || departed.CapacityOccupancy != 1 ||
+		departed.ReservedCount != 1 || departed.ConnectedCount != 0 {
+		t.Fatalf("old departure did not atomically expose successor seat: %+v err=%v", departed, err)
+	}
+	if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 1 {
+		t.Fatalf("old departure deleted successor count=%d", count)
+	}
+
+	// Another placement lineage cannot consume the detached capability.
+	wrongPlacement := reservation
+	wrongPlacement.PlacementVersion++
+	wrongPlacement.PlacementOperationID = "22222222-2222-4222-8222-222222222222"
+	if rejected, rejectErr := repo.AcknowledgeAdmission(ctx, pod, credential, wrongPlacement,
+		newAdmissionID, 20, now+4, testTTL); errcode.As(rejectErr) != errcode.ErrUnauthorized || rejected.Admitted {
+		t.Fatalf("wrong placement admission=%+v err=%v", rejected, rejectErr)
+	}
+
+	newAdmission, err := repo.AcknowledgeAdmission(ctx, pod, credential, reservation,
+		newAdmissionID, 20, now+5, testTTL)
+	if err != nil || !newAdmission.Admitted || newAdmission.CapacityOccupancy != 1 ||
+		newAdmission.ReservedCount != 0 || newAdmission.ConnectedCount != 1 {
+		t.Fatalf("new admission=%+v err=%v", newAdmission, err)
+	}
+	if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 0 {
+		t.Fatalf("new admission did not consume successor count=%d", count)
+	}
+
+	// A replayed old Logout after the new owner exists is fenced by exact
+	// admission_seq+UUID and must not delete the successor owner (ABA).
+	oldReplay, err := repo.AcknowledgeDeparture(ctx, pod, credential, reservation,
+		oldAdmissionID, 10, now+6, testTTL)
+	if err != nil || !oldReplay.Conflict || oldReplay.Departed {
+		t.Fatalf("old departure replay=%+v err=%v", oldReplay, err)
+	}
+}
+
+func TestSuccessorLeaseAdmissionBeforeOldDeparture(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newAuthRepo(t)
+	const pod = "pandora-hub-successor-admission-first"
+	now := time.Now().UnixMilli()
+	activateReady(t, repo, pod, now, 0)
+	now = time.Now().UnixMilli() + 1
+	reservation := capacityTestPlacedReservation(101, uuid.NewString(), now)
+	credential := capacityTestCredential()
+	oldAdmissionID, newAdmissionID := uuid.NewString(), uuid.NewString()
+	mustReserveCapacity(t, repo, pod, reservation, now)
+	if admitted, err := repo.AcknowledgeAdmission(ctx, pod, credential, reservation,
+		oldAdmissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+		t.Fatalf("old admission=%+v err=%v", admitted, err)
+	}
+	mustReserveCapacity(t, repo, pod, reservation, now+2)
+	if admitted, err := repo.AcknowledgeAdmission(ctx, pod, credential, reservation,
+		newAdmissionID, 20, now+3, testTTL); err != nil || !admitted.Admitted || admitted.CapacityOccupancy != 1 {
+		t.Fatalf("new admission=%+v err=%v", admitted, err)
+	}
+	if oldDeparture, err := repo.AcknowledgeDeparture(ctx, pod, credential, reservation,
+		oldAdmissionID, 10, now+4, testTTL); err != nil || !oldDeparture.Conflict || oldDeparture.Departed {
+		t.Fatalf("old departure=%+v err=%v", oldDeparture, err)
+	}
+	if current, err := repo.InspectAssignmentSeat(ctx, pod, AssignmentInstanceIdentity{
+		PlayerID: reservation.PlayerID, AssignmentID: reservation.AssignmentID,
+		InstanceUID: reservation.InstanceUID, ProtocolEpoch: reservation.ProtocolEpoch,
+		WriterEpoch: reservation.WriterEpoch, PlacementVersion: reservation.PlacementVersion,
+		PlacementOperationID: reservation.PlacementOperationID, SourceMatchID: reservation.SourceMatchID,
+	}); err != nil || !current.Connected || current.AdmissionID != newAdmissionID || current.AdmissionSeq != 20 {
+		t.Fatalf("replacement owner=%+v err=%v", current, err)
+	}
+}
+
+func TestSuccessorLeaseRotatesOnlyToNewerPlacementVersion(t *testing.T) {
+	for _, detached := range []bool{false, true} {
+		name := "connected"
+		if detached {
+			name = "detached"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			repo, _ := newAuthRepo(t)
+			pod := "pandora-hub-successor-rotate-" + name
+			now := time.Now().UnixMilli()
+			activateReady(t, repo, pod, now, 0)
+			now = time.Now().UnixMilli() + 1
+			old := capacityTestPlacedReservation(101, uuid.NewString(), now)
+			oldAdmissionID := uuid.NewString()
+			mustReserveCapacity(t, repo, pod, old, now)
+			if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), old,
+				oldAdmissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+				t.Fatalf("old admission=%+v err=%v", admitted, err)
+			}
+			mustReserveCapacity(t, repo, pod, old, now+2)
+			// Storage records may contain fields written by a newer binary.  Moving a
+			// successor to a newer placement capability must preserve those bytes.
+			unknown := []byte{0xa0, 0x06, 0x01} // field 100, varint 1
+			rawSuccessors, rawErr := repo.rdb.HGetAll(ctx, successorsKey(pod)).Result()
+			if rawErr != nil || len(rawSuccessors) != 1 {
+				t.Fatalf("successor before rotation=%d err=%v", len(rawSuccessors), rawErr)
+			}
+			for field, raw := range rawSuccessors {
+				record := &hubv1.HubReservationStorageRecord{}
+				if err := proto.Unmarshal([]byte(raw), record); err != nil {
+					t.Fatal(err)
+				}
+				record.ProtoReflect().SetUnknown(unknown)
+				payload, err := proto.Marshal(record)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := repo.rdb.HSet(ctx, successorsKey(pod), field, payload).Err(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if detached {
+				if departed, err := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(), old,
+					oldAdmissionID, 10, now+3, testTTL); err != nil || !departed.Departed {
+					t.Fatalf("old departure=%+v err=%v", departed, err)
+				}
+			}
+
+			fork := old
+			fork.PlacementOperationID = "22222222-2222-4222-8222-222222222222"
+			if result, err := repo.ReserveAssignment(ctx, pod, fork, now+4, 30_000, testTTL); err != nil ||
+				result.OK || result.Reason != "assignment-successor-conflict" {
+				t.Fatalf("same-version fork=%+v err=%v", result, err)
+			}
+			newer := old
+			newer.PlacementVersion++
+			newer.PlacementOperationID = "33333333-3333-4333-8333-333333333333"
+			if result, err := repo.ReserveAssignment(ctx, pod, newer, now+5, 30_000, testTTL); err != nil || !result.OK {
+				t.Fatalf("newer successor=%+v err=%v", result, err)
+			}
+			if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 1 {
+				t.Fatalf("rotated successor cardinality=%d", count)
+			}
+			expectedField, err := successorCapability(pod, newer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rotatedRaw, err := repo.rdb.HGet(ctx, successorsKey(pod), expectedField).Bytes()
+			if err != nil {
+				t.Fatalf("rotated successor capability missing: %v", err)
+			}
+			rotatedRecord := &hubv1.HubReservationStorageRecord{}
+			if err := proto.Unmarshal(rotatedRaw, rotatedRecord); err != nil {
+				t.Fatal(err)
+			}
+			if got := rotatedRecord.ProtoReflect().GetUnknown(); !bytes.Equal(got, unknown) {
+				t.Fatalf("rotation dropped unknown fields: got=%x want=%x", got, unknown)
+			}
+			if stale, staleErr := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), old,
+				uuid.NewString(), 20, now+6, testTTL); errcode.As(staleErr) != errcode.ErrUnauthorized || stale.Admitted {
+				t.Fatalf("stale placement admission=%+v err=%v", stale, staleErr)
+			}
+			if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), newer,
+				uuid.NewString(), 20, now+7, testTTL); err != nil || !admitted.Admitted || admitted.CapacityOccupancy != 1 {
+				t.Fatalf("newer placement admission=%+v err=%v", admitted, err)
+			}
+		})
+	}
+}
+
+func TestSuccessorLeaseExpiryAndReleaseCancellation(t *testing.T) {
+	t.Run("expiry-does-not-delete-live-owner", func(t *testing.T) {
+		ctx := context.Background()
+		repo, _ := newAuthRepo(t)
+		const pod = "pandora-hub-successor-expiry"
+		now := time.Now().UnixMilli()
+		activateReady(t, repo, pod, now, 0)
+		now = time.Now().UnixMilli() + 1
+		reservation := capacityTestPlacedReservation(101, uuid.NewString(), now)
+		oldAdmissionID := uuid.NewString()
+		mustReserveCapacity(t, repo, pod, reservation, now)
+		if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+			oldAdmissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+			t.Fatalf("old admission=%+v err=%v", admitted, err)
+		}
+		mustReserveCapacity(t, repo, pod, reservation, now+2)
+		rawSuccessors, err := repo.rdb.HGetAll(ctx, successorsKey(pod)).Result()
+		if err != nil || len(rawSuccessors) != 1 {
+			t.Fatalf("successors=%d err=%v", len(rawSuccessors), err)
+		}
+		for field, raw := range rawSuccessors {
+			record := &hubv1.HubReservationStorageRecord{}
+			if err := proto.Unmarshal([]byte(raw), record); err != nil {
+				t.Fatal(err)
+			}
+			record.ExpiresAtMs = time.Now().UnixMilli() - 1
+			payload, _ := proto.Marshal(record)
+			if err := repo.rdb.HSet(ctx, successorsKey(pod), field, payload).Err(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := repo.ActivateHeartbeat(ctx, pod, capacityTestCredential(),
+			activateInput(0, "ready", now+3)); err != nil {
+			t.Fatal(err)
+		}
+		if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 0 {
+			t.Fatalf("expired successor count=%d", count)
+		}
+		shard, _, _ := shardRepoFor(repo).GetShard(ctx, pod)
+		if shard.GetPlayerCount() != 1 || shard.GetConnectedOwnershipCount() != 1 || shard.GetReservedCount() != 0 {
+			t.Fatalf("successor expiry deleted live owner: %+v", shard)
+		}
+		if admission, admissionErr := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+			uuid.NewString(), 20, now+4, testTTL); errcode.As(admissionErr) != errcode.ErrUnauthorized || admission.Admitted {
+			t.Fatalf("admission without successor=%+v err=%v", admission, admissionErr)
+		}
+	})
+
+	for _, departureFirst := range []bool{false, true} {
+		name := "connected"
+		if departureFirst {
+			name = "detached"
+		}
+		t.Run("release-cancels-"+name+"-successor-without-lineage", func(t *testing.T) {
+			ctx := context.Background()
+			repo, _ := newAuthRepo(t)
+			pod := "pandora-hub-successor-release-" + name
+			now := time.Now().UnixMilli()
+			activateReady(t, repo, pod, now, 0)
+			now = time.Now().UnixMilli() + 1
+			reservation := capacityTestPlacedReservation(101, uuid.NewString(), now)
+			admissionID := uuid.NewString()
+			mustReserveCapacity(t, repo, pod, reservation, now)
+			if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+				admissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+				t.Fatalf("old admission=%+v err=%v", admitted, err)
+			}
+			mustReserveCapacity(t, repo, pod, reservation, now+2)
+			if departureFirst {
+				if departed, err := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(), reservation,
+					admissionID, 10, now+3, testTTL); err != nil || !departed.Departed {
+					t.Fatalf("old departure=%+v err=%v", departed, err)
+				}
+			}
+			// Deliberately omit placement lineage: rolling durable cleanup records
+			// may only retain the exact assignment/base instance owner.
+			expected := AssignmentInstanceIdentity{PlayerID: reservation.PlayerID,
+				AssignmentID: reservation.AssignmentID, InstanceUID: reservation.InstanceUID,
+				ProtocolEpoch: reservation.ProtocolEpoch, WriterEpoch: reservation.WriterEpoch}
+			result, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL)
+			if departureFirst {
+				if err != nil || !result.Released || result.DepartureRequired || result.Conflict {
+					t.Fatalf("detached release=%+v err=%v", result, err)
+				}
+			} else if err != nil || !result.DepartureRequired || result.Released || result.Conflict {
+				t.Fatalf("connected release=%+v err=%v", result, err)
+			}
+			if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 0 {
+				t.Fatalf("release did not cancel successor count=%d", count)
+			}
+			if !departureFirst {
+				if departed, err := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(), reservation,
+					admissionID, 10, now+4, testTTL); err != nil || !departed.Departed || departed.CapacityOccupancy != 0 {
+					t.Fatalf("post-cancel physical departure=%+v err=%v", departed, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSuccessorCleanupRejectsDuplicateCapabilities(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newAuthRepo(t)
+	const pod = "pandora-hub-successor-duplicate"
+	now := time.Now().UnixMilli()
+	activateReady(t, repo, pod, now, 0)
+	now = time.Now().UnixMilli() + 1
+	reservation := capacityTestPlacedReservation(101, uuid.NewString(), now)
+	mustReserveCapacity(t, repo, pod, reservation, now)
+	if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+		uuid.NewString(), 10, now+1, testTTL); err != nil || !admitted.Admitted {
+		t.Fatalf("old admission=%+v err=%v", admitted, err)
+	}
+	mustReserveCapacity(t, repo, pod, reservation, now+2)
+	rawSuccessors, _ := repo.rdb.HGetAll(ctx, successorsKey(pod)).Result()
+	var raw string
+	for _, value := range rawSuccessors {
+		raw = value
+	}
+	other := reservation
+	other.PlacementVersion++
+	other.PlacementOperationID = "22222222-2222-4222-8222-222222222222"
+	otherField, err := successorCapability(pod, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.rdb.HSet(ctx, successorsKey(pod), otherField, raw).Err(); err != nil {
+		t.Fatal(err)
+	}
+	expected := AssignmentInstanceIdentity{PlayerID: reservation.PlayerID,
+		AssignmentID: reservation.AssignmentID, InstanceUID: reservation.InstanceUID,
+		ProtocolEpoch: reservation.ProtocolEpoch, WriterEpoch: reservation.WriterEpoch}
+	if snapshot, err := repo.InspectAssignmentSeat(ctx, pod, expected); err != nil || !snapshot.Conflict {
+		t.Fatalf("duplicate inspect=%+v err=%v", snapshot, err)
+	}
+	if released, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL); err != nil ||
+		!released.Conflict || released.Released || released.DepartureRequired {
+		t.Fatalf("duplicate release=%+v err=%v", released, err)
+	}
+	if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 2 {
+		t.Fatalf("conflict mutated duplicate successors count=%d", count)
+	}
+}
+
+func TestSuccessorCleanupAllowsOlderBindingAfterBindCrash(t *testing.T) {
+	for _, detached := range []bool{false, true} {
+		name := "connected"
+		if detached {
+			name = "detached"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			repo, _ := newAuthRepo(t)
+			pod := "pandora-hub-successor-bind-crash-" + name
+			now := time.Now().UnixMilli()
+			activateReady(t, repo, pod, now, 0)
+			now = time.Now().UnixMilli() + 1
+			old := capacityTestPlacedReservation(101, uuid.NewString(), now)
+			admissionID := uuid.NewString()
+			mustReserveCapacity(t, repo, pod, old, now)
+			if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), old,
+				admissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+				t.Fatalf("old admission=%+v err=%v", admitted, err)
+			}
+			mustReserveCapacity(t, repo, pod, old, now+2)
+			if detached {
+				if departed, err := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(), old,
+					admissionID, 10, now+3, testTTL); err != nil || !departed.Departed {
+					t.Fatalf("old departure=%+v err=%v", departed, err)
+				}
+			}
+
+			// Simulate the crash window: assignment/placement v8 committed, while
+			// Redis still carries the exact same owner's pre-bind successor v7.
+			expected := AssignmentInstanceIdentity{PlayerID: old.PlayerID, AssignmentID: old.AssignmentID,
+				InstanceUID: old.InstanceUID, ProtocolEpoch: old.ProtocolEpoch, WriterEpoch: old.WriterEpoch,
+				PlacementVersion:     old.PlacementVersion + 1,
+				PlacementOperationID: "44444444-4444-4444-8444-444444444444", SourceMatchID: old.SourceMatchID}
+			snapshot, err := repo.InspectAssignmentSeat(ctx, pod, expected)
+			if err != nil || snapshot.Conflict || (detached && !snapshot.Reserved) || (!detached && !snapshot.Connected) {
+				t.Fatalf("bind-crash inspect=%+v err=%v", snapshot, err)
+			}
+			released, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL)
+			if detached {
+				if err != nil || !released.Released || released.Conflict || released.DepartureRequired {
+					t.Fatalf("detached bind-crash release=%+v err=%v", released, err)
+				}
+			} else {
+				if err != nil || released.Conflict || !released.DepartureRequired || released.Released {
+					t.Fatalf("connected bind-crash release=%+v err=%v", released, err)
+				}
+				if departed, departErr := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(), old,
+					admissionID, 10, now+4, testTTL); departErr != nil || !departed.Departed || departed.CapacityOccupancy != 0 {
+					t.Fatalf("bind-crash exact departure=%+v err=%v", departed, departErr)
+				}
+			}
+			if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 0 {
+				t.Fatalf("bind-crash cleanup retained stale successor count=%d", count)
+			}
+		})
+	}
+}
+
+func TestSuccessorCleanupIgnoresAndDeletesExpiredNewerBinding(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newAuthRepo(t)
+	const pod = "pandora-hub-successor-expired-newer"
+	now := time.Now().UnixMilli()
+	activateReady(t, repo, pod, now, 0)
+	now = time.Now().UnixMilli() + 1
+	old := capacityTestPlacedReservation(101, uuid.NewString(), now)
+	admissionID := uuid.NewString()
+	mustReserveCapacity(t, repo, pod, old, now)
+	if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), old,
+		admissionID, 10, now+1, testTTL); err != nil || !admitted.Admitted {
+		t.Fatalf("old admission=%+v err=%v", admitted, err)
+	}
+	newer := old
+	newer.PlacementVersion++
+	newer.PlacementOperationID = "55555555-5555-4555-8555-555555555555"
+	mustReserveCapacity(t, repo, pod, newer, now+2)
+	if departed, err := repo.AcknowledgeDeparture(ctx, pod, capacityTestCredential(), old,
+		admissionID, 10, now+3, testTTL); err != nil || !departed.Departed {
+		t.Fatalf("old departure=%+v err=%v", departed, err)
+	}
+	expected := AssignmentInstanceIdentity{PlayerID: old.PlayerID, AssignmentID: old.AssignmentID,
+		InstanceUID: old.InstanceUID, ProtocolEpoch: old.ProtocolEpoch, WriterEpoch: old.WriterEpoch,
+		PlacementVersion: old.PlacementVersion, PlacementOperationID: old.PlacementOperationID,
+		SourceMatchID: old.SourceMatchID}
+	if snapshot, err := repo.InspectAssignmentSeat(ctx, pod, expected); err != nil || !snapshot.Conflict {
+		t.Fatalf("live newer successor must conflict: snapshot=%+v err=%v", snapshot, err)
+	}
+	rawSuccessors, err := repo.rdb.HGetAll(ctx, successorsKey(pod)).Result()
+	if err != nil || len(rawSuccessors) != 1 {
+		t.Fatalf("newer successor=%d err=%v", len(rawSuccessors), err)
+	}
+	for field, raw := range rawSuccessors {
+		record := &hubv1.HubReservationStorageRecord{}
+		if err := proto.Unmarshal([]byte(raw), record); err != nil {
+			t.Fatal(err)
+		}
+		record.ExpiresAtMs = time.Now().UnixMilli() - 1
+		payload, err := proto.Marshal(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.rdb.HSet(ctx, successorsKey(pod), field, payload).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if snapshot, err := repo.InspectAssignmentSeat(ctx, pod, expected); err != nil ||
+		!snapshot.AlreadyAbsent || snapshot.Conflict || snapshot.Reserved {
+		t.Fatalf("expired newer successor must be logically absent: snapshot=%+v err=%v", snapshot, err)
+	}
+	if released, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL); err != nil ||
+		!released.Released || released.Conflict || released.DepartureRequired {
+		t.Fatalf("expired newer successor release=%+v err=%v", released, err)
+	}
+	if count, _ := repo.rdb.HLen(ctx, successorsKey(pod)).Result(); count != 0 {
+		t.Fatalf("expired newer successor was not deleted count=%d", count)
+	}
+}
+
+func TestSuccessorLoaderRejectsCapabilityFromAnotherPod(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newAuthRepo(t)
+	const pod = "pandora-hub-successor-pod-binding"
+	now := time.Now().UnixMilli()
+	activateReady(t, repo, pod, now, 0)
+	now = time.Now().UnixMilli() + 1
+	reservation := capacityTestPlacedReservation(101, uuid.NewString(), now)
+	mustReserveCapacity(t, repo, pod, reservation, now)
+	if admitted, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+		uuid.NewString(), 10, now+1, testTTL); err != nil || !admitted.Admitted {
+		t.Fatalf("admission=%+v err=%v", admitted, err)
+	}
+	mustReserveCapacity(t, repo, pod, reservation, now+2)
+	rawSuccessors, err := repo.rdb.HGetAll(ctx, successorsKey(pod)).Result()
+	if err != nil || len(rawSuccessors) != 1 {
+		t.Fatalf("successor=%d err=%v", len(rawSuccessors), err)
+	}
+	foreignField, err := successorCapability(pod+"-other", reservation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for oldField, raw := range rawSuccessors {
+		if err := repo.rdb.HDel(ctx, successorsKey(pod), oldField).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.rdb.HSet(ctx, successorsKey(pod), foreignField, raw).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repo.ReserveAssignment(ctx, pod, reservation, now+3, 30_000, testTTL); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("foreign-pod capability must fail closed: err=%v", err)
 	}
 }
 
@@ -473,6 +973,46 @@ func TestReleaseAssignmentSeatExactThreeStatesAndConflictIsReadOnly(t *testing.T
 				t.Fatalf("already-absent result=%+v err=%v", absent, err)
 			}
 		})
+	}
+}
+
+func TestReleaseConnectedOwnerConsumesOnlyExactUIDTeardownProof(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newAuthRepo(t)
+	const pod = "pandora-hub-exact-uid-teardown"
+	now := time.Now().UnixMilli()
+	activateReady(t, repo, pod, now, 0)
+	now = time.Now().UnixMilli() + 1
+	reservation := capacityTestReservation(101, uuid.NewString(), now)
+	mustReserveCapacity(t, repo, pod, reservation, now)
+	if admission, err := repo.AcknowledgeAdmission(ctx, pod, capacityTestCredential(), reservation,
+		uuid.NewString(), 1, now+2, testTTL); err != nil || !admission.Admitted {
+		t.Fatalf("admission=%+v err=%v", admission, err)
+	}
+	expected := AssignmentInstanceIdentity{PlayerID: reservation.PlayerID,
+		AssignmentID: reservation.AssignmentID, InstanceUID: reservation.InstanceUID,
+		ProtocolEpoch: reservation.ProtocolEpoch, WriterEpoch: reservation.WriterEpoch}
+
+	if err := repo.RecordInstanceTeardownProof(ctx, pod, "uid-other", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL); err != nil ||
+		!result.DepartureRequired || result.Released {
+		t.Fatalf("wrong UID proof authorized cleanup: result=%+v err=%v", result, err)
+	}
+	if err := repo.RecordInstanceTeardownProof(ctx, pod, reservation.InstanceUID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := repo.ReleaseAssignmentSeatExact(ctx, pod, expected, testTTL); err != nil ||
+		!result.Released || result.DepartureRequired || result.Conflict {
+		t.Fatalf("exact UID proof did not release owner: result=%+v err=%v", result, err)
+	}
+	if exists, _ := repo.rdb.HExists(ctx, sessionsKey(pod), reservation.AssignmentID).Result(); exists {
+		t.Fatal("exact torn-down UID session remained")
+	}
+	shard, _, err := shardRepoFor(repo).GetShard(ctx, pod)
+	if err != nil || shard.GetPlayerCount() != 0 || shard.GetConnectedOwnershipCount() != 0 {
+		t.Fatalf("teardown cleanup did not repair projection: shard=%+v err=%v", shard, err)
 	}
 }
 

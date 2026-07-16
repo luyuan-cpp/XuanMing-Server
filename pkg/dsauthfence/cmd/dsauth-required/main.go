@@ -20,6 +20,9 @@ func main() {
 	prefix := flag.String("prefix", dsauthfence.DefaultPrefix, "DS auth fence key prefix")
 	minEpoch := flag.Uint64("min-epoch", 1, "minimum accepted required writer epoch")
 	maxEpoch := flag.Uint64("max-epoch", uint64(dsauthfence.ProtocolEpochV2), "maximum accepted required writer epoch")
+	minPolicyGeneration := flag.Uint64("min-policy-generation", 1, "minimum accepted immutable required policy generation")
+	maxPolicyGeneration := flag.Uint64("max-policy-generation", uint64(dsauthfence.RequiredPolicyGenerationV3), "maximum accepted immutable required policy generation")
+	requireV3Record := flag.Bool("require-v3-activation-record", false, "require canonical same-transaction immutable V3 activation record/provenance")
 	timeout := flag.Duration("timeout", 10*time.Second, "linearizable read timeout")
 	output := flag.String("output", "text", "output format: text or json")
 	requireMTLS := flag.Bool("require-mtls", false, "require custom-CA mutual TLS for etcd")
@@ -49,6 +52,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	minPolicy, maxPolicy, err := checkedPolicyGenerationRange(*minPolicyGeneration, *maxPolicyGeneration)
+	if err != nil {
+		fatal(err)
+	}
 	client, err := dsauthfence.NewActivationClientWithSecurity(endpoints, *prefix, *timeout, dsauthfence.ClientSecurity{
 		RequireMTLS:         *requireMTLS,
 		CAFile:              *caFile,
@@ -73,17 +80,54 @@ func main() {
 	if err != nil {
 		fatal(fmt.Errorf("required writer epoch preflight failed: %w", err))
 	}
-	if err := validateRequiredEpoch(snapshot.Epoch, minAccepted, maxAccepted); err != nil {
+	if err := validateRequiredState(snapshot, minAccepted, maxAccepted, minPolicy, maxPolicy); err != nil {
 		fatal(err)
+	}
+	if *requireV3Record {
+		if snapshot.PolicyGeneration != dsauthfence.RequiredPolicyGenerationV3 {
+			fatal(fmt.Errorf("V3 activation record cannot be required for policy generation %d", snapshot.PolicyGeneration))
+		}
+		if err := client.VerifyRequiredPolicyV3ActivationRecord(ctx); err != nil {
+			fatal(fmt.Errorf("required V3 activation record preflight failed: %w", err))
+		}
 	}
 	if *output == "json" {
 		mustJSON(json.NewEncoder(os.Stdout).Encode(struct {
-			Epoch       uint32 `json:"epoch"`
-			ModRevision int64  `json:"mod_revision"`
-		}{Epoch: snapshot.Epoch, ModRevision: snapshot.ModRevision}))
+			Epoch            uint32 `json:"epoch"`
+			PolicyGeneration uint32 `json:"policy_generation"`
+			PolicyID         string `json:"policy_id"`
+			RawValue         string `json:"raw_value"`
+			ModRevision      int64  `json:"mod_revision"`
+		}{Epoch: snapshot.Epoch, PolicyGeneration: snapshot.PolicyGeneration,
+			PolicyID: snapshot.PolicyID, RawValue: snapshot.RawValue, ModRevision: snapshot.ModRevision}))
 		return
 	}
-	fmt.Printf("required_writer_epoch 只读预检通过: epoch=%d mod_revision=%d\n", snapshot.Epoch, snapshot.ModRevision)
+	fmt.Printf("required_writer_epoch 只读预检通过: epoch=%d policy_generation=%d policy_id=%q raw_value=%q mod_revision=%d\n",
+		snapshot.Epoch, snapshot.PolicyGeneration, snapshot.PolicyID, snapshot.RawValue, snapshot.ModRevision)
+}
+
+func checkedPolicyGenerationRange(minGeneration, maxGeneration uint64) (uint32, uint32, error) {
+	if minGeneration > math.MaxUint32 || maxGeneration > math.MaxUint32 {
+		return 0, 0, fmt.Errorf("accepted policy generation range exceeds uint32: %d..%d", minGeneration, maxGeneration)
+	}
+	minAccepted, maxAccepted := uint32(minGeneration), uint32(maxGeneration)
+	if minAccepted == 0 || maxAccepted == 0 || minAccepted > maxAccepted ||
+		maxAccepted > dsauthfence.RequiredPolicyGenerationV3 {
+		return 0, 0, fmt.Errorf("invalid accepted policy generation range: %d..%d", minAccepted, maxAccepted)
+	}
+	return minAccepted, maxAccepted, nil
+}
+
+func validateRequiredState(snapshot dsauthfence.RequiredSnapshot, minEpoch, maxEpoch,
+	minPolicyGeneration, maxPolicyGeneration uint32) error {
+	if err := validateRequiredEpoch(snapshot.Epoch, minEpoch, maxEpoch); err != nil {
+		return err
+	}
+	if snapshot.PolicyGeneration < minPolicyGeneration || snapshot.PolicyGeneration > maxPolicyGeneration {
+		return fmt.Errorf("required policy generation %d outside accepted range %d..%d",
+			snapshot.PolicyGeneration, minPolicyGeneration, maxPolicyGeneration)
+	}
+	return nil
 }
 
 func checkedEpochRange(minEpoch, maxEpoch uint64) (uint32, uint32, error) {

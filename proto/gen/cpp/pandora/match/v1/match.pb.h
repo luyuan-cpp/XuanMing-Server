@@ -318,6 +318,7 @@ enum MatchAllocationPhase : int {
   MATCH_ALLOCATION_PHASE_REQUESTING = 2,
   MATCH_ALLOCATION_PHASE_COMPLETED = 3,
   MATCH_ALLOCATION_PHASE_FAILED = 4,
+  MATCH_ALLOCATION_PHASE_ABORTING = 5,
   MatchAllocationPhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   MatchAllocationPhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -328,11 +329,11 @@ extern const uint32_t MatchAllocationPhase_internal_data_[];
 inline constexpr MatchAllocationPhase MatchAllocationPhase_MIN =
     static_cast<MatchAllocationPhase>(0);
 inline constexpr MatchAllocationPhase MatchAllocationPhase_MAX =
-    static_cast<MatchAllocationPhase>(4);
+    static_cast<MatchAllocationPhase>(5);
 [[nodiscard]] inline bool MatchAllocationPhase_IsValid(int value) {
-  return 0 <= value && value <= 4;
+  return 0 <= value && value <= 5;
 }
-inline constexpr int MatchAllocationPhase_ARRAYSIZE = 4 + 1;
+inline constexpr int MatchAllocationPhase_ARRAYSIZE = 5 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 MatchAllocationPhase_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(MatchAllocationPhase) {
@@ -347,7 +348,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& MatchAllocationPhase_Name(MatchAllocationPhase value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<MatchAllocationPhase_descriptor, 0, 4>(
+  return ::google::protobuf::internal::NameOfDenseEnum<MatchAllocationPhase_descriptor, 0, 5>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool MatchAllocationPhase_Parse(

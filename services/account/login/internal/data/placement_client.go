@@ -30,23 +30,25 @@ type BattlePlacementAdmission struct {
 }
 
 type PlacementSnapshot struct {
-	Found           bool
-	CurrentRoute    locatorv1.PlacementRoute
-	TargetRoute     locatorv1.PlacementRoute
-	TransitionState locatorv1.PlacementTransitionState
-	Version         uint64
-	OperationID     string
-	MatchID         uint64
-	TargetMatchID   uint64
-	SourceMatchID   uint64
-	TargetBound     bool
-	LeaseDeadlineMs int64
-	ProofType       locatorv1.PlacementProofType
-	ProofID         string
-	Target          placement.Target
-	RetargetCount   uint32
+	Found               bool
+	CurrentRoute        locatorv1.PlacementRoute
+	TargetRoute         locatorv1.PlacementRoute
+	TransitionState     locatorv1.PlacementTransitionState
+	Version             uint64
+	OperationID         string
+	MatchID             uint64
+	TargetMatchID       uint64
+	SourceMatchID       uint64
+	TargetBound         bool
+	LeaseDeadlineMs     int64
+	ProofType           locatorv1.PlacementProofType
+	ProofID             string
+	Target              placement.Target
+	SourceBinding       placement.Binding
+	SourceTarget        placement.Target
+	RetargetCount       uint32
 	LastRetargetProofID string
-	LastRetargetReason locatorv1.PlacementTargetUnavailableReason
+	LastRetargetReason  locatorv1.PlacementTargetUnavailableReason
 }
 
 func (s PlacementSnapshot) HubBinding() (placement.Binding, bool) {
@@ -196,7 +198,12 @@ func (g *GrpcPlacementChecker) GetPlacement(ctx context.Context, playerID uint64
 		LastRetargetReason: rec.GetLastRetargetReason(),
 		Target: placement.Target{PodName: rec.GetDsPodName(), InstanceUID: rec.GetDsInstanceUid(),
 			InstanceEpoch: rec.GetDsInstanceEpoch(), AssignmentID: rec.GetHubAssignmentId(),
-			AllocationID: rec.GetAllocationId(), ReleaseTrack: rec.GetReleaseTrack()}}, nil
+			AllocationID: rec.GetAllocationId(), ReleaseTrack: rec.GetReleaseTrack()},
+		SourceBinding: placement.Binding{Version: rec.GetSourcePlacementVersion(),
+			OperationID: rec.GetSourceOperationId()},
+		SourceTarget: placement.Target{PodName: rec.GetSourceDsPodName(), InstanceUID: rec.GetSourceDsInstanceUid(),
+			InstanceEpoch: rec.GetSourceDsInstanceEpoch(), AssignmentID: rec.GetSourceHubAssignmentId(),
+			AllocationID: rec.GetSourceAllocationId(), ReleaseTrack: rec.GetSourceReleaseTrack()}}, nil
 }
 
 func (g *GrpcPlacementChecker) CheckHubAdmission(ctx context.Context, in HubPlacementAdmission) error {

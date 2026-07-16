@@ -34,11 +34,15 @@ rules:
   - apiGroups: ["allocation.agones.dev"]
     resources: ["gameserverallocations"]
     verbs: ["create"]
-  # ds_allocator Release / hub_allocator 分片发现
+  # ds_allocator：按名称读取 Agones 关联 Pod UID，作为精确释放/防 ABA 身份的一部分。
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+  # ds_allocator Release / allocation_id DeleteCollection reconciliation / hub_allocator 分片发现
   # patch:hub_allocator 给 ready Hub DS 写 pandora.dev/ds-token annotation(DS 回调令牌,审核 P1 #1)
   - apiGroups: ["agones.dev"]
     resources: ["gameservers"]
-    verbs: ["get", "list", "delete", "patch"]
+    verbs: ["get", "list", "delete", "deletecollection", "patch"]
   # hub_allocator 自动扩缩容 / 整合时需读写 Fleet spec.replicas
   - apiGroups: ["agones.dev"]
     resources: ["fleets"]

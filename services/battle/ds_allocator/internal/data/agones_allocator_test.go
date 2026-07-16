@@ -37,6 +37,16 @@ func newTestAllocator(t *testing.T, serverURL string) *AgonesGameServerAllocator
 	return a
 }
 
+func writeOwnedPod(w http.ResponseWriter, name, podUID, gameServerUID string) {
+	_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+		"name": name, "uid": podUID, "resourceVersion": "201",
+		"ownerReferences": []map[string]any{{
+			"apiVersion": "agones.dev/v1", "kind": "GameServer", "name": name,
+			"uid": gameServerUID, "controller": true,
+		}},
+	}})
+}
+
 func TestNewAgonesGameServerAllocator_RequiresFleet(t *testing.T) {
 	if _, err := NewAgonesGameServerAllocator(conf.AgonesConf{Enabled: true}); err == nil {
 		t.Fatal("expected error when fleet_name empty, got nil")
@@ -167,6 +177,10 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 				"address": "10.0.0.8", "ports": []map[string]any{{"port": 7777}},
 			}})
 		case http.MethodGet:
+			if strings.Contains(r.URL.Path, "/pods/") {
+				writeOwnedPod(w, "battle-fleet-auth1", "pod-uid-auth1", "uid-auth1")
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
 				"name": "battle-fleet-auth1", "uid": "uid-auth1", "resourceVersion": "101",
 				"labels": map[string]string{
@@ -197,8 +211,126 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 		t.Fatal("Model B signed token before selected GameServer UID was known")
 	}
 	if got.PodName != "battle-fleet-auth1" || got.Addr != "10.0.0.8:7777" ||
-		got.InstanceUID != "uid-auth1" || got.ResourceVersion != "101" || got.ReleaseTrack != "stable" {
+		got.InstanceUID != "uid-auth1" || got.PodUID != "pod-uid-auth1" ||
+		got.ResourceVersion != "101" || got.ReleaseTrack != "stable" {
 		t.Fatalf("authoritative allocation mismatch: %+v", got)
+	}
+}
+
+func TestAuthoritativeAllocationRejectsVersion4WithNonRFC4122Variant(t *testing.T) {
+	a := &AgonesGameServerAllocator{}
+	const nonRFCVariant = "11111111-1111-4111-0111-111111111111"
+	if _, err := a.AllocateAuthoritative(context.Background(), 42, nonRFCVariant,
+		[]uint64{1}, 1, "ranked", "stable"); err == nil {
+		t.Fatal("AllocateAuthoritative accepted UUIDv4 with non-RFC4122 variant")
+	}
+	if _, found, err := a.ResolveAllocationByID(context.Background(), 42, nonRFCVariant,
+		[]uint64{1}, 1, "ranked"); err == nil || found {
+		t.Fatalf("ResolveAllocationByID accepted UUIDv4 with non-RFC4122 variant: found=%v err=%v", found, err)
+	}
+	if _, err := a.ResolveExpectedPodUID(context.Background(), &AuthoritativeGameServerAllocation{
+		PodName: "pod-1", InstanceUID: "uid-1", AllocationID: nonRFCVariant,
+	}); err == nil {
+		t.Fatal("ResolveExpectedPodUID accepted UUIDv4 with non-RFC4122 variant")
+	}
+}
+
+func TestResolveExpectedPodUIDRequiresExactGameServerAndOwnedPod(t *testing.T) {
+	const allocationID = "11111111-1111-4111-8111-111111111111"
+	var gets atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("preflight side effect method=%s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		gets.Add(1)
+		if strings.Contains(r.URL.Path, "/pods/") {
+			writeOwnedPod(w, "battle-legacy-1", "pod-uid-legacy-1", "gs-uid-legacy-1")
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+			"name": "battle-legacy-1", "uid": "gs-uid-legacy-1", "resourceVersion": "101",
+			"labels":      map[string]string{"pandora.dev/allocation-id": allocationID},
+			"annotations": map[string]string{"pandora.dev/allocation-id": allocationID},
+		}})
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	podUID, err := a.ResolveExpectedPodUID(context.Background(), &AuthoritativeGameServerAllocation{
+		PodName: "battle-legacy-1", InstanceUID: "gs-uid-legacy-1", AllocationID: allocationID,
+	})
+	if err != nil || podUID != "pod-uid-legacy-1" {
+		t.Fatalf("exact pod UID preflight: pod_uid=%q err=%v", podUID, err)
+	}
+	if gets.Load() != 2 {
+		t.Fatalf("exact preflight GET calls=%d want 2", gets.Load())
+	}
+}
+
+func TestResolveExpectedPodUIDRejectsMissingOrRecreatedIdentity(t *testing.T) {
+	const allocationID = "22222222-2222-4222-8222-222222222222"
+	tests := map[string]struct {
+		gameServerStatus     int
+		gameServerUID        string
+		labelAllocation      string
+		annotationAllocation string
+		podStatus            int
+		podOwnerUID          string
+	}{
+		"gameserver missing":          {gameServerStatus: http.StatusNotFound},
+		"same name new uid":           {gameServerStatus: http.StatusOK, gameServerUID: "gs-new", labelAllocation: allocationID, podStatus: http.StatusOK, podOwnerUID: "gs-new"},
+		"allocation label drift":      {gameServerStatus: http.StatusOK, gameServerUID: "gs-old", labelAllocation: "33333333-3333-4333-8333-333333333333", podStatus: http.StatusOK, podOwnerUID: "gs-old"},
+		"allocation annotation drift": {gameServerStatus: http.StatusOK, gameServerUID: "gs-old", labelAllocation: allocationID, annotationAllocation: "33333333-3333-4333-8333-333333333333", podStatus: http.StatusOK, podOwnerUID: "gs-old"},
+		"owned pod missing":           {gameServerStatus: http.StatusOK, gameServerUID: "gs-old", labelAllocation: allocationID, podStatus: http.StatusNotFound},
+		"pod owner uid drift":         {gameServerStatus: http.StatusOK, gameServerUID: "gs-old", labelAllocation: allocationID, podStatus: http.StatusOK, podOwnerUID: "gs-new"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Errorf("preflight issued side effect method=%s", r.Method)
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					return
+				}
+				if strings.Contains(r.URL.Path, "/pods/") {
+					status := tc.podStatus
+					if status == 0 {
+						status = http.StatusOK
+					}
+					if status != http.StatusOK {
+						w.WriteHeader(status)
+						return
+					}
+					writeOwnedPod(w, "battle-legacy-2", "pod-current", tc.podOwnerUID)
+					return
+				}
+				status := tc.gameServerStatus
+				if status == 0 {
+					status = http.StatusOK
+				}
+				if status != http.StatusOK {
+					w.WriteHeader(status)
+					return
+				}
+				annotationAllocation := tc.annotationAllocation
+				if annotationAllocation == "" {
+					annotationAllocation = allocationID
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+					"name": "battle-legacy-2", "uid": tc.gameServerUID, "resourceVersion": "101",
+					"labels":      map[string]string{"pandora.dev/allocation-id": tc.labelAllocation},
+					"annotations": map[string]string{"pandora.dev/allocation-id": annotationAllocation},
+				}})
+			}))
+			defer srv.Close()
+			a := newTestAllocator(t, srv.URL)
+			if podUID, err := a.ResolveExpectedPodUID(context.Background(), &AuthoritativeGameServerAllocation{
+				PodName: "battle-legacy-2", InstanceUID: "gs-old", AllocationID: allocationID,
+			}); err == nil || podUID != "" {
+				t.Fatalf("unsafe legacy identity accepted: pod_uid=%q err=%v", podUID, err)
+			}
+		})
 	}
 }
 
@@ -233,6 +365,93 @@ func TestAllocateAuthoritative_POSTUnknownReturnsAllocationFence(t *testing.T) {
 	}
 }
 
+func TestResolveAllocationByID_UniqueExactGameServerAndPod(t *testing.T) {
+	const allocationID = "44444444-4444-4444-8444-444444444444"
+	var sawSelector atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/pods/") {
+			writeOwnedPod(w, "battle-reconcile-1", "pod-uid-reconcile-1", "gs-uid-reconcile-1")
+			return
+		}
+		if r.Method != http.MethodGet ||
+			r.URL.Path != "/apis/agones.dev/v1/namespaces/pandora/gameservers" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		if r.URL.Query().Get("labelSelector") == "pandora.dev/allocation-id="+allocationID {
+			sawSelector.Store(true)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{
+			"metadata": map[string]any{
+				"name": "battle-reconcile-1", "uid": "gs-uid-reconcile-1", "resourceVersion": "301",
+				"labels": map[string]string{
+					"pandora.dev/match-id": "42", "pandora.dev/map-id": "1",
+					"pandora.dev/game-mode": "ranked", "pandora.dev/allocation-id": allocationID,
+					"pandora.dev/release-track": "stable",
+				},
+				"annotations": map[string]string{
+					"pandora.dev/allocation-id": allocationID, "pandora.dev/roster": "1,2",
+					"pandora.dev/release-track": "stable",
+				},
+			},
+		}}})
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	got, found, err := a.ResolveAllocationByID(context.Background(), 42, allocationID,
+		[]uint64{2, 1, 2}, 1, "ranked")
+	if err != nil || !found || got == nil {
+		t.Fatalf("ResolveAllocationByID found=%t allocation=%+v err=%v", found, got, err)
+	}
+	if !sawSelector.Load() || got.PodName != "battle-reconcile-1" ||
+		got.InstanceUID != "gs-uid-reconcile-1" || got.PodUID != "pod-uid-reconcile-1" ||
+		got.ResourceVersion != "301" || got.AllocationID != allocationID || got.ReleaseTrack != "stable" {
+		t.Fatalf("resolved exact allocation=%+v selector=%t", got, sawSelector.Load())
+	}
+}
+
+func TestResolveAllocationByID_EmptyIsAuthoritativeAbsence(t *testing.T) {
+	const allocationID = "55555555-5555-4555-8555-555555555555"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{}})
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	got, found, err := a.ResolveAllocationByID(context.Background(), 43, allocationID,
+		[]uint64{1}, 1, "ranked")
+	if err != nil || found || got != nil {
+		t.Fatalf("empty allocation resolution found=%t allocation=%+v err=%v", found, got, err)
+	}
+}
+
+func TestResolveAllocationByID_MultipleOrAPIUnknownFailClosed(t *testing.T) {
+	const allocationID = "66666666-6666-4666-8666-666666666666"
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   any
+	}{
+		{name: "multiple", status: http.StatusOK, body: map[string]any{"items": []any{
+			map[string]any{"metadata": map[string]any{"name": "a"}},
+			map[string]any{"metadata": map[string]any{"name": "b"}},
+		}}},
+		{name: "api_unknown", status: http.StatusServiceUnavailable, body: map[string]any{"error": "retry"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_ = json.NewEncoder(w).Encode(tc.body)
+			}))
+			defer srv.Close()
+			a := newTestAllocator(t, srv.URL)
+			if got, found, err := a.ResolveAllocationByID(context.Background(), 44, allocationID,
+				[]uint64{1}, 1, "ranked"); err == nil || found || got != nil {
+				t.Fatalf("ambiguous/unknown result found=%t allocation=%+v err=%v", found, got, err)
+			}
+		})
+	}
+}
+
 func TestAllocateAuthoritative_CanaryNoCapacityFallsBackAndPersistsGETTrack(t *testing.T) {
 	const allocationID = "33333333-3333-4333-8333-333333333333"
 	var posts atomic.Int32
@@ -258,6 +477,10 @@ func TestAllocateAuthoritative_CanaryNoCapacityFallsBackAndPersistsGETTrack(t *t
 				"ports": []map[string]any{{"port": 7777}},
 			}})
 		case http.MethodGet:
+			if strings.Contains(r.URL.Path, "/pods/") {
+				writeOwnedPod(w, "battle-stable-1", "pod-uid-stable-1", "uid-stable-1")
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
 				"name": "battle-stable-1", "uid": "uid-stable-1", "resourceVersion": "7",
 				"labels": map[string]string{
@@ -530,6 +753,10 @@ func TestAgonesRelease_OK(t *testing.T) {
 func TestAgonesReleaseExpected_UsesUIDPrecondition(t *testing.T) {
 	var gotUID string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.Error(w, "gone", http.StatusNotFound)
+			return
+		}
 		var body struct {
 			Preconditions struct {
 				UID string `json:"uid"`
@@ -542,12 +769,32 @@ func TestAgonesReleaseExpected_UsesUIDPrecondition(t *testing.T) {
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
 	if err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
-		PodName: "battle-fleet-abc12", InstanceUID: "uid-old",
+		PodName: "battle-fleet-abc12", InstanceUID: "uid-old", PodUID: "pod-uid-old",
 	}); err != nil {
 		t.Fatalf("ReleaseExpected: %v", err)
 	}
 	if gotUID != "uid-old" {
 		t.Fatalf("delete uid precondition=%q, want uid-old", gotUID)
+	}
+}
+
+func TestAgonesReleaseExpected_MissingDurablePodUIDHasZeroDeleteSideEffects(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	a := newTestAllocator(t, srv.URL)
+	err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
+		PodName: "battle-fleet-legacy", InstanceUID: "uid-old",
+	})
+	if err == nil || errcode.As(err) != errcode.ErrDSAllocationFailed {
+		t.Fatalf("missing durable Pod UID err=%v code=%v", err, errcode.As(err))
+	}
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("missing durable Pod UID made %d Kubernetes requests; want zero", got)
 	}
 }
 
@@ -557,10 +804,68 @@ func TestAgonesReleaseExpected_UIDConflictDoesNotSucceed(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
+	a.allocateTimeout = 20 * time.Millisecond
 	if err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
-		PodName: "battle-fleet-rebuilt", InstanceUID: "uid-old",
+		PodName: "battle-fleet-rebuilt", InstanceUID: "uid-old", PodUID: "pod-uid-old",
 	}); err == nil {
 		t.Fatal("same-name rebuilt GameServer UID conflict must not be treated as released")
+	}
+}
+
+func TestAgonesReleaseExpected_2xxWaitsForGameServerAndPodUIDGone(t *testing.T) {
+	var deleted atomic.Bool
+	var gets atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleted.Store(true)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		call := gets.Add(1)
+		// 删除请求后的第一轮 GET 仍看到 exact old UIDs；这不能
+		// 落 teardown proof。后续两个对象都 404 才返回成功。
+		if call <= 2 {
+			uid := "uid-old"
+			if strings.Contains(r.URL.Path, "/pods/") {
+				uid = "pod-uid-old"
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"uid": uid}})
+			return
+		}
+		http.Error(w, "gone", http.StatusNotFound)
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	a.allocateTimeout = 500 * time.Millisecond
+	if err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
+		PodName: "battle-fleet-abc12", InstanceUID: "uid-old", PodUID: "pod-uid-old",
+	}); err != nil {
+		t.Fatalf("ReleaseExpected: %v", err)
+	}
+	if !deleted.Load() || gets.Load() < 4 {
+		t.Fatalf("delete=%t get_calls=%d want post-delete polling", deleted.Load(), gets.Load())
+	}
+}
+
+func TestAgonesReleaseExpected_2xxButOldPodStillExistsFailsClosed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		uid := "uid-old"
+		if strings.Contains(r.URL.Path, "/pods/") {
+			uid = "pod-uid-old"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"uid": uid}})
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	a.allocateTimeout = 20 * time.Millisecond
+	if err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
+		PodName: "battle-fleet-abc12", InstanceUID: "uid-old", PodUID: "pod-uid-old",
+	}); err == nil {
+		t.Fatal("DELETE 2xx while exact old Pod UID remains must fail closed")
 	}
 }
 
@@ -582,12 +887,12 @@ func TestAgonesReleaseExpected_UnknownUIDUsesAllocationLabel(t *testing.T) {
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
 	if err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
-		PodName: "do-not-delete-by-name", AllocationID: "alloc-42",
+		PodName: "do-not-delete-by-name", AllocationID: "28888c9f-0289-47dd-855f-55ff163e70a0",
 	}); err != nil {
 		t.Fatalf("ReleaseExpected by allocation label: %v", err)
 	}
 	if gotPath != "/apis/agones.dev/v1/namespaces/pandora/gameservers" ||
-		gotSelector != "pandora.dev/allocation-id=alloc-42" {
+		gotSelector != "pandora.dev/allocation-id=28888c9f-0289-47dd-855f-55ff163e70a0" {
 		t.Fatalf("collection delete path=%q selector=%q", gotPath, gotSelector)
 	}
 }
@@ -605,7 +910,7 @@ func TestAgonesReleaseExpected_UnknownUIDRequiresEmptyListConfirmation(t *testin
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
 	if err := a.ReleaseExpected(context.Background(), &AuthoritativeGameServerAllocation{
-		AllocationID: "alloc-still-there",
+		AllocationID: "5c51f910-87b8-4bb3-8629-06d01a09ab09",
 	}); err == nil {
 		t.Fatal("2xx DeleteCollection with remaining object must fail closed")
 	}

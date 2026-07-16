@@ -45,6 +45,19 @@ func signedIncoming(t *testing.T, signer *Signer, method string, subject uint64)
 	return metadata.NewIncomingContext(context.Background(), md.Copy())
 }
 
+func signedIncomingWithPayload(t *testing.T, signer *Signer, method string, subject uint64, payload []byte) context.Context {
+	t.Helper()
+	out, err := signer.SignContextWithPayload(context.Background(), method, subject, payload)
+	if err != nil {
+		t.Fatalf("SignContextWithPayload: %v", err)
+	}
+	md, ok := metadata.FromOutgoingContext(out)
+	if !ok {
+		t.Fatal("payload-signed context has no outgoing metadata")
+	}
+	return metadata.NewIncomingContext(context.Background(), md.Copy())
+}
+
 func newAuthPair(t *testing.T) (*Signer, *Verifier, *memoryReplayStore) {
 	t.Helper()
 	store := &memoryReplayStore{seen: map[string]struct{}{}}
@@ -148,5 +161,48 @@ func TestSignerDoesNotForwardPlayerCredential(t *testing.T) {
 	md, _ := metadata.FromOutgoingContext(signed)
 	if len(md.Get("authorization")) != 0 || len(md.Get("x-pandora-player-id")) != 0 {
 		t.Fatal("player credential leaked into internal RPC metadata")
+	}
+}
+
+func TestVerifyWithPayloadBindsCanonicalBodyBeforeReplayWrite(t *testing.T) {
+	signer, verifier, store := newAuthPair(t)
+	payload := []byte("pandora-battle-allocation-abort-v1\n42\nop-a\npod-a\nuid-a\n1\nalloc-a\nstable")
+	ctx := signedIncomingWithPayload(t, signer, testMethod, 42, payload)
+
+	mutated := append([]byte(nil), payload...)
+	mutated[len(mutated)-1] = 'y'
+	if err := verifier.VerifyWithPayload(ctx, testMethod, 42, mutated); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("mutated payload error=%v, want ErrUnauthorized", err)
+	}
+	if len(store.seen) != 0 {
+		t.Fatal("mutated payload consumed replay nonce")
+	}
+	if err := verifier.VerifyWithPayload(ctx, testMethod, 42, payload); err != nil {
+		t.Fatalf("exact payload VerifyWithPayload: %v", err)
+	}
+	if err := verifier.VerifyWithPayload(ctx, testMethod, 42, payload); !errors.Is(err, ErrReplay) {
+		t.Fatalf("payload replay error=%v, want ErrReplay", err)
+	}
+}
+
+func TestPayloadCredentialCannotDowngradeToPlainVerify(t *testing.T) {
+	signer, verifier, store := newAuthPair(t)
+	ctx := signedIncomingWithPayload(t, signer, testMethod, 42, []byte("canonical-body"))
+	if err := verifier.Verify(ctx, testMethod, 42); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("downgrade error=%v, want ErrUnauthorized", err)
+	}
+	if len(store.seen) != 0 {
+		t.Fatal("downgrade attempt consumed replay nonce")
+	}
+}
+
+func TestPlainCredentialCannotUpgradeToPayloadVerify(t *testing.T) {
+	signer, verifier, store := newAuthPair(t)
+	ctx := signedIncoming(t, signer, testMethod, 42)
+	if err := verifier.VerifyWithPayload(ctx, testMethod, 42, []byte("canonical-body")); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("upgrade error=%v, want ErrUnauthorized", err)
+	}
+	if len(store.seen) != 0 {
+		t.Fatal("upgrade attempt consumed replay nonce")
 	}
 }

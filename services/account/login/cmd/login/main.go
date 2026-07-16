@@ -41,6 +41,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/redisx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
+	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
 	"github.com/luyuancpp/pandora/services/account/login/internal/biz"
 	"github.com/luyuancpp/pandora/services/account/login/internal/conf"
@@ -161,6 +162,13 @@ func main() {
 		}
 	}()
 
+	battleDeparture, battleAllocatorConn, battleAllocatorMode := mustBuildBattleDepartureCoordinator(&cfg, helper)
+	defer func() {
+		if battleAllocatorConn != nil {
+			_ = battleAllocatorConn.Close()
+		}
+	}()
+
 	// Hub allocator 的 v2 票与 Session/legacy HS256 是独立信任域。Login 主登录链和
 	// VerifyDSTicket 诊断链共用同一份完整 overlap JWKS verifier，但分别显式注入各自 usecase。
 	var v2Verifier *auth.DSTicketVerifier
@@ -186,6 +194,7 @@ func main() {
 	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, v2Verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	loginUC.SetMatchResumeReader(matchResumeReader)
+	loginUC.SetBattleDepartureCoordinator(battleDeparture)
 	proofSecret := os.Getenv("PANDORA_PLACEMENT_ACCOUNT_BOOTSTRAP_SECRET")
 	if proofSecret == "" {
 		proofSecret = cfg.Login.PlacementBootstrapProofSecret
@@ -300,6 +309,7 @@ func main() {
 		"locator_notifier", locatorMode,
 		"hub_assigner", hubMode,
 		"match_resume_reader", matchMode,
+		"battle_departure_coordinator", battleAllocatorMode,
 		"require_hub_assignment_binding", cfg.Login.RequireHubAssignmentBinding,
 		"ds_auth_mode", cfg.DSAuth.Mode,
 		"ds_auth_authority_mode", cfg.DSAuth.AuthorityMode,
@@ -443,6 +453,18 @@ func mustBuildMatchResumeReader(cfg *conf.Config, h kratosHelper) (data.MatchRes
 	conn := grpcclient.MustDialInsecure(addr)
 	h.Infow("msg", "match_resume_reader_dial_ok", "addr", addr)
 	return data.NewGrpcMatchResumeReader(conn, signer), conn, "grpc"
+}
+
+func mustBuildBattleDepartureCoordinator(cfg *conf.Config, h kratosHelper) (data.BattleDepartureCoordinator, locatorConnLike, string) {
+	addr := cfg.Login.BattleAllocator.Addr
+	if addr == "" {
+		h.Warnw("msg", "battle_departure_coordinator_disabled_in_config",
+			"hint", "placement enforce requires login.battle_allocator.addr")
+		return nil, nil, "disabled"
+	}
+	conn := grpcclient.MustDialInsecure(addr)
+	h.Infow("msg", "battle_departure_coordinator_dial_ok", "addr", addr)
+	return data.NewGrpcBattleDepartureCoordinator(dsv1.NewDSAllocatorServiceClient(conn)), conn, "grpc"
 }
 
 // kratosHelper 是 *klog.Helper 的简化接口,避免 main.go 导出泛型。

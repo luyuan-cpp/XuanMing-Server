@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
@@ -42,12 +43,34 @@ func (f *fakePlacementClient) BeginPlacementTransition(_ context.Context, req *l
 		return &locatorv1.BeginPlacementTransitionResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
 	}
 	if rec.GetTransitionState() == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE {
+		rec.SourcePlacementVersion = rec.GetVersion()
+		rec.SourceOperationId = rec.GetOperationId()
+		rec.SourceDsPodName = rec.GetDsPodName()
+		rec.SourceDsInstanceUid = rec.GetDsInstanceUid()
+		rec.SourceDsInstanceEpoch = rec.GetDsInstanceEpoch()
+		rec.SourceHubAssignmentId = rec.GetHubAssignmentId()
+		rec.SourceAllocationId = rec.GetAllocationId()
+		rec.SourceReleaseTrack = rec.GetReleaseTrack()
 		rec.Version++
 		rec.TargetRoute = locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE
 		rec.TransitionState = locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING
 		rec.OperationId = req.GetOperationId()
+		rec.SourceMatchId = req.GetSourceMatchId()
 		rec.TargetMatchId = req.GetTargetMatchId()
+		rec.ProofType = req.GetProofType()
+		rec.ProofId = req.GetProofId()
+		rec.AdmissionId = ""
+		rec.DsPodName = ""
+		rec.DsInstanceUid = ""
+		rec.DsInstanceEpoch = 0
+		rec.HubAssignmentId = ""
+		rec.AllocationId = ""
+		rec.ReleaseTrack = ""
+		rec.SourceDepartureConfirmed = false
+		rec.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED
+		rec.SourceDepartureProofId = ""
 	}
+	rec.UpdatedAtMs = time.Now().UnixMilli()
 	rec.LeaseDeadlineMs = req.GetLeaseDeadlineMs()
 	return &locatorv1.BeginPlacementTransitionResponse{Code: commonv1.ErrCode_OK,
 		Placement: proto.Clone(rec).(*locatorv1.PlayerPlacementStorageRecord)}, nil
@@ -71,10 +94,8 @@ func TestPrepareBattlePlacementBindsFullTargetAndRenewsSameOperation(t *testing.
 		t.Fatal(err)
 	}
 	fake := &fakePlacementClient{signer: signer, records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{
-		1: {PlayerId: 1, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-			TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE, Version: 7},
-		2: {PlayerId: 2, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
-			TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE, Version: 11},
+		1: exactHubPlacement(1, 7),
+		2: exactHubPlacement(2, 11),
 	}}
 	coordinator := NewGrpcPlacementCoordinator(fake, signer, 30*time.Minute)
 	opID := uuid.NewString()
@@ -99,6 +120,7 @@ func TestPrepareBattlePlacementBindsFullTargetAndRenewsSameOperation(t *testing.
 		}
 	}
 	// 同 operation 重放必须先 Begin 续租，再幂等 Bind；不能因旧 pending 卡死。
+	fake.records[1].UpdatedAtMs = time.Now().Add(-2 * time.Minute).UnixMilli()
 	fake.records[1].LeaseDeadlineMs = time.Now().Add(-time.Minute).UnixMilli()
 	if _, err := coordinator.PrepareBattlePlacement(context.Background(), opID, 99, []uint64{1}, allocation); err != nil {
 		t.Fatalf("retry same operation: %v", err)
@@ -106,5 +128,170 @@ func TestPrepareBattlePlacementBindsFullTargetAndRenewsSameOperation(t *testing.
 	if fake.records[1].GetLeaseDeadlineMs() <= time.Now().UnixMilli() || fake.beginCalls != 3 || fake.bindCalls != 3 {
 		t.Fatalf("same operation was not renewed/rebound: deadline=%d begin=%d bind=%d",
 			fake.records[1].GetLeaseDeadlineMs(), fake.beginCalls, fake.bindCalls)
+	}
+}
+
+func exactHubPlacement(playerID, version uint64) *locatorv1.PlayerPlacementStorageRecord {
+	return &locatorv1.PlayerPlacementStorageRecord{
+		PlayerId: playerID, CurrentRoute: locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE,
+		Version:         version, OperationId: uuid.NewString(), DsPodName: "hub-a", DsInstanceUid: "hub-uid-a",
+		DsInstanceEpoch: 3, HubAssignmentId: uuid.NewString(), ReleaseTrack: "stable",
+		UpdatedAtMs: time.Now().Add(-time.Minute).UnixMilli(),
+	}
+}
+
+func exactUnboundBattlePending(playerID, matchID uint64, operationID string) *locatorv1.PlayerPlacementStorageRecord {
+	source := exactHubPlacement(playerID, 7)
+	now := time.Now()
+	return &locatorv1.PlayerPlacementStorageRecord{
+		PlayerId:        playerID,
+		CurrentRoute:    locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB,
+		TargetRoute:     locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE,
+		TransitionState: locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING,
+		Version:         8, OperationId: operationID, TargetMatchId: matchID,
+		UpdatedAtMs: now.UnixMilli(), LeaseDeadlineMs: now.Add(30 * time.Minute).UnixMilli(),
+		ProofType:              locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_MATCH_START,
+		ProofId:                operationID,
+		SourcePlacementVersion: source.GetVersion(), SourceOperationId: source.GetOperationId(),
+		SourceDsPodName: source.GetDsPodName(), SourceDsInstanceUid: source.GetDsInstanceUid(),
+		SourceDsInstanceEpoch: source.GetDsInstanceEpoch(),
+		SourceHubAssignmentId: source.GetHubAssignmentId(), SourceReleaseTrack: source.GetReleaseTrack(),
+	}
+}
+
+func TestPreflightBattlePlacementAllowsOnlyExactStableHubOrCanonicalUnboundPending(t *testing.T) {
+	operationID := uuid.NewString()
+	const matchID = uint64(901)
+	basePending := exactUnboundBattlePending(1, matchID, operationID)
+
+	accepted := []struct {
+		name string
+		rec  *locatorv1.PlayerPlacementStorageRecord
+	}{
+		{name: "exact stable Hub", rec: exactHubPlacement(1, 7)},
+		{name: "canonical unbound same operation", rec: basePending},
+	}
+	for _, tc := range accepted {
+		t.Run("accept "+tc.name, func(t *testing.T) {
+			client := &fakePlacementClient{records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{
+				1: proto.Clone(tc.rec).(*locatorv1.PlayerPlacementStorageRecord),
+			}}
+			coordinator := NewGrpcPlacementCoordinator(client, nil, 30*time.Minute)
+			if err := coordinator.PreflightBattlePlacement(context.Background(), operationID, matchID, []uint64{1}); err != nil {
+				t.Fatalf("canonical placement rejected: %v", err)
+			}
+		})
+	}
+
+	mutations := []struct {
+		name   string
+		mutate func(*locatorv1.PlayerPlacementStorageRecord)
+	}{
+		{name: "complete target already bound", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.DsPodName, rec.DsInstanceUid, rec.AllocationId, rec.ReleaseTrack = "battle-a", "uid-a", "allocation-a", "stable"
+			rec.DsInstanceEpoch = 3
+		}},
+		{name: "partial target", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.DsPodName = "battle-partial"
+		}},
+		{name: "Hub assignment in Battle target", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.HubAssignmentId = uuid.NewString()
+		}},
+		{name: "different operation", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.OperationId = uuid.NewString()
+		}},
+		{name: "different match", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.TargetMatchId++
+		}},
+		{name: "source version not immediate predecessor", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourcePlacementVersion--
+		}},
+		{name: "source operation equals transition", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceOperationId = rec.GetOperationId()
+		}},
+		{name: "partial source target", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDsInstanceUid = ""
+		}},
+		{name: "Battle-shaped source target", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceHubAssignmentId = ""
+			rec.SourceAllocationId = "source-allocation"
+		}},
+		{name: "nonzero source match", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceMatchId = 77
+		}},
+		{name: "wrong proof type", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.ProofType = locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_MATCH_TERMINAL
+		}},
+		{name: "proof id not operation", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.ProofId = uuid.NewString()
+		}},
+		{name: "active departure confirmation", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDepartureConfirmed = true
+			rec.SourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE
+			rec.SourceDepartureProofId = uuid.NewString()
+		}},
+		{name: "partial departure marker", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDepartureProofId = uuid.NewString()
+		}},
+		{name: "cross-lineage departure history", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.LastSourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE
+			rec.LastSourceDepartureProofId = uuid.NewString()
+			rec.LastSourceDeparturePlacementVersion = rec.GetSourcePlacementVersion() - 1
+			rec.LastSourceDepartureOperationId = rec.GetSourceOperationId()
+		}},
+		{name: "admission already present", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.AdmissionId = uuid.NewString()
+		}},
+		{name: "lease predates update", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.LeaseDeadlineMs = rec.GetUpdatedAtMs()
+		}},
+		{name: "record player mismatch", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.PlayerId = 2
+		}},
+	}
+	for _, tc := range mutations {
+		t.Run("reject "+tc.name, func(t *testing.T) {
+			rec := proto.Clone(basePending).(*locatorv1.PlayerPlacementStorageRecord)
+			tc.mutate(rec)
+			client := &fakePlacementClient{records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{1: rec}}
+			coordinator := NewGrpcPlacementCoordinator(client, nil, 30*time.Minute)
+			if err := coordinator.PreflightBattlePlacement(context.Background(), operationID, matchID, []uint64{1}); err == nil || errcode.As(err) != errcode.ErrLocatorConflict {
+				t.Fatalf("non-canonical placement did not fail with a definite conflict: %v", err)
+			}
+		})
+	}
+}
+
+func TestPreflightBattlePlacementRejectsMalformedStableHub(t *testing.T) {
+	operationID := uuid.NewString()
+	const matchID = uint64(902)
+	mutations := []struct {
+		name   string
+		mutate func(*locatorv1.PlayerPlacementStorageRecord)
+	}{
+		{name: "active source tuple", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDsPodName = "stale-source"
+		}},
+		{name: "partial active departure marker", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.SourceDepartureProofId = uuid.NewString()
+		}},
+		{name: "cross-lineage departure history", mutate: func(rec *locatorv1.PlayerPlacementStorageRecord) {
+			rec.LastSourceDepartureProofType = locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPARTURE
+			rec.LastSourceDepartureProofId = uuid.NewString()
+			rec.LastSourceDeparturePlacementVersion = rec.GetVersion() - 1
+			rec.LastSourceDepartureOperationId = rec.GetOperationId()
+		}},
+	}
+	for _, tc := range mutations {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := exactHubPlacement(1, 7)
+			tc.mutate(rec)
+			client := &fakePlacementClient{records: map[uint64]*locatorv1.PlayerPlacementStorageRecord{1: rec}}
+			coordinator := NewGrpcPlacementCoordinator(client, nil, 30*time.Minute)
+			if err := coordinator.PreflightBattlePlacement(context.Background(), operationID, matchID, []uint64{1}); err == nil || errcode.As(err) != errcode.ErrLocatorConflict {
+				t.Fatalf("malformed STABLE_HUB did not fail with a definite conflict: %v", err)
+			}
+		})
 	}
 }

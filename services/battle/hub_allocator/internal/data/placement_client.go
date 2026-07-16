@@ -15,6 +15,7 @@ type HubPlacementClient interface {
 	GetHubPlacement(context.Context, uint64) (HubPlacementSnapshot, error)
 	BeginHubTransfer(context.Context, uint64, uint64, string, string, string, int64) (placement.Binding, error)
 	BindHubTarget(context.Context, uint64, placement.Binding, placement.Target, int64) error
+	ConfirmHubSourceDeparture(context.Context, placement.SourceDepartureProof, string) error
 	RetargetHubTarget(context.Context, uint64, placement.Binding, placement.Binding,
 		placement.Target, placement.Target, placement.TargetUnavailableReason,
 		string, string, int64) (placement.Binding, error)
@@ -22,16 +23,32 @@ type HubPlacementClient interface {
 }
 
 type HubPlacementSnapshot struct {
-	Found               bool
-	Binding             placement.Binding
-	CurrentRoute        locatorv1.PlacementRoute
-	TargetRoute         locatorv1.PlacementRoute
-	TransitionState     locatorv1.PlacementTransitionState
-	Target              placement.Target
-	TargetMatchID       uint64
-	RetargetCount       uint32
-	LastRetargetProofID string
-	LastRetargetReason  locatorv1.PlacementTargetUnavailableReason
+	Found   bool
+	Binding placement.Binding
+	// SourceBinding/SourceTarget are the immutable physical source captured by
+	// player_locator at BeginPlacementTransition.  Target is the destination
+	// being prepared and therefore cannot prove that the previous Hub owner has
+	// departed.
+	SourceBinding                       placement.Binding
+	SourceTarget                        placement.Target
+	CurrentRoute                        locatorv1.PlacementRoute
+	CurrentMatchID                      uint64
+	TargetRoute                         locatorv1.PlacementRoute
+	TransitionState                     locatorv1.PlacementTransitionState
+	ProofType                           locatorv1.PlacementProofType
+	Target                              placement.Target
+	TargetMatchID                       uint64
+	LeaseDeadlineMs                     int64
+	SourceDepartureConfirmed            bool
+	SourceDepartureProofType            locatorv1.PlacementSourceDepartureProofType
+	SourceDepartureProofID              string
+	LastSourceDepartureProofType        locatorv1.PlacementSourceDepartureProofType
+	LastSourceDepartureProofID          string
+	LastSourceDeparturePlacementVersion uint64
+	LastSourceDepartureOperationID      string
+	RetargetCount                       uint32
+	LastRetargetProofID                 string
+	LastRetargetReason                  locatorv1.PlacementTargetUnavailableReason
 }
 
 func (g *GrpcHubPlacementClient) GetHubPlacement(ctx context.Context, playerID uint64) (HubPlacementSnapshot, error) {
@@ -53,14 +70,30 @@ func (g *GrpcHubPlacementClient) GetHubPlacement(ctx context.Context, playerID u
 			"Hub placement read returned malformed authority")
 	}
 	return HubPlacementSnapshot{Found: true,
-		Binding: binding, CurrentRoute: rec.GetCurrentRoute(),
+		Binding: binding, CurrentRoute: rec.GetCurrentRoute(), CurrentMatchID: rec.GetMatchId(),
+		SourceBinding: placement.Binding{Version: rec.GetSourcePlacementVersion(),
+			OperationID: rec.GetSourceOperationId()},
+		SourceTarget: placement.Target{PodName: rec.GetSourceDsPodName(),
+			InstanceUID: rec.GetSourceDsInstanceUid(), InstanceEpoch: rec.GetSourceDsInstanceEpoch(),
+			AssignmentID: rec.GetSourceHubAssignmentId(), AllocationID: rec.GetSourceAllocationId(),
+			ReleaseTrack: rec.GetSourceReleaseTrack()},
 		TargetRoute: rec.GetTargetRoute(), TransitionState: rec.GetTransitionState(),
+		ProofType: rec.GetProofType(),
 		Target: placement.Target{PodName: rec.GetDsPodName(), InstanceUID: rec.GetDsInstanceUid(),
 			InstanceEpoch: rec.GetDsInstanceEpoch(), AssignmentID: rec.GetHubAssignmentId(),
 			AllocationID: rec.GetAllocationId(), ReleaseTrack: rec.GetReleaseTrack()},
-		TargetMatchID: rec.GetTargetMatchId(), RetargetCount: rec.GetRetargetCount(),
-		LastRetargetProofID: rec.GetLastRetargetProofId(),
-		LastRetargetReason:  rec.GetLastRetargetReason()}, nil
+		TargetMatchID:                       rec.GetTargetMatchId(),
+		LeaseDeadlineMs:                     rec.GetLeaseDeadlineMs(),
+		SourceDepartureConfirmed:            rec.GetSourceDepartureConfirmed(),
+		SourceDepartureProofType:            rec.GetSourceDepartureProofType(),
+		SourceDepartureProofID:              rec.GetSourceDepartureProofId(),
+		LastSourceDepartureProofType:        rec.GetLastSourceDepartureProofType(),
+		LastSourceDepartureProofID:          rec.GetLastSourceDepartureProofId(),
+		LastSourceDeparturePlacementVersion: rec.GetLastSourceDeparturePlacementVersion(),
+		LastSourceDepartureOperationID:      rec.GetLastSourceDepartureOperationId(),
+		RetargetCount:                       rec.GetRetargetCount(),
+		LastRetargetProofID:                 rec.GetLastRetargetProofId(),
+		LastRetargetReason:                  rec.GetLastRetargetReason()}, nil
 }
 
 func (g *GrpcHubPlacementClient) BeginHubTransfer(ctx context.Context, playerID, expectedVersion uint64,
@@ -125,6 +158,82 @@ func (g *GrpcHubPlacementClient) BindHubTarget(ctx context.Context, playerID uin
 		return errcode.New(errcode.ErrLocatorConflict, "placement bind response identity mismatch")
 	}
 	return nil
+}
+
+// ConfirmHubSourceDeparture submits the Hub allocator's physical cleanup ACK.
+// It is intentionally separate from Bind/Commit: merely preparing a target is
+// never proof that the old Hub no longer owns a PlayerController or seat.
+func (g *GrpcHubPlacementClient) ConfirmHubSourceDeparture(ctx context.Context,
+	proof placement.SourceDepartureProof, signature string,
+) error {
+	if err := validateHubSourceDepartureProof(proof, signature); err != nil {
+		return err
+	}
+	resp, err := g.client.ConfirmPlacementSourceDeparture(ctx,
+		&locatorv1.ConfirmPlacementSourceDepartureRequest{
+			PlayerId: proof.PlayerID, PlacementVersion: proof.PlacementVersion,
+			OperationId: proof.OperationID, TargetRoute: locatorv1.PlacementRoute(proof.TargetRoute),
+			TargetMatchId: proof.TargetMatchID, SourcePlacementVersion: proof.SourcePlacementVersion,
+			SourceOperationId: proof.SourceOperationID,
+			SourceRoute:       locatorv1.PlacementRoute(proof.SourceRoute), SourceMatchId: proof.SourceMatchID,
+			SourceTarget: placementTargetProto(proof.SourceTarget),
+			ProofType:    locatorv1.PlacementSourceDepartureProofType(proof.ProofType),
+			ProofId:      proof.ProofID, ProofSignature: signature,
+		})
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"Hub source departure confirmation unavailable")
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK || !resp.GetConfirmed() || resp.GetPlacement() == nil {
+		code := errcode.Code(resp.GetCode())
+		if code == 0 {
+			code = errcode.ErrLocatorConflict
+		}
+		return errcode.New(code, "Hub source departure confirmation rejected")
+	}
+	if !hubSourceDepartureResponseMatches(resp.GetPlacement(), proof) {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"Hub source departure response identity mismatch")
+	}
+	return nil
+}
+
+func validateHubSourceDepartureProof(proof placement.SourceDepartureProof, signature string) error {
+	validTarget := (proof.TargetRoute == placement.RouteHub && proof.TargetMatchID == 0) ||
+		(proof.TargetRoute == placement.RouteBattle && proof.TargetMatchID > 0)
+	if proof.PlayerID == 0 || proof.PlacementVersion == 0 ||
+		proof.SourcePlacementVersion == 0 || proof.SourcePlacementVersion >= proof.PlacementVersion ||
+		!placement.ValidOperationID(proof.OperationID) ||
+		!placement.ValidOperationID(proof.SourceOperationID) ||
+		proof.OperationID == proof.SourceOperationID || !validTarget ||
+		proof.SourceRoute != placement.RouteHub || proof.SourceMatchID != 0 ||
+		!proof.SourceTarget.CompleteHub() || proof.SourceTarget.AllocationID != "" ||
+		proof.ProofType != placement.ProofHubDeparture || proof.ProofID == "" || signature == "" {
+		return errcode.New(errcode.ErrInvalidArg, "complete Hub source departure proof required")
+	}
+	return nil
+}
+
+func hubSourceDepartureResponseMatches(rec *locatorv1.PlayerPlacementStorageRecord,
+	proof placement.SourceDepartureProof,
+) bool {
+	return rec != nil && rec.GetPlayerId() == proof.PlayerID &&
+		rec.GetVersion() == proof.PlacementVersion && rec.GetOperationId() == proof.OperationID &&
+		rec.GetTargetRoute() == locatorv1.PlacementRoute(proof.TargetRoute) &&
+		rec.GetTargetMatchId() == proof.TargetMatchID &&
+		rec.GetTransitionState() == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_PENDING &&
+		rec.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB && rec.GetMatchId() == 0 &&
+		rec.GetSourcePlacementVersion() == proof.SourcePlacementVersion &&
+		rec.GetSourceOperationId() == proof.SourceOperationID &&
+		rec.GetSourceDsPodName() == proof.SourceTarget.PodName &&
+		rec.GetSourceDsInstanceUid() == proof.SourceTarget.InstanceUID &&
+		rec.GetSourceDsInstanceEpoch() == proof.SourceTarget.InstanceEpoch &&
+		rec.GetSourceHubAssignmentId() == proof.SourceTarget.AssignmentID &&
+		rec.GetSourceAllocationId() == "" &&
+		rec.GetSourceReleaseTrack() == proof.SourceTarget.ReleaseTrack &&
+		rec.GetSourceDepartureConfirmed() &&
+		int32(rec.GetSourceDepartureProofType()) == proof.ProofType &&
+		rec.GetSourceDepartureProofId() == proof.ProofID
 }
 
 func (g *GrpcHubPlacementClient) RetargetHubTarget(ctx context.Context, playerID uint64,

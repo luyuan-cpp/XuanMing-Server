@@ -55,6 +55,9 @@ match:
   # signed nonce once across replicas.
   match_resume_auth_secret: "pandora-dev-match-resume-auth-key-v1!"
   match_resume_auth_audience: "matchmaker:5v5_ranked"
+  # Matchmaker→DS allocator signed exact allocation abort only.
+  allocation_abort_auth_secret: "pandora-dev-allocation-abort-auth-key-v1!"
+  allocation_abort_auth_audience: "ds-allocator:battle-allocation-abort"
   # battle_gate_fail_open: locator 查询失败时"战斗中禁止匹配"检查的降级策略
   #   false（默认，生产安全 / fail-closed）：locator 查询失败则拒绝入队(ERR_UNAVAILABLE)，避免抖动时绕过保护
   #   true（仅本地单服务联调）：只跑 matchmaker、不起 player_locator 时，locator 查询失败仅告警后放行

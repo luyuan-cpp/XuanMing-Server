@@ -241,6 +241,35 @@ func (s *LocatorService) BindPlacementTarget(ctx context.Context, req *locatorv1
 	return &locatorv1.BindPlacementTargetResponse{Code: commonv1.ErrCode_OK, Placement: rec}, nil
 }
 
+func (s *LocatorService) ConfirmPlacementSourceDeparture(ctx context.Context, req *locatorv1.ConfirmPlacementSourceDepartureRequest) (*locatorv1.ConfirmPlacementSourceDepartureResponse, error) {
+	if s.placementUC == nil {
+		return &locatorv1.ConfirmPlacementSourceDepartureResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	rec, err := s.placementUC.ConfirmSourceDeparture(ctx, biz.ConfirmSourceDepartureInput{
+		PlayerID:          req.GetPlayerId(),
+		Version:           req.GetPlacementVersion(),
+		OperationID:       req.GetOperationId(),
+		TargetRoute:       req.GetTargetRoute(),
+		TargetMatchID:     req.GetTargetMatchId(),
+		SourceVersion:     req.GetSourcePlacementVersion(),
+		SourceOperationID: req.GetSourceOperationId(),
+		SourceRoute:       req.GetSourceRoute(),
+		SourceMatchID:     req.GetSourceMatchId(),
+		SourceTarget:      placementTarget(req.GetSourceTarget()),
+		ProofType:         req.GetProofType(),
+		ProofID:           req.GetProofId(),
+		ProofSignature:    req.GetProofSignature(),
+	})
+	if err != nil {
+		return &locatorv1.ConfirmPlacementSourceDepartureResponse{Code: toProtoCode(err)}, nil
+	}
+	return &locatorv1.ConfirmPlacementSourceDepartureResponse{
+		Code:      commonv1.ErrCode_OK,
+		Confirmed: true,
+		Placement: rec,
+	}, nil
+}
+
 func (s *LocatorService) RetargetPlacementTarget(ctx context.Context, req *locatorv1.RetargetPlacementTargetRequest) (*locatorv1.RetargetPlacementTargetResponse, error) {
 	if s.placementUC == nil {
 		return &locatorv1.RetargetPlacementTargetResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil

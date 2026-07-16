@@ -442,3 +442,57 @@
 - 已纠正 `battle-reconnect.md` §6/§7 的旧绝对结论,补“不卡死”定义、阻断反例和必跑矩阵；同步更新
   `ds-arch.md` §9.2 与 `decision-revisit-ds-callback-auth.md` §7.16.3。当前结论明确为**代码尚未全部完成**；
   本轮仅做审计与文档收口,未修改服务端/客户端业务代码,未 commit/push。
+
+## 2026-07-15：任意时点 DS 恢复代码收口（本地全绿，真环境仍阻断发布）
+
+- 服务端已以版本化 placement + immutable source-departure proof 形成 Hub/Battle 唯一准入门：
+  UNKNOWN 始终 retryable 且零 seat/ticket/spawn，Hub/Battle Admission 必须在 spawn/READY 前提交 exact
+  version/operation/target/source 证明。Login `ResumeContext` 覆盖 Hub、排队、确认、分配、Ready 和对局。
+- Matchmaker 已把 formation/allocation/release 改为可重放持久 saga；StartMatch 在任何副作用前与
+  Agones 外调前都检查 STABLE_HUB。allocation 新增 exact `REQUESTING→ABORTING→FAILED`，
+  payload-bound 独立 HMAC 与持久 abort journal；UNKNOWN/ACK loss 不抢先 FAILED/requeue。BattleResult
+  release outbox、compare-delete claim/ticket 与 active index reconciler 已收口。
+- Model-B 回收必须同时持有真实 GameServer UID + Pod UID；新分配在 usecase/finalize 双硬门
+  拒绝空 PodUID。正常结算、empty/stale、abort、preactive 的旧记录都在 terminal fence 前做
+  exact K8s 回填。pre-Prepare `instance_epoch=0` 改为专用 fenced release，unknown 保留永久 fence，
+  成功才 purge，不伪造玩家 teardown proof。late abort 同时要求 teardown 与 Kafka ACK 后 lifecycle
+  两份 full-target proof。
+- 发布流程新增只读 legacy PodUID 三阶段证明：`prepare` 在排空前审计存量，`drained` 在 blue writer=0 +
+  capability empty + drain marker 后审计零写窗口，`final` 在 green exact capability/strict writer 已启动但
+  Service 尚未切换前再次审计。三份 Job 绑定同一 RunId、immutable image/config、Redis identity/topology；
+  final PASS 前不切 Service、不 CAS epoch，epoch=2 审计禁止事后创建证据。临时只读 Redis ACL 身份在
+  CAS 后必须由独立控制身份精确 `DELUSER` 并回读 absent，cleanup pending 不算发布完成。
+- Redis `BattleStorageRecord` 的 23 个生产写点（含独立 quarantine 命令）统一进入不可逆 strict Model-B
+  mutation gate：新/重写记录必须带完整 PodUID，legacy 只允许 exact PodUID backfill，未知 protobuf bytes
+  保留且 PodUID 不可变。etcd target 值固定为 `2@ds-auth-v2-pod-uid-write-invariant-v1`，五个 writer 的
+  exact feature policy 同时绑定初读、capability 注册事务、watch 与 activation record；旧 numeric epoch=2
+  binary 和新 binary 遇裸 `2` 都 fail-closed，关闭 feature-only rollback 窗口。
+- UE 已以 `UMyDsRecoveryCoordinator` 作唯一 DS `ClientTravel` writer，generation/request-seq/phase 拒绝
+  迟到回调；30s 只改 UI/退避。Battle DS 的 Controller/Pawn/World/weak-ledger census 与 exact ABA eviction
+  已落地，无法归因的物理对象 fail-closed。
+- 最终本地验证：`go.work` 29/29 module test + vet；Proto lint 与两次生成 diff 确定；
+  activation/cluster 合同、PowerShell AST、services/online kustomize、`git diff --check` 通过；
+  PandoraEditor 725/725、PandoraServer 577/577；UE DsRecovery 5/5、DSAuth 11/11。race 因 CGO=0/无 gcc
+  未跑；online manifest live API 因本机 kubeconfig `127.0.0.1:59751` 不可达而 BLOCKED-ENV。
+- 仍不允许宣称生产已证明“任意时点绝不卡死”：仓库尚未接入能覆盖整个 preflight→CAS 窗口的真实
+  Redis topology-change/failover/reshard lease provider 与信任根。这不是本机环境偶发失败，而是外部
+  控制面能力尚未接线；fresh/retry Activate、Go CLI/core CAS 与普通 online release 当前都在任何
+  create/patch/scale/build/push/apply 前 fail-closed。产线 placement/PodUID preflight 以及真 Redis
+  Cluster/K8s/Agones/UDP/移动端前后台故障矩阵也尚未执行。如果旧空 PodUID record 的 K8s 不可变证据
+  已丢失，代码只会保留明确 retryable fence，发布前需可审计迁移/清退，禁止猜 UID。
+
+## 2026-07-15：Hub successor policy V3 发布交接
+
+- successor lease 新 writer 由库自动写 `supported_policy_generation/id=V3`，并把实际初读 required 写入
+  `acquired_policy_generation/id`；V3 activation 对五类 writer 的 compiled support、V2 staging acquire、
+  exact features/Pod UID/digest 与 Hub count=1 全部 fail-closed。V2→V3 是同 writer epoch 的 policy-only
+  CAS；fresh local 使用 missing→V3 zero-writer 单事务 genesis，Resume 必须验证同事务 immutable record。
+- 平台必须在 V2 staging 后预创建 exact schema、`immutable: true` 的
+  `pandora-ds-auth-policy-v3-evidence`，绑定 run-id、context/namespace、staged Pod UID/image digest、完整 V3
+  feature policy 与 Hub `capability lease + NotReady + zero ready endpoint` 事实。仓库脚本只读并精确验证该
+  交接物，不会把普通/可变 ConfigMap 当证据。
+- `activate_hub_successor_policy.ps1` 已支持崩溃续跑：required=V2 才执行 pre-CAS 门/CAS；required=V3
+  从 record-only proof 继续。post-CAS 从固定五个 canonical Deployment/selector/owner chain 重新派生当前
+  live UID（不把历史 marker UID 当永久 allowlist），要求唯一业务 container Running+imageID、所有 capability
+  acquired=V3、Hub ready Endpoint 精确 1 个且 UID 唯一匹配；最后再次 capability audit 并写 immutable
+  completion marker。完整契约见 `docs/design/battle-reconnect.md` §7.8。

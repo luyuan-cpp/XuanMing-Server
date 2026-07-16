@@ -24,9 +24,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/battleabort"
 	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
@@ -56,14 +58,17 @@ var errReadyWaitTimeout = errors.New("ready wait timeout")
 
 // 战斗 DS 状态常量(对应 proto string state 字段)。
 const (
-	stateAllocating          = "allocating"
-	stateAllocationUncertain = data.BattleStateAllocationUncertain
-	statePreactiveReleasing  = data.BattleStatePreactiveReleasePending
-	stateWarming             = "warming"
-	stateReady               = "ready"
-	stateRunning             = "running"
-	stateEnded               = "ended"
-	stateAbandoned           = "abandoned"
+	stateAllocating            = "allocating"
+	stateAllocationUncertain   = data.BattleStateAllocationUncertain
+	stateAllocationReconciling = data.BattleStateAllocationReconcileReleasePending
+	stateAllocationEmptyFence  = data.BattleStateAllocationReconcileEmptyTombstone
+	statePreactiveReleasing    = data.BattleStatePreactiveReleasePending
+	stateAllocationAbort       = data.BattleStateAllocationAbortPending
+	stateWarming               = "warming"
+	stateReady                 = "ready"
+	stateRunning               = "running"
+	stateEnded                 = "ended"
+	stateAbandoned             = "abandoned"
 )
 
 // Heartbeat 响应控制指令常量。
@@ -79,6 +84,12 @@ const updateMaxRetry = 3
 // 1s 足够:DS 心跳 5s 一跳,ready 等待窗口 10s,1s 轮询既不漏判也不给 Redis 添压。
 // 用 var 而非 const,便于单测把它调小以避免慢测(见 allocator_test.go init)。
 var readyPollInterval = 1 * time.Second
+
+// activeIndexReconcileInterval bounds the cost of rebuilding the derived
+// active ZSET from canonical battle records. The first sweep always runs it;
+// later sweeps repeat it so a standalone ZSET write loss cannot strand a
+// permanent recovery tombstone forever.
+var activeIndexReconcileInterval = 30 * time.Second
 
 // detachedCleanupTimeout 是 ready 等待失败后回收 pod + 删镜像的独立 ctx 预算。
 // ready 等待失败的常见原因正是入站 ctx 被取消/超时,复用它做 Release/DeleteBattle 会立刻
@@ -113,6 +124,15 @@ type LocationRefresher interface {
 	RefreshBattleLocations(ctx context.Context, playerIDs []uint64, matchID uint64, dsAddr string) error
 }
 
+// BattleDeparturePlacementVerifier 要求 locator Begin 已先线性化为
+// exact PENDING->HUB（新 version/op），并且其持久 source lineage
+// 精确匹配旧 Battle ticket claims。Begin 先 fence 旧票，再等物理离场。
+type BattleDeparturePlacementVerifier interface {
+	VerifyPendingHubBattleDeparture(ctx context.Context, expected data.BattlePlayerDepartureExpected) error
+	ConfirmBattleSourceDeparture(ctx context.Context, expected data.BattlePlayerDepartureExpected,
+		departureID string) error
+}
+
 // AllocatorUsecase 是 ds_allocator 业务逻辑核心。
 type AllocatorUsecase struct {
 	repo      data.BattleRepo
@@ -124,15 +144,20 @@ type AllocatorUsecase struct {
 	// 当作已恢复并 Expire 掉 Battle fence。
 	lifecycleRequired bool
 	locator           LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
+	departureVerifier BattleDeparturePlacementVerifier
 
 	// Model B 仅在 agones+enforce+authority_mode=redis 时由 main 注入。Redis authRepo 是
 	// 唯一授权权威；K8s annotation 只投递 pending 凭据。
-	authRepo           data.BattleAuthRepo
-	authoritativeAlloc AuthoritativeGameServerAllocator
-	dsSigner           BattleCredentialSigner
-	dsCredentialTTL    time.Duration
-	modelB             bool
-	releasePolicy      releasetrack.Policy
+	authRepo                 data.BattleAuthRepo
+	abortRepo                data.BattleAllocationAbortRepo
+	lifecycleProofRepo       data.BattleAllocationLifecycleRepo
+	authoritativeAlloc       AuthoritativeGameServerAllocator
+	dsSigner                 BattleCredentialSigner
+	dsCredentialTTL          time.Duration
+	modelB                   bool
+	releasePolicy            releasetrack.Policy
+	activeIndexReconciler    data.BattleActiveIndexReconciler
+	lastActiveIndexReconcile time.Time
 
 	// killOrphanOnStop:心跳判定某 DS 该停机(orphan / pod_mismatch / 终态)时,是否由后端主动
 	// 回收该 pod。local 模式打开——本机 UE DS 没有 Agones,收到 stop 指令不会自杀,残留进程会
@@ -149,7 +174,11 @@ type BattleCredentialSigner interface {
 
 // NewAllocatorUsecase 构造 AllocatorUsecase。
 func NewAllocatorUsecase(repo data.BattleRepo, alloc GameServerAllocator, cfg conf.AllocatorConf) *AllocatorUsecase {
-	return &AllocatorUsecase{repo: repo, alloc: alloc, cfg: cfg}
+	u := &AllocatorUsecase{repo: repo, alloc: alloc, cfg: cfg}
+	if reconciler, ok := repo.(data.BattleActiveIndexReconciler); ok {
+		u.activeIndexReconciler = reconciler
+	}
+	return u
 }
 
 // SetLifecyclePusher 注入 ds.lifecycle 事件发送器(main 在 Kafka 就绪时调用)。
@@ -174,6 +203,12 @@ func (u *AllocatorUsecase) ValidateLifecyclePusherReady() error {
 // SetLocationRefresher 注入 BATTLE 位置续期器(main 在 locator_addr 已配时调用,弱依赖)。
 func (u *AllocatorUsecase) SetLocationRefresher(r LocationRefresher) { u.locator = r }
 
+// SetBattleDeparturePlacementVerifier 注入持久 placement 读者。未注入时
+// EnsurePlayerDeparture 必须 fail-closed，不影响心跳本身。
+func (u *AllocatorUsecase) SetBattleDeparturePlacementVerifier(v BattleDeparturePlacementVerifier) {
+	u.departureVerifier = v
+}
+
 // SetReleaseTrackPolicy 在启动期注入 match 级确定性 cohort 策略。
 func (u *AllocatorUsecase) SetReleaseTrackPolicy(p releasetrack.Policy) { u.releasePolicy = p }
 
@@ -185,11 +220,28 @@ func (u *AllocatorUsecase) EnableRedisAuthority(
 	tokenTTL time.Duration,
 ) error {
 	a, ok := u.alloc.(AuthoritativeGameServerAllocator)
-	if repo == nil || signer == nil || tokenTTL <= 0 || !ok {
+	abortRepo, abortOK := repo.(data.BattleAllocationAbortRepo)
+	lifecycleProofRepo, lifecycleProofOK := repo.(data.BattleAllocationLifecycleRepo)
+	battleStrictWriter, battleStrictOK := u.repo.(data.StrictModelBBattleStorage)
+	authStrictWriter, authStrictOK := repo.(data.StrictModelBBattleStorage)
+	if repo == nil || signer == nil || tokenTTL <= 0 || !ok || !abortOK || !lifecycleProofOK ||
+		u.activeIndexReconciler == nil || !battleStrictOK || !authStrictOK {
 		return errcode.New(errcode.ErrInvalidState,
-			"battle Model B requires auth repo, signer, positive ttl and authoritative Agones allocator")
+			"battle Model B requires auth/abort/lifecycle repo, signer, positive ttl, authoritative Agones allocator, canonical active-index reconciler and strict storage writers")
+	}
+	// Irreversible and deliberately last among capability checks: after the
+	// startup all-master preflight succeeds, no Model-B RPC/worker can become
+	// visible until both battle-writing repository views enforce the same
+	// continuous storage invariant.
+	battleStrictWriter.EnableStrictModelBWrites()
+	authStrictWriter.EnableStrictModelBWrites()
+	if !battleStrictWriter.StrictModelBWritesEnabled() || !authStrictWriter.StrictModelBWritesEnabled() {
+		return errcode.New(errcode.ErrInvalidState,
+			"battle Model B strict storage write gate did not activate")
 	}
 	u.authRepo = repo
+	u.abortRepo = abortRepo
+	u.lifecycleProofRepo = lifecycleProofRepo
 	u.authoritativeAlloc = a
 	u.dsSigner = signer
 	u.dsCredentialTTL = tokenTTL
@@ -368,7 +420,7 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 		return nil, errcode.New(errcode.ErrDSAllocationFailed, "allocate ds for match %d failed", matchID)
 	}
 	if u.modelB && (authoritative == nil || authoritative.PodName == "" || authoritative.Addr == "" ||
-		authoritative.InstanceUID == "" || authoritative.ResourceVersion == "" ||
+		authoritative.InstanceUID == "" || authoritative.PodUID == "" || authoritative.ResourceVersion == "" ||
 		authoritative.AllocationID != allocationID || !releasetrack.Valid(authoritative.ReleaseTrack)) {
 		// data 层虽已做严格 GET，这里仍在副作用边界复核完整身份，防错误实现/测试桩
 		// 以 nil error 绕过 UID/RV/allocation_id 确认。保持永久 uncertain，不做清理。
@@ -403,6 +455,7 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 	}
 	if authoritative != nil {
 		battle.GameserverUid = authoritative.InstanceUID
+		battle.PodUid = authoritative.PodUID
 	}
 	var finalized bool
 	if u.modelB {
@@ -570,7 +623,7 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 	if existing == nil {
 		return nil, errcode.New(errcode.ErrDSAllocationFailed, "battle %d allocation claim missing", matchID)
 	}
-	if existing.State == stateAllocationUncertain {
+	if existing.State == stateAllocationUncertain || existing.State == stateAllocationReconciling {
 		// 该状态表示 GSA POST 可能迟到应用。调用方不等待、不清理、不查删 K8s；
 		// 只返回暂不可用，永久 claim 继续阻止同 match 第二次 POST。
 		plog.With(ctx).Warnw("msg", "allocate_idempotent_uncertain",
@@ -578,7 +631,7 @@ func (u *AllocatorUsecase) awaitExistingAllocation(
 		return nil, errcode.New(errcode.ErrUnavailable,
 			"battle %d allocation result requires explicit reconciliation", matchID)
 	}
-	if existing.State == statePreactiveReleasing {
+	if existing.State == statePreactiveReleasing || existing.State == stateAllocationAbort {
 		// 外部 UID 条件删除尚未得到明确成功；永久 release fence 必须继续
 		// 阻止本请求发第二次 GSA POST。回收可由幂等 sweep 重试，但安全不依赖重试。
 		return nil, errcode.New(errcode.ErrUnavailable,
@@ -712,7 +765,7 @@ func (u *AllocatorUsecase) cleanupAllocatedBattle(
 				"allocation_id", allocationID)
 			return
 		}
-		if rerr := u.releaseGameServer(cleanupCtx, matchID, podName, allocation); rerr != nil {
+		if rerr := u.releaseFencedPreactiveGameServer(cleanupCtx, matchID, podName, allocation); rerr != nil {
 			// ReleaseExpected timeout/unknown 必须保留永久 fence；不得 purge。
 			plog.With(ctx).Warnw("msg", "ready_wait_cleanup_release_unconfirmed", "match_id", matchID,
 				"pod", podName, "err", rerr)
@@ -753,6 +806,21 @@ func (u *AllocatorUsecase) releaseGameServer(
 		return errcode.New(errcode.ErrInvalidState,
 			"battle Model B release requires complete expected GameServer tuple")
 	}
+	if allocation.PodUID == "" {
+		podUID, err := u.ensureDurableReleasePodUID(ctx, matchID, podName,
+			data.BattleExpectedInstance{
+				AllocationID: allocation.AllocationID, InstanceUID: allocation.InstanceUID,
+				InstanceEpoch: allocation.InstanceEpoch,
+			}, allocation.ReleaseTrack)
+		if err != nil {
+			return err
+		}
+		allocation.PodUID = podUID
+	}
+	if allocation.PodUID == "" {
+		return errcode.New(errcode.ErrInvalidState,
+			"battle Model B release requires durable expected Pod UID")
+	}
 	if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
 		return err
 	}
@@ -762,7 +830,46 @@ func (u *AllocatorUsecase) releaseGameServer(
 	return u.repo.RecordInstanceTeardown(ctx, matchID, data.BattleDepartureSource{
 		DSPodName: podName, GameServerUID: allocation.InstanceUID,
 		InstanceEpoch: allocation.InstanceEpoch, AllocationID: allocation.AllocationID,
+		PodUID: allocation.PodUID,
 	})
+}
+
+// releaseFencedPreactiveGameServer handles the crash window after the exact
+// GameServer+Pod identity was durably finalized but before PrepareCredential
+// assigned an instance epoch. FencePreactiveReleaseExpected is the mandatory
+// Redis linearization point before this method.  Epoch zero has never admitted
+// a DS or minted a ticket, so it must be physically released and purged without
+// fabricating a credentialed instance-teardown proof.
+func (u *AllocatorUsecase) releaseFencedPreactiveGameServer(
+	ctx context.Context,
+	matchID uint64,
+	podName string,
+	allocation *data.AuthoritativeGameServerAllocation,
+) error {
+	if allocation == nil || allocation.InstanceEpoch != 0 {
+		return u.releaseGameServer(ctx, matchID, podName, allocation)
+	}
+	if !u.modelB || matchID == 0 || podName == "" || allocation.PodName != podName ||
+		allocation.InstanceUID == "" || allocation.AllocationID == "" {
+		return errcode.New(errcode.ErrInvalidState,
+			"precredential release requires exact fenced GameServer tuple")
+	}
+	if allocation.PodUID == "" {
+		podUID, err := u.ensureDurableReleasePodUID(ctx, matchID, podName,
+			data.BattleExpectedInstance{
+				AllocationID: allocation.AllocationID, InstanceUID: allocation.InstanceUID,
+				InstanceEpoch: 0,
+			}, allocation.ReleaseTrack)
+		if err != nil {
+			return err
+		}
+		allocation.PodUID = podUID
+	}
+	if allocation.PodUID == "" {
+		return errcode.New(errcode.ErrInvalidState,
+			"precredential release requires durable expected Pod UID")
+	}
+	return u.authoritativeAlloc.ReleaseExpected(ctx, allocation)
 }
 
 // reconcilePreactiveRelease 幂等完成永久 pre-active release fence → UID 条件删除 → purge。
@@ -778,6 +885,14 @@ func (u *AllocatorUsecase) reconcilePreactiveRelease(
 		AllocationID: battle.GetAllocationId(), InstanceUID: battle.GetGameserverUid(),
 		InstanceEpoch: battle.GetInstanceEpoch(),
 	}
+	podUID, preflightErr := u.ensureDurableReleasePodUID(
+		ctx, battle.GetMatchId(), battle.GetDsPodName(), expected, battle.GetReleaseTrack())
+	if preflightErr != nil {
+		plog.With(ctx).Warnw("msg", "preactive_release_pod_uid_preflight_failed",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", preflightErr)
+		return false
+	}
+	battle.PodUid = podUID
 	fenced, err := u.authRepo.FencePreactiveReleaseExpected(ctx, battle.GetMatchId(), expected)
 	if err != nil || !fenced {
 		plog.With(ctx).Warnw("msg", "preactive_release_fence_failed", "match_id", battle.GetMatchId(),
@@ -786,9 +901,10 @@ func (u *AllocatorUsecase) reconcilePreactiveRelease(
 	}
 	allocation := &data.AuthoritativeGameServerAllocation{
 		PodName: battle.GetDsPodName(), InstanceUID: battle.GetGameserverUid(),
-		InstanceEpoch: battle.GetInstanceEpoch(), AllocationID: battle.GetAllocationId(),
+		PodUID: battle.GetPodUid(), InstanceEpoch: battle.GetInstanceEpoch(),
+		AllocationID: battle.GetAllocationId(),
 	}
-	if err := u.releaseGameServer(ctx, battle.GetMatchId(), battle.GetDsPodName(), allocation); err != nil {
+	if err := u.releaseFencedPreactiveGameServer(ctx, battle.GetMatchId(), battle.GetDsPodName(), allocation); err != nil {
 		plog.With(ctx).Warnw("msg", "preactive_release_unconfirmed", "match_id", battle.GetMatchId(),
 			"allocation_id", battle.GetAllocationId(), "err", err)
 		return false
@@ -799,6 +915,243 @@ func (u *AllocatorUsecase) reconcilePreactiveRelease(
 			"allocation_id", battle.GetAllocationId(), "purged", purged, "err", err)
 	}
 	return purged
+}
+
+// publishReconciledAllocationAbandoned is the durable handoff from a
+// physically-confirmed pre-credential allocation cleanup to battle_result.
+// The Redis battle record remains permanent until Kafka acknowledges the
+// ABANDONED event; only then may it receive terminal retention TTL and leave
+// the active recovery index.
+func (u *AllocatorUsecase) publishReconciledAllocationAbandoned(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+) bool {
+	if battle == nil || battle.GetMatchId() == 0 || battle.GetState() != stateAbandoned ||
+		battle.GetAllocationId() == "" || battle.GetInstanceEpoch() != 0 || len(battle.GetPlayerIds()) == 0 {
+		return false
+	}
+	snapshot, err := u.authRepo.ReadAuthority(ctx, battle.GetMatchId())
+	if err != nil || snapshot.AuthFound || !snapshot.BattleFound || snapshot.Battle == nil ||
+		snapshot.Battle.GetState() != stateAbandoned ||
+		snapshot.Battle.GetAllocationId() != battle.GetAllocationId() ||
+		snapshot.Battle.GetGameserverUid() != battle.GetGameserverUid() {
+		plog.With(ctx).Warnw("msg", "allocation_uncertain_terminal_snapshot_rejected",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+		return false
+	}
+	battle = snapshot.Battle
+	if !u.deliverAbandoned(ctx, battle.GetMatchId(), battle.GetDsPodName(),
+		battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode()) {
+		return false
+	}
+	if battle.GetGameserverUid() == "" {
+		// Empty LIST is enough to release the players, but not enough to forget
+		// cleanup authority: the original timed-out POST may apply after that
+		// LIST. Persist Kafka ACK as a separate tombstone state and keep polling
+		// the allocation_id forever (until a future explicit quiescence proof).
+		repo, ok := u.repo.(data.AllocationUncertainRepo)
+		if !ok {
+			return false
+		}
+		marked, err := repo.MarkAllocationUncertainEmptyLifecyclePublished(ctx,
+			battle.GetMatchId(), battle.GetAllocationId())
+		if err != nil || !marked {
+			plog.With(ctx).Warnw("msg", "allocation_uncertain_empty_tombstone_failed",
+				"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(),
+				"marked", marked, "err", err)
+			return false
+		}
+		// Delay the next cleanup pass by one heartbeat window without changing
+		// the permanent battle record or pretending this is a DS heartbeat.
+		if err := u.repo.TouchActive(ctx, battle.GetMatchId(), time.Now().UnixMilli()); err != nil {
+			plog.With(ctx).Warnw("msg", "allocation_uncertain_empty_tombstone_index_failed",
+				"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+			return false
+		}
+		plog.With(ctx).Infow("msg", "allocation_uncertain_empty_tombstone_retained",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId())
+		return true
+	}
+	if err := u.repo.ExpireBattle(ctx, battle.GetMatchId(), u.battleTTL()); err != nil {
+		plog.With(ctx).Warnw("msg", "allocation_uncertain_terminal_expire_failed",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+		return false
+	}
+	plog.With(ctx).Infow("msg", "allocation_uncertain_terminal_delivered",
+		"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId())
+	return true
+}
+
+// resumeReconciledAllocationAbandoned re-confirms physical absence after a
+// crash between the durable ABANDONED CAS and lifecycle publication. The
+// repeat release is exact and idempotent (UID+Pod UID, or allocation_id label
+// when the original POST never produced an object).
+func (u *AllocatorUsecase) resumeReconciledAllocationAbandoned(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+) bool {
+	if battle == nil || battle.GetState() != stateAbandoned || battle.GetInstanceEpoch() != 0 ||
+		battle.GetAllocationId() == "" {
+		return false
+	}
+	snapshot, err := u.authRepo.ReadAuthority(ctx, battle.GetMatchId())
+	if err != nil || snapshot.AuthFound || !snapshot.BattleFound || snapshot.Battle == nil ||
+		snapshot.Battle.GetState() != stateAbandoned ||
+		snapshot.Battle.GetAllocationId() != battle.GetAllocationId() {
+		return false
+	}
+	battle = snapshot.Battle
+	allocation := &data.AuthoritativeGameServerAllocation{AllocationID: battle.GetAllocationId()}
+	if battle.GetGameserverUid() != "" {
+		if battle.GetDsPodName() == "" || battle.GetPodUid() == "" {
+			return false
+		}
+		allocation.PodName = battle.GetDsPodName()
+		allocation.InstanceUID = battle.GetGameserverUid()
+		allocation.PodUID = battle.GetPodUid()
+		allocation.ReleaseTrack = battle.GetReleaseTrack()
+	}
+	if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
+		plog.With(ctx).Warnw("msg", "allocation_uncertain_terminal_release_unconfirmed",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+		return false
+	}
+	return u.publishReconciledAllocationAbandoned(ctx, battle)
+}
+
+// resumeEmptyAllocationTombstone continuously cleans the immutable
+// allocation_id after the players' terminal lifecycle has already been
+// published. It intentionally never expires/deletes the tombstone: a delayed
+// original POST has no credential and cannot admit players, but must still be
+// reaped whenever it becomes visible.
+func (u *AllocatorUsecase) resumeEmptyAllocationTombstone(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+) bool {
+	if battle == nil || battle.GetState() != stateAllocationEmptyFence ||
+		battle.GetAllocationId() == "" || battle.GetInstanceEpoch() != 0 ||
+		battle.GetDsPodName() != "" || battle.GetGameserverUid() != "" || battle.GetPodUid() != "" {
+		return false
+	}
+	snapshot, err := u.authRepo.ReadAuthority(ctx, battle.GetMatchId())
+	if err != nil || snapshot.AuthFound || !snapshot.BattleFound || snapshot.Battle == nil ||
+		snapshot.Battle.GetState() != stateAllocationEmptyFence ||
+		snapshot.Battle.GetAllocationId() != battle.GetAllocationId() {
+		return false
+	}
+	if err := u.authoritativeAlloc.ReleaseExpected(ctx,
+		&data.AuthoritativeGameServerAllocation{AllocationID: battle.GetAllocationId()}); err != nil {
+		plog.With(ctx).Warnw("msg", "allocation_uncertain_empty_tombstone_cleanup_failed",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+		return false
+	}
+	if err := u.repo.TouchActive(ctx, battle.GetMatchId(), time.Now().UnixMilli()); err != nil {
+		plog.With(ctx).Warnw("msg", "allocation_uncertain_empty_tombstone_reindex_failed",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+		return false
+	}
+	return true
+}
+
+// reconcileAllocationUncertain turns an unknown GSA POST into a bounded,
+// restart-safe terminal cancellation without ever issuing a second POST:
+// allocation_id LIST -> authoritative empty or one exact GS+Pod -> permanent
+// exact release fence -> confirmed physical absence -> durable ABANDONED ->
+// lifecycle outbox. Ambiguous/API-unknown results leave the original permanent
+// fence and active index untouched for the next sweep.
+func (u *AllocatorUsecase) reconcileAllocationUncertain(
+	ctx context.Context,
+	battle *dsv1.BattleStorageRecord,
+) bool {
+	if battle == nil || !u.modelB || u.authRepo == nil || u.authoritativeAlloc == nil {
+		return false
+	}
+	repo, repoOK := u.repo.(data.AllocationUncertainRepo)
+	resolver, resolverOK := u.authoritativeAlloc.(UncertainGameServerAllocationResolver)
+	if !repoOK || !resolverOK {
+		plog.With(ctx).Errorw("msg", "allocation_uncertain_reconciler_unavailable_fail_closed",
+			"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId())
+		return false
+	}
+
+	switch battle.GetState() {
+	case stateAllocationUncertain:
+		allocation, found, err := resolver.ResolveAllocationByID(ctx, battle.GetMatchId(),
+			battle.GetAllocationId(), battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode())
+		if err != nil {
+			plog.With(ctx).Warnw("msg", "allocation_uncertain_resolve_failed_will_retry",
+				"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+			return false
+		}
+		if !found {
+			// DeleteCollection+LIST is repeated even after a read-only empty result.
+			// This closes a timeout-late-apply window before publishing terminal.
+			allocation = &data.AuthoritativeGameServerAllocation{AllocationID: battle.GetAllocationId()}
+			if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
+				plog.With(ctx).Warnw("msg", "allocation_uncertain_empty_release_unconfirmed",
+					"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+				return false
+			}
+			completed, err := repo.CompleteAllocationUncertainRelease(ctx, battle.GetMatchId(),
+				battle.GetAllocationId(), "")
+			if err != nil || !completed {
+				plog.With(ctx).Warnw("msg", "allocation_uncertain_empty_terminal_cas_failed",
+					"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(),
+					"completed", completed, "err", err)
+				return false
+			}
+		} else {
+			fenced, err := repo.FenceAllocationUncertainRelease(ctx, battle.GetMatchId(),
+				battle.GetAllocationId(), allocation)
+			if err != nil || !fenced {
+				plog.With(ctx).Warnw("msg", "allocation_uncertain_exact_release_fence_failed",
+					"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(),
+					"fenced", fenced, "err", err)
+				return false
+			}
+			if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
+				plog.With(ctx).Warnw("msg", "allocation_uncertain_exact_release_unconfirmed",
+					"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+				return false
+			}
+			completed, err := repo.CompleteAllocationUncertainRelease(ctx, battle.GetMatchId(),
+				battle.GetAllocationId(), allocation.InstanceUID)
+			if err != nil || !completed {
+				plog.With(ctx).Warnw("msg", "allocation_uncertain_exact_terminal_cas_failed",
+					"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(),
+					"completed", completed, "err", err)
+				return false
+			}
+		}
+	case stateAllocationReconciling:
+		if battle.GetAllocationId() == "" || battle.GetDsPodName() == "" ||
+			battle.GetGameserverUid() == "" || battle.GetPodUid() == "" || battle.GetInstanceEpoch() != 0 {
+			return false
+		}
+		allocation := &data.AuthoritativeGameServerAllocation{
+			PodName: battle.GetDsPodName(), InstanceUID: battle.GetGameserverUid(),
+			PodUID: battle.GetPodUid(), AllocationID: battle.GetAllocationId(),
+			ReleaseTrack: battle.GetReleaseTrack(),
+		}
+		if err := u.authoritativeAlloc.ReleaseExpected(ctx, allocation); err != nil {
+			plog.With(ctx).Warnw("msg", "allocation_uncertain_exact_release_resume_failed",
+				"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)
+			return false
+		}
+		completed, err := repo.CompleteAllocationUncertainRelease(ctx, battle.GetMatchId(),
+			battle.GetAllocationId(), battle.GetGameserverUid())
+		if err != nil || !completed {
+			return false
+		}
+	default:
+		return false
+	}
+
+	terminal, found, err := u.repo.GetBattle(ctx, battle.GetMatchId())
+	if err != nil || !found || terminal.GetState() != stateAbandoned {
+		return false
+	}
+	return u.publishReconciledAllocationAbandoned(ctx, terminal)
 }
 
 // ── RPC 2:ReleaseBattle ───────────────────────────────────────────────────────
@@ -823,7 +1176,9 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 		plog.With(ctx).Infow("msg", "release_idempotent_miss", "match_id", matchID, "reason", reason)
 		return nil
 	}
-	if battle.State == stateAllocationUncertain || battle.State == statePreactiveReleasing {
+	if battle.State == stateAllocationUncertain || battle.State == stateAllocationReconciling ||
+		battle.State == stateAllocationEmptyFence ||
+		battle.State == statePreactiveReleasing || battle.State == stateAllocationAbort {
 		// 即使当前副本仍以 legacy 配置运行，也不能清理由另一个 Model-B writer
 		// 写下的永久 POST fence。混跑期间最多返回不可用，绝不 Release/Delete。
 		return errcode.New(errcode.ErrUnavailable,
@@ -836,6 +1191,91 @@ func (u *AllocatorUsecase) ReleaseBattle(ctx context.Context, matchID uint64, re
 		return err
 	}
 	plog.With(ctx).Infow("msg", "battle_released", "match_id", matchID, "pod", battle.DsPodName, "reason", reason)
+	return nil
+}
+
+// AbortPreactiveBattle compensates a Matchmaker allocation saga only after a
+// payload-authenticated service RPC has supplied the exact operation and DS
+// tuple. The Redis fence+journal is committed before Kubernetes is touched;
+// every unknown result remains retryable and the permanent journal recognizes
+// an ACK-loss retry even after bounded battle/auth records expire.
+func (u *AllocatorUsecase) AbortPreactiveBattle(ctx context.Context, request battleabort.Request) error {
+	if !request.Complete() {
+		return errcode.New(errcode.ErrInvalidArg, "complete battle allocation abort request required")
+	}
+	if !u.modelB || u.abortRepo == nil || u.authoritativeAlloc == nil {
+		return errcode.New(errcode.ErrInvalidState,
+			"battle allocation abort requires Redis Model-B authority")
+	}
+
+	// Do not create the permanent ABORT fence for a legacy active record until
+	// its exact Pod UID is durable.  If battle/auth are already gone, defer to
+	// the permanent abort journal below so ACK-loss replay still works.
+	preflight, err := u.authRepo.ReadAuthority(ctx, request.MatchID)
+	if err != nil {
+		return err
+	}
+	if preflight.BattleFound {
+		if _, err := u.ensureDurableReleasePodUID(ctx, request.MatchID, request.Target.PodName,
+			data.BattleExpectedInstance{
+				AllocationID: request.Target.AllocationID, InstanceUID: request.Target.InstanceUID,
+				InstanceEpoch: request.Target.InstanceEpoch,
+			}, request.Target.ReleaseTrack); err != nil {
+			return err
+		}
+	}
+	fence, err := u.abortRepo.FenceAllocationAbortExpected(ctx, request)
+	if err != nil {
+		return err
+	}
+	if fence.Released {
+		completed, completeErr := u.abortRepo.CompleteAllocationAbortExpected(
+			ctx, request, u.dsCredentialTTL, u.battleTTL())
+		if completeErr != nil {
+			return completeErr
+		}
+		if !completed {
+			return errcode.New(errcode.ErrUnavailable,
+				"battle %d allocation abort ACK cleanup pending", request.MatchID)
+		}
+		return nil
+	}
+	battle := fence.Battle
+	if battle == nil || battle.GetMatchId() != request.MatchID ||
+		battle.GetDsPodName() != request.Target.PodName || battle.GetPodUid() == "" {
+		return errcode.New(errcode.ErrInvalidState,
+			"battle %d allocation abort fence lacks exact pod authority", request.MatchID)
+	}
+	allocation := &data.AuthoritativeGameServerAllocation{
+		PodName: request.Target.PodName, InstanceUID: request.Target.InstanceUID,
+		PodUID: battle.GetPodUid(), InstanceEpoch: request.Target.InstanceEpoch,
+		AllocationID: request.Target.AllocationID, ReleaseTrack: request.Target.ReleaseTrack,
+	}
+	if err := u.releaseGameServer(ctx, request.MatchID, request.Target.PodName, allocation); err != nil {
+		return err
+	}
+	if !u.deliverAbandoned(ctx, request.MatchID, request.Target.PodName,
+		battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode()) {
+		return errcode.New(errcode.ErrUnavailable,
+			"battle %d allocation abort lifecycle publish pending", request.MatchID)
+	}
+	if err := u.lifecycleProofRepo.RecordAllocationLifecyclePublished(
+		ctx, request.MatchID, request.Target); err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d allocation abort lifecycle marker pending", request.MatchID)
+	}
+	completed, err := u.abortRepo.CompleteAllocationAbortExpected(
+		ctx, request, u.dsCredentialTTL, u.battleTTL())
+	if err != nil {
+		return err
+	}
+	if !completed {
+		return errcode.New(errcode.ErrUnavailable,
+			"battle %d allocation abort completion pending", request.MatchID)
+	}
+	plog.With(ctx).Infow("msg", "battle_allocation_abort_completed",
+		"match_id", request.MatchID, "operation_id", request.OperationID,
+		"allocation_id", request.Target.AllocationID)
 	return nil
 }
 
@@ -861,6 +1301,14 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 		proof.Credential.InstanceEpoch != expected.InstanceEpoch {
 		return errcode.New(errcode.ErrInvalidArg, "battle terminal release proof is incomplete")
 	}
+	// Rolling-upgrade gate: pod_uid was added after the first Model-B records.
+	// It must be durably present before the terminal CAS.  Legacy records may
+	// only be backfilled from exact K8s GameServer/allocation/owned-Pod reads;
+	// missing or same-name replacement objects remain retryable and do not
+	// create a permanent TERMINATING fence.
+	if _, err := u.ensureDurableReleasePodUID(ctx, matchID, podName, expected, ""); err != nil {
+		return err
+	}
 	terminated, err := u.authRepo.TerminateResultExpected(ctx, matchID, expected, proof)
 	if err != nil {
 		return err
@@ -869,9 +1317,19 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 		return errcode.New(errcode.ErrDSAllocationFailed,
 			"battle %d stable identity changed before terminal release", matchID)
 	}
+	snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d terminal authority reread failed", matchID)
+	}
+	if !exactTerminatedReleaseSnapshot(snapshot, matchID, podName, expected) {
+		return errcode.New(errcode.ErrUnavailable,
+			"battle %d terminal authority snapshot is incomplete or changed", matchID)
+	}
 	allocation := &data.AuthoritativeGameServerAllocation{
 		PodName: podName, InstanceUID: expected.InstanceUID,
 		InstanceEpoch: expected.InstanceEpoch, AllocationID: expected.AllocationID,
+		PodUID: snapshot.Battle.GetPodUid(), ReleaseTrack: snapshot.Battle.GetReleaseTrack(),
 	}
 	if err := u.releaseGameServer(ctx, matchID, podName, allocation); err != nil {
 		plog.With(ctx).Warnw("msg", "terminal_gameserver_release_unconfirmed",
@@ -883,6 +1341,123 @@ func (u *AllocatorUsecase) ReleaseBattleExpected(
 		"match_id", matchID, "allocation_id", expected.AllocationID,
 		"pod", podName, "uid", expected.InstanceUID)
 	return nil
+}
+
+func (u *AllocatorUsecase) ensureDurableReleasePodUID(
+	ctx context.Context,
+	matchID uint64,
+	podName string,
+	expected data.BattleExpectedInstance,
+	expectedReleaseTrack string,
+) (string, error) {
+	snapshot, err := u.authRepo.ReadAuthority(ctx, matchID)
+	if err != nil {
+		return "", errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d release preflight authority read failed", matchID)
+	}
+	if !exactReleaseIdentitySnapshot(snapshot, matchID, podName, expected, expectedReleaseTrack) {
+		return "", errcode.New(errcode.ErrDSAllocationFailed,
+			"battle %d release preflight identity changed", matchID)
+	}
+	if snapshot.Battle.GetPodUid() != "" {
+		return snapshot.Battle.GetPodUid(), nil
+	}
+	podUID, err := u.authoritativeAlloc.ResolveExpectedPodUID(ctx,
+		&data.AuthoritativeGameServerAllocation{
+			PodName: podName, InstanceUID: expected.InstanceUID,
+			InstanceEpoch: expected.InstanceEpoch, AllocationID: expected.AllocationID,
+		})
+	if err != nil || podUID == "" {
+		return "", errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d legacy pod UID exact preflight failed", matchID)
+	}
+	err = u.repo.UpdateBattleKeepTTL(ctx, matchID, updateMaxRetry, func(battle *dsv1.BattleStorageRecord) error {
+		if !exactReleaseBattleIdentity(battle, matchID, podName, expected, expectedReleaseTrack) {
+			return errcode.New(errcode.ErrDSAllocationFailed,
+				"battle %d changed during pod UID backfill", matchID)
+		}
+		switch battle.GetPodUid() {
+		case "":
+			battle.PodUid = podUID
+		case podUID:
+		default:
+			return errcode.New(errcode.ErrDSAllocationFailed,
+				"battle %d pod UID changed during backfill", matchID)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d legacy pod UID durable backfill failed", matchID)
+	}
+	verified, err := u.authRepo.ReadAuthority(ctx, matchID)
+	if err != nil || !exactReleaseIdentitySnapshot(verified, matchID, podName, expected, expectedReleaseTrack) ||
+		verified.Battle.GetPodUid() != podUID {
+		return "", errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle %d legacy pod UID backfill verification failed", matchID)
+	}
+	return podUID, nil
+}
+
+func exactReleaseBattleIdentity(
+	battle *dsv1.BattleStorageRecord,
+	matchID uint64,
+	podName string,
+	expected data.BattleExpectedInstance,
+	expectedReleaseTrack string,
+) bool {
+	return battle != nil && battle.GetMatchId() == matchID &&
+		battle.GetAllocationId() == expected.AllocationID && battle.GetDsPodName() == podName &&
+		battle.GetGameserverUid() == expected.InstanceUID &&
+		battle.GetInstanceEpoch() == expected.InstanceEpoch &&
+		releasetrack.Valid(battle.GetReleaseTrack()) &&
+		(expectedReleaseTrack == "" || battle.GetReleaseTrack() == expectedReleaseTrack) &&
+		releaseStateAllowsPodUIDBackfill(battle.GetState())
+}
+
+func releaseStateAllowsPodUIDBackfill(state string) bool {
+	switch state {
+	case stateWarming, stateReady, stateRunning, stateEnded, stateAbandoned,
+		statePreactiveReleasing, stateAllocationAbort:
+		return true
+	default:
+		return false
+	}
+}
+
+func exactReleaseIdentitySnapshot(
+	snapshot data.BattleAuthoritySnapshot,
+	matchID uint64,
+	podName string,
+	expected data.BattleExpectedInstance,
+	expectedReleaseTrack string,
+) bool {
+	if !snapshot.BattleFound || !exactReleaseBattleIdentity(
+		snapshot.Battle, matchID, podName, expected, expectedReleaseTrack) {
+		return false
+	}
+	// auth may have naturally expired before result relay; TerminateResultExpected
+	// has a proof-bound reconstruction path.  When present it must still bind the
+	// exact stable allocation.
+	return !snapshot.AuthFound || (snapshot.Auth != nil && snapshot.Auth.GetMatchId() == matchID &&
+		snapshot.Auth.GetAllocationId() == expected.AllocationID && snapshot.Auth.GetDsPodName() == podName &&
+		snapshot.Auth.GetInstanceUid() == expected.InstanceUID &&
+		snapshot.Auth.GetInstanceEpoch() == expected.InstanceEpoch)
+}
+
+func exactTerminatedReleaseSnapshot(
+	snapshot data.BattleAuthoritySnapshot,
+	matchID uint64,
+	podName string,
+	expected data.BattleExpectedInstance,
+) bool {
+	return snapshot.AuthFound && snapshot.Auth != nil && snapshot.BattleFound && snapshot.Battle != nil &&
+		exactReleaseBattleIdentity(snapshot.Battle, matchID, podName, expected, "") &&
+		snapshot.Battle.GetState() == stateEnded && snapshot.Battle.GetPodUid() != "" &&
+		snapshot.Auth.GetMatchId() == matchID && snapshot.Auth.GetAllocationId() == expected.AllocationID &&
+		snapshot.Auth.GetDsPodName() == podName && snapshot.Auth.GetInstanceUid() == expected.InstanceUID &&
+		snapshot.Auth.GetInstanceEpoch() == expected.InstanceEpoch &&
+		snapshot.Auth.GetPhase() == dsv1.BattleAuthPhase_BATTLE_AUTH_PHASE_TERMINATING
 }
 
 // FinalizeBattleReleaseExpected 是 durable released_at_ms 之后的 phase2。它只校验同一
@@ -945,7 +1520,7 @@ func (u *AllocatorUsecase) HeartbeatAuthorized(
 	tsMs int64,
 ) (*HeartbeatResult, error) {
 	return u.HeartbeatAuthorizedWithPlayers(ctx, matchID, id, playerCount, state, tsMs,
-		false, nil, nil)
+		false, 0, "", nil, nil)
 }
 
 // HeartbeatAuthorizedWithPlayers 是 Battle→Hub 物理离场闭环心跳。只有
@@ -960,16 +1535,42 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	state string,
 	_ int64,
 	snapshotPresent bool,
+	censusCapabilityVersion uint32,
+	censusID string,
 	activePlayerIDs []uint64,
 	acknowledgedDepartureIDs []string,
 ) (*HeartbeatResult, error) {
 	if !u.modelB {
 		return nil, errcode.New(errcode.ErrInvalidState, "battle Redis authority is not enabled")
 	}
-	if snapshotPresent && playerCount != int32(len(activePlayerIDs)) {
+	if snapshotPresent && playerCount > int32(len(activePlayerIDs)) {
 		return nil, errcode.New(errcode.ErrInvalidArg,
-			"battle heartbeat player_count=%d does not match active snapshot=%d",
+			"battle heartbeat player_count=%d exceeds complete owner census=%d",
 			playerCount, len(activePlayerIDs))
+	}
+	// Rolling Model-B writers may encounter an active record written before
+	// pod_uid existed.  Backfill on the first heartbeat, before
+	// ActivateHeartbeat can atomically turn an empty battle into ABANDONED and
+	// make its authority permanent.  A missing/recreated K8s object rejects this
+	// heartbeat with zero Redis state transition.
+	preflightSnapshot, preflightReadErr := u.authRepo.ReadAuthority(ctx, matchID)
+	if preflightReadErr != nil {
+		return nil, preflightReadErr
+	}
+	if preflightSnapshot.BattleFound && preflightSnapshot.Battle != nil &&
+		preflightSnapshot.Battle.GetPodUid() == "" &&
+		preflightSnapshot.Battle.GetAllocationId() != "" &&
+		preflightSnapshot.Battle.GetDsPodName() == id.PodName &&
+		preflightSnapshot.Battle.GetGameserverUid() == id.InstanceUID &&
+		preflightSnapshot.Battle.GetInstanceEpoch() == id.InstanceEpoch &&
+		legacyPodUIDPreflightCredentialMatches(preflightSnapshot, id) {
+		if _, err := u.ensureDurableReleasePodUID(ctx, matchID, id.PodName,
+			data.BattleExpectedInstance{
+				AllocationID: preflightSnapshot.Battle.GetAllocationId(),
+				InstanceUID:  id.InstanceUID, InstanceEpoch: id.InstanceEpoch,
+			}, preflightSnapshot.Battle.GetReleaseTrack()); err != nil {
+			return nil, err
+		}
 	}
 	out, err := u.authRepo.ActivateHeartbeat(ctx, matchID, id, data.BattleHeartbeatInput{
 		PlayerCount:        playerCount,
@@ -998,7 +1599,8 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 			data.BattleDepartureSource{
 				DSPodName: id.PodName, GameServerUID: id.InstanceUID,
 				InstanceEpoch: id.InstanceEpoch, AllocationID: out.Battle.GetAllocationId(),
-			}, snapshotPresent, activePlayerIDs, acknowledgedDepartureIDs)
+			}, snapshotPresent, censusCapabilityVersion, censusID,
+			activePlayerIDs, acknowledgedDepartureIDs)
 		if reconcileErr != nil {
 			return nil, reconcileErr
 		}
@@ -1006,7 +1608,8 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	}
 	if out.FirstAbandon && out.Battle != nil {
 		finished := u.finishEmptyAbandon(ctx, matchID, out.Battle.DsPodName,
-			out.Battle.GameserverUid, out.Battle.AllocationId, out.Battle.InstanceEpoch,
+			out.Battle.GameserverUid, out.Battle.PodUid, out.Battle.AllocationId,
+			out.Battle.ReleaseTrack, out.Battle.InstanceEpoch,
 			out.Battle.PlayerIds, out.Battle.MapId, out.Battle.GameMode)
 		result.Command = finished.Command
 		return result, nil
@@ -1022,6 +1625,26 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	return result, nil
 }
 
+func legacyPodUIDPreflightCredentialMatches(
+	snapshot data.BattleAuthoritySnapshot,
+	id data.BattleCredentialIdentity,
+) bool {
+	if !snapshot.AuthFound || snapshot.Auth == nil || snapshot.Battle == nil ||
+		snapshot.Auth.GetMatchId() != snapshot.Battle.GetMatchId() ||
+		snapshot.Auth.GetAllocationId() != snapshot.Battle.GetAllocationId() ||
+		snapshot.Auth.GetDsPodName() != id.PodName || snapshot.Auth.GetInstanceUid() != id.InstanceUID ||
+		snapshot.Auth.GetInstanceEpoch() != id.InstanceEpoch || id.ExpMs <= uint64(time.Now().UnixMilli()) {
+		return false
+	}
+	matches := func(c *dsv1.BattleDSCredential) bool {
+		return c != nil && c.GetGen() == id.Gen && c.GetJti() == id.JTI && c.GetExpMs() == id.ExpMs &&
+			c.GetKid() == id.Kid && c.GetInstanceUid() == id.InstanceUID &&
+			c.GetInstanceEpoch() == id.InstanceEpoch && c.GetTokenSha256() == id.TokenSHA256 &&
+			c.GetWriterEpoch() == id.WriterEpoch
+	}
+	return matches(snapshot.Auth.GetActive()) || matches(snapshot.Auth.GetPending())
+}
+
 // EnsurePlayerDeparture 是 Login/Hub 签发 Hub ticket 前的物理源离场门。
 // pending 是正常可重试结果，不是成功；只有 Departed=true 才能继续 Hub。
 func (u *AllocatorUsecase) EnsurePlayerDeparture(
@@ -1032,7 +1655,30 @@ func (u *AllocatorUsecase) EnsurePlayerDeparture(
 		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrUnavailable,
 			"battle physical departure requires Redis authority")
 	}
-	return u.repo.EnsurePlayerDeparture(ctx, expected)
+	if u.departureVerifier == nil {
+		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrUnavailable,
+			"battle departure placement verifier unavailable")
+	}
+	if err := u.departureVerifier.VerifyPendingHubBattleDeparture(ctx, expected); err != nil {
+		return data.BattlePlayerDepartureResult{}, err
+	}
+	result, err := u.repo.EnsurePlayerDeparture(ctx, expected)
+	if err != nil || !result.Departed {
+		return result, err
+	}
+	// Physical absence is not yet permission to admit Hub. Publish the exact,
+	// signed source-departure attestation into the current PENDING placement
+	// before reporting departed=true to Login. If the RPC response is lost,
+	// the durable journal plus stable departure_id makes the next call replay
+	// the same proof; locator confirmation is exact-CAS and idempotent.
+	if result.DepartureID == "" {
+		return data.BattlePlayerDepartureResult{}, errcode.New(errcode.ErrInvalidState,
+			"battle departure completed without durable departure id")
+	}
+	if err := u.departureVerifier.ConfirmBattleSourceDeparture(ctx, expected, result.DepartureID); err != nil {
+		return data.BattlePlayerDepartureResult{}, err
+	}
+	return result, nil
 }
 
 // Heartbeat 处理 DS 上报(单向 unary,DS 每 5s 调)。刷新 last_heartbeat_ms + 状态。
@@ -1060,7 +1706,9 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 	var emptyAbandoned bool
 	var abandonPod string
 	var abandonUID string
+	var abandonPodUID string
 	var abandonAllocationID string
+	var abandonReleaseTrack string
 	var abandonInstanceEpoch uint32
 	var abandonPlayers []uint64
 	var abandonMapID uint32
@@ -1070,7 +1718,9 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 		// CAS 冲突重跑时以最后一轮为准,每轮重置出参标记
 		refreshActive = false
 		emptyAbandoned = false
-		if b.State == stateAllocationUncertain || b.State == statePreactiveReleasing {
+		if b.State == stateAllocationUncertain || b.State == stateAllocationReconciling ||
+			b.State == stateAllocationEmptyFence ||
+			b.State == statePreactiveReleasing || b.State == stateAllocationAbort {
 			return errHeartbeatAllocationFenced
 		}
 		// 已是终态(ended/abandoned):中止写回(哨兵错误),不刷新 TTL/active,令 DS 停机
@@ -1105,7 +1755,9 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 				emptyAbandoned = true
 				abandonPod = b.DsPodName
 				abandonUID = b.GameserverUid
+				abandonPodUID = b.PodUid
 				abandonAllocationID = b.AllocationId
+				abandonReleaseTrack = b.ReleaseTrack
 				abandonInstanceEpoch = b.InstanceEpoch
 				abandonPlayers = append([]uint64(nil), b.PlayerIds...)
 				abandonMapID = b.MapId
@@ -1152,7 +1804,8 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 	if emptyAbandoned {
 		// 空场超时判弃:回收 pod + 投递补偿 + 移出 active,回 stop 指令令 DS 停机。
 		return u.finishEmptyAbandon(ctx, matchID, abandonPod, abandonUID,
-			abandonAllocationID, abandonInstanceEpoch, abandonPlayers, abandonMapID, abandonGameMode), nil
+			abandonPodUID, abandonAllocationID, abandonReleaseTrack, abandonInstanceEpoch,
+			abandonPlayers, abandonMapID, abandonGameMode), nil
 	}
 	// 断线重连(docs/design/battle-reconnect.md §2.2):对局活跃时续期玩家 BATTLE 位置 TTL,
 	// 使玩家整局在线期间 login 都能检测到"在战斗中",支持中途掉线重登直连回原 battle DS。
@@ -1171,7 +1824,7 @@ func (u *AllocatorUsecase) Heartbeat(ctx context.Context, matchID uint64, podNam
 func (u *AllocatorUsecase) finishEmptyAbandon(
 	ctx context.Context,
 	matchID uint64,
-	podName, instanceUID, allocationID string,
+	podName, instanceUID, podUID, allocationID, releaseTrack string,
 	instanceEpoch uint32,
 	playerIDs []uint64,
 	mapID uint32,
@@ -1184,6 +1837,14 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 		fence := data.BattleExpectedInstance{
 			AllocationID: allocationID, InstanceUID: instanceUID, InstanceEpoch: instanceEpoch,
 		}
+		resolvedPodUID, preflightErr := u.ensureDurableReleasePodUID(
+			ctx, matchID, podName, fence, releaseTrack)
+		if preflightErr != nil {
+			plog.With(ctx).Warnw("msg", "empty_abandon_pod_uid_preflight_failed",
+				"match_id", matchID, "pod", podName, "err", preflightErr)
+			return &HeartbeatResult{Command: commandStop}
+		}
+		podUID = resolvedPodUID
 		terminated, terr := u.authRepo.TerminateExpected(
 			ctx, matchID, fence, stateAbandoned, u.dsCredentialTTL, u.battleTTL())
 		if !terminated {
@@ -1196,7 +1857,7 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 		}
 		expected = &data.AuthoritativeGameServerAllocation{
 			PodName: podName, InstanceUID: instanceUID, AllocationID: allocationID,
-			InstanceEpoch: instanceEpoch,
+			PodUID: podUID, InstanceEpoch: instanceEpoch, ReleaseTrack: releaseTrack,
 		}
 	}
 	if rerr := u.releaseGameServer(ctx, matchID, podName, expected); rerr != nil {
@@ -1208,6 +1869,15 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 	}
 	if u.deliverAbandoned(ctx, matchID, podName, playerIDs, mapID, gameMode) {
 		if u.modelB {
+			target := placement.Target{
+				PodName: podName, InstanceUID: instanceUID, InstanceEpoch: instanceEpoch,
+				AllocationID: allocationID, ReleaseTrack: releaseTrack,
+			}
+			if err := u.lifecycleProofRepo.RecordAllocationLifecyclePublished(ctx, matchID, target); err != nil {
+				plog.With(ctx).Warnw("msg", "empty_abandon_lifecycle_marker_failed",
+					"match_id", matchID, "allocation_id", allocationID, "err", err)
+				return &HeartbeatResult{Command: commandStop}
+			}
 			fence := data.BattleExpectedInstance{
 				AllocationID: allocationID, InstanceUID: instanceUID, InstanceEpoch: instanceEpoch,
 			}
@@ -1276,6 +1946,12 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 	defer ticker.Stop()
 	plog.With(ctx).Infow("msg", "heartbeat_sweep_started",
 		"interval", u.cfg.SweepInterval.String(), "timeout", u.cfg.HeartbeatTimeout.String())
+	// Recover the derived index immediately on process start. Waiting for the
+	// first ticker would leave a lost permanent tombstone invisible for a full
+	// sweep interval after every restart.
+	if err := u.sweepOnce(ctx); err != nil {
+		plog.With(ctx).Warnw("msg", "heartbeat_initial_sweep_failed", "err", err)
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -1301,6 +1977,9 @@ func (u *AllocatorUsecase) RunHeartbeatSweep(ctx context.Context) {
 // 把 TERMINATING auth+battle 置为永久，只有 ReleaseExpected 与 lifecycle 投递都明确
 // 成功后才由 ExpireTerminatedExpected 恢复有界 TTL；未知结果宁可不可用也不丢 fence。
 func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
+	if err := u.reconcileActiveIndexIfDue(ctx); err != nil {
+		return err
+	}
 	threshold := time.Now().Add(-u.cfg.HeartbeatTimeout.Std()).UnixMilli()
 	stale, err := u.repo.RangeStaleBattles(ctx, threshold)
 	if err != nil {
@@ -1315,9 +1994,28 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				"match_id", mid, "err", readErr)
 			continue
 		}
-		if found && inflight.State == stateAllocationUncertain {
-			plog.With(ctx).Debugw("msg", "allocation_uncertain_retained",
-				"match_id", mid, "allocation_id", inflight.AllocationId)
+		if found && (inflight.State == stateAllocationUncertain ||
+			inflight.State == stateAllocationReconciling) {
+			if u.modelB {
+				u.reconcileAllocationUncertain(ctx, inflight)
+			} else {
+				plog.With(ctx).Debugw("msg", "allocation_uncertain_retained_legacy_writer",
+					"match_id", mid, "allocation_id", inflight.AllocationId)
+			}
+			continue
+		}
+		if found && inflight.State == stateAllocationEmptyFence {
+			if u.modelB {
+				u.resumeEmptyAllocationTombstone(ctx, inflight)
+			}
+			// Old writers do not know this state and must remain read-only.
+			continue
+		}
+		if u.modelB && found && inflight.State == stateAbandoned && inflight.GetInstanceEpoch() == 0 {
+			// allocation_uncertain reconciliation committed ABANDONED but crashed
+			// before Kafka ACK/Expire. Reconfirm exact physical absence, then resume
+			// the durable lifecycle handoff.
+			u.resumeReconciledAllocationAbandoned(ctx, inflight)
 			continue
 		}
 		if found && inflight.State == statePreactiveReleasing {
@@ -1325,6 +2023,22 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			// 做 UID 条件 Release 并在明确成功后 purge，不会再次 GSA POST。
 			if u.modelB {
 				u.reconcilePreactiveRelease(ctx, inflight)
+			}
+			continue
+		}
+		if found && inflight.State == stateAllocationAbort {
+			if !u.modelB || u.abortRepo == nil {
+				continue
+			}
+			request, released, journalFound, journalErr := u.abortRepo.ReadAllocationAbort(ctx, mid)
+			if journalErr != nil || !journalFound {
+				plog.With(ctx).Warnw("msg", "allocation_abort_journal_unavailable",
+					"match_id", mid, "found", journalFound, "err", journalErr)
+				continue
+			}
+			if abortErr := u.AbortPreactiveBattle(ctx, request); abortErr != nil {
+				plog.With(ctx).Warnw("msg", "allocation_abort_reconcile_pending",
+					"match_id", mid, "released", released, "err", abortErr)
 			}
 			continue
 		}
@@ -1341,6 +2055,21 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 					"deleted", deleted, "err", deleteErr)
 			}
 			continue
+		}
+		if u.modelB && found && inflight.GetPodUid() == "" &&
+			inflight.GetDsPodName() != "" && inflight.GetGameserverUid() != "" &&
+			inflight.GetInstanceEpoch() > 0 && inflight.GetAllocationId() != "" {
+			resolvedPodUID, preflightErr := u.ensureDurableReleasePodUID(
+				ctx, mid, inflight.GetDsPodName(), data.BattleExpectedInstance{
+					AllocationID: inflight.GetAllocationId(), InstanceUID: inflight.GetGameserverUid(),
+					InstanceEpoch: inflight.GetInstanceEpoch(),
+				}, inflight.GetReleaseTrack())
+			if preflightErr != nil {
+				plog.With(ctx).Warnw("msg", "model_b_stale_pod_uid_preflight_failed",
+					"match_id", mid, "pod", inflight.GetDsPodName(), "err", preflightErr)
+				continue
+			}
+			inflight.PodUid = resolvedPodUID
 		}
 		if u.modelB {
 			out, aerr := u.authRepo.AbandonIfStale(
@@ -1389,6 +2118,14 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 				AllocationID: b.GetAllocationId(), InstanceUID: b.GetGameserverUid(),
 				InstanceEpoch: b.GetInstanceEpoch(),
 			}
+			resolvedPodUID, preflightErr := u.ensureDurableReleasePodUID(
+				ctx, mid, b.GetDsPodName(), expectedInstance, b.GetReleaseTrack())
+			if preflightErr != nil {
+				plog.With(ctx).Warnw("msg", "model_b_sweep_pod_uid_preflight_failed",
+					"match_id", mid, "pod", b.GetDsPodName(), "err", preflightErr)
+				continue
+			}
+			b.PodUid = resolvedPodUID
 			terminated, terminateErr := u.authRepo.TerminateExpected(
 				ctx, mid, expectedInstance, stateAbandoned, u.dsCredentialTTL, u.battleTTL())
 			if !terminated {
@@ -1402,7 +2139,7 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			}
 			if rerr := u.releaseGameServer(ctx, mid, b.DsPodName, &data.AuthoritativeGameServerAllocation{
 				PodName: b.DsPodName, InstanceUID: b.GameserverUid, AllocationID: b.AllocationId,
-				InstanceEpoch: b.InstanceEpoch,
+				PodUID: b.PodUid, InstanceEpoch: b.InstanceEpoch,
 			}); rerr != nil {
 				plog.With(ctx).Warnw("msg", "model_b_sweep_release_failed",
 					"match_id", mid, "pod", b.DsPodName, "err", rerr)
@@ -1413,6 +2150,17 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 					"match_id", mid, "pod", b.DsPodName, "authority", "redis")
 			}
 			if u.deliverAbandoned(ctx, mid, b.DsPodName, b.PlayerIds, b.MapId, b.GameMode) {
+				target := placement.Target{
+					PodName: b.DsPodName, InstanceUID: b.GameserverUid,
+					InstanceEpoch: b.InstanceEpoch, AllocationID: b.AllocationId,
+					ReleaseTrack: b.ReleaseTrack,
+				}
+				if markerErr := u.lifecycleProofRepo.RecordAllocationLifecyclePublished(
+					ctx, mid, target); markerErr != nil {
+					plog.With(ctx).Warnw("msg", "model_b_sweep_lifecycle_marker_failed",
+						"match_id", mid, "allocation_id", b.AllocationId, "err", markerErr)
+					continue
+				}
 				if expired, eerr := u.authRepo.ExpireTerminatedExpected(
 					ctx, mid, expectedInstance, u.dsCredentialTTL, u.battleTTL()); eerr != nil || !expired {
 					plog.With(ctx).Warnw("msg", "model_b_sweep_expire_failed", "match_id", mid,
@@ -1499,6 +2247,27 @@ func (u *AllocatorUsecase) sweepOnce(ctx context.Context) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (u *AllocatorUsecase) reconcileActiveIndexIfDue(ctx context.Context) error {
+	if u.activeIndexReconciler == nil {
+		if u.modelB {
+			return errcode.New(errcode.ErrInvalidState,
+				"canonical battle active-index reconciler unavailable")
+		}
+		return nil
+	}
+	now := time.Now()
+	if !u.lastActiveIndexReconcile.IsZero() && activeIndexReconcileInterval > 0 &&
+		now.Sub(u.lastActiveIndexReconcile) < activeIndexReconcileInterval {
+		return nil
+	}
+	if err := u.activeIndexReconciler.ReconcileBattleActiveIndex(ctx, 256); err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"rebuild canonical battle active index")
+	}
+	u.lastActiveIndexReconcile = now
 	return nil
 }
 

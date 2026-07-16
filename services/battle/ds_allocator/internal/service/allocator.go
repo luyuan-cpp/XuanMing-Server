@@ -11,10 +11,14 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/luyuancpp/pandora/pkg/auth"
+	"github.com/luyuancpp/pandora/pkg/battleabort"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/middleware"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 
@@ -25,8 +29,9 @@ import (
 // AllocatorService 实现 dsv1.DSAllocatorServiceServer。
 type AllocatorService struct {
 	dsv1.UnimplementedDSAllocatorServiceServer
-	uc      *biz.AllocatorUsecase
-	dsGuard *middleware.DSCallbackGuard // DS 回调令牌守卫(审核 P1 #1);nil 等价 off
+	uc        *biz.AllocatorUsecase
+	dsGuard   *middleware.DSCallbackGuard // DS 回调令牌守卫(审核 P1 #1);nil 等价 off
+	abortAuth *internalrpcauth.Verifier   // Matchmaker-only, full-payload-bound destructive RPC
 }
 
 // NewAllocatorService 构造 AllocatorService。
@@ -36,6 +41,13 @@ func NewAllocatorService(uc *biz.AllocatorUsecase) *AllocatorService {
 
 // SetDSCallbackGuard 注入 DS 回调令牌守卫(可选依赖,main 在 ds_auth 已配时调用)。
 func (s *AllocatorService) SetDSCallbackGuard(g *middleware.DSCallbackGuard) { s.dsGuard = g }
+
+// SetAllocationAbortVerifier injects the independent Matchmaker→allocator
+// service-auth verifier. It is deliberately unrelated to player JWT,
+// placement proofs, Login resume auth, and DS callback credentials.
+func (s *AllocatorService) SetAllocationAbortVerifier(v *internalrpcauth.Verifier) {
+	s.abortAuth = v
+}
 
 // AllocateBattle 为 match 申请战斗 DS(matchmaker 全员确认后调)。
 func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.AllocateBattleRequest) (*dsv1.AllocateBattleResponse, error) {
@@ -119,6 +131,41 @@ func (s *AllocatorService) ReleaseBattle(ctx context.Context, req *dsv1.ReleaseB
 	return &dsv1.ReleaseBattleResponse{Code: commonv1.ErrCode_OK}, nil
 }
 
+// AbortPreactiveBattle is the signed allocation-saga compensation endpoint.
+// Authentication binds the canonical full body and consumes a shared Redis
+// nonce before the usecase may fence Redis or touch Kubernetes.
+func (s *AllocatorService) AbortPreactiveBattle(
+	ctx context.Context,
+	req *dsv1.AbortPreactiveBattleRequest,
+) (*dsv1.AbortPreactiveBattleResponse, error) {
+	request := battleabort.Request{
+		MatchID: req.GetMatchId(), OperationID: req.GetAllocationOperationId(),
+		Target: placement.Target{
+			PodName: req.GetDsPodName(), InstanceUID: req.GetGameserverUid(),
+			InstanceEpoch: req.GetInstanceEpoch(), AllocationID: req.GetAllocationId(),
+			ReleaseTrack: req.GetReleaseTrack(),
+		},
+	}
+	if !request.Complete() {
+		return &dsv1.AbortPreactiveBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	if s.abortAuth == nil {
+		return &dsv1.AbortPreactiveBattleResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+	}
+	if err := s.abortAuth.VerifyWithPayload(ctx,
+		dsv1.DSAllocatorService_AbortPreactiveBattle_FullMethodName,
+		request.MatchID, request.Canonical()); err != nil {
+		if errors.Is(err, internalrpcauth.ErrUnavailable) {
+			return &dsv1.AbortPreactiveBattleResponse{Code: commonv1.ErrCode_ERR_UNAVAILABLE}, nil
+		}
+		return &dsv1.AbortPreactiveBattleResponse{Code: commonv1.ErrCode_ERR_PERMISSION_DENY}, nil
+	}
+	if err := s.uc.AbortPreactiveBattle(ctx, request); err != nil {
+		return &dsv1.AbortPreactiveBattleResponse{Code: toProtoCode(err)}, nil
+	}
+	return &dsv1.AbortPreactiveBattleResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
 // EnsurePlayerDeparture 为 Battle→Hub 签票/准入提供 exact 物理离场证明。
 // departed=false 是必须稍后重试的正常 pending，调用方绝不得继续 Hub 流程。
 func (s *AllocatorService) EnsurePlayerDeparture(
@@ -126,13 +173,15 @@ func (s *AllocatorService) EnsurePlayerDeparture(
 	req *dsv1.EnsurePlayerDepartureRequest,
 ) (*dsv1.EnsurePlayerDepartureResponse, error) {
 	if req.GetMatchId() == 0 || req.GetPlayerId() == 0 || req.GetPlacementVersion() == 0 || req.GetOperationId() == "" ||
+		req.GetSourcePlacementVersion() == 0 || req.GetSourceOperationId() == "" ||
 		req.GetDsPodName() == "" || req.GetGameserverUid() == "" ||
 		req.GetInstanceEpoch() == 0 || req.GetAllocationId() == "" {
 		return &dsv1.EnsurePlayerDepartureResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
 	res, err := s.uc.EnsurePlayerDeparture(ctx, data.BattlePlayerDepartureExpected{
 		MatchID: req.GetMatchId(), PlayerID: req.GetPlayerId(), PlacementVersion: req.GetPlacementVersion(),
-		OperationID: req.GetOperationId(),
+		OperationID: req.GetOperationId(), SourcePlacementVersion: req.GetSourcePlacementVersion(),
+		SourceOperationID: req.GetSourceOperationId(),
 		Source: data.BattleDepartureSource{
 			DSPodName: req.GetDsPodName(), GameServerUID: req.GetGameserverUid(),
 			InstanceEpoch: req.GetInstanceEpoch(), AllocationID: req.GetAllocationId(),
@@ -176,7 +225,8 @@ func (s *AllocatorService) Heartbeat(ctx context.Context, req *dsv1.HeartbeatReq
 			TokenSHA256:   verified.TokenSHA256,
 			WriterEpoch:   verified.WriterEpoch,
 		}, req.GetPlayerCount(), req.GetState(), req.GetTsMs(),
-			req.GetActivePlayerSnapshotPresent(), req.GetActivePlayerIds(), req.GetAcknowledgedDepartureIds())
+			req.GetActivePlayerSnapshotPresent(), req.GetPlayerCensusCapabilityVersion(),
+			req.GetPlayerCensusId(), req.GetActivePlayerIds(), req.GetAcknowledgedDepartureIds())
 	} else {
 		// Legacy/off 灰度路径保持既有范围语义；Model B 开启后不会落到这里。
 		if checkErr := s.dsGuard.Check(ctx, middleware.DSScope{

@@ -60,6 +60,10 @@ type DSAllocator interface {
 	// mapID 是本局副本编号（客户端选择、经票据继承到 match），透传给 ds_allocator 决定 DS 加载哪张关卡；
 	// 0 = 让 ds_allocator 用其默认关卡（向后兼容旧客户端 / 未选副本）。
 	AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32) (*model.BattleAllocation, error)
+	// AbortBattleAllocation durably compensates an allocated target before any
+	// Battle ticket was published. The exact allocation operation and target are
+	// payload-authenticated by the concrete service client.
+	AbortBattleAllocation(ctx context.Context, matchID uint64, operationID string, allocation *model.BattleAllocation) error
 	SignBattleTickets(ctx context.Context, matchID uint64, playerIDs []uint64, allocation *model.BattleAllocation, bindings map[uint64]placement.Binding) (map[uint64]string, error)
 
 	// SignBattleTicket 给（重连 / 换设备的）玩家现签一张新的 battle DSTicket（新 jti、sub=playerID）。
@@ -94,10 +98,17 @@ type LocationNotifier interface {
 	FindOfflinePlayers(ctx context.Context, playerIDs []uint64) ([]uint64, error)
 }
 
-// PlacementCoordinator 是 Battle READY 前的权威 placement 硬门。
-// 同一个 operationID 的重复提交必须幂等；返回成功前，所有玩家都必须已绑定到本局
-// BATTLE_PENDING。nil 或任意错误都只能让 match 保持 ALLOCATING 重试，不能发布 READY。
+// PlacementCoordinator 是匹配受理及 Battle READY 前的权威 placement 硬门。
+// Presence/Location TTL 只表示网络活性，不能证明玩家当前可从 Hub 发起新局：
+//   - RequireStableHub 必须在 StartMatch 写任何 durable operation/claim/ticket 前证明全员
+//     都处于 exact STABLE_HUB；missing/pending/Battle/error 一律拒绝。
+//   - PreflightBattlePlacement 必须在外调 AllocateBattle 前再次只读校验，并允许同一
+//     durable operation 已经拥有的 BATTLE_PENDING，以覆盖 ACK-loss/restart 重放。
+//   - PrepareBattlePlacement 对同一个 operationID 的重复提交必须幂等；返回成功前，
+//     所有玩家都必须已绑定到本局 BATTLE_PENDING。
 type PlacementCoordinator interface {
+	RequireStableHub(ctx context.Context, playerIDs []uint64) error
+	PreflightBattlePlacement(ctx context.Context, operationID string, matchID uint64, playerIDs []uint64) error
 	PrepareBattlePlacement(ctx context.Context, operationID string, matchID uint64, playerIDs []uint64, allocation *model.BattleAllocation) (map[uint64]placement.Binding, error)
 }
 
@@ -105,12 +116,16 @@ type PlacementCoordinator interface {
 // BATTLE. Success means the old Hub PlayerController/Pawn departed (or its
 // exact instance UID was authoritatively torn down), not merely key cleanup.
 type HubDepartureCoordinator interface {
-	EnsureHubDeparted(ctx context.Context, playerIDs []uint64) error
+	EnsureHubDeparted(ctx context.Context, matchID uint64, operationID string,
+		playerIDs []uint64, bindings map[uint64]placement.Binding) error
 }
 
 type StubHubDepartureCoordinator struct{}
 
-func (StubHubDepartureCoordinator) EnsureHubDeparted(context.Context, []uint64) error { return nil }
+func (StubHubDepartureCoordinator) EnsureHubDeparted(context.Context, uint64, string,
+	[]uint64, map[uint64]placement.Binding) error {
+	return nil
+}
 
 // IDGenerator 生成唯一 match_id(snowflake)。
 type IDGenerator interface {
@@ -333,9 +348,13 @@ func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captain
 		return 0, err
 	}
 
-	// 战斗中禁止重复匹配（不变量 §1：玩家同一时刻只能在一个 Location）。
-	// 权威态在 player_locator：任一成员正处于 BATTLE → 整队拒绝入队。
-	if err := u.ensureNoneInBattle(ctx, members); err != nil {
+	// StartMatch 的零副作用最终门必须读 durable placement，而不是短 TTL
+	// Location/presence。只有全员 exact STABLE_HUB 才允许创建 start operation；
+	// UNKNOWN、PENDING、BATTLE 或 authority error 都在任何 claim/ticket/op 之前返回。
+	if u.placement == nil {
+		return 0, errcode.New(errcode.ErrUnavailable, "placement authority unavailable")
+	}
+	if err := u.placement.RequireStableHub(ctx, memberPlayerIDs(members)); err != nil {
 		return 0, err
 	}
 	if err := u.preflightStartClaims(ctx, members); err != nil {
@@ -989,17 +1008,70 @@ func (u *MatchUsecase) ReleaseMatch(ctx context.Context, matchID uint64, fallbac
 		}
 	}
 
-	var joined error
-	// 删确属本局的票据(idempotent)。ticketSet 先完整建立，供后续 claim compare-delete；
-	// 即使 ticket record 已删除，也仍能证明旧 claim 属于本局。
+	// canonical match 已缺失时，只能从 fallback roster 建立机械证明：claim
+	// 精确指向 tid、tid 精确声明 expected match，且 player 确实在该 ticket
+	// roster。任何缺票/损坏都是 UNKNOWN，不能猜成“这是旧局 claim”。
 	ticketSet := make(map[uint64]struct{}, len(ticketIDs))
 	for _, tid := range ticketIDs {
 		ticketSet[tid] = struct{}{}
 	}
-	for _, tid := range ticketIDs {
-		if err := u.repo.DeleteTicket(ctx, tid); err != nil {
-			joined = errors.Join(joined, fmt.Errorf("delete ticket %d: %w", tid, err))
+	if !matchFound {
+		fallbackSnapshot := make([]uint64, 0, len(playerSet))
+		for pid := range playerSet {
+			fallbackSnapshot = append(fallbackSnapshot, pid)
 		}
+		for _, pid := range fallbackSnapshot {
+			tid, claimed, claimErr := u.repo.GetPlayerTicket(ctx, pid)
+			if claimErr != nil {
+				return fmt.Errorf("discover player %d claim for missing match %d: %w", pid, matchID, claimErr)
+			}
+			if !claimed {
+				continue
+			}
+			ticket, found, ticketErr := u.repo.GetTicket(ctx, tid)
+			if ticketErr != nil {
+				return fmt.Errorf("discover ticket %d for missing match %d: %w", tid, matchID, ticketErr)
+			}
+			if !found {
+				return errcode.New(errcode.ErrUnavailable,
+					"missing match %d player %d claim points to missing ticket %d", matchID, pid, tid)
+			}
+			if ticket.GetMatchId() != matchID {
+				// Exact proof that this is a newer/different operation; leave it intact.
+				continue
+			}
+			if memberIndex(ticket.GetMembers(), pid) < 0 {
+				return errcode.New(errcode.ErrUnavailable,
+					"missing match %d player %d is not owner/member of claimed ticket %d", matchID, pid, tid)
+			}
+			if _, exists := ticketSet[tid]; !exists {
+				ticketSet[tid] = struct{}{}
+				ticketIDs = append(ticketIDs, tid)
+			}
+			for _, member := range ticket.GetMembers() {
+				if member.GetPlayerId() != 0 {
+					playerSet[member.GetPlayerId()] = struct{}{}
+				}
+			}
+		}
+	}
+
+	var joined error
+	// WATCH/CAS 删确属本局的票据。先完成全部 ticket phase；任一漂移/错误时
+	// 不进入 claim phase，canonical/outbox 会保留并重试。
+	for _, tid := range ticketIDs {
+		_, found, currentMatchID, err := u.repo.DeleteTicketIfMatch(ctx, tid, matchID)
+		if err != nil {
+			joined = errors.Join(joined, fmt.Errorf("compare-delete ticket %d for match %d: %w", tid, matchID, err))
+			continue
+		}
+		if found && currentMatchID != matchID {
+			joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+				"ticket %d drifted from match %d to match %d", tid, matchID, currentMatchID))
+		}
+	}
+	if joined != nil {
+		return joined
 	}
 
 	// 删每个成员的 player→ticket 归属(仅当确属本局,防误删结算后新一局 claim)。
@@ -1037,13 +1109,33 @@ func (u *MatchUsecase) releasePlayerClaim(ctx context.Context, matchID, playerID
 	}
 	belongs := false
 	if _, in := ticketSet[tid]; in {
+		// Exact ticket IDs are globally non-reusable. Still fail closed if a
+		// conflicting record is visible before the claim CAS (defends rollout or
+		// operator mistakes that violate that invariant).
+		current, found, gerr := u.repo.GetTicket(ctx, tid)
+		if gerr != nil {
+			return fmt.Errorf("recheck ticket %d for player %d release: %w", tid, playerID, gerr)
+		}
+		if found && current.GetMatchId() != matchID {
+			return errcode.New(errcode.ErrUnavailable,
+				"player %d claim ticket %d was reused by match %d", playerID, tid, current.GetMatchId())
+		}
 		belongs = true
 	} else {
 		t, found, gerr := u.repo.GetTicket(ctx, tid)
 		if gerr != nil {
 			return fmt.Errorf("get ticket %d for player %d release: %w", tid, playerID, gerr)
 		}
-		belongs = found && t.MatchId == matchID
+		if !found {
+			return errcode.New(errcode.ErrUnavailable,
+				"player %d claim points to unproven missing ticket %d while releasing match %d", playerID, tid, matchID)
+		}
+		if t.GetMatchId() == matchID {
+			// A same-match edge appeared after the discovery phase. Retry from the
+			// beginning so its ticket is conditionally deleted before its claim.
+			return errcode.New(errcode.ErrUnavailable,
+				"late ticket %d for match %d requires release rediscovery", tid, matchID)
+		}
 	}
 	if !belongs {
 		// claim 指向别的票据(玩家结算后已发起新一局)→ 不误删。
@@ -1143,6 +1235,67 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 	return nil
 }
 
+// queueAcceptedMatchAllocation is the formation commit point for auto-confirm
+// and solo matches. The canonical match is first created in CONFIRM, then every
+// ticket reservation and player claim is made durable, and only then can this
+// helper CAS it to ALLOCATING. A process crash before this point therefore
+// cannot start a Battle DS for a partially formed match.
+//
+// The operation is idempotent so the canonical reconciler can finish the exact
+// same handoff after a process crash or a lost Redis acknowledgement.
+func (u *MatchUsecase) queueAcceptedMatchAllocation(
+	ctx context.Context,
+	candidate *matchv1.MatchStorageRecord,
+) (*matchv1.MatchStorageRecord, error) {
+	if candidate == nil || candidate.GetMatchId() == 0 {
+		return nil, errcode.New(errcode.ErrInvalidArg, "accepted match required")
+	}
+	if candidate.GetStage() != stageConfirm || !allAccepted(candidate.GetMembers()) {
+		return nil, errcode.New(errcode.ErrInvalidState,
+			"match %d is not a fully accepted formation", candidate.GetMatchId())
+	}
+	// This also repairs a claim persistence ACK loss. Missing/drifted ticket
+	// reservations remain retryable and block the transition fail-closed.
+	if err := u.ensureMatchDiscovery(ctx, candidate); err != nil {
+		return nil, err
+	}
+
+	var queued *matchv1.MatchStorageRecord
+	err := u.repo.UpdateMatchWithLock(ctx, candidate.GetMatchId(), u.cfg.OptimisticRetry,
+		func(rec *matchv1.MatchStorageRecord) error {
+			switch rec.GetStage() {
+			case stageAllocating, stageReady:
+				// A previous attempt may have committed and lost its ACK.
+				queued = cloneMatch(rec)
+				return nil
+			case stageConfirm:
+				if !allAccepted(rec.GetMembers()) {
+					return errcode.New(errcode.ErrInvalidState,
+						"match %d no longer fully accepted", rec.GetMatchId())
+				}
+			default:
+				return errcode.New(errcode.ErrInvalidState,
+					"match %d stage=%d cannot enter allocation", rec.GetMatchId(), rec.GetStage())
+			}
+			rec.Stage = stageAllocating
+			if rec.AllocationOperationId == "" {
+				rec.AllocationOperationId = allocationOperationID()
+			}
+			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_PENDING
+			rec.AllocationNextAttemptAtMs = time.Now().UnixMilli()
+			queued = cloneMatch(rec)
+			return nil
+		}, u.matchTTL())
+	if err != nil {
+		return nil, err
+	}
+	if queued == nil {
+		return nil, errcode.New(errcode.ErrMatchConcurrent,
+			"match %d allocation handoff not committed", candidate.GetMatchId())
+	}
+	return queued, nil
+}
+
 // onMatchFailed 处理确认失败:无过错票据退回队列,过错票据(拒绝者 / 超时未确认者)
 // 删除并释放归属,推 FAILED 进度。
 //
@@ -1174,6 +1327,8 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 // failMatch 是失败收尾的公共骨架(onMatchFailed / 成局前在线校验共用):
 // 推 FAILED 给全体 → 逐票按 isFaulty 判责(过错删除释放归属 / 无过错退回队列并续 claim
 // 补推 QUEUEING) → 移出 active → match 缩短 TTL。
+// 若 allocation 已 checkpoint，调用方必须先在 ALLOCATING 阶段取得 signed abort 的
+// definitive success，再 CAS FAILED；failMatch 绝不在票据补偿后倒置执行外部回收。
 // 守卫:只处理仍归属本 match 的票据(match_id 相等),并发退回/归属他局的票据盲写
 // 会把他局在进票据抽回队列(违反不变量 §1),一律跳过;也使本函数可幂等重跑。
 func (u *MatchUsecase) failMatch(ctx context.Context, m *matchv1.MatchStorageRecord, isFaulty func(tid uint64, ticket *matchv1.MatchTicketStorageRecord) bool) error {
@@ -1290,11 +1445,211 @@ func allocationRetryDelay(attempt uint32) time.Duration {
 	return d
 }
 
+func definitePlacementConflict(err error) bool {
+	return errcode.As(err) == errcode.ErrLocatorConflict
+}
+
+// exactAllocationSnapshot fences every ALLOCATING terminal writer to the
+// precise durable generation it observed. Stage alone is insufficient: a
+// concurrent worker may already have checkpointed a DS or moved the same match
+// into ABORTING. Neither a stale liveness result nor an allocator error from an
+// older request may erase that newer authority.
+func exactAllocationSnapshot(
+	rec *matchv1.MatchStorageRecord,
+	snapshot *matchv1.MatchStorageRecord,
+	phase matchv1.MatchAllocationPhase,
+) bool {
+	return rec != nil && snapshot != nil &&
+		rec.GetMatchId() != 0 && rec.GetMatchId() == snapshot.GetMatchId() &&
+		rec.GetStage() == stageAllocating && snapshot.GetStage() == stageAllocating &&
+		rec.GetAllocationPhase() == phase && snapshot.GetAllocationPhase() == phase &&
+		placement.ValidOperationID(rec.GetAllocationOperationId()) &&
+		rec.GetAllocationOperationId() == snapshot.GetAllocationOperationId() &&
+		proto.Equal(rec.GetBattleTarget(), snapshot.GetBattleTarget())
+}
+
+func exactUncheckpointedRequestingAllocation(
+	rec *matchv1.MatchStorageRecord,
+	snapshot *matchv1.MatchStorageRecord,
+) bool {
+	return exactAllocationSnapshot(rec, snapshot,
+		matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING) &&
+		rec.GetBattleTarget() == nil && snapshot.GetBattleTarget() == nil
+}
+
+// failAllocationPlacementConflict converts a canonical placement contradiction
+// into a durable terminal match before compensating tickets/claims.  Mark every
+// member rejected so a crash during failMatch cannot make the generic FAILED
+// reconciler requeue an already-invalid match on restart; it will deterministically
+// compare-delete every ticket/claim owned by this match instead.
+func (u *MatchUsecase) failAllocationPlacementConflict(
+	ctx context.Context,
+	job *matchv1.MatchStorageRecord,
+	cause error,
+) error {
+	// The local job clone may predate the allocation checkpoint. Atomically
+	// choose one of two paths from the current canonical record:
+	//   - no target: fail directly (no external side effect exists);
+	//   - exact target: first fence progress in durable ABORTING while the stage
+	//     stays ALLOCATING. READY accepts REQUESTING only, so no concurrent worker
+	//     can publish tickets after this linearization point.
+	var aborting, failed *matchv1.MatchStorageRecord
+	err := u.repo.UpdateMatchWithLock(ctx, job.GetMatchId(), u.cfg.OptimisticRetry,
+		func(rec *matchv1.MatchStorageRecord) error {
+			if rec.GetStage() != stageAllocating {
+				return errcode.New(errcode.ErrMatchConcurrent,
+					"match %d no longer allocating during placement conflict", rec.GetMatchId())
+			}
+			if rec.GetAllocationOperationId() != job.GetAllocationOperationId() {
+				return errcode.New(errcode.ErrMatchConcurrent,
+					"match %d allocation operation changed during placement conflict", rec.GetMatchId())
+			}
+			if rec.GetBattleTarget() != nil {
+				allocation, complete := allocationFromStoredTarget(rec.GetBattleTarget())
+				if !complete || !placement.ValidOperationID(rec.GetAllocationOperationId()) {
+					return errcode.New(errcode.ErrInvalidState,
+						"match %d has incomplete allocation abort checkpoint", rec.GetMatchId())
+				}
+				_ = allocation // completeness is rechecked by advanceAllocationAbort.
+				switch rec.GetAllocationPhase() {
+				case matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING,
+					matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING:
+					rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING
+					aborting = cloneMatch(rec)
+					return nil
+				default:
+					return errcode.New(errcode.ErrMatchConcurrent,
+						"match %d allocation phase=%d cannot begin abort", rec.GetMatchId(), rec.GetAllocationPhase())
+				}
+			}
+			if !exactUncheckpointedRequestingAllocation(rec, job) {
+				return errcode.New(errcode.ErrMatchConcurrent,
+					"match %d uncheckpointed allocation generation changed during placement conflict", rec.GetMatchId())
+			}
+			rec.Stage = stageFailed
+			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED
+			for _, member := range rec.GetMembers() {
+				member.Confirm = confirmRejected
+			}
+			failed = cloneMatch(rec)
+			return nil
+		}, u.matchTTL())
+	if err != nil {
+		if errcode.As(err) == errcode.ErrMatchConcurrent {
+			return cause
+		}
+		return errors.Join(cause, err)
+	}
+	if failed == nil {
+		if aborting == nil {
+			return cause
+		}
+		return u.advanceAllocationAbort(ctx, aborting, cause, false)
+	}
+	plog.With(ctx).Warnw("msg", "battle_placement_conflict_failed_match",
+		"match_id", failed.GetMatchId(), "operation_id", failed.GetAllocationOperationId(), "err", cause)
+	return errors.Join(cause, u.failMatch(ctx, failed, failedMatchClassifier(failed)))
+}
+
+// advanceAllocationAbort is the sole legal writer for an ABORTING job. On an
+// unknown RPC result it preserves ALLOCATING+ABORTING, all tickets/claims and
+// the active index. Only a definitive idempotent allocator ACK permits the CAS
+// to FAILED and deterministic termination of every ticket in this invalid run.
+func (u *MatchUsecase) advanceAllocationAbort(
+	ctx context.Context,
+	m *matchv1.MatchStorageRecord,
+	cause error,
+	scheduleRetry bool,
+) error {
+	if m == nil || m.GetStage() != stageAllocating ||
+		m.GetAllocationPhase() != matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING {
+		return cause
+	}
+	job := cloneMatch(m)
+	if scheduleRetry {
+		nowMs := time.Now().UnixMilli()
+		if job.GetAllocationNextAttemptAtMs() > nowMs {
+			return nil
+		}
+		job = nil
+		if err := u.repo.UpdateMatchWithLock(ctx, m.GetMatchId(), u.cfg.OptimisticRetry,
+			func(rec *matchv1.MatchStorageRecord) error {
+				if !exactAllocationSnapshot(rec, m,
+					matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING) {
+					return errcode.New(errcode.ErrMatchConcurrent,
+						"match %d allocation abort generation changed", rec.GetMatchId())
+				}
+				rec.AllocationAttempt++
+				rec.AllocationNextAttemptAtMs = nowMs + allocationRetryDelay(rec.GetAllocationAttempt()).Milliseconds()
+				job = cloneMatch(rec)
+				return nil
+			}, u.matchTTL()); err != nil {
+			if errcode.As(err) == errcode.ErrMatchConcurrent {
+				return nil
+			}
+			return errors.Join(cause, err)
+		}
+		if job == nil {
+			return cause
+		}
+	}
+
+	allocation, complete := allocationFromStoredTarget(job.GetBattleTarget())
+	if !complete || !placement.ValidOperationID(job.GetAllocationOperationId()) {
+		return errors.Join(cause, errcode.New(errcode.ErrInvalidState,
+			"match %d allocation abort checkpoint is incomplete", job.GetMatchId()))
+	}
+	if abortErr := u.allocator.AbortBattleAllocation(ctx, job.GetMatchId(),
+		job.GetAllocationOperationId(), allocation); abortErr != nil {
+		plog.With(ctx).Warnw("msg", "match_allocation_abort_pending",
+			"match_id", job.GetMatchId(), "operation_id", job.GetAllocationOperationId(),
+			"allocation_id", allocation.Target.AllocationID, "err", abortErr)
+		return errors.Join(cause, abortErr)
+	}
+
+	var failed *matchv1.MatchStorageRecord
+	err := u.repo.UpdateMatchWithLock(ctx, job.GetMatchId(), u.cfg.OptimisticRetry,
+		func(rec *matchv1.MatchStorageRecord) error {
+			checkpoint, checkpointed := allocationFromStoredTarget(rec.GetBattleTarget())
+			if !exactAllocationSnapshot(rec, job,
+				matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING) ||
+				!checkpointed || !sameBattleAllocation(checkpoint, allocation) {
+				return errcode.New(errcode.ErrMatchConcurrent,
+					"match %d allocation abort fence changed", rec.GetMatchId())
+			}
+			rec.Stage = stageFailed
+			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED
+			for _, member := range rec.GetMembers() {
+				// Partial BATTLE_PENDING must never auto-requeue. Deleting every
+				// ticket+claim forces a later StartMatch through RequireStableHub;
+				// terminal placement recovery, not TTL/client state, is the gate.
+				member.Confirm = confirmRejected
+			}
+			failed = cloneMatch(rec)
+			return nil
+		}, u.matchTTL())
+	if err != nil {
+		if errcode.As(err) == errcode.ErrMatchConcurrent {
+			return cause
+		}
+		return errors.Join(cause, err)
+	}
+	if failed == nil {
+		return cause
+	}
+	plog.With(ctx).Warnw("msg", "battle_placement_conflict_failed_match",
+		"match_id", failed.GetMatchId(), "operation_id", failed.GetAllocationOperationId(), "err", cause)
+	return errors.Join(cause, u.failMatch(ctx, failed, failedMatchClassifier(failed)))
+}
+
 // advanceAllocation 由服务生命周期 worker 推进 ALLOCATING job。
 // AllocateBattle 以 match_id 幂等，placement 以 operation_id 幂等；任一步未知都只延期重试。
 func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchStorageRecord) error {
 	if m == nil || m.Stage != stageAllocating {
 		return nil
+	}
+	if m.GetAllocationPhase() == matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING {
+		return u.advanceAllocationAbort(ctx, m, nil, true)
 	}
 	nowMs := time.Now().UnixMilli()
 	if m.AllocationNextAttemptAtMs > nowMs {
@@ -1305,6 +1660,10 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	if err := u.repo.UpdateMatchWithLock(ctx, m.MatchId, u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
 		if rec.Stage != stageAllocating {
 			return errcode.New(errcode.ErrInvalidState, "match %d no longer allocating", rec.MatchId)
+		}
+		if rec.GetAllocationPhase() == matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_ABORTING {
+			return errcode.New(errcode.ErrMatchConcurrent,
+				"match %d allocation abort already fenced", rec.GetMatchId())
 		}
 		if rec.AllocationNextAttemptAtMs > nowMs {
 			return errcode.New(errcode.ErrMatchConcurrent, "match %d allocation not due", rec.MatchId)
@@ -1328,6 +1687,13 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	}
 
 	playerIDs := memberPlayerIDs(job.Members)
+	// A legacy/in-flight creator may have written ALLOCATING before all ticket
+	// reservations or player claims became durable. Never create an external DS
+	// until the exact canonical discovery graph is complete. UNKNOWN remains the
+	// same retryable ALLOCATING operation; it is never interpreted as absence.
+	if err := u.ensureMatchDiscovery(ctx, job); err != nil {
+		return err
+	}
 
 	// 成局最终门:分配 DS 前批量校验全员在线(locator 在线保活:Hub DS 心跳捎带续期,
 	// 掉线/崩溃 → 断报 ≥30s → locator key 过期 = 离线)。掉线玩家所在票据判责删除,
@@ -1335,32 +1701,35 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	// 但白耗一次分配 + 其余 9 人被拉进残局)。
 	// 开关:LivenessGateEnabled 默认关闭(Hub DS player_ids 心跳未联发前会误判全员离线);
 	// 弱依赖:开关关闭 / locator 未配(nil)/ 查询失败 → 跳过校验继续成局,不误杀正常对局。
-	if offline := u.findOfflineMembers(ctx, playerIDs); len(offline) > 0 {
-		plog.With(ctx).Warnw("msg", "match_liveness_failed",
-			"match_id", job.MatchId, "offline_players", offline)
-		// 先把 match 记录 CAS 翻成 FAILED(守卫:仅 ALLOCATING 可翻)。若已被 expireOnce
-		// 等并发路径改走 FAILED/READY,说明收尾已由对方负责,这里不再重复 failMatch。
-		var failed *matchv1.MatchStorageRecord
-		werr := u.repo.UpdateMatchWithLock(ctx, job.MatchId, u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
-			if rec.Stage != stageAllocating {
-				return errcode.New(errcode.ErrMatchDeclined, "match %d stage=%d not allocating, skip liveness fail", job.MatchId, rec.Stage)
-			}
-			rec.Stage = stageFailed
-			rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED
-			for _, member := range rec.Members {
-				for _, offlinePlayerID := range offline {
-					if member.GetPlayerId() == offlinePlayerID {
-						member.Confirm = confirmRejected
+	if job.GetBattleTarget() == nil {
+		if offline := u.findOfflineMembers(ctx, playerIDs); len(offline) > 0 {
+			plog.With(ctx).Warnw("msg", "match_liveness_failed",
+				"match_id", job.MatchId, "offline_players", offline)
+			// 先把 match 记录 CAS 翻成 FAILED。守卫绑定 exact REQUESTING/op/nil-target
+			// 快照；并发 checkpoint/ABORTING/新 generation 均由对方继续推进，这里不收尾。
+			var failed *matchv1.MatchStorageRecord
+			werr := u.repo.UpdateMatchWithLock(ctx, job.MatchId, u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
+				if !exactUncheckpointedRequestingAllocation(rec, job) {
+					return errcode.New(errcode.ErrMatchConcurrent,
+						"match %d allocation generation changed before liveness fail", job.GetMatchId())
+				}
+				rec.Stage = stageFailed
+				rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED
+				for _, member := range rec.Members {
+					for _, offlinePlayerID := range offline {
+						if member.GetPlayerId() == offlinePlayerID {
+							member.Confirm = confirmRejected
+						}
 					}
 				}
+				failed = cloneMatch(rec)
+				return nil
+			}, u.matchTTL())
+			if werr != nil {
+				return werr
 			}
-			failed = cloneMatch(rec)
-			return nil
-		}, u.matchTTL())
-		if werr != nil {
-			return werr
+			return u.failMatch(ctx, failed, failedMatchClassifier(failed))
 		}
-		return u.failMatch(ctx, failed, failedMatchClassifier(failed))
 	}
 
 	// 两级撮合放置(scale-cellular-20m.md §4.4):算出"参战玩家多数所在 region/cell",
@@ -1374,6 +1743,10 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 			"players", len(playerIDs))
 	}
 
+	if u.placement == nil {
+		return errcode.New(errcode.ErrUnavailable, "placement coordinator unavailable for match %d", job.MatchId)
+	}
+
 	// AllocateBattle may have succeeded just before this process died.  Once an
 	// exact target is checkpointed on the canonical match, every later attempt
 	// must reuse it; calling the allocator again and accepting a different target
@@ -1384,19 +1757,32 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 			"match %d has incomplete durable battle target", job.MatchId)
 	}
 	if !checkpointed {
+		// Read-only durable placement gate immediately precedes the external
+		// allocator side effect.  A definite canonical contradiction terminates
+		// this match and compare-deletes its claims; transport/UNKNOWN keeps the
+		// same ALLOCATING job retryable and must never be inferred as absence.
+		if err := u.placement.PreflightBattlePlacement(ctx, job.GetAllocationOperationId(),
+			job.GetMatchId(), playerIDs); err != nil {
+			if definitePlacementConflict(err) {
+				return u.failAllocationPlacementConflict(ctx, job, err)
+			}
+			return err
+		}
 		var err error
 		allocation, err = u.allocator.AllocateBattle(ctx, job.MatchId, playerIDs, job.MapId)
 		if err != nil {
 			plog.With(ctx).Errorw("msg", "ds_allocate_failed", "match_id", job.MatchId, "err", err)
-			if errcode.As(err) != errcode.ErrDSAllocationFailed {
+			code := errcode.As(err)
+			if code != errcode.ErrDSAllocationFailed && code != errcode.ErrDSNoAvailable {
 				// transport/Redis/allocation_uncertain 都是未知结果，只能保持 ALLOCATING。
 				return err
 			}
 			// 只有 allocator 明确证明未产生可用 DS 时，才先 CAS FAILED，再执行退票补偿。
 			var failed *matchv1.MatchStorageRecord
 			werr := u.repo.UpdateMatchWithLock(ctx, job.MatchId, u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
-				if rec.Stage != stageAllocating {
-					return errcode.New(errcode.ErrMatchDeclined, "match %d no longer allocating", job.MatchId)
+				if !exactUncheckpointedRequestingAllocation(rec, job) {
+					return errcode.New(errcode.ErrMatchConcurrent,
+						"match %d allocation generation changed before definitive allocator failure", job.GetMatchId())
 				}
 				rec.Stage = stageFailed
 				rec.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_FAILED
@@ -1417,8 +1803,12 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 		}
 	}
 
-	if u.placement == nil {
-		return errcode.New(errcode.ErrUnavailable, "placement coordinator unavailable for match %d", job.MatchId)
+	// Linearize permission for each post-checkpoint external step against the
+	// allocator-abort fence. A worker holding an old local clone may continue
+	// only while the canonical generation is exact REQUESTING/op/target.
+	if _, err := u.fenceRequestingAllocationCheckpoint(ctx, job.GetMatchId(),
+		job.GetAllocationOperationId(), allocation); err != nil {
+		return err
 	}
 	bindings, err := u.placement.PrepareBattlePlacement(ctx, job.AllocationOperationId, job.MatchId, playerIDs, allocation)
 	if err != nil {
@@ -1430,6 +1820,9 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 		// target is driven through ds_allocator ABANDONED -> battle_result's signed
 		// terminal proof; locator's terminal fence then blocks this operation from
 		// being renewed or admitted while the proof-gated cancellation converges.
+		if definitePlacementConflict(err) {
+			return u.failAllocationPlacementConflict(ctx, job, err)
+		}
 		return err
 	}
 	if err := validatePreparedBindings(job.AllocationOperationId, playerIDs, bindings); err != nil {
@@ -1438,11 +1831,20 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	if u.hubDeparture == nil {
 		return errcode.New(errcode.ErrUnavailable, "Hub physical departure coordinator unavailable")
 	}
-	if err := u.hubDeparture.EnsureHubDeparted(ctx, playerIDs); err != nil {
+	if _, err := u.fenceRequestingAllocationCheckpoint(ctx, job.GetMatchId(),
+		job.GetAllocationOperationId(), allocation); err != nil {
+		return err
+	}
+	if err := u.hubDeparture.EnsureHubDeparted(ctx, job.MatchId, job.AllocationOperationId,
+		playerIDs, bindings); err != nil {
 		plog.With(ctx).Warnw("msg", "hub_physical_departure_pending", "match_id", job.MatchId,
 			"operation_id", job.AllocationOperationId, "err", err)
 		// BATTLE_PENDING is durable, but tickets/READY remain unpublished until
 		// every old Hub owner has exact Departure or UID-teardown proof.
+		return err
+	}
+	if _, err := u.fenceRequestingAllocationCheckpoint(ctx, job.GetMatchId(),
+		job.GetAllocationOperationId(), allocation); err != nil {
 		return err
 	}
 	tickets, err := u.allocator.SignBattleTickets(ctx, job.MatchId, playerIDs, allocation, bindings)
@@ -1459,12 +1861,14 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	// 造成"票在队列里但人被拉进战斗"的脏状态。已分配的 DS 由 battle 心跳超时补偿回收(不变量 §4)。
 	var ready *matchv1.MatchStorageRecord
 	werr := u.repo.UpdateMatchWithLock(ctx, job.MatchId, u.cfg.OptimisticRetry, func(rec *matchv1.MatchStorageRecord) error {
-		if rec.Stage != stageAllocating {
-			return errcode.New(errcode.ErrMatchDeclined, "match %d stage=%d not allocating, skip ready", job.MatchId, rec.Stage)
+		expected := &matchv1.MatchStorageRecord{
+			MatchId: job.GetMatchId(), Stage: stageAllocating,
+			AllocationPhase:       matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING,
+			AllocationOperationId: job.GetAllocationOperationId(),
+			BattleTarget:          battleTargetStorage(allocation, nil),
 		}
-		checkpoint, complete := allocationFromStoredTarget(rec.GetBattleTarget())
-		if !complete || !sameBattleAllocation(checkpoint, allocation) ||
-			rec.GetAllocationOperationId() != job.GetAllocationOperationId() {
+		if !exactAllocationSnapshot(rec, expected,
+			matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_REQUESTING) {
 			return errcode.New(errcode.ErrMatchConcurrent,
 				"match %d allocation checkpoint changed before READY", job.MatchId)
 		}
@@ -1692,11 +2096,18 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 		return nil, errcode.New(errcode.ErrUnauthorized, "missing caller identity")
 	}
 
-	// 重连兜底:句柄丢失(id==0)时用 callerID 反查自己当前所在票据。
+	// 重连兜底:句柄丢失(id==0)时先反查 canonical ticket；StartMatch 已受理但
+	// worker 尚未完成 ticket handoff 时，再查 durable start-operation 派生索引。
 	if id == 0 {
 		tid, found, err := u.repo.GetPlayerTicket(ctx, callerID)
 		if err != nil {
 			return nil, err
+		}
+		if !found {
+			tid, found, err = u.repo.GetStartPlayerOperation(ctx, callerID)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if !found {
 			return nil, errcode.New(errcode.ErrMatchNotFound, "player %d not in any queue", callerID)
@@ -1704,42 +2115,92 @@ func (u *MatchUsecase) GetMatchProgress(ctx context.Context, callerID, id uint64
 		id = tid
 	}
 
-	if m, found, err := u.repo.GetMatch(ctx, id); err != nil {
-		return nil, err
-	} else if found {
-		if err := u.requireLocalGameMode(m.GetGameMode()); err != nil {
-			return nil, err
-		}
-		if memberIndex(m.Members, callerID) < 0 {
-			return nil, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
-		}
-		prog := matchToProgress(m)
-		u.refreshBattleTicket(ctx, m, callerID, prog)
-		return prog, nil
-	}
-	if t, found, err := u.repo.GetTicket(ctx, id); err != nil {
-		return nil, err
-	} else if found {
-		if err := u.requireLocalGameMode(t.GetGameMode()); err != nil {
-			return nil, err
-		}
-		if memberIndex(t.Members, callerID) < 0 {
-			return nil, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
-		}
-		if t.MatchId != 0 {
-			if m, found, err := u.repo.GetMatch(ctx, t.MatchId); err != nil {
-				return nil, err
-			} else if found {
-				if err := u.requireLocalGameMode(m.GetGameMode()); err != nil {
-					return nil, err
-				}
-				// 票据已撮合进 match,caller 既是票据成员即本局成员,直接给 match 进度。
-				prog := matchToProgress(m)
-				u.refreshBattleTicket(ctx, m, callerID, prog)
-				return prog, nil
+	readCanonical := func() (*matchv1.MatchProgress, bool, error) {
+		if m, found, err := u.repo.GetMatch(ctx, id); err != nil {
+			return nil, false, err
+		} else if found {
+			if memberIndex(m.Members, callerID) < 0 {
+				return nil, false, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
 			}
+			if err := u.requireLocalGameMode(m.GetGameMode()); err != nil {
+				return nil, false, err
+			}
+			prog := matchToProgress(m)
+			u.refreshBattleTicket(ctx, m, callerID, prog)
+			return prog, true, nil
 		}
-		return ticketToProgress(t), nil
+		if t, found, err := u.repo.GetTicket(ctx, id); err != nil {
+			return nil, false, err
+		} else if found {
+			if memberIndex(t.Members, callerID) < 0 {
+				return nil, false, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
+			}
+			if err := u.requireLocalGameMode(t.GetGameMode()); err != nil {
+				return nil, false, err
+			}
+			if t.MatchId != 0 {
+				if m, found, err := u.repo.GetMatch(ctx, t.MatchId); err != nil {
+					return nil, false, err
+				} else if found {
+					if memberIndex(m.Members, callerID) < 0 {
+						return nil, false, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
+					}
+					if err := u.requireLocalGameMode(m.GetGameMode()); err != nil {
+						return nil, false, err
+					}
+					// 票据已撮合进 match,caller 既是票据成员即本局成员,直接给 match 进度。
+					prog := matchToProgress(m)
+					u.refreshBattleTicket(ctx, m, callerID, prog)
+					return prog, true, nil
+				}
+			}
+			return ticketToProgress(t), true, nil
+		}
+		return nil, false, nil
+	}
+
+	if prog, found, err := readCanonical(); err != nil || found {
+		return prog, err
+	}
+
+	// StartMatch 的线性化点是 durable start operation；ticket body 由后台
+	// worker 稍后创建。RPC 已返回 ACCEPTED 后立即查询时，不能把这个正常窗口
+	// 误报成 4001，否则客户端会把仍在启动的匹配错误降级成 Hub 路由。
+	op, startFound, err := u.repo.GetStartOperation(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if startFound {
+		if op.GetTicketId() != id || len(op.GetMembers()) == 0 {
+			return nil, errcode.New(errcode.ErrUnavailable, "match start operation %d graph is invalid", id)
+		}
+		if memberIndex(op.GetMembers(), callerID) < 0 {
+			return nil, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
+		}
+		if err := u.requireLocalGameMode(op.GetGameMode()); err != nil {
+			return nil, err
+		}
+		switch op.GetPhase() {
+		case matchv1.MatchStartPhase_MATCH_START_PHASE_ACCEPTED,
+			matchv1.MatchStartPhase_MATCH_START_PHASE_TICKET_READY,
+			matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMING,
+			matchv1.MatchStartPhase_MATCH_START_PHASE_CLAIMS_READY,
+			matchv1.MatchStartPhase_MATCH_START_PHASE_QUEUED:
+			return ticketToProgress(ticketFromStartOperation(op)), nil
+		case matchv1.MatchStartPhase_MATCH_START_PHASE_COMPENSATING,
+			matchv1.MatchStartPhase_MATCH_START_PHASE_FAILED:
+			return &matchv1.MatchProgress{MatchId: id, Stage: stageFailed}, nil
+		default:
+			return nil, errcode.New(errcode.ErrUnavailable,
+				"match start operation %d has invalid phase %s", id, op.GetPhase())
+		}
+	}
+
+	// Worker 按“先写 ticket，后删 start operation”交接；若上面的首次 canonical
+	// 读取早于 ticket 写入，而 start-op 读取晚于删除，第二次读取必能看到 ticket
+	// 或已经形成的 match，避免在两个权威记录之间制造瞬时 NOT_FOUND。
+	if prog, found, err := readCanonical(); err != nil || found {
+		return prog, err
 	}
 	return nil, errcode.New(errcode.ErrMatchNotFound, "match/ticket %d not found", id)
 }
@@ -1932,12 +2393,27 @@ func (u *MatchUsecase) reconcileActiveOnce(ctx context.Context) error {
 			// reconciler adopt a PVE allocation job (or vice versa).
 			continue
 		}
-		if m.Stage == stageConfirm || m.Stage == stageAllocating || m.Stage == stageReady {
-			if discoveryErr := u.ensureMatchDiscovery(ctx, m); discoveryErr != nil {
-				joined = errors.Join(joined, discoveryErr)
-				continue
+		// Auto-confirm/solo formation deliberately lands as fully accepted
+		// CONFIRM first. If the creator died after reserving the complete graph but
+		// before the ALLOCATING CAS, the canonical scan completes that handoff.
+		discoveryChecked := false
+		if m.Stage == stageConfirm && allAccepted(m.GetMembers()) {
+			queued, queueErr := u.queueAcceptedMatchAllocation(ctx, m)
+			discoveryChecked = true // queueAcceptedMatchAllocation performs the exact check.
+			if queueErr != nil {
+				joined = errors.Join(joined, queueErr)
+			} else {
+				m = queued
 			}
 		}
+		if !discoveryChecked && (m.Stage == stageConfirm || m.Stage == stageAllocating || m.Stage == stageReady) {
+			if discoveryErr := u.ensureMatchDiscovery(ctx, m); discoveryErr != nil {
+				joined = errors.Join(joined, discoveryErr)
+			}
+		}
+		// Discovery health never controls derived-index repair. In particular, a
+		// crash after CreateMatch but before all reservations must still regain an
+		// active entry so expireOnce can durably fail/requeue the partial formation.
 		switch m.Stage {
 		case stageConfirm, stageAllocating:
 			if aerr := u.repo.EnsureActive(ctx, mid, m.ConfirmDeadlineMs); aerr != nil {
@@ -1961,8 +2437,37 @@ func (u *MatchUsecase) reconcileActiveOnce(ctx context.Context) error {
 }
 
 func (u *MatchUsecase) ensureMatchDiscovery(ctx context.Context, m *matchv1.MatchStorageRecord) error {
+	if m == nil || m.GetMatchId() == 0 || len(m.GetMembers()) == 0 || len(m.GetTicketIds()) == 0 {
+		return errcode.New(errcode.ErrUnavailable, "incomplete canonical match discovery graph")
+	}
+	expectedPlayers := make(map[uint64]struct{}, len(m.GetMembers()))
+	for _, member := range m.GetMembers() {
+		playerID := member.GetPlayerId()
+		if playerID == 0 {
+			return errcode.New(errcode.ErrUnavailable, "match %d has zero player in canonical roster", m.GetMatchId())
+		}
+		if _, duplicate := expectedPlayers[playerID]; duplicate {
+			return errcode.New(errcode.ErrUnavailable,
+				"match %d canonical roster duplicates player %d", m.GetMatchId(), playerID)
+		}
+		expectedPlayers[playerID] = struct{}{}
+	}
+
 	var joined error
+	tickets := make([]*matchv1.MatchTicketStorageRecord, 0, len(m.GetTicketIds()))
+	seenTicketIDs := make(map[uint64]struct{}, len(m.GetTicketIds()))
 	for _, ticketID := range m.GetTicketIds() {
+		if ticketID == 0 {
+			joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+				"match %d has zero ticket id", m.GetMatchId()))
+			continue
+		}
+		if _, duplicate := seenTicketIDs[ticketID]; duplicate {
+			joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+				"match %d duplicates ticket %d", m.GetMatchId(), ticketID))
+			continue
+		}
+		seenTicketIDs[ticketID] = struct{}{}
 		ticket, found, err := u.repo.GetTicket(ctx, ticketID)
 		if err != nil {
 			joined = errors.Join(joined, err)
@@ -1973,7 +2478,50 @@ func (u *MatchUsecase) ensureMatchDiscovery(ctx context.Context, m *matchv1.Matc
 				"match %d ticket %d discovery edge missing/drifted", m.GetMatchId(), ticketID))
 			continue
 		}
+		tickets = append(tickets, ticket)
+	}
+	if joined != nil {
+		return joined
+	}
+
+	// Validate the ticket-union exactly equals the canonical roster before
+	// creating or persisting any claim. A subset/superset/duplicate graph is
+	// UNKNOWN and must never reach AllocateBattle.
+	seenPlayers := make(map[uint64]struct{}, len(expectedPlayers))
+	for _, ticket := range tickets {
+		if len(ticket.GetMembers()) == 0 {
+			joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+				"match %d ticket %d has empty roster", m.GetMatchId(), ticket.GetTicketId()))
+			continue
+		}
 		for _, member := range ticket.GetMembers() {
+			playerID := member.GetPlayerId()
+			if _, expected := expectedPlayers[playerID]; !expected {
+				joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+					"match %d ticket %d contains unexpected player %d", m.GetMatchId(), ticket.GetTicketId(), playerID))
+				continue
+			}
+			if _, duplicate := seenPlayers[playerID]; duplicate {
+				joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+					"match %d ticket graph duplicates player %d", m.GetMatchId(), playerID))
+				continue
+			}
+			seenPlayers[playerID] = struct{}{}
+		}
+	}
+	for playerID := range expectedPlayers {
+		if _, seen := seenPlayers[playerID]; !seen {
+			joined = errors.Join(joined, errcode.New(errcode.ErrUnavailable,
+				"match %d ticket graph omits player %d", m.GetMatchId(), playerID))
+		}
+	}
+	if joined != nil {
+		return joined
+	}
+
+	for _, ticket := range tickets {
+		for _, member := range ticket.GetMembers() {
+			ticketID := ticket.GetTicketId()
 			existing, claimed, claimErr := u.repo.ClaimPlayer(ctx, member.GetPlayerId(), ticketID, u.ticketTTL())
 			if claimErr != nil {
 				joined = errors.Join(joined, claimErr)
@@ -2232,7 +2780,8 @@ func (u *MatchUsecase) greedyFormMatches(
 	}
 }
 
-// formSoloMatch 是本地端到端测试路径:单张队伍票据直接成局,跳过多人确认,立即拉 Battle DS。
+// formSoloMatch 是本地端到端测试路径:单张队伍票据直接成局,跳过多人确认。
+// 它仍须先完成票据/claim 图，再提交 durable ALLOCATING job。
 func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchTicketStorageRecord) error {
 	if err := u.requireLocalGameMode(ticket.GetGameMode()); err != nil {
 		return err
@@ -2254,17 +2803,14 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 		})
 	}
 	match := &matchv1.MatchStorageRecord{
-		MatchId:                   matchID,
-		Stage:                     stageAllocating,
-		Members:                   members,
-		TicketIds:                 []uint64{ticket.TicketId},
-		CreatedAtMs:               now,
-		ConfirmDeadlineMs:         now,
-		MapId:                     ticket.MapId,
-		AllocationOperationId:     allocationOperationID(),
-		AllocationPhase:           matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_PENDING,
-		AllocationNextAttemptAtMs: now,
-		GameMode:                  ticket.GetGameMode(),
+		MatchId:           matchID,
+		Stage:             stageConfirm,
+		Members:           members,
+		TicketIds:         []uint64{ticket.TicketId},
+		CreatedAtMs:       now,
+		ConfirmDeadlineMs: now + u.cfg.ConfirmTimeout.Std().Milliseconds(),
+		MapId:             ticket.MapId,
+		GameMode:          ticket.GetGameMode(),
 	}
 
 	// 一致性顺序(先建 match 再预留,与 formMatch 一致):match 先落库并进 active ZSET,
@@ -2283,9 +2829,14 @@ func (u *MatchUsecase) formSoloMatch(ctx context.Context, ticket *matchv1.MatchT
 		// reconciler will retry this exact graph without manufacturing a new match.
 		return fmt.Errorf("persist solo match claims: %w", err)
 	}
+	queued, err := u.queueAcceptedMatchAllocation(ctx, match)
+	if err != nil {
+		return fmt.Errorf("queue solo match allocation: %w", err)
+	}
 
 	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
-	plog.With(ctx).Infow("msg", "solo_match_found", "match_id", matchID, "ticket_id", ticket.TicketId, "players", len(members))
+	plog.With(ctx).Infow("msg", "solo_match_found", "match_id", matchID, "ticket_id", ticket.TicketId,
+		"players", len(members), "operation_id", queued.GetAllocationOperationId())
 	// 只持久登记 allocation job；后台 worker 负责 Allocate→placement→READY。
 	return nil
 }
@@ -2327,26 +2878,17 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	collect(sideA, 0)
 	collect(sideB, 1)
 
-	// AutoConfirmMatch(dev 联调)下成员已全员 accepted,match 直接以 ALLOCATING 落库:
-	// onAllConfirmed 的 set-ready stage 守卫只认 ALLOCATING,且语义上确认期已跳过。
-	initialStage := stageConfirm
-	if u.cfg.AutoConfirmMatch {
-		initialStage = stageAllocating
-	}
 	match := &matchv1.MatchStorageRecord{
-		MatchId:           matchID,
-		Stage:             initialStage,
+		MatchId: matchID,
+		// Even auto-confirm starts in CONFIRM. ALLOCATING is the commit that
+		// proves every reservation and claim below is durable.
+		Stage:             stageConfirm,
 		Members:           members,
 		TicketIds:         ticketIDs,
 		CreatedAtMs:       now,
 		ConfirmDeadlineMs: deadline,
 		MapId:             matchMapID(sideA, sideB),
 		GameMode:          u.cfg.GameMode,
-	}
-	if initialStage == stageAllocating {
-		match.AllocationOperationId = allocationOperationID()
-		match.AllocationPhase = matchv1.MatchAllocationPhase_MATCH_ALLOCATION_PHASE_PENDING
-		match.AllocationNextAttemptAtMs = now
 	}
 
 	// 一致性流程(先建 match,再预留票据):
@@ -2386,6 +2928,14 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	if persistErr != nil {
 		return fmt.Errorf("persist match %d claims before FOUND: %w", matchID, persistErr)
 	}
+	var queued *matchv1.MatchStorageRecord
+	if u.cfg.AutoConfirmMatch {
+		var queueErr error
+		queued, queueErr = u.queueAcceptedMatchAllocation(ctx, match)
+		if queueErr != nil {
+			return fmt.Errorf("queue auto-confirm match %d allocation: %w", matchID, queueErr)
+		}
+	}
 	// 撮合成局，成员进入确认期：上报 locator MATCHING（不变量 §1，弱依赖）
 	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
 	// 推 FOUND → CONFIRM 进度给全体(原则 3 例外:含发起方)
@@ -2395,7 +2945,7 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 		"auto_confirm", u.cfg.AutoConfirmMatch)
 	if u.cfg.AutoConfirmMatch {
 		plog.With(ctx).Infow("msg", "match_allocation_queued", "match_id", matchID,
-			"operation_id", match.GetAllocationOperationId())
+			"operation_id", queued.GetAllocationOperationId())
 	}
 	return nil
 }

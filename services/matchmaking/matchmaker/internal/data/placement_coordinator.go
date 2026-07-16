@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	commonv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/common/v1"
@@ -34,6 +35,81 @@ func NewGrpcPlacementCoordinator(client placementClient, signer *placement.Proof
 		leaseTTL = 30 * time.Minute
 	}
 	return &GrpcPlacementCoordinator{client: client, signer: signer, leaseTTL: leaseTTL}
+}
+
+// RequireStableHub is the StartMatch zero-side-effect authority gate.  A
+// missing durable record is UNKNOWN (never "not in Battle"), and a short-TTL
+// presence record is deliberately not consulted here.
+func (c *GrpcPlacementCoordinator) RequireStableHub(ctx context.Context, playerIDs []uint64) error {
+	if c == nil || c.client == nil || len(playerIDs) == 0 {
+		return errcode.New(errcode.ErrUnavailable, "placement authority unavailable")
+	}
+	seen := make(map[uint64]struct{}, len(playerIDs))
+	for _, playerID := range playerIDs {
+		if playerID == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "placement gate contains zero player_id")
+		}
+		if _, duplicate := seen[playerID]; duplicate {
+			return errcode.New(errcode.ErrInvalidArg, "placement gate contains duplicate player %d", playerID)
+		}
+		seen[playerID] = struct{}{}
+		rec, found, err := c.getPlacement(ctx, playerID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return errcode.New(errcode.ErrUnavailable,
+				"placement is UNKNOWN for player %d", playerID)
+		}
+		if rec.GetPlayerId() != playerID {
+			return errcode.New(errcode.ErrLocatorConflict,
+				"placement authority returned player %d for requested player %d", rec.GetPlayerId(), playerID)
+		}
+		if exactStableHub(rec) {
+			continue
+		}
+		if rec.GetTransitionState() == locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE &&
+			rec.GetCurrentRoute() == locatorv1.PlacementRoute_PLACEMENT_ROUTE_BATTLE && rec.GetMatchId() != 0 {
+			return errcode.New(errcode.ErrMatchInBattle,
+				"player %d has authoritative Battle placement match=%d", playerID, rec.GetMatchId())
+		}
+		return errcode.New(errcode.ErrInvalidState,
+			"player %d placement is not exact STABLE_HUB (route=%s transition=%s version=%d operation=%q)",
+			playerID, rec.GetCurrentRoute(), rec.GetTransitionState(), rec.GetVersion(), rec.GetOperationId())
+	}
+	return nil
+}
+
+// PreflightBattlePlacement is a read-only gate placed immediately before the
+// external AllocateBattle call.  It accepts exact STABLE_HUB or a retry of this
+// same durable BATTLE_PENDING operation; every other found state is a definite
+// ErrLocatorConflict, while missing/read failure remains retryable UNKNOWN.
+func (c *GrpcPlacementCoordinator) PreflightBattlePlacement(
+	ctx context.Context,
+	operationID string,
+	matchID uint64,
+	playerIDs []uint64,
+) error {
+	if c == nil || c.client == nil {
+		return errcode.New(errcode.ErrUnavailable, "placement authority unavailable")
+	}
+	if !placement.ValidOperationID(operationID) || matchID == 0 || len(playerIDs) == 0 {
+		return errcode.New(errcode.ErrInvalidArg, "complete battle placement preflight identity required")
+	}
+	seen := make(map[uint64]struct{}, len(playerIDs))
+	for _, playerID := range playerIDs {
+		if playerID == 0 {
+			return errcode.New(errcode.ErrInvalidArg, "battle placement preflight contains zero player_id")
+		}
+		if _, duplicate := seen[playerID]; duplicate {
+			return errcode.New(errcode.ErrInvalidArg, "battle placement preflight contains duplicate player %d", playerID)
+		}
+		seen[playerID] = struct{}{}
+		if err := c.preflightBattleAllocation(ctx, playerID, operationID, matchID); err != nil {
+			return fmt.Errorf("preflight battle placement player=%d match=%d: %w", playerID, matchID, err)
+		}
+	}
+	return nil
 }
 
 func (c *GrpcPlacementCoordinator) PrepareBattlePlacement(
@@ -78,6 +154,145 @@ func (c *GrpcPlacementCoordinator) PrepareBattlePlacement(
 		bindings[playerID] = binding
 	}
 	return bindings, nil
+}
+
+func (c *GrpcPlacementCoordinator) getPlacement(
+	ctx context.Context,
+	playerID uint64,
+) (*locatorv1.PlayerPlacementStorageRecord, bool, error) {
+	resp, err := c.client.GetPlacement(ctx, &locatorv1.GetPlacementRequest{PlayerId: playerID})
+	if err != nil {
+		return nil, false, errcode.NewCause(errcode.ErrUnavailable, err,
+			"placement authority read failed for player %d", playerID)
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		code := errcode.Code(resp.GetCode())
+		if code == errcode.ErrLocatorConflict {
+			return nil, false, errcode.New(code,
+				"placement authority conflict for player %d", playerID)
+		}
+		return nil, false, errcode.NewCause(errcode.ErrUnavailable,
+			errcode.New(code, "GetPlacement code=%d", resp.GetCode()),
+			"placement authority read unavailable for player %d", playerID)
+	}
+	if !resp.GetFound() || resp.GetPlacement() == nil {
+		return nil, false, nil
+	}
+	return resp.GetPlacement(), true, nil
+}
+
+func exactStableHub(rec *locatorv1.PlayerPlacementStorageRecord) bool {
+	if rec == nil || rec.GetVersion() == 0 || !placement.ValidOperationID(rec.GetOperationId()) ||
+		rec.GetTransitionState() != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE ||
+		rec.GetCurrentRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || rec.GetMatchId() != 0 ||
+		rec.GetTargetRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_UNSPECIFIED || rec.GetTargetMatchId() != 0 ||
+		rec.GetLeaseDeadlineMs() != 0 || rec.GetSourcePlacementVersion() != 0 || rec.GetSourceOperationId() != "" ||
+		rec.GetSourceDepartureConfirmed() ||
+		rec.GetSourceDepartureProofType() != locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED ||
+		rec.GetSourceDepartureProofId() != "" || !placementSourceTarget(rec).Equal(placement.Target{}) {
+		return false
+	}
+	target := placementActiveTarget(rec)
+	return target.CompleteHub() && target.AllocationID == "" &&
+		canonicalDepartureHistory(rec, rec.GetVersion(), rec.GetOperationId())
+}
+
+func exactSameBattlePending(
+	rec *locatorv1.PlayerPlacementStorageRecord,
+	operationID string,
+	matchID uint64,
+) bool {
+	if !sameBattlePendingOperation(rec, operationID, matchID) || rec.GetVersion() <= 1 ||
+		rec.GetCurrentRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || rec.GetMatchId() != 0 ||
+		rec.GetSourceMatchId() != 0 || rec.GetProofType() != locatorv1.PlacementProofType_PLACEMENT_PROOF_TYPE_MATCH_START ||
+		rec.GetProofId() != operationID || rec.GetUpdatedAtMs() <= 0 ||
+		rec.GetLeaseDeadlineMs() <= rec.GetUpdatedAtMs() || rec.GetAdmissionId() != "" ||
+		rec.GetSourcePlacementVersion() != rec.GetVersion()-1 ||
+		!placement.ValidOperationID(rec.GetSourceOperationId()) || rec.GetSourceOperationId() == rec.GetOperationId() ||
+		rec.GetSourceDepartureConfirmed() ||
+		rec.GetSourceDepartureProofType() != locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED ||
+		rec.GetSourceDepartureProofId() != "" {
+		return false
+	}
+	source := placementSourceTarget(rec)
+	if !source.CompleteHub() || source.AllocationID != "" ||
+		!canonicalDepartureHistory(rec, rec.GetSourcePlacementVersion(), rec.GetSourceOperationId()) {
+		return false
+	}
+	target := placementActiveTarget(rec)
+	return target.Equal(placement.Target{}) ||
+		(target.CompleteBattle() && target.AssignmentID == "")
+}
+
+// preflightBattleAllocation is intentionally stricter than the idempotent
+// Prepare path.  Before there is a durable BattleTarget checkpoint, Allocate
+// may run only from an exact STABLE_HUB or from the exact same Begin record
+// while its target is still wholly unbound.  A complete or partial target is
+// evidence that an earlier allocation has already escaped; allocating again
+// would create two authoritative DS candidates.
+func (c *GrpcPlacementCoordinator) preflightBattleAllocation(
+	ctx context.Context,
+	playerID uint64,
+	operationID string,
+	matchID uint64,
+) error {
+	current, found, err := c.getPlacement(ctx, playerID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errcode.New(errcode.ErrLocatorNotFound, "placement is UNKNOWN")
+	}
+	if current.GetPlayerId() != playerID {
+		return errcode.New(errcode.ErrLocatorConflict,
+			"placement authority returned player %d for requested player %d", current.GetPlayerId(), playerID)
+	}
+	if exactStableHub(current) {
+		return nil
+	}
+	if exactSameBattlePending(current, operationID, matchID) &&
+		placementActiveTarget(current).Equal(placement.Target{}) {
+		return nil
+	}
+	return errcode.New(errcode.ErrLocatorConflict,
+		"battle allocation preflight requires exact STABLE_HUB or canonical unbound BATTLE_PENDING")
+}
+
+func placementActiveTarget(rec *locatorv1.PlayerPlacementStorageRecord) placement.Target {
+	return placement.Target{PodName: rec.GetDsPodName(), InstanceUID: rec.GetDsInstanceUid(),
+		InstanceEpoch: rec.GetDsInstanceEpoch(), AssignmentID: rec.GetHubAssignmentId(),
+		AllocationID: rec.GetAllocationId(), ReleaseTrack: rec.GetReleaseTrack()}
+}
+
+func placementSourceTarget(rec *locatorv1.PlayerPlacementStorageRecord) placement.Target {
+	return placement.Target{PodName: rec.GetSourceDsPodName(), InstanceUID: rec.GetSourceDsInstanceUid(),
+		InstanceEpoch: rec.GetSourceDsInstanceEpoch(), AssignmentID: rec.GetSourceHubAssignmentId(),
+		AllocationID: rec.GetSourceAllocationId(), ReleaseTrack: rec.GetSourceReleaseTrack()}
+}
+
+// canonicalDepartureHistory mirrors player_locator's fail-closed audit shape:
+// the quartet is either wholly absent or wholly bound to the exact placement
+// lineage.  last_* is audit-only, but a partial or cross-lineage value is not a
+// canonical source for a new allocation.
+func canonicalDepartureHistory(
+	rec *locatorv1.PlayerPlacementStorageRecord,
+	expectedVersion uint64,
+	expectedOperationID string,
+) bool {
+	proofType := rec.GetLastSourceDepartureProofType()
+	proofID := rec.GetLastSourceDepartureProofId()
+	version := rec.GetLastSourceDeparturePlacementVersion()
+	operationID := rec.GetLastSourceDepartureOperationId()
+	if proofType == locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_UNSPECIFIED &&
+		proofID == "" && version == 0 && operationID == "" {
+		return true
+	}
+	if proofType != locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_HUB_DEPARTURE &&
+		proofType != locatorv1.PlacementSourceDepartureProofType_PLACEMENT_SOURCE_DEPARTURE_PROOF_TYPE_BATTLE_DEPARTURE {
+		return false
+	}
+	return strings.TrimSpace(proofID) != "" && version == expectedVersion &&
+		operationID == expectedOperationID && placement.ValidOperationID(operationID)
 }
 
 func (c *GrpcPlacementCoordinator) preparePlayer(
@@ -161,26 +376,22 @@ func (c *GrpcPlacementCoordinator) readBattleBeginVersion(
 	operationID string,
 	matchID uint64,
 ) (uint64, error) {
-	getResp, err := c.client.GetPlacement(ctx, &locatorv1.GetPlacementRequest{PlayerId: playerID})
+	current, found, err := c.getPlacement(ctx, playerID)
 	if err != nil {
 		return 0, err
 	}
-	if getResp.GetCode() != commonv1.ErrCode_OK {
-		return 0, errcode.New(errcode.Code(getResp.GetCode()), "GetPlacement code=%d", getResp.GetCode())
-	}
-	if !getResp.GetFound() || getResp.GetPlacement() == nil {
+	if !found {
 		return 0, errcode.New(errcode.ErrLocatorNotFound, "placement is UNKNOWN")
 	}
-	current := getResp.GetPlacement()
+	if current.GetPlayerId() != playerID {
+		return 0, errcode.New(errcode.ErrLocatorConflict,
+			"placement authority returned player %d for requested player %d", current.GetPlayerId(), playerID)
+	}
 	expectedVersion := current.GetVersion()
-	if sameBattlePendingOperation(current, operationID, matchID) {
-		if current.GetVersion() <= 1 {
-			return 0, errcode.New(errcode.ErrLocatorConflict, "pending placement has invalid version")
-		}
+	if exactSameBattlePending(current, operationID, matchID) {
 		expectedVersion = current.GetVersion() - 1
 	} else {
-		if current.GetTransitionState() != locatorv1.PlacementTransitionState_PLACEMENT_TRANSITION_STATE_STABLE ||
-			current.GetCurrentRoute() != locatorv1.PlacementRoute_PLACEMENT_ROUTE_HUB || current.GetMatchId() != 0 {
+		if !exactStableHub(current) {
 			return 0, errcode.New(errcode.ErrLocatorConflict,
 				"expected stable HUB, got route=%s transition=%s version=%d operation=%q",
 				current.GetCurrentRoute(), current.GetTransitionState(), current.GetVersion(), current.GetOperationId())

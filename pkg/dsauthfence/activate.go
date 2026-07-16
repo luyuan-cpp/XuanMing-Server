@@ -1,11 +1,13 @@
 package dsauthfence
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,8 +27,34 @@ type LiveCapability struct {
 // RequiredSnapshot 是 required writer 的一次线性读结果。Value 相同不足以做推进 CAS：
 // key 曾 1→2→1 时只有 ModRevision 能识别 ABA。
 type RequiredSnapshot struct {
-	Epoch       uint32
-	ModRevision int64
+	Epoch            uint32
+	PolicyGeneration uint32
+	PolicyID         string
+	RawValue         string
+	ModRevision      int64
+}
+
+// ActivationRecord is the immutable audit record written in the same etcd
+// transaction that advances required_writer_epoch.  ActivationEvidenceSHA256
+// binds the external, create-only Kubernetes evidence marker (including the
+// completed preflight Job/Pod and exact configuration identity) to the epoch
+// transition; a same-named Job created after activation can therefore never
+// satisfy an epoch-2 audit.
+type ActivationRecord struct {
+	From                            uint32 `json:"from"`
+	To                              uint32 `json:"to"`
+	FromRequiredValue               string `json:"from_required_value"`
+	ToRequiredValue                 string `json:"to_required_value"`
+	RequiredPolicyID                string `json:"required_policy_id"`
+	FromPolicyGeneration            uint32 `json:"from_policy_generation,omitempty"`
+	ToPolicyGeneration              uint32 `json:"to_policy_generation,omitempty"`
+	FromModRevision                 int64  `json:"from_mod_revision"`
+	ExpectedServicesHash            string `json:"expected_services_hash"`
+	ActivationEvidenceSHA256        string `json:"activation_evidence_sha256"`
+	ActivationEvidenceCompletedAtMS int64  `json:"activation_evidence_completed_at_ms"`
+	ActivatedAtMS                   int64  `json:"activated_at_ms"`
+	ZeroWriterBootstrap             bool   `json:"zero_writer_bootstrap,omitempty"`
+	GenesisBootstrap                bool   `json:"genesis_bootstrap,omitempty"`
 }
 
 // ActivationLock 冻结 capability 集合，封住 audit→CAS 的检查使用竞态。
@@ -35,6 +63,10 @@ type ActivationLock struct {
 	leaseID clientv3.LeaseID
 	token   string
 	cancel  context.CancelFunc
+	// No code path sets this until a real control-plane provider verifier is
+	// implemented. It prevents library callers from bypassing the release
+	// wrapper and advancing with a self-asserted Kubernetes marker.
+	topologyLeaseVerified bool
 }
 
 // ActivationClient 只供审计/推进工具使用；业务进程不得调用推进 API。
@@ -123,9 +155,13 @@ func (c *ActivationClient) BootstrapRequired(ctx context.Context, epoch uint32) 
 		return fmt.Errorf("bootstrap epoch must be immutable baseline 1, got %d", epoch)
 	}
 	key := requiredKey(c.prefix)
+	value, err := RequiredValueForEpoch(epoch)
+	if err != nil {
+		return err
+	}
 	resp, err := c.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
-		Then(clientv3.OpPut(key, strconv.FormatUint(uint64(epoch), 10))).
+		Then(clientv3.OpPut(key, value)).
 		Commit()
 	if err != nil {
 		return err
@@ -151,14 +187,18 @@ func (c *ActivationClient) RequiredSnapshot(ctx context.Context) (RequiredSnapsh
 	if len(resp.Kvs) != 1 {
 		return RequiredSnapshot{}, fmt.Errorf("required epoch missing")
 	}
-	epoch, err := ParseEpoch(resp.Kvs[0].Value)
+	state, err := ParseRequiredState(resp.Kvs[0].Value)
 	if err != nil {
 		return RequiredSnapshot{}, err
 	}
 	if resp.Kvs[0].ModRevision <= 0 {
 		return RequiredSnapshot{}, fmt.Errorf("required epoch has invalid mod revision")
 	}
-	return RequiredSnapshot{Epoch: epoch, ModRevision: resp.Kvs[0].ModRevision}, nil
+	return RequiredSnapshot{
+		Epoch: state.Epoch, PolicyGeneration: state.PolicyGeneration,
+		PolicyID: state.PolicyID, RawValue: state.RawValue,
+		ModRevision: resp.Kvs[0].ModRevision,
+	}, nil
 }
 
 // Capabilities 列出仍有 lease 的实时能力；坏记录使审计失败，绝不跳过。
@@ -184,15 +224,17 @@ func (c *ActivationClient) Capabilities(ctx context.Context) ([]LiveCapability, 
 
 // AuditPolicy 是推进前 capability 快照必须满足的精确条件。
 type AuditPolicy struct {
-	Prefix               string
-	RequiredServices     map[string]int
-	RequiredInstances    map[string]map[string]struct{}
-	TargetEpoch          uint32
-	KeysetRevision       string
-	EtcdIdentityRevision string
-	AllowedDigests       map[string]struct{}
-	ExpectedDigests      map[string]string
-	RequiredFeatures     map[string]map[string]struct{}
+	Prefix                           string
+	RequiredServices                 map[string]int
+	RequiredInstances                map[string]map[string]struct{}
+	TargetEpoch                      uint32
+	TargetPolicyGeneration           uint32
+	ExpectedAcquiredPolicyGeneration uint32
+	KeysetRevision                   string
+	EtcdIdentityRevision             string
+	AllowedDigests                   map[string]struct{}
+	ExpectedDigests                  map[string]string
+	RequiredFeatures                 map[string]map[string]struct{}
 }
 
 // AuditCapabilities 验证每个预期服务的实时副本数与不可变身份。
@@ -203,6 +245,14 @@ func AuditCapabilities(capabilities []LiveCapability, policy AuditPolicy) []stri
 	prefix := policy.Prefix
 	if prefix == "" {
 		prefix = DefaultPrefix
+	}
+	targetWriterEpoch := policy.TargetEpoch
+	if policy.TargetPolicyGeneration != 0 {
+		if expected, err := requiredWriterEpochForPolicyGeneration(policy.TargetPolicyGeneration); err != nil {
+			findings = append(findings, err.Error())
+		} else {
+			targetWriterEpoch = expected
+		}
 	}
 	for service, expectedFeatures := range policy.RequiredFeatures {
 		if _, ok := policy.RequiredServices[service]; !ok {
@@ -235,8 +285,30 @@ func AuditCapabilities(capabilities []LiveCapability, policy AuditPolicy) []stri
 		if live.LeaseID == 0 {
 			findings = append(findings, fmt.Sprintf("%s/%s 无 lease", capability.Service, capability.InstanceUID))
 		}
-		if capability.WriterEpoch != policy.TargetEpoch {
-			findings = append(findings, fmt.Sprintf("%s/%s writer_epoch=%d != target=%d", capability.Service, capability.InstanceUID, capability.WriterEpoch, policy.TargetEpoch))
+		if capability.WriterEpoch != targetWriterEpoch {
+			findings = append(findings, fmt.Sprintf("%s/%s writer_epoch=%d != target=%d", capability.Service, capability.InstanceUID, capability.WriterEpoch, targetWriterEpoch))
+		}
+		if policy.TargetPolicyGeneration == RequiredPolicyGenerationV3 &&
+			(capability.SupportedPolicyGeneration != RequiredPolicyGenerationV3 ||
+				capability.SupportedPolicyID != RequiredPolicyV3) {
+			findings = append(findings, fmt.Sprintf(
+				"%s/%s supported_policy=%d@%q != target=%d@%q",
+				capability.Service, capability.InstanceUID,
+				capability.SupportedPolicyGeneration, capability.SupportedPolicyID,
+				RequiredPolicyGenerationV3, RequiredPolicyV3))
+		}
+		if policy.ExpectedAcquiredPolicyGeneration != 0 {
+			expectedPolicyID, err := requiredPolicyIDForGeneration(policy.ExpectedAcquiredPolicyGeneration)
+			if err != nil {
+				findings = append(findings, err.Error())
+			} else if capability.AcquiredPolicyGeneration != policy.ExpectedAcquiredPolicyGeneration ||
+				capability.AcquiredPolicyID != expectedPolicyID {
+				findings = append(findings, fmt.Sprintf(
+					"%s/%s acquired_policy=%d@%q != expected=%d@%q",
+					capability.Service, capability.InstanceUID,
+					capability.AcquiredPolicyGeneration, capability.AcquiredPolicyID,
+					policy.ExpectedAcquiredPolicyGeneration, expectedPolicyID))
+			}
 		}
 		if !digestPattern.MatchString(capability.ImageDigest) {
 			findings = append(findings, fmt.Sprintf("%s/%s image_digest 非 immutable digest", capability.Service, capability.InstanceUID))
@@ -366,34 +438,128 @@ func ParseRequiredFeatures(raw string) (map[string]map[string]struct{}, error) {
 	return out, nil
 }
 
+func validateAuditedTargetPolicy(target uint32, expectedServices map[string]int, audited []LiveCapability) error {
+	if target != ProtocolEpochV2 {
+		return fmt.Errorf("unsupported audited target writer epoch %d", target)
+	}
+	return validateAuditedPolicyGeneration(RequiredPolicyGenerationV2, expectedServices, audited)
+}
+
+func validateAuditedPolicyGeneration(generation uint32, expectedServices map[string]int,
+	audited []LiveCapability) error {
+	expectedPolicy, err := requiredFeaturesForPolicyGeneration(generation)
+	if err != nil {
+		return err
+	}
+	policyFeatures := make(map[string]map[string]struct{}, len(expectedPolicy))
+	for service, features := range expectedPolicy {
+		set := make(map[string]struct{}, len(features))
+		for _, feature := range features {
+			set[feature] = struct{}{}
+		}
+		policyFeatures[service] = set
+	}
+	if err := ValidateActivationPolicyGeneration(generation, expectedServices, policyFeatures); err != nil {
+		return err
+	}
+	targetValue, err := RequiredValueForPolicyGeneration(generation)
+	if err != nil {
+		return err
+	}
+	state, err := ParseRequiredState([]byte(targetValue))
+	if err != nil {
+		return err
+	}
+	counts := make(map[string]int)
+	targetWriterEpoch, err := requiredWriterEpochForPolicyGeneration(generation)
+	if err != nil {
+		return err
+	}
+	for _, live := range audited {
+		capability := live.Capability
+		if capability.WriterEpoch != targetWriterEpoch {
+			return fmt.Errorf("audited capability %s/%s writer epoch does not match target policy", capability.Service, capability.InstanceUID)
+		}
+		if generation == RequiredPolicyGenerationV3 &&
+			(capability.SupportedPolicyGeneration != RequiredPolicyGenerationV3 ||
+				capability.SupportedPolicyID != RequiredPolicyV3) {
+			return fmt.Errorf("audited capability %s/%s does not compile in exact target policy %d@%s",
+				capability.Service, capability.InstanceUID, RequiredPolicyGenerationV3, RequiredPolicyV3)
+		}
+		if generation == RequiredPolicyGenerationV3 &&
+			(capability.AcquiredPolicyGeneration != RequiredPolicyGenerationV2 ||
+				capability.AcquiredPolicyID != RequiredPolicyV2) {
+			return fmt.Errorf("audited staging capability %s/%s was not acquired against exact V2",
+				capability.Service, capability.InstanceUID)
+		}
+		if err := validateRequiredPolicyForCapability(
+			state, capability.Service, capability.WriterEpoch, capability.Features); err != nil {
+			return err
+		}
+		counts[capability.Service]++
+	}
+	for service, expected := range expectedServices {
+		if counts[service] != expected {
+			return fmt.Errorf("audited capability count for %s does not match activation policy", service)
+		}
+	}
+	return nil
+}
+
 // AdvanceRequired 只允许 expected→target 的前进 CAS，并写不可变审计记录。
 // expectedModRevision 必须来自锁内 RequiredSnapshot；值+revision 双比较封住 1→2→1 ABA。
-func (l *ActivationLock) AdvanceRequired(ctx context.Context, expected, target uint32, expectedModRevision int64, expectedServices map[string]int, audited []LiveCapability) error {
+func (l *ActivationLock) AdvanceRequired(ctx context.Context, expected, target uint32, expectedModRevision int64, expectedServices map[string]int, audited []LiveCapability, activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64) error {
+	if l == nil || !l.topologyLeaseVerified {
+		return ErrTopologyChangeLockProviderUnavailable
+	}
 	if expected == 0 || target <= expected || expectedModRevision <= 0 {
 		return fmt.Errorf("required epoch must advance: %d -> %d", expected, target)
 	}
+	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	if err := validateAuditedTargetPolicy(target, expectedServices, audited); err != nil {
+		return err
+	}
+	fromValue, err := RequiredValueForEpoch(expected)
+	if err != nil {
+		return err
+	}
+	toValue, err := RequiredValueForEpoch(target)
+	if err != nil {
+		return err
+	}
+	nowMS := time.Now().UnixMilli()
+	if activationEvidenceCompletedAtMS <= 0 || activationEvidenceCompletedAtMS > nowMS {
+		return fmt.Errorf("activation evidence completion time is invalid")
+	}
 	key := requiredKey(l.client.prefix)
 	recordKey := cleanPrefix(l.client.prefix) + "activations/" + strconv.FormatUint(uint64(target), 10)
-	record := map[string]any{
-		"from":                   expected,
-		"to":                     target,
-		"from_mod_revision":      expectedModRevision,
-		"expected_services_hash": ExpectedServicesHash(expectedServices),
-		"activated_at_ms":        time.Now().UnixMilli(),
+	record := ActivationRecord{
+		From:                            expected,
+		To:                              target,
+		FromRequiredValue:               fromValue,
+		ToRequiredValue:                 toValue,
+		RequiredPolicyID:                RequiredPolicyV2,
+		FromModRevision:                 expectedModRevision,
+		ExpectedServicesHash:            ExpectedServicesHash(expectedServices),
+		ActivationEvidenceSHA256:        activationEvidenceSHA256,
+		ActivationEvidenceCompletedAtMS: activationEvidenceCompletedAtMS,
+		ActivatedAtMS:                   nowMS,
 	}
 	payload, err := json.Marshal(record)
 	if err != nil {
 		return err
 	}
 	compares, err := buildAdvanceCompares(
-		l.client.prefix, l.token, key, recordKey, expected, expectedModRevision, audited)
+		l.client.prefix, l.token, key, recordKey, fromValue, expectedModRevision, audited)
 	if err != nil {
 		return err
 	}
 	resp, err := l.client.cli.Txn(ctx).
 		If(compares...).
 		Then(
-			clientv3.OpPut(key, strconv.FormatUint(uint64(target), 10)),
+			clientv3.OpPut(key, toValue),
 			clientv3.OpPut(recordKey, string(payload)),
 		).
 		Commit()
@@ -406,17 +572,390 @@ func (l *ActivationLock) AdvanceRequired(ctx context.Context, expected, target u
 	return nil
 }
 
+func policyActivationRecordKey(prefix string, generation uint32, policyID string) string {
+	return cleanPrefix(prefix) + "activations/policies/" + strconv.FormatUint(uint64(generation), 10) + "@" + policyID
+}
+
+// AdvanceRequiredPolicyV3 atomically advances immutable V2 to immutable V3
+// while retaining data-plane WriterEpoch=2. This is a policy-only transition:
+// it needs the etcd activation lock and an exact target-policy capability
+// snapshot, but deliberately does not depend on the Redis topology lock used
+// by a data-plane writer-epoch change.
+func (l *ActivationLock) AdvanceRequiredPolicyV3(ctx context.Context, expected RequiredSnapshot,
+	expectedServices map[string]int, audited []LiveCapability, activationEvidenceSHA256 string,
+	activationEvidenceCompletedAtMS int64) error {
+	if l == nil || l.client == nil || l.token == "" {
+		return fmt.Errorf("activation lock is missing")
+	}
+	if expected.ModRevision <= 0 || expected.PolicyGeneration != RequiredPolicyGenerationV2 ||
+		expected.Epoch != ProtocolEpochV2 || expected.PolicyID != RequiredPolicyV2 ||
+		expected.RawValue != RequiredValueV2 {
+		return fmt.Errorf("required policy-only transition must advance from V2 to V3")
+	}
+	fromValue, err := RequiredValueForPolicyGeneration(expected.PolicyGeneration)
+	if err != nil {
+		return err
+	}
+	if expected.RawValue != fromValue {
+		return fmt.Errorf("required policy snapshot raw value mismatch")
+	}
+	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	if err := validateAuditedPolicyGeneration(RequiredPolicyGenerationV3, expectedServices, audited); err != nil {
+		return err
+	}
+	nowMS := time.Now().UnixMilli()
+	if activationEvidenceCompletedAtMS <= 0 || activationEvidenceCompletedAtMS > nowMS {
+		return fmt.Errorf("activation evidence completion time is invalid")
+	}
+	toValue := RequiredValueV3
+	recordKey := policyActivationRecordKey(l.client.prefix, RequiredPolicyGenerationV3, RequiredPolicyV3)
+	record := ActivationRecord{
+		From: expected.Epoch, To: ProtocolEpochV2,
+		FromPolicyGeneration: expected.PolicyGeneration, ToPolicyGeneration: RequiredPolicyGenerationV3,
+		FromRequiredValue: fromValue, ToRequiredValue: toValue, RequiredPolicyID: RequiredPolicyV3,
+		FromModRevision: expected.ModRevision, ExpectedServicesHash: ExpectedServicesHash(expectedServices),
+		ActivationEvidenceSHA256:        activationEvidenceSHA256,
+		ActivationEvidenceCompletedAtMS: activationEvidenceCompletedAtMS, ActivatedAtMS: nowMS,
+	}
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	key := requiredKey(l.client.prefix)
+	compares, err := buildAdvanceCompares(l.client.prefix, l.token, key, recordKey,
+		fromValue, expected.ModRevision, audited)
+	if err != nil {
+		return err
+	}
+	resp, err := l.client.cli.Txn(ctx).If(compares...).Then(
+		clientv3.OpPut(key, toValue),
+		clientv3.OpPut(recordKey, string(payload)),
+	).Commit()
+	if err != nil {
+		return err
+	}
+	if !resp.Succeeded {
+		return fmt.Errorf("required policy CAS failed (expected_generation=%d target_generation=%d)",
+			expected.PolicyGeneration, RequiredPolicyGenerationV3)
+	}
+	return nil
+}
+
+// AdvanceRequiredPolicyV3FromZeroWriters is the only supported V1→V3 path.
+// AcquireLock prevents new capability registration; the same CAS that changes
+// required also proves the complete capability prefix is still empty. This is
+// intended for a fresh/reset cluster before any writer process starts and must
+// never be replaced with a manual etcd put.
+func (l *ActivationLock) AdvanceRequiredPolicyV3FromZeroWriters(ctx context.Context,
+	expected RequiredSnapshot, activationEvidenceSHA256 string,
+	activationEvidenceCompletedAtMS int64) error {
+	if l == nil || l.client == nil || l.token == "" {
+		return fmt.Errorf("activation lock is missing")
+	}
+	if expected.ModRevision <= 0 || expected.PolicyGeneration != RequiredPolicyGenerationV1 ||
+		expected.Epoch != 1 || expected.PolicyID != "" || expected.RawValue != "1" {
+		return fmt.Errorf("zero-writer policy bootstrap must advance exact V1 to V3")
+	}
+	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	nowMS := time.Now().UnixMilli()
+	if activationEvidenceCompletedAtMS <= 0 || activationEvidenceCompletedAtMS > nowMS {
+		return fmt.Errorf("activation evidence completion time is invalid")
+	}
+	recordKey := policyActivationRecordKey(l.client.prefix, RequiredPolicyGenerationV3, RequiredPolicyV3)
+	record := ActivationRecord{
+		From: 1, To: ProtocolEpochV2,
+		FromPolicyGeneration: RequiredPolicyGenerationV1,
+		ToPolicyGeneration:   RequiredPolicyGenerationV3,
+		FromRequiredValue:    "1", ToRequiredValue: RequiredValueV3,
+		RequiredPolicyID: RequiredPolicyV3, FromModRevision: expected.ModRevision,
+		ExpectedServicesHash:            ExpectedServicesHash(map[string]int{}),
+		ActivationEvidenceSHA256:        activationEvidenceSHA256,
+		ActivationEvidenceCompletedAtMS: activationEvidenceCompletedAtMS,
+		ActivatedAtMS:                   nowMS, ZeroWriterBootstrap: true,
+	}
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	key := requiredKey(l.client.prefix)
+	compares, err := buildZeroWriterPolicyAdvanceCompares(l.client.prefix, l.token,
+		key, recordKey, expected.ModRevision)
+	if err != nil {
+		return err
+	}
+	resp, err := l.client.cli.Txn(ctx).If(compares...).Then(
+		clientv3.OpPut(key, RequiredValueV3),
+		clientv3.OpPut(recordKey, string(payload)),
+	).Commit()
+	if err != nil {
+		return err
+	}
+	if !resp.Succeeded {
+		return fmt.Errorf("zero-writer required policy CAS failed; V1 snapshot, lock, empty capability prefix, or create-only record changed")
+	}
+	return nil
+}
+
+// BootstrapRequiredPolicyV3FromMissing is the crash-safe fresh-cluster
+// genesis. Unlike a two-command missing→V1→V3 sequence, required V3 and its
+// immutable record are created together. The activation lock plus range
+// compare prove no writer capability existed at the linearization point.
+func (l *ActivationLock) BootstrapRequiredPolicyV3FromMissing(ctx context.Context,
+	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64) error {
+	if l == nil || l.client == nil || l.token == "" {
+		return fmt.Errorf("activation lock is missing")
+	}
+	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	nowMS := time.Now().UnixMilli()
+	if activationEvidenceCompletedAtMS <= 0 || activationEvidenceCompletedAtMS > nowMS {
+		return fmt.Errorf("activation evidence completion time is invalid")
+	}
+	recordKey := policyActivationRecordKey(l.client.prefix, RequiredPolicyGenerationV3, RequiredPolicyV3)
+	record := ActivationRecord{
+		From: 0, To: ProtocolEpochV2,
+		FromPolicyGeneration: 0, ToPolicyGeneration: RequiredPolicyGenerationV3,
+		FromRequiredValue: "", ToRequiredValue: RequiredValueV3,
+		RequiredPolicyID: RequiredPolicyV3, FromModRevision: 0,
+		ExpectedServicesHash:            ExpectedServicesHash(map[string]int{}),
+		ActivationEvidenceSHA256:        activationEvidenceSHA256,
+		ActivationEvidenceCompletedAtMS: activationEvidenceCompletedAtMS,
+		ActivatedAtMS:                   nowMS, ZeroWriterBootstrap: true, GenesisBootstrap: true,
+	}
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	key := requiredKey(l.client.prefix)
+	compares, err := buildMissingZeroWriterPolicyBootstrapCompares(l.client.prefix, l.token, key, recordKey)
+	if err != nil {
+		return err
+	}
+	resp, err := l.client.cli.Txn(ctx).If(compares...).Then(
+		clientv3.OpPut(key, RequiredValueV3), clientv3.OpPut(recordKey, string(payload))).Commit()
+	if err != nil {
+		return err
+	}
+	if !resp.Succeeded {
+		return fmt.Errorf("fresh V3 genesis CAS failed; required/record appeared, lock changed, or a capability exists")
+	}
+	return nil
+}
+
+// VerifyRequiredPolicyV3ActivationEvidence verifies the immutable V3 policy
+// transition record for either a direct V1→V3 or an incremental V2→V3 move.
+func (c *ActivationClient) VerifyRequiredPolicyV3ActivationEvidence(ctx context.Context,
+	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64) error {
+	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	record, err := c.verifyRequiredPolicyV3ActivationRecord(ctx)
+	if err != nil {
+		return err
+	}
+	if record.ActivationEvidenceSHA256 != activationEvidenceSHA256 ||
+		record.ActivationEvidenceCompletedAtMS != activationEvidenceCompletedAtMS {
+		return fmt.Errorf("V3 policy activation record evidence mismatch")
+	}
+	return nil
+}
+
+// VerifyRequiredPolicyV3ActivationRecord is a read-only startup/resume proof.
+// It validates that required V3 and a canonical create-only activation record
+// were written in the same transaction, including zero-writer provenance for
+// genesis/V1 paths. Production migration additionally calls the exact-evidence
+// variant above to bind the external immutable staging marker.
+func (c *ActivationClient) VerifyRequiredPolicyV3ActivationRecord(ctx context.Context) error {
+	_, err := c.verifyRequiredPolicyV3ActivationRecord(ctx)
+	return err
+}
+
+func (c *ActivationClient) verifyRequiredPolicyV3ActivationRecord(ctx context.Context) (ActivationRecord, error) {
+	requiredEpochKey := requiredKey(c.prefix)
+	recordKey := policyActivationRecordKey(c.prefix, RequiredPolicyGenerationV3, RequiredPolicyV3)
+	resp, err := c.cli.Txn(ctx).Then(clientv3.OpGet(requiredEpochKey), clientv3.OpGet(recordKey)).Commit()
+	if err != nil {
+		return ActivationRecord{}, err
+	}
+	if len(resp.Responses) != 2 {
+		return ActivationRecord{}, fmt.Errorf("V3 policy activation evidence read is incomplete")
+	}
+	requiredResp, recordResp := resp.Responses[0].GetResponseRange(), resp.Responses[1].GetResponseRange()
+	if requiredResp == nil || len(requiredResp.Kvs) != 1 || string(requiredResp.Kvs[0].Value) != RequiredValueV3 ||
+		recordResp == nil || len(recordResp.Kvs) != 1 {
+		return ActivationRecord{}, fmt.Errorf("required V3 policy or immutable activation record missing")
+	}
+	requiredKV, recordKV := requiredResp.Kvs[0], recordResp.Kvs[0]
+	if recordKV.CreateRevision <= 0 || recordKV.Version != 1 ||
+		recordKV.ModRevision != recordKV.CreateRevision || requiredKV.ModRevision != recordKV.CreateRevision {
+		return ActivationRecord{}, fmt.Errorf("V3 policy activation record is not the immutable required-policy transaction")
+	}
+	record, err := decodeActivationRecord(recordKV.Value)
+	if err != nil {
+		return ActivationRecord{}, fmt.Errorf("decode V3 policy activation record: %w", err)
+	}
+	validFrom := false
+	switch record.FromPolicyGeneration {
+	case 0:
+		validFrom = record.GenesisBootstrap && record.ZeroWriterBootstrap && record.From == 0 &&
+			record.FromRequiredValue == "" && record.FromModRevision == 0
+	case RequiredPolicyGenerationV1, RequiredPolicyGenerationV2:
+		fromValue, valueErr := RequiredValueForPolicyGeneration(record.FromPolicyGeneration)
+		fromWriter, writerErr := requiredWriterEpochForPolicyGeneration(record.FromPolicyGeneration)
+		validFrom = valueErr == nil && writerErr == nil && record.From == fromWriter &&
+			record.FromRequiredValue == fromValue && record.FromModRevision > 0 &&
+			record.FromModRevision < recordKV.CreateRevision && !record.GenesisBootstrap &&
+			((record.FromPolicyGeneration == RequiredPolicyGenerationV1) == record.ZeroWriterBootstrap)
+	}
+	if !validFrom || record.ToPolicyGeneration != RequiredPolicyGenerationV3 ||
+		record.To != ProtocolEpochV2 ||
+		record.ToRequiredValue != RequiredValueV3 || record.RequiredPolicyID != RequiredPolicyV3 ||
+		!isCanonicalLowerHexSHA256(record.ExpectedServicesHash) || record.ActivatedAtMS <= 0 ||
+		record.ActivationEvidenceCompletedAtMS <= 0 ||
+		record.ActivationEvidenceCompletedAtMS > record.ActivatedAtMS {
+		return ActivationRecord{}, fmt.Errorf("V3 policy activation record is not canonical")
+	}
+	if err := validateActivationEvidenceSHA256(record.ActivationEvidenceSHA256); err != nil {
+		return ActivationRecord{}, fmt.Errorf("V3 policy activation record has invalid evidence: %w", err)
+	}
+	return record, nil
+}
+
+// VerifyActivationEvidence performs a linear read of the immutable target
+// activation record and requires the exact evidence digest.  Legacy epoch-1
+// state has no activation record and remains readable; epoch-2 never falls
+// back when the record or evidence field is absent/malformed.
+func (c *ActivationClient) VerifyActivationEvidence(ctx context.Context, target uint32, activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64) error {
+	if target <= 1 {
+		return fmt.Errorf("activation evidence target must be greater than baseline: %d", target)
+	}
+	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	requiredEpochKey := requiredKey(c.prefix)
+	recordKey := cleanPrefix(c.prefix) + "activations/" + strconv.FormatUint(uint64(target), 10)
+	resp, err := c.cli.Txn(ctx).Then(
+		clientv3.OpGet(requiredEpochKey),
+		clientv3.OpGet(recordKey),
+	).Commit()
+	if err != nil {
+		return err
+	}
+	if len(resp.Responses) != 2 {
+		return fmt.Errorf("activation evidence read for epoch %d is incomplete", target)
+	}
+	requiredResp := resp.Responses[0].GetResponseRange()
+	recordResp := resp.Responses[1].GetResponseRange()
+	targetValue, valueErr := RequiredValueForEpoch(target)
+	if valueErr != nil {
+		return valueErr
+	}
+	if requiredResp == nil || len(requiredResp.Kvs) != 1 ||
+		string(requiredResp.Kvs[0].Value) != targetValue {
+		return fmt.Errorf("required epoch %d is not current while verifying activation evidence", target)
+	}
+	if recordResp == nil || len(recordResp.Kvs) != 1 {
+		return fmt.Errorf("activation record for epoch %d missing", target)
+	}
+	requiredKV := requiredResp.Kvs[0]
+	recordKV := recordResp.Kvs[0]
+	// Both keys were written by the same activation transaction.  Version=1
+	// additionally rejects any later overwrite of the nominally immutable
+	// record, even when an attacker preserves the JSON fields.
+	if recordKV.CreateRevision <= 0 || recordKV.Version != 1 ||
+		recordKV.ModRevision != recordKV.CreateRevision ||
+		requiredKV.ModRevision != recordKV.CreateRevision {
+		return fmt.Errorf("activation record for epoch %d is not the immutable required-epoch transaction", target)
+	}
+	record, err := decodeActivationRecord(recordKV.Value)
+	if err != nil {
+		return fmt.Errorf("decode activation record for epoch %d: %w", target, err)
+	}
+	if record.From == 0 || record.To != target || record.From >= record.To ||
+		record.FromRequiredValue != "1" || record.ToRequiredValue != targetValue ||
+		record.RequiredPolicyID != RequiredPolicyV2 ||
+		record.FromModRevision <= 0 || record.FromModRevision >= recordKV.CreateRevision ||
+		!isCanonicalLowerHexSHA256(record.ExpectedServicesHash) || record.ActivatedAtMS <= 0 ||
+		record.ActivationEvidenceCompletedAtMS <= 0 || record.ActivationEvidenceCompletedAtMS > record.ActivatedAtMS {
+		return fmt.Errorf("activation record for epoch %d is not canonical", target)
+	}
+	if err := validateActivationEvidenceSHA256(record.ActivationEvidenceSHA256); err != nil {
+		return fmt.Errorf("activation record for epoch %d has invalid evidence: %w", target, err)
+	}
+	if record.ActivationEvidenceSHA256 != activationEvidenceSHA256 {
+		return fmt.Errorf("activation record evidence mismatch for epoch %d", target)
+	}
+	if record.ActivationEvidenceCompletedAtMS != activationEvidenceCompletedAtMS {
+		return fmt.Errorf("activation record evidence completion mismatch for epoch %d", target)
+	}
+	return nil
+}
+
+func decodeActivationRecord(payload []byte) (ActivationRecord, error) {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	var record ActivationRecord
+	if err := decoder.Decode(&record); err != nil {
+		return ActivationRecord{}, err
+	}
+	var trailing struct{}
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return ActivationRecord{}, fmt.Errorf("activation record contains trailing JSON")
+		}
+		return ActivationRecord{}, err
+	}
+	return record, nil
+}
+
+func isCanonicalLowerHexSHA256(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 32
+}
+
+func validateActivationEvidenceSHA256(value string) error {
+	if !digestPattern.MatchString(value) {
+		return fmt.Errorf("activation evidence must be immutable sha256 digest")
+	}
+	return nil
+}
+
+// ValidateActivationEvidenceInput keeps legacy epoch-1 read-only audits
+// compatible while making an epoch advance and every already-target audit
+// fail closed unless both pieces of external evidence are present.
+func ValidateActivationEvidenceInput(current, target uint32, digest string, completedAtMS int64, advancing bool) error {
+	required := current == target || advancing
+	if !required && digest == "" && completedAtMS == 0 {
+		return nil
+	}
+	if err := validateActivationEvidenceSHA256(digest); err != nil {
+		return err
+	}
+	if completedAtMS <= 0 {
+		return fmt.Errorf("activation evidence completion time is required")
+	}
+	return nil
+}
+
 func buildAdvanceCompares(
 	prefix, lockToken, key, recordKey string,
-	expected uint32,
+	expectedRequiredValue string,
 	expectedModRevision int64,
 	audited []LiveCapability,
 ) ([]clientv3.Cmp, error) {
-	if expected == 0 || expectedModRevision <= 0 || key == "" || recordKey == "" || lockToken == "" {
+	if expectedRequiredValue == "" || expectedModRevision <= 0 || key == "" || recordKey == "" || lockToken == "" {
 		return nil, fmt.Errorf("invalid required advance snapshot")
 	}
 	compares := []clientv3.Cmp{
-		clientv3.Compare(clientv3.Value(key), "=", strconv.FormatUint(uint64(expected), 10)),
+		clientv3.Compare(clientv3.Value(key), "=", expectedRequiredValue),
 		clientv3.Compare(clientv3.ModRevision(key), "=", expectedModRevision),
 		clientv3.Compare(clientv3.CreateRevision(recordKey), "=", 0),
 		clientv3.Compare(clientv3.Value(activationLockKey(prefix)), "=", lockToken),
@@ -429,6 +968,36 @@ func buildAdvanceCompares(
 			clientv3.Compare(clientv3.ModRevision(capability.Key), "=", capability.ModRevision))
 	}
 	return compares, nil
+}
+
+func buildZeroWriterPolicyAdvanceCompares(prefix, lockToken, key, recordKey string,
+	expectedModRevision int64) ([]clientv3.Cmp, error) {
+	if expectedModRevision <= 0 || key == "" || recordKey == "" || lockToken == "" {
+		return nil, fmt.Errorf("invalid zero-writer policy advance snapshot")
+	}
+	capabilities := capabilityPrefix(prefix)
+	return []clientv3.Cmp{
+		clientv3.Compare(clientv3.Value(key), "=", "1"),
+		clientv3.Compare(clientv3.ModRevision(key), "=", expectedModRevision),
+		clientv3.Compare(clientv3.CreateRevision(recordKey), "=", 0),
+		clientv3.Compare(clientv3.Value(activationLockKey(prefix)), "=", lockToken),
+		clientv3.Compare(clientv3.CreateRevision(capabilities), "=", 0).
+			WithRange(clientv3.GetPrefixRangeEnd(capabilities)),
+	}, nil
+}
+
+func buildMissingZeroWriterPolicyBootstrapCompares(prefix, lockToken, key, recordKey string) ([]clientv3.Cmp, error) {
+	if key == "" || recordKey == "" || lockToken == "" {
+		return nil, fmt.Errorf("invalid missing zero-writer V3 bootstrap snapshot")
+	}
+	capabilities := capabilityPrefix(prefix)
+	return []clientv3.Cmp{
+		clientv3.Compare(clientv3.CreateRevision(key), "=", 0),
+		clientv3.Compare(clientv3.CreateRevision(recordKey), "=", 0),
+		clientv3.Compare(clientv3.Value(activationLockKey(prefix)), "=", lockToken),
+		clientv3.Compare(clientv3.CreateRevision(capabilities), "=", 0).
+			WithRange(clientv3.GetPrefixRangeEnd(capabilities)),
+	}, nil
 }
 
 // ParseExpectedServices 解析 service=count 逗号清单。
