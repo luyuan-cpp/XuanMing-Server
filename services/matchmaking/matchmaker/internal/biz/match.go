@@ -72,6 +72,18 @@ type DSAllocator interface {
 	SignBattleTicket(ctx context.Context, playerID, matchID uint64, allocation *model.BattleAllocation) (token string, err error)
 }
 
+// CombatFactionDSAllocator 是滚动升级后的分配能力。旧实现仍可只实现 DSAllocator；
+// 生产 gRPC 实现必须实现本接口，把 MatchMember.side 作为独立的 match-local 战斗阵营下发。
+type CombatFactionDSAllocator interface {
+	AllocateBattleWithCombatFactions(
+		ctx context.Context,
+		matchID uint64,
+		playerIDs []uint64,
+		combatFactionByPlayer map[uint64]uint32,
+		mapID uint32,
+	) (*model.BattleAllocation, error)
+}
+
 // LocationNotifier 把玩家位置变更上报给 player_locator（不变量 §1：玩家同一时刻只在一个 Location）。
 //
 // 状态权属：matchmaker 是 MATCHING / BATTLE 两个状态的权威（它掌握撮合生命周期）；
@@ -1616,7 +1628,21 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	}
 	if !checkpointed {
 		var err error
-		allocation, err = u.allocator.AllocateBattle(ctx, job.MatchId, playerIDs, job.MapId)
+		combatFactionByPlayer, factionErr := combatFactionsFromMembers(job.GetMembers())
+		if factionErr != nil {
+			return errcode.New(errcode.ErrInvalidState,
+				"match %d combat factions invalid: %v", job.GetMatchId(), factionErr)
+		}
+		if factionAllocator, ok := u.allocator.(CombatFactionDSAllocator); ok {
+			allocation, err = factionAllocator.AllocateBattleWithCombatFactions(
+				ctx, job.MatchId, playerIDs, combatFactionByPlayer, job.MapId)
+		} else {
+			// 仅用于旧测试桩/滚动升级中的旧实现。生产 GrpcDSAllocator 实现上面的
+			// 扩展接口；缺能力时保持旧行为并显式告警，不能按 player 顺序猜阵营。
+			plog.With(ctx).Warnw("msg", "combat_faction_allocator_legacy_fallback",
+				"match_id", job.GetMatchId(), "players", len(playerIDs))
+			allocation, err = u.allocator.AllocateBattle(ctx, job.MatchId, playerIDs, job.MapId)
+		}
 		if err != nil {
 			plog.With(ctx).Errorw("msg", "ds_allocate_failed", "match_id", job.MatchId, "err", err)
 			code := errcode.As(err)

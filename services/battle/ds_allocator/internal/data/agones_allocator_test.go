@@ -169,8 +169,9 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 				t.Errorf("GSA POST missing persistent allocation-id label: %s", body)
 			}
 			if !strings.Contains(string(body), `"pandora.dev/roster":"2,9"`) ||
+				!strings.Contains(string(body), `"pandora.dev/combat-factions":"2=4,9=4"`) ||
 				!strings.Contains(string(body), `"pandora.dev/release-track":"stable"`) {
-				t.Errorf("GSA POST missing canonical roster/release metadata: %s", body)
+				t.Errorf("GSA POST missing canonical roster/combat-factions/release metadata: %s", body)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]any{
 				"state": "Allocated", "gameServerName": "battle-fleet-auth1",
@@ -189,7 +190,8 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 				},
 				"annotations": map[string]string{
 					"pandora.dev/allocation-id": "11111111-1111-4111-8111-111111111111",
-					"pandora.dev/roster":        "2,9", "pandora.dev/release-track": "stable",
+					"pandora.dev/roster":        "2,9", "pandora.dev/combat-factions": "2=4,9=4",
+					"pandora.dev/release-track": "stable",
 				},
 			}})
 		default:
@@ -203,7 +205,8 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 		return "must-not-be-used", nil
 	}, true)
 	const allocationID = "11111111-1111-4111-8111-111111111111"
-	got, err := a.AllocateAuthoritative(context.Background(), 42, allocationID, []uint64{9, 2, 9}, 1, "ranked", "stable")
+	got, err := a.AllocateAuthoritative(context.Background(), 42, allocationID,
+		[]uint64{9, 2, 9}, map[uint64]uint32{2: 4, 9: 4}, 1, "ranked", "stable")
 	if err != nil {
 		t.Fatalf("AllocateAuthoritative: %v", err)
 	}
@@ -217,15 +220,45 @@ func TestAllocateAuthoritative_POSTWithoutTokenThenStrictGETIdentity(t *testing.
 	}
 }
 
+func TestAllocateAuthoritative_StrictGETRejectsMissingCombatFactions(t *testing.T) {
+	const allocationID = "12121212-1212-4212-8212-121212121212"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]any{
+				"state": "Allocated", "gameServerName": "battle-faction-missing",
+				"address": "10.0.0.8", "ports": []map[string]any{{"port": 7777}},
+			}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{
+			"name": "battle-faction-missing", "uid": "uid-faction-missing", "resourceVersion": "101",
+			"labels": map[string]string{
+				"pandora.dev/match-id": "42", battleAllocationMetadataKey: allocationID,
+				releaseTrackMetadataKey: "stable",
+			},
+			"annotations": map[string]string{
+				battleAllocationMetadataKey: allocationID, battleRosterAnnotationKey: "1",
+				releaseTrackMetadataKey: "stable",
+			},
+		}})
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	if _, err := a.AllocateAuthoritative(context.Background(), 42, allocationID,
+		[]uint64{1}, map[uint64]uint32{1: 2}, 1, "ranked", "stable"); err == nil {
+		t.Fatal("strict GET accepted missing combat-factions annotation")
+	}
+}
+
 func TestAuthoritativeAllocationRejectsVersion4WithNonRFC4122Variant(t *testing.T) {
 	a := &AgonesGameServerAllocator{}
 	const nonRFCVariant = "11111111-1111-4111-0111-111111111111"
 	if _, err := a.AllocateAuthoritative(context.Background(), 42, nonRFCVariant,
-		[]uint64{1}, 1, "ranked", "stable"); err == nil {
+		[]uint64{1}, nil, 1, "ranked", "stable"); err == nil {
 		t.Fatal("AllocateAuthoritative accepted UUIDv4 with non-RFC4122 variant")
 	}
 	if _, found, err := a.ResolveAllocationByID(context.Background(), 42, nonRFCVariant,
-		[]uint64{1}, 1, "ranked"); err == nil || found {
+		[]uint64{1}, nil, 1, "ranked"); err == nil || found {
 		t.Fatalf("ResolveAllocationByID accepted UUIDv4 with non-RFC4122 variant: found=%v err=%v", found, err)
 	}
 	if _, err := a.ResolveExpectedPodUID(context.Background(), &AuthoritativeGameServerAllocation{
@@ -349,7 +382,7 @@ func TestAllocateAuthoritative_StrictGETRejectsMissingIdentity(t *testing.T) {
 	}))
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
-	if _, err := a.AllocateAuthoritative(context.Background(), 42, "11111111-1111-4111-8111-111111111111", []uint64{1}, 1, "ranked", "stable"); err == nil {
+	if _, err := a.AllocateAuthoritative(context.Background(), 42, "11111111-1111-4111-8111-111111111111", []uint64{1}, nil, 1, "ranked", "stable"); err == nil {
 		t.Fatal("missing UID/RV must fail closed")
 	}
 }
@@ -359,7 +392,7 @@ func TestAllocateAuthoritative_POSTUnknownReturnsAllocationFence(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	const allocationID = "22222222-2222-4222-8222-222222222222"
-	got, err := a.AllocateAuthoritative(ctx, 42, allocationID, []uint64{1}, 1, "ranked", "stable")
+	got, err := a.AllocateAuthoritative(ctx, 42, allocationID, []uint64{1}, nil, 1, "ranked", "stable")
 	if err == nil || got == nil || got.AllocationID != allocationID || got.InstanceUID != "" {
 		t.Fatalf("partial=%+v err=%v", got, err)
 	}
@@ -391,7 +424,8 @@ func TestResolveAllocationByID_UniqueExactGameServerAndPod(t *testing.T) {
 				},
 				"annotations": map[string]string{
 					"pandora.dev/allocation-id": allocationID, "pandora.dev/roster": "1,2",
-					"pandora.dev/release-track": "stable",
+					"pandora.dev/combat-factions": "1=2,2=7",
+					"pandora.dev/release-track":   "stable",
 				},
 			},
 		}}})
@@ -399,7 +433,7 @@ func TestResolveAllocationByID_UniqueExactGameServerAndPod(t *testing.T) {
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
 	got, found, err := a.ResolveAllocationByID(context.Background(), 42, allocationID,
-		[]uint64{2, 1, 2}, 1, "ranked")
+		[]uint64{2, 1, 2}, map[uint64]uint32{1: 2, 2: 7}, 1, "ranked")
 	if err != nil || !found || got == nil {
 		t.Fatalf("ResolveAllocationByID found=%t allocation=%+v err=%v", found, got, err)
 	}
@@ -407,6 +441,33 @@ func TestResolveAllocationByID_UniqueExactGameServerAndPod(t *testing.T) {
 		got.InstanceUID != "gs-uid-reconcile-1" || got.PodUID != "pod-uid-reconcile-1" ||
 		got.ResourceVersion != "301" || got.AllocationID != allocationID || got.ReleaseTrack != "stable" {
 		t.Fatalf("resolved exact allocation=%+v selector=%t", got, sawSelector.Load())
+	}
+}
+
+func TestResolveAllocationByIDRejectsCombatFactionDrift(t *testing.T) {
+	const allocationID = "45454545-4545-4545-8545-454545454545"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{
+			"metadata": map[string]any{
+				"name": "battle-faction-drift", "uid": "uid-faction-drift", "resourceVersion": "301",
+				"labels": map[string]string{
+					"pandora.dev/match-id": "42", "pandora.dev/map-id": "1",
+					"pandora.dev/game-mode": "ranked", battleAllocationMetadataKey: allocationID,
+					releaseTrackMetadataKey: "stable",
+				},
+				"annotations": map[string]string{
+					battleAllocationMetadataKey: allocationID, battleRosterAnnotationKey: "1",
+					battleCombatFactionsAnnotationKey: "1=9", releaseTrackMetadataKey: "stable",
+				},
+			},
+		}}})
+	}))
+	defer srv.Close()
+	a := newTestAllocator(t, srv.URL)
+	got, found, err := a.ResolveAllocationByID(context.Background(), 42, allocationID,
+		[]uint64{1}, map[uint64]uint32{1: 2}, 1, "ranked")
+	if err == nil || found || got != nil {
+		t.Fatalf("combat faction drift accepted: found=%t allocation=%+v err=%v", found, got, err)
 	}
 }
 
@@ -418,7 +479,7 @@ func TestResolveAllocationByID_EmptyIsAuthoritativeAbsence(t *testing.T) {
 	defer srv.Close()
 	a := newTestAllocator(t, srv.URL)
 	got, found, err := a.ResolveAllocationByID(context.Background(), 43, allocationID,
-		[]uint64{1}, 1, "ranked")
+		[]uint64{1}, nil, 1, "ranked")
 	if err != nil || found || got != nil {
 		t.Fatalf("empty allocation resolution found=%t allocation=%+v err=%v", found, got, err)
 	}
@@ -445,7 +506,7 @@ func TestResolveAllocationByID_MultipleOrAPIUnknownFailClosed(t *testing.T) {
 			defer srv.Close()
 			a := newTestAllocator(t, srv.URL)
 			if got, found, err := a.ResolveAllocationByID(context.Background(), 44, allocationID,
-				[]uint64{1}, 1, "ranked"); err == nil || found || got != nil {
+				[]uint64{1}, nil, 1, "ranked"); err == nil || found || got != nil {
 				t.Fatalf("ambiguous/unknown result found=%t allocation=%+v err=%v", found, got, err)
 			}
 		})
@@ -505,7 +566,7 @@ func TestAllocateAuthoritative_CanaryNoCapacityFallsBackAndPersistsGETTrack(t *t
 		t.Fatal(err)
 	}
 	got, err := a.AllocateAuthoritative(context.Background(), 77, allocationID,
-		[]uint64{20, 10}, 1, "ranked", "canary")
+		[]uint64{20, 10}, nil, 1, "ranked", "canary")
 	if err != nil || got == nil || got.ReleaseTrack != "stable" || got.PodName != "battle-stable-1" {
 		t.Fatalf("fallback allocation=%+v err=%v", got, err)
 	}

@@ -334,6 +334,19 @@ func (u *AllocatorUsecase) ResolveBattleTarget(
 // 幂等:同 match_id 已有镜像时——ready/running 且有有效心跳 → 直接回;warming → 继续等 ready;
 // 终态/不可用 → 返回分配失败(绝不把 ds_addr 回给 matchmaker)。
 func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32, gameMode string) (*AllocateResult, error) {
+	return u.AllocateBattleWithCombatFactions(ctx, matchID, playerIDs, nil, mapID, gameMode)
+}
+
+// AllocateBattleWithCombatFactions 为 match 申请战斗 DS，并持久化完整的 match-local
+// 玩家阵营快照。空映射仅兼容滚动升级中的旧 matchmaker；非空映射必须精确覆盖 roster。
+func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
+	ctx context.Context,
+	matchID uint64,
+	playerIDs []uint64,
+	combatFactionByPlayer map[uint64]uint32,
+	mapID uint32,
+	gameMode string,
+) (*AllocateResult, error) {
 	if matchID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
@@ -342,6 +355,23 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 		return nil, errcode.New(errcode.ErrInvalidArg, "invalid battle roster: %v", rosterErr)
 	}
 	playerIDs = canonicalPlayers
+	var combatFactions []*dsv1.BattlePlayerCombatFaction
+	if len(combatFactionByPlayer) > 0 {
+		canonicalFactionPlayers, _, factionErr := dsmetadata.CanonicalCombatFactions(
+			playerIDs, combatFactionByPlayer)
+		if factionErr != nil {
+			return nil, errcode.New(errcode.ErrInvalidArg, "invalid battle combat factions: %v", factionErr)
+		}
+		playerIDs = canonicalFactionPlayers
+		combatFactions = combatFactionRecords(playerIDs, combatFactionByPlayer)
+		// 脱离调用方 map，避免 RPC 返回前外部复用/修改 map 造成 TOCTOU 或数据竞争。
+		combatFactionByPlayer = make(map[uint64]uint32, len(combatFactions))
+		for _, record := range combatFactions {
+			combatFactionByPlayer[record.GetPlayerId()] = record.GetCombatFactionId()
+		}
+	} else {
+		plog.With(ctx).Warnw("msg", "battle_combat_factions_legacy_missing", "match_id", matchID)
+	}
 	desiredReleaseTrack := u.releasePolicy.Select(matchID)
 
 	// 单 key SET NX claim 是并发 AllocateBattle 的线性化点。只有持有本次 allocation_id
@@ -349,21 +379,28 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 	claimAt := time.Now().UnixMilli()
 	allocationID := uuid.NewString()
 	claim := &dsv1.BattleStorageRecord{
-		MatchId:         matchID,
-		State:           stateAllocating,
-		PlayerIds:       append([]uint64(nil), playerIDs...),
-		MapId:           mapID,
-		GameMode:        gameMode,
-		AllocatedAtMs:   claimAt,
-		LastHeartbeatMs: claimAt,
-		PlayerCount:     int32(len(playerIDs)),
-		AllocationId:    allocationID,
+		MatchId:              matchID,
+		State:                stateAllocating,
+		PlayerIds:            append([]uint64(nil), playerIDs...),
+		MapId:                mapID,
+		GameMode:             gameMode,
+		AllocatedAtMs:        claimAt,
+		LastHeartbeatMs:      claimAt,
+		PlayerCount:          int32(len(playerIDs)),
+		AllocationId:         allocationID,
+		PlayerCombatFactions: cloneCombatFactionRecords(combatFactions),
 	}
 	claimed, existing, err := u.repo.ClaimBattle(ctx, claim, u.battleTTL())
 	if err != nil {
 		return nil, err
 	}
 	if !claimed {
+		if !sameBattleAllocationRequest(existing, claim) {
+			plog.With(ctx).Errorw("msg", "battle_allocation_idempotency_snapshot_mismatch",
+				"match_id", matchID, "allocation_id", existing.GetAllocationId())
+			return nil, errcode.New(errcode.ErrUnavailable,
+				"battle %d allocation request conflicts with existing snapshot", matchID)
+		}
 		return u.awaitExistingAllocation(ctx, matchID, existing)
 	}
 
@@ -382,7 +419,7 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 				"battle %d allocation fence unavailable", matchID)
 		}
 		authoritative, err = u.authoritativeAlloc.AllocateAuthoritative(
-			ctx, matchID, allocationID, playerIDs, mapID, gameMode, desiredReleaseTrack)
+			ctx, matchID, allocationID, playerIDs, combatFactionByPlayer, mapID, gameMode, desiredReleaseTrack)
 		if authoritative != nil {
 			podName, addr = authoritative.PodName, authoritative.Addr
 		}
@@ -424,18 +461,19 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 			"allocator returned invalid actual release_track %q", actualReleaseTrack)
 	}
 	battle := &dsv1.BattleStorageRecord{
-		MatchId:         matchID,
-		DsPodName:       podName,
-		DsAddr:          addr,
-		State:           stateWarming, // 等 DS 心跳确认 ready 才回 matchmaker;不把 Agones Allocated 当成 ready
-		PlayerIds:       playerIDs,
-		MapId:           mapID,
-		GameMode:        gameMode,
-		AllocatedAtMs:   now,
-		LastHeartbeatMs: now, // 仅作 sweep 宽限基准;ready 判定要求 LastHeartbeatMs 严格大于此(即真实心跳)
-		PlayerCount:     int32(len(playerIDs)),
-		AllocationId:    allocationID,
-		ReleaseTrack:    actualReleaseTrack,
+		MatchId:              matchID,
+		DsPodName:            podName,
+		DsAddr:               addr,
+		State:                stateWarming, // 等 DS 心跳确认 ready 才回 matchmaker;不把 Agones Allocated 当成 ready
+		PlayerIds:            playerIDs,
+		MapId:                mapID,
+		GameMode:             gameMode,
+		AllocatedAtMs:        now,
+		LastHeartbeatMs:      now, // 仅作 sweep 宽限基准;ready 判定要求 LastHeartbeatMs 严格大于此(即真实心跳)
+		PlayerCount:          int32(len(playerIDs)),
+		AllocationId:         allocationID,
+		ReleaseTrack:         actualReleaseTrack,
+		PlayerCombatFactions: cloneCombatFactionRecords(combatFactions),
 	}
 	if authoritative != nil {
 		battle.GameserverUid = authoritative.InstanceUID
@@ -492,6 +530,81 @@ func (u *AllocatorUsecase) AllocateBattle(ctx context.Context, matchID uint64, p
 
 	plog.With(ctx).Infow("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
 	return res, nil
+}
+
+func combatFactionRecords(
+	canonicalPlayers []uint64,
+	combatFactionByPlayer map[uint64]uint32,
+) []*dsv1.BattlePlayerCombatFaction {
+	if len(combatFactionByPlayer) == 0 {
+		return nil
+	}
+	records := make([]*dsv1.BattlePlayerCombatFaction, 0, len(canonicalPlayers))
+	for _, playerID := range canonicalPlayers {
+		records = append(records, &dsv1.BattlePlayerCombatFaction{
+			PlayerId: playerID, CombatFactionId: combatFactionByPlayer[playerID],
+		})
+	}
+	return records
+}
+
+func cloneCombatFactionRecords(records []*dsv1.BattlePlayerCombatFaction) []*dsv1.BattlePlayerCombatFaction {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]*dsv1.BattlePlayerCombatFaction, 0, len(records))
+	for _, record := range records {
+		out = append(out, &dsv1.BattlePlayerCombatFaction{
+			PlayerId: record.GetPlayerId(), CombatFactionId: record.GetCombatFactionId(),
+		})
+	}
+	return out
+}
+
+func combatFactionMapFromRecords(
+	playerIDs []uint64,
+	records []*dsv1.BattlePlayerCombatFaction,
+) (map[uint64]uint32, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+	canonicalPlayers, _, err := dsmetadata.CanonicalRoster(playerIDs)
+	if err != nil || !slices.Equal(playerIDs, canonicalPlayers) || len(records) != len(playerIDs) {
+		return nil, errors.New("combat faction records must align with canonical battle roster")
+	}
+	factions := make(map[uint64]uint32, len(records))
+	for i, record := range records {
+		if record == nil || record.GetPlayerId() != playerIDs[i] {
+			return nil, errors.New("combat faction records are not in canonical roster order")
+		}
+		if record.GetCombatFactionId() > dsmetadata.MaxCombatFactionID {
+			return nil, errors.New("combat faction_id exceeds DS camp range")
+		}
+		factions[record.GetPlayerId()] = record.GetCombatFactionId()
+	}
+	if _, _, err := dsmetadata.CanonicalCombatFactions(canonicalPlayers, factions); err != nil {
+		return nil, err
+	}
+	return factions, nil
+}
+
+func sameBattleAllocationRequest(existing, expected *dsv1.BattleStorageRecord) bool {
+	if existing == nil || expected == nil || existing.GetMatchId() != expected.GetMatchId() ||
+		existing.GetMapId() != expected.GetMapId() || existing.GetGameMode() != expected.GetGameMode() ||
+		!slices.Equal(existing.GetPlayerIds(), expected.GetPlayerIds()) {
+		return false
+	}
+	a, b := existing.GetPlayerCombatFactions(), expected.GetPlayerCombatFactions()
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].GetPlayerId() != b[i].GetPlayerId() ||
+			a[i].GetCombatFactionId() != b[i].GetCombatFactionId() {
+			return false
+		}
+	}
+	return true
 }
 
 const (
@@ -1060,8 +1173,16 @@ func (u *AllocatorUsecase) reconcileAllocationUncertain(
 
 	switch battle.GetState() {
 	case stateAllocationUncertain:
+		combatFactionByPlayer, factionErr := combatFactionMapFromRecords(
+			battle.GetPlayerIds(), battle.GetPlayerCombatFactions())
+		if factionErr != nil {
+			plog.With(ctx).Errorw("msg", "allocation_uncertain_combat_factions_invalid_fail_closed",
+				"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", factionErr)
+			return false
+		}
 		allocation, found, err := resolver.ResolveAllocationByID(ctx, battle.GetMatchId(),
-			battle.GetAllocationId(), battle.GetPlayerIds(), battle.GetMapId(), battle.GetGameMode())
+			battle.GetAllocationId(), battle.GetPlayerIds(), combatFactionByPlayer,
+			battle.GetMapId(), battle.GetGameMode())
 		if err != nil {
 			plog.With(ctx).Warnw("msg", "allocation_uncertain_resolve_failed_will_retry",
 				"match_id", battle.GetMatchId(), "allocation_id", battle.GetAllocationId(), "err", err)

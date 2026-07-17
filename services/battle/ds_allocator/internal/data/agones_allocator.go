@@ -41,10 +41,11 @@ import (
 
 // fleetLabelKey 是 Agones Fleet 给其 GameServer 打的标签 key(selector 用)。
 const (
-	fleetLabelKey               = "agones.dev/fleet"
-	releaseTrackMetadataKey     = "pandora.dev/release-track"
-	battleRosterAnnotationKey   = "pandora.dev/roster"
-	battleAllocationMetadataKey = "pandora.dev/allocation-id"
+	fleetLabelKey                     = "agones.dev/fleet"
+	releaseTrackMetadataKey           = "pandora.dev/release-track"
+	battleRosterAnnotationKey         = "pandora.dev/roster"
+	battleCombatFactionsAnnotationKey = "pandora.dev/combat-factions"
+	battleAllocationMetadataKey       = "pandora.dev/allocation-id"
 )
 
 type battleFleetRoute struct {
@@ -285,6 +286,7 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	matchID uint64,
 	allocationID string,
 	playerIDs []uint64,
+	combatFactionByPlayer map[uint64]uint32,
 	mapID uint32,
 	gameMode, releaseTrack string,
 ) (*AuthoritativeGameServerAllocation, error) {
@@ -299,6 +301,16 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 	if rosterErr != nil || len(canonicalPlayers) == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "agones: invalid battle roster: %v", rosterErr)
 	}
+	combatFactions := ""
+	if len(combatFactionByPlayer) > 0 {
+		var factionErr error
+		canonicalPlayers, combatFactions, factionErr = dsmetadata.CanonicalCombatFactions(
+			canonicalPlayers, combatFactionByPlayer)
+		if factionErr != nil {
+			return nil, errcode.New(errcode.ErrInvalidArg,
+				"agones: invalid battle combat factions: %v", factionErr)
+		}
+	}
 	partial := &AuthoritativeGameServerAllocation{AllocationID: allocationID}
 	meta := &gsaMetadata{Labels: map[string]string{
 		"pandora.dev/match-id":      fmt.Sprintf("%d", matchID),
@@ -309,6 +321,9 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		battleRosterAnnotationKey:   roster,
 		battleAllocationMetadataKey: allocationID,
 	}}
+	if combatFactions != "" {
+		meta.Annotations[battleCombatFactionsAnnotationKey] = combatFactions
+	}
 	podName, addr, selectedTrack, err := a.allocateWithMetadata(ctx, matchID, mapID, releaseTrack, meta)
 	if err != nil {
 		// 即使 POST 没有可解析响应，也必须把 allocation_id 交还调用方。它是未知结果
@@ -327,6 +342,7 @@ func (a *AgonesGameServerAllocator) AllocateAuthoritative(
 		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocationID) ||
 		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocationID ||
 		gs.Metadata.Annotations[battleRosterAnnotationKey] != roster ||
+		!exactOptionalAnnotation(gs.Metadata.Annotations, battleCombatFactionsAnnotationKey, combatFactions) ||
 		!releasetrack.Valid(actualReleaseTrack) || actualReleaseTrack != selectedTrack ||
 		gs.Metadata.Annotations[releaseTrackMetadataKey] != actualReleaseTrack {
 		return partial, errcode.New(errcode.ErrDSAllocationFailed,
@@ -369,11 +385,21 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 	matchID uint64,
 	allocationID string,
 	playerIDs []uint64,
+	combatFactionByPlayer map[uint64]uint32,
 	mapID uint32,
 	gameMode string,
 ) (*AuthoritativeGameServerAllocation, bool, error) {
 	parsedAllocationID, parseErr := uuid.Parse(allocationID)
 	canonicalPlayers, roster, rosterErr := dsmetadata.CanonicalRoster(playerIDs)
+	combatFactions := ""
+	if rosterErr == nil && len(combatFactionByPlayer) > 0 {
+		var factionErr error
+		canonicalPlayers, combatFactions, factionErr = dsmetadata.CanonicalCombatFactions(
+			canonicalPlayers, combatFactionByPlayer)
+		if factionErr != nil {
+			rosterErr = factionErr
+		}
+	}
 	if matchID == 0 || parseErr != nil || parsedAllocationID == uuid.Nil ||
 		parsedAllocationID.Version() != uuid.Version(4) || parsedAllocationID.Variant() != uuid.RFC4122 ||
 		parsedAllocationID.String() != allocationID ||
@@ -418,6 +444,7 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 		gs.Metadata.Labels[battleAllocationMetadataKey] != sanitizeLabelValue(allocationID) ||
 		gs.Metadata.Annotations[battleAllocationMetadataKey] != allocationID ||
 		gs.Metadata.Annotations[battleRosterAnnotationKey] != roster ||
+		!exactOptionalAnnotation(gs.Metadata.Annotations, battleCombatFactionsAnnotationKey, combatFactions) ||
 		!releasetrack.Valid(actualTrack) || gs.Metadata.Annotations[releaseTrackMetadataKey] != actualTrack {
 		return nil, false, errcode.New(errcode.ErrDSAllocationFailed,
 			"agones: allocation_id %s resolved GameServer binding is incomplete or conflicting",
@@ -441,6 +468,16 @@ func (a *AgonesGameServerAllocator) ResolveAllocationByID(
 		ReleaseTrack:       actualTrack,
 		AnnotationsPresent: gs.Metadata.Annotations != nil,
 	}, true, nil
+}
+
+// exactOptionalAnnotation 区分 legacy 缺席与新协议精确值：期望空串时 key 必须不存在，
+// 不能把意外的空值/旧分配残留当作同一权威快照。
+func exactOptionalAnnotation(annotations map[string]string, key, expected string) bool {
+	value, found := annotations[key]
+	if expected == "" {
+		return !found
+	}
+	return found && value == expected
 }
 
 func (a *AgonesGameServerAllocator) allocateWithMetadata(

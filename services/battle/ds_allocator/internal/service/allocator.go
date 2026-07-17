@@ -54,7 +54,12 @@ func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.Allocat
 	if req.GetMatchId() == 0 {
 		return &dsv1.AllocateBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.AllocateBattle(ctx, req.GetMatchId(), req.GetPlayerIds(), req.GetMapId(), req.GetGameMode())
+	combatFactionByPlayer, err := combatFactionMap(req.GetPlayerCombatFactions())
+	if err != nil {
+		return &dsv1.AllocateBattleResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	res, err := s.uc.AllocateBattleWithCombatFactions(
+		ctx, req.GetMatchId(), req.GetPlayerIds(), combatFactionByPlayer, req.GetMapId(), req.GetGameMode())
 	if err != nil {
 		return &dsv1.AllocateBattleResponse{Code: toProtoCode(err)}, nil
 	}
@@ -69,6 +74,23 @@ func (s *AllocatorService) AllocateBattle(ctx context.Context, req *dsv1.Allocat
 		AllocationId:  res.AllocationID,
 		ReleaseTrack:  res.ReleaseTrack,
 	}, nil
+}
+
+func combatFactionMap(records []*dsv1.BattlePlayerCombatFaction) (map[uint64]uint32, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+	factions := make(map[uint64]uint32, len(records))
+	for _, record := range records {
+		if record == nil || record.GetPlayerId() == 0 {
+			return nil, errors.New("player combat faction requires player_id")
+		}
+		if _, duplicate := factions[record.GetPlayerId()]; duplicate {
+			return nil, errors.New("duplicate player combat faction")
+		}
+		factions[record.GetPlayerId()] = record.GetCombatFactionId()
+	}
+	return factions, nil
 }
 
 // ResolveBattleTarget 只读返回当前可重连目标并核验 roster 成员。它与 AllocateBattle

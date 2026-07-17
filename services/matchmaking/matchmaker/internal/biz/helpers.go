@@ -2,8 +2,11 @@
 package biz
 
 import (
+	"fmt"
+
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
@@ -125,6 +128,34 @@ func memberPlayerIDs(members []*matchv1.MatchMemberStorageRecord) []uint64 {
 		ids = append(ids, m.PlayerId)
 	}
 	return ids
+}
+
+// combatFactionsFromMembers 把持久化 MatchMember.side 转成独立的 match-local 战斗阵营。
+// team_id/guild_id 不参与映射，因此多个队伍可共享阵营，也允许 0/1 之外的多阵营场景。
+func combatFactionsFromMembers(members []*matchv1.MatchMemberStorageRecord) (map[uint64]uint32, error) {
+	if len(members) == 0 {
+		return nil, fmt.Errorf("match members are empty")
+	}
+	factions := make(map[uint64]uint32, len(members))
+	players := make([]uint64, 0, len(members))
+	for _, member := range members {
+		if member == nil || member.GetPlayerId() == 0 {
+			return nil, fmt.Errorf("match member player_id is empty")
+		}
+		if member.GetSide() < 0 || uint64(member.GetSide()) > uint64(dsmetadata.MaxCombatFactionID) {
+			return nil, fmt.Errorf("player %d side %d exceeds combat faction range",
+				member.GetPlayerId(), member.GetSide())
+		}
+		if _, duplicate := factions[member.GetPlayerId()]; duplicate {
+			return nil, fmt.Errorf("duplicate match member player_id %d", member.GetPlayerId())
+		}
+		factions[member.GetPlayerId()] = uint32(member.GetSide())
+		players = append(players, member.GetPlayerId())
+	}
+	if _, _, err := dsmetadata.CanonicalCombatFactions(players, factions); err != nil {
+		return nil, err
+	}
+	return factions, nil
 }
 
 func cloneMatch(m *matchv1.MatchStorageRecord) *matchv1.MatchStorageRecord {

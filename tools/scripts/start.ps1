@@ -2832,7 +2832,7 @@ function Invoke-K8s {
     # 显式覆盖父环境遗留值,不能只依赖 compose 默认值。
     $env:PANDORA_DS_EDGE_BIND_HOST = '127.0.0.1'
     & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind
-    Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
+    Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);集群本身已部署好,修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind"
 
     Write-Host ""
     if ($relayBind -eq '0.0.0.0') {
@@ -3944,7 +3944,7 @@ function Resume-K8s {
     # 恢复路径同样锁死宿主 DS 面,避免继承用户环境中的 0.0.0.0。
     $env:PANDORA_DS_EDGE_BIND_HOST = '127.0.0.1'
     & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'e2e_k8s.ps1') -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind
-    Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad"
+    Assert-LastExit "宿主桥接/中继(e2e_k8s.ps1);修复后可单独重跑:pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind"
     if ($relayBind -eq '0.0.0.0') {
         Write-Ok "真 DS 闭环已恢复(局域网):内网其它机器客户端连 ${resumeAdvHost}:8443 即可(需防火墙放行 TCP 8443 + UDP 7000-8000;宿主 8444 仅回环)。"
     } else {

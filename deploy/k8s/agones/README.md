@@ -22,8 +22,13 @@ pwsh tools/scripts/start.ps1 -Mode k8s
 只有宿主桥接/中继单独坏了(如手动杀了 port-forward)才需单跑修复：
 
 ```powershell
-pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad   # 只重建宿主桥接/中继,不动集群
+# 当前 allocator 向局域网客户端广播非回环 IP 时，必须显式开放宿主入口：
+pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile pandora-agones -KubeContext pandora-agones -RelayBindHost 0.0.0.0
 ```
+
+`e2e_k8s.ps1` 会先读取 live `Secret/pandora-config` 中 DS/Hub allocator 的
+`agones.advertise_host`。两者漂移、地址不属于本机，或非回环广播地址与 relay 监听范围不匹配时，
+脚本会在改动 Fleet、镜像、Envoy 或旧 relay 前停止；局域网开放必须显式传 `-RelayBindHost 0.0.0.0`。
 
 `e2e_k8s.ps1` 自动完成：校验集群/Agones/Fleet 就绪 → 从 Fleet yaml 解析真 DS 镜像精确 tag 并
 `minikube image load` → 起宿主 Envoy 桥接(`k8s_envoy_bridge.ps1`：对各业务 k8s Service 做

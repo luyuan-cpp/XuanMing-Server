@@ -10,12 +10,13 @@
 #
 # 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、20 个后端 Deployment 部署。
 #   pwsh tools/scripts/start.ps1 -Mode k8s
-#   pwsh tools/scripts/e2e_k8s.ps1
+#   # start.ps1 会按 live allocator 地址自动把正确的 RelayBindHost 传给本脚本
 #
 # 用法:
-#   pwsh tools/scripts/e2e_k8s.ps1                 # 校验 + load 镜像 + 等 Fleet + 起中继(后台)
+#   pwsh tools/scripts/e2e_k8s.ps1                 # 仅 allocator 广播 127.0.0.1 的本机模式
+#   pwsh tools/scripts/e2e_k8s.ps1 -RelayBindHost 0.0.0.0 # allocator 广播非回环 IP 的局域网模式
 #   pwsh tools/scripts/e2e_k8s.ps1 -NoRelay        # 不自动起容器版中继(自己按提示起 pandora/udp-relay:dev 容器)
-#   pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad  # 镜像已 load 过,跳过
+#   pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -RelayBindHost 0.0.0.0 # 局域网模式只重建桥接/中继
 #   pwsh tools/scripts/e2e_k8s.ps1 -TimeoutSec 300 # 等 Fleet Ready 的超时(默认 240s)
 #   pwsh tools/scripts/e2e_k8s.ps1 -MinikubeProfile pandora-agones # 指定 minikube profile / docker network
 #   pwsh tools/scripts/e2e_k8s.ps1 -BridgeForce    # 500xx 端口被本地/compose 旧服务占用时,杀掉后重建 port-forward
@@ -28,7 +29,8 @@ param(
     [Alias('Profile')]
     [string]$MinikubeProfile = 'pandora-agones', # minikube profile;docker driver 下通常同名 docker network
     [string]$KubeContext = '', # 必须指向上述本地 minikube；留空时取与 profile 同名的 context
-    [string]$RelayBindHost = '127.0.0.1', # UDP 中继 docker publish 绑定地址;内网多机联调传 0.0.0.0 对局域网开放
+    [ValidateSet('127.0.0.1', '0.0.0.0')]
+    [string]$RelayBindHost = '127.0.0.1', # 安全默认仅本机;allocator 广播非回环地址时必须显式传 0.0.0.0
     [int]$TimeoutSec = 240   # 等 Fleet Ready 超时秒
 )
 
@@ -66,6 +68,150 @@ function Test-KubeContextIsLocalMinikube([string]$Context, [string]$Profile) {
     if ($apiHost -in @('127.0.0.1', 'localhost', '::1', '[::1]')) { return $true }
     $mkIp = (minikube -p $Profile ip 2>$null | Out-String).Trim()
     return ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($mkIp) -and $apiHost -eq $mkIp)
+}
+
+# 只读取 allocator 的顶层 agones 段，不能误取后续 local_ds/local_hub 的同名字段。
+function Get-AgonesAdvertiseHostFromText {
+    param(
+        [Parameter(Mandatory)][string]$ConfigText,
+        [Parameter(Mandatory)][string]$ConfigName
+    )
+
+    $insideAgones = $false
+    $advertiseHost = $null
+    $advertiseHostSeen = $false
+    foreach ($line in ($ConfigText -split "`r?`n")) {
+        if (-not $insideAgones) {
+            if ($line -match '^agones:\s*(?:#.*)?$') { $insideAgones = $true }
+            continue
+        }
+        if ($line -match '^[^\s#]') { break }
+        if ($line -match '^\s+advertise_host:\s*(?<value>[^#]+)') {
+            if ($advertiseHostSeen) {
+                throw "live Secret/pandora-config 中 $ConfigName 的 agones.advertise_host 重复"
+            }
+            $advertiseHostSeen = $true
+            $value = $Matches['value'].Trim()
+            if (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+                $value = $value.Substring(1, $value.Length - 2).Trim()
+            }
+            $advertiseHost = $value
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($advertiseHost)) {
+        throw "live Secret/pandora-config 中 $ConfigName 缺少 agones.advertise_host"
+    }
+    return $advertiseHost
+}
+
+# Secret 内容只在内存中解码；错误信息不得回显 JSON、Base64 或 YAML。
+function Get-LiveAllocatorAdvertiseContract {
+    param(
+        [Parameter(Mandatory)][string[]]$ContextArgs,
+        [Parameter(Mandatory)][string]$Namespace
+    )
+
+    $secretOutput = @(& kubectl @ContextArgs get secret pandora-config -n $Namespace -o json 2>$null)
+    $secretExitCode = $LASTEXITCODE
+    if ($secretExitCode -ne 0 -or $secretOutput.Count -eq 0) {
+        throw "读取本地 context 的 Secret/$Namespace/pandora-config 失败；未改动 Fleet、镜像、桥接或中继"
+    }
+    try {
+        $secret = ($secretOutput -join "`n") | ConvertFrom-Json
+    } catch {
+        throw "解析本地 Secret/$Namespace/pandora-config 元数据失败；未回显 Secret 内容"
+    }
+    if ($null -eq $secret.data) {
+        throw "Secret/$Namespace/pandora-config 缺少 data"
+    }
+
+    $hosts = @{}
+    foreach ($configName in @('ds-allocator.yaml', 'hub-allocator.yaml')) {
+        $property = $secret.data.PSObject.Properties[$configName]
+        if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            throw "Secret/$Namespace/pandora-config 缺少 $configName"
+        }
+        try {
+            $configBytes = [Convert]::FromBase64String([string]$property.Value)
+            $configText = [Text.Encoding]::UTF8.GetString($configBytes)
+            $hosts[$configName] = Get-AgonesAdvertiseHostFromText -ConfigText $configText -ConfigName $configName
+        } catch {
+            if ($_.Exception.Message -like 'live Secret/pandora-config*') { throw }
+            throw "Secret/$Namespace/pandora-config 的 $configName 无法安全解码"
+        }
+    }
+
+    $uid = [string]$secret.metadata.uid
+    $resourceVersion = [string]$secret.metadata.resourceVersion
+    if ([string]::IsNullOrWhiteSpace($uid) -or [string]::IsNullOrWhiteSpace($resourceVersion)) {
+        throw "Secret/$Namespace/pandora-config 缺少不可变身份或版本信息"
+    }
+    return [pscustomobject]@{
+        Uid = $uid
+        ResourceVersion = $resourceVersion
+        DsAdvertiseHost = [string]$hosts['ds-allocator.yaml']
+        HubAdvertiseHost = [string]$hosts['hub-allocator.yaml']
+    }
+}
+
+function Assert-RelayBindingMatchesAdvertiseHosts {
+    param(
+        [Parameter(Mandatory)][string]$DsAdvertiseHost,
+        [Parameter(Mandatory)][string]$HubAdvertiseHost,
+        [Parameter(Mandatory)][string]$RequestedBindHost,
+        [Parameter(Mandatory)][bool]$RelayBindWasExplicit
+    )
+
+    if ($DsAdvertiseHost -cne $HubAdvertiseHost) {
+        throw "ds-allocator 与 hub-allocator 的 agones.advertise_host 不一致；拒绝重建桥接/中继"
+    }
+    $parsed = $null
+    if (-not [Net.IPAddress]::TryParse($HubAdvertiseHost, [ref]$parsed) -or
+        $parsed.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or
+        $parsed.ToString() -cne $HubAdvertiseHost -or
+        $HubAdvertiseHost -in @('0.0.0.0', '255.255.255.255')) {
+        throw "allocator agones.advertise_host 必须是规范、可下发给客户端的 IPv4 地址"
+    }
+
+    $isLoopback = [Net.IPAddress]::IsLoopback($parsed)
+    if ($isLoopback) {
+        if ($HubAdvertiseHost -cne '127.0.0.1' -or $RequestedBindHost -cne '127.0.0.1') {
+            throw "allocator 广播回环地址时，UDP relay 只能绑定 127.0.0.1"
+        }
+    } elseif (-not $RelayBindWasExplicit -or $RequestedBindHost -cne '0.0.0.0') {
+        throw "allocator 广播非回环地址时，必须显式传 -RelayBindHost 0.0.0.0；现有桥接/中继保持不变"
+    }
+    return $HubAdvertiseHost
+}
+
+function Assert-AdvertiseHostOwnedByLocalMachine([string]$AdvertiseHost) {
+    if ([Net.IPAddress]::IsLoopback([Net.IPAddress]::Parse($AdvertiseHost)) -or -not $IsWindows) { return }
+    $localIPv4 = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | ForEach-Object { [string]$_.IPAddress })
+    if ($localIPv4 -cnotcontains $AdvertiseHost) {
+        throw "allocator agones.advertise_host=$AdvertiseHost 当前不属于本机任何 IPv4 网卡；拒绝开放 UDP relay"
+    }
+}
+
+function Assert-LiveAllocatorContractUnchanged {
+    param(
+        [Parameter(Mandatory)]$Baseline,
+        [Parameter(Mandatory)][string[]]$ContextArgs,
+        [Parameter(Mandatory)][string]$Namespace,
+        [Parameter(Mandatory)][string]$RequestedBindHost,
+        [Parameter(Mandatory)][bool]$RelayBindWasExplicit
+    )
+
+    $latest = Get-LiveAllocatorAdvertiseContract -ContextArgs $ContextArgs -Namespace $Namespace
+    $latestHost = Assert-RelayBindingMatchesAdvertiseHosts `
+        -DsAdvertiseHost $latest.DsAdvertiseHost `
+        -HubAdvertiseHost $latest.HubAdvertiseHost `
+        -RequestedBindHost $RequestedBindHost `
+        -RelayBindWasExplicit $RelayBindWasExplicit
+    if ($latest.Uid -cne $Baseline.Uid -or $latest.ResourceVersion -cne $Baseline.ResourceVersion) {
+        throw "Secret/$Namespace/pandora-config 在编排过程中已变化；拒绝继续重建桥接/中继"
+    }
+    Assert-AdvertiseHostOwnedByLocalMachine $latestHost
 }
 
 function ConvertTo-IPv4UInt32([string]$ip) {
@@ -160,6 +306,22 @@ if (-not (Test-KubeContextIsLocalMinikube $KubeContext $MinikubeProfile)) {
 }
 $kubectlContextArgs = @('--context', $KubeContext)
 Write-Ok "kubectl 已显式钉在本机 context '$KubeContext'(不修改全局 current-context)"
+
+# 在任何 Fleet apply、镜像 load/delete、桥接或中继改动前锁定 live allocator/relay 合约。
+$relayBindWasExplicit = $PSBoundParameters.ContainsKey('RelayBindHost')
+try {
+    $relayContract = Get-LiveAllocatorAdvertiseContract -ContextArgs $kubectlContextArgs -Namespace $K8sNamespace
+    $LiveAdvertiseHost = Assert-RelayBindingMatchesAdvertiseHosts `
+        -DsAdvertiseHost $relayContract.DsAdvertiseHost `
+        -HubAdvertiseHost $relayContract.HubAdvertiseHost `
+        -RequestedBindHost $RelayBindHost `
+        -RelayBindWasExplicit $relayBindWasExplicit
+    Assert-AdvertiseHostOwnedByLocalMachine $LiveAdvertiseHost
+    Write-Ok "live allocator/relay 合约通过:advertise=$LiveAdvertiseHost,bind=$RelayBindHost"
+} catch {
+    Write-Err $_.Exception.Message
+    exit 1
+}
 
 kubectl @kubectlContextArgs get ns agones-system *> $null
 if ($LASTEXITCODE -ne 0) { Write-Err "未检测到 Agones(agones-system)。先跑:pwsh tools/scripts/start.ps1 -Mode k8s"; exit 1 }
@@ -256,6 +418,14 @@ if ($SkipImageLoad) {
 
 # ── 2) 起宿主 Envoy 桥接 ────────────────────────────────────────────────
 Write-Step "[2/6] 起宿主 Envoy 桥接(k8s Service -> host port-forward -> Envoy)"
+try {
+    Assert-LiveAllocatorContractUnchanged -Baseline $relayContract -ContextArgs $kubectlContextArgs `
+        -Namespace $K8sNamespace -RequestedBindHost $RelayBindHost `
+        -RelayBindWasExplicit $relayBindWasExplicit
+} catch {
+    Write-Err $_.Exception.Message
+    exit 1
+}
 Start-K8sEnvoyBridge
 
 # ── 3) 等 Fleet Ready ──────────────────────────────────────────────────
@@ -327,11 +497,7 @@ if ($NoRelay) {
     $relayRange = '7000-8000'
     $relayDir   = Join-Path $ProjectRoot 'tools/udp-relay'
 
-    # 4.1 清理:旧 Windows 进程版中继 + 旧容器(都是 127.0.0.1:7000-8000 端口冲突来源)
-    Stop-HostUdpRelay
-    docker rm -f $relayName *> $null
-
-    # 4.2 解析 minikube 节点 IP 作为转发目标(容器在 profile 对应 docker 网络内可达)
+    # 4.1 解析 minikube 节点 IP 作为转发目标(容器在 profile 对应 docker 网络内可达)
     $relayTarget = (& minikube -p $MinikubeProfile ip 2>$null | Out-String).Trim()
     if ([string]::IsNullOrWhiteSpace($relayTarget)) {
         Write-Err "无法解析 minikube -p $MinikubeProfile ip,容器版中继无法确定 TARGET_HOST。先确认 minikube profile 在跑。"
@@ -339,7 +505,7 @@ if ($NoRelay) {
     }
     Write-Info "  TARGET_HOST(minikube 节点)= $relayTarget"
 
-    # 4.3 确认 profile 对应 docker 网络存在,且 target IP 落在该网络 subnet 内
+    # 4.2 确认 profile 对应 docker 网络存在,且 target IP 落在该网络 subnet 内
     $networkJson = (docker network inspect $MinikubeDockerNetwork 2>$null | Out-String)
     if ($LASTEXITCODE -ne 0) {
         Write-Err "未找到 docker 网络 '$MinikubeDockerNetwork' —— 当前 minikube profile '$MinikubeProfile' 可能不是 docker driver,或 Docker 里残留/切到了其它 profile。容器版中继不适用。"
@@ -366,10 +532,22 @@ if ($NoRelay) {
         Write-Ok "docker 网络 '$MinikubeDockerNetwork' subnet 校验通过: TARGET_HOST $relayTarget ∈ $($ipv4Subnets -join ', ')"
     }
 
-    # 4.4 构建中继镜像(纯标准库,很快)
+    # 4.3 构建中继镜像(纯标准库,很快)
     Write-Info "  docker build $relayImage ..."
     docker build -t $relayImage $relayDir
     if ($LASTEXITCODE -ne 0) { Write-Err "中继镜像构建失败"; exit 1 }
+
+    # 4.4 构建完成后再最终复核 Secret，随后才停止旧 relay；失败时保留原有可用链路。
+    try {
+        Assert-LiveAllocatorContractUnchanged -Baseline $relayContract -ContextArgs $kubectlContextArgs `
+            -Namespace $K8sNamespace -RequestedBindHost $RelayBindHost `
+            -RelayBindWasExplicit $relayBindWasExplicit
+    } catch {
+        Write-Err $_.Exception.Message
+        exit 1
+    }
+    Stop-HostUdpRelay
+    docker rm -f $relayName *> $null
 
     # 4.5 起容器:挂 profile 对应 docker 网络 + 发布宿主 $RelayBindHost:7000-8000/udp
     #     RelayBindHost=127.0.0.1 仅本机自测;=0.0.0.0 时对局域网开放(内网多机联调,需宿主防火墙放行 UDP 7000-8000)。
@@ -393,7 +571,7 @@ if ($NoRelay) {
     }
     Write-Ok "UDP 中继(dockerized)已启动:容器 $relayName,--network $MinikubeDockerNetwork,转发 ${RelayBindHost}:$relayRange/udp -> ${relayTarget}:$relayRange"
     Write-Info "  停止:docker rm -f $relayName    查看:docker logs -f $relayName"
-    $verifyHost = if ($RelayBindHost -eq '0.0.0.0') { '<本机局域网IP>' } else { $RelayBindHost }
+    $verifyHost = $LiveAdvertiseHost
     Write-Info "  验证:发 UDP 到 ${verifyHost}:<port> 后,minikube ssh 里 'sudo iptables -t nat -L -n -v | grep dpt:<port>' 的 DNAT 计数应增长。"
 }
 
@@ -404,7 +582,7 @@ kubectl @kubectlContextArgs get gameservers -n $FleetNamespace -L agones.dev/fle
 
 # ── 6) 端到端验收清单 ──────────────────────────────────────────────────
 Write-Step "[6/6] 真 DS 闭环验收(用真 UE 客户端)"
-$clientHost = if ($RelayBindHost -eq '0.0.0.0') { '<本机局域网IP>' } else { $RelayBindHost }
+$clientHost = $LiveAdvertiseHost
 Write-Host @"
   后端入口(Envoy):客户端面 ${clientHost}:8443
   DS 回调入口:GameServer Pod → pandora-envoy.pandora.svc.cluster.local:8444

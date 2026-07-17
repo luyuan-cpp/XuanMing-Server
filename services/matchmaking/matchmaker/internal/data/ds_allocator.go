@@ -17,6 +17,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/battleabort"
+	"github.com/luyuancpp/pandora/pkg/dsmetadata"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/placement"
@@ -113,15 +114,48 @@ func (g *GrpcDSAllocator) Close() error {
 // mapID 为本局副本编号(来自 match 记录):非 0 时按局透传给 ds_allocator 选副本地图;
 // 为 0(旧客户端 / 未选)时回退到静态默认 g.mapID,保持向后兼容。
 func (g *GrpcDSAllocator) AllocateBattle(ctx context.Context, matchID uint64, playerIDs []uint64, mapID uint32) (*model.BattleAllocation, error) {
+	return g.allocateBattle(ctx, matchID, playerIDs, nil, mapID)
+}
+
+// AllocateBattleWithCombatFactions 把 matchmaker 权威 MatchMember.side 完整下发给 allocator。
+// 映射按 player_id canonical 化；多个玩家/队伍可共享 faction，也允许 faction>1。
+func (g *GrpcDSAllocator) AllocateBattleWithCombatFactions(
+	ctx context.Context,
+	matchID uint64,
+	playerIDs []uint64,
+	combatFactionByPlayer map[uint64]uint32,
+	mapID uint32,
+) (*model.BattleAllocation, error) {
+	canonicalPlayers, _, err := dsmetadata.CanonicalCombatFactions(playerIDs, combatFactionByPlayer)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInvalidArg, "invalid combat factions: %v", err)
+	}
+	factions := make([]*dsv1.BattlePlayerCombatFaction, 0, len(canonicalPlayers))
+	for _, playerID := range canonicalPlayers {
+		factions = append(factions, &dsv1.BattlePlayerCombatFaction{
+			PlayerId: playerID, CombatFactionId: combatFactionByPlayer[playerID],
+		})
+	}
+	return g.allocateBattle(ctx, matchID, canonicalPlayers, factions, mapID)
+}
+
+func (g *GrpcDSAllocator) allocateBattle(
+	ctx context.Context,
+	matchID uint64,
+	playerIDs []uint64,
+	combatFactions []*dsv1.BattlePlayerCombatFaction,
+	mapID uint32,
+) (*model.BattleAllocation, error) {
 	effectiveMapID := mapID
 	if effectiveMapID == 0 {
 		effectiveMapID = g.mapID
 	}
 	resp, err := g.cli.AllocateBattle(ctx, &dsv1.AllocateBattleRequest{
-		MatchId:   matchID,
-		PlayerIds: playerIDs,
-		MapId:     effectiveMapID,
-		GameMode:  g.gameMode,
+		MatchId:              matchID,
+		PlayerIds:            playerIDs,
+		MapId:                effectiveMapID,
+		GameMode:             g.gameMode,
+		PlayerCombatFactions: combatFactions,
 	})
 	if err != nil {
 		return nil, err

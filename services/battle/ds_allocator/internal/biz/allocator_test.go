@@ -108,6 +108,71 @@ func newUsecase(t *testing.T) (*AllocatorUsecase, *data.RedisBattleRepo) {
 	return uc, repo
 }
 
+func TestAllocateBattleRejectsCombatFactionDriftForExistingMatch(t *testing.T) {
+	uc, repo := newUsecase(t)
+	const matchID = uint64(61001)
+	claim := &dsv1.BattleStorageRecord{
+		MatchId: matchID, State: stateAllocating, AllocationId: "existing-allocation",
+		PlayerIds: []uint64{11, 22}, MapId: 8, GameMode: "custom",
+		PlayerCombatFactions: []*dsv1.BattlePlayerCombatFaction{
+			{PlayerId: 11, CombatFactionId: 3},
+			{PlayerId: 22, CombatFactionId: 3},
+		},
+	}
+	if claimed, _, err := repo.ClaimBattle(t.Context(), claim, time.Hour); err != nil || !claimed {
+		t.Fatalf("seed claim: claimed=%t err=%v", claimed, err)
+	}
+	_, err := uc.AllocateBattleWithCombatFactions(
+		t.Context(), matchID, []uint64{22, 11}, map[uint64]uint32{11: 3, 22: 9}, 8, "custom")
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("faction drift err=%v code=%v want unavailable", err, errcode.As(err))
+	}
+	stored, found, getErr := repo.GetBattle(t.Context(), matchID)
+	if getErr != nil || !found || stored.GetAllocationId() != "existing-allocation" ||
+		stored.GetPlayerCombatFactions()[1].GetCombatFactionId() != 3 {
+		t.Fatalf("existing claim mutated: found=%t stored=%v err=%v", found, stored, getErr)
+	}
+}
+
+func TestAllocateBattlePersistsCanonicalCombatFactions(t *testing.T) {
+	uc, repo := newUsecase(t)
+	const matchID = uint64(61002)
+	type result struct {
+		value *AllocateResult
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		value, err := uc.AllocateBattleWithCombatFactions(
+			context.Background(), matchID, []uint64{22, 11},
+			map[uint64]uint32{11: 3, 22: 9}, 8, "custom")
+		done <- result{value: value, err: err}
+	}()
+	feedReadyHeartbeat(t, uc, repo, matchID, 2)
+	allocated := <-done
+	if allocated.err != nil || allocated.value == nil {
+		t.Fatalf("allocate: value=%+v err=%v", allocated.value, allocated.err)
+	}
+	stored, found, err := repo.GetBattle(t.Context(), matchID)
+	if err != nil || !found {
+		t.Fatalf("get battle: found=%t err=%v", found, err)
+	}
+	got := stored.GetPlayerCombatFactions()
+	if len(got) != 2 || got[0].GetPlayerId() != 11 || got[0].GetCombatFactionId() != 3 ||
+		got[1].GetPlayerId() != 22 || got[1].GetCombatFactionId() != 9 {
+		t.Fatalf("stored combat factions=%v", got)
+	}
+}
+
+func TestCombatFactionMapFromRecordsRequiresCanonicalRosterOrder(t *testing.T) {
+	_, err := combatFactionMapFromRecords([]uint64{11, 22}, []*dsv1.BattlePlayerCombatFaction{
+		{PlayerId: 22, CombatFactionId: 1}, {PlayerId: 11, CombatFactionId: 1},
+	})
+	if err == nil {
+		t.Fatal("out-of-order persisted combat factions must fail closed")
+	}
+}
+
 func enableModelBForTest(
 	t *testing.T,
 	uc *AllocatorUsecase,
@@ -325,6 +390,7 @@ func (a *uncertainResolverTestAllocator) ResolveAllocationByID(
 	_ uint64,
 	allocationID string,
 	_ []uint64,
+	_ map[uint64]uint32,
 	_ uint32,
 	_ string,
 ) (*data.AuthoritativeGameServerAllocation, bool, error) {
@@ -344,6 +410,7 @@ func (a *timeoutLateApplyAllocator) AllocateAuthoritative(
 	_ uint64,
 	allocationID string,
 	_ []uint64,
+	_ map[uint64]uint32,
 	_ uint32,
 	_, _ string,
 ) (*data.AuthoritativeGameServerAllocation, error) {
@@ -387,6 +454,7 @@ func (a *authoritativeTestAllocator) AllocateAuthoritative(
 	_ uint64,
 	allocationID string,
 	_ []uint64,
+	_ map[uint64]uint32,
 	_ uint32,
 	_, releaseTrack string,
 ) (*data.AuthoritativeGameServerAllocation, error) {

@@ -209,7 +209,9 @@ message MatchMemberStorageRecord {
   uint64             team_id   = 2;  // 玩家所属 team(整队进出,不可拆)
   int32              mmr       = 3;
   uint32             hero_id   = 4;
-  int32              side      = 5;  // 0 = team_a;1 = team_b
+  // match-local 战斗阵营。它独立于 team_id/guild_id：多个队伍可同阵营，
+  // 同一局也可使用 0..N 的多个阵营；当前 5v5 仍使用 0/1。
+  int32              side      = 5;
   MatchConfirmStatus confirm   = 6;  // 确认期状态
   // 7-9 reserved
   reserved 7 to 9;

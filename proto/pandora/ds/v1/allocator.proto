@@ -56,8 +56,12 @@ message AllocateBattleRequest {
   repeated uint64 player_ids = 2;
   uint32 map_id    = 3;
   string game_mode = 4;  // "ranked_5v5" | "casual_5v5" | "custom"
-  // 5-9 reserved
+  // match-local 战斗阵营。它独立于组队/公会：多个 team_id 可映射到同一阵营，
+  // 同一局也可有两个以上阵营。新调用方必须对 roster 每名玩家精确提供一条；
+  // 空列表仅用于滚动升级期间兼容旧 matchmaker。
+  // 5-9 是既有保留号，不能复用；新增字段从 10 开始。
   reserved 5 to 9;
+  repeated BattlePlayerCombatFaction player_combat_factions = 10;
 }
 
 message AllocateBattleResponse {
@@ -256,6 +260,9 @@ message BattleStorageRecord {
   // 分配时从 Pod GET 捕获，并验证 ownerReference UID 等于
   // gameserver_uid。GameServer DELETE 2xx 后仍要等该 Pod UID 消失/变更。
   string pod_uid = 19;
+  // 与 player_ids 同源的权威单局战斗阵营快照。空列表表示滚动升级前的 legacy 分配；
+  // 非空时必须按 player_id 升序且完整覆盖 player_ids。
+  repeated BattlePlayerCombatFaction player_combat_factions = 20;
 }
 
 // ===== Model B Battle DS 回调授权状态机 =====
@@ -404,4 +411,12 @@ message DSLifecycleEvent {
   uint32 map_id            = 5;
   string game_mode         = 6;
   int64  ts_ms             = 7;
+}
+
+// BattlePlayerCombatFaction 是玩家在单局内的权威战斗阵营绑定。
+// combat_faction_id 从 0 开始，仅在 match_id 内有意义；它不是 team_id/guild_id。
+// 放在文件末尾仅为保持既有生成 message 索引稳定；字段可在前文消息中引用。
+message BattlePlayerCombatFaction {
+  uint64 player_id = 1;
+  uint32 combat_faction_id = 2;
 }

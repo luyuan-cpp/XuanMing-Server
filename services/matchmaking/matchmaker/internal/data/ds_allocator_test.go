@@ -22,6 +22,24 @@ type allocatorResponseClient struct {
 	response *dsv1.AllocateBattleResponse
 }
 
+type allocatorCaptureClient struct {
+	dsv1.DSAllocatorServiceClient
+	request *dsv1.AllocateBattleRequest
+}
+
+func (c *allocatorCaptureClient) AllocateBattle(
+	_ context.Context,
+	req *dsv1.AllocateBattleRequest,
+	_ ...grpc.CallOption,
+) (*dsv1.AllocateBattleResponse, error) {
+	c.request = req
+	return &dsv1.AllocateBattleResponse{
+		Code: commonv1.ErrCode_OK, DsAddr: "10.0.0.1:7777", DsPodName: "battle-1",
+		GameserverUid: "uid-1", InstanceEpoch: 1,
+		AllocationId: "550e8400-e29b-41d4-a716-446655440000", ReleaseTrack: "stable",
+	}, nil
+}
+
 func (c allocatorResponseClient) AllocateBattle(context.Context, *dsv1.AllocateBattleRequest, ...grpc.CallOption) (*dsv1.AllocateBattleResponse, error) {
 	return c.response, nil
 }
@@ -43,6 +61,25 @@ func TestAllocateBattlePreservesAllocatorResponseCode(t *testing.T) {
 				t.Fatalf("AllocateBattle code = %d err=%v, want %d", errcode.As(err), err, tt.want)
 			}
 		})
+	}
+}
+
+func TestAllocateBattleWithCombatFactionsSendsCanonicalIndependentMapping(t *testing.T) {
+	client := &allocatorCaptureClient{}
+	allocator := &GrpcDSAllocator{cli: client, gameMode: "custom"}
+	_, err := allocator.AllocateBattleWithCombatFactions(
+		t.Context(), 9001, []uint64{99, 7, 42}, map[uint64]uint32{7: 3, 42: 3, 99: 9}, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := client.request.GetPlayerCombatFactions()
+	if len(got) != 3 || got[0].GetPlayerId() != 7 || got[0].GetCombatFactionId() != 3 ||
+		got[1].GetPlayerId() != 42 || got[1].GetCombatFactionId() != 3 ||
+		got[2].GetPlayerId() != 99 || got[2].GetCombatFactionId() != 9 {
+		t.Fatalf("player_combat_factions=%v", got)
+	}
+	if players := client.request.GetPlayerIds(); len(players) != 3 || players[0] != 7 || players[1] != 42 || players[2] != 99 {
+		t.Fatalf("player_ids=%v", players)
 	}
 }
 

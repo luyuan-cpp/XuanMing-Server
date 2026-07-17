@@ -9,6 +9,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/placement"
 )
 
 // Hub DS 分片发现/启动模式(标准两模式开关 + 离线兜底,与 ds_allocator.mode 对齐)。
@@ -246,6 +247,13 @@ func (c *Config) Defaults() {
 	}
 	if c.Hub.HeartbeatTimeout == 0 {
 		c.Hub.HeartbeatTimeout = config.Duration(30 * time.Second)
+	}
+	// 脑裂再入屏障机械下限(pkg/placement 契约,2026-07-16):AssignHub 只有在分片心跳
+	// 超过 HeartbeatTimeout 后才会把玩家改派到新分片;该窗口必须 ≥ DS 授权租约上限 +
+	// 偏差余量(25s),保证分区的旧 Hub 已对存量玩家完成自我 fencing。这是正确性下限
+	// 而非调优参数:配置调低会重新打开「一人两 Hub」窗口,机械抬到下限。
+	if c.Hub.HeartbeatTimeout.Std() < placement.DSFenceReentryBarrier {
+		c.Hub.HeartbeatTimeout = config.Duration(placement.DSFenceReentryBarrier)
 	}
 	if c.Hub.SweepInterval == 0 {
 		c.Hub.SweepInterval = config.Duration(5 * time.Second)

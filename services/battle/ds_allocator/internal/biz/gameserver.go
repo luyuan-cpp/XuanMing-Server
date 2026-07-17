@@ -29,6 +29,7 @@ type AuthoritativeGameServerAllocator interface {
 		matchID uint64,
 		allocationID string,
 		playerIDs []uint64,
+		combatFactionByPlayer map[uint64]uint32,
 		mapID uint32,
 		gameMode, releaseTrack string,
 	) (*data.AuthoritativeGameServerAllocation, error)
@@ -68,6 +69,7 @@ type UncertainGameServerAllocationResolver interface {
 		matchID uint64,
 		allocationID string,
 		playerIDs []uint64,
+		combatFactionByPlayer map[uint64]uint32,
 		mapID uint32,
 		gameMode string,
 	) (allocation *data.AuthoritativeGameServerAllocation, found bool, err error)

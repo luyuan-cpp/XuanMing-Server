@@ -120,14 +120,35 @@ func TestInspectBattleRouteExplicitThreeState(t *testing.T) {
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("stale heartbeat", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
 
-	// 显式终态 ended/abandoned → TERMINAL(唯一放行证明,与成员身份无关)。
+	// 显式终态 ended → TERMINAL(DS 自报终局,与成员身份无关,心跳新鲜度无关,立即放行)。
 	record.State = "ended"
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("ended member", 1001, BattleRouteTerminal, 0)
 	assertRoute("ended non-member", 9999, BattleRouteTerminal, 0)
-	record.State = "abandoned"
+	// ended 即使心跳很新也立即 Terminal(正常结算回大厅不能被屏障拖慢)。
+	record.LastHeartbeatMs = now.Add(-time.Second).UnixMilli()
 	setAdmissionProto(t, mr, key, record)
-	assertRoute("abandoned", 1001, BattleRouteTerminal, 0)
+	assertRoute("ended fresh heartbeat", 1001, BattleRouteTerminal, 0)
+
+	// abandoned = 心跳超时判死:再入屏障生效(pkg/placement.DSFenceReentryBarrier=25s)。
+	// 分区的旧 DS 可能仍有可玩玩家,必须等它的 20s 自我 fencing 上限 + 5s 余量过去。
+	record.State = "abandoned"
+	record.LastHeartbeatMs = now.Add(-time.Minute).UnixMilli() // 屏障已过 → Terminal
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("abandoned past barrier", 1001, BattleRouteTerminal, 0)
+
+	record.LastHeartbeatMs = now.Add(-16 * time.Second).UnixMilli() // abandon(15s)刚发生,屏障未过
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("abandoned inside barrier", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
+
+	record.LastHeartbeatMs = now.Add(-25 * time.Second).UnixMilli() // 恰好到达屏障边界(等于即放行)
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("abandoned at barrier boundary", 1001, BattleRouteTerminal, 0)
+
+	record.LastHeartbeatMs = 0 // 从未有过成功心跳:DS 从未取得授权租约,不可能有玩家,立即 Terminal
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("abandoned never heartbeated", 1001, BattleRouteTerminal, 0)
+	record.LastHeartbeatMs = now.Add(-time.Minute).UnixMilli()
 
 	// match_id 不符(投影被其它对局覆写)→ UNKNOWN。
 	record.State = "ended"

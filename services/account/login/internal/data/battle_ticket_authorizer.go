@@ -13,6 +13,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
 
@@ -151,7 +152,22 @@ func (c *RedisBattleTicketAuthorizer) InspectBattleRoute(
 		return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
 			"battle projection match mismatch (want %d got %d)", matchID, battle.GetMatchId())
 	}
-	if battle.GetState() == battleStateEnded || battle.GetState() == battleStateAbandoned {
+	if battle.GetState() == battleStateEnded {
+		// ended = DS 自己上报的正常终局:DS 已按结算流程收尾,无脑裂窗口,立即放行。
+		return BattleRouteTerminal, nil
+	}
+	if battle.GetState() == battleStateAbandoned {
+		// abandoned = 心跳超时判死(补偿性终态),DS 可能只是与后端分区、其上玩家仍可玩。
+		// 脑裂再入屏障(2026-07-16,pkg/placement 契约):必须等旧 DS 的授权租约上限 +
+		// 偏差余量过去(它届时已对存量玩家自我 fencing),才能把玩家放去 Hub/新局。
+		// LastHeartbeatMs==0 = 从未有过成功心跳:DS 从未取得授权租约,其准入门从未打开,
+		// 不可能有玩家在其上,立即 Terminal 安全。
+		if last := battle.GetLastHeartbeatMs(); last > 0 {
+			if wait := last + placement.DSFenceReentryBarrier.Milliseconds() - c.now().UnixMilli(); wait > 0 {
+				return BattleRouteUnknown, errcode.New(errcode.ErrUnavailable,
+					"abandoned battle %d is inside the DS fence re-entry barrier (%dms left); retry", matchID, wait)
+			}
+		}
 		return BattleRouteTerminal, nil
 	}
 	if c.liveRosterAllows(battle, playerID, matchID) {

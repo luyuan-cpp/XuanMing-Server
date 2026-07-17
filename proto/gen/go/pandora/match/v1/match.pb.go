@@ -1209,13 +1209,15 @@ func (x *MatchProgressEvent) GetTsMs() int64 {
 
 // MatchMemberStorageRecord 是 match 内单个玩家的存储快照。
 type MatchMemberStorageRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	TeamId        uint64                 `protobuf:"varint,2,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"` // 玩家所属 team(整队进出,不可拆)
-	Mmr           int32                  `protobuf:"varint,3,opt,name=mmr,proto3" json:"mmr,omitempty"`
-	HeroId        uint32                 `protobuf:"varint,4,opt,name=hero_id,json=heroId,proto3" json:"hero_id,omitempty"`
-	Side          int32                  `protobuf:"varint,5,opt,name=side,proto3" json:"side,omitempty"`                                                // 0 = team_a;1 = team_b
-	Confirm       MatchConfirmStatus     `protobuf:"varint,6,opt,name=confirm,proto3,enum=pandora.match.v1.MatchConfirmStatus" json:"confirm,omitempty"` // 确认期状态
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	TeamId   uint64                 `protobuf:"varint,2,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"` // 玩家所属 team(整队进出,不可拆)
+	Mmr      int32                  `protobuf:"varint,3,opt,name=mmr,proto3" json:"mmr,omitempty"`
+	HeroId   uint32                 `protobuf:"varint,4,opt,name=hero_id,json=heroId,proto3" json:"hero_id,omitempty"`
+	// match-local 战斗阵营。它独立于 team_id/guild_id：多个队伍可同阵营，
+	// 同一局也可使用 0..N 的多个阵营；当前 5v5 仍使用 0/1。
+	Side          int32              `protobuf:"varint,5,opt,name=side,proto3" json:"side,omitempty"`
+	Confirm       MatchConfirmStatus `protobuf:"varint,6,opt,name=confirm,proto3,enum=pandora.match.v1.MatchConfirmStatus" json:"confirm,omitempty"` // 确认期状态
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
