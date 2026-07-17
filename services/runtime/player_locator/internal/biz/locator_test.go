@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	"github.com/luyuancpp/pandora/pkg/placement"
 	"github.com/luyuancpp/pandora/services/runtime/player_locator/internal/data"
 )
 
@@ -322,9 +323,18 @@ func TestNewLocatorUsecase_DefaultTTL(t *testing.T) {
 	if uc2.ttl != 30*time.Second {
 		t.Errorf("negative ttl should fall to 30s, got %v", uc2.ttl)
 	}
+	// 脑裂再入屏障机械下限(pkg/placement.DSFenceReentryBarrier=25s,2026-07-16):
+	// BATTLE presence 是 login/matchmaker 再入门的第一道信号,TTL 低于屏障会在
+	// 分区旧 DS 完成自我 fencing 之前放行再入,构成一人两 DS 窗口 → 机械抬回。
 	uc3 := NewLocatorUsecase(newStubRepo(), 5*time.Second)
-	if uc3.ttl != 5*time.Second {
-		t.Errorf("explicit ttl=5s expected, got %v", uc3.ttl)
+	if uc3.ttl != placement.DSFenceReentryBarrier {
+		t.Errorf("ttl below fence barrier must be raised to %v, got %v",
+			placement.DSFenceReentryBarrier, uc3.ttl)
+	}
+	// 屏障之上的显式配置保持原值。
+	uc4 := NewLocatorUsecase(newStubRepo(), 40*time.Second)
+	if uc4.ttl != 40*time.Second {
+		t.Errorf("explicit ttl=40s expected, got %v", uc4.ttl)
 	}
 }
 

@@ -82,7 +82,28 @@ UE `PandoraBackendSubsystem` 的 dev 开关默认值在 C++ 头文件里,生产*
 > Linux DS 崩溃和性能排障手册见
 > [`docs/ops/linux-ds-observability.md`](linux-ds-observability.md)。
 
-### 2.3 边缘 TLS 证书（Envoy）
+### 2.3 GameServer 公网 UDP 可达性（上线硬门）
+
+> `-Mode online` 不使用本地 `udp-relay`。Battle / Hub allocator 默认把 Agones
+> `status.address:status.ports[0].port` 原样返回给玩家；K8s Pod Ready、Agones GameServer Ready 和
+> DS→allocator 业务心跳都只证明**集群内部**正常，不能证明玩家网络能打到该 UDP 地址。
+>
+> 当前 `start.ps1 -Mode online` 尚未回读云网络规则，也没有能力从集群外发 UDP；本节是由外部平台 /
+> 运维提供证据的人工发布硬门，**不是发布脚本已自动执行的检查**。当前 online 的独立零写阻断仍须保留。
+
+- [ ] online 生成的 DS/Hub allocator 配置均**没有** `agones.advertise_host`；若确需统一地址覆盖，已有独立架构审批和逐 GameServer 动态端口路由证明，不能仅凭“域名能解析”放行
+- [ ] Stable / Canary 每个可接新玩家的 GameServer，其 `status.address` 都是玩家侧可路由地址，不是 Pod IP、Service ClusterIP、仅 VPC 可见的节点内网 IP
+- [ ] `status.ports[0].port` 落在平台批准的 UDP 端口池；当前 Fleet 使用 `portPolicy: Dynamic`，不得把文档里的 Hub/Battle 目标分段误当成已生效配置
+- [ ] 云安全组、节点防火墙及公网 NAT / LB 将该 UDP 端口精确路由到 GameServer 所在节点的 Agones hostPort；跨节点或端口重映射不会把流量送错实例
+- [ ] 从**集群外、与真实玩家同网络路径**对当前每个可接新玩家的 GameServer 做真实 UDP 握手；至少覆盖每个 distinct 公网 address、Node / 节点池、放量 track 和实际动态 port，不能用 Hub/Battle 各抽一个替代
+- [ ] 每个探针结果都已记录 address、port、GameServer name/UID、Node、track、时间与结果（不得记录 DSTicket 或密钥），并在 exact GameServer 观察到对应握手 / `PreLogin`，不是只看到 NAT/LB 收包
+- [ ] 自动扩容产生的新 Node / 节点池或 GameServer 在接收玩家前重复等价外部验证；若平台暂不能把该验证接入准入门，则保持该容量不可分配
+- [ ] 上述任一项为 UNKNOWN、超时或证据无法与 exact GameServer UID 对账时，发布保持阻断，不得用 Fleet Ready、心跳正常或集群内探针替代
+
+> 具体 online 拓扑与操作口径见
+> [`deploy/k8s/agones/README.md`](../../deploy/k8s/agones/README.md) 的“玩家 → GameServer 公网 UDP 硬门”。
+
+### 2.4 边缘 TLS 证书（Envoy）
 
 - [ ] 证书由**公网 CA** 签发(Let's Encrypt 免费 / 商业 CA),**不是 mkcert 自签**
 - [ ] 证书 **SAN = 真实域名**,不含 IP(公网 CA 不给 IP 签)
@@ -92,7 +113,7 @@ UE `PandoraBackendSubsystem` 的 dev 开关默认值在 C++ 头文件里,生产*
 > 完整证书策略(dev vs 生产、为什么要域名、成本)见
 > [`docs/design/gateway-decision.md`](../design/gateway-decision.md) §14。
 
-### 2.4 数据 / 账号
+### 2.5 数据 / 账号
 
 - [ ] 清掉 dev 种子账号(`test` / `test1`~`test10000`,密码 `abc`)
 - [ ] 生产 DB 不带任何 dev 测试数据
@@ -103,7 +124,7 @@ UE `PandoraBackendSubsystem` 的 dev 开关默认值在 C++ 头文件里,生产*
 - [ ] 按 [`tools/migrate`](../../tools/migrate/README.md) 先运行一次性 migration Job；生产 DSN 均为可验证的 `tls=true`，所有 expected targets 均验收 `version=N dirty=false`
 - [ ] migration Job 失败/超时/dirty/TLS 不安全/inventory 不一致时发布已阻断，未自动 force、未继续滚动业务 Deployment
 
-### 2.5 Auction 状态机升级（本次必须人工门禁）
+### 2.6 Auction 状态机升级（本次必须人工门禁）
 
 - [ ] 生产 auction 为单库或恰好 2 个 MySQL shard；`N>2` 已由服务 fail-fast，未绕过。扩容前另做 owner registry 全量回填、冲突审计和持久完成标记
 - [ ] `auction_shard_topology` 已在每片 exact-match generation/count/index/identity；禁止 data-bearing 集群改 `1↔2`、重排/重复 DSN。双分片首次登记只临时打开 bootstrap，成功后已恢复 false

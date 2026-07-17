@@ -15,6 +15,8 @@
 > - **会话围栏**:单写者 session JTI(Redis);GetResumeContext/Logout/IssueDSTicket 均校验
 >   当前 JTI,旧会话操作零副作用。
 > - **物理离场证明**依然保留:"逻辑路由已切换"不能代替"旧 DS 的 PlayerController/Pawn 已退出世界"。
+> - **脑裂根治(2026-07-17)**:DS 授权租约 fencing + 服务端再入屏障,见 §8。需求级硬性要求
+>   「玩家任何阶段不许卡死」的正式记录与代码级落地对照也在 §8。
 >
 > 下文 §1~§2.2 保留问题演进背景;涉及"版本化 placement / durable saga/outbox / placement 上下文"
 > 的段落为**历史方案**,已随硬切废弃,阅读时以本状态块为准。
@@ -744,3 +746,81 @@ UE 客户端 r1090–r1130（luhailong）+ 未提交工作树（Coordinator/Onli
    新增 Automation 负/正例：`Pandora.Module.Account.DsRecovery.ForegroundRestartRequiresRecoverableContext`。
 4. **仍未完成（与 §7.5 声明边界一致）**：真实移动端前后台/断网矩阵、真 UDP Admission、
    Redis Cluster/K8s/Agones 故障注入尚未在生产环境验收；本节只证明代码级闭环。
+
+## 8. 脑裂根治:DS 授权租约 fencing + 服务端再入屏障(2026-07-17)
+
+> 目标不变量(CLAUDE.md §9.1/§9.22):**同一玩家同一时刻最多只能在一个可玩 DS**,
+> 且核心时序 `旧 DS 最晚停止可玩时间 < 新 DS 最早开始可玩时间` 在网络分区下也成立。
+
+### 8.1 根因与被封死的窗口
+
+硬切简化后的既有防线(locator presence + matchmaker 耐久 claim + 三态 fail-closed 门 +
+exact eviction)有一个共同盲区:**与后端分区、但客户端仍可达的 DS 永远不会自我停止**。
+旧租约(`AdmissionLeaseSeconds` 30s)只拒新玩家、绝不影响存量连接;eviction order 又依赖
+成功心跳响应送达——分区时恰好不可达。具体反例:
+
+- **Battle→Hub**:battle DS 与后端分区,15s 判 `abandoned` → `InspectBattleRoute` 立即
+  Terminal → 顶号/新设备 15s 起即可进 Hub;老设备在分区 DS 上无限期可玩 = 一人两 DS。
+- **Hub→Hub**:hub 分区,30s `heartbeat_timeout` 后 `AssignHub` 改派新分片并立刻发新票;
+  旧 hub 存量玩家无限期可玩。
+- **Battle→新匹配**:abandon 补偿 15s 释放 match claim;locator BATTLE 30s 蒸发后
+  `ensureNoneInBattle` 放行;旧 DS 仍可玩。
+
+### 8.2 标准最简修复(定义)
+
+经典 lease-shorter-than-failure-detector fencing,两半各一条规则,协议常量集中在
+`pkg/placement`(跨仓库契约,UE 侧常量必须与之一致):
+
+1. **DS 短租约自我 fencing(旧 DS 一半)**:DS 以最近一次「绑定 active 凭据的权威心跳
+   响应」为租约起点(单调钟)。连续 `DSFenceLeaseMaxSeconds=20s` 续租失败 → 除拒新玩家外,
+   **Kick 全部存量已准入玩家、销毁玩家 Pawn、拒绝 pending 准入**(一次 outage 只触发一次,
+   续租成功后复位)。从未取得授权的 DS(local-off/未激活)无存量玩家可围栏,不触发。
+2. **服务端再入屏障(新 DS 一半)**:任何「把静默 DS 上的玩家交给新 DS」的门,必须等该 DS
+   `last_heartbeat_ms` 起至少 `DSFenceReentryBarrier = 20s + 5s(偏差余量) = 25s`。
+   偏差余量覆盖:响应在途上限(心跳 RPC 有界超时 4s) + fencing 检测粒度(1s ticker) +
+   两侧时钟漂移。不等式 `20 + 1 + 4 ≤ 25` 由 UE Automation 测试硬断言。
+
+由此:旧 DS 最晚在 `last_response + 20s + 1s` 停止全部可玩性,而新 DS 最早在
+`last_heartbeat + 25s` 才可能接纳该玩家(`last_response ≥ last_heartbeat`),时序成立。
+
+这是 CLAUDE.md §9.22 owner 权威模型中「短 owner lease fencing + admit_not_before 屏障」
+的最简落地;**每玩家 `owner_epoch` 线性一致 owner authority 仍是文档化目标**,当前由
+session JTI 单写者围栏 + DSTicket v2 exact 实例绑定 + locator match fence 提供等价的
+迟到写防护,§9.22 全量模型待真实需求/故障证据再升级(§15 复杂度举证)。
+
+### 8.3 代码级落地对照
+
+服务端(XuanMing-Server,均已提交,`go test` 全绿):
+
+| 位置 | 改动 |
+|---|---|
+| `pkg/placement/placement.go` | 协议常量 `DSFenceLeaseMaxSeconds=20` / `DSFenceSkewMarginSeconds=5` / `DSFenceReentryBarrier=25s` |
+| `services/account/login/internal/data/battle_ticket_authorizer.go` | `InspectBattleRoute`:`abandoned` 在 `last_heartbeat+25s` 内返回 UNKNOWN(可重试),之后才 Terminal;`ended`(DS 自报正常终局)立即 Terminal;`LastHeartbeatMs==0`(从未心跳→从未开门→无玩家)立即 Terminal。Login/GetResumeContext/IssueDSTicket(hub)/SelectRole 四门全部继承 |
+| `services/battle/hub_allocator/internal/conf/conf.go` | `hub.heartbeat_timeout` 机械下限 ≥ 25s(改派新分片的等待窗) |
+| `services/runtime/player_locator/internal/biz/locator.go` | locator TTL 机械下限 ≥ 25s(presence 蒸发即各再入门第一道信号) |
+| 对应 `*_test.go` | 屏障内/边界/已过/从未心跳四态正负例;两处下限地板测试 |
+
+UE 侧(Pandora-Client-SVN,待用户编译验证):
+
+| 位置 | 改动 |
+|---|---|
+| `PandoraDSBackendSubsystem.h/.cpp` | 生效租约 `clamp(AdmissionLeaseSeconds,5,20)`(配置只能收紧);1s fencing watchdog 随 Start/Stop*Heartbeat 生命周期;超窗一次性广播 `OnAuthorityLeaseLost`;心跳 RPC 有界超时 4s(迟到响应不得刷新租约锚点);心跳间隔钳到 [1,5]s |
+| `PandoraDSGameModeBase.h/.cpp` | Hub/Battle 共用:`FenceAllAdmittedPlayersForAuthorityLoss` = 拒 pending 准入 + Kick 全部已接纳连接(Kick 失效则直接关连接) + 销毁玩家 Pawn(含无 Controller 残留);census/departure 语义不变 |
+| `PandoraDSTicketV2Test.cpp` | `AuthorityFencePolicy` Automation:不等式断言 + 纯判定四象限 + effective lease 钳制 |
+
+### 8.4 玩家体验与 no-freeze 的一致性
+
+被 fencing 踢出的客户端走 `UMyDsRecoveryCoordinator` 既有恢复链:断链 → 权威重查 →
+屏障内各门返回可重试 Unavailable(客户端可见退避重试 UI)→ 屏障过后收敛到唯一新 DS。
+等待有界(最长 ~25s + 分配耗时),每一步有 ticker/前台事件驱动,符合 §7.11 需求与
+CLAUDE.md §9.19/20/23(「脑裂时安全优先但不能永久卡流程」)。正常路径零影响:
+`ended` 正常结算回大厅不经过屏障,不增加任何延迟。
+
+### 8.5 验收状态与剩余风险
+
+- 服务端:`login`/`hub_allocator`/`player_locator`/`ds_allocator`/`matchmaker`/`pkg`
+  `go test` 全绿(2026-07-17)。
+- UE:代码与 Automation 测试已就位,**编译与真机验证由用户执行**(Live Coding 约束)。
+- 剩余风险(发布前验收项):真实分区故障注入(iptables/网络策略切断 DS↔后端)证明
+  fencing 触发与再入时序;真实移动端前后台矩阵;§8.2 所述 owner_epoch 全量模型未实现,
+  可达传输层的短暂(秒级)转移重叠窗口仍依赖 eviction order 送达,已记录为已知边界。

@@ -346,8 +346,12 @@ Envoy 是基础设施组件,**不是 go 服务**。它做:
 
 ### 6.4 UE DS 端口
 
-- Hub DS:Agones 从 7000-7500 动态分配
-- Battle DS:Agones 从 7501-8000 动态分配
+- **目标规划**：Hub DS 使用 7000-7500，Battle DS 使用 7501-8000。
+- **当前实现**：四条 Fleet 仅声明 `portPolicy: Dynamic`，仓库内尚未按角色落实上述分段；实际 hostPort
+  由集群 Agones controller 的全局端口池分配。安全组 / 防火墙 / NAT 不得根据本节目标规划臆测端口已经分段。
+- online 玩家直接连接 allocator 返回的 `status.address:status.ports[0].port`，不经过本地 UDP relay。
+  上线必须按 [`docs/ops/release-checklist.md`](../ops/release-checklist.md) §2.3 回读实际 address/port/Node/UID，
+  并从集群外完成 exact GameServer UDP 握手；仅 Fleet Ready 或集群内可达不算验收。
 
 ## 7. 时间约定
 

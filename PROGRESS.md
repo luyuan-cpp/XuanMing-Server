@@ -516,3 +516,22 @@
   `DsRecovery.ForegroundRestartRequiresRecoverableContext`。PandoraServer Win64 编译通过（Pandora
   runtime module 含全部修复）；PandoraEditor 目标因本机编辑器 Live Coding 占用未能本轮编译，
   PandoraTests 新用例待编辑器空闲后随 Editor 构建验证。真实移动端前后台/断网矩阵仍是发布前验收项。
+
+## 2026-07-17：脑裂根治落地 — DS 授权租约 fencing + 服务端再入屏障
+
+- 定义并落地「一人两 DS」的标准最简根治（lease-shorter-than-failure-detector fencing，
+  完整契约见 `battle-reconnect.md §8`，常量集中 `pkg/placement`）：
+  ① DS 短租约自我 fencing：连续 20s 拿不到绑定 active 凭据的权威心跳响应 → DS 除拒新玩家外，
+  Kick 全部存量已准入玩家、销毁玩家 Pawn、拒 pending 准入（UE `PandoraDSBackendSubsystem`
+  1s watchdog + `OnAuthorityLeaseLost`，`PandoraDSGameModeBase::FenceAllAdmittedPlayersForAuthorityLoss`，
+  Hub/Battle 共用）；② 服务端再入屏障：`abandoned` 只有在 `last_heartbeat + 25s` 后才算 Terminal
+  （login `InspectBattleRoute`，四个 Hub 再入门全部继承）；locator TTL 与 hub `heartbeat_timeout`
+  机械下限 ≥ 25s。`ended`（DS 自报正常终局）不经屏障，正常结算零延迟。
+- 迟到响应防护：DS 心跳 RPC 有界超时 4s（迟到响应不得刷新租约锚点）；心跳间隔钳 [1,5]s；
+  UE Automation 硬断言不等式 `20(租约)+1(检测)+4(在途) ≤ 25(屏障)`。
+- 测试：服务端 login/hub_allocator/player_locator/ds_allocator/matchmaker/pkg 全 `go test` 绿
+  （屏障四态正负例、两处下限地板、locator TTL 地板修正既有用例）；UE 新增
+  `Pandora.Auth.DSTicketV2.AuthorityFencePolicy`，编译与真机分区注入由用户执行。
+- 边界如实记录：CLAUDE.md §9.22 的每玩家 `owner_epoch` 线性一致 owner authority 仍是文档化
+  目标；当前由 session JTI 围栏 + DSTicket v2 exact 实例绑定 + locator match fence 提供迟到写
+  防护。可达传输层的秒级转移重叠窗口依赖 eviction order 送达，列为已知边界与发布前验收项。
