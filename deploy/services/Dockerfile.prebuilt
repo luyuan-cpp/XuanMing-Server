@@ -12,23 +12,17 @@
 #
 # 由 Build-Images-Host 自动调用:
 #   docker build -f deploy/services/Dockerfile.prebuilt \
-#     --build-arg BASE_REGISTRY=docker.io \
 #     -t pandora/<name>:dev  run/docker-build/prebuilt/<name>
-
-ARG GO_VERSION=1.26.5
-ARG BASE_REGISTRY=docker.io
-
-# ===== certs 阶段 =====
-# 只为拿 golang 官方镜像自带的 CA 根证书与时区库,不做任何编译(该层构建后一直命中缓存)。
-# 复用宿主已缓存的 golang 基础镜像;这台机器既然能宿主 go build,通常也早已拉过该镜像。
-FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION} AS certs
 
 # ===== 运行阶段 =====
 # 与方案 A 完全一致:scratch + 静态二进制 + CA + 时区,非 root(uid:gid=10001)。
 FROM scratch
 
-COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=certs /usr/share/zoneinfo /usr/share/zoneinfo
+# Build-Images-Host 在服务循环前只从本地 runtime-assets 镜像提取一次，并通过 BuildKit
+# 本地命名上下文 runtime_assets 传入。这样既不请求 registry，也不让 Windows PowerShell
+# 逐服务复制 zoneinfo 内的 Linux 绝对符号链接。
+COPY --from=runtime_assets /ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=runtime_assets /zoneinfo/ /usr/share/zoneinfo/
 
 WORKDIR /app
 

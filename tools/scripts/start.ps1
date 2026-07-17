@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Pandora 后端一键启动器(策划/开发都能用)。
 
@@ -130,6 +130,32 @@ param(
 $ErrorActionPreference = 'Stop'
 $ScriptDir   = $PSScriptRoot
 $ProjectRoot = (Resolve-Path "$ScriptDir/../..").Path
+
+# 本脚本也会由长期运行的 web 进程拉起。Windows 进程只在启动时继承一次 PATH；之后安装
+# minikube 等工具，即使已经写入机器/用户 PATH，web 创建的新控制台仍会继承旧快照。
+# 每次启动都把当前持久化 PATH 合并进本进程，避免要求重启 web 或整机。
+function Sync-ProcessPathFromRegistry {
+    if (-not $IsWindows) { return }
+
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $entries = [Collections.Generic.List[string]]::new()
+    foreach ($pathValue in @(
+        $env:PATH,
+        [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+    )) {
+        if ([string]::IsNullOrWhiteSpace($pathValue)) { continue }
+        foreach ($entry in $pathValue.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
+            $expanded = [Environment]::ExpandEnvironmentVariables($entry.Trim())
+            if (-not [string]::IsNullOrWhiteSpace($expanded) -and $seen.Add($expanded)) {
+                $entries.Add($expanded)
+            }
+        }
+    }
+    $env:PATH = $entries -join ';'
+}
+
+Sync-ProcessPathFromRegistry
 . (Join-Path $ScriptDir 'lib/online_manifest_contract.ps1')
 . (Join-Path $ScriptDir 'lib/ds_auth_activation_contract.ps1')
 . (Join-Path $ScriptDir 'lib/dsticket_keyset_contract.ps1')
@@ -172,6 +198,97 @@ function Invoke-KubectlDeleteTolerateMissingKind {
         return
     }
     throw "$What 失败(exit=$LASTEXITCODE):$text"
+}
+
+# 普通 -Down 只停止本地基础设施，不得删除 namespace/pandora 与 etcd-data PVC。
+# required_writer_epoch、V3 activation record 与 writer capability 都以 etcd 为权威；
+# 删 namespace 会级联清空该 PVC，删 PVC 会丢基线，下次启动都会形成
+# “旧 minikube profile + 全新空 etcd”，既无法 Resume，也不满足 fresh-profile 自动 genesis 门。
+#
+# 多文档清单（infra.yaml 用内联 flow 写 metadata，kustomize 渲染又是多份 `---` 拼接）不能靠
+# `kubectl create -o json` 一次拿 List——它输出的是并列 JSON 对象流，ConvertFrom-Json 会在
+# 第二个对象处报“Additional text encountered”。因此逐文档用客户端 dry-run 取 kind/name/namespace，
+# 稳定识别后再把非保留对象合并成一份清单批量删除。
+function Get-K8sManifestObjectIdentities {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$ManifestText
+    )
+    $docs = @([regex]::Split($ManifestText, "(?m)^\s*---\s*$") | Where-Object {
+        (-not [string]::IsNullOrWhiteSpace($_)) -and ($_ -match '(?m)^\s*kind\s*:')
+    })
+    $result = New-Object System.Collections.Generic.List[object]
+    foreach ($doc in $docs) {
+        $idLine = $doc | & kubectl --context $KubeContext create --dry-run=client -f - `
+            -o 'jsonpath={.kind}|{.metadata.name}|{.metadata.namespace}' 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "解析 k8s 清单文档失败:$(@($idLine) -join [Environment]::NewLine)"
+        }
+        $flat = ((@($idLine) | ForEach-Object { $_.ToString() }) -join '').Trim()
+        $parts = $flat -split '\|', 3
+        $result.Add([pscustomobject]@{
+            Kind      = $parts[0].Trim()
+            Name      = if ($parts.Count -ge 2) { $parts[1].Trim() } else { '' }
+            Namespace = if ($parts.Count -ge 3) { $parts[2].Trim() } else { '' }
+            Doc       = $doc.Trim()
+        })
+    }
+    return , $result.ToArray()
+}
+
+# 删除清单中除“保留谓词”命中对象外的全部对象。ShouldPreserve 接收单个身份对象，返回 $true 表示保留。
+# 容忍 namespace 已不存在时的“not found”——普通 Down 可能对着一个早已被拆掉的集群空跑。
+function Remove-K8sManifestObjectsPreserving {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$ManifestText,
+        [Parameter(Mandatory = $true)][scriptblock]$ShouldPreserve,
+        [Parameter(Mandatory = $true)][string]$What
+    )
+    $identities = @(Get-K8sManifestObjectIdentities -KubeContext $KubeContext -ManifestText $ManifestText)
+    if ($identities.Count -eq 0) { throw "$What:清单为空，拒绝在未知状态下继续 Down。" }
+    $toDelete = @($identities | Where-Object { -not (& $ShouldPreserve $_) })
+    if ($toDelete.Count -eq 0) { return , $identities }
+    $payload = ($toDelete | ForEach-Object { $_.Doc }) -join "`n---`n"
+    $deleteLines = @($payload | & kubectl --context $KubeContext delete -f - --ignore-not-found 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        $text = ((@($deleteLines) | ForEach-Object { $_.ToString() }) -join "`n")
+        # namespace 早已不存在 → 其内 namespaced 对象天然无残留，等价 not-found，容忍。
+        if ($text -match '(?i)namespaces .*not found' -or $text -match '(?i)not found') {
+            Write-Skip "$What:目标 namespace/对象已不存在，无残留可删，跳过。"
+            return , $identities
+        }
+        throw "$What 失败:$text"
+    }
+    foreach ($line in @($deleteLines)) { if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Host $line } }
+    return , $identities
+}
+
+# 读取本地 etcd-data PVC 是否存在。namespace 缺失也按“不存在”处理，不抛错。
+function Test-LocalEtcdDataPvcExists {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $out = @(& kubectl --context $KubeContext get pvc/etcd-data -n $K8sNamespace --ignore-not-found -o name 2>&1)
+    $flat = ((@($out) | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ($flat -match 'persistentvolumeclaim/etcd-data') { return $true }
+    if ($LASTEXITCODE -eq 0) { return $false }
+    if ($flat -match '(?i)not found') { return $false }
+    throw "读取 pvc/etcd-data 状态失败:$flat"
+}
+
+# 普通 Down 结束后回读 namespace/pandora 与 PVC/etcd-data，二者缺一则说明 DS auth 权威已丢，fail-fast。
+function Assert-LocalEtcdDataPreservedAfterDown {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $nsName = ((@(& kubectl --context $KubeContext get "namespace/$K8sNamespace" --ignore-not-found -o name 2>&1) |
+            ForEach-Object { $_.ToString() }) -join '').Trim()
+    if ($LASTEXITCODE -ne 0 -or $nsName -cne "namespace/$K8sNamespace") {
+        throw "普通 Down 后 namespace/$K8sNamespace 缺失；etcd-data PVC 已随之级联删除，DS auth 权威状态可能已丢失。"
+    }
+    $pvcName = ((@(& kubectl --context $KubeContext get pvc/etcd-data -n $K8sNamespace --ignore-not-found -o name 2>&1) |
+            ForEach-Object { $_.ToString() }) -join '').Trim()
+    if ($LASTEXITCODE -ne 0 -or $pvcName -cne 'persistentvolumeclaim/etcd-data') {
+        throw '普通 Down 后无法回读 PVC/etcd-data；DS auth 权威状态可能已丢失。'
+    }
+    Write-Ok "本地 k8s 基础设施已停止；namespace/$K8sNamespace 与 PVC/etcd-data 已保留供下次启动恢复 DS auth 基线。"
 }
 
 # pandora-config Secret 只收录 20 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
@@ -2531,12 +2648,36 @@ function Invoke-K8s {
         # in-cluster Envoy「DS 面」网关也是启动时 Apply-AgonesManifests 起的(本地专属),一并清理
         kubectl --context $mkProfile delete -f (Join-Path $ProjectRoot 'deploy/k8s/agones/16-ds-envoy.yaml') --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete in-cluster Envoy'
-        kubectl --context $mkProfile delete -k $servicesDir --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete k8s services'
+        # 只有 Down 前确实存在 etcd-data PVC，才要求 Down 后仍保留；对早已拆空的集群空跑不误报数据丢失。
+        $etcdPvcExistedBeforeDown = Test-LocalEtcdDataPvcExists -KubeContext $mkProfile
+        # 业务服务:渲染 kustomize 后删除除 Namespace 外的全部对象。
+        # 保留 namespace/pandora 是刻意的——services kustomize 含 00-namespace.yaml，
+        # 直接 delete -k 会连 namespace 一起删掉，级联清空 PVC/etcd-data（DS auth V3 权威）。
+        $servicesManifest = ((@(& kubectl --context $mkProfile kustomize $servicesDir 2>&1) |
+                ForEach-Object { $_.ToString() }) -join "`n")
+        Assert-LastExit 'kubectl kustomize k8s services'
+        $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $servicesManifest `
+            -What 'kubectl delete k8s services（保留 namespace）' -ShouldPreserve {
+            param($o)
+            ([string]$o.Kind -ceq 'Namespace') -and ([string]$o.Name -ceq $K8sNamespace)
+        }
         kubectl --context $mkProfile delete -f $lokiYaml --ignore-not-found 2>$null
         Assert-LastExit 'kubectl delete Loki'
-        kubectl --context $mkProfile delete -f $infraYaml --ignore-not-found 2>$null
-        Assert-LastExit 'kubectl delete k8s infra'
+        # 基础设施:删除除 PVC/etcd-data 外的全部对象，保留 etcd 数据卷。
+        $infraManifest = (Get-Content -LiteralPath $infraYaml -Raw)
+        $null = Remove-K8sManifestObjectsPreserving -KubeContext $mkProfile -ManifestText $infraManifest `
+            -What 'kubectl delete k8s infra（保留 PVC/etcd-data）' -ShouldPreserve {
+            param($o)
+            ([string]$o.Kind -ceq 'PersistentVolumeClaim') -and
+            ([string]$o.Name -ceq 'etcd-data') -and
+            ([string]$o.Namespace -ceq $K8sNamespace)
+        }
+        if ($etcdPvcExistedBeforeDown) {
+            Assert-LocalEtcdDataPreservedAfterDown -KubeContext $mkProfile
+        }
+        else {
+            Write-Info "Down 前本地无 etcd-data PVC，无 DS auth 基线可保留（跳过保留校验）。"
+        }
         Write-Info "minikube 仍在运行;彻底关:minikube stop"
         return
     }
@@ -3596,27 +3737,55 @@ function Build-Images-Host {
     $stageRoot = Join-Path $ProjectRoot 'run/docker-build/prebuilt'
     if (-not (Test-Path $stageRoot)) { New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null }
 
-    # Dockerfile.prebuilt 只用 golang 镜像取 CA 证书 / 时区(不编译,层缓存命中);沿用本地已有基础镜像。
-    $baseRegistry = $env:PANDORA_BASE_REGISTRY
-    if (-not $baseRegistry) {
-        $goVer = '1.26.5'
-        $m = Select-String -Path $prebuiltDockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
-        $wantGo = "docker.io/library/golang:$goVer"
-        docker image inspect $wantGo *> $null
-        if ($LASTEXITCODE -eq 0) {
-            $baseRegistry = 'docker.io'
-        } else {
-            $localGo = (docker images --format '{{.Repository}}:{{.Tag}}' 2>$null | Select-String '(^|/)golang:' | Select-Object -First 1)
-            if ($localGo) {
-                $src = "$localGo".Trim()
-                Write-Info "  本机无 $wantGo,发现 $src,自动打标复用(免联网拉基础镜像)。"
-                docker tag $src $wantGo 2>$null
-                $baseRegistry = 'docker.io'
-            } else {
-                $baseRegistry = 'docker.m.daocloud.io'
+    # 预编译镜像只需 CA + zoneinfo。若 Dockerfile 对 20 个服务都直接 FROM 远程 golang tag，
+    # BuildKit 即使已有 layer cache 仍可能逐次请求 registry manifest/token；网络抖动会在任意
+    # 一个服务处 TLS timeout。循环前只准备一次本地固定 source tag，之后打包完全不访问 registry。
+    $runtimeAssetsImage = 'pandora/runtime-assets:local'
+    docker image inspect $runtimeAssetsImage *> $null
+    if ($LASTEXITCODE -ne 0) {
+        $localRuntimeSource = $null
+        foreach ($candidate in @($List | ForEach-Object { "pandora/$($_.Name):dev" })) {
+            docker image inspect $candidate *> $null
+            if ($LASTEXITCODE -eq 0) { $localRuntimeSource = $candidate; break }
+        }
+        if ($null -eq $localRuntimeSource) {
+            $goVer = '1.26.5'
+            $baseRegistry = if ($env:PANDORA_BASE_REGISTRY) { $env:PANDORA_BASE_REGISTRY.TrimEnd('/') } else { 'docker.m.daocloud.io' }
+            $localRuntimeSource = "$baseRegistry/library/golang:$goVer"
+            docker image inspect $localRuntimeSource *> $null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Info "  首次准备本地 CA/时区资产镜像:$localRuntimeSource"
+                docker pull $localRuntimeSource
+                if ($LASTEXITCODE -ne 0) {
+                    throw "无法一次性拉取 runtime assets source:$localRuntimeSource。可设置 PANDORA_BASE_REGISTRY=docker.io 后重试。"
+                }
             }
         }
+        Write-Info "  固定本地 runtime assets:$localRuntimeSource -> $runtimeAssetsImage"
+        docker tag $localRuntimeSource $runtimeAssetsImage
+        if ($LASTEXITCODE -ne 0) { throw "无法创建本地 runtime assets tag:$runtimeAssetsImage" }
+    }
+    $runtimeAssetsDir = Join-Path $stageRoot '_runtime-assets'
+    if (Test-Path $runtimeAssetsDir) { Remove-Item -LiteralPath $runtimeAssetsDir -Recurse -Force }
+    New-Item -ItemType Directory -Path (Join-Path $runtimeAssetsDir 'zoneinfo') -Force | Out-Null
+    $assetsContainer = $null
+    try {
+        $assetsContainer = ((docker create $runtimeAssetsImage) | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $assetsContainer -cnotmatch '^[0-9a-f]{12,64}$') {
+            throw "无法从 $runtimeAssetsImage 创建 runtime assets 临时容器。"
+        }
+        docker cp "${assetsContainer}:/etc/ssl/certs/ca-certificates.crt" (Join-Path $runtimeAssetsDir 'ca-certificates.crt')
+        if ($LASTEXITCODE -ne 0) { throw "$runtimeAssetsImage 缺 CA 根证书。" }
+        docker cp "${assetsContainer}:/usr/share/zoneinfo/." (Join-Path $runtimeAssetsDir 'zoneinfo')
+        if ($LASTEXITCODE -ne 0) { throw "$runtimeAssetsImage 缺时区库。" }
+    } finally {
+        if (-not [string]::IsNullOrWhiteSpace($assetsContainer)) {
+            docker rm -f $assetsContainer *> $null
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $runtimeAssetsDir 'ca-certificates.crt') -PathType Leaf) -or
+        @(Get-ChildItem -LiteralPath (Join-Path $runtimeAssetsDir 'zoneinfo') -File -Recurse).Count -eq 0) {
+        throw '本地 runtime assets 提取结果不完整。'
     }
     # 宿主 go build 拉模块用的代理(默认 goproxy.cn;尊重已自定义的非公有 GOPROXY)。
     $goproxy = $env:PANDORA_GOPROXY
@@ -3624,7 +3793,7 @@ function Build-Images-Host {
         if ($env:GOPROXY -and $env:GOPROXY -notmatch 'proxy\.golang\.org') { $goproxy = $env:GOPROXY }
         else { $goproxy = 'https://goproxy.cn,direct' }
     }
-    Write-Info "  基础镜像仓库:$baseRegistry(仅用于取 CA/时区,不编译)"
+    Write-Info "  CA/时区资产镜像:$runtimeAssetsImage(本地固定 tag，服务循环内不访问 registry)"
     Write-Info "  Go 模块代理:$goproxy(宿主交叉编译用)"
 
     $ld = "-s -w " +
@@ -3658,10 +3827,9 @@ function Build-Images-Host {
         } else {
             New-Item -ItemType Directory -Path (Join-Path $stage 'etc') -Force | Out-Null
         }
-
         Write-Info "  [host] docker build pandora/$($svc.Name):dev(打包预编译产物,秒级)..."
         docker build -f $prebuiltDockerfile `
-            --build-arg "BASE_REGISTRY=$baseRegistry" `
+            --build-context "runtime_assets=$runtimeAssetsDir" `
             --label "org.opencontainers.image.revision=$($v.Commit)" `
             -t "pandora/$($svc.Name):dev" $stage
         if ($LASTEXITCODE -ne 0) { throw "镜像打包失败:$($svc.Name)" }

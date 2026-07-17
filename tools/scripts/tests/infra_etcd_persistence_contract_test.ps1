@@ -93,8 +93,16 @@ $functions = @($startAst.FindAll({
         }, $true))
 $resume = @($functions | Where-Object Name -CEQ 'Resume-K8s')
 $apiWait = @($functions | Where-Object Name -CEQ 'Wait-KubeApiServerReady')
+$removeInfra = @($functions | Where-Object Name -CEQ 'Remove-K8sManifestObjectsPreserving')
+$identities = @($functions | Where-Object Name -CEQ 'Get-K8sManifestObjectIdentities')
+$preservedAssert = @($functions | Where-Object Name -CEQ 'Assert-LocalEtcdDataPreservedAfterDown')
+$invokeK8s = @($functions | Where-Object Name -CEQ 'Invoke-K8s')
 Assert-True ($resume.Count -eq 1) '必须有唯一 Resume-K8s'
 Assert-True ($apiWait.Count -eq 1) '必须有唯一 Wait-KubeApiServerReady'
+Assert-True ($removeInfra.Count -eq 1) '必须有唯一按谓词保留对象的清单删除函数'
+Assert-True ($identities.Count -eq 1) '必须有唯一逐文档识别 kind/name/namespace 的函数'
+Assert-True ($preservedAssert.Count -eq 1) '必须有唯一 Down 后 namespace+PVC 保留校验函数'
+Assert-True ($invokeK8s.Count -eq 1) '必须有唯一 Invoke-K8s'
 Assert-True ($apiWait[0].Extent.Text.Contains('get --raw=/readyz')) 'apiserver 等待必须只读 /readyz'
 $apiWaitCommands = @($apiWait[0].FindAll({
             param($node)
@@ -113,5 +121,35 @@ $lateAuditMutant = $resumeSource.Replace(
 Assert-Throws {
     Assert-ResumeAuditOrdering -ResumeSource $lateAuditMutant
 } '任一审计移到业务 Ready/apply/rollout 后必须被 mutant 契约阻断'
+
+$identitiesSource = $identities[0].Extent.Text
+Assert-True ($identitiesSource.Contains('create --dry-run=client -f -') -and
+    $identitiesSource.Contains('jsonpath={.kind}|{.metadata.name}|{.metadata.namespace}')) `
+    '逐文档识别必须走客户端 dry-run，避免多文档 JSON 流解析失败'
+
+$removeSource = $removeInfra[0].Extent.Text
+Assert-True ($removeSource.Contains('kubectl --context $KubeContext delete -f - --ignore-not-found')) `
+    '按谓词删除必须把非保留对象合并成一份清单批量删除'
+
+$preservedAssertSource = $preservedAssert[0].Extent.Text
+Assert-True ($preservedAssertSource.Contains("namespace/$K8sNamespace") -or
+    $preservedAssertSource.Contains('namespace/$K8sNamespace')) `
+    'Down 后必须回读 namespace 仍在（删 namespace 会级联清空 etcd PVC）'
+Assert-True ($preservedAssertSource.Contains("get pvc/etcd-data -n `$K8sNamespace")) `
+    'Down 后必须回读 PVC/etcd-data 仍在'
+
+$invokeK8sSource = $invokeK8s[0].Extent.Text
+Assert-True (-not $invokeK8sSource.Contains('delete -k $servicesDir')) `
+    'Invoke-K8s -Down 禁止用 delete -k 删业务（会连 00-namespace.yaml 一起删掉 namespace，级联清空 etcd PVC）'
+Assert-True ($invokeK8sSource.Contains('kubectl --context $mkProfile kustomize $servicesDir')) `
+    'Invoke-K8s -Down 必须先渲染 services kustomize 再按谓词删除，保留 namespace'
+Assert-True ($invokeK8sSource.Contains("([string]`$o.Kind -ceq 'Namespace') -and ([string]`$o.Name -ceq `$K8sNamespace)")) `
+    'Invoke-K8s -Down 必须保留 namespace/pandora'
+Assert-True ($invokeK8sSource.Contains("([string]`$o.Name -ceq 'etcd-data')")) `
+    'Invoke-K8s -Down 必须保留 PVC/etcd-data'
+Assert-True ($invokeK8sSource.Contains('Assert-LocalEtcdDataPreservedAfterDown -KubeContext $mkProfile')) `
+    'Invoke-K8s -Down 结束前必须校验 namespace+PVC 仍在'
+Assert-True (-not $invokeK8sSource.Contains('delete -f $infraYaml')) `
+    'Invoke-K8s -Down 禁止再把含 etcd-data PVC 的完整 infra 清单直接删除'
 
 Write-Host 'infra_etcd_persistence_contract_test: PASS' -ForegroundColor Green

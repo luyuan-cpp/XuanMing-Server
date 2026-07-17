@@ -21,6 +21,17 @@ $bridgeAst = [System.Management.Automation.Language.Parser]::ParseFile(
 Assert-True (@($bridgeErrors).Count -eq 0) 'k8s_envoy_bridge.ps1 必须可解析'
 
 $source = Get-Content -LiteralPath $startPath -Raw
+$pathRefreshFunction = $source.IndexOf('function Sync-ProcessPathFromRegistry', [StringComparison]::Ordinal)
+$pathRefreshCall = $source.IndexOf("Sync-ProcessPathFromRegistry`r`n", $pathRefreshFunction + 1, [StringComparison]::Ordinal)
+$prerequisiteCall = $source.LastIndexOf('$prereqOk = Resolve-Prerequisites $Mode', [StringComparison]::Ordinal)
+Assert-True ($pathRefreshFunction -ge 0 -and $pathRefreshCall -gt $pathRefreshFunction) `
+    'start.ps1 必须在每次运行时合并 Windows 机器/用户 PATH，兼容长期运行 web 的旧环境快照'
+Assert-True ($source.Contains("[Environment]::GetEnvironmentVariable('Path', 'Machine')")) `
+    'PATH 刷新必须读取 Windows 机器级 PATH'
+Assert-True ($source.Contains("[Environment]::GetEnvironmentVariable('Path', 'User')")) `
+    'PATH 刷新必须读取 Windows 用户级 PATH'
+Assert-True ($pathRefreshCall -lt $prerequisiteCall) `
+    'PATH 必须在工具前置检查前刷新'
 $profileBoundLoad = "Sync-ImagesToMinikube -Images (Get-ServiceImages) -MinikubeArgs @('-p', `$mkProfile)"
 Assert-True ($source.Contains($profileBoundLoad)) `
     '本地 K8s 业务镜像 load 必须显式绑定本次已校验的 minikube profile'
