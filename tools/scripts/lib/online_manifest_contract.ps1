@@ -8,28 +8,8 @@ $script:PandoraImagePinPattern = '^(?<repository>[^\s@]+)@(?<digest>sha256:[0-9a
 $script:PandoraWriterServices = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
 $script:PandoraPlayerHmacServices = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
 $script:PandoraDsCallbackHmacServices = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator')
-$script:PandoraPlacementDomains = [ordered]@{
-    AccountBootstrap = @(
-        @{ Service = 'login'; Section = 'login'; Child = 'placement_bootstrap_proof_secret' },
-        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_account_bootstrap_proof_secret' })
-    MatchStart = @(
-        @{ Service = 'matchmaker'; Section = 'match'; Child = 'placement_match_start_proof_secret' },
-        @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'placement_match_start_proof_secret' },
-        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_match_start_proof_secret' })
-    BattleExit = @(
-        @{ Service = 'battle-result'; Section = 'battle'; Child = 'placement_battle_exit_proof_secret' },
-        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_exit_proof_secret' })
-    # HubDeparture uses this same Hub authority key with a separate HMAC message
-    # domain. It is deliberately not a binding in BattleDeparture below.
-    HubTransfer = @(
-        @{ Service = 'hub-allocator'; Section = 'hub'; Child = 'placement_hub_transfer_proof_secret' },
-        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret' })
-    BattleDeparture = @(
-        @{ Service = 'ds-allocator'; Section = 'allocator'; Child = 'placement_battle_departure_proof_secret' },
-        @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_departure_proof_secret' })
-}
+$script:PandoraPlacementDomains = [ordered]@{}
 $script:PandoraMatchResumeAuthBindings = @(
-    @{ Service = 'login'; Section = 'login'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' })
 $script:PandoraAllocationAbortAuthBindings = @(

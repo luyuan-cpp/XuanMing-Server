@@ -137,6 +137,12 @@ func (s *LoginService) IssueDSTicket(ctx context.Context, req *loginv1.IssueDSTi
 		plog.With(ctx).Warnw("msg", "ds_ticket_issue_no_player_id")
 		return &loginv1.IssueDSTicketResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
+	// P0 修复(2026-07-15,codex P0-10):session 现行性门。JWT 验签只证明"曾登录过",
+	// 顶号后旧 token 在 exp 前仍验得过;这里用 Redis session jti 确认 token 是当前一代,
+	// 防止旧设备继续给自己签 hub/battle 票造成双在场。
+	if err := s.loginUC.RequireCurrentSessionToken(ctx, playerID, req.GetSessionToken()); err != nil {
+		return &loginv1.IssueDSTicketResponse{Code: toProtoCode(err)}, nil
+	}
 
 	// ds_type=hub:复用登录的 hub 分配链路(hub_allocator.AssignHub),返回"当前有效"的大厅地址
 	// + 全新一次性票据。结算返回大厅必须走这条路,以应对 Hub DS 被 Agones 重建/换端口/换分片

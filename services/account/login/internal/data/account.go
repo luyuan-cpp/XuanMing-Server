@@ -130,6 +130,12 @@ func isDupErr(err error) bool {
 type SessionRepo interface {
 	Set(ctx context.Context, playerID uint64, token, jti, deviceID string, ttl time.Duration) error
 	Delete(ctx context.Context, playerID uint64) error
+	// GetJTI 读当前 session 的 jti(P0 修复 2026-07-15,session 现行性门)。
+	// found=false = 无 session(已登出/过期/从未登录)。
+	GetJTI(ctx context.Context, playerID uint64) (jti string, found bool, err error)
+	// DeleteIfJTI 仅当当前 session 的 jti 匹配时才删除(CAS)。
+	// 防止旧设备的迟到 Logout 误删新登录的 session(顶号后新设备被踢)。
+	DeleteIfJTI(ctx context.Context, playerID uint64, jti string) (deleted bool, err error)
 }
 
 // RedisSessionRepo 基于 go-redis/v9 的 SessionRepo 实现。
@@ -167,6 +173,33 @@ func (r *RedisSessionRepo) Delete(ctx context.Context, playerID uint64) error {
 		return errcode.New(errcode.ErrInternal, "redis sess del: %v", err)
 	}
 	return nil
+}
+
+func (r *RedisSessionRepo) GetJTI(ctx context.Context, playerID uint64) (string, bool, error) {
+	jti, err := r.rdb.HGet(ctx, sessKey(playerID), "jti").Result()
+	if errors.Is(err, redis.Nil) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, errcode.New(errcode.ErrInternal, "redis sess get jti: %v", err)
+	}
+	return jti, jti != "", nil
+}
+
+// deleteIfJTIScript:hash 字段 jti 与参数相等才 DEL(原子 CAS,防迟到 Logout 误删新 session)。
+var deleteIfJTIScript = redis.NewScript(`
+if redis.call("HGET", KEYS[1], "jti") == ARGV[1] then
+	return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
+
+func (r *RedisSessionRepo) DeleteIfJTI(ctx context.Context, playerID uint64, jti string) (bool, error) {
+	n, err := deleteIfJTIScript.Run(ctx, r.rdb, []string{sessKey(playerID)}, jti).Int64()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return false, errcode.New(errcode.ErrInternal, "redis sess del-if-jti: %v", err)
+	}
+	return n > 0, nil
 }
 
 // =====================================================================

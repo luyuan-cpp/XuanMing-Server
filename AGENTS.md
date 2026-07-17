@@ -49,7 +49,9 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 **实现必须全面排查隐蔽 bug 与分布式边界**(细则见 `CLAUDE.md §16`):不能只跑通 happy path。设计、实现和 review 必须覆盖并发竞争、重复请求、重试、超时、乱序、消息重复 / 丢失、部分成功、网络分区、依赖降级、进程崩溃 / 重启、多副本、滚动升级与补偿恢复;共享状态必须明确权威源、幂等键、事务 / 原子边界、fencing 与最终一致性条件。发现的问题必须修到闭环并补针对性测试;没有证据不得声称“无 bug”或“分布式安全”。
 
-**状态使用优先查询唯一权威,不在各服务重复存**(细则见 `CLAUDE.md` §9 不变量 22):只持久化跨请求 / 重启仍影响正确性且无法可靠重建的最小权威事实或租约;可从权威事实计算的展示 / 派生状态按需查询计算。其他服务不得保存并信任影子副本;缓存只能用于加速,必须可过期 / 可重建且不能参与权威写决策。关键状态迁移必须用事务 / CAS / 条件更新原子完成,禁止非原子的“先查后存”;查询失败返回 UNKNOWN / UNAVAILABLE,不得冒充 OFFLINE、空闲或默认状态。
+**状态使用优先查询唯一权威,不在各服务重复存**(细则见 `CLAUDE.md` §9 不变量 22):只持久化跨请求 / 重启仍影响正确性且无法可靠重建的最小权威事实或必要租约;可从权威事实计算的展示 / 派生状态按需查询计算。其他服务不得保存并信任影子副本;缓存只能用于加速,必须可过期 / 可重建且不能参与权威写决策。关键状态迁移必须用事务 / CAS / 条件更新原子完成,禁止非原子的“先查后存”;查询失败返回 UNKNOWN / UNAVAILABLE,不得冒充 OFFLINE、空闲或默认状态。`LOCATION_STATE_HUB` / `BATTLE` 等 TTL 位置只作 presence / 最近活跃投影,key miss 不证明玩家已离开旧 DS;玩家归属只由唯一 owner authority 维护最小 `owner_epoch + exact owner + operation_id + lease` 权威。旧 epoch 不能影响当前 owner / 业务,但可精确幂等清理只属于自己的残留;有权写还必须满足 lease 未过期。相关设计若仍把 locator TTL 写成 Hub↔Battle 路由权威,即属规范冲突,必须停止实现并先报告 / 同步文档。
+
+**登录成功后只走一条幂等进场 / 恢复闭环**(细则见 `CLAUDE.md` §9 不变量 23):登录返回、选角、匹配各阶段、READY、切前后台、断线、Travel / Admission 失败和 Hub↔Battle 回流全部汇入同一无状态查询 / 恢复逻辑入口与客户端恢复协调器,不是新建有状态编排服务;禁止客户端自行猜路由或增加第二套 fallback。`Login OK` 后的暂时故障不得清 session 或要求重新输入密码;重复请求 / 回包丢失 / 重启必须沿稳定 `operation_id` 继续,不得重复占座、分配 DS 或产生第二 owner。未选角先返回 ROLE_REQUIRED,不提前分配 Hub;WAIT / UNKNOWN 的每次等待有 deadline,超时重查或展示真实重试 / 退出入口,整体可持续重试;只有该场景要求的玩家态完成 Admission 且客户端收到 exact 连接 ACK 才算本地 PLAYABLE。实现与 review 必须覆盖 locator 分区、MATCHING 恢复、地图加载无回调、旧 DS 恢复、迟到 Logout / Heartbeat 和 Stable / Canary 混跑。
 
 **接线做最终版,不留半成品**(细则见 `CLAUDE.md §14`):新功能一次接到可上线版本,不准 TODO 占位 / 空实现;允许配置开关默认关闭(如 `snowflake.node_id_source` 默认 static),但开关打开后的分支必须是完整真实实现。引入隔离重依赖的独立 pkg module(如 `pkg/snowflake/etcdnode` 的 etcd client)到服务时,Claude 写代码 + 补 go.mod 的 require/replace,`go mod tidy` 生成 go.sum 由 Codex 执行(§11.1);接线后必须在交接里**列出需 tidy 的服务清单**,不准默声留着让下个 AI 撞 build 红。
 
@@ -81,7 +83,9 @@ pwsh tools/scripts/export_images.ps1 -Build -BuildMode host
 
 ## 10. 触碰红线 → 立刻停止 + 报告
 
-任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **任何可能让玩家卡死、永久等待或进不去场景的代码**(所有登录、选角、匹配、传送、重连、切场景和进 Hub / Battle DS 路径必须有有界超时、持续驱动、可见错误与真实可用的重试 / 返回 / 恢复入口,见 `CLAUDE.md` §9 不变量 19/20) / **任何让 Go 服务或 Hub / Battle DS 无法金丝雀发布、必须停服升级或会强杀在场玩家的改动**(Go 新旧副本兼容共存;DS Stable/Canary 双 Fleet,新版本只接新分配,旧版本停止接新并排空在场会话后退役,见 `CLAUDE.md` §9 不变量 21、`docs/design/zero-downtime-update.md` §6.3) / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线或读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`) / **新增客户端可写入的累积列表却没有写入侧总量上限和读取侧分页 / 单次返回上限**(好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、待处理队列等;必须在事务 / 原子写路径校验单玩家 / 单实体的 pending / active 数量,超限回明确业务错误,读取侧走 cursor 分页或 SQL LIMIT 兜底;登记到 `CLAUDE.md` §9 不变量 18 的「现存受管列表清单」)。
+任务范围明显扩大或漏关键文件 / 规范文档自相矛盾 / 要写 secrets 进 git / 要 sudo / chmod / 关防火墙 / build 改坏别的服务 / 即将 push 远端 / **任何可能让玩家卡死、永久等待或进不去场景的代码**(所有登录、选角、匹配、传送、重连、切场景和进 Hub / Battle DS 路径必须有有界超时、持续驱动、可见错误与真实可用的重试 / 返回 / 恢复入口,见 `CLAUDE.md` §9 不变量 19/20/23) / **任何让 Go 服务或 Hub / Battle DS 无法金丝雀发布、必须停服升级或会强杀在场玩家的改动**(Go 新旧副本兼容共存,已有 RPC 不得原地禁用,同一逻辑任务 / 分片的单写者 Stable / Canary 共用 election + 单调 fencing token;DS Stable/Canary 双 Fleet,新版本只接新分配,旧版本停止接新并排空在场会话后退役,见 `CLAUDE.md` §9 不变量 21、`docs/design/zero-downtime-update.md` §6.3) / **破坏不停服更新(给 Redis pb 存储改字段编号·类型·语义、read-modify-write 路径丢弃 unknown fields、设计「必须停服才能上线/读数据」的方案)**(见 `CLAUDE.md` §9 不变量 16/17、`docs/design/zero-downtime-update.md`) / **新增客户端可写入的累积列表却没有写入侧总量上限和读取侧分页 / 单次返回上限**(好友、好友申请、公会申请、公会成员、组队 / 入群邀请、临时群成员、我所在的群、交易请求、黑名单、待处理队列等;必须在事务 / 原子写路径校验单玩家 / 单实体的 pending / active 数量,超限回明确业务错误,读取侧走 cursor 分页或 SQL LIMIT 兜底;登记到 `CLAUDE.md` §9 不变量 18 的「现存受管列表清单」)。
+
+以下同样属于立即停止的进场红线:把 locator TTL / key miss 当 Hub↔Battle 归属证明;`Login OK` 后因暂时失败清 session、要求重输密码或另走本地 fallback;重复进场产生第二 assignment / allocation / owner;旧 session / owner epoch 的 Logout、Heartbeat、Admission 或业务写能影响新会话;地图加载、Admission、旧连接 / Controller 清退只有无限轮询而没有总截止时间和可见恢复入口。
 
 ## 11. 合作分工
 

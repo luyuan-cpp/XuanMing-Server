@@ -68,6 +68,16 @@ login:
     addr: "player-locator.pandora.svc.cluster.local:50006"
   hub:
     addr: "hub-allocator.pandora.svc.cluster.local:50021"
+  # matchmaker 只读权威兜底(P0 修复 2026-07-15,生产必配):locator presence 未命中 BATTLE
+  # 时再查 ResolvePlayerMatchContext,防 READY↔投影窗口/租约蒸发把在局玩家误路由回 Hub。
+  # auth_secret/auth_audience:login→matchmaker 内部服务鉴权(internalrpcauth)。
+  # ⚠️ 必须与 matchmaker 的 match.match_resume_auth_secret/audience 完全一致;
+  # ≥32 字节独立强随机密钥,不得复用玩家 JWT secret。缺失则被 matchmaker 拒绝,
+  # B1 下等于战斗恢复链 fail-closed。
+  matchmaker:
+    addr: "matchmaker.pandora.svc.cluster.local:50011"
+    auth_secret: "__MATCH_RESUME_AUTH_SECRET_32B_CHANGE_ME__"
+    auth_audience: "matchmaker:5v5_ranked"
     region: ""
 
 # 生产实际配置由 gen_cluster_config.ps1 原子注入 enforce/redis + fence；本模板保持

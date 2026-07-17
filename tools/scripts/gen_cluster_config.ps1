@@ -482,23 +482,8 @@ $PlayerSecretServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allo
 $DsSecretServiceNames = @('login', 'ds-allocator', 'hub-allocator', 'battle-result', 'player-locator')
 # DSTicket v2(方案 B)签发方清单(与决策文档 §7.2 私钥暴露面一致):恰好等于玩家面 jwt 清单。
 $DsTicketServiceNames = @('login', 'matchmaker', 'matchmaker-pve', 'hub-allocator')
-$PlacementSecretBindings = @(
-    @{ Service = 'login'; Section = 'login'; Child = 'placement_bootstrap_proof_secret'; Kind = 'AccountBootstrap' },
-    @{ Service = 'matchmaker'; Section = 'match'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
-    @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
-    @{ Service = 'battle-result'; Section = 'battle'; Child = 'placement_battle_exit_proof_secret'; Kind = 'BattleExit' },
-    # HubDeparture 复用 HubTransfer authority key；二者在 Go canonical message 中 domain-separated。
-    # 不给 Hub 注入 BattleDeparture key，避免 Hub 伪造 Battle→Hub 的物理离场证明。
-    @{ Service = 'hub-allocator'; Section = 'hub'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' },
-    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_account_bootstrap_proof_secret'; Kind = 'AccountBootstrap' },
-    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_match_start_proof_secret'; Kind = 'MatchStart' },
-    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_exit_proof_secret'; Kind = 'BattleExit' },
-    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_hub_transfer_proof_secret'; Kind = 'HubTransfer' },
-    @{ Service = 'ds-allocator'; Section = 'allocator'; Child = 'placement_battle_departure_proof_secret'; Kind = 'BattleDeparture' },
-    @{ Service = 'player-locator'; Section = 'locator'; Child = 'placement_battle_departure_proof_secret'; Kind = 'BattleDeparture' }
-)
+$PlacementSecretBindings = @()
 $MatchResumeAuthSecretBindings = @(
-    @{ Service = 'login'; Section = 'login'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker'; Section = 'match'; Child = 'match_resume_auth_secret' },
     @{ Service = 'matchmaker-pve'; Section = 'match'; Child = 'match_resume_auth_secret' }
 )
@@ -1066,14 +1051,6 @@ function Convert-Secret([string]$ServiceName, [string]$Text) {
                 $DevAllocationAbortAuthSecret $EffectiveAllocationAbortAuthSecret
         }
     }
-    if ($ServiceName -ceq 'login') {
-        if ($null -ne $PlacementModeToInject) { $Text = Set-YamlPlacementMode $ServiceName $Text 'login' $PlacementModeToInject }
-        else { Assert-YamlDirectString $ServiceName $Text 'login' 'placement_mode' 'off' }
-    }
-    if ($ServiceName -ceq 'hub-allocator') {
-        if ($null -ne $PlacementModeToInject) { $Text = Set-YamlPlacementMode $ServiceName $Text 'hub' $PlacementModeToInject }
-        else { Assert-YamlDirectString $ServiceName $Text 'hub' 'placement_mode' 'off' }
-    }
     return $Text
 }
 # Sync-EnvoyJwks:注入真密钥时,必须同步 Envoy 客户端面(:8443)的 local_jwks,否则 login 用新密钥
@@ -1348,14 +1325,6 @@ function Assert-GeneratedSet {
         foreach ($binding in @($AllocationAbortAuthSecretBindings | Where-Object Service -CEQ $svc.Name)) {
             Assert-YamlDirectString $svc.Name $yaml $binding.Section $binding.Child `
                 $EffectiveAllocationAbortAuthSecret
-        }
-        if ($svc.Name -ceq 'login') {
-            Assert-YamlDirectString $svc.Name $yaml 'login' 'placement_mode' `
-                $(if ($null -ne $PlacementModeToInject) { $PlacementModeToInject } else { 'off' })
-        }
-        if ($svc.Name -ceq 'hub-allocator') {
-            Assert-YamlDirectString $svc.Name $yaml 'hub' 'placement_mode' `
-                $(if ($null -ne $PlacementModeToInject) { $PlacementModeToInject } else { 'off' })
         }
         if ($svc.Name -eq 'battle-result') {
             if ($DsAuthorityModeToInject -eq 'redis') {

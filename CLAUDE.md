@@ -122,19 +122,41 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     显式登录态；**任何阶段都不允许出现无人驱动的静默等待（卡死）**。落地约束：
     - 客户端所有 DS `ClientTravel` 只允许 `UMyDsRecoveryCoordinator` 单写者发起；每个异步回调必须过
       generation + request-seq + phase 三元校验，迟到回调零副作用。
-    - 服务端对 UNKNOWN placement 一律 fail-closed 且零副作用（不签票、不占座、不开 spawn gate），
+    - 服务端对 UNKNOWN owner / route 一律 fail-closed 且零副作用（不签票、不占座、不开 spawn gate），
       客户端只能退避重查；客户端本地超时/本地状态**不得**改写权威路由。
-    - 每个恢复等待状态必须有 ticker / 回调 / 前台事件继续驱动；HTTP unary 必须有界超时且保证回调
-      恰好一次。无会话上下文（从未登录 / 显式登出 / 主动放弃重连）时，前台恢复不得触发任何强制
-      关卡切换或静默重放登录。
-    需求与验收记录见 `docs/design/battle-reconnect.md` §7（含 §7.11 复核）与
-    `docs/reviews/ds-recovery-claude-audit.md`；违反本条的改动 PR review 直接拒。
+    - 每个恢复等待状态必须有 ticker / 回调 / 前台事件继续驱动；HTTP unary 必须有界超时，每个本地请求
+      最终只进入 success / error / cancel / timeout 之一。业务必须容忍传输回调重复、迟到或完全不来，
+      由 watchdog 继续驱动。无会话上下文（从未登录 / 显式登出 / 主动放弃重连）时，前台恢复不得触发
+      任何强制关卡切换或静默重放登录。
+    - `UMyDsRecoveryCoordinator` 用**一个共享 watchdog / ticker 按 phase 记录 deadline**；`ClientTravel`、
+      地图加载、等待 PlayerController、Admission / 场景玩家态 ACK、旧连接 / 旧 Controller 清退每阶段
+      都必须有界。不能只靠“理论上会到”的引擎事件或无限短周期轮询；阶段到期后只能重查权威并自动
+      重试，或进入带真实重试 / 返回入口的 UI，不得再建一套 timer 状态机。
+    `docs/design/battle-reconnect.md` 与历史 review 只提供上下文，**不能替代当前 HEAD 的代码、测试和
+    故障注入证据**；违反本条的改动 PR review 直接拒。
 
-20. **任何代码都不能让玩家卡死或进不去场景（全局硬性要求）**：本条覆盖所有登录、选角、匹配、组队、传送、加载、重连、前后台切换、地图切换以及进入 / 返回 Hub DS、Battle DS 的路径，不限于第 19 条已有流程。任何异步状态都必须有持续驱动和有界超时；失败、断网、依赖不可用、回调丢失 / 迟到、进程重启或状态不一致时，必须在有界时间内自动恢复，或进入带明确原因和**真实可用**重试 / 返回 / 放弃入口的 UI。禁止永久黑屏、无限 loading、无超时等待、按钮不可用、只能杀进程恢复、服务端残留状态导致永远无法重新进场，以及客户端和服务端互相等待。新增或修改进场相关代码必须验证成功、超时、断网、重复回调、迟到回调、切后台、重启和部分失败路径；无法证明满足本条的改动不得合入。
+20. **任何代码都不能让玩家卡死或进不去场景（全局硬性要求）**：第 19 条的有界驱动 / 恢复入口与第 23 条的单一幂等进场规则，适用于所有登录、选角、匹配、组队、传送、加载、重连、前后台切换、地图切换及进入 / 返回 Hub、Battle 的路径。禁止永久黑屏、无限 loading、无 deadline 等待或轮询、按钮不可用、只能杀进程恢复、残留状态阻止重新进场，以及客户端和服务端互相等待。新增或修改相关路径必须验证成功、超时、断网、重复 / 迟到 / 丢失回调、切后台、重启和部分失败；无法证明满足本条的改动不得合入。
 
-21. **所有 Go 服务和 Hub / Battle DS 都必须支持金丝雀发布新版本且不停服（全局硬性要求）**：Go 服务通过 stable / canary 新旧副本并存、readiness、按比例或按人群分流、优雅摘流量和在途排空发布；RPC、事件和存储格式必须在共存窗口双向兼容，异常时能立即把 Canary 权重归零，Stable 持续服务。DS 通过 Agones Stable / Canary 独立 Fleet 发布：Canary 必须先预热 Ready 后才接小比例**新分配**，同一玩家 / 对局固定 release track；回滚先停止 Canary 新分配，禁止删除或强杀仍承载玩家的 Allocated DS。旧 Battle DS 必须把当前对局跑完，旧 Hub DS 必须停止接新并安全迁移 / 排空玩家，确认空场后才退役。任何升级都不得要求全服停机、踢掉在场玩家、打断对局或让玩家无法进入场景；详见 `docs/design/zero-downtime-update.md` §6.3。
+21. **所有 Go 服务和 Hub / Battle DS 都必须支持金丝雀发布新版本且不停服（全局硬性要求）**：Go 服务通过 stable / canary 新旧副本并存、readiness、按比例或按人群分流、优雅摘流量和在途排空发布；RPC、事件和存储格式必须在共存窗口双向兼容，异常时能立即把 Canary 权重归零，Stable 持续服务。已有 RPC / 字段 / 语义不得原地禁用或硬切；删除能力必须走 expand → migrate → contract，先让新旧调用方双向兼容并验证 Stable↔Canary、旧 DS↔新 Go、新 DS↔旧 Go 组合，最后一个旧调用者和旧 DS 排空后才能收缩。只有作用于**同一未分区权威 / 同一逻辑任务或分片**的单写者循环才共享 leader election；权威写同时原子校验单调 fencing token，失租旧 leader 永久不能补写。可并行 worker 应用 consumer group、行 claim、幂等 CAS 等标准机制，不得为金丝雀强行全局串行化。同一多步骤 operation 要么粘住 release track，要么其持久状态和迁移语义必须让新旧版本双向理解。DS 通过 Agones Stable / Canary 独立 Fleet 发布：Canary 必须先预热 Ready 后才接小比例**新分配**，同一玩家 / 对局固定 release track；回滚先停止 Canary 新分配，禁止删除或强杀仍承载玩家的 Allocated DS。旧 Battle DS 必须把当前对局跑完，旧 Hub DS 必须停止接新并安全迁移 / 排空玩家，确认空场后才退役。任何升级都不得要求全服停机、踢掉在场玩家、打断对局或让玩家无法进入场景；详见 `docs/design/zero-downtime-update.md` §6.3。
 
-22. **状态优先查询唯一权威，不重复存储影子状态（全局硬性要求）**：先明确每个状态的唯一权威源，只在该处保存跨请求 / 重启仍影响正确性且无法可靠重建的**最小权威事实或短期租约**；其他服务需要状态时查询权威接口，不得各自持久化并信任一份副本。可由权威事实计算的展示状态、聚合状态和派生字段按需查询 / 计算；缓存与物化视图必须明确为非权威、带 TTL / version、可失效且可从权威源重建，不能参与扣减、准入、归属切换等权威写决策。关键迁移禁止普通“先查再存”（存在 TOCTOU 竞态），必须通过事务、CAS、条件更新、唯一键或等价原子机制完成检查与修改。查询缺失只有在契约明确时才能推导状态；查询超时、依赖故障或结果不确定必须返回 `UNKNOWN` / `UNAVAILABLE` 并重试或 fail-closed，禁止冒充 `OFFLINE`、空闲、成功或其它默认状态。例：`LOCATION_STATE_HUB` 只由 Hub DS 上报，在 player_locator 以 `HUB + hub_pod + shard_id + TTL` 保存为短期权威位置租约；从 Battle 回流时携带的 `match_id` fence 只参与原子迁移校验，通过后不持久化。其他服务一律调用 `GetLocation` / `BatchGetLocation`，不得把 `HUB` 复制到自身数据库长期信任。详见 `docs/design/go-services.md` §2.6。
+22. **状态优先查询唯一权威，不重复存储影子状态（全局硬性要求）**：先明确每个状态的唯一权威源，只在该处保存跨请求 / 重启仍影响正确性且无法可靠重建的**最小权威事实或必要租约**；其他服务需要状态时查询权威接口，不得各自持久化并信任一份副本。可由权威事实计算的展示状态、聚合状态和派生字段按需查询 / 计算；缓存与物化视图必须明确为非权威、带 TTL / version、可失效且可从权威源重建，不能参与扣减、准入、归属切换等权威写决策。关键迁移禁止普通“先查再存”（存在 TOCTOU 竞态），必须通过事务、CAS、条件更新、唯一键或等价原子机制完成检查与修改。查询缺失只有在契约明确时才能推导状态；查询超时、依赖故障或结果不确定必须返回 `UNKNOWN` / `UNAVAILABLE` 并重试或 fail-closed，禁止冒充 `OFFLINE`、空闲、成功或其它默认状态。
+
+    状态必须按语义拆开，不能让一个易失 TTL 同时承担在线展示和玩家归属：
+    - `LOCATION_STATE_HUB` / `BATTLE` 是 player_locator 的短期 **presence / 最近活跃投影**，按需查询且不在其它服务复制；key miss 只能说明 presence 不可见，**不能**单独证明玩家已离开旧 DS，也不能授权进入另一台 DS。
+    - 选角结果查询角色权威，匹配阶段查询 matchmaker 权威；locator 中若暂留 `MATCHING`，也只能是投影，不能替代 durable match stage。
+    - 当前哪台 DS 有权控制和修改玩家，必须有一份最小玩家 owner 权威：**每玩家**单调不回退的 `owner_epoch`（不同于 DS `instance_epoch`、writer epoch、session epoch）、owner 类型、exact DS identity、稳定 `operation_id` 和最多 `PENDING / ADMITTED` 两阶段；短 owner lease 只限制物理残留窗口，不得扩展成通用 placement saga、多套 proof 或影子状态。
+    - 只有唯一 owner authority 能通过受控 transition API 原子修改 owner；Login、matchmaker、allocator、DS 等只能查询或提交绑定 `operation_id` 的命令，不得各自 raw CAS 同一记录。获得业务权限必须同时匹配当前 `owner_epoch` 且 owner lease 未过期；连续续租失败进入安全余量或已无法证明 lease 有效时，立即停止接收新输入、跨服务回调和持久化 / 外部权威写，到期必须 Kick / Despawn。票据、Admission、Heartbeat、Logout、跨服务回调和持久化写都继承 / 校验 epoch；局内纯内存操作从已绑定 epoch 的连接上下文继承即可。旧 epoch 不得影响当前 owner 或业务状态，但允许幂等、精确地清理仅属于自己 epoch 的旧连接、Pawn / 玩家态、seat、lease 和审计记录。
+
+    当前 `docs/design/go-services.md` §2.6 与 `docs/design/battle-reconnect.md` 仍含旧的 TTL 路由 / placement 叙述；在同步修订前不得把它们当作实现或验收依据，以本条为准。
+
+23. **登录成功后必须由一条幂等进场链收敛到可玩场景（全局需求级硬约束）**：`Login OK` 是认证会话已建立的线性化点。只要客户端仍持有有效 session / refresh 凭据，且依赖与容量最终恢复，系统必须最终收敛到一个且仅一个可操作场景；持续外部故障时也只能停在可见、可重试 / 可退出的 UI，不能黑屏或静默等待。除 session 明确过期 / 被撤销、封禁、强制版本不兼容等终态外，路由、匹配、分配、签票、Travel、Admission 的暂时失败不得清空会话、要求重新输入账号密码，或另起一条本地 fallback 路由。
+
+    - **单一入口**：登录返回、选角完成、前台恢复、断线、Travel / Admission 失败、匹配 READY、Battle 结算回 Hub 和持有有效凭据的冷启动恢复，都必须汇入同一**无状态逻辑 API**与客户端 `UMyDsRecoveryCoordinator`。该 API 优先复用现有 Login 恢复入口，以 query-first 方式组合角色、matchmaker 与 owner 权威；需要新归属时只向唯一 owner authority 提交一次绑定 operation 的 transition，不新增有状态编排微服务，不复制领域状态。客户端不得自行在 Hub / Battle 间降级或维护第二套恢复状态机。
+    - **最小状态集**：统一入口只返回 `ROLE_REQUIRED`、`WAIT`（含权威 match stage 与 `retry_after`）、`TARGET`（`PENDING / ADMITTED` + exact target + `owner_epoch`，票据可选且可安全重签）、`REAUTH` 或 `TERMINAL`。查询失败返回 `WAIT / UNKNOWN`，不得默认 Hub；角色查询失败不等于 role=0，未选角时不得提前分配 Hub、占座或签进场票。`TARGET/ADMITTED` 且客户端当前连接精确匹配 owner 时必须幂等 no-op，不能再次 Travel / 占座。
+    - **端到端幂等**：一次真实进场 / owner 迁移使用一个稳定 `operation_id`：登录→选角→首个 Hub、Hub→Battle、Battle→Hub 分别是新的 operation；同目标重连、重复点击、请求重试、响应丢失、回调重复 / 乱序、前后台切换和服务重启继续原 operation。ID 在首次请求前生成并保留到客户端 `PLAYABLE`、明确取消或终态；冷启动丢失本地 ID 时必须先查询并恢复服务端当前 operation，不能竞争创建第二个。分配、归属切换和 Admission 用 CAS / 唯一键原子推进；单次票据可以安全重签新 JTI，但票据本身不是幂等键。任何 exact owner identity 变化（Hub↔Battle、Hub→Hub、Battle 实例替换、Pod UID / instance epoch 变化或灾备接管）都必须递增 `owner_epoch`；同 epoch 重试不得重复占座、重复分配 DS 或产生第二个 owner。重复 Login / SelectRole 必须在换 coordinator generation 前 single-flight 合并或按同一 operation 幂等返回，迟到响应零副作用。
+    - **会话 fencing**：若产品采用顶号，会话权威必须校验当前 session id / JTI（或等价单调 epoch）；旧 session 不能再签 DS 票，迟到 Logout 只能 compare-delete 自己，不能删除新会话。
+    - **完成点分层**：返回票据、调用 `ClientTravel`、World BeginPlay 或 locator 出现 HUB / BATTLE 都不算完成。服务端完成点是当前 owner epoch 仍在有效 lease 内、Admission 幂等提交且该场景要求的角色 / Pawn / 玩家态创建成功，并把 owner 标记为 `ADMITTED`；客户端连接 exact DS 且收到 connection-specific ACK 后才进入本地 `PLAYABLE`。ACK 丢失时重查 / 重放同一 Admission 必须返回原 `ADMITTED` 并重新确认，不能再次分配、占座或盲目 Travel。每一阶段都有 deadline、退避 + jitter、前台唤醒驱动和可见恢复 UI；每次等待有界，整体可持续重试。
+    - **验收矩阵**：至少覆盖重复 Login / SelectRole、响应丢失、MATCHING 各阶段切后台 / 杀进程、locator / Redis / matchmaker 分区、READY push 丢失、地图加载无回调、Admission ACK 丢失、同 Hub 旧 Controller 不退出、旧 DS 分区后恢复、迟到 Logout / Heartbeat、服务进程重启以及 Stable / Canary 新旧组合。测试未覆盖前不得声称“永远不卡”“幂等进场”或“无 bug”。
 
 ## 10. AI 协作约定
 

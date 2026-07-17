@@ -17,6 +17,9 @@ import (
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/passwd"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
+	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
+	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
+	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
@@ -56,10 +59,21 @@ func (fakeSessionRepo) Set(_ context.Context, _ uint64, _, _, _ string, _ time.D
 }
 func (fakeSessionRepo) Delete(_ context.Context, _ uint64) error { return nil }
 
+func (fakeSessionRepo) GetJTI(_ context.Context, _ uint64) (string, bool, error) {
+	return "", false, nil
+}
+
+func (fakeSessionRepo) DeleteIfJTI(_ context.Context, _ uint64, _ string) (bool, error) {
+	return true, nil
+}
+
 type loginBattleAuthorizerFake struct {
 	err         error
 	target      data.BattleTicketTarget
 	returnEmpty bool
+
+	// authorizeCalls:AuthorizeBattleTicket 被调用次数(验证“resume 组不出来就不签票”零副作用)。
+	authorizeCalls int
 
 	// ---- InspectBattleRoute(Hub 门三态)可控项 ----
 	// routeStates 非空:按调用序依次弹出(TOCTOU 并发终局切换场景)。
@@ -75,6 +89,7 @@ type loginBattleAuthorizerFake struct {
 var _ data.BattleRouteInspector = (*loginBattleAuthorizerFake)(nil)
 
 func (f *loginBattleAuthorizerFake) AuthorizeBattleTicket(context.Context, uint64, uint64) (data.BattleTicketTarget, error) {
+	f.authorizeCalls++
 	if f.err != nil {
 		return data.BattleTicketTarget{}, f.err
 	}
@@ -714,6 +729,66 @@ func TestLogin_BattleReconnect_MissingIssuerDoesNotAssignHub(t *testing.T) {
 	}
 }
 
+// fakeMatchResolver 实现 data.MatchContextResolver(matchmaker 耐久权威兜底测试用)。
+type fakeMatchResolver struct {
+	out   data.PlayerMatchAuthority
+	err   error
+	calls int
+}
+
+func (f *fakeMatchResolver) ResolvePlayerMatchContext(_ context.Context, _ uint64) (data.PlayerMatchAuthority, error) {
+	f.calls++
+	return f.out, f.err
+}
+
+// TestLogin_BattleReconnect_RecoversReadyMatchWhenPresenceMissing 验证 P0-2/P0-4 修复:
+// locator presence 蒸发(TTL 过期 / READY↔投影窗口)但 matchmaker 耐久权威显示 ACTIVE+READY
+// 时,登录仍把玩家路由回原对局,绝不误进 Hub。
+func TestLogin_BattleReconnect_RecoversReadyMatchWhenPresenceMissing(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}} // 租约已蒸发
+	hub := &fakeHubAssigner{res: &data.HubAssignment{HubDSAddr: "10.0.0.9:7777", HubTicket: "must-not-be-used"}}
+	uc := newTestUsecaseWithNotifier(t, hub, notifier)
+	resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
+		State:   matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+		Stage:   matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
+		MatchID: 9001,
+	}}
+	uc.SetMatchContextResolver(resolver)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if res.MatchID != 9001 || res.BattleDSAddr == "" {
+		t.Fatalf("durable READY match must route back to battle, got match=%d addr=%q", res.MatchID, res.BattleDSAddr)
+	}
+	if res.HubDSAddr != "" || notifier.loginPendingN != 0 {
+		t.Fatalf("presence-miss recovery must not enter hub: hub=%q pending=%d", res.HubDSAddr, notifier.loginPendingN)
+	}
+	if resolver.calls == 0 {
+		t.Fatalf("matchmaker durable authority was never consulted")
+	}
+}
+
+// TestLogin_BattleReconnect_QueuedMatchStillGoesHub 验证:排队/确认/分配中的玩家本就
+// 该在 Hub 等 READY 推送,matchmaker 权威兜底不得把他们锁在门外。
+func TestLogin_BattleReconnect_QueuedMatchStillGoesHub(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	uc.SetMatchContextResolver(&fakeMatchResolver{out: data.PlayerMatchAuthority{
+		State: matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+		Stage: matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED,
+	}})
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if res.BattleDSAddr != "" || res.HubDSAddr == "" {
+		t.Fatalf("queued player must go hub, got battle=%q hub=%q", res.BattleDSAddr, res.HubDSAddr)
+	}
+}
+
 // TestLogin_BattleReconnect_NotInBattleFallsToHub 验证:玩家不在战斗中时,走正常 hub 流程,
 // battle 字段为空,且 NotifyLoginPending 被调用。
 func TestLogin_BattleReconnect_NotInBattleFallsToHub(t *testing.T) {
@@ -870,5 +945,279 @@ func TestLogin_BattleReconnect_TransientErrorRetriesThenReconnects(t *testing.T)
 	}
 	if notifier.loginPendingN != 0 {
 		t.Errorf("battle reconnect should skip NotifyLoginPending, got %d", notifier.loginPendingN)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// canonical game_mode 进 Resume(2026-07-16 修复:客户端 DS 恢复协调器
+// "rejecting unknown authoritative game_mode ''" 死循环)。
+// game_mode 唯一权威 = matchmaker 持久记录(ResolvePlayerMatchContext),
+// login 绝不按 PVE/PVP 硬编码猜测。
+// ---------------------------------------------------------------------------
+
+// presenceHitBattle 构造 locator presence 命中 BATTLE 的 fakeNotifier(真实 locator
+// 命中路径恒有 PresenceState=BATTLE,见 data/locator_client.go)。
+func presenceHitBattle(matchID uint64) *fakeNotifier {
+	return &fakeNotifier{bl: data.BattleLocation{
+		InBattle:      true,
+		MatchID:       matchID,
+		BattleAddr:    "10.1.2.3:7000",
+		PresenceState: locatorv1.LocationState_LOCATION_STATE_BATTLE,
+	}}
+}
+
+// TestLogin_BattleReconnect_ResumeCarriesCanonicalGameMode:presence 命中重连时,
+// Resume 必须携带 matchmaker 权威 game_mode——PVE(pve_coop)与 PVP(5v5_ranked)
+// 同一条读取链,无任何模式特判。stage=RUNNING(BATTLE 租约活着=玩家已在 DS 上)。
+func TestLogin_BattleReconnect_ResumeCarriesCanonicalGameMode(t *testing.T) {
+	for _, mode := range []string{"pve_coop", "5v5_ranked"} {
+		t.Run(mode, func(t *testing.T) {
+			notifier := presenceHitBattle(9001)
+			uc := newTestUsecaseWithNotifier(t, nil, notifier)
+			resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
+				State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+				Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
+				MatchID:  9001,
+				GameMode: mode,
+			}}
+			uc.SetMatchContextResolver(resolver)
+
+			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+			if err != nil {
+				t.Fatalf("Login: %v", err)
+			}
+			r := res.Resume
+			if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE || r.MatchID != 9001 {
+				t.Fatalf("Resume route/match = %v/%d, want BATTLE/9001", r.Route, r.MatchID)
+			}
+			if r.GameMode != mode {
+				t.Fatalf("Resume.GameMode = %q, want canonical %q (this is the client dead-loop bug)", r.GameMode, mode)
+			}
+			if r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING {
+				t.Fatalf("Resume.MatchStage = %v, want RUNNING (live BATTLE lease)", r.MatchStage)
+			}
+			if resolver.calls != 1 {
+				t.Fatalf("resolver calls = %d, want exactly 1", resolver.calls)
+			}
+		})
+	}
+}
+
+// TestLogin_BattleReconnect_B1FailClosedWhenGameModeUnavailable:B1 下 game_mode
+// 拿不到(权威查询失败 / claim 漂移 / 记录缺字段)→ 可重试 Unavailable,且零副作用:
+// 不签票、不派 Hub、不写 LOGIN_PENDING。缺 game_mode 的 BATTLE resume 就是交付 bug。
+func TestLogin_BattleReconnect_B1FailClosedWhenGameModeUnavailable(t *testing.T) {
+	cases := []struct {
+		name     string
+		resolver *fakeMatchResolver
+	}{
+		{"resolver_error", &fakeMatchResolver{err: errcode.New(errcode.ErrInternal, "matchmaker down")}},
+		{"active_empty_game_mode", &fakeMatchResolver{out: data.PlayerMatchAuthority{
+			State:   matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+			Stage:   matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
+			MatchID: 9001,
+		}}},
+		{"claim_match_id_drift", &fakeMatchResolver{out: data.PlayerMatchAuthority{
+			State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+			Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
+			MatchID:  8888, // ≠ locator 9001:漂移不猜
+			GameMode: "pve_coop",
+		}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			notifier := presenceHitBattle(9001)
+			hub := &fakeHubAssigner{}
+			uc := newTestUsecaseWithNotifier(t, hub, notifier)
+			authorizer := &loginBattleAuthorizerFake{}
+			ticketUC := NewTicketUsecase(uc.signer, uc.verifier, nil)
+			ticketUC.SetBattleTicketAuthorizer(authorizer)
+			uc.SetBattleTicketIssuer(ticketUC)
+			uc.SetMatchContextResolver(tc.resolver)
+			uc.SetRequireHubAssignmentBinding(true)
+
+			res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+			if errcode.As(err) != errcode.ErrUnavailable || res != nil {
+				t.Fatalf("result=%+v code=%v err=%v, want nil/Unavailable", res, errcode.As(err), err)
+			}
+			if authorizer.authorizeCalls != 0 {
+				t.Fatalf("ticket issued %d times on rejected resume path, want 0 (no side effects)", authorizer.authorizeCalls)
+			}
+			if hub.gotPlayerID != 0 || notifier.loginPendingN != 0 {
+				t.Fatalf("fail-closed path mutated hub/pending: hub_player=%d pending=%d",
+					hub.gotPlayerID, notifier.loginPendingN)
+			}
+		})
+	}
+}
+
+// TestLogin_BattleReconnect_LocalDegradesWithoutResolver:local/off 无 resolver
+// (dev 裸跑)保留历史弱降级——照常重连,game_mode 空 + 告警,不阻断登录。
+func TestLogin_BattleReconnect_LocalDegradesWithoutResolver(t *testing.T) {
+	notifier := presenceHitBattle(9001)
+	uc := newTestUsecaseWithNotifier(t, nil, notifier) // resolver 未配,B1 off
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	r := res.Resume
+	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE || r.MatchID != 9001 ||
+		r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING {
+		t.Fatalf("local degrade must still reconnect: %+v", r)
+	}
+	if r.GameMode != "" {
+		t.Fatalf("no resolver configured yet GameMode=%q; where did it come from?", r.GameMode)
+	}
+}
+
+// TestLogin_BattleReconnect_PresenceMissReadyClaimCarriesGameMode:locator 投影蒸发、
+// 由 READY claim 合成的重连,Resume 复用同一次权威查询(恰好 1 次 RPC)携带
+// game_mode,stage 按权威显式映射为 READY(而非谎报 RUNNING)。
+func TestLogin_BattleReconnect_PresenceMissReadyClaimCarriesGameMode(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}} // 租约已蒸发
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
+		State:        matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+		Stage:        matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
+		MatchID:      9001,
+		BattleDSAddr: "10.9.9.9:7000",
+		GameMode:     "pve_coop",
+	}}
+	uc.SetMatchContextResolver(resolver)
+
+	res, err := uc.Login(context.Background(), "acc", "pw", "dev-1")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	r := res.Resume
+	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE || r.MatchID != 9001 || r.GameMode != "pve_coop" {
+		t.Fatalf("synthesized reconnect resume = %+v, want BATTLE/9001/pve_coop", r)
+	}
+	if r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY {
+		t.Fatalf("Resume.MatchStage = %v, want READY (authority stage, no RUNNING lie)", r.MatchStage)
+	}
+	if resolver.calls != 1 {
+		t.Fatalf("resolver calls = %d, want exactly 1 (reuse the authority fetched by resolveBattleAuthority)", resolver.calls)
+	}
+}
+
+// signTestSession 给 GetResumeContext 测试签一个玩家 42 的有效 session token,
+// 并关掉 session 现行性门(sessions=nil → requireCurrentSession 直通,聚焦路由断言)。
+func signTestSession(t *testing.T, uc *LoginUsecase) string {
+	t.Helper()
+	uc.sessions = nil
+	tok, _, err := uc.signer.SignSession(42, "jti-resume-test")
+	if err != nil {
+		t.Fatalf("SignSession: %v", err)
+	}
+	return tok
+}
+
+// TestGetResumeContext_BattleRouteCarriesGameModeAndStage:冷启动恢复(bug 主现场,
+// login.go 原 GetResumeContext 返回缺 game_mode 的结果)必须给出 BATTLE + RUNNING +
+// canonical game_mode。
+func TestGetResumeContext_BattleRouteCarriesGameModeAndStage(t *testing.T) {
+	notifier := presenceHitBattle(9001)
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	resolver := &fakeMatchResolver{out: data.PlayerMatchAuthority{
+		State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+		Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY,
+		MatchID:  9001,
+		GameMode: "pve_coop",
+	}}
+	uc.SetMatchContextResolver(resolver)
+	tok := signTestSession(t, uc)
+
+	r, err := uc.GetResumeContext(context.Background(), tok)
+	if err != nil {
+		t.Fatalf("GetResumeContext: %v", err)
+	}
+	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_BATTLE || r.MatchID != 9001 ||
+		r.GameMode != "pve_coop" || r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING {
+		t.Fatalf("resume = %+v, want BATTLE/9001/pve_coop/RUNNING", r)
+	}
+}
+
+// TestGetResumeContext_QueuedClaimEnrichesHubRoute:排队/确认中的玩家冷启动仍回 HUB,
+// 但 Resume 带上权威 match_id/stage/game_mode——客户端必须先恢复 x-pandora-game-mode
+// 路由头才能 Cancel/Confirm/GetProgress。
+func TestGetResumeContext_QueuedClaimEnrichesHubRoute(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	uc.SetMatchContextResolver(&fakeMatchResolver{out: data.PlayerMatchAuthority{
+		State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
+		Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED,
+		MatchID:  777,
+		GameMode: "5v5_ranked",
+	}})
+	tok := signTestSession(t, uc)
+
+	r, err := uc.GetResumeContext(context.Background(), tok)
+	if err != nil {
+		t.Fatalf("GetResumeContext: %v", err)
+	}
+	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB {
+		t.Fatalf("route = %v, want HUB (queued player waits for READY push)", r.Route)
+	}
+	if r.MatchID != 777 || r.GameMode != "5v5_ranked" ||
+		r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED {
+		t.Fatalf("hub resume = %+v, want 777/5v5_ranked/QUEUED enrichment", r)
+	}
+}
+
+// TestGetResumeContext_NoClaimPlainHub:无任何撮合 claim → 裸 HUB(不带撮合字段)。
+func TestGetResumeContext_NoClaimPlainHub(t *testing.T) {
+	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	uc.SetMatchContextResolver(&fakeMatchResolver{out: data.PlayerMatchAuthority{
+		State: matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_NONE,
+	}})
+	tok := signTestSession(t, uc)
+
+	r, err := uc.GetResumeContext(context.Background(), tok)
+	if err != nil {
+		t.Fatalf("GetResumeContext: %v", err)
+	}
+	if r.Route != loginv1.ResumeRoute_RESUME_ROUTE_HUB || r.MatchID != 0 || r.GameMode != "" ||
+		r.MatchStage != loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_UNSPECIFIED {
+		t.Fatalf("plain hub resume = %+v, want empty HUB", r)
+	}
+}
+
+// TestGetResumeContext_B1FailClosedWhenResolverFails:B1 下冷启动恢复也 fail-closed:
+// presence 命中 BATTLE 但权威查询失败 → 可重试 Unavailable,绝不下发缺 game_mode 的
+// BATTLE resume。
+func TestGetResumeContext_B1FailClosedWhenResolverFails(t *testing.T) {
+	notifier := presenceHitBattle(9001)
+	uc := newTestUsecaseWithNotifier(t, nil, notifier)
+	uc.SetMatchContextResolver(&fakeMatchResolver{err: errcode.New(errcode.ErrInternal, "matchmaker down")})
+	uc.SetRequireHubAssignmentBinding(true)
+	tok := signTestSession(t, uc)
+
+	_, err := uc.GetResumeContext(context.Background(), tok)
+	if errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("code=%v err=%v, want retryable Unavailable", errcode.As(err), err)
+	}
+}
+
+// TestResumeStageFromMatchStage_ExplicitMapping:match/login 两个枚举数值语义不对齐
+// (match STARTING=1 vs login NONE=1),必须显式映射,严禁数值强转。
+func TestResumeStageFromMatchStage_ExplicitMapping(t *testing.T) {
+	cases := []struct {
+		in   matchv1.PlayerMatchResumeStage
+		want loginv1.ResumeMatchStage
+	}{
+		{matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_STARTING, loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED},
+		{matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED, loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED},
+		{matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_CONFIRMING, loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_CONFIRMING},
+		{matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_ALLOCATING, loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_ALLOCATING},
+		{matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY, loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY},
+		{matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_UNSPECIFIED, loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_UNSPECIFIED},
+	}
+	for _, tc := range cases {
+		if got := resumeStageFromMatchStage(tc.in); got != tc.want {
+			t.Errorf("resumeStageFromMatchStage(%v) = %v, want %v", tc.in, got, tc.want)
+		}
 	}
 }

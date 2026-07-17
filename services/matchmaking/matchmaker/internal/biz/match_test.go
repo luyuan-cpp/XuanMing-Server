@@ -636,15 +636,25 @@ func (f *fixture) seedTicket(t *testing.T, ctx context.Context, ticketID uint64,
 
 // ── 用例 ──────────────────────────────────────────────────────────────────────
 
-func TestStartMatch_DoesNotTreatStalePresenceAsRoutingAuthority(t *testing.T) {
+// P0 修复(2026-07-15,codex P0-8):placement 硬删后 locator BATTLE 状态门重新生效——
+// 战斗中玩家不得入队(不变量 §1 一人一 DS)。终局后 BATTLE 投影 ≤30s 自然蒸发,
+// 玩家随后可正常 StartMatch;误拦截窗口有界且可自愈。
+func TestStartMatch_RejectsPlayerInBattle(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t, 999)
 	const captain = uint64(45)
 	f.locator.mu.Lock()
-	f.locator.inBattle[captain] = true // stale TTL projection contradicts durable STABLE_HUB
+	f.locator.inBattle[captain] = true
+	f.locator.mu.Unlock()
+	if _, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0); errcode.As(err) != errcode.ErrMatchInBattle {
+		t.Fatalf("in-battle player must be rejected from queueing, got err=%v", err)
+	}
+	// BATTLE 投影蒸发后同一玩家可入队。
+	f.locator.mu.Lock()
+	delete(f.locator.inBattle, captain)
 	f.locator.mu.Unlock()
 	if id, err := f.uc.StartMatch(ctx, 7004, 7004, captain, 0); err != nil || id != 7004 {
-		t.Fatalf("stale presence overrode durable Hub placement: id=%d err=%v", id, err)
+		t.Fatalf("player outside battle must queue normally: id=%d err=%v", id, err)
 	}
 }
 

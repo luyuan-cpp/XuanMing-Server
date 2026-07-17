@@ -243,6 +243,20 @@ func (u *MatchUsecase) notifyBattle(ctx context.Context, playerIDs []uint64, mat
 	}
 }
 
+// notifyBattleStrict 是 READY 提交前的强依赖 BATTLE 投影写入(P0 修复 2026-07-15)。
+// locator 未注入(dev 裸跑)跳过;写入失败返回可重试错误,由 allocation 推进循环重试。
+func (u *MatchUsecase) notifyBattleStrict(ctx context.Context, playerIDs []uint64, matchID uint64, battlePod string) error {
+	if u.locator == nil {
+		return nil
+	}
+	if err := u.locator.NotifyBattle(ctx, playerIDs, matchID, battlePod); err != nil {
+		plog.With(ctx).Errorw("msg", "locator_notify_battle_failed_pre_ready", "match_id", matchID, "err", err)
+		return errcode.NewCause(errcode.ErrUnavailable, err,
+			"battle location projection must commit before READY for match %d", matchID)
+	}
+	return nil
+}
+
 // ensureNoneInBattle 拦截"战斗中还点匹配"：任一成员正处于 BATTLE 状态则拒绝整队入队。
 //
 // 权威来源是 player_locator（不变量 §1）。处理规则：
@@ -305,6 +319,13 @@ func (u *MatchUsecase) removeActive(ctx context.Context, matchID uint64) {
 func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32) (uint64, error) {
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID)
 	if err != nil {
+		return 0, err
+	}
+
+	// P0 修复(2026-07-15,codex P0-8):战斗中玩家不得入队。claim(preflight/SETNX)只拦
+	// "已在撒配链路里"的玩家;若上一局已 ReleaseMatch 但玩家仍在 DS 内(或 GM 拉入),
+	// 唯一能拦住的是 locator BATTLE 状态门(不变量 §1 一人一 DS)。
+	if err := u.ensureNoneInBattle(ctx, members); err != nil {
 		return 0, err
 	}
 
@@ -378,37 +399,6 @@ func (u *MatchUsecase) preflightStartClaims(ctx context.Context, members []*matc
 		}
 	}
 	return nil
-}
-
-// claimPlayer 原子声明 player→ticket 归属;撞上"指向已消失票据的僵尸 claim"时清理后重试一次。
-//
-// 僵尸 claim 来源:onMatchFailed 删拒绝者票据后、释放 claim 前崩溃等残留——claim 活着但
-// 票据已不存在,不自愈则玩家要等 claim TTL(30min)才能再匹配(典型"匹配不了")。
-// 安全性:票据存在 → 真占用,绝不碰;票据查询失败 → 保守按占用处理(fail-closed)。
-// 判据可靠的前提是 StartMatch 的写序铁律(先写票据主体再 claim):由此「claim 指向 X 而
-// X 主体不在」⇔ 真僵尸,绝无 in-flight 误判。若有人改回「先 claim 后写主体」,这里的
-// 自愈会把并发 StartMatch 的 in-flight claim 删掉 → 同批玩家双票入队(违反不变量 §1)。
-func (u *MatchUsecase) claimPlayer(ctx context.Context, playerID, ticketID uint64) (bool, error) {
-	for attempt := 0; attempt < 2; attempt++ {
-		existTID, ok, err := u.repo.ClaimPlayer(ctx, playerID, ticketID, u.ticketTTL())
-		if err != nil {
-			return false, err
-		}
-		if ok {
-			return true, nil
-		}
-		if _, found, gerr := u.repo.GetTicket(ctx, existTID); gerr != nil || found {
-			return false, gerr // 占用票据仍在(或查询失败):真占用,不自愈
-		}
-		plog.With(ctx).Warnw("msg", "start_match_reap_stale_claim",
-			"player_id", playerID, "stale_ticket_id", existTID)
-		// CAS 删:仅当 claim 仍指向这张已消失的旧票据才删。无条件删在「旧 claim 自然过期 →
-		// 并发请求写入新 claim」的窗口会误删新一局 claim(违反不变量 §1)。
-		if derr := u.repo.DeletePlayerIndexIfMatches(ctx, playerID, existTID); derr != nil {
-			return false, derr
-		}
-	}
-	return false, nil
 }
 
 const (
@@ -1676,6 +1666,15 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	}
 	dsAddr := allocation.Address
 
+	// P0 修复(2026-07-15,codex P0-4):BATTLE 投影必须先于 READY 提交写入(强依赖)。
+	// 否则 READY 推送已发、玩家已向 battle 迁移,而 locator 无 BATTLE 租约——这个窗口内
+	// 断线重登会被误路由回 Hub(双在场)。失败 → 返回错误,allocation 已 checkpoint,
+	// 推进循环重试幂等(同 match 重写 BATTLE 过 guardTransition)。
+	// 即使后续 READY CAS 失败,残留投影也只活 ≤30s(TTL),且三态门 fail-closed 可自愈。
+	if err := u.notifyBattleStrict(ctx, playerIDs, job.MatchId, dsAddr); err != nil {
+		return err
+	}
+
 	// 写 match → READY。stage 守卫:仅 ALLOCATING 可推进到 READY——若本 match 在分配期间
 	// 已被 expireOnce 判 FAILED(票据已退回队列),盲写会把 FAILED 翻成 READY,
 	// 造成"票在队列里但人被拉进战斗"的脏状态。已分配的 DS 由 battle 心跳超时补偿回收(不变量 §4)。
@@ -1704,7 +1703,7 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 		return werr
 	}
 
-	// 更新 locator 投影（弱依赖）；它不是 READY 放行证明。
+	// 投影已在 READY 前强写入(notifyBattleStrict);这里再刷一次纯属弱依赖续期,失败仅 Warn。
 	u.notifyBattle(ctx, playerIDs, job.MatchId, dsAddr)
 
 	// 每个玩家单独带自己的 battle_ticket 推 READY 进度

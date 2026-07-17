@@ -61,6 +61,16 @@ match:
   mmr_widen_per_sec: 20
   mmr_max_window: 2000
   optimistic_retry: 3
+  # leader: 后台撮合循环单写者选举(P0 修复 2026-07-15,codex P0-14)。
+  # ⚠️ 生产默认开启:副本数 >1 而未开选举 = 双写者并发推进同一 match saga,
+  # WATCH/CAS 只防单键竞态,防不了跨键 saga 交错(重复成局/重复分配 DS)。
+  # 单副本部署开着也无害(唯一副本自动当选)。与 deploy/k8s/services/services.yaml
+  # 的 matchmaker replicas 约束配套。
+  leader:
+    enabled: true
+    etcd_endpoints: ["etcd.pandora.svc.cluster.local:2379"]
+    prefix: "/pandora/prod/leader/"
+    lease_ttl_sec: 10
 
 jwt:
   issuer: "pandora-login"

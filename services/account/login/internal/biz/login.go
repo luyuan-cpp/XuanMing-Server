@@ -28,7 +28,9 @@ import (
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/passwd"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
+	locatorv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/locator/v1"
 	loginv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/login/v1"
+	matchv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/match/v1"
 	"github.com/luyuancpp/pandora/services/account/login/internal/data"
 )
 
@@ -102,6 +104,11 @@ type LoginUsecase struct {
 	// hub_allocator 故障/旧版本返回无绑定票时回退；所有 hub 入场票必须由 allocator 权威签发。
 	requireHubAssignmentBinding bool
 
+	// matchResolver 是 matchmaker 只读权威兜底(P0 修复 2026-07-15,codex P0-2/P0-3/P0-4)。
+	// locator 是 30s TTL presence 投影,不能当"玩家不在对局"的证明;matchmaker 的
+	// player claim + match 记录才是耐久事实。nil = presence-only(dev/local 兼容)。
+	matchResolver data.MatchContextResolver
+
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md 三层化地基)。
 	// 可为 nil:单 Cell / dev 部署不路由,登录返回 region/cell = 0。多 Cell 部署由 main
 	// 经 SetCellRouter 注入(配静态表或 etcdtable 热更新表)。nil-safe,不阻断登录。
@@ -128,6 +135,11 @@ type LoginUsecase struct {
 // SetBattleTicketIssuer 在服务启动、对外监听前注入统一的 Battle 票据签发入口。
 func (u *LoginUsecase) SetBattleTicketIssuer(issuer BattleTicketIssuer) {
 	u.battleTicketIssuer = issuer
+}
+
+// SetMatchContextResolver 注入 matchmaker 只读权威客户端(可 nil,presence-only 降级)。
+func (u *LoginUsecase) SetMatchContextResolver(r data.MatchContextResolver) {
+	u.matchResolver = r
 }
 
 // NewLoginUsecase 构造 LoginUsecase。
@@ -350,12 +362,94 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	}, nil
 }
 
-func (u *LoginUsecase) buildBattleReconnectResume(matchID uint64) ResumeContextResult {
+// resumeStageFromMatchStage 显式映射 matchmaker 权威 stage → login resume stage。
+// 两个枚举数值语义并不对齐(match STARTING=1 vs login NONE=1),严禁数值强转。
+func resumeStageFromMatchStage(s matchv1.PlayerMatchResumeStage) loginv1.ResumeMatchStage {
+	switch s {
+	case matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_STARTING:
+		// start saga 在飞:对客户端等价于已受理排队。
+		return loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED
+	case matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED:
+		return loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_QUEUED
+	case matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_CONFIRMING:
+		return loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_CONFIRMING
+	case matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_ALLOCATING:
+		return loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_ALLOCATING
+	case matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY:
+		return loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_READY
+	default:
+		return loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_UNSPECIFIED
+	}
+}
+
+// hubResumeFromMatchAuthority 组装 HUB 路由的 ResumeContext。玩家持有活跃撮合 claim
+// (排队/确认/分配中)时带上 match_id/stage/game_mode——冷启动客户端必须先恢复
+// x-pandora-game-mode 路由头才能 Cancel/Confirm/GetProgress
+// (login.proto ResumeContext.game_mode 契约)。无 claim / 未查到 → 裸 HUB。
+func hubResumeFromMatchAuthority(ma *data.PlayerMatchAuthority) ResumeContextResult {
+	out := ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}
+	if ma != nil && ma.State == matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE {
+		out.MatchID = ma.MatchID
+		out.MatchStage = resumeStageFromMatchStage(ma.Stage)
+		out.GameMode = ma.GameMode
+	}
+	return out
+}
+
+// buildBattleResume 组装 BATTLE 路由的 ResumeContext。game_mode 必须来自 matchmaker
+// 持久权威(ResolvePlayerMatchContext 的 canonical 读,PVE/PVP 记录同源可解),
+// login 不做任何硬编码猜测。
+//
+// ma 是 resolveBattleAuthority 已查得的权威(presence 未命中、由 READY claim 合成
+// 的路径);presence 命中的快路径 ma==nil,这里补查一次(零副作用只读)。
+//
+// stage:presence 命中(locator BATTLE 租约活着)= RUNNING(玩家已在 DS 上);
+// 由 READY claim 合成 = 按权威 stage 显式映射(READY)。
+//
+// fail-closed(B1):game_mode 拿不到(resolver 未配/查询失败/claim 漂移/记录缺字段)
+// → ErrUnavailable 可重试。缺 game_mode 的 BATTLE resume 会让客户端 DS 恢复协调器
+// 无法恢复路由头(rejecting unknown authoritative game_mode),交付它就是交付 bug。
+// local/off 保留弱降级(空 game_mode + 告警,dev 裸跑不阻断)。
+func (u *LoginUsecase) buildBattleResume(
+	ctx context.Context, playerID uint64, bl data.BattleLocation, ma *data.PlayerMatchAuthority,
+) (ResumeContextResult, error) {
+	h := plog.With(ctx)
+	if ma == nil && u.matchResolver != nil {
+		fetched, merr := u.matchResolver.ResolvePlayerMatchContext(ctx, playerID)
+		if merr != nil {
+			if u.requireHubAssignmentBinding {
+				return ResumeContextResult{}, errcode.NewCause(errcode.ErrUnavailable, merr,
+					"cannot resolve canonical game_mode for battle resume; retry")
+			}
+			h.Warnw("msg", "battle_resume_game_mode_query_degraded", "err", merr, "player_id", playerID)
+		} else {
+			ma = &fetched
+		}
+	}
+	gameMode := ""
+	if ma != nil &&
+		ma.State == matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE &&
+		ma.MatchID == bl.MatchID {
+		gameMode = ma.GameMode
+	}
+	if gameMode == "" {
+		if u.requireHubAssignmentBinding {
+			return ResumeContextResult{}, errcode.New(errcode.ErrUnavailable,
+				"canonical game_mode unavailable for battle resume (match_id=%d); retry", bl.MatchID)
+		}
+		h.Warnw("msg", "battle_resume_game_mode_missing",
+			"player_id", playerID, "match_id", bl.MatchID)
+	}
+	stage := loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING
+	if bl.PresenceState != locatorv1.LocationState_LOCATION_STATE_BATTLE && ma != nil {
+		stage = resumeStageFromMatchStage(ma.Stage)
+	}
 	return ResumeContextResult{
 		Route:      loginv1.ResumeRoute_RESUME_ROUTE_BATTLE,
-		MatchID:    matchID,
-		MatchStage: loginv1.ResumeMatchStage_RESUME_MATCH_STAGE_RUNNING,
-	}
+		MatchID:    bl.MatchID,
+		MatchStage: stage,
+		GameMode:   gameMode,
+	}, nil
 }
 
 // ResolveBattleEndpoint 为 authenticated IssueDSTicket(battle) 与完整 Login
@@ -418,6 +512,69 @@ func (u *LoginUsecase) queryBattleLocation(ctx context.Context, playerID uint64)
 	return data.BattleLocation{}, lastErr
 }
 
+// resolveBattleAuthority 是"玩家是否在对局"的统一判定入口(P0 修复 2026-07-15)。
+//
+// 层次:
+//  1. locator presence(30s 租约投影):命中 BATTLE → 直接返回(快路径,后续仍经
+//     InspectBattleRoute 三态门验真)。
+//  2. presence 未命中:租约可能蒸发/投影未写(READY 与 notifyBattle 之间的窗口)。
+//     查 matchmaker 耐久权威(player claim + match 记录,ReleaseMatch 才释放):
+//     ACTIVE+READY → 合成 InBattle=true 返回(后续同样过三态门,终局残留 claim
+//     会被 Terminal 分流回 Hub,不会误锁);ACTIVE 早期阶段(排队/确认/分配中)
+//     → 玩家物理上本就该在 Hub(撒配从 Hub 发起,READY 推送走 hub 连接),不改路由;
+//     NONE → Hub。UNKNOWN/查询失败 → B1 fail-closed 可重试,local/off 弱降级。
+//
+// 第二返回值是本次已查得的 matchmaker 权威(含 canonical game_mode/stage),供调用方
+// 组装 ResumeContext 时复用,避免重复 RPC;presence 命中的快路径不查,返 nil
+// (game_mode 由 buildBattleResume 按需补查)。
+//
+// matchResolver 未配(dev/local) → 退化为纯 presence 判定(历史行为)。
+func (u *LoginUsecase) resolveBattleAuthority(ctx context.Context, playerID uint64) (data.BattleLocation, *data.PlayerMatchAuthority, error) {
+	h := plog.With(ctx)
+	bl, err := u.queryBattleLocation(ctx, playerID)
+	if err != nil {
+		return data.BattleLocation{}, nil, err
+	}
+	if bl.InBattle || u.matchResolver == nil {
+		return bl, nil, nil
+	}
+	ma, merr := u.matchResolver.ResolvePlayerMatchContext(ctx, playerID)
+	if merr != nil {
+		if u.requireHubAssignmentBinding {
+			return data.BattleLocation{}, nil, errcode.NewCause(errcode.ErrUnavailable, merr,
+				"cannot consult durable match authority; retry")
+		}
+		h.Warnw("msg", "match_authority_query_degraded", "err", merr, "player_id", playerID)
+		return bl, nil, nil // local/off 弱降级:保留 presence 判定。
+	}
+	switch ma.State {
+	case matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE:
+		if ma.Stage == matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_READY && ma.MatchID != 0 {
+			// READY 局但 locator 投影缺失(TTL 蒸发 / notifyBattle 窗口):以耐久权威为准。
+			h.Infow("msg", "battle_authority_recovered_from_match_claim",
+				"player_id", playerID, "match_id", ma.MatchID)
+			return data.BattleLocation{
+				InBattle:      true,
+				MatchID:       ma.MatchID,
+				BattleAddr:    ma.BattleDSAddr,
+				PresenceState: bl.PresenceState,
+			}, &ma, nil
+		}
+		// 排队/确认/分配中:玩家应在 Hub 等 READY 推送,不改路由。
+		return bl, &ma, nil
+	case matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_NONE:
+		return bl, &ma, nil
+	default:
+		// UNKNOWN(索引漂移/坏记录):B1 不猜,可重试;local/off 弱降级。
+		if u.requireHubAssignmentBinding {
+			return data.BattleLocation{}, nil, errcode.New(errcode.ErrUnavailable,
+				"durable match authority state unknown; retry")
+		}
+		h.Warnw("msg", "match_authority_state_unknown_degraded", "player_id", playerID)
+		return bl, nil, nil
+	}
+}
+
 // tryBattleReconnect 检测玩家是否在 battle DS 中掉线,是则组装"直连 battle DS 重连"的
 // LoginResult(docs/design/battle-reconnect.md §2.1)。返回 nil 表示未命中重连 → 调用方继续
 // 走正常 hub 登录流程。
@@ -438,7 +595,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 ) (*LoginResult, error) {
 	h := plog.With(ctx)
 
-	bl, err := u.queryBattleLocation(ctx, playerID)
+	bl, ma, err := u.resolveBattleAuthority(ctx, playerID)
 	if err != nil {
 		h.Warnw("msg", "battle_location_query_failed", "err", err, "player_id", playerID)
 		if u.requireHubAssignmentBinding {
@@ -476,6 +633,13 @@ func (u *LoginUsecase) tryBattleReconnect(
 			"battle route authority temporarily unavailable; retry")
 	}
 
+	// 先拿 canonical game_mode/stage 再签票:resume 组不出来(B1 fail-closed)时
+	// 直接可重试退出,不留已签票据的副作用。
+	resume, resumeErr := u.buildBattleResume(ctx, playerID, bl, ma)
+	if resumeErr != nil {
+		return nil, resumeErr
+	}
+
 	battleResult, terr := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
 		ctx, playerID, bl.MatchID, regionID, cellID)
 	if terr != nil {
@@ -509,7 +673,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 		MatchID:           bl.MatchID,
 		RegionID:          regionID,
 		CellID:            cellID,
-		Resume:            u.buildBattleReconnectResume(bl.MatchID),
+		Resume:            resume,
 	}, nil
 }
 
@@ -525,10 +689,13 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 		return ResumeContextResult{}, errcode.New(errcode.ErrUnauthorized, "invalid session")
 	}
 	playerID := claims.PlayerID()
+	if cerr := u.requireCurrentSession(ctx, playerID, claims.ID); cerr != nil {
+		return ResumeContextResult{}, cerr
+	}
 	if u.notifier == nil {
 		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
 	}
-	bl, qerr := u.queryBattleLocation(ctx, playerID)
+	bl, ma, qerr := u.resolveBattleAuthority(ctx, playerID)
 	if qerr != nil {
 		if u.requireHubAssignmentBinding {
 			return ResumeContextResult{}, errcode.NewCause(errcode.ErrUnavailable, qerr,
@@ -537,7 +704,9 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
 	}
 	if !bl.InBattle {
-		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
+		// HUB 路由:若持有活跃撮合 claim(排队/确认/分配中),把权威
+		// match_id/stage/game_mode 带给冷启动客户端恢复撮合会话。
+		return hubResumeFromMatchAuthority(ma), nil
 	}
 	if u.battleTicketIssuer == nil {
 		return ResumeContextResult{}, errcode.New(errcode.ErrUnavailable,
@@ -546,7 +715,7 @@ func (u *LoginUsecase) GetResumeContext(ctx context.Context, sessionToken string
 	state, rerr := u.battleTicketIssuer.InspectBattleRoute(ctx, playerID, bl.MatchID)
 	switch state {
 	case data.BattleRouteActive:
-		return u.buildBattleReconnectResume(bl.MatchID), nil
+		return u.buildBattleResume(ctx, playerID, bl, ma)
 	case data.BattleRouteTerminal:
 		return ResumeContextResult{Route: loginv1.ResumeRoute_RESUME_ROUTE_HUB}, nil
 	default:
@@ -709,7 +878,7 @@ func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, pla
 		}
 		return nil // local/off 无 locator:保留历史行为(dev 裸跑)。
 	}
-	bl, err := u.queryBattleLocation(ctx, playerID)
+	bl, _, err := u.resolveBattleAuthority(ctx, playerID) // hub 门只关心在局与否,不需要 game_mode
 	if err != nil {
 		if u.requireHubAssignmentBinding {
 			return errcode.NewCause(errcode.ErrUnavailable, err,
@@ -915,10 +1084,60 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 		h.Warnw("msg", "logout_session_no_player")
 		return nil
 	}
-	if err := u.sessions.Delete(ctx, playerID); err != nil {
+	// P0 修复(2026-07-15,codex P0-10):只删"本 token 对应的那一代 session"。
+	// 顶号后旧设备的迟到 Logout 携带旧 jti,CAS 不命中 → 不影响新设备 session。
+	deleted, err := u.sessions.DeleteIfJTI(ctx, playerID, claims.ID)
+	if err != nil {
 		h.Errorw("msg", "logout_session_del_failed", "err", err, "player_id", playerID)
 		return err
 	}
+	if !deleted {
+		h.Infow("msg", "logout_stale_session_ignored", "player_id", playerID)
+		return nil
+	}
 	h.Infow("msg", "logout_ok", "player_id", playerID)
 	return nil
+}
+
+// requireCurrentSession 校验调用方持有的 session token 仍是"当前一代"(P0 修复
+// 2026-07-15,codex P0-10)。JWT 验签只证明"曾经登录过",不证明"未被顶号":
+// 顶号后旧 token 在 exp 前仍能验过,两台设备可各自拿票造成双在场。
+// 本门用 Redis session 的 jti 做现行性判定:不匹配 = 已被新登录取代,拒绝。
+// sessions 未配(dev 裸跑) → 跳过;Redis 故障 → 可重试 Unavailable(fail-closed)。
+func (u *LoginUsecase) requireCurrentSession(ctx context.Context, playerID uint64, jti string) error {
+	if u.sessions == nil {
+		return nil
+	}
+	cur, found, err := u.sessions.GetJTI(ctx, playerID)
+	if err != nil {
+		return errcode.NewCause(errcode.ErrUnavailable, err, "session authority unavailable; retry")
+	}
+	if !found {
+		return errcode.New(errcode.ErrUnauthorized, "session expired or logged out; login again")
+	}
+	if jti == "" || cur != jti {
+		plog.With(ctx).Warnw("msg", "session_superseded_rejected", "player_id", playerID)
+		return errcode.New(errcode.ErrUnauthorized, "session superseded by a newer login")
+	}
+	return nil
+}
+
+// RequireCurrentSessionToken 供 service 层在携带原始 token 的 RPC(IssueDSTicket)上
+// 做现行性门:验签 + 与 ctx 已鉴权 playerID 一致 + jti 为当前一代。
+// 注:SelectRole 请求体无 token(只能靠 Envoy 验签),现行性门暂无法覆盖,待 proto 加字段。
+func (u *LoginUsecase) RequireCurrentSessionToken(ctx context.Context, playerID uint64, sessionToken string) error {
+	if u.sessions == nil || u.verifier == nil {
+		return nil
+	}
+	if sessionToken == "" {
+		if u.requireHubAssignmentBinding {
+			return errcode.New(errcode.ErrUnauthorized, "session token required")
+		}
+		return nil // dev 兼容:旧客户端未传 token 时不阻断。
+	}
+	claims, err := u.verifier.VerifySession(sessionToken)
+	if err != nil || claims.PlayerID() == 0 || claims.PlayerID() != playerID {
+		return errcode.New(errcode.ErrUnauthorized, "session token invalid for caller")
+	}
+	return u.requireCurrentSession(ctx, playerID, claims.ID)
 }

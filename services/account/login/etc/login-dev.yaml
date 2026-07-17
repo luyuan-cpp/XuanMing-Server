@@ -106,10 +106,16 @@ login:
     addr: "127.0.0.1:50021"
     region: "cn"
 
-  # Durable match/start-operation authority used by ResumeContext and the
-  # conservative one-time placement migration. Required in placement enforce.
+  # matchmaker 只读权威兜底(P0 修复 2026-07-15):locator presence 未命中 BATTLE 时,
+  # 再查 ResolvePlayerMatchContext(player claim + match 记录是耐久事实,不靠 30s TTL)。
+  # READY 局即使投影蒸发也能把玩家路由回原 battle。addr 留空 → presence-only。
+  # auth_secret/auth_audience:login→matchmaker 内部服务鉴权(internalrpcauth),
+  # 必须与 matchmaker-dev.yaml 的 match_resume_auth_secret/audience 一致;
+  # 读路径 canonical,PVE(pve_coop)记录同样可经此实例解析(共享 Redis)。
   matchmaker:
     addr: "127.0.0.1:50011"
+    auth_secret: "pandora-dev-match-resume-auth-key-v1!"
+    auth_audience: "matchmaker:5v5_ranked"
 
   # Battle→Hub physical departure authority. In placement enforce this must
   # point at ds_allocator; Login first fences the old ticket in locator, then

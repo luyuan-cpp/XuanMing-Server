@@ -173,11 +173,6 @@ func (g *GrpcDSAllocator) SignBattleTickets(
 	return tickets, nil
 }
 
-func isB1BoundBattleResponse(resp *dsv1.AllocateBattleResponse) bool {
-	return resp != nil && (resp.GetGameserverUid() != "" || resp.GetInstanceEpoch() != 0 ||
-		resp.GetAllocationId() != "" || resp.GetReleaseTrack() != "")
-}
-
 // battleTargetFromResponse 从 AllocateBattleResponse 提取 v2 实例绑定。
 // 三个实例字段缺一即拒(旧 ds_allocator / 降级路径),保证 v2 票永远带完整绑定。
 func battleTargetFromResponse(resp *dsv1.AllocateBattleResponse, matchID uint64) (auth.DSTicketTarget, error) {

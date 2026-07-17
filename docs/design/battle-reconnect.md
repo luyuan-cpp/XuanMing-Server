@@ -3,11 +3,21 @@
 > 玩家已匹配进入 battle DS 后掉线,重新登录应直接回到那场对局的 battle DS,而不是被丢回大厅。
 > 本文记录该能力的设计与落地(服务级决策,CLAUDE.md §5/§7)。
 >
-> **状态(2026-07-15)**:第一阶段基于短 TTL locator 的方案已升级为持久版本化 placement +
-> Admission 最终门 + durable saga/outbox + UE 单写者 Coordinator。§1~§2.2 保留问题演进背景；
-> 当前权威语义以 §2.3、§7.3.1、§7.5 和 `decision-revisit-ds-callback-auth.md`
-> §7.16.3~§7.17 为准。本轮又补上 Hub/Battle **物理源离场证明**，所以“逻辑路由已切换”不再能
-> 代替“旧 DS 的 PlayerController/Pawn 已退出世界”。
+> **状态(2026-07-15,硬切简化后)**:持久版本化 placement 已整体删除(简化决策:回到"最简化+标准")。
+> 当前权威模型:
+> - **路由投影**:`player_locator` 30s 租约 presence,由 ds_allocator 心跳续期;它只是投影,不是持久权威。
+> - **持久权威**:matchmaker 的 match claim(`ResolvePlayerMatchContext` 只读 RPC)。login 侧
+>   `resolveBattleAuthority` 先查 presence,查不到时向 matchmaker 查 claim:ACTIVE+READY+match_id
+>   → 按战斗路由重签票据(claim 即权威);更早阶段/NONE → Hub。matchmaker 在 READY 提交**之前**
+>   强一致写 locator 投影(`notifyBattleStrict`),提交后再弱一致重申。
+> - **准入门**:Battle DS 侧 InspectBattleRoute 三态门 + Hub Admission ACK(connection-specific
+>   nonce);World BeginPlay 不是权威证明,客户端 Coordinator travel 后必须复核 GetResumeContext。
+> - **会话围栏**:单写者 session JTI(Redis);GetResumeContext/Logout/IssueDSTicket 均校验
+>   当前 JTI,旧会话操作零副作用。
+> - **物理离场证明**依然保留:"逻辑路由已切换"不能代替"旧 DS 的 PlayerController/Pawn 已退出世界"。
+>
+> 下文 §1~§2.2 保留问题演进背景;涉及"版本化 placement / durable saga/outbox / placement 上下文"
+> 的段落为**历史方案**,已随硬切废弃,阅读时以本状态块为准。
 
 ## 1. 问题与定性
 

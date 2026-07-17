@@ -92,6 +92,13 @@ type LoginConf struct {
 	// addr 为空 → 不调,回退自签 hub 票据 + MockHubDSAddr(便于本机不起 hub_allocator 也能跑通 login)。
 	Hub HubClientConf `yaml:"hub,omitempty" json:"hub,omitempty"`
 
+	// Match(P0 修复 2026-07-15):matchmaker 只读权威兜底。locator presence 未命中 BATTLE
+	// 时,login 再查 matchmaker ResolvePlayerMatchContext——player claim + match 记录是
+	// "玩家是否属于活跃对局"的耐久事实(不靠 30s TTL)。READY 局即使 locator 投影缺失
+	// 也能把玩家路由回原 battle,防 Hub/Battle 双在场。
+	// addr 为空 → 不查,presence-only(dev/local 兼容);B1 生产建议必配。
+	Match MatchClientConf `yaml:"matchmaker,omitempty" json:"matchmaker,omitempty"`
+
 	// AllowedRoleIDs 是选角白名单(选角权威化 2026-07-08,SelectRole RPC 服务端校验)。
 	// 对齐客户端 CfgMisc.DefaultRoleIDs(选角界面可选列表)。
 	// 非空 = 严格白名单;空 = fail-closed,SelectRole 一律拒绝(防改包客户端签任意 role_id
@@ -108,6 +115,24 @@ type LocatorClientConf struct {
 	// Addr player_locator gRPC 端口(默认 127.0.0.1:50006)。
 	// 留空仅允许 local/off；Hub assignment binding 激活时 Validate 会拒绝启动。
 	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
+}
+
+// MatchClientConf 是 login 调 matchmaker 的客户端参数(P0 修复 2026-07-15)。
+type MatchClientConf struct {
+	// Addr matchmaker gRPC 端口(默认 127.0.0.1:50008)。
+	// 留空 → 不查 matchmaker 耐久权威,仅凭 locator presence 判断在局(dev/local)。
+	Addr string `yaml:"addr,omitempty" json:"addr,omitempty"`
+
+	// AuthSecret 是 login→matchmaker ResolvePlayerMatchContext 的内部服务鉴权密钥
+	// (pkg/internalrpcauth,HMAC + Redis nonce 防重放)。必须与所连 matchmaker 的
+	// match.match_resume_auth_secret 一致,且是独立随机密钥(≥32 字节,不得复用玩家 JWT)。
+	// 留空 → 不签名(仅容忍 matchmaker 未启用 resume auth 的裸 dev;启用环境会被拒)。
+	AuthSecret string `yaml:"auth_secret,omitempty" json:"auth_secret,omitempty"`
+
+	// AuthAudience 是鉴权受众,必须与 matchmaker 的 match_resume_auth_audience 一致
+	// (如 matchmaker:5v5_ranked)。读路径是 canonical 的:PVE 玩家的 pve_coop 记录
+	// 同样能从这一实例解析出来(共享 Redis),无需每个 game_mode 各拨一路。
+	AuthAudience string `yaml:"auth_audience,omitempty" json:"auth_audience,omitempty"`
 }
 
 // HubClientConf 是 login 调 hub_allocator 的客户端参数(W4 ⑥)。

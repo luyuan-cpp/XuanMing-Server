@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
 	"github.com/luyuancpp/pandora/pkg/dsauthfence"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
+	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
@@ -143,6 +145,14 @@ func main() {
 		}
 	}()
 
+	// matchmaker 只读权威客户端(P0 修复 2026-07-15):addr 为空 → presence-only
+	matchResolver, matchConn, matchMode := mustBuildMatchResolver(&cfg, helper)
+	defer func() {
+		if matchConn != nil {
+			_ = matchConn.Close()
+		}
+	}()
+
 	// Hub allocator 的 v2 票与 Session/legacy HS256 是独立信任域。Login 主登录链和
 	// VerifyDSTicket 诊断链共用同一份完整 overlap JWKS verifier，但分别显式注入各自 usecase。
 	var v2Verifier *auth.DSTicketVerifier
@@ -167,6 +177,7 @@ func main() {
 	// 6. biz + service 装配
 	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, v2Verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
+	loginUC.SetMatchContextResolver(matchResolver)
 	if cfg.Login.DevSkipPassword {
 		helper.Warnw("msg", "DEV_SKIP_PASSWORD_ENABLED",
 			"warn", "password verification disabled + unknown accounts auto-provisioned; NEVER enable in prod")
@@ -263,6 +274,7 @@ func main() {
 		"jti_repo", repoEnabled(jtiRepo != nil),
 		"locator_notifier", locatorMode,
 		"hub_assigner", hubMode,
+		"match_resolver", matchMode,
 		"require_hub_assignment_binding", cfg.Login.RequireHubAssignmentBinding,
 		"ds_auth_mode", cfg.DSAuth.Mode,
 		"ds_auth_authority_mode", cfg.DSAuth.AuthorityMode,
@@ -388,6 +400,34 @@ func mustBuildHubAssigner(cfg *conf.Config, h kratosHelper) (data.HubAssigner, l
 	conn := grpcclient.MustDialInsecure(addr)
 	h.Infow("msg", "hub_allocator_dial_ok", "addr", addr, "region", cfg.Login.Hub.Region)
 	return data.NewGrpcHubAssigner(conn), conn, "grpc"
+}
+
+// mustBuildMatchResolver 按 cfg.Login.Match.Addr 决定是否拨号到 matchmaker(P0 修复 2026-07-15)。
+// addr 空 → 返回 nil resolver(biz 走 presence-only,dev/local 兼容);拨号失败 → panic。
+// auth_secret 配置后每次调用携带 internalrpcauth 服务身份签名(matchmaker 强制校验);
+// secret 非法(太短等) → panic(配置错误 fail-fast);addr 已配但 secret 缺失 → 告警
+// (启用 resume auth 的 matchmaker 会拒绝裸调,权威兑底等于失效)。
+func mustBuildMatchResolver(cfg *conf.Config, h kratosHelper) (data.MatchContextResolver, locatorConnLike, string) {
+	addr := cfg.Login.Match.Addr
+	if addr == "" {
+		h.Warnw("msg", "matchmaker_authority_disabled_in_config",
+			"hint", "set login.matchmaker.addr to enable durable battle-authority fallback (P0-2/P0-3)")
+		return nil, nil, "disabled"
+	}
+	var signer *internalrpcauth.Signer
+	if cfg.Login.Match.AuthSecret != "" {
+		s, serr := internalrpcauth.NewSigner(cfg.Login.Match.AuthSecret, "login", cfg.Login.Match.AuthAudience)
+		if serr != nil {
+			panic(fmt.Sprintf("login.matchmaker.auth_secret/auth_audience invalid: %v", serr))
+		}
+		signer = s
+	} else {
+		h.Errorw("msg", "matchmaker_resume_auth_secret_missing",
+			"hint", "set login.matchmaker.auth_secret/auth_audience to match matchmaker match_resume_auth_*; unsigned calls are rejected")
+	}
+	conn := grpcclient.MustDialInsecure(addr)
+	h.Infow("msg", "matchmaker_dial_ok", "addr", addr, "resume_auth", signer != nil)
+	return data.NewGrpcMatchContextResolver(conn, signer), conn, "grpc"
 }
 
 // kratosHelper 是 *klog.Helper 的简化接口,避免 main.go 导出泛型。
