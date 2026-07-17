@@ -78,7 +78,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 跨服务必须保持的不变量。任何改动违反这些 → PR review 直接拒。
 
-1. **玩家在线只能在一个 DS**(player_locator 强制)
+1. **玩家同一时刻只能在一个可操作 DS**(由唯一 owner authority 的每玩家 `owner_epoch`、短 owner lease fencing 与 Admission 交接屏障强制；player_locator 只作 presence / 最近活跃投影)
 2. **战斗结果幂等**(同一 match_id 只落库一次)
 3. **DS 票据短时效**(JWT exp 5min)
 4. **DS 崩溃必有补偿**(Battle DS 15s 心跳超时 → abandoned → 段位回滚;Hub DS 默认 30s 超时 → draining/停止分配)
@@ -144,8 +144,10 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     状态必须按语义拆开，不能让一个易失 TTL 同时承担在线展示和玩家归属：
     - `LOCATION_STATE_HUB` / `BATTLE` 是 player_locator 的短期 **presence / 最近活跃投影**，按需查询且不在其它服务复制；key miss 只能说明 presence 不可见，**不能**单独证明玩家已离开旧 DS，也不能授权进入另一台 DS。
     - 选角结果查询角色权威，匹配阶段查询 matchmaker 权威；locator 中若暂留 `MATCHING`，也只能是投影，不能替代 durable match stage。
-    - 当前哪台 DS 有权控制和修改玩家，必须有一份最小玩家 owner 权威：**每玩家**单调不回退的 `owner_epoch`（不同于 DS `instance_epoch`、writer epoch、session epoch）、owner 类型、exact DS identity、稳定 `operation_id` 和最多 `PENDING / ADMITTED` 两阶段；短 owner lease 只限制物理残留窗口，不得扩展成通用 placement saga、多套 proof 或影子状态。
+    - 当前哪台 DS 有权控制和修改玩家，必须有一份最小玩家 owner 权威：**每玩家**单调不回退的 `owner_epoch`（不同于 DS `instance_epoch`、writer epoch、session epoch）、owner 类型、exact DS identity、稳定 `operation_id`、短 lease 截止、迁移 `admit_not_before` 屏障和最多 `PENDING / ADMITTED` 两阶段；owner 记录不能因 TTL 消失，短 lease 只限制旧 DS 可操作的物理残留窗口，不得扩展成通用 placement saga、多套 proof 或影子状态。
     - 只有唯一 owner authority 能通过受控 transition API 原子修改 owner；Login、matchmaker、allocator、DS 等只能查询或提交绑定 `operation_id` 的命令，不得各自 raw CAS 同一记录。获得业务权限必须同时匹配当前 `owner_epoch` 且 owner lease 未过期；连续续租失败进入安全余量或已无法证明 lease 有效时，立即停止接收新输入、跨服务回调和持久化 / 外部权威写，到期必须 Kick / Despawn。票据、Admission、Heartbeat、Logout、跨服务回调和持久化写都继承 / 校验 epoch；局内纯内存操作从已绑定 epoch 的连接上下文继承即可。旧 epoch 不得影响当前 owner 或业务状态，但允许幂等、精确地清理仅属于自己 epoch 的旧连接、Pawn / 玩家态、seat、lease 和审计记录。
+    - **脑裂下只能有一个可玩 DS**：owner authority 及其底层存储必须提供线性一致读 / CAS、法定多数侧单写和“已确认写在故障切换后不回滚”；`owner_epoch`、lease 截止、`admit_not_before` 与 `PENDING → ADMITTED` 必须处于同一个线性一致事务域，禁止把 owner 放 MySQL、准入 lease / 屏障放 Redis 或 etcd 后再跨存储“先查后写”。普通 Redis TTL / 主从异步复制、Redlock、locator key miss、Pod 存活或本机时间都不能充当 owner 权威。切换 exact target 时，唯一 authority 用一次 CAS 把 `E/旧 target` 推进为 `E+1/PENDING/新 target`，并把 CAS 线性化点观察到的旧 lease 最晚安全截止时间（含已先完成的并发续租和时钟 / 网络安全余量）写入 `admit_not_before`；CAS 后旧 epoch 的续租一律失败。新 DS 在屏障打开前只能预留目标和加载地图级资源，不得创建可操作 Pawn / 玩家态、处理输入、产生业务写、提交 `ADMITTED` 或向客户端确认 `PLAYABLE`；屏障打开后仍须线性重查并以 exact `(player_id, owner_epoch, operation_id, DS instance identity)` CAS `PENDING → ADMITTED`。Admission 回包丢失只幂等返回同一结果，不得再分配或创建第二 owner。
+    - 旧 DS 只把**当前 epoch 的成功续租响应**视为续租成功；已发送请求、超时 / UNKNOWN、缓存、locator 心跳或客户端仍连着都不算。它必须用单调时钟保存一个比 authority 屏障更早的本地安全截止时间，失联或到期时先原子关闭该玩家输入与所有业务输出，再 Kick / Despawn；进程暂停 / 网络分区后恢复时，在处理任何积压输入或 Tick 前先重查 epoch / lease，旧 epoch 只能精确清理自身残留。Stable / Canary 必须共享同一 owner authority、epoch / lease 语义和 Admission 门，任何 release track 都不得绕过屏障。核心时序必须满足：`旧 DS 最晚停止可玩时间 < 新 DS 最早开始可玩时间`。
 
     当前 `docs/design/go-services.md` §2.6 与 `docs/design/battle-reconnect.md` 仍含旧的 TTL 路由 / placement 叙述；在同步修订前不得把它们当作实现或验收依据，以本条为准。
 
@@ -156,6 +158,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     - **端到端幂等**：一次真实进场 / owner 迁移使用一个稳定 `operation_id`：登录→选角→首个 Hub、Hub→Battle、Battle→Hub 分别是新的 operation；同目标重连、重复点击、请求重试、响应丢失、回调重复 / 乱序、前后台切换和服务重启继续原 operation。ID 在首次请求前生成并保留到客户端 `PLAYABLE`、明确取消或终态；冷启动丢失本地 ID 时必须先查询并恢复服务端当前 operation，不能竞争创建第二个。分配、归属切换和 Admission 用 CAS / 唯一键原子推进；单次票据可以安全重签新 JTI，但票据本身不是幂等键。任何 exact owner identity 变化（Hub↔Battle、Hub→Hub、Battle 实例替换、Pod UID / instance epoch 变化或灾备接管）都必须递增 `owner_epoch`；同 epoch 重试不得重复占座、重复分配 DS 或产生第二个 owner。重复 Login / SelectRole 必须在换 coordinator generation 前 single-flight 合并或按同一 operation 幂等返回，迟到响应零副作用。
     - **会话 fencing**：若产品采用顶号，会话权威必须校验当前 session id / JTI（或等价单调 epoch）；旧 session 不能再签 DS 票，迟到 Logout 只能 compare-delete 自己，不能删除新会话。
     - **完成点分层**：返回票据、调用 `ClientTravel`、World BeginPlay 或 locator 出现 HUB / BATTLE 都不算完成。服务端完成点是当前 owner epoch 仍在有效 lease 内、Admission 幂等提交且该场景要求的角色 / Pawn / 玩家态创建成功，并把 owner 标记为 `ADMITTED`；客户端连接 exact DS 且收到 connection-specific ACK 后才进入本地 `PLAYABLE`。ACK 丢失时重查 / 重放同一 Admission 必须返回原 `ADMITTED` 并重新确认，不能再次分配、占座或盲目 Travel。每一阶段都有 deadline、退避 + jitter、前台唤醒驱动和可见恢复 UI；每次等待有界，整体可持续重试。
+    - **脑裂时安全优先但不能永久卡流程**：为了守住一人一 DS，可以在新 owner 的 `admit_not_before` 前返回带明确原因、`retry_after` 和 deadline 的 `WAIT`，但必须保留 session 与原 `operation_id`，由同一 coordinator 的 watchdog 到期重查，不能等待旧 DS 某个可能永不到达的回调。旧 lease 到期且 authority / 健康 DS 恢复后必须自动继续，无需重登、手工清状态或另走 fallback。若 owner authority 永久失去法定多数或长期无容量，“立即进入新 DS”与“绝不双 DS”无法同时保证，此时只能停在可见、可交互、可持续重试 / 可退出的 UI；不得默认 Hub、清 session、黑屏或静默 loading。这里的“永不卡”是没有内部永久中间态或无出口等待，并以 authority 与容量最终恢复为收敛前提，不能靠放开第二个 DS 换取表面可用性。
     - **验收矩阵**：至少覆盖重复 Login / SelectRole、响应丢失、MATCHING 各阶段切后台 / 杀进程、locator / Redis / matchmaker 分区、READY push 丢失、地图加载无回调、Admission ACK 丢失、同 Hub 旧 Controller 不退出、旧 DS 分区后恢复、迟到 Logout / Heartbeat、服务进程重启以及 Stable / Canary 新旧组合。测试未覆盖前不得声称“永远不卡”“幂等进场”或“无 bug”。
 
 ## 10. AI 协作约定
