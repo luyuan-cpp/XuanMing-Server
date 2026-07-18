@@ -510,10 +510,11 @@ message SubscribeRequest {
 }
 
 message PushFrame {
-  string topic     = 1;  // pandora.team.update / pandora.match.progress / ...
+  string topic     = 1;  // pandora.team.update / pandora.match.progress / ...(= 业务域,粗路由)
   bytes  payload   = 2;  // 业务 Event message 序列化(如 TeamUpdateEvent)
   int64  ts_ms     = 3;
   string trace_id  = 4;
+  uint32 event_type = 5; // 域内事件类型(细路由);0=该 topic 现有旧事件。见 go-services.md「域内多事件类型路由」
 }
 ```
 

@@ -139,3 +139,20 @@ message ListMyOrdersResponse {
   uint64 next_cursor_order_id = 3;  // has_more=true 时为本页末 order_id,否则为 0
   bool has_more = 4;
 }
+
+// ===== 预留:域内推送事件类型判别键(当前无面向玩家的 push 通道)=====
+//
+// ⚠️ 现状:auction 域现有的 AuctionMatchEvent 是**服务内部 + 风控对账**事件(kafka key=match_id),
+// **不是面向玩家的推送**,客户端不消费;auction 目前对客户端**无 push 通道**(靠 ListMarket/
+// ListMyOrders 主动拉取)。
+// 这里**预先占位**一个域内事件类型判别键,和 team/match/friend 对齐同一套路由模型
+//(见 pandora/push/v1/push.proto §event_type、docs/design/go-services.md「域内多事件类型路由」),
+// 以便将来给 auction 接入面向玩家的 push(如「挂单成交/被超价/撤单退回」实时提醒)时,判别键就位。
+//
+// 落地顺序(将来接入 push 时):新增面向玩家的事件 message + producer 发 kafka(带 event_type
+// header)+ push consumer 透传 + 客户端新建订阅 Model。届时:
+//   - 0(UNSPECIFIED)= 接入时的首个/基础推送事件;
+//   - 结构不同的后续事件从 1 起顺延,只增不复用。
+enum AuctionPushEventType {
+  AUCTION_PUSH_EVENT_TYPE_UNSPECIFIED = 0;  // 预留;将来接入 push 时 = 首个/基础事件
+}

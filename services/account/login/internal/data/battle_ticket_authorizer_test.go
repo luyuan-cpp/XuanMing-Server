@@ -130,8 +130,9 @@ func TestInspectBattleRouteExplicitThreeState(t *testing.T) {
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("ended fresh heartbeat", 1001, BattleRouteTerminal, 0)
 
-	// abandoned = 心跳超时判死:再入屏障生效(pkg/placement.DSFenceReentryBarrier=25s)。
-	// 分区的旧 DS 可能仍有可玩玩家,必须等它的 20s 自我 fencing 上限 + 5s 余量过去。
+	// abandoned = 心跳超时判死:再入屏障生效(pkg/placement.DSFenceReentryBarrier=27s)。
+	// 分区的旧 DS 可能仍有可玩玩家,必须等它的 20s 自我 fencing 上限 + 7s 余量
+	// (4s 响应在途 + 1s 检测粒度 + ≥2s 服务间时钟漂移预留)过去。
 	record.State = "abandoned"
 	record.LastHeartbeatMs = now.Add(-time.Minute).UnixMilli() // 屏障已过 → Terminal
 	setAdmissionProto(t, mr, key, record)
@@ -141,7 +142,13 @@ func TestInspectBattleRouteExplicitThreeState(t *testing.T) {
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("abandoned inside barrier", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
 
-	record.LastHeartbeatMs = now.Add(-25 * time.Second).UnixMilli() // 恰好到达屏障边界(等于即放行)
+	// 旧屏障值(25s)必须仍在新屏障内:锁住 2026-07-18 的时钟漂移预留扩容,
+	// 任何把余量改回 ≤5s 的回退都会让本用例转为 Terminal 而失败。
+	record.LastHeartbeatMs = now.Add(-25 * time.Second).UnixMilli()
+	setAdmissionProto(t, mr, key, record)
+	assertRoute("abandoned inside skew reserve", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
+
+	record.LastHeartbeatMs = now.Add(-27 * time.Second).UnixMilli() // 恰好到达屏障边界(等于即放行)
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("abandoned at barrier boundary", 1001, BattleRouteTerminal, 0)
 

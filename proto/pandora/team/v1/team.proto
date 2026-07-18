@@ -86,7 +86,10 @@ message TeamStorageRecord {
 // ===== RPC =====
 
 message CreateTeamRequest {
-  uint64 player_id = 1;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // player_id 已删:身份一律以 JWT x-pandora-player-id 为准,客户端无需也不应自报。
+  // 保留字段号 1(勿复用):老客户端仍会发 field 1(varint),复用会让其字节被误解。
+  reserved 1;
+  reserved "player_id";
 }
 
 message CreateTeamResponse {
@@ -167,7 +170,10 @@ message GetTeamResponse {
 // 带宽说明:这是登录进大厅调一次的 unary,5 人队 Team 序列化后 ~200 字节,
 // 比拆成两次 RPC(先查 team_id 再 GetTeam)更省;Team 本身已是 §5.11 客户端最小视图。
 message GetMyTeamRequest {
-  uint64 player_id = 1;  // 服务端以 JWT x-pandora-player-id 为准,此字段忽略
+  // player_id 已删:服务端从 JWT x-pandora-player-id 取 player_id,客户端无需也不应自报。
+  // 保留字段号 1(勿复用):老客户端仍会发 field 1(varint),复用会让其字节被误解。
+  reserved 1;
+  reserved "player_id";
 }
 
 message GetMyTeamResponse {
@@ -183,6 +189,26 @@ message GetMyTeamResponse {
 // 消费方:push 服务 KafkaConsumer → ConnectionManager.SendTo → 客户端 server stream。
 //
 // 该 message 通过 KafkaEnvelope.payload 传输,不通过 gRPC 直接 stream。
+
+// TeamPushEventType 是 pandora.team.update **域内的事件类型判别键**,
+// 填入 PushFrame.event_type(见 pandora/push/v1/push.proto §event_type)。
+//
+// 作用:pandora.team.update 这一个 topic 下要承载多种「结构不同」的事件 message;
+//       客户端按 (topic=pandora.team.update, event_type) 定位该反序列化哪个 message。
+//       这样域内加新事件类型**不新增 topic**(拒绝 topic 爆炸)。
+//
+// ⚠️ 与 TeamUpdateReason 是两个不同的轴,别混:
+//   - TeamPushEventType:选「哪个 message」(TeamUpdateEvent vs 将来的 TeamInviteEvent...)。
+//   - TeamUpdateReason  :在 TeamUpdateEvent **内部**说明「这次 update 为什么触发」(播动画/音效)。
+//
+// 编号规则:**每域独立**(team 的 1 与 match 的 1 无关);**0 永远 = 现有 TeamUpdateEvent**
+// (兼容正在游戏中的老客户端:老 producer 不填→缺省 0→旧事件);枚举值只增不复用。
+enum TeamPushEventType {
+  TEAM_PUSH_EVENT_TYPE_UNSPECIFIED = 0;  // = TeamUpdateEvent(旧事件,向后兼容)
+  TEAM_PUSH_EVENT_TYPE_INVITE      = 1;  // payload=TeamInviteEvent(邀请专属事件,见下)
+  // 将来新增(示例,当前未启用):
+  //   TEAM_PUSH_EVENT_TYPE_DISBAND = 2;  // payload=TeamDisbandEvent
+}
 
 // TeamUpdateReason 描述本次 TeamUpdateEvent 的触发原因,供客户端决定播放哪段动画/音效。
 // 枚举值编号永不复用(只 reserved)。
@@ -210,5 +236,31 @@ message TeamUpdateEvent {
   // 6-9 reserved
   reserved 6 to 9;
   TeamUpdateReason reason    = 10;  // 变更原因;客户端用于播动画/音效
-  uint64           invite_id = 11;  // reason=INVITE_SENT 时填;其他 reason 为 0
+  // ⚠️ invite_id 为历史字段:邀请曾复用 TeamUpdateEvent(reason=INVITE_SENT)承载。
+  //    新客户端改用独立的 TeamInviteEvent(event_type=TEAM_PUSH_EVENT_TYPE_INVITE)。
+  //    金丝雀共存期生产者"双发"(TeamConf.invite_push_mode=dual):老客户端认此字段、
+  //    新客户端认独立事件,各弹一次不双弹。全量铺完新客户端后切 dedicated 停发本字段
+  //    (字节兼容,勿删勿改号)。
+  uint64           invite_id = 11;  // [legacy] reason=INVITE_SENT 时填;其他 reason 为 0
+}
+
+// TeamInviteEvent 是「收到组队邀请」的**专属事件**,通过 PushFrame.event_type=
+// TEAM_PUSH_EVENT_TYPE_INVITE(=1)投递到 topic pandora.team.update。
+//
+// 为什么独立成一个 message(而不是继续塞进 TeamUpdateEvent):
+//   邀请只需「谁邀请我、进哪个队、令牌、何时过期」这几项,不需要 team 全量快照,
+//   也不属于「队伍成员变更」语义。塞进 TeamUpdateEvent 会让那个 message 随事件种类
+//   膨胀成宽表(每种事件挂一批专属字段、对其他事件全是废字段)。event_type 的本意
+//   就是「每种事件 payload 是它自己的 proto」,故邀请独立成 TeamInviteEvent。
+//
+// 客户端收到后弹「接受/拒绝」邀请框;AcceptInvite 时回传 invite_id 供服务端校验未过期。
+message TeamInviteEvent {
+  uint64 team_id       = 1;  // 邀请加入的队伍
+  uint64 invite_id     = 2;  // 邀请令牌;AcceptInvite 回传校验未过期/未取消
+  uint64 inviter_id    = 3;  // 发起邀请的玩家(队内成员)
+  uint64 to_player_id  = 4;  // 被邀请人(也是 kafka key)
+  int64  ts_ms         = 5;  // 事件产生时间(unix ms)
+  int64  expires_at_ms = 6;  // 邀请过期时间(unix ms),与 InviteResponse.expires_at_ms 一致
+  // 7-9 reserved(将来如需队长昵称等展示字段)
+  reserved 7 to 9;
 }

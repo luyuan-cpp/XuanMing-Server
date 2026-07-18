@@ -97,7 +97,7 @@ func NewLocatorUsecase(repo data.LocationRepo, ttl time.Duration, presence ...Pr
 	}
 	// 脑裂再入屏障机械下限(pkg/placement 契约,2026-07-16):BATTLE presence 是
 	// login/matchmaker 再入门(tryBattleReconnect/ensureNoneInBattle)的第一道信号,
-	// 其 TTL 必须 ≥ DS 授权租约上限 + 偏差余量(25s),保证 presence 蒸发、各门放行时
+	// 其 TTL 必须 ≥ DS 授权租约上限 + 偏差余量(27s),保证 presence 蒸发、各门放行时
 	// 分区的旧 DS 已对存量玩家完成自我 fencing。正确性下限,配置调低机械抬回。
 	if ttl < placement.DSFenceReentryBarrier {
 		ttl = placement.DSFenceReentryBarrier

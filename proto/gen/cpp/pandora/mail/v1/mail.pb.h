@@ -60,6 +60,8 @@ namespace mail {
 namespace v1 {
 enum MailChannel : int;
 extern const uint32_t MailChannel_internal_data_[];
+enum MailPushEventType : int;
+extern const uint32_t MailPushEventType_internal_data_[];
 enum MailStatus : int;
 extern const uint32_t MailStatus_internal_data_[];
 class ClaimMailRequest;
@@ -207,6 +209,9 @@ template <>
 internal::EnumTraitsT<::pandora::mail::v1::MailChannel_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::mail::v1::MailChannel>;
 template <>
+internal::EnumTraitsT<::pandora::mail::v1::MailPushEventType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::mail::v1::MailPushEventType>;
+template <>
 internal::EnumTraitsT<::pandora::mail::v1::MailStatus_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::mail::v1::MailStatus>;
 }  // namespace protobuf
@@ -297,6 +302,45 @@ template <>
 [[nodiscard]] inline bool MailStatus_Parse(
     ::absl::string_view name, MailStatus* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<MailStatus>(MailStatus_descriptor(), name,
+                                           value);
+}
+enum MailPushEventType : int {
+  MAIL_PUSH_EVENT_TYPE_UNSPECIFIED = 0,
+  MailPushEventType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  MailPushEventType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t MailPushEventType_internal_data_[];
+inline constexpr MailPushEventType MailPushEventType_MIN =
+    static_cast<MailPushEventType>(0);
+inline constexpr MailPushEventType MailPushEventType_MAX =
+    static_cast<MailPushEventType>(0);
+[[nodiscard]] inline bool MailPushEventType_IsValid(int value) {
+  return 0 <= value && value <= 0;
+}
+inline constexpr int MailPushEventType_ARRAYSIZE = 0 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+MailPushEventType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(MailPushEventType) {
+  return MailPushEventType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& MailPushEventType_Name(T value) {
+  static_assert(::std::is_same<T, MailPushEventType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to MailPushEventType_Name().");
+  return MailPushEventType_Name(static_cast<MailPushEventType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& MailPushEventType_Name(MailPushEventType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<MailPushEventType_descriptor, 0, 0>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool MailPushEventType_Parse(
+    ::absl::string_view name, MailPushEventType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<MailPushEventType>(MailPushEventType_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -6437,6 +6481,12 @@ struct is_proto_enum<::pandora::mail::v1::MailStatus> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::mail::v1::MailStatus>() {
   return ::pandora::mail::v1::MailStatus_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::mail::v1::MailPushEventType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::mail::v1::MailPushEventType>() {
+  return ::pandora::mail::v1::MailPushEventType_descriptor();
 }
 
 }  // namespace protobuf

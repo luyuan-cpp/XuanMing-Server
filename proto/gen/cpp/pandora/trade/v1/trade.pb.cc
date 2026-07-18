@@ -1678,7 +1678,7 @@ const ::_pbi::ClassData* ListMyOrdersResponse_get_class_data() {
 }  // namespace trade
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2ftrade_2fv1_2ftrade_2eproto[1];
+    file_level_enum_descriptors_pandora_2ftrade_2fv1_2ftrade_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2ftrade_2fv1_2ftrade_2eproto = nullptr;
 const ::uint32_t
@@ -1851,16 +1851,18 @@ const char descriptor_table_protodef_pandora_2ftrade_2fv1_2ftrade_2eproto[] ABSL
     "_SELLER_CONFIRMED\020\003\022\031\n\025ORDER_STATE_COMPL"
     "ETED\020\004\022\026\n\022ORDER_STATE_FAILED\020\005\022\027\n\023ORDER_"
     "STATE_EXPIRED\020\006\022\030\n\024ORDER_STATE_CANCELED\020"
-    "\0072\204\003\n\014TradeService\022Z\n\013CreateOrder\022$.pand"
-    "ora.trade.v1.CreateOrderRequest\032%.pandor"
-    "a.trade.v1.CreateOrderResponse\022]\n\014Confir"
-    "mOrder\022%.pandora.trade.v1.ConfirmOrderRe"
-    "quest\032&.pandora.trade.v1.ConfirmOrderRes"
-    "ponse\022Z\n\013CancelOrder\022$.pandora.trade.v1."
-    "CancelOrderRequest\032%.pandora.trade.v1.Ca"
-    "ncelOrderResponse\022]\n\014ListMyOrders\022%.pand"
-    "ora.trade.v1.ListMyOrdersRequest\032&.pando"
-    "ra.trade.v1.ListMyOrdersResponseb\006proto3"
+    "\007*;\n\022TradePushEventType\022%\n!TRADE_PUSH_EV"
+    "ENT_TYPE_UNSPECIFIED\020\0002\204\003\n\014TradeService\022"
+    "Z\n\013CreateOrder\022$.pandora.trade.v1.Create"
+    "OrderRequest\032%.pandora.trade.v1.CreateOr"
+    "derResponse\022]\n\014ConfirmOrder\022%.pandora.tr"
+    "ade.v1.ConfirmOrderRequest\032&.pandora.tra"
+    "de.v1.ConfirmOrderResponse\022Z\n\013CancelOrde"
+    "r\022$.pandora.trade.v1.CancelOrderRequest\032"
+    "%.pandora.trade.v1.CancelOrderResponse\022]"
+    "\n\014ListMyOrders\022%.pandora.trade.v1.ListMy"
+    "OrdersRequest\032&.pandora.trade.v1.ListMyO"
+    "rdersResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2ftrade_2fv1_2ftrade_2eproto_deps[1] = {
@@ -1870,7 +1872,7 @@ static ::absl::once_flag descriptor_table_pandora_2ftrade_2fv1_2ftrade_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2ftrade_2fv1_2ftrade_2eproto = {
     false,
     false,
-    2120,
+    2181,
     descriptor_table_protodef_pandora_2ftrade_2fv1_2ftrade_2eproto,
     "pandora/trade/v1/trade.proto",
     &descriptor_table_pandora_2ftrade_2fv1_2ftrade_2eproto_once,
@@ -1893,6 +1895,13 @@ OrderState_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t OrderState_internal_data_[] = {
     524288u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TradePushEventType_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2ftrade_2fv1_2ftrade_2eproto);
+  return file_level_enum_descriptors_pandora_2ftrade_2fv1_2ftrade_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t TradePushEventType_internal_data_[] = {
+    65536u, 0u, };
 // ===================================================================
 
 TradeItem::TradeItem(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

@@ -95,3 +95,18 @@ message ListMyOrdersResponse {
   repeated Order orders = 2;
   uint64 next_cursor = 3;  // 0=无更多
 }
+
+// ===== 预留:域内推送事件类型判别键(当前无 push 通道)=====
+//
+// ⚠️ 现状:trade 域**尚无任何 kafka/push 通道**(客户端靠 ListMyOrders 等主动拉取)。
+// 这里**预先占位**一个域内事件类型判别键,和 team/match/friend 对齐同一套路由模型
+//(见 pandora/push/v1/push.proto §event_type、docs/design/go-services.md「域内多事件类型路由」),
+// 以便将来给 trade 接入 push(如「对方已确认/交易完成/超时」实时提醒)时,判别键结构已就位。
+//
+// 落地顺序(将来接入 push 时):新增事件 message + producer 发 kafka(带 event_type header)+
+// push consumer 透传 + 客户端新建订阅 Model。届时:
+//   - 0(UNSPECIFIED)= 接入时的首个/基础推送事件;
+//   - 结构不同的后续事件从 1 起顺延,只增不复用。
+enum TradePushEventType {
+  TRADE_PUSH_EVENT_TYPE_UNSPECIFIED = 0;  // 预留;将来接入 push 时 = 首个/基础事件
+}

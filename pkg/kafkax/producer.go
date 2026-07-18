@@ -198,6 +198,46 @@ func (p *KeyOrderedProducer) SendRaw(ctx context.Context, key string, payload []
 	return nil
 }
 
+// HeaderEventType 是 push 域内事件类型判别键的 kafka header 名。
+// push consumer 从此 header 读出值填入 PushFrame.event_type;
+// 缺省(老 producer 不填)→ consumer 读到 0 → 客户端按该 topic 的旧事件解析(向后兼容)。
+const HeaderEventType = "event_type"
+
+// SendRawWithEventType 与 SendRaw 相同,额外在 kafka header 里带上 event_type
+// (push 域内多事件类型路由的判别键,详见 pandora/push/v1/push.proto)。
+// eventType=0 时不写 header(等价于 SendRaw),避免给现网旧事件平白加 header。
+func (p *KeyOrderedProducer) SendRawWithEventType(ctx context.Context, key string, payload []byte, eventType uint32) error {
+	if p.isClosed() {
+		return fmt.Errorf("producer closed")
+	}
+
+	partition, ok := p.consistent.GetPartition(key)
+	if !ok {
+		return fmt.Errorf("no partition")
+	}
+
+	pm := &sarama.ProducerMessage{
+		Topic:     p.topic,
+		Key:       sarama.StringEncoder(key),
+		Value:     sarama.ByteEncoder(payload),
+		Partition: partition,
+		Timestamp: time.Now(),
+	}
+	if eventType != 0 {
+		pm.Headers = []sarama.RecordHeader{{
+			Key:   []byte(HeaderEventType),
+			Value: []byte(strconv.FormatUint(uint64(eventType), 10)),
+		}}
+	}
+
+	if _, _, err := p.producer.SendMessage(pm); err != nil {
+		atomic.AddInt64(&p.errorCount, 1)
+		return fmt.Errorf("send: %w", err)
+	}
+	atomic.AddInt64(&p.successCount, 1)
+	return nil
+}
+
 // PushToPlayers 把同一份 payload 按 player_id 路由分发到 N 个玩家(W3 ④,2026-06-05)。
 //
 // 这是 push 推送的统一入口,**业务服必须走本方法**,review 时只看一处:
@@ -231,6 +271,31 @@ func (p *KeyOrderedProducer) PushToPlayers(
 		if err := p.SendRaw(ctx, strconv.FormatUint(pid, 10), payload); err != nil {
 			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d err=%v",
 				p.topic, pid, err)
+			lastErr = err
+			continue
+		}
+		sent++
+	}
+	return sent, lastErr
+}
+
+// PushToPlayersWithEventType 与 PushToPlayers 相同(排除 caller、按 player_id 路由分发),
+// 额外给每条消息带上 event_type header(push 域内多事件类型路由判别键)。
+// eventType=0 时行为等价于 PushToPlayers(不写 header)。
+func (p *KeyOrderedProducer) PushToPlayersWithEventType(
+	ctx context.Context,
+	callerPlayerID uint64,
+	toPlayerIDs []uint64,
+	payload []byte,
+	eventType uint32,
+) (sent int, lastErr error) {
+	for _, pid := range toPlayerIDs {
+		if pid == callerPlayerID {
+			continue
+		}
+		if err := p.SendRawWithEventType(ctx, strconv.FormatUint(pid, 10), payload, eventType); err != nil {
+			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d event_type=%d err=%v",
+				p.topic, pid, eventType, err)
 			lastErr = err
 			continue
 		}

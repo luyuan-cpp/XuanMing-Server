@@ -235,7 +235,7 @@ func (v *VU) actGetProfile(ctx context.Context) {
 
 func (v *VU) actGetMyTeam(ctx context.Context) {
 	_ = v.timed("team.GetMyTeam", func() error {
-		_, e := v.pool.Team.GetMyTeam(v.authCtx(ctx), &teamv1.GetMyTeamRequest{PlayerId: v.playerID})
+		_, e := v.pool.Team.GetMyTeam(v.authCtx(ctx), &teamv1.GetMyTeamRequest{})
 		return e
 	})
 }
@@ -276,7 +276,7 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 	// 1) 建队(单人队即可施压撮合 / 锚定埋点)。
 	var teamID uint64
 	if err := v.timed("team.CreateTeam", func() error {
-		resp, e := v.pool.Team.CreateTeam(v.authCtx(ctx), &teamv1.CreateTeamRequest{PlayerId: v.playerID})
+		resp, e := v.pool.Team.CreateTeam(v.authCtx(ctx), &teamv1.CreateTeamRequest{})
 		if e != nil {
 			return e
 		}

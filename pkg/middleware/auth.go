@@ -12,9 +12,12 @@ package middleware
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 
 	"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/middleware"
+	"github.com/go-kratos/kratos/v2/transport"
 
 	plog "github.com/luyuancpp/pandora/pkg/log"
 )
@@ -74,4 +77,40 @@ func PlayerIDFromContext(ctx context.Context) uint64 {
 		}
 	}
 	return extractPlayerID(ctx)
+}
+
+// SessionJTIFromContext 从 Envoy jwt_authn 验签后透传的 x-pandora-jwt-payload 头
+// 提取会话 JWT 的 jti(会话现行性门用,防顶号后旧设备继续拿票,CLAUDE.md §9.23)。
+//
+// 只在客户端面(:8443)可信:该头在入站被无条件剥离、仅验签成功后由 Envoy 重写。
+// 请求体不带 token 的鉴权 RPC(SelectRole)靠它读 jti;取不到返回 ""(直连内网端口
+// 联调 / DS 面无 jwt_authn),由业务侧按 profile 决定 fail-closed 还是放行。
+func SessionJTIFromContext(ctx context.Context) string {
+	tr, ok := transport.FromServerContext(ctx)
+	if !ok {
+		return ""
+	}
+	return ParseJWTPayloadJTI(tr.RequestHeader().Get(MetadataKeyJWTPayload))
+}
+
+// ParseJWTPayloadJTI 解析 Envoy forward_payload_header 的 base64url JSON,取 jti。
+// 纯函数供测试;任何解码 / 结构异常都返回 ""(调用方按"头缺失"同等处理)。
+func ParseJWTPayloadJTI(payload string) string {
+	if payload == "" {
+		return ""
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		// Envoy 输出无 padding;兼容带 padding 的实现差异后仍失败才放弃。
+		if raw, err = base64.URLEncoding.DecodeString(payload); err != nil {
+			return ""
+		}
+	}
+	var claims struct {
+		JTI string `json:"jti"`
+	}
+	if json.Unmarshal(raw, &claims) != nil {
+		return ""
+	}
+	return claims.JTI
 }

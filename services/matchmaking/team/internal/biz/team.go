@@ -35,8 +35,13 @@ import (
 // 实现由 main 装配时注入(kafkax.KeyOrderedProducer.PushToPlayers 包装)。
 type TeamEventPusher interface {
 	// PushTeamUpdate 向 toPlayerIDs 广播队伍变更事件字节(不发给 callerPlayerID)。
-	// payload 是 proto.Marshal(teamv1.TeamUpdateEvent) 的结果。
+	// payload 是 proto.Marshal(teamv1.TeamUpdateEvent) 的结果,event_type 缺省 0(旧事件)。
 	PushTeamUpdate(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte) (sent int, err error)
+
+	// PushTeamEvent 与 PushTeamUpdate 相同,额外指定 push 域内事件类型判别键 event_type
+	// (填入 PushFrame.event_type),供客户端按 (topic, event_type) 定位反序列化哪个 message。
+	// eventType=0 时等价 PushTeamUpdate。用于邀请等「payload 是各自独立 proto」的专属事件。
+	PushTeamEvent(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte, eventType uint32) (sent int, err error)
 }
 
 // MatchCanceler 是“离队/踢人 → 撤销 matchmaker 匹配票据”联动的抽象接口。
@@ -236,9 +241,24 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 		return nil, err
 	}
 
-	// push INVITE_SENT 给 target(不发给 inviter — 原则 2)
-	u.pushUpdate(ctx, inviterID, []uint64{targetPlayerID}, team,
-		teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
+	// push 邀请给 target(不发给 inviter — 原则 2)。
+	// 邀请是「payload 各自独立 proto」的专属事件。老客户端只认 TeamUpdateEvent(reason=INVITE_SENT),
+	// 新客户端只认独立 TeamInviteEvent(已不再从 TeamUpdateEvent 读邀请)。灰度共存期靠"双发"喂饱两代:
+	//   - dual(默认):两条都发。老客户端 legacy 弹框、把独立事件误解成 TeamUpdateEvent→护栏(InviteId/
+	//     TeamId>0)不过→只多一次无害快照不误弹;新客户端忽略 legacy、只在独立事件弹框。各弹一次不双弹。
+	//   - dedicated:只发独立事件(全量铺完新客户端后用)。
+	//   - legacy:只发旧事件(回退用)。
+	switch u.cfg.InvitePushMode {
+	case "legacy":
+		u.pushUpdate(ctx, inviterID, []uint64{targetPlayerID}, team,
+			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
+	case "dedicated":
+		u.pushInvite(ctx, inviterID, targetPlayerID, teamID, inviteID)
+	default: // "dual"(含空串):共存期双发,金丝雀安全
+		u.pushInvite(ctx, inviterID, targetPlayerID, teamID, inviteID)
+		u.pushUpdate(ctx, inviterID, []uint64{targetPlayerID}, team,
+			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
+	}
 
 	plog.With(ctx).Infow("msg", "team_invite_sent",
 		"team_id", teamID, "inviter_id", inviterID,
@@ -656,6 +676,34 @@ func (u *TeamUsecase) pushUpdate(
 			plog.With(ctx).Warnw("msg", "team_push_failed",
 				"team_id", team.GetTeamId(), "to_player_id", pid, "reason", reason.String(), "err", err)
 		}
+	}
+}
+
+// pushInvite 构造独立的 TeamInviteEvent 并以 event_type=INVITE(=1)推送给被邀请人。
+// 由 Invite 按 InvitePushMode 调用(dual/dedicated 会调,legacy 不调)。
+func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID, teamID, inviteID uint64) {
+	if u.pusher == nil || targetPlayerID == 0 {
+		return
+	}
+	now := time.Now().UnixMilli()
+	event := &teamv1.TeamInviteEvent{
+		TeamId:      teamID,
+		InviteId:    inviteID,
+		InviterId:   inviterID,
+		ToPlayerId:  targetPlayerID,
+		TsMs:        now,
+		ExpiresAtMs: now + u.cfg.InviteTTL.Std().Milliseconds(),
+	}
+	payload, err := proto.Marshal(event)
+	if err != nil {
+		plog.With(ctx).Warnw("msg", "team_invite_marshal_failed",
+			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
+		return
+	}
+	const eventTypeInvite = uint32(teamv1.TeamPushEventType_TEAM_PUSH_EVENT_TYPE_INVITE)
+	if _, err := u.pusher.PushTeamEvent(ctx, inviterID, []uint64{targetPlayerID}, payload, eventTypeInvite); err != nil {
+		plog.With(ctx).Warnw("msg", "team_invite_push_failed",
+			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
 	}
 }
 

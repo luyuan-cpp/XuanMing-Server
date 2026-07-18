@@ -3774,7 +3774,7 @@ const ::_pbi::ClassData* MatchStorageRecord_get_class_data() {
 }  // namespace match
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2fmatch_2fv1_2fmatch_2eproto[6];
+    file_level_enum_descriptors_pandora_2fmatch_2fv1_2fmatch_2eproto[7];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2fmatch_2fv1_2fmatch_2eproto = nullptr;
 const ::uint32_t
@@ -4234,27 +4234,29 @@ const char descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto[] ABSL
     "H_RESUME_STAGE_QUEUED\020\002\022(\n$PLAYER_MATCH_"
     "RESUME_STAGE_CONFIRMING\020\003\022(\n$PLAYER_MATC"
     "H_RESUME_STAGE_ALLOCATING\020\004\022#\n\037PLAYER_MA"
-    "TCH_RESUME_STAGE_READY\020\005*\242\001\n\022MatchConfir"
-    "mStatus\022$\n MATCH_CONFIRM_STATUS_UNSPECIF"
-    "IED\020\000\022 \n\034MATCH_CONFIRM_STATUS_PENDING\020\001\022"
-    "!\n\035MATCH_CONFIRM_STATUS_ACCEPTED\020\002\022!\n\035MA"
-    "TCH_CONFIRM_STATUS_REJECTED\020\0032\363\004\n\014MatchS"
-    "ervice\022W\n\nStartMatch\022#.pandora.match.v1."
-    "StartMatchRequest\032$.pandora.match.v1.Sta"
-    "rtMatchResponse\022Z\n\013CancelMatch\022$.pandora"
-    ".match.v1.CancelMatchRequest\032%.pandora.m"
-    "atch.v1.CancelMatchResponse\022]\n\014ConfirmMa"
-    "tch\022%.pandora.match.v1.ConfirmMatchReque"
-    "st\032&.pandora.match.v1.ConfirmMatchRespon"
-    "se\022i\n\020GetMatchProgress\022).pandora.match.v"
-    "1.GetMatchProgressRequest\032*.pandora.matc"
-    "h.v1.GetMatchProgressResponse\022]\n\014Release"
-    "Match\022%.pandora.match.v1.ReleaseMatchReq"
-    "uest\032&.pandora.match.v1.ReleaseMatchResp"
-    "onse\022\204\001\n\031ResolvePlayerMatchContext\0222.pan"
-    "dora.match.v1.ResolvePlayerMatchContextR"
-    "equest\0323.pandora.match.v1.ResolvePlayerM"
-    "atchContextResponseb\006proto3"
+    "TCH_RESUME_STAGE_READY\020\005*;\n\022MatchPushEve"
+    "ntType\022%\n!MATCH_PUSH_EVENT_TYPE_UNSPECIF"
+    "IED\020\000*\242\001\n\022MatchConfirmStatus\022$\n MATCH_CO"
+    "NFIRM_STATUS_UNSPECIFIED\020\000\022 \n\034MATCH_CONF"
+    "IRM_STATUS_PENDING\020\001\022!\n\035MATCH_CONFIRM_ST"
+    "ATUS_ACCEPTED\020\002\022!\n\035MATCH_CONFIRM_STATUS_"
+    "REJECTED\020\0032\363\004\n\014MatchService\022W\n\nStartMatc"
+    "h\022#.pandora.match.v1.StartMatchRequest\032$"
+    ".pandora.match.v1.StartMatchResponse\022Z\n\013"
+    "CancelMatch\022$.pandora.match.v1.CancelMat"
+    "chRequest\032%.pandora.match.v1.CancelMatch"
+    "Response\022]\n\014ConfirmMatch\022%.pandora.match"
+    ".v1.ConfirmMatchRequest\032&.pandora.match."
+    "v1.ConfirmMatchResponse\022i\n\020GetMatchProgr"
+    "ess\022).pandora.match.v1.GetMatchProgressR"
+    "equest\032*.pandora.match.v1.GetMatchProgre"
+    "ssResponse\022]\n\014ReleaseMatch\022%.pandora.mat"
+    "ch.v1.ReleaseMatchRequest\032&.pandora.matc"
+    "h.v1.ReleaseMatchResponse\022\204\001\n\031ResolvePla"
+    "yerMatchContext\0222.pandora.match.v1.Resol"
+    "vePlayerMatchContextRequest\0323.pandora.ma"
+    "tch.v1.ResolvePlayerMatchContextResponse"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_deps[1] = {
@@ -4264,7 +4266,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto = {
     false,
     false,
-    6467,
+    6528,
     descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto,
     "pandora/match/v1/match.proto",
     &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_once,
@@ -4316,9 +4318,16 @@ PlayerMatchResumeStage_descriptor() {
 PROTOBUF_CONSTINIT const uint32_t PlayerMatchResumeStage_internal_data_[] = {
     393216u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-MatchConfirmStatus_descriptor() {
+MatchPushEventType_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto);
   return file_level_enum_descriptors_pandora_2fmatch_2fv1_2fmatch_2eproto[5];
+}
+PROTOBUF_CONSTINIT const uint32_t MatchPushEventType_internal_data_[] = {
+    65536u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+MatchConfirmStatus_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto);
+  return file_level_enum_descriptors_pandora_2fmatch_2fv1_2fmatch_2eproto[6];
 }
 PROTOBUF_CONSTINIT const uint32_t MatchConfirmStatus_internal_data_[] = {
     262144u, 0u, };

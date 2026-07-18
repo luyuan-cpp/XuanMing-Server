@@ -60,6 +60,8 @@ namespace auction {
 namespace v1 {
 enum AuctionOrderStatus : int;
 extern const uint32_t AuctionOrderStatus_internal_data_[];
+enum AuctionPushEventType : int;
+extern const uint32_t AuctionPushEventType_internal_data_[];
 enum OrderSide : int;
 extern const uint32_t OrderSide_internal_data_[];
 class AuctionMatchEvent;
@@ -167,6 +169,9 @@ template <>
 internal::EnumTraitsT<::pandora::auction::v1::AuctionOrderStatus_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::auction::v1::AuctionOrderStatus>;
 template <>
+internal::EnumTraitsT<::pandora::auction::v1::AuctionPushEventType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::auction::v1::AuctionPushEventType>;
+template <>
 internal::EnumTraitsT<::pandora::auction::v1::OrderSide_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::auction::v1::OrderSide>;
 }  // namespace protobuf
@@ -258,6 +263,45 @@ template <>
 [[nodiscard]] inline bool AuctionOrderStatus_Parse(
     ::absl::string_view name, AuctionOrderStatus* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<AuctionOrderStatus>(AuctionOrderStatus_descriptor(), name,
+                                           value);
+}
+enum AuctionPushEventType : int {
+  AUCTION_PUSH_EVENT_TYPE_UNSPECIFIED = 0,
+  AuctionPushEventType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  AuctionPushEventType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t AuctionPushEventType_internal_data_[];
+inline constexpr AuctionPushEventType AuctionPushEventType_MIN =
+    static_cast<AuctionPushEventType>(0);
+inline constexpr AuctionPushEventType AuctionPushEventType_MAX =
+    static_cast<AuctionPushEventType>(0);
+[[nodiscard]] inline bool AuctionPushEventType_IsValid(int value) {
+  return 0 <= value && value <= 0;
+}
+inline constexpr int AuctionPushEventType_ARRAYSIZE = 0 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+AuctionPushEventType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(AuctionPushEventType) {
+  return AuctionPushEventType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& AuctionPushEventType_Name(T value) {
+  static_assert(::std::is_same<T, AuctionPushEventType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to AuctionPushEventType_Name().");
+  return AuctionPushEventType_Name(static_cast<AuctionPushEventType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& AuctionPushEventType_Name(AuctionPushEventType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<AuctionPushEventType_descriptor, 0, 0>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool AuctionPushEventType_Parse(
+    ::absl::string_view name, AuctionPushEventType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<AuctionPushEventType>(AuctionPushEventType_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -4737,6 +4781,12 @@ struct is_proto_enum<::pandora::auction::v1::AuctionOrderStatus> : std::true_typ
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::auction::v1::AuctionOrderStatus>() {
   return ::pandora::auction::v1::AuctionOrderStatus_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::auction::v1::AuctionPushEventType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::auction::v1::AuctionPushEventType>() {
+  return ::pandora::auction::v1::AuctionPushEventType_descriptor();
 }
 
 }  // namespace protobuf

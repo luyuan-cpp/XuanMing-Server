@@ -31,6 +31,12 @@ const MetadataKeyTraceID = "x-pandora-trace-id"
 // MetadataKeyPlayerID 是 player_id metadata key,Envoy / gateway 鉴权后注入。
 const MetadataKeyPlayerID = "x-pandora-player-id"
 
+// MetadataKeyJWTPayload 是 Envoy jwt_authn 验签成功后透传的 JWT payload 头
+// (forward_payload_header,base64url JSON)。客户端面入站第一时间无条件剥离本头,
+// 只有验签成功才由 Envoy 重写,因此其中的 jti/sub 在 :8443 面可信
+// (deploy/envoy/envoy.yaml header_mutation + jwt_authn 说明)。
+const MetadataKeyJWTPayload = "x-pandora-jwt-payload"
+
 // Trace 是 trace_id 注入 / 透传 middleware,server / client 都用同一份。
 //
 // Server 侧:从 incoming metadata 找 x-pandora-trace-id;没有则生成 UUID;塞进 ctx。

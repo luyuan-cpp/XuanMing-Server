@@ -535,3 +535,26 @@
 - 边界如实记录：CLAUDE.md §9.22 的每玩家 `owner_epoch` 线性一致 owner authority 仍是文档化
   目标；当前由 session JTI 围栏 + DSTicket v2 exact 实例绑定 + locator match fence 提供迟到写
   防护。可达传输层的秒级转移重叠窗口依赖 eviction order 送达，列为已知边界与发布前验收项。
+
+## 2026-07-18：全量双规则审计 + 三项已知边界闭环（面向上线加固，battle-reconnect.md §8.6）
+
+- 全量 inline 审计两条需求级规则（任意时点不卡死+安全重连；严格单会话/根除脑裂）：四个再入门、
+  两个机械地板、DS 侧 fencing/GameMode Kick、PostLogin 同机顶号、会话 JTI 单写者、matchmaker
+  入队门（BattleGateFailOpen 默认 fail-closed）、ShrinkHubTTL Lua 守卫逐一读码核实；五服务 +
+  全 pkg `go test -count=1` 全绿。多 agent workflow 因订阅 session limit 全灭，结论均来自 inline 取证。
+- 边界 1 闭环——时钟漂移零预留：`DSFenceSkewMarginSeconds` 5→7（屏障 25s→27s），显式留出
+  ≥2s 服务间时钟漂移预算；UE 镜像常量 `ServerFenceReentryBarrierSeconds=27` /
+  `InterServiceClockSkewReserveSeconds=2`，Automation 断言升级为 `20+1+4+2 ≤ 27`；
+  屏障边界测试改 27s 并新增「25s(旧屏障值)仍须 UNKNOWN」防回退负例。代价：abandoned 再入 +2s。
+- 边界 2 闭环——SelectRole 会话现行性：免 proto 字段，从 Envoy jwt_authn 验签后重写的
+  `x-pandora-jwt-payload`（入站无条件剥离，不可伪造）提取 jti，`RequireCurrentSessionJTI` 与
+  IssueDSTicket 同门判定；jti 缺失时 B1 严格档 fail-closed。`pkg/middleware` 纯函数解析 +
+  login biz 七态表驱动测试。顶号后旧设备四条拿票路径（Login/Resume/IssueDSTicket/SelectRole）
+  现全部封死。
+- 边界 3 闭环——挂起恢复首帧积压输入（§9.22）：`FWorldDelegates::OnWorldTickStart` 先于
+  NetDriver TickDispatch（引擎 LevelTick.cpp 顺序），DS 订阅后每帧在分发积压包前复查租约；
+  1s watchdog 保留兜底，共用 edge-trigger。
+- 文档：battle-reconnect.md §8 全量改 27s，新增 §8.6 加固记录与 §8.5 分区注入验收执行清单
+  （NetworkPolicy 步骤 + T0 时序断言 + 顶号矩阵）。go-services.md §2.6 同步。
+- 交接：UE 编译 + `Pandora.Auth.DSTicketV2.AuthorityFencePolicy` 由用户执行（Live Coding 约束）；
+  分区注入清单为发布前必跑验收，代码级不能替代。git/svn 提交由用户复核后执行。

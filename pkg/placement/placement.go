@@ -26,7 +26,7 @@ import (
 //     last_heartbeat_ms 至少经过 DSFenceReentryBarrier(= 租约上限 + 时钟/网络
 //     偏差余量)。由此保证核心时序:旧 DS 最晚停止可玩时间 < 新 DS 最早开始可玩时间。
 //  3. 相关窗口启动校验:player_locator TTL 与 hub_allocator heartbeat_timeout
-//     都必须 ≥ DSFenceReentryBarrier(当前默认 30s ≥ 25s,启动时机械下限保护)。
+//     都必须 ≥ DSFenceReentryBarrier(当前默认 30s ≥ 27s,启动时机械下限保护)。
 //
 // 这些是正确性常量而非调优参数:调大只增加故障恢复延迟,调小会重新打开
 // 「一名玩家同时存在于两台 DS」的脑裂窗口(CLAUDE.md §9.1/§9.22)。
@@ -34,9 +34,12 @@ const (
 	// DSFenceLeaseMaxSeconds 是 DS 侧授权租约的协议上限(秒)。
 	DSFenceLeaseMaxSeconds = 20
 
-	// DSFenceSkewMarginSeconds 覆盖心跳响应传输延迟、fencing 检测粒度(1s ticker)
-	// 与两侧时钟漂移的安全余量(秒)。
-	DSFenceSkewMarginSeconds = 5
+	// DSFenceSkewMarginSeconds 是安全余量(秒),预算构成必须完整覆盖三项:
+	// 心跳响应在途上限(UE HeartbeatRequestTimeoutSeconds=4s) + fencing 检测粒度
+	// (1s ticker) + 服务间时钟漂移专属预留(≥2s;ds_allocator 写 last_heartbeat_ms
+	// 与 login 读 now() 是两台机器的时钟)。2026-07-18 从 5 提到 7:原值被前两项
+	// 恰好占满,时钟漂移零预留,UE Automation 断言等号成立即无余量。
+	DSFenceSkewMarginSeconds = 7
 
 	// DSFenceReentryBarrier 是服务端再入屏障:自 DS 最后一次心跳起,必须经过
 	// 该时长才允许把这台 DS 上的玩家路由到任何新 DS。

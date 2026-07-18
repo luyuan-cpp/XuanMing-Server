@@ -460,6 +460,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushFrame final : public ::google::
     kPayloadFieldNumber = 2,
     kTraceIdFieldNumber = 4,
     kTsMsFieldNumber = 3,
+    kEventTypeFieldNumber = 5,
   };
   // string topic = 1 [json_name = "topic"];
   void clear_topic() ;
@@ -516,11 +517,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushFrame final : public ::google::
   void _internal_set_ts_ms(::int64_t value);
 
   public:
+  // uint32 event_type = 5 [json_name = "eventType"];
+  void clear_event_type() ;
+  [[nodiscard]] ::uint32_t event_type() const;
+  void set_event_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_event_type() const;
+  void _internal_set_event_type(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.push.v1.PushFrame)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -553,6 +564,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushFrame final : public ::google::
     ::google::protobuf::internal::ArenaStringPtr payload_;
     ::google::protobuf::internal::ArenaStringPtr trace_id_;
     ::int64_t ts_ms_;
+    ::uint32_t event_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -881,6 +893,30 @@ inline void PushFrame::set_allocated_trace_id(::std::string* PROTOBUF_NULLABLE v
     _impl_.trace_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.push.v1.PushFrame.trace_id)
+}
+
+// uint32 event_type = 5 [json_name = "eventType"];
+inline void PushFrame::clear_event_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.event_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t PushFrame::event_type() const {
+  // @@protoc_insertion_point(field_get:pandora.push.v1.PushFrame.event_type)
+  return _internal_event_type();
+}
+inline void PushFrame::set_event_type(::uint32_t value) {
+  _internal_set_event_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:pandora.push.v1.PushFrame.event_type)
+}
+inline ::uint32_t PushFrame::_internal_event_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.event_type_;
+}
+inline void PushFrame::_internal_set_event_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.event_type_ = value;
 }
 
 #ifdef __GNUC__

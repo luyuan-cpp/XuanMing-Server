@@ -37,6 +37,17 @@ type TeamConf struct {
 	// 成员离队/被踢时联动撤销其所在的匹配票据(弱依赖):留空 → 不联动,
 	// 行为与历史一致(本机不起 matchmaker 的骨架联调路径)。
 	MatchmakerAddr string `yaml:"matchmaker_addr,omitempty" json:"matchmaker_addr,omitempty"`
+
+	// InvitePushMode 邀请推送模式(金丝雀灰度用)。老客户端只认 TeamUpdateEvent(reason=INVITE_SENT),
+	// 新客户端只认独立的 TeamInviteEvent(event_type=INVITE=1、已不再从 TeamUpdateEvent 读邀请)。
+	// 两代客户端各认各的 payload,单一模式无法同时喂饱两代 → 灰度共存期必须"双发"。
+	//   - "dual"(默认):两条都发。老客户端用 legacy 弹框、把独立事件当 TeamUpdateEvent 误解→
+	//     InviteId/TeamId=0→护栏不过→仅多一次无害快照,不误弹;新客户端忽略 legacy(纯化后不读)、
+	//     只在独立事件弹框。**各弹一次、不双弹**(客户端已纯化,故双发安全,金丝雀期首选)。
+	//   - "dedicated":只发独立事件。全量铺完新客户端后切到此值,停发冗余 legacy。老客户端会漏弹。
+	//   - "legacy":只发旧 TeamUpdateEvent。回退用;新客户端会漏弹邀请框。
+	// 空串按 "dual" 处理(见 Defaults)。
+	InvitePushMode string `yaml:"invite_push_mode,omitempty" json:"invite_push_mode,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。
@@ -55,6 +66,10 @@ func (c *Config) Defaults() {
 	}
 	if c.Team.OptimisticRetry == 0 {
 		c.Team.OptimisticRetry = 3
+	}
+	if c.Team.InvitePushMode == "" {
+		// 金丝雀期默认双发:老/新客户端各认各的 payload,互不干扰,各弹一次。
+		c.Team.InvitePushMode = "dual"
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50010"

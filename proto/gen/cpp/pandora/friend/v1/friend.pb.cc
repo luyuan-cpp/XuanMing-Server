@@ -3900,7 +3900,7 @@ const ::_pbi::ClassData* ListBlocksResponse_get_class_data() {
 }  // namespace friend_
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2ffriend_2fv1_2ffriend_2eproto[2];
+    file_level_enum_descriptors_pandora_2ffriend_2fv1_2ffriend_2eproto[3];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2ffriend_2fv1_2ffriend_2eproto = nullptr;
 const ::uint32_t
@@ -4223,35 +4223,37 @@ const char descriptor_table_protodef_pandora_2ffriend_2fv1_2ffriend_2eproto[] AB
     "UNSPECIFIED\020\000\022!\n\035FRIEND_REQUEST_STATUS_P"
     "ENDING\020\001\022\"\n\036FRIEND_REQUEST_STATUS_ACCEPT"
     "ED\020\002\022\"\n\036FRIEND_REQUEST_STATUS_REJECTED\020\003"
-    "\022!\n\035FRIEND_REQUEST_STATUS_EXPIRED\020\004*\214\001\n\021"
-    "FriendEventReason\022#\n\037FRIEND_EVENT_REASON"
-    "_UNSPECIFIED\020\000\022(\n$FRIEND_EVENT_REASON_RE"
-    "QUEST_RECEIVED\020\001\022(\n$FRIEND_EVENT_REASON_"
-    "REQUEST_ACCEPTED\020\0022\301\007\n\rFriendService\022V\n\t"
-    "AddFriend\022#.pandora.friend.v1.AddFriendR"
-    "equest\032$.pandora.friend.v1.AddFriendResp"
-    "onse\022_\n\014AcceptFriend\022&.pandora.friend.v1"
-    ".AcceptFriendRequest\032\'.pandora.friend.v1"
-    ".AcceptFriendResponse\022_\n\014RejectFriend\022&."
-    "pandora.friend.v1.RejectFriendRequest\032\'."
-    "pandora.friend.v1.RejectFriendResponse\022q"
-    "\n\022ListFriendRequests\022,.pandora.friend.v1"
-    ".ListFriendRequestsRequest\032-.pandora.fri"
-    "end.v1.ListFriendRequestsResponse\022\\\n\013Lis"
-    "tFriends\022%.pandora.friend.v1.ListFriends"
-    "Request\032&.pandora.friend.v1.ListFriendsR"
-    "esponse\022_\n\014RemoveFriend\022&.pandora.friend"
-    ".v1.RemoveFriendRequest\032\'.pandora.friend"
-    ".v1.RemoveFriendResponse\022J\n\005Block\022\037.pand"
-    "ora.friend.v1.BlockRequest\032 .pandora.fri"
-    "end.v1.BlockResponse\022P\n\007Unblock\022!.pandor"
-    "a.friend.v1.UnblockRequest\032\".pandora.fri"
-    "end.v1.UnblockResponse\022Y\n\nListBlocks\022$.p"
-    "andora.friend.v1.ListBlocksRequest\032%.pan"
-    "dora.friend.v1.ListBlocksResponse\022k\n\020Rec"
-    "ommendFriends\022*.pandora.friend.v1.Recomm"
-    "endFriendsRequest\032+.pandora.friend.v1.Re"
-    "commendFriendsResponseb\006proto3"
+    "\022!\n\035FRIEND_REQUEST_STATUS_EXPIRED\020\004*=\n\023F"
+    "riendPushEventType\022&\n\"FRIEND_PUSH_EVENT_"
+    "TYPE_UNSPECIFIED\020\000*\214\001\n\021FriendEventReason"
+    "\022#\n\037FRIEND_EVENT_REASON_UNSPECIFIED\020\000\022(\n"
+    "$FRIEND_EVENT_REASON_REQUEST_RECEIVED\020\001\022"
+    "(\n$FRIEND_EVENT_REASON_REQUEST_ACCEPTED\020"
+    "\0022\301\007\n\rFriendService\022V\n\tAddFriend\022#.pando"
+    "ra.friend.v1.AddFriendRequest\032$.pandora."
+    "friend.v1.AddFriendResponse\022_\n\014AcceptFri"
+    "end\022&.pandora.friend.v1.AcceptFriendRequ"
+    "est\032\'.pandora.friend.v1.AcceptFriendResp"
+    "onse\022_\n\014RejectFriend\022&.pandora.friend.v1"
+    ".RejectFriendRequest\032\'.pandora.friend.v1"
+    ".RejectFriendResponse\022q\n\022ListFriendReque"
+    "sts\022,.pandora.friend.v1.ListFriendReques"
+    "tsRequest\032-.pandora.friend.v1.ListFriend"
+    "RequestsResponse\022\\\n\013ListFriends\022%.pandor"
+    "a.friend.v1.ListFriendsRequest\032&.pandora"
+    ".friend.v1.ListFriendsResponse\022_\n\014Remove"
+    "Friend\022&.pandora.friend.v1.RemoveFriendR"
+    "equest\032\'.pandora.friend.v1.RemoveFriendR"
+    "esponse\022J\n\005Block\022\037.pandora.friend.v1.Blo"
+    "ckRequest\032 .pandora.friend.v1.BlockRespo"
+    "nse\022P\n\007Unblock\022!.pandora.friend.v1.Unblo"
+    "ckRequest\032\".pandora.friend.v1.UnblockRes"
+    "ponse\022Y\n\nListBlocks\022$.pandora.friend.v1."
+    "ListBlocksRequest\032%.pandora.friend.v1.Li"
+    "stBlocksResponse\022k\n\020RecommendFriends\022*.p"
+    "andora.friend.v1.RecommendFriendsRequest"
+    "\032+.pandora.friend.v1.RecommendFriendsRes"
+    "ponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2ffriend_2fv1_2ffriend_2eproto_deps[1] = {
@@ -4261,7 +4263,7 @@ static ::absl::once_flag descriptor_table_pandora_2ffriend_2fv1_2ffriend_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2ffriend_2fv1_2ffriend_2eproto = {
     false,
     false,
-    4030,
+    4093,
     descriptor_table_protodef_pandora_2ffriend_2fv1_2ffriend_2eproto,
     "pandora/friend/v1/friend.proto",
     &descriptor_table_pandora_2ffriend_2fv1_2ffriend_2eproto_once,
@@ -4285,9 +4287,16 @@ FriendRequestStatus_descriptor() {
 PROTOBUF_CONSTINIT const uint32_t FriendRequestStatus_internal_data_[] = {
     327680u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-FriendEventReason_descriptor() {
+FriendPushEventType_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2ffriend_2fv1_2ffriend_2eproto);
   return file_level_enum_descriptors_pandora_2ffriend_2fv1_2ffriend_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t FriendPushEventType_internal_data_[] = {
+    65536u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FriendEventReason_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2ffriend_2fv1_2ffriend_2eproto);
+  return file_level_enum_descriptors_pandora_2ffriend_2fv1_2ffriend_2eproto[2];
 }
 PROTOBUF_CONSTINIT const uint32_t FriendEventReason_internal_data_[] = {
     196608u, 0u, };

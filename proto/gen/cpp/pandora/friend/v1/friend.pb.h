@@ -60,6 +60,8 @@ namespace friend_ {
 namespace v1 {
 enum FriendEventReason : int;
 extern const uint32_t FriendEventReason_internal_data_[];
+enum FriendPushEventType : int;
+extern const uint32_t FriendPushEventType_internal_data_[];
 enum FriendRequestStatus : int;
 extern const uint32_t FriendRequestStatus_internal_data_[];
 class AcceptFriendRequest;
@@ -271,6 +273,9 @@ template <>
 internal::EnumTraitsT<::pandora::friend_::v1::FriendEventReason_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::friend_::v1::FriendEventReason>;
 template <>
+internal::EnumTraitsT<::pandora::friend_::v1::FriendPushEventType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::friend_::v1::FriendPushEventType>;
+template <>
 internal::EnumTraitsT<::pandora::friend_::v1::FriendRequestStatus_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::friend_::v1::FriendRequestStatus>;
 }  // namespace protobuf
@@ -320,6 +325,45 @@ template <>
 [[nodiscard]] inline bool FriendRequestStatus_Parse(
     ::absl::string_view name, FriendRequestStatus* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<FriendRequestStatus>(FriendRequestStatus_descriptor(), name,
+                                           value);
+}
+enum FriendPushEventType : int {
+  FRIEND_PUSH_EVENT_TYPE_UNSPECIFIED = 0,
+  FriendPushEventType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  FriendPushEventType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t FriendPushEventType_internal_data_[];
+inline constexpr FriendPushEventType FriendPushEventType_MIN =
+    static_cast<FriendPushEventType>(0);
+inline constexpr FriendPushEventType FriendPushEventType_MAX =
+    static_cast<FriendPushEventType>(0);
+[[nodiscard]] inline bool FriendPushEventType_IsValid(int value) {
+  return 0 <= value && value <= 0;
+}
+inline constexpr int FriendPushEventType_ARRAYSIZE = 0 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+FriendPushEventType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(FriendPushEventType) {
+  return FriendPushEventType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& FriendPushEventType_Name(T value) {
+  static_assert(::std::is_same<T, FriendPushEventType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to FriendPushEventType_Name().");
+  return FriendPushEventType_Name(static_cast<FriendPushEventType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& FriendPushEventType_Name(FriendPushEventType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<FriendPushEventType_descriptor, 0, 0>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool FriendPushEventType_Parse(
+    ::absl::string_view name, FriendPushEventType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<FriendPushEventType>(FriendPushEventType_descriptor(), name,
                                            value);
 }
 enum FriendEventReason : int {
@@ -7591,6 +7635,12 @@ struct is_proto_enum<::pandora::friend_::v1::FriendRequestStatus> : std::true_ty
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::friend_::v1::FriendRequestStatus>() {
   return ::pandora::friend_::v1::FriendRequestStatus_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::friend_::v1::FriendPushEventType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::friend_::v1::FriendPushEventType>() {
+  return ::pandora::friend_::v1::FriendPushEventType_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::friend_::v1::FriendEventReason> : std::true_type {};

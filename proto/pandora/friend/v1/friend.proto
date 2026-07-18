@@ -187,6 +187,21 @@ message RecommendFriendsResponse {
 
 // ===== 推送事件(kafka pandora.friend.event)=====
 
+// FriendPushEventType 是 pandora.friend.event **域内的事件类型判别键**,
+// 填入 PushFrame.event_type(见 pandora/push/v1/push.proto §event_type)。
+//
+// 作用:pandora.friend.event 这一个 topic 下要承载多种「结构不同」的事件 message;
+//       客户端按 (topic=pandora.friend.event, event_type) 定位该反序列化哪个 message。
+//
+// ⚠️ 与 FriendEventReason 是两个不同的轴,别混:
+//   - FriendPushEventType:选「哪个 message」(FriendEvent vs 将来的新事件 message...)。
+//   - FriendEventReason  :在 FriendEvent **内部**说明本次好友事件具体是请求/接受。
+//
+// 编号规则:**每域独立**;**0 永远 = 现有 FriendEvent**(老 producer 不填→缺省 0→旧事件);枚举值只增不复用。
+enum FriendPushEventType {
+  FRIEND_PUSH_EVENT_TYPE_UNSPECIFIED = 0;  // = FriendEvent(旧事件,向后兼容)
+}
+
 // FriendEventReason 区分好友事件类型,客户端据此弹"收到好友请求" / "对方已接受"。
 enum FriendEventReason {
   FRIEND_EVENT_REASON_UNSPECIFIED      = 0;

@@ -11,6 +11,19 @@
 - 转发推送 topics(`pandora.team.update` / `pandora.match.progress` / `pandora.chat.*` / `pandora.player.update` / `pandora.friend.event` / `pandora.system.notify`)
 - 离线消息缓存 redis ZSET(5min,断线重连按 `last_seen_ms` 补推)
 
+## 域内多事件类型路由(2026-07-17)
+
+一个 `topic`(= 业务域)下可承载多种**结构不同**的事件 message,用 `PushFrame.event_type` 做**域内细路由**,
+避免「一事件一 topic」导致 topic 爆炸。客户端按 `(topic, event_type)` 定位该反序列化哪个 message。
+
+- **每域独立编号**,各域自定义 `XxxPushEventType` enum(如 `pandora.team.v1.TeamPushEventType`);
+  `0` 永远 = 该 topic 现有旧事件,枚举值只增不复用。设计详见
+  [`docs/design/go-services.md`](../../../docs/design/go-services.md) §「域内多事件类型路由」。
+- **传递路径**:与 `trace_id` 一致走 kafka header;consumer 把 `event_type` header 透传进 `PushFrame.EventType`。
+- **当前阶段**:`TeamPushEventType` 仅 `UNSPECIFIED=0`,现网所有帧 `event_type=0`,**push 服务无需改**;
+  引入首个非 0 事件类型时,`internal/biz/consumer.go` 构造 `PushFrame` 处需补一行读取 `event_type` header
+  (紧邻现有 `TraceId: headerStr(msg.Headers, "trace_id")`)。
+
 ## 协议铁律(对齐 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))
 
 - **原则 2**:发起方不收自己触发的 push(业务服 produce kafka 时**必须用 `pkg/kafkax.PushToPlayers` helper**,helper 自动排除 caller_player_id)

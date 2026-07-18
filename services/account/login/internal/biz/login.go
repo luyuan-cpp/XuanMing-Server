@@ -1124,7 +1124,8 @@ func (u *LoginUsecase) requireCurrentSession(ctx context.Context, playerID uint6
 
 // RequireCurrentSessionToken 供 service 层在携带原始 token 的 RPC(IssueDSTicket)上
 // 做现行性门:验签 + 与 ctx 已鉴权 playerID 一致 + jti 为当前一代。
-// 注:SelectRole 请求体无 token(只能靠 Envoy 验签),现行性门暂无法覆盖,待 proto 加字段。
+// 注:SelectRole 请求体无 token,由 RequireCurrentSessionJTI 从 Envoy 验签后的
+// payload 头取 jti 走同一道门(2026-07-18,免 proto 字段)。
 func (u *LoginUsecase) RequireCurrentSessionToken(ctx context.Context, playerID uint64, sessionToken string) error {
 	if u.sessions == nil || u.verifier == nil {
 		return nil
@@ -1140,4 +1141,24 @@ func (u *LoginUsecase) RequireCurrentSessionToken(ctx context.Context, playerID 
 		return errcode.New(errcode.ErrUnauthorized, "session token invalid for caller")
 	}
 	return u.requireCurrentSession(ctx, playerID, claims.ID)
+}
+
+// RequireCurrentSessionJTI 是请求体不带 token 的鉴权 RPC(SelectRole)的会话现行性门
+// (封 battle-reconnect.md 已知边界 3,2026-07-18):jti 来自 Envoy jwt_authn 验签成功后
+// 重写的 x-pandora-jwt-payload 头(入站无条件剥离,客户端无法伪造),与 IssueDSTicket 的
+// 请求体 token 走同一 requireCurrentSession 判定。
+//
+// jti 为空 = 未经 Envoy 网关(直连内网端口联调 / dev 裸跑):B1 严格档 fail-closed 拒绝
+// (生产 SelectRole 必经 :8443 jwt_authn,该头必然存在);local/off 保留历史放行。
+func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID uint64, jti string) error {
+	if u.sessions == nil {
+		return nil // dev 裸跑:未配 session 权威,与其余现行性门同语义直通。
+	}
+	if jti == "" {
+		if u.requireHubAssignmentBinding {
+			return errcode.New(errcode.ErrUnauthorized, "session payload required")
+		}
+		return nil
+	}
+	return u.requireCurrentSession(ctx, playerID, jti)
 }

@@ -175,6 +175,21 @@ message MatchProgress {
 //
 // 客户端首次进匹配可以调 GetMatchProgress 拉一次,之后被动接收推送。
 
+// MatchPushEventType 是 pandora.match.progress **域内的事件类型判别键**,
+// 填入 PushFrame.event_type(见 pandora/push/v1/push.proto §event_type)。
+//
+// 作用:pandora.match.progress 这一个 topic 下要承载多种「结构不同」的事件 message;
+//       客户端按 (topic=pandora.match.progress, event_type) 定位该反序列化哪个 message。
+//       域内加新事件类型**不新增 topic**(拒绝 topic 爆炸)。
+//
+// 编号规则:**每域独立**(match 的 1 与 team 的 1 无关);**0 永远 = 现有 MatchProgressEvent**
+// (兼容正在游戏中的老客户端:老 producer 不填→缺省 0→旧事件);枚举值只增不复用。
+enum MatchPushEventType {
+  MATCH_PUSH_EVENT_TYPE_UNSPECIFIED = 0;  // = MatchProgressEvent(旧事件,向后兼容)
+  // 将来新增(示例,当前未启用):
+  //   MATCH_PUSH_EVENT_TYPE_CANCELLED = 1;  // payload=MatchCancelledEvent
+}
+
 message MatchProgressEvent {
   MatchProgress progress     = 1;
   uint64        to_player_id = 2;  // 接收推送的玩家(也是 kafka key)

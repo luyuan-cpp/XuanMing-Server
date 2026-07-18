@@ -2869,7 +2869,7 @@ const ::_pbi::ClassData* ListMailResponse_get_class_data() {
 }  // namespace mail
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2fmail_2fv1_2fmail_2eproto[2];
+    file_level_enum_descriptors_pandora_2fmail_2fv1_2fmail_2eproto[3];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2fmail_2fv1_2fmail_2eproto = nullptr;
 const ::uint32_t
@@ -3145,24 +3145,25 @@ const char descriptor_table_protodef_pandora_2fmail_2fv1_2fmail_2eproto[] ABSL_A
     "D\020\002\022\031\n\025MAIL_CHANNEL_PERSONAL\020\003*p\n\nMailSt"
     "atus\022\033\n\027MAIL_STATUS_UNSPECIFIED\020\000\022\026\n\022MAI"
     "L_STATUS_UNREAD\020\001\022\024\n\020MAIL_STATUS_READ\020\002\022"
-    "\027\n\023MAIL_STATUS_CLAIMED\020\0032\206\005\n\013MailService"
-    "\022O\n\010ListMail\022 .pandora.mail.v1.ListMailR"
-    "equest\032!.pandora.mail.v1.ListMailRespons"
-    "e\022O\n\010ReadMail\022 .pandora.mail.v1.ReadMail"
-    "Request\032!.pandora.mail.v1.ReadMailRespon"
-    "se\022R\n\tClaimMail\022!.pandora.mail.v1.ClaimM"
-    "ailRequest\032\".pandora.mail.v1.ClaimMailRe"
-    "sponse\022U\n\nDeleteMail\022\".pandora.mail.v1.D"
-    "eleteMailRequest\032#.pandora.mail.v1.Delet"
-    "eMailResponse\022a\n\016SendSystemMail\022&.pandor"
-    "a.mail.v1.SendSystemMailRequest\032\'.pandor"
-    "a.mail.v1.SendSystemMailResponse\022^\n\rSend"
-    "GuildMail\022%.pandora.mail.v1.SendGuildMai"
-    "lRequest\032&.pandora.mail.v1.SendGuildMail"
-    "Response\022g\n\020SendPersonalMail\022(.pandora.m"
-    "ail.v1.SendPersonalMailRequest\032).pandora"
-    ".mail.v1.SendPersonalMailResponseb\006proto"
-    "3"
+    "\027\n\023MAIL_STATUS_CLAIMED\020\003*9\n\021MailPushEven"
+    "tType\022$\n MAIL_PUSH_EVENT_TYPE_UNSPECIFIE"
+    "D\020\0002\206\005\n\013MailService\022O\n\010ListMail\022 .pandor"
+    "a.mail.v1.ListMailRequest\032!.pandora.mail"
+    ".v1.ListMailResponse\022O\n\010ReadMail\022 .pando"
+    "ra.mail.v1.ReadMailRequest\032!.pandora.mai"
+    "l.v1.ReadMailResponse\022R\n\tClaimMail\022!.pan"
+    "dora.mail.v1.ClaimMailRequest\032\".pandora."
+    "mail.v1.ClaimMailResponse\022U\n\nDeleteMail\022"
+    "\".pandora.mail.v1.DeleteMailRequest\032#.pa"
+    "ndora.mail.v1.DeleteMailResponse\022a\n\016Send"
+    "SystemMail\022&.pandora.mail.v1.SendSystemM"
+    "ailRequest\032\'.pandora.mail.v1.SendSystemM"
+    "ailResponse\022^\n\rSendGuildMail\022%.pandora.m"
+    "ail.v1.SendGuildMailRequest\032&.pandora.ma"
+    "il.v1.SendGuildMailResponse\022g\n\020SendPerso"
+    "nalMail\022(.pandora.mail.v1.SendPersonalMa"
+    "ilRequest\032).pandora.mail.v1.SendPersonal"
+    "MailResponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto_deps[1] = {
@@ -3172,7 +3173,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto = {
     false,
     false,
-    3281,
+    3340,
     descriptor_table_protodef_pandora_2fmail_2fv1_2fmail_2eproto,
     "pandora/mail/v1/mail.proto",
     &descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto_once,
@@ -3202,6 +3203,13 @@ MailStatus_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t MailStatus_internal_data_[] = {
     262144u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+MailPushEventType_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fmail_2fv1_2fmail_2eproto);
+  return file_level_enum_descriptors_pandora_2fmail_2fv1_2fmail_2eproto[2];
+}
+PROTOBUF_CONSTINIT const uint32_t MailPushEventType_internal_data_[] = {
+    65536u, 0u, };
 // ===================================================================
 
 MailAttachment::MailAttachment(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

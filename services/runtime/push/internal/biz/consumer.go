@@ -130,10 +130,11 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	// 不写离线缓存(广播无 per-player 归属;离线玩家重连后不补推全服广播,避免历史公告刷屏)。
 	if k.broadcast {
 		frame := &pushv1.PushFrame{
-			Topic:   msg.Topic,
-			Payload: msg.Value,
-			TsMs:    msg.Timestamp.UnixMilli(),
-			TraceId: headerStr(msg.Headers, "trace_id"),
+			Topic:     msg.Topic,
+			Payload:   msg.Value,
+			TsMs:      msg.Timestamp.UnixMilli(),
+			TraceId:   headerStr(msg.Headers, "trace_id"),
+			EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
 		}
 		sent, failed := k.cm.Broadcast(frame)
 		if failed > 0 {
@@ -164,10 +165,11 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 
 	// 2. 构 PushFrame(payload 直接是业务 Event proto bytes;ts_ms 取 kafka 消息时间)
 	frame := &pushv1.PushFrame{
-		Topic:   msg.Topic,
-		Payload: msg.Value,
-		TsMs:    msg.Timestamp.UnixMilli(),
-		TraceId: headerStr(msg.Headers, "trace_id"),
+		Topic:     msg.Topic,
+		Payload:   msg.Value,
+		TsMs:      msg.Timestamp.UnixMilli(),
+		TraceId:   headerStr(msg.Headers, "trace_id"),
+		EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
 	}
 
 	// 3. 路由:在线 → SendTo;离线或 send 失败 → 写 ZSET
@@ -207,6 +209,21 @@ func headerStr(headers []*sarama.RecordHeader, key string) string {
 		}
 	}
 	return ""
+}
+
+// headerUint32 在 sarama.RecordHeader 列表里找指定 key 并解析为 uint32
+// (找不到 / 解析失败 → 返 0,即该 topic 的旧事件类型,向后兼容)。
+// 用于把业务 producer 塞的 event_type header 透传进 PushFrame.EventType。
+func headerUint32(headers []*sarama.RecordHeader, key string) uint32 {
+	s := headerStr(headers, key)
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return uint32(v)
 }
 
 // 让 *ConnectionManager 自动满足 FrameSender / FrameRouter(编译期检查)。

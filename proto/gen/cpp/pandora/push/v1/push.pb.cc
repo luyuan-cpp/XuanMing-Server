@@ -204,11 +204,11 @@ constexpr PushFrame::ParseTableT_ PushFrame::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(PushFrame, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -218,10 +218,7 @@ constexpr PushFrame::ParseTableT_ PushFrame::InternalGenerateParseTable_(const :
       ::_pbi::TcParser::GetTable<::pandora::push::v1::PushFrame>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string trace_id = 4 [json_name = "traceId"];
-      {::_pbi::TcParser::FastUS1,
-       {34, 2, 0,
-        PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.trace_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string topic = 1 [json_name = "topic"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -234,6 +231,16 @@ constexpr PushFrame::ParseTableT_ PushFrame::InternalGenerateParseTable_(const :
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PushFrame, _impl_.ts_ms_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.ts_ms_)}},
+      // string trace_id = 4 [json_name = "traceId"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.trace_id_)}},
+      // uint32 event_type = 5 [json_name = "eventType"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PushFrame, _impl_.event_type_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.event_type_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -245,6 +252,8 @@ constexpr PushFrame::ParseTableT_ PushFrame::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.ts_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // string trace_id = 4 [json_name = "traceId"];
       {PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.trace_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 event_type = 5 [json_name = "eventType"];
+      {PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.event_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -270,7 +279,8 @@ inline constexpr PushFrame::Impl_::Impl_(
         trace_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        ts_ms_{::int64_t{0}} {}
+        ts_ms_{::int64_t{0}},
+        event_type_{0u} {}
 
 template <typename>
 constexpr PushFrame::PushFrame(::_pbi::ConstantInitialized,
@@ -383,15 +393,17 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::push::v1::PushFrame, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::push::v1::PushFrame, _impl_.topic_),
         PROTOBUF_FIELD_OFFSET(::pandora::push::v1::PushFrame, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::pandora::push::v1::PushFrame, _impl_.ts_ms_),
         PROTOBUF_FIELD_OFFSET(::pandora::push::v1::PushFrame, _impl_.trace_id_),
+        PROTOBUF_FIELD_OFFSET(::pandora::push::v1::PushFrame, _impl_.event_type_),
         0,
         1,
         3,
         2,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
@@ -410,12 +422,13 @@ const char descriptor_table_protodef_pandora_2fpush_2fv1_2fpush_2eproto[] ABSL_A
     "sh.v1\032\037pandora/common/v1/errcode.proto\"_"
     "\n\020SubscribeRequest\022#\n\rsession_token\030\001 \001("
     "\tR\014sessionToken\022 \n\014last_seen_ms\030\002 \001(\003R\nl"
-    "astSeenMsJ\004\010\003\020\n\"q\n\tPushFrame\022\024\n\005topic\030\001 "
-    "\001(\tR\005topic\022\030\n\007payload\030\002 \001(\014R\007payload\022\023\n\005"
-    "ts_ms\030\003 \001(\003R\004tsMs\022\031\n\010trace_id\030\004 \001(\tR\007tra"
-    "ceIdJ\004\010\005\020\n2[\n\013PushService\022L\n\tSubscribe\022!"
-    ".pandora.push.v1.SubscribeRequest\032\032.pand"
-    "ora.push.v1.PushFrame0\001b\006proto3"
+    "astSeenMsJ\004\010\003\020\n\"\220\001\n\tPushFrame\022\024\n\005topic\030\001"
+    " \001(\tR\005topic\022\030\n\007payload\030\002 \001(\014R\007payload\022\023\n"
+    "\005ts_ms\030\003 \001(\003R\004tsMs\022\031\n\010trace_id\030\004 \001(\tR\007tr"
+    "aceId\022\035\n\nevent_type\030\005 \001(\rR\teventTypeJ\004\010\006"
+    "\020\n2[\n\013PushService\022L\n\tSubscribe\022!.pandora"
+    ".push.v1.SubscribeRequest\032\032.pandora.push"
+    ".v1.PushFrame0\001b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fpush_2fv1_2fpush_2eproto_deps[1] = {
@@ -425,7 +438,7 @@ static ::absl::once_flag descriptor_table_pandora_2fpush_2fv1_2fpush_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fpush_2fv1_2fpush_2eproto = {
     false,
     false,
-    391,
+    423,
     descriptor_table_protodef_pandora_2fpush_2fv1_2fpush_2eproto,
     "pandora/push/v1/push.proto",
     &descriptor_table_pandora_2fpush_2fv1_2fpush_2eproto_once,
@@ -718,7 +731,13 @@ PushFrame::PushFrame(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.ts_ms_ = from._impl_.ts_ms_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, ts_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, ts_ms_),
+           offsetof(Impl_, event_type_) -
+               offsetof(Impl_, ts_ms_) +
+               sizeof(Impl_::event_type_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.push.v1.PushFrame)
 }
@@ -732,7 +751,12 @@ PROTOBUF_NDEBUG_INLINE PushFrame::Impl_::Impl_(
 
 inline void PushFrame::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.ts_ms_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, ts_ms_),
+           0,
+           offsetof(Impl_, event_type_) -
+               offsetof(Impl_, ts_ms_) +
+               sizeof(Impl_::event_type_));
 }
 PushFrame::~PushFrame() {
   // @@protoc_insertion_point(destructor:pandora.push.v1.PushFrame)
@@ -796,7 +820,11 @@ PROTOBUF_NOINLINE void PushFrame::Clear() {
       _impl_.trace_id_.ClearNonDefaultToEmpty();
     }
   }
-  _impl_.ts_ms_ = ::int64_t{0};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.ts_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.event_type_) -
+        reinterpret_cast<char*>(&_impl_.ts_ms_)) + sizeof(_impl_.event_type_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -857,6 +885,15 @@ PROTOBUF_NOINLINE void PushFrame::Clear() {
     }
   }
 
+  // uint32 event_type = 5 [json_name = "eventType"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_event_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_event_type(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -882,7 +919,7 @@ PROTOBUF_NOINLINE void PushFrame::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string topic = 1 [json_name = "topic"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_topic().empty()) {
@@ -911,6 +948,13 @@ PROTOBUF_NOINLINE void PushFrame::Clear() {
             this_._internal_ts_ms());
       }
     }
+    // uint32 event_type = 5 [json_name = "eventType"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_event_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_event_type());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -929,7 +973,7 @@ void PushFrame::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_topic().empty()) {
         _this->_internal_set_topic(from._internal_topic());
@@ -962,6 +1006,11 @@ void PushFrame::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.ts_ms_ = from._impl_.ts_ms_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_event_type() != 0) {
+        _this->_impl_.event_type_ = from._impl_.event_type_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -985,7 +1034,12 @@ void PushFrame::InternalSwap(PushFrame* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.topic_, &other->_impl_.topic_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.payload_, &other->_impl_.payload_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.trace_id_, &other->_impl_.trace_id_, arena);
-  swap(_impl_.ts_ms_, other->_impl_.ts_ms_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.event_type_)
+      + sizeof(PushFrame::_impl_.event_type_)
+      - PROTOBUF_FIELD_OFFSET(PushFrame, _impl_.ts_ms_)>(
+          reinterpret_cast<char*>(&_impl_.ts_ms_),
+          reinterpret_cast<char*>(&other->_impl_.ts_ms_));
 }
 
 ::google::protobuf::Metadata PushFrame::GetMetadata() const {

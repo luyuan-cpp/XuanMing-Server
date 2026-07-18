@@ -2098,7 +2098,7 @@ const ::_pbi::ClassData* ListMarketResponse_get_class_data() {
 }  // namespace auction
 }  // namespace pandora
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_pandora_2fauction_2fv1_2fauction_2eproto[2];
+    file_level_enum_descriptors_pandora_2fauction_2fv1_2fauction_2eproto[3];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_pandora_2fauction_2fv1_2fauction_2eproto = nullptr;
 const ::uint32_t
@@ -2347,19 +2347,21 @@ const char descriptor_table_protodef_pandora_2fauction_2fv1_2fauction_2eproto[] 
     "\020\001\022)\n%AUCTION_ORDER_STATUS_PARTIALLY_FIL"
     "LED\020\002\022\037\n\033AUCTION_ORDER_STATUS_FILLED\020\003\022!"
     "\n\035AUCTION_ORDER_STATUS_CANCELED\020\004\022 \n\034AUC"
-    "TION_ORDER_STATUS_EXPIRED\020\0052\325\003\n\016AuctionS"
-    "ervice\022[\n\nPlaceOrder\022%.pandora.auction.v"
-    "1.PlaceOrderRequest\032&.pandora.auction.v1"
-    ".PlaceOrderResponse\022F\n\003Bid\022\036.pandora.auc"
-    "tion.v1.BidRequest\032\037.pandora.auction.v1."
-    "BidResponse\022^\n\013CancelOrder\022&.pandora.auc"
-    "tion.v1.CancelOrderRequest\032\'.pandora.auc"
-    "tion.v1.CancelOrderResponse\022[\n\nListMarke"
-    "t\022%.pandora.auction.v1.ListMarketRequest"
-    "\032&.pandora.auction.v1.ListMarketResponse"
-    "\022a\n\014ListMyOrders\022\'.pandora.auction.v1.Li"
-    "stMyOrdersRequest\032(.pandora.auction.v1.L"
-    "istMyOrdersResponseb\006proto3"
+    "TION_ORDER_STATUS_EXPIRED\020\005*\?\n\024AuctionPu"
+    "shEventType\022\'\n#AUCTION_PUSH_EVENT_TYPE_U"
+    "NSPECIFIED\020\0002\325\003\n\016AuctionService\022[\n\nPlace"
+    "Order\022%.pandora.auction.v1.PlaceOrderReq"
+    "uest\032&.pandora.auction.v1.PlaceOrderResp"
+    "onse\022F\n\003Bid\022\036.pandora.auction.v1.BidRequ"
+    "est\032\037.pandora.auction.v1.BidResponse\022^\n\013"
+    "CancelOrder\022&.pandora.auction.v1.CancelO"
+    "rderRequest\032\'.pandora.auction.v1.CancelO"
+    "rderResponse\022[\n\nListMarket\022%.pandora.auc"
+    "tion.v1.ListMarketRequest\032&.pandora.auct"
+    "ion.v1.ListMarketResponse\022a\n\014ListMyOrder"
+    "s\022\'.pandora.auction.v1.ListMyOrdersReque"
+    "st\032(.pandora.auction.v1.ListMyOrdersResp"
+    "onseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto_deps[1] = {
@@ -2369,7 +2371,7 @@ static ::absl::once_flag descriptor_table_pandora_2fauction_2fv1_2fauction_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto = {
     false,
     false,
-    3107,
+    3172,
     descriptor_table_protodef_pandora_2fauction_2fv1_2fauction_2eproto,
     "pandora/auction/v1/auction.proto",
     &descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto_once,
@@ -2399,6 +2401,13 @@ AuctionOrderStatus_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t AuctionOrderStatus_internal_data_[] = {
     393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+AuctionPushEventType_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_pandora_2fauction_2fv1_2fauction_2eproto);
+  return file_level_enum_descriptors_pandora_2fauction_2fv1_2fauction_2eproto[2];
+}
+PROTOBUF_CONSTINIT const uint32_t AuctionPushEventType_internal_data_[] = {
+    65536u, 0u, };
 // ===================================================================
 
 AuctionOrder::AuctionOrder(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

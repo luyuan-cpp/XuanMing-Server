@@ -241,7 +241,7 @@ LOCATION_BATTLE { match_id, battle_pod }
 **状态查询与存储边界（全局不变量 §9.22 的 locator 落地）**:
 
 - `LOCATION_STATE_HUB` / `BATTLE` 是**短期 presence / 最近活跃投影**（CLAUDE.md §9.22），不是持久归属权威，也不是永久玩家业务数据。玩家真正进入 Hub 后，只允许该 Hub DS 上报 `HUB + hub_pod + shard_id`；从 Battle 回流时额外携带 `match_id` 作为 fence，只参与原子迁移校验，通过后不持久化。player_locator 在 Redis 单键保存该投影并用 TTL 续期。Hub 心跳持续续期，玩家离开 / 断线后停止续期，key 到期才按契约推导为 `OFFLINE`。key miss 只说明 presence 不可见，**不能**单独证明玩家已离开旧 DS，也不授权进入另一台 DS；归属判定还须叠加 matchmaker 耐久 claim 与 `InspectBattleRoute` 三态门。
-- **脑裂再入屏障下限（2026-07-17，`pkg/placement` 契约）**：locator TTL 是 login / matchmaker 再入门的第一道信号，`NewLocatorUsecase` 把 TTL 机械抬到 ≥ `placement.DSFenceReentryBarrier`(25s)。低于该值时，分区旧 DS（20s 授权租约 + 5s 余量内自我 fencing）还没踢完存量玩家，presence 蒸发就会放行再入 → 一人两 DS。详见 `battle-reconnect.md` §8。
+- **脑裂再入屏障下限（2026-07-17，`pkg/placement` 契约）**：locator TTL 是 login / matchmaker 再入门的第一道信号，`NewLocatorUsecase` 把 TTL 机械抬到 ≥ `placement.DSFenceReentryBarrier`(27s；2026-07-18 偏差余量 5→7,新增 ≥2s 服务间时钟漂移专属预留)。低于该值时，分区旧 DS（20s 授权租约 + 余量内自我 fencing）还没踢完存量玩家，presence 蒸发就会放行再入 → 一人两 DS。详见 `battle-reconnect.md` §8。
 - player_locator 是 Location 的唯一查询入口。login、team、matchmaker、friend 等其他服务需要当前位置时调用 `GetLocation` / `BatchGetLocation`，不得把 `HUB` 再写入自己的 MySQL、Redis 或长期内存状态并据此做决定。允许短 TTL 展示缓存，但必须标记非权威、可失效、可重建，不能参与准入或归属迁移。
 - “优先查询”指业务消费者查询 player_locator 这一统一权威索引，不是每次扫描 / 扇出查询所有 Hub DS。完全不保存位置索引会导致无法确定查询目标、Hub 故障与玩家不在无法区分，并破坏单一 Location 判定。
 - key **确实不存在**可按本接口契约返回 `OFFLINE`；Redis 超时、网络错误或结果不确定必须返回 `UNKNOWN` / `UNAVAILABLE`，不得伪装成 `OFFLINE`。UNKNOWN 不能作为签票、占座、切换归属或放行进场的依据。
@@ -568,12 +568,57 @@ message SubscribeRequest {
 }
 
 message PushFrame {
-  string topic    = 1;  // pandora.team.update / pandora.match.progress / ...
-  bytes  payload  = 2;  // 业务 Event message 序列化(如 TeamUpdateEvent)
-  int64  ts_ms    = 3;
-  string trace_id = 4;
+  string topic      = 1;  // pandora.team.update / pandora.match.progress / ...(= 业务域,粗路由)
+  bytes  payload    = 2;  // 业务 Event message 序列化(如 TeamUpdateEvent)
+  int64  ts_ms      = 3;
+  string trace_id   = 4;
+  uint32 event_type = 5;  // 域内事件类型(细路由);0=该 topic 现有旧事件。见下「域内多事件类型路由」
 }
 ```
+
+#### 域内多事件类型路由(2026-07-17)
+
+一个 `topic`(= 业务域)下要承载多种**结构不同**的事件 message(如 `pandora.team.update`
+下有 `TeamUpdateEvent`,将来还会有 `TeamInviteEvent` 等)。为**不让 topic 爆炸**(拒绝一事件一
+topic),用 `(topic, event_type)` 两级定位 payload 该反序列化成哪个 message:
+
+- `topic` → 业务域(粗路由);`event_type` → 域内第几种事件(细路由)。
+- **每域独立编号**:每个域定义自己的 `XxxPushEventType` enum,team 的 `1` 与 match 的 `1`
+  互不相干,靠 `topic` 区分。**不需要全局 event_id 台账。** 当前已定义(均仅 `UNSPECIFIED=0`):
+  `pandora.team.v1.TeamPushEventType`、`pandora.match.v1.MatchPushEventType`、
+  `pandora.friend.v1.FriendPushEventType`(= 客户端今天绑 push 的三个域:Team/Match/Friend)。
+  邮件/交易行等域当前**无客户端 push 通道**,不涉及本路由,将来接入 push 时再加对应 enum。
+- **`0` 永远 = 该 topic 现有旧事件**(team → `TeamUpdateEvent`、match → `MatchProgressEvent`、
+  friend → `FriendEvent`),枚举值只增不复用。
+
+**端到端传递路径**(与 `trace_id` 一致,走 kafka header,payload 保持裸 message、不包信封):
+
+```
+producer: PushToPlayers(..., payload) + kafka header "event_type"=N
+   → kafka(topic 不变) →
+push consumer: frame.EventType = header["event_type"]  →  stream.Send(PushFrame)
+   → 客户端:switch (topic → 域) → switch (event_type → message)
+```
+
+**向后兼容(保护正在游戏中的老客户端,proto3 原生特性)**:
+
+- 老 producer 不带 header → `event_type` 缺省 `0` → 天然落到「旧事件」,**老 producer 无需改**。
+- 老客户端不认 `event_type` 字段 → proto3 未知字段静默忽略,仍按旧 payload 解,不崩;
+  万一收到新事件也顶多字段对不上(protobuf 不崩),走客户端兜底,无害。
+- 新客户端:`switch(event_type)`,`0`/未知 → 旧路径,已知新值 → 对应新 message。
+
+**分阶段落地(读先于写)**:
+
+1. proto 加 `event_type` + 各域 enum(当前 `TeamPushEventType` 仅 `UNSPECIFIED=0`);现网所有帧
+   `event_type` 均为 `0`,**行为零变更**。
+2. 新客户端先全量铺「能读 `event_type`」的版本(此时无人发新类型,全走旧路径,零风险)。
+3. 覆盖率达标后,才引入第一个真实新事件类型:producer 填 `event_type` header +
+   **push consumer 加一行**把 header 透传进 `frame.EventType`(当前 consumer 尚未透传,因为还没有非 0 值);
+   两处都是加法、仍向后兼容,按开关灰度放量,异常可秒级回退。
+
+> ⚠️ 现阶段(仅 `event_type=0`)**push 服务无需改**;引入首个非 0 事件类型时,consumer 需补一行
+> `frame.EventType = headerUint(msg.Headers, "event_type")`(紧邻现有 `TraceId: headerStr(...)`)。
+
 
 **实现**(Kratos 风格):
 - 框架:Kratos `transport/grpc`(支持 server stream,go-zero zrpc 不支持是切换主因)

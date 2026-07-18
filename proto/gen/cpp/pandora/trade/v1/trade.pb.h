@@ -60,6 +60,8 @@ namespace trade {
 namespace v1 {
 enum OrderState : int;
 extern const uint32_t OrderState_internal_data_[];
+enum TradePushEventType : int;
+extern const uint32_t TradePushEventType_internal_data_[];
 class CancelOrderRequest;
 struct CancelOrderRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -148,6 +150,9 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::pandora::trade::v1::OrderState_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::trade::v1::OrderState>;
+template <>
+internal::EnumTraitsT<::pandora::trade::v1::TradePushEventType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::trade::v1::TradePushEventType>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -198,6 +203,45 @@ template <>
 [[nodiscard]] inline bool OrderState_Parse(
     ::absl::string_view name, OrderState* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<OrderState>(OrderState_descriptor(), name,
+                                           value);
+}
+enum TradePushEventType : int {
+  TRADE_PUSH_EVENT_TYPE_UNSPECIFIED = 0,
+  TradePushEventType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TradePushEventType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TradePushEventType_internal_data_[];
+inline constexpr TradePushEventType TradePushEventType_MIN =
+    static_cast<TradePushEventType>(0);
+inline constexpr TradePushEventType TradePushEventType_MAX =
+    static_cast<TradePushEventType>(0);
+[[nodiscard]] inline bool TradePushEventType_IsValid(int value) {
+  return 0 <= value && value <= 0;
+}
+inline constexpr int TradePushEventType_ARRAYSIZE = 0 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TradePushEventType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TradePushEventType) {
+  return TradePushEventType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TradePushEventType_Name(T value) {
+  static_assert(::std::is_same<T, TradePushEventType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TradePushEventType_Name().");
+  return TradePushEventType_Name(static_cast<TradePushEventType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TradePushEventType_Name(TradePushEventType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TradePushEventType_descriptor, 0, 0>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TradePushEventType_Parse(
+    ::absl::string_view name, TradePushEventType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TradePushEventType>(TradePushEventType_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -3529,6 +3573,12 @@ struct is_proto_enum<::pandora::trade::v1::OrderState> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::trade::v1::OrderState>() {
   return ::pandora::trade::v1::OrderState_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::trade::v1::TradePushEventType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::trade::v1::TradePushEventType>() {
+  return ::pandora::trade::v1::TradePushEventType_descriptor();
 }
 
 }  // namespace protobuf

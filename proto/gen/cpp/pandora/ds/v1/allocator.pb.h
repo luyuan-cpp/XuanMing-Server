@@ -152,6 +152,14 @@ extern const ::google::protobuf::internal::ClassDataFull BattleInstanceTeardownS
 #else
 extern const BattleInstanceTeardownStorageRecordGlobalsTypeInternal BattleInstanceTeardownStorageRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattlePlayerCombatFaction;
+struct BattlePlayerCombatFactionGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattlePlayerCombatFactionGlobalsTypeInternal BattlePlayerCombatFaction_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattlePlayerCombatFaction_class_data_;
+#else
+extern const BattlePlayerCombatFactionGlobalsTypeInternal BattlePlayerCombatFaction_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattlePlayerDepartureJournalStorageRecord;
 struct BattlePlayerDepartureJournalStorageRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2959,479 +2967,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DSLifecycleEvent final : public ::g
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattleStorageRecord) */ {
- public:
-  inline BattleStorageRecord() : BattleStorageRecord(nullptr) {}
-  ~BattleStorageRecord() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BattleStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleStorageRecord));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr BattleStorageRecord(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline BattleStorageRecord(const BattleStorageRecord& from) : BattleStorageRecord(nullptr, from) {}
-  inline BattleStorageRecord(BattleStorageRecord&& from) noexcept : BattleStorageRecord(nullptr, ::std::move(from)) {}
-  inline BattleStorageRecord& operator=(const BattleStorageRecord& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BattleStorageRecord& operator=(BattleStorageRecord&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const BattleStorageRecord& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleStorageRecord>(&BattleStorageRecord_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 16;
-  friend void swap(BattleStorageRecord& a, BattleStorageRecord& b) { a.Swap(&b); }
-  inline void Swap(BattleStorageRecord* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BattleStorageRecord* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] BattleStorageRecord* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<BattleStorageRecord>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const BattleStorageRecord& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const BattleStorageRecord& from) { BattleStorageRecord::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BattleStorageRecord* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.BattleStorageRecord"; }
-
-  explicit BattleStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BattleStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleStorageRecord& from);
-  BattleStorageRecord(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleStorageRecord&& from) noexcept
-      : BattleStorageRecord(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kPlayerIdsFieldNumber = 5,
-    kDsPodNameFieldNumber = 2,
-    kDsAddrFieldNumber = 3,
-    kStateFieldNumber = 4,
-    kGameModeFieldNumber = 7,
-    kGameserverUidFieldNumber = 12,
-    kLastVerifiedJtiFieldNumber = 15,
-    kAllocationIdFieldNumber = 17,
-    kReleaseTrackFieldNumber = 18,
-    kPodUidFieldNumber = 19,
-    kMatchIdFieldNumber = 1,
-    kAllocatedAtMsFieldNumber = 8,
-    kMapIdFieldNumber = 6,
-    kPlayerCountFieldNumber = 10,
-    kLastHeartbeatMsFieldNumber = 9,
-    kEmptySinceMsFieldNumber = 11,
-    kLastVerifiedGenFieldNumber = 14,
-    kInstanceEpochFieldNumber = 13,
-    kLastVerifiedWriterEpochFieldNumber = 16,
-  };
-  // repeated uint64 player_ids = 5 [json_name = "playerIds"];
-  [[nodiscard]] int player_ids_size()
-      const;
-  private:
-  int _internal_player_ids_size() const;
-
-  public:
-  void clear_player_ids() ;
-  [[nodiscard]] ::uint64_t player_ids(int index) const;
-  void set_player_ids(int index, ::uint64_t value);
-  void add_player_ids(::uint64_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
-
-  public:
-  // string ds_pod_name = 2 [json_name = "dsPodName"];
-  void clear_ds_pod_name() ;
-  [[nodiscard]] const ::std::string& ds_pod_name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_ds_pod_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
-  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_ds_pod_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
-
-  public:
-  // string ds_addr = 3 [json_name = "dsAddr"];
-  void clear_ds_addr() ;
-  [[nodiscard]] const ::std::string& ds_addr() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_ds_addr(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_ds_addr();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_addr();
-  void set_allocated_ds_addr(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_ds_addr() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_addr(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_addr();
-
-  public:
-  // string state = 4 [json_name = "state"];
-  void clear_state() ;
-  [[nodiscard]] const ::std::string& state() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_state(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_state();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_state();
-  void set_allocated_state(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_state() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_state(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // string game_mode = 7 [json_name = "gameMode"];
-  void clear_game_mode() ;
-  [[nodiscard]] const ::std::string& game_mode() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_game_mode(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_game_mode();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_game_mode();
-  void set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_game_mode() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
-
-  public:
-  // string gameserver_uid = 12 [json_name = "gameserverUid"];
-  void clear_gameserver_uid() ;
-  [[nodiscard]] const ::std::string& gameserver_uid() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_gameserver_uid(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_gameserver_uid();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gameserver_uid();
-  void set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_gameserver_uid() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_gameserver_uid(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_gameserver_uid();
-
-  public:
-  // string last_verified_jti = 15 [json_name = "lastVerifiedJti"];
-  void clear_last_verified_jti() ;
-  [[nodiscard]] const ::std::string& last_verified_jti() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_last_verified_jti(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_last_verified_jti();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_verified_jti();
-  void set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_last_verified_jti() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_last_verified_jti(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_verified_jti();
-
-  public:
-  // string allocation_id = 17 [json_name = "allocationId"];
-  void clear_allocation_id() ;
-  [[nodiscard]] const ::std::string& allocation_id() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_allocation_id(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
-  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_allocation_id() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
-
-  public:
-  // string release_track = 18 [json_name = "releaseTrack"];
-  void clear_release_track() ;
-  [[nodiscard]] const ::std::string& release_track() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_release_track(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_release_track();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
-  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_release_track() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
-
-  public:
-  // string pod_uid = 19 [json_name = "podUid"];
-  void clear_pod_uid() ;
-  [[nodiscard]] const ::std::string& pod_uid() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_pod_uid(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_pod_uid();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pod_uid();
-  void set_allocated_pod_uid(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_pod_uid() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_pod_uid(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_pod_uid();
-
-  public:
-  // uint64 match_id = 1 [json_name = "matchId"];
-  void clear_match_id() ;
-  [[nodiscard]] ::uint64_t match_id() const;
-  void set_match_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_match_id() const;
-  void _internal_set_match_id(::uint64_t value);
-
-  public:
-  // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
-  void clear_allocated_at_ms() ;
-  [[nodiscard]] ::int64_t allocated_at_ms() const;
-  void set_allocated_at_ms(::int64_t value);
-
-  private:
-  ::int64_t _internal_allocated_at_ms() const;
-  void _internal_set_allocated_at_ms(::int64_t value);
-
-  public:
-  // uint32 map_id = 6 [json_name = "mapId"];
-  void clear_map_id() ;
-  [[nodiscard]] ::uint32_t map_id() const;
-  void set_map_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_map_id() const;
-  void _internal_set_map_id(::uint32_t value);
-
-  public:
-  // int32 player_count = 10 [json_name = "playerCount"];
-  void clear_player_count() ;
-  [[nodiscard]] ::int32_t player_count() const;
-  void set_player_count(::int32_t value);
-
-  private:
-  ::int32_t _internal_player_count() const;
-  void _internal_set_player_count(::int32_t value);
-
-  public:
-  // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
-  void clear_last_heartbeat_ms() ;
-  [[nodiscard]] ::int64_t last_heartbeat_ms() const;
-  void set_last_heartbeat_ms(::int64_t value);
-
-  private:
-  ::int64_t _internal_last_heartbeat_ms() const;
-  void _internal_set_last_heartbeat_ms(::int64_t value);
-
-  public:
-  // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
-  void clear_empty_since_ms() ;
-  [[nodiscard]] ::int64_t empty_since_ms() const;
-  void set_empty_since_ms(::int64_t value);
-
-  private:
-  ::int64_t _internal_empty_since_ms() const;
-  void _internal_set_empty_since_ms(::int64_t value);
-
-  public:
-  // uint64 last_verified_gen = 14 [json_name = "lastVerifiedGen"];
-  void clear_last_verified_gen() ;
-  [[nodiscard]] ::uint64_t last_verified_gen() const;
-  void set_last_verified_gen(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_last_verified_gen() const;
-  void _internal_set_last_verified_gen(::uint64_t value);
-
-  public:
-  // uint32 instance_epoch = 13 [json_name = "instanceEpoch"];
-  void clear_instance_epoch() ;
-  [[nodiscard]] ::uint32_t instance_epoch() const;
-  void set_instance_epoch(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_instance_epoch() const;
-  void _internal_set_instance_epoch(::uint32_t value);
-
-  public:
-  // uint32 last_verified_writer_epoch = 16 [json_name = "lastVerifiedWriterEpoch"];
-  void clear_last_verified_writer_epoch() ;
-  [[nodiscard]] ::uint32_t last_verified_writer_epoch() const;
-  void set_last_verified_writer_epoch(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_last_verified_writer_epoch() const;
-  void _internal_set_last_verified_writer_epoch(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
-                          0, 154,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BattleStorageRecord& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
-    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
-    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
-    ::google::protobuf::internal::ArenaStringPtr ds_addr_;
-    ::google::protobuf::internal::ArenaStringPtr state_;
-    ::google::protobuf::internal::ArenaStringPtr game_mode_;
-    ::google::protobuf::internal::ArenaStringPtr gameserver_uid_;
-    ::google::protobuf::internal::ArenaStringPtr last_verified_jti_;
-    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
-    ::google::protobuf::internal::ArenaStringPtr release_track_;
-    ::google::protobuf::internal::ArenaStringPtr pod_uid_;
-    ::uint64_t match_id_;
-    ::int64_t allocated_at_ms_;
-    ::uint32_t map_id_;
-    ::int32_t player_count_;
-    ::int64_t last_heartbeat_ms_;
-    ::int64_t empty_since_ms_;
-    ::uint64_t last_verified_gen_;
-    ::uint32_t instance_epoch_;
-    ::uint32_t last_verified_writer_epoch_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerDepartureStorageRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattlePlayerDepartureStorageRecord) */ {
  public:
@@ -3853,6 +3388,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerDepartureStorageRecord 
     ::uint64_t placement_version_;
     ::uint64_t source_placement_version_;
     ::int64_t acknowledged_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerCombatFaction final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattlePlayerCombatFaction) */ {
+ public:
+  inline BattlePlayerCombatFaction() : BattlePlayerCombatFaction(nullptr) {}
+  ~BattlePlayerCombatFaction() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattlePlayerCombatFaction* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePlayerCombatFaction));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattlePlayerCombatFaction(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattlePlayerCombatFaction(const BattlePlayerCombatFaction& from) : BattlePlayerCombatFaction(nullptr, from) {}
+  inline BattlePlayerCombatFaction(BattlePlayerCombatFaction&& from) noexcept : BattlePlayerCombatFaction(nullptr, ::std::move(from)) {}
+  inline BattlePlayerCombatFaction& operator=(const BattlePlayerCombatFaction& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattlePlayerCombatFaction& operator=(BattlePlayerCombatFaction&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattlePlayerCombatFaction& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePlayerCombatFaction>(&BattlePlayerCombatFaction_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(BattlePlayerCombatFaction& a, BattlePlayerCombatFaction& b) { a.Swap(&b); }
+  inline void Swap(BattlePlayerCombatFaction* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattlePlayerCombatFaction* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattlePlayerCombatFaction* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattlePlayerCombatFaction>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattlePlayerCombatFaction& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattlePlayerCombatFaction& from) { BattlePlayerCombatFaction::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattlePlayerCombatFaction* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.BattlePlayerCombatFaction"; }
+
+  explicit BattlePlayerCombatFaction(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattlePlayerCombatFaction(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePlayerCombatFaction& from);
+  BattlePlayerCombatFaction(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePlayerCombatFaction&& from) noexcept
+      : BattlePlayerCombatFaction(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kCombatFactionIdFieldNumber = 2,
+  };
+  // uint64 player_id = 1 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 combat_faction_id = 2 [json_name = "combatFactionId"];
+  void clear_combat_faction_id() ;
+  [[nodiscard]] ::uint32_t combat_faction_id() const;
+  void set_combat_faction_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_combat_faction_id() const;
+  void _internal_set_combat_faction_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattlePlayerCombatFaction)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattlePlayerCombatFaction& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    ::uint32_t combat_faction_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5993,259 +5741,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleResponse final : publ
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:pandora.ds.v1.AllocateBattleRequest) */ {
- public:
-  inline AllocateBattleRequest() : AllocateBattleRequest(nullptr) {}
-  ~AllocateBattleRequest() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(AllocateBattleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(AllocateBattleRequest));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr AllocateBattleRequest(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline AllocateBattleRequest(const AllocateBattleRequest& from) : AllocateBattleRequest(nullptr, from) {}
-  inline AllocateBattleRequest(AllocateBattleRequest&& from) noexcept : AllocateBattleRequest(nullptr, ::std::move(from)) {}
-  inline AllocateBattleRequest& operator=(const AllocateBattleRequest& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AllocateBattleRequest& operator=(AllocateBattleRequest&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const AllocateBattleRequest& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AllocateBattleRequest>(&AllocateBattleRequest_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 2;
-  friend void swap(AllocateBattleRequest& a, AllocateBattleRequest& b) { a.Swap(&b); }
-  inline void Swap(AllocateBattleRequest* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AllocateBattleRequest* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] AllocateBattleRequest* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<AllocateBattleRequest>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const AllocateBattleRequest& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const AllocateBattleRequest& from) { AllocateBattleRequest::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(AllocateBattleRequest* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.AllocateBattleRequest"; }
-
-  explicit AllocateBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  AllocateBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AllocateBattleRequest& from);
-  AllocateBattleRequest(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AllocateBattleRequest&& from) noexcept
-      : AllocateBattleRequest(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kPlayerIdsFieldNumber = 2,
-    kGameModeFieldNumber = 4,
-    kMatchIdFieldNumber = 1,
-    kMapIdFieldNumber = 3,
-  };
-  // repeated uint64 player_ids = 2 [json_name = "playerIds"];
-  [[nodiscard]] int player_ids_size()
-      const;
-  private:
-  int _internal_player_ids_size() const;
-
-  public:
-  void clear_player_ids() ;
-  [[nodiscard]] ::uint64_t player_ids(int index) const;
-  void set_player_ids(int index, ::uint64_t value);
-  void add_player_ids(::uint64_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
-
-  public:
-  // string game_mode = 4 [json_name = "gameMode"];
-  void clear_game_mode() ;
-  [[nodiscard]] const ::std::string& game_mode() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_game_mode(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_game_mode();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_game_mode();
-  void set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_game_mode() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
-
-  public:
-  // uint64 match_id = 1 [json_name = "matchId"];
-  void clear_match_id() ;
-  [[nodiscard]] ::uint64_t match_id() const;
-  void set_match_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_match_id() const;
-  void _internal_set_match_id(::uint64_t value);
-
-  public:
-  // uint32 map_id = 3 [json_name = "mapId"];
-  void clear_map_id() ;
-  [[nodiscard]] ::uint32_t map_id() const;
-  void set_map_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_map_id() const;
-  void _internal_set_map_id(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:pandora.ds.v1.AllocateBattleRequest)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 53,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const AllocateBattleRequest& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
-    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
-    ::google::protobuf::internal::ArenaStringPtr game_mode_;
-    ::uint64_t match_id_;
-    ::uint32_t map_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AbortPreactiveBattleResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.ds.v1.AbortPreactiveBattleResponse) */ {
  public:
@@ -7280,6 +6775,502 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED HeartbeatResponse final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStorageRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattleStorageRecord) */ {
+ public:
+  inline BattleStorageRecord() : BattleStorageRecord(nullptr) {}
+  ~BattleStorageRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleStorageRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleStorageRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleStorageRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleStorageRecord(const BattleStorageRecord& from) : BattleStorageRecord(nullptr, from) {}
+  inline BattleStorageRecord(BattleStorageRecord&& from) noexcept : BattleStorageRecord(nullptr, ::std::move(from)) {}
+  inline BattleStorageRecord& operator=(const BattleStorageRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleStorageRecord& operator=(BattleStorageRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleStorageRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleStorageRecord>(&BattleStorageRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(BattleStorageRecord& a, BattleStorageRecord& b) { a.Swap(&b); }
+  inline void Swap(BattleStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleStorageRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleStorageRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleStorageRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleStorageRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleStorageRecord& from) { BattleStorageRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleStorageRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.BattleStorageRecord"; }
+
+  explicit BattleStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleStorageRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleStorageRecord& from);
+  BattleStorageRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleStorageRecord&& from) noexcept
+      : BattleStorageRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 5,
+    kPlayerCombatFactionsFieldNumber = 20,
+    kDsPodNameFieldNumber = 2,
+    kDsAddrFieldNumber = 3,
+    kStateFieldNumber = 4,
+    kGameModeFieldNumber = 7,
+    kGameserverUidFieldNumber = 12,
+    kLastVerifiedJtiFieldNumber = 15,
+    kAllocationIdFieldNumber = 17,
+    kReleaseTrackFieldNumber = 18,
+    kPodUidFieldNumber = 19,
+    kMatchIdFieldNumber = 1,
+    kAllocatedAtMsFieldNumber = 8,
+    kMapIdFieldNumber = 6,
+    kPlayerCountFieldNumber = 10,
+    kLastHeartbeatMsFieldNumber = 9,
+    kEmptySinceMsFieldNumber = 11,
+    kLastVerifiedGenFieldNumber = 14,
+    kInstanceEpochFieldNumber = 13,
+    kLastVerifiedWriterEpochFieldNumber = 16,
+  };
+  // repeated uint64 player_ids = 5 [json_name = "playerIds"];
+  [[nodiscard]] int player_ids_size()
+      const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  [[nodiscard]] ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
+
+  public:
+  // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 20 [json_name = "playerCombatFactions"];
+  [[nodiscard]] int player_combat_factions_size()
+      const;
+  private:
+  int _internal_player_combat_factions_size() const;
+
+  public:
+  void clear_player_combat_factions() ;
+  [[nodiscard]] const ::pandora::ds::v1::BattlePlayerCombatFaction& player_combat_factions(int index) const;
+  [[nodiscard]] ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL mutable_player_combat_factions(int index);
+  ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL add_player_combat_factions();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>&
+  player_combat_factions() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
+  mutable_player_combat_factions();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>& _internal_player_combat_factions() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL _internal_mutable_player_combat_factions();
+
+  public:
+  // string ds_pod_name = 2 [json_name = "dsPodName"];
+  void clear_ds_pod_name() ;
+  [[nodiscard]] const ::std::string& ds_pod_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_pod_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_pod_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_pod_name();
+  void set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_pod_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_pod_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_pod_name();
+
+  public:
+  // string ds_addr = 3 [json_name = "dsAddr"];
+  void clear_ds_addr() ;
+  [[nodiscard]] const ::std::string& ds_addr() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ds_addr(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ds_addr();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ds_addr();
+  void set_allocated_ds_addr(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ds_addr() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ds_addr(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ds_addr();
+
+  public:
+  // string state = 4 [json_name = "state"];
+  void clear_state() ;
+  [[nodiscard]] const ::std::string& state() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_state(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_state();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_state();
+  void set_allocated_state(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_state() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_state(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // string game_mode = 7 [json_name = "gameMode"];
+  void clear_game_mode() ;
+  [[nodiscard]] const ::std::string& game_mode() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_game_mode(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_game_mode();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_game_mode();
+  void set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_game_mode() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
+
+  public:
+  // string gameserver_uid = 12 [json_name = "gameserverUid"];
+  void clear_gameserver_uid() ;
+  [[nodiscard]] const ::std::string& gameserver_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gameserver_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gameserver_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gameserver_uid();
+  void set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gameserver_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gameserver_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gameserver_uid();
+
+  public:
+  // string last_verified_jti = 15 [json_name = "lastVerifiedJti"];
+  void clear_last_verified_jti() ;
+  [[nodiscard]] const ::std::string& last_verified_jti() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_verified_jti(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_verified_jti();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_verified_jti();
+  void set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_verified_jti() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_verified_jti(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_verified_jti();
+
+  public:
+  // string allocation_id = 17 [json_name = "allocationId"];
+  void clear_allocation_id() ;
+  [[nodiscard]] const ::std::string& allocation_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_allocation_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_allocation_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_allocation_id();
+  void set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_allocation_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_allocation_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_allocation_id();
+
+  public:
+  // string release_track = 18 [json_name = "releaseTrack"];
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
+  // string pod_uid = 19 [json_name = "podUid"];
+  void clear_pod_uid() ;
+  [[nodiscard]] const ::std::string& pod_uid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_pod_uid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_pod_uid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pod_uid();
+  void set_allocated_pod_uid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_pod_uid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_pod_uid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_pod_uid();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // int64 allocated_at_ms = 8 [json_name = "allocatedAtMs"];
+  void clear_allocated_at_ms() ;
+  [[nodiscard]] ::int64_t allocated_at_ms() const;
+  void set_allocated_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_allocated_at_ms() const;
+  void _internal_set_allocated_at_ms(::int64_t value);
+
+  public:
+  // uint32 map_id = 6 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // int32 player_count = 10 [json_name = "playerCount"];
+  void clear_player_count() ;
+  [[nodiscard]] ::int32_t player_count() const;
+  void set_player_count(::int32_t value);
+
+  private:
+  ::int32_t _internal_player_count() const;
+  void _internal_set_player_count(::int32_t value);
+
+  public:
+  // int64 last_heartbeat_ms = 9 [json_name = "lastHeartbeatMs"];
+  void clear_last_heartbeat_ms() ;
+  [[nodiscard]] ::int64_t last_heartbeat_ms() const;
+  void set_last_heartbeat_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_last_heartbeat_ms() const;
+  void _internal_set_last_heartbeat_ms(::int64_t value);
+
+  public:
+  // int64 empty_since_ms = 11 [json_name = "emptySinceMs"];
+  void clear_empty_since_ms() ;
+  [[nodiscard]] ::int64_t empty_since_ms() const;
+  void set_empty_since_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_empty_since_ms() const;
+  void _internal_set_empty_since_ms(::int64_t value);
+
+  public:
+  // uint64 last_verified_gen = 14 [json_name = "lastVerifiedGen"];
+  void clear_last_verified_gen() ;
+  [[nodiscard]] ::uint64_t last_verified_gen() const;
+  void set_last_verified_gen(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_verified_gen() const;
+  void _internal_set_last_verified_gen(::uint64_t value);
+
+  public:
+  // uint32 instance_epoch = 13 [json_name = "instanceEpoch"];
+  void clear_instance_epoch() ;
+  [[nodiscard]] ::uint32_t instance_epoch() const;
+  void set_instance_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_instance_epoch() const;
+  void _internal_set_instance_epoch(::uint32_t value);
+
+  public:
+  // uint32 last_verified_writer_epoch = 16 [json_name = "lastVerifiedWriterEpoch"];
+  void clear_last_verified_writer_epoch() ;
+  [[nodiscard]] ::uint32_t last_verified_writer_epoch() const;
+  void set_last_verified_writer_epoch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_last_verified_writer_epoch() const;
+  void _internal_set_last_verified_writer_epoch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.BattleStorageRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 20,
+                          1, 154,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleStorageRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::ds::v1::BattlePlayerCombatFaction > player_combat_factions_;
+    ::google::protobuf::internal::ArenaStringPtr ds_pod_name_;
+    ::google::protobuf::internal::ArenaStringPtr ds_addr_;
+    ::google::protobuf::internal::ArenaStringPtr state_;
+    ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::google::protobuf::internal::ArenaStringPtr gameserver_uid_;
+    ::google::protobuf::internal::ArenaStringPtr last_verified_jti_;
+    ::google::protobuf::internal::ArenaStringPtr allocation_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
+    ::google::protobuf::internal::ArenaStringPtr pod_uid_;
+    ::uint64_t match_id_;
+    ::int64_t allocated_at_ms_;
+    ::uint32_t map_id_;
+    ::int32_t player_count_;
+    ::int64_t last_heartbeat_ms_;
+    ::int64_t empty_since_ms_;
+    ::uint64_t last_verified_gen_;
+    ::uint32_t instance_epoch_;
+    ::uint32_t last_verified_writer_epoch_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerDepartureJournalStorageRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.ds.v1.BattlePlayerDepartureJournalStorageRecord) */ {
  public:
@@ -7886,6 +7877,282 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleDSAuthStorageRecord final : p
     ::int64_t updated_at_ms_;
     ::int64_t last_active_heartbeat_ms_;
     ::uint32_t required_writer_epoch_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fds_2fv1_2fallocator_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateBattleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.ds.v1.AllocateBattleRequest) */ {
+ public:
+  inline AllocateBattleRequest() : AllocateBattleRequest(nullptr) {}
+  ~AllocateBattleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AllocateBattleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AllocateBattleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AllocateBattleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AllocateBattleRequest(const AllocateBattleRequest& from) : AllocateBattleRequest(nullptr, from) {}
+  inline AllocateBattleRequest(AllocateBattleRequest&& from) noexcept : AllocateBattleRequest(nullptr, ::std::move(from)) {}
+  inline AllocateBattleRequest& operator=(const AllocateBattleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AllocateBattleRequest& operator=(AllocateBattleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AllocateBattleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AllocateBattleRequest>(&AllocateBattleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(AllocateBattleRequest& a, AllocateBattleRequest& b) { a.Swap(&b); }
+  inline void Swap(AllocateBattleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AllocateBattleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AllocateBattleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AllocateBattleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AllocateBattleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AllocateBattleRequest& from) { AllocateBattleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AllocateBattleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.ds.v1.AllocateBattleRequest"; }
+
+  explicit AllocateBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AllocateBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AllocateBattleRequest& from);
+  AllocateBattleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AllocateBattleRequest&& from) noexcept
+      : AllocateBattleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdsFieldNumber = 2,
+    kGameModeFieldNumber = 4,
+    kMatchIdFieldNumber = 1,
+    kMapIdFieldNumber = 3,
+    kPlayerCombatFactionsFieldNumber = 10,
+  };
+  // repeated uint64 player_ids = 2 [json_name = "playerIds"];
+  [[nodiscard]] int player_ids_size()
+      const;
+  private:
+  int _internal_player_ids_size() const;
+
+  public:
+  void clear_player_ids() ;
+  [[nodiscard]] ::uint64_t player_ids(int index) const;
+  void set_player_ids(int index, ::uint64_t value);
+  void add_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_ids();
+
+  public:
+  // string game_mode = 4 [json_name = "gameMode"];
+  void clear_game_mode() ;
+  [[nodiscard]] const ::std::string& game_mode() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_game_mode(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_game_mode();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_game_mode();
+  void set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_game_mode() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_game_mode(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_game_mode();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // uint32 map_id = 3 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
+  [[nodiscard]] int player_combat_factions_size()
+      const;
+  private:
+  int _internal_player_combat_factions_size() const;
+
+  public:
+  void clear_player_combat_factions() ;
+  [[nodiscard]] const ::pandora::ds::v1::BattlePlayerCombatFaction& player_combat_factions(int index) const;
+  [[nodiscard]] ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL mutable_player_combat_factions(int index);
+  ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL add_player_combat_factions();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>&
+  player_combat_factions() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
+  mutable_player_combat_factions();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>& _internal_player_combat_factions() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL _internal_mutable_player_combat_factions();
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.ds.v1.AllocateBattleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 5,
+                          1, 53,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AllocateBattleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_ids_;
+    ::google::protobuf::internal::CachedSize _player_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr game_mode_;
+    ::uint64_t match_id_;
+    ::uint32_t map_id_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::ds::v1::BattlePlayerCombatFaction > player_combat_factions_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8517,6 +8784,61 @@ inline void AllocateBattleRequest::set_allocated_game_mode(::std::string* PROTOB
     _impl_.game_mode_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.AllocateBattleRequest.game_mode)
+}
+
+// repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 10 [json_name = "playerCombatFactions"];
+inline int AllocateBattleRequest::_internal_player_combat_factions_size() const {
+  return _internal_player_combat_factions().size();
+}
+inline int AllocateBattleRequest::player_combat_factions_size() const {
+  return _internal_player_combat_factions_size();
+}
+inline void AllocateBattleRequest::clear_player_combat_factions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_combat_factions_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::pandora::ds::v1::BattlePlayerCombatFaction& AllocateBattleRequest::player_combat_factions(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
+  return _internal_player_combat_factions().Get(index);
+}
+inline ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL AllocateBattleRequest::mutable_player_combat_factions(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
+  return _internal_mutable_player_combat_factions()->Mutable(index);
+}
+inline ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL AllocateBattleRequest::add_player_combat_factions()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::ds::v1::BattlePlayerCombatFaction* _add =
+      _internal_mutable_player_combat_factions()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_add:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>& AllocateBattleRequest::player_combat_factions() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
+  return _internal_player_combat_factions();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
+AllocateBattleRequest::mutable_player_combat_factions() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.ds.v1.AllocateBattleRequest.player_combat_factions)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_combat_factions();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>&
+AllocateBattleRequest::_internal_player_combat_factions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_combat_factions_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
+AllocateBattleRequest::_internal_mutable_player_combat_factions() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_combat_factions_;
 }
 
 // -------------------------------------------------------------------
@@ -12140,7 +12462,7 @@ ListBattlesResponse::_internal_mutable_battles() {
 inline void BattleStorageRecord::clear_match_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t BattleStorageRecord::match_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.match_id)
@@ -12148,7 +12470,7 @@ inline ::uint64_t BattleStorageRecord::match_id() const {
 }
 inline void BattleStorageRecord::set_match_id(::uint64_t value) {
   _internal_set_match_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.match_id)
 }
 inline ::uint64_t BattleStorageRecord::_internal_match_id() const {
@@ -12164,7 +12486,7 @@ inline void BattleStorageRecord::_internal_set_match_id(::uint64_t value) {
 inline void BattleStorageRecord::clear_ds_pod_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ds_pod_name_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& BattleStorageRecord::ds_pod_name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12174,13 +12496,13 @@ inline const ::std::string& BattleStorageRecord::ds_pod_name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_ds_pod_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.ds_pod_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_ds_pod_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_ds_pod_name();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
   return _s;
@@ -12200,10 +12522,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_ds
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_ds_pod_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.ds_pod_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.ds_pod_name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.ds_pod_name_.Set("", GetArena());
@@ -12213,9 +12535,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_ds_pod_name
 inline void BattleStorageRecord::set_allocated_ds_pod_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.ds_pod_name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_pod_name_.IsDefault()) {
@@ -12228,7 +12550,7 @@ inline void BattleStorageRecord::set_allocated_ds_pod_name(::std::string* PROTOB
 inline void BattleStorageRecord::clear_ds_addr() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ds_addr_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& BattleStorageRecord::ds_addr() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12238,13 +12560,13 @@ inline const ::std::string& BattleStorageRecord::ds_addr() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_ds_addr(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.ds_addr_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.ds_addr)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_ds_addr()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_ds_addr();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.ds_addr)
   return _s;
@@ -12264,10 +12586,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_ds
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_ds_addr() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.ds_addr)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.ds_addr_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.ds_addr_.Set("", GetArena());
@@ -12277,9 +12599,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_ds_addr() {
 inline void BattleStorageRecord::set_allocated_ds_addr(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.ds_addr_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ds_addr_.IsDefault()) {
@@ -12292,7 +12614,7 @@ inline void BattleStorageRecord::set_allocated_ds_addr(::std::string* PROTOBUF_N
 inline void BattleStorageRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::std::string& BattleStorageRecord::state() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12302,13 +12624,13 @@ inline const ::std::string& BattleStorageRecord::state() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_state(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.state_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.state)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_state()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_state();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.state)
   return _s;
@@ -12328,10 +12650,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_st
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.state)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.state_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.state_.Set("", GetArena());
@@ -12341,9 +12663,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_state() {
 inline void BattleStorageRecord::set_allocated_state(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.state_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.state_.IsDefault()) {
@@ -12407,7 +12729,7 @@ BattleStorageRecord::_internal_mutable_player_ids() {
 inline void BattleStorageRecord::clear_map_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.map_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t BattleStorageRecord::map_id() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.map_id)
@@ -12415,7 +12737,7 @@ inline ::uint32_t BattleStorageRecord::map_id() const {
 }
 inline void BattleStorageRecord::set_map_id(::uint32_t value) {
   _internal_set_map_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.map_id)
 }
 inline ::uint32_t BattleStorageRecord::_internal_map_id() const {
@@ -12431,7 +12753,7 @@ inline void BattleStorageRecord::_internal_set_map_id(::uint32_t value) {
 inline void BattleStorageRecord::clear_game_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.game_mode_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::std::string& BattleStorageRecord::game_mode() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12441,13 +12763,13 @@ inline const ::std::string& BattleStorageRecord::game_mode() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_game_mode(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   _impl_.game_mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.game_mode)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_game_mode()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::std::string* _s = _internal_mutable_game_mode();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.game_mode)
   return _s;
@@ -12467,10 +12789,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_ga
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_game_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.game_mode)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   auto* released = _impl_.game_mode_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.game_mode_.Set("", GetArena());
@@ -12480,9 +12802,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_game_mode()
 inline void BattleStorageRecord::set_allocated_game_mode(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   _impl_.game_mode_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.game_mode_.IsDefault()) {
@@ -12495,7 +12817,7 @@ inline void BattleStorageRecord::set_allocated_game_mode(::std::string* PROTOBUF
 inline void BattleStorageRecord::clear_allocated_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allocated_at_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
@@ -12503,7 +12825,7 @@ inline ::int64_t BattleStorageRecord::allocated_at_ms() const {
 }
 inline void BattleStorageRecord::set_allocated_at_ms(::int64_t value) {
   _internal_set_allocated_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.allocated_at_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_allocated_at_ms() const {
@@ -12519,7 +12841,7 @@ inline void BattleStorageRecord::_internal_set_allocated_at_ms(::int64_t value) 
 inline void BattleStorageRecord::clear_last_heartbeat_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_heartbeat_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
@@ -12527,7 +12849,7 @@ inline ::int64_t BattleStorageRecord::last_heartbeat_ms() const {
 }
 inline void BattleStorageRecord::set_last_heartbeat_ms(::int64_t value) {
   _internal_set_last_heartbeat_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_heartbeat_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_last_heartbeat_ms() const {
@@ -12543,7 +12865,7 @@ inline void BattleStorageRecord::_internal_set_last_heartbeat_ms(::int64_t value
 inline void BattleStorageRecord::clear_player_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::int32_t BattleStorageRecord::player_count() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.player_count)
@@ -12551,7 +12873,7 @@ inline ::int32_t BattleStorageRecord::player_count() const {
 }
 inline void BattleStorageRecord::set_player_count(::int32_t value) {
   _internal_set_player_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.player_count)
 }
 inline ::int32_t BattleStorageRecord::_internal_player_count() const {
@@ -12567,7 +12889,7 @@ inline void BattleStorageRecord::_internal_set_player_count(::int32_t value) {
 inline void BattleStorageRecord::clear_empty_since_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.empty_since_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::int64_t BattleStorageRecord::empty_since_ms() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
@@ -12575,7 +12897,7 @@ inline ::int64_t BattleStorageRecord::empty_since_ms() const {
 }
 inline void BattleStorageRecord::set_empty_since_ms(::int64_t value) {
   _internal_set_empty_since_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.empty_since_ms)
 }
 inline ::int64_t BattleStorageRecord::_internal_empty_since_ms() const {
@@ -12591,7 +12913,7 @@ inline void BattleStorageRecord::_internal_set_empty_since_ms(::int64_t value) {
 inline void BattleStorageRecord::clear_gameserver_uid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gameserver_uid_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline const ::std::string& BattleStorageRecord::gameserver_uid() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12601,13 +12923,13 @@ inline const ::std::string& BattleStorageRecord::gameserver_uid() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_gameserver_uid(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   _impl_.gameserver_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_gameserver_uid()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::std::string* _s = _internal_mutable_gameserver_uid();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
   return _s;
@@ -12627,10 +12949,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_ga
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_gameserver_uid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.gameserver_uid)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   auto* released = _impl_.gameserver_uid_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.gameserver_uid_.Set("", GetArena());
@@ -12640,9 +12962,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_gameserver_
 inline void BattleStorageRecord::set_allocated_gameserver_uid(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
   _impl_.gameserver_uid_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gameserver_uid_.IsDefault()) {
@@ -12655,7 +12977,7 @@ inline void BattleStorageRecord::set_allocated_gameserver_uid(::std::string* PRO
 inline void BattleStorageRecord::clear_instance_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.instance_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t BattleStorageRecord::instance_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.instance_epoch)
@@ -12663,7 +12985,7 @@ inline ::uint32_t BattleStorageRecord::instance_epoch() const {
 }
 inline void BattleStorageRecord::set_instance_epoch(::uint32_t value) {
   _internal_set_instance_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.instance_epoch)
 }
 inline ::uint32_t BattleStorageRecord::_internal_instance_epoch() const {
@@ -12679,7 +13001,7 @@ inline void BattleStorageRecord::_internal_set_instance_epoch(::uint32_t value) 
 inline void BattleStorageRecord::clear_last_verified_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_gen_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint64_t BattleStorageRecord::last_verified_gen() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_gen)
@@ -12687,7 +13009,7 @@ inline ::uint64_t BattleStorageRecord::last_verified_gen() const {
 }
 inline void BattleStorageRecord::set_last_verified_gen(::uint64_t value) {
   _internal_set_last_verified_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_gen)
 }
 inline ::uint64_t BattleStorageRecord::_internal_last_verified_gen() const {
@@ -12703,7 +13025,7 @@ inline void BattleStorageRecord::_internal_set_last_verified_gen(::uint64_t valu
 inline void BattleStorageRecord::clear_last_verified_jti() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_jti_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline const ::std::string& BattleStorageRecord::last_verified_jti() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12713,13 +13035,13 @@ inline const ::std::string& BattleStorageRecord::last_verified_jti() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_last_verified_jti(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   _impl_.last_verified_jti_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_last_verified_jti()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::std::string* _s = _internal_mutable_last_verified_jti();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
   return _s;
@@ -12739,10 +13061,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_la
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_last_verified_jti() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.last_verified_jti)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   auto* released = _impl_.last_verified_jti_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.last_verified_jti_.Set("", GetArena());
@@ -12752,9 +13074,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_last_verifi
 inline void BattleStorageRecord::set_allocated_last_verified_jti(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
   _impl_.last_verified_jti_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_verified_jti_.IsDefault()) {
@@ -12767,7 +13089,7 @@ inline void BattleStorageRecord::set_allocated_last_verified_jti(::std::string* 
 inline void BattleStorageRecord::clear_last_verified_writer_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_verified_writer_epoch_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t BattleStorageRecord::last_verified_writer_epoch() const {
   // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.last_verified_writer_epoch)
@@ -12775,7 +13097,7 @@ inline ::uint32_t BattleStorageRecord::last_verified_writer_epoch() const {
 }
 inline void BattleStorageRecord::set_last_verified_writer_epoch(::uint32_t value) {
   _internal_set_last_verified_writer_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.last_verified_writer_epoch)
 }
 inline ::uint32_t BattleStorageRecord::_internal_last_verified_writer_epoch() const {
@@ -12791,7 +13113,7 @@ inline void BattleStorageRecord::_internal_set_last_verified_writer_epoch(::uint
 inline void BattleStorageRecord::clear_allocation_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allocation_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline const ::std::string& BattleStorageRecord::allocation_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12801,13 +13123,13 @@ inline const ::std::string& BattleStorageRecord::allocation_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_allocation_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   _impl_.allocation_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.allocation_id)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_allocation_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::std::string* _s = _internal_mutable_allocation_id();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.allocation_id)
   return _s;
@@ -12827,10 +13149,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_al
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_allocation_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.allocation_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   auto* released = _impl_.allocation_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.allocation_id_.Set("", GetArena());
@@ -12840,9 +13162,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_allocation_
 inline void BattleStorageRecord::set_allocated_allocation_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
   _impl_.allocation_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.allocation_id_.IsDefault()) {
@@ -12855,7 +13177,7 @@ inline void BattleStorageRecord::set_allocated_allocation_id(::std::string* PROT
 inline void BattleStorageRecord::clear_release_track() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.release_track_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline const ::std::string& BattleStorageRecord::release_track() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12865,13 +13187,13 @@ inline const ::std::string& BattleStorageRecord::release_track() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_release_track(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.release_track)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_release_track()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::std::string* _s = _internal_mutable_release_track();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.release_track)
   return _s;
@@ -12891,10 +13213,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_re
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_release_track() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.release_track)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000200U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   auto* released = _impl_.release_track_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.release_track_.Set("", GetArena());
@@ -12904,9 +13226,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_release_tra
 inline void BattleStorageRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
   _impl_.release_track_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
@@ -12919,7 +13241,7 @@ inline void BattleStorageRecord::set_allocated_release_track(::std::string* PROT
 inline void BattleStorageRecord::clear_pod_uid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pod_uid_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline const ::std::string& BattleStorageRecord::pod_uid() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -12929,13 +13251,13 @@ inline const ::std::string& BattleStorageRecord::pod_uid() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattleStorageRecord::set_pod_uid(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   _impl_.pod_uid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:pandora.ds.v1.BattleStorageRecord.pod_uid)
 }
 inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::mutable_pod_uid()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::std::string* _s = _internal_mutable_pod_uid();
   // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.pod_uid)
   return _s;
@@ -12955,10 +13277,10 @@ inline ::std::string* PROTOBUF_NONNULL BattleStorageRecord::_internal_mutable_po
 inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_pod_uid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:pandora.ds.v1.BattleStorageRecord.pod_uid)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000200U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000400U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   auto* released = _impl_.pod_uid_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.pod_uid_.Set("", GetArena());
@@ -12968,15 +13290,70 @@ inline ::std::string* PROTOBUF_NULLABLE BattleStorageRecord::release_pod_uid() {
 inline void BattleStorageRecord::set_allocated_pod_uid(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
   _impl_.pod_uid_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.pod_uid_.IsDefault()) {
     _impl_.pod_uid_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.ds.v1.BattleStorageRecord.pod_uid)
+}
+
+// repeated .pandora.ds.v1.BattlePlayerCombatFaction player_combat_factions = 20 [json_name = "playerCombatFactions"];
+inline int BattleStorageRecord::_internal_player_combat_factions_size() const {
+  return _internal_player_combat_factions().size();
+}
+inline int BattleStorageRecord::player_combat_factions_size() const {
+  return _internal_player_combat_factions_size();
+}
+inline void BattleStorageRecord::clear_player_combat_factions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_combat_factions_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::pandora::ds::v1::BattlePlayerCombatFaction& BattleStorageRecord::player_combat_factions(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattleStorageRecord.player_combat_factions)
+  return _internal_player_combat_factions().Get(index);
+}
+inline ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL BattleStorageRecord::mutable_player_combat_factions(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.ds.v1.BattleStorageRecord.player_combat_factions)
+  return _internal_mutable_player_combat_factions()->Mutable(index);
+}
+inline ::pandora::ds::v1::BattlePlayerCombatFaction* PROTOBUF_NONNULL BattleStorageRecord::add_player_combat_factions()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::ds::v1::BattlePlayerCombatFaction* _add =
+      _internal_mutable_player_combat_factions()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:pandora.ds.v1.BattleStorageRecord.player_combat_factions)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>& BattleStorageRecord::player_combat_factions() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.ds.v1.BattleStorageRecord.player_combat_factions)
+  return _internal_player_combat_factions();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
+BattleStorageRecord::mutable_player_combat_factions() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.ds.v1.BattleStorageRecord.player_combat_factions)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_combat_factions();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>&
+BattleStorageRecord::_internal_player_combat_factions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_combat_factions_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::ds::v1::BattlePlayerCombatFaction>* PROTOBUF_NONNULL
+BattleStorageRecord::_internal_mutable_player_combat_factions() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_combat_factions_;
 }
 
 // -------------------------------------------------------------------
@@ -16143,6 +16520,58 @@ inline ::int64_t DSLifecycleEvent::_internal_ts_ms() const {
 inline void DSLifecycleEvent::_internal_set_ts_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ts_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattlePlayerCombatFaction
+
+// uint64 player_id = 1 [json_name = "playerId"];
+inline void BattlePlayerCombatFaction::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t BattlePlayerCombatFaction::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattlePlayerCombatFaction.player_id)
+  return _internal_player_id();
+}
+inline void BattlePlayerCombatFaction::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattlePlayerCombatFaction.player_id)
+}
+inline ::uint64_t BattlePlayerCombatFaction::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BattlePlayerCombatFaction::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 combat_faction_id = 2 [json_name = "combatFactionId"];
+inline void BattlePlayerCombatFaction::clear_combat_faction_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.combat_faction_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t BattlePlayerCombatFaction::combat_faction_id() const {
+  // @@protoc_insertion_point(field_get:pandora.ds.v1.BattlePlayerCombatFaction.combat_faction_id)
+  return _internal_combat_faction_id();
+}
+inline void BattlePlayerCombatFaction::set_combat_faction_id(::uint32_t value) {
+  _internal_set_combat_faction_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.ds.v1.BattlePlayerCombatFaction.combat_faction_id)
+}
+inline ::uint32_t BattlePlayerCombatFaction::_internal_combat_faction_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.combat_faction_id_;
+}
+inline void BattlePlayerCombatFaction::_internal_set_combat_faction_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.combat_faction_id_ = value;
 }
 
 #ifdef __GNUC__

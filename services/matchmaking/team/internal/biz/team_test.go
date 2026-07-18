@@ -21,12 +21,18 @@ type mockPusher struct {
 }
 
 type pushCall struct {
-	caller uint64
-	to     []uint64
+	caller    uint64
+	to        []uint64
+	eventType uint32
 }
 
 func (m *mockPusher) PushTeamUpdate(_ context.Context, callerPlayerID uint64, toPlayerIDs []uint64, _ []byte) (int, error) {
 	m.calls = append(m.calls, pushCall{caller: callerPlayerID, to: toPlayerIDs})
+	return len(toPlayerIDs), nil
+}
+
+func (m *mockPusher) PushTeamEvent(_ context.Context, callerPlayerID uint64, toPlayerIDs []uint64, _ []byte, eventType uint32) (int, error) {
+	m.calls = append(m.calls, pushCall{caller: callerPlayerID, to: toPlayerIDs, eventType: eventType})
 	return len(toPlayerIDs), nil
 }
 
@@ -182,18 +188,31 @@ func TestInvitePushOnlyTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invite: %v", err)
 	}
-	if len(pusher.calls) != 1 {
-		t.Fatalf("expected 1 push, got %d", len(pusher.calls))
+	// 默认 InvitePushMode="dual"(金丝雀共存期):双发独立事件(event_type=1)+ legacy(event_type=0)。
+	// 两条都必须只发给 target(3001)、绝不发给 inviter(2001)。
+	if len(pusher.calls) != 2 {
+		t.Fatalf("expected 2 pushes (dual mode), got %d", len(pusher.calls))
 	}
-	call := pusher.calls[0]
-	if call.caller != 2001 {
-		t.Errorf("expected caller=2001, got %d", call.caller)
-	}
-	// 接收方只有 target(3001),不含 inviter(2001)
-	for _, id := range call.to {
-		if id == 2001 {
-			t.Error("inviter(2001) should not receive push")
+	var sawDedicated, sawLegacy bool
+	for _, call := range pusher.calls {
+		if call.caller != 2001 {
+			t.Errorf("expected caller=2001, got %d", call.caller)
 		}
+		// 接收方只有 target(3001),不含 inviter(2001)
+		for _, id := range call.to {
+			if id == 2001 {
+				t.Error("inviter(2001) should not receive push")
+			}
+		}
+		switch call.eventType {
+		case 1: // TEAM_PUSH_EVENT_TYPE_INVITE(独立事件)
+			sawDedicated = true
+		case 0: // legacy TeamUpdateEvent
+			sawLegacy = true
+		}
+	}
+	if !sawDedicated || !sawLegacy {
+		t.Errorf("dual mode should emit both dedicated(1) and legacy(0), got dedicated=%v legacy=%v", sawDedicated, sawLegacy)
 	}
 }
 

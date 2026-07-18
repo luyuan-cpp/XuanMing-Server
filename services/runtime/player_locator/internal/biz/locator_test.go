@@ -323,7 +323,7 @@ func TestNewLocatorUsecase_DefaultTTL(t *testing.T) {
 	if uc2.ttl != 30*time.Second {
 		t.Errorf("negative ttl should fall to 30s, got %v", uc2.ttl)
 	}
-	// 脑裂再入屏障机械下限(pkg/placement.DSFenceReentryBarrier=25s,2026-07-16):
+	// 脑裂再入屏障机械下限(pkg/placement.DSFenceReentryBarrier=27s,2026-07-16;2026-07-18 余量 5→7):
 	// BATTLE presence 是 login/matchmaker 再入门的第一道信号,TTL 低于屏障会在
 	// 分区旧 DS 完成自我 fencing 之前放行再入,构成一人两 DS 窗口 → 机械抬回。
 	uc3 := NewLocatorUsecase(newStubRepo(), 5*time.Second)

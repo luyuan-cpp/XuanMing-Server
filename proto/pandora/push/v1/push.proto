@@ -67,13 +67,14 @@ message SubscribeRequest {
 }
 
 message PushFrame {
-  // topic 跟 kafka topic 一致,客户端用来分发到不同 UI handler。
+  // topic 跟 kafka topic 一致,客户端用来「粗路由」到业务域(team / match / friend / ...)。
+  // topic = 业务域,数量只随「域」增长,不随「事件种类」增长(不会 topic 爆炸)。
   // 例:pandora.team.update / pandora.match.progress / pandora.chat.world / ...
   string topic = 1;
 
-  // payload 是业务 Event message 的 protobuf 序列化字节。
-  // 例:topic=pandora.team.update → payload=TeamUpdateEvent serialized bytes
-  // 客户端按 topic 选对应 message 反序列化。
+  // payload 是业务 Event message 的 protobuf 序列化字节(**裸 message,不再包一层**)。
+  // 例:topic=pandora.team.update, event_type=0 → payload=TeamUpdateEvent serialized bytes
+  // 客户端按 (topic, event_type) 选对应 message 反序列化。
   bytes payload = 2;
 
   // ts_ms 是事件生产时间(业务服 produce kafka 时打的时间戳),
@@ -83,6 +84,31 @@ message PushFrame {
   // trace_id 跟业务 RPC 的 trace_id 同源,用于全链路排查。
   string trace_id = 4;
 
-  // 5-9 reserved core
-  reserved 5 to 9;
+  // event_type 是「域内事件类型」判别键(2026-07-17 加,见 §域内多事件类型路由)。
+  //
+  // 背景:一个 topic(=业务域)下要承载多种「结构不同」的事件 message
+  //       (如 pandora.team.update 下有 TeamUpdateEvent / 将来的 TeamInviteEvent / ...)。
+  //       为了不让 topic 爆炸(拒绝一事件一 topic),用 (topic, event_type) 两级定位 message:
+  //         topic     → 业务域(粗路由)
+  //         event_type→ 域内第几种事件(细路由)
+  //
+  // 编号规则(**每域独立**,不是全局):
+  //   - 每个业务域各自定义一个 XxxPushEventType enum(如 pandora.team.v1.TeamPushEventType),
+  //     枚举值即本字段取值;team 的 1 和 match 的 1 互不相干,靠 topic 区分。
+  //   - **0 永远 = 该 topic 现有的旧事件**(如 team → TeamUpdateEvent),用于向后兼容。
+  //   - 枚举值编号只增不复用(对齐既有 enum 纪律)。
+  //
+  // 兼容性(靠 proto3 两条原生特性,保护「正在游戏中的老客户端」):
+  //   - 老 producer 不填 → 缺省 0 → 天然落到「旧事件」,老 producer 无需改。
+  //   - 老 client 不认本字段 → proto3 未知字段静默忽略,仍按旧 payload 解,不崩;
+  //     万一收到新事件(event_type=N),按旧 message 解顶多字段对不上,protobuf 不崩,
+  //     客户端走兜底(如重拉快照),无害。
+  //   - 新 client:switch(event_type),0/未知 → 旧路径,已知新值 → 对应新 message。
+  //
+  // ⚠️ push 服务对本字段**透明转发**:它只按 topic 路由,不解 payload、不读 event_type。
+  //     event_type 由 producer 填、client 读,push 服务原样透传(与 topic/trace_id 一致)。
+  uint32 event_type = 5;
+
+  // 6-9 reserved core
+  reserved 6 to 9;
 }

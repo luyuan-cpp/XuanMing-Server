@@ -104,6 +104,12 @@ func (s *LoginService) SelectRole(ctx context.Context, req *loginv1.SelectRoleRe
 		plog.With(ctx).Warnw("msg", "select_role_no_player_id")
 		return &loginv1.SelectRoleResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
 	}
+	// 会话现行性门(2026-07-18,封"顶号后旧设备仍可 SelectRole 拿 hub 票"缺口):
+	// jti 取自 Envoy 验签后重写的 x-pandora-jwt-payload(入站剥离,客户端无法伪造),
+	// 与 IssueDSTicket 的请求体 token 走同一 Redis session 判定。
+	if err := s.loginUC.RequireCurrentSessionJTI(ctx, playerID, middleware.SessionJTIFromContext(ctx)); err != nil {
+		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
+	}
 	addr, ticket, _, err := s.loginUC.SelectRole(ctx, playerID, req.GetRoleId())
 	if err != nil {
 		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil

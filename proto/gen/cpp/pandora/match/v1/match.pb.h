@@ -62,6 +62,8 @@ enum MatchAllocationPhase : int;
 extern const uint32_t MatchAllocationPhase_internal_data_[];
 enum MatchConfirmStatus : int;
 extern const uint32_t MatchConfirmStatus_internal_data_[];
+enum MatchPushEventType : int;
+extern const uint32_t MatchPushEventType_internal_data_[];
 enum MatchStage : int;
 extern const uint32_t MatchStage_internal_data_[];
 enum MatchStartPhase : int;
@@ -249,6 +251,9 @@ internal::EnumTraitsT<::pandora::match::v1::MatchAllocationPhase_internal_data_>
 template <>
 internal::EnumTraitsT<::pandora::match::v1::MatchConfirmStatus_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::match::v1::MatchConfirmStatus>;
+template <>
+internal::EnumTraitsT<::pandora::match::v1::MatchPushEventType_internal_data_>
+    internal::EnumTraitsImpl::value<::pandora::match::v1::MatchPushEventType>;
 template <>
 internal::EnumTraitsT<::pandora::match::v1::MatchStage_internal_data_>
     internal::EnumTraitsImpl::value<::pandora::match::v1::MatchStage>;
@@ -485,6 +490,45 @@ template <>
 [[nodiscard]] inline bool PlayerMatchResumeStage_Parse(
     ::absl::string_view name, PlayerMatchResumeStage* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<PlayerMatchResumeStage>(PlayerMatchResumeStage_descriptor(), name,
+                                           value);
+}
+enum MatchPushEventType : int {
+  MATCH_PUSH_EVENT_TYPE_UNSPECIFIED = 0,
+  MatchPushEventType_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  MatchPushEventType_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t MatchPushEventType_internal_data_[];
+inline constexpr MatchPushEventType MatchPushEventType_MIN =
+    static_cast<MatchPushEventType>(0);
+inline constexpr MatchPushEventType MatchPushEventType_MAX =
+    static_cast<MatchPushEventType>(0);
+[[nodiscard]] inline bool MatchPushEventType_IsValid(int value) {
+  return 0 <= value && value <= 0;
+}
+inline constexpr int MatchPushEventType_ARRAYSIZE = 0 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+MatchPushEventType_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(MatchPushEventType) {
+  return MatchPushEventType_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& MatchPushEventType_Name(T value) {
+  static_assert(::std::is_same<T, MatchPushEventType>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to MatchPushEventType_Name().");
+  return MatchPushEventType_Name(static_cast<MatchPushEventType>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& MatchPushEventType_Name(MatchPushEventType value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<MatchPushEventType_descriptor, 0, 0>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool MatchPushEventType_Parse(
+    ::absl::string_view name, MatchPushEventType* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<MatchPushEventType>(MatchPushEventType_descriptor(), name,
                                            value);
 }
 enum MatchConfirmStatus : int {
@@ -9788,6 +9832,12 @@ struct is_proto_enum<::pandora::match::v1::PlayerMatchResumeStage> : std::true_t
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::match::v1::PlayerMatchResumeStage>() {
   return ::pandora::match::v1::PlayerMatchResumeStage_descriptor();
+}
+template <>
+struct is_proto_enum<::pandora::match::v1::MatchPushEventType> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::pandora::match::v1::MatchPushEventType>() {
+  return ::pandora::match::v1::MatchPushEventType_descriptor();
 }
 template <>
 struct is_proto_enum<::pandora::match::v1::MatchConfirmStatus> : std::true_type {};

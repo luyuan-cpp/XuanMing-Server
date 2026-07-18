@@ -166,6 +166,11 @@ func (k *kafkaPusher) PushTeamUpdate(ctx context.Context, callerPlayerID uint64,
 	return k.p.PushToPlayers(ctx, callerPlayerID, toPlayerIDs, payload)
 }
 
+// PushTeamEvent 带 push 域内事件类型判别键(event_type)推送(邀请等专属事件)。
+func (k *kafkaPusher) PushTeamEvent(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte, eventType uint32) (int, error) {
+	return k.p.PushToPlayersWithEventType(ctx, callerPlayerID, toPlayerIDs, payload, eventType)
+}
+
 // kratosHelper 是 *klog.Helper 的简化接口。
 type kratosHelper interface {
 	Infow(keyvals ...any)
