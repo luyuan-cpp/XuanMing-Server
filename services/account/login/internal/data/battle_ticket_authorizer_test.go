@@ -148,6 +148,7 @@ func TestInspectBattleRouteExplicitThreeState(t *testing.T) {
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("abandoned inside skew reserve", 1001, BattleRouteUnknown, errcode.ErrUnavailable)
 
+	// 只有达到完整 27s 屏障后才能判定 Terminal，等值边界明确采用“到达即放行”。
 	record.LastHeartbeatMs = now.Add(-27 * time.Second).UnixMilli() // 恰好到达屏障边界(等于即放行)
 	setAdmissionProto(t, mr, key, record)
 	assertRoute("abandoned at barrier boundary", 1001, BattleRouteTerminal, 0)

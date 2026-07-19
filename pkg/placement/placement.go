@@ -39,10 +39,12 @@ const (
 	// (1s ticker) + 服务间时钟漂移专属预留(≥2s;ds_allocator 写 last_heartbeat_ms
 	// 与 login 读 now() 是两台机器的时钟)。2026-07-18 从 5 提到 7:原值被前两项
 	// 恰好占满,时钟漂移零预留,UE Automation 断言等号成立即无余量。
+	// 该值是跨服务正确性预算,不能按单机观测到的平均延迟随意缩小。
 	DSFenceSkewMarginSeconds = 7
 
 	// DSFenceReentryBarrier 是服务端再入屏障:自 DS 最后一次心跳起,必须经过
 	// 该时长才允许把这台 DS 上的玩家路由到任何新 DS。
+	// 当前派生结果为 27 秒,保持租约上限与安全余量只有一个权威计算入口。
 	DSFenceReentryBarrier = (DSFenceLeaseMaxSeconds + DSFenceSkewMarginSeconds) * time.Second
 )
 

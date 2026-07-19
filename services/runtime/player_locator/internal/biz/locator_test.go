@@ -315,10 +315,12 @@ func TestReportDisconnect_InvalidArgs(t *testing.T) {
 }
 
 func TestNewLocatorUsecase_DefaultTTL(t *testing.T) {
+	// uc 覆盖零值配置，确认构造器回填常规 30s 默认 TTL。
 	uc := NewLocatorUsecase(newStubRepo(), 0)
 	if uc.ttl != 30*time.Second {
 		t.Errorf("default ttl should be 30s, got %v", uc.ttl)
 	}
+	// uc2 覆盖非法负值，确认它与未配置走同一默认分支。
 	uc2 := NewLocatorUsecase(newStubRepo(), -1)
 	if uc2.ttl != 30*time.Second {
 		t.Errorf("negative ttl should fall to 30s, got %v", uc2.ttl)
@@ -326,12 +328,14 @@ func TestNewLocatorUsecase_DefaultTTL(t *testing.T) {
 	// 脑裂再入屏障机械下限(pkg/placement.DSFenceReentryBarrier=27s,2026-07-16;2026-07-18 余量 5→7):
 	// BATTLE presence 是 login/matchmaker 再入门的第一道信号,TTL 低于屏障会在
 	// 分区旧 DS 完成自我 fencing 之前放行再入,构成一人两 DS 窗口 → 机械抬回。
+	// uc3 故意传入 5s，验证配置不会绕过共享的 fencing 正确性下限。
 	uc3 := NewLocatorUsecase(newStubRepo(), 5*time.Second)
 	if uc3.ttl != placement.DSFenceReentryBarrier {
 		t.Errorf("ttl below fence barrier must be raised to %v, got %v",
 			placement.DSFenceReentryBarrier, uc3.ttl)
 	}
 	// 屏障之上的显式配置保持原值。
+	// uc4 锁定“只抬低值、不覆盖合法高值”，避免把安全门误做成固定 TTL。
 	uc4 := NewLocatorUsecase(newStubRepo(), 40*time.Second)
 	if uc4.ttl != 40*time.Second {
 		t.Errorf("explicit ttl=40s expected, got %v", uc4.ttl)

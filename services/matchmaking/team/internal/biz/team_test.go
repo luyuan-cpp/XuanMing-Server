@@ -21,6 +21,10 @@ type mockPusher struct {
 }
 
 type pushCall struct {
+	// 字段含义:
+	// - caller 记录本次推送应排除的发起玩家;
+	// - to 记录本次推送的目标玩家集合;
+	// - eventType 记录客户端选择 payload 类型所用的域内判别值。
 	caller    uint64
 	to        []uint64
 	eventType uint32
@@ -31,8 +35,11 @@ func (m *mockPusher) PushTeamUpdate(_ context.Context, callerPlayerID uint64, to
 	return len(toPlayerIDs), nil
 }
 
+// PushTeamEvent 记录带域内事件类型的推送,供测试核对 dedicated 与 legacy 是否都发送。
 func (m *mockPusher) PushTeamEvent(_ context.Context, callerPlayerID uint64, toPlayerIDs []uint64, _ []byte, eventType uint32) (int, error) {
+	// calls 保存完整调用顺序和参数,eventType 用于区分独立邀请事件与旧队伍快照。
 	m.calls = append(m.calls, pushCall{caller: callerPlayerID, to: toPlayerIDs, eventType: eventType})
+	// mock 把目标数量视为成功发送数,不在本测试模拟传输失败。
 	return len(toPlayerIDs), nil
 }
 
@@ -193,17 +200,21 @@ func TestInvitePushOnlyTarget(t *testing.T) {
 	if len(pusher.calls) != 2 {
 		t.Fatalf("expected 2 pushes (dual mode), got %d", len(pusher.calls))
 	}
+	// sawDedicated 与 sawLegacy 分别标记独立邀请事件和旧 TeamUpdateEvent 是否出现。
 	var sawDedicated, sawLegacy bool
+	// call 是 mock 按发送顺序记录的单次推送,逐条核对发起方、接收方和事件类型。
 	for _, call := range pusher.calls {
 		if call.caller != 2001 {
 			t.Errorf("expected caller=2001, got %d", call.caller)
 		}
 		// 接收方只有 target(3001),不含 inviter(2001)
+		// id 是当前推送记录中的一个接收玩家 ID。
 		for _, id := range call.to {
 			if id == 2001 {
 				t.Error("inviter(2001) should not receive push")
 			}
 		}
+		// eventType=1 表示独立邀请 payload,0 表示向后兼容的旧队伍更新 payload。
 		switch call.eventType {
 		case 1: // TEAM_PUSH_EVENT_TYPE_INVITE(独立事件)
 			sawDedicated = true
@@ -211,6 +222,7 @@ func TestInvitePushOnlyTarget(t *testing.T) {
 			sawLegacy = true
 		}
 	}
+	// dual 模式缺少任一类型都会导致对应代际客户端收不到邀请。
 	if !sawDedicated || !sawLegacy {
 		t.Errorf("dual mode should emit both dedicated(1) and legacy(0), got dedicated=%v legacy=%v", sawDedicated, sawLegacy)
 	}

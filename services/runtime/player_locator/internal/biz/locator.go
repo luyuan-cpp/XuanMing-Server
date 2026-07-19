@@ -102,7 +102,9 @@ func NewLocatorUsecase(repo data.LocationRepo, ttl time.Duration, presence ...Pr
 	if ttl < placement.DSFenceReentryBarrier {
 		ttl = placement.DSFenceReentryBarrier
 	}
+	// u 保存钳制后的有效 TTL，后续写入不能再使用调用方传入的过短原值。
 	u := &LocatorUsecase{repo: repo, ttl: ttl}
+	// presence 是可选弱依赖；仅在调用方显式提供时记录首个通知器，未提供则保持纯拉模式。
 	if len(presence) > 0 {
 		u.presence = presence[0]
 	}

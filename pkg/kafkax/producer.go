@@ -206,16 +206,22 @@ const HeaderEventType = "event_type"
 // SendRawWithEventType 与 SendRaw 相同,额外在 kafka header 里带上 event_type
 // (push 域内多事件类型路由的判别键,详见 pandora/push/v1/push.proto)。
 // eventType=0 时不写 header(等价于 SendRaw),避免给现网旧事件平白加 header。
+// 参数中 key 是 Kafka 分区键(玩家推送时为十进制 player_id),payload 是业务事件原始 protobuf
+// 字节,eventType 是当前 topic 域内的事件枚举值;ctx 保留与 SendRaw 一致的调用契约,
+// 当前同步 Sarama 发送不会读取它。
 func (p *KeyOrderedProducer) SendRawWithEventType(ctx context.Context, key string, payload []byte, eventType uint32) error {
+	// 关闭后的 producer 不再接收新消息,避免把发送误报为成功或写入已关闭的客户端。
 	if p.isClosed() {
 		return fmt.Errorf("producer closed")
 	}
 
+	// partition 是一致性哈希为 key 选出的固定分区;ok=false 表示当前分区环无法给出路由。
 	partition, ok := p.consistent.GetPartition(key)
 	if !ok {
 		return fmt.Errorf("no partition")
 	}
 
+	// pm 是交给 Sarama 的完整消息;显式写入分区保证同一 key 的消息保持分区内顺序。
 	pm := &sarama.ProducerMessage{
 		Topic:     p.topic,
 		Key:       sarama.StringEncoder(key),
@@ -223,6 +229,7 @@ func (p *KeyOrderedProducer) SendRawWithEventType(ctx context.Context, key strin
 		Partition: partition,
 		Timestamp: time.Now(),
 	}
+	// 0 是每个 topic 的旧事件兼容值,因此只有非零类型才需要增加判别 header。
 	if eventType != 0 {
 		pm.Headers = []sarama.RecordHeader{{
 			Key:   []byte(HeaderEventType),
@@ -230,10 +237,12 @@ func (p *KeyOrderedProducer) SendRawWithEventType(ctx context.Context, key strin
 		}}
 	}
 
+	// SendMessage 同步返回 broker 发送结果;失败只累计 errorCount,绝不能累计成功数。
 	if _, _, err := p.producer.SendMessage(pm); err != nil {
 		atomic.AddInt64(&p.errorCount, 1)
 		return fmt.Errorf("send: %w", err)
 	}
+	// 只有 Sarama 确认发送成功后才累计 successCount。
 	atomic.AddInt64(&p.successCount, 1)
 	return nil
 }
@@ -282,6 +291,8 @@ func (p *KeyOrderedProducer) PushToPlayers(
 // PushToPlayersWithEventType 与 PushToPlayers 相同(排除 caller、按 player_id 路由分发),
 // 额外给每条消息带上 event_type header(push 域内多事件类型路由判别键)。
 // eventType=0 时行为等价于 PushToPlayers(不写 header)。
+// callerPlayerID=0 表示不排除任何人;toPlayerIDs 是候选接收者,payload 与 eventType 对所有
+// 接收者相同。返回的 sent 是成功发送人数,lastErr 是本批最后一次发送错误(部分成功仍继续)。
 func (p *KeyOrderedProducer) PushToPlayersWithEventType(
 	ctx context.Context,
 	callerPlayerID uint64,
@@ -289,16 +300,20 @@ func (p *KeyOrderedProducer) PushToPlayersWithEventType(
 	payload []byte,
 	eventType uint32,
 ) (sent int, lastErr error) {
+	// pid 是当前处理的目标玩家 ID,同时会被编码成 Kafka key 以维持玩家内事件顺序。
 	for _, pid := range toPlayerIDs {
+		// 发起方通过 RPC 响应获得结果,默认不重复接收自己触发的推送。
 		if pid == callerPlayerID {
 			continue
 		}
+		// 单个玩家发送失败只记录并继续,避免一个坏目标阻断同批其他玩家。
 		if err := p.SendRawWithEventType(ctx, strconv.FormatUint(pid, 10), payload, eventType); err != nil {
 			klog.Warnf("[kafkax] push_to_players send_failed topic=%s player_id=%d event_type=%d err=%v",
 				p.topic, pid, eventType, err)
 			lastErr = err
 			continue
 		}
+		// sent 只统计已由底层 producer 确认成功的目标数。
 		sent++
 	}
 	return sent, lastErr

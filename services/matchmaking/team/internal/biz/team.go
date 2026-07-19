@@ -250,11 +250,14 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 	//   - legacy:只发旧事件(回退用)。
 	switch u.cfg.InvitePushMode {
 	case "legacy":
+		// 回退模式只发旧 TeamUpdateEvent,继续服务尚未识别 event_type 的客户端。
 		u.pushUpdate(ctx, inviterID, []uint64{targetPlayerID}, team,
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
 	case "dedicated":
+		// 新客户端全量铺开后只发精简的独立邀请事件,停止冗余旧快照。
 		u.pushInvite(ctx, inviterID, targetPlayerID, teamID, inviteID)
 	default: // "dual"(含空串):共存期双发,金丝雀安全
+		// 金丝雀共存期同时照顾新旧客户端;两代各认一种 payload,不会重复弹邀请框。
 		u.pushInvite(ctx, inviterID, targetPlayerID, teamID, inviteID)
 		u.pushUpdate(ctx, inviterID, []uint64{targetPlayerID}, team,
 			teamv1.TeamUpdateReason_TEAM_UPDATE_REASON_INVITE_SENT, inviteID)
@@ -682,10 +685,13 @@ func (u *TeamUsecase) pushUpdate(
 // pushInvite 构造独立的 TeamInviteEvent 并以 event_type=INVITE(=1)推送给被邀请人。
 // 由 Invite 按 InvitePushMode 调用(dual/dedicated 会调,legacy 不调)。
 func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID, teamID, inviteID uint64) {
+	// 未装配推送器或接收方无效时无法投递,直接保持邀请主流程成功。
 	if u.pusher == nil || targetPlayerID == 0 {
 		return
 	}
+	// now 统一作为事件产生时间和过期时间的计算基准,避免两次取时产生偏差。
 	now := time.Now().UnixMilli()
+	// event 只携带邀请弹框所需的最小字段,不再附带完整队伍快照。
 	event := &teamv1.TeamInviteEvent{
 		TeamId:      teamID,
 		InviteId:    inviteID,
@@ -694,13 +700,17 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 		TsMs:        now,
 		ExpiresAtMs: now + u.cfg.InviteTTL.Std().Milliseconds(),
 	}
+	// payload 是写入 Kafka 的 TeamInviteEvent protobuf 字节;err 表示序列化失败。
 	payload, err := proto.Marshal(event)
 	if err != nil {
+		// 序列化失败只记录告警;邀请令牌已落库,不能把推送弱依赖反向变成业务失败。
 		plog.With(ctx).Warnw("msg", "team_invite_marshal_failed",
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
 		return
 	}
+	// eventTypeInvite 是客户端选择 TeamInviteEvent 反序列化器的域内判别值。
 	const eventTypeInvite = uint32(teamv1.TeamPushEventType_TEAM_PUSH_EVENT_TYPE_INVITE)
+	// 推送失败沿用弱依赖策略只记告警,不改变已经落库的邀请主流程结果。
 	if _, err := u.pusher.PushTeamEvent(ctx, inviterID, []uint64{targetPlayerID}, payload, eventTypeInvite); err != nil {
 		plog.With(ctx).Warnw("msg", "team_invite_push_failed",
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)

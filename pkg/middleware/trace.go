@@ -35,6 +35,7 @@ const MetadataKeyPlayerID = "x-pandora-player-id"
 // (forward_payload_header,base64url JSON)。客户端面入站第一时间无条件剥离本头,
 // 只有验签成功才由 Envoy 重写,因此其中的 jti/sub 在 :8443 面可信
 // (deploy/envoy/envoy.yaml header_mutation + jwt_authn 说明)。
+// 该常量只统一可信请求头名称,不表示任意调用方自行写入的同名头都可信。
 const MetadataKeyJWTPayload = "x-pandora-jwt-payload"
 
 // Trace 是 trace_id 注入 / 透传 middleware,server / client 都用同一份。

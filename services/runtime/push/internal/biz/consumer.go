@@ -129,6 +129,7 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	// 广播类 topic(chat.world / system.notify):key 为空,给全部在线玩家 Broadcast。
 	// 不写离线缓存(广播无 per-player 归属;离线玩家重连后不补推全服广播,避免历史公告刷屏)。
 	if k.broadcast {
+		// frame 是向所有当前连接复用的只读推送帧;EventType 从 Kafka header 解析并保留 0 兼容值。
 		frame := &pushv1.PushFrame{
 			Topic:     msg.Topic,
 			Payload:   msg.Value,
@@ -136,6 +137,7 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 			TraceId:   headerStr(msg.Headers, "trace_id"),
 			EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
 		}
+		// sent 与 failed 分别记录本次广播成功、失败的在线连接数,仅部分失败需要告警。
 		sent, failed := k.cm.Broadcast(frame)
 		if failed > 0 {
 			h.Warnw("msg", "push_broadcast_partial_failed",
@@ -164,6 +166,7 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 	k.guardPlayerOwnership(ctx, playerID, msg.Topic)
 
 	// 2. 构 PushFrame(payload 直接是业务 Event proto bytes;ts_ms 取 kafka 消息时间)
+	// frame 保留业务 payload 原字节,只补齐 topic、时间、链路与域内事件类型等路由元数据。
 	frame := &pushv1.PushFrame{
 		Topic:     msg.Topic,
 		Payload:   msg.Value,
@@ -214,15 +217,21 @@ func headerStr(headers []*sarama.RecordHeader, key string) string {
 // headerUint32 在 sarama.RecordHeader 列表里找指定 key 并解析为 uint32
 // (找不到 / 解析失败 → 返 0,即该 topic 的旧事件类型,向后兼容)。
 // 用于把业务 producer 塞的 event_type header 透传进 PushFrame.EventType。
+// headers 是 Kafka 原始 header 列表,key 是待查 header 名;本函数不区分缺失与畸形值,
+// 两者都必须收敛为兼容值 0,避免坏 header 让整条业务推送进入 poison/DLQ。
 func headerUint32(headers []*sarama.RecordHeader, key string) uint32 {
+	// s 是目标 header 的十进制文本;空值同时覆盖 header 缺失和值为空。
 	s := headerStr(headers, key)
 	if s == "" {
 		return 0
 	}
+	// v 是限定到 32 位后的无符号事件类型,err 表示非十进制、负数或越界。
 	v, err := strconv.ParseUint(s, 10, 32)
+	// 解析失败不能阻断旧客户端兼容路径,按未声明 event_type 处理。
 	if err != nil {
 		return 0
 	}
+	// ParseUint 已完成 32 位范围校验,此处转换不会截断。
 	return uint32(v)
 }
 

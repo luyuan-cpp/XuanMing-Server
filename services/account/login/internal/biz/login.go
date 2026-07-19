@@ -1151,14 +1151,17 @@ func (u *LoginUsecase) RequireCurrentSessionToken(ctx context.Context, playerID 
 // jti 为空 = 未经 Envoy 网关(直连内网端口联调 / dev 裸跑):B1 严格档 fail-closed 拒绝
 // (生产 SelectRole 必经 :8443 jwt_authn,该头必然存在);local/off 保留历史放行。
 func (u *LoginUsecase) RequireCurrentSessionJTI(ctx context.Context, playerID uint64, jti string) error {
+	// sessions 是当前会话代际的唯一权威；未注入仅代表 dev 裸跑，不伪造现行性结论。
 	if u.sessions == nil {
 		return nil // dev 裸跑:未配 session 权威,与其余现行性门同语义直通。
 	}
+	// 严格档把缺失 jti 视为无法证明调用方仍持有当前会话，必须在任何选角副作用前拒绝。
 	if jti == "" {
 		if u.requireHubAssignmentBinding {
 			return errcode.New(errcode.ErrUnauthorized, "session payload required")
 		}
 		return nil
 	}
+	// 非空 jti 复用统一现行性门，确保 SelectRole 与 IssueDSTicket 的顶号 fencing 语义一致。
 	return u.requireCurrentSession(ctx, playerID, jti)
 }

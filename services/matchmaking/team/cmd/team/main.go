@@ -168,6 +168,7 @@ func (k *kafkaPusher) PushTeamUpdate(ctx context.Context, callerPlayerID uint64,
 
 // PushTeamEvent 带 push 域内事件类型判别键(event_type)推送(邀请等专属事件)。
 func (k *kafkaPusher) PushTeamEvent(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte, eventType uint32) (int, error) {
+	// 适配层不解释 payload,只把业务层给出的事件类型原样交给统一 Kafka producer。
 	return k.p.PushToPlayersWithEventType(ctx, callerPlayerID, toPlayerIDs, payload, eventType)
 }
 

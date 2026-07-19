@@ -252,6 +252,7 @@ func (c *Config) Defaults() {
 	// 超过 HeartbeatTimeout 后才会把玩家改派到新分片;该窗口必须 ≥ DS 授权租约上限 +
 	// 偏差余量(27s),保证分区的旧 Hub 已对存量玩家完成自我 fencing。这是正确性下限
 	// 而非调优参数:配置调低会重新打开「一人两 Hub」窗口,机械抬到下限。
+	// 比较和回填都复用 placement 包的单一常量，避免 Hub 与 Battle 再入屏障发生配置漂移。
 	if c.Hub.HeartbeatTimeout.Std() < placement.DSFenceReentryBarrier {
 		c.Hub.HeartbeatTimeout = config.Duration(placement.DSFenceReentryBarrier)
 	}

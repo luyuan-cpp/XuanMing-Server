@@ -108,8 +108,10 @@ func (s *LoginService) SelectRole(ctx context.Context, req *loginv1.SelectRoleRe
 	// jti 取自 Envoy 验签后重写的 x-pandora-jwt-payload(入站剥离,客户端无法伪造),
 	// 与 IssueDSTicket 的请求体 token 走同一 Redis session 判定。
 	if err := s.loginUC.RequireCurrentSessionJTI(ctx, playerID, middleware.SessionJTIFromContext(ctx)); err != nil {
+		// 权威缺失、过期或读取失败都在 SelectRole 业务写前返回，保证 fail-closed 且零签票副作用。
 		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil
 	}
+	// addr 与 ticket 只会在会话现行性已确认后生成，旧设备不能越过 fencing 取得 Hub 入口。
 	addr, ticket, _, err := s.loginUC.SelectRole(ctx, playerID, req.GetRoleId())
 	if err != nil {
 		return &loginv1.SelectRoleResponse{Code: toProtoCode(err)}, nil

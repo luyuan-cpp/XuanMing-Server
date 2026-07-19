@@ -86,19 +86,25 @@ func PlayerIDFromContext(ctx context.Context) uint64 {
 // 请求体不带 token 的鉴权 RPC(SelectRole)靠它读 jti;取不到返回 ""(直连内网端口
 // 联调 / DS 面无 jwt_authn),由业务侧按 profile 决定 fail-closed 还是放行。
 func SessionJTIFromContext(ctx context.Context) string {
+	// tr 是 Kratos 写入 ctx 的服务端 transport,ok 表示当前调用确实带有可读的请求头上下文。
 	tr, ok := transport.FromServerContext(ctx)
+	// 无 transport 时不能猜测会话身份,统一返回空值交给业务 profile 决定拒绝或兼容放行。
 	if !ok {
 		return ""
 	}
+	// 这里只读取 Envoy 重写后的可信 payload 头,具体解码与异常归一化由纯函数负责。
 	return ParseJWTPayloadJTI(tr.RequestHeader().Get(MetadataKeyJWTPayload))
 }
 
 // ParseJWTPayloadJTI 解析 Envoy forward_payload_header 的 base64url JSON,取 jti。
 // 纯函数供测试;任何解码 / 结构异常都返回 ""(调用方按"头缺失"同等处理)。
+// payload 是完整 JWT payload 的 base64url 文本,不是原始 JWT,也不在这里重复做签名校验。
 func ParseJWTPayloadJTI(payload string) string {
+	// 空字符串表示网关没有提供可信 payload 头,无需进入解码流程。
 	if payload == "" {
 		return ""
 	}
+	// raw 保存解码后的 JSON 字节;err 仅描述当前 base64url 编码形式是否可解。
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
 		// Envoy 输出无 padding;兼容带 padding 的实现差异后仍失败才放弃。
@@ -106,11 +112,14 @@ func ParseJWTPayloadJTI(payload string) string {
 			return ""
 		}
 	}
+	// claims 只声明当前逻辑需要的 jti,其余 JWT claim 由 json.Unmarshal 安全忽略。
 	var claims struct {
 		JTI string `json:"jti"`
 	}
+	// JSON 结构异常与头缺失使用同一空值语义,禁止向调用方暴露半解析结果。
 	if json.Unmarshal(raw, &claims) != nil {
 		return ""
 	}
+	// 缺少 jti 时字段零值自然为空,继续由上层会话现行性策略处理。
 	return claims.JTI
 }
