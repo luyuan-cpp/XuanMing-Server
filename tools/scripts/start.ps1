@@ -2765,8 +2765,8 @@ function Invoke-K8s {
     # 也不等它 rollout(日志栈晚几十秒就绪不影响业务链路)。
     kubectl @kubectlContextArgs apply -f $lokiYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "loki/alloy 日志栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/loki.yaml" }
-    Write-Info "等待基础设施就绪(最多 180s)..."
-    kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=180s; Assert-LastExit 'mysql 就绪'
+    Write-Info "等待基础设施就绪(MySQL 首次冷拉最多 1800s/30 分钟,其余组件每个最多 120-180s)..."
+    kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'mysql 就绪'
     kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=120s; Assert-LastExit 'redis 就绪'
     kubectl @kubectlContextArgs rollout status deploy/etcd      -n $K8sNamespace --timeout=120s; Assert-LastExit 'etcd 就绪'
     # zookeeper / kafka 必须就绪,否则 player/push/battle-result 会因连不上 kafka:9092 CrashLoop

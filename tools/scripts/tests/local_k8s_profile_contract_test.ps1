@@ -10,7 +10,7 @@ $startPath = Join-Path $ProjectRoot 'tools\scripts\start.ps1'
 $bridgePath = Join-Path $ProjectRoot 'tools\scripts\k8s_envoy_bridge.ps1'
 $tokens = $null
 $errors = $null
-$null = [System.Management.Automation.Language.Parser]::ParseFile(
+$startAst = [System.Management.Automation.Language.Parser]::ParseFile(
     $startPath, [ref]$tokens, [ref]$errors)
 Assert-True (@($errors).Count -eq 0) 'start.ps1 必须可解析'
 
@@ -170,6 +170,26 @@ Assert-True (@($recheckOffsets | Where-Object { $_ -gt $dockerBuildOffset -and $
 Assert-True ($stopRelayOffset -lt $dockerRunOffset) '必须在最终复核后紧邻替换 relay，缩小 TOCTOU 窗口'
 
 $source = Get-Content -LiteralPath $startPath -Raw
+$invokeK8sFunctions = @($startAst.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -ceq 'Invoke-K8s'
+}, $true))
+Assert-True ($invokeK8sFunctions.Count -eq 1) '必须有唯一 Invoke-K8s'
+$mysqlRolloutCommands = @($invokeK8sFunctions[0].FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -ceq 'kubectl' -and
+        $node.Extent.Text -cmatch '\brollout\s+status\s+deploy/mysql\b'
+}, $true))
+Assert-True ($mysqlRolloutCommands.Count -eq 1) 'Invoke-K8s 必须有唯一 MySQL rollout 等待命令'
+$mysqlRolloutSource = $mysqlRolloutCommands[0].Extent.Text
+Assert-True ($mysqlRolloutSource -cmatch '(?:^|\s)--timeout=1800s(?:\s|$)') `
+    'MySQL 首次冷拉实际等待必须为 1800s，与 infra.yaml 的 progressDeadlineSeconds 对齐'
+Assert-True (-not ($mysqlRolloutSource -cmatch '(?:^|\s)--timeout=180s(?:\s|$)')) `
+    'MySQL rollout 不得退回 180s'
+Assert-True ($source.Contains('MySQL 首次冷拉最多 1800s/30 分钟')) `
+    '启动提示必须准确说明 MySQL 最长等待时间'
 $retryCommand = 'pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind'
 Assert-True ([regex]::Matches($source, [regex]::Escape($retryCommand)).Count -ge 2) `
     'start.ps1 两处失败提示都必须保留 profile/context/bind，不能诱导回环绑定回归'
