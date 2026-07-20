@@ -7,20 +7,23 @@
 
 ### 1.1 基础设施
 
-最小只需要 Redis:
-
-```powershell
-docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env up -d redis
-```
-
-team 配置里有 Kafka producer。Kafka 不起时,team 会记录 `kafka_producer_init_failed` 并继续跑,只是不发 `pandora.team.update` 推送。
-
-如果要连 push 推送一起测,再起 Kafka / Zookeeper / push:
+默认配置下最小需要 Redis + Zookeeper + Kafka。team 的邀请通知经
+`pandora.team.update` 投递；只要 `kafka.brokers` 非空，Kafka producer 就是启动强依赖：
+连不上时 team 会在 gRPC Ready 前退出，由编排器在 Kafka 恢复后重试，不能接受 Invite 后静默丢通知。
 
 ```powershell
 docker compose -f deploy/docker-compose.dev.yml --env-file deploy/env/dev.env up -d zookeeper kafka redis
+```
+
+要观察客户端/stream 收到邀请，再启动 push：
+
+```powershell
 go run ./services/runtime/push/cmd/push -conf services/runtime/push/etc/push-dev.yaml
 ```
+
+如果只做不涉及玩家通知的纯 RPC 本地调试，可以复制一份临时 team 配置并显式设
+`kafka.brokers: []`。启动日志会标记 `kafka_producer_disabled_dev_only`；该模式不能用于验证邀请，
+也不能用于集群部署。
 
 ### 1.2 VS Code 启 team
 
@@ -45,13 +48,14 @@ VS Code 使用 [.vscode/launch.json](../../.vscode/launch.json) 里的 `Debug te
 
 ```text
 redis_connected addr=127.0.0.1:6380
+kafka_producer_ready topic=pandora.team.update required=true
 service_ready grpc=:50010 http=:51010 ...
 ```
 
-如果 Kafka 没起,看到下面日志是允许的:
+如果 Kafka 没起，会看到下面日志并退出；先恢复 Kafka，再重启 team：
 
 ```text
-kafka_producer_init_failed ... team push will be silently dropped until kafka is available
+kafka_producer_required_but_unavailable ... team service exits before Ready ...
 ```
 
 ## 2. 身份怎么传
@@ -289,7 +293,11 @@ data 层:
 
 ### 7.3 Kafka 没起
 
-基础组队逻辑仍可调,只是没有 push 事件。要测推送再起 Kafka + push。
+默认配置下 team 会在 Ready 前退出，这是邀请通知不静默丢失的启动门禁。先启动 Kafka，确认
+broker 可连接，再启动/重启 team；Kubernetes 部署会自动重试未成功启动的新 Pod。
+
+只有显式 `kafka.brokers: []` 的纯 RPC 本地配置允许无 Kafka 启动，并会打印
+`kafka_producer_disabled_dev_only`。该模式没有玩家可见的邀请通知。
 
 ### 7.4 字段名
 

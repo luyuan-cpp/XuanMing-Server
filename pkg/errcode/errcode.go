@@ -75,13 +75,14 @@ const (
 
 // team(3000-3999)
 const (
-	ErrTeamNotFound      Code = 3001
-	ErrTeamFull          Code = 3002
-	ErrTeamNotCaptain    Code = 3003
-	ErrTeamAlreadyInTeam Code = 3004
-	ErrTeamInviteExpired Code = 3005
-	ErrTeamWrongState    Code = 3006
-	ErrTeamConcurrent    Code = 3007 // WATCH/MULTI/EXEC 乐观锁重试耗尽
+	ErrTeamNotFound           Code = 3001
+	ErrTeamFull               Code = 3002
+	ErrTeamNotCaptain         Code = 3003
+	ErrTeamAlreadyInTeam      Code = 3004
+	ErrTeamInviteExpired      Code = 3005
+	ErrTeamWrongState         Code = 3006
+	ErrTeamConcurrent         Code = 3007 // WATCH/MULTI/EXEC 乐观锁重试耗尽
+	ErrTeamInvitePendingLimit Code = 3008 // 被邀请人待处理邀请数已达上限(不变量 §9-18 写入侧上限)
 )
 
 // match(4000-4999)

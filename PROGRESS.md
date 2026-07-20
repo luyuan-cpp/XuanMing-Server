@@ -558,3 +558,25 @@
   （NetworkPolicy 步骤 + T0 时序断言 + 顶号矩阵）。go-services.md §2.6 同步。
 - 交接：UE 编译 + `Pandora.Auth.DSTicketV2.AuthorityFencePolicy` 由用户执行（Live Coding 约束）；
   分区注入清单为发布前必跑验收，代码级不能替代。git/svn 提交由用户复核后执行。
+
+## 2026-07-20：队伍邀请恢复（Kafka 启动门禁 + push/team 协议同版滚动）
+
+- 现场根因闭环：旧 team 在 Kafka 尚未就绪时 producer 初始化失败后仍以 `pusher=nil` Ready，后续
+  Invite RPC 虽返回 OK 但通知永久静默丢弃；同时运行中的 team/push 仍为 `4193897`，落后于已发布
+  的 `event_type=1 + TeamInviteEvent` 客户端协议，单独重启旧 team 也无法恢复新客户端邀请 UI。
+- 代码修复：配置了 `kafka.brokers` 时，team producer 改为启动强依赖，失败在 gRPC Ready 前退出，
+  交给编排器重试；只有显式空 brokers 才进入有醒目标志的纯 RPC dev-only 模式。补齐空配置、构造
+  失败、nil producer、成功装配/事件类型透传测试；team Deployment 显式 `maxUnavailable=0`、
+  `maxSurge=1`，保证失败的新 Pod 不替换仍可服务的旧 Pod。push 补 header 缺失为 0、header=1 原样
+  透传两条回归断言，协议与发布文档同步为严格 `push reader → team dual writer → 新客户端` 顺序。
+- 验证：team、push、`pkg` 各自 `go test -count=1 ./...` 全绿，K8s manifest server dry-run 通过；
+  不可达 Kafka 的隔离进程以 exit 1 退出，出现 `kafka_producer_required_but_unavailable`、无
+  `service_ready`、全程 0 个 TCP listener。仅重建/替换 push 与 team，运行版本均为
+  `6aff5dd-dirty`，两 Pod imageID 与 minikube 新镜像一致，其余 18 个业务 Pod UID 未变化。
+- 真链路验收：被邀请方先建立 Push Subscribe，随后 CreateTeam/Invite 经 team → Kafka → push 实际
+  收到同一 topic 的 `eventType=1` 专属帧和 `eventType=0` legacy 帧；AcceptInvite 与 GetTeam 均确认
+  双成员，测试队伍随后解散且两玩家 `GetMyTeam.hasTeamMsg=false`。滚动导致失效的宿主 50010/50014
+  port-forward 已替换并分别反射到新 `TeamInviteEvent` / `PushFrame.event_type`。
+- 已知边界如实保留：本次根治的是“启动时 producer 失败后永久 nil”和协议版本错配；运行期间
+  Kafka send 重试耗尽仍只有错误日志。若要把邀请承诺为端到端 durable delivery，仍需 outbox 或
+  被邀请方可查询的权威邀请列表，不能用本次启动门禁代替。

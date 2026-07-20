@@ -29,14 +29,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TeamService_CreateTeam_FullMethodName   = "/pandora.team.v1.TeamService/CreateTeam"
-	TeamService_Invite_FullMethodName       = "/pandora.team.v1.TeamService/Invite"
-	TeamService_AcceptInvite_FullMethodName = "/pandora.team.v1.TeamService/AcceptInvite"
-	TeamService_LeaveTeam_FullMethodName    = "/pandora.team.v1.TeamService/LeaveTeam"
-	TeamService_Kick_FullMethodName         = "/pandora.team.v1.TeamService/Kick"
-	TeamService_SetReady_FullMethodName     = "/pandora.team.v1.TeamService/SetReady"
-	TeamService_GetTeam_FullMethodName      = "/pandora.team.v1.TeamService/GetTeam"
-	TeamService_GetMyTeam_FullMethodName    = "/pandora.team.v1.TeamService/GetMyTeam"
+	TeamService_CreateTeam_FullMethodName           = "/pandora.team.v1.TeamService/CreateTeam"
+	TeamService_Invite_FullMethodName               = "/pandora.team.v1.TeamService/Invite"
+	TeamService_AcceptInvite_FullMethodName         = "/pandora.team.v1.TeamService/AcceptInvite"
+	TeamService_LeaveTeam_FullMethodName            = "/pandora.team.v1.TeamService/LeaveTeam"
+	TeamService_Kick_FullMethodName                 = "/pandora.team.v1.TeamService/Kick"
+	TeamService_SetReady_FullMethodName             = "/pandora.team.v1.TeamService/SetReady"
+	TeamService_GetTeam_FullMethodName              = "/pandora.team.v1.TeamService/GetTeam"
+	TeamService_GetMyTeam_FullMethodName            = "/pandora.team.v1.TeamService/GetMyTeam"
+	TeamService_ListMyPendingInvites_FullMethodName = "/pandora.team.v1.TeamService/ListMyPendingInvites"
 )
 
 // TeamServiceClient is the client API for TeamService service.
@@ -57,6 +58,7 @@ type TeamServiceClient interface {
 	SetReady(ctx context.Context, in *SetReadyRequest, opts ...grpc.CallOption) (*SetReadyResponse, error)
 	GetTeam(ctx context.Context, in *GetTeamRequest, opts ...grpc.CallOption) (*GetTeamResponse, error)
 	GetMyTeam(ctx context.Context, in *GetMyTeamRequest, opts ...grpc.CallOption) (*GetMyTeamResponse, error)
+	ListMyPendingInvites(ctx context.Context, in *ListMyPendingInvitesRequest, opts ...grpc.CallOption) (*ListMyPendingInvitesResponse, error)
 }
 
 type teamServiceClient struct {
@@ -147,6 +149,16 @@ func (c *teamServiceClient) GetMyTeam(ctx context.Context, in *GetMyTeamRequest,
 	return out, nil
 }
 
+func (c *teamServiceClient) ListMyPendingInvites(ctx context.Context, in *ListMyPendingInvitesRequest, opts ...grpc.CallOption) (*ListMyPendingInvitesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMyPendingInvitesResponse)
+	err := c.cc.Invoke(ctx, TeamService_ListMyPendingInvites_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TeamServiceServer is the server API for TeamService service.
 // All implementations should embed UnimplementedTeamServiceServer
 // for forward compatibility.
@@ -165,6 +177,7 @@ type TeamServiceServer interface {
 	SetReady(context.Context, *SetReadyRequest) (*SetReadyResponse, error)
 	GetTeam(context.Context, *GetTeamRequest) (*GetTeamResponse, error)
 	GetMyTeam(context.Context, *GetMyTeamRequest) (*GetMyTeamResponse, error)
+	ListMyPendingInvites(context.Context, *ListMyPendingInvitesRequest) (*ListMyPendingInvitesResponse, error)
 }
 
 // UnimplementedTeamServiceServer should be embedded to have
@@ -197,6 +210,9 @@ func (UnimplementedTeamServiceServer) GetTeam(context.Context, *GetTeamRequest) 
 }
 func (UnimplementedTeamServiceServer) GetMyTeam(context.Context, *GetMyTeamRequest) (*GetMyTeamResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMyTeam not implemented")
+}
+func (UnimplementedTeamServiceServer) ListMyPendingInvites(context.Context, *ListMyPendingInvitesRequest) (*ListMyPendingInvitesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListMyPendingInvites not implemented")
 }
 func (UnimplementedTeamServiceServer) testEmbeddedByValue() {}
 
@@ -362,6 +378,24 @@ func _TeamService_GetMyTeam_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TeamService_ListMyPendingInvites_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMyPendingInvitesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TeamServiceServer).ListMyPendingInvites(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TeamService_ListMyPendingInvites_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TeamServiceServer).ListMyPendingInvites(ctx, req.(*ListMyPendingInvitesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TeamService_ServiceDesc is the grpc.ServiceDesc for TeamService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -400,6 +434,10 @@ var TeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMyTeam",
 			Handler:    _TeamService_GetMyTeam_Handler,
+		},
+		{
+			MethodName: "ListMyPendingInvites",
+			Handler:    _TeamService_ListMyPendingInvites_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

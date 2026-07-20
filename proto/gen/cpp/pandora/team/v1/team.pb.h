@@ -177,6 +177,30 @@ extern const ::google::protobuf::internal::ClassDataFull LeaveTeamResponse_class
 #else
 extern const LeaveTeamResponseGlobalsTypeInternal LeaveTeamResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListMyPendingInvitesRequest;
+struct ListMyPendingInvitesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListMyPendingInvitesRequestGlobalsTypeInternal ListMyPendingInvitesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListMyPendingInvitesRequest_class_data_;
+#else
+extern const ListMyPendingInvitesRequestGlobalsTypeInternal ListMyPendingInvitesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListMyPendingInvitesResponse;
+struct ListMyPendingInvitesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListMyPendingInvitesResponseGlobalsTypeInternal ListMyPendingInvitesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListMyPendingInvitesResponse_class_data_;
+#else
+extern const ListMyPendingInvitesResponseGlobalsTypeInternal ListMyPendingInvitesResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PendingInvite;
+struct PendingInviteGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PendingInviteGlobalsTypeInternal PendingInvite_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PendingInvite_class_data_;
+#else
+extern const PendingInviteGlobalsTypeInternal PendingInvite_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SetReadyRequest;
 struct SetReadyRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -965,7 +989,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamInviteEvent final : public ::go
   [[nodiscard]] static const TeamInviteEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamInviteEvent>(&TeamInviteEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(TeamInviteEvent& a, TeamInviteEvent& b) { a.Swap(&b); }
   inline void Swap(TeamInviteEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1403,6 +1427,381 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetReadyRequest final : public ::go
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PendingInvite final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.PendingInvite) */ {
+ public:
+  inline PendingInvite() : PendingInvite(nullptr) {}
+  ~PendingInvite() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PendingInvite* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PendingInvite));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PendingInvite(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PendingInvite(const PendingInvite& from) : PendingInvite(nullptr, from) {}
+  inline PendingInvite(PendingInvite&& from) noexcept : PendingInvite(nullptr, ::std::move(from)) {}
+  inline PendingInvite& operator=(const PendingInvite& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PendingInvite& operator=(PendingInvite&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PendingInvite& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PendingInvite>(&PendingInvite_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(PendingInvite& a, PendingInvite& b) { a.Swap(&b); }
+  inline void Swap(PendingInvite* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PendingInvite* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PendingInvite* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PendingInvite>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PendingInvite& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PendingInvite& from) { PendingInvite::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PendingInvite* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.PendingInvite"; }
+
+  explicit PendingInvite(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PendingInvite(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PendingInvite& from);
+  PendingInvite(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PendingInvite&& from) noexcept
+      : PendingInvite(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTeamIdFieldNumber = 1,
+    kInviteIdFieldNumber = 2,
+    kInviterIdFieldNumber = 3,
+    kExpiresAtMsFieldNumber = 4,
+  };
+  // uint64 team_id = 1 [json_name = "teamId"];
+  void clear_team_id() ;
+  [[nodiscard]] ::uint64_t team_id() const;
+  void set_team_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_team_id() const;
+  void _internal_set_team_id(::uint64_t value);
+
+  public:
+  // uint64 invite_id = 2 [json_name = "inviteId"];
+  void clear_invite_id() ;
+  [[nodiscard]] ::uint64_t invite_id() const;
+  void set_invite_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_invite_id() const;
+  void _internal_set_invite_id(::uint64_t value);
+
+  public:
+  // uint64 inviter_id = 3 [json_name = "inviterId"];
+  void clear_inviter_id() ;
+  [[nodiscard]] ::uint64_t inviter_id() const;
+  void set_inviter_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_inviter_id() const;
+  void _internal_set_inviter_id(::uint64_t value);
+
+  public:
+  // int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+  void clear_expires_at_ms() ;
+  [[nodiscard]] ::int64_t expires_at_ms() const;
+  void set_expires_at_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_expires_at_ms() const;
+  void _internal_set_expires_at_ms(::int64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.PendingInvite)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PendingInvite& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t team_id_;
+    ::uint64_t invite_id_;
+    ::uint64_t inviter_id_;
+    ::int64_t expires_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyPendingInvitesRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ListMyPendingInvitesRequest) */ {
+ public:
+  inline ListMyPendingInvitesRequest() : ListMyPendingInvitesRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListMyPendingInvitesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListMyPendingInvitesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListMyPendingInvitesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListMyPendingInvitesRequest(const ListMyPendingInvitesRequest& from) : ListMyPendingInvitesRequest(nullptr, from) {}
+  inline ListMyPendingInvitesRequest(ListMyPendingInvitesRequest&& from) noexcept : ListMyPendingInvitesRequest(nullptr, ::std::move(from)) {}
+  inline ListMyPendingInvitesRequest& operator=(const ListMyPendingInvitesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListMyPendingInvitesRequest& operator=(ListMyPendingInvitesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListMyPendingInvitesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListMyPendingInvitesRequest>(&ListMyPendingInvitesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(ListMyPendingInvitesRequest& a, ListMyPendingInvitesRequest& b) { a.Swap(&b); }
+  inline void Swap(ListMyPendingInvitesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListMyPendingInvitesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListMyPendingInvitesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<ListMyPendingInvitesRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const ListMyPendingInvitesRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const ListMyPendingInvitesRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ListMyPendingInvitesRequest"; }
+
+  explicit ListMyPendingInvitesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListMyPendingInvitesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListMyPendingInvitesRequest& from);
+  ListMyPendingInvitesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListMyPendingInvitesRequest&& from) noexcept
+      : ListMyPendingInvitesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ListMyPendingInvitesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
   friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
 };
 // -------------------------------------------------------------------
@@ -3328,6 +3727,230 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Team final : public ::google::proto
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyPendingInvitesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.team.v1.ListMyPendingInvitesResponse) */ {
+ public:
+  inline ListMyPendingInvitesResponse() : ListMyPendingInvitesResponse(nullptr) {}
+  ~ListMyPendingInvitesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListMyPendingInvitesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListMyPendingInvitesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListMyPendingInvitesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListMyPendingInvitesResponse(const ListMyPendingInvitesResponse& from) : ListMyPendingInvitesResponse(nullptr, from) {}
+  inline ListMyPendingInvitesResponse(ListMyPendingInvitesResponse&& from) noexcept : ListMyPendingInvitesResponse(nullptr, ::std::move(from)) {}
+  inline ListMyPendingInvitesResponse& operator=(const ListMyPendingInvitesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListMyPendingInvitesResponse& operator=(ListMyPendingInvitesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListMyPendingInvitesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListMyPendingInvitesResponse>(&ListMyPendingInvitesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(ListMyPendingInvitesResponse& a, ListMyPendingInvitesResponse& b) { a.Swap(&b); }
+  inline void Swap(ListMyPendingInvitesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListMyPendingInvitesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListMyPendingInvitesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListMyPendingInvitesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListMyPendingInvitesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListMyPendingInvitesResponse& from) { ListMyPendingInvitesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListMyPendingInvitesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.team.v1.ListMyPendingInvitesResponse"; }
+
+  explicit ListMyPendingInvitesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListMyPendingInvitesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListMyPendingInvitesResponse& from);
+  ListMyPendingInvitesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListMyPendingInvitesResponse&& from) noexcept
+      : ListMyPendingInvitesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kInvitesFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // repeated .pandora.team.v1.PendingInvite invites = 2 [json_name = "invites"];
+  [[nodiscard]] int invites_size()
+      const;
+  private:
+  int _internal_invites_size() const;
+
+  public:
+  void clear_invites() ;
+  [[nodiscard]] const ::pandora::team::v1::PendingInvite& invites(int index) const;
+  [[nodiscard]] ::pandora::team::v1::PendingInvite* PROTOBUF_NONNULL mutable_invites(int index);
+  ::pandora::team::v1::PendingInvite* PROTOBUF_NONNULL add_invites();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>&
+  invites() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>* PROTOBUF_NONNULL
+  mutable_invites();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>& _internal_invites() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>* PROTOBUF_NONNULL _internal_mutable_invites();
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.team.v1.ListMyPendingInvitesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListMyPendingInvitesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::team::v1::PendingInvite > invites_;
+    int code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fteam_2fv1_2fteam_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamUpdateEvent final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.team.v1.TeamUpdateEvent) */ {
  public:
@@ -3384,7 +4007,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamUpdateEvent final : public ::go
   [[nodiscard]] static const TeamUpdateEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamUpdateEvent>(&TeamUpdateEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(TeamUpdateEvent& a, TeamUpdateEvent& b) { a.Swap(&b); }
   inline void Swap(TeamUpdateEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7634,6 +8257,193 @@ inline void GetMyTeamResponse::set_allocated_team(::pandora::team::v1::Team* PRO
 
   _impl_.team_ = reinterpret_cast<::pandora::team::v1::Team*>(value);
   // @@protoc_insertion_point(field_set_allocated:pandora.team.v1.GetMyTeamResponse.team)
+}
+
+// -------------------------------------------------------------------
+
+// ListMyPendingInvitesRequest
+
+// -------------------------------------------------------------------
+
+// PendingInvite
+
+// uint64 team_id = 1 [json_name = "teamId"];
+inline void PendingInvite::clear_team_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t PendingInvite::team_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.PendingInvite.team_id)
+  return _internal_team_id();
+}
+inline void PendingInvite::set_team_id(::uint64_t value) {
+  _internal_set_team_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.PendingInvite.team_id)
+}
+inline ::uint64_t PendingInvite::_internal_team_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_id_;
+}
+inline void PendingInvite::_internal_set_team_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_id_ = value;
+}
+
+// uint64 invite_id = 2 [json_name = "inviteId"];
+inline void PendingInvite::clear_invite_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.invite_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t PendingInvite::invite_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.PendingInvite.invite_id)
+  return _internal_invite_id();
+}
+inline void PendingInvite::set_invite_id(::uint64_t value) {
+  _internal_set_invite_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.PendingInvite.invite_id)
+}
+inline ::uint64_t PendingInvite::_internal_invite_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.invite_id_;
+}
+inline void PendingInvite::_internal_set_invite_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.invite_id_ = value;
+}
+
+// uint64 inviter_id = 3 [json_name = "inviterId"];
+inline void PendingInvite::clear_inviter_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.inviter_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t PendingInvite::inviter_id() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.PendingInvite.inviter_id)
+  return _internal_inviter_id();
+}
+inline void PendingInvite::set_inviter_id(::uint64_t value) {
+  _internal_set_inviter_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.PendingInvite.inviter_id)
+}
+inline ::uint64_t PendingInvite::_internal_inviter_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.inviter_id_;
+}
+inline void PendingInvite::_internal_set_inviter_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.inviter_id_ = value;
+}
+
+// int64 expires_at_ms = 4 [json_name = "expiresAtMs"];
+inline void PendingInvite::clear_expires_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_at_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::int64_t PendingInvite::expires_at_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.PendingInvite.expires_at_ms)
+  return _internal_expires_at_ms();
+}
+inline void PendingInvite::set_expires_at_ms(::int64_t value) {
+  _internal_set_expires_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.PendingInvite.expires_at_ms)
+}
+inline ::int64_t PendingInvite::_internal_expires_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expires_at_ms_;
+}
+inline void PendingInvite::_internal_set_expires_at_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListMyPendingInvitesResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ListMyPendingInvitesResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ListMyPendingInvitesResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListMyPendingInvitesResponse.code)
+  return _internal_code();
+}
+inline void ListMyPendingInvitesResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.team.v1.ListMyPendingInvitesResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ListMyPendingInvitesResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ListMyPendingInvitesResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// repeated .pandora.team.v1.PendingInvite invites = 2 [json_name = "invites"];
+inline int ListMyPendingInvitesResponse::_internal_invites_size() const {
+  return _internal_invites().size();
+}
+inline int ListMyPendingInvitesResponse::invites_size() const {
+  return _internal_invites_size();
+}
+inline void ListMyPendingInvitesResponse::clear_invites() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.invites_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::team::v1::PendingInvite& ListMyPendingInvitesResponse::invites(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.team.v1.ListMyPendingInvitesResponse.invites)
+  return _internal_invites().Get(index);
+}
+inline ::pandora::team::v1::PendingInvite* PROTOBUF_NONNULL ListMyPendingInvitesResponse::mutable_invites(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.team.v1.ListMyPendingInvitesResponse.invites)
+  return _internal_mutable_invites()->Mutable(index);
+}
+inline ::pandora::team::v1::PendingInvite* PROTOBUF_NONNULL ListMyPendingInvitesResponse::add_invites()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::team::v1::PendingInvite* _add =
+      _internal_mutable_invites()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.team.v1.ListMyPendingInvitesResponse.invites)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>& ListMyPendingInvitesResponse::invites() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.team.v1.ListMyPendingInvitesResponse.invites)
+  return _internal_invites();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>* PROTOBUF_NONNULL
+ListMyPendingInvitesResponse::mutable_invites() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.team.v1.ListMyPendingInvitesResponse.invites)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_invites();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>&
+ListMyPendingInvitesResponse::_internal_invites() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.invites_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::team::v1::PendingInvite>* PROTOBUF_NONNULL
+ListMyPendingInvitesResponse::_internal_mutable_invites() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.invites_;
 }
 
 // -------------------------------------------------------------------

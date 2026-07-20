@@ -52,9 +52,10 @@ type KeyOrderedProducer struct {
 //
 // sarama.NewConfig() 已把三个 Net 超时初始化为 30s,且 Validate() 强制三者都 > 0。
 // 仅当 yaml 显式给出正值时才覆盖,缺省字段保留 sarama 默认,避免把未配置字段写成 0
-// 触发 "Net.DialTimeout/ReadTimeout/WriteTimeout must be > 0" 而导致 producer 构造失败
-// ——该失败在 ds_allocator/battle_result/team/matchmaker 是弱依赖,会静默禁用对应 kafka
-// 事件链(ds.lifecycle 补偿 / player.update outbox / team.update / match.progress)。
+// 触发 "Net.DialTimeout/ReadTimeout/WriteTimeout must be > 0" 而导致 producer 构造失败。
+// producer 是否属于启动强依赖由各服务入口决定；配置了 brokers 的 team / matchmaker 会在该
+// 构造失败时拒绝 Ready（team 防 Invite 通知永久静默丢失，matchmaker 防组队非队长成员唯一的
+// match.progress READY 通道永久静默丢失），其他调用方按各自恢复语义处理。
 func buildProducerConfig(cfg config.KafkaConfig) *sarama.Config {
 	c := sarama.NewConfig()
 	c.Version = sarama.V3_6_0_0

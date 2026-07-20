@@ -236,8 +236,10 @@ func (u *TeamUsecase) Invite(ctx context.Context, inviteID, teamID, inviterID, t
 		return nil, errcode.New(errcode.ErrTeamFull, "team %d is full (%d/%d)", teamID, len(team.Members), team.MaxSize)
 	}
 
-	// 存储邀请令牌
-	if err := u.repo.SetInvite(ctx, inviteID, teamID, targetPlayerID, u.cfg.InviteTTL.Std()); err != nil {
+	// 存储邀请令牌。同一被邀请人 pending 邀请数超 MaxPendingInvites 时返
+	// ErrTeamInvitePendingLimit(3008)——不变量 §9-18 写入侧上限,限流+占位在
+	// data 层 Lua 内原子完成。
+	if err := u.repo.SetInvite(ctx, inviteID, teamID, inviterID, targetPlayerID, u.cfg.InviteTTL.Std(), u.cfg.MaxPendingInvites); err != nil {
 		return nil, err
 	}
 
@@ -327,9 +329,9 @@ func (u *TeamUsecase) AcceptInvite(ctx context.Context, inviteID, teamID, player
 
 	// player index 已由 ClaimPlayer 在锁前原子写入,此处无需再写。
 
-	// 删 invite 令牌
+	// 删 invite 令牌(同时释放被邀请人 pending 索引配额)
 	if inviteID != 0 {
-		_ = u.repo.DeleteInvite(ctx, inviteID)
+		_ = u.repo.DeleteInvite(ctx, inviteID, playerID)
 	}
 
 	// push MEMBER_JOINED 给所有成员(不发给 playerID — 原则 2)
@@ -553,6 +555,17 @@ func (u *TeamUsecase) GetMyTeam(ctx context.Context, playerID uint64) (*teamv1.T
 	return team, true, nil
 }
 
+// ListPendingInvites 查询发给 playerID 的未过期 pending 邀请(拉取兜底,只读)。
+//
+// 为什么存在:邀请令牌的唯一权威在 Redis,kafka→push 推送只是投影(不变量
+// §9-22)。此前 invite_id 只能从推送获得,推送链路任一环丢帧(producer 故障窗口/
+// push 副本崩溃/客户端断线)邀请就静默失效到 TTL 过期。客户端在登录、回前台、
+// 打开组队 UI 时调本接口兜底,推送从「唯一通道」降级为「加速器」。
+// 读取侧上限 = MaxPendingInvites(写入侧硬上限已兜住总量,单次全量返回即达标)。
+func (u *TeamUsecase) ListPendingInvites(ctx context.Context, playerID uint64) ([]*data.InviteRecord, error) {
+	return u.repo.ListPendingInvites(ctx, playerID, u.cfg.MaxPendingInvites)
+}
+
 // claimPlayerHealingOrphan 原子声明 player→teamID 归属(SETNX,不变量 §1),并对
 // 孤儿索引自愈:索引虽在但其指向的队伍主体已过期/解散(TTL 竞态 / 解散后删索引
 // 失败的悬挂残留)时,不该把玩家永久锁在不存在的队伍里,而应清掉脏索引后重新声明。
@@ -676,6 +689,11 @@ func (u *TeamUsecase) pushUpdate(
 		}
 		// PushToPlayers 内部跳过 callerPlayerID == pid 的情况(原则 2)
 		if _, err := u.pusher.PushTeamUpdate(ctx, callerPlayerID, []uint64{pid}, payload); err != nil {
+			if inviteID != 0 {
+				// legacy 路径承载邀请的推送丢了 → 计入邀请推送失败指标(可告警,
+				// 不再只靠 Warn 日志;被邀请人靠 ListMyPendingInvites 拉取兜底)。
+				InvitePushFailed.WithLabelValues("legacy").Inc()
+			}
 			plog.With(ctx).Warnw("msg", "team_push_failed",
 				"team_id", team.GetTeamId(), "to_player_id", pid, "reason", reason.String(), "err", err)
 		}
@@ -704,14 +722,17 @@ func (u *TeamUsecase) pushInvite(ctx context.Context, inviterID, targetPlayerID,
 	payload, err := proto.Marshal(event)
 	if err != nil {
 		// 序列化失败只记录告警;邀请令牌已落库,不能把推送弱依赖反向变成业务失败。
+		InvitePushFailed.WithLabelValues("dedicated").Inc()
 		plog.With(ctx).Warnw("msg", "team_invite_marshal_failed",
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
 		return
 	}
 	// eventTypeInvite 是客户端选择 TeamInviteEvent 反序列化器的域内判别值。
 	const eventTypeInvite = uint32(teamv1.TeamPushEventType_TEAM_PUSH_EVENT_TYPE_INVITE)
-	// 推送失败沿用弱依赖策略只记告警,不改变已经落库的邀请主流程结果。
+	// 推送失败沿用弱依赖策略只记告警 + 计数(可告警),不改变已经落库的邀请主流程结果;
+	// 丢帧由被邀请人 ListMyPendingInvites 拉取兜底。
 	if _, err := u.pusher.PushTeamEvent(ctx, inviterID, []uint64{targetPlayerID}, payload, eventTypeInvite); err != nil {
+		InvitePushFailed.WithLabelValues("dedicated").Inc()
 		plog.With(ctx).Warnw("msg", "team_invite_push_failed",
 			"team_id", teamID, "to_player_id", targetPlayerID, "invite_id", inviteID, "err", err)
 	}

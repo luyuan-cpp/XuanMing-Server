@@ -48,6 +48,12 @@ type TeamConf struct {
 	//   - "legacy":只发旧 TeamUpdateEvent。回退用;新客户端会漏弹邀请框。
 	// 空串按 "dual" 处理(见 Defaults)。
 	InvitePushMode string `yaml:"invite_push_mode,omitempty" json:"invite_push_mode,omitempty"`
+
+	// MaxPendingInvites 同一被邀请人的未过期 pending 邀请数上限(不变量 §9-18:
+	// 组队邀请是客户端可写入、可堆积、会被拉取展示的列表,必须有写入侧上限)。
+	// 超限 Invite 返 ErrTeamInvitePendingLimit(3008);ListMyPendingInvites 单次返回
+	// 也按此值截断(写入侧硬上限已兜住总量,无需分页)。默认 10。
+	MaxPendingInvites int `yaml:"max_pending_invites,omitempty" json:"max_pending_invites,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发 panic。
@@ -70,6 +76,9 @@ func (c *Config) Defaults() {
 	if c.Team.InvitePushMode == "" {
 		// 金丝雀期默认双发:老/新客户端各认各的 payload,互不干扰,各弹一次。
 		c.Team.InvitePushMode = "dual"
+	}
+	if c.Team.MaxPendingInvites == 0 {
+		c.Team.MaxPendingInvites = 10
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50010"

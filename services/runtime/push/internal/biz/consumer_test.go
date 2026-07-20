@@ -141,8 +141,36 @@ func TestKafkaConsumer_HandleOnline(t *testing.T) {
 	if f.GetTraceId() != "trace-abc" {
 		t.Fatalf("trace_id=%q want=trace-abc", f.GetTraceId())
 	}
+	if f.GetEventType() != 0 {
+		t.Fatalf("event_type=%d want=0 when Kafka header is absent", f.GetEventType())
+	}
 	if len(offline.appended) != 0 {
 		t.Fatalf("offline should be empty when online, got=%+v", offline.appended)
+	}
+}
+
+// event_type 是域内 payload 类型判别键；push 必须把 Kafka header 原样透传到 PushFrame。
+func TestKafkaConsumer_HandleEventType(t *testing.T) {
+	sender := newMockSender()
+	sender.online[42] = true
+	offline := newMockOffline()
+	kc := makeConsumer(t, sender, offline)
+
+	msg := makeMsg("pandora.team.update", "42", []byte("team-invite-event-bytes"), "trace-invite")
+	msg.Headers = append(msg.Headers, &sarama.RecordHeader{
+		Key:   []byte(kafkax.HeaderEventType),
+		Value: []byte("1"),
+	})
+	if err := kc.handle(context.Background(), msg); err != nil {
+		t.Fatalf("handle err=%v", err)
+	}
+
+	f, ok := sender.frames[42]
+	if !ok {
+		t.Fatal("expected SendTo(42) but no frame recorded")
+	}
+	if f.GetEventType() != 1 {
+		t.Fatalf("event_type=%d want=1", f.GetEventType())
 	}
 }
 

@@ -7,7 +7,7 @@
 //  4. Redis client 连通性 Ping(强依赖)
 //  5. Snowflake Node(node_id 来自 yaml)
 //  6. team gRPC reader(team_addr 留空则跳过 team 校验)
-//  7. kafkax.KeyOrderedProducer(topic=pandora.match.progress) → matchPusher
+//  7. kafkax.KeyOrderedProducer(topic=pandora.match.progress) → matchPusher(brokers 配置时为启动强依赖)
 //  8. 装配链:RedisMatchRepo → MatchUsecase → MatchService → gRPC/HTTP server
 //  9. 后台 RunMatchLoop(撮合 + 确认期超时扫描)
 //  10. kratos.New(...).Run() 阻塞
@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -118,20 +120,28 @@ func main() {
 		helper.Warnw("msg", "team_addr_empty", "hint", "StartMatch will skip team validation")
 	}
 
-	// 6. Kafka producer → matchPusher(弱依赖:broker 不通则 warn,push 静默 fail)
+	// 6. Kafka producer → matchPusher。
+	// kafka.brokers 非空表示启用 match 进度推送；此时 producer 是启动强依赖。组队匹配只有
+	// 队长持有 StartMatch 返回的 match_id 可轮询 GetMatchProgress 兜底，其余成员得知成局 /
+	// READY / Battle 落点的唯一通道就是 pandora.match.progress 推送；初始化失败必须在对外
+	// Ready 前退出，让 Kubernetes 保留旧 Pod 并在 Kafka 恢复后重试新 Pod，不能再以
+	// pusher=nil 受理匹配后把整场进度推送静默丢弃（非队长成员会一直停在 Hub）。
 	var pusher biz.MatchEventPusher
-	if len(cfg.Kafka.Brokers) > 0 {
-		producer, err := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicMatchProgress)
-		if err != nil {
-			helper.Warnw("msg", "kafka_producer_init_failed", "err", err,
-				"hint", "match progress push will be silently dropped until kafka is available")
-		} else {
-			defer func() { _ = producer.Close() }()
-			pusher = &kafkaPusher{p: producer}
-			helper.Infow("msg", "kafka_producer_ready", "topic", kafkax.TopicMatchProgress)
-		}
+	publication, perr := initializeMatchPublication(cfg.Kafka, func(kcfg pconfig.KafkaConfig, topic string) (rawMatchProducer, error) {
+		return kafkax.NewKeyOrderedProducer(kcfg, topic)
+	})
+	if perr != nil {
+		helper.Errorw("msg", "kafka_producer_required_but_unavailable", "err", perr,
+			"hint", "matchmaker exits before Ready so the orchestrator can retry after Kafka recovers")
+		os.Exit(1)
+	}
+	if publication.producer != nil {
+		defer func() { _ = publication.producer.Close() }()
+		pusher = publication.pusher
+		helper.Infow("msg", "kafka_producer_ready", "topic", kafkax.TopicMatchProgress, "required", true)
 	} else {
-		helper.Warnw("msg", "kafka_brokers_empty", "hint", "match progress push disabled")
+		helper.Warnw("msg", "kafka_producer_disabled_dev_only", "reason", publication.disabledReason,
+			"hint", "match progress push disabled; only the captain can see READY via GetMatchProgress polling in this explicit no-Kafka development mode")
 	}
 
 	// 7. 装配链
@@ -272,9 +282,55 @@ func main() {
 	}
 }
 
-// kafkaPusher 把 biz.MatchEventPusher 接口适配到 kafkax.KeyOrderedProducer。
+// rawMatchProducer 是启动门禁测试可替换的 Kafka 最小能力面。
+type rawMatchProducer interface {
+	PushToPlayers(context.Context, uint64, []uint64, []byte) (int, error)
+	Close() error
+}
+
+type matchPublicationInit struct {
+	pusher         biz.MatchEventPusher
+	producer       rawMatchProducer
+	disabledReason string
+}
+
+// initializeMatchPublication 集中约束 match 进度推送的启动语义（与 team 同口径）：
+//   - kafka.brokers 显式为空时保留纯 RPC 本地调试模式（仅队长可轮询）；
+//   - 只要配置了 broker，producer 就是强依赖，初始化失败或返回 nil 都拒绝启动。
+//
+// 该门禁必须发生在 gRPC server 构造与 app.Run 之前，确保 readiness 永远不会把
+// “StartMatch 受理成功但 READY 推送永久关闭”的进程加入 Service Endpoints。
+func initializeMatchPublication(
+	cfg pconfig.KafkaConfig,
+	factory func(pconfig.KafkaConfig, string) (rawMatchProducer, error),
+) (matchPublicationInit, error) {
+	configured := false
+	for _, broker := range cfg.Brokers {
+		if strings.TrimSpace(broker) != "" {
+			configured = true
+			break
+		}
+	}
+	if !configured {
+		return matchPublicationInit{disabledReason: "kafka.brokers is empty"}, nil
+	}
+
+	producer, err := factory(cfg, kafkax.TopicMatchProgress)
+	if err != nil {
+		return matchPublicationInit{}, fmt.Errorf("initialize required %s producer: %w", kafkax.TopicMatchProgress, err)
+	}
+	if producer == nil {
+		return matchPublicationInit{}, fmt.Errorf("initialize required %s producer: factory returned nil", kafkax.TopicMatchProgress)
+	}
+	return matchPublicationInit{
+		pusher:   &kafkaPusher{p: producer},
+		producer: producer,
+	}, nil
+}
+
+// kafkaPusher 把 biz.MatchEventPusher 接口适配到 Kafka producer。
 type kafkaPusher struct {
-	p *kafkax.KeyOrderedProducer
+	p rawMatchProducer
 }
 
 func (k *kafkaPusher) PushMatchProgress(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte) (int, error) {

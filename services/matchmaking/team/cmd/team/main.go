@@ -14,8 +14,10 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -23,6 +25,7 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -96,20 +99,26 @@ func main() {
 	sf, sfCloser := etcdnode.MustProvideSnowflake(serviceName, cfg.Node.NodeId, cfg.Snowflake)
 	defer func() { _ = sfCloser.Close() }()
 
-	// 5. Kafka producer → kafkaPusher(弱依赖:broker 不通则 warn 并继续,push 会静默 fail)
+	// 5. Kafka producer → kafkaPusher。
+	// kafka.brokers 非空表示启用队伍推送；此时 producer 是启动强依赖。初始化失败必须在
+	// gRPC server 对外 Ready 前退出，让 Kubernetes 保留旧 Pod 并重试新 Pod，不能再以
+	// pusher=nil 接受 Invite 后静默丢掉被邀请方唯一能看到的通知。
 	var pusher biz.TeamEventPusher
-	if len(cfg.Kafka.Brokers) > 0 {
-		producer, err := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicTeamUpdate)
-		if err != nil {
-			helper.Warnw("msg", "kafka_producer_init_failed", "err", err,
-				"hint", "team push will be silently dropped until kafka is available")
-		} else {
-			defer func() { _ = producer.Close() }()
-			pusher = &kafkaPusher{p: producer}
-			helper.Infow("msg", "kafka_producer_ready", "topic", kafkax.TopicTeamUpdate)
-		}
+	publication, err := initializeTeamPublication(cfg.Kafka, func(kcfg pconfig.KafkaConfig, topic string) (rawTeamProducer, error) {
+		return kafkax.NewKeyOrderedProducer(kcfg, topic)
+	})
+	if err != nil {
+		helper.Errorw("msg", "kafka_producer_required_but_unavailable", "err", err,
+			"hint", "team service exits before Ready so the orchestrator can retry after Kafka recovers")
+		os.Exit(1)
+	}
+	if publication.producer != nil {
+		defer func() { _ = publication.producer.Close() }()
+		pusher = publication.pusher
+		helper.Infow("msg", "kafka_producer_ready", "topic", kafkax.TopicTeamUpdate, "required", true)
 	} else {
-		helper.Warnw("msg", "kafka_brokers_empty", "hint", "team push disabled")
+		helper.Warnw("msg", "kafka_producer_disabled_dev_only", "reason", publication.disabledReason,
+			"hint", "Invite only stores tokens in this explicit no-Kafka development mode; configure kafka.brokers for player-visible invitations")
 	}
 
 	// 6. 装配链
@@ -157,9 +166,56 @@ func main() {
 	}
 }
 
-// kafkaPusher 把 biz.TeamEventPusher 接口适配到 kafkax.KeyOrderedProducer。
+// rawTeamProducer 是启动门禁测试可替换的 Kafka 最小能力面。
+type rawTeamProducer interface {
+	PushToPlayers(context.Context, uint64, []uint64, []byte) (int, error)
+	PushToPlayersWithEventType(context.Context, uint64, []uint64, []byte, uint32) (int, error)
+	Close() error
+}
+
+type teamPublicationInit struct {
+	pusher         biz.TeamEventPusher
+	producer       rawTeamProducer
+	disabledReason string
+}
+
+// initializeTeamPublication 集中约束队伍推送的启动语义：
+//   - kafka.brokers 显式为空时保留纯 RPC 本地调试模式；
+//   - 只要配置了 broker，producer 就是强依赖，初始化失败或返回 nil 都拒绝启动。
+//
+// 该门禁必须发生在 gRPC server 构造与 app.Run 之前，确保 readiness 永远不会把
+// “Invite 返回成功但推送永久关闭”的进程加入 Service Endpoints。
+func initializeTeamPublication(
+	cfg pconfig.KafkaConfig,
+	factory func(pconfig.KafkaConfig, string) (rawTeamProducer, error),
+) (teamPublicationInit, error) {
+	configured := false
+	for _, broker := range cfg.Brokers {
+		if strings.TrimSpace(broker) != "" {
+			configured = true
+			break
+		}
+	}
+	if !configured {
+		return teamPublicationInit{disabledReason: "kafka.brokers is empty"}, nil
+	}
+
+	producer, err := factory(cfg, kafkax.TopicTeamUpdate)
+	if err != nil {
+		return teamPublicationInit{}, fmt.Errorf("initialize required %s producer: %w", kafkax.TopicTeamUpdate, err)
+	}
+	if producer == nil {
+		return teamPublicationInit{}, fmt.Errorf("initialize required %s producer: factory returned nil", kafkax.TopicTeamUpdate)
+	}
+	return teamPublicationInit{
+		pusher:   &kafkaPusher{p: producer},
+		producer: producer,
+	}, nil
+}
+
+// kafkaPusher 把 biz.TeamEventPusher 接口适配到 Kafka producer。
 type kafkaPusher struct {
-	p *kafkax.KeyOrderedProducer
+	p rawTeamProducer
 }
 
 func (k *kafkaPusher) PushTeamUpdate(ctx context.Context, callerPlayerID uint64, toPlayerIDs []uint64, payload []byte) (int, error) {

@@ -163,7 +163,7 @@ func TestInvite(t *testing.T) {
 	repo, _ := newTestRepo(t)
 	ctx := context.Background()
 
-	if err := repo.SetInvite(ctx, 7001, 8001, 9001, 60*time.Second); err != nil {
+	if err := repo.SetInvite(ctx, 7001, 8001, 6001, 9001, 60*time.Second, 10); err != nil {
 		t.Fatalf("SetInvite: %v", err)
 	}
 
@@ -171,16 +171,27 @@ func TestInvite(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("GetInvite: found=%v err=%v", found, err)
 	}
-	if inv.TeamID != 8001 || inv.TargetPlayerID != 9001 {
+	if inv.TeamID != 8001 || inv.TargetPlayerID != 9001 || inv.InviterID != 6001 || inv.InviteID != 7001 {
 		t.Errorf("unexpected invite: %+v", inv)
 	}
+	if inv.ExpiresAtMs <= 0 {
+		t.Errorf("expected expires_at_ms set, got %d", inv.ExpiresAtMs)
+	}
 
-	if err := repo.DeleteInvite(ctx, 7001); err != nil {
+	if err := repo.DeleteInvite(ctx, 7001, 9001); err != nil {
 		t.Fatalf("DeleteInvite: %v", err)
 	}
 	_, found, _ = repo.GetInvite(ctx, 7001)
 	if found {
 		t.Error("expected not found after delete")
+	}
+	// 删除后 pending 索引配额同步释放
+	invites, err := repo.ListPendingInvites(ctx, 9001, 10)
+	if err != nil {
+		t.Fatalf("ListPendingInvites: %v", err)
+	}
+	if len(invites) != 0 {
+		t.Errorf("expected empty pending list after delete, got %d", len(invites))
 	}
 }
 
@@ -189,7 +200,7 @@ func TestInviteExpiry(t *testing.T) {
 	repo, mr := newTestRepo(t)
 	ctx := context.Background()
 
-	if err := repo.SetInvite(ctx, 7002, 8002, 9002, 1*time.Second); err != nil {
+	if err := repo.SetInvite(ctx, 7002, 8002, 6002, 9002, 1*time.Second, 10); err != nil {
 		t.Fatalf("SetInvite: %v", err)
 	}
 
@@ -202,6 +213,104 @@ func TestInviteExpiry(t *testing.T) {
 	}
 	if found {
 		t.Error("expected invite expired")
+	}
+}
+
+// TestInvitePendingLimit 验证同一被邀请人的 pending 邀请数上限(不变量 §9-18 写入侧)。
+func TestInvitePendingLimit(t *testing.T) {
+	repo, _ := newTestRepo(t)
+	ctx := context.Background()
+
+	const target, maxPending = uint64(9100), 3
+	for i := 0; i < maxPending; i++ {
+		if err := repo.SetInvite(ctx, uint64(7100+i), uint64(8100+i), 6100, target, 60*time.Second, maxPending); err != nil {
+			t.Fatalf("SetInvite #%d: %v", i, err)
+		}
+	}
+
+	// 第 maxPending+1 条:超限,返回 3008
+	err := repo.SetInvite(ctx, 7999, 8999, 6100, target, 60*time.Second, maxPending)
+	if errcode.As(err) != errcode.ErrTeamInvitePendingLimit {
+		t.Fatalf("expected ErrTeamInvitePendingLimit, got %v", err)
+	}
+
+	// 接受一条(删除)释放配额后可以继续邀请
+	if err := repo.DeleteInvite(ctx, 7100, target); err != nil {
+		t.Fatalf("DeleteInvite: %v", err)
+	}
+	if err := repo.SetInvite(ctx, 7999, 8999, 6100, target, 60*time.Second, maxPending); err != nil {
+		t.Fatalf("SetInvite after release: %v", err)
+	}
+}
+
+// TestInvitePendingLimitExpiredFreesQuota 验证过期邀请不占配额(Lua 里先清过期再校验)。
+func TestInvitePendingLimitExpiredFreesQuota(t *testing.T) {
+	repo, mr := newTestRepo(t)
+	ctx := context.Background()
+
+	const target, maxPending = uint64(9200), 2
+	for i := 0; i < maxPending; i++ {
+		if err := repo.SetInvite(ctx, uint64(7200+i), 8200, 6200, target, 1*time.Second, maxPending); err != nil {
+			t.Fatalf("SetInvite #%d: %v", i, err)
+		}
+	}
+	// 满额时超限
+	if err := repo.SetInvite(ctx, 7299, 8200, 6200, target, 1*time.Second, maxPending); errcode.As(err) != errcode.ErrTeamInvitePendingLimit {
+		t.Fatalf("expected limit error, got %v", err)
+	}
+
+	// 快进使旧邀请过期 → 配额释放
+	mr.FastForward(2 * time.Second)
+	if err := repo.SetInvite(ctx, 7299, 8200, 6200, target, 60*time.Second, maxPending); err != nil {
+		t.Fatalf("SetInvite after expiry: %v", err)
+	}
+}
+
+// TestListPendingInvites 验证拉取兜底:按过期时间升序、截断 limit、跳过已删令牌。
+func TestListPendingInvites(t *testing.T) {
+	repo, _ := newTestRepo(t)
+	ctx := context.Background()
+
+	const target = uint64(9300)
+	// 三条 TTL 递增(过期时间升序 = 写入顺序)
+	for i := 0; i < 3; i++ {
+		if err := repo.SetInvite(ctx, uint64(7300+i), uint64(8300+i), uint64(6300+i), target, time.Duration(10+i)*time.Second, 10); err != nil {
+			t.Fatalf("SetInvite #%d: %v", i, err)
+		}
+	}
+
+	invites, err := repo.ListPendingInvites(ctx, target, 10)
+	if err != nil {
+		t.Fatalf("ListPendingInvites: %v", err)
+	}
+	if len(invites) != 3 {
+		t.Fatalf("expected 3 invites, got %d", len(invites))
+	}
+	for i, inv := range invites {
+		if inv.InviteID != uint64(7300+i) || inv.TeamID != uint64(8300+i) || inv.InviterID != uint64(6300+i) {
+			t.Errorf("invite #%d mismatch: %+v", i, inv)
+		}
+	}
+
+	// 读取侧 limit 截断
+	invites, err = repo.ListPendingInvites(ctx, target, 2)
+	if err != nil {
+		t.Fatalf("ListPendingInvites limit: %v", err)
+	}
+	if len(invites) != 2 {
+		t.Fatalf("expected 2 invites with limit=2, got %d", len(invites))
+	}
+
+	// 令牌 hash 被直接删(模拟 TTL 竞态残留)→ 列表跳过且不报错
+	if err := repo.rdb.Del(ctx, inviteKey(7301)).Err(); err != nil {
+		t.Fatalf("del: %v", err)
+	}
+	invites, err = repo.ListPendingInvites(ctx, target, 10)
+	if err != nil {
+		t.Fatalf("ListPendingInvites after stale: %v", err)
+	}
+	if len(invites) != 2 {
+		t.Fatalf("expected 2 invites after stale skip, got %d", len(invites))
 	}
 }
 

@@ -237,6 +237,8 @@ kind: Deployment
 metadata: { name: team, namespace: pandora, labels: { app: team } }
 spec:
   replicas: 1
+  # 邀请推送的 Kafka producer 是启动强依赖；新 Pod 未 Ready/反复退出时必须保留旧 Pod 接流量。
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
   selector: { matchLabels: { app: team } }
   template:
     metadata: { labels: { app: team } }

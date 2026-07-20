@@ -204,6 +204,35 @@ func (s *TeamService) GetMyTeam(ctx context.Context, _ *teamv1.GetMyTeamRequest)
 	}, nil
 }
 
+// ListMyPendingInvites 查询"发给我的待处理邀请"(只读,拉取兜底)。player_id 以 JWT ctx 为准(R5)。
+// 推送(TeamInviteEvent)只是投影/加速器,这里才是邀请令牌的权威查询(不变量 §9-22):
+// 客户端在登录、回前台、打开组队 UI 时调用,推送丢帧最多延迟弹窗,不丢邀请。
+// 没有邀请是正常态:返 OK + 空列表。
+func (s *TeamService) ListMyPendingInvites(ctx context.Context, _ *teamv1.ListMyPendingInvitesRequest) (*teamv1.ListMyPendingInvitesResponse, error) {
+	playerID := callerID(ctx)
+	if playerID == 0 {
+		return &teamv1.ListMyPendingInvitesResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+	}
+
+	recs, err := s.uc.ListPendingInvites(ctx, playerID)
+	if err != nil {
+		return &teamv1.ListMyPendingInvitesResponse{Code: toProtoCode(err)}, nil
+	}
+	invites := make([]*teamv1.PendingInvite, 0, len(recs))
+	for _, r := range recs {
+		invites = append(invites, &teamv1.PendingInvite{
+			TeamId:      r.TeamID,
+			InviteId:    r.InviteID,
+			InviterId:   r.InviterID,
+			ExpiresAtMs: r.ExpiresAtMs,
+		})
+	}
+	return &teamv1.ListMyPendingInvitesResponse{
+		Code:    commonv1.ErrCode_OK,
+		Invites: invites,
+	}, nil
+}
+
 // ── 辅助 ──────────────────────────────────────────────────────────────────────
 
 // callerID 从 ctx 取 JWT 注入的 player_id。

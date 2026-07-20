@@ -27,6 +27,7 @@ service TeamService {
   rpc SetReady(SetReadyRequest) returns (SetReadyResponse);              // 立即完成型
   rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);                 // 只读,按 team_id 查任意队伍快照
   rpc GetMyTeam(GetMyTeamRequest) returns (GetMyTeamResponse);           // 只读,登录后进大厅查"我的队伍"完整快照(队伍主界面)
+  rpc ListMyPendingInvites(ListMyPendingInvitesRequest) returns (ListMyPendingInvitesResponse);  // 只读,拉取兜底:查"发给我的待处理邀请"
 }
 
 enum TeamState {
@@ -180,6 +181,35 @@ message GetMyTeamResponse {
   pandora.common.v1.ErrCode code = 1;
   bool has_team_msg = 2;  // false=玩家当前没有队伍(正常态,code 仍为 OK)
   Team team         = 3;  // has_team_msg=false 时为空;完整快照,队伍主界面直接用
+}
+
+// ListMyPendingInvites:查询"发给我的待处理邀请"(只读,拉取兜底)。
+//
+// 为什么需要它(推送单点消除):邀请令牌的唯一权威在 Redis(pandora:team:invite:*),
+// kafka→push 推送只是投影/加速器(不变量 §9-22)。此前 invite_id 只能从推送获得,
+// producer 故障窗口 / push 副本崩溃 / 客户端恰好断线,邀请就静默失效到 TTL 过期。
+// 客户端在登录、回前台、打开组队 UI 时调用本 RPC 兜底,丢推送最多延迟弹窗,不丢邀请。
+//
+// 上限治理(不变量 §9-18,组队邀请是"客户端可写入的堆积列表"):
+//   - 写入侧:同一被邀请人 pending 邀请数上限 TeamConf.max_pending_invites(默认 10),
+//     超限 Invite 返回 ERR_TEAM_INVITE_PENDING_LIMIT(3008)。
+//   - 读取侧:单次全量返回,服务端按同一上限截断(写入侧硬上限已兜住总量,无需分页)。
+message ListMyPendingInvitesRequest {
+  // 身份一律以 JWT x-pandora-player-id 为准,客户端无需也不应自报 player_id。
+}
+
+// PendingInvite 是待处理邀请的查询视图,与 TeamInviteEvent(推送)字段对齐:
+// 客户端拿到后走与收到推送完全相同的弹框/接受流程(AcceptInvite 回传 invite_id)。
+message PendingInvite {
+  uint64 team_id       = 1;  // 邀请加入的队伍
+  uint64 invite_id     = 2;  // 邀请令牌;AcceptInvite 回传校验未过期/未取消
+  uint64 inviter_id    = 3;  // 发起邀请的玩家
+  int64  expires_at_ms = 4;  // 邀请过期时间(unix ms)
+}
+
+message ListMyPendingInvitesResponse {
+  pandora.common.v1.ErrCode code = 1;
+  repeated PendingInvite invites = 2;  // 按过期时间升序;数量 ≤ max_pending_invites
 }
 
 // ===== Kafka 推送 payload =====

@@ -20,9 +20,11 @@
   `0` 永远 = 该 topic 现有旧事件,枚举值只增不复用。设计详见
   [`docs/design/go-services.md`](../../../docs/design/go-services.md) §「域内多事件类型路由」。
 - **传递路径**:与 `trace_id` 一致走 kafka header;consumer 把 `event_type` header 透传进 `PushFrame.EventType`。
-- **当前阶段**:`TeamPushEventType` 仅 `UNSPECIFIED=0`,现网所有帧 `event_type=0`,**push 服务无需改**;
-  引入首个非 0 事件类型时,`internal/biz/consumer.go` 构造 `PushFrame` 处需补一行读取 `event_type` header
-  (紧邻现有 `TraceId: headerStr(msg.Headers, "trace_id")`)。
+- **当前阶段**:`TeamPushEventType` 已启用 `TEAM_PUSH_EVENT_TYPE_INVITE=1`，team 在兼容期同时发送
+  专属 `TeamInviteEvent(event_type=1)` 与 legacy `TeamUpdateEvent(event_type=0)`；
+  `internal/biz/consumer.go` 已读取 header 并透传 `PushFrame.EventType`。
+- **发布顺序**:必须先升级 push reader，再升级 team dual producer，最后发布只认专属邀请事件的
+  新客户端；回滚/修复旧环境时同样保持 **push → team**，避免新客户端命中旧 writer 后漏邀请。
 
 ## 协议铁律(对齐 [`protocol-ordering-rules.md`](../../../docs/design/protocol-ordering-rules.md))
 

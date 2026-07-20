@@ -272,6 +272,10 @@ GetMyTeam() → has_team_msg + Team 完整快照(只读;登录后进大厅时调
 ```
 队伍状态变更推送走 kafka `pandora.team.update` → push 服务 server stream,**不提供** StreamTeamUpdates RPC。
 
+**依赖约束**：Redis 是队伍权威状态强依赖；配置了 `kafka.brokers` 时，Kafka producer 也是
+玩家可见邀请的启动强依赖。producer 初始化失败时 team 必须在 gRPC Ready 前退出，不能用
+`pusher=nil` 接受 Invite 后静默丢通知。仅显式空 brokers 的纯 RPC 本地配置允许禁用推送。
+
 **客户端同步约定(2026-06-15)**:
 - `TeamUpdateEvent.team` 服务端已填充完整 `Team` 客户端可见快照,不是空信号;该快照来自 `TeamStorageRecord` 经 `recordToProto` 组装,不暴露存储侧字段。
 - 常规队伍状态变更(`MEMBER_JOINED` / `MEMBER_LEFT` / `READY_CHANGED` / `CAPTAIN_CHANGED` / `DISBANDED` 等)客户端仍把 push 当"有变化"信号,收到后防抖合并调用 `GetMyTeam` 读取当前权威态,只在 `GetMyTeam` 回包路径写本地 `CurrentTeamSnapshot`。原因是 kafka → push → client stream 是 at-least-once 链路,可能重复、乱序或客户端处理时已过期;`GetMyTeam` 从 Redis 当前索引/队伍记录读取,并带脏索引清理逻辑,保证 UI 最终收敛到服务端权威态。
@@ -584,9 +588,10 @@ topic),用 `(topic, event_type)` 两级定位 payload 该反序列化成哪个 m
 
 - `topic` → 业务域(粗路由);`event_type` → 域内第几种事件(细路由)。
 - **每域独立编号**:每个域定义自己的 `XxxPushEventType` enum,team 的 `1` 与 match 的 `1`
-  互不相干,靠 `topic` 区分。**不需要全局 event_id 台账。** 当前已定义(均仅 `UNSPECIFIED=0`):
+  互不相干,靠 `topic` 区分。**不需要全局 event_id 台账。** 当前 team 已启用
+  `TEAM_PUSH_EVENT_TYPE_INVITE=1`；match/friend 目前仍只有 `UNSPECIFIED=0`。
   `pandora.team.v1.TeamPushEventType`、`pandora.match.v1.MatchPushEventType`、
-  `pandora.friend.v1.FriendPushEventType`(= 客户端今天绑 push 的三个域:Team/Match/Friend)。
+  `pandora.friend.v1.FriendPushEventType` 是客户端已接 push 的三个域。
   邮件/交易行等域当前**无客户端 push 通道**,不涉及本路由,将来接入 push 时再加对应 enum。
 - **`0` 永远 = 该 topic 现有旧事件**(team → `TeamUpdateEvent`、match → `MatchProgressEvent`、
   friend → `FriendEvent`),枚举值只增不复用。
@@ -607,17 +612,15 @@ push consumer: frame.EventType = header["event_type"]  →  stream.Send(PushFram
   万一收到新事件也顶多字段对不上(protobuf 不崩),走客户端兜底,无害。
 - 新客户端:`switch(event_type)`,`0`/未知 → 旧路径,已知新值 → 对应新 message。
 
-**分阶段落地(读先于写)**:
+**当前落地状态与滚动顺序(2026-07-20)**:
 
-1. proto 加 `event_type` + 各域 enum(当前 `TeamPushEventType` 仅 `UNSPECIFIED=0`);现网所有帧
-   `event_type` 均为 `0`,**行为零变更**。
-2. 新客户端先全量铺「能读 `event_type`」的版本(此时无人发新类型,全走旧路径,零风险)。
-3. 覆盖率达标后,才引入第一个真实新事件类型:producer 填 `event_type` header +
-   **push consumer 加一行**把 header 透传进 `frame.EventType`(当前 consumer 尚未透传,因为还没有非 0 值);
-   两处都是加法、仍向后兼容,按开关灰度放量,异常可秒级回退。
-
-> ⚠️ 现阶段(仅 `event_type=0`)**push 服务无需改**;引入首个非 0 事件类型时,consumer 需补一行
-> `frame.EventType = headerUint(msg.Headers, "event_type")`(紧邻现有 `TraceId: headerStr(...)`)。
+1. proto 已有 `PushFrame.event_type` 和 `TEAM_PUSH_EVENT_TYPE_INVITE=1`；push consumer 已把 Kafka
+   `event_type` header 透传到 `PushFrame.EventType`。
+2. team 邀请采用兼容期双发：`event_type=1` 的 `TeamInviteEvent` 给新客户端，另发
+   `event_type=0` 的 legacy `TeamUpdateEvent(INVITE_SENT)` 保护旧客户端。
+3. 发布必须遵守读先于写：先升级并确认 push 能透传 header，再升级 team 双发 producer，最后才
+   发布只按专属邀请事件展示的新客户端。当前新客户端已发布时，恢复旧环境也必须严格按
+   **push → team** 顺序升级，并验证滚动混跑窗口，不能只重启旧 team。
 
 
 **实现**(Kratos 风格):

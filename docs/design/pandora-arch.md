@@ -37,7 +37,7 @@
 | 4 | **friend** | 好友 / 黑名单 | 无 | mysql + redis |
 | 5 | **chat** | 频道(世界 / 队伍 / 私聊) | 弱(channel 路由) | redis pub/sub + kafka |
 | 6 | **player_locator** | 玩家位置(hub_id / battle_id) | 强 | redis |
-| 7 | **team** | 组队状态机 | 强 | redis |
+| 7 | **team** | 组队状态机 | 强 | redis(权威态) + kafka(配置后为玩家邀请推送启动强依赖) |
 | 8 | **matchmaker** | MMR / 队伍合并 / 排队 / bot 降级 | 强 | redis + ds_allocator |
 | 9 | **trade** | 两阶段交易 / 审计 | 强 | redis + mysql + kafka |
 | 10 | **dialogue** | NPC 对话树运行时 | 无(读配置) | mysql / 配置中心 |
