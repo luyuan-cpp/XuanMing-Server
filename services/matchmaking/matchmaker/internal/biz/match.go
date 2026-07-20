@@ -1732,15 +1732,19 @@ func (u *MatchUsecase) advanceAllocation(ctx context.Context, m *matchv1.MatchSt
 	// 投影已在 READY 前强写入(notifyBattleStrict);这里再刷一次纯属弱依赖续期,失败仅 Warn。
 	u.notifyBattle(ctx, playerIDs, job.MatchId, dsAddr)
 
-	// 每个玩家单独带自己的 battle_ticket 推 READY 进度
-	now := time.Now().UnixMilli()
-	for _, member := range ready.Members {
-		u.pushOne(ctx, member.PlayerId, ready, dsAddr, tickets[member.PlayerId], now)
+	// 每个玩家单独带自己的 battle_ticket 推 READY 进度。交付是 at-least-once:
+	// 全员推送成功才把 match 移出 active ZSET(不变量:READY ∈ active ⟺ 推送交付未确认)。
+	// 失败(Kafka 不可用)或本进程在推送前崩溃时,match 滞留 active,由撮合循环
+	// stageReady 分支(finalizeReadyMatch)幂等补推——重签新 jti,客户端契约要求容忍
+	// 重复回调(CLAUDE.md §9.19)——直到交付或 match TTL 到期。非队长成员没有 match_id,
+	// 这条推送是他们得知 READY / Battle 落点的唯一服务端主动通道,不允许静默丢弃。
+	if perr := u.pushReadyStrict(ctx, ready, dsAddr, tickets); perr != nil {
+		plog.With(ctx).Warnw("msg", "match_ready_push_deferred", "match_id", job.MatchId, "err", perr)
+	} else {
+		// 确认期结束:移出 active。票据保留到 TTL, 让客户端用 StartMatch 返回的 ticket_id
+		// 继续轮询时也能解析到 READY match, 避免错过 push 后 GetMatchProgress 变成 4001。
+		u.removeActive(ctx, job.MatchId)
 	}
-
-	// 确认期结束:移出 active。票据保留到 TTL, 让客户端用 StartMatch 返回的 ticket_id
-	// 继续轮询时也能解析到 READY match, 避免错过 push 后 GetMatchProgress 变成 4001。
-	u.removeActive(ctx, job.MatchId)
 	plog.With(ctx).Infow("msg", "match_ready", "match_id", job.MatchId, "ds_addr", dsAddr, "players", len(playerIDs))
 	return nil
 }
@@ -2254,9 +2258,10 @@ func (u *MatchUsecase) reconcileActiveOnce(ctx context.Context) error {
 				joined = errors.Join(joined, aerr)
 			}
 		case stageReady:
-			if rerr := u.repo.RemoveActive(ctx, mid); rerr != nil {
-				joined = errors.Join(joined, rerr)
-			}
+			// READY 的 active 表项语义是「推送交付未确认」,由 advanceAllocationsOnce
+			// (finalizeReadyMatch)补推并移出。canonical 扫描无法区分「已交付」与
+			// 「未交付」,既不清除(会拆掉补推驱动)也不补建(READY 记录存活到
+			// ReleaseMatch,补建会对已交付的局每 5s 重复推送一整场)。
 		}
 	}
 	return joined
@@ -2405,8 +2410,10 @@ func (u *MatchUsecase) advanceAllocationsOnce(ctx context.Context) error {
 				joined = errors.Join(joined, cleanupErr)
 			}
 		case stageReady:
-			if rerr := u.repo.RemoveActive(ctx, mid); rerr != nil {
-				joined = errors.Join(joined, rerr)
+			// READY 仍在 active = READY 推送交付未确认(崩溃窗口 / Kafka 中断)。
+			// 幂等补推,全员成功才移出 active;失败保留下轮重试。
+			if ferr := u.finalizeReadyMatch(ctx, m); ferr != nil {
+				joined = errors.Join(joined, ferr)
 			}
 		}
 	}
@@ -2827,7 +2834,10 @@ func (u *MatchUsecase) expireOnce(ctx context.Context) error {
 			snapshot, keepActive = nil, false
 			switch m.Stage {
 			case stageReady:
-				return nil // READY 不再由 active worker 推进
+				// READY 滞留 active = 推送交付未确认,由撮合循环 finalizeReadyMatch
+				// 补推后移出;确认期 deadline 对 READY 无意义,不清索引也不判失败。
+				keepActive = true
+				return nil
 			case stageFailed:
 				if m.GetAllocationNextAttemptAtMs() != -1 {
 					snapshot = cloneMatch(m) // cleanup 未 durable ACK，继续重放
@@ -2972,6 +2982,66 @@ func (u *MatchUsecase) pushOne(ctx context.Context, playerID uint64, m *matchv1.
 	}
 	prog := buildProgress(m.MatchId, m.Stage, m.Members, dsAddr, battleTicket)
 	u.pushOneProgress(ctx, playerID, prog, nowMs)
+}
+
+// pushReadyStrict 给全体成员各推一条带其专属 battle_ticket 的 READY 进度并返回聚合错误。
+// 与 pushOne(fire-and-forget)不同:READY 是非队长成员进入 Battle 的关键通知,交付失败
+// 必须反馈给调用方以保留重试驱动(match 留在 active ZSET),不能静默丢弃。
+// pusher 未配置(dev 纯轮询模式)视为无需交付。部分成功也返回错误:下轮对全员重推,
+// 已收到的客户端按契约幂等忽略重复(CLAUDE.md §9.19)。
+func (u *MatchUsecase) pushReadyStrict(ctx context.Context, m *matchv1.MatchStorageRecord, dsAddr string, tickets map[uint64]string) error {
+	if u.pusher == nil {
+		return nil
+	}
+	now := time.Now().UnixMilli()
+	var joined error
+	for _, member := range m.Members {
+		prog := buildProgress(m.MatchId, m.Stage, m.Members, dsAddr, tickets[member.PlayerId])
+		event := &matchv1.MatchProgressEvent{Progress: prog, ToPlayerId: member.PlayerId, TsMs: now}
+		payload, err := proto.Marshal(event)
+		if err != nil {
+			joined = errors.Join(joined, fmt.Errorf("marshal ready progress for player %d: %w", member.PlayerId, err))
+			continue
+		}
+		// 原则 3 例外:callerID=0 → 发给所有人(含发起方)
+		if _, err := u.pusher.PushMatchProgress(ctx, 0, []uint64{member.PlayerId}, payload); err != nil {
+			joined = errors.Join(joined, fmt.Errorf("push ready progress to player %d: %w", member.PlayerId, err))
+		}
+	}
+	return joined
+}
+
+// finalizeReadyMatch 补推一场 READY 后仍滞留 active ZSET 的 match,交付确认后移出 active。
+//
+// 不变量:READY ∈ active ZSET ⟺ READY 推送交付未确认。滞留只有两种来源:
+//   - READY CAS 提交后、推送完成 / removeActive 前进程崩溃(重启补推,可能对部分成员
+//     重复,客户端契约要求容忍重复回调);
+//   - 推送时 Kafka 不可用(pushReadyStrict 失败保留 active,本函数每 tick 重试直到恢复)。
+//
+// 每次补推为全员重签票据(新 jti),与 GetMatchProgress 的 refreshBattleTicket 同口径,
+// 不复用旧票撞 DS 侧 jti 一次性防重放。推送成功前绝不 RemoveActive;错误由调用方聚合
+// 记日志,match TTL 是重试的自然上限(记录消失 → advanceAllocationsOnce 清索引)。
+func (u *MatchUsecase) finalizeReadyMatch(ctx context.Context, m *matchv1.MatchStorageRecord) error {
+	if u.pusher == nil {
+		return u.repo.RemoveActive(ctx, m.GetMatchId())
+	}
+	allocation, ok := allocationFromMatch(m)
+	if !ok || m.GetBattleDsAddr() == "" {
+		return errcode.New(errcode.ErrUnavailable,
+			"match %d READY without complete persisted battle target", m.GetMatchId())
+	}
+	playerIDs := memberPlayerIDs(m.GetMembers())
+	tickets, err := u.allocator.SignBattleTickets(ctx, m.GetMatchId(), playerIDs, allocation)
+	if err != nil {
+		return err
+	}
+	if err := validateSignedBattleTickets(playerIDs, tickets); err != nil {
+		return err
+	}
+	if err := u.pushReadyStrict(ctx, m, m.GetBattleDsAddr(), tickets); err != nil {
+		return err
+	}
+	return u.repo.RemoveActive(ctx, m.GetMatchId())
 }
 
 func (u *MatchUsecase) pushOneProgress(ctx context.Context, playerID uint64, prog *matchv1.MatchProgress, nowMs int64) {

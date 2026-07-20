@@ -580,3 +580,45 @@
 - 已知边界如实保留：本次根治的是“启动时 producer 失败后永久 nil”和协议版本错配；运行期间
   Kafka send 重试耗尽仍只有错误日志。若要把邀请承诺为端到端 durable delivery，仍需 outbox 或
   被邀请方可查询的权威邀请列表，不能用本次启动门禁代替。
+
+## 2026-07-20:组队匹配 READY 通知闭环(matchmaker Kafka 启动门禁 + READY 补推 + UE 等待 watchdog)
+
+- 现场根因闭环:matchmaker-pve 启动时 Kafka 未就绪,producer 一次性初始化失败后以 `pusher=nil`
+  继续服务,整个 Pod 生命周期 `pandora.match.progress` 静默丢弃(现场 4 个 partition end offset
+  均为 0)。组队匹配只有队长持有 StartMatch 返回的 match_id 可轮询兜底,非队长成员唯一通道就是
+  该推送 → 队长进 Battle、队员永远停在 Hub(match 14537609598533632)。
+- 修复一(启动门禁,与 2026-07-20 team 同口径):配置 `kafka.brokers` 时 matchmaker producer 为
+  启动强依赖,初始化失败在对外 Ready 前 exit;显式空 brokers 保留 dev 纯轮询模式。新增
+  `initializeMatchPublication` + cmd 层 4 条测试。
+- 修复二(READY 推送 at-least-once):新机械不变量「READY ∈ active ZSET ⟺ READY 推送交付
+  未确认」。READY CAS 后推送改 `pushReadyStrict`(聚合错误),全员成功才 RemoveActive;滞留
+  READY 由撮合循环 `finalizeReadyMatch` 幂等补推(全员重签新 jti,与 refreshBattleTicket 同
+  口径),覆盖「READY 提交后、推送前崩溃」与「推送时 Kafka 不可用」两个窗口,上限 match TTL。
+  `expireOnce`(keepActive)与 `reconcileActiveOnce`(不清不建)同步改语义。回归:
+  `ready_push_saga_test.go` 两条(推送失败保留 active + 重启后补推带个人票据;过期扫描不误清)。
+  matchmaker 全包 `go test` 全绿。
+- 修复三(UE 侧最后闭环,Pandora-Client-SVN):`UMyMatchModel` 新增组队匹配等待 watchdog——
+  订阅 `UMyTeamModel::OnTeamSnapshotChanged`,本队 `TEAM_STATE_MATCHING` 且本地无匹配归属期间
+  以 `TeamMatchStandbyCheckIntervalSeconds`(默认 5s)循环检查,到期仍无归属且 Coordinator 空闲
+  (Phase==Idle,不抢流不换代)则触发 `RestartAuthoritativeRecovery(Resume)`——与「收到无归属
+  推送」同一条权威恢复路径,由 ResumeContext 决定 QUEUED/CONFIRM/READY 或明确 Hub。World 切换
+  后 OnWorldBeginPlay 幂等重挂 ticker(§9.19 有界驱动)。切后台场景本就由 Coordinator 前台
+  `RestartAuthoritativeRecovery(Resume)` 覆盖,未改动。
+- 场景矩阵:启动窗口 Kafka 未就绪 → 门禁拒 Ready(编排器重试);运行中 Kafka 宕机 → READY 滞留
+  active 持续补推,恢复即达,UE watchdog 兜底前台等待;matchmaker 崩溃/换 leader → durable saga
+  重放 + 补推;客户端切后台 → 前台恢复权威重查;推送链路全灭 → watchdog 周期 ResumeContext。
+- 交接:UE 编译与真机验证由用户执行(Live Coding 约束);建议复验事故时序(先起 matchmaker 后起
+  Kafka → CrashLoop 至就绪;双人组队 → 两端都收到 READY 并进 Battle;匹配中 kill matchmaker-pve
+  Pod → 重启后队员仍能进场)。git/svn 提交由用户复核后执行。文档:go-services.md §2.8 新增
+  READY at-least-once 不变量条目。
+- 追加(同日,用户质询「Kafka 恢复后人已在别的副本,补推岂不是有问题」触发的审查):
+  ①服务端侧确认无害——ReleaseMatch 前成员被 claim + locator BATTLE 门锁死进不了别局,
+  ReleaseMatch 后 match 记录删除、补推循环即停,不存在"跨局迟到补推";②客户端侧查出真缺口:
+  `UMyDsRecoveryCoordinator::TryDriveTravel` 缺 §23 要求的 Battle 幂等 no-op 守卫(Hub 有
+  CanReuseCurrentHubAdmission,Battle 没有),战斗内收到重复/迟到 READY(补推使之常态化)会
+  对同一 DS 重复 ClientTravel 把玩家拽出重载地图——先于本次改动即存在,补推放大。已补:
+  Battle 目标且当前 live connection 端点精确一致时不再 Travel,转入与 World BeginPlay 后验
+  同款的 post-travel 权威复核(bPostTravelAuthorityCheck + RetryBackoff + ScheduleAuthorityRetry),
+  由 ResumeContext 按 route+match 确认 admission 收口;漂移则照常权威重查。验收补充:战斗内
+  手动重发 READY 推送(或制造部分成员推送失败触发补推)→ 在局玩家无地图重载,日志出现
+  "already connected to target battle endpoint"。

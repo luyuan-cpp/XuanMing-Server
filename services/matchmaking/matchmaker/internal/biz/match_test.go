@@ -25,8 +25,29 @@ import (
 // ── 测试桩 ────────────────────────────────────────────────────────────────────
 
 type mockPusher struct {
-	mu     sync.Mutex
-	events []*matchv1.MatchProgressEvent
+	mu      sync.Mutex
+	events  []*matchv1.MatchProgressEvent
+	failErr error // 非 nil 时 PushMatchProgress 一律失败(模拟 Kafka 不可用)
+}
+
+// failWith 设置 / 清除注入的推送失败(nil = 恢复正常)。
+func (m *mockPusher) failWith(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.failErr = err
+}
+
+// readyTicketFor 返回该玩家最近一条 READY 推送里的 battle_ticket。
+func (m *mockPusher) readyTicketFor(playerID uint64) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := len(m.events) - 1; i >= 0; i-- {
+		e := m.events[i]
+		if e.ToPlayerId == playerID && e.Progress != nil && e.Progress.Stage == stageReady {
+			return e.Progress.BattleTicket, true
+		}
+	}
+	return "", false
 }
 
 type captureResumeAllocator struct {
@@ -49,6 +70,13 @@ func (a *captureResumeAllocator) SignBattleTicket(
 }
 
 func (m *mockPusher) PushMatchProgress(_ context.Context, _ uint64, to []uint64, payload []byte) (int, error) {
+	m.mu.Lock()
+	if m.failErr != nil {
+		err := m.failErr
+		m.mu.Unlock()
+		return 0, err
+	}
+	m.mu.Unlock()
 	var e matchv1.MatchProgressEvent
 	if err := proto.Unmarshal(payload, &e); err == nil {
 		m.mu.Lock()

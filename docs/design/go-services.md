@@ -325,6 +325,16 @@ GetMatchProgress(match_id) → MatchProgress   # match_id 可为 0(重连兜底)
 - **重连兜底**:`match_id=0` 时服务端用 JWT player_id 反查本人当前票据
   (`GetPlayerTicket`),解决重新登录 / 换设备丢句柄后拿不到自己进度;READY 阶段
   额外为本人现签新 battle DSTicket(新 jti,sub 锁定本人)。
+- **READY 推送 at-least-once(2026-07-20 事故修复)**:组队非队长成员没有 match_id,
+  `pandora.match.progress` 推送是其得知 READY / Battle 落点的唯一服务端主动通道。
+  机械不变量:**READY ∈ active ZSET ⟺ READY 推送交付未确认**——全员推送成功才移出
+  active;READY CAS 后崩溃或推送时 Kafka 不可用,match 滞留 active,由撮合循环
+  `finalizeReadyMatch` 幂等补推(每次重签全员新 jti 票据)直到交付或 match TTL 到期,
+  `expireOnce`/`reconcileActiveOnce` 不得清除该表项。客户端契约:必须容忍重复 READY
+  推送(幂等,coordinator 单写者保证不双 Travel)。配套:`kafka.brokers` 配置时
+  producer 为**启动强依赖**(初始化失败在 Ready 前退出,与 team 同口径);UE 侧
+  「本队 MATCHING 且本地无匹配归属」期间有 standby watchdog 周期触发 ResumeContext
+  权威恢复,覆盖推送链路全灭的场景。
 
 ---
 
