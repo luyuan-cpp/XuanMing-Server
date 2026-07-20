@@ -62,6 +62,9 @@ kind: Deployment
 metadata: { name: redis, namespace: pandora, labels: { app: redis } }
 spec:
   replicas: 1
+  # 虽然 alpine 镜像较小，但会与 MySQL/Kafka/ZooKeeper 同时冷拉；统一放宽 Deployment
+  # deadline，避免共享下载队列较慢时被默认 600s 提前判失败。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: redis } }
   template:
     metadata: { labels: { app: redis } }
@@ -191,6 +194,9 @@ spec:
   replicas: 1
   # 单节点 + RWO 数据盘不得 RollingUpdate 并发起两个 etcd；先停旧 Pod 再挂同一 PVC。
   strategy: { type: Recreate }
+  # 所有 infra Deployment 会同时 apply；首次冷拉大镜像时，即使 etcd 镜像较小也可能在
+  # minikube 下载队列中超过默认 600s，随后 rollout 直接报 ProgressDeadlineExceeded。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: etcd } }
   template:
     metadata: { labels: { app: etcd } }

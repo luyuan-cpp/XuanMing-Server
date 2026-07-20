@@ -176,20 +176,59 @@ $invokeK8sFunctions = @($startAst.FindAll({
         $node.Name -ceq 'Invoke-K8s'
 }, $true))
 Assert-True ($invokeK8sFunctions.Count -eq 1) '必须有唯一 Invoke-K8s'
-$mysqlRolloutCommands = @($invokeK8sFunctions[0].FindAll({
+$invokeK8sCommands = @($invokeK8sFunctions[0].FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst]
+}, $true))
+foreach ($deployment in @('mysql', 'redis', 'etcd', 'zookeeper', 'kafka')) {
+    $rolloutCommands = @($invokeK8sCommands | Where-Object {
+        $_.GetCommandName() -ceq 'kubectl' -and
+            $_.Extent.Text -cmatch ('\brollout\s+status\s+deploy/' + [regex]::Escape($deployment) + '\b')
+    })
+    Assert-True ($rolloutCommands.Count -eq 1) "Invoke-K8s 必须有唯一 $deployment rollout 等待命令"
+    Assert-True ($rolloutCommands[0].Extent.Text -cmatch '(?:^|\s)--timeout=1800s(?:\s|$)') `
+        "$deployment 首次冷拉实际等待必须为 1800s，与 Deployment progress deadline 对齐"
+}
+Assert-True (@($invokeK8sCommands | Where-Object {
+    $_.GetCommandName() -ceq 'kubectl' -and
+        $_.Extent.Text -cmatch '\brollout\s+status\s+deploy/(?:loki|alloy)\b'
+}).Count -eq 0) 'Loki/Alloy 只能放宽 Deployment deadline，不得变成阻断业务启动的 rollout 等待'
+Assert-True ($source.Contains('第三方镜像首次冷拉每个最多 1800s/30 分钟')) `
+    '启动提示必须准确说明第三方基础设施最长等待时间'
+$resumeK8sFunctions = @($startAst.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -ceq 'Resume-K8s'
+}, $true))
+Assert-True ($resumeK8sFunctions.Count -eq 1) '必须有唯一 Resume-K8s'
+$resumeEtcdRollout = @($resumeK8sFunctions[0].FindAll({
     param($node)
     $node -is [System.Management.Automation.Language.CommandAst] -and
         $node.GetCommandName() -ceq 'kubectl' -and
-        $node.Extent.Text -cmatch '\brollout\s+status\s+deploy/mysql\b'
+        $node.Extent.Text -cmatch '\brollout\s+status\s+deploy/etcd\b'
 }, $true))
-Assert-True ($mysqlRolloutCommands.Count -eq 1) 'Invoke-K8s 必须有唯一 MySQL rollout 等待命令'
-$mysqlRolloutSource = $mysqlRolloutCommands[0].Extent.Text
-Assert-True ($mysqlRolloutSource -cmatch '(?:^|\s)--timeout=1800s(?:\s|$)') `
-    'MySQL 首次冷拉实际等待必须为 1800s，与 infra.yaml 的 progressDeadlineSeconds 对齐'
-Assert-True (-not ($mysqlRolloutSource -cmatch '(?:^|\s)--timeout=180s(?:\s|$)')) `
-    'MySQL rollout 不得退回 180s'
-Assert-True ($source.Contains('MySQL 首次冷拉最多 1800s/30 分钟')) `
-    '启动提示必须准确说明 MySQL 最长等待时间'
+Assert-True ($resumeEtcdRollout.Count -eq 1 -and
+    $resumeEtcdRollout[0].Extent.Text -cmatch '(?:^|\s)--timeout=1800s(?:\s|$)') `
+    'Resume 恢复 etcd 时也必须允许第三方镜像重新冷拉 30 分钟'
+$applyAgonesFunctions = @($startAst.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -ceq 'Apply-AgonesManifests'
+}, $true))
+Assert-True ($applyAgonesFunctions.Count -eq 1) '必须有唯一 Apply-AgonesManifests'
+$applyAgonesSource = $applyAgonesFunctions[0].Extent.Text
+Assert-True ($applyAgonesSource.Contains('helm status agones') -and
+    $applyAgonesSource.Contains("info.status -ceq 'deployed'")) `
+    'Agones 必须按 Helm release deployed 状态判断，不能只凭 namespace 存在就跳过修复'
+$agonesHelmInstall = @($applyAgonesFunctions[0].FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -ceq 'helm' -and
+        $node.Extent.Text -cmatch '\bupgrade\s+--install\s+agones\b'
+}, $true))
+Assert-True ($agonesHelmInstall.Count -eq 1 -and
+    $agonesHelmInstall[0].Extent.Text -cmatch '(?:^|\s)--timeout\s+30m(?:\s|$)') `
+    'Agones 首次安装必须把 Helm 默认 5 分钟等待放宽到 30 分钟'
 $retryCommand = 'pwsh tools/scripts/e2e_k8s.ps1 -SkipImageLoad -MinikubeProfile $mkProfile -KubeContext $mkCtx -RelayBindHost $relayBind'
 Assert-True ([regex]::Matches($source, [regex]::Escape($retryCommand)).Count -ge 2) `
     'start.ps1 两处失败提示都必须保留 profile/context/bind，不能诱导回环绑定回归'

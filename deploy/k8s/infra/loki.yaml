@@ -56,6 +56,8 @@ kind: Deployment
 metadata: { name: loki, namespace: pandora, labels: { app: loki } }
 spec:
   replicas: 1
+  # 新机器首次冷拉 Grafana 日志栈时允许 30 分钟；日志栈仍是非关键路径，不阻断业务启动。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: loki } }
   template:
     metadata: { labels: { app: loki } }
@@ -183,6 +185,8 @@ kind: Deployment
 metadata: { name: alloy, namespace: pandora, labels: { app: alloy } }
 spec:
   replicas: 1
+  # 与 Loki 对齐，避免共享下载带宽时被 Deployment 默认 600s 提前判失败。
+  progressDeadlineSeconds: 1800
   selector: { matchLabels: { app: alloy } }
   template:
     metadata: { labels: { app: alloy } }

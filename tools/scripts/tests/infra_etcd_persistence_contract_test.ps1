@@ -4,6 +4,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path
 $InfraPath = Join-Path $ProjectRoot 'deploy/k8s/infra/infra.yaml'
+$LokiPath = Join-Path $ProjectRoot 'deploy/k8s/infra/loki.yaml'
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw "ASSERT FAILED:$Message" }
@@ -73,8 +74,42 @@ function Assert-EtcdPersistenceContract([string]$Manifest) {
     }
 }
 
+function Assert-DeploymentProgressDeadlines(
+    [string]$Manifest,
+    [string[]]$DeploymentNames,
+    [string]$ContractName) {
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('pandora-progress-deadline-' + [guid]::NewGuid().ToString('N') + '.yaml')
+    try {
+        [System.IO.File]::WriteAllText($tmp, $Manifest, [System.Text.UTF8Encoding]::new($false))
+        $jsonPath = '{.kind}{"\t"}{.metadata.name}{"\t"}{.spec.progressDeadlineSeconds}{"\n"}'
+        $lines = @(& kubectl create --dry-run=client --validate=false -f $tmp -o "jsonpath=$jsonPath" 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "kubectl client parse 失败:$($lines -join [Environment]::NewLine)" }
+        $deadlines = @{}
+        foreach ($row in $lines) {
+            if ([string]::IsNullOrWhiteSpace($row)) { continue }
+            $fields = @([regex]::Split($row.ToString(), "`t"))
+            if ($fields.Count -ne 3) { throw "progress deadline contract 列数=$($fields.Count)，应为 3:$row" }
+            if ([string]$fields[0] -ceq 'Deployment') {
+                $deadlines[[string]$fields[1]] = [string]$fields[2]
+            }
+        }
+        foreach ($name in $DeploymentNames) {
+            Assert-True ($deadlines.ContainsKey($name)) "$ContractName 缺 Deployment/$name"
+            Assert-True ([string]$deadlines[$name] -ceq '1800') `
+                "$ContractName Deployment/$name 的 progressDeadlineSeconds 必须为 1800"
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $manifest = Get-Content -LiteralPath $InfraPath -Raw
 Assert-EtcdPersistenceContract $manifest
+Assert-DeploymentProgressDeadlines -Manifest $manifest `
+    -DeploymentNames @('mysql', 'redis', 'etcd', 'zookeeper', 'kafka') -ContractName '关键第三方基础设施'
+$lokiManifest = Get-Content -LiteralPath $LokiPath -Raw
+Assert-DeploymentProgressDeadlines -Manifest $lokiManifest `
+    -DeploymentNames @('loki', 'alloy') -ContractName 'Grafana 日志基础设施'
 Assert-Throws {
     Assert-EtcdPersistenceContract ($manifest.Replace('persistentVolumeClaim: { claimName: etcd-data }', 'emptyDir: {}'))
 } '拒绝 etcd 回退 emptyDir'

@@ -2181,16 +2181,30 @@ function Apply-AgonesManifests {
     }
 
     if ($InstallAgones) {
-        kubectl @kubectlContextArgs get ns agones-system *> $null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Info "安装 Agones(helm,装到 agones-system)..."
+        # namespace 可能由一次失败/超时的 Helm install 提前创建，不能据此断言 Agones 已安装。
+        # 只有 release 明确处于 deployed 才跳过；missing/failed 均走 upgrade --install 幂等修复。
+        $agonesReleaseDeployed = $false
+        $agonesStatusJson = (helm status agones --kube-context $KubeContext --namespace agones-system -o json 2>$null | Out-String)
+        $agonesStatusExit = $LASTEXITCODE
+        if ($agonesStatusExit -eq 0 -and -not [string]::IsNullOrWhiteSpace($agonesStatusJson)) {
+            try {
+                $agonesStatus = $agonesStatusJson | ConvertFrom-Json -ErrorAction Stop
+                $agonesReleaseDeployed = ([string]$agonesStatus.info.status -ceq 'deployed')
+            } catch {
+                Write-Warn "Agones Helm release 状态无法解析，将执行 upgrade --install 修复:$($_.Exception.Message)"
+            }
+        }
+        if (-not $agonesReleaseDeployed) {
+            Write-Info "安装/修复 Agones(helm,装到 agones-system)..."
             helm repo add agones https://agones.dev/chart/stable 2>$null | Out-Null
             helm repo update 2>$null | Out-Null
-            kubectl @kubectlContextArgs create namespace agones-system 2>$null | Out-Null
-            helm install agones agones/agones --kube-context $KubeContext --namespace agones-system --wait
-            if ($LASTEXITCODE -ne 0) { throw "Agones 安装失败" }
+            # Agones chart 含 controller/allocator/extensions 等多个第三方镜像；新机器首次冷拉时
+            # Helm 默认 5 分钟会先于镜像下载结束而失败。显式放宽到 30 分钟，缓存命中时不增加耗时。
+            helm upgrade --install agones agones/agones --kube-context $KubeContext --namespace agones-system `
+                --create-namespace --wait --timeout 30m
+            if ($LASTEXITCODE -ne 0) { throw "Agones 安装/修复失败(首次冷拉最多等待 30 分钟)" }
         } else {
-            Write-Ok "Agones 已安装(agones-system 存在)"
+            Write-Ok "Agones Helm release 已部署"
         }
     }
 
@@ -2765,13 +2779,13 @@ function Invoke-K8s {
     # 也不等它 rollout(日志栈晚几十秒就绪不影响业务链路)。
     kubectl @kubectlContextArgs apply -f $lokiYaml
     if ($LASTEXITCODE -ne 0) { Write-Warn "loki/alloy 日志栈 apply 失败(不影响业务);可稍后手动 kubectl apply -f deploy/k8s/infra/loki.yaml" }
-    Write-Info "等待基础设施就绪(MySQL 首次冷拉最多 1800s/30 分钟,其余组件每个最多 120-180s)..."
+    Write-Info "等待基础设施就绪(第三方镜像首次冷拉每个最多 1800s/30 分钟)..."
     kubectl @kubectlContextArgs rollout status deploy/mysql     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'mysql 就绪'
-    kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=120s; Assert-LastExit 'redis 就绪'
-    kubectl @kubectlContextArgs rollout status deploy/etcd      -n $K8sNamespace --timeout=120s; Assert-LastExit 'etcd 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/redis     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'redis 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/etcd      -n $K8sNamespace --timeout=1800s; Assert-LastExit 'etcd 就绪'
     # zookeeper / kafka 必须就绪,否则 player/push/battle-result 会因连不上 kafka:9092 CrashLoop
-    kubectl @kubectlContextArgs rollout status deploy/zookeeper -n $K8sNamespace --timeout=120s; Assert-LastExit 'zookeeper 就绪'
-    kubectl @kubectlContextArgs rollout status deploy/kafka     -n $K8sNamespace --timeout=180s; Assert-LastExit 'kafka 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/zookeeper -n $K8sNamespace --timeout=1800s; Assert-LastExit 'zookeeper 就绪'
+    kubectl @kubectlContextArgs rollout status deploy/kafka     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'kafka 就绪'
 
     Write-Step '[3.5/8] DS callback auth required_writer_epoch 线性预检 / fresh-only CAS bootstrap'
     Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:(-not $profileExistedBeforeStart)
@@ -3866,7 +3880,7 @@ function Resume-K8s {
     Wait-KubeApiServerReady -KubeContext $mkCtx
     # required policy 的线性审计依赖 etcd；电脑重启后 apiserver Ready 不代表 etcd Pod 已恢复。
     # 只先等基础设施 etcd，绝不先等可能带旧 capability provenance 的业务 writer。
-    kubectl --context $mkCtx rollout status deploy/etcd -n $K8sNamespace --timeout=120s
+    kubectl --context $mkCtx rollout status deploy/etcd -n $K8sNamespace --timeout=1800s
     Assert-LastExit 'etcd 恢复就绪（DS-auth baseline 前）'
     Write-Step 'Resume 最早只读审计（先于旧业务 Ready/apply/rollout）'
     Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx
