@@ -447,6 +447,11 @@ function Ensure-DsTicketDevKeyMaterial {
 # etcd.pandora.svc:2379；启动器从宿主做线性预检/CAS 时通过临时 port-forward。
 $script:LocalDsFenceEndpoint = 'etcd.pandora.svc:2379'
 $script:LocalDsFenceKeysetRevision = 'pandora-ds-auth-v2-local-r1'
+$script:LocalFreshDsAuthMarkerName = 'pandora-local-fresh-dsauth-genesis-v1'
+$script:LocalFreshDsAuthMarkerStateAnnotation = 'pandora.dev/dsauth-bootstrap-state'
+$script:LocalFreshDsAuthMarkerPvcAnnotation = 'pandora.dev/dsauth-etcd-pvc-uid'
+$script:LocalFreshDsAuthMarkerCompletedAnnotation = 'pandora.dev/dsauth-bootstrap-completed-at-ms'
+$script:LocalFreshDsAuthEvidenceSha256 = 'sha256:cc675844fffad7d16bfaf31bcbc31a8f4d8bd8ffa0306c8e34d461161b573130'
 
 function Test-MinikubeProfileExists {
     param([Parameter(Mandatory = $true)][string]$Profile)
@@ -462,6 +467,203 @@ function Test-MinikubeProfileExists {
         if ([string]$entry.Name -ceq $Profile) { return $true }
     }
     return $false
+}
+
+# fresh DS-auth genesis 不能只依赖“本次 start 前 profile 不存在”这个内存判断：镜像下载或
+# 基础设施启动若中途失败，下一次运行时 profile 已存在，启动器会失去 fresh 事实。这里在
+# 新 namespace 创建后立刻写入 create-only + immutable intent，并把它绑定到本次 minikube
+# profile、kube-system UID 和 pandora namespace UID。可变状态只放 annotation，通过
+# resourceVersion CAS 按 preinfra -> pending -> complete 前进。
+function Get-LocalFreshGenesisIntent {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $lines = @(& kubectl --context $KubeContext get "configmap/$($script:LocalFreshDsAuthMarkerName)" `
+        -n $K8sNamespace --ignore-not-found -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "读取本地 fresh DS-auth marker 失败:$($lines -join [Environment]::NewLine)"
+    }
+    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+    try { return ($text | ConvertFrom-Json -ErrorAction Stop) }
+    catch { throw "本地 fresh DS-auth marker 返回非法 JSON:$($_.Exception.Message)" }
+}
+
+function Get-KubernetesNamespaceUid {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$Namespace
+    )
+    $ns = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "namespace/$Namespace", '-o', 'json') -Action "读取 namespace/$Namespace UID"
+    $uid = [string]$ns.metadata.uid
+    if ([string]::IsNullOrWhiteSpace($uid)) { throw "namespace/$Namespace 缺少 UID，拒绝建立 fresh 证据。" }
+    return $uid
+}
+
+function Assert-LocalFreshGenesisIntent {
+    param(
+        [Parameter(Mandatory = $true)][object]$Marker,
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    if ([string]$Marker.metadata.name -cne $script:LocalFreshDsAuthMarkerName -or
+        [string]$Marker.metadata.namespace -cne $K8sNamespace -or $Marker.immutable -ne $true) {
+        throw 'fresh DS-auth marker 名称/namespace/immutable 契约漂移，拒绝自动 genesis。'
+    }
+    $kubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+    $pandoraUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace $K8sNamespace
+    if ([string]$Marker.data.schema_version -cne '1' -or
+        [string]$Marker.data.minikube_profile -cne $MinikubeProfile -or
+        [string]$Marker.data.kube_system_namespace_uid -cne $kubeSystemUid -or
+        [string]$Marker.data.pandora_namespace_uid -cne $pandoraUid -or
+        [string]$Marker.data.target_writer_epoch -cne '2' -or
+        [string]$Marker.data.target_policy_generation -cne '3' -or
+        [string]$Marker.data.target_policy_id -cne 'ds-auth-v2-hub-successor-lease-v1' -or
+        [string]$Marker.data.activation_evidence_sha256 -cne $script:LocalFreshDsAuthEvidenceSha256) {
+        throw 'fresh DS-auth marker 的集群 UID/profile/目标策略证据不匹配，拒绝把旧数据冒充 fresh。'
+    }
+    $state = [string]$Marker.metadata.annotations.$($script:LocalFreshDsAuthMarkerStateAnnotation)
+    if ($state -notin @('preinfra', 'pending', 'complete')) {
+        throw "fresh DS-auth marker 状态非法:$state"
+    }
+    if ($state -in @('pending', 'complete')) {
+        $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '读取 fresh marker 绑定的 PVC/etcd-data'
+        $markerPvcUid = [string]$Marker.metadata.annotations.$($script:LocalFreshDsAuthMarkerPvcAnnotation)
+        if ([string]::IsNullOrWhiteSpace($markerPvcUid) -or $markerPvcUid -cne [string]$pvc.metadata.uid) {
+            throw 'fresh DS-auth marker 绑定的 etcd-data PVC UID 已漂移，拒绝自动 genesis。'
+        }
+    }
+    if ($state -ceq 'complete' -and
+        [string]::IsNullOrWhiteSpace([string]$Marker.metadata.annotations.$($script:LocalFreshDsAuthMarkerCompletedAnnotation))) {
+        throw 'fresh DS-auth marker 已标 complete 但缺少完成时间，拒绝信任。'
+    }
+    return $state
+}
+
+function New-LocalFreshGenesisIntent {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    if ($null -ne (Get-LocalFreshGenesisIntent -KubeContext $KubeContext)) {
+        throw 'fresh profile 上意外已存在 DS-auth marker；create-only 契约拒绝覆盖。'
+    }
+    $kubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+    $pandoraUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace $K8sNamespace
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
+    $markerObject = [ordered]@{
+        apiVersion = 'v1'; kind = 'ConfigMap'; immutable = $true
+        metadata = [ordered]@{
+            name = $script:LocalFreshDsAuthMarkerName; namespace = $K8sNamespace
+            labels = [ordered]@{ 'app.kubernetes.io/part-of' = 'pandora'; 'app.kubernetes.io/component' = 'dsauth-bootstrap-intent' }
+            annotations = [ordered]@{ $script:LocalFreshDsAuthMarkerStateAnnotation = 'preinfra' }
+        }
+        data = [ordered]@{
+            schema_version = '1'; minikube_profile = $MinikubeProfile
+            kube_system_namespace_uid = $kubeSystemUid; pandora_namespace_uid = $pandoraUid
+            target_writer_epoch = '2'; target_policy_generation = '3'
+            target_policy_id = 'ds-auth-v2-hub-successor-lease-v1'
+            activation_evidence_sha256 = $script:LocalFreshDsAuthEvidenceSha256
+            created_at_ms = $now
+        }
+    }
+    $json = $markerObject | ConvertTo-Json -Depth 20 -Compress
+    $created = @($json | & kubectl --context $KubeContext create -f - 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "create-only 创建 fresh DS-auth marker 失败:$($created -join [Environment]::NewLine)"
+    }
+    $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    $state = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    if ($state -cne 'preinfra') { throw 'fresh DS-auth marker 创建后未处于 preinfra。' }
+    Write-Ok 'fresh DS-auth intent 已持久化并绑定当前 minikube/namespace UID(state=preinfra)。'
+}
+
+function Set-LocalFreshGenesisIntentState {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile,
+        [Parameter(Mandatory = $true)][ValidateSet('pending', 'complete')][string]$TargetState
+    )
+    $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    if ($null -eq $marker) { throw "缺少 fresh DS-auth marker，不能推进到 $TargetState。" }
+    $state = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    if ($state -ceq $TargetState -or ($state -ceq 'complete' -and $TargetState -ceq 'pending')) { return }
+    $expected = if ($TargetState -ceq 'pending') { 'preinfra' } else { 'pending' }
+    if ($state -cne $expected) { throw "fresh DS-auth marker 非法状态转换:$state->$TargetState" }
+
+    $annotations = [ordered]@{ $script:LocalFreshDsAuthMarkerStateAnnotation = $TargetState }
+    if ($TargetState -ceq 'pending') {
+        $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
+            -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '绑定 fresh marker 到 PVC/etcd-data'
+        $annotations[$script:LocalFreshDsAuthMarkerPvcAnnotation] = [string]$pvc.metadata.uid
+    } else {
+        $annotations[$script:LocalFreshDsAuthMarkerCompletedAnnotation] = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
+    }
+    $patchObject = [ordered]@{ metadata = [ordered]@{ resourceVersion = [string]$marker.metadata.resourceVersion; annotations = $annotations } }
+    $patchJson = $patchObject | ConvertTo-Json -Depth 10 -Compress
+    $patched = @(& kubectl --context $KubeContext patch "configmap/$($script:LocalFreshDsAuthMarkerName)" `
+        -n $K8sNamespace --type merge -p $patchJson 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "CAS 推进 fresh DS-auth marker $state->$TargetState 失败:$($patched -join [Environment]::NewLine)"
+    }
+    $readback = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    $actual = Assert-LocalFreshGenesisIntent -Marker $readback -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    if ($actual -cne $TargetState) { throw "fresh DS-auth marker 推进后回读状态不一致:$actual" }
+    Write-Ok "fresh DS-auth marker 已推进:$state->$TargetState"
+}
+
+# pending marker 允许 missing->V3 之前，pandora namespace 只能存在本启动器声明的第三方
+# 基础设施 Pod；任何未知/缩到 0/终止中的业务 workload 都阻断。default namespace 只检查
+# Pandora/Agones DS 痕迹，避免把用户无关的本地 workload 误当 writer。
+function Assert-NoLocalFreshGenesisWriters {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $allowedImages = [ordered]@{
+        mysql = 'mysql:8.4'; redis = 'redis:8.8.0-alpine'
+        zookeeper = 'confluentinc/cp-zookeeper:7.9.7'; kafka = 'confluentinc/cp-kafka:7.9.7'
+        etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
+    }
+    $pandoraWorkloads = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'deployment,statefulset,daemonset,replicaset,pod,job,cronjob', '-n', $K8sNamespace, '-o', 'json') `
+        -Action 'fresh genesis 前枚举 pandora workload'
+    foreach ($item in @($pandoraWorkloads.items)) {
+        $kind = [string]$item.kind
+        if ($kind -notin @('Deployment', 'ReplicaSet', 'Pod')) {
+            throw "fresh genesis 前检测到不允许的 pandora workload:$kind/$($item.metadata.name)"
+        }
+        $app = [string]$item.metadata.labels.app
+        if (-not $allowedImages.Contains($app)) {
+            throw "fresh genesis 前检测到未知 pandora workload:$kind/$($item.metadata.name)(app=$app)"
+        }
+        $podSpec = if ($kind -ceq 'Pod') { $item.spec } else { $item.spec.template.spec }
+        $images = @($podSpec.containers | ForEach-Object { [string]$_.image })
+        if ($images.Count -ne 1 -or $images[0] -cne [string]$allowedImages[$app]) {
+            throw "fresh genesis 前基础设施 workload 镜像漂移:$kind/$($item.metadata.name)"
+        }
+    }
+
+    $defaultWorkloads = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'deployment,statefulset,daemonset,replicaset,pod,job,cronjob', '-n', 'default', '-o', 'json') `
+        -Action 'fresh genesis 前枚举 default workload'
+    foreach ($item in @($defaultWorkloads.items)) {
+        $podSpec = if ([string]$item.kind -ceq 'Pod') { $item.spec } elseif ([string]$item.kind -ceq 'CronJob') { $item.spec.jobTemplate.spec.template.spec } else { $item.spec.template.spec }
+        $images = @($podSpec.containers | ForEach-Object { [string]$_.image })
+        $identity = @([string]$item.metadata.name, [string]$item.metadata.labels.app, ($images -join ',')) -join ' '
+        if ($identity -match '(?i)pandora|battle-ds|hub-ds|ds-allocator|player-locator') {
+            throw "fresh genesis 前 default namespace 仍有 Pandora/DS workload:$($item.kind)/$($item.metadata.name)"
+        }
+    }
+    foreach ($resourceType in @('fleet', 'gameserver', 'gameserverset')) {
+        $lines = @(& kubectl --context $KubeContext get $resourceType -A -o name 2>&1)
+        $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+        if ($LASTEXITCODE -ne 0) {
+            if ($text -match '(?i)the server doesn''t have a resource type|could not find the requested resource') { continue }
+            throw "fresh genesis 前读取 Agones $resourceType 失败:$text"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($text)) {
+            throw "fresh genesis 前仍有 Agones $resourceType，拒绝 zero-writer genesis:$text"
+        }
+    }
+    Write-Ok 'fresh DS-auth zero-writer workload 门禁通过（仅基础设施，无 Pandora/Agones writer）。'
 }
 
 function Invoke-WithLocalEtcdPortForward {

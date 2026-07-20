@@ -38,6 +38,43 @@ function Assert-DoesNotThrow([scriptblock]$Action, [string]$Message) {
     try { & $Action | Out-Null } catch { throw "$Message：$($_.Exception.Message)" }
 }
 
+function Get-OnlyFunctionAst($Ast, [string]$Name) {
+    $definitions = @($Ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -ceq $Name
+    }, $true))
+    Assert-True ($definitions.Count -eq 1) "必须有唯一 $Name"
+    return $definitions[0]
+}
+
+function Assert-CriticalInfraStartupOrdering([string]$InvokeSource) {
+    $profileProbe = $InvokeSource.IndexOf(
+        '$profileExistedBeforeStart = Test-MinikubeProfileExists', [StringComparison]::Ordinal)
+    $hostPull = $InvokeSource.IndexOf('Ensure-CriticalInfraImagesOnHost', [StringComparison]::Ordinal)
+    $minikubeStart = $InvokeSource.IndexOf('minikube start -p $mkProfile', [StringComparison]::Ordinal)
+    $contextLock = $InvokeSource.IndexOf('$mkCtx = Resolve-MinikubeKubeContext', [StringComparison]::Ordinal)
+    $namespaceApply = $InvokeSource.IndexOf("00-namespace.yaml", [StringComparison]::Ordinal)
+    $preinfraIntent = $InvokeSource.IndexOf('New-LocalFreshGenesisIntent', [StringComparison]::Ordinal)
+    $nodeLoad = $InvokeSource.IndexOf('Sync-CriticalInfraImagesToMinikube', [StringComparison]::Ordinal)
+    $nodeReadback = $InvokeSource.IndexOf('Assert-CriticalInfraImagesInMinikube', [StringComparison]::Ordinal)
+    $configWrite = $InvokeSource.IndexOf('Apply-PandoraConfigSecret', [StringComparison]::Ordinal)
+    $infraApply = $InvokeSource.IndexOf('apply -f $infraYaml', [StringComparison]::Ordinal)
+
+    foreach ($position in @($profileProbe, $hostPull, $minikubeStart, $contextLock, $namespaceApply,
+            $preinfraIntent, $nodeLoad, $nodeReadback, $configWrite, $infraApply)) {
+        Assert-True ($position -ge 0) '关键基础设施镜像/fresh intent 启动顺序缺少必要调用'
+    }
+    Assert-True ($profileProbe -lt $hostPull -and $hostPull -lt $minikubeStart) `
+        '真实 fresh 必须在 minikube start 前把关键基础设施镜像完整预拉到宿主；拉取失败不得留下半个集群'
+    Assert-True ($minikubeStart -lt $contextLock -and $contextLock -lt $namespaceApply -and
+        $namespaceApply -lt $preinfraIntent) `
+        'preinfra intent 只能在 minikube 已启动、context 已锁定且 namespace 已创建后 create-only 落盘'
+    Assert-True ($preinfraIntent -lt $nodeLoad -and $nodeLoad -lt $nodeReadback -and
+        $nodeReadback -lt $configWrite -and $configWrite -lt $infraApply) `
+        'preinfra intent 后必须先 load 并回读节点关键镜像，再允许配置和 infra apply'
+}
+
 foreach ($functionName in @('Get-AgonesAdvertiseHostFromText', 'Assert-RelayBindingMatchesAdvertiseHosts')) {
     $definitions = @($e2eAst.FindAll({
         param($node)
