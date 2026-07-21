@@ -1,0 +1,45 @@
+# Pandora mail 服务配置 —— TiDB 版(邮件迁 social TiDB,2026-07-21)。
+#
+# 与 mail-dev.yaml 唯一差异:node.mysql_client.dsn 指向 TiDB(默认 :4000)、collation
+# 改 utf8mb4_bin(TiDB 连接默认排序;邮件表无大小写敏感字符串键 —— payload 是 BLOB、
+# 其余键全 BIGINT,utf8mb4_bin 语义无差),其余完全一致。
+# TiDB 兼容 MySQL 协议,pkg/mysqlx + database/sql + go-sql-driver/mysql 零改动直连;
+# mail_repo.go 的拉取游标 / 写扩散 / 附件领取幂等事务在 TiDB 悲观事务下原生可跑
+# (表 DDL 见 01-social-tidb.sql;mail 读 guild_members 判所属公会,guild 已同库同迁 TiDB)。
+#
+# 启用方式(TiDB 集群就绪后,由 Codex / 人):
+#   先用 deploy/tidb-init/01-social-tidb.sql 建库表,再:
+#   mail --conf services/social/mail/etc/mail-dev-tidb.yaml
+#
+# ⚠️ DSN host/port/账号按实际 TiDB 集群填;下方 4000 是 TiDB Server 默认端口占位。
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50009"
+    timeout: "15s"
+    enable_reflection: true
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
+  http:
+    network: tcp
+    addr: ":51009"
+
+node:
+  node_id: 1
+  # TiDB:MySQL 协议兼容,DSN 形态与 MySQL 一致,仅 host:port 指向 TiDB Server。
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:4000)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_bin"
+    max_open_conns: 32
+    max_idle_conns: 8
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+mail:
+  # 系统/公会邮件 end_ms 为 0 时的默认有效期天数
+  default_sys_ttl_days: 7
+  max_title_len: 64
+  max_body_len: 2048
+  max_attachments: 16
+  # inventory 服务 gRPC 地址,领取附件入库;留空且 allow_noop_grant=true 时仅标记不发奖
+  inventory_addr: "127.0.0.1:50015"
+  allow_noop_grant: false

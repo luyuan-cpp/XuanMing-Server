@@ -1,0 +1,51 @@
+# Pandora chat 服务配置 —— TiDB 版(私聊历史迁 social TiDB,2026-07-21)。
+#
+# 与 chat-dev.yaml 唯一差异:node.mysql_client.dsn 指向 TiDB(默认 :4000)、collation
+# 改 utf8mb4_bin(TiDB 连接默认排序;chat_private_messages 全部业务键是数值 BIGINT,
+# 无大小写敏感字符串键,utf8mb4_bin 语义无差),其余完全一致。
+# TiDB 兼容 MySQL 协议,pkg/mysqlx + database/sql + go-sql-driver/mysql 零改动直连;
+# chat_repo.go 的翻页游标 / 点查在 TiDB 下原生可跑(表 DDL 见 01-social-tidb.sql)。
+#
+# 启用方式(TiDB 集群就绪后,由 Codex / 人):
+#   先用 deploy/tidb-init/01-social-tidb.sql 建库表,再:
+#   chat --conf services/social/chat/etc/chat-dev-tidb.yaml
+#
+# ⚠️ DSN host/port/账号按实际 TiDB 集群填;下方 4000 是 TiDB Server 默认端口占位。
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50005"
+    timeout: "15s"              # demo:弱网/本机抖动下 unary RPC 放宽;prod 再按接口收紧
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+    max_conn_age: "15m"         # 达龄 GOAWAY 重拨,滚动更新时流量能滚到新副本(zero-downtime §6.2)
+  http:
+    network: tcp
+    addr: ":51005"
+
+node:
+  node_id: 1
+  # TiDB:MySQL 协议兼容,DSN 形态与 MySQL 一致,仅 host:port 指向 TiDB Server。
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:4000)/pandora_social?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_bin"
+    max_open_conns: 32
+    max_idle_conns: 8
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+kafka:
+  brokers: ["127.0.0.1:9093"]
+  group_id: "pandora-chat"
+  partition_cnt: 4
+
+chat:
+  # max_content_len: 单条消息最大字符数(utf8 rune,默认 256)
+  max_content_len: 256
+  # history_limit: PullHistory 单次返回上限(默认 50)
+  history_limit: 50
+  # team_addr: team 服务 gRPC 地址;空 → 队伍频道降级(弱依赖)
+  team_addr: "127.0.0.1:50010"
+  # guild_addr: guild 服务 gRPC 地址(GuildService + GroupService 同进程);空 → 公会 / 群频道降级
+  guild_addr: "127.0.0.1:50008"
+  # sensitive_words: 敏感词列表(命中整词替换为等长 *);空 → 不过滤
+  sensitive_words: []
