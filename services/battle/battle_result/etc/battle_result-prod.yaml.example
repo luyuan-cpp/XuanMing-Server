@@ -55,6 +55,21 @@ battle:
   outbox_publish_interval: "2s"   # 不变量 §4:player.update 事务出箱 at-least-once
   outbox_batch_size: 128
 
+  # ── 战斗中实时进度通道(实时成长,realtime-progression.md)────────────────────
+  # 缺省 false=关闭(新对局拒开流,DS 自动走局后结算路径;已开流对局不受影响)。
+  # ⚠️ 启用纪律(P0 级,不变量 §21 混版安全):必须先把 battle_result **全部副本**升级到
+  # 含实时进度收口逻辑的版本(≥2026-07-21,启动日志有 battle_progress schema gate),
+  # 且 pandora_player 000002 / pandora_battle 000005 迁移已全绿,再置 true 滚动下发。
+  # 旧代码副本结算不感知水位表、不抑制结算掉落 —— 提前打开会在混版窗口双发掉落。
+  # 回滚:置 false 只停新对局开流,进行中对局继续收流到结算,不丢已入账产出。
+  progress_enabled: false
+  # monster_exp: 怪物击杀经验表(monster_config_id → 单只经验;空 = 击杀不折算经验)。
+  # 与客户端角色配置表同源;正式数值随 exp_curve 一起等策划确认(见 player prod example)。
+  monster_exp: {}
+  # 单场累计硬上限(事务权威侧封顶,失陷 DS 跨 seq 刷产出在此拦截)
+  max_progress_exp_per_match: 1000000
+  max_progress_items_per_match: 500
+
 # Model-B 回调身份与玩家 SessionToken / DSTicket 完全分域。battle-result 只持有 DS callback
 # verifier 材料，不持有任何玩家签票私钥；普通 stable/canary 发布不轮换本 secret/keyset。
 ds_auth:

@@ -20,7 +20,7 @@ type LevelTable struct {
 	byID map[uint32]*configpb.LevelRow
 }
 
-// newLevelTable 建索引 + 校验:主键非零且唯一(通用)+ validateLevelRow(表私有钩子)。
+// newLevelTable 建索引 + 校验:主键与唯一键非零 / 不重复(通用)+ validateLevelRow(表私有钩子)。
 func newLevelTable(data *configpb.LevelTableData) (*LevelTable, error) {
 	rows := data.GetRows()
 	t := &LevelTable{

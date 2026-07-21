@@ -92,6 +92,10 @@ func (s *Store) Load(activeDir string, expectVersion uint64) (*LoadResult, error
 			return nil, fmt.Errorf("manifest 缺少本进程必需的表 %q,整批拒绝", name)
 		}
 	}
+	// 跨表引用完整性((excel_fk),tables.gen.go 生成):全过才允许切换。
+	if err := validateCrossTables(next); err != nil {
+		return nil, err
+	}
 	warnings = append(warnings, strayFileWarnings(activeDir, m)...)
 
 	s.cur.Store(next)

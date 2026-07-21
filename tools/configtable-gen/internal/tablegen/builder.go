@@ -33,7 +33,8 @@ func (d *TableDef) Build(grid [][]string) (proto.Message, int, error) {
 
 	container := d.container.New()
 	list := container.Mutable(d.rowsField).List()
-	seen := make(map[uint64]int) // 主键 → 已出现的 xlsx 行号
+	seen := make(map[uint64]int)          // 主键 → 已出现的 xlsx 行号
+	seenKeys := make(map[int]map[any]int) // 唯一二级键列序 → 取值 → xlsx 行号((excel_key) §7.4 同级查重)
 	for i := dataStart; i < len(grid); i++ {
 		xlsxRow := i + 1
 		cells := padTo(grid[i], len(d.columns))
@@ -45,6 +46,17 @@ func (d *TableDef) Build(grid [][]string) (proto.Message, int, error) {
 		for j, cs := range d.columns {
 			if err := d.setCell(rm, cs, cells[j]); err != nil {
 				return nil, 0, fmt.Errorf("%s 第 %d 行 %s: %w", d.ExcelFile, xlsxRow, cs.header, err)
+			}
+			if cs.unique {
+				val := rm.Get(cs.fd).Interface()
+				if seenKeys[j] == nil {
+					seenKeys[j] = make(map[any]int)
+				}
+				if prev, dup := seenKeys[j][val]; dup {
+					return nil, 0, fmt.Errorf("%s 第 %d 行 %s: 唯一键取值 %v 与第 %d 行重复",
+						d.ExcelFile, xlsxRow, cs.header, val, prev)
+				}
+				seenKeys[j][val] = xlsxRow
 			}
 		}
 		key := rm.Get(d.keyField).Uint()

@@ -9,6 +9,7 @@ import (
 	"math"
 	"strconv"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -358,6 +359,10 @@ func (f *fakeRepo) DeletePushOutbox(_ context.Context, id int64) error {
 		}
 	}
 	return nil
+}
+
+func (f *fakeRepo) PurgeExpHistory(_ context.Context, _ time.Time, _ int) (int64, error) {
+	return 0, nil
 }
 
 func (f *fakeRepo) LoadRewardClaims(_ context.Context, playerID uint64) ([]byte, int32, error) {

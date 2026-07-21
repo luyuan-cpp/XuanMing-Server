@@ -4716,7 +4716,7 @@ inline ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NONNULL BattleProgressEv
   if (fact_case() != kMonsterKill) {
     clear_fact();
     set_has_monster_kill();
-    _impl_.fact_.monster_kill_ = 
+    _impl_.fact_.monster_kill_ =
         ::google::protobuf::Message::DefaultConstruct<::pandora::battle::v1::MonsterKillFact>(GetArena());
   }
   return _impl_.fact_.monster_kill_;
@@ -4798,7 +4798,7 @@ inline ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NONNULL BattleProgressEve
   if (fact_case() != kItemPickup) {
     clear_fact();
     set_has_item_pickup();
-    _impl_.fact_.item_pickup_ = 
+    _impl_.fact_.item_pickup_ =
         ::google::protobuf::Message::DefaultConstruct<::pandora::battle::v1::ItemPickupFact>(GetArena());
   }
   return _impl_.fact_.item_pickup_;

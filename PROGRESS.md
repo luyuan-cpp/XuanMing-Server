@@ -694,6 +694,9 @@
   (背包满则失败保持穿戴)。装备栏全员复制,查看他人出装天然支持。
   ⑨入场随机选择出生点:PandoraDSGameModeBase 新增 bRandomizeSpawnPointSelection
   (Battle 构造置 true,Hub 保持 SlotIndex 确定性),同筛选条件空闲候选内随机,占用互斥不变。
+  显式配置恒优先于随机(用户 2026-07-21 纠正):玩家绑定点(PlayerId>0)永不随机;候选集中
+  任一点填了显式槽位(SlotIndex!=0,如 PVE 副本入口固定队形)即整组回退 SlotIndex 确定性顺序,
+  只有全部候选未填槽位时才随机。
 - 小修:UMyBagComponent::GetMaxStackSize 在 UCfgSystem 缺失(无表测试环境)时回退
   SetDefaultMaxStackSize 的默认上限(此前该字段写而不读);具体道具配置缺失仍 fail-closed 0。
 - 明确未做(有既有拍板/另行立项):PVE 匹配补人与 AI 填充(decision-dungeon-entry-modes §5
@@ -758,3 +761,39 @@
   (API 兼容,消费方零改动)。
 - 未移植并记录原因:comp(ECS 组件结构,Go 侧无消费方)、fk(外键 helper,现有表无外键列)、
   multi-key 复合主键(无此类表);出现真实需求再加(§15.3)。加新表五步见 hotreload doc §10。
+
+## 2026-07-21(续2):生成器定稿为 protogen 式(proto 注解驱动,零手写登记,Claude)
+
+- 按用户指认的旧项目工具 D:\luyuan\mmorpg\tools\proto_generator\protogen 重构 configtable-gen:
+  描述符驱动 + 独立模板文件 + proto 自定义 option,替换上一版的手写表规格登记(registry.go
+  Sources() 的 GoName/RowType/KeyGetter 等字段与 BuildLevelTable 手写列映射全部删除)。[proto]
+- proto 即单一事实源:新增 `proto/pandora/config/v1/excel.proto` 自定义 option
+  ((excel_file)/(excel_col)/(excel_required)/(excel_default)/(excel_prefix),扩展号 51501-51505
+  内部保留区);level.proto 全字段打注解。生成器 import configpb 后经 protoregistry 遍历
+  pandora.config.v1 自动发现表(discover.go:容器命名 <Name>TableData、rows 字段、id uint32 主键
+  三项约定 fail-closed 校验),通用 protoreflect 行构建器(builder.go)按注解执行 §7 校验;
+  与原手写构建器产出字节级一致(dist version 未变即证)。
+- gogen 模板迁独立文件 internal/gogen/template/*.tmpl(go:embed;table/tables/companion 三模板,
+  对应旧 go_config.go.j2 / go_all_table.go.j2 / protogen instance 模式);伴生文件 <name>.go
+  缺失时生成一次空 validate 钩子桩,此后归人维护不覆盖。
+- 测试:builder_test(发现 + 14 个校验用例含枚举拒 0)、gogen 三测试(形状/最新性守护/确定性,
+  伴生文件存在性纳入守护)、manifest/pkg/matchmaker 全量回归绿;生成器幂等复跑零写盘。
+- 加新表三步(hotreload doc §10 已更新):proto 注解 → proto_gen.ps1 → configtable-gen。
+
+## 2026-07-21(续3):补齐 fk / multi-key / bitindex 三类生成能力(Claude)
+
+- 按用户点名移植旧导表的最后三类列能力,全部走 excel.proto 注解(protogen 式):[proto]
+  - `(excel_key)` 唯一二级键(旧 `key`)→ By<Field> 单行查询,生成+加载双阶段查重;
+  - `(excel_multi_key)` 非唯一索引(旧 `multi`)→ ListBy<Field>;
+  - `(excel_fk)`(旧 `fk:Table`,限 uint32 引用目标表 id)→ 生成阶段批内引用完整性
+    (tablegen.ValidateFKs,失败整批不产出)+ 加载阶段生成 validateCrossTables(store.go
+    整批切换前 fail-closed 兜底)+ 正查 Tables.<Src><Field>Row[ByID] + 反查 ListBy<Field>;
+    必填外键 0 非法,非必填 0=无引用;fk:Table.column 与 gfk 无用例未移植;
+  - `(excel_bit_index)`(容器注解,旧 bit_index)→ <name>_bitindex.gen.go 稳定 ID→位序映射;
+    状态文件 configtable/bitindex_state/<name>.json 为权威(git 跟踪,新 ID 追加、删 ID 保位
+    永不复用,丢失=已落库位图错位作废);关卡表已启用(ID 1-7→位 0-6),供解锁/进度位图。
+- 端到端测试夹具:proto/pandora/configtest/v1(场景+副本表,对齐 dungeon-scene 分层决策形状;
+  独立包生产 Discover 扫不到,角色=旧项目 Test/TestMultiKey.xlsx)。覆盖:注解发现/互斥校验、
+  唯一键重复、FK 通过/悬空/必填 0/目标缺席、位序稳定性(删行保位/同集合零变更/回环)、
+  夹具代码渲染断言;TestGeneratedFilesUpToDate 增 bitindex 产物与状态/dist 一致性守护。
+- 全量回归绿(configtable-gen 三包 + pkg/configtable + matchmaker);生成器幂等复跑零写盘。

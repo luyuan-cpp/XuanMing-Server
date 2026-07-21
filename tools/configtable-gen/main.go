@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/luyuancpp/pandora/tools/configtable-gen/internal/gogen"
 	"github.com/luyuancpp/pandora/tools/configtable-gen/internal/tablegen"
 	"github.com/luyuancpp/pandora/tools/configtable-gen/internal/xlsxlite"
@@ -31,6 +33,8 @@ func main() {
 	tablesRoot := flag.String("tables", "", "源表根目录(必填,如 F:\\work\\Pandora-Client-SVN\\Table)")
 	outDir := flag.String("out", filepath.Join("configtable", "dist"), "数据产物输出目录")
 	goOut := flag.String("go-out", filepath.Join("pkg", "configtable"), "Go 表代码输出目录(空 = 跳过代码生成)")
+	bitStateDir := flag.String("bitindex-state", filepath.Join("configtable", "bitindex_state"),
+		"位序状态目录((excel_bit_index) 表;git 跟踪,丢失会导致已落库位图错位)")
 	sourceRev := flag.String("source-rev", "unknown", "源表版本标注(如 svn-r123)")
 	forceVersion := flag.Uint64("version", 0, "强制指定版本号(默认自动单调递增)")
 	flag.Parse()
@@ -48,6 +52,7 @@ func main() {
 
 	// 1. 数据产物:xlsx → 通用构建器(excel 注解驱动)→ dist
 	var generated []tablegen.Generated
+	built := make(map[string]proto.Message, len(defs))
 	for i := range defs {
 		def := &defs[i]
 		path := filepath.Join(*tablesRoot, filepath.FromSlash(def.ExcelFile))
@@ -62,7 +67,13 @@ func main() {
 		generated = append(generated, tablegen.Generated{
 			Name: def.Name, ProtoName: def.ProtoName, Data: data, RowCount: rows,
 		})
+		built[def.Name] = data
 		fmt.Printf("[OK] %-8s %3d 行  ← %s\n", def.Name, rows, def.ExcelFile)
+	}
+
+	// 1.5 批内引用完整性((excel_fk),§7.5):全表构建完成后统一校验,失败整批不产出。
+	if err := tablegen.ValidateFKs(defs, built); err != nil {
+		fatalf("外键校验失败,整批不产出:\n  %v", err)
 	}
 
 	res, err := tablegen.WriteBatch(generated, tablegen.Options{
@@ -87,6 +98,30 @@ func main() {
 	files, err := gogen.Files(defs)
 	if err != nil {
 		fatalf("%v", err)
+	}
+
+	// 2.5 位序映射((excel_bit_index) 表):状态文件保证稳定分配(新 ID 追加、删 ID 保位)。
+	for _, def := range defs {
+		if !def.BitIndex {
+			continue
+		}
+		statePath := filepath.Join(*bitStateDir, def.Name+".json")
+		state, err := tablegen.LoadBitState(statePath)
+		if err != nil {
+			fatalf("表 %s: %v", def.Name, err)
+		}
+		live, changed := state.Assign(def.RowIDs(built[def.Name]))
+		if changed {
+			if err := tablegen.SaveBitState(statePath, state); err != nil {
+				fatalf("表 %s 写位序状态失败: %v", def.Name, err)
+			}
+			fmt.Printf("[BIT] %s 位序状态更新 → %s\n", def.Name, statePath)
+		}
+		raw, err := gogen.BitIndexFile(def, live, state.BitCount())
+		if err != nil {
+			fatalf("表 %s 生成位序映射失败: %v", def.Name, err)
+		}
+		files[def.Name+"_bitindex.gen.go"] = raw
 	}
 	changed := 0
 	for name, raw := range files {

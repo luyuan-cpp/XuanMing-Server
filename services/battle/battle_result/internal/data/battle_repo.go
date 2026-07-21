@@ -131,15 +131,17 @@ type BattleRepo interface {
 	DeleteMatchReleaseOutbox(ctx context.Context, id uint64) error
 
 	// ── 实时进度通道(实时成长,realtime-progression.md §3)────────────────────
-	// GetProgressWatermark 读进度水位:(last_applied_seq, 已结算, 行存在, error)。
-	GetProgressWatermark(ctx context.Context, matchID uint64) (uint64, bool, bool, error)
-	// ApplyProgress 原子推进水位(乐观 CAS)并写进度出箱(同一事务)。
+	// GetProgressWatermark 读进度水位快照(seq / 累计入账 / 结算态 / 行存在性)。
+	GetProgressWatermark(ctx context.Context, matchID uint64) (ProgressWatermark, error)
+	// ApplyProgress 原子推进水位(乐观 CAS)+ 累计本批经验/件数 + 写进度出箱(同一事务)。
 	// CAS 失败 / 已结算 → ErrUnavailable(调用方重读水位收敛)。
-	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, rows []ProgressOutboxRecord) error
-	// FetchProgressOutbox 按 id 升序取最多 limit 条待发放进度出箱记录。
+	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, rows []ProgressOutboxRecord) error
+	// FetchProgressOutbox 按 id 升序取最多 limit 条已到重试时点的待发放进度出箱记录。
 	FetchProgressOutbox(ctx context.Context, limit int) ([]ProgressOutboxRecord, error)
 	// DeleteProgressOutbox 删除已成功发放的进度出箱行。
 	DeleteProgressOutbox(ctx context.Context, id int64) error
+	// DeferProgressOutbox 发放失败后指数退避推迟该行(行不丢,防队首阻塞)。
+	DeferProgressOutbox(ctx context.Context, id int64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -208,6 +210,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 			if ierr := insertMatchReleaseOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, time.Now().UnixMilli()); ierr != nil {
 				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
 					"restore match release outbox match=%d: %v", result.GetMatchId(), ierr)
+			}
+			// 幂等重放分支同样必须收口实时进度水位(审计 P0):首笔落库若由不含进度逻辑的
+			// 旧副本完成,水位行会一直未打终局标记,僵尸 / 分区恢复 DS 的迟到进度仍会被
+			// 接受并发放。settleProgressStreamTx 幂等,已收口的行原样返回不改写首次标记。
+			if _, serr := settleProgressStreamTx(ctx, tx, result.GetMatchId(), finalProgressSeq, time.Now().UnixMilli()); serr != nil {
+				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
+					"settle progress stream on replay match=%d: %v", result.GetMatchId(), serr)
 			}
 			if cerr := tx.Commit(); cerr != nil {
 				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,

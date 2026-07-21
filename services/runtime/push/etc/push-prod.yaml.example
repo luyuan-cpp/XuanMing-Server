@@ -48,4 +48,5 @@ push:
     - "pandora.chat.world"
     - "pandora.friend.event"
     - "pandora.hub.migrate"
+    - "pandora.player.experience"
   offline_cache_ttl: "5m"

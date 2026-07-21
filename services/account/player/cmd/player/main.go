@@ -98,6 +98,16 @@ func main() {
 
 	// 4. 装配链
 	repo := data.NewMySQLPlayerRepo(db)
+	// 启动 schema gate:经验相关表列缺失时 fail-fast,不能让副本 Ready 后在首个
+	// GetProfile / AddExperience 才大面积报错(迁移顺序错误要在发布时拦住)。
+	schemaCtx, schemaCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := repo.ValidateExperienceSchema(schemaCtx); err != nil {
+		schemaCancel()
+		helper.Errorw("msg", "player_experience_schema_invalid", "err", err,
+			"hint", "先执行 pandora_player migration 000002_experience(players.exp / exp_history / player_push_outbox)")
+		os.Exit(1)
+	}
+	schemaCancel()
 	uc := biz.NewPlayerUsecase(repo, cfg.Player)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
@@ -112,20 +122,24 @@ func main() {
 
 	// 5. 经验推送出箱发布器(实时成长):producer 可用才注入,失败只警告(出箱积压不丢,
 	// 与 battle_result player.update producer 同语义)。event_type 走 kafka header,push 透传。
+	// ⚠️ 经验事件走独立 topic pandora.player.experience,绝不能发 pandora.player.update:
+	// 旧 player 副本消费 player.update 时不看 event_type header,会把经验事件误解码成
+	// MMR 事件污染段位(金丝雀混跑,不变量 §21;详见 kafkax.TopicPlayerUpdate 注释)。
 	pubCtx, pubCancel := context.WithCancel(context.Background())
 	defer pubCancel()
 	if len(cfg.Kafka.Brokers) > 0 {
-		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicPlayerUpdate)
+		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicPlayerExperience)
 		if perr != nil {
 			helper.Warnw("msg", "player_push_producer_init_failed", "err", perr,
 				"hint", "经验推送出箱积压不丢,producer 可用后重启补发")
 		} else {
 			defer func() { _ = producer.Close() }()
 			uc.SetExperiencePusher(&playerEventPusher{p: producer})
-			helper.Infow("msg", "player_push_producer_ready", "topic", kafkax.TopicPlayerUpdate)
+			helper.Infow("msg", "player_push_producer_ready", "topic", kafkax.TopicPlayerExperience)
 		}
 	}
 	go uc.RunPushOutboxPublisher(pubCtx)
+	go uc.RunExpHistoryJanitor(pubCtx)
 
 	// 6. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
 	consumers, dlqProducers := mustBuildConsumers(&cfg, uc, helper)

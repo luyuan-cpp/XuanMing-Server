@@ -6,9 +6,20 @@
 --   players.exp        级内经验列(满级恒 0)
 --   exp_history        经验入账历史 + 幂等键(uk player_id+idempotency_key,不变量 §2)
 --   player_push_outbox 经验推送事务出箱(与入账同事务原子提交,不变量 §4)
+--
+-- exp 列条件加列:deploy/mysql-init/04-player-tables.sql 的 fresh-init 已直接建出 exp 列,
+-- 该库随后纳入 migrator 时无条件 ADD COLUMN 会 duplicate column 报错(审计 P1)。
+-- ALGORITHM=INSTANT 显式声明在线 DDL(MySQL 8.0 加带默认值列为 INSTANT,不锁表不重建;
+-- 若目标实例不支持会明确失败而不是静默退化成锁表拷贝)。
 
-ALTER TABLE `players`
-    ADD COLUMN `exp` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '级内经验(实时成长;满级恒 0)' AFTER `level`;
+SET @ddl := IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'players' AND COLUMN_NAME = 'exp') = 0,
+    'ALTER TABLE `players` ADD COLUMN `exp` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT ''级内经验(实时成长;满级恒 0)'' AFTER `level`, ALGORITHM=INSTANT',
+    'SELECT 1');
+PREPARE add_exp_column FROM @ddl;
+EXECUTE add_exp_column;
+DEALLOCATE PREPARE add_exp_column;
 
 CREATE TABLE IF NOT EXISTS `exp_history` (
     `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,

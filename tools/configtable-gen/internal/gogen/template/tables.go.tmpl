@@ -25,6 +25,44 @@ type Tables struct {
 var specByName = map[string]tableSpec{
 {{range .Tables}}	"{{.Name}}": {protoName: "{{.ProtoName}}", build: build{{.GoName}}Table},
 {{end}}}
+
+// validateCrossTables 批内跨表引用完整性((excel_fk);生成阶段已校验,
+// 服务端加载再 fail-closed 兜底,全过才允许整批切换)。
+func validateCrossTables(dst *Tables) error {
+{{- range .Tables}}{{$src := .}}
+{{- range .FKs}}
+	for _, row := range dst.{{$src.GoName}}.All() {
+		v := row.Get{{.GoField}}()
+		if v == 0 {
+{{- if .Required}}
+			return fmt.Errorf("表 {{$src.Name}} 主键 %d 的 {{.Header}} 为 0(必填外键)", row.GetId())
+{{- else}}
+			continue // 0 = 无引用
+{{- end}}
+		}
+		if !dst.{{.TargetGoName}}.Exists(v) {
+			return fmt.Errorf("表 {{$src.Name}} 主键 %d 的 {{.Header}}(%d)在表 {{.TargetName}} 中不存在", row.GetId(), v)
+		}
+	}
+{{- end}}
+{{- end}}
+	return nil
+}
+{{range .Tables}}{{$src := .}}{{range .FKs}}
+// {{$src.GoName}}{{.GoField}}Row 解析 {{$src.Name}}.{{.Header}} → {{.TargetName}} 行(外键正查)。
+func (tb *Tables) {{$src.GoName}}{{.GoField}}Row(row *configpb.{{$src.RowType}}) (*configpb.{{.TargetRow}}, bool) {
+	return tb.{{.TargetGoName}}.ByID(row.Get{{.GoField}}())
+}
+
+// {{$src.GoName}}{{.GoField}}RowByID 按 {{$src.Name}} 主键取行再解析 {{.Header}} → {{.TargetName}} 行。
+func (tb *Tables) {{$src.GoName}}{{.GoField}}RowByID(id uint32) (*configpb.{{.TargetRow}}, bool) {
+	row, ok := tb.{{$src.GoName}}.ByID(id)
+	if !ok {
+		return nil, false
+	}
+	return tb.{{$src.GoName}}{{.GoField}}Row(row)
+}
+{{end}}{{end}}
 {{range .Tables}}
 func build{{.GoName}}Table(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.{{.DataType}}

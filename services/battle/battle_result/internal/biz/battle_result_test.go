@@ -46,17 +46,22 @@ type fakeRepo struct {
 	matchReleaseDeferErr      error
 	matchReleaseDeleteErr     error
 
-	// 实时进度通道(实时成长):复刻 MySQL 水位 / 终局标记 / 进度出箱语义。
+	// 实时进度通道(实时成长):复刻 MySQL 水位 / 终局标记 / 累计上限 / 进度出箱语义。
 	progressSeq     map[uint64]uint64 // match_id → last_applied_seq
+	progressExp     map[uint64]uint64 // match_id → total_exp
+	progressItems   map[uint64]uint32 // match_id → total_items
 	progressSettled map[uint64]bool   // match_id → 已结算(打过终局标记)
 	progressOutbox  []data.ProgressOutboxRecord
 	nextProgressID  int64
+	deferredIDs     []int64 // DeferProgressOutbox 调用记录(fake 不真正推迟,行保持可取)
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		store:           map[uint64]*battlev1.BattleResult{},
 		progressSeq:     map[uint64]uint64{},
+		progressExp:     map[uint64]uint64{},
+		progressItems:   map[uint64]uint32{},
 		progressSettled: map[uint64]bool{},
 	}
 }
@@ -108,13 +113,19 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 
 // ── 实时进度通道 fake(复刻 progress_repo 水位 CAS / 出箱语义)────────────────
 
-func (r *fakeRepo) GetProgressWatermark(_ context.Context, matchID uint64) (uint64, bool, bool, error) {
+func (r *fakeRepo) GetProgressWatermark(_ context.Context, matchID uint64) (data.ProgressWatermark, error) {
 	seq, ok := r.progressSeq[matchID]
 	settled := r.progressSettled[matchID]
-	return seq, settled, ok || settled, nil
+	return data.ProgressWatermark{
+		LastAppliedSeq: seq,
+		TotalExp:       r.progressExp[matchID],
+		TotalItems:     r.progressItems[matchID],
+		Settled:        settled,
+		Existed:        ok || settled,
+	}, nil
 }
 
-func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, rows []data.ProgressOutboxRecord) error {
+func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, rows []data.ProgressOutboxRecord) error {
 	if r.progressSettled[matchID] {
 		return errcode.New(errcode.ErrUnavailable, "progress watermark moved or settled match=%d", matchID)
 	}
@@ -122,6 +133,8 @@ func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq
 		return errcode.New(errcode.ErrUnavailable, "progress watermark contended match=%d", matchID)
 	}
 	r.progressSeq[matchID] = newSeq
+	r.progressExp[matchID] += addExp
+	r.progressItems[matchID] += addItems
 	for _, row := range rows {
 		r.nextProgressID++
 		row.ID = r.nextProgressID
@@ -147,6 +160,12 @@ func (r *fakeRepo) DeleteProgressOutbox(_ context.Context, id int64) error {
 			return nil
 		}
 	}
+	return nil
+}
+
+func (r *fakeRepo) DeferProgressOutbox(_ context.Context, id int64) error {
+	// fake 只记录调用不真正推迟(单测里行保持可取,复刻"下轮重试"语义)。
+	r.deferredIDs = append(r.deferredIDs, id)
 	return nil
 }
 

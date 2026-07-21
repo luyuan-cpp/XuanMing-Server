@@ -43,9 +43,6 @@ func (u *BattleResultUsecase) SetExperienceGranter(g ExperienceGranter) {
 // roster 是凭据检查器从权威 BattleStorageRecord 取的本场玩家名单(service 层注入);
 // nil = dev / guard off 模式,跳过成员校验(生产 authority_mode=redis 恒非 nil)。
 func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64, roster []uint64, events []*battlev1.BattleProgressEvent) (uint64, error) {
-	if !u.cfg.ProgressEnabled() {
-		return 0, errcode.New(errcode.ErrInvalidState, "realtime progress channel disabled")
-	}
 	if matchID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
@@ -63,26 +60,35 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		}
 	}
 
-	lastSeq, settled, _, err := u.repo.GetProgressWatermark(ctx, matchID)
+	wm, err := u.repo.GetProgressWatermark(ctx, matchID)
 	if err != nil {
 		return 0, err
 	}
-	if settled {
+	if wm.Settled {
 		return 0, errcode.New(errcode.ErrInvalidState, "match %d already settled, progress rejected", matchID)
 	}
+	// 每场模式以水位行存在性固化(§22 单一权威):行已存在 = 本场发放权已归实时通道,
+	// killswitch 中途关闭不影响进行中对局(否则"部分实时 + 结算掉落被整体抑制"会丢奖);
+	// 行不存在时由开关决定能否开流(默认关,混版发布纪律见 conf.ProgressEnabled)。
+	if !wm.Existed && !u.cfg.ProgressEnabled {
+		return 0, errcode.New(errcode.ErrInvalidState, "realtime progress channel disabled")
+	}
+	lastSeq := wm.LastAppliedSeq
 
 	// 事实换算(DS 不可信):怪物经验查配置表,拾取过白名单;未知怪 / 非白名单物品跳过并告警
 	// (只丢该事实的发放,水位照常推进 —— 坏配置不能把整条流卡死)。
 	maxSeqCap := u.cfg.MaxProgressSeqPerMatchOrDefault()
 	maxKill := u.cfg.MaxKillCountPerFactOrDefault()
 	maxPickup := u.cfg.MaxPickupCountPerFactOrDefault()
-	maxItemsPerRow := u.cfg.MaxDropsPerPlayer() // 复用结算路径同款上限(出箱 CSV 列宽守护)
 	expByPlayer := make(map[uint64]uint64)
-	itemsByPlayer := make(map[uint64][]uint32)
 	var (
+		itemRows    []data.ProgressOutboxRecord
 		prevSeq     uint64
 		newSeq      = lastSeq
+		firstNew    uint64
 		skippedFact int
+		batchExp    uint64
+		batchItems  uint32
 	)
 	for _, e := range events {
 		seq := e.GetSeq()
@@ -95,6 +101,9 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		}
 		if seq <= lastSeq {
 			continue // 旧事件重放(at-least-once),已入账,跳过
+		}
+		if firstNew == 0 {
+			firstNew = seq
 		}
 		newSeq = seq
 		playerID := e.GetPlayerId()
@@ -120,6 +129,7 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				continue
 			}
 			expByPlayer[playerID] += expPer * uint64(cnt)
+			batchExp += expPer * uint64(cnt)
 		case *battlev1.BattleProgressEvent_ItemPickup:
 			cnt := fact.ItemPickup.GetCount()
 			if cnt == 0 || cnt > maxPickup {
@@ -132,21 +142,22 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 					"match_id", matchID, "player_id", playerID, "item_config_id", itemID)
 				continue
 			}
-			items := itemsByPlayer[playerID]
-			for i := uint32(0); i < cnt; i++ {
-				if len(items) >= maxItemsPerRow {
-					skippedFact++
-					plog.With(ctx).Warnw("msg", "progress_pickup_truncated",
-						"match_id", matchID, "player_id", playerID, "max", maxItemsPerRow)
-					break
-				}
-				items = append(items, itemID)
+			// 每拾取事实一行出箱(Seq=事实自身 seq,uk 天然唯一):单事实 count 已被
+			// 夹紧到 CSV 列宽内,合法掉落永不截断(审计 P1;拾取低频,行数有界)。
+			items := make([]uint32, cnt)
+			for i := range items {
+				items[i] = itemID
 			}
-			itemsByPlayer[playerID] = items
+			itemRows = append(itemRows, data.ProgressOutboxRecord{
+				MatchID: matchID, Seq: seq, PlayerID: playerID,
+				Kind: data.ProgressGrantItem, ItemConfigIDs: items,
+			})
+			batchItems += cnt
 		default:
-			// 未知事实类型(新 DS 对旧 Go,金丝雀共存窗):跳过发放但推进水位,不拒批。
-			skippedFact++
-			plog.With(ctx).Warnw("msg", "progress_unknown_fact_skipped", "match_id", matchID, "seq", seq)
+			// 未知事实类型:整批拒收,绝不"跳过发放但推进水位"(静默 ACK = 新事实永久丢失,
+			// 审计 P1)。新 DS 携带新事实类型必须先升级 battle_result 全 fleet 再放量
+			// (与 conf.ProgressEnabled 混版纪律同向:Go 先行,DS 后行)。
+			return 0, errcode.New(errcode.ErrInvalidArg, "unknown progress fact seq=%d (upgrade battle_result before new DS fact types)", seq)
 		}
 	}
 
@@ -154,30 +165,40 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		// 整批都是旧事件(原批重发)→ 纯重放 ACK,零副作用。
 		return lastSeq, nil
 	}
+	if firstNew > lastSeq+1 {
+		// seq 跳号合法(DS 有界缓冲满载丢最老事件,realtime-progression.md §3/§9),
+		// 但必须留痕:跳过的 seq 永不再来,结算对账 gap 告警的先导信号。
+		plog.With(ctx).Warnw("msg", "progress_seq_gap",
+			"match_id", matchID, "last_applied", lastSeq, "first_new", firstNew)
+	}
 
-	rows := make([]data.ProgressOutboxRecord, 0, len(expByPlayer)+len(itemsByPlayer))
+	// 单场累计上限(事务权威侧封顶,审计 P1):失陷 DS 跨大量 seq 累计巨额产出在此拦截。
+	// 读-判-写受水位 CAS 保护无竞态(并发批次只有一个能 CAS 成功,失败方重读后重判)。
+	if capExp := u.cfg.MaxProgressExpPerMatchOrDefault(); wm.TotalExp+batchExp > capExp {
+		return 0, errcode.New(errcode.ErrInvalidArg,
+			"match %d cumulative exp %d+%d exceeds per-match cap %d", matchID, wm.TotalExp, batchExp, capExp)
+	}
+	if capItems := u.cfg.MaxProgressItemsPerMatchOrDefault(); wm.TotalItems+batchItems > capItems {
+		return 0, errcode.New(errcode.ErrInvalidArg,
+			"match %d cumulative items %d+%d exceeds per-match cap %d", matchID, wm.TotalItems, batchItems, capItems)
+	}
+
+	rows := make([]data.ProgressOutboxRecord, 0, len(expByPlayer)+len(itemRows))
 	for playerID, exp := range expByPlayer {
 		rows = append(rows, data.ProgressOutboxRecord{
 			MatchID: matchID, Seq: newSeq, PlayerID: playerID,
 			Kind: data.ProgressGrantExp, ExpDelta: exp,
 		})
 	}
-	for playerID, items := range itemsByPlayer {
-		if len(items) == 0 {
-			continue
-		}
-		rows = append(rows, data.ProgressOutboxRecord{
-			MatchID: matchID, Seq: newSeq, PlayerID: playerID,
-			Kind: data.ProgressGrantItem, ItemConfigIDs: items,
-		})
-	}
+	rows = append(rows, itemRows...)
 
-	if err := u.repo.ApplyProgress(ctx, matchID, lastSeq, newSeq, rows); err != nil {
+	if err := u.repo.ApplyProgress(ctx, matchID, lastSeq, newSeq, batchExp, batchItems, rows); err != nil {
 		return 0, err
 	}
 	plog.With(ctx).Infow("msg", "battle_progress_applied",
 		"match_id", matchID, "acked_seq", newSeq, "events", len(events),
-		"grant_rows", len(rows), "skipped_facts", skippedFact)
+		"grant_rows", len(rows), "skipped_facts", skippedFact,
+		"total_exp", wm.TotalExp+batchExp, "total_items", wm.TotalItems+batchItems)
 	return newSeq, nil
 }
 
@@ -233,6 +254,7 @@ func (u *BattleResultUsecase) RunProgressPublisher(ctx context.Context) {
 }
 
 // publishProgressBatch 取一批进度出箱行发放,返回本轮成功发放并删除的条数。
+// 单行失败 → deferRow 指数退避推迟(行不丢,坏行不会长期占满首批饿死后续正常行)。
 func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, error) {
 	recs, err := u.repo.FetchProgressOutbox(ctx, u.cfg.ProgressBatchSizeOrDefault())
 	if err != nil {
@@ -243,17 +265,20 @@ func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, er
 		switch r.Kind {
 		case data.ProgressGrantExp:
 			if u.expGranter == nil {
-				continue // player_addr 未配:积压不丢
+				u.deferProgressRow(ctx, r.ID) // player_addr 未配:积压不丢,退避防饿死 item 行
+				continue
 			}
 			key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "exp")
 			if gerr := u.expGranter.AddExperience(ctx, r.PlayerID, r.ExpDelta, "monster_kill", key); gerr != nil {
 				plog.With(ctx).Warnw("msg", "progress_exp_grant_failed",
 					"player_id", r.PlayerID, "exp", r.ExpDelta, "err", gerr)
+				u.deferProgressRow(ctx, r.ID)
 				continue
 			}
 		case data.ProgressGrantItem:
 			if u.granter == nil {
-				continue // inventory_addr 未配:积压不丢
+				u.deferProgressRow(ctx, r.ID) // inventory_addr 未配:积压不丢
+				continue
 			}
 			key := progressIdempotencyKey(r.MatchID, r.Seq, r.PlayerID, "item")
 			if gerr := u.granter.GrantInstances(ctx, r.PlayerID, r.ItemConfigIDs, key); gerr != nil {
@@ -262,6 +287,7 @@ func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, er
 					if merr := u.mailSender.SendOverflowMail(ctx, r.PlayerID, r.ItemConfigIDs, key); merr != nil {
 						plog.With(ctx).Warnw("msg", "progress_overflow_mail_failed",
 							"player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", merr)
+						u.deferProgressRow(ctx, r.ID)
 						continue
 					}
 					plog.With(ctx).Infow("msg", "progress_overflow_mailed",
@@ -269,12 +295,14 @@ func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, er
 				} else {
 					plog.With(ctx).Warnw("msg", "progress_item_grant_failed",
 						"player_id", r.PlayerID, "items", len(r.ItemConfigIDs), "err", gerr)
+					u.deferProgressRow(ctx, r.ID)
 					continue
 				}
 			}
 		default:
-			// 未知类型行(未来扩展 / 脏数据):告警并跳过,不删(人工介入)。
+			// 未知类型行(未来扩展 / 脏数据):告警并退避推迟,不删(人工介入)。
 			plog.With(ctx).Warnw("msg", "progress_outbox_unknown_kind", "id", r.ID, "kind", r.Kind)
+			u.deferProgressRow(ctx, r.ID)
 			continue
 		}
 		if derr := u.repo.DeleteProgressOutbox(ctx, r.ID); derr != nil {
@@ -286,6 +314,14 @@ func (u *BattleResultUsecase) publishProgressBatch(ctx context.Context) (int, er
 		plog.With(ctx).Infow("msg", "progress_outbox_granted", "count", granted)
 	}
 	return granted, nil
+}
+
+// deferProgressRow 推迟一条发放失败的出箱行(失败本身只告警:推迟失败下轮 Fetch 仍会
+// 取到该行重试,不影响 at-least-once)。
+func (u *BattleResultUsecase) deferProgressRow(ctx context.Context, id int64) {
+	if err := u.repo.DeferProgressOutbox(ctx, id); err != nil {
+		plog.With(ctx).Warnw("msg", "progress_outbox_defer_failed", "id", id, "err", err)
+	}
 }
 
 // progressIdempotencyKey 组装进度发放幂等键:progress:{match_id}:{seq}:{player_id}:{kind}。

@@ -78,9 +78,11 @@ battle:
   outbox_batch_size: 128
 
   # ── 战斗中实时进度通道(实时成长,realtime-progression.md)────────────────────
-  # progress_disabled: killswitch(默认 false=启用;true → ReportProgress 一律拒,DS 停流
-  # 回退局后结算路径,进行中对局已入账部分不受影响)
-  progress_disabled: false
+  # progress_enabled: 通道开关(**缺省 false=关闭**,§14.2 默认不改变现有行为)。
+  # dev 单副本本地集群无混版窗口,直接开启联调;生产启用纪律见 prod example
+  # (battle_result 全 fleet 升级到含进度收口逻辑的版本后才能置 true,否则混版双发掉落)。
+  # 关闭只拒新对局开流;已有水位的进行中对局继续收流到结算(每场模式固化)。
+  progress_enabled: true
   # monster_exp: 怪物击杀经验表(monster_config_id → 单只经验;DS 不可信,换算唯一权威)。
   # ID 必须与客户端 角色配置表 的怪物 config id 一致;空 = 击杀不折算经验(跳过并告警)。
   # 联调时按实际怪物 ID 填,例:
@@ -88,11 +90,14 @@ battle:
   #   2001: 50
   #   2002: 120
   monster_exp: {}
-  # 进度批校验上限(缺省 256 / 100000 / 100 / 10)
+  # 进度批校验上限(缺省 256 / 100000 / 100 / 10;pickup 单事实上限被夹紧 ≤46 保证单行 CSV)
   max_progress_batch: 256
   max_progress_seq_per_match: 100000
   max_kill_count_per_fact: 100
   max_pickup_count_per_fact: 10
+  # 单场累计硬上限(事务权威侧封顶,失陷 DS 跨 seq 刷产出在此拦截;缺省 1000000 / 500)
+  max_progress_exp_per_match: 1000000
+  max_progress_items_per_match: 500
   # 进度出箱发布节奏(经验/掉落即时到账的体感上界;缺省 1s / 128)
   progress_publish_interval: "1s"
   progress_batch_size: 128

@@ -299,10 +299,11 @@ func (*serviceBattleRepo) FetchMatchReleaseOutbox(context.Context, int, int64) (
 }
 func (*serviceBattleRepo) DeferMatchReleaseOutbox(context.Context, uint64, int64) error { return nil }
 func (*serviceBattleRepo) DeleteMatchReleaseOutbox(context.Context, uint64) error       { return nil }
-func (*serviceBattleRepo) GetProgressWatermark(context.Context, uint64) (uint64, bool, bool, error) {
-	return 0, false, false, nil
+func (*serviceBattleRepo) GetProgressWatermark(context.Context, uint64) (data.ProgressWatermark, error) {
+	return data.ProgressWatermark{}, nil
 }
-func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, []data.ProgressOutboxRecord) error {
+func (*serviceBattleRepo) DeferProgressOutbox(context.Context, int64) error { return nil }
+func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, uint64, uint32, []data.ProgressOutboxRecord) error {
 	return nil
 }
 func (*serviceBattleRepo) FetchProgressOutbox(context.Context, int) ([]data.ProgressOutboxRecord, error) {

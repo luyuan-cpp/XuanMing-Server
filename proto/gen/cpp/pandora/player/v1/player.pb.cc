@@ -2819,9 +2819,9 @@ constexpr PlayerProfile::ParseTableT_ PlayerProfile::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      51, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959488,  // skipmap
+      4294965632,  // skipmap
       offsetof(ParseTableT_, field_entries),
       11,  // num_field_entries
       0,  // num_aux_entries
@@ -2872,17 +2872,13 @@ constexpr PlayerProfile::ParseTableT_ PlayerProfile::InternalGenerateParseTable_
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfile, _impl_.total_wins_), 8>(),
        {88, 8, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_wins_)}},
-      // uint64 exp_in_level = 12 [json_name = "expInLevel"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfile, _impl_.exp_in_level_), 9>(),
-       {96, 9, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.exp_in_level_)}},
-      // bool is_max_level = 13 [json_name = "isMaxLevel"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerProfile, _impl_.is_max_level_), 10>(),
-       {104, 10, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.is_max_level_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
+      50, 0, 1,
+      65532, 9,
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [json_name = "playerId"];
@@ -2903,9 +2899,9 @@ constexpr PlayerProfile::ParseTableT_ PlayerProfile::InternalGenerateParseTable_
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_battles_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
       // int32 total_wins = 11 [json_name = "totalWins"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.total_wins_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
-      // uint64 exp_in_level = 12 [json_name = "expInLevel"];
+      // uint64 exp_in_level = 50 [json_name = "expInLevel"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.exp_in_level_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // bool is_max_level = 13 [json_name = "isMaxLevel"];
+      // bool is_max_level = 51 [json_name = "isMaxLevel"];
       {PROTOBUF_FIELD_OFFSET(PlayerProfile, _impl_.is_max_level_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
@@ -9043,8 +9039,8 @@ const char descriptor_table_protodef_pandora_2fplayer_2fv1_2fplayer_2eproto[] AB
     "\030\006 \001(\003R\013createdAtMs\022 \n\014last_seen_ms\030\007 \001("
     "\003R\nlastSeenMs\022#\n\rtotal_battles\030\n \001(\005R\014to"
     "talBattles\022\035\n\ntotal_wins\030\013 \001(\005R\ttotalWin"
-    "s\022 \n\014exp_in_level\030\014 \001(\004R\nexpInLevel\022 \n\014i"
-    "s_max_level\030\r \001(\010R\nisMaxLevelJ\004\010\010\020\nJ\004\010\016\020"
+    "s\022 \n\014exp_in_level\0302 \001(\004R\nexpInLevel\022 \n\014i"
+    "s_max_level\0303 \001(\010R\nisMaxLevelJ\004\010\010\020\nJ\004\010\014\020"
     "2\"0\n\021GetProfileRequest\022\033\n\tplayer_id\030\001 \001("
     "\004R\010playerId\"\200\001\n\022GetProfileResponse\022.\n\004co"
     "de\030\001 \001(\0162\032.pandora.common.v1.ErrCodeR\004co"
@@ -9526,21 +9522,21 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
     }
   }
 
-  // uint64 exp_in_level = 12 [json_name = "expInLevel"];
+  // uint64 exp_in_level = 50 [json_name = "expInLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_exp_in_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          12, this_._internal_exp_in_level(), target);
+          50, this_._internal_exp_in_level(), target);
     }
   }
 
-  // bool is_max_level = 13 [json_name = "isMaxLevel"];
+  // bool is_max_level = 51 [json_name = "isMaxLevel"];
   if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_is_max_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
-          13, this_._internal_is_max_level(), target);
+          51, this_._internal_is_max_level(), target);
     }
   }
 
@@ -9635,17 +9631,17 @@ PROTOBUF_NOINLINE void PlayerProfile::Clear() {
             this_._internal_total_wins());
       }
     }
-    // uint64 exp_in_level = 12 [json_name = "expInLevel"];
+    // uint64 exp_in_level = 50 [json_name = "expInLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_exp_in_level() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_exp_in_level());
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_exp_in_level());
       }
     }
-    // bool is_max_level = 13 [json_name = "isMaxLevel"];
+    // bool is_max_level = 51 [json_name = "isMaxLevel"];
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_is_max_level() != 0) {
-        total_size += 2;
+        total_size += 3;
       }
     }
   }

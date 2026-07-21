@@ -67,6 +67,10 @@ type PlayerConf struct {
 
 	// PushOutboxBatch 每轮发布取多少条推送出箱记录(默认 128)。
 	PushOutboxBatch int `yaml:"push_outbox_batch,omitempty" json:"push_outbox_batch,omitempty"`
+
+	// ExpHistoryRetention 经验幂等收据(exp_history)留存期(默认 7 天,下限 7 天:
+	// 必须覆盖 battle_result progress 出箱最长重试窗,收据被提前清掉会破坏幂等,§9.2)。
+	ExpHistoryRetention config.Duration `yaml:"exp_history_retention,omitempty" json:"exp_history_retention,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -132,4 +136,14 @@ func (p *PlayerConf) PushOutboxBatchOrDefault() int {
 		return p.PushOutboxBatch
 	}
 	return 128
+}
+
+// ExpHistoryRetentionOrDefault 返回生效的 exp_history 留存期(未配置 → 7 天;
+// 配置低于 7 天按 7 天,防手滑把幂等窗清穿)。
+func (p *PlayerConf) ExpHistoryRetentionOrDefault() time.Duration {
+	const min = 7 * 24 * time.Hour
+	if d := p.ExpHistoryRetention.Std(); d > min {
+		return d
+	}
+	return min
 }

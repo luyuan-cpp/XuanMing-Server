@@ -19,6 +19,12 @@ extend google.protobuf.MessageOptions {
   // excel_file 源表相对路径(相对 Pandora-Client-SVN/Table 根目录)。
   // 标注在整表容器 message 上;未标注的 message 不参与导表。
   string excel_file = 51501;
+
+  // excel_bit_index 为本表生成「稳定 ID → 位序」映射(<name>_bitindex.gen.go),
+  // 供按位图存储进度/解锁标记的系统使用(旧项目 mission/reward 用途)。
+  // 稳定性由状态文件 configtable/bitindex_state/<name>.json 保证:
+  // 新 ID 追加分配、删除的 ID 保留占位永不复用,已落库位图不因改表而错位。
+  bool excel_bit_index = 51506;
 }
 
 extend google.protobuf.FieldOptions {
@@ -33,4 +39,18 @@ extend google.protobuf.FieldOptions {
 
   // excel_prefix 非空单元格必须以该前缀开头(如 UE 资产 / 类路径 "/")。
   string excel_prefix = 51505;
+
+  // excel_key 唯一二级键(旧项目列标记 `key`):生成 By<Field> 单行查询,
+  // 生成与加载两阶段都校验取值唯一。不可与 excel_multi_key / excel_fk 同用,不可标在 id 上。
+  bool excel_key = 51507;
+
+  // excel_multi_key 非唯一索引(旧项目列标记 `multi`):生成 ListBy<Field> 多行查询。
+  bool excel_multi_key = 51508;
+
+  // excel_fk 外键(旧项目列标记 `fk:Table`):取值必须存在于目标表的 id
+  // (值填目标表注册键,如 "level";列类型必须 uint32,对齐配置表 ID 规则)。
+  // 生成阶段做批内引用完整性校验(§7.5),加载阶段由生成的 validateCrossTables 再兜底;
+  // 代码侧生成正向解析(Tables.<Src><Field>Row)与反向索引(ListBy<Field>)。
+  // 非必填列取值 0 = 无引用,跳过校验。暂只支持引用目标表 id,不支持 fk:Table.column 与 gfk。
+  string excel_fk = 51509;
 }

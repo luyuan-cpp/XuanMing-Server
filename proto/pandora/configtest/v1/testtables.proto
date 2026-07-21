@@ -1,0 +1,41 @@
+// tools/configtable-gen 的测试夹具表(仅供生成器单测使用)。
+//
+// 独立包 pandora.configtest.v1:生成器运行时只扫 pandora.config.v1(discover.go),
+// 本包只被 *_test.go import,不进生产二进制、不进 dist、不生成 pkg/configtable 代码。
+// 作用:让 excel_key / excel_multi_key / excel_fk / excel_bit_index 四类注解
+// 在没有真实业务表使用前就有端到端(发现 → 构建 → 校验 → 代码渲染)测试覆盖,
+// 对齐旧项目 data/ 里 Test.xlsx / TestMultiKey.xlsx 的角色。
+// 表形状取自 decision-dungeon-scene-table-layering.md 的分层方案(场景表 + 副本表引用场景)。
+
+syntax = "proto3";
+
+package pandora.configtest.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// TestSceneRow 场景夹具:唯一二级键(scene_name)。
+message TestSceneRow {
+  uint32 id = 1 [(pandora.config.v1.excel_col) = "ID", (pandora.config.v1.excel_required) = true];
+  string scene_name = 2 [(pandora.config.v1.excel_col) = "名称", (pandora.config.v1.excel_required) = true, (pandora.config.v1.excel_key) = true];
+}
+
+message TestSceneTableData {
+  option (pandora.config.v1.excel_file) = "程序/test_scene.xlsx";
+
+  repeated TestSceneRow rows = 1;
+}
+
+// TestDungeonRow 副本夹具:外键(scene_id → test_scene)+ 非唯一索引(difficulty)+ 唯一键(code)。
+message TestDungeonRow {
+  uint32 id = 1 [(pandora.config.v1.excel_col) = "ID", (pandora.config.v1.excel_required) = true];
+  uint32 scene_id = 2 [(pandora.config.v1.excel_col) = "场景ID", (pandora.config.v1.excel_required) = true, (pandora.config.v1.excel_fk) = "test_scene"];
+  uint32 difficulty = 3 [(pandora.config.v1.excel_col) = "难度", (pandora.config.v1.excel_multi_key) = true];
+  string code = 4 [(pandora.config.v1.excel_col) = "编码", (pandora.config.v1.excel_required) = true, (pandora.config.v1.excel_key) = true];
+}
+
+message TestDungeonTableData {
+  option (pandora.config.v1.excel_file) = "程序/test_dungeon.xlsx";
+  option (pandora.config.v1.excel_bit_index) = true;
+
+  repeated TestDungeonRow rows = 1;
+}

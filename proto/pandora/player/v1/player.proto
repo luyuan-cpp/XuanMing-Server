@@ -52,8 +52,9 @@ service PlayerService {
   // AddExperience 幂等入账经验并结算等级(连升多级 / Lv 上限封顶 / 满级 no-op)。
   // 系统 RPC:只允许后端内部直连(battle_result progress 出箱 worker / 任务完成点 / GM),
   // 带玩家 JWT 的客户端调用一律拒绝,且不在 Envoy 暴露(客户端不能给自己加经验)。
-  // 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经
-  // pandora.player.update(event_type=1)通知客户端刷新经验条 / 播升级表现。
+  // 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经独立 topic
+  // pandora.player.experience(event_type=1)通知客户端刷新经验条 / 播升级表现
+  // (不复用 pandora.player.update:旧 player 副本按 MMR 事件解码会被污染,§21 混跑安全)。
   rpc AddExperience(AddExperienceRequest) returns (AddExperienceResponse);
 }
 
@@ -72,15 +73,15 @@ message PlayerProfile {
 
   int32  total_battles = 10;
   int32  total_wins    = 11;
+  // 12-49 reserved for stats
+  reserved 12 to 49;
 
   // ── 玩家等级经验(实时成长;level 字段见 3)──
   // exp_in_level 是**级内经验**(不是账号累计);客户端用 CfgPlayerLevelExp 表补
   // "升到下一级所需经验"。is_max_level=true 时 UI 显示满条 + MAX(exp_in_level 恒 0)。
-  // 12/13 取自原 stats 预留段(开发期收窄 reserved,§5.4)。
-  uint64 exp_in_level = 12;
-  bool   is_max_level = 13;
-  // 14-49 reserved for stats
-  reserved 14 to 49;
+  // 用 50/51 新编号,不收窄 12-49 预留段(buf breaking RESERVED 门禁保持绿,审计 P1)。
+  uint64 exp_in_level = 50;
+  bool   is_max_level = 51;
 }
 
 message GetProfileRequest {
@@ -147,7 +148,7 @@ message UpdateMMRResponse {
   int32 new_mmr = 2;
 }
 
-// ===== 推送事件(kafka pandora.player.update)=====
+// ===== 推送事件(kafka pandora.player.update / pandora.player.experience)=====
 
 // PlayerUpdateEvent 是玩家档案变更事件(kafka key = player_id,不变量 §9)。
 //
@@ -162,16 +163,19 @@ message PlayerUpdateEvent {
   int64  ts_ms     = 5;
 }
 
-// PlayerPushEventType 是 pandora.player.update 域内事件类型判别键
+// PlayerPushEventType 是 player 域推送事件类型判别键
 // (push.proto §域内多事件类型路由:producer 写 kafka header event_type,
 // push 透传进 PushFrame.EventType,客户端按 (topic, event_type) 选 message 反序列化)。
-// 0 永远 = 本 topic 现有旧事件(PlayerUpdateEvent,MMR);编号只增不复用。
+// 0 永远 = pandora.player.update 现有旧事件(PlayerUpdateEvent);编号只增不复用。
+// ⚠️ 新事件类型必须开新 topic 而非复用 pandora.player.update:player 旧副本消费该 topic
+// 不看 header,新事件会被按 MMR 误解码(§21 混跑安全,详见 pkg/kafkax/topics.go)。
 enum PlayerPushEventType {
-  PLAYER_PUSH_EVENT_TYPE_LEGACY_UPDATE = 0;  // PlayerUpdateEvent(MMR / 战绩,兼容旧客户端)
-  PLAYER_PUSH_EVENT_TYPE_EXPERIENCE    = 1;  // PlayerExperienceEvent(等级经验快照)
+  PLAYER_PUSH_EVENT_TYPE_LEGACY_UPDATE = 0;  // PlayerUpdateEvent(MMR / 战绩,topic pandora.player.update)
+  PLAYER_PUSH_EVENT_TYPE_EXPERIENCE    = 1;  // PlayerExperienceEvent(等级经验快照,topic pandora.player.experience)
 }
 
-// PlayerExperienceEvent 玩家经验变化推送(客户端可见结构,player 服务入账后出箱生产)。
+// PlayerExperienceEvent 玩家经验变化推送(客户端可见结构,player 服务入账后出箱生产,
+// kafka topic = pandora.player.experience,key=player_id)。
 //
 // 客户端契约:
 //   - 收到即用权威快照刷新经验条(RequiredExp 查客户端 CfgPlayerLevelExp 表);

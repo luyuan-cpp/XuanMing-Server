@@ -199,17 +199,41 @@ F:\work\XuanMing-Server\configtable\dist\
 **已接线服务**:matchmaker(`config_table.dir` 开关,空=不启用;启用后启动强依赖 fail-closed,
 StartMatch 校验 map_id ∈ 关卡表且 category=战斗,否则 `ERR_MATCH_INVALID_MAP`)。
 
-**Go 表访问代码也是生成的**(2026-07-21 补,移植旧项目 go_config.go.j2 / go_all_table.go.j2 模板):
-`tools/configtable-gen/internal/gogen` 按表规格生成 `pkg/configtable/<name>_table.gen.go`
-(视图 + All/ByID/Exists/Count/ByIDs/RandOne/Where/First)与 `tables.gen.go`(Tables 快照结构 +
-specByName 注册,即旧 all_table.go 的替代);表私有校验与域方法留在手写伴生文件
-(`level.go` 的 `validateLevelRow` / `IsBattleLevel`)。生成代码与表规格的同步由
-`gogen` 的 `TestGeneratedFilesUpToDate` 守护(改规格不重跑生成器 / 手改 gen 文件 → 测试红)。
-未移植 comp(ECS 组件)与 fk(外键 helper)模板:Go 侧无 ECS 消费方、现有表无外键列,
-出现真实需求再加(§15.3)。
+**生成器是 protogen 式的(2026-07-21 定稿,做法对齐旧项目 tools/proto_generator/protogen)**:
+proto 即单一事实源——表与列的导表元信息全部标注在 `proto/pandora/config/v1/excel.proto`
+定义的自定义 option 上(`(excel_file)` 标容器 = 一张表;`(excel_col)/(excel_required)/
+(excel_default)/(excel_prefix)` 标行字段 = 一列),`tools/configtable-gen` 经 protoreflect
+描述符自动发现全部配置表(`internal/tablegen/discover.go`),**零手写登记代码**:
+- 数据侧:通用行构建器(`builder.go`)按注解做 §7 校验(表头精确对齐 / 类型 / 枚举拒 0 /
+  必填 / 默认值 / 前缀 / 主键唯一),xlsx → 容器 message → dist JSON;
+- 代码侧:`internal/gogen` 用独立模板文件(`template/*.tmpl`,go:embed,对应旧
+  go_config.go.j2 / go_all_table.go.j2)生成 `pkg/configtable/<name>_table.gen.go`
+  (视图 + All/ByID/Exists/Count/ByIDs/RandOne/Where/First)与 `tables.gen.go`
+  (Tables 快照 + specByName 注册,即旧 all_table.go 的替代);
+- 伴生文件 `<name>.go`(`validate<Name>Row` 业务校验钩子 + 域方法,如 level.go 的
+  `IsBattleLevel`)缺失时由生成器创建一次空桩,此后归人维护不覆盖(同 protogen 的
+  instance 文件模式)。
+生成代码与 proto 注解的同步由 `gogen.TestGeneratedFilesUpToDate` 守护(改注解 / 模板不重跑
+生成器、手改 gen 文件 → 测试红;bitindex 产物与状态 / dist 数据的一致性同样纳入守护)。
 
-**加新表五步**(单一事实源 = `internal/tablegen/registry.go` 的 `Sources()`):
-① proto 容器(`proto/pandora/config/v1`)→ ② `tablegen` 写 `Build<Name>Table` 表规格(列映射+§7 校验)
-→ ③ `Sources()` 登记一条 → ④ 跑 `go run ./tools/configtable-gen -tables <Table根>`(同时产出
-dist 数据 + gen Go 代码)→ ⑤ `pkg/configtable` 写伴生文件(`validate<Name>Row` 钩子,可空实现 + 域方法)。
+**二级索引 / 外键 / 位序(2026-07-21 补齐,移植旧项目 key / multi / fk / bit_index 四类列标记)**:
+- `(excel_key)` 唯一二级键 → 生成 `By<Field>` 单行查询;生成与加载两阶段查重(旧列标记 `key`);
+- `(excel_multi_key)` 非唯一索引 → 生成 `ListBy<Field>` 多行查询(旧列标记 `multi`);
+- `(excel_fk) = "<目标表名>"` 外键(列类型必须 uint32,引用目标表 id;旧列标记 `fk:Table`):
+  生成阶段批内引用完整性校验(§7.5,失败整批不产出)+ 加载阶段生成的 `validateCrossTables`
+  fail-closed 兜底(store.go 在整批切换前调用);代码侧生成正查(`Tables.<Src><Field>Row` /
+  `...RowByID`)与反查(`ListBy<Field>`)。非必填列 0 = 无引用;必填列 0 也非法。
+  暂不支持 `fk:Table.column` 与 gfk(无用例,需时再加);
+- `(excel_bit_index)`(容器注解)稳定「ID → 位序」映射 → 生成 `<name>_bitindex.gen.go`
+  (`<Name>BitIndex(id)` / `<Name>BitCount`),供进度 / 解锁位图存储(旧 mission/reward 用途)。
+  **稳定性权威 = `configtable/bitindex_state/<name>.json`(git 跟踪,严禁手改 / 丢弃,
+  丢失 = 已落库位图全部错位作废)**:新 ID 追加分配,删除的 ID 保留占位永不复用。
+  关卡表已启用(关卡解锁 / 通关进度位图)。
+这四类注解的端到端测试由 `proto/pandora/configtest/v1` 夹具包承担(角色对齐旧项目
+Test.xlsx / TestMultiKey.xlsx;独立包,生产 Discover 扫不到、不进 dist)。
+未移植 comp(ECS 组件)模板:Go 侧无 ECS 消费方,出现真实需求再加(§15.3)。
+
+**加新表三步**:① 写 proto(行 message 打 `(excel_col)` 等注解,容器打 `(excel_file)`)
+→ ② `pwsh tools/scripts/proto_gen.ps1` 重生 pb → ③ `go run ./tools/configtable-gen
+-tables <Table根>`(数据 + Go 代码 + 伴生桩一次产出;桩里按需补业务校验与域方法)。
 

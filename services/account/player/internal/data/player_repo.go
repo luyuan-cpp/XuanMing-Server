@@ -15,6 +15,7 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+	"time"
 
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
 )
@@ -110,6 +111,8 @@ type PlayerRepo interface {
 	FetchPushOutbox(ctx context.Context, limit int) ([]PushOutboxRecord, error)
 	// DeletePushOutbox 删除已成功投递的推送出箱行。
 	DeletePushOutbox(ctx context.Context, id int64) error
+	// PurgeExpHistory 删除 created_at < cutoff 的经验幂等收据(最多 limit 行,返回删除数)。
+	PurgeExpHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error)
 
 	// ── 领奖记录 ───────────────────────────────────────────────────────────
 	// LoadRewardClaims 读玩家领奖记录(RewardClaimStorageRecord 序列化 bytes + 乐观锁版本)。

@@ -89,8 +89,9 @@ type PlayerServiceClient interface {
 	// AddExperience 幂等入账经验并结算等级(连升多级 / Lv 上限封顶 / 满级 no-op)。
 	// 系统 RPC:只允许后端内部直连(battle_result progress 出箱 worker / 任务完成点 / GM),
 	// 带玩家 JWT 的客户端调用一律拒绝,且不在 Envoy 暴露(客户端不能给自己加经验)。
-	// 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经
-	// pandora.player.update(event_type=1)通知客户端刷新经验条 / 播升级表现。
+	// 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经独立 topic
+	// pandora.player.experience(event_type=1)通知客户端刷新经验条 / 播升级表现
+	// (不复用 pandora.player.update:旧 player 副本按 MMR 事件解码会被污染,§21 混跑安全)。
 	AddExperience(ctx context.Context, in *AddExperienceRequest, opts ...grpc.CallOption) (*AddExperienceResponse, error)
 }
 
@@ -361,8 +362,9 @@ type PlayerServiceServer interface {
 	// AddExperience 幂等入账经验并结算等级(连升多级 / Lv 上限封顶 / 满级 no-op)。
 	// 系统 RPC:只允许后端内部直连(battle_result progress 出箱 worker / 任务完成点 / GM),
 	// 带玩家 JWT 的客户端调用一律拒绝,且不在 Envoy 暴露(客户端不能给自己加经验)。
-	// 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经
-	// pandora.player.update(event_type=1)通知客户端刷新经验条 / 播升级表现。
+	// 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经独立 topic
+	// pandora.player.experience(event_type=1)通知客户端刷新经验条 / 播升级表现
+	// (不复用 pandora.player.update:旧 player 副本按 MMR 事件解码会被污染,§21 混跑安全)。
 	AddExperience(context.Context, *AddExperienceRequest) (*AddExperienceResponse, error)
 }
 

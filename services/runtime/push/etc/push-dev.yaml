@@ -50,6 +50,8 @@ push:
   # 2026-06-19 presence 订阅推送上线(§13.4),补 pandora.presence.update(key=subscriber_id)。
   # 2026-06-27 群聊上线,补 pandora.chat.guild(公会频道)/ pandora.chat.group(临时群频道,均 key=接收方)
   #   + pandora.guild.event(公会成员变更通知,key=to_player_id)。
+  # 2026-07-21 实时成长上线,补 pandora.player.experience(经验/升级推送,key=player_id,
+  #   event_type=1;独立 topic 原因见 pkg/kafkax/topics.go TopicPlayerUpdate 注释)。
   topics:
     - "pandora.team.update"
     - "pandora.match.progress"
@@ -62,6 +64,7 @@ push:
     - "pandora.guild.event"
     - "pandora.hub.migrate"
     - "pandora.presence.update"
+    - "pandora.player.experience"
 
   # 离线消息 redis ZSET TTL(每次写入刷新)。
   offline_cache_ttl: "5m"

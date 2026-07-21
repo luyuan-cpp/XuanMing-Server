@@ -6,6 +6,21 @@
 >   Envoy AddExperience 403 拦截已落地并通过 build/test(本仓库);
 > - UE 侧(进度上报器 / Loot 掉落广播 / 客户端经验适配)在 Pandora-Client 仓库跟进,
 >   剩余接线与验收见交接记录(PROGRESS.md 2026-07-21 条目)。
+>
+> **2026-07-21 发布前审计修订**(两个混版 P0 + 一批 P1,详见当日审计记录):
+> 1. 经验推送改走**独立 topic `pandora.player.experience`**(原设计复用 pandora.player.update
+>    + event_type header;player 旧副本消费该 topic 不看 header,混跑窗口会把经验事件按
+>    MMR 事件误解码污染段位,§9.21)。push 服务补订阅;§2/§4.3/§7 已同步修订。
+> 2. 实时通道**默认关闭**(`progress_enabled` 缺省 false,§14.2):battle_result 全 fleet
+>    升级后才允许启用,否则旧代码副本结算不感知水位表 → 混版窗口双发掉落(P0)。
+>    每场模式以水位行存在性固化:killswitch 中途关闭不影响已开流对局(防丢奖)。
+> 3. 拾取出箱**每事实一行**(Seq=事实自身 seq),合法掉落不再截断;单事实 count 夹紧 ≤46。
+> 4. 新增**单场累计上限**(total_exp/total_items 随水位同事务 CAS 累计,超限整批拒)。
+> 5. 未知 fact 类型**整批拒**(原"跳过并推进水位"= 新 DS 新事实被静默 ACK 永久丢失)。
+> 6. 进度出箱失败行**指数退避**(next_attempt_at_ms/attempt_count,防队首阻塞)。
+> 7. `PlayerProfile` 经验字段改用 50/51 编号(不收窄 12-49 预留段,buf breaking 门禁绿)。
+> 8. player/battle_result 启动加经验/进度 **schema gate**;pandora_player 000002 exp 列
+>    改条件加列(fresh-init 兼容)+ ALGORITHM=INSTANT;exp_history 加 7 天保留期后台清理。
 
 ## 0. 需求与结论
 
@@ -24,7 +39,7 @@
 | 经验数值权威 / 等级结算 / 持久化 | Go `player` 服务 | 大厅态持久化;§9.6 DS 不可信 |
 | 击杀 / 拾取事实的实时上报 | Battle DS → Go `battle_result`,**异步批量** | 本文档新增的第三通道(§1) |
 | 经验换算(怪→经验)、掉落白名单校验 | Go `battle_result` | 与"MMR 在 battle_result 算"同构 |
-| 经验条刷新 / 升级表现触发 | `pandora.player.update` 新 event_type → push → 客户端 | 复用既有推送管线 |
+| 经验条刷新 / 升级表现触发 | 独立 topic `pandora.player.experience` → push → 客户端(§4.3) | 复用既有推送管线(混跑安全见 §4.3) |
 | 掉落广播(同队可见、即时) | **Battle DS 组播,Go 零参与** | 纯瞬时表现,ds-arch §0.1;可见域(同场同队)只有 DS 手里现成 |
 
 ## 1. ds-arch §0.5 / §0.6 契约修订稿(待合入)
@@ -62,9 +77,9 @@ DS: 怪物死亡(权威判定)
          → 同一事务: 推进水位 + 写 progress 出箱
       → 出箱 worker: player.AddExperience(delta, key="progress:{match_id}:{seq}")
       → player: 幂等入账 → 等级曲线结算(连升多级/Lv15 封顶/满级 no-op)
-         → 同一事务写 player.update 出箱(event_type=EXPERIENCE)
-      → kafka pandora.player.update → push → 客户端 SetExperienceDisplay
-         (levels_gained>0 → PlayLevelUpPresentation)
+         → 同一事务写推送出箱(event_type=EXPERIENCE)
+      → kafka pandora.player.experience(独立 topic,§4.3)→ push → 客户端
+         SetExperienceDisplay(levels_gained>0 → PlayLevelUpPresentation)
 
 【任务经验】(纯 Go,无 DS 参与)
 任务完成判定点(现有 ClaimReward / 未来 campaign) → player.AddExperience(key="quest:{player}:{quest}")
@@ -117,18 +132,30 @@ push 离线 ZSET(5min)补推经验事件,超窗由快照覆盖。
 
 - `players` 表加 `exp` 列(级内经验;`level` 列已存在)。
 - 新 RPC `AddExperience`(**内部直连,不经 Envoy 暴露**,带玩家 JWT 的调用一律拒 —— 同
-  GrantItems 惯例):幂等入账 → 按等级经验表循环进位(天然支持连升多级)→ Lv.15 封顶,
-  满级后 delta no-op(不累加、不发事件)→ 同一事务写 player.update 出箱。
+  GrantItems 惯例;内网调用方身份鉴权与 GrantInstances 同项目级"内网可信 + Envoy 边界"
+  约定,不单独加服务级授权):幂等入账 → 按等级经验表循环进位(天然支持连升多级)→
+  Lv.15 封顶,满级后 delta no-op(不累加、不发事件)→ 同一事务写推送出箱。
 - 等级经验配置表:与客户端 `j_玩家等级经验.xlsx` / `CfgPlayerLevelExp` **同源导出**
   (Lv15 行 UpgradeExp=0),走配置表热更管线;两侧漂移 = 显示 bug,导表流水线要保证一致。
+  **曲线变更纪律(2026-07-21 审计)**:曲线是入账即生效的不可逆持久数值,当前副本本地
+  配置无版本绑定 —— 变更必须全 fleet 同配置一起换(先关金丝雀分流),禁止不同曲线副本
+  混跑;生产在正式数值确认前保持 exp_curve 为空(功能关);接入 configtable 热更管线
+  (单源 + version + 原子切换)后此纪律由管线保证。
 - 幂等键留存:复用属性点授予的 `uk(player_id, idempotency_key)` 表模式;
   留存期配置化(默认 ≥7 天,覆盖出箱最长重试窗)后台清理。
 - 升级联动钩子:升级授予属性点 / 天赋点不在本次需求,但结算点天然是
   `GrantAttributePoints/GrantTalentPoints(key="levelup:{player}:{level}")` 的挂点,后续接入零改造。
 
-### 4.3 推送(复用 pandora.player.update,新 event_type)
+### 4.3 推送(独立 topic pandora.player.experience,2026-07-21 审计修订)
 
-按 push.proto 域内多事件类型规则(0 永远 = 旧 `PlayerUpdateEvent`):
+**不复用 pandora.player.update**:player 旧副本消费该 topic 做幂等 UpdateMMR 时不看
+event_type header,Stable/Canary 混跑窗口里经验事件会被按 `PlayerUpdateEvent` 误解码
+(字段 2/3 恰好对上 match_id/mmr_delta),静默污染 MMR(审计 P0;§9.21 事件双向兼容)。
+经验事件走独立 topic `pandora.player.experience`(key=player_id,push 订阅透传;
+player 旧副本不订阅,混跑零风险)。规则沉淀:**player.update 永远单事件类型,
+player 域新增推送事件一律开新 topic**(见 pkg/kafkax/topics.go)。
+
+event_type 枚举保留(客户端按 (topic, event_type) 选型;0 永远 = 旧 `PlayerUpdateEvent`):
 
 ```proto
 enum PlayerPushEventType {
@@ -146,8 +173,10 @@ message PlayerExperienceEvent {
 }
 ```
 
-push 服务零改动(透明转发)。客户端适配层按"(level, 累计经验) 单调不回退"处理乱序 /
-补推重放:落后于当前展示快照的事件直接丢弃;升级表现按事件触发,重放去重由 ts_ms 兜底。
+push 服务只需把 `pandora.player.experience` 加进订阅列表(消费侧通用透传,零逻辑改动)。
+客户端适配层按"(level, 累计经验) 单调不回退"处理乱序 / 补推重放:落后于当前展示快照的
+事件直接丢弃;升级表现按事件触发,重放去重由 ts_ms 兜底。事件是全量权威快照 + 客户端
+单调去重,因此 player 推送出箱多副本发布无需 claim/fencing(重复投递无害)。
 
 ### 4.4 单点入口清单(经验来源)
 
@@ -168,8 +197,13 @@ push 服务零改动(透明转发)。客户端适配层按"(level, 累计经验)
   `PlayerStats` 可选带聚合审计字段(怪物击杀计数),仅入库审计,不参与发放。
 - **ABANDONED 语义修订**:DS 崩溃 → 段位照旧回滚 / mmr_delta=0,**但已入账的经验与掉落不回滚**
   ("打到即所得"是本设计的目的;经验 / PvE 掉落非对抗性计分,不构成 §9.4 补偿语义破坏)。
-- **金丝雀 / 新旧共存**(§9.21):一场对局固定一台 DS,新 DS 流式上报、旧 DS 走结算路径,
-  服务端按水位表自动分流,无共存冲突;killswitch 切换只影响新开对局。
+- **金丝雀 / 新旧共存**(§9.21,2026-07-21 审计修订):一场对局固定一台 DS,新 DS 流式
+  上报、旧 DS 走结算路径,服务端按水位表自动分流。**battle_result 自身的混版窗口必须用
+  `progress_enabled`(缺省 false)闸住**:旧代码副本结算不感知水位表、不抑制结算掉落,
+  若通道在混版窗口开着,同场"实时已发 + 旧副本结算再发"= 双发(P0)。发布顺序:迁移全绿
+  → 全 fleet 升级 → 置 true 滚动下发。killswitch 关闭只拒新对局开流,**已有水位的对局
+  继续收流到结算**(每场模式以水位行固化,防"半实时"丢奖);结算幂等重放分支同样收口
+  水位(旧副本首笔落库后,新副本重试会补打终局标记,封死迟到进度)。
 
 ## 6. proto 改动清单(`[proto]`,同步 UE 仓库)
 
@@ -178,8 +212,8 @@ push 服务零改动(透明转发)。客户端适配层按"(level, 累计经验)
      `ReportProgressRequest{match_id, events[]}` / `ReportProgressResponse{code, acked_seq}`。
    - `ReportResultRequest` 加 `final_progress_seq`;`PlayerStats` 可选加审计聚合字段。
 2. `player/v1/player.proto`:
-   - `PlayerProfile` 加 `exp_in_level` / `is_max_level`(从 12-49 stats 预留段取 12/13,
-     收窄 reserved 为 `14 to 49`;开发期允许,§5.4);
+   - `PlayerProfile` 加 `exp_in_level = 50` / `is_max_level = 51`(2026-07-21 审计修订:
+     不收窄 12-49 预留段 —— 收窄会触发 buf breaking RESERVED 门禁,50/51 完全等效且门禁绿);
    - 新增 `AddExperience` RPC(内部);新增 `PlayerPushEventType` + `PlayerExperienceEvent`。
 3. 掉落广播**不进 proto**:UE NetDriver ClientRPC(§0.1 表现层),不碰 Go。
 
@@ -193,9 +227,9 @@ push 服务零改动(透明转发)。客户端适配层按"(level, 累计经验)
 - 击杀本地表现(飘字等)照旧 GameplayCue,与上报解耦。
 
 **客户端**
-- push 适配:订阅 `pandora.player.update` event_type=1 → `SetExperienceDisplay`
-  (RequiredExp 查 `CfgPlayerLevelExp`),`levels_gained>0` → `PlayLevelUpPresentation`;
-  单调不回退去重。
+- push 适配:按 PushFrame `(topic="pandora.player.experience", event_type=1)` 选型
+  → `SetExperienceDisplay`(RequiredExp 查 `CfgPlayerLevelExp`),
+  `levels_gained>0` → `PlayLevelUpPresentation`;单调不回退去重。
 - 登录 / 重连(RecoveryCoordinator 既有时机):`GetProfile` 刷权威快照。
 - 广播适配:接 DS ClientRPC → 本地化 / 显示名(PlayerState)/ 品质颜色 → `EnqueuePublicBroadcast`。
 

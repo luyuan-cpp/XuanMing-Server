@@ -52,11 +52,17 @@ player:
   # ── 玩家等级经验(实时成长,realtime-progression.md)──
   # exp_curve: 第 i 项 = 从 Lv(i+1) 升到 Lv(i+2) 所需级内经验;最高等级 = 项数+1。
   # 14 项 → Lv15 封顶。数值与客户端 Table/角色/j_玩家等级经验.xlsx 同源
-  # (当前为联调占位曲线,步进 800,累计 86800;正式数值待策划确认后两侧同步改)。
+  # (当前为联调占位曲线,步进 800,累计 86800;正式数值待策划确认后两侧同步改。
+  #  dev 专用:本地单副本联调可用占位曲线;生产必须等正式数值,见 prod example)。
   # 置空 = 经验功能关闭(AddExperience 拒,行为与历史一致)。
+  # ⚠️ 曲线是入账即生效的持久数值:改曲线必须全 fleet 同配置一起换(先关金丝雀分流),
+  #    不同曲线副本混跑会按不同阈值结算同一玩家,结果不可逆(§9.21;后续迁 configtable 管线)。
   exp_curve: [1000, 1800, 2600, 3400, 4200, 5000, 5800, 6600, 7400, 8200, 9000, 9800, 10600, 11400]
   # max_exp_per_grant: 单次 AddExperience 入账上限(防异常调用方一次灌满;缺省 1000000)
   max_exp_per_grant: 1000000
-  # push_outbox_interval / push_outbox_batch: 经验推送出箱发布节奏(缺省 1s / 128)
+  # push_outbox_interval / push_outbox_batch: 经验推送出箱发布节奏(缺省 1s / 128;
+  # 满批自动连续排空,吞吐不受 interval 钉死)
   push_outbox_interval: "1s"
   push_outbox_batch: 128
+  # exp_history_retention: 经验幂等收据留存期(缺省 7d,下限 7d,后台每小时分批清理)
+  exp_history_retention: "168h"

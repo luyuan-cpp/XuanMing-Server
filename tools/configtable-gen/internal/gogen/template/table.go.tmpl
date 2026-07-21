@@ -18,14 +18,26 @@ import (
 type {{.GoName}}Table struct {
 	rows []*configpb.{{.RowType}}
 	byID map[{{.KeyType}}]*configpb.{{.RowType}}
+{{- range .UniqueKeys}}
+	by{{.GoField}} map[{{.GoType}}]*configpb.{{$.RowType}} // 唯一键 {{.Header}}
+{{- end}}
+{{- range .MultiKeys}}
+	listBy{{.GoField}} map[{{.GoType}}][]*configpb.{{$.RowType}} // 索引 {{.Header}}
+{{- end}}
 }
 
-// new{{.GoName}}Table 建索引 + 校验:主键非零且唯一(通用)+ validate{{.GoName}}Row(表私有钩子)。
+// new{{.GoName}}Table 建索引 + 校验:主键与唯一键非零 / 不重复(通用)+ validate{{.GoName}}Row(表私有钩子)。
 func new{{.GoName}}Table(data *configpb.{{.DataType}}) (*{{.GoName}}Table, error) {
 	rows := data.GetRows()
 	t := &{{.GoName}}Table{
 		rows: rows,
 		byID: make(map[{{.KeyType}}]*configpb.{{.RowType}}, len(rows)),
+{{- range .UniqueKeys}}
+		by{{.GoField}}: make(map[{{.GoType}}]*configpb.{{$.RowType}}, len(rows)),
+{{- end}}
+{{- range .MultiKeys}}
+		listBy{{.GoField}}: make(map[{{.GoType}}][]*configpb.{{$.RowType}}),
+{{- end}}
 	}
 	for i, row := range rows {
 		key := row.GetId()
@@ -39,6 +51,15 @@ func new{{.GoName}}Table(data *configpb.{{.DataType}}) (*{{.GoName}}Table, error
 			return nil, fmt.Errorf("{{.Name}} 主键 %v: %w", key, err)
 		}
 		t.byID[key] = row
+{{- range .UniqueKeys}}
+		if _, dup := t.by{{.GoField}}[row.Get{{.GoField}}()]; dup {
+			return nil, fmt.Errorf("{{$.Name}} 唯一键 {{.Header}} 取值重复 %v", row.Get{{.GoField}}())
+		}
+		t.by{{.GoField}}[row.Get{{.GoField}}()] = row
+{{- end}}
+{{- range .MultiKeys}}
+		t.listBy{{.GoField}}[row.Get{{.GoField}}()] = append(t.listBy{{.GoField}}[row.Get{{.GoField}}()], row)
+{{- end}}
 	}
 	return t, nil
 }
@@ -100,3 +121,16 @@ func (t *{{.GoName}}Table) First(pred func(*configpb.{{.RowType}}) bool) (*confi
 	}
 	return nil, false
 }
+{{range .UniqueKeys}}
+// By{{.GoField}} 按唯一键 {{.Header}} 查行((excel_key))。
+func (t *{{$.GoName}}Table) By{{.GoField}}(key {{.GoType}}) (*configpb.{{$.RowType}}, bool) {
+	row, ok := t.by{{.GoField}}[key]
+	return row, ok
+}
+{{end}}{{range .MultiKeys}}
+// ListBy{{.GoField}} 按 {{.Header}} 查全部行(非唯一索引 / 外键反查;加载序)。
+// 只读约定:调用方不得修改返回的切片与行。
+func (t *{{$.GoName}}Table) ListBy{{.GoField}}(key {{.GoType}}) []*configpb.{{$.RowType}} {
+	return t.listBy{{.GoField}}[key]
+}
+{{end}}

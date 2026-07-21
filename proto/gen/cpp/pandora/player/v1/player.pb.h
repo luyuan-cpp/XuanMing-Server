@@ -4292,8 +4292,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfile final : public ::goog
     kLastSeenMsFieldNumber = 7,
     kTotalBattlesFieldNumber = 10,
     kTotalWinsFieldNumber = 11,
-    kExpInLevelFieldNumber = 12,
-    kIsMaxLevelFieldNumber = 13,
+    kExpInLevelFieldNumber = 50,
+    kIsMaxLevelFieldNumber = 51,
   };
   // string nickname = 2 [json_name = "nickname"];
   void clear_nickname() ;
@@ -4395,7 +4395,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfile final : public ::goog
   void _internal_set_total_wins(::int32_t value);
 
   public:
-  // uint64 exp_in_level = 12 [json_name = "expInLevel"];
+  // uint64 exp_in_level = 50 [json_name = "expInLevel"];
   void clear_exp_in_level() ;
   [[nodiscard]] ::uint64_t exp_in_level() const;
   void set_exp_in_level(::uint64_t value);
@@ -4405,7 +4405,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfile final : public ::goog
   void _internal_set_exp_in_level(::uint64_t value);
 
   public:
-  // bool is_max_level = 13 [json_name = "isMaxLevel"];
+  // bool is_max_level = 51 [json_name = "isMaxLevel"];
   void clear_is_max_level() ;
   [[nodiscard]] bool is_max_level() const;
   void set_is_max_level(bool value);
@@ -4421,7 +4421,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfile final : public ::goog
   using ParseTableT_ =
       ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 62,
-                          2>;
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -12592,7 +12592,7 @@ inline void PlayerProfile::_internal_set_total_wins(::int32_t value) {
   _impl_.total_wins_ = value;
 }
 
-// uint64 exp_in_level = 12 [json_name = "expInLevel"];
+// uint64 exp_in_level = 50 [json_name = "expInLevel"];
 inline void PlayerProfile::clear_exp_in_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_in_level_ = ::uint64_t{0u};
@@ -12616,7 +12616,7 @@ inline void PlayerProfile::_internal_set_exp_in_level(::uint64_t value) {
   _impl_.exp_in_level_ = value;
 }
 
-// bool is_max_level = 13 [json_name = "isMaxLevel"];
+// bool is_max_level = 51 [json_name = "isMaxLevel"];
 inline void PlayerProfile::clear_is_max_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_max_level_ = false;

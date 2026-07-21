@@ -15,12 +15,14 @@ import (
 	"github.com/luyuancpp/pandora/services/battle/battle_result/internal/data"
 )
 
-// progressUsecase 构造带怪物经验表 + 掉落白名单的测试 usecase。
+// progressUsecase 构造带怪物经验表 + 掉落白名单的测试 usecase(通道显式开启:
+// progress_enabled 缺省 false,§14.2 默认不改变现有行为)。
 func progressUsecase(repo data.BattleRepo) *BattleResultUsecase {
 	cfg := conf.BattleConf{
 		EloKFactor: 32, BaseMMR: 1500,
-		MonsterExp:    map[uint32]uint64{101: 10, 102: 25},
-		DropWhitelist: []uint32{5001, 5002},
+		ProgressEnabled: true,
+		MonsterExp:      map[uint32]uint64{101: 10, 102: 25},
+		DropWhitelist:   []uint32{5001, 5002},
 	}
 	return NewBattleResultUsecase(repo, NewStaticMMRReader(cfg.BaseMMR), &fakePusher{}, nil, cfg)
 }
@@ -83,12 +85,37 @@ func TestReportProgress_ValidationMatrix(t *testing.T) {
 	}
 }
 
-func TestReportProgress_Disabled(t *testing.T) {
-	cfg := conf.BattleConf{ProgressDisabled: true}
+func TestReportProgress_DisabledByDefault(t *testing.T) {
+	// 零值配置 = 通道关闭(§14.2:默认不改变现有行为;混版发布纪律见 conf.ProgressEnabled)。
+	cfg := conf.BattleConf{}
 	uc := NewBattleResultUsecase(newFakeRepo(), NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
 	_, err := uc.ReportProgress(context.Background(), 900, nil, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)})
 	if errcode.As(err) != errcode.ErrInvalidState {
 		t.Fatalf("disabled channel want ErrInvalidState, got %v", err)
+	}
+}
+
+func TestReportProgress_KillswitchKeepsInFlightMatches(t *testing.T) {
+	// 每场模式以水位行固化:通道中途关闭,已开流对局必须继续收流(否则该场后续拾取
+	// 被拒 + 结算掉落又因水位>0 被抑制 → 永久丢奖,审计 P1)。
+	repo := newFakeRepo()
+	uc := progressUsecase(repo)
+	ctx := context.Background()
+	roster := []uint64{7}
+
+	if _, err := uc.ReportProgress(ctx, 905, roster, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}); err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	// 关闭开关(同一 repo,新 usecase 模拟配置翻转 / Stable 关 Canary 开的混配副本)。
+	off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
+		MonsterExp: map[uint32]uint64{101: 10}, DropWhitelist: []uint32{5001},
+	})
+	if acked, err := off.ReportProgress(ctx, 905, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)}); err != nil || acked != 2 {
+		t.Fatalf("in-flight match must keep streaming after killswitch, acked=%d err=%v", acked, err)
+	}
+	// 新对局在关闭副本上不得开流。
+	if _, err := off.ReportProgress(ctx, 906, roster, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("new match on disabled replica want ErrInvalidState, got %v", err)
 	}
 }
 
@@ -113,20 +140,27 @@ func TestReportProgress_AggregatesAndAcks(t *testing.T) {
 	if repo.progressSeq[900] != 6 {
 		t.Fatalf("watermark=%d want 6", repo.progressSeq[900])
 	}
-	// 聚合:7 的 exp 一行(45)+ 7 的 item 一行([5001,5001])+ 8 的 exp 一行(10)。
+	// 聚合:7 的 exp 一行(45,seq=批末 6)+ 8 的 exp 一行(10,seq=6)
+	// + 7 的 item 一行([5001,5001],seq=事实自身 4,每拾取事实一行,审计 P1 不截断)。
 	var exp7, exp8 uint64
 	var items7 []uint32
 	for _, row := range repo.progressOutbox {
-		if row.Seq != 6 {
-			t.Fatalf("row seq=%d want batch-end 6", row.Seq)
-		}
 		switch {
 		case row.Kind == data.ProgressGrantExp && row.PlayerID == 7:
 			exp7 = row.ExpDelta
+			if row.Seq != 6 {
+				t.Fatalf("exp row seq=%d want batch-end 6", row.Seq)
+			}
 		case row.Kind == data.ProgressGrantExp && row.PlayerID == 8:
 			exp8 = row.ExpDelta
+			if row.Seq != 6 {
+				t.Fatalf("exp row seq=%d want batch-end 6", row.Seq)
+			}
 		case row.Kind == data.ProgressGrantItem && row.PlayerID == 7:
 			items7 = row.ItemConfigIDs
+			if row.Seq != 4 {
+				t.Fatalf("item row seq=%d want fact seq 4", row.Seq)
+			}
 		default:
 			t.Fatalf("unexpected outbox row %+v", row)
 		}
@@ -136,6 +170,9 @@ func TestReportProgress_AggregatesAndAcks(t *testing.T) {
 	}
 	if len(items7) != 2 || items7[0] != 5001 || items7[1] != 5001 {
 		t.Fatalf("items7=%v, want [5001 5001]", items7)
+	}
+	if repo.progressExp[900] != 55 || repo.progressItems[900] != 2 {
+		t.Fatalf("cumulative exp=%d items=%d, want 55/2", repo.progressExp[900], repo.progressItems[900])
 	}
 
 	// 原批重发(at-least-once)→ 纯重放 ACK,零副作用。
@@ -159,6 +196,55 @@ func TestReportProgress_AggregatesAndAcks(t *testing.T) {
 	}
 	if len(repo.progressOutbox) != rows+1 {
 		t.Fatalf("next batch rows=%d want %d", len(repo.progressOutbox), rows+1)
+	}
+}
+
+func TestReportProgress_UnknownFactRejectsBatch(t *testing.T) {
+	// 未知事实类型(新 DS 新 fact 打到旧 Go)必须整批拒,不得"跳过发放但推进水位"
+	// (静默 ACK = 事实永久丢失,审计 P1 向前兼容性)。
+	repo := newFakeRepo()
+	uc := progressUsecase(repo)
+	events := []*battlev1.BattleProgressEvent{
+		killEvent(1, 7, 101, 1),
+		{Seq: 2, PlayerId: 7}, // oneof 未设置 = 本副本不认识的事实类型
+	}
+	if _, err := uc.ReportProgress(context.Background(), 904, []uint64{7}, events); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("unknown fact want ErrInvalidArg, got %v", err)
+	}
+	if repo.progressSeq[904] != 0 || len(repo.progressOutbox) != 0 {
+		t.Fatalf("rejected batch must be side-effect free: seq=%d rows=%d", repo.progressSeq[904], len(repo.progressOutbox))
+	}
+}
+
+func TestReportProgress_PerMatchCumulativeCaps(t *testing.T) {
+	// 单场累计上限:失陷 DS 跨大量 seq 刷产出必须在事务权威侧封顶(审计 P1)。
+	repo := newFakeRepo()
+	cfg := conf.BattleConf{
+		ProgressEnabled: true,
+		MonsterExp:      map[uint32]uint64{101: 10},
+		DropWhitelist:   []uint32{5001},
+		// exp 上限 25:第一批 2 杀=20 过,第二批再 1 杀=10 累计 30 超限拒。
+		MaxProgressExpPerMatch: 25,
+		// items 上限 3:一次拾取 4 件直接超限拒。
+		MaxProgressItemsPerMatch: 3,
+	}
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	ctx := context.Background()
+	roster := []uint64{7}
+
+	if acked, err := uc.ReportProgress(ctx, 907, roster, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 2)}); err != nil || acked != 1 {
+		t.Fatalf("first batch acked=%d err=%v", acked, err)
+	}
+	if _, err := uc.ReportProgress(ctx, 907, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("cumulative exp over cap want ErrInvalidArg, got %v", err)
+	}
+	if repo.progressSeq[907] != 1 || repo.progressExp[907] != 20 {
+		t.Fatalf("rejected batch must not advance: seq=%d exp=%d", repo.progressSeq[907], repo.progressExp[907])
+	}
+	if _, err := uc.ReportProgress(ctx, 908, roster, []*battlev1.BattleProgressEvent{
+		pickupEvent(1, 7, 5001, 2), pickupEvent(2, 7, 5001, 2),
+	}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("cumulative items over cap want ErrInvalidArg, got %v", err)
 	}
 }
 

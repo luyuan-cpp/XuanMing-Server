@@ -1,8 +1,9 @@
 // consumer.go — kafka 消费 handler(W4 ④,2026-06-06)。
 //
-// player 订阅 pandora.player.update(battle_result 结算后发),解 proto → 幂等 UpdateMMR
-// (idempotency_key=match_id,不变量 §2)。decode 失败用 kafkax.Poison 包装(毒丸消息)
-// → 消费者直接投 DLQ;业务瞬时错误走重试→耗尽进 DLQ(不丢 MMR 更新)。
+// player 订阅 pandora.player.update(battle_result 结算后发,单事件类型 topic:只承载
+// PlayerUpdateEvent),解 proto → 幂等 UpdateMMR(idempotency_key=match_id,不变量 §2)。
+// decode 失败 / 非法 event_type header 用 kafkax.Poison 包装(毒丸消息)→ 消费者直接投
+// DLQ;业务瞬时错误走重试→耗尽进 DLQ(不丢 MMR 更新)。
 package biz
 
 import (
@@ -20,12 +21,22 @@ import (
 
 // PlayerUpdateHandler 返回 pandora.player.update 的消费 handler(幂等 UpdateMMR)。
 //
-// 域内多事件类型(push.proto):本消费者只处理 event_type=0(旧 PlayerUpdateEvent,MMR)。
-// event_type≠0(如 EXPERIENCE=1,由 player 自己出箱生产、push 转发客户端)不属本消费者,
-// 必须按 header 跳过 —— 否则按 PlayerUpdateEvent 反序列化会因 wire type 冲突进 DLQ。
+// pandora.player.update 是单事件类型 topic(只承载 PlayerUpdateEvent;经验事件走独立
+// topic pandora.player.experience,原因见 kafkax.TopicPlayerUpdate 注释)。本 handler
+// 仍防御性校验 event_type header:
+//   - 缺失 / "0" → 旧事件,正常处理(兼容旧 producer 不写 header);
+//   - 合法非 0 → 不属本消费者的未来事件,跳过并告警(不得按 MMR 误解码);
+//   - 存在但非法(非数字/溢出)→ 毒丸进 DLQ 留证,绝不能降级当旧事件解码。
 func (u *PlayerUsecase) PlayerUpdateHandler() kafkax.Handler {
 	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
-		if et := headerEventType(msg.Headers); et != uint32(playerv1.PlayerPushEventType_PLAYER_PUSH_EVENT_TYPE_LEGACY_UPDATE) {
+		et, ok := headerEventType(msg.Headers)
+		if !ok {
+			return kafkax.Poison(errcode.New(errcode.ErrInvalidArg,
+				"malformed event_type header on player.update offset=%d", msg.Offset))
+		}
+		if et != uint32(playerv1.PlayerPushEventType_PLAYER_PUSH_EVENT_TYPE_LEGACY_UPDATE) {
+			plog.With(ctx).Warnw("msg", "player_update_unexpected_event_type_skipped",
+				"event_type", et, "offset", msg.Offset)
 			return nil
 		}
 		evt := &playerv1.PlayerUpdateEvent{}
@@ -48,18 +59,20 @@ func (u *PlayerUsecase) PlayerUpdateHandler() kafkax.Handler {
 	}
 }
 
-// headerEventType 从 kafka headers 解析 event_type(缺失 / 解析失败 → 0,兼容旧 producer;
-// 语义对齐 push 服务 consumer 的 headerUint32)。
-func headerEventType(headers []*sarama.RecordHeader) uint32 {
+// headerEventType 从 kafka headers 解析 event_type。
+// 返回 (值, 是否合法):缺失 → (0, true)(兼容旧 producer 不写 header);
+// 存在且为合法 uint32 → (v, true);存在但非法(非数字/负数/溢出)→ (0, false),
+// 调用方必须按毒丸处理,不得降级当旧事件解码(误解码会污染 MMR)。
+func headerEventType(headers []*sarama.RecordHeader) (uint32, bool) {
 	for _, h := range headers {
 		if h == nil || string(h.Key) != kafkax.HeaderEventType {
 			continue
 		}
 		v, err := strconv.ParseUint(string(h.Value), 10, 32)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return uint32(v)
+		return uint32(v), true
 	}
-	return 0
+	return 0, true
 }

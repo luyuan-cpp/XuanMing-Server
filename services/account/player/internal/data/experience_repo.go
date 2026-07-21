@@ -146,7 +146,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	}
 
 	// 经验推送出箱:与入账同事务(不变量 §4)。payload 是入账后的权威快照,
-	// push 经 pandora.player.update(event_type=EXPERIENCE)透传给客户端。
+	// push 经 pandora.player.experience(event_type=EXPERIENCE)透传给客户端。
 	evt := &playerv1.PlayerExperienceEvent{
 		PlayerId:     apply.PlayerID,
 		Level:        newLevel,
@@ -217,6 +217,42 @@ func (r *MySQLPlayerRepo) FetchPushOutbox(ctx context.Context, limit int) ([]Pus
 func (r *MySQLPlayerRepo) DeletePushOutbox(ctx context.Context, id int64) error {
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM player_push_outbox WHERE id = ?`, id); err != nil {
 		return errcode.New(errcode.ErrInternal, "delete push outbox id=%d: %v", id, err)
+	}
+	return nil
+}
+
+// PurgeExpHistory 删除 created_at < cutoff 的经验幂等收据(最多 limit 行)。
+// 表按 PK 升序物理扫描,老行在前,LIMIT 删除无需额外索引;多副本并发调用安全。
+func (r *MySQLPlayerRepo) PurgeExpHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM exp_history WHERE created_at < ? LIMIT ?`, cutoff, limit)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "purge exp history: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// ValidateExperienceSchema 启动时探测经验相关表列,缺失即失败(fail-fast,§16.4):
+// 副本不能先 Ready 再在首个 GetProfile / AddExperience 上大面积报错。
+// 纪律对齐 battle_result.ValidateRecoveryOutboxSchema。
+func (r *MySQLPlayerRepo) ValidateExperienceSchema(ctx context.Context) error {
+	checks := []string{
+		`SELECT player_id, level, exp FROM players LIMIT 0`,
+		`SELECT id, player_id, idempotency_key, exp_delta, reason, old_level, old_exp, new_level, new_exp, created_at FROM exp_history LIMIT 0`,
+		`SELECT id, player_id, event_type, payload, created_at_ms FROM player_push_outbox LIMIT 0`,
+	}
+	for _, query := range checks {
+		rows, err := r.db.QueryContext(ctx, query)
+		if err != nil {
+			return errcode.New(errcode.ErrInternal, "player experience schema invalid: %v", err)
+		}
+		if err := rows.Close(); err != nil {
+			return errcode.New(errcode.ErrInternal, "close experience schema probe: %v", err)
+		}
 	}
 	return nil
 }

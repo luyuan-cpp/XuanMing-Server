@@ -55,6 +55,34 @@ func TestGeneratedAPI(t *testing.T) {
 	}
 }
 
+// TestLevelBitIndex 生成的稳定位序映射((excel_bit_index),level_bitindex.gen.go):
+// 与 configtable/bitindex_state/level.json 同源,g_关卡 现网 ID 1-7 → 位 0-6。
+func TestLevelBitIndex(t *testing.T) {
+	if bit, ok := LevelBitIndex(1); !ok || bit != 0 {
+		t.Fatalf("LevelBitIndex(1)=%d,%v", bit, ok)
+	}
+	if bit, ok := LevelBitIndex(7); !ok || bit != 6 {
+		t.Fatalf("LevelBitIndex(7)=%d,%v", bit, ok)
+	}
+	if _, ok := LevelBitIndex(999); ok {
+		t.Fatal("不存在的 ID 不应有位序")
+	}
+	if LevelBitCount < 7 {
+		t.Fatalf("LevelBitCount=%d,应 ≥ 7", LevelBitCount)
+	}
+	// 位序互不重复(位图存储的硬前提)
+	seen := map[uint32]uint32{}
+	for id, bit := range levelBitIndexMap {
+		if prev, dup := seen[bit]; dup {
+			t.Fatalf("位 %d 被 id %d 与 %d 复用", bit, prev, id)
+		}
+		if bit >= LevelBitCount {
+			t.Fatalf("id %d 位 %d 超出 LevelBitCount %d", id, bit, LevelBitCount)
+		}
+		seen[bit] = id
+	}
+}
+
 // TestValidateHookWired 生成的 newLevelTable 必须调用手写 validateLevelRow(钩子接线守护)。
 func TestValidateHookWired(t *testing.T) {
 	bad := battleRow(6, "MOBA战斗")

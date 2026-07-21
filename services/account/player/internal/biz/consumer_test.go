@@ -1,12 +1,13 @@
-// consumer_test.go — player.update 消费 handler 的 event_type 路由单测(实时成长)。
+// consumer_test.go — player.update 消费 handler 的 event_type 防御单测(实时成长)。
 //
-// 关键回归:pandora.player.update 同 topic 现在承载多种事件(0=MMR 旧事件,1=经验),
-// MMR 消费者必须按 kafka header 跳过非 0 事件 —— 否则 PlayerExperienceEvent 按
-// PlayerUpdateEvent 反序列化会因 wire type 冲突判毒丸进 DLQ。
+// pandora.player.update 是单事件类型 topic(经验事件走独立 topic pandora.player.experience,
+// 金丝雀混跑安全,见 kafkax.TopicPlayerUpdate 注释)。本消费者仍防御性校验 header:
+// 合法非 0 → 跳过;存在但非法 → 毒丸进 DLQ(绝不能降级按 MMR 解码)。
 package biz
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/IBM/sarama"
@@ -58,5 +59,36 @@ func TestPlayerUpdateHandler_LegacyEventStillConsumed(t *testing.T) {
 	}
 	if len(repo.idem) != 1 {
 		t.Fatalf("legacy event must apply UpdateMMR once, idem=%v", repo.idem)
+	}
+}
+
+func TestPlayerUpdateHandler_MalformedEventTypeIsPoison(t *testing.T) {
+	repo := newFakeRepo()
+	uc := NewPlayerUsecase(repo, conf.PlayerConf{})
+	handler := uc.PlayerUpdateHandler()
+
+	// 恰好能按 PlayerUpdateEvent 解码的 payload + 非法 header:必须判毒丸,
+	// 不能降级当旧事件消费(降级 = 未知语义消息改写 MMR)。
+	evt := &playerv1.PlayerUpdateEvent{PlayerId: 7, MatchId: 42, MmrDelta: 25, Reason: "win"}
+	payload, err := proto.Marshal(evt)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	for _, bad := range []string{"abc", "-1", "99999999999999999999"} {
+		msg := &sarama.ConsumerMessage{
+			Value: payload,
+			Headers: []*sarama.RecordHeader{{
+				Key:   []byte(kafkax.HeaderEventType),
+				Value: []byte(bad),
+			}},
+		}
+		err := handler(context.Background(), msg)
+		var poison *kafkax.PoisonError
+		if err == nil || !errors.As(err, &poison) {
+			t.Fatalf("malformed header %q must be poison, got %v", bad, err)
+		}
+	}
+	if len(repo.idem) != 0 {
+		t.Fatalf("malformed header must not trigger UpdateMMR, idem=%v", repo.idem)
 	}
 }

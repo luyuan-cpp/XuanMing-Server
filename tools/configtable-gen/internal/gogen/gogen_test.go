@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	// 夹具表注册(pandora.configtest.v1;TestFixtureRendering 经 DiscoverPackage 消费)
+	_ "github.com/luyuancpp/pandora/proto/gen/go/pandora/configtest/v1"
+
 	"github.com/luyuancpp/pandora/tools/configtable-gen/internal/tablegen"
 )
 
@@ -99,6 +102,108 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	for _, def := range discover(t) {
 		if _, err := os.Stat(filepath.Join(pkgDir, def.Name+".go")); err != nil {
 			t.Errorf("缺伴生文件 %s.go: %v", def.Name, err)
+		}
+	}
+
+	// bitindex 产物同步:状态文件 + dist 数据都在仓库,可完整重建比对
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	for _, def := range discover(t) {
+		if !def.BitIndex {
+			continue
+		}
+		statePath := filepath.Join(repoRoot, "configtable", "bitindex_state", def.Name+".json")
+		distPath := filepath.Join(repoRoot, "configtable", "dist", def.Name+".json")
+		if _, err := os.Stat(distPath); err != nil {
+			t.Skipf("dist 未生成,跳过 bitindex 比对: %v", err)
+		}
+		state, err := tablegen.LoadBitState(statePath)
+		if err != nil {
+			t.Fatalf("表 %s: %v(bit_index 表必须有状态文件)", def.Name, err)
+		}
+		raw, err := os.ReadFile(distPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		container, err := def.ParseJSON(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		live, changed := state.Assign(def.RowIDs(container))
+		if changed {
+			t.Errorf("表 %s 位序状态落后于 dist 数据,请重跑生成器", def.Name)
+		}
+		want, err := BitIndexFile(def, live, state.BitCount())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(filepath.Join(pkgDir, def.Name+"_bitindex.gen.go"))
+		if err != nil {
+			t.Errorf("读 %s_bitindex.gen.go 失败: %v", def.Name, err)
+			continue
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s_bitindex.gen.go 与状态/数据不同步,请重跑生成器", def.Name)
+		}
+	}
+}
+
+// TestFixtureRendering key/multi_key/fk/bit_index 注解的代码渲染(configtest 夹具包;
+// render 内部 gofmt 即语法校验,字符串断言钉住 API 形状)。
+func TestFixtureRendering(t *testing.T) {
+	const testImport = "github.com/luyuancpp/pandora/proto/gen/go/pandora/configtest/v1"
+	defs, err := tablegen.DiscoverPackage("pandora.configtest.v1")
+	if err != nil {
+		t.Fatalf("DiscoverPackage: %v", err)
+	}
+	var dungeon tablegen.TableDef
+	for _, d := range defs {
+		if d.Name == "test_dungeon" {
+			dungeon = d
+		}
+	}
+
+	tbl, err := TableFileFor(dungeon, testImport)
+	if err != nil {
+		t.Fatalf("TableFileFor: %v", err)
+	}
+	for _, want := range []string{
+		"func (t *TestDungeonTable) ByCode(key string)",           // excel_key 唯一键
+		"func (t *TestDungeonTable) ListByDifficulty(key uint32)", // excel_multi_key 索引
+		"func (t *TestDungeonTable) ListBySceneId(key uint32)",    // excel_fk 隐含反查
+		"唯一键 编码 取值重复",                                             // 加载期唯一键查重
+	} {
+		if !strings.Contains(string(tbl), want) {
+			t.Errorf("dungeon 表代码缺少 %q", want)
+		}
+	}
+
+	reg, err := RegistryFileFor(defs, testImport)
+	if err != nil {
+		t.Fatalf("RegistryFileFor: %v", err)
+	}
+	for _, want := range []string{
+		"func validateCrossTables(dst *Tables) error",
+		"dst.TestScene.Exists(v)",  // 跨表兜底校验
+		"为 0(必填外键)",                // required fk 拒 0
+		"func (tb *Tables) TestDungeonSceneIdRow(row *configpb.TestDungeonRow) (*configpb.TestSceneRow, bool)",
+		"func (tb *Tables) TestDungeonSceneIdRowByID(id uint32)",
+	} {
+		if !strings.Contains(string(reg), want) {
+			t.Errorf("夹具注册代码缺少 %q", want)
+		}
+	}
+
+	bit, err := BitIndexFile(dungeon, []tablegen.BitEntry{{ID: 10, Bit: 0}, {ID: 11, Bit: 1}}, 5)
+	if err != nil {
+		t.Fatalf("BitIndexFile: %v", err)
+	}
+	for _, want := range []string{
+		"var testDungeonBitIndexMap = map[uint32]uint32{",
+		"func TestDungeonBitIndex(id uint32) (uint32, bool)",
+		"const TestDungeonBitCount uint32 = 5",
+	} {
+		if !strings.Contains(string(bit), want) {
+			t.Errorf("位序映射代码缺少 %q", want)
 		}
 	}
 }

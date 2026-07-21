@@ -4,10 +4,13 @@
 //   - AddExperience 是**系统 RPC 的业务核心**:幂等入账(uk player_id+idempotency_key)、
 //     按等级经验曲线循环进位(连升多级)、最高等级封顶、满级 no-op。
 //   - 入账与经验推送出箱同一 MySQL 事务(不变量 §4);后台 RunPushOutboxPublisher 轮询
-//     出箱表逐条投 kafka pandora.player.update(event_type=EXPERIENCE header),
+//     出箱表逐条投 kafka pandora.player.experience(event_type=EXPERIENCE header),
 //     push 服务透明转发给客户端刷新经验条 / 播升级表现。
 //   - 经验来源(battle_result progress 出箱 / 任务完成点 / GM)只报 delta,
 //     等级曲线唯一权威在本服务(DS / 调用方不可信,不变量 §6 同构)。
+//   - 多副本发布器无需 claim/fencing:事件是入账后的**全量权威快照**,客户端按
+//     (level, exp_in_level) 单调不回退去重,重复投递 / 旧快照晚到都无副作用
+//     (at-least-once + 快照语义,§16.2)。
 package biz
 
 import (
@@ -20,7 +23,7 @@ import (
 	"github.com/luyuancpp/pandora/services/account/player/internal/data"
 )
 
-// ExperiencePusher 把玩家推送出箱行投递到 kafka pandora.player.update
+// ExperiencePusher 把玩家推送出箱行投递到 kafka pandora.player.experience
 // (key=player_id 保序,event_type 走 kafka header,push 服务透传)。
 // 投递失败返回 error → 出箱行保留下轮重试(at-least-once,不变量 §4)。
 type ExperiencePusher interface {
@@ -117,8 +120,54 @@ func (u *PlayerUsecase) RunPushOutboxPublisher(ctx context.Context) {
 			plog.With(ctx).Infow("msg", "push_outbox_publisher_stopped")
 			return
 		case <-ticker.C:
-			if n, err := u.publishPushOutboxBatch(ctx); err != nil {
-				plog.With(ctx).Warnw("msg", "push_outbox_publish_batch_failed", "published", n, "err", err)
+			// 排空循环:满批说明还有积压,立即继续下一批,不等下个 tick
+			// (否则吞吐被钉死在 batch/interval,持续流量下积压只增不减)。
+			for ctx.Err() == nil {
+				n, err := u.publishPushOutboxBatch(ctx)
+				if err != nil {
+					plog.With(ctx).Warnw("msg", "push_outbox_publish_batch_failed", "published", n, "err", err)
+					break
+				}
+				if n < u.cfg.PushOutboxBatchOrDefault() {
+					break // 未满批 = 已清空
+				}
+			}
+		}
+	}
+}
+
+// RunExpHistoryJanitor 启动 exp_history 幂等收据的后台清理循环,直到 ctx 取消。
+//
+// 设计(realtime-progression.md §4.2):留存期默认 7 天(覆盖 progress 出箱最长重试窗,
+// 出箱重试退避上限 5min,量级远小于留存期),到期分批删除防表无限增长。
+// 多副本并发 DELETE ... LIMIT 安全(各删各的行);表按 PK 升序扫,老行在前,无需新索引。
+func (u *PlayerUsecase) RunExpHistoryJanitor(ctx context.Context) {
+	const (
+		sweepInterval = time.Hour
+		purgeBatch    = 1000
+	)
+	ticker := time.NewTicker(sweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-u.cfg.ExpHistoryRetentionOrDefault())
+			var total int64
+			for ctx.Err() == nil {
+				n, err := u.repo.PurgeExpHistory(ctx, cutoff, purgeBatch)
+				if err != nil {
+					plog.With(ctx).Warnw("msg", "exp_history_purge_failed", "purged", total, "err", err)
+					break
+				}
+				total += n
+				if n < purgeBatch {
+					break
+				}
+			}
+			if total > 0 {
+				plog.With(ctx).Infow("msg", "exp_history_purged", "rows", total)
 			}
 		}
 	}

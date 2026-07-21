@@ -35,9 +35,14 @@ player:
   loadout_customize_enabled: true
   consume_topics:
     - "pandora.player.update"
-  # 玩家等级经验曲线(实时成长):与客户端 j_玩家等级经验.xlsx 同源,14 项 → Lv15 封顶;
-  # 置空 = 经验功能关闭。正式数值以策划确认版为准,两侧必须同步改。
-  exp_curve: [1000, 1800, 2600, 3400, 4200, 5000, 5800, 6600, 7400, 8200, 9000, 9800, 10600, 11400]
+  # 玩家等级经验曲线(实时成长):与客户端 j_玩家等级经验.xlsx 同源,14 项 → Lv15 封顶。
+  # ⚠️ 生产默认注释 = 功能关闭(AddExperience 拒,行为与历史一致):经验入账是**不可逆
+  # 持久数值**,必须等策划正式数值确认后才启用,不得用联调占位曲线上线。
+  # 启用纪律(§9.21):改/配曲线必须全 fleet 同配置一起换(先关金丝雀分流),不同曲线副本
+  # 混跑会按不同阈值结算同一玩家;后续曲线迁 configtable 热更管线(单源+原子切换)。
+  # exp_curve: [<策划确认后填写>]
   max_exp_per_grant: 1000000
   push_outbox_interval: "1s"
   push_outbox_batch: 128
+  # 经验幂等收据留存期(默认/下限 7d,须覆盖 battle_result progress 出箱最长重试窗)
+  exp_history_retention: "168h"

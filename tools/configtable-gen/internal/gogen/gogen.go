@@ -16,6 +16,7 @@ import (
 	"embed"
 	"fmt"
 	"go/format"
+	"strings"
 	"text/template"
 
 	"github.com/luyuancpp/pandora/tools/configtable-gen/internal/tablegen"
@@ -35,16 +36,24 @@ type tableCtx struct {
 }
 
 // TableFile 生成一张表的 <name>_table.gen.go 内容(gofmt 后)。
-func TableFile(def tablegen.TableDef) ([]byte, error) {
-	return render("table.go.tmpl", tableCtx{TableDef: def, PbImport: configpbImport})
+func TableFile(def tablegen.TableDef) ([]byte, error) { return TableFileFor(def, configpbImport) }
+
+// TableFileFor 同 TableFile,可指定 pb 包导入路径(configtest 夹具单测用)。
+func TableFileFor(def tablegen.TableDef, pbImport string) ([]byte, error) {
+	return render("table.go.tmpl", tableCtx{TableDef: def, PbImport: pbImport})
 }
 
 // RegistryFile 生成 tables.gen.go 内容(gofmt 后)。
 func RegistryFile(defs []tablegen.TableDef) ([]byte, error) {
+	return RegistryFileFor(defs, configpbImport)
+}
+
+// RegistryFileFor 同 RegistryFile,可指定 pb 包导入路径(configtest 夹具单测用)。
+func RegistryFileFor(defs []tablegen.TableDef, pbImport string) ([]byte, error) {
 	return render("tables.go.tmpl", struct {
 		Tables   []tablegen.TableDef
 		PbImport string
-	}{Tables: defs, PbImport: configpbImport})
+	}{Tables: defs, PbImport: pbImport})
 }
 
 // CompanionStub 生成 <name>.go 伴生桩(空校验钩子)。只应在目标文件不存在时落盘一次。
@@ -52,7 +61,20 @@ func CompanionStub(def tablegen.TableDef) ([]byte, error) {
 	return render("companion.go.tmpl", tableCtx{TableDef: def, PbImport: configpbImport})
 }
 
-// Files 全部常规生成产物(不含伴生桩):文件名 → 内容。加新表后重跑即增量覆盖。
+// BitIndexFile 生成 <name>_bitindex.gen.go((excel_bit_index) 表的稳定 ID→位序映射)。
+// entries 由 tablegen.BitState.Assign 产出(仅当前表内 ID,按 bit 升序);
+// bitCount 取 BitState.BitCount()(含已删除 ID 的保留位)。
+func BitIndexFile(def tablegen.TableDef, entries []tablegen.BitEntry, bitCount uint32) ([]byte, error) {
+	return render("bitindex.go.tmpl", struct {
+		tablegen.TableDef
+		LowerGoName string
+		Entries     []tablegen.BitEntry
+		BitCount    uint32
+	}{TableDef: def, LowerGoName: lowerFirst(def.GoName), Entries: entries, BitCount: bitCount})
+}
+
+// Files 全部常规生成产物(不含伴生桩与 bitindex,后者需状态文件参与,见 main):
+// 文件名 → 内容。加新表后重跑即增量覆盖。
 func Files(defs []tablegen.TableDef) (map[string][]byte, error) {
 	out := make(map[string][]byte, len(defs)+1)
 	for _, def := range defs {
@@ -68,6 +90,13 @@ func Files(defs []tablegen.TableDef) (map[string][]byte, error) {
 	}
 	out["tables.gen.go"] = reg
 	return out, nil
+}
+
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
 }
 
 func render(name string, data any) ([]byte, error) {

@@ -44,6 +44,8 @@ message LevelRow {
 // LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。
 message LevelTableData {
   option (excel_file) = "关卡/g_关卡.xlsx";
+  // 关卡 ID 位序映射:供关卡解锁 / 通关进度位图存储用(旧项目 mission/reward 同款机制)。
+  option (excel_bit_index) = true;
 
   repeated LevelRow rows = 1;
 }

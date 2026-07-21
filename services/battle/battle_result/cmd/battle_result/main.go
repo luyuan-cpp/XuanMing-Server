@@ -148,6 +148,14 @@ func main() {
 			"hint", "apply pandora_battle migration 000003_match_release_outbox")
 		os.Exit(1)
 	}
+	// 实时进度两表在每次结算都被无条件访问(settleProgressStreamTx 收口),
+	// 与 killswitch 无关,必须启动即探测(不能 Ready 后首个结算才炸,§16.4)。
+	if err := repo.ValidateProgressSchema(schemaCtx); err != nil {
+		schemaCancel()
+		helper.Errorw("msg", "battle_progress_schema_invalid", "err", err,
+			"hint", "apply pandora_battle migration 000005_battle_progress")
+		os.Exit(1)
+	}
 	schemaCancel()
 	var terminalRelay *data.GrpcTerminalReleaseRelay
 	var authRedis redis.UniversalClient
@@ -242,7 +250,7 @@ func main() {
 		defer func() { _ = expGranter.Close() }()
 		uc.SetExperienceGranter(expGranter)
 		helper.Infow("msg", "experience_granter_grpc", "player_addr", cfg.Battle.PlayerAddr,
-			"monster_exp_entries", len(cfg.Battle.MonsterExp), "progress_enabled", cfg.Battle.ProgressEnabled())
+			"monster_exp_entries", len(cfg.Battle.MonsterExp), "progress_enabled", cfg.Battle.ProgressEnabled)
 	} else {
 		helper.Warnw("msg", "experience_granter_disabled",
 			"hint", "player_addr 未配置 → 击杀经验不入账(进度出箱积压不丢,配好地址重启补发)")

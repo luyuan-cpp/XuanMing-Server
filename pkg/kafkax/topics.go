@@ -48,8 +48,20 @@ const (
 	TopicChatGroup = "pandora.chat.group"
 
 	// TopicPlayerUpdate — proto: pandora.player.v1.PlayerUpdateEvent(W3+ 补)
-	// key=player_id;玩家档案变更通知(MMR/昵称/英雄池)
+	// key=player_id;玩家档案变更通知(MMR/昵称/英雄池)。
+	//
+	// ⚠️ 单事件类型 topic(金丝雀混跑安全,不变量 §21):player 服务旧副本消费本 topic 时
+	// 不看 event_type header,直接按 PlayerUpdateEvent 解码做 MMR 入账 —— 在共存窗口里
+	// 任何"同 topic 加新 event_type"的消息都会被旧副本误解码(字段 2/3 恰好能对上
+	// match_id/mmr_delta,静默污染 MMR)。因此本 topic 永远只承载 PlayerUpdateEvent;
+	// player 域新增事件一律开新 topic(如 TopicPlayerExperience)。
 	TopicPlayerUpdate = "pandora.player.update"
+
+	// TopicPlayerExperience — proto: pandora.player.v1.PlayerExperienceEvent(实时成长,2026-07-21)
+	// key=player_id;player 服务经验入账后出箱生产,push 订阅透传客户端刷新经验条/播升级表现。
+	// event_type header 恒为 PLAYER_PUSH_EVENT_TYPE_EXPERIENCE(客户端按 (topic, event_type) 选型)。
+	// 独立 topic 的原因见 TopicPlayerUpdate 注释(旧 player 副本不订阅本 topic,混跑零风险)。
+	TopicPlayerExperience = "pandora.player.experience"
 
 	// TopicFriendEvent — proto: pandora.friend.v1.FriendEvent
 	// key=to_player_id;原则 2:发给接收方(好友请求 / 接受通知)
@@ -104,6 +116,7 @@ func BuildDLQTopic(originalTopic string) string {
 // 2026-06-16 chat 三频道补全:加 chat.team(队伍)/ chat.world(世界广播),
 // 让队伍聊天和世界聊天也被 push 消费(此前只订阅 chat.private,team/world 消息丢失)。
 // 2026-06-19 presence 订阅推送上线(§13.4),补 pandora.presence.update(好友在线态变更)。
+// 2026-07-21 实时成长上线,补 pandora.player.experience(经验/升级推送,key=player_id)。
 // 后续 player.update / system.notify Event message 落地后,
 // 在对应业务服 PR 里把常量加进本切片,push etc yaml 同步加 topics。
 var PushTopics = []string{
@@ -118,6 +131,7 @@ var PushTopics = []string{
 	TopicFriendEvent,
 	TopicGuildEvent,
 	TopicPresenceUpdate,
+	TopicPlayerExperience,
 }
 
 // BroadcastTopics 是「广播类」push topic 集合:这些 topic 的 kafka key 为空(广播语义),

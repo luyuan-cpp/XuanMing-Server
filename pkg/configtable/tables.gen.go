@@ -26,6 +26,12 @@ var specByName = map[string]tableSpec{
 	"level": {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
 }
 
+// validateCrossTables 批内跨表引用完整性((excel_fk);生成阶段已校验,
+// 服务端加载再 fail-closed 兜底,全过才允许整批切换)。
+func validateCrossTables(dst *Tables) error {
+	return nil
+}
+
 func buildLevelTable(raw []byte, mt ManifestTable, dst *Tables) error {
 	var data configpb.LevelTableData
 	if err := unmarshalTable(raw, &data); err != nil {
