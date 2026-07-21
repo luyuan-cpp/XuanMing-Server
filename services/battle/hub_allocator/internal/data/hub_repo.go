@@ -272,6 +272,7 @@ func (r *RedisHubRepo) UpdateShardWithLock(
 			return fnErr // fn 业务错误,不重试
 		}
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue // CAS 冲突,重试
 		}
 		return txErr
@@ -450,6 +451,7 @@ func (r *RedisHubRepo) CompareAndSwapAssignment(
 			return perr
 		}, key)
 		if err == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		if err != nil {
@@ -491,6 +493,7 @@ func (r *RedisHubRepo) DeleteAssignmentIfPodMatches(ctx context.Context, playerI
 			return perr
 		}, key)
 		if err == redis.TxFailedErr {
+			casConflictBackoff(ctx, i)
 			continue // WATCH 期间归属被改写,重读再判
 		}
 		if err != nil {

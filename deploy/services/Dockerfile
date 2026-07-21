@@ -14,12 +14,14 @@
 # (mysql/redis/kafka/etcd 改容器服务名,见 tools/scripts/gen_cluster_config.ps1)。
 
 ARG GO_VERSION=1.26.5
+ARG GO_IMAGE_VARIANT=bookworm
 # 基础镜像仓库前缀:默认官方 docker.io;国内机器由 start.ps1 传 docker.m.daocloud.io 等加速镜像。
 ARG BASE_REGISTRY=docker.io
 
 # ===== 构建阶段 =====
-FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION} AS builder
+FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION}-${GO_IMAGE_VARIANT} AS builder
 
+ARG GO_VERSION
 ARG SERVICE_DIR
 ARG CMD_NAME
 
@@ -40,6 +42,9 @@ COPY . .
 # GOPROXY:容器内拉 go 模块;国内机器默认走 goproxy.cn,可由 start.ps1 / 环境变量覆盖。
 ARG GOPROXY=https://goproxy.cn,direct
 ENV CGO_ENABLED=0 GOOS=linux GOFLAGS=-trimpath GOPROXY=${GOPROXY}
+RUN actual="$(go env GOVERSION)" \
+    && test "$actual" = "go${GO_VERSION}" \
+       || (echo "ERROR: required go${GO_VERSION}, actual=${actual}" && exit 1)
 RUN test -n "$SERVICE_DIR" || (echo "ERROR: build-arg SERVICE_DIR 必填" && exit 1) \
     && test -n "$CMD_NAME" || (echo "ERROR: build-arg CMD_NAME 必填" && exit 1) \
     && cd "/src/${SERVICE_DIR}" \

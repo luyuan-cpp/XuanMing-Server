@@ -245,11 +245,12 @@ func (r *RedisHubAuthRepo) ActivateHeartbeat(ctx context.Context, pod string, id
 			return ActivateResult{}, bizErr
 		}
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return ActivateResult{}, txErr
 	}
-	return ActivateResult{}, errcode.New(errcode.ErrInternal, "hub activate heartbeat %s: cas retry exhausted", pod)
+	return ActivateResult{}, errcode.New(errcode.ErrUnavailable, "hub activate heartbeat %s: cas retry exhausted", pod)
 }
 
 // ReserveRoutableSeat 见 HubAuthRepo 接口注释。单事务(authKey+shardKey 同 slot):同时确认授权
@@ -358,11 +359,12 @@ func (r *RedisHubAuthRepo) QuarantineExpected(
 			return err
 		}, aKey, sKey)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return result, txErr
 	}
-	return QuarantineResult{}, errcode.New(errcode.ErrInternal, "hub quarantine %s: cas retry exhausted", pod)
+	return QuarantineResult{}, errcode.New(errcode.ErrUnavailable, "hub quarantine %s: cas retry exhausted", pod)
 }
 
 func hubProjectionMatchesCredential(
@@ -518,11 +520,12 @@ func (r *RedisHubAuthRepo) routable(ctx context.Context, pod string, nowMs, maxH
 			return out, nil
 		}
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return ReserveResult{}, txErr
 	}
-	return ReserveResult{}, errcode.New(errcode.ErrInternal, "hub reserve routable %s: cas retry exhausted", pod)
+	return ReserveResult{}, errcode.New(errcode.ErrUnavailable, "hub reserve routable %s: cas retry exhausted", pod)
 }
 
 // ReleaseRoutableSeat 仅在当前 active 与 expected 四元组、分片投影仍完全一致时退一个座位。
@@ -588,6 +591,7 @@ func (r *RedisHubAuthRepo) ReleaseRoutableSeat(ctx context.Context, pod string, 
 			return err
 		}, aKey, sKey)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		if txErr != nil {
@@ -595,7 +599,7 @@ func (r *RedisHubAuthRepo) ReleaseRoutableSeat(ctx context.Context, pod string, 
 		}
 		return released, nil
 	}
-	return false, errcode.New(errcode.ErrInternal, "hub release routable %s: cas retry exhausted", pod)
+	return false, errcode.New(errcode.ErrUnavailable, "hub release routable %s: cas retry exhausted", pod)
 }
 
 // ReleaseAssignmentSeat 只允许同一 GameServer UID/epoch 的当前 V2 active 投影退座。
@@ -667,6 +671,7 @@ func (r *RedisHubAuthRepo) releaseAssignmentSeatLegacy(
 			return err
 		}, aKey, sKey)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		if txErr != nil {
@@ -674,7 +679,7 @@ func (r *RedisHubAuthRepo) releaseAssignmentSeatLegacy(
 		}
 		return released, nil
 	}
-	return false, errcode.New(errcode.ErrInternal, "hub assignment release %s: cas retry exhausted", pod)
+	return false, errcode.New(errcode.ErrUnavailable, "hub assignment release %s: cas retry exhausted", pod)
 }
 
 func routableCredentialComplete(cred *hubv1.HubDSCredential, auth *hubv1.HubShardAuthStorageRecord, nowMs int64) bool {

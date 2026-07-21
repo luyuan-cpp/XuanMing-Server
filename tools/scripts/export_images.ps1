@@ -244,48 +244,43 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 if ($Build) {
     Write-Step "构建 20 个业务镜像(BuildMode=$BuildMode;离线优先:本地基础镜像 + docker.io 源)"
 
-    # incontainer(方案 A):容器内跑 `go build`,必须用 golang:1.26.5,旧 toolchain 会拒编 `go 1.26.5` module。
-    # host(方案 B):宿主用本机 go 1.26.5 交叉编译,容器里的 golang 镜像只被 Dockerfile.prebuilt 用来
-    #   取 CA 证书 / 时区(不编译),版本无所谓 —— 由 Build-Images-Host 自行打标任意本地 golang 复用。
-    # 因此严格的「golang 镜像版本 >= 1.26.5」校验只在 incontainer 模式做;host 模式不设此门槛,
-    # 否则本机只有 1.26.4 golang 镜像时会误挡宿主编译(宿主 go 已是 1.26.5,编译正确)。
+    # incontainer(方案 A):容器内跑 `go build`,基础镜像必须实测为 go1.26.5。
+    # host(方案 B):start.ps1 会独立校验宿主 `go env GOVERSION` 精确等于 go1.26.5；
+    # Dockerfile.prebuilt 的 runtime_assets 只提供 CA/时区，不参与 Go 编译。
     if ($BuildMode -eq 'incontainer') {
-        $wantGo = 'golang:1.26.5'
-        $wantGoVersion = [version]'1.26.5'
+        $wantGo = 'golang:1.26.5-bookworm'
+        $wantGoversion = 'go1.26.5'
 
-        # 从 `go version` 输出解析出主版本号(形如 "go version go1.26.5 linux/amd64" -> 1.26.5)。
-        function Get-GoImageVersion([string]$image) {
-            $out = (docker run --rm --entrypoint go $image version 2>$null | Out-String)
+        function Get-GoImageGoversion([string]$image) {
+            $out = (docker run --rm --entrypoint go $image env GOVERSION 2>$null | Out-String).Trim()
             if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($out)) { return $null }
-            if ($out -match 'go(\d+)\.(\d+)(?:\.(\d+))?') {
-                $patch = if ($Matches[3]) { $Matches[3] } else { '0' }
-                try { return [version]"$($Matches[1]).$($Matches[2]).$patch" } catch { return $null }
-            }
-            return $null
+            return $out
         }
 
         docker image inspect $wantGo *> $null
-        if ($LASTEXITCODE -ne 0) {
-            # 逐个候选 golang 镜像实测其 `go version`,只接受 >= 1.26.5 的。
-            $candidates = @(docker images --format '{{.Repository}}:{{.Tag}}' | Select-String '^golang:' | ForEach-Object { "$_".Trim() })
+        $wantActual = if ($LASTEXITCODE -eq 0) { Get-GoImageGoversion $wantGo } else { $null }
+        if ($wantActual -ne $wantGoversion) {
+            if ($wantActual) { Write-Warn "本地 $wantGo 实际为 $wantActual，拒绝冒充 $wantGoversion。" }
+            # 逐个候选 golang 镜像实测，只接受精确的 go1.26.5。
+            $candidates = @(docker images --format '{{.Repository}}:{{.Tag}}' | Select-String '(^|/)golang:1\.26\.5-bookworm$' | ForEach-Object { "$_".Trim() })
             $picked = $null
             foreach ($cand in $candidates) {
-                $ver = Get-GoImageVersion $cand
-                if ($ver -and $ver -ge $wantGoVersion) { $picked = $cand; break }
-                elseif ($ver) { Write-Warn "本地 $cand 的 Go 版本 $ver < $wantGoVersion,跳过(不能冒充 $wantGo)。" }
+                $actual = Get-GoImageGoversion $cand
+                if ($actual -eq $wantGoversion) { $picked = $cand; break }
+                elseif ($actual) { Write-Warn "本地 $cand 的 GOVERSION=$actual，跳过。" }
             }
             if ($picked) {
-                Write-Warn "本地无 $wantGo,发现 $picked(Go 版本满足 >= $wantGoVersion),自动打标 $wantGo 复用(避免联网拉取)。"
+                Write-Info "发现 $picked 的 GOVERSION=$wantGoversion，打标 $wantGo 复用。"
                 docker tag $picked $wantGo
-                docker tag $picked "docker.io/library/golang:1.26.5"
+                docker tag $picked "docker.io/library/golang:1.26.5-bookworm"
             } else {
-                Write-Err "本地无 $wantGo,且没有任何 >= $wantGoVersion 的 golang 镜像可复用。"
-                Write-Err "请先 docker pull golang:1.26.5(或在能联网的机器上 pull 后 docker save/load 过来),否则容器内 `go 1.26.5` 编译会失败。"
+                Write-Err "本地没有任何 GOVERSION=$wantGoversion 的 golang 镜像可复用。"
+                Write-Err "请先 docker pull golang:1.26.5-bookworm(或在能联网的机器上 pull 后 docker save/load 过来)。"
                 Write-Err "提示:本机已装 go 1.26.5 时,可改用 -BuildMode host(宿主编译,不需要容器内 golang 1.26.5)。"
                 exit 1
             }
         } else {
-            docker tag $wantGo "docker.io/library/golang:1.26.5" 2>$null
+            docker tag $wantGo "docker.io/library/golang:1.26.5-bookworm" 2>$null
         }
     }
 

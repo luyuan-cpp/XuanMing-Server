@@ -6,9 +6,10 @@
 #   Pop-Location
 # 再以该 stage 目录为构建上下文。该路径与业务服务 Dockerfile.prebuilt 的原则一致。
 ARG GO_VERSION=1.26.5
+ARG GO_IMAGE_VARIANT=bookworm
 ARG BASE_REGISTRY=docker.io
 
-FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION} AS runtime-files
+FROM ${BASE_REGISTRY}/library/golang:${GO_VERSION}-${GO_IMAGE_VARIANT} AS runtime-files
 
 FROM scratch
 

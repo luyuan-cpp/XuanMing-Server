@@ -139,8 +139,9 @@ docker build -f deploy/migrate/Dockerfile `
   -t pandora/migrate:<immutable-tag> .
 ```
 
-容器内构建会先断言基础镜像内的 `go env GOVERSION` 与 `GO_VERSION` 完全一致，镜像 tag
-标错或本地缓存陈旧时直接失败，不会静默用旧工具链出包。受限内网可沿用业务镜像的宿主
+容器内构建固定使用 `golang:1.26.5-bookworm`，并先断言基础镜像内的
+`go env GOVERSION` 与 `GO_VERSION` 完全一致。镜像 tag 标错或本地缓存陈旧时直接失败，
+不会静默用旧工具链出包。受限内网可沿用业务镜像的宿主
 交叉编译路线：
 
 ```powershell

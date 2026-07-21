@@ -4996,25 +4996,44 @@ function Build-Images-InContainer {
     param([array]$List, $Version, [string]$Dockerfile, [string]$OfflineTar, [switch]$StrictRelease)
     $v = $Version
 
+    function Get-GoImageGoversion([string]$Image) {
+        $actual = (docker run --rm --entrypoint go $Image env GOVERSION 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($actual)) { return $null }
+        return $actual
+    }
+
     # 国内镜像:基础镜像仓库前缀 + go 模块代理,避免卡在 Docker Hub / proxy.golang.org。
     # 默认走国内加速;可用 PANDORA_BASE_REGISTRY / PANDORA_GOPROXY 覆盖(官方仓库填 docker.io)。
     $baseRegistry = $env:PANDORA_BASE_REGISTRY
     if (-not $baseRegistry) {
-        # 本机已有 golang 基础镜像时,优先用本地(打成 Dockerfile 需要的 docker.io/library/golang:<ver> tag),
-        # 彻底免联网拉基础镜像;本地没有才回退国内加速站(需网络)。
+        # 本机已有且容器内版本精确匹配时才复用。禁止把任意旧 golang 镜像改标成目标版本，
+        # 否则 tag 看似正确，实际编译器仍可能是旧 patch 版本。
         $goVer = '1.26.5'
         $m = Select-String -Path $Dockerfile -Pattern '^ARG\s+GO_VERSION=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($m) { $goVer = $m.Matches[0].Groups[1].Value }
-        $wantGo = "docker.io/library/golang:$goVer"
+        $goImageVariant = 'bookworm'
+        $variantMatch = Select-String -Path $Dockerfile -Pattern '^ARG\s+GO_IMAGE_VARIANT=(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($variantMatch) { $goImageVariant = $variantMatch.Matches[0].Groups[1].Value }
+        $goImageTag = "$goVer-$goImageVariant"
+        $wantGo = "docker.io/library/golang:$goImageTag"
         docker image inspect $wantGo *> $null
-        if ($LASTEXITCODE -eq 0) {
+        $wantActual = if ($LASTEXITCODE -eq 0) { Get-GoImageGoversion $wantGo } else { $null }
+        if ($wantActual -eq "go$goVer") {
             $baseRegistry = 'docker.io'
         } else {
-            $localGo = (docker images --format '{{.Repository}}:{{.Tag}}' 2>$null | Select-String '(^|/)golang:' | Select-Object -First 1)
-            if ($localGo) {
-                $src = "$localGo".Trim()
-                Write-Info "  本机无 $wantGo,发现 $src,自动打标复用(免联网拉基础镜像)。"
-                docker tag $src $wantGo 2>$null
+            if ($wantActual) {
+                Write-Warn "  本机 $wantGo 实际为 $wantActual，不符合 go$goVer，拒绝复用。"
+            }
+            $tagPattern = '(^|/)golang:' + [regex]::Escape($goImageTag) + '$'
+            $candidates = @(docker images --format '{{.Repository}}:{{.Tag}}' 2>$null | Select-String $tagPattern | ForEach-Object { "$($_)".Trim() })
+            $picked = $null
+            foreach ($candidate in $candidates) {
+                if ((Get-GoImageGoversion $candidate) -eq "go$goVer") { $picked = $candidate; break }
+            }
+            if ($picked) {
+                Write-Info "  发现容器内精确为 go$goVer 的 $picked，打标为 $wantGo 复用。"
+                docker tag $picked $wantGo *> $null
+                if ($LASTEXITCODE -ne 0) { throw "无法创建基础镜像标签:$wantGo" }
                 $baseRegistry = 'docker.io'
             } else {
                 $baseRegistry = 'docker.m.daocloud.io'
@@ -5066,8 +5085,13 @@ function Build-Images-InContainer {
 function Build-Images-Host {
     param([array]$List, $Version)
     if (-not (Test-CommandExists 'go')) {
-        throw "host 构建方式需要本机安装 Go(1.26.5+)。装好后重试,或改用 -BuildMode incontainer(容器内编译,无需本机 Go)。"
+        throw "host 构建方式需要本机安装 Go 1.26.5。装好后重试,或改用 -BuildMode incontainer(容器内编译,无需本机 Go)。"
     }
+    $hostGoVersion = ((& go env GOVERSION) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $hostGoVersion -ne 'go1.26.5') {
+        throw "host 构建要求 go env GOVERSION=go1.26.5，当前=$hostGoVersion。"
+    }
+    Write-Info "  宿主 Go 版本已验证:$hostGoVersion"
     $v = $Version
     $prebuiltDockerfile = Join-Path $ProjectRoot 'deploy/services/Dockerfile.prebuilt'
     $stageRoot = Join-Path $ProjectRoot 'run/docker-build/prebuilt'
@@ -5086,8 +5110,9 @@ function Build-Images-Host {
         }
         if ($null -eq $localRuntimeSource) {
             $goVer = '1.26.5'
+            $goImageVariant = 'bookworm'
             $baseRegistry = if ($env:PANDORA_BASE_REGISTRY) { $env:PANDORA_BASE_REGISTRY.TrimEnd('/') } else { 'docker.m.daocloud.io' }
-            $localRuntimeSource = "$baseRegistry/library/golang:$goVer"
+            $localRuntimeSource = "$baseRegistry/library/golang:$goVer-$goImageVariant"
             docker image inspect $localRuntimeSource *> $null
             if ($LASTEXITCODE -ne 0) {
                 Write-Info "  首次准备本地 CA/时区资产镜像:$localRuntimeSource"

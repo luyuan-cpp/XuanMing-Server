@@ -14,6 +14,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -125,8 +126,34 @@ type DepartureResult struct {
 var errAuthStale = errcode.New(errcode.ErrUnauthorized, "hub ds credential not authoritative")
 
 // 同一 Hub 的高并发 Assign/Transfer/Heartbeat 会争用 auth+shard 两键；冲突重读不重放
-// 外部副作用，使用足够预算让真实并发收敛，耗尽仍 fail-closed。
+// 外部副作用，使用足够预算让真实并发收敛，耗尽仍 fail-closed(返回可重试的
+// ErrUnavailable:预算耗尽只说明瞬时争用,不是内部不变量被破坏)。
+// 每次冲突后必须经 casConflictBackoff 退避,不得紧循环重试。
 const hubAuthCASRetries = 64
+
+// casConflictBackoff 在 WATCH/CAS 乐观并发冲突后按指数 + 抖动退避,再进入下一次重试。
+// 零间隔紧循环在高并发争用同 {pod}/同玩家键时会互相踩踏:每次 EXEC 成功都会打断其余
+// 全部在途 WATCH 事务,落后者可能连续输掉全部预算(-race/慢盘等减速环境尤甚;
+// 2026-07-21 存量 flake:32 并发 AssignHub 把 64 次预算全部冲突耗尽后报 exhausted)。
+// 首次冲突立即重试保住低争用延迟;此后自 1ms 指数升至 16ms 封顶,叠加 [-50%,+50%)
+// 抖动打散同拍;ctx 取消/超时立即停止等待,由外层事务错误路径收尾。
+func casConflictBackoff(ctx context.Context, attempt int) {
+	if attempt <= 0 {
+		return
+	}
+	shift := attempt - 1
+	if shift > 4 {
+		shift = 4
+	}
+	base := time.Millisecond << shift
+	delay := base/2 + rand.N(base)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+}
 
 // phaseLocked 判定授权相位是否已锁定(不再接受新 stage / promote / 分配):
 // QUARANTINED(紧急吊销)与 TERMINATING(实例下线中)一律拒绝写入侧与授权侧副作用,
@@ -300,11 +327,12 @@ func (r *RedisHubAuthRepo) InitAuth(ctx context.Context, pod, instanceUID string
 			return out, nil
 		}
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return nil, txErr
 	}
-	return nil, errcode.New(errcode.ErrInternal, "hub auth init %s: cas retry exhausted", pod)
+	return nil, errcode.New(errcode.ErrUnavailable, "hub auth init %s: cas retry exhausted", pod)
 }
 
 func (r *RedisHubAuthRepo) StagePending(ctx context.Context, pod string, cred *hubv1.HubDSCredential, authTTL time.Duration) (*hubv1.HubShardAuthStorageRecord, error) {
@@ -379,11 +407,12 @@ func (r *RedisHubAuthRepo) StagePending(ctx context.Context, pod string, cred *h
 			return nil, bizErr
 		}
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return nil, txErr
 	}
-	return nil, errcode.New(errcode.ErrInternal, "hub auth stage %s: cas retry exhausted", pod)
+	return nil, errcode.New(errcode.ErrUnavailable, "hub auth stage %s: cas retry exhausted", pod)
 }
 
 func (r *RedisHubAuthRepo) MarkDelivered(ctx context.Context, pod string, expected *hubv1.HubDSCredential, rv string, authTTL time.Duration) error {
@@ -436,11 +465,12 @@ func (r *RedisHubAuthRepo) MarkDelivered(ctx context.Context, pod string, expect
 			return bizErr
 		}
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return txErr
 	}
-	return errcode.New(errcode.ErrInternal, "hub auth mark delivered %s: cas retry exhausted", pod)
+	return errcode.New(errcode.ErrUnavailable, "hub auth mark delivered %s: cas retry exhausted", pod)
 }
 
 // validateStoredCredential 拒绝不完整或已过期的权威凭据。JWT 本身只在投递/中间件处验签,

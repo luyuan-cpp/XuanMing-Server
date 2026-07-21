@@ -807,11 +807,12 @@ func (r *RedisHubAuthRepo) ReserveAssignment(ctx context.Context, pod string, re
 			return err
 		}, watchKeys...)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return out, txErr
 	}
-	return ReserveResult{}, errcode.New(errcode.ErrInternal, "hub reserve assignment %s: cas retry exhausted", pod)
+	return ReserveResult{}, errcode.New(errcode.ErrUnavailable, "hub reserve assignment %s: cas retry exhausted", pod)
 }
 
 // AcknowledgeAdmission 原子把 reservation 消费为 connected ownership；同 assignment 的新
@@ -956,6 +957,7 @@ func (r *RedisHubAuthRepo) AcknowledgeAdmission(ctx context.Context, pod string,
 			return err
 		}, watchKeys...)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		if txErr != nil {
@@ -969,7 +971,7 @@ func (r *RedisHubAuthRepo) AcknowledgeAdmission(ctx context.Context, pod string,
 		}
 		return out, nil
 	}
-	return AdmissionResult{}, errcode.New(errcode.ErrInternal, "hub admission %s: cas retry exhausted", pod)
+	return AdmissionResult{}, errcode.New(errcode.ErrUnavailable, "hub admission %s: cas retry exhausted", pod)
 }
 
 // AcknowledgeDeparture exact 删除当前 admission owner。网络响应丢失后同 identity 重试幂等；
@@ -1091,6 +1093,7 @@ func (r *RedisHubAuthRepo) AcknowledgeDeparture(ctx context.Context, pod string,
 			return err
 		}, watchKeys...)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		if txErr != nil {
@@ -1101,7 +1104,7 @@ func (r *RedisHubAuthRepo) AcknowledgeDeparture(ctx context.Context, pod string,
 		}
 		return out, nil
 	}
-	return DepartureResult{}, errcode.New(errcode.ErrInternal, "hub departure %s: cas retry exhausted", pod)
+	return DepartureResult{}, errcode.New(errcode.ErrUnavailable, "hub departure %s: cas retry exhausted", pod)
 }
 
 // ReleaseAssignmentSeat 在调用方赢得跨 slot assignment CAS 后，只精确删除尚未 Admission
@@ -1222,11 +1225,12 @@ func (r *RedisHubAuthRepo) InspectAssignmentSeat(ctx context.Context, pod string
 			return err
 		}, watchKeys...)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return out, txErr
 	}
-	return AssignmentSeatSnapshot{}, errcode.New(errcode.ErrInternal,
+	return AssignmentSeatSnapshot{}, errcode.New(errcode.ErrUnavailable,
 		"hub assignment seat inspection %s: cas retry exhausted", pod)
 }
 
@@ -1495,11 +1499,12 @@ func (r *RedisHubAuthRepo) ReleaseAssignmentSeatExact(ctx context.Context, pod s
 			return err
 		}, watchKeys...)
 		if txErr == redis.TxFailedErr {
+			casConflictBackoff(ctx, attempt)
 			continue
 		}
 		return out, txErr
 	}
-	return ReleaseAssignmentSeatResult{}, errcode.New(errcode.ErrInternal,
+	return ReleaseAssignmentSeatResult{}, errcode.New(errcode.ErrUnavailable,
 		"hub assignment release %s: cas retry exhausted", pod)
 }
 
