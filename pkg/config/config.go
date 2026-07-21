@@ -63,6 +63,18 @@ type Base struct {
 	// CellRoute 蜂窝扩容部署拓扑(scale-cellular-20m.md):mode 空=单 Cell 不路由,
 	// static/etcd=多 Cell。各服务 main 用 cellroute.BuildRouter(cfg.CellRoute) 装配。
 	CellRoute cellroute.RouterConfig `yaml:"cell_route,omitempty" json:"cell_route,omitempty"`
+
+	// ConfigTable 策划配置表加载(pkg/configtable,不变量 §9.15 标准热更流水线)。
+	// dir 非空 = 启用:启动强依赖加载该目录(active 批次,含 manifest.json),失败进程退出
+	// (fail-closed);热更经 ConfigTableAdminService.ReloadConfigTable 重读同一目录,
+	// 失败保留旧表。dir 为空 = 不启用,行为与未接配置表前完全一致。
+	ConfigTable ConfigTableConf `yaml:"config_table,omitempty" json:"config_table,omitempty"`
+}
+
+// ConfigTableConf 配置表加载参数。
+type ConfigTableConf struct {
+	// Dir active 批次目录(含 manifest.json + 各表 json),见 docs/design/config-table-hotreload.md §4。
+	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
 }
 
 // Server Kratos 风格的 server 监听配置(替代 go-zero zrpc.RpcServerConf)。

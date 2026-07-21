@@ -27,6 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/placement"
@@ -152,6 +153,12 @@ type MatchUsecase struct {
 	// 默认 DefaultRegionMatchPolicy();多 Region 阶段可由 main 从配置覆盖。
 	regionPolicy RegionMatchPolicy
 
+	// tables 配置表快照容器(pkg/configtable,读路径无锁)。可为 nil:
+	// config_table.dir 未配置时不启用,StartMatch 跳过 map_id 表校验(历史行为)。
+	// 由 main 经 SetConfigTables 注入;热更由 ConfigTableAdminService 触发,
+	// 本结构每次经 Tables() 取当前批次,天然读到热更后的表。
+	tables *configtable.Store
+
 	// lastLivenessSweep 是队列在线扫除(livenessSweepOnce)的上次执行时刻。
 	// 只在 RunMatchLoop 单 goroutine 里读写,无需加锁。
 	lastLivenessSweep  time.Time
@@ -181,6 +188,38 @@ func (u *MatchUsecase) SetCellRouter(r *cellroute.Router) {
 // SetRegionPolicy 覆盖跨 region 溢出策略(可选,多 Region 阶段从配置装配)。
 func (u *MatchUsecase) SetRegionPolicy(p RegionMatchPolicy) {
 	u.regionPolicy = p
+}
+
+// SetConfigTables 注入配置表容器(可选,config_table.dir 配置时由 main 装配)。
+// 用 setter 而非构造参数,与 SetCellRouter 一致,避免未启用的调用点被迫改签名。
+func (u *MatchUsecase) SetConfigTables(s *configtable.Store) {
+	u.tables = s
+}
+
+// validateMapID StartMatch 入口的 map_id 关卡表准入门(配置表未启用时放行,历史行为)。
+//
+// mapID==0 表示「用本实例默认副本」,校验的是兜底后的实际值(cfg.MapId,与
+// data.GrpcDSAllocator 的 effectiveMapID 兜底口径一致)——热更删掉默认关卡后,
+// 新请求也会被立即拦下,而不是等 DS 加载失败。
+// 只做入口校验:已入队票据短生命周期(ticket TTL 内)自然流完,不回溯清扫。
+func (u *MatchUsecase) validateMapID(mapID uint32) error {
+	if u.tables == nil {
+		return nil
+	}
+	effective := mapID
+	if effective == 0 {
+		effective = u.cfg.MapId
+	}
+	tb := u.tables.Tables()
+	if tb == nil {
+		// 启用了配置表却无生效批次:main 启动强依赖保证不会出现;真出现只能 fail-closed。
+		return errcode.New(errcode.ErrUnavailable, "config tables enabled but not loaded")
+	}
+	if !tb.Level.IsBattleLevel(effective) {
+		return errcode.New(errcode.ErrMatchInvalidMap,
+			"map_id %d not a battle level in level table (version %d)", effective, tb.Version)
+	}
+	return nil
 }
 
 // ticketRegion 解析一张票据的 owner region(以队长 captain_id 为 owner 锚点)。
@@ -329,6 +368,12 @@ func (u *MatchUsecase) removeActive(ctx context.Context, matchID uint64) {
 //
 // 前置(reader 非 nil 时):team 必须存在、state=READY、captainID 为队长、成员数 ≤ 一方人数。
 func (u *MatchUsecase) StartMatch(ctx context.Context, ticketID, teamID, captainID uint64, mapID uint32) (uint64, error) {
+	// 关卡表准入门(不变量 §9.15 接线):客户端上送的 map_id 必须是关卡表里的战斗类关卡,
+	// 否则任意 map_id 会一路透传成 DS 的 PANDORA_MAP_ID(拉起加载不存在关卡的 DS)。
+	if err := u.validateMapID(mapID); err != nil {
+		return 0, err
+	}
+
 	members, avgMMR, err := u.resolveMembers(ctx, teamID, captainID)
 	if err != nil {
 		return 0, err

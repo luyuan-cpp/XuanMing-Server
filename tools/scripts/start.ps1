@@ -1103,12 +1103,14 @@ function Assert-NoLocalFreshGenesisWriters {
 
 # 6aff5dd 之前的旧启动器没有 fresh marker，只能对“刚刚由同一批 apply 创建”的本地
 # minikube 半成品做一次窄兼容。这个 cohort 是 local-only heuristic，不声称数学证明卷连续性；
-# 权威正确性仍由 PVC/PV UID、revision=1、zero-writer 审计和 etcd CAS 共同收口。
+# 它只证明当前对象同批且当前 etcd 未写。adopting 后的数据盘连续性由随机 sentinel、pending
+# 不可重建门禁与最终 etcd CAS 共同收口。
 function Get-LocalLegacyInfraOnlyAdoptionCohort {
     param(
         [Parameter(Mandatory = $true)][string]$KubeContext,
         [Parameter(Mandatory = $true)][long]$CollectionTimeUnixMS,
-        [Parameter(Mandatory = $true)][string]$ExpectedPvcUid
+        [Parameter(Mandatory = $true)][string]$ExpectedPvcUid,
+        [switch]$AllowNotReady
     )
     if ($CollectionTimeUnixMS -le 0) { throw 'legacy cohort collection time 必须为正 Unix ms。' }
     if ([string]::IsNullOrWhiteSpace($ExpectedPvcUid)) { throw 'legacy cohort 必须绑定预先读取的 PVC UID。' }
@@ -1310,12 +1312,15 @@ function Get-LocalLegacyInfraOnlyAdoptionCohort {
         Assert-CanonicalContainerSpec -PodSpec $deployment.spec.template.spec -App $app -ExpectedImage $expectedImage -What "Deployment/$app"
         $revision = [string](Get-OptionalPropertyValue -Object $deployment.metadata.annotations -Name 'deployment.kubernetes.io/revision')
         if ($revision -cne '1' -or [long]$deployment.metadata.generation -ne 1 -or
-            [int]$deployment.spec.replicas -ne 1 -or
+            [int]$deployment.spec.replicas -ne 1) {
+            throw "legacy cohort Deployment/$app 的 revision/generation/spec 漂移。"
+        }
+        if (-not $AllowNotReady -and (
             [long](Get-OptionalPropertyValue -Object $deployment.status -Name 'observedGeneration') -ne [long]$deployment.metadata.generation -or
             [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'replicas') -ne 1 -or
             [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'updatedReplicas') -ne 1 -or
             [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'readyReplicas') -ne 1 -or
-            [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'availableReplicas') -ne 1) {
+            [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'availableReplicas') -ne 1)) {
             throw "legacy cohort Deployment/$app 非唯一完成 rollout。"
         }
         if ($app -ceq 'etcd') {
@@ -1339,11 +1344,14 @@ function Get-LocalLegacyInfraOnlyAdoptionCohort {
             [string]$rsOwners[0].kind -cne 'Deployment' -or [string]$rsOwners[0].name -cne $app -or
             [string]$rsOwners[0].uid -cne $deploymentEvidence.Uid -or $rsRevision -cne $revision -or
             [string]::IsNullOrWhiteSpace($rsHash) -or -not ([string]$replicaSet.metadata.name).StartsWith("$app-", [StringComparison]::Ordinal) -or
-            [long]$replicaSet.metadata.generation -ne 1 -or [int]$replicaSet.spec.replicas -ne 1 -or
+            [long]$replicaSet.metadata.generation -ne 1 -or [int]$replicaSet.spec.replicas -ne 1) {
+            throw "legacy cohort current ReplicaSet/$app 的 owner/UID/revision/spec 漂移。"
+        }
+        if (-not $AllowNotReady -and (
             [long](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'observedGeneration') -ne [long]$replicaSet.metadata.generation -or
             [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'replicas') -ne 1 -or
             [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'readyReplicas') -ne 1 -or
-            [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'availableReplicas') -ne 1) {
+            [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'availableReplicas') -ne 1)) {
             throw "legacy cohort current ReplicaSet/$app 的 owner/UID/revision/replicas 漂移。"
         }
         Assert-AppAndHashLabels -Labels $replicaSet.metadata.labels -App $app -ExpectedHash $rsHash -What "ReplicaSet/$app"
@@ -1370,9 +1378,12 @@ function Get-LocalLegacyInfraOnlyAdoptionCohort {
         if ($podOwners.Count -ne 1 -or @(Get-AllOwnerReferences -Metadata $pod.metadata).Count -ne 1 -or
             [string]$podOwners[0].kind -cne 'ReplicaSet' -or
             [string]$podOwners[0].name -cne [string]$replicaSet.metadata.name -or
-            [string]$podOwners[0].uid -cne $replicaSetEvidence.Uid -or [string]$pod.status.phase -cne 'Running' -or
-            $readyConditions.Count -ne 1) {
-            throw "legacy cohort Pod/$app 的 owner/UID/Running/Ready 结构漂移。"
+            [string]$podOwners[0].uid -cne $replicaSetEvidence.Uid) {
+            throw "legacy cohort Pod/$app 的 owner/UID 结构漂移。"
+        }
+        if ((-not $AllowNotReady -and ([string]$pod.status.phase -cne 'Running' -or $readyConditions.Count -ne 1)) -or
+            ($AllowNotReady -and [string]$pod.status.phase -cnotin @('Pending', 'Running'))) {
+            throw "legacy cohort Pod/$app 的 Running/Ready 状态不满足当前采集阶段。"
         }
         Assert-AppAndHashLabels -Labels $pod.metadata.labels -App $app -ExpectedHash $rsHash -What "Pod/$app"
         Assert-CanonicalContainerSpec -PodSpec $pod.spec -App $app -ExpectedImage $expectedImage -What "Pod/$app"
@@ -1407,8 +1418,9 @@ function Get-LocalLegacyInfraOnlyAdoptionCohort {
 }
 
 # 旧脚本没有来得及写 marker 的兼容收养必须额外证明这块 etcd 数据盘从未发生过任何写入。
-# etcd revision 一旦写入就单调大于 1（压缩不会降回 1）；因此 revision=1 + 整个 ds-auth
-# prefix 无 key 能区分“首次启动中断留下的空 PVC”和“旧权威 key 被删/数据盘被替换”的常见现场。
+# revision=1 + 整个 ds-auth prefix 无 key 只证明“当前数据盘尚未发生 etcd 写入”，不能单独
+# 证明宿主目录的历史连续性。它只用于 markerless legacy 的窄收养前置；adopting 之后必须由
+# 随机 continuity sentinel 证明同一数据内容一直延续到 pending/genesis CAS。
 function Assert-LocalEtcdStorePristineForGenesis {
     param([Parameter(Mandatory = $true)][string]$KubeContext)
     $lines = @(& kubectl --context $KubeContext exec -n $K8sNamespace deployment/etcd -- `
@@ -1649,8 +1661,8 @@ function Assert-LocalDsAuthBaseline {
                     Assert-NoLocalFreshGenesisWriters -KubeContext $KubeContext
                     Assert-LocalEtcdStorePristineForGenesis -KubeContext $KubeContext
                 }
-                # Mutex 已排除其它一键进程；prepare 紧前仍重新线性回读 marker，防止旧分支
-                # 越过已推进的 pending。公开 CLI 不构成绕过 Kubernetes 状态机的授权接口。
+                # Mutex 已排除其它新版一键进程；prepare 紧前仍重新线性回读 marker，防止旧分支
+                # 越过已推进的 pending。直接人工改 etcd/调用内部 CLI 不属于一键状态机的安全契约。
                 $prepareMarker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
                 $prepareMarkerState = Assert-LocalFreshGenesisIntent -Marker $prepareMarker `
                     -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
@@ -1659,10 +1671,28 @@ function Assert-LocalDsAuthBaseline {
                     $null -eq $prepareTokenProperty -or [string]$prepareTokenProperty.Value -cne $continuityToken) {
                     throw "continuity prepare 紧前 marker 已漂移(state=$prepareMarkerState)；禁止旧分支重放 sentinel。"
                 }
-                $prepareLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
-                    --prepare-zero-writer-genesis-v3 --apply --genesis-continuity-token $continuityToken 2>&1)
-                if ($LASTEXITCODE -ne 0) {
-                    throw "create-only 建立/回读 genesis continuity sentinel 失败:$($prepareLines -join [Environment]::NewLine)"
+                # Txn 可能已在服务端提交、客户端却因瞬时断链拿到失败。prepare 本身是同 token +
+                # authority-prefix-empty 的幂等事务；在 Mutex 内有界重试可在本次双击中消解 ambiguous
+                # commit，且每次重试前都重新核对 marker state/token，绝不跨过 pending。
+                $prepareDeadline = [DateTime]::UtcNow.AddSeconds(45)
+                while ($true) {
+                    $prepareMarker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+                    $prepareMarkerState = Assert-LocalFreshGenesisIntent -Marker $prepareMarker `
+                        -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+                    $prepareTokenProperty = $prepareMarker.data.PSObject.Properties[$script:LocalFreshDsAuthContinuityTokenField]
+                    if ($prepareMarkerState -cnotin @('preinfra', 'adopting') -or
+                        $null -eq $prepareTokenProperty -or [string]$prepareTokenProperty.Value -cne $continuityToken) {
+                        throw "continuity prepare 重试前 marker 已漂移(state=$prepareMarkerState)；禁止旧分支重放 sentinel。"
+                    }
+                    $prepareLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                        --prepare-zero-writer-genesis-v3 --apply --genesis-continuity-token $continuityToken 2>&1)
+                    if ($LASTEXITCODE -eq 0) { break }
+                    $prepareText = ($prepareLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+                    if ([DateTime]::UtcNow -ge $prepareDeadline) {
+                        throw "45 秒内无法 create-only 建立/精确回读 genesis continuity sentinel:$prepareText"
+                    }
+                    Write-Warn 'continuity prepare 返回瞬时/不确定结果；同一键入口内按 exact token 有界重试...'
+                    Start-Sleep -Seconds 2
                 }
                 $sentinelVerifyLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
                     --verify-genesis-continuity --genesis-continuity-token $continuityToken 2>&1)
@@ -3995,8 +4025,11 @@ function Invoke-K8s {
         # 只有 read 证明 missing 时，baseline 才把 cohort 失败升级为阻断。
         $legacyAdoptionCollectionTimeUnixMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         try {
+            # apply 前先固定 UID/owner/spec/timestamp cohort；Pod 尚在拉镜像时允许未 Ready。infra
+            # rollout 完成后的 baseline 会用同一 collectedAt 严格重算 Ready 且 fingerprint 必须不变。
             $legacyCohort = Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext $mkCtx `
-                -CollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS -ExpectedPvcUid $legacyAdoptionPvcUid
+                -CollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS -ExpectedPvcUid $legacyAdoptionPvcUid `
+                -AllowNotReady
             $legacyAdoptionCohortFingerprintSha256 = [string]$legacyCohort.FingerprintSha256
         } catch {
             $legacyAdoptionCohortPreflightError = $_.Exception.Message

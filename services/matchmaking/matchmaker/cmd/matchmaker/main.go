@@ -28,6 +28,7 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
@@ -83,6 +84,33 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		helper.Errorw("msg", "config_validation_failed", "err", err)
 		os.Exit(1)
+	}
+
+	// 2.5 配置表(不变量 §9.15):config_table.dir 配置后是启动强依赖,加载失败直接退出
+	// (fail-closed);未配置则不启用,StartMatch 跳过 map_id 表校验(历史行为)。
+	var ctStore *configtable.Store
+	if dir := cfg.ConfigTable.Dir; dir != "" {
+		ctStore = configtable.NewStore()
+		res, err := ctStore.Load(dir, 0)
+		if err != nil {
+			helper.Errorw("msg", "configtable_load_failed", "dir", dir, "err", err)
+			os.Exit(1)
+		}
+		for _, w := range res.Warnings {
+			helper.Warnw("msg", "configtable_load_warning", "warning", w)
+		}
+		// 兜底默认副本(match.map_id)必须是关卡表里的战斗类关卡,配置漂移在启动时暴露,
+		// 而不是等第一个 StartMatch(map_id=0) 被拒。
+		if !ctStore.Tables().Level.IsBattleLevel(cfg.Match.MapId) {
+			helper.Errorw("msg", "configtable_default_map_invalid", "map_id", cfg.Match.MapId,
+				"hint", "match.map_id must be a battle-category level in g_关卡.xlsx")
+			os.Exit(1)
+		}
+		helper.Infow("msg", "configtable_loaded", "dir", dir,
+			"version", res.Version, "levels", ctStore.Tables().Level.Count())
+	} else {
+		helper.Warnw("msg", "configtable_disabled",
+			"hint", "config_table.dir empty; StartMatch map_id will not be validated against level table")
 	}
 
 	// 3. Redis(强依赖)
@@ -193,6 +221,9 @@ func main() {
 		helper.Warnw("msg", "locator_addr_empty", "hint", "match state (MATCHING/BATTLE) will not be reported to player_locator")
 	}
 	uc := biz.NewMatchUsecase(repo, reader, pusher, allocator, sf, locator, cfg.Match)
+	if ctStore != nil {
+		uc.SetConfigTables(ctStore)
+	}
 
 	// 蜂窝扩容:按 cfg.CellRoute 装配确定性 region/cell 路由(off/static/etcd 统一口）。
 	// 单 Cell(mode 空）→ router=nil,行为不变;多 Cell → 两级撮合 + battle 放置感知 region。
@@ -222,8 +253,12 @@ func main() {
 	}
 	svc := service.NewMatchService(uc, sf, resumeAuth)
 
-	// 8. gRPC + HTTP
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	// 8. gRPC + HTTP(配置表启用时同端口挂热更入口,内部接口不经 Envoy)
+	var ctAdmin *service.ConfigTableAdminService
+	if ctStore != nil {
+		ctAdmin = service.NewConfigTableAdminService(ctStore, cfg.ConfigTable.Dir)
+	}
+	grpcSrv := server.NewGRPCServer(&cfg, svc, ctAdmin)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	// 9. 后台撮合循环(随进程生命周期启停)

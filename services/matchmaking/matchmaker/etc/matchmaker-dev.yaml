@@ -40,6 +40,14 @@ snowflake:
   node_bits: 17
   step_bits: 15
 
+# config_table: 策划配置表加载(不变量 §9.15;docs/design/config-table-hotreload.md)。
+#   dir 非空 = 启用:启动强依赖加载该目录(manifest.json + 各表 json),失败进程退出;
+#   StartMatch 校验 map_id 必须是关卡表战斗类关卡;热更走 ConfigTableAdminService.ReloadConfigTable。
+#   dir 留空 / 注释 = 不启用(现行为不变)。dev 直接指仓库 dist(相对服务目录);
+#   部署环境用发布脚本落的 <deploy-root>/configtable/active。
+# config_table:
+#   dir: "../../../configtable/dist"
+
 match:
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:50010"

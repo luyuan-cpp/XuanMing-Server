@@ -47,6 +47,10 @@ snowflake:
   node_bits: 17
   step_bits: 15
 
+# config_table: 策划配置表加载(不变量 §9.15,说明见 matchmaker-dev.yaml)。留空 = 不启用。
+# config_table:
+#   dir: "../../../configtable/dist"
+
 match:
   # team_addr: team 服务 gRPC 直连地址(StartMatch 拉队伍校验 READY);留空跳过校验
   team_addr: "127.0.0.1:50010"

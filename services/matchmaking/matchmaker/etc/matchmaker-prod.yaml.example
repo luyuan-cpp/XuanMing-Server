@@ -36,6 +36,11 @@ snowflake:
   node_bits: 17
   step_bits: 15
 
+# config_table: 策划配置表加载(不变量 §9.15;docs/design/config-table-hotreload.md §4)。
+# 生产指向发布脚本维护的 active 目录;启动强依赖,加载失败进程退出(fail-closed)。
+config_table:
+  dir: "/data/pandora/configtable/active"
+
 match:
   team_addr: "team.pandora.svc.cluster.local:50010"
   ds_allocator_addr: "ds-allocator.pandora.svc.cluster.local:50020"

@@ -1,0 +1,32 @@
+// Pandora 配置表热更受控入口(运维 / 调试;内部 gRPC 端口,不经 Envoy,不对客户端开放)。
+//
+// 语义(docs/design/config-table-hotreload.md §6):
+//   - 幂等:active/manifest.json 的 version == 当前生效 version 时不重复加载,直接返回当前状态;
+//   - 同步返回结果:成功返回生效 version;失败返回原因(哪张表 / 何种校验失败),且不切换(保留旧表);
+//   - 原子切换:新批次全表加载 + 校验通过后才替换内存指针(pkg/configtable)。
+// 每个消费配置表的服务各自实现本 service,挂在自己的内部 gRPC server 上。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/common/v1/errcode.proto";
+
+service ConfigTableAdminService {
+  // ReloadConfigTable 从本服务的 active 目录重新加载配置表并原子切换。
+  rpc ReloadConfigTable(ReloadConfigTableRequest) returns (ReloadConfigTableResponse);
+}
+
+message ReloadConfigTableRequest {
+  // expect_version 非 0 时:要求 active/manifest.json 的 version 恰好等于该值,
+  // 否则拒绝加载(发布脚本用它确认「我刚发布的那批」已落到 active,防止误触发旧目录)。
+  // 0 = 不校验,加载 active 当前内容。
+  uint64 expect_version = 1;
+}
+
+message ReloadConfigTableResponse {
+  pandora.common.v1.ErrCode code = 1;
+  uint64 active_version = 2; // 当前生效 version(成功 = 新版本;失败 / no-op = 仍在用的版本)
+  bool reloaded = 3;         // true = 本次发生了切换;false = 幂等 no-op 或失败
+  string detail = 4;         // 人可读说明(no-op 原因 / 校验失败定位),仅运维可见
+}

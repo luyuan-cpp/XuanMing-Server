@@ -1,6 +1,6 @@
 # Pandora 配置表热更流水线
 
-> **状态**:方向已定,实现待排期(2026-06-30 记录)
+> **状态**:核心链路已落地(2026-07-21,首表 level/g_关卡;§10 有落点清单),方向 2026-06-30 拍板
 > **本文档地位**:策划配置表(`Table`)→ JSON → 服务端热加载 的契约与目录约定。
 > **关联规范**:`CLAUDE.md §5`(proto 优先 / 配置表 ID `uint32`)、`infra.md`(资源命名)、`pandora-arch.md §11`(决策行)。
 > **一句话**:这是**配置发布 / 热更流水线**,不是分布式配置中心;Apollo / Nacos **现在不接**,以后只可能当"发布通知 / 版本号",不当大量表 JSON 的主存储。
@@ -113,7 +113,7 @@ F:\work\XuanMing-Server\configtable\dist\
 
 ```jsonc
 {
-  "version": 20260630_001,          // 单调递增版本号(日期+序号 或 纯自增)
+  "version": 20260630001,           // 单调递增版本号 = 日期*1000+当日序号(生成器自动;JSON 数字不能带下划线)
   "generated_at_ms": 1751270400000, // 生成时间(毫秒)
   "generator": "configtable-gen@1.0.0",
   "source_rev": "svn-r12345",       // 源表 SVN 版本,便于追溯
@@ -177,14 +177,39 @@ F:\work\XuanMing-Server\configtable\dist\
 - Apollo / Nacos **不作为核心**;未来若需「发布通知 / 版本号 / 多机刷新」,**优先复用现有 etcd watch**,Apollo / Nacos 仅在 §2.1 触发条件成立时再评估,且只管元数据不存表体。
 - proto 读 JSON 落地前,生成器钉死「字段名对齐 / 64 位整数字符串 / 未知字段策略」三件事。
 
-## §10 落地任务清单(实现时按序做,均待排期)
+## §10 落地任务清单(2026-07-21 核心链路已落地,落点如下)
 
-> 当前仅设计草稿,**未写代码**。实现归属按 `AGENTS.md §11.1`:业务/生成器/加载器逻辑由 Claude 实现+验证,环境/SVN/git 收尾由 Codex/人。
+> 实现归属按 `AGENTS.md §11.1`:业务/生成器/加载器逻辑由 Claude 实现+验证,环境/SVN/git 收尾由 Codex/人。
+> 移植说明:运行时访问模式移植自旧项目 mmorpg 的 `go/shared/generated/table`(TableManager),
+> 三处标准化改造:全批快照 + `atomic.Pointer` 原子切换(旧为普通指针赋值)、失败返回 error 保留旧表
+> (旧为 `log.Fatalf`)、manifest 驱动整批 all-or-nothing(旧为逐表独立加载)。
 
-1. [ ] 定义各表 proto message(`proto/pandora/config/*.proto`,message 全名进 manifest 的 `proto` 字段)。
-2. [ ] `configtable-gen` 生成器:读 `Table` 源表 → §7 校验 → 输出 `dist/*.json` + `manifest.json`。
-3. [ ] 服务端加载器:读 `active/manifest.json` → 逐表 `protojson.Unmarshal`(`DiscardUnknown` 运行时按需)→ 原子整表替换。
-4. [ ] reload 入口:etcd 版本键 watch(多机)+ gRPC `ReloadConfigTable`(单机/dev),§6 语义。
-5. [ ] staging → active 原子切换 + history 留档 + 回滚命令。
-6. [ ] 发布脚本(`tools/scripts/`):dist → 服务端 staging 拷贝 + 触发 reload。
+1. [x] 各表 proto message:`proto/pandora/config/v1/level.proto`(LevelRow/LevelTableData,首表 = g_关卡)。
+2. [x] `configtable-gen` 生成器:`tools/configtable-gen`(Go,独立 module;stdlib 自实现 xlsx 最小读取器,
+       无 Python 依赖)。§7 校验齐;产物确定性序列化(protojson Compact→Indent);version 自动单调
+       (YYYYMMDD*1000+seq);同内容幂等不写盘。首批产物已入库 `configtable/dist`(v20260721001)。
+3. [x] 服务端加载器:`pkg/configtable`(manifest 校验 + checksum + 行数断言 + 运行时 `DiscardUnknown` +
+       version 单调防回退 + 全批成功才 `atomic.Pointer` 切换 + 未知新表跳过告警/脏文件告警)。
+4. [~] reload 入口:gRPC `ConfigTableAdminService.ReloadConfigTable` 已落(matchmaker 内部端口,
+       幂等/expect_version/失败保留旧表);**etcd 版本键 watch(多机)待排期**,单机/dev 用 RPC 已够。
+5. [x] staging → active 切换 + history 留档:`tools/scripts/configtable_publish.ps1`(文件面;回滚 =
+       重新生成更高版本发布,脚本拒绝低版本覆盖)。
+6. [x] 发布脚本同上(可选 `-ReloadAddr` 用 grpcurl 触发 reload)。
+
+**已接线服务**:matchmaker(`config_table.dir` 开关,空=不启用;启用后启动强依赖 fail-closed,
+StartMatch 校验 map_id ∈ 关卡表且 category=战斗,否则 `ERR_MATCH_INVALID_MAP`)。
+
+**Go 表访问代码也是生成的**(2026-07-21 补,移植旧项目 go_config.go.j2 / go_all_table.go.j2 模板):
+`tools/configtable-gen/internal/gogen` 按表规格生成 `pkg/configtable/<name>_table.gen.go`
+(视图 + All/ByID/Exists/Count/ByIDs/RandOne/Where/First)与 `tables.gen.go`(Tables 快照结构 +
+specByName 注册,即旧 all_table.go 的替代);表私有校验与域方法留在手写伴生文件
+(`level.go` 的 `validateLevelRow` / `IsBattleLevel`)。生成代码与表规格的同步由
+`gogen` 的 `TestGeneratedFilesUpToDate` 守护(改规格不重跑生成器 / 手改 gen 文件 → 测试红)。
+未移植 comp(ECS 组件)与 fk(外键 helper)模板:Go 侧无 ECS 消费方、现有表无外键列,
+出现真实需求再加(§15.3)。
+
+**加新表五步**(单一事实源 = `internal/tablegen/registry.go` 的 `Sources()`):
+① proto 容器(`proto/pandora/config/v1`)→ ② `tablegen` 写 `Build<Name>Table` 表规格(列映射+§7 校验)
+→ ③ `Sources()` 登记一条 → ④ 跑 `go run ./tools/configtable-gen -tables <Table根>`(同时产出
+dist 数据 + gen Go 代码)→ ⑤ `pkg/configtable` 写伴生文件(`validate<Name>Row` 钩子,可空实现 + 域方法)。
 

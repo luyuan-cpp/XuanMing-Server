@@ -103,7 +103,8 @@ function Assert-OneClickGenesisAuthorization([string]$InvokeSource) {
             '-ExpectedAdoptionPvcUid $legacyAdoptionPvcUid',
             '-ExpectedAdoptionCohortFingerprintSha256 $legacyAdoptionCohortFingerprintSha256',
             '-LegacyAdoptionCollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS',
-            '-LegacyAdoptionCohortPreflightError $legacyAdoptionCohortPreflightError')) {
+            '-LegacyAdoptionCohortPreflightError $legacyAdoptionCohortPreflightError',
+            '-AllowNotReady')) {
         Assert-True ($InvokeSource.Contains($fragment)) "一键入口 genesis 授权表达式缺少:$fragment"
     }
     $legacyStart = $InvokeSource.IndexOf('$allowLegacyInfraOnlyAdoption =', [StringComparison]::Ordinal)
@@ -135,7 +136,16 @@ function Assert-BaselineGenesisAuthorization([string]$BaselineSource) {
             '--verify-genesis-continuity',
             '--genesis-continuity-token $continuityToken',
             'Ensure-LocalObservedV3Witness',
-            'LocalFreshDsAuthMarkerEvidenceCompletedAnnotation')) {
+            'LocalFreshDsAuthMarkerEvidenceCompletedAnnotation',
+            '[System.Threading.Mutex]::new',
+            '$baselineMutex.WaitOne',
+            '[System.Threading.AbandonedMutexException]',
+            '$baselineMutex.ReleaseMutex()',
+            '$prepareMarker = Get-LocalFreshGenesisIntent',
+            '$prepareMarkerState -cnotin',
+            '$prepareTokenProperty',
+            '$prepareDeadline = [DateTime]::UtcNow.AddSeconds(45)',
+            'continuity prepare 返回瞬时/不确定结果')) {
         Assert-True ($BaselineSource.Contains($fragment)) "baseline genesis 授权表达式缺少:$fragment"
     }
     $preinfraStart = $BaselineSource.IndexOf("if (`$markerState -cin @('preinfra', 'adopting'))", [StringComparison]::Ordinal)
@@ -146,13 +156,17 @@ function Assert-BaselineGenesisAuthorization([string]$BaselineSource) {
     $preinfraPristine = $preinfraBranch.IndexOf('Assert-LocalEtcdStorePristineForGenesis', [StringComparison]::Ordinal)
     $preinfraLastPristine = $preinfraBranch.LastIndexOf('Assert-LocalEtcdStorePristineForGenesis', [StringComparison]::Ordinal)
     $preinfraZeroWriter = $preinfraBranch.IndexOf('Assert-NoLocalFreshGenesisWriters', [StringComparison]::Ordinal)
+    $preinfraMarkerReread = $preinfraBranch.IndexOf('$prepareMarker = Get-LocalFreshGenesisIntent', [StringComparison]::Ordinal)
+    $preinfraMarkerStateGate = $preinfraBranch.IndexOf('$prepareMarkerState -cnotin', [StringComparison]::Ordinal)
     $preinfraPrepare = $preinfraBranch.IndexOf('--prepare-zero-writer-genesis-v3', [StringComparison]::Ordinal)
     $preinfraSentinelVerify = $preinfraBranch.LastIndexOf('--verify-genesis-continuity', [StringComparison]::Ordinal)
     $preinfraSetPending = $preinfraBranch.IndexOf('-TargetState pending', [StringComparison]::Ordinal)
     Assert-True ($preinfraPristine -ge 0 -and $preinfraPristine -lt $preinfraZeroWriter -and
         $preinfraZeroWriter -lt $preinfraLastPristine -and $preinfraLastPristine -lt $preinfraPrepare -and
+        $preinfraLastPristine -lt $preinfraMarkerReread -and $preinfraMarkerReread -lt $preinfraMarkerStateGate -and
+        $preinfraMarkerStateGate -lt $preinfraPrepare -and
         $preinfraPrepare -lt $preinfraSentinelVerify -and $preinfraSentinelVerify -lt $preinfraSetPending) `
-        'preinfra/adopting 必须按 pristine -> zero-writer -> pristine -> prepare sentinel -> verify -> pending 排序'
+        'preinfra/adopting 必须按 pristine -> zero-writer -> pristine -> marker/token 回读 -> prepare sentinel -> verify -> pending 排序'
 
     $resumeGuardStart = $BaselineSource.IndexOf('if (-not $AllowFreshBootstrap)', [StringComparison]::Ordinal)
     $resumeGuardEnd = $BaselineSource.IndexOf('if (-not $requiredIsMissing)', $resumeGuardStart, [StringComparison]::Ordinal)
@@ -355,6 +369,8 @@ foreach ($mutant in @(
 $baselineFunction = Get-OnlyFunctionAst $startAst 'Assert-LocalDsAuthBaseline'
 $baselineSource = $baselineFunction.Extent.Text
 Assert-BaselineGenesisAuthorization -BaselineSource $baselineSource
+Assert-True (-not $baselineSource.Contains('-AllowNotReady')) `
+    'apply 后 baseline cohort 复算必须保持严格 Ready，禁止沿用 preflight 放宽开关'
 $requiredRead = $baselineSource.IndexOf('go run ./pkg/dsauthfence/cmd/dsauth-required', [StringComparison]::Ordinal)
 $completeMissingGuard = $baselineSource.IndexOf("markerState -ceq 'complete'", [StringComparison]::Ordinal)
 $legacyCohortRecheck = $baselineSource.IndexOf('Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext $KubeContext', [StringComparison]::Ordinal)
@@ -433,6 +449,8 @@ foreach ($mutant in @(
         $baselineSource.Replace('if (-not $AllowLegacyInfraOnlyAdoption -or [string]::IsNullOrWhiteSpace($ExpectedAdoptionPvcUid))', 'if ($false)'),
         $baselineSource.Replace('Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext $KubeContext', 'Removed-LocalLegacyInfraOnlyAdoptionCohort'),
         $baselineSource.Replace('$recheckedCohort.FingerprintSha256 -cne $ExpectedAdoptionCohortFingerprintSha256', '$false'),
+        $baselineSource.Replace('[System.Threading.Mutex]::new', '[System.Threading.RemovedMutex]::new'),
+        $baselineSource.Replace('$prepareMarker = Get-LocalFreshGenesisIntent', '$prepareMarker = $marker'),
         $preinfraGateMutant,
         $preinfraOrderMutant,
         $resumeGuardWarnMutant,
@@ -683,6 +701,28 @@ $cohortAgain = Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext 'minikube' `
     -CollectionTimeUnixMS $script:CohortCollectedAtMS -ExpectedPvcUid $script:CohortPvcUid
 Assert-True ([string]$cohortAgain.FingerprintSha256 -ceq [string]$cohort.FingerprintSha256) `
     '同一 collectedAt + 同一对象集合重算 fingerprint 必须稳定'
+
+# 上次一键在 Pod 拉镜像/Ready 前中断时，本轮必须能在 apply 前先固定同一批对象身份，
+# 等 rollout 后再走默认严格 Ready 复算；不能要求用户为了 preflight 再双击第二次。
+foreach ($item in @($script:CohortWorkloads.items)) {
+    if ([string]$item.kind -ceq 'Deployment') {
+        $item.status = [pscustomobject]@{ observedGeneration = 1; replicas = 1; updatedReplicas = 1 }
+    } elseif ([string]$item.kind -ceq 'ReplicaSet') {
+        $item.status = [pscustomobject]@{ observedGeneration = 1; replicas = 1 }
+    } elseif ([string]$item.kind -ceq 'Pod') {
+        $item.status = [pscustomobject]@{ phase = 'Pending'; conditions = @() }
+    }
+}
+Assert-Throws {
+    Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext 'minikube' `
+        -CollectionTimeUnixMS $script:CohortCollectedAtMS -ExpectedPvcUid $script:CohortPvcUid
+} '严格 baseline cohort 仍必须要求 infra Ready'
+$notReadyCohort = Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext 'minikube' `
+    -CollectionTimeUnixMS $script:CohortCollectedAtMS -ExpectedPvcUid $script:CohortPvcUid -AllowNotReady
+Assert-True ([string]$notReadyCohort.FingerprintSha256 -ceq [string]$cohort.FingerprintSha256) `
+    'apply 前未 Ready cohort 必须固定与 Ready 后相同的 UID/owner/spec/timestamp fingerprint'
+Initialize-CohortFixture
+
 $mysqlDeployment = @($script:CohortWorkloads.items | Where-Object {
     [string]$_.kind -ceq 'Deployment' -and [string]$_.metadata.name -ceq 'mysql'
 })[0]

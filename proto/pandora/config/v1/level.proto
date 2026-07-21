@@ -1,0 +1,49 @@
+// Pandora 配置表:关卡表。
+//
+// 源表:Pandora-Client-SVN/Table/关卡/g_关卡.xlsx(策划维护,SVN)。
+// 产物:XuanMing-Server/configtable/dist/level.json(tools/configtable-gen 生成,git 跟踪)。
+// 加载:服务端 pkg/configtable 以 protojson 读入本容器,全批校验通过后原子切换。
+// 契约:字段名 = 生成 JSON key(protojson UseProtoNames,snake_case);
+//   列名映射 / 必填 / 默认值 / 前缀约束全部由 excel.proto 注解承载(proto 即单一事实源),
+//   改列只改「xlsx 表头 + 本文件注解」两处,生成器与服务端代码自动跟随。
+// 规范:配置表 ID 默认 uint32(CLAUDE.md §5.6);流水线契约见 docs/design/config-table-hotreload.md。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "pandora/config/v1/excel.proto";
+
+// LevelCategory 关卡类别(对齐 g_关卡.xlsx「关卡类别」列取值,JSON 里用数字)。
+enum LevelCategory {
+  LEVEL_CATEGORY_UNSPECIFIED = 0;
+  LEVEL_CATEGORY_LOGIN       = 1; // 登录
+  LEVEL_CATEGORY_ROLE_SELECT = 2; // 选角
+  LEVEL_CATEGORY_MAIN_CITY   = 3; // 主城
+  LEVEL_CATEGORY_BATTLE      = 4; // 战斗 / 副本(可被匹配 / 进本的玩法关卡)
+}
+
+// LevelRow 关卡表一行(列序 = 字段号序 = 表头 A..G)。
+message LevelRow {
+  // ID(主键,即全链路 map_id)
+  uint32 id = 1 [(excel_col) = "ID", (excel_required) = true];
+  // 关卡名称(策划可读名)
+  string name = 2 [(excel_col) = "关卡名称", (excel_required) = true];
+  // 关卡资源(UE 关卡资产路径)
+  string asset_path = 3 [(excel_col) = "关卡资源", (excel_required) = true, (excel_prefix) = "/"];
+  // GameMode类(UE 类路径,空 = 关卡默认)
+  string game_mode_class = 4 [(excel_col) = "GameMode类", (excel_prefix) = "/"];
+  // 关卡类别(枚举数字;0=UNSPECIFIED 不允许)
+  LevelCategory category = 5 [(excel_col) = "关卡类别", (excel_required) = true];
+  // 禁止ui快捷键开关(源表空值默认 1=禁止,表头注释「1:禁止(默认)」)
+  bool disable_ui_shortcut = 6 [(excel_col) = "禁止ui快捷键开关", (excel_default) = "1"];
+  // 匹配列表显示(源表空值默认 0=不显示)
+  bool show_in_match_list = 7 [(excel_col) = "匹配列表显示", (excel_default) = "0"];
+}
+
+// LevelTableData 关卡表整表容器(dist/level.json 的根对象;excel_file 注解 = 导表登记)。
+message LevelTableData {
+  option (excel_file) = "关卡/g_关卡.xlsx";
+
+  repeated LevelRow rows = 1;
+}

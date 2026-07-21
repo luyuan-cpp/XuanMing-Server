@@ -703,3 +703,58 @@
 - 交接(用户/编辑器侧):UE 编译+PIE 验证(Live Coding 约束,AI 不代跑);掉落物/宝箱/撤离点
   蓝图子类外观与关卡摆放;CfgItem 表新增「使用回血量/装备部位」两列导表;DefaultMyGameSetting.ini
   可选配置 UMyLootSetting(默认值即可跑通)。git/svn 提交由用户复核后执行。
+
+## 2026-07-21:配置表热更流水线落地(旧项目读表移植 + §9.15 标准化,Claude)
+
+- 背景:把 D:\luyuan\mmorpg 的 Go 读表(go/shared/generated/table 单例 TableManager 模式)移植到本仓库,
+  并按 config-table-hotreload.md §0 标准流水线加固。旧实现三处不达标,移植时全部修正:
+  ①每表 `m.snap = snap` 普通指针赋值(热更下数据竞争)→ 全批快照 + `atomic.Pointer` 一次切换;
+  ②`LoadTables` 失败 `log.Fatalf` 杀进程 → 返回 error,失败保留旧批次;
+  ③逐表独立加载(批内跨表版本可能撕裂)→ manifest 驱动整批 all-or-nothing。
+- 新增(全链 `go build`/`go test` 绿):
+  - `proto/pandora/config/v1`:`level.proto`(LevelRow/LevelTableData,对齐 g_关卡.xlsx)+
+    `configtable.proto`(ConfigTableAdminService.ReloadConfigTable,幂等/失败保留旧表);
+    errcode 增 `ERR_MATCH_INVALID_MAP=4008`(proto 与 pkg/errcode 同步)。[proto]
+  - `pkg/configtable`:manifest(version+sha256+rows)校验、protojson 加载(运行时 DiscardUnknown,
+    滚动窗口容忍新字段)、version 单调防回退、expect_version、未知新表跳过告警、脏文件告警、
+    LevelTable 只读视图(ByID/IsBattleLevel);测试覆盖 9 类失败路径「失败保留旧表」+ 并发读切换。
+  - `tools/configtable-gen`(独立 module,已入 go.work):读 Pandora-Client-SVN/Table 源表
+    (中文表头版式:1 列名/2-4 注释/5+ 数据),§7 严格校验(表头精确对齐/主键唯一/枚举越界/
+    布尔 0-1/路径前缀),protojson 确定性序列化(Compact→Indent 消除 protojson 随机空白),
+    生成回读严格校验;version 自动单调(YYYYMMDD*1000+seq),同内容幂等不写盘。
+    xlsx 解析用 stdlib 自实现最小读取器(zip+xml,fail-closed),不引第三方、无需 Python。
+  - `configtable/dist`:首批产物 v20260721001(level 7 行,git 跟踪)。
+  - matchmaker 接线:`config_table.dir` 开关(空=不启用,现行为不变;非空=启动强依赖 fail-closed,
+    并校验兜底 `match.map_id` 必须战斗类关卡);StartMatch 增关卡表准入门——客户端 map_id
+    (含 0→默认兜底后)必须存在于关卡表且 category=战斗,否则 `ERR_MATCH_INVALID_MAP`
+    (此前任意 map_id 可一路透传成 DS `PANDORA_MAP_ID`);同 gRPC 端口挂 ReloadConfigTable
+    (内部接口,callerID!=0 一律拒;信任模型同 ReleaseMatch)。热更后新批次对后续 StartMatch 立即生效,
+    已入队票据在 ticket TTL 内自然流完不回溯。`pkg/config.Base` 增 `config_table` 段(全服务可复用)。
+  - `tools/scripts/configtable_publish.ps1`:dist→staging→sha256 校验→版本单调→旧 active 归档
+    history/v<ver>→改名切 active(+可选 grpcurl 触发 reload);已实测发布/no-op/升级归档/回退拒绝。
+- 决策记录:「匹配列表显示」列不做服务端准入(是客户端 UI 展示位,dev/GM 直进测试关卡需放行),
+  服务端只卡「存在 + category=战斗」;生成器与 pkg/configtable 不互相 import,以 §5 manifest JSON
+  为共同契约。产物 JSON 口径:proto 原名 snake_case + 枚举数字 + 零值省略。
+- 剩余(待排期,不阻塞现网):etcd 版本键 watch 多机统一刷新(§6 方式 1,单机 reload RPC 已够);
+  其余表(道具/技能/Buff…)按「proto 容器 + tablegen 表规格 + specByName 注册 + Tables 加字段」四步扩;
+  本机无 gcc,`-race` 未跑(读路径 atomic.Pointer + 不可变快照,竞态面已设计消除)。
+- 交接:①`go.work` 新增 `use ./tools/configtable-gen`(如需 `go work sync`/tidy 由 Codex 收尾;
+  该 module 仅依赖 proto+protobuf,本机 build/test 已绿);②proto 有改动已重生 pb,UE 侧无需同步
+  (纯服务端协议);③dev 启用方式见 matchmaker-dev.yaml `config_table` 注释段。
+
+## 2026-07-21(续):Go 表访问代码改为生成(移植旧项目表代码模板,Claude)
+
+- 补齐读表移植缺口:旧项目 mmorpg 的「每表一份生成 Go 代码」能力(go_config.go.j2 /
+  go_all_table.go.j2)移入 `tools/configtable-gen/internal/gogen`(text/template + go/format)。
+  旧生成物 48 个 `*_table.go` 不直接拷(表集与 pb 包都是旧项目的),生成能力对 Pandora 表规格重放。
+- 结构:`pkg/configtable/<name>_table.gen.go`(视图 + All/ByID/Exists/Count/ByIDs/RandOne/Where/First,
+  即旧 TableManager API 去单例化)+ `tables.gen.go`(Tables 快照结构 + specByName 注册,替代旧
+  all_table.go 的 LoadTables);表私有校验/域方法留手写伴生文件(level.go:validateLevelRow +
+  IsBattleLevel)。生成/手写边界:gen 文件头 DO NOT EDIT,钩子由生成代码显式调用。
+- 表规格单一事实源收拢到 `internal/tablegen/registry.go` `Sources()`(数据产物与代码生成共用);
+  main 增 `-go-out`(默认 pkg/configtable,空=跳过),内容不变不写盘。
+- 守护:`gogen.TestGeneratedFilesUpToDate`(规格改了不重跑生成器 / 手改 gen 文件 → 测试红)、
+  确定性测试、生成 API 与钩子接线测试。pkg/configtable 既有全部测试 + matchmaker 全量回归绿
+  (API 兼容,消费方零改动)。
+- 未移植并记录原因:comp(ECS 组件结构,Go 侧无消费方)、fk(外键 helper,现有表无外键列)、
+  multi-key 复合主键(无此类表);出现真实需求再加(§15.3)。加新表五步见 hotreload doc §10。

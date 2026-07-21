@@ -1,0 +1,36 @@
+// Pandora 配置表 Excel 注解(自定义 option;做法对齐旧项目 protogen 的选项驱动生成)。
+//
+// proto 是配置表的单一事实源:表(容器 message)与列(行 message 字段)的导表元信息
+// 全部以下列 option 标注,tools/configtable-gen 经 protoreflect 描述符自动发现:
+//   - 打了 (excel_file) 的 <Name>TableData 容器 = 一张配置表;
+//   - 行 message 里打了 (excel_col) 的字段 = 源表一列(按字段号序对应表头列序);
+//   - 主键约定:行 message 必有名为 id 的 uint32 字段(CLAUDE.md §5.6)。
+// 加新表不再手写任何登记代码:写 proto(带注解)→ proto_gen.ps1 → configtable-gen。
+//
+// 扩展号取内部保留区 [50000, 99999](不对外发布,仓库内自治)。
+
+syntax = "proto3";
+
+package pandora.config.v1;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MessageOptions {
+  // excel_file 源表相对路径(相对 Pandora-Client-SVN/Table 根目录)。
+  // 标注在整表容器 message 上;未标注的 message 不参与导表。
+  string excel_file = 51501;
+}
+
+extend google.protobuf.FieldOptions {
+  // excel_col 源表列名(表头第 1 行,逐列精确匹配;列序 = 字段号序)。
+  string excel_col = 51502;
+
+  // excel_required 单元格必填:空单元格报错。默认 false(空取 excel_default,无默认则类型零值)。
+  bool excel_required = 51503;
+
+  // excel_default 空单元格的默认值(按列类型解析,如 bool 列 "1"/"0");与 excel_required 互斥。
+  string excel_default = 51504;
+
+  // excel_prefix 非空单元格必须以该前缀开头(如 UE 资产 / 类路径 "/")。
+  string excel_prefix = 51505;
+}
