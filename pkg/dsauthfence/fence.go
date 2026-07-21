@@ -190,7 +190,14 @@ type Lease interface {
 // Backend 隔离 etcd 细节，允许用确定性 fake 验证所有 fail-closed 分支。
 type Backend interface {
 	GetRequired(context.Context, string) (state RequiredState, watchRevision int64, modRevision int64, found bool, err error)
-	AcquireCapability(context.Context, string, string, string, string, int64, []byte, int64) (Lease, error)
+	// GetCapability 线性读取本进程 capability key 现值(同 Pod 崩溃重启的安全接管预检)。
+	GetCapability(ctx context.Context, key string) (value []byte, modRevision int64, leaseID int64, found bool, err error)
+	// AcquireCapability 注册 capability。prevModRevision==0 要求 key 不存在
+	// (CreateRevision==0);>0 表示同身份安全接管:CAS ModRevision 精确匹配才原子替换,
+	// 成功后 best-effort revoke prevLeaseID(终结旧 keepalive,不影响已挂新租约的 key)。
+	AcquireCapability(ctx context.Context, key, lockKey, requiredKey string,
+		expectedRequiredValue string, expectedRequiredModRevision int64,
+		value []byte, ttl int64, prevModRevision int64, prevLeaseID int64) (Lease, error)
 	WatchRequired(context.Context, string, int64) <-chan RequiredEvent
 	Close() error
 }
@@ -203,6 +210,7 @@ type Holder struct {
 
 	required    atomic.Uint32
 	policy      atomic.Uint32
+	reclaimed   bool
 	lost        chan struct{}
 	lostOnce    sync.Once
 	closeOnce   sync.Once
@@ -260,25 +268,14 @@ func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
 		_ = backend.Close()
 		return nil, fmt.Errorf("dsauthfence: marshal capability: %w", err)
 	}
-	leaseCtx, cancelLease := context.WithTimeout(ctx, cfg.DialTimeout)
-	lease, err := backend.AcquireCapability(
-		leaseCtx,
-		capabilityKey(cfg.Prefix, cfg.Service, cfg.InstanceUID),
-		activationLockKey(cfg.Prefix),
-		requiredKey,
-		required.RawValue,
-		requiredModRevision,
-		payload,
-		cfg.LeaseTTLSec,
-	)
-	cancelLease()
+	lease, reclaimed, err := acquireWithSamePodTakeover(ctx, backend, cfg, requiredKey, required.RawValue, requiredModRevision, payload)
 	if err != nil {
 		_ = backend.Close()
 		return nil, fmt.Errorf("dsauthfence: acquire capability: %w", err)
 	}
 
 	watchCtx, cancel := context.WithCancel(context.Background())
-	h := &Holder{backend: backend, lease: lease, cancel: cancel, lost: make(chan struct{})}
+	h := &Holder{backend: backend, lease: lease, cancel: cancel, reclaimed: reclaimed, lost: make(chan struct{})}
 	h.required.Store(required.Epoch)
 	h.policy.Store(required.PolicyGeneration)
 	watch := backend.WatchRequired(watchCtx, requiredKey, revision+1)
@@ -288,8 +285,89 @@ func Start(ctx context.Context, backend Backend, cfg Config) (*Holder, error) {
 	return h, nil
 }
 
+// acquireWithSamePodTakeover 注册 capability,并在「同 Pod 上一进程 fatal 崩溃
+// (无法执行 defer Close)残留同身份 capability」时做安全接管,消除等旧租约 TTL
+// 自然过期的恢复空窗(§16.8:恢复最坏耗时不得吃光业务安全租约)。
+//
+// 接管不放宽单 writer / 防脑裂:
+//   - key 按 (service, PodUID) 唯一,异 Pod 副本各持异 key,永不互相接管;
+//   - 只有 validateSamePodTakeover 全部身份字段一致才接管;任何不一致 fail-closed;
+//   - 接管是 ModRevision 精确 CAS(并发接管者最多一个成功)+ 与 required/activation
+//     lock 同一事务判定,与全新注册走完全相同的 fencing 条件;
+//   - 接管成功后 revoke 旧租约:若旧进程理论上仍存活,其 keepalive 立即终结 → Lost
+//     触发退出,结构性保证不出现第二个自认持有 capability 的进程。
+//
+// 两次尝试仅覆盖「预检 Get 与注册 Txn 之间残留租约恰好自然过期/键变化」的窄竞态,
+// 把一次容器级 CrashLoop 退避(≥10s)收敛为一次进程内重读。
+func acquireWithSamePodTakeover(
+	ctx context.Context,
+	backend Backend,
+	cfg Config,
+	requiredKey, requiredRawValue string,
+	requiredModRevision int64,
+	payload []byte,
+) (Lease, bool, error) {
+	capKey := capabilityKey(cfg.Prefix, cfg.Service, cfg.InstanceUID)
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		preCtx, cancelPre := context.WithTimeout(ctx, cfg.DialTimeout)
+		prevValue, prevModRevision, prevLeaseID, prevFound, err := backend.GetCapability(preCtx, capKey)
+		cancelPre()
+		if err != nil {
+			return nil, false, fmt.Errorf("linearizable read own capability: %w", err)
+		}
+		if prevFound {
+			if terr := validateSamePodTakeover(prevValue, cfg); terr != nil {
+				return nil, false, terr
+			}
+		} else {
+			prevModRevision, prevLeaseID = 0, 0
+		}
+		leaseCtx, cancelLease := context.WithTimeout(ctx, cfg.DialTimeout)
+		lease, err := backend.AcquireCapability(
+			leaseCtx, capKey, activationLockKey(cfg.Prefix), requiredKey,
+			requiredRawValue, requiredModRevision,
+			payload, cfg.LeaseTTLSec, prevModRevision, prevLeaseID,
+		)
+		cancelLease()
+		if err == nil {
+			return lease, prevFound, nil
+		}
+		lastErr = err
+	}
+	return nil, false, lastErr
+}
+
+// validateSamePodTakeover 判定残留 capability 是否属于「同一 Pod 的上一个进程」。
+// 同 PodUID ⇒ kubelet 串行重启同一容器 ⇒ 同一不可变 Pod spec(镜像 digest 一致)且
+// 旧进程必已退出,接管不会产生第二 writer。任何字段不一致(异身份写入、镜像已换、
+// 配置漂移)一律拒绝接管并 fail-closed,等旧租约自然过期或人工介入,不得放宽。
+func validateSamePodTakeover(prevRaw []byte, cfg Config) error {
+	var prev Capability
+	if err := json.Unmarshal(prevRaw, &prev); err != nil {
+		return fmt.Errorf("dsauthfence: stale capability unparsable, refuse takeover: %w", err)
+	}
+	if prev.Service != cfg.Service || prev.InstanceUID != cfg.InstanceUID {
+		return fmt.Errorf("dsauthfence: stale capability identity %s/%s mismatch, refuse takeover",
+			prev.Service, prev.InstanceUID)
+	}
+	if prev.ImageDigest != cfg.ImageDigest {
+		return errors.New("dsauthfence: stale capability image digest mismatch, refuse takeover")
+	}
+	if prev.WriterEpoch != cfg.WriterEpoch {
+		return errors.New("dsauthfence: stale capability writer epoch mismatch, refuse takeover")
+	}
+	if prev.KeysetRevision != cfg.KeysetRevision {
+		return errors.New("dsauthfence: stale capability keyset revision mismatch, refuse takeover")
+	}
+	return nil
+}
+
 // RequiredEpoch 返回本进程已经观察到的全局单调高水位。
 func (h *Holder) RequiredEpoch() uint32 { return h.required.Load() }
+
+// Reclaimed 报告本次注册是否通过同 Pod 安全接管取得(供启动日志/审计观测)。
+func (h *Holder) Reclaimed() bool { return h.reclaimed }
 
 // RequiredPolicyGeneration is the immutable control-plane policy generation.
 // V2 and V3 both require data-plane WriterEpoch=2.

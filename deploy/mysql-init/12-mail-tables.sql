@@ -11,12 +11,15 @@
 --   player_mail         个人收件箱(写扩散,mail_id PK)
 --   player_mail_cursor  系统 / 公会邮件拉取游标(player_id PK)
 --   player_mail_claim   附件领取幂等(player_id + mail_id PK)
+--   player_mail_archive 过期未领附件归档(清理 worker 移入,守住"不静默丢失"不变量)
 --
 -- 约定:
 --   - 所有业务 ID BIGINT UNSIGNED(snowflake,不变量 §9.11 对齐 Go uint64)
 --   - 系统/公会邮件由单节点生成,channel 内 mail_id 严格递增(游标比较零漏拉)
 --   - 邮件正文 + 附件序列化成 proto bytes 存 payload blob(CLAUDE.md §5.8 存储侧)
 --   - status:1 unread / 2 read / 3 claimed(对齐 MailStatus)
+--   - 增长有界(2026-07-21):所有邮件生命有限(end_ms/expire_ms 为 0 时服务端补默认 TTL),
+--     mail 服务 sweep worker 周期批量清理过期行;idx_expire/idx_end/idx_mail 供清理走索引
 
 USE `pandora_social`;
 
@@ -26,7 +29,8 @@ CREATE TABLE IF NOT EXISTS `sys_mail` (
     `end_ms`     BIGINT          NOT NULL DEFAULT 0 COMMENT '失效止 ms(0 永不过期)',
     `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化(标题/正文/附件)',
     `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`mail_id`)
+    PRIMARY KEY (`mail_id`),
+    KEY `idx_end` (`end_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 系统邮件(全服一份,登录拉取)';
 
@@ -38,7 +42,8 @@ CREATE TABLE IF NOT EXISTS `guild_mail` (
     `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
     `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`mail_id`),
-    KEY `idx_guild` (`guild_id`, `mail_id`)
+    KEY `idx_guild` (`guild_id`, `mail_id`),
+    KEY `idx_end` (`end_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 公会邮件(每公会一份,成员拉取)';
 
@@ -51,7 +56,8 @@ CREATE TABLE IF NOT EXISTS `player_mail` (
     `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
     `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`mail_id`),
-    KEY `idx_player_status` (`player_id`, `status`)
+    KEY `idx_player_status` (`player_id`, `status`),
+    KEY `idx_expire` (`expire_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 个人邮件收件箱(写扩散,离线可达)';
 
@@ -68,6 +74,24 @@ CREATE TABLE IF NOT EXISTS `player_mail_claim` (
     `player_id`   BIGINT UNSIGNED NOT NULL COMMENT '领取人',
     `mail_id`     BIGINT UNSIGNED NOT NULL COMMENT '被领邮件(任意 channel)',
     `claimed_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`player_id`, `mail_id`)
+    PRIMARY KEY (`player_id`, `mail_id`),
+    KEY `idx_mail` (`mail_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 邮件附件领取幂等(player_id+mail_id 唯一)';
+  COMMENT='Pandora 邮件附件领取幂等(player_id+mail_id 唯一;sweep 按雪花 mail_id cutoff 范围清理)';
+
+-- 过期未领附件归档:sweep 清理 player_mail 时,带未领附件的过期邮件先移入本表再删
+-- (mail.md §7.4 "过期附件清理后必有补偿或归档,不静默丢失";已领/无附件的直接删)。
+-- 本表自身按 archived_at + archive_retention_days 二次清理,生命同样有限。
+CREATE TABLE IF NOT EXISTS `player_mail_archive` (
+    `mail_id`     BIGINT UNSIGNED NOT NULL COMMENT '原 player_mail.mail_id',
+    `player_id`   BIGINT UNSIGNED NOT NULL COMMENT '收件人',
+    `status`      TINYINT         NOT NULL COMMENT '归档时状态(1 unread / 2 read)',
+    `expire_ms`   BIGINT          NOT NULL COMMENT '原过期时间 ms',
+    `created_ms`  BIGINT          NOT NULL COMMENT '原 created_at 的 Unix ms',
+    `payload`     BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
+    `archived_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`mail_id`),
+    KEY `idx_player` (`player_id`),
+    KEY `idx_archived` (`archived_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 过期未领附件归档(客诉补偿凭据,超保留期后清除)';

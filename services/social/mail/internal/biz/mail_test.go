@@ -18,14 +18,25 @@ import (
 
 type storedMail struct {
 	playerID uint64
+	expireMs int64
+	maxInbox int
 	payload  []byte
 }
 
-// fakeMailRepo 是内存版 data.MailRepo,只落地个人邮件 + 领取幂等(其余方法返回零值)。
+// fakeMailRepo 是内存版 data.MailRepo,只落地个人邮件 + 领取幂等(其余方法返回零值);
+// sweep 方法记录入参供断言(expired 预置待清行)。
 type fakeMailRepo struct {
 	personal map[uint64]storedMail // mailID → 邮件
 	claimed  map[string]bool       // "player:mail" → 已领
 	status   map[string]int32
+
+	expired        []data.ExpiredPersonalRow // ListExpiredPersonal 返回值预置
+	archivedRows   []data.ExpiredPersonalRow // ArchiveAndDeletePersonal 收到的归档行
+	deletedIDs     []uint64                  // ArchiveAndDeletePersonal 收到的删除 ID
+	sysEndBefore   int64
+	guildEndBefore int64
+	claimsBeforeID uint64
+	purgeDays      int
 }
 
 func newFakeMailRepo() *fakeMailRepo {
@@ -95,9 +106,42 @@ func (r *fakeMailRepo) InsertSysMail(context.Context, uint64, int64, int64, []by
 func (r *fakeMailRepo) InsertGuildMail(context.Context, uint64, uint64, int64, int64, []byte) error {
 	return nil
 }
-func (r *fakeMailRepo) InsertPersonalMail(_ context.Context, mailID, playerID uint64, _ int64, payload []byte) error {
-	r.personal[mailID] = storedMail{playerID: playerID, payload: payload}
+func (r *fakeMailRepo) InsertPersonalMail(_ context.Context, mailID, playerID uint64, expireMs int64, payload []byte, maxInbox int) error {
+	r.personal[mailID] = storedMail{playerID: playerID, expireMs: expireMs, maxInbox: maxInbox, payload: payload}
 	return nil
+}
+
+func (r *fakeMailRepo) ListExpiredPersonal(_ context.Context, _ int64, limit int) ([]data.ExpiredPersonalRow, error) {
+	if len(r.expired) > limit {
+		return r.expired[:limit], nil
+	}
+	return r.expired, nil
+}
+
+func (r *fakeMailRepo) ArchiveAndDeletePersonal(_ context.Context, archive []data.ExpiredPersonalRow, deleteIDs []uint64) error {
+	r.archivedRows = append(r.archivedRows, archive...)
+	r.deletedIDs = append(r.deletedIDs, deleteIDs...)
+	return nil
+}
+
+func (r *fakeMailRepo) DeleteSysMailEndedBefore(_ context.Context, endBeforeMs int64, _ int) (int64, error) {
+	r.sysEndBefore = endBeforeMs
+	return 0, nil
+}
+
+func (r *fakeMailRepo) DeleteGuildMailEndedBefore(_ context.Context, endBeforeMs int64, _ int) (int64, error) {
+	r.guildEndBefore = endBeforeMs
+	return 0, nil
+}
+
+func (r *fakeMailRepo) DeleteClaimsBefore(_ context.Context, maxMailID uint64, _ int) (int64, error) {
+	r.claimsBeforeID = maxMailID
+	return 0, nil
+}
+
+func (r *fakeMailRepo) PurgeArchiveBefore(_ context.Context, retentionDays, _ int) (int64, error) {
+	r.purgeDays = retentionDays
+	return 0, nil
 }
 
 // fakeItemGranter 捕获可堆叠附件发放。
@@ -131,7 +175,11 @@ func (g *fakeInstGranter) GrantInstances(_ context.Context, playerID uint64, ids
 }
 
 func testCfg() conf.MailConf {
-	return conf.MailConf{DefaultSysTtlDays: 7, MaxTitleLen: 64, MaxBodyLen: 2048, MaxAttachments: 16}
+	return conf.MailConf{
+		DefaultSysTtlDays: 7, DefaultPersonalTtlDays: 30, MaxInboxSize: 200,
+		SweepBatch: 500, ExpiredRetentionDays: 7, ArchiveRetentionDays: 90, ClaimRetentionDays: 180,
+		MaxTitleLen: 64, MaxBodyLen: 2048, MaxAttachments: 16,
+	}
 }
 
 // ── 测试 ──────────────────────────────────────────────────────────────────────
@@ -141,7 +189,7 @@ func TestSendPersonalMailStoresGrantKey(t *testing.T) {
 	repo := newFakeMailRepo()
 	uc := NewMailUsecase(repo, testCfg(), &fakeItemGranter{})
 	atts := []*mailv1.MailAttachment{{ItemConfigId: 5001, Count: 2, AsInstance: true}}
-	id, err := uc.SendPersonalMail(context.Background(), 100, 1, "掉落", "背包已满", atts, 0, "battle_drop:9:1")
+	id, err := uc.SendPersonalMail(context.Background(), 100, 1, "掉落", "背包已满", atts, 0, 1000, "battle_drop:9:1")
 	if err != nil {
 		t.Fatalf("SendPersonalMail err: %v", err)
 	}
@@ -163,7 +211,7 @@ func TestClaimInstanceUsesGrantKey(t *testing.T) {
 	uc.SetInstanceGranter(inst)
 
 	atts := []*mailv1.MailAttachment{{ItemConfigId: 5001, Count: 2, AsInstance: true}}
-	id, err := uc.SendPersonalMail(context.Background(), 100, 1, "掉落", "背包已满", atts, 0, "battle_drop:9:1")
+	id, err := uc.SendPersonalMail(context.Background(), 100, 1, "掉落", "背包已满", atts, 0, 1000, "battle_drop:9:1")
 	if err != nil {
 		t.Fatalf("SendPersonalMail err: %v", err)
 	}
@@ -194,7 +242,7 @@ func TestClaimInstanceDefaultKey(t *testing.T) {
 	uc.SetInstanceGranter(inst)
 
 	atts := []*mailv1.MailAttachment{{ItemConfigId: 5001, Count: 1, AsInstance: true}}
-	id, err := uc.SendPersonalMail(context.Background(), 200, 7, "装备", "运营发放", atts, 0, "")
+	id, err := uc.SendPersonalMail(context.Background(), 200, 7, "装备", "运营发放", atts, 0, 1000, "")
 	if err != nil {
 		t.Fatalf("SendPersonalMail err: %v", err)
 	}
@@ -215,7 +263,7 @@ func TestClaimStackableUsesItemGranter(t *testing.T) {
 	uc.SetInstanceGranter(inst)
 
 	atts := []*mailv1.MailAttachment{{ItemConfigId: 3001, Count: 10}} // as_instance=false
-	id, err := uc.SendPersonalMail(context.Background(), 300, 5, "金币", "领奖", atts, 0, "")
+	id, err := uc.SendPersonalMail(context.Background(), 300, 5, "金币", "领奖", atts, 0, 1000, "")
 	if err != nil {
 		t.Fatalf("SendPersonalMail err: %v", err)
 	}
@@ -242,7 +290,7 @@ func TestClaimMixedBothGranters(t *testing.T) {
 		{ItemConfigId: 3001, Count: 5},                   // 可堆叠
 		{ItemConfigId: 5001, Count: 1, AsInstance: true}, // 装备实例
 	}
-	id, err := uc.SendPersonalMail(context.Background(), 400, 8, "混合", "领奖", atts, 0, "battle_drop:1:8")
+	id, err := uc.SendPersonalMail(context.Background(), 400, 8, "混合", "领奖", atts, 0, 1000, "battle_drop:1:8")
 	if err != nil {
 		t.Fatalf("SendPersonalMail err: %v", err)
 	}

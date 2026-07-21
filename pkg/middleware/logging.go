@@ -41,14 +41,17 @@ func Logging() middleware.Middleware {
 		return func(ctx context.Context, req any) (any, error) {
 			start := time.Now()
 
+			// 方向判定(§16.7):client transport 存在即本次是 client hop(它是本次调用
+			// 刚放进 ctx 的);server transport 可能是 handler 继承的,只作兜底,
+			// 避免 handler 内发起的下游调用被错标成外层 server op。
 			op := ""
 			kind := ""
-			if tr, ok := transport.FromServerContext(ctx); ok {
-				op = tr.Operation()
-				kind = string(tr.Kind())
-			} else if tr, ok := transport.FromClientContext(ctx); ok {
+			if tr, ok := transport.FromClientContext(ctx); ok {
 				op = tr.Operation()
 				kind = string(tr.Kind()) + "_client"
+			} else if tr, ok := transport.FromServerContext(ctx); ok {
+				op = tr.Operation()
+				kind = string(tr.Kind())
 			}
 
 			resp, err := handler(ctx, req)

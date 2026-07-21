@@ -29,6 +29,18 @@ node:
 mail:
   # 系统/公会邮件 end_ms 为 0 时的默认有效期天数
   default_sys_ttl_days: 7
+  # 个人邮件 expire_ms 为 0 时的默认有效期天数(一切邮件生命有限,sweep 清理前提)
+  default_personal_ttl_days: 30
+  # 单玩家收件箱行数上限(§9 不变量 18;满时驱逐最旧已领邮件,仍满拒收 ERR_MAIL_BOX_FULL)
+  max_inbox_size: 200
+  # 过期清理:每 sweep_interval 一轮,每表单批 sweep_batch 行;过期后再留 expired_retention_days
+  # 缓冲才物理删(带未领附件的先归档 player_mail_archive,归档保留 archive_retention_days);
+  # 领取记录按雪花 mail_id 截断,保留 claim_retention_days(须大于一切邮件最长有效期)
+  sweep_interval: "5m"
+  sweep_batch: 500
+  expired_retention_days: 7
+  archive_retention_days: 90
+  claim_retention_days: 180
   max_title_len: 64
   max_body_len: 2048
   max_attachments: 16

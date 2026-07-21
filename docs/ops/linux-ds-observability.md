@@ -14,9 +14,12 @@
 2. 再看 DS 进程日志:当前日志 + `--previous` 上一次崩溃前日志。
 3. 再看 crash 产物:core / minidump / UE crash report,用同版本符号还原调用栈。
 4. 性能问题看 metrics / profiler,不要只看 `top`。
+5. 一旦确认崩溃或 P0,立即从 [`docs/incidents/template.md`](../incidents/template.md) 建档并登记 [`docs/incidents/index.md`](../incidents/index.md);先保全证据再清理/重启,后续持续更新到关闭。
 
 > 经验法则:如果只能看到 "Pod 重启了",说明观测链路还没建完;至少要能拿到
 > `版本号 + pod + exit code + 崩溃堆栈 + 崩溃前日志 + 当时核心指标`。
+>
+> 取证手册回答“怎么查”,事故档案回答“这一次发生了什么以及是否真正关闭”。任何 runtime fatal、OOM、CrashLoop、非预期进程退出或 P0 都必须有独立 Incident;不得只在聊天记录、设计文档或 `PROGRESS.md` 留一句结论。原始日志含 JWT/DSTicket/Secret 时只记录受控位置和脱敏片段,严禁把凭证写入仓库。
 
 ---
 
@@ -213,4 +216,3 @@ kubectl get events -n pandora --sort-by=.lastTimestamp
 kubectl top pod -n pandora
 kubectl top node
 ```
-

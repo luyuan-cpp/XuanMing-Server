@@ -94,7 +94,7 @@ func (l *RedisMarketLocker) Lock(ctx context.Context, marketID uint32) (func(), 
 			return nil, err
 		}
 		if res.IsLocked() {
-			lease := newMarketLockLease(context.WithoutCancel(ctx), marketID, res, l.ttl, l.failStop)
+			lease := newMarketLockLease(plog.Detach(ctx), marketID, res, l.ttl, l.failStop)
 			lease.start()
 			return lease.release, nil
 		}
@@ -123,6 +123,8 @@ func marketBusyError(marketID uint32) error {
 // marketLockLease 管理一次成功持锁的生命周期。Release 先阻止新续租并等待正在执行的
 // Extend 完成,随后才释放 token,保证 Extend 与 Release 永不并发读写 TryLockResult。
 type marketLockLease struct {
+	// logCtx 由 plog.Detach 派生(§16.7):仅携带日志字段,无取消、无请求级 transport。
+	// lease 是长生命周期对象且 renewLoop 在独立 goroutine 使用它,禁止存请求 ctx。
 	logCtx   context.Context
 	marketID uint32
 	result   *redislock.TryLockResult

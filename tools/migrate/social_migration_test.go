@@ -18,6 +18,8 @@ const (
 	socialBaselinePath = "migrations/pandora_social/000001_baseline.up.sql"
 	socialV2UpPath     = "migrations/pandora_social/000002_guild_counter_tables.up.sql"
 	socialV2DownPath   = "migrations/pandora_social/000002_guild_counter_tables.down.sql"
+	socialV3UpPath     = "migrations/pandora_social/000003_mail_growth_bounded.up.sql"
+	socialV3DownPath   = "migrations/pandora_social/000003_mail_growth_bounded.down.sql"
 )
 
 func TestPandoraSocialV2MigrationContract(t *testing.T) {
@@ -25,13 +27,16 @@ func TestPandoraSocialV2MigrationContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 2 {
-		t.Fatalf("pandora_social latest version=%d, 期望=2", version)
+	if version != 3 {
+		t.Fatalf("pandora_social latest version=%d, 期望=3", version)
 	}
 
 	baseline := readEmbeddedMigration(t, socialBaselinePath)
 	if strings.Contains(baseline, "pending_request_count") || strings.Contains(baseline, "player_group_counts") {
 		t.Fatal("000001 baseline 必须保持 immutable；新计数结构只能存在于 000002")
+	}
+	if strings.Contains(baseline, "player_mail_archive") || strings.Contains(baseline, "idx_expire") {
+		t.Fatal("000001 baseline 必须保持 immutable；邮件清理结构只能存在于 000003")
 	}
 
 	up := readEmbeddedMigration(t, socialV2UpPath)
@@ -50,7 +55,27 @@ func TestPandoraSocialV2MigrationContract(t *testing.T) {
 		}
 	}
 
-	down := readEmbeddedMigration(t, socialV2DownPath)
+	assertAdditiveOnlyDown(t, "000002", readEmbeddedMigration(t, socialV2DownPath))
+
+	upV3 := readEmbeddedMigration(t, socialV3UpPath)
+	requiredV3Fragments := []string{
+		"ADD INDEX `idx_expire` (`expire_ms`)",
+		"ADD INDEX `idx_end` (`end_ms`)",
+		"ADD INDEX `idx_mail` (`mail_id`)",
+		"CREATE TABLE IF NOT EXISTS `player_mail_archive`",
+		"information_schema.statistics",
+	}
+	for _, fragment := range requiredV3Fragments {
+		if !strings.Contains(upV3, fragment) {
+			t.Fatalf("000003 up 缺少契约片段 %q", fragment)
+		}
+	}
+	assertAdditiveOnlyDown(t, "000003", readEmbeddedMigration(t, socialV3DownPath))
+}
+
+// assertAdditiveOnlyDown 校验 down 迁移为 additive-only no-op(不在线删除兼容结构)。
+func assertAdditiveOnlyDown(t *testing.T, version, down string) {
+	t.Helper()
 	var executableDownLines []string
 	for _, line := range strings.Split(down, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -59,8 +84,8 @@ func TestPandoraSocialV2MigrationContract(t *testing.T) {
 		}
 	}
 	executableDown := strings.ToUpper(strings.Join(executableDownLines, "\n"))
-	if strings.Contains(executableDown, "DROP TABLE") || strings.Contains(executableDown, "DROP COLUMN") {
-		t.Fatal("000002 down 必须是 additive-only no-op，不能在线删除兼容结构")
+	if strings.Contains(executableDown, "DROP TABLE") || strings.Contains(executableDown, "DROP COLUMN") || strings.Contains(executableDown, "DROP INDEX") {
+		t.Fatalf("%s down 必须是 additive-only no-op，不能在线删除兼容结构", version)
 	}
 }
 
@@ -198,6 +223,23 @@ func precreateSocialCounterSchema(t *testing.T, ctx context.Context, db *sql.DB)
 			group_count INT NOT NULL DEFAULT 0,
 			PRIMARY KEY (player_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`,
+		// v3 邮件清理结构预建(docker-init fresh schema 形态,验证 000003 幂等)
+		`ALTER TABLE player_mail ADD INDEX idx_expire (expire_ms)`,
+		`ALTER TABLE sys_mail ADD INDEX idx_end (end_ms)`,
+		`ALTER TABLE guild_mail ADD INDEX idx_end (end_ms)`,
+		`ALTER TABLE player_mail_claim ADD INDEX idx_mail (mail_id)`,
+		`CREATE TABLE player_mail_archive (
+			mail_id BIGINT UNSIGNED NOT NULL,
+			player_id BIGINT UNSIGNED NOT NULL,
+			status TINYINT NOT NULL,
+			expire_ms BIGINT NOT NULL,
+			created_ms BIGINT NOT NULL,
+			payload BLOB NOT NULL,
+			archived_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (mail_id),
+			KEY idx_player (player_id),
+			KEY idx_archived (archived_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
@@ -297,7 +339,38 @@ func assertSocialCounterBackfill(t *testing.T, db *sql.DB) {
 	if err := db.QueryRowContext(ctx, `SELECT version, dirty FROM schema_migrations LIMIT 1`).Scan(&version, &dirty); err != nil {
 		t.Fatalf("读取 schema_migrations: %v", err)
 	}
-	if version != 2 || dirty {
-		t.Fatalf("schema_migrations version=%d dirty=%v, 期望 version=2 dirty=false", version, dirty)
+	wantVersion, err := latestMigrationVersion("pandora_social")
+	if err != nil {
+		t.Fatalf("latestMigrationVersion: %v", err)
+	}
+	if version != wantVersion || dirty {
+		t.Fatalf("schema_migrations version=%d dirty=%v, 期望 version=%d dirty=false", version, dirty, wantVersion)
+	}
+
+	// v3 邮件清理结构:归档表 + 各清理索引必须就位(legacy 与 fresh 两形态跑完等价)
+	var archiveTables int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'player_mail_archive'`).Scan(&archiveTables); err != nil {
+		t.Fatalf("查询 player_mail_archive: %v", err)
+	}
+	if archiveTables != 1 {
+		t.Fatal("v3 迁移后缺少 player_mail_archive 表")
+	}
+	wantIndexes := [][2]string{
+		{"player_mail", "idx_expire"},
+		{"sys_mail", "idx_end"},
+		{"guild_mail", "idx_end"},
+		{"player_mail_claim", "idx_mail"},
+	}
+	for _, ti := range wantIndexes {
+		var n int
+		if err := db.QueryRowContext(ctx,
+			`SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
+			ti[0], ti[1]).Scan(&n); err != nil {
+			t.Fatalf("查询索引 %s.%s: %v", ti[0], ti[1], err)
+		}
+		if n != 1 {
+			t.Fatalf("v3 迁移后缺少索引 %s.%s", ti[0], ti[1])
+		}
 	}
 }

@@ -460,7 +460,7 @@ func TestAssignHub_LazySeedAndLeastLoaded(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0)
+	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
 	if err != nil {
 		t.Fatalf("AssignHub err: %v", err)
 	}
@@ -481,15 +481,37 @@ func TestAssignHub_LazySeedAndLeastLoaded(t *testing.T) {
 	}
 }
 
+// TestAssignHub_SourceMatchFenceIntoTicket:Battle→Hub 回流 fence(2026-07-21)。
+// AssignHub 携带 source_match_id 时必须原样盖进签票 binding(首次分配与幂等重签同语义);
+// 普通登录(0)不携带。fence 只进票据,不进归属镜像。
+func TestAssignHub_SourceMatchFenceIntoTicket(t *testing.T) {
+	uc, _, signer := newTestUsecase(500, 3)
+	ctx := context.Background()
+
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 9001); err != nil {
+		t.Fatalf("AssignHub with fence err: %v", err)
+	}
+	if signer.lastBinding.SourceMatchID != 9001 {
+		t.Fatalf("signed binding source_match_id = %d, want 9001", signer.lastBinding.SourceMatchID)
+	}
+	// 幂等重签(同玩家再次 AssignHub,普通登录无 fence)→ 本次票据不携带旧 fence。
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
+		t.Fatalf("second assign err: %v", err)
+	}
+	if signer.lastBinding.SourceMatchID != 0 {
+		t.Fatalf("plain re-assign must not carry stale fence, got %d", signer.lastBinding.SourceMatchID)
+	}
+}
+
 func TestAssignHub_Idempotent(t *testing.T) {
 	uc, repo, signer := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0)
+	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
 	if err != nil {
 		t.Fatalf("first assign err: %v", err)
 	}
-	r2, err := uc.AssignHub(ctx, 1001, "global", 0, 0)
+	r2, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
 	if err != nil {
 		t.Fatalf("second assign err: %v", err)
 	}
@@ -513,7 +535,7 @@ func TestAssignHub_SpreadAcrossShards(t *testing.T) {
 	// 3 个玩家应分散到 3 个分片(每次选最空)
 	pods := map[string]bool{}
 	for i := uint64(1); i <= 3; i++ {
-		res, err := uc.AssignHub(ctx, i, "global", 0, 0)
+		res, err := uc.AssignHub(ctx, i, "global", 0, 0, 0)
 		if err != nil {
 			t.Fatalf("assign p%d err: %v", i, err)
 		}
@@ -533,10 +555,10 @@ func TestAssignHub_CapacityFull(t *testing.T) {
 	uc, _, _ := newTestUsecase(1, 1) // 1 分片,容量 1
 	ctx := context.Background()
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign err: %v", err)
 	}
-	_, err := uc.AssignHub(ctx, 1002, "global", 0, 0)
+	_, err := uc.AssignHub(ctx, 1002, "global", 0, 0, 0)
 	if err == nil {
 		t.Fatal("want capacity-full error")
 	}
@@ -549,11 +571,11 @@ func TestAssignHub_TeammateColocation(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 7, 0) // team 7
+	r1, err := uc.AssignHub(ctx, 1001, "global", 7, 0, 0) // team 7
 	if err != nil {
 		t.Fatalf("p1 assign err: %v", err)
 	}
-	r2, err := uc.AssignHub(ctx, 1002, "global", 7, 0) // same team
+	r2, err := uc.AssignHub(ctx, 1002, "global", 7, 0, 0) // same team
 	if err != nil {
 		t.Fatalf("p2 assign err: %v", err)
 	}
@@ -569,7 +591,7 @@ func TestReleaseHub_DecrementAndIdempotent(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0)
+	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
@@ -592,7 +614,7 @@ func TestTransferHub_MoveBetweenShards(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0) // shard 1
+	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0) // shard 1
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
@@ -648,7 +670,7 @@ func TestTransferHub_SetAssignmentFailRollback(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 
-	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0) // 落在 shard 1
+	r1, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0) // 落在 shard 1
 	if err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
@@ -727,7 +749,7 @@ func TestHeartbeat_KnownShardNoCommand(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 	// 先 assign 触发种子,再心跳已知分片
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	now := time.Now().UnixMilli()
@@ -746,7 +768,7 @@ func TestHeartbeat_KnownShardNoCommand(t *testing.T) {
 func TestSweepOnce_MarksStaleDraining(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	pod := "pandora-hub-global-1"
@@ -777,7 +799,7 @@ func TestSweepOnce_SkipsNeverHeartbeated(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 	// 仅 assign(Mock 种子 last_heartbeat_ms=0,从不进 active)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	if err := uc.sweepOnce(ctx); err != nil {
@@ -792,7 +814,7 @@ func TestSweepOnce_SkipsNeverHeartbeated(t *testing.T) {
 
 func TestAssignHub_InvalidPlayer(t *testing.T) {
 	uc, _, _ := newTestUsecase(500, 3)
-	if _, err := uc.AssignHub(context.Background(), 0, "global", 0, 0); err == nil {
+	if _, err := uc.AssignHub(context.Background(), 0, "global", 0, 0, 0); err == nil {
 		t.Fatal("want invalid-arg error for player_id 0")
 	} else if errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("want ErrInvalidArg, got %d", errcode.As(err))
@@ -953,7 +975,7 @@ func TestHeartbeat_ReviveLivenessDrainOnHealthyReport(t *testing.T) {
 func TestHeartbeat_ReviveAfterSweepFalsePositive(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("assign err: %v", err)
 	}
 	pod := "pandora-hub-global-1"

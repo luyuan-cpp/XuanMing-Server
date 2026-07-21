@@ -35,8 +35,12 @@ type HubAssignment struct {
 //
 // roleID(选角权威化 2026-07-08):玩家已选角色配置 ID。>0 时 allocator 把它签进
 // hub 票据 claim 并更新归属镜像;0 = 未选角/保留 allocator 已存值。
+//
+// sourceMatchID(Battle→Hub 回流 fence,2026-07-21):login 三态门证明原对局已终局时
+// 透传的原 Battle match_id;allocator 把它签进 hub 票据 source_match_id claim,
+// Hub DS 用它通过 locator 的 BATTLE→HUB guard。0 = 普通登录/非回流。
 type HubAssigner interface {
-	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*HubAssignment, error)
+	AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*HubAssignment, error)
 }
 
 // GrpcHubAssigner 实现 HubAssigner,内嵌 grpc client。
@@ -58,12 +62,13 @@ func NewGrpcHubAssigner(conn *grpc.ClientConn) *GrpcHubAssigner {
 // AssignHub 调 HubAllocatorService.AssignHub,返回分片地址 + hub 票据。
 //
 // 登录时玩家尚未组队,teamID 一般为 0;region 由 login 配置给出(空 = 让 allocator 选最空分片)。
-func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*HubAssignment, error) {
+func (a *GrpcHubAssigner) AssignHub(ctx context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*HubAssignment, error) {
 	req := &hubv1.AssignHubRequest{
-		PlayerId: playerID,
-		Region:   region,
-		TeamId:   teamID,
-		RoleId:   roleID,
+		PlayerId:      playerID,
+		Region:        region,
+		TeamId:        teamID,
+		RoleId:        roleID,
+		SourceMatchId: sourceMatchID,
 	}
 	resp, err := a.client.AssignHub(ctx, req)
 	if err != nil {

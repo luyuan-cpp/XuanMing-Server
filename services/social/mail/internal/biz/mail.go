@@ -242,7 +242,8 @@ func (u *MailUsecase) SendGuildMail(ctx context.Context, mailID, guildID uint64,
 
 // SendPersonalMail 写收件人收件箱(离线可达)。instanceGrantKey 非空时存入 payload,
 // 领取 as_instance 附件走 GrantInstances 用此键去重(战斗掉落转邮件与直发共享源键 → 至多一次)。
-func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID uint64, title, body string, atts []*mailv1.MailAttachment, expireMs int64, instanceGrantKey string) (uint64, error) {
+// expireMs=0 时补默认 TTL(一切邮件生命有限,sweep 清理的前提);写入侧上限见 InsertPersonalMail。
+func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID uint64, title, body string, atts []*mailv1.MailAttachment, expireMs, nowMs int64, instanceGrantKey string) (uint64, error) {
 	if toPlayerID == 0 {
 		return 0, errcode.New(errcode.ErrInvalidArg, "to_player_id required")
 	}
@@ -250,7 +251,10 @@ func (u *MailUsecase) SendPersonalMail(ctx context.Context, mailID, toPlayerID u
 	if err != nil {
 		return 0, err
 	}
-	if err := u.repo.InsertPersonalMail(ctx, mailID, toPlayerID, expireMs, payload); err != nil {
+	if expireMs == 0 {
+		expireMs = nowMs + int64(u.cfg.DefaultPersonalTtlDays)*86400_000
+	}
+	if err := u.repo.InsertPersonalMail(ctx, mailID, toPlayerID, expireMs, payload, u.cfg.MaxInboxSize); err != nil {
 		return 0, err
 	}
 	return mailID, nil

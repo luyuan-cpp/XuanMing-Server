@@ -174,3 +174,73 @@ CREATE TABLE IF NOT EXISTS `player_group_counts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='Pandora 玩家所在群计数(TiDB 安全上限校验)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
+
+-- ===================================================================================
+-- 邮件(mail 服务迁 social TiDB,2026-07-21)
+-- ===================================================================================
+-- 与 deploy/mysql-init/12-mail-tables.sql 逻辑等价,TiDB 差异同上(§8.2 热点处理):
+--   1. 显式雪花主键表(sys_mail / guild_mail / player_mail,mail_id 是 uint64 雪花,不变量 §9.11
+--      不能用 AUTO_RANDOM)→ 主键 NONCLUSTERED + SHARD_ROW_ID_BITS + PRE_SPLIT_REGIONS,行按随机
+--      _tidb_rowid 落盘,避开雪花时间序写热点;代价是按 mail_id 点查多一次回表(可接受)。
+--   2. player_mail_cursor(player_id PK)/ player_mail_claim(player_id+mail_id PK)同法处理。
+--   3. collation 用 utf8mb4_bin:邮件表无大小写敏感字符串键(payload 是 BLOB,其余键全 BIGINT),
+--      与本文件其余表一致;mysql-init 版的 utf8mb4_0900_ai_ci 仅是库默认,语义无差。
+-- 拉取式游标 / 写扩散 / 附件领取幂等的事务语义(mail_repo.go)在 TiDB 悲观事务下原生可跑。
+-- mail 读 guild_members 判玩家所属公会:guild 表已同库同迁 TiDB,依赖一致。
+
+CREATE TABLE IF NOT EXISTS `sys_mail` (
+    `mail_id`    BIGINT UNSIGNED NOT NULL COMMENT 'snowflake 系统邮件 ID(uint64,channel 内递增)',
+    `start_ms`   BIGINT          NOT NULL DEFAULT 0 COMMENT '生效起 ms(0 立即)',
+    `end_ms`     BIGINT          NOT NULL DEFAULT 0 COMMENT '失效止 ms(0 永不过期)',
+    `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化(标题/正文/附件)',
+    `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 系统邮件(全服一份,登录拉取,TiDB)'
+  SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
+
+CREATE TABLE IF NOT EXISTS `guild_mail` (
+    `mail_id`    BIGINT UNSIGNED NOT NULL COMMENT 'snowflake 公会邮件 ID(uint64,channel 内递增)',
+    `guild_id`   BIGINT UNSIGNED NOT NULL COMMENT '所属公会',
+    `start_ms`   BIGINT          NOT NULL DEFAULT 0,
+    `end_ms`     BIGINT          NOT NULL DEFAULT 0,
+    `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
+    `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */,
+    KEY `idx_guild` (`guild_id`, `mail_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 公会邮件(每公会一份,成员拉取,TiDB)'
+  SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
+
+CREATE TABLE IF NOT EXISTS `player_mail` (
+    `mail_id`    BIGINT UNSIGNED NOT NULL COMMENT 'snowflake 个人邮件 ID(uint64)',
+    `player_id`  BIGINT UNSIGNED NOT NULL COMMENT '收件人',
+    `status`     TINYINT         NOT NULL DEFAULT 1 COMMENT '1 unread / 2 read / 3 claimed',
+    `claimed`    TINYINT         NOT NULL DEFAULT 0 COMMENT '附件是否已领',
+    `expire_ms`  BIGINT          NOT NULL DEFAULT 0 COMMENT '过期 ms(0 永不过期)',
+    `payload`    BLOB            NOT NULL COMMENT 'MailContentStorageRecord 序列化',
+    `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`mail_id`) /*T![clustered_index] NONCLUSTERED */,
+    KEY `idx_player_status` (`player_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 个人邮件收件箱(写扩散,离线可达,TiDB)'
+  SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
+
+CREATE TABLE IF NOT EXISTS `player_mail_cursor` (
+    `player_id`          BIGINT UNSIGNED NOT NULL COMMENT '玩家',
+    `last_sys_mail_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '系统邮件已读到的最大 id',
+    `last_guild_mail_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '公会邮件已读到的最大 id',
+    `updated_at`         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 系统/公会邮件拉取游标(watermark,TiDB)'
+  SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
+
+CREATE TABLE IF NOT EXISTS `player_mail_claim` (
+    `player_id`  BIGINT UNSIGNED NOT NULL COMMENT '领取人',
+    `mail_id`    BIGINT UNSIGNED NOT NULL COMMENT '被领邮件(任意 channel)',
+    `claimed_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`player_id`, `mail_id`) /*T![clustered_index] NONCLUSTERED */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
+  COMMENT='Pandora 邮件附件领取幂等(player_id+mail_id 唯一,TiDB)'
+  SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;

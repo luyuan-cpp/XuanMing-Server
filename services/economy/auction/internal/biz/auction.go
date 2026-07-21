@@ -472,7 +472,7 @@ func (u *AuctionUsecase) addBookCache(ctx context.Context, o *data.OrderRecord) 
 	if u.book == nil {
 		return
 	}
-	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bookCacheWriteTimeout)
+	cacheCtx, cancel := context.WithTimeout(plog.Detach(ctx), bookCacheWriteTimeout)
 	defer cancel()
 	if err := u.book.Add(cacheCtx, o.MarketID, o.Side, o.OrderID, o.Price); err != nil {
 		plog.With(ctx).Warnw("msg", "auction_book_cache_add_failed",
@@ -484,7 +484,7 @@ func (u *AuctionUsecase) removeBookCache(ctx context.Context, o *data.OrderRecor
 	if u.book == nil {
 		return
 	}
-	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bookCacheWriteTimeout)
+	cacheCtx, cancel := context.WithTimeout(plog.Detach(ctx), bookCacheWriteTimeout)
 	defer cancel()
 	if err := u.book.Remove(cacheCtx, o.MarketID, o.Side, o.OrderID); err != nil {
 		plog.With(ctx).Warnw("msg", "auction_book_cache_remove_failed",
@@ -591,7 +591,7 @@ func (u *AuctionUsecase) releaseOwnerSlot(ctx context.Context, o *data.OrderReco
 	if u.slots == nil || o == nil || o.OwnerID == 0 || o.MarketID == 0 || o.OrderID == 0 {
 		return
 	}
-	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ownerSlotWriteTimeout)
+	releaseCtx, cancel := context.WithTimeout(plog.Detach(ctx), ownerSlotWriteTimeout)
 	defer cancel()
 	if err := u.slots.Release(releaseCtx, o.OwnerID,
 		data.OwnerOrderSlot{MarketID: o.MarketID, OrderID: o.OrderID}); err != nil {
@@ -868,7 +868,7 @@ func toProtoMatch(m *data.MatchRecord) *auctionv1.AuctionMatchEvent {
 // 发送成功后清 marker 前退出只会重复同一 match_id，不再产生确定性丢失。
 func (u *AuctionUsecase) publishMatchEvent(ctx context.Context, m *data.MatchRecord) bool {
 	if u.events != nil {
-		attemptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		attemptCtx, cancel := context.WithTimeout(plog.Detach(ctx), 5*time.Second)
 		err := u.events.PushMatch(attemptCtx, toProtoMatch(m))
 		cancel()
 		if err != nil {
@@ -877,7 +877,7 @@ func (u *AuctionUsecase) publishMatchEvent(ctx context.Context, m *data.MatchRec
 			return false
 		}
 	}
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	writeCtx, cancel := context.WithTimeout(plog.Detach(ctx), 2*time.Second)
 	defer cancel()
 	_, err := u.repo.ClearMatchEventPending(writeCtx, m.MarketID, m.MatchID)
 	if err != nil {
@@ -943,7 +943,7 @@ const sideEffectRetryDelay = 30 * time.Second
 // deferMatchSettlement 用独立短上下文持久化退避时间；请求取消不能让永久失败记录继续
 // 占住固定批次。若 MySQL 同时不可用，marker 保持立即就绪，数据库恢复后会再次尝试。
 func (u *AuctionUsecase) deferMatchSettlement(ctx context.Context, m *data.MatchRecord) {
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	writeCtx, cancel := context.WithTimeout(plog.Detach(ctx), 2*time.Second)
 	defer cancel()
 	if _, err := u.repo.DeferMatchSettlement(writeCtx, m.MarketID, m.MatchID, nowMs()+sideEffectRetryDelay.Milliseconds()); err != nil {
 		plog.With(ctx).Errorw("msg", "auction_defer_settlement_failed", "match_id", m.MatchID, "err", err)
@@ -951,7 +951,7 @@ func (u *AuctionUsecase) deferMatchSettlement(ctx context.Context, m *data.Match
 }
 
 func (u *AuctionUsecase) deferMatchEvent(ctx context.Context, m *data.MatchRecord) {
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	writeCtx, cancel := context.WithTimeout(plog.Detach(ctx), 2*time.Second)
 	defer cancel()
 	if _, err := u.repo.DeferMatchEvent(writeCtx, m.MarketID, m.MatchID, nowMs()+sideEffectRetryDelay.Milliseconds()); err != nil {
 		plog.With(ctx).Errorw("msg", "auction_defer_match_event_failed", "match_id", m.MatchID, "err", err)
@@ -959,7 +959,7 @@ func (u *AuctionUsecase) deferMatchEvent(ctx context.Context, m *data.MatchRecor
 }
 
 func (u *AuctionUsecase) deferOrderRelease(ctx context.Context, marketID uint32, orderID uint64) {
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	writeCtx, cancel := context.WithTimeout(plog.Detach(ctx), 2*time.Second)
 	defer cancel()
 	if _, err := u.repo.DeferOrderRelease(writeCtx, marketID, orderID, nowMs()+sideEffectRetryDelay.Milliseconds()); err != nil {
 		plog.With(ctx).Errorw("msg", "auction_defer_release_failed", "market_id", marketID, "order_id", orderID, "err", err)
@@ -967,7 +967,7 @@ func (u *AuctionUsecase) deferOrderRelease(ctx context.Context, marketID uint32,
 }
 
 func (u *AuctionUsecase) deferOrderReconcile(ctx context.Context, marketID uint32, orderID uint64) {
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	writeCtx, cancel := context.WithTimeout(plog.Detach(ctx), 2*time.Second)
 	defer cancel()
 	if _, err := u.repo.DeferOrderReconcile(writeCtx, marketID, orderID, nowMs()+sideEffectRetryDelay.Milliseconds()); err != nil {
 		plog.With(ctx).Errorw("msg", "auction_defer_order_reconcile_failed",

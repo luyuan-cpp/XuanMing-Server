@@ -140,6 +140,26 @@ func With(ctx context.Context) *klog.Helper {
 	return klog.NewHelper(logger)
 }
 
+// Detach 从请求 ctx 派生一个脱离取消、且不携带任何 transport 的后台 ctx,
+// 只显式复制标准业务日志字段(trace_id / player_id / match_id / team_id)。
+//
+// fire-and-forget goroutine 一律用它代替 context.WithoutCancel(ctx):
+// WithoutCancel 会原样保留全部 ctx 值,包括入站请求的 Kratos server transport;
+// 异步 goroutine 再经挂 Trace middleware 的 gRPC client 发下游调用时,middleware 会
+// 命中继承来的 server transport 并写其 ReplyHeader,与原请求正在发送的响应并发操作
+// 同一 metadata Map,触发 fatal error: concurrent map iteration and map write
+// (2026-07-21 ds_allocator Heartbeat 崩溃)。Detach 保住不变量 §8「写带 trace_id」,
+// 同时保证请求级 transport 不会泄漏进后台任务。
+func Detach(ctx context.Context) context.Context {
+	out := context.Background()
+	for _, key := range []ContextKey{CtxKeyTraceID, CtxKeyPlayerID, CtxKeyMatchID, CtxKeyTeamID} {
+		if v := ctx.Value(key); v != nil {
+			out = context.WithValue(out, key, v)
+		}
+	}
+	return out
+}
+
 // WithTraceID 把 trace_id 塞进 ctx,后续 With(ctx) 自动带上。
 func WithTraceID(ctx context.Context, traceID string) context.Context {
 	return context.WithValue(ctx, CtxKeyTraceID, traceID)

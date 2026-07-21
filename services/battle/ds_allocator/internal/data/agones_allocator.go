@@ -649,7 +649,8 @@ func (a *AgonesGameServerAllocator) DeliverCredential(
 
 	// PATCH 结果未知时，确认读不能复用一个可能已因入站超时/取消而失效的 ctx。
 	// 独立确认仍由 do() 的 allocateTimeout 严格限时；它只读 K8s 当前事实，不延长业务写。
-	confirmed, confirmErr := a.getGameServer(context.WithoutCancel(ctx), allocation.PodName)
+	// plog.Detach(§16.7):detached 确认读只复制日志字段,不携带请求级 transport/取消。
+	confirmed, confirmErr := a.getGameServer(plog.Detach(ctx), allocation.PodName)
 	if confirmErr == nil {
 		confirmErr = confirmCredentialDelivery(confirmed, allocation, annotations)
 	}

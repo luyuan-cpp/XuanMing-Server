@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
+	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/releasetrack"
 	dsv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/ds/v1"
 )
@@ -665,9 +666,10 @@ func (r *RedisBattleRepo) finalizeBattleAllocation(
 			// warming 也是 GSA 生命周期 fence，调用方应继续凭据投递。只在严格
 			// GET read-back 同时确认 allocation/UID/pod/state 且 PTTL=-1 时认定成功。
 			// 外层请求常因“EXEC 响应超时”已经 canceled；read-back 若复用它会
-			// 立刻失败，等同没有确认。保留 trace/value，但用独立短预算完成严格 GET。
+			// 立刻失败，等同没有确认。plog.Detach 只保留 trace 等日志字段
+			// (§16.7:不携带请求级 transport/取消),用独立短预算完成严格 GET。
 			readCtx, cancel := context.WithTimeout(
-				context.WithoutCancel(ctx), fencedFinalizeReadbackTimeout)
+				plog.Detach(ctx), fencedFinalizeReadbackTimeout)
 			confirmed, readErr := r.confirmPersistentFencedFinalize(readCtx, battle)
 			if confirmed && readErr == nil {
 				matched = true

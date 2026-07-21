@@ -85,6 +85,12 @@ type DSTicketClaimsV2 struct {
 	MatchID         uint64 `json:"match_id,omitempty"`
 	AllocationID    string `json:"allocation_id,omitempty"`
 	HubAssignmentID string `json:"hub_assignment_id,omitempty"`
+	// SourceMatchID:Battle→Hub 回流 fence(2026-07-21)。hub 票可带:玩家从终局
+	// (ended/abandoned)对局返回大厅时,签票权威(login 三态门)把原 Battle match_id
+	// 盖进来,Hub DS 用它调 SetLocation(HUB, fence=source_match_id) 通过 locator 的
+	// BATTLE→HUB guard(不变量 §1),消除终局 TTL 残留导致的 4007「玩家正在战斗中」。
+	// battle 票必须 0(battle 绑定走 match_id);普通登录 hub 票为 0(claim 不序列化)。
+	SourceMatchID uint64 `json:"source_match_id,omitempty"`
 }
 
 // PlayerID 把 sub 字符串解成 uint64。失败返回 0。
@@ -114,6 +120,9 @@ type DSTicketTarget struct {
 	// MatchID / AllocationID:battle 票必填;hub 票必空/0。
 	MatchID      uint64
 	AllocationID string
+	// SourceMatchID:Battle→Hub 回流 fence(见 DSTicketClaimsV2.SourceMatchID)。
+	// 仅 hub 票可带(>0 表示终局回流);battle 票必须 0。
+	SourceMatchID uint64
 }
 
 func (t DSTicketTarget) validate(dsType DSType) error {
@@ -137,6 +146,9 @@ func (t DSTicketTarget) validate(dsType DSType) error {
 		}
 		if t.HubAssignmentID != "" {
 			return errors.New("auth.DSTicketTarget: battle ticket must not carry hub_assignment_id")
+		}
+		if t.SourceMatchID != 0 {
+			return errors.New("auth.DSTicketTarget: battle ticket must not carry source_match_id (battle binding is match_id)")
 		}
 	default:
 		return fmt.Errorf("auth.DSTicketTarget: invalid dsType %q", dsType)
@@ -261,6 +273,7 @@ func (s *DSTicketSigner) sign(playerID uint64, dsType DSType, regionID, cellID, 
 		MatchID:         target.MatchID,
 		AllocationID:    target.AllocationID,
 		HubAssignmentID: target.HubAssignmentID,
+		SourceMatchID:   target.SourceMatchID,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	t.Header["kid"] = s.kid
@@ -395,6 +408,7 @@ func (v *DSTicketVerifier) Verify(token string) (*DSTicketClaimsV2, error) {
 		HubAssignmentID: claims.HubAssignmentID,
 		MatchID:         claims.MatchID,
 		AllocationID:    claims.AllocationID,
+		SourceMatchID:   claims.SourceMatchID,
 	}
 	if err := target.validate(DSType(claims.DSType)); err != nil {
 		return nil, errcode.New(errcode.ErrLoginTicketInvalid, "ds ticket binding invalid: %v", err)

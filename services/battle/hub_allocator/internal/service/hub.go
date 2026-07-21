@@ -52,7 +52,9 @@ func (s *HubService) AssignHub(ctx context.Context, req *hubv1.AssignHubRequest)
 	if req.GetPlayerId() == 0 {
 		return &hubv1.AssignHubResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
 	}
-	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId())
+	// source_match_id:login 三态门证明原对局终局后透传的 Battle→Hub 回流 fence,
+	// 盖进 hub 票据 claim(内部控制面调用,信任链与 role_id 同源)。
+	res, err := s.uc.AssignHub(ctx, req.GetPlayerId(), req.GetRegion(), req.GetTeamId(), req.GetRoleId(), req.GetSourceMatchId())
 	if err != nil {
 		return &hubv1.AssignHubResponse{Code: toProtoCode(err)}, nil
 	}

@@ -20,6 +20,7 @@ Pandora/
 ├── deploy/                # docker-compose / k8s / Agones yaml
 ├── tools/scripts/         # 开发与压测脚本
 ├── docs/design/           # 架构与设计文档(必读)
+├── docs/incidents/        # 崩溃与 P0 事故索引、模板和复盘档案
 └── robot/                 # 压测客户端
 ```
 
@@ -35,8 +36,9 @@ Pandora/
 6. [`docs/design/proto-design.md`](./docs/design/proto-design.md) — 协议设计
 7. [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md) — 压测纪律
 8. [`docs/design/pvp-rules.md`](./docs/design/pvp-rules.md) — PvP 规则待定项
-9. [`AGENTS.md`](./AGENTS.md) — AI 协作守则
-10. [`PROGRESS.md`](./PROGRESS.md) — 当前进度
+9. [`docs/incidents/index.md`](./docs/incidents/index.md) — 崩溃/P0 建档、状态和关闭门
+10. [`AGENTS.md`](./AGENTS.md) — AI 协作守则
+11. [`PROGRESS.md`](./PROGRESS.md) — 当前进度
 
 ## 快速启动
 

@@ -514,7 +514,7 @@ func main() {
 			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止旧 writer 在失租/epoch 回退后继续写")
 			os.Exit(1)
 		}()
-		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())
 	}
 
 	// 7. 后台心跳超时扫描(随进程生命周期启停)
@@ -576,12 +576,13 @@ func (h *hubTicketSigner) SignHubTicket(playerID uint64, roleID uint32, binding 
 			DSInstanceEpoch: binding.ProtocolEpoch,
 			HubAssignmentID: binding.HubAssignmentID,
 			ReleaseTrack:    binding.ReleaseTrack,
+			SourceMatchID:   binding.SourceMatchID,
 		})
 	}
 	if binding.PodName == "" {
-		return h.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, 0, 0, roleID, jti)
+		return h.signer.SignHubDSTicketFull(playerID, 0, 0, roleID, binding.SourceMatchID, jti)
 	}
-	return h.signer.SignBoundHubDSTicket(playerID, 0, 0, roleID, jti, auth.DSTicketBinding{
+	return h.signer.SignBoundHubDSTicket(playerID, 0, 0, roleID, binding.SourceMatchID, jti, auth.DSTicketBinding{
 		DSPodName: binding.PodName, DSInstanceUID: binding.InstanceUID,
 		ProtocolEpoch: binding.ProtocolEpoch, CredentialGen: binding.CredentialGen,
 		CredentialJTI: binding.CredentialJTI, HubAssignmentID: binding.HubAssignmentID,

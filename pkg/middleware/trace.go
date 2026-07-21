@@ -40,8 +40,15 @@ const MetadataKeyJWTPayload = "x-pandora-jwt-payload"
 
 // Trace 是 trace_id 注入 / 透传 middleware,server / client 都用同一份。
 //
-// Server 侧:从 incoming metadata 找 x-pandora-trace-id;没有则生成 UUID;塞进 ctx。
-// Client 侧:从 ctx 取 trace_id;写到 outgoing metadata。
+// Server 侧:从 incoming metadata 找 x-pandora-trace-id;没有则生成 UUID;塞进 ctx + 回程 header。
+// Client 侧:从 ctx(plog)取 trace_id;没有则生成 UUID;只写 outgoing metadata。
+//
+// 方向判定按「本次调用的 transport」二选一,client 分支不得触碰 server transport:
+// server handler 内(含由请求 ctx 派生的异步 goroutine)发起下游调用时,ctx 里同时带着
+// 入站请求的 server transport 和本次调用的 client transport;此时若再走
+// FromServerContext 写 ReplyHeader,就会与 gRPC 正在发送响应时对同一 metadata Map 的
+// 遍历并发(grpc metadata.Join / SetHeader),触发
+// fatal error: concurrent map iteration and map write(2026-07-21 ds_allocator Heartbeat 崩溃)。
 //
 // 用法:
 //
@@ -49,21 +56,28 @@ const MetadataKeyJWTPayload = "x-pandora-jwt-payload"
 func Trace() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
+			// Client 侧:本次调用存在 client transport ⇒ 这是 client hop。
+			// trace_id 只从 ctx 值取(server 侧 middleware 已放入),不读 server transport。
+			if tr, ok := transport.FromClientContext(ctx); ok {
+				traceID, _ := ctx.Value(plog.CtxKeyTraceID).(string)
+				if traceID == "" {
+					traceID = uuid.NewString()
+					ctx = plog.WithTraceID(ctx, traceID)
+				}
+				tr.RequestHeader().Set(MetadataKeyTraceID, traceID)
+				return handler(ctx, req)
+			}
+
+			// Server 侧:从 incoming metadata 提取 / 生成,写 ctx + 回程 header。
+			// 此时 handler 尚未开始组装响应,写 ReplyHeader 与响应发送不并发。
 			traceID := extractTraceID(ctx)
 			if traceID == "" {
 				traceID = uuid.NewString()
 			}
 			ctx = plog.WithTraceID(ctx, traceID)
-
-			// Server 侧:把 trace_id 写到回程 metadata(给客户端日志关联用)
 			if tr, ok := transport.FromServerContext(ctx); ok {
 				tr.ReplyHeader().Set(MetadataKeyTraceID, traceID)
 			}
-			// Client 侧:把 trace_id 写到 outgoing metadata(给下游服务用)
-			if tr, ok := transport.FromClientContext(ctx); ok {
-				tr.RequestHeader().Set(MetadataKeyTraceID, traceID)
-			}
-
 			return handler(ctx, req)
 		}
 	}

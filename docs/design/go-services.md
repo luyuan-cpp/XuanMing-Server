@@ -36,6 +36,32 @@
 
 **Edge Gateway = Envoy**(端口 8443 HTTPS),不是 go 服务,不计在表格内。**状态**:✅ W2 ④ 落地(v1.38.0 docker,login_cluster + push_cluster + grpc_web/cors/router filters,详见 `PROGRESS.md` W2 ④ 段)。
 
+### 1.1 Go RPC context 与异步边界（全服务契约）
+
+Kratos 入站 gRPC handler 的请求 `ctx` 不是普通参数：它携带 server transport，而 transport 的 `ReplyHeader` 直接引用本次响应的 `metadata.MD`（底层为 `map[string][]string`）。handler 返回后，gRPC 会遍历该 map 发送响应头。因此，请求 `ctx`、server transport 和响应 metadata 的有效期只到 handler 返回为止。
+
+以下写法全服务禁止：
+
+```go
+go func() {
+    ctx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), timeout)
+    defer cancel()
+    downstreamClient.Call(ctx, req)
+}()
+```
+
+`context.WithoutCancel` 只移除取消和 deadline，不会复制或删除任何 Value。上例仍继承 server transport；Kratos client interceptor 再加入 client transport 后，共用 Trace / Metrics / Logging middleware 可能同时看到二者。若 client hop 写入继承的 server `ReplyHeader`，就会与原 handler 回包时的 metadata 遍历并发，触发不可恢复的 `fatal error: concurrent map iteration and map write`。
+
+异步任务必须遵守以下契约：
+
+- 从 `context.Background()` 或项目统一 detached helper 建立干净根 context，只白名单复制 trace / player / match / team 等不可变日志字段；不得复制 transport、metadata、请求对象或取消链。
+- 业务参数、玩家列表、地址和下游凭证显式传值；切片、map、指针等可变捕获必须复制或同步。每个后台调用必须有有界 timeout、`cancel`、错误日志和明确生命周期。
+- 同步代码只有在调用在 handler 返回前完成、且不会保存或异步转交 context 时，才可为特定清理语义使用 `WithoutCancel`；review 必须沿所有被调用方证明这一点。它不能作为通用 detached API。
+- 共用 middleware 必须按本次 interceptor 的调用方向互斥处理。client 调用只写本次 `RequestHeader`，不得写继承的 server `ReplyHeader`；Metrics / Logging 也必须记录下游 client 方法，不能因 server transport 仍在 context 中而误记成上游 handler。
+- 新增或修改异步下游 RPC 时，必须覆盖双 transport 单元测试、handler 返回与后台 RPC 并发的集成测试，并在支持 CGO 的 Linux / CI 环境运行 `go test -race`。
+
+关键 writer 的重启设计还必须把 capability / fence 旧 lease TTL、同 Pod 容器重启、CrashLoopBackOff、重新注册、DS 本地授权租约、heartbeat timeout 与启动 sweep 放到同一故障时间轴。最坏恢复时间必须小于业务可恢复预算；不能用删除或覆盖 fencing 换取快速启动。
+
 ## 2. 各服务详细契约
 
 ### 2.1 login

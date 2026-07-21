@@ -52,9 +52,19 @@ ORDER BY mail_id
 
 额外约束:拉取下界取 `max(last_guild_mail_id, 入会时间对应的 mail_id)`,新成员不会看到入会前的旧群发;退会后游标作废,不再拉该公会邮件。
 
-### 2.4 过期清理
+### 2.4 过期清理与增长有界(2026-07-21 落地,biz/sweep.go)
 
-游标 > 邮件 id 的玩家天然跳过,但"附件未领 + 已过期"要定时清理并发补偿(可选自动补发到个人邮件)。系统/公会邮件过 end_ms 后归档,不参与拉取。
+邮件表天然只增不减(写扩散的 `player_mail` 与"领取状态写扩散"的 `player_mail_claim` 尤甚),按三层保证增长有界:
+
+1. **一切邮件生命有限**:`end_ms`/`expire_ms` 为 0 时发送侧补默认 TTL(系统/公会 `default_sys_ttl_days` 默认 7 天,个人 `default_personal_ttl_days` 默认 30 天)。没有默认 TTL,后面所有清理都清不干净。
+2. **收件箱写入侧上限**(§9 不变量 18):`InsertPersonalMail` 事务内 `COUNT(*) FOR UPDATE` 原子校验单玩家行数(`max_inbox_size` 默认 200,防 TOCTOU);满时驱逐最旧的已领邮件(附件已落袋,删除无损),仍满返回 `ERR_MAIL_BOX_FULL`。调用方(battle_result 掉落出箱)靠补扫重试,旧邮件过期被清后发送自然成功。读侧 `ListMail` 已有 cursor 分页。
+3. **sweep worker 周期回收**(每 `sweep_interval` 默认 5m 一轮,每表单批 `sweep_batch` 默认 500 行;多副本各自跑、无锁,删除/INSERT IGNORE 幂等,对齐 leaderboard 补扫模式):
+   - `player_mail`:过期 + `expired_retention_days`(默认 7 天)缓冲后,已领/无附件直删;**带未领附件的先移入 `player_mail_archive` 再删**(§7.4 "不静默丢失",归档行是客诉补偿凭据);
+   - `sys_mail`/`guild_mail`:`end_ms` 过 + 缓冲后直删(玩家游标天然跳过,不参与拉取);
+   - `player_mail_claim`:雪花 `mail_id` 时间段单调,按 `mail_id < snowflake.MinIDAt(now - claim_retention_days)`(默认 180 天,须大于一切邮件最长有效期)范围删,走 `idx_mail` 索引;即便运营例外邮件寿命超长导致 claim 提前删,重复发奖也被 inventory 幂等键兜住,只影响 UI 已领标记;
+   - `player_mail_archive`:超 `archive_retention_days`(默认 90 天)后清除,归档表自身有界。
+
+清理走 `idx_expire`(player_mail)/`idx_end`(sys/guild)/`idx_mail`(claim)索引,小批量防长事务。InnoDB DELETE 不还磁盘空间(空间内部复用);若上线后量级证明批量删追不上写入,升级路径是按 mail_id RANGE 分区 + DROP PARTITION(两表 PK 均含 mail_id)。
 
 ## 3. 对外 RPC
 
@@ -79,11 +89,12 @@ SendPersonalMail(player_id, Mail) → mail_id
 
 ## 5. 表结构(pandora_social)
 
-- `sys_mail(mail_id PK, audience, start_ms, end_ms, payload BLOB, created_at)` — 系统邮件一份。
-- `guild_mail(mail_id PK, guild_id, start_ms, end_ms, payload BLOB, created_at)` + idx(guild_id) — 公会邮件一份。
-- `player_mail(mail_id PK, player_id, status, payload BLOB, expire_ms)` + idx(player_id,status) — 个人收件箱。
+- `sys_mail(mail_id PK, audience, start_ms, end_ms, payload BLOB, created_at)` + idx(end_ms) — 系统邮件一份。
+- `guild_mail(mail_id PK, guild_id, start_ms, end_ms, payload BLOB, created_at)` + idx(guild_id) + idx(end_ms) — 公会邮件一份。
+- `player_mail(mail_id PK, player_id, status, payload BLOB, expire_ms)` + idx(player_id,status) + idx(expire_ms) — 个人收件箱。
 - `player_mail_cursor(player_id PK, last_sys_mail_id, last_guild_mail_id)` — 系统/公会邮件游标。
-- `player_mail_claim(player_id, mail_id) PK` — 领取幂等。
+- `player_mail_claim(player_id, mail_id) PK` + idx(mail_id) — 领取幂等(idx 供 sweep 按雪花 cutoff 范围删)。
+- `player_mail_archive(mail_id PK, player_id, status, expire_ms, created_ms, payload, archived_at)` + idx(player_id) + idx(archived_at) — 过期未领附件归档(§2.4)。
 
 ## 6. kafka
 
@@ -101,4 +112,6 @@ SendPersonalMail(player_id, Mail) → mail_id
 
 - 端口 50009 占用确认。
 - 是否本期做"定向系统邮件"(段位/区服)还是只全服。
-- 过期未领是否自动补发到个人邮件。
+- 过期未领是否自动补发到个人邮件。**2026-07-21 部分落地**:清理侧已用归档兜底
+  (`player_mail_archive` 保留 90 天,不静默丢失,§2.4);"自动补发"仍待拍板——若做,
+  从归档表捞行补发即可,发放幂等由 inventory 键保证,不需改清理链路。

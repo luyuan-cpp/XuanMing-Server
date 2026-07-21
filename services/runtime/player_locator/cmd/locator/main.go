@@ -199,7 +199,7 @@ func main() {
 			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch 副本继续接受 Hub 写回")
 			os.Exit(1)
 		}()
-		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())
 	}
 	// Presence worker 可写 Kafka；Redis authority 模式下必须在 capability 成功后才启动。
 	if presenceHub != nil {

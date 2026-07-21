@@ -44,7 +44,7 @@ func newOwnerCleanupFixture(t *testing.T) *ownerCleanupFixture {
 	}
 	epoch1 := activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
 	epoch2 := activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("source assignment: %v", err)
 	}
 	source, found, err := repo.GetAssignment(ctx, 1001)

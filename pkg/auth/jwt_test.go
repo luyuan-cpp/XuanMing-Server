@@ -134,7 +134,7 @@ func TestSignBoundHubDSTicketRoundTrip(t *testing.T) {
 		CredentialGen: 17, CredentialJTI: "credential-jti", HubAssignmentID: "assignment-id",
 		WriterEpoch: DSAuthWriterEpochV2,
 	}
-	tok, _, err := s.SignBoundHubDSTicket(7777, 0, 0, 9, "ticket-jti", binding)
+	tok, _, err := s.SignBoundHubDSTicket(7777, 0, 0, 9, 0, "ticket-jti", binding)
 	if err != nil {
 		t.Fatalf("SignBoundHubDSTicket: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestSignBoundHubDSTicketRoundTrip(t *testing.T) {
 
 func TestSignBoundHubDSTicketRejectsPartialBinding(t *testing.T) {
 	s, _ := newTestSigner(t, time.Unix(1_700_000_000, 0).UTC())
-	_, _, err := s.SignBoundHubDSTicket(7777, 0, 0, 0, "ticket-jti", DSTicketBinding{DSPodName: "hub-a"})
+	_, _, err := s.SignBoundHubDSTicket(7777, 0, 0, 0, 0, "ticket-jti", DSTicketBinding{DSPodName: "hub-a"})
 	if err == nil {
 		t.Fatal("partial hub binding must be rejected")
 	}

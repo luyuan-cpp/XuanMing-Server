@@ -125,17 +125,19 @@ type fakeHubAssigner struct {
 	res *data.HubAssignment
 	err error
 
-	gotPlayerID uint64
-	gotRegion   string
-	gotTeamID   uint64
-	gotRoleID   uint32
+	gotPlayerID      uint64
+	gotRegion        string
+	gotTeamID        uint64
+	gotRoleID        uint32
+	gotSourceMatchID uint64
 }
 
-func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region string, teamID uint64, roleID uint32) (*data.HubAssignment, error) {
+func (f *fakeHubAssigner) AssignHub(_ context.Context, playerID uint64, region string, teamID uint64, roleID uint32, sourceMatchID uint64) (*data.HubAssignment, error) {
 	f.gotPlayerID = playerID
 	f.gotRegion = region
 	f.gotTeamID = teamID
 	f.gotRoleID = roleID
+	f.gotSourceMatchID = sourceMatchID
 	if f.err != nil {
 		return nil, f.err
 	}

@@ -36,7 +36,7 @@ func TestVerifyDSTicketResponsePassesThroughHubBinding(t *testing.T) {
 		HubAssignmentID: "assignment-a",
 		WriterEpoch:     2,
 	}
-	ticket, _, err := signer.SignBoundHubDSTicket(1001, 3, 33, 9, "entry-jti-a", binding)
+	ticket, _, err := signer.SignBoundHubDSTicket(1001, 3, 33, 9, 0, "entry-jti-a", binding)
 	if err != nil {
 		t.Fatal(err)
 	}

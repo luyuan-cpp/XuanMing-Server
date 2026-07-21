@@ -68,6 +68,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 - 架构级决策:见 [`docs/design/pandora-arch.md`](./docs/design/pandora-arch.md) §11。
 - 服务级决策:写入对应 [`docs/design/<service>.md`](./docs/design/) 或服务 README。
 - 压测结论:写入 `docs/design/stress-<round>-*.md`。
+- 崩溃与 P0 事故:按 [`docs/incidents/index.md`](./docs/incidents/index.md) 当次建档并持续更新；稳定约束再同步到 design/ops，不能用设计文档或审核交接替代事故档案。
 - 周期进度与流水账:追加到 [`PROGRESS.md`](./PROGRESS.md),只追加不删旧条目。
 
 ## 8. 压测纪律
@@ -223,5 +224,12 @@ AI 协作规则以 [`AGENTS.md`](./AGENTS.md) 为准,本文件不重复维护细
 4. **多副本与故障恢复**：覆盖进程崩溃、重启、主从切换、网络分区、租约丢失、时钟偏差、多实例重复调度和滚动升级中新旧版本共存。进程内状态不能被当作唯一权威；失去租约 / ownership 后必须 fencing，旧实例不得继续写。
 5. **容量与退化边界**：检查空值、零值、最大值、溢出 / 下溢、分页边界、集合硬上限、队列积压、缓存击穿 / 雪崩、热点 key 和依赖不可用时的行为。降级不得破坏数据正确性、安全边界或 `§9` 不变量。
 6. **验证必须对应风险**：每个已识别风险至少有一种可复现验证：单元测试、并发测试、race 检测、集成测试、故障注入、重启恢复测试或端到端测试。修 bug 必须补能在修复前失败、修复后通过的针对性回归测试；无法本地验证的路径必须在交接中明确列为剩余风险和人工验收项。
+7. **Go 请求 context 与 transport 生命周期必须隔离**：gRPC / HTTP handler 的请求 `ctx` 含有 Kratos server transport、`metadata.MD`、鉴权头和其他请求级 Value，不得逃逸到 handler 生命周期之外。
+   - `context.WithoutCancel(ctx)` 只移除取消信号和 deadline，仍完整保留 Value；禁止用它把请求 `ctx` 传入 goroutine、异步 fan-out、队列、缓存或长生命周期对象后再调用下游 gRPC。
+   - fire-and-forget 必须从 `context.Background()` 或项目统一的 detached helper 派生，只白名单复制 trace / player / match / team 等不可变日志字段；业务参数、下游凭证和必要身份必须使用有类型的参数显式传递。捕获的切片、map、指针等可变值必须复制或明确同步，并设置有界 timeout 和 `cancel`。
+   - server / client 共用 middleware 必须按**本次调用方向**互斥处理；上下文同时存在两种 transport 时，client interceptor 只能修改本次 client `RequestHeader`，绝不能修改继承的 server `ReplyHeader`。Metrics / Logging / Trace 等都不得用“只要存在 server transport 就算 server 调用”的优先级猜测方向。
+   - review 必须追踪完整 context 来源、Value、异步边界和下游调用链。涉及异步下游 RPC 时，必须补“同一 context 同时含 server / client transport”的回归测试，以及真实 handler 返回与后台 RPC 并发的集成测试；`go test -race` 必须在支持 CGO 的 Linux / CI 环境执行，无法执行时明确阻断项，不得写成已验证。
+8. **关键 writer 的租约与重启时间预算必须闭合**：使用 Pod UID / instance identity 注册 capability、writer fence 或 activation lock 时，必须覆盖 runtime fatal、OOM、SIGKILL 等无法执行 `defer Close()` 的退出。设计和故障测试必须把旧 lease TTL、容器启动、CrashLoopBackOff、重新抢占、下游本地自 fencing、heartbeat timeout 和启动 sweep 放在同一时间轴验证；恢复最坏耗时不得吃光业务安全租约。不得通过忽略重复 key、无条件覆盖或删除 fencing 来缩短恢复时间，必须在保持单 writer / 防脑裂的前提下设计安全接管。
+9. **崩溃与 P0 必须建立可关闭的事故档案**：确认 runtime fatal、未恢复 panic、OOM/CrashLoop/非预期退出或任何 P0 后，必须在同一任务按 [`docs/incidents/template.md`](./docs/incidents/template.md) 创建/更新事故文档并登记 [`docs/incidents/index.md`](./docs/incidents/index.md)。先记录最小事实，未知根因明确写未知；后续持续补齐脱敏证据、UTC 时间线、调用链和变量生命周期、根因/放大因素、全仓同类扫描、修复 commit/镜像、部署/回滚、race/集成/故障注入、观察窗口与剩余风险。只有模板关闭清单全部满足才能标记已关闭，不能把在途 diff、普通测试或服务重新 Ready 包装成事故已修复。
 
 分布式正确性不能靠增加层数或复杂框架自动获得。仍须遵守 `§15`：优先用最简单的标准机制建立可证明的权威、原子、幂等、fencing 和恢复闭环。

@@ -20,6 +20,21 @@ func withVirtualClock(start int64) (*atomic.Int64, func()) {
 	return &vclock, func() { unixNow = orig }
 }
 
+func TestMinIDAt(t *testing.T) {
+	if got := MinIDAt(int64(Epoch) - 1); got != 0 {
+		t.Fatalf("MinIDAt(before epoch) = %d, want 0", got)
+	}
+	// t 秒生成的 ID 必落在 [MinIDAt(t), MinIDAt(t+1)) 区间
+	vclock, restore := withVirtualClock(int64(Epoch) + 1000)
+	defer restore()
+	n := NewNode(3)
+	id := n.Generate()
+	lo, hi := MinIDAt(vclock.Load()), MinIDAt(vclock.Load()+1)
+	if id < lo || id >= hi {
+		t.Fatalf("id %d outside [%d, %d)", id, lo, hi)
+	}
+}
+
 func TestGenerate_Unique(t *testing.T) {
 	n := NewNode(0)
 	const count = 10000

@@ -160,7 +160,7 @@ func newBoundTicketUsecase(t *testing.T, jti data.TicketJTIRepo, checker data.Hu
 		HubAssignmentID: "assignment-a",
 		WriterEpoch:     2,
 	}
-	ticket, _, err := signer.SignBoundHubDSTicket(1001, 3, 33, 9, "entry-jti-a", binding)
+	ticket, _, err := signer.SignBoundHubDSTicket(1001, 3, 33, 9, 0, "entry-jti-a", binding)
 	if err != nil {
 		t.Fatalf("SignBoundHubDSTicket: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestLoginBindingActivationNeverFallsBackToSelfSignedHubTicket(t *testing.T)
 		// P0 Hub 路由门(2026-07-14):B1 下 ResolveHubEndpoint 必须先由 locator 证明玩家
 		// 不在 battle 才能签票;本子用例只验证绑定票透传,注入“不在战斗”的 notifier 过门。
 		uc := newTestUsecaseWithNotifier(t, hub, &fakeNotifier{})
-		bound, _, err := uc.signer.SignBoundHubDSTicket(1001, 0, 0, 0, "bound-allocator-jti", auth.DSTicketBinding{
+		bound, _, err := uc.signer.SignBoundHubDSTicket(1001, 0, 0, 0, 0, "bound-allocator-jti", auth.DSTicketBinding{
 			DSPodName:       "hub-cn-1",
 			DSInstanceUID:   "uid-a",
 			ProtocolEpoch:   7,
@@ -490,7 +490,7 @@ func TestVerifyDSTicketAdmissionBeforeMarkerAndStableRotationRetry(t *testing.T)
 			CredentialGen: 11, CredentialJTI: "cred-old", HubAssignmentID: "assignment-1",
 			WriterEpoch: auth.DSAuthWriterEpochV2,
 		}
-		ticket, _, err := signer.SignBoundHubDSTicket(1001, 0, 0, 0, "hub-entry-jti", oldBinding)
+		ticket, _, err := signer.SignBoundHubDSTicket(1001, 0, 0, 0, 0, "hub-entry-jti", oldBinding)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -520,7 +520,7 @@ func TestVerifyDSTicketAdmissionBeforeMarkerAndStableRotationRetry(t *testing.T)
 		uc.SetHubAssignmentBindingPolicy(true, &capturingAssignmentChecker{})
 		oldBinding := auth.DSTicketBinding{DSPodName: "hub-1", DSInstanceUID: "uid-h", ProtocolEpoch: 7,
 			CredentialGen: 11, CredentialJTI: "cred-old", HubAssignmentID: "assignment-1", WriterEpoch: 2}
-		ticket, _, _ := signer.SignBoundHubDSTicket(1001, 0, 0, 0, "strict-entry-jti", oldBinding)
+		ticket, _, _ := signer.SignBoundHubDSTicket(1001, 0, 0, 0, 0, "strict-entry-jti", oldBinding)
 		rotated := admissionBinding(auth.DSTypeHub, 0, "hub-1", "uid-h", 7, 12, "cred-new")
 		if _, err := uc.VerifyDSTicketForAdmission(context.Background(), ticket, rotated.PodName, admissionID, rotated); errcode.As(err) != errcode.ErrLoginTicketInvalid {
 			t.Fatalf("code=%v err=%v", errcode.As(err), err)

@@ -97,6 +97,9 @@ type DSTicketClaims struct {
 	DSCredentialJTI string `json:"ds_credential_jti,omitempty"`
 	HubAssignmentID string `json:"hub_assignment_id,omitempty"`
 	DSWriterEpoch   uint32 `json:"ds_writer_epoch,omitempty"`
+	// SourceMatchID:Battle→Hub 回流 fence(与 DSTicketClaimsV2.SourceMatchID 同义,
+	// 2026-07-21)。仅 hub 票可带(>0 表示从该终局对局返回大厅);battle 票必须 0。
+	SourceMatchID uint64 `json:"source_match_id,omitempty"`
 }
 
 // DSTicketBinding 是 hub DSTicket 的实例/归属绑定。零值表示旧兼容票据；非零时六项必须完整，
@@ -389,16 +392,23 @@ func (s *Signer) SignDSTicketWithCell(playerID uint64, dsType DSType, matchID ui
 //
 // 其余语义同 SignDSTicketWithCell。不变量 §3:默认 TTL=5min。
 func (s *Signer) SignDSTicketFull(playerID uint64, dsType DSType, matchID uint64, regionID, cellID, roleID uint32, jti string) (token string, expiresAtMs int64, err error) {
-	return s.signDSTicket(playerID, dsType, matchID, regionID, cellID, roleID, jti, DSTicketBinding{})
+	return s.signDSTicket(playerID, dsType, matchID, regionID, cellID, roleID, 0, jti, DSTicketBinding{})
+}
+
+// SignHubDSTicketFull 与 SignDSTicketFull(dsType=hub) 相同,另把 Battle→Hub 回流 fence
+// (sourceMatchID,见 DSTicketClaims.SourceMatchID)盖进票据。0 = 普通登录(claim 不序列化)。
+func (s *Signer) SignHubDSTicketFull(playerID uint64, regionID, cellID, roleID uint32, sourceMatchID uint64, jti string) (token string, expiresAtMs int64, err error) {
+	return s.signDSTicket(playerID, DSTypeHub, 0, regionID, cellID, roleID, sourceMatchID, jti, DSTicketBinding{})
 }
 
 // SignBoundHubDSTicket 签发绑定当前 Hub DS active 凭据与玩家归属版本的 hub 票据。
 // 绑定不完整一律拒绝，避免产生看似新格式但实际可跨实例/跨归属使用的半绑定票据。
-func (s *Signer) SignBoundHubDSTicket(playerID uint64, regionID, cellID, roleID uint32, jti string, binding DSTicketBinding) (token string, expiresAtMs int64, err error) {
-	return s.signDSTicket(playerID, DSTypeHub, 0, regionID, cellID, roleID, jti, binding)
+// sourceMatchID:Battle→Hub 回流 fence,0 = 普通登录。
+func (s *Signer) SignBoundHubDSTicket(playerID uint64, regionID, cellID, roleID uint32, sourceMatchID uint64, jti string, binding DSTicketBinding) (token string, expiresAtMs int64, err error) {
+	return s.signDSTicket(playerID, DSTypeHub, 0, regionID, cellID, roleID, sourceMatchID, jti, binding)
 }
 
-func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, regionID, cellID, roleID uint32, jti string, binding DSTicketBinding) (token string, expiresAtMs int64, err error) {
+func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, regionID, cellID, roleID uint32, sourceMatchID uint64, jti string, binding DSTicketBinding) (token string, expiresAtMs int64, err error) {
 	if playerID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: playerID must be > 0")
 	}
@@ -410,6 +420,9 @@ func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, re
 	}
 	if dsType == DSTypeBattle && matchID == 0 {
 		return "", 0, errors.New("auth.SignDSTicket: battle DSTicket requires matchID")
+	}
+	if dsType == DSTypeBattle && sourceMatchID != 0 {
+		return "", 0, errors.New("auth.SignDSTicket: battle DSTicket must not carry source_match_id")
 	}
 	if !binding.empty() {
 		if dsType != DSTypeHub || !binding.complete() {
@@ -439,6 +452,7 @@ func (s *Signer) signDSTicket(playerID uint64, dsType DSType, matchID uint64, re
 		DSCredentialJTI: binding.CredentialJTI,
 		HubAssignmentID: binding.HubAssignmentID,
 		DSWriterEpoch:   binding.WriterEpoch,
+		SourceMatchID:   sourceMatchID,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	str, err := t.SignedString(s.cfg.Secret)

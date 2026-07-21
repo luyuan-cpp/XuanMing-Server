@@ -5,9 +5,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
@@ -95,6 +97,12 @@ func main() {
 	}
 	mailSvc := service.NewMailService(uc, sf)
 
+	// 过期清理:周期批量回收过期邮件 / 领取记录 / 归档,保证各表增长有界(biz/sweep.go)。
+	// 多副本各自跑,删除幂等无需锁(对齐 leaderboard 发奖补扫模式)。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go runMailSweep(sweepCtx, uc, cfg.Mail.SweepInterval.Std())
+
 	grpcSrv := server.NewGRPCServer(&cfg, mailSvc)
 	httpSrv := server.NewHTTPServer(&cfg)
 
@@ -108,6 +116,20 @@ func main() {
 	if err := app.Run(); err != nil {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
+	}
+}
+
+// runMailSweep 周期跑一轮过期清理(对齐 dialogue runSessionSweep / leaderboard 补扫模式)。
+func runMailSweep(ctx context.Context, uc *biz.MailUsecase, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			uc.SweepExpired(ctx, time.Now().UnixMilli())
+		}
 	}
 }
 

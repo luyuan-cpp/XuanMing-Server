@@ -112,6 +112,31 @@ func TestDSTicketV2_HubRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDSTicketV2_HubSourceMatchRoundTrip:Battle→Hub 回流 fence(source_match_id,
+// 2026-07-21)hub 票往返。签进 claim → 验签后原样读出;不影响 hub 票“无 battle 绑定”不变量。
+func TestDSTicketV2_HubSourceMatchRoundTrip(t *testing.T) {
+	pemBytes, pub, _ := newV2TestKeyPair(t)
+	s := newV2TestSigner(t, pemBytes)
+	v := newV2TestVerifier(t, pub)
+
+	tg := hubTarget()
+	tg.SourceMatchID = 9001
+	token, _, err := s.SignHubTicket(1001, 0, 0, 0, "jti-hub-fence", tg)
+	if err != nil {
+		t.Fatalf("SignHubTicket with source_match_id: %v", err)
+	}
+	claims, err := v.Verify(token)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if claims.SourceMatchID != 9001 {
+		t.Fatalf("source_match_id = %d, want 9001", claims.SourceMatchID)
+	}
+	if claims.MatchID != 0 || claims.AllocationID != "" {
+		t.Fatalf("hub ticket must not carry battle binding: %+v", claims)
+	}
+}
+
 func TestDSTicketV2_BattleRoundTrip(t *testing.T) {
 	pemBytes, pub, _ := newV2TestKeyPair(t)
 	s := newV2TestSigner(t, pemBytes)
@@ -162,6 +187,12 @@ func TestDSTicketV2_SignRejectsIncompleteBinding(t *testing.T) {
 		{"battle missing match", func() error {
 			tg := battleTarget()
 			tg.MatchID = 0
+			_, _, err := s.SignBattleTicket(1, 0, 0, "j", tg)
+			return err
+		}},
+		{"battle carrying source_match_id", func() error {
+			tg := battleTarget()
+			tg.SourceMatchID = 9001
 			_, _, err := s.SignBattleTicket(1, 0, 0, "j", tg)
 			return err
 		}},

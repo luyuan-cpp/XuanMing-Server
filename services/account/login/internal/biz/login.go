@@ -289,19 +289,23 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	//   租约活着且 match Active → 回原局;Terminal/租约过期 → 进 Hub;
 	//   权威暂时不可用 → 可重试 Unavailable(最长 ~30s 租约到期自愈,绝不永久卡死)。
 	// DS 崩溃/删除 → 心跳停 → 租约 30s 蒸发 → 玩家自动进 Hub,无需任何 cleanup。
+	// hubFenceMatchID:tryBattleReconnect 判定「终局后 TTL 残留」继续走 Hub 时带回的
+	// 原对局 match_id(Battle→Hub 回流 fence),签进 hub 票据 source_match_id claim。
+	var hubFenceMatchID uint64
 	if u.notifier == nil {
 		if u.requireHubAssignmentBinding {
 			return nil, errcode.New(errcode.ErrUnavailable,
 				"player locator is required before B1 hub assignment")
 		}
 	} else {
-		res, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID)
+		res, terminalFence, reconnectErr := u.tryBattleReconnect(ctx, playerID, deviceID, sessionToken, sessExpMs, regionID, cellID)
 		if reconnectErr != nil {
 			return nil, reconnectErr
 		}
 		if res != nil {
 			return res, nil
 		}
+		hubFenceMatchID = terminalFence
 	}
 
 	// 读玩家已选角色(选角权威化 2026-07-08):弱依赖,读失败按 0(未选角)处理不阻断登录。
@@ -327,7 +331,7 @@ func (u *LoginUsecase) Login(ctx context.Context, account, passwordHash, deviceI
 	// 解析 hub 分片 + hub 票据(W4 ⑥):
 	// hub_allocator 是 hub 票据权威,优先调 AssignHub 拿真实地址 + 票据;
 	// 未配 / 调用失败 → 回退自签票据(盖 region/cell 戳) + 静态 hubDSAddr(弱依赖,不阻断登录)。
-	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID, selectedRoleID)
+	hubDSAddr, hubTicket, hubExpMs, err := u.resolveHub(ctx, playerID, regionID, cellID, selectedRoleID, hubFenceMatchID)
 	if err != nil {
 		h.Errorw("msg", "resolve_hub_failed", "err", err, "player_id", playerID)
 		return nil, err
@@ -586,57 +590,60 @@ func (u *LoginUsecase) resolveBattleAuthority(ctx context.Context, playerID uint
 // LoginResult(docs/design/battle-reconnect.md §2.1)。返回 nil 表示未命中重连 → 调用方继续
 // 走正常 hub 登录流程。
 //
-// local/off 查询失败按既有 §2.3 弱依赖策略返回 (nil,nil) 走 Hub；B1 查询失败返回
+// local/off 查询失败按既有 §2.3 弱依赖策略返回 (nil,0,nil) 走 Hub；B1 查询失败返回
 // Unavailable(可重试)。只有明确 !InBattle 才允许 B1 继续走 Hub。
 //
 // locator 明确 InBattle 时,用 InspectBattleRoute 三态分诊(租约推导模型):
 //
 //	Active   → 签票回原局(签票失败 = 可重试 Unavailable,不得继续 Hub);
-//	Terminal → locator BATTLE 仅为 TTL 残留,直接走 Hub(无需等 TTL 蒸发);
+//	Terminal → locator BATTLE 仅为 TTL 残留,直接走 Hub(无需等 TTL 蒸发),
+//	           第二返回值带出残留 match_id 作为 Battle→Hub 回流 fence,
+//	           调用方签进 hub 票据 source_match_id claim;
 //	Unknown  → 可重试 Unavailable(match 权威抖动;最长 ~30s 租约到期后 InBattle
 //	           自然变 false,永不永久卡死)。
 //
 // 命中重连时不调 NotifyLoginPending / 不分配 hub(避免把 BATTLE 位置顶成 HUB)。
 func (u *LoginUsecase) tryBattleReconnect(
 	ctx context.Context, playerID uint64, deviceID, sessionToken string, sessExpMs int64, regionID, cellID uint32,
-) (*LoginResult, error) {
+) (*LoginResult, uint64, error) {
 	h := plog.With(ctx)
 
 	bl, ma, err := u.resolveBattleAuthority(ctx, playerID)
 	if err != nil {
 		h.Warnw("msg", "battle_location_query_failed", "err", err, "player_id", playerID)
 		if u.requireHubAssignmentBinding {
-			return nil, errcode.NewCause(errcode.ErrUnavailable, err,
+			return nil, 0, errcode.NewCause(errcode.ErrUnavailable, err,
 				"cannot prove player is outside battle before B1 hub assignment")
 		}
 		// local/off 保留历史弱依赖降级。
-		return nil, nil
+		return nil, 0, nil
 	}
 	if !bl.InBattle {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	// locator 租约说在战斗:用 match 权威三态门区分“仍在活局”与“终局后 TTL 残留”。
 	if u.battleTicketIssuer == nil {
 		h.Errorw("msg", "battle_reconnect_ticket_issuer_unavailable",
 			"player_id", playerID, "match_id", bl.MatchID)
-		return nil, errcode.New(errcode.ErrUnavailable, "battle reconnect ticket authority unavailable")
+		return nil, 0, errcode.New(errcode.ErrUnavailable, "battle reconnect ticket authority unavailable")
 	}
 	state, rerr := u.battleTicketIssuer.InspectBattleRoute(ctx, playerID, bl.MatchID)
 	switch state {
 	case data.BattleRouteTerminal:
 		// match 已显式终局(ended/abandoned):locator 记录只是 TTL 残留,直接进 Hub。
-		// 这里不需要任何 cleanup:残留记录最多 30s 自然蒸发。
+		// 残留 match_id 作为回流 fence 带回,签进 hub 票据后 Hub DS 才能立即改写
+		// locator(否则要等 TTL 蒸发,期间匹配 4007)。
 		h.Infow("msg", "battle_reconnect_skipped_terminal_match",
 			"player_id", playerID, "match_id", bl.MatchID)
-		return nil, nil
+		return nil, bl.MatchID, nil
 	case data.BattleRouteActive:
 		// 继续下方签票回原局。
 	default:
 		// UNKNOWN(match 权威抖动/roster 不可读):不猜。可重试,最长 30s 租约到期自愈。
 		h.Warnw("msg", "battle_reconnect_route_unknown_retryable",
 			"player_id", playerID, "match_id", bl.MatchID, "err", rerr)
-		return nil, errcode.NewCause(errcode.ErrUnavailable, rerr,
+		return nil, 0, errcode.NewCause(errcode.ErrUnavailable, rerr,
 			"battle route authority temporarily unavailable; retry")
 	}
 
@@ -644,7 +651,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 	// 直接可重试退出,不留已签票据的副作用。
 	resume, resumeErr := u.buildBattleResume(ctx, playerID, bl, ma)
 	if resumeErr != nil {
-		return nil, resumeErr
+		return nil, 0, resumeErr
 	}
 
 	battleResult, terr := u.battleTicketIssuer.IssueBattleDSTicketAtCell(
@@ -653,12 +660,12 @@ func (u *LoginUsecase) tryBattleReconnect(
 		// roster/Redis/签票任一失败 → 本次路由可重试,绝不直签或继续分配 Hub。
 		h.Errorw("msg", "authorize_battle_reconnect_ticket_failed", "err", terr,
 			"player_id", playerID, "match_id", bl.MatchID)
-		return nil, errcode.NewCause(errcode.ErrUnavailable, terr,
+		return nil, 0, errcode.NewCause(errcode.ErrUnavailable, terr,
 			"battle reconnect ticket authority unavailable")
 	}
 	battleTicket, battleExpMs := battleResult.Ticket, battleResult.ExpiresAtMs
 	if battleResult.BattleDSAddr == "" {
-		return nil, errcode.New(errcode.ErrUnavailable, "battle reconnect target address unavailable")
+		return nil, 0, errcode.New(errcode.ErrUnavailable, "battle reconnect target address unavailable")
 	}
 
 	// 记录最近登录设备(失败不阻塞登录,只日志告警)。
@@ -681,7 +688,7 @@ func (u *LoginUsecase) tryBattleReconnect(
 		RegionID:          regionID,
 		CellID:            cellID,
 		Resume:            resume,
-	}, nil
+	}, 0, nil
 }
 
 // GetResumeContext 是前台/冷启动恢复入口(session 仍有效、不走完整 Login 时)。
@@ -773,12 +780,17 @@ func (u *LoginUsecase) ensureAccount(ctx context.Context, account, passwordHash 
 // hub_allocator 路径的票据由其自身签发(其内部落点绑定属 Codex/hub_allocator 职责)。
 //
 // roleID(选角权威化 2026-07-08):玩家已选角色。两条路径都把它盖进 hub 票据 claim:
-// AssignHub 透传给 allocator 签;回退自签用 SignDSTicketFull。0 = 未选角(claim 不序列化)。
-func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID, cellID, roleID uint32) (addr, ticket string, expMs int64, err error) {
+// AssignHub 透传给 allocator 签;回退自签用 SignHubDSTicketFull。0 = 未选角(claim 不序列化)。
+//
+// sourceMatchID(Battle→Hub 回流 fence,2026-07-21):三态门证明原对局已终局时的原
+// Battle match_id;两条路径都盖进 hub 票据 source_match_id claim,Hub DS 准入后用它写
+// SetLocation(HUB, fence) 通过 locator 的 BATTLE→HUB guard,消除终局 TTL 残留导致的
+// 「4007 玩家正在战斗中」。0 = 普通登录/非回流。
+func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID, cellID, roleID uint32, sourceMatchID uint64) (addr, ticket string, expMs int64, err error) {
 	h := plog.With(ctx)
 
 	if u.hubAssigner != nil {
-		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0, roleID)
+		assign, aerr := u.hubAssigner.AssignHub(ctx, playerID, u.hubRegion, 0, roleID, sourceMatchID)
 		if aerr == nil && assign == nil {
 			aerr = errcode.New(errcode.ErrUnavailable, "hub allocator returned an empty assignment")
 		}
@@ -806,7 +818,7 @@ func (u *LoginUsecase) resolveHub(ctx context.Context, playerID uint64, regionID
 			"hub allocator is required by the RS256/assignment-bound ticket profile")
 	}
 
-	ticket, expMs, err = u.signer.SignDSTicketFull(playerID, auth.DSTypeHub, 0, regionID, cellID, roleID, uuid.NewString())
+	ticket, expMs, err = u.signer.SignHubDSTicketFull(playerID, regionID, cellID, roleID, sourceMatchID, uuid.NewString())
 	if err != nil {
 		return "", "", 0, errcode.New(errcode.ErrInternal, "sign hub ticket failed: %v", err)
 	}
@@ -850,17 +862,19 @@ func (u *LoginUsecase) ResolveHubEndpoint(ctx context.Context, playerID uint64) 
 
 // ResolveHubEndpointFromMatch 是结算/离开战斗回大厅路径。sourceMatchID 仅作日志
 // 参考;路由权威完全由 guardHubRouteAgainstActiveBattle 的三态门决定
-// (Active→拒绝,Terminal→放行,Unknown→可重试)。
+// (Active→拒绝,Terminal→放行,Unknown→可重试)。回流 fence 同样取门的权威判定
+// (locator BATTLE 残留的 match_id),不信客户端上报的 sourceMatchID。
 func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID, sourceMatchID uint64) (addr, ticket string, expMs int64, err error) {
 	if playerID == 0 {
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "playerID must be > 0")
 	}
-	if gerr := u.guardHubRouteAgainstActiveBattle(ctx, playerID); gerr != nil {
+	fenceMatchID, gerr := u.guardHubRouteAgainstActiveBattle(ctx, playerID)
+	if gerr != nil {
 		return "", "", 0, gerr
 	}
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
 	// 选角权威化:返回大厅路径也把已选角盖进新票(与登录同语义,DS 重入时同样能 spawn 对角色)。
-	return u.resolveHub(ctx, playerID, regionID, cellID, u.loadSelectedRole(ctx, playerID))
+	return u.resolveHub(ctx, playerID, regionID, cellID, u.loadSelectedRole(ctx, playerID), fenceMatchID)
 }
 
 // guardHubRouteAgainstActiveBattle 是所有非 Login 主链 Hub 签票入口(IssueDSTicket(hub) /
@@ -876,31 +890,36 @@ func (u *LoginUsecase) ResolveHubEndpointFromMatch(ctx context.Context, playerID
 //
 // P0 修复(2026-07-15,Codex 复审):不再把通用 ErrPermissionDeny 当终态证明——它同时
 // 覆盖 roster 漂移/非成员/记录缺失,那些必须 UNKNOWN 拒绝。只有投影记录显式终态才放行。
-func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, playerID uint64) error {
+//
+// 第一返回值(2026-07-21):Terminal 放行时返回该终局对局的 match_id 作为 Battle→Hub
+// 回流 fence,调用方把它签进 hub 票据 source_match_id claim——locator 的 BATTLE 残留
+// 只接受带同 match_id 令牌的 HUB 写(guardTransition,不变量 §1),没有 fence 的 Hub
+// 准入会让 locator 停留在 BATTLE 直到 TTL 过期,期间匹配一律 4007。其余分支返回 0。
+func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, playerID uint64) (uint64, error) {
 	h := plog.With(ctx)
 	if u.notifier == nil {
 		if u.requireHubAssignmentBinding {
-			return errcode.New(errcode.ErrUnavailable,
+			return 0, errcode.New(errcode.ErrUnavailable,
 				"player locator is required before hub ticket issuance")
 		}
-		return nil // local/off 无 locator:保留历史行为(dev 裸跑)。
+		return 0, nil // local/off 无 locator:保留历史行为(dev 裸跑)。
 	}
 	bl, _, err := u.resolveBattleAuthority(ctx, playerID) // hub 门只关心在局与否,不需要 game_mode
 	if err != nil {
 		if u.requireHubAssignmentBinding {
-			return errcode.NewCause(errcode.ErrUnavailable, err,
+			return 0, errcode.NewCause(errcode.ErrUnavailable, err,
 				"cannot prove player is outside battle before hub ticket issuance")
 		}
 		h.Warnw("msg", "hub_route_gate_locator_degraded", "err", err, "player_id", playerID)
-		return nil // local/off 保留历史弱降级。
+		return 0, nil // local/off 保留历史弱降级。
 	}
 	if !bl.InBattle {
-		return nil
+		return 0, nil
 	}
 	// locator 明确 InBattle:必须由 roster 权威区分“仍在活局”与“显式终局后 TTL 残留”。
 	// 不可判定时不分 profile 一律 fail-closed:阳性 BATTLE 信号下猜“已结束”就是双归属。
 	if u.battleTicketIssuer == nil {
-		return errcode.New(errcode.ErrUnavailable,
+		return 0, errcode.New(errcode.ErrUnavailable,
 			"battle route authority unavailable while locator reports BATTLE")
 	}
 	state, rerr := u.battleTicketIssuer.InspectBattleRoute(ctx, playerID, bl.MatchID)
@@ -908,16 +927,17 @@ func (u *LoginUsecase) guardHubRouteAgainstActiveBattle(ctx context.Context, pla
 	case data.BattleRouteActive:
 		h.Warnw("msg", "hub_route_rejected_active_battle",
 			"player_id", playerID, "match_id", bl.MatchID)
-		return errcode.New(errcode.ErrInvalidState,
+		return 0, errcode.New(errcode.ErrInvalidState,
 			"player is in active battle (match_id=%d); reconnect via Login instead of hub ticket", bl.MatchID)
 	case data.BattleRouteTerminal:
-		// 权威记录显式终态(ended/abandoned) → locator BATTLE 仅为 TTL 残留,放行 Hub(正常结算回大厅)。
-		return nil
+		// 权威记录显式终态(ended/abandoned) → locator BATTLE 仅为 TTL 残留,放行 Hub
+		// (正常结算回大厅),并把残留 match_id 作为回流 fence 交给签票路径。
+		return bl.MatchID, nil
 	default:
 		// UNKNOWN(含 roster 漂移/非成员/记录缺失/stale/错误):不得猜测,拒绝。
 		h.Warnw("msg", "hub_route_rejected_unknown_battle_state",
 			"player_id", playerID, "match_id", bl.MatchID, "err", rerr)
-		return errcode.NewCause(errcode.ErrUnavailable, rerr,
+		return 0, errcode.NewCause(errcode.ErrUnavailable, rerr,
 			"cannot prove battle is over before hub ticket issuance")
 	}
 }
@@ -955,7 +975,8 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 		return "", "", 0, errcode.New(errcode.ErrInvalidArg, "roleID must be > 0")
 	}
 	// SelectRole 也是 Hub 物理副作用入口:先过 active-BATTLE 三态权威门。
-	if gerr := u.guardHubRouteAgainstActiveBattle(ctx, playerID); gerr != nil {
+	fenceMatchID, gerr := u.guardHubRouteAgainstActiveBattle(ctx, playerID)
+	if gerr != nil {
 		return "", "", 0, gerr
 	}
 	if len(u.allowedRoleIDs) > 0 {
@@ -981,7 +1002,7 @@ func (u *LoginUsecase) SelectRole(ctx context.Context, playerID uint64, roleID u
 	}
 
 	regionID, cellID := u.routeRegionCell(ctx, playerID)
-	addr, ticket, expMs, err = u.resolveHub(ctx, playerID, regionID, cellID, roleID)
+	addr, ticket, expMs, err = u.resolveHub(ctx, playerID, regionID, cellID, roleID, fenceMatchID)
 	if err != nil {
 		h.Errorw("msg", "select_role_resolve_hub_failed", "err", err, "player_id", playerID, "role_id", roleID)
 		return "", "", 0, err

@@ -33,6 +33,16 @@ type fakeBackend struct {
 	requiredEpoch       uint32
 	requiredValue       string
 	requiredModRevision int64
+
+	// 同 Pod 安全接管预检的 staged 残留 capability 与传参记录
+	staleValue       []byte
+	staleModRevision int64
+	staleLeaseID     int64
+	staleFound       bool
+	staleErr         error
+	prevModRevision  int64
+	prevLeaseID      int64
+	acquireCalls     int
 }
 
 func (f *fakeBackend) GetRequired(context.Context, string) (RequiredState, int64, int64, bool, error) {
@@ -49,9 +59,20 @@ func (f *fakeBackend) GetRequired(context.Context, string) (RequiredState, int64
 	state, err := ParseRequiredState([]byte(value))
 	return state, 7, 5, true, err
 }
-func (f *fakeBackend) AcquireCapability(_ context.Context, key, _, _ string, required string, modRevision int64, value []byte, _ int64) (Lease, error) {
+func (f *fakeBackend) GetCapability(context.Context, string) ([]byte, int64, int64, bool, error) {
+	if f.staleErr != nil {
+		return nil, 0, 0, false, f.staleErr
+	}
+	if !f.staleFound {
+		return nil, 0, 0, false, nil
+	}
+	return f.staleValue, f.staleModRevision, f.staleLeaseID, true, nil
+}
+func (f *fakeBackend) AcquireCapability(_ context.Context, key, _, _ string, required string, modRevision int64, value []byte, _ int64, prevModRevision int64, prevLeaseID int64) (Lease, error) {
+	f.acquireCalls++
 	f.key, f.value = key, value
 	f.requiredValue, f.requiredModRevision = required, modRevision
+	f.prevModRevision, f.prevLeaseID = prevModRevision, prevLeaseID
 	state, _ := ParseRequiredState([]byte(required))
 	f.requiredEpoch = state.Epoch
 	if f.lease == nil {
@@ -101,6 +122,96 @@ func TestStartFencesCapabilityWithExactRequiredRevision(t *testing.T) {
 	defer func() { _ = holder.Close() }()
 	if backend.requiredEpoch != 1 || backend.requiredValue != "1" || backend.requiredModRevision != 5 {
 		t.Fatalf("capability compare value=%q epoch=%d mod_revision=%d", backend.requiredValue, backend.requiredEpoch, backend.requiredModRevision)
+	}
+}
+
+// staleCapability 构造残留 capability JSON(默认与 validConfig 同身份,可用 mutate 改字段)。
+func staleCapability(t *testing.T, cfg Config, mutate func(*Capability)) []byte {
+	t.Helper()
+	prev := Capability{
+		Service: cfg.Service, InstanceUID: cfg.InstanceUID, WriterEpoch: cfg.WriterEpoch,
+		ImageDigest: cfg.ImageDigest, KeysetRevision: cfg.KeysetRevision,
+	}
+	if mutate != nil {
+		mutate(&prev)
+	}
+	raw, err := json.Marshal(prev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// TestStartReclaimsSamePodStaleCapability:同 Pod 上一进程 fatal 崩溃残留的同身份
+// capability 必须被安全接管(ModRevision CAS + 旧租约 revoke),不再等 TTL 自然过期
+// (2026-07-21 allocator 崩溃后重启被 duplicate key 拒、恢复晚于 20s 授权租约)。
+func TestStartReclaimsSamePodStaleCapability(t *testing.T) {
+	cfg := validConfig()
+	backend := &fakeBackend{
+		epoch: 1, found: true, watch: make(chan RequiredEvent),
+		staleFound: true, staleValue: staleCapability(t, cfg, nil),
+		staleModRevision: 42, staleLeaseID: 99,
+	}
+	holder, err := Start(context.Background(), backend, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.Close() }()
+	if backend.prevModRevision != 42 || backend.prevLeaseID != 99 {
+		t.Fatalf("takeover CAS prev_mod_revision=%d prev_lease_id=%d, want 42/99",
+			backend.prevModRevision, backend.prevLeaseID)
+	}
+	if !holder.Reclaimed() {
+		t.Fatal("holder should report reclaimed capability")
+	}
+}
+
+// TestStartRefusesForeignStaleCapability:残留 capability 任一身份字段不一致
+// (异身份写入 / 镜像已换 / writer epoch / keyset 漂移 / 值不可解析)必须拒绝接管
+// fail-closed,且绝不发起注册事务。
+func TestStartRefusesForeignStaleCapability(t *testing.T) {
+	cfg := validConfig()
+	for _, tc := range []struct {
+		name  string
+		value []byte
+	}{
+		{name: "unparsable", value: []byte("{not json")},
+		{name: "instance_uid", value: staleCapability(t, cfg, func(c *Capability) { c.InstanceUID = "other-pod" })},
+		{name: "image_digest", value: staleCapability(t, cfg, func(c *Capability) {
+			c.ImageDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		})},
+		{name: "writer_epoch", value: staleCapability(t, cfg, func(c *Capability) { c.WriterEpoch = 1 })},
+		{name: "keyset_revision", value: staleCapability(t, cfg, func(c *Capability) { c.KeysetRevision = "r2" })},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &fakeBackend{
+				epoch: 1, found: true, watch: make(chan RequiredEvent),
+				staleFound: true, staleValue: tc.value, staleModRevision: 42, staleLeaseID: 99,
+			}
+			if _, err := Start(context.Background(), backend, cfg); err == nil {
+				t.Fatal("expected fail-closed takeover refusal")
+			}
+			if backend.acquireCalls != 0 {
+				t.Fatalf("acquire must not run after takeover refusal, got %d calls", backend.acquireCalls)
+			}
+		})
+	}
+}
+
+// TestStartFreshAcquireUsesCreateRevisionGuard:无残留 key 时保持原「key 必须不存在」
+// 语义(prevModRevision/prevLeaseID 均为 0)。
+func TestStartFreshAcquireUsesCreateRevisionGuard(t *testing.T) {
+	backend := &fakeBackend{epoch: 1, found: true, watch: make(chan RequiredEvent)}
+	holder, err := Start(context.Background(), backend, validConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.Close() }()
+	if backend.prevModRevision != 0 || backend.prevLeaseID != 0 {
+		t.Fatalf("fresh acquire prev=%d/%d, want 0/0", backend.prevModRevision, backend.prevLeaseID)
+	}
+	if holder.Reclaimed() {
+		t.Fatal("fresh acquire must not report reclaimed")
 	}
 }
 

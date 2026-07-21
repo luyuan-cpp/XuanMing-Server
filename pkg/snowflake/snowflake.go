@@ -93,6 +93,17 @@ func nowEpoch() uint64 {
 	return uint64(ts) - Epoch
 }
 
+// MinIDAt 返回 unixSec 时刻(Unix 秒)可能生成的最小 ID:时间段取该秒、node/step 全零。
+// 用途:按"创建时间早于 cutoff"做范围清理(如 player_mail_claim 按 mail_id < MinIDAt(cutoff)
+// 批量删),把时间条件转成 ID 范围条件,走主键/索引扫描。
+// unixSec 早于 Epoch 时返回 0(全部 ID 都晚于该时刻)。
+func MinIDAt(unixSec int64) uint64 {
+	if unixSec < int64(Epoch) {
+		return 0
+	}
+	return (uint64(unixSec) - Epoch) << timeShift
+}
+
 // unixNow 返回当前 Unix 秒。抽成包级变量仅为便于测试注入虚拟时钟
 // (绕开 32768 ID/s 的真实容量墙做大规模并发验证);生产路径恒等于
 // time.Now().Unix()。

@@ -408,7 +408,7 @@ func main() {
 			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch allocator 继续分配或接收 DS 写回")
 			os.Exit(1)
 		}()
-		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())
 	}
 
 	// 6. 后台心跳超时扫描(随进程生命周期启停)

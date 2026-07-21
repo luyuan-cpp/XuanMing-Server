@@ -30,27 +30,31 @@ import (
 // maxRewardClaimRetry 是领奖写入遇乐观锁冲突的最大重试次数(并发领取同一玩家时兜底)。
 const maxRewardClaimRetry = 3
 
-// loadRewardRecord 读取并反序列化玩家领奖记录,返回内存 Record + 当前乐观锁版本。
-// 未建行 → 空 Record + version 0(后续 Save 按新建处理)。
-func (u *PlayerUsecase) loadRewardRecord(ctx context.Context, playerID uint64) (*rewardclaim.Record, int32, error) {
+// loadRewardRecord 读取并反序列化玩家领奖记录,返回内存 Record + 底层存储 message +
+// 当前乐观锁版本。未建行 → 空 Record + 空 message + version 0(后续 Save 按新建处理)。
+// stored 必须原样保留到 saveRewardRecord 回写:金丝雀 / 滚动共存窗口内,新副本可能已写入
+// 本副本不认识的新字段(unknown fields),丢弃 stored 重建 message 等效 DiscardUnknown,
+// 会静默清掉新字段(不变量 §17 / zero-downtime-update.md §2.3、§7.3)。
+func (u *PlayerUsecase) loadRewardRecord(ctx context.Context, playerID uint64) (*rewardclaim.Record, *playerv1.RewardClaimStorageRecord, int32, error) {
 	raw, version, err := u.repo.LoadRewardClaims(ctx, playerID)
 	if err != nil {
-		return nil, 0, err
-	}
-	if len(raw) == 0 {
-		return rewardclaim.New(), version, nil
+		return nil, nil, 0, err
 	}
 	stored := &playerv1.RewardClaimStorageRecord{}
-	if uerr := proto.Unmarshal(raw, stored); uerr != nil {
-		return nil, 0, errcode.New(errcode.ErrInternal, "decode reward record player=%d: %v", playerID, uerr)
+	if len(raw) > 0 {
+		if uerr := proto.Unmarshal(raw, stored); uerr != nil {
+			return nil, nil, 0, errcode.New(errcode.ErrInternal, "decode reward record player=%d: %v", playerID, uerr)
+		}
 	}
-	return rewardclaim.Load(stored.GetPermanent(), stored.GetActivity()), version, nil
+	return rewardclaim.Load(stored.GetPermanent(), stored.GetActivity()), stored, version, nil
 }
 
-// saveRewardRecord 序列化并乐观锁写回领奖记录。
-func (u *PlayerUsecase) saveRewardRecord(ctx context.Context, playerID uint64, rec *rewardclaim.Record, expectVersion int32) error {
-	perm, act := rec.Snapshot()
-	raw, err := proto.Marshal(&playerv1.RewardClaimStorageRecord{Permanent: perm, Activity: act})
+// saveRewardRecord 把内存 Record 写回读取时的 stored message 后乐观锁落库。
+// 只原地覆盖 permanent / activity 两个字段,stored 携带的 unknown fields 随 Marshal
+// 原样带回 —— 禁止重建 message(zero-downtime-update.md §2.3)。
+func (u *PlayerUsecase) saveRewardRecord(ctx context.Context, playerID uint64, rec *rewardclaim.Record, stored *playerv1.RewardClaimStorageRecord, expectVersion int32) error {
+	stored.Permanent, stored.Activity = rec.Snapshot()
+	raw, err := proto.Marshal(stored)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "encode reward record player=%d: %v", playerID, err)
 	}
@@ -81,7 +85,7 @@ func (u *PlayerUsecase) ClaimReward(ctx context.Context, playerID uint64, source
 
 	var lastErr error
 	for attempt := 0; attempt < maxRewardClaimRetry; attempt++ {
-		rec, version, err := u.loadRewardRecord(ctx, playerID)
+		rec, stored, version, err := u.loadRewardRecord(ctx, playerID)
 		if err != nil {
 			return err
 		}
@@ -103,7 +107,7 @@ func (u *PlayerUsecase) ClaimReward(ctx context.Context, playerID uint64, source
 			return errcode.New(errcode.ErrInternal, "claim reward player=%d id=%d: %v", playerID, rewardID, claimErr)
 		}
 
-		if serr := u.saveRewardRecord(ctx, playerID, rec, version); serr != nil {
+		if serr := u.saveRewardRecord(ctx, playerID, rec, stored, version); serr != nil {
 			if errcode.As(serr) == errcode.ErrPlayerVersionMismatch {
 				lastErr = serr
 				continue // 并发冲突,重读重试
@@ -120,7 +124,7 @@ func (u *PlayerUsecase) GetRewardClaims(ctx context.Context, playerID uint64, so
 	if playerID == 0 {
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
-	rec, _, err := u.loadRewardRecord(ctx, playerID)
+	rec, _, _, err := u.loadRewardRecord(ctx, playerID)
 	if err != nil {
 		return nil, err
 	}

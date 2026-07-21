@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"time"
+
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
@@ -16,6 +18,33 @@ type Config struct {
 type MailConf struct {
 	// DefaultSysTtlDays 系统/公会邮件默认有效期天数(end_ms 为 0 时补,默认 7)。
 	DefaultSysTtlDays int `yaml:"default_sys_ttl_days,omitempty" json:"default_sys_ttl_days,omitempty"`
+
+	// DefaultPersonalTtlDays 个人邮件默认有效期天数(expire_ms 为 0 时补,默认 30)。
+	// 一切邮件生命有限是 sweep 清理的前提:没有默认 TTL,库只增不减。
+	DefaultPersonalTtlDays int `yaml:"default_personal_ttl_days,omitempty" json:"default_personal_ttl_days,omitempty"`
+
+	// MaxInboxSize 单玩家收件箱行数上限(默认 200,§9 不变量 18 写入侧上限)。
+	// 满时先驱逐最旧的已领(status=claimed)邮件,仍满返回 ERR_MAIL_BOX_FULL;
+	// 调用方(battle_result 掉落出箱)靠补扫重试,待旧邮件过期被 sweep 清掉后自然成功。
+	MaxInboxSize int `yaml:"max_inbox_size,omitempty" json:"max_inbox_size,omitempty"`
+
+	// SweepInterval 过期清理轮询间隔(默认 5m)。多副本各自跑,删除幂等无需锁
+	// (对齐 leaderboard 发奖补扫模式)。
+	SweepInterval config.Duration `yaml:"sweep_interval,omitempty" json:"sweep_interval,omitempty"`
+
+	// SweepBatch 每轮每表清理行数上限(默认 500,小批量防长事务锁表)。
+	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
+
+	// ExpiredRetentionDays 过期后延迟清理的缓冲天数(默认 7):过期邮件先只是不可见,
+	// 缓冲期后才物理删除/归档,留客诉排查窗口,也吸收时钟偏差。
+	ExpiredRetentionDays int `yaml:"expired_retention_days,omitempty" json:"expired_retention_days,omitempty"`
+
+	// ArchiveRetentionDays 归档表保留天数(默认 90,超期物理清除,归档表自身有界)。
+	ArchiveRetentionDays int `yaml:"archive_retention_days,omitempty" json:"archive_retention_days,omitempty"`
+
+	// ClaimRetentionDays 领取记录保留天数(默认 180)。须大于一切邮件的最长有效期:
+	// 邮件本体删除后 claim 行只剩审计价值;即便误删,重复发奖仍被 inventory 幂等键兜住。
+	ClaimRetentionDays int `yaml:"claim_retention_days,omitempty" json:"claim_retention_days,omitempty"`
 
 	// MaxTitleLen 邮件标题最大长度(utf8 rune,默认 64)。
 	MaxTitleLen int `yaml:"max_title_len,omitempty" json:"max_title_len,omitempty"`
@@ -37,6 +66,27 @@ type MailConf struct {
 func (c *Config) Defaults() {
 	if c.Mail.DefaultSysTtlDays <= 0 {
 		c.Mail.DefaultSysTtlDays = 7
+	}
+	if c.Mail.DefaultPersonalTtlDays <= 0 {
+		c.Mail.DefaultPersonalTtlDays = 30
+	}
+	if c.Mail.MaxInboxSize <= 0 {
+		c.Mail.MaxInboxSize = 200
+	}
+	if c.Mail.SweepInterval <= 0 {
+		c.Mail.SweepInterval = config.Duration(5 * time.Minute)
+	}
+	if c.Mail.SweepBatch <= 0 {
+		c.Mail.SweepBatch = 500
+	}
+	if c.Mail.ExpiredRetentionDays <= 0 {
+		c.Mail.ExpiredRetentionDays = 7
+	}
+	if c.Mail.ArchiveRetentionDays <= 0 {
+		c.Mail.ArchiveRetentionDays = 90
+	}
+	if c.Mail.ClaimRetentionDays <= 0 {
+		c.Mail.ClaimRetentionDays = 180
 	}
 	if c.Mail.MaxTitleLen <= 0 {
 		c.Mail.MaxTitleLen = 64

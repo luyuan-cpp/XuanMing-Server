@@ -317,7 +317,7 @@ func main() {
 			helper.Errorw("msg", "ds_auth_fence_lost", "hint", "立即退出，禁止失租/旧 epoch 副本继续结算")
 			os.Exit(1)
 		}()
-		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch())
+		helper.Infow("msg", "ds_auth_fence_ready", "required_writer_epoch", fence.RequiredEpoch(), "reclaimed_stale_capability", fence.Reclaimed())
 	}
 	// publisher/consumer 都会产生外部副作用；capability 未取得前禁止启动。
 	go uc.RunOutboxPublisher(pubCtx)

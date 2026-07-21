@@ -191,6 +191,7 @@ const (
 	ErrMailExpired        Code = 9602 // 邮件已过期
 	ErrMailNoAttachment   Code = 9603 // 该邮件无附件可领
 	ErrMailAlreadyClaimed Code = 9604 // 附件已领取(幂等命中)
+	ErrMailBoxFull        Code = 9605 // 收件箱已满(写入侧上限,§9 不变量 18;驱逐已领邮件后仍满)
 )
 
 // data_service(10000-10999)

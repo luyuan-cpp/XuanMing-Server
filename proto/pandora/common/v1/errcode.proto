@@ -164,6 +164,7 @@ enum ErrCode {
   ERR_MAIL_EXPIRED             = 9602;  // 邮件已过期
   ERR_MAIL_NO_ATTACHMENT       = 9603;  // 该邮件无附件可领
   ERR_MAIL_ALREADY_CLAIMED     = 9604;  // 附件已领取(幂等命中)
+  ERR_MAIL_BOX_FULL            = 9605;  // 收件箱已满(写入侧上限,§9 不变量 18)
 
   // 10000-10999 data_service
   ERR_DATA_VERSION_MISMATCH    = 10001;

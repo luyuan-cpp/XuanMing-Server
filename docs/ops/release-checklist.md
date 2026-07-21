@@ -78,6 +78,7 @@ UE `PandoraBackendSubsystem` 的 dev 开关默认值在 C++ 头文件里,生产*
 - [ ] 密码 / token / secret 不写进入库 yaml(真值文件已被 gitignore,只提交 `.example` 模板)
 - [ ] Linux DS 符号文件已随版本归档,crash dump / minidump / UE crash report 能自动上传
 - [ ] DS metrics 已接 Prometheus / Grafana,至少能看在线、tick p95/p99、CPU、内存、网络、心跳、崩溃次数
+- [ ] 本版本关联的崩溃/P0 已登记 `docs/incidents/index.md`;未关闭 Incident 已明确阻断发布或有审批记录,已关闭项具备修复 commit、镜像 digest、race/故障路径和观察窗口证据
 
 > Linux DS 崩溃和性能排障手册见
 > [`docs/ops/linux-ds-observability.md`](linux-ds-observability.md)。

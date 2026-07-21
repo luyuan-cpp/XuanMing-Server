@@ -16,6 +16,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 )
@@ -36,6 +37,16 @@ type MailRow struct {
 	ExpireMs  int64 // 个人邮件
 	StartMs   int64 // 系统/公会邮件
 	EndMs     int64 // 系统/公会邮件
+	Payload   []byte
+}
+
+// ExpiredPersonalRow 是 sweep 捞出的过期个人邮件(含收件人,biz 解 payload 决定归档或直删)。
+type ExpiredPersonalRow struct {
+	MailID    uint64
+	PlayerID  uint64
+	Status    int32
+	ExpireMs  int64
+	CreatedMs int64
 	Payload   []byte
 }
 
@@ -63,7 +74,24 @@ type MailRepo interface {
 
 	InsertSysMail(ctx context.Context, mailID uint64, startMs, endMs int64, payload []byte) error
 	InsertGuildMail(ctx context.Context, mailID, guildID uint64, startMs, endMs int64, payload []byte) error
-	InsertPersonalMail(ctx context.Context, mailID, playerID uint64, expireMs int64, payload []byte) error
+	// InsertPersonalMail 写收件箱,事务内原子校验单玩家行数上限(§9 不变量 18):
+	// 满时先驱逐最旧的已领(status=claimed)邮件,仍满返回 ErrMailBoxFull。
+	InsertPersonalMail(ctx context.Context, mailID, playerID uint64, expireMs int64, payload []byte, maxInbox int) error
+
+	// ── sweep 清理(全部幂等,多副本并发安全,单批 limit 有界)──────────────────────
+
+	// ListExpiredPersonal 捞过期个人邮件(expire_ms ∈ (0, expireBeforeMs]),按过期时间升序。
+	ListExpiredPersonal(ctx context.Context, expireBeforeMs int64, limit int) ([]ExpiredPersonalRow, error)
+	// ArchiveAndDeletePersonal 同事务:archive 行移入 player_mail_archive(INSERT IGNORE 幂等),
+	// deleteIDs(须含 archive 行的 mail_id)从 player_mail 删除。
+	ArchiveAndDeletePersonal(ctx context.Context, archive []ExpiredPersonalRow, deleteIDs []uint64) error
+	// DeleteSysMailEndedBefore / DeleteGuildMailEndedBefore 删失效系统/公会邮件(end_ms ∈ (0, endBeforeMs])。
+	DeleteSysMailEndedBefore(ctx context.Context, endBeforeMs int64, limit int) (int64, error)
+	DeleteGuildMailEndedBefore(ctx context.Context, endBeforeMs int64, limit int) (int64, error)
+	// DeleteClaimsBefore 删 mail_id < maxMailID 的领取记录(雪花 ID 时间段单调,等价按创建时间截断)。
+	DeleteClaimsBefore(ctx context.Context, maxMailID uint64, limit int) (int64, error)
+	// PurgeArchiveBefore 删归档超保留期的行(归档表自身有界)。
+	PurgeArchiveBefore(ctx context.Context, retentionDays, limit int) (int64, error)
 }
 
 // MySQLMailRepo 实现 MailRepo。
@@ -185,9 +213,10 @@ func (r *MySQLMailRepo) AdvanceCursor(ctx context.Context, playerID, sysMax, gui
 }
 
 func (r *MySQLMailRepo) SetPersonalStatus(ctx context.Context, playerID, mailID uint64, status int32) error {
+	// claimed 列随 status=claimed 同步置 1(只置不清),供客户端视图与清理/驱逐判定
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE player_mail SET status = ? WHERE mail_id = ? AND player_id = ?`,
-		status, mailID, playerID)
+		`UPDATE player_mail SET status = ?, claimed = IF(? = 3, 1, claimed) WHERE mail_id = ? AND player_id = ?`,
+		status, status, mailID, playerID)
 	if err != nil {
 		return errcode.New(errcode.ErrInternal, "set status %d: %v", mailID, err)
 	}
@@ -290,12 +319,139 @@ func (r *MySQLMailRepo) InsertGuildMail(ctx context.Context, mailID, guildID uin
 	return nil
 }
 
-func (r *MySQLMailRepo) InsertPersonalMail(ctx context.Context, mailID, playerID uint64, expireMs int64, payload []byte) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO player_mail (mail_id, player_id, status, expire_ms, payload) VALUES (?, ?, 1, ?, ?)`,
-		mailID, playerID, expireMs, payload)
+// InsertPersonalMail 事务内原子校验收件箱上限后写入(§9 不变量 18,防 TOCTOU):
+// COUNT(*) FOR UPDATE 锁住该玩家的 idx_player_status 索引范围,并发同玩家写入串行化;
+// 满时驱逐最旧的已领邮件(附件已落袋,删除无损),仍满回滚返回 ErrMailBoxFull。
+// 过期未清但未领的行仍占名额(不在写路径解 payload 判附件,留给 sweep 归档后自然释放);
+// 调用方(battle_result 掉落出箱)靠补扫重试,旧邮件过期被清后发送自然成功。
+func (r *MySQLMailRepo) InsertPersonalMail(ctx context.Context, mailID, playerID uint64, expireMs int64, payload []byte, maxInbox int) error {
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
+		return errcode.New(errcode.ErrInternal, "insert personal mail begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if maxInbox > 0 {
+		var cnt int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM player_mail WHERE player_id = ? FOR UPDATE`, playerID).Scan(&cnt); err != nil {
+			return errcode.New(errcode.ErrInternal, "insert personal mail count %d: %v", playerID, err)
+		}
+		if cnt >= maxInbox {
+			res, err := tx.ExecContext(ctx,
+				`DELETE FROM player_mail WHERE player_id = ? AND status = ? ORDER BY mail_id LIMIT ?`,
+				playerID, StatusClaimed, cnt-maxInbox+1)
+			if err != nil {
+				return errcode.New(errcode.ErrInternal, "insert personal mail evict %d: %v", playerID, err)
+			}
+			evicted, _ := res.RowsAffected()
+			if cnt-int(evicted) >= maxInbox {
+				return errcode.New(errcode.ErrMailBoxFull, "player %d inbox full (%d/%d)", playerID, cnt, maxInbox)
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO player_mail (mail_id, player_id, status, expire_ms, payload) VALUES (?, ?, 1, ?, ?)`,
+		mailID, playerID, expireMs, payload); err != nil {
 		return errcode.New(errcode.ErrInternal, "insert personal mail: %v", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return errcode.New(errcode.ErrInternal, "insert personal mail commit: %v", err)
+	}
 	return nil
+}
+
+// ── sweep 清理实现(幂等删除,多副本并发安全:同行只会被一方删成功)──────────────────
+
+func (r *MySQLMailRepo) ListExpiredPersonal(ctx context.Context, expireBeforeMs int64, limit int) ([]ExpiredPersonalRow, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT mail_id, player_id, status, expire_ms,
+		        CAST(UNIX_TIMESTAMP(created_at) * 1000 AS SIGNED), payload
+		 FROM player_mail
+		 WHERE expire_ms > 0 AND expire_ms <= ?
+		 ORDER BY expire_ms
+		 LIMIT ?`, expireBeforeMs, limit)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "list expired personal: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []ExpiredPersonalRow
+	for rows.Next() {
+		var m ExpiredPersonalRow
+		if err := rows.Scan(&m.MailID, &m.PlayerID, &m.Status, &m.ExpireMs, &m.CreatedMs, &m.Payload); err != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan expired personal: %v", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (r *MySQLMailRepo) ArchiveAndDeletePersonal(ctx context.Context, archive []ExpiredPersonalRow, deleteIDs []uint64) error {
+	if len(deleteIDs) == 0 {
+		return nil
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "archive personal begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if len(archive) > 0 {
+		q := strings.Builder{}
+		q.WriteString(`INSERT IGNORE INTO player_mail_archive (mail_id, player_id, status, expire_ms, created_ms, payload) VALUES `)
+		args := make([]any, 0, len(archive)*6)
+		for i, m := range archive {
+			if i > 0 {
+				q.WriteString(",")
+			}
+			q.WriteString("(?, ?, ?, ?, ?, ?)")
+			args = append(args, m.MailID, m.PlayerID, m.Status, m.ExpireMs, m.CreatedMs, m.Payload)
+		}
+		if _, err := tx.ExecContext(ctx, q.String(), args...); err != nil {
+			return errcode.New(errcode.ErrInternal, "archive personal insert: %v", err)
+		}
+	}
+
+	q := `DELETE FROM player_mail WHERE mail_id IN (?` + strings.Repeat(",?", len(deleteIDs)-1) + `)`
+	args := make([]any, len(deleteIDs))
+	for i, id := range deleteIDs {
+		args[i] = id
+	}
+	if _, err := tx.ExecContext(ctx, q, args...); err != nil {
+		return errcode.New(errcode.ErrInternal, "archive personal delete: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return errcode.New(errcode.ErrInternal, "archive personal commit: %v", err)
+	}
+	return nil
+}
+
+func (r *MySQLMailRepo) DeleteSysMailEndedBefore(ctx context.Context, endBeforeMs int64, limit int) (int64, error) {
+	return r.execAffected(ctx, "delete sys mail",
+		`DELETE FROM sys_mail WHERE end_ms > 0 AND end_ms <= ? LIMIT ?`, endBeforeMs, limit)
+}
+
+func (r *MySQLMailRepo) DeleteGuildMailEndedBefore(ctx context.Context, endBeforeMs int64, limit int) (int64, error) {
+	return r.execAffected(ctx, "delete guild mail",
+		`DELETE FROM guild_mail WHERE end_ms > 0 AND end_ms <= ? LIMIT ?`, endBeforeMs, limit)
+}
+
+func (r *MySQLMailRepo) DeleteClaimsBefore(ctx context.Context, maxMailID uint64, limit int) (int64, error) {
+	return r.execAffected(ctx, "delete claims",
+		`DELETE FROM player_mail_claim WHERE mail_id < ? LIMIT ?`, maxMailID, limit)
+}
+
+func (r *MySQLMailRepo) PurgeArchiveBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
+	return r.execAffected(ctx, "purge archive",
+		`DELETE FROM player_mail_archive WHERE archived_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`, retentionDays, limit)
+}
+
+func (r *MySQLMailRepo) execAffected(ctx context.Context, op, q string, args ...any) (int64, error) {
+	res, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "%s: %v", op, err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }

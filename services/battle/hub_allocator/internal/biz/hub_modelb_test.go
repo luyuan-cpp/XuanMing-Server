@@ -210,7 +210,7 @@ func TestModelB_AssignBlockedWithoutActivation(t *testing.T) {
 		t.Fatalf("seed ready shard: %v", err)
 	}
 
-	if _, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
+	if _, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
 		t.Fatalf("assign to never-activated shard must be blocked, got %v", err)
 	}
 }
@@ -223,7 +223,7 @@ func TestModelB_AssignAllowsActivatedAndBinds(t *testing.T) {
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
 
-	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0)
+	res, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0)
 	if err != nil {
 		t.Fatalf("assign to activated shard must succeed: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestModelB_AdmissionCrossSlotDriftWaitsForPhysicalDeparture(t *testing.T) {
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	oldAssignment, found, err := repo.GetAssignment(ctx, 1001)
@@ -337,7 +337,7 @@ func TestModelB_AssignSignFailureExactReservationCleanup(t *testing.T) {
 	activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
 	uc.signer = &failingHubTicketSigner{}
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); errcode.As(err) != errcode.ErrInternal {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); errcode.As(err) != errcode.ErrInternal {
 		t.Fatalf("sign failure code=%v err=%v", errcode.As(err), err)
 	}
 	if assignment, found, err := repo.GetAssignment(ctx, 1001); err != nil || found {
@@ -363,7 +363,7 @@ func TestModelB_TransferSignFailureKeepsOldOwnerAndCleansTargetReservation(t *te
 	seedWarming(t, repo, pod2, 2, 500, now)
 	activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
 	activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	before, _, _ := repo.GetAssignment(ctx, 1001)
@@ -411,7 +411,7 @@ func TestModelB_ConcurrentAssignSingleSeatAndBinding(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			result, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0)
+			result, err := uc.AssignHub(context.Background(), 1001, "global", 0, 0, 0)
 			if result != nil {
 				ticketCh <- result.HubTicket
 			}
@@ -466,11 +466,11 @@ func TestModelB_AssignIdempotentReuse(t *testing.T) {
 	seedWarming(t, repo, pod, 1, 500, now)
 	activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	// 再分配同玩家 → 复用(不重复占位):player_count 仍 1。
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("reuse assign: %v", err)
 	}
 	s, _, _ := repo.GetShard(ctx, pod)
@@ -494,7 +494,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 		TokenSHA256: "sha-j42", Kid: "kid-test", WriterEpoch: modelBTestWriterEpoch,
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignment, found, err := repo.GetAssignment(ctx, playerID)
@@ -526,7 +526,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 	}
 	// Departure 与下一次 5s heartbeat 之间，audit=1 > connected=0 必须安全暂停路由；
 	// 不能为了重登在 DS 尚未证明连接已消失时超发。
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); errcode.As(err) != errcode.ErrHubNoAvailable {
 		t.Fatalf("stale connected audit must pause relogin, code=%v err=%v", errcode.As(err), err)
 	}
 	if _, err := uc.HeartbeatWithCredential(ctx, pod, 0, nil, 500, "ready", now+2, cred); err != nil {
@@ -534,7 +534,7 @@ func TestModelB_CleanDepartureThenReloginRecreatesReservation(t *testing.T) {
 	}
 
 	// assignment 仍用于线路粘性，但 admission ledger 已空；重签必须原子补回 reservation。
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("relogin assign: %v", err)
 	}
 	current, found, err := repo.GetAssignment(ctx, playerID)
@@ -564,7 +564,7 @@ func TestModelB_ExpiredReservationThenReloginRefreshesLease(t *testing.T) {
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignment, found, err := repo.GetAssignment(ctx, playerID)
@@ -585,7 +585,7 @@ func TestModelB_ExpiredReservationThenReloginRefreshesLease(t *testing.T) {
 		t.Fatalf("assignment must outlive reservation: found=%v err=%v", found, err)
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("assign after reservation expiry: %v", err)
 	}
 	current, _, _ := repo.GetAssignment(ctx, playerID)
@@ -616,7 +616,7 @@ func TestModelB_ActiveSessionReuseDoesNotDoubleCountOrDeleteOwner(t *testing.T) 
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignment, _, _ := repo.GetAssignment(ctx, playerID)
@@ -635,7 +635,7 @@ func TestModelB_ActiveSessionReuseDoesNotDoubleCountOrDeleteOwner(t *testing.T) 
 		t.Fatal("active session missing before reuse")
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("active session reuse: %v", err)
 	}
 	if reservations, _ := mr.HKeys("pandora:hub:reservations:{" + pod + "}"); len(reservations) != 0 {
@@ -667,7 +667,7 @@ func TestModelB_AssignIdempotentReuseRefreshesAssignmentTTL(t *testing.T) {
 		t.Fatalf("extend shard ttl: %v", err)
 	}
 
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	assignmentKey := "pandora:hub:player:1001"
@@ -681,7 +681,7 @@ func TestModelB_AssignIdempotentReuseRefreshesAssignmentTTL(t *testing.T) {
 	if remaining := mr.TTL(assignmentKey); remaining <= 0 || remaining > time.Second {
 		t.Fatalf("assignment must be near expiry before reuse, got %s", remaining)
 	}
-	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, playerID, "global", 0, 0, 0); err != nil {
 		t.Fatalf("reuse assign: %v", err)
 	}
 	if refreshed := mr.TTL(assignmentKey); refreshed < initialTTL-time.Second {
@@ -706,7 +706,7 @@ func TestModelB_AssignRejectsIncompleteOrFutureWriterAssignmentWithoutMutation(t
 			now := time.Now().UnixMilli()
 			seedWarming(t, repo, pod, 1, 500, now)
 			activate(t, uc, authRepo, pod, "uid-A", 42, "j42", now)
-			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 				t.Fatal(err)
 			}
 			before, found, err := repo.GetAssignment(ctx, 1001)
@@ -719,7 +719,7 @@ func TestModelB_AssignRejectsIncompleteOrFutureWriterAssignmentWithoutMutation(t
 				t.Fatalf("poison assignment swapped=%v err=%v", swapped, err)
 			}
 			shardBefore, _, _ := repo.GetShard(ctx, pod)
-			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); errcode.As(err) != errcode.ErrInvalidState {
+			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); errcode.As(err) != errcode.ErrInvalidState {
 				t.Fatalf("incomplete/future assignment must fail closed, code=%v err=%v", errcode.As(err), err)
 			}
 			after, _, _ := repo.GetAssignment(ctx, 1001)
@@ -743,7 +743,7 @@ func TestModelB_FutureWriterAssignmentRejectedByAllConsumerPaths(t *testing.T) {
 			seedWarming(t, repo, pod2, 2, 500, now)
 			activate(t, uc, authRepo, pod1, "uid-A", 42, "j42", now)
 			activate(t, uc, authRepo, pod2, "uid-B", 52, "j52", now)
-			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+			if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 				t.Fatal(err)
 			}
 			before, found, err := repo.GetAssignment(ctx, 1001)
@@ -813,7 +813,7 @@ func TestModelB_ReuseInvalidatesOnInstanceDrift(t *testing.T) {
 	seedWarming(t, repo, pod, 1, 500, now)
 	ep1 := activate(t, uc, authRepo, pod, "uid-A", 9, "j9", now)
 
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("first assign: %v", err)
 	}
 	a1, _, _ := repo.GetAssignment(ctx, 1001)
@@ -830,7 +830,7 @@ func TestModelB_ReuseInvalidatesOnInstanceDrift(t *testing.T) {
 
 	// 再分配同玩家:旧归属元组 (uid-A,ep1,gen9) != 当前 active (uid-B,ep2,gen20)
 	// → reuseRoutable=false → 退旧重分配,新归属钉新元组。
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatalf("reassign after drift: %v", err)
 	}
 	a2, _, _ := repo.GetAssignment(ctx, 1001)
@@ -846,7 +846,7 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 	now := time.Now().UnixMilli()
 	seedWarming(t, repo, pod, 1, 500, now)
 	epoch := activate(t, uc, authRepo, pod, "uid-A", 9, "j9", now)
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	old, found, err := repo.GetAssignment(ctx, 1001)
@@ -882,7 +882,7 @@ func TestModelB_SameInstanceRotationRebindsWithoutDoubleSeatAndKeepsUnknown(t *t
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0); err != nil {
+	if _, err := uc.AssignHub(ctx, 1001, "global", 0, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	got, _, _ := repo.GetAssignment(ctx, 1001)

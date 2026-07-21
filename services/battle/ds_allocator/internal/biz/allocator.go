@@ -239,14 +239,15 @@ func (u *AllocatorUsecase) EnableRedisAuthority(
 func (u *AllocatorUsecase) SetKillOrphanOnStop(v bool) { u.killOrphanOnStop = v }
 
 // killStrandedDS 在心跳判定某 DS 该停机时,异步回收其 pod(local 模式防幽灵 DS 占端口)。
-// fire-and-forget:用 detached ctx(保留 trace_id 满足不变量 §8)+ 短超时,不给心跳响应加尾延迟。
+// fire-and-forget:请求 ctx 不得逃逸进 goroutine(§16.7),用 plog.Detach(只复制 trace_id
+// 等日志字段,满足不变量 §8)+ 短超时,不给心跳响应加尾延迟。
 // killOrphanOnStop 关闭(Agones 模式)时为 no-op,pod 回收交 Agones 生命周期。
 func (u *AllocatorUsecase) killStrandedDS(ctx context.Context, matchID uint64, podName, reason string) {
 	if !u.killOrphanOnStop || podName == "" {
 		return
 	}
 	go func() {
-		kctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedCleanupTimeout)
+		kctx, cancel := context.WithTimeout(plog.Detach(ctx), detachedCleanupTimeout)
 		defer cancel()
 		if err := u.alloc.Release(kctx, podName); err != nil {
 			plog.With(kctx).Warnw("msg", "kill_stranded_ds_failed", "match_id", matchID, "pod", podName, "reason", reason, "err", err)
@@ -833,14 +834,15 @@ func (u *AllocatorUsecase) failReadyWaitTimeout(
 // cleanupAllocatedBattle 用与入站 ctx 解耦的独立 ctx 执行
 // 永久 release fence → UID 条件回收 → 明确成功后 purge。
 // 入站 ctx 在 ready 等待失败时多半已被取消/超时,直接复用它做 Release/DeleteBattle 会立刻
-// 失败,从而留下 warming 镜像 + 已分配 pod 泄漏;故这里 detach 出一个短超时 ctx 兜底回收。
+// 失败,从而留下 warming 镜像 + 已分配 pod 泄漏;故这里用 plog.Detach 出一个短超时 ctx
+// 兜底回收(§16.7:detached 路径只复制日志字段,不携带请求级 transport)。
 func (u *AllocatorUsecase) cleanupAllocatedBattle(
 	ctx context.Context,
 	matchID uint64,
 	allocationID, podName string,
 	allocation *data.AuthoritativeGameServerAllocation,
 ) {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedCleanupTimeout)
+	cleanupCtx, cancel := context.WithTimeout(plog.Detach(ctx), detachedCleanupTimeout)
 	defer cancel()
 	if u.modelB {
 		// 先把 auth+battle 同槽锁成永久 pre-active release fence，再触碰 K8s。
@@ -1964,13 +1966,14 @@ func (u *AllocatorUsecase) finishEmptyAbandon(
 
 // refreshBattleLocations 异步续期一批玩家的 BATTLE 位置 TTL(断线重连,弱依赖)。
 //
-// fire-and-forget:不给心跳响应加尾延迟;用 detached ctx(保留 trace_id 满足不变量 §8
-// 写带 trace_id,但脱离心跳 RPC 取消)+ 短超时防 locator 卡死泄漏 goroutine。
-// 失败只 Warn,绝不影响心跳 / 对局。
+// fire-and-forget:不给心跳响应加尾延迟;用 plog.Detach(只复制 trace_id 等日志字段,
+// 满足不变量 §8 写带 trace_id,同时剥离心跳 RPC 的取消与 server transport——下游是
+// 挂 Trace middleware 的 gRPC client,不得继承入站请求 transport)+ 短超时防 locator
+// 卡死泄漏 goroutine。失败只 Warn,绝不影响心跳 / 对局。
 func (u *AllocatorUsecase) refreshBattleLocations(ctx context.Context, playerIDs []uint64, matchID uint64, dsAddr string) {
 	players := append([]uint64(nil), playerIDs...) // 拷贝,脱离调用方切片复用
 	go func() {
-		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), locationRefreshTimeout)
+		rctx, cancel := context.WithTimeout(plog.Detach(ctx), locationRefreshTimeout)
 		defer cancel()
 		if err := u.locator.RefreshBattleLocations(rctx, players, matchID, dsAddr); err != nil {
 			plog.With(rctx).Warnw("msg", "refresh_battle_locations_failed", "match_id", matchID, "err", err)

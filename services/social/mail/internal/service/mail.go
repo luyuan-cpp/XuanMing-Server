@@ -118,7 +118,7 @@ func (s *MailService) SendPersonalMail(ctx context.Context, req *mailv1.SendPers
 	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
 		return &mailv1.SendPersonalMailResponse{Code: code}, nil
 	}
-	id, err := s.uc.SendPersonalMail(ctx, s.sf.Generate(), req.GetToPlayerId(), req.GetTitle(), req.GetBody(), req.GetAttachments(), req.GetExpireMs(), req.GetInstanceGrantKey())
+	id, err := s.uc.SendPersonalMail(ctx, s.sf.Generate(), req.GetToPlayerId(), req.GetTitle(), req.GetBody(), req.GetAttachments(), req.GetExpireMs(), nowMs(), req.GetInstanceGrantKey())
 	if err != nil {
 		return &mailv1.SendPersonalMailResponse{Code: toProtoCode(err)}, nil
 	}

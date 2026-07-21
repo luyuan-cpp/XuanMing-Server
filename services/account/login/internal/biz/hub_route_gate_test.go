@@ -48,7 +48,7 @@ func TestHubRouteGate_ActiveBattle_Rejected(t *testing.T) {
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: true, MatchID: 9001}}
 	uc := newHubGateUsecase(t, nil, notifier, &loginBattleAuthorizerFake{}, true)
 
-	err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+	_, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
 	wantCode(t, err, errcode.ErrInvalidState)
 }
 
@@ -59,18 +59,23 @@ func TestHubRouteGate_RosterDriftPermissionDeny_Rejected(t *testing.T) {
 	authz := &loginBattleAuthorizerFake{err: errcode.New(errcode.ErrPermissionDeny, "player not in roster (drifted)")}
 	uc := newHubGateUsecase(t, nil, notifier, authz, true)
 
-	err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+	_, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
 	wantCode(t, err, errcode.ErrUnavailable)
 }
 
 func TestHubRouteGate_ExplicitTerminal_Allowed(t *testing.T) {
 	// 唯一放行路径:权威记录显式终态(ended/abandoned)→ locator BATTLE 仅为 TTL 残留。
+	// 放行时必须带出残留 match_id 作为 Battle→Hub 回流 fence(2026-07-21)。
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: true, MatchID: 9001}}
 	authz := &loginBattleAuthorizerFake{routeState: data.BattleRouteTerminal}
 	uc := newHubGateUsecase(t, nil, notifier, authz, true)
 
-	if err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
+	fence, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+	if err != nil {
 		t.Fatalf("explicit terminal record should allow hub, got %v", err)
+	}
+	if fence != 9001 {
+		t.Fatalf("terminal passthrough fence = %d, want 9001(残留对局 match_id)", fence)
 	}
 }
 
@@ -81,7 +86,7 @@ func TestHubRouteGate_BattleUnknown_FailClosed_BothProfiles(t *testing.T) {
 		authz := &loginBattleAuthorizerFake{err: errcode.New(errcode.ErrUnavailable, "redis down")}
 		uc := newHubGateUsecase(t, nil, notifier, authz, require)
 
-		err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+		_, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
 		wantCode(t, err, errcode.ErrUnavailable)
 	}
 }
@@ -91,7 +96,7 @@ func TestHubRouteGate_BattleButNoAuthority_FailClosed(t *testing.T) {
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: true, MatchID: 9001}}
 	uc := newHubGateUsecase(t, nil, notifier, nil, false)
 
-	err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+	_, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
 	wantCode(t, err, errcode.ErrUnavailable)
 }
 
@@ -99,7 +104,7 @@ func TestHubRouteGate_NotInBattle_Allowed(t *testing.T) {
 	notifier := &fakeNotifier{bl: data.BattleLocation{InBattle: false}}
 	uc := newHubGateUsecase(t, nil, notifier, &loginBattleAuthorizerFake{}, true)
 
-	if err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
+	if _, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
 		t.Fatalf("not-in-battle should allow hub, got %v", err)
 	}
 }
@@ -109,7 +114,7 @@ func TestHubRouteGate_LocatorError_RequireBinding_FailClosed(t *testing.T) {
 	notifier := &fakeNotifier{blErr: errors.New("locator dial timeout")}
 	uc := newHubGateUsecase(t, nil, notifier, &loginBattleAuthorizerFake{}, true)
 
-	err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+	_, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
 	wantCode(t, err, errcode.ErrUnavailable)
 }
 
@@ -118,7 +123,7 @@ func TestHubRouteGate_LocatorError_WeakProfile_Allowed(t *testing.T) {
 	notifier := &fakeNotifier{blErr: errors.New("locator dial timeout")}
 	uc := newHubGateUsecase(t, nil, notifier, &loginBattleAuthorizerFake{}, false)
 
-	if err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
+	if _, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
 		t.Fatalf("weak profile locator error should allow, got %v", err)
 	}
 }
@@ -126,14 +131,14 @@ func TestHubRouteGate_LocatorError_WeakProfile_Allowed(t *testing.T) {
 func TestHubRouteGate_NoNotifier_RequireBinding_FailClosed(t *testing.T) {
 	uc := newHubGateUsecase(t, nil, nil, &loginBattleAuthorizerFake{}, true)
 
-	err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
+	_, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42)
 	wantCode(t, err, errcode.ErrUnavailable)
 }
 
 func TestHubRouteGate_NoNotifier_WeakProfile_Allowed(t *testing.T) {
 	uc := newHubGateUsecase(t, nil, nil, &loginBattleAuthorizerFake{}, false)
 
-	if err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
+	if _, err := uc.guardHubRouteAgainstActiveBattle(context.Background(), 42); err != nil {
 		t.Fatalf("weak profile without notifier should allow, got %v", err)
 	}
 }
@@ -221,6 +226,10 @@ func TestResolveHubEndpoint_ExplicitTerminal_Allowed(t *testing.T) {
 	}
 	if hub.gotPlayerID != 42 {
 		t.Errorf("AssignHub playerID=%d, want 42 (exactly once)", hub.gotPlayerID)
+	}
+	if hub.gotSourceMatchID != 9001 {
+		t.Errorf("AssignHub source_match_id=%d, want 9001(终局残留 match_id 作为 Battle→Hub 回流 fence)",
+			hub.gotSourceMatchID)
 	}
 }
 
@@ -331,5 +340,8 @@ func TestSelectRole_ExplicitTerminal_Allowed(t *testing.T) {
 	}
 	if hub.gotRoleID != 7 {
 		t.Errorf("AssignHub roleID=%d, want 7", hub.gotRoleID)
+	}
+	if hub.gotSourceMatchID != 9001 {
+		t.Errorf("AssignHub source_match_id=%d, want 9001(终局残留回流 fence)", hub.gotSourceMatchID)
 	}
 }

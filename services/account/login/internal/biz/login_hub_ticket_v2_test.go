@@ -116,7 +116,7 @@ func TestResolveHubAcceptsValidDSTicketV2AndUsesVerifiedExpiry(t *testing.T) {
 	}}
 	uc := newHubV2ResolveUsecase(t, hub, keys.verifier)
 
-	addr, gotTicket, gotExpMs, err := uc.resolveHub(context.Background(), 42, 0, 0, 0)
+	addr, gotTicket, gotExpMs, err := uc.resolveHub(context.Background(), 42, 0, 0, 0, 0)
 	if err != nil {
 		t.Fatalf("resolveHub: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestResolveHubRejectsInvalidDSTicketV2FailClosed(t *testing.T) {
 				HubDSAddr: "10.0.0.9:7777", HubTicket: ticket, HubPodName: "hub-stable-1", ShardID: 7,
 			}}
 			uc := newHubV2ResolveUsecase(t, hub, keys.verifier)
-			addr, gotTicket, expMs, err := uc.resolveHub(context.Background(), 42, 0, 0, 0)
+			addr, gotTicket, expMs, err := uc.resolveHub(context.Background(), 42, 0, 0, 0, 0)
 			if err == nil {
 				t.Fatalf("resolveHub accepted invalid v2 ticket: addr=%q ticket_len=%d exp=%d",
 					addr, len(gotTicket), expMs)
@@ -189,7 +189,7 @@ func TestResolveHubRejectsDSTicketV2WithoutIndependentVerifier(t *testing.T) {
 		HubDSAddr: "10.0.0.9:7777", HubTicket: ticket, HubPodName: "hub-stable-1", ShardID: 7,
 	}}
 	uc := newHubV2ResolveUsecase(t, hub, nil)
-	if _, _, _, err := uc.resolveHub(context.Background(), 42, 0, 0, 0); err == nil {
+	if _, _, _, err := uc.resolveHub(context.Background(), 42, 0, 0, 0, 0); err == nil {
 		t.Fatal("v2 ticket without independent verifier must fail closed")
 	}
 }
@@ -208,18 +208,18 @@ func TestResolveHubRS256ProfileRejectsLegacyHS256DSTicket(t *testing.T) {
 	// 只要装了 v2 verifier，即使 binding 激活栅栏尚未打开，也不得按票据 alg 降级到 HS256。
 	v2Profile := NewLoginUsecase(nil, nil, nil, hub, nil, nil, "127.0.0.1:7777", "cn",
 		legacySigner, legacyVerifier, keys.verifier, false, false, nil, false)
-	if _, _, _, err := v2Profile.resolveHub(context.Background(), 42, 0, 0, 0); err == nil {
+	if _, _, _, err := v2Profile.resolveHub(context.Background(), 42, 0, 0, 0, 0); err == nil {
 		t.Fatal("RS256 Login profile accepted allocator-issued legacy HS256 hub ticket")
 	}
 	v2Profile.hubAssigner = &fakeHubAssigner{err: context.DeadlineExceeded}
-	if _, _, _, err := v2Profile.resolveHub(context.Background(), 42, 0, 0, 0); err == nil {
+	if _, _, _, err := v2Profile.resolveHub(context.Background(), 42, 0, 0, 0, 0); err == nil {
 		t.Fatal("RS256 Login profile fell back to a self-signed HS256 hub ticket")
 	}
 
 	// 完全未配置 v2 的 local/off profile 仍可在兼容窗内验证 HS256。
 	legacyProfile := NewLoginUsecase(nil, nil, nil, hub, nil, nil, "127.0.0.1:7777", "cn",
 		legacySigner, legacyVerifier, nil, false, false, nil, false)
-	if _, got, _, err := legacyProfile.resolveHub(context.Background(), 42, 0, 0, 0); err != nil || got != legacyTicket {
+	if _, got, _, err := legacyProfile.resolveHub(context.Background(), 42, 0, 0, 0, 0); err != nil || got != legacyTicket {
 		t.Fatalf("legacy profile rejected HS256 ticket: ticket_match=%v err=%v", got == legacyTicket, err)
 	}
 }

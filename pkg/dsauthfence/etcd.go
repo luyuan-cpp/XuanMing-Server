@@ -50,6 +50,23 @@ func (b *etcdBackend) GetRequired(ctx context.Context, key string) (RequiredStat
 	return state, resp.Header.Revision, resp.Kvs[0].ModRevision, true, err
 }
 
+// GetCapability 线性读取 capability key 现值(默认线性一致读),返回值与租约 ID,
+// 供同 Pod 崩溃重启的安全接管预检。
+func (b *etcdBackend) GetCapability(ctx context.Context, key string) ([]byte, int64, int64, bool, error) {
+	resp, err := b.cli.Get(ctx, key)
+	if err != nil {
+		return nil, 0, 0, false, err
+	}
+	if len(resp.Kvs) == 0 {
+		return nil, 0, 0, false, nil
+	}
+	if len(resp.Kvs) != 1 {
+		return nil, 0, 0, false, errors.New("capability key returned multiple values")
+	}
+	kv := resp.Kvs[0]
+	return kv.Value, kv.ModRevision, kv.Lease, true, nil
+}
+
 func (b *etcdBackend) AcquireCapability(
 	ctx context.Context,
 	key, lockKey, requiredKey string,
@@ -57,14 +74,22 @@ func (b *etcdBackend) AcquireCapability(
 	expectedRequiredModRevision int64,
 	value []byte,
 	ttl int64,
+	prevModRevision int64,
+	prevLeaseID int64,
 ) (Lease, error) {
 	grant, err := b.cli.Grant(ctx, ttl)
 	if err != nil {
 		return nil, err
 	}
+	// 默认要求 key 不存在;同 Pod 安全接管(prevModRevision>0)改为 ModRevision 精确 CAS,
+	// 并发接管者最多一个成功,fencing 语义与全新注册完全一致。
+	ownKeyCmp := clientv3.Compare(clientv3.CreateRevision(key), "=", 0)
+	if prevModRevision > 0 {
+		ownKeyCmp = clientv3.Compare(clientv3.ModRevision(key), "=", prevModRevision)
+	}
 	resp, err := b.cli.Txn(ctx).
 		If(
-			clientv3.Compare(clientv3.CreateRevision(key), "=", 0),
+			ownKeyCmp,
 			// 激活工具持锁期间禁止新 writer 注册，封住 capability 审计到推进 CAS 的 TOCTOU。
 			clientv3.Compare(clientv3.CreateRevision(lockKey), "=", 0),
 			// required 的线性读与 capability 注册必须组成同一个 fencing 判定。若两者之间
@@ -80,6 +105,12 @@ func (b *etcdBackend) AcquireCapability(
 			return nil, err
 		}
 		return nil, fmt.Errorf("capability registration fenced by duplicate key, activation lock, or required epoch change: %s", key)
+	}
+	if prevLeaseID != 0 {
+		// 接管成功后终结旧租约:Put 已把 key 挂到新租约(etcd 覆盖写自动解除旧租约附着),
+		// 此刻 revoke 只会杀掉空租约的 keepalive——若旧进程理论上仍存活,其 Lost 立即触发
+		// 退出,结构性保证单 writer;旧租约已自然过期时返回 NotFound,忽略即可。
+		_, _ = b.cli.Revoke(ctx, clientv3.LeaseID(prevLeaseID))
 	}
 	kaCtx, cancel := context.WithCancel(context.Background())
 	ka, err := b.cli.KeepAlive(kaCtx, grant.ID)

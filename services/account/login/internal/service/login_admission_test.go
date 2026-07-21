@@ -263,7 +263,7 @@ func TestVerifyDSTicketHubProjectionRejectsBeforeJTIMarker(t *testing.T) {
 			}
 
 			entrySigner, _ := auth.NewSigner(auth.Config{Secret: []byte("pandora-player-ticket-test-secret-32!!")})
-			ticket, _, err := entrySigner.SignBoundHubDSTicket(1001, 0, 0, 0, entryJTI, auth.DSTicketBinding{
+			ticket, _, err := entrySigner.SignBoundHubDSTicket(1001, 0, 0, 0, 0, entryJTI, auth.DSTicketBinding{
 				DSPodName: pod, DSInstanceUID: uid, ProtocolEpoch: 7, CredentialGen: 11,
 				CredentialJTI: "hub-credential-jti", HubAssignmentID: "assignment-1",
 				WriterEpoch: auth.DSAuthWriterEpochV2,

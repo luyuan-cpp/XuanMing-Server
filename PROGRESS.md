@@ -797,3 +797,60 @@
   唯一键重复、FK 通过/悬空/必填 0/目标缺席、位序稳定性(删行保位/同集合零变更/回环)、
   夹具代码渲染断言;TestGeneratedFilesUpToDate 增 bitindex 产物与状态/dist 一致性守护。
 - 全量回归绿(configtable-gen 三包 + pkg/configtable + matchmaker);生成器幂等复跑零写盘。
+
+## 2026-07-21(续4):金丝雀共存窗口「旧副本回写丢新字段」审计(Claude)
+
+- 问题:金丝雀期间同一玩家请求在新旧副本间跳,新副本写入的新字段可能被旧副本
+  read-modify-write 回写静默清掉(用户提出,按存储类别全仓审计)。
+- 结论:MySQL 结构化列(只 SET 认识的列,全仓无 REPLACE INTO)、data_service
+  (update_mask 掩码写 + 缓存写入方字段位图超集判定)、Redis blob RMW(team/hub 默认
+  Unmarshal + 原地改回写)均安全;pkg/configtable 的 DiscardUnknown 为只读路径合规。
+- 发现 1 处潜在陷阱:reward.go saveRewardRecord「重建式回写」RewardClaimStorageRecord
+  (当前仅 permanent/activity 两字段无实际丢失;给该 message 加新字段前必须先改为
+  保留 stored message 原地改回写,否则金丝雀窗口丢新字段)。
+- 规则升级:zero-downtime-update.md §2.3 增补「禁止重建式回写」硬规则,新增 §7
+  审计记录(问题定义 / 分类结论表 / 陷阱处方 / 数据兼容≠路由粘性)。
+
+## 2026-07-21(续5):修复领奖记录重建式回写 + 全仓落盘点排查(Claude)
+
+- 修复 reward.go(§7.3 陷阱):loadRewardRecord 保留 stored message,saveRewardRecord 原地
+  覆盖 permanent/activity 后 Marshal(stored),unknown fields 随回写原样带回;新增回归测试
+  TestClaimReward_PreservesUnknownFields(存量记录挂 field 15 raw varint,领奖后断言未知
+  字段保留 + 位图正确;修复前失败)。player 服务 go build + 全量 go test 绿。
+- 全仓 proto.Marshal 落盘点分类排查:除 reward.go 外无第二处重建式回写。
+  team/trade UpdateWithLock 原地改;ds_allocator/hub_allocator/matchmaker 全线
+  proto.Clone+原地改;hub capacity ledger 整表重写 marshal 的是 load 反序列化原对象;
+  mail 内容建一次不改;guild/data_service 缓存带字段位图投毒防护(PGC\x01/PDC\x02);
+  friend/chat/dialogue/auction/leaderboard/player_locator/inventory 无 proto blob 落盘。
+- zero-downtime-update.md §7.3 改为已修复(含测试说明),新增 §7.4 全仓排查结论表,
+  原"数据兼容≠路由粘性"顺延为 §7.5。
+
+## 2026-07-21(续6):mail 服务增长有界(默认 TTL + 收件箱上限 + sweep 清理)(Claude)
+
+- 问题:邮件库只增不减——过期邮件仅读时过滤从不删;个人邮件 expire_ms=0 永不过期;
+  player_mail_claim 只 INSERT 不 DELETE(领取状态写扩散,长期最大增长点);无收件箱上限。
+- 三层修复(docs/design/mail.md §2.4):①个人邮件默认 TTL 30 天(default_personal_ttl_days);
+  ②InsertPersonalMail 事务内 COUNT(*) FOR UPDATE 原子校验收件箱上限 200(§9 不变量 18,
+  满时驱逐最旧已领邮件,仍满 ERR_MAIL_BOX_FULL=9605,battle_result 出箱补扫重试自愈);
+  ③biz/sweep.go 周期清理 worker(5m/轮、每表单批 500,多副本无锁幂等对齐 leaderboard 补扫):
+  过期个人邮件缓冲 7 天后带未领附件的先归档 player_mail_archive(保留 90 天)再删,
+  已领/无附件直删;sys/guild 邮件失效后删;claim 表按雪花 mail_id cutoff 范围删(180 天,
+  新增 snowflake.MinIDAt)。
+- 表结构:player_mail+idx_expire、sys/guild_mail+idx_end、player_mail_claim+idx_mail、
+  新增 player_mail_archive(12-mail-tables.sql 原地修订,存量库需手动 ALTER)。
+- 顺带修复:SetPersonalStatus 现在同步置 claimed 列(原来永远 0,客户端视图 Claimed 恒 false)。
+- 测试:TTL 默认/显式、归档分流(含坏 payload 保守归档)、各表 cutoff、MinIDAt 区间;
+  mail + snowflake 全部 go build/test/vet 绿。errcode.proto 加 ERR_MAIL_BOX_FULL 待 Codex 重生 pb。
+
+## 2026-07-21(续7):mail 表改动改走版本化迁移 000003(Claude)
+
+- 修正续6"存量库需手动 ALTER":发现 tools/migrate 已管 pandora_social,新增
+  000003_mail_growth_bounded(4 个清理索引 information_schema 守卫幂等 + player_mail_archive
+  建表;down 按惯例 additive-only no-op,回滚保留归档数据)。
+- social_migration_test 契约同步:latest version 2→3、baseline immutable 断言扩到邮件结构、
+  v3 up 契约片段、down 断言抽 assertAdditiveOnlyDown(新增禁 DROP INDEX)、集成测试
+  schema_migrations 版本改跟 latestMigrationVersion、fresh 形态预建 v3 结构验幂等、
+  迁移后断言归档表 + 4 索引就位。workspace 模式 go test/vet 绿。
+- 既有阻断(非本次引入):tools/migrate 在 GOWORK=off -mod=readonly 下编译失败,
+  go.sum 缺 go.uber.org/atomic 条目;修复(go mod tidy)按 AGENTS.md §11.1 交 Codex,
+  修好前 README 的 docker 镜像构建路径走不通。

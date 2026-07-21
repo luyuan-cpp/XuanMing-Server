@@ -67,10 +67,14 @@ func Metrics() middleware.Middleware {
 }
 
 // splitOperation 把 "/pandora.login.v1.LoginService/Login" 切成 ("LoginService", "Login")。
+//
+// 方向判定(§16.7):client transport 是本次调用刚放进 ctx 的,存在即说明这是 client hop;
+// server transport 可能是 server handler 继承下来的,只能作兜底。不得反过来优先 server,
+// 否则 handler 内(含异步 goroutine)发起的下游调用会被错标成外层 server op。
 func splitOperation(ctx context.Context) (service, method string) {
-	tr, ok := transport.FromServerContext(ctx)
+	tr, ok := transport.FromClientContext(ctx)
 	if !ok {
-		if tr, ok = transport.FromClientContext(ctx); !ok {
+		if tr, ok = transport.FromServerContext(ctx); !ok {
 			return "unknown", "unknown"
 		}
 	}

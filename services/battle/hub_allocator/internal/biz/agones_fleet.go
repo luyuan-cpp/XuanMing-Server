@@ -509,7 +509,8 @@ func (a *AgonesHubFleetProvider) ensureHubCredential(ctx context.Context, gs *ga
 	// 2b. 当前 annotation 严格等于 Redis pending:必须再 GET 当前对象终态,并以 expected
 	// tuple CAS 记 delivered。LIST 快照/annotation gen 数字本身没有推进授权的能力。
 	if rec.Pending != nil && a.credentialBundleMatches(gs, rec.Pending, true) == nil {
-		rv, cerr := a.confirmCredentialDelivery(context.WithoutCancel(ctx), pod, rec.Pending)
+		// plog.Detach(§16.7):detached 确认读只复制日志字段,不携带请求级 transport/取消。
+		rv, cerr := a.confirmCredentialDelivery(plog.Detach(ctx), pod, rec.Pending)
 		if cerr != nil {
 			return 0, 0, cerr
 		}
@@ -598,7 +599,8 @@ func (a *AgonesHubFleetProvider) patchCredentialAnnotation(ctx context.Context, 
 
 	// PATCH 的任何返回都不是授权事实。即使调用方 ctx 已取消,也给安全确认一次独立、有界的
 	// GET 机会(内部 getGameServer 仍受 listTimeout 限制),避免“timeout 但实际已应用”被误判。
-	rv, confirmErr := a.confirmCredentialDelivery(context.WithoutCancel(ctx), gs.Metadata.Name, expected)
+	// plog.Detach(§16.7):detached 确认读只复制日志字段,不携带请求级 transport/取消。
+	rv, confirmErr := a.confirmCredentialDelivery(plog.Detach(ctx), gs.Metadata.Name, expected)
 	if confirmErr == nil && rv != gs.Metadata.ResourceVersion {
 		return rv, nil
 	}
