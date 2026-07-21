@@ -538,7 +538,7 @@ func (u *MatchUsecase) compensateStartOperation(ctx context.Context, op *matchv1
 	if err != nil {
 		return err
 	}
-	u.pushProgress(ctx, failed.GetTicketId(), stageFailed, failed.GetMembers(), "", "")
+	u.pushProgress(ctx, failed.GetTicketId(), stageFailed, failed.GetMembers(), "", failed.GetMapId())
 	return u.repo.RemoveStartActive(ctx, failed.GetTicketId())
 }
 
@@ -677,7 +677,7 @@ func (u *MatchUsecase) advanceStartOperation(ctx context.Context, current *match
 		if err != nil {
 			return err
 		}
-		u.pushProgress(ctx, op.GetTicketId(), stageQueueing, op.GetMembers(), "", "")
+		u.pushProgress(ctx, op.GetTicketId(), stageQueueing, op.GetMembers(), "", op.GetMapId())
 		// QUEUED is an explicit ownership handoff: the durable ticket + player
 		// claims are now canonical. Delete the start operation instead of waiting
 		// for a cache TTL to imply completion.
@@ -795,7 +795,7 @@ func (u *MatchUsecase) CancelMatch(ctx context.Context, playerID uint64) error {
 	u.rollbackClaims(ctx, ticketID, memberPlayerIDs(ticket.Members))
 	// FAILED 补推给票据全体成员:取消可能不是本人发起(队长取消 / team 离队联动撤票),
 	// 其余队友的客户端仍停在 QUEUEING,不推会一直转圈直到 GetMatchProgress 兜底轮询。
-	u.pushProgress(ctx, ticket.TicketId, stageFailed, ticket.Members, "", "")
+	u.pushProgress(ctx, ticket.TicketId, stageFailed, ticket.Members, "", ticket.MapId)
 	plog.With(ctx).Infow("msg", "match_cancel", "ticket_id", ticketID, "player_id", playerID)
 	return nil
 }
@@ -914,7 +914,7 @@ func (u *MatchUsecase) rejectOrReapOrphan(ctx context.Context, playerID, matchID
 		return derr
 	}
 	u.rollbackClaims(ctx, tid, memberPlayerIDs(ticket.Members))
-	u.pushProgress(ctx, tid, stageFailed, ticket.Members, "", "")
+	u.pushProgress(ctx, tid, stageFailed, ticket.Members, "", ticket.MapId)
 	plog.With(ctx).Warnw("msg", "match_cancel_reaped_orphan_ticket",
 		"ticket_id", tid, "match_id", matchID, "player_id", playerID)
 	return nil
@@ -1180,7 +1180,7 @@ func (u *MatchUsecase) ConfirmMatch(ctx context.Context, playerID, matchID uint6
 	default:
 		// 仍有人未确认:推 CONFIRM 进度给全体
 		if snapshot != nil && snapshot.Stage == stageConfirm {
-			u.pushProgress(ctx, matchID, stageConfirm, snapshot.Members, "", "")
+			u.pushProgress(ctx, matchID, stageConfirm, snapshot.Members, "", snapshot.MapId)
 		}
 	}
 	plog.With(ctx).Infow("msg", "match_confirm", "match_id", matchID, "player_id", playerID,
@@ -1286,7 +1286,7 @@ func (u *MatchUsecase) onMatchFailed(ctx context.Context, m *matchv1.MatchStorag
 // 会把他局在进票据抽回队列(违反不变量 §1),一律跳过;也使本函数可幂等重跑。
 func (u *MatchUsecase) failMatch(ctx context.Context, m *matchv1.MatchStorageRecord, isFaulty func(tid uint64, ticket *matchv1.MatchTicketStorageRecord) bool) error {
 	// 推 FAILED 给全体(含过错方)
-	u.pushProgress(ctx, m.MatchId, stageFailed, m.Members, "", "")
+	u.pushProgress(ctx, m.MatchId, stageFailed, m.Members, "", m.MapId)
 
 	var joined error
 	for _, tid := range m.TicketIds {
@@ -1341,7 +1341,7 @@ func (u *MatchUsecase) failMatch(ctx context.Context, m *matchv1.MatchStorageRec
 		}
 		// 补推 QUEUEING:客户端刚收到 FAILED,若不告知"你已自动回到队列",其再点匹配
 		// 会撞 ErrMatchAlreadyMatching(4002) 卡死在"匹配不了"。句柄仍是 ticket_id。
-		u.pushProgress(ctx, ticket.TicketId, stageQueueing, ticket.Members, "", "")
+		u.pushProgress(ctx, ticket.TicketId, stageQueueing, ticket.Members, "", ticket.MapId)
 	}
 	if joined != nil {
 		return joined // active index remains; durable worker retries deterministic cleanup
@@ -1819,6 +1819,7 @@ func (u *MatchUsecase) ResolvePlayerMatchContext(ctx context.Context, playerID u
 			Stage:    matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_STARTING,
 			TicketId: startTicketID,
 			GameMode: op.GetGameMode(),
+			MapId:    op.GetMapId(),
 		}, nil
 	}
 	if !claimFound {
@@ -1839,6 +1840,7 @@ func (u *MatchUsecase) ResolvePlayerMatchContext(ctx context.Context, playerID u
 		State:    matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE,
 		TicketId: claimTicketID,
 		GameMode: ticket.GetGameMode(),
+		MapId:    ticket.GetMapId(),
 	}
 	if ticket.GetMatchId() == 0 {
 		base.Stage = matchv1.PlayerMatchResumeStage_PLAYER_MATCH_RESUME_STAGE_QUEUED
@@ -1858,6 +1860,10 @@ func (u *MatchUsecase) ResolvePlayerMatchContext(ctx context.Context, playerID u
 	}
 	if m.GetGameMode() != "" {
 		base.GameMode = m.GetGameMode()
+	}
+	if m.GetMapId() != 0 {
+		// match 记录继承自票据;两者都有时以 match 为准(0=未指定,保留票据值)。
+		base.MapId = m.GetMapId()
 	}
 	base.MatchId = m.GetMatchId()
 	switch m.GetStage() {
@@ -2772,8 +2778,8 @@ func (u *MatchUsecase) formMatch(ctx context.Context, sideA, sideB []*matchv1.Ma
 	// 撮合成局，成员进入确认期：上报 locator MATCHING（不变量 §1，弱依赖）
 	u.notifyMatching(ctx, memberPlayerIDs(members), matchID)
 	// 推 FOUND → CONFIRM 进度给全体(原则 3 例外:含发起方)
-	u.pushProgress(ctx, matchID, stageFound, members, "", "")
-	u.pushProgress(ctx, matchID, stageConfirm, members, "", "")
+	u.pushProgress(ctx, matchID, stageFound, members, "", match.MapId)
+	u.pushProgress(ctx, matchID, stageConfirm, members, "", match.MapId)
 	plog.With(ctx).Infow("msg", "match_found", "match_id", matchID, "players", len(members),
 		"auto_confirm", u.cfg.AutoConfirmMatch)
 	if u.cfg.AutoConfirmMatch {
@@ -2954,7 +2960,7 @@ func (u *MatchUsecase) livenessSweepOnce(ctx context.Context) error {
 		u.rollbackClaims(ctx, t.TicketId, memberPlayerIDs(t.Members))
 		// FAILED 推给票据全体成员:同队在线的队友(组队票)立刻知道排队被取消,
 		// 不至于停在 QUEUEING 干等;掉线者本人收不到,重连后 GetMatchProgress 兜底。
-		u.pushProgress(ctx, t.TicketId, stageFailed, t.Members, "", "")
+		u.pushProgress(ctx, t.TicketId, stageFailed, t.Members, "", t.MapId)
 		plog.With(ctx).Infow("msg", "liveness_sweep_reaped_ticket",
 			"ticket_id", t.TicketId, "members", len(t.Members))
 	}
@@ -2964,13 +2970,14 @@ func (u *MatchUsecase) livenessSweepOnce(ctx context.Context) error {
 // ── push 辅助 ─────────────────────────────────────────────────────────────────
 
 // pushProgress 给 members 全体推同一阶段进度(battle 字段为空时不填)。
-func (u *MatchUsecase) pushProgress(ctx context.Context, matchID uint64, stage matchv1.MatchStage, members []*matchv1.MatchMemberStorageRecord, dsAddr, _ string) {
+// mapID 取调用方手头权威记录(ticket/op/match)的 map_id,已终局(FAILED)可为 0。
+func (u *MatchUsecase) pushProgress(ctx context.Context, matchID uint64, stage matchv1.MatchStage, members []*matchv1.MatchMemberStorageRecord, dsAddr string, mapID uint32) {
 	if u.pusher == nil || len(members) == 0 {
 		return
 	}
 	now := time.Now().UnixMilli()
 	for _, m := range members {
-		prog := buildProgress(matchID, stage, members, dsAddr, "")
+		prog := buildProgress(matchID, stage, members, dsAddr, "", mapID)
 		u.pushOneProgress(ctx, m.PlayerId, prog, now)
 	}
 }
@@ -2980,7 +2987,7 @@ func (u *MatchUsecase) pushOne(ctx context.Context, playerID uint64, m *matchv1.
 	if u.pusher == nil {
 		return
 	}
-	prog := buildProgress(m.MatchId, m.Stage, m.Members, dsAddr, battleTicket)
+	prog := buildProgress(m.MatchId, m.Stage, m.Members, dsAddr, battleTicket, m.MapId)
 	u.pushOneProgress(ctx, playerID, prog, nowMs)
 }
 
@@ -2996,7 +3003,7 @@ func (u *MatchUsecase) pushReadyStrict(ctx context.Context, m *matchv1.MatchStor
 	now := time.Now().UnixMilli()
 	var joined error
 	for _, member := range m.Members {
-		prog := buildProgress(m.MatchId, m.Stage, m.Members, dsAddr, tickets[member.PlayerId])
+		prog := buildProgress(m.MatchId, m.Stage, m.Members, dsAddr, tickets[member.PlayerId], m.MapId)
 		event := &matchv1.MatchProgressEvent{Progress: prog, ToPlayerId: member.PlayerId, TsMs: now}
 		payload, err := proto.Marshal(event)
 		if err != nil {

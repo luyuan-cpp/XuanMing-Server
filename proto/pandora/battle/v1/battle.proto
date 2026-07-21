@@ -17,6 +17,23 @@ service BattleResultService {
   rpc ReportResult(ReportResultRequest) returns (ReportResultResponse);
   rpc GetMatchResult(GetMatchResultRequest) returns (GetMatchResultResponse);
   rpc ListPlayerHistory(ListPlayerHistoryRequest) returns (ListPlayerHistoryResponse);
+
+  // ReportProgress 战斗中实时进度事实上报(实时成长通道,docs/design/realtime-progression.md)。
+  //
+  // 鉴权同 ReportResult:DS callback Guard(battle 令牌绑 match_id)+ Redis active 校验,
+  // 玩家必须在权威 roster 内。DS 侧必须异步 fire-and-forget + 本地有界缓冲重试,
+  // **绝不阻塞 UE 主 tick**(ds-arch §0.5 ③ 五条约束)。
+  //
+  // 幂等 / 顺序契约:
+  //   - 事件 seq 每场从 1 单调递增;单飞行批 + 批内升序 + 失败原批重发。
+  //   - 服务端按 battle_progress_stream 水位去重:seq <= last_applied_seq 的事件跳过,
+  //     水位推进与 progress 出箱写入同一 MySQL 事务(at-least-once 重放零副作用)。
+  //   - 响应 acked_seq = 服务端已应用水位,DS 据此清本地缓冲。
+  //   - 对局已结算(正常 / ABANDONED)后本 RPC 一律拒(ERR_INVALID_STATE),
+  //     DS 收到不可重试错误应丢弃该批并告警,不得无限重试。
+  //
+  // DS 不可信:DS 只报事实(杀了什么怪 / 拾了什么白名单物品),经验换算与发放全在后端。
+  rpc ReportProgress(ReportProgressRequest) returns (ReportProgressResponse);
 }
 
 message PlayerStats {
@@ -65,6 +82,11 @@ enum BattleOutcome {
 // DS 通过 kafka envelope 上报,但本 RPC 也提供同步上报用法(测试 / 兼容)
 message ReportResultRequest {
   BattleResult result = 1;
+
+  // final_progress_seq 是 DS 本场经实时进度通道上报的最后一个事件 seq(对账用)。
+  // 0 = 本场未走实时通道(旧 DS / 通道关闭)。服务端与 battle_progress_stream 水位比对,
+  // 有缺口只告警(尾窗丢失,realtime-progression.md §9),不自动补。
+  uint64 final_progress_seq = 2;
 }
 
 message ReportResultResponse {
@@ -90,4 +112,46 @@ message ListPlayerHistoryRequest {
 message ListPlayerHistoryResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated BattleResult results = 2;
+}
+
+// ===== 战斗中实时进度事实上报(实时成长通道)=====
+
+// MonsterKillFact 击杀怪物事实:DS 只报"杀了哪种怪、几只",经验换算在后端
+// (battle_result 怪物经验表,DS 不可信)。count 有单事件上限(服务端配置,超限拒)。
+message MonsterKillFact {
+  uint32 monster_config_id = 1;  // 怪物配置 ID(§12)
+  uint32 count             = 2;  // 本事件击杀数(>0,通常为 1;服务端按配置上限校验)
+}
+
+// ItemPickupFact 拾取物品事实:DS 只报"拾了哪个配置物品、几件"。
+// 服务端按掉落白名单过滤(与结算路径同一 drop_whitelist),每件发一件未鉴定实例
+// (语义与 ReportResult 的 dropped_item_config_ids 一致,但即时入账)。
+message ItemPickupFact {
+  uint32 item_config_id = 1;  // 物品配置 ID(§12)
+  uint32 count          = 2;  // 本事件拾取件数(>0;服务端按配置上限校验)
+}
+
+// BattleProgressEvent 一条战斗中进度事实事件。
+// seq 每场单调递增(从 1 起),是幂等键 (match_id, seq) 的组成部分。
+message BattleProgressEvent {
+  uint64 seq       = 1;
+  uint64 player_id = 2;  // 受益玩家(必须在本场权威 roster 内)
+  oneof fact {
+    MonsterKillFact monster_kill = 3;
+    ItemPickupFact  item_pickup  = 4;
+  }
+  int64 ts_ms = 5;  // DS 侧事件发生时间(审计;权威时间以服务端为准)
+}
+
+// ReportProgressRequest 一批进度事件(批内 seq 升序;单飞行批,失败原批重发)。
+message ReportProgressRequest {
+  uint64 match_id = 1;
+  repeated BattleProgressEvent events = 2;  // 非空;单批条数有服务端上限(超限拒)
+}
+
+message ReportProgressResponse {
+  pandora.common.v1.ErrCode code = 1;
+  // acked_seq 服务端已应用水位(含本批)。DS 清掉 <= acked_seq 的本地缓冲。
+  // 整批都是旧事件(重放)时返回当前水位,同样安全可清。
+  uint64 acked_seq = 2;
 }

@@ -71,9 +71,9 @@ func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.Re
 	}
 	var already bool
 	if terminalRelease != nil {
-		already, err = s.uc.ReportAuthorizedResult(ctx, req.GetResult(), *terminalRelease)
+		already, err = s.uc.ReportAuthorizedResult(ctx, req.GetResult(), *terminalRelease, req.GetFinalProgressSeq())
 	} else {
-		already, err = s.uc.ReportResult(ctx, req.GetResult())
+		already, err = s.uc.ReportResult(ctx, req.GetResult(), req.GetFinalProgressSeq())
 	}
 	if err != nil {
 		return &battlev1.ReportResultResponse{Code: toProtoCode(err)}, nil
@@ -89,6 +89,39 @@ func (s *BattleResultService) ReportResult(ctx context.Context, req *battlev1.Re
 		}
 	}
 	return &battlev1.ReportResultResponse{Code: commonv1.ErrCode_OK, AlreadyRecorded: already}, nil
+}
+
+// ReportProgress 战斗中实时进度事实上报(实时成长,realtime-progression.md §3/§4.1)。
+//
+// 鉴权复用 ReportResult 的 DS 回调链:Guard battle 令牌绑 match_id;authority_mode=redis 时
+// 另过 Redis active 校验并取权威 roster(玩家越权直接拒)。对局结算后 credential 进入终态
+// + 水位表打终局标记,双重保证迟到进度一律拒(僵尸 DS fencing)。
+func (s *BattleResultService) ReportProgress(ctx context.Context, req *battlev1.ReportProgressRequest) (*battlev1.ReportProgressResponse, error) {
+	if req.GetMatchId() == 0 || len(req.GetEvents()) == 0 {
+		return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	_, credential, err := s.dsGuard.CheckBattleCredential(ctx, middleware.DSScope{Type: auth.DSTypeBattle, MatchID: req.GetMatchId(), RequireToken: true})
+	if err != nil {
+		return &battlev1.ReportProgressResponse{Code: toProtoCode(err)}, nil
+	}
+	// roster:Redis active 校验副产物(canonical BattleStorageRecord),biz 用它拒绝
+	// 非本场玩家的进度事实。checker 未启用(dev / mode off)→ roster=nil,biz 跳过成员校验。
+	var roster []uint64
+	if s.battleCredentialChecker != nil {
+		if credential == nil {
+			return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_ERR_UNAUTHORIZED}, nil
+		}
+		proof, aerr := s.battleCredentialChecker.AuthorizeResult(ctx, req.GetMatchId(), credential)
+		if aerr != nil {
+			return &battlev1.ReportProgressResponse{Code: toProtoCode(aerr)}, nil
+		}
+		roster = proof.PlayerIDs
+	}
+	acked, err := s.uc.ReportProgress(ctx, req.GetMatchId(), roster, req.GetEvents())
+	if err != nil {
+		return &battlev1.ReportProgressResponse{Code: toProtoCode(err)}, nil
+	}
+	return &battlev1.ReportProgressResponse{Code: commonv1.ErrCode_OK, AckedSeq: acked}, nil
 }
 
 // GetMatchResult 查询一场对局结算。

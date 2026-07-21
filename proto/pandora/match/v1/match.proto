@@ -150,6 +150,9 @@ message ResolvePlayerMatchContextResponse {
   uint64 placement_version = 8;
   string placement_operation_id = 9;
   string game_mode = 10;
+  // [proto] 本局副本编号(语义同 MatchProgress.map_id):QUEUED 时来自 ticket,
+  // 有 match 记录时来自 match;0 = 未指定/默认。冷启动/换设备恢复据此预置关卡上下文。
+  uint32 map_id = 11;
 }
 
 message MatchProgress {
@@ -165,6 +168,12 @@ message MatchProgress {
   repeated uint64 team_b = 8;
   // 9-19 reserved
   reserved 9 to 19;
+  // [proto] 本局副本编号(g_关卡.xlsx 关卡 id,uint32 配置表 ID,CLAUDE.md §9.12)。
+  // 权威源 MatchTicketStorageRecord/MatchStorageRecord.map_id;票据/对局已知即填。
+  // 客户端在收到 READY 时(ClientTravel 之前)据此预置关卡上下文 NextLevel,
+  // 不再等 DS 握手后按地图包名反查(同资源多关卡行会歧义)。
+  // 0 = 未指定(服务端默认副本),客户端保留地图名反查兜底。
+  uint32 map_id = 20;
 }
 
 // ===== Kafka 推送 payload =====

@@ -1170,6 +1170,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
     kPlacementVersionFieldNumber = 4,
     kPlacementStateFieldNumber = 6,
     kDsInstanceEpochFieldNumber = 10,
+    kMapIdFieldNumber = 14,
   };
   // string operation_id = 5 [json_name = "operationId"];
   void clear_operation_id() ;
@@ -1336,11 +1337,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
   void _internal_set_ds_instance_epoch(::uint32_t value);
 
   public:
+  // uint32 map_id = 14 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.login.v1.ResumeContext)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 137,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1382,6 +1393,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResumeContext final : public ::goog
     ::uint64_t placement_version_;
     int placement_state_;
     ::uint32_t ds_instance_epoch_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5634,6 +5646,30 @@ inline void ResumeContext::set_allocated_game_mode(::std::string* PROTOBUF_NULLA
     _impl_.game_mode_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.login.v1.ResumeContext.game_mode)
+}
+
+// uint32 map_id = 14 [json_name = "mapId"];
+inline void ResumeContext::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t ResumeContext::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.login.v1.ResumeContext.map_id)
+  return _internal_map_id();
+}
+inline void ResumeContext::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:pandora.login.v1.ResumeContext.map_id)
+}
+inline ::uint32_t ResumeContext::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void ResumeContext::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
 }
 
 // -------------------------------------------------------------------

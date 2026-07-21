@@ -47,6 +47,14 @@ service PlayerService {
   // 响应只回客户端可见最小视图(§14),不外露存储位图。
   rpc ClaimReward(ClaimRewardRequest) returns (ClaimRewardResponse);
   rpc GetRewardClaims(GetRewardClaimsRequest) returns (GetRewardClaimsResponse);
+
+  // ── 玩家等级经验(实时成长,docs/design/realtime-progression.md)──
+  // AddExperience 幂等入账经验并结算等级(连升多级 / Lv 上限封顶 / 满级 no-op)。
+  // 系统 RPC:只允许后端内部直连(battle_result progress 出箱 worker / 任务完成点 / GM),
+  // 带玩家 JWT 的客户端调用一律拒绝,且不在 Envoy 暴露(客户端不能给自己加经验)。
+  // 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经
+  // pandora.player.update(event_type=1)通知客户端刷新经验条 / 播升级表现。
+  rpc AddExperience(AddExperienceRequest) returns (AddExperienceResponse);
 }
 
 // ===== 玩家档案 =====
@@ -64,8 +72,15 @@ message PlayerProfile {
 
   int32  total_battles = 10;
   int32  total_wins    = 11;
-  // 12-49 reserved for stats
-  reserved 12 to 49;
+
+  // ── 玩家等级经验(实时成长;level 字段见 3)──
+  // exp_in_level 是**级内经验**(不是账号累计);客户端用 CfgPlayerLevelExp 表补
+  // "升到下一级所需经验"。is_max_level=true 时 UI 显示满条 + MAX(exp_in_level 恒 0)。
+  // 12/13 取自原 stats 预留段(开发期收窄 reserved,§5.4)。
+  uint64 exp_in_level = 12;
+  bool   is_max_level = 13;
+  // 14-49 reserved for stats
+  reserved 14 to 49;
 }
 
 message GetProfileRequest {
@@ -145,6 +160,31 @@ message PlayerUpdateEvent {
   int32  mmr_delta = 3;
   string reason    = 4;  // "win" | "lose" | "draw" | "abandon"
   int64  ts_ms     = 5;
+}
+
+// PlayerPushEventType 是 pandora.player.update 域内事件类型判别键
+// (push.proto §域内多事件类型路由:producer 写 kafka header event_type,
+// push 透传进 PushFrame.EventType,客户端按 (topic, event_type) 选 message 反序列化)。
+// 0 永远 = 本 topic 现有旧事件(PlayerUpdateEvent,MMR);编号只增不复用。
+enum PlayerPushEventType {
+  PLAYER_PUSH_EVENT_TYPE_LEGACY_UPDATE = 0;  // PlayerUpdateEvent(MMR / 战绩,兼容旧客户端)
+  PLAYER_PUSH_EVENT_TYPE_EXPERIENCE    = 1;  // PlayerExperienceEvent(等级经验快照)
+}
+
+// PlayerExperienceEvent 玩家经验变化推送(客户端可见结构,player 服务入账后出箱生产)。
+//
+// 客户端契约:
+//   - 收到即用权威快照刷新经验条(RequiredExp 查客户端 CfgPlayerLevelExp 表);
+//   - levels_gained > 0 → 播一次升级表现(连升多级只播终级一次);
+//   - 按"(level, exp_in_level) 单调不回退"丢弃乱序 / 离线补推的旧事件;
+//   - is_max_level=true → 显示 MAX 满条(exp_in_level 恒 0)。
+message PlayerExperienceEvent {
+  uint64 player_id     = 1;
+  int32  level         = 2;  // 入账后权威等级
+  uint64 exp_in_level  = 3;  // 入账后级内经验(满级恒 0)
+  bool   is_max_level  = 4;
+  uint32 levels_gained = 5;  // 本次入账升了几级(0 = 未升级)
+  int64  ts_ms         = 6;
 }
 
 // ===== 出战养成(选英雄 / 属性加点 / 出战快照)=====
@@ -372,4 +412,27 @@ message GetRewardClaimsRequest {
 message GetRewardClaimsResponse {
   pandora.common.v1.ErrCode code = 1;
   repeated uint32 claimed_reward_ids = 2;
+}
+
+// ===== 玩家等级经验(实时成长)=====
+
+// AddExperienceRequest 幂等入账经验(系统 RPC,不经 Envoy)。
+// 幂等键约定(单点入口清单见 realtime-progression.md §4.4):
+//   击杀怪物  progress:{match_id}:{seq}:{player_id}:exp(battle_result progress 出箱)
+//   完成任务  quest:{player_id}:{quest_id}
+//   GM 补发   gm:{operation_id}
+message AddExperienceRequest {
+  uint64 player_id       = 1;
+  uint64 exp_delta       = 2;  // 须 > 0(服务端另有单次上限,超限拒)
+  string reason          = 3;  // "monster_kill" | "quest" | "gm"(审计)
+  string idempotency_key = 4;
+}
+
+message AddExperienceResponse {
+  pandora.common.v1.ErrCode code = 1;
+  int32  level         = 2;  // 入账后权威等级
+  uint64 exp_in_level  = 3;  // 入账后级内经验(满级恒 0)
+  bool   is_max_level  = 4;
+  uint32 levels_gained = 5;  // 本次入账升级数(幂等命中 / 满级 no-op 时为 0)
+  bool   already       = 6;  // true = 幂等命中,本次未重复入账
 }

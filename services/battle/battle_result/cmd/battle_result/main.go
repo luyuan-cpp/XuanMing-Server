@@ -235,6 +235,19 @@ func main() {
 			"hint", "inventory_addr 未配置 → 战斗装备掉落不发放(drop 出箱积压不丢,配好地址重启补发)")
 	}
 
+	// 6.2.0 player 经验入账器(实时成长,弱依赖:PlayerAddr 空 → 进度出箱经验行积压不丢,
+	// 配好地址重启补发)。AddExperience 是系统接口,走内网 insecure 直连(复用 MMR reader 地址)。
+	if cfg.Battle.PlayerAddr != "" {
+		expGranter := data.NewGrpcExperienceGranter(cfg.Battle.PlayerAddr)
+		defer func() { _ = expGranter.Close() }()
+		uc.SetExperienceGranter(expGranter)
+		helper.Infow("msg", "experience_granter_grpc", "player_addr", cfg.Battle.PlayerAddr,
+			"monster_exp_entries", len(cfg.Battle.MonsterExp), "progress_enabled", cfg.Battle.ProgressEnabled())
+	} else {
+		helper.Warnw("msg", "experience_granter_disabled",
+			"hint", "player_addr 未配置 → 击杀经验不入账(进度出箱积压不丢,配好地址重启补发)")
+	}
+
 	// 6.2.1 背包满溢出转邮件发送器(弱依赖:MailAddr 空 → 背包满掉落留在出箱轮询重试,退化为历史行为)。
 	// 传源键 battle_drop:{match}:{player} 至 mail,领取时 GrantInstances 同键去重(直发与邮件链至多一次)。
 	if cfg.Battle.MailAddr != "" {
@@ -301,6 +314,7 @@ func main() {
 	// publisher/consumer 都会产生外部副作用；capability 未取得前禁止启动。
 	go uc.RunOutboxPublisher(pubCtx)
 	go uc.RunDropPublisher(pubCtx)
+	go uc.RunProgressPublisher(pubCtx)
 	go uc.RunMatchReleasePublisher(pubCtx)
 	if terminalRelay != nil {
 		go uc.RunTerminalReleasePublisher(pubCtx)

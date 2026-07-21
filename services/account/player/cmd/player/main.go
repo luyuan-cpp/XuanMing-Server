@@ -18,6 +18,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/go-kratos/kratos/v2"
@@ -80,6 +81,11 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
+	if err := cfg.Player.ValidateExpCurve(); err != nil {
+		helper.Errorw("msg", "exp_curve_invalid", "err", err,
+			"hint", "player.exp_curve 每项须 >0,与客户端 j_玩家等级经验.xlsx 同源")
+		os.Exit(1)
+	}
 
 	// 3. MySQL(强依赖:玩家档案落库不可降级)
 	if cfg.Node.MySQLClient.DSN == "" {
@@ -104,7 +110,24 @@ func main() {
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
 
-	// 5. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
+	// 5. 经验推送出箱发布器(实时成长):producer 可用才注入,失败只警告(出箱积压不丢,
+	// 与 battle_result player.update producer 同语义)。event_type 走 kafka header,push 透传。
+	pubCtx, pubCancel := context.WithCancel(context.Background())
+	defer pubCancel()
+	if len(cfg.Kafka.Brokers) > 0 {
+		producer, perr := kafkax.NewKeyOrderedProducer(cfg.Kafka, kafkax.TopicPlayerUpdate)
+		if perr != nil {
+			helper.Warnw("msg", "player_push_producer_init_failed", "err", perr,
+				"hint", "经验推送出箱积压不丢,producer 可用后重启补发")
+		} else {
+			defer func() { _ = producer.Close() }()
+			uc.SetExperiencePusher(&playerEventPusher{p: producer})
+			helper.Infow("msg", "player_push_producer_ready", "topic", kafkax.TopicPlayerUpdate)
+		}
+	}
+	go uc.RunPushOutboxPublisher(pubCtx)
+
+	// 6. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
 	consumers, dlqProducers := mustBuildConsumers(&cfg, uc, helper)
 	for _, kc := range consumers {
 		kc.Start()
@@ -196,6 +219,16 @@ func mustBuildConsumers(cfg *conf.Config, uc *biz.PlayerUsecase, h *klog.Helper)
 		os.Exit(1)
 	}
 	return out, dlqProducers
+}
+
+// playerEventPusher 把 biz.ExperiencePusher 适配到 kafkax.KeyOrderedProducer。
+// key=player_id(不变量 §9 同玩家事件保序);event_type 走 kafka header(push.proto 域内路由)。
+type playerEventPusher struct {
+	p *kafkax.KeyOrderedProducer
+}
+
+func (k *playerEventPusher) PushPlayerEvent(ctx context.Context, playerID uint64, eventType uint32, payload []byte) error {
+	return k.p.SendRawWithEventType(ctx, strconv.FormatUint(playerID, 10), payload, eventType)
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 battle_result / login main.go)。

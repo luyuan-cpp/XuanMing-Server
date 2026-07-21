@@ -84,11 +84,15 @@ func TestBuildZeroWriterPolicyAdvanceComparesBindsEmptyCapabilityRange(t *testin
 func TestBuildMissingV3GenesisComparesRequiredRecordLockAndEmptyCapabilities(t *testing.T) {
 	key := requiredKey(DefaultPrefix)
 	recordKey := policyActivationRecordKey(DefaultPrefix, RequiredPolicyGenerationV3, RequiredPolicyV3)
-	compares, err := buildMissingZeroWriterPolicyBootstrapCompares(DefaultPrefix, "lock-token", key, recordKey)
+	continuityToken := "nonce:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	compares, err := buildMissingZeroWriterPolicyBootstrapCompares(
+		DefaultPrefix, "lock-token", key, recordKey, continuityToken)
 	if err != nil {
 		t.Fatal(err)
 	}
 	foundRequiredMissing, foundRecordMissing, foundLock, foundEmptyRange := false, false, false, false
+	foundContinuityVersion, foundContinuityValue := false, false
+	foundPrefixBeforeLockEmpty, foundPrefixAfterLockEmpty := false, false
 	for i := range compares {
 		cmp := &compares[i]
 		wire := (*etcdserverpb.Compare)(cmp)
@@ -99,13 +103,95 @@ func TestBuildMissingV3GenesisComparesRequiredRecordLockAndEmptyCapabilities(t *
 			foundRecordMissing = wire.GetCreateRevision() == 0
 		case activationLockKey(DefaultPrefix):
 			foundLock = string(wire.GetValue()) == "lock-token"
+		case genesisContinuityKey(DefaultPrefix):
+			foundContinuityVersion = foundContinuityVersion || wire.GetVersion() == 1
+			foundContinuityValue = foundContinuityValue || string(wire.GetValue()) == continuityToken
 		case capabilityPrefix(DefaultPrefix):
 			foundEmptyRange = wire.GetCreateRevision() == 0 &&
 				string(wire.GetRangeEnd()) == clientPrefixEnd(capabilityPrefix(DefaultPrefix))
+		case cleanPrefix(DefaultPrefix):
+			foundPrefixBeforeLockEmpty = wire.GetCreateRevision() == 0 &&
+				string(wire.GetRangeEnd()) == activationLockKey(DefaultPrefix)
+		case activationLockKey(DefaultPrefix) + "\x00":
+			foundPrefixAfterLockEmpty = wire.GetCreateRevision() == 0 &&
+				string(wire.GetRangeEnd()) == clientPrefixEnd(cleanPrefix(DefaultPrefix))
 		}
 	}
-	if !foundRequiredMissing || !foundRecordMissing || !foundLock || !foundEmptyRange {
+	if !foundRequiredMissing || !foundRecordMissing || !foundLock || !foundEmptyRange ||
+		!foundContinuityVersion || !foundContinuityValue ||
+		!foundPrefixBeforeLockEmpty || !foundPrefixAfterLockEmpty {
 		t.Fatalf("genesis CAS missing a create-only/lock/empty-range comparison: %+v", compares)
+	}
+}
+
+func TestBuildMissingV3ContinuityPrepareComparesAllAuthorityInputsEmpty(t *testing.T) {
+	continuityKey := genesisContinuityKey(DefaultPrefix)
+	compares := buildMissingZeroWriterContinuityPrepareCompares(DefaultPrefix, continuityKey)
+	found := map[string]bool{}
+	for i := range compares {
+		cmp := &compares[i]
+		wire := (*etcdserverpb.Compare)(cmp)
+		switch string(cmp.KeyBytes()) {
+		case continuityKey:
+			found["continuity"] = wire.GetCreateRevision() == 0
+		case cleanPrefix(DefaultPrefix):
+			found["authority-prefix"] = wire.GetCreateRevision() == 0 &&
+				string(wire.GetRangeEnd()) == clientPrefixEnd(cleanPrefix(DefaultPrefix))
+		}
+	}
+	for _, name := range []string{"continuity", "authority-prefix"} {
+		if !found[name] {
+			t.Fatalf("continuity prepare missing %s create-only compare: %+v", name, compares)
+		}
+	}
+}
+
+func TestValidateGenesisContinuityToken(t *testing.T) {
+	valid := "nonce:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := ValidateGenesisContinuityToken(valid); err != nil {
+		t.Fatalf("valid token rejected: %v", err)
+	}
+	for _, invalid := range []string{"", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "nonce:AAAA", "nonce:aa"} {
+		if err := ValidateGenesisContinuityToken(invalid); err == nil {
+			t.Fatalf("invalid token accepted: %q", invalid)
+		}
+	}
+}
+
+func TestCombinedContinuityProvenanceRejectsV1ToV3Record(t *testing.T) {
+	legacyMigration := ActivationRecord{
+		From:                 1,
+		To:                   ProtocolEpochV2,
+		FromRequiredValue:    "1",
+		ToRequiredValue:      RequiredValueV3,
+		RequiredPolicyID:     RequiredPolicyV3,
+		FromPolicyGeneration: RequiredPolicyGenerationV1,
+		ToPolicyGeneration:   RequiredPolicyGenerationV3,
+		FromModRevision:      12,
+		ZeroWriterBootstrap:  true,
+		GenesisBootstrap:     false,
+	}
+	if err := validateGenesisContinuityActivationProvenance(legacyMigration, 10, 20); err == nil {
+		t.Fatal("V1->V3 migration record was accepted as continuity genesis")
+	}
+
+	canonicalGenesis := ActivationRecord{
+		From:                 0,
+		To:                   ProtocolEpochV2,
+		FromRequiredValue:    "",
+		ToRequiredValue:      RequiredValueV3,
+		RequiredPolicyID:     RequiredPolicyV3,
+		FromPolicyGeneration: 0,
+		ToPolicyGeneration:   RequiredPolicyGenerationV3,
+		FromModRevision:      0,
+		ZeroWriterBootstrap:  true,
+		GenesisBootstrap:     true,
+	}
+	if err := validateGenesisContinuityActivationProvenance(canonicalGenesis, 10, 20); err != nil {
+		t.Fatalf("canonical continuity genesis rejected: %v", err)
+	}
+	if err := validateGenesisContinuityActivationProvenance(canonicalGenesis, 20, 20); err == nil {
+		t.Fatal("genesis record at the sentinel revision was accepted")
 	}
 }
 
@@ -214,5 +300,31 @@ func TestActivationEvidenceInputKeepsEpoch1ReadOnlyAndFencesEpoch2(t *testing.T)
 	}
 	if err := ValidateActivationEvidenceInput(2, 2, valid, 123, false); err != nil {
 		t.Fatalf("complete epoch-2 evidence rejected: %v", err)
+	}
+}
+
+func TestZeroWriterV3RecordsRequireEmptyServicesTopology(t *testing.T) {
+	emptyHash := ExpectedServicesHash(map[string]int{})
+	nonEmptyHash := ExpectedServicesHash(map[string]int{"login": 1})
+	if emptyHash == nonEmptyHash {
+		t.Fatal("empty and non-empty services topology hashes unexpectedly match")
+	}
+	for _, tc := range []struct {
+		name    string
+		record  ActivationRecord
+		wantErr bool
+	}{
+		{name: "genesis empty", record: ActivationRecord{ZeroWriterBootstrap: true, GenesisBootstrap: true, ExpectedServicesHash: emptyHash}},
+		{name: "genesis non-empty", record: ActivationRecord{ZeroWriterBootstrap: true, GenesisBootstrap: true, ExpectedServicesHash: nonEmptyHash}, wantErr: true},
+		{name: "v1 zero-writer empty", record: ActivationRecord{ZeroWriterBootstrap: true, ExpectedServicesHash: emptyHash}},
+		{name: "v1 zero-writer non-empty", record: ActivationRecord{ZeroWriterBootstrap: true, ExpectedServicesHash: nonEmptyHash}, wantErr: true},
+		{name: "non-zero-writer", record: ActivationRecord{ExpectedServicesHash: nonEmptyHash}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateZeroWriterServicesTopology(tc.record)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validateZeroWriterServicesTopology() error=%v, wantErr=%v", err, tc.wantErr)
+			}
+		})
 	}
 }

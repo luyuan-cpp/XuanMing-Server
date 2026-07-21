@@ -2,6 +2,9 @@
 package conf
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 )
@@ -44,6 +47,26 @@ type PlayerConf struct {
 
 	// ConsumeTopics 本服订阅的 kafka topic(默认 [player.update])。
 	ConsumeTopics []string `yaml:"consume_topics,omitempty" json:"consume_topics,omitempty"`
+
+	// ── 玩家等级经验(实时成长,docs/design/realtime-progression.md)──
+
+	// ExpCurve 等级经验曲线:第 i 项(0 基)= 从 Lv(i+1) 升到 Lv(i+2) 所需级内经验(须 >0)。
+	// 最高等级 = len(ExpCurve)+1(需求 Lv15 → 配 14 项)。
+	// **空 = 经验功能关闭**(AddExperience 返回 ERR_PLAYER_FEATURE_DISABLED,GetProfile 不标满级),
+	// 默认关闭保持现有行为不变(§14.2)。数值必须与客户端 j_玩家等级经验.xlsx / CfgPlayerLevelExp
+	// 同源(客户端用同表补 RequiredExp 显示;漂移只影响显示,权威在本服务)。
+	ExpCurve []uint64 `yaml:"exp_curve,omitempty" json:"exp_curve,omitempty"`
+
+	// MaxExpPerGrant 单次 AddExperience 入账上限(默认 1000000)。
+	// 防异常 / 越权调用方一次灌满等级(DS 不可信纵深:battle_result 已按怪物表换算,
+	// 这里是 player 侧最后一道兜底)。
+	MaxExpPerGrant uint64 `yaml:"max_exp_per_grant,omitempty" json:"max_exp_per_grant,omitempty"`
+
+	// PushOutboxInterval 经验推送出箱发布轮询间隔(默认 1s;经验条刷新体感由它决定上界)。
+	PushOutboxInterval config.Duration `yaml:"push_outbox_interval,omitempty" json:"push_outbox_interval,omitempty"`
+
+	// PushOutboxBatch 每轮发布取多少条推送出箱记录(默认 128)。
+	PushOutboxBatch int `yaml:"push_outbox_batch,omitempty" json:"push_outbox_batch,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -69,4 +92,44 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51002"
 	}
+}
+
+// ValidateExpCurve 校验等级经验曲线(main 启动时调,失败即退出):
+// 空 = 功能关闭合法;非空时每项须 >0(0 会让该级永不可升,属配置错误),
+// 且长度有 sanity 上限(防手滑配出千级曲线)。
+func (p *PlayerConf) ValidateExpCurve() error {
+	const maxCurveLen = 200
+	if len(p.ExpCurve) > maxCurveLen {
+		return fmt.Errorf("player.exp_curve too long: %d > %d", len(p.ExpCurve), maxCurveLen)
+	}
+	for i, need := range p.ExpCurve {
+		if need == 0 {
+			return fmt.Errorf("player.exp_curve[%d] must be positive (Lv%d→Lv%d)", i, i+1, i+2)
+		}
+	}
+	return nil
+}
+
+// MaxExpPerGrantOrDefault 返回生效的单次入账上限(未配置 → 1000000)。
+func (p *PlayerConf) MaxExpPerGrantOrDefault() uint64 {
+	if p.MaxExpPerGrant > 0 {
+		return p.MaxExpPerGrant
+	}
+	return 1_000_000
+}
+
+// PushOutboxIntervalOrDefault 返回生效的推送出箱轮询间隔(未配置 → 1s)。
+func (p *PlayerConf) PushOutboxIntervalOrDefault() time.Duration {
+	if d := p.PushOutboxInterval.Std(); d > 0 {
+		return d
+	}
+	return time.Second
+}
+
+// PushOutboxBatchOrDefault 返回生效的推送出箱批大小(未配置 → 128)。
+func (p *PlayerConf) PushOutboxBatchOrDefault() int {
+	if p.PushOutboxBatch > 0 {
+		return p.PushOutboxBatch
+	}
+	return 128
 }

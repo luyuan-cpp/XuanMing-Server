@@ -38,6 +38,9 @@ type PlayerMatchAuthority struct {
 	// 持久记录(ticket/match 的 game_mode 字段)。冷启动客户端要用它恢复
 	// x-pandora-game-mode 路由头;绝不允许 login 侧按 PVE/PVP 硬编码猜测。
 	GameMode string
+	// MapID 是本局副本编号(g_关卡.xlsx 关卡 id),来自同一持久记录;0=未指定/默认。
+	// 客户端据此在 ClientTravel 前预置关卡上下文,缺失时保留地图名反查兜底,不 fail-closed。
+	MapID uint32
 }
 
 // MatchContextResolver 给 login.biz 查询玩家在 matchmaker 侧的耐久对局归属。
@@ -97,5 +100,6 @@ func (r *GrpcMatchContextResolver) ResolvePlayerMatchContext(
 		MatchID:      resp.GetMatchId(),
 		BattleDSAddr: resp.GetBattleDsAddr(),
 		GameMode:     resp.GetGameMode(),
+		MapID:        resp.GetMapId(),
 	}, nil
 }

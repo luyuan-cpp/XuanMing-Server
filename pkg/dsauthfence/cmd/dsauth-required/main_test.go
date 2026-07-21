@@ -61,3 +61,31 @@ func TestCheckedEpochRangeRejectsUint32Truncation(t *testing.T) {
 		t.Fatalf("min=%d max=%d err=%v", min, max, err)
 	}
 }
+
+func TestValidateActivationEvidenceRequirement(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		requireV3  bool
+		sha        string
+		atMS       int64
+		continuity string
+		wantErr    bool
+	}{
+		{name: "none"},
+		{name: "exact", requireV3: true, sha: "sha256:abc", atMS: 123},
+		{name: "sha-only", requireV3: true, sha: "sha256:abc", wantErr: true},
+		{name: "time-only", requireV3: true, atMS: 123, wantErr: true},
+		{name: "without-record", sha: "sha256:abc", atMS: 123, wantErr: true},
+		{name: "negative-time", requireV3: true, sha: "sha256:abc", atMS: -1, wantErr: true},
+		{name: "continuity", requireV3: true, sha: "sha256:abc", atMS: 123, continuity: "nonce:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{name: "continuity-without-evidence", requireV3: true, continuity: "nonce:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", wantErr: true},
+		{name: "bad-continuity", requireV3: true, sha: "sha256:abc", atMS: 123, continuity: "nonce:AAAA", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateActivationEvidenceRequirement(tc.requireV3, tc.sha, tc.atMS, tc.continuity)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
+	}
+}

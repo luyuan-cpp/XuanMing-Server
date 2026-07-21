@@ -23,6 +23,9 @@ func main() {
 	minPolicyGeneration := flag.Uint64("min-policy-generation", 1, "minimum accepted immutable required policy generation")
 	maxPolicyGeneration := flag.Uint64("max-policy-generation", uint64(dsauthfence.RequiredPolicyGenerationV3), "maximum accepted immutable required policy generation")
 	requireV3Record := flag.Bool("require-v3-activation-record", false, "require canonical same-transaction immutable V3 activation record/provenance")
+	requireActivationEvidenceSHA256 := flag.String("require-activation-evidence-sha256", "", "require exact V3 activation evidence digest")
+	requireActivationEvidenceCompletedAtMS := flag.Int64("require-activation-evidence-completed-at-ms", 0, "require exact V3 activation evidence completion Unix milliseconds")
+	requireGenesisContinuityToken := flag.String("require-genesis-continuity-token", "", "require exact create-only local genesis data-volume continuity token")
 	timeout := flag.Duration("timeout", 10*time.Second, "linearizable read timeout")
 	output := flag.String("output", "text", "output format: text or json")
 	requireMTLS := flag.Bool("require-mtls", false, "require custom-CA mutual TLS for etcd")
@@ -39,6 +42,10 @@ func main() {
 	flag.Parse()
 	if *output != "text" && *output != "json" {
 		fatal(fmt.Errorf("-output must be text or json"))
+	}
+	if err := validateActivationEvidenceRequirement(*requireV3Record, *requireActivationEvidenceSHA256,
+		*requireActivationEvidenceCompletedAtMS, *requireGenesisContinuityToken); err != nil {
+		fatal(err)
 	}
 
 	endpoints := splitNonEmpty(*endpointsRaw)
@@ -87,7 +94,20 @@ func main() {
 		if snapshot.PolicyGeneration != dsauthfence.RequiredPolicyGenerationV3 {
 			fatal(fmt.Errorf("V3 activation record cannot be required for policy generation %d", snapshot.PolicyGeneration))
 		}
-		if err := client.VerifyRequiredPolicyV3ActivationRecord(ctx); err != nil {
+		if *requireActivationEvidenceSHA256 != "" {
+			var evidenceErr error
+			if *requireGenesisContinuityToken != "" {
+				evidenceErr = client.VerifyRequiredPolicyV3ActivationEvidenceAndContinuity(ctx,
+					*requireActivationEvidenceSHA256, *requireActivationEvidenceCompletedAtMS,
+					*requireGenesisContinuityToken)
+			} else {
+				evidenceErr = client.VerifyRequiredPolicyV3ActivationEvidence(ctx,
+					*requireActivationEvidenceSHA256, *requireActivationEvidenceCompletedAtMS)
+			}
+			if evidenceErr != nil {
+				fatal(fmt.Errorf("required V3 exact activation evidence preflight failed: %w", evidenceErr))
+			}
+		} else if err := client.VerifyRequiredPolicyV3ActivationRecord(ctx); err != nil {
 			fatal(fmt.Errorf("required V3 activation record preflight failed: %w", err))
 		}
 	}
@@ -104,6 +124,30 @@ func main() {
 	}
 	fmt.Printf("required_writer_epoch 只读预检通过: epoch=%d policy_generation=%d policy_id=%q raw_value=%q mod_revision=%d\n",
 		snapshot.Epoch, snapshot.PolicyGeneration, snapshot.PolicyID, snapshot.RawValue, snapshot.ModRevision)
+}
+
+func validateActivationEvidenceRequirement(requireV3Record bool, sha256 string, completedAtMS int64,
+	genesisContinuityToken string) error {
+	hasSHA := strings.TrimSpace(sha256) != ""
+	hasTime := completedAtMS != 0
+	if hasSHA != hasTime {
+		return fmt.Errorf("exact activation evidence digest and completion time must be provided together")
+	}
+	if hasSHA && !requireV3Record {
+		return fmt.Errorf("exact activation evidence requires -require-v3-activation-record")
+	}
+	if strings.TrimSpace(genesisContinuityToken) != "" {
+		if !hasSHA {
+			return fmt.Errorf("genesis continuity token requires exact V3 activation evidence")
+		}
+		if err := dsauthfence.ValidateGenesisContinuityToken(genesisContinuityToken); err != nil {
+			return err
+		}
+	}
+	if completedAtMS < 0 {
+		return fmt.Errorf("exact activation evidence completion time must be positive")
+	}
+	return nil
 }
 
 func checkedPolicyGenerationRange(minGeneration, maxGeneration uint64) (uint32, uint32, error) {

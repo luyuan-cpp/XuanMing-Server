@@ -32,6 +32,9 @@ func main() {
 		policyV3                        = flag.Bool("policy-v3", false, "audit/apply the immutable V2->V3 policy-only transition")
 		zeroWriterV3                    = flag.Bool("zero-writer-v1-to-v3", false, "audit/apply the fresh-cluster V1->V3 transition with an empty capability prefix")
 		genesisV3                       = flag.Bool("zero-writer-genesis-v3", false, "single-transaction fresh-cluster missing->V3 genesis with an empty capability prefix")
+		prepareGenesisV3                = flag.Bool("prepare-zero-writer-genesis-v3", false, "create/verify the exact data-volume continuity sentinel before missing->V3 genesis")
+		verifyGenesisContinuity         = flag.Bool("verify-genesis-continuity", false, "read-only exact verification of the data-volume continuity sentinel")
+		genesisContinuityToken          = flag.String("genesis-continuity-token", "", "exact random nonce mirrored by the immutable Kubernetes genesis marker")
 		requireEmpty                    = flag.Bool("require-empty-capabilities", false, "read-only proof that the DS auth capability prefix is empty")
 		timeout                         = flag.Duration("timeout", 10*time.Second, "single audit/apply timeout")
 		requireMTLS                     = flag.Bool("require-mtls", false, "require custom-CA mutual TLS for etcd")
@@ -46,14 +49,16 @@ func main() {
 		forbiddenReadPrefix             = flag.String("forbidden-read-prefix", "", "prefix this identity must be denied from reading")
 	)
 	flag.Parse()
+	explicitFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) { explicitFlags[f.Name] = true })
 	modeCount := 0
-	for _, selected := range []bool{*policyV3, *zeroWriterV3, *genesisV3} {
+	for _, selected := range []bool{*policyV3, *zeroWriterV3, *genesisV3, *prepareGenesisV3, *verifyGenesisContinuity} {
 		if selected {
 			modeCount++
 		}
 	}
 	if modeCount > 1 {
-		must(fmt.Errorf("-policy-v3, -zero-writer-v1-to-v3 and -zero-writer-genesis-v3 are mutually exclusive"))
+		must(fmt.Errorf("policy-v3, zero-writer V1->V3, genesis prepare, and genesis apply modes are mutually exclusive"))
 	}
 	if modeCount != 0 && *bootstrap {
 		must(fmt.Errorf("policy transition modes cannot be combined with -bootstrap; create baseline V1 first"))
@@ -64,13 +69,33 @@ func main() {
 	if modeCount == 0 {
 		must(validateApplyMode(*bootstrap, *apply))
 	}
+	if (*prepareGenesisV3 || *genesisV3 || *verifyGenesisContinuity) && *genesisContinuityToken == "" {
+		must(fmt.Errorf("-genesis-continuity-token is required for genesis prepare/apply"))
+	}
+	if !*prepareGenesisV3 && !*genesisV3 && !*verifyGenesisContinuity && *genesisContinuityToken != "" {
+		must(fmt.Errorf("-genesis-continuity-token is only valid for genesis prepare/apply"))
+	}
+	if *prepareGenesisV3 || *verifyGenesisContinuity || *genesisV3 {
+		must(rejectExplicitFlags("genesis continuity mode", explicitFlags,
+			"expected-services", "expected-instances", "keyset-revision",
+			"allowed-image-digests", "expected-image-digests", "required-features",
+			"expected-epoch", "target-epoch", "require-empty-capabilities"))
+	}
+	if (*prepareGenesisV3 || *verifyGenesisContinuity) &&
+		(explicitFlags["activation-evidence-sha256"] || explicitFlags["activation-evidence-completed-at-ms"]) {
+		must(fmt.Errorf("genesis prepare/verify cannot accept activation evidence before the Kubernetes marker is pending"))
+	}
+	if *verifyGenesisContinuity && *apply {
+		must(fmt.Errorf("-verify-genesis-continuity is read-only and cannot be combined with -apply"))
+	}
 
 	services := make(map[string]int)
 	instances := make(map[string]map[string]struct{})
 	requiredFeatures := make(map[string]map[string]struct{})
 	expectedDigests := make(map[string]string)
 	var err error
-	needsCapabilityAudit := !*requireEmpty && !*bootstrap && !*zeroWriterV3 && !*genesisV3
+	needsCapabilityAudit := !*requireEmpty && !*bootstrap && !*zeroWriterV3 && !*genesisV3 &&
+		!*prepareGenesisV3 && !*verifyGenesisContinuity
 	if needsCapabilityAudit {
 		services, err = dsauthfence.ParseExpectedServices(*expectedRaw)
 		must(err)
@@ -127,6 +152,21 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
+	if *verifyGenesisContinuity {
+		must(dsauthfence.ValidateGenesisContinuityToken(*genesisContinuityToken))
+		must(client.VerifyGenesisContinuity(ctx, *genesisContinuityToken))
+		fmt.Println("fresh genesis 数据盘 continuity sentinel 精确只读验证通过")
+		return
+	}
+	if *prepareGenesisV3 {
+		if !*apply {
+			must(fmt.Errorf("-prepare-zero-writer-genesis-v3 requires explicit -apply"))
+		}
+		must(dsauthfence.ValidateGenesisContinuityToken(*genesisContinuityToken))
+		must(client.PrepareMissingRequiredPolicyV3Continuity(ctx, *genesisContinuityToken))
+		fmt.Println("已 create-only 建立/精确回读 fresh genesis 数据盘 continuity sentinel")
+		return
+	}
 	if *bootstrap {
 		if *expected != 1 || *target != uint(dsauthfence.ProtocolEpochV2) {
 			must(fmt.Errorf("bootstrap is fixed to baseline expected-epoch=1 and target-epoch=%d", dsauthfence.ProtocolEpochV2))
@@ -148,11 +188,14 @@ func main() {
 		}
 		must(dsauthfence.ValidateActivationEvidenceInput(0, dsauthfence.RequiredPolicyGenerationV3,
 			*activationEvidence, *activationEvidenceCompletedAtMS, true))
+		must(dsauthfence.ValidateGenesisContinuityToken(*genesisContinuityToken))
 		lock, err := client.AcquireLock(ctx, 30)
 		must(err)
 		defer func() { _ = lock.Close() }()
-		must(lock.BootstrapRequiredPolicyV3FromMissing(ctx, *activationEvidence, *activationEvidenceCompletedAtMS))
-		must(client.VerifyRequiredPolicyV3ActivationEvidence(ctx, *activationEvidence, *activationEvidenceCompletedAtMS))
+		must(lock.BootstrapRequiredPolicyV3FromMissing(ctx, *activationEvidence,
+			*activationEvidenceCompletedAtMS, *genesisContinuityToken))
+		must(client.VerifyRequiredPolicyV3ActivationEvidenceAndContinuity(ctx, *activationEvidence,
+			*activationEvidenceCompletedAtMS, *genesisContinuityToken))
 		fmt.Println("已单事务完成 fresh-cluster missing -> V3 genesis（required + immutable record + lock + empty capability prefix）")
 		return
 	}
@@ -296,6 +339,15 @@ func runZeroWriterV3(ctx context.Context, client *dsauthfence.ActivationClient,
 func validateApplyMode(bootstrap, apply bool) error {
 	if apply && !bootstrap {
 		return dsauthfence.ErrTopologyChangeLockProviderUnavailable
+	}
+	return nil
+}
+
+func rejectExplicitFlags(mode string, explicit map[string]bool, names ...string) error {
+	for _, name := range names {
+		if explicit[name] {
+			return fmt.Errorf("%s does not accept -%s because that flag would be ignored", mode, name)
+		}
 	}
 	return nil
 }

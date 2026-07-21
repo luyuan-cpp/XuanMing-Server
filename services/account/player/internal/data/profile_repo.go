@@ -20,12 +20,12 @@ VALUES (?, ?, 1, ?, '', 0, 0)`
 
 func (r *MySQLPlayerRepo) GetProfile(ctx context.Context, playerID uint64) (*playerv1.PlayerProfile, bool, error) {
 	const q = `SELECT nickname, level, mmr, avatar,
-UNIX_TIMESTAMP(created_at)*1000, UNIX_TIMESTAMP(last_seen_at)*1000, total_battles, total_wins
+UNIX_TIMESTAMP(created_at)*1000, UNIX_TIMESTAMP(last_seen_at)*1000, total_battles, total_wins, exp
 FROM players WHERE player_id = ? LIMIT 1`
 	p := &playerv1.PlayerProfile{PlayerId: playerID}
 	err := r.db.QueryRowContext(ctx, q, playerID).Scan(
 		&p.Nickname, &p.Level, &p.Mmr, &p.Avatar,
-		&p.CreatedAtMs, &p.LastSeenMs, &p.TotalBattles, &p.TotalWins)
+		&p.CreatedAtMs, &p.LastSeenMs, &p.TotalBattles, &p.TotalWins, &p.ExpInLevel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}

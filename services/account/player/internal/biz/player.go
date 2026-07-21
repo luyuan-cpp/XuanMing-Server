@@ -36,6 +36,10 @@ type PlayerUsecase struct {
 	// 分片部署时由 main 经 SetCellRouter 注入,核心写(UpdateMMR)后额外打一条档案 owner 落点
 	// 观测(供分片上线核对档案落点 == 玩家 owner cell,§4.2 line 142)。nil-safe。
 	router *cellroute.Router
+
+	// expPusher 把经验推送出箱行投 kafka(实时成长;nil-safe:未注入时出箱积压不丢)。
+	// 由 main 经 SetExperiencePusher 注入(与 SetCellRouter 同风格)。
+	expPusher ExperiencePusher
 }
 
 // NewPlayerUsecase 构造。
@@ -84,6 +88,9 @@ func (u *PlayerUsecase) GetProfile(ctx context.Context, playerID uint64) (*playe
 	if !found {
 		return nil, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", playerID)
 	}
+	// 经验派生字段装饰(实时成长):满级 → is_max_level + 级内经验按 0 展示;
+	// 曲线未配置(功能关闭)→ 不标满级,行为与历史一致。
+	p.ExpInLevel, p.IsMaxLevel = u.DecorateExperience(p.GetLevel(), p.GetExpInLevel())
 	return p, nil
 }
 

@@ -90,6 +90,36 @@ type BattleConf struct {
 	// 内网 insecure 直连(系统接口,无 JWT)。发放遇 ErrInventoryCapacityFull(背包满)时,
 	// RunDropPublisher 用它调 SendPersonalMail 把溢出装备转个人邮件(幂等键防重发),再删出箱行。
 	MailAddr string `yaml:"mail_addr,omitempty" json:"mail_addr,omitempty"`
+
+	// ── 战斗中实时进度通道(实时成长,docs/design/realtime-progression.md)──
+
+	// ProgressDisabled 实时进度通道 killswitch(默认 false=启用)。
+	// 置 true → ReportProgress 一律拒(ERR_INVALID_STATE,DS 收到即停流,回退局后结算路径);
+	// 进行中对局已入账部分不受影响。旧 DS 不调用本 RPC,启用与否都不改变其行为。
+	ProgressDisabled bool `yaml:"progress_disabled,omitempty" json:"progress_disabled,omitempty"`
+
+	// MonsterExp 怪物击杀经验表:monster_config_id → 单只经验(DS 不可信,换算唯一权威)。
+	// 空 = 击杀事实不折算经验(跳过并告警,水位照常推进);与导表管线接通前先在此配置。
+	MonsterExp map[uint32]uint64 `yaml:"monster_exp,omitempty" json:"monster_exp,omitempty"`
+
+	// MaxProgressBatch 单次 ReportProgress 最多接受的事件条数(默认 256,超限拒)。
+	MaxProgressBatch int `yaml:"max_progress_batch,omitempty" json:"max_progress_batch,omitempty"`
+
+	// MaxProgressSeqPerMatch 单场事件 seq 硬上限(默认 100000)。超上限整批拒:
+	// 正常对局到不了这个量级,到了必是异常 / 恶意 DS(有界性兜底,§9.18 同类纪律)。
+	MaxProgressSeqPerMatch uint64 `yaml:"max_progress_seq_per_match,omitempty" json:"max_progress_seq_per_match,omitempty"`
+
+	// MaxKillCountPerFact 单条击杀事实的 count 上限(默认 100;DS 侧批内聚合后仍超必异常)。
+	MaxKillCountPerFact uint32 `yaml:"max_kill_count_per_fact,omitempty" json:"max_kill_count_per_fact,omitempty"`
+
+	// MaxPickupCountPerFact 单条拾取事实的 count 上限(默认 10)。
+	MaxPickupCountPerFact uint32 `yaml:"max_pickup_count_per_fact,omitempty" json:"max_pickup_count_per_fact,omitempty"`
+
+	// ProgressPublishInterval 进度出箱发布轮询间隔(默认 1s;经验/掉落到账体感由它决定上界)。
+	ProgressPublishInterval config.Duration `yaml:"progress_publish_interval,omitempty" json:"progress_publish_interval,omitempty"`
+
+	// ProgressBatchSize 每轮发布取多少条进度出箱记录(默认 128)。
+	ProgressBatchSize int `yaml:"progress_batch_size,omitempty" json:"progress_batch_size,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -185,4 +215,63 @@ func (b *BattleConf) MaxDropsPerPlayer() int {
 		n = maxDropPerPlayerHardCap
 	}
 	return n
+}
+
+// ── 实时进度通道访问器(任何构造路径都有安全默认,风格同 MaxDropsPerPlayer)──
+
+// ProgressEnabled 实时进度通道是否启用(killswitch:progress_disabled 取反)。
+func (b *BattleConf) ProgressEnabled() bool { return !b.ProgressDisabled }
+
+// MonsterExpOf 查怪物单只经验。未配置该怪物 → (0, false),调用方跳过并告警。
+func (b *BattleConf) MonsterExpOf(monsterConfigID uint32) (uint64, bool) {
+	exp, ok := b.MonsterExp[monsterConfigID]
+	return exp, ok
+}
+
+// MaxProgressBatchOrDefault 单批事件条数上限(默认 256)。
+func (b *BattleConf) MaxProgressBatchOrDefault() int {
+	if b.MaxProgressBatch > 0 {
+		return b.MaxProgressBatch
+	}
+	return 256
+}
+
+// MaxProgressSeqPerMatchOrDefault 单场 seq 硬上限(默认 100000)。
+func (b *BattleConf) MaxProgressSeqPerMatchOrDefault() uint64 {
+	if b.MaxProgressSeqPerMatch > 0 {
+		return b.MaxProgressSeqPerMatch
+	}
+	return 100_000
+}
+
+// MaxKillCountPerFactOrDefault 单条击杀事实 count 上限(默认 100)。
+func (b *BattleConf) MaxKillCountPerFactOrDefault() uint32 {
+	if b.MaxKillCountPerFact > 0 {
+		return b.MaxKillCountPerFact
+	}
+	return 100
+}
+
+// MaxPickupCountPerFactOrDefault 单条拾取事实 count 上限(默认 10)。
+func (b *BattleConf) MaxPickupCountPerFactOrDefault() uint32 {
+	if b.MaxPickupCountPerFact > 0 {
+		return b.MaxPickupCountPerFact
+	}
+	return 10
+}
+
+// ProgressPublishIntervalOrDefault 进度出箱发布轮询间隔(默认 1s)。
+func (b *BattleConf) ProgressPublishIntervalOrDefault() time.Duration {
+	if d := b.ProgressPublishInterval.Std(); d > 0 {
+		return d
+	}
+	return time.Second
+}
+
+// ProgressBatchSizeOrDefault 进度出箱发布批大小(默认 128)。
+func (b *BattleConf) ProgressBatchSizeOrDefault() int {
+	if b.ProgressBatchSize > 0 {
+		return b.ProgressBatchSize
+	}
+	return 128
 }

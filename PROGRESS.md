@@ -622,3 +622,84 @@
   由 ResumeContext 按 route+match 确认 admission 收口;漂移则照常权威重查。验收补充:战斗内
   手动重发 READY 推送(或制造部分成员推送失败触发补推)→ 在局玩家无地图重载,日志出现
   "already connected to target battle endpoint"。
+
+## 2026-07-20 ~ 07-21 实时成长入账通道(玩家经验 + 掉落即时到账,Claude)
+
+- 需求拍板:击杀怪物/完成任务**即时**加经验(Lv15 封顶 MAX,连升多级),金品质+掉落同队广播;
+  DS 崩溃**已入账部分保住**;§0.6 红线不删。设计:`docs/design/realtime-progression.md`(已拍板);
+  契约修订已合入 `ds-arch.md` §0.5 ③ / §0.6;决策已登记 `pandora-arch.md` §11。
+- proto(`[proto]`,已本地 buf lint + go/cpp 双生成,cpp pb 已拷入 UE 仓库):
+  `battle.proto` 新增 `ReportProgress`(BattleProgressEvent oneof MonsterKill/ItemPickup,
+  seq 幂等)+ `ReportResultRequest.final_progress_seq`;`player.proto` 新增 `AddExperience`
+  (系统 RPC)、`PlayerPushEventType`(0=旧 MMR 事件,1=EXPERIENCE)、`PlayerExperienceEvent`、
+  `PlayerProfile.exp_in_level/is_max_level`(取自 stats 预留段 12/13,reserved 收窄为 14-49)。
+- player 服务:`players.exp` 列 + `exp_history`(uk player_id+idempotency_key)+
+  `player_push_outbox`(与入账同事务);`AddExperience` 幂等入账 + 等级曲线结算
+  (`AdvanceExperience` 纯函数:连升多级/升满清零/满级 no-op 不消费幂等键不出箱);
+  推送出箱发布器 `RunPushOutboxPublisher`(SendRawWithEventType,kafka header 路由);
+  `exp_curve` 配置与客户端 `j_玩家等级经验.xlsx` 同源(dev/prod 样例已填 1000..11400 占位曲线,
+  空=功能关闭);MMR 消费者按 event_type header 跳过非 0 事件(防经验事件进 DLQ,有回归测试)。
+- battle_result 服务:`ReportProgress`(复用 ReportResult 的 Guard+Redis active 鉴权,
+  roster 越权拒)→ 校验/上限(单批 256/单场 seq 10 万/单事实 count 上限)→ 怪物经验表换算 +
+  掉落白名单过滤(未知怪/非白名单跳过告警,水位照常推进,不卡流)→ `battle_progress_stream`
+  水位乐观 CAS 与 `battle_progress_outbox` 同事务;出箱 worker 幂等调 player.AddExperience /
+  inventory.GrantInstances(幂等键 progress:{match}:{seq}:{player}:{kind},背包满转邮件同 drop);
+  SaveResult 事务内打终局标记(僵尸 DS fencing:结算后进度一律 ERR_INVALID_STATE)+
+  水位>0 抑制结算路径掉落发放(单一权威路径防双发,不信 DS 声明)+ final_progress_seq 对账
+  (缺口只告警,§9 尾窗残余风险);killswitch `progress_disabled`。ABANDONED 不回滚已入账。
+- SQL:mysql-init 04/05 更新 + `tools/migrate` pandora_player 000002_experience、
+  pandora_battle 000005_battle_progress(纯 additive,不停服)。Envoy:AddExperience 加入
+  player.v1 403 精确拦截清单(与 UpdateMMR/Grant* 同双保险)。
+- 验证:player/battle_result `go build + go test` 全绿(新增等级曲线 10 例、AddExperience 6 例、
+  consumer 路由 2 例、progress 校验矩阵/聚合/重放/结算拒收/防双发/发布器 8 例);全 go.work
+  模块构建通过(顺手修了 matchmaker 上会话遗留的 buildProgress 调用点漏传 m.MapId 编译错)。
+  无新增依赖,无需 go mod tidy。
+- UE 侧(Pandora-Client-SVN)由并行会话按同一设计实施中(已见:PandoraBattleProgressReporter、
+  Loot 掉落模块/品质色阶(1白..5金6红)、battle/player wire+codec+ReportBattleProgress 传输层、
+  GameMode 接线进行中)。**交接/待验收清单**:①怪物击杀事实(MonsterKillFact)上报接线与
+  battle_result `monster_exp` 表(dev yaml 目前空表,需按怪物配置 ID 填值);②客户端经验适配
+  (player.update event_type=1 → SetExperienceDisplay/PlayLevelUpPresentation、登录/重连
+  GetProfile 刷新、player codec 的 GetProfile/PlayerExperienceEvent 解码)当前尚未见落地;
+  ③`j_玩家等级经验.xlsx` 与怪物经验列进服务端导表管线(当前以服务 yaml 为权威配置);
+  ④UE 编译/联调由用户执行;⑤验收矩阵见 realtime-progression.md §8(幂等/连升/封顶/故障/
+  崩溃保住/防双发/断线补推/广播可见域/killswitch)。
+
+## 2026-07-21:关卡内规则功能补齐(UE 侧,基于既有 Drop/实时进度系统扩展)
+
+- 盘点结论(对照策划三图,除场景缩略图):主流程/大厅五件套/交易行/组队匹配/结算服务端均已上线;
+  怪物掉落+拾取入包+实时入账(CfgDrop/AMyDropItemActor/PandoraBattleProgressReporter)已由前序
+  工作树实现。本轮补齐其余关卡内规则,全部为 UE 仓库改动,后端零改动:
+  ①拾取分配规则强化:AMyDropItemActor 新增专属归属 OwnerPlayerId(0=公共先到先得,>0 仅归属者
+  可拾)、死亡玩家不可拾取、bPersistOnPickup(false=拾取只入战斗背包不入账)、品质查询与
+  BP 外观钩子;ItemConfigId/Count 开放 EditAnywhere,关卡直摆=初始场景物品。
+  ②玩家死亡掉落:APandoraBattleGameMode::SpawnPlayerDeathDrops,撤离制副本死亡时战斗背包
+  (人物背包,装备可配)整包散布为 persist=false 公共掉落——原持有者拾取时已即时入账,再分配
+  拾取只入战斗背包,防后端双发;PVP 保持原行为。开关在 UMyLootSetting(DefaultMyGameSetting.ini)。
+  ③宝箱开锁拾取规则:AMyLootChestActor(站桩开锁 UnlockSeconds/离开重置/开锁权继承/掉落表
+  独立 roll/可配开锁者专属/RespawnSeconds 重刷),状态+进度复制,蓝图挂外观。
+  ④撤离点显示和撤离规则:AMyExtractionPointActor(bAlwaysRelevant 全程可见,可配延迟开放,
+  进圈蓄力 ExtractSeconds、离圈/死亡重置,多人并行蓄力),蓄力满走
+  APandoraBattleGameMode::HandlePlayerExtracted(可信身份+防重复+终局快照冻结前受理)。
+  ⑤终局规则策略化:UPandoraBattleSettlementRule 新增 SupportsExtraction/EvaluateTerminal;
+  PVP 行为不变(任一死亡立即结算);PVE 撤离制=全员死亡或撤离才结算,任一人撤离成功=通关(0),
+  全灭=未通关(1);单人 PVE 语义与旧行为兼容。GameMode 维护 Dead/Extracted 终态集合。
+  ⑥公屏信息广播规则(realtime-progression §7 掉落广播):拾取品质≥门槛(默认金=5,可配)时
+  NotifyItemPickedUp 内经可信 ActivePlayers 解析拾取者,向同阵营在场玩家控制器逐个
+  ClientReceivePublicBroadcast;客户端本地解析道具名/品质色后送 UMyMainView::EnqueuePublicBroadcast。
+  ⑦副本场景道具使用规则(食物/水):FCfgItem 新增「使用回血量 UseHealHp」;
+  UMyBagComponent::ServerUseBagItem 服务端权威校验(可使用+回血>0+存活)→四元组精确扣 1
+  →ASC ApplyModToAttribute 回血(PreAttributeChange 钳制);抽光格子即时清空防幽灵条目。
+  ⑧装备穿戴规则:FCfgItem 新增「装备部位 EquipSlot」;ServerEquipItem(背包→装备栏,同部位
+  自动替换,替换后背包无位整体回滚,强制堆叠上限=1 保 guid/动态属性跟随)/ServerUnequipItem
+  (背包满则失败保持穿戴)。装备栏全员复制,查看他人出装天然支持。
+  ⑨入场随机选择出生点:PandoraDSGameModeBase 新增 bRandomizeSpawnPointSelection
+  (Battle 构造置 true,Hub 保持 SlotIndex 确定性),同筛选条件空闲候选内随机,占用互斥不变。
+- 小修:UMyBagComponent::GetMaxStackSize 在 UCfgSystem 缺失(无表测试环境)时回退
+  SetDefaultMaxStackSize 的默认上限(此前该字段写而不读);具体道具配置缺失仍 fail-closed 0。
+- 明确未做(有既有拍板/另行立项):PVE 匹配补人与 AI 填充(decision-dungeon-entry-modes §5
+  拍板当前不做);NPC 对话客户端 UI(dialogue 服务端已上线);可破坏物=「无行为树怪物实体+
+  CfgDrop 配掉落」内容配置路径,无需新代码;鉴定/背包/交易行等大厅系统服务端已上线且
+  inventory/player/battle_result `go test ./...` 本轮复跑全绿。
+- 交接(用户/编辑器侧):UE 编译+PIE 验证(Live Coding 约束,AI 不代跑);掉落物/宝箱/撤离点
+  蓝图子类外观与关卡摆放;CfgItem 表新增「使用回血量/装备部位」两列导表;DefaultMyGameSetting.ini
+  可选配置 UMyLootSetting(默认值即可跑通)。git/svn 提交由用户复核后执行。

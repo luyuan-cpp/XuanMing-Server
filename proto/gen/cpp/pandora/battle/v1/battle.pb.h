@@ -60,6 +60,14 @@ namespace battle {
 namespace v1 {
 enum BattleOutcome : int;
 extern const uint32_t BattleOutcome_internal_data_[];
+class BattleProgressEvent;
+struct BattleProgressEventGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleProgressEventGlobalsTypeInternal BattleProgressEvent_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleProgressEvent_class_data_;
+#else
+extern const BattleProgressEventGlobalsTypeInternal BattleProgressEvent_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattleResult;
 struct BattleResultGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -84,6 +92,14 @@ extern const ::google::protobuf::internal::ClassDataFull GetMatchResultResponse_
 #else
 extern const GetMatchResultResponseGlobalsTypeInternal GetMatchResultResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ItemPickupFact;
+struct ItemPickupFactGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ItemPickupFactGlobalsTypeInternal ItemPickupFact_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ItemPickupFact_class_data_;
+#else
+extern const ItemPickupFactGlobalsTypeInternal ItemPickupFact_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListPlayerHistoryRequest;
 struct ListPlayerHistoryRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -100,6 +116,14 @@ extern const ::google::protobuf::internal::ClassDataFull ListPlayerHistoryRespon
 #else
 extern const ListPlayerHistoryResponseGlobalsTypeInternal ListPlayerHistoryResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class MonsterKillFact;
+struct MonsterKillFactGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MonsterKillFactGlobalsTypeInternal MonsterKillFact_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MonsterKillFact_class_data_;
+#else
+extern const MonsterKillFactGlobalsTypeInternal MonsterKillFact_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerStats;
 struct PlayerStatsGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -107,6 +131,22 @@ extern PlayerStatsGlobalsTypeInternal PlayerStats_globals_;
 extern const ::google::protobuf::internal::ClassDataFull PlayerStats_class_data_;
 #else
 extern const PlayerStatsGlobalsTypeInternal PlayerStats_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReportProgressRequest;
+struct ReportProgressRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReportProgressRequestGlobalsTypeInternal ReportProgressRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReportProgressRequest_class_data_;
+#else
+extern const ReportProgressRequestGlobalsTypeInternal ReportProgressRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ReportProgressResponse;
+struct ReportProgressResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ReportProgressResponseGlobalsTypeInternal ReportProgressResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ReportProgressResponse_class_data_;
+#else
+extern const ReportProgressResponseGlobalsTypeInternal ReportProgressResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class ReportResultRequest;
 struct ReportResultRequestGlobalsTypeInternal;
@@ -393,6 +433,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportResultResponse final : public
     ::google::protobuf::internal::CachedSize _cached_size_;
     int code_;
     bool already_recorded_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fbattle_2fv1_2fbattle_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportProgressResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.battle.v1.ReportProgressResponse) */ {
+ public:
+  inline ReportProgressResponse() : ReportProgressResponse(nullptr) {}
+  ~ReportProgressResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReportProgressResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReportProgressResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReportProgressResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReportProgressResponse(const ReportProgressResponse& from) : ReportProgressResponse(nullptr, from) {}
+  inline ReportProgressResponse(ReportProgressResponse&& from) noexcept : ReportProgressResponse(nullptr, ::std::move(from)) {}
+  inline ReportProgressResponse& operator=(const ReportProgressResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReportProgressResponse& operator=(ReportProgressResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReportProgressResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportProgressResponse>(&ReportProgressResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(ReportProgressResponse& a, ReportProgressResponse& b) { a.Swap(&b); }
+  inline void Swap(ReportProgressResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReportProgressResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReportProgressResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReportProgressResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReportProgressResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReportProgressResponse& from) { ReportProgressResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReportProgressResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.battle.v1.ReportProgressResponse"; }
+
+  explicit ReportProgressResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReportProgressResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReportProgressResponse& from);
+  ReportProgressResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReportProgressResponse&& from) noexcept
+      : ReportProgressResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAckedSeqFieldNumber = 2,
+    kCodeFieldNumber = 1,
+  };
+  // uint64 acked_seq = 2 [json_name = "ackedSeq"];
+  void clear_acked_seq() ;
+  [[nodiscard]] ::uint64_t acked_seq() const;
+  void set_acked_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_acked_seq() const;
+  void _internal_set_acked_seq(::uint64_t value);
+
+  public:
+  // .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+  void clear_code() ;
+  [[nodiscard]] ::pandora::common::v1::ErrCode code() const;
+  void set_code(::pandora::common::v1::ErrCode value);
+
+  private:
+  ::pandora::common::v1::ErrCode _internal_code() const;
+  void _internal_set_code(::pandora::common::v1::ErrCode value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.battle.v1.ReportProgressResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReportProgressResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t acked_seq_;
+    int code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -744,6 +997,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerStats final : public ::google
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterKillFact final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.battle.v1.MonsterKillFact) */ {
+ public:
+  inline MonsterKillFact() : MonsterKillFact(nullptr) {}
+  ~MonsterKillFact() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MonsterKillFact* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MonsterKillFact));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MonsterKillFact(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MonsterKillFact(const MonsterKillFact& from) : MonsterKillFact(nullptr, from) {}
+  inline MonsterKillFact(MonsterKillFact&& from) noexcept : MonsterKillFact(nullptr, ::std::move(from)) {}
+  inline MonsterKillFact& operator=(const MonsterKillFact& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MonsterKillFact& operator=(MonsterKillFact&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MonsterKillFact& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MonsterKillFact>(&MonsterKillFact_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(MonsterKillFact& a, MonsterKillFact& b) { a.Swap(&b); }
+  inline void Swap(MonsterKillFact* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MonsterKillFact* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MonsterKillFact* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MonsterKillFact>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MonsterKillFact& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MonsterKillFact& from) { MonsterKillFact::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MonsterKillFact* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.battle.v1.MonsterKillFact"; }
+
+  explicit MonsterKillFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MonsterKillFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MonsterKillFact& from);
+  MonsterKillFact(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MonsterKillFact&& from) noexcept
+      : MonsterKillFact(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMonsterConfigIdFieldNumber = 1,
+    kCountFieldNumber = 2,
+  };
+  // uint32 monster_config_id = 1 [json_name = "monsterConfigId"];
+  void clear_monster_config_id() ;
+  [[nodiscard]] ::uint32_t monster_config_id() const;
+  void set_monster_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_monster_config_id() const;
+  void _internal_set_monster_config_id(::uint32_t value);
+
+  public:
+  // uint32 count = 2 [json_name = "count"];
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.battle.v1.MonsterKillFact)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MonsterKillFact& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t monster_config_id_;
+    ::uint32_t count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fbattle_2fv1_2fbattle_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListPlayerHistoryRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.battle.v1.ListPlayerHistoryRequest) */ {
  public:
@@ -962,6 +1428,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListPlayerHistoryRequest final : pu
     ::uint64_t player_id_;
     ::int64_t before_ms_;
     ::int32_t limit_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fbattle_2fv1_2fbattle_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemPickupFact final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.battle.v1.ItemPickupFact) */ {
+ public:
+  inline ItemPickupFact() : ItemPickupFact(nullptr) {}
+  ~ItemPickupFact() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ItemPickupFact* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ItemPickupFact));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ItemPickupFact(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ItemPickupFact(const ItemPickupFact& from) : ItemPickupFact(nullptr, from) {}
+  inline ItemPickupFact(ItemPickupFact&& from) noexcept : ItemPickupFact(nullptr, ::std::move(from)) {}
+  inline ItemPickupFact& operator=(const ItemPickupFact& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ItemPickupFact& operator=(ItemPickupFact&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ItemPickupFact& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ItemPickupFact>(&ItemPickupFact_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(ItemPickupFact& a, ItemPickupFact& b) { a.Swap(&b); }
+  inline void Swap(ItemPickupFact* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ItemPickupFact* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ItemPickupFact* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ItemPickupFact>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ItemPickupFact& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ItemPickupFact& from) { ItemPickupFact::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ItemPickupFact* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.battle.v1.ItemPickupFact"; }
+
+  explicit ItemPickupFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ItemPickupFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ItemPickupFact& from);
+  ItemPickupFact(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ItemPickupFact&& from) noexcept
+      : ItemPickupFact(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemConfigIdFieldNumber = 1,
+    kCountFieldNumber = 2,
+  };
+  // uint32 item_config_id = 1 [json_name = "itemConfigId"];
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // uint32 count = 2 [json_name = "count"];
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.battle.v1.ItemPickupFact)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ItemPickupFact& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t item_config_id_;
+    ::uint32_t count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1488,6 +2167,291 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleResult final : public ::googl
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleProgressEvent final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.battle.v1.BattleProgressEvent) */ {
+ public:
+  inline BattleProgressEvent() : BattleProgressEvent(nullptr) {}
+  ~BattleProgressEvent() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleProgressEvent* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleProgressEvent));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleProgressEvent(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleProgressEvent(const BattleProgressEvent& from) : BattleProgressEvent(nullptr, from) {}
+  inline BattleProgressEvent(BattleProgressEvent&& from) noexcept : BattleProgressEvent(nullptr, ::std::move(from)) {}
+  inline BattleProgressEvent& operator=(const BattleProgressEvent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleProgressEvent& operator=(BattleProgressEvent&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleProgressEvent& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleProgressEvent>(&BattleProgressEvent_globals_);
+  }
+  enum FactCase {
+    kMonsterKill = 3,
+    kItemPickup = 4,
+    FACT_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(BattleProgressEvent& a, BattleProgressEvent& b) { a.Swap(&b); }
+  inline void Swap(BattleProgressEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleProgressEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleProgressEvent* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleProgressEvent>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleProgressEvent& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleProgressEvent& from) { BattleProgressEvent::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleProgressEvent* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.battle.v1.BattleProgressEvent"; }
+
+  explicit BattleProgressEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleProgressEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleProgressEvent& from);
+  BattleProgressEvent(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleProgressEvent&& from) noexcept
+      : BattleProgressEvent(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeqFieldNumber = 1,
+    kPlayerIdFieldNumber = 2,
+    kTsMsFieldNumber = 5,
+    kMonsterKillFieldNumber = 3,
+    kItemPickupFieldNumber = 4,
+  };
+  // uint64 seq = 1 [json_name = "seq"];
+  void clear_seq() ;
+  [[nodiscard]] ::uint64_t seq() const;
+  void set_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seq() const;
+  void _internal_set_seq(::uint64_t value);
+
+  public:
+  // uint64 player_id = 2 [json_name = "playerId"];
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // int64 ts_ms = 5 [json_name = "tsMs"];
+  void clear_ts_ms() ;
+  [[nodiscard]] ::int64_t ts_ms() const;
+  void set_ts_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_ts_ms() const;
+  void _internal_set_ts_ms(::int64_t value);
+
+  public:
+  // .pandora.battle.v1.MonsterKillFact monster_kill = 3 [json_name = "monsterKill"];
+  [[nodiscard]] bool has_monster_kill()
+      const;
+  private:
+  bool _internal_has_monster_kill() const;
+
+  public:
+  void clear_monster_kill() ;
+  [[nodiscard]] const ::pandora::battle::v1::MonsterKillFact& monster_kill() const;
+  [[nodiscard]] ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE release_monster_kill();
+  ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NONNULL mutable_monster_kill();
+  void set_allocated_monster_kill(::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_monster_kill(::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE value);
+  ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE unsafe_arena_release_monster_kill();
+
+  private:
+  const ::pandora::battle::v1::MonsterKillFact& _internal_monster_kill() const;
+  ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NONNULL _internal_mutable_monster_kill();
+
+  public:
+  // .pandora.battle.v1.ItemPickupFact item_pickup = 4 [json_name = "itemPickup"];
+  [[nodiscard]] bool has_item_pickup()
+      const;
+  private:
+  bool _internal_has_item_pickup() const;
+
+  public:
+  void clear_item_pickup() ;
+  [[nodiscard]] const ::pandora::battle::v1::ItemPickupFact& item_pickup() const;
+  [[nodiscard]] ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE release_item_pickup();
+  ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NONNULL mutable_item_pickup();
+  void set_allocated_item_pickup(::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_item_pickup(::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE value);
+  ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE unsafe_arena_release_item_pickup();
+
+  private:
+  const ::pandora::battle::v1::ItemPickupFact& _internal_item_pickup() const;
+  ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NONNULL _internal_mutable_item_pickup();
+
+  public:
+  void clear_fact();
+  FactCase fact_case() const;
+  // @@protoc_insertion_point(class_scope:pandora.battle.v1.BattleProgressEvent)
+ private:
+  class _Internal;
+  void set_has_monster_kill();
+  void set_has_item_pickup();
+  [[nodiscard]] inline bool has_fact() const;
+  inline void clear_has_fact();
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleProgressEvent& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t seq_;
+    ::uint64_t player_id_;
+    ::int64_t ts_ms_;
+    union FactUnion {
+      constexpr FactUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE monster_kill_;
+      ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE item_pickup_;
+    } fact_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fbattle_2fv1_2fbattle_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportResultRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:pandora.battle.v1.ReportResultRequest) */ {
  public:
@@ -1637,6 +2601,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportResultRequest final : public 
   // accessors -------------------------------------------------------
   enum : int {
     kResultFieldNumber = 1,
+    kFinalProgressSeqFieldNumber = 2,
   };
   // .pandora.battle.v1.BattleResult result = 1 [json_name = "result"];
   [[nodiscard]] bool has_result()
@@ -1654,11 +2619,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportResultRequest final : public 
   ::pandora::battle::v1::BattleResult* PROTOBUF_NONNULL _internal_mutable_result();
 
   public:
+  // uint64 final_progress_seq = 2 [json_name = "finalProgressSeq"];
+  void clear_final_progress_seq() ;
+  [[nodiscard]] ::uint64_t final_progress_seq() const;
+  void set_final_progress_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_final_progress_seq() const;
+  void _internal_set_final_progress_seq(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.battle.v1.ReportResultRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1688,6 +2663,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportResultRequest final : public 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::pandora::battle::v1::BattleResult* PROTOBUF_NULLABLE result_;
+    ::uint64_t final_progress_seq_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_pandora_2fbattle_2fv1_2fbattle_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReportProgressRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:pandora.battle.v1.ReportProgressRequest) */ {
+ public:
+  inline ReportProgressRequest() : ReportProgressRequest(nullptr) {}
+  ~ReportProgressRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ReportProgressRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ReportProgressRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ReportProgressRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ReportProgressRequest(const ReportProgressRequest& from) : ReportProgressRequest(nullptr, from) {}
+  inline ReportProgressRequest(ReportProgressRequest&& from) noexcept : ReportProgressRequest(nullptr, ::std::move(from)) {}
+  inline ReportProgressRequest& operator=(const ReportProgressRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReportProgressRequest& operator=(ReportProgressRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ReportProgressRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReportProgressRequest>(&ReportProgressRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(ReportProgressRequest& a, ReportProgressRequest& b) { a.Swap(&b); }
+  inline void Swap(ReportProgressRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReportProgressRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ReportProgressRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ReportProgressRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ReportProgressRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ReportProgressRequest& from) { ReportProgressRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ReportProgressRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "pandora.battle.v1.ReportProgressRequest"; }
+
+  explicit ReportProgressRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ReportProgressRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReportProgressRequest& from);
+  ReportProgressRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ReportProgressRequest&& from) noexcept
+      : ReportProgressRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kEventsFieldNumber = 2,
+    kMatchIdFieldNumber = 1,
+  };
+  // repeated .pandora.battle.v1.BattleProgressEvent events = 2 [json_name = "events"];
+  [[nodiscard]] int events_size()
+      const;
+  private:
+  int _internal_events_size() const;
+
+  public:
+  void clear_events() ;
+  [[nodiscard]] const ::pandora::battle::v1::BattleProgressEvent& events(int index) const;
+  [[nodiscard]] ::pandora::battle::v1::BattleProgressEvent* PROTOBUF_NONNULL mutable_events(int index);
+  ::pandora::battle::v1::BattleProgressEvent* PROTOBUF_NONNULL add_events();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>&
+  events() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>* PROTOBUF_NONNULL
+  mutable_events();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>& _internal_events() const;
+  ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>* PROTOBUF_NONNULL _internal_mutable_events();
+
+  public:
+  // uint64 match_id = 1 [json_name = "matchId"];
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:pandora.battle.v1.ReportProgressRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ReportProgressRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::pandora::battle::v1::BattleProgressEvent > events_;
+    ::uint64_t match_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2901,6 +4101,30 @@ inline void ReportResultRequest::set_allocated_result(::pandora::battle::v1::Bat
   // @@protoc_insertion_point(field_set_allocated:pandora.battle.v1.ReportResultRequest.result)
 }
 
+// uint64 final_progress_seq = 2 [json_name = "finalProgressSeq"];
+inline void ReportResultRequest::clear_final_progress_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_progress_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ReportResultRequest::final_progress_seq() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ReportResultRequest.final_progress_seq)
+  return _internal_final_progress_seq();
+}
+inline void ReportResultRequest::set_final_progress_seq(::uint64_t value) {
+  _internal_set_final_progress_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.ReportResultRequest.final_progress_seq)
+}
+inline ::uint64_t ReportResultRequest::_internal_final_progress_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.final_progress_seq_;
+}
+inline void ReportResultRequest::_internal_set_final_progress_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_progress_seq_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ReportResultResponse
@@ -3264,6 +4488,494 @@ inline ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleResult>
 ListPlayerHistoryResponse::_internal_mutable_results() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.results_;
+}
+
+// -------------------------------------------------------------------
+
+// MonsterKillFact
+
+// uint32 monster_config_id = 1 [json_name = "monsterConfigId"];
+inline void MonsterKillFact::clear_monster_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.monster_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t MonsterKillFact::monster_config_id() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.MonsterKillFact.monster_config_id)
+  return _internal_monster_config_id();
+}
+inline void MonsterKillFact::set_monster_config_id(::uint32_t value) {
+  _internal_set_monster_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.MonsterKillFact.monster_config_id)
+}
+inline ::uint32_t MonsterKillFact::_internal_monster_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.monster_config_id_;
+}
+inline void MonsterKillFact::_internal_set_monster_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.monster_config_id_ = value;
+}
+
+// uint32 count = 2 [json_name = "count"];
+inline void MonsterKillFact::clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t MonsterKillFact::count() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.MonsterKillFact.count)
+  return _internal_count();
+}
+inline void MonsterKillFact::set_count(::uint32_t value) {
+  _internal_set_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.MonsterKillFact.count)
+}
+inline ::uint32_t MonsterKillFact::_internal_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.count_;
+}
+inline void MonsterKillFact::_internal_set_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ItemPickupFact
+
+// uint32 item_config_id = 1 [json_name = "itemConfigId"];
+inline void ItemPickupFact::clear_item_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t ItemPickupFact::item_config_id() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ItemPickupFact.item_config_id)
+  return _internal_item_config_id();
+}
+inline void ItemPickupFact::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.ItemPickupFact.item_config_id)
+}
+inline ::uint32_t ItemPickupFact::_internal_item_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_config_id_;
+}
+inline void ItemPickupFact::_internal_set_item_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = value;
+}
+
+// uint32 count = 2 [json_name = "count"];
+inline void ItemPickupFact::clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ItemPickupFact::count() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ItemPickupFact.count)
+  return _internal_count();
+}
+inline void ItemPickupFact::set_count(::uint32_t value) {
+  _internal_set_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.ItemPickupFact.count)
+}
+inline ::uint32_t ItemPickupFact::_internal_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.count_;
+}
+inline void ItemPickupFact::_internal_set_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattleProgressEvent
+
+// uint64 seq = 1 [json_name = "seq"];
+inline void BattleProgressEvent::clear_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t BattleProgressEvent::seq() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.BattleProgressEvent.seq)
+  return _internal_seq();
+}
+inline void BattleProgressEvent::set_seq(::uint64_t value) {
+  _internal_set_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.BattleProgressEvent.seq)
+}
+inline ::uint64_t BattleProgressEvent::_internal_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seq_;
+}
+inline void BattleProgressEvent::_internal_set_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = value;
+}
+
+// uint64 player_id = 2 [json_name = "playerId"];
+inline void BattleProgressEvent::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BattleProgressEvent::player_id() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.BattleProgressEvent.player_id)
+  return _internal_player_id();
+}
+inline void BattleProgressEvent::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.BattleProgressEvent.player_id)
+}
+inline ::uint64_t BattleProgressEvent::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BattleProgressEvent::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// .pandora.battle.v1.MonsterKillFact monster_kill = 3 [json_name = "monsterKill"];
+inline bool BattleProgressEvent::has_monster_kill() const {
+  return fact_case() == kMonsterKill;
+}
+inline bool BattleProgressEvent::_internal_has_monster_kill() const {
+  return fact_case() == kMonsterKill;
+}
+inline void BattleProgressEvent::set_has_monster_kill() {
+  _impl_._oneof_case_[0] = kMonsterKill;
+}
+inline void BattleProgressEvent::clear_monster_kill() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (fact_case() == kMonsterKill) {
+    if (GetArena() == nullptr) {
+      delete _impl_.fact_.monster_kill_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.fact_.monster_kill_);
+    }
+    clear_has_fact();
+  }
+}
+inline ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE BattleProgressEvent::release_monster_kill() {
+  // @@protoc_insertion_point(field_release:pandora.battle.v1.BattleProgressEvent.monster_kill)
+  if (fact_case() == kMonsterKill) {
+    clear_has_fact();
+    auto* temp = _impl_.fact_.monster_kill_;
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.fact_.monster_kill_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::pandora::battle::v1::MonsterKillFact& BattleProgressEvent::_internal_monster_kill() const {
+  return fact_case() == kMonsterKill ? static_cast<const ::pandora::battle::v1::MonsterKillFact&>(*_impl_.fact_.monster_kill_)
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::battle::v1::MonsterKillFact>(&::pandora::battle::v1::MonsterKillFact_globals_);
+}
+inline const ::pandora::battle::v1::MonsterKillFact& BattleProgressEvent::monster_kill() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.BattleProgressEvent.monster_kill)
+  return _internal_monster_kill();
+}
+inline ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE BattleProgressEvent::unsafe_arena_release_monster_kill() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:pandora.battle.v1.BattleProgressEvent.monster_kill)
+  if (fact_case() == kMonsterKill) {
+    clear_has_fact();
+    auto* temp = _impl_.fact_.monster_kill_;
+    _impl_.fact_.monster_kill_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void BattleProgressEvent::unsafe_arena_set_allocated_monster_kill(
+    ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_fact();
+  if (value) {
+    set_has_monster_kill();
+    _impl_.fact_.monster_kill_ = value;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.battle.v1.BattleProgressEvent.monster_kill)
+}
+inline ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NONNULL BattleProgressEvent::_internal_mutable_monster_kill() {
+  if (fact_case() != kMonsterKill) {
+    clear_fact();
+    set_has_monster_kill();
+    _impl_.fact_.monster_kill_ = 
+        ::google::protobuf::Message::DefaultConstruct<::pandora::battle::v1::MonsterKillFact>(GetArena());
+  }
+  return _impl_.fact_.monster_kill_;
+}
+inline ::pandora::battle::v1::MonsterKillFact* PROTOBUF_NONNULL BattleProgressEvent::mutable_monster_kill()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::pandora::battle::v1::MonsterKillFact* _msg = _internal_mutable_monster_kill();
+  // @@protoc_insertion_point(field_mutable:pandora.battle.v1.BattleProgressEvent.monster_kill)
+  return _msg;
+}
+
+// .pandora.battle.v1.ItemPickupFact item_pickup = 4 [json_name = "itemPickup"];
+inline bool BattleProgressEvent::has_item_pickup() const {
+  return fact_case() == kItemPickup;
+}
+inline bool BattleProgressEvent::_internal_has_item_pickup() const {
+  return fact_case() == kItemPickup;
+}
+inline void BattleProgressEvent::set_has_item_pickup() {
+  _impl_._oneof_case_[0] = kItemPickup;
+}
+inline void BattleProgressEvent::clear_item_pickup() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (fact_case() == kItemPickup) {
+    if (GetArena() == nullptr) {
+      delete _impl_.fact_.item_pickup_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.fact_.item_pickup_);
+    }
+    clear_has_fact();
+  }
+}
+inline ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE BattleProgressEvent::release_item_pickup() {
+  // @@protoc_insertion_point(field_release:pandora.battle.v1.BattleProgressEvent.item_pickup)
+  if (fact_case() == kItemPickup) {
+    clear_has_fact();
+    auto* temp = _impl_.fact_.item_pickup_;
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.fact_.item_pickup_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::pandora::battle::v1::ItemPickupFact& BattleProgressEvent::_internal_item_pickup() const {
+  return fact_case() == kItemPickup ? static_cast<const ::pandora::battle::v1::ItemPickupFact&>(*_impl_.fact_.item_pickup_)
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::pandora::battle::v1::ItemPickupFact>(&::pandora::battle::v1::ItemPickupFact_globals_);
+}
+inline const ::pandora::battle::v1::ItemPickupFact& BattleProgressEvent::item_pickup() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.BattleProgressEvent.item_pickup)
+  return _internal_item_pickup();
+}
+inline ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE BattleProgressEvent::unsafe_arena_release_item_pickup() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:pandora.battle.v1.BattleProgressEvent.item_pickup)
+  if (fact_case() == kItemPickup) {
+    clear_has_fact();
+    auto* temp = _impl_.fact_.item_pickup_;
+    _impl_.fact_.item_pickup_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void BattleProgressEvent::unsafe_arena_set_allocated_item_pickup(
+    ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_fact();
+  if (value) {
+    set_has_item_pickup();
+    _impl_.fact_.item_pickup_ = value;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:pandora.battle.v1.BattleProgressEvent.item_pickup)
+}
+inline ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NONNULL BattleProgressEvent::_internal_mutable_item_pickup() {
+  if (fact_case() != kItemPickup) {
+    clear_fact();
+    set_has_item_pickup();
+    _impl_.fact_.item_pickup_ = 
+        ::google::protobuf::Message::DefaultConstruct<::pandora::battle::v1::ItemPickupFact>(GetArena());
+  }
+  return _impl_.fact_.item_pickup_;
+}
+inline ::pandora::battle::v1::ItemPickupFact* PROTOBUF_NONNULL BattleProgressEvent::mutable_item_pickup()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::pandora::battle::v1::ItemPickupFact* _msg = _internal_mutable_item_pickup();
+  // @@protoc_insertion_point(field_mutable:pandora.battle.v1.BattleProgressEvent.item_pickup)
+  return _msg;
+}
+
+// int64 ts_ms = 5 [json_name = "tsMs"];
+inline void BattleProgressEvent::clear_ts_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ts_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::int64_t BattleProgressEvent::ts_ms() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.BattleProgressEvent.ts_ms)
+  return _internal_ts_ms();
+}
+inline void BattleProgressEvent::set_ts_ms(::int64_t value) {
+  _internal_set_ts_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.BattleProgressEvent.ts_ms)
+}
+inline ::int64_t BattleProgressEvent::_internal_ts_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ts_ms_;
+}
+inline void BattleProgressEvent::_internal_set_ts_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ts_ms_ = value;
+}
+
+inline bool BattleProgressEvent::has_fact() const {
+  return fact_case() != FACT_NOT_SET;
+}
+inline void BattleProgressEvent::clear_has_fact() {
+  _impl_._oneof_case_[0] = FACT_NOT_SET;
+}
+inline BattleProgressEvent::FactCase BattleProgressEvent::fact_case() const {
+  return BattleProgressEvent::FactCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// ReportProgressRequest
+
+// uint64 match_id = 1 [json_name = "matchId"];
+inline void ReportProgressRequest::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ReportProgressRequest::match_id() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ReportProgressRequest.match_id)
+  return _internal_match_id();
+}
+inline void ReportProgressRequest::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.ReportProgressRequest.match_id)
+}
+inline ::uint64_t ReportProgressRequest::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void ReportProgressRequest::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// repeated .pandora.battle.v1.BattleProgressEvent events = 2 [json_name = "events"];
+inline int ReportProgressRequest::_internal_events_size() const {
+  return _internal_events().size();
+}
+inline int ReportProgressRequest::events_size() const {
+  return _internal_events_size();
+}
+inline void ReportProgressRequest::clear_events() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.events_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::pandora::battle::v1::BattleProgressEvent& ReportProgressRequest::events(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ReportProgressRequest.events)
+  return _internal_events().Get(index);
+}
+inline ::pandora::battle::v1::BattleProgressEvent* PROTOBUF_NONNULL ReportProgressRequest::mutable_events(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:pandora.battle.v1.ReportProgressRequest.events)
+  return _internal_mutable_events()->Mutable(index);
+}
+inline ::pandora::battle::v1::BattleProgressEvent* PROTOBUF_NONNULL ReportProgressRequest::add_events()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::pandora::battle::v1::BattleProgressEvent* _add =
+      _internal_mutable_events()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:pandora.battle.v1.ReportProgressRequest.events)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>& ReportProgressRequest::events() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:pandora.battle.v1.ReportProgressRequest.events)
+  return _internal_events();
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>* PROTOBUF_NONNULL
+ReportProgressRequest::mutable_events() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:pandora.battle.v1.ReportProgressRequest.events)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_events();
+}
+inline const ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>&
+ReportProgressRequest::_internal_events() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.events_;
+}
+inline ::google::protobuf::RepeatedPtrField<::pandora::battle::v1::BattleProgressEvent>* PROTOBUF_NONNULL
+ReportProgressRequest::_internal_mutable_events() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.events_;
+}
+
+// -------------------------------------------------------------------
+
+// ReportProgressResponse
+
+// .pandora.common.v1.ErrCode code = 1 [json_name = "code"];
+inline void ReportProgressResponse::clear_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::pandora::common::v1::ErrCode ReportProgressResponse::code() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ReportProgressResponse.code)
+  return _internal_code();
+}
+inline void ReportProgressResponse::set_code(::pandora::common::v1::ErrCode value) {
+  _internal_set_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.ReportProgressResponse.code)
+}
+inline ::pandora::common::v1::ErrCode ReportProgressResponse::_internal_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::pandora::common::v1::ErrCode>(_impl_.code_);
+}
+inline void ReportProgressResponse::_internal_set_code(::pandora::common::v1::ErrCode value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.code_ = value;
+}
+
+// uint64 acked_seq = 2 [json_name = "ackedSeq"];
+inline void ReportProgressResponse::clear_acked_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acked_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ReportProgressResponse::acked_seq() const {
+  // @@protoc_insertion_point(field_get:pandora.battle.v1.ReportProgressResponse.acked_seq)
+  return _internal_acked_seq();
+}
+inline void ReportProgressResponse::set_acked_seq(::uint64_t value) {
+  _internal_set_acked_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:pandora.battle.v1.ReportProgressResponse.acked_seq)
+}
+inline ::uint64_t ReportProgressResponse::_internal_acked_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.acked_seq_;
+}
+inline void ReportProgressResponse::_internal_set_acked_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acked_seq_ = value;
 }
 
 #ifdef __GNUC__

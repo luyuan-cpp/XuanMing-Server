@@ -91,7 +91,7 @@ func (s *LoginService) GetResumeContext(ctx context.Context, req *loginv1.GetRes
 
 func resumeContextToProto(in biz.ResumeContextResult) *loginv1.ResumeContext {
 	return &loginv1.ResumeContext{Route: in.Route, MatchId: in.MatchID,
-		MatchStage: in.MatchStage, GameMode: in.GameMode}
+		MatchStage: in.MatchStage, GameMode: in.GameMode, MapId: in.MapID}
 }
 
 // SelectRole 立即完成型(选角权威化 2026-07-08,见 login.proto SelectRole 注释)。

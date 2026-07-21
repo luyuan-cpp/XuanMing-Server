@@ -21,7 +21,7 @@ function Assert-ResumeAuditOrdering([string]$ResumeSource) {
         'Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx',
         'Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment',
         'Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment',
-        'Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:$false'
+        'Assert-LocalDsAuthBaseline -KubeContext $mkCtx -MinikubeProfile $mkProfile -AllowFreshBootstrap:$false'
     )
     Assert-True ($apiReady -ge 0) 'Resume 必须先等待 apiserver /readyz'
     $etcdReady = $ResumeSource.IndexOf('rollout status deploy/etcd', [StringComparison]::Ordinal)
@@ -131,12 +131,14 @@ $apiWait = @($functions | Where-Object Name -CEQ 'Wait-KubeApiServerReady')
 $removeInfra = @($functions | Where-Object Name -CEQ 'Remove-K8sManifestObjectsPreserving')
 $identities = @($functions | Where-Object Name -CEQ 'Get-K8sManifestObjectIdentities')
 $preservedAssert = @($functions | Where-Object Name -CEQ 'Assert-LocalEtcdDataPreservedAfterDown')
+$existingPersistence = @($functions | Where-Object Name -CEQ 'Assert-ExistingLocalEtcdPersistence')
 $invokeK8s = @($functions | Where-Object Name -CEQ 'Invoke-K8s')
 Assert-True ($resume.Count -eq 1) '必须有唯一 Resume-K8s'
 Assert-True ($apiWait.Count -eq 1) '必须有唯一 Wait-KubeApiServerReady'
 Assert-True ($removeInfra.Count -eq 1) '必须有唯一按谓词保留对象的清单删除函数'
 Assert-True ($identities.Count -eq 1) '必须有唯一逐文档识别 kind/name/namespace 的函数'
 Assert-True ($preservedAssert.Count -eq 1) '必须有唯一 Down 后 namespace+PVC 保留校验函数'
+Assert-True ($existingPersistence.Count -eq 1) '必须有唯一现有 etcd 持久化门禁函数'
 Assert-True ($invokeK8s.Count -eq 1) '必须有唯一 Invoke-K8s'
 Assert-True ($apiWait[0].Extent.Text.Contains('get --raw=/readyz')) 'apiserver 等待必须只读 /readyz'
 $apiWaitCommands = @($apiWait[0].FindAll({
@@ -173,7 +175,27 @@ Assert-True ($preservedAssertSource.Contains("namespace/$K8sNamespace") -or
 Assert-True ($preservedAssertSource.Contains("get pvc/etcd-data -n `$K8sNamespace")) `
     'Down 后必须回读 PVC/etcd-data 仍在'
 
+$existingPersistenceSource = $existingPersistence[0].Extent.Text
+Assert-True ($existingPersistenceSource.Contains('get pvc/etcd-data')) `
+    '现有 Deployment/etcd 必须在 infra apply 前回读其 PVC，禁止同名空盘被自动重建'
+Assert-True ($existingPersistenceSource.Contains("pvcPhase -cne 'Bound'")) `
+    '现有 PVC/etcd-data 默认必须为 Bound 且 UID 非空'
+Assert-True ($existingPersistenceSource.Contains("AllowPendingPvcForPreinfra -and `$pvcPhase -ceq 'Pending'")) `
+    '只有调用方已验证 preinfra marker 时才可暂时等待 Pending PVC'
+Assert-True ($existingPersistenceSource.Contains('权威数据盘丢失')) `
+    '现有 Deployment 有声明但 PVC 缺失时必须按数据丢失 fail closed'
+
 $invokeK8sSource = $invokeK8s[0].Extent.Text
+$markerReadPosition = $invokeK8sSource.IndexOf('$initialGenesisMarker = Get-LocalFreshGenesisIntent', [StringComparison]::Ordinal)
+$markerValidatePosition = $invokeK8sSource.IndexOf('$initialGenesisMarkerState = Assert-LocalFreshGenesisIntent', [StringComparison]::Ordinal)
+$persistencePosition = $invokeK8sSource.IndexOf('Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx', [StringComparison]::Ordinal)
+Assert-True ($markerReadPosition -ge 0 -and $markerReadPosition -lt $markerValidatePosition -and
+    $markerValidatePosition -lt $persistencePosition) `
+    '入口必须先读取并验证 marker，再决定 persistence guard 是否可等待 Pending PVC'
+Assert-True ($invokeK8sSource.Contains("-AllowPendingPvcForPreinfra:(`$initialGenesisMarkerState -ceq 'preinfra')")) `
+    'Pending PVC 放宽必须且只能来源于已验证的 preinfra state'
+Assert-True (-not $invokeK8sSource.Contains('-AllowPendingPvcForPreinfra:$true')) `
+    'legacy/pending/complete 现场不得无条件放宽 Pending PVC'
 Assert-True (-not $invokeK8sSource.Contains('delete -k $servicesDir')) `
     'Invoke-K8s -Down 禁止用 delete -k 删业务（会连 00-namespace.yaml 一起删掉 namespace，级联清空 etcd PVC）'
 Assert-True ($invokeK8sSource.Contains('kubectl --context $mkProfile kustomize $servicesDir')) `

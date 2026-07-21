@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS `players` (
     `player_id`     BIGINT UNSIGNED  NOT NULL,
     `nickname`      VARCHAR(64)      NOT NULL COMMENT '玩家昵称,uk_nickname 唯一',
     `level`         INT              NOT NULL DEFAULT 1,
+    `exp`           BIGINT UNSIGNED  NOT NULL DEFAULT 0 COMMENT '级内经验(实时成长;满级恒 0)',
     `mmr`           INT              NOT NULL DEFAULT 1500 COMMENT '段位分,floor 0',
     `avatar`        VARCHAR(255)     NOT NULL DEFAULT '',
     `total_battles` INT              NOT NULL DEFAULT 0,
@@ -114,6 +115,41 @@ CREATE TABLE IF NOT EXISTS `player_talents` (
     KEY `idx_player` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家天赋树已点分配(re-spec 全量替换)';
+
+-- ── 玩家等级经验(实时成长,2026-07-20 realtime-progression.md)────────────────
+--
+--   exp_history        经验入账历史 + 幂等键(uk player_id+idempotency_key,不变量 §2;
+--                      幂等键口径:progress:{match_id}:{seq}:{player_id}:exp / quest:{player}:{quest} / gm:{op})
+--   player_push_outbox 经验推送事务出箱:与入账同事务原子提交(不变量 §4),
+--                      后台发布器投 kafka pandora.player.update(event_type 走 kafka header),
+--                      成功即删行,表只保留待发布事件不会无限增长。
+
+CREATE TABLE IF NOT EXISTS `exp_history` (
+    `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`       BIGINT UNSIGNED  NOT NULL,
+    `idempotency_key` VARCHAR(64)      NOT NULL COMMENT '幂等键(来源单点入口清单见 realtime-progression.md §4.4)',
+    `exp_delta`       BIGINT UNSIGNED  NOT NULL COMMENT '本次入账经验(>0)',
+    `reason`          VARCHAR(32)      NOT NULL DEFAULT '' COMMENT 'monster_kill | quest | gm',
+    `old_level`       INT              NOT NULL,
+    `old_exp`         BIGINT UNSIGNED  NOT NULL,
+    `new_level`       INT              NOT NULL,
+    `new_exp`         BIGINT UNSIGNED  NOT NULL,
+    `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_player_idem` (`player_id`, `idempotency_key`),
+    KEY `idx_player_created` (`player_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家经验入账历史 + 幂等键(实时成长,不变量 §2)';
+
+CREATE TABLE IF NOT EXISTS `player_push_outbox` (
+    `id`            BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `player_id`     BIGINT UNSIGNED  NOT NULL,
+    `event_type`    INT UNSIGNED     NOT NULL COMMENT 'PlayerPushEventType(1=EXPERIENCE)',
+    `payload`       VARBINARY(512)   NOT NULL COMMENT '对应事件 message 的 proto bytes',
+    `created_at_ms` BIGINT           NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 玩家推送事务出箱(经验等 player.update 域内事件,不变量 §4)';
 
 CREATE TABLE IF NOT EXISTS `talent_point_grants` (
     `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,

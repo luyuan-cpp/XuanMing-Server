@@ -109,6 +109,40 @@ CREATE TABLE IF NOT EXISTS `match_release_outbox` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Battle 结算后可靠释放 match/ticket/player claim';
 
+-- ── 战斗中实时进度通道(实时成长,2026-07-20 realtime-progression.md)──────────
+--
+--   battle_progress_stream 每场进度水位:last_applied_seq 只增(乐观 CAS 推进,与出箱同事务);
+--     settled_at_ms>0 = 对局已结算(正常 / ABANDONED 都打标记),此后 ReportProgress 一律拒
+--     (僵尸 / 分区恢复 DS fencing);结算时水位>0 → 结算路径掉落只对账不发放(单一权威路径)。
+--     行不随对局清理(体量小:一场一行),final_seq 留存对账证据。
+--   battle_progress_outbox 进度发放事务出箱:exp → player.AddExperience /
+--     item → inventory.GrantInstances,幂等键 progress:{match_id}:{seq}:{player_id}:{kind};
+--     发放成功即 DELETE,只保留待发放行。
+
+CREATE TABLE IF NOT EXISTS `battle_progress_stream` (
+    `match_id`         BIGINT UNSIGNED NOT NULL,
+    `last_applied_seq` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    `final_seq`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'DS 结算上报的对账水位(0=未走实时通道)',
+    `settled_at_ms`    BIGINT          NOT NULL DEFAULT 0 COMMENT '>0 = 对局已结算,进度一律拒',
+    `updated_at_ms`    BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`match_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 战斗实时进度水位(去重 + 结算 fencing,实时成长)';
+
+CREATE TABLE IF NOT EXISTS `battle_progress_outbox` (
+    `id`              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `match_id`        BIGINT UNSIGNED NOT NULL,
+    `seq`             BIGINT UNSIGNED NOT NULL COMMENT '批末事件 seq(幂等键组成)',
+    `player_id`       BIGINT UNSIGNED NOT NULL,
+    `kind`            TINYINT UNSIGNED NOT NULL COMMENT '1=exp(player.AddExperience) 2=item(inventory.GrantInstances)',
+    `exp_delta`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'kind=1:本行经验(批内聚合)',
+    `item_config_ids` VARCHAR(512)    NOT NULL DEFAULT '' COMMENT 'kind=2:CSV item_config_id(每 ID 一件实例)',
+    `created_at_ms`   BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_match_seq_player_kind` (`match_id`, `seq`, `player_id`, `kind`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 战斗实时进度发放事务出箱(at-least-once + 下游幂等,实时成长)';
+
 -- 每玩家 Battle→Hub 终态证明。初始行与 battles/stats 同事务提交；worker
 -- 从 player_locator 读取精确 stable BATTLE version 后把 UUIDv4/HMAC proof CAS
 -- 写回 payload，再无 TTL 地 relay 到 Redis。成功才删，未知结果重试同一 payload。

@@ -31,6 +31,7 @@ const (
 	BattleResultService_ReportResult_FullMethodName      = "/pandora.battle.v1.BattleResultService/ReportResult"
 	BattleResultService_GetMatchResult_FullMethodName    = "/pandora.battle.v1.BattleResultService/GetMatchResult"
 	BattleResultService_ListPlayerHistory_FullMethodName = "/pandora.battle.v1.BattleResultService/ListPlayerHistory"
+	BattleResultService_ReportProgress_FullMethodName    = "/pandora.battle.v1.BattleResultService/ReportProgress"
 )
 
 // BattleResultServiceClient is the client API for BattleResultService service.
@@ -40,6 +41,22 @@ type BattleResultServiceClient interface {
 	ReportResult(ctx context.Context, in *ReportResultRequest, opts ...grpc.CallOption) (*ReportResultResponse, error)
 	GetMatchResult(ctx context.Context, in *GetMatchResultRequest, opts ...grpc.CallOption) (*GetMatchResultResponse, error)
 	ListPlayerHistory(ctx context.Context, in *ListPlayerHistoryRequest, opts ...grpc.CallOption) (*ListPlayerHistoryResponse, error)
+	// ReportProgress 战斗中实时进度事实上报(实时成长通道,docs/design/realtime-progression.md)。
+	//
+	// 鉴权同 ReportResult:DS callback Guard(battle 令牌绑 match_id)+ Redis active 校验,
+	// 玩家必须在权威 roster 内。DS 侧必须异步 fire-and-forget + 本地有界缓冲重试,
+	// **绝不阻塞 UE 主 tick**(ds-arch §0.5 ③ 五条约束)。
+	//
+	// 幂等 / 顺序契约:
+	//   - 事件 seq 每场从 1 单调递增;单飞行批 + 批内升序 + 失败原批重发。
+	//   - 服务端按 battle_progress_stream 水位去重:seq <= last_applied_seq 的事件跳过,
+	//     水位推进与 progress 出箱写入同一 MySQL 事务(at-least-once 重放零副作用)。
+	//   - 响应 acked_seq = 服务端已应用水位,DS 据此清本地缓冲。
+	//   - 对局已结算(正常 / ABANDONED)后本 RPC 一律拒(ERR_INVALID_STATE),
+	//     DS 收到不可重试错误应丢弃该批并告警,不得无限重试。
+	//
+	// DS 不可信:DS 只报事实(杀了什么怪 / 拾了什么白名单物品),经验换算与发放全在后端。
+	ReportProgress(ctx context.Context, in *ReportProgressRequest, opts ...grpc.CallOption) (*ReportProgressResponse, error)
 }
 
 type battleResultServiceClient struct {
@@ -80,6 +97,16 @@ func (c *battleResultServiceClient) ListPlayerHistory(ctx context.Context, in *L
 	return out, nil
 }
 
+func (c *battleResultServiceClient) ReportProgress(ctx context.Context, in *ReportProgressRequest, opts ...grpc.CallOption) (*ReportProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportProgressResponse)
+	err := c.cc.Invoke(ctx, BattleResultService_ReportProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleResultServiceServer is the server API for BattleResultService service.
 // All implementations should embed UnimplementedBattleResultServiceServer
 // for forward compatibility.
@@ -87,6 +114,22 @@ type BattleResultServiceServer interface {
 	ReportResult(context.Context, *ReportResultRequest) (*ReportResultResponse, error)
 	GetMatchResult(context.Context, *GetMatchResultRequest) (*GetMatchResultResponse, error)
 	ListPlayerHistory(context.Context, *ListPlayerHistoryRequest) (*ListPlayerHistoryResponse, error)
+	// ReportProgress 战斗中实时进度事实上报(实时成长通道,docs/design/realtime-progression.md)。
+	//
+	// 鉴权同 ReportResult:DS callback Guard(battle 令牌绑 match_id)+ Redis active 校验,
+	// 玩家必须在权威 roster 内。DS 侧必须异步 fire-and-forget + 本地有界缓冲重试,
+	// **绝不阻塞 UE 主 tick**(ds-arch §0.5 ③ 五条约束)。
+	//
+	// 幂等 / 顺序契约:
+	//   - 事件 seq 每场从 1 单调递增;单飞行批 + 批内升序 + 失败原批重发。
+	//   - 服务端按 battle_progress_stream 水位去重:seq <= last_applied_seq 的事件跳过,
+	//     水位推进与 progress 出箱写入同一 MySQL 事务(at-least-once 重放零副作用)。
+	//   - 响应 acked_seq = 服务端已应用水位,DS 据此清本地缓冲。
+	//   - 对局已结算(正常 / ABANDONED)后本 RPC 一律拒(ERR_INVALID_STATE),
+	//     DS 收到不可重试错误应丢弃该批并告警,不得无限重试。
+	//
+	// DS 不可信:DS 只报事实(杀了什么怪 / 拾了什么白名单物品),经验换算与发放全在后端。
+	ReportProgress(context.Context, *ReportProgressRequest) (*ReportProgressResponse, error)
 }
 
 // UnimplementedBattleResultServiceServer should be embedded to have
@@ -104,6 +147,9 @@ func (UnimplementedBattleResultServiceServer) GetMatchResult(context.Context, *G
 }
 func (UnimplementedBattleResultServiceServer) ListPlayerHistory(context.Context, *ListPlayerHistoryRequest) (*ListPlayerHistoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPlayerHistory not implemented")
+}
+func (UnimplementedBattleResultServiceServer) ReportProgress(context.Context, *ReportProgressRequest) (*ReportProgressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReportProgress not implemented")
 }
 func (UnimplementedBattleResultServiceServer) testEmbeddedByValue() {}
 
@@ -179,6 +225,24 @@ func _BattleResultService_ListPlayerHistory_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleResultService_ReportProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleResultServiceServer).ReportProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleResultService_ReportProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleResultServiceServer).ReportProgress(ctx, req.(*ReportProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleResultService_ServiceDesc is the grpc.ServiceDesc for BattleResultService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -197,6 +261,10 @@ var BattleResultService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPlayerHistory",
 			Handler:    _BattleResultService_ListPlayerHistory_Handler,
+		},
+		{
+			MethodName: "ReportProgress",
+			Handler:    _BattleResultService_ReportProgress_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

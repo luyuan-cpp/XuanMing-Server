@@ -27,7 +27,7 @@ func (u *BattleResultUsecase) BattleResultHandler() kafkax.Handler {
 		if err := proto.Unmarshal(msg.Value, result); err != nil {
 			return kafkax.Poison(errcode.New(errcode.ErrBattleResultDecode, "decode battle.result offset=%d: %v", msg.Offset, err))
 		}
-		_, err := u.ReportResult(ctx, result)
+		_, err := u.ReportResult(ctx, result, 0)
 		return err
 	}
 }

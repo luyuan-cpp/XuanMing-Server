@@ -256,12 +256,13 @@ func (r *serviceBattleRepo) SaveResult(
 	_ []data.OutboxRecord,
 	_ []data.DropOutboxRecord,
 	terminal *data.TerminalReleaseRecord,
-) (bool, error) {
+	_ uint64,
+) (bool, data.ProgressSettleInfo, error) {
 	if r.saveErr != nil {
-		return false, r.saveErr
+		return false, data.ProgressSettleInfo{}, r.saveErr
 	}
 	if r.saved {
-		return true, nil
+		return true, data.ProgressSettleInfo{}, nil
 	}
 	r.saved = true
 	if terminal != nil {
@@ -269,7 +270,7 @@ func (r *serviceBattleRepo) SaveResult(
 		copyRecord.ID = 1
 		r.terminal = &copyRecord
 	}
-	return false, nil
+	return false, data.ProgressSettleInfo{}, nil
 }
 
 func (*serviceBattleRepo) GetResult(context.Context, uint64) (*battlev1.BattleResult, bool, error) {
@@ -298,6 +299,16 @@ func (*serviceBattleRepo) FetchMatchReleaseOutbox(context.Context, int, int64) (
 }
 func (*serviceBattleRepo) DeferMatchReleaseOutbox(context.Context, uint64, int64) error { return nil }
 func (*serviceBattleRepo) DeleteMatchReleaseOutbox(context.Context, uint64) error       { return nil }
+func (*serviceBattleRepo) GetProgressWatermark(context.Context, uint64) (uint64, bool, bool, error) {
+	return 0, false, false, nil
+}
+func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, []data.ProgressOutboxRecord) error {
+	return nil
+}
+func (*serviceBattleRepo) FetchProgressOutbox(context.Context, int) ([]data.ProgressOutboxRecord, error) {
+	return nil, nil
+}
+func (*serviceBattleRepo) DeleteProgressOutbox(context.Context, int64) error { return nil }
 
 type guardedReportFixture struct {
 	svc    *BattleResultService

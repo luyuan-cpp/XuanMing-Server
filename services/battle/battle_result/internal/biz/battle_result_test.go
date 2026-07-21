@@ -45,33 +45,55 @@ type fakeRepo struct {
 	nextMatchReleaseID        uint64
 	matchReleaseDeferErr      error
 	matchReleaseDeleteErr     error
+
+	// 实时进度通道(实时成长):复刻 MySQL 水位 / 终局标记 / 进度出箱语义。
+	progressSeq     map[uint64]uint64 // match_id → last_applied_seq
+	progressSettled map[uint64]bool   // match_id → 已结算(打过终局标记)
+	progressOutbox  []data.ProgressOutboxRecord
+	nextProgressID  int64
 }
 
-func newFakeRepo() *fakeRepo { return &fakeRepo{store: map[uint64]*battlev1.BattleResult{}} }
+func newFakeRepo() *fakeRepo {
+	return &fakeRepo{
+		store:           map[uint64]*battlev1.BattleResult{},
+		progressSeq:     map[uint64]uint64{},
+		progressSettled: map[uint64]bool{},
+	}
+}
 
-func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, outbox []data.OutboxRecord, dropOutbox []data.DropOutboxRecord, terminalRelease *data.TerminalReleaseRecord) (bool, error) {
+func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, outbox []data.OutboxRecord, dropOutbox []data.DropOutboxRecord, terminalRelease *data.TerminalReleaseRecord, _ uint64) (bool, data.ProgressSettleInfo, error) {
 	r.saveCnt++
 	if r.saveErr != nil {
-		return false, r.saveErr
+		return false, data.ProgressSettleInfo{}, r.saveErr
 	}
 	if _, ok := r.store[result.GetMatchId()]; ok {
 		r.ensureFakeMatchRelease(result.GetMatchId(), r.store[result.GetMatchId()].GetStats())
-		return true, nil // 幂等命中会恢复缺失 release outbox，其它出箱不重复
+		return true, data.ProgressSettleInfo{}, nil // 幂等命中会恢复缺失 release outbox，其它出箱不重复
 	}
 	r.store[result.GetMatchId()] = proto.Clone(result).(*battlev1.BattleResult)
+	// 实时进度通道结算收口(复刻 settleProgressStreamTx):打终局标记 + 水位>0 抑制掉落发放。
+	lastSeq, streamExisted := r.progressSeq[result.GetMatchId()]
+	r.progressSettled[result.GetMatchId()] = true
+	settleInfo := data.ProgressSettleInfo{
+		StreamExisted:   streamExisted,
+		LastAppliedSeq:  lastSeq,
+		DropsSuppressed: lastSeq > 0,
+	}
 	for _, o := range outbox {
 		r.nextID++
 		r.outbox = append(r.outbox, data.OutboxRecord{ID: r.nextID, PlayerID: o.PlayerID, Payload: o.Payload})
 	}
-	for _, d := range dropOutbox {
-		if len(d.ItemConfigIDs) == 0 {
-			continue
+	if !settleInfo.DropsSuppressed {
+		for _, d := range dropOutbox {
+			if len(d.ItemConfigIDs) == 0 {
+				continue
+			}
+			r.nextDropID++
+			r.dropOutbox = append(r.dropOutbox, data.DropOutboxRecord{
+				ID: r.nextDropID, MatchID: result.GetMatchId(), PlayerID: d.PlayerID,
+				ItemConfigIDs: append([]uint32(nil), d.ItemConfigIDs...),
+			})
 		}
-		r.nextDropID++
-		r.dropOutbox = append(r.dropOutbox, data.DropOutboxRecord{
-			ID: r.nextDropID, MatchID: result.GetMatchId(), PlayerID: d.PlayerID,
-			ItemConfigIDs: append([]uint32(nil), d.ItemConfigIDs...),
-		})
 	}
 	if terminalRelease != nil {
 		r.nextTerminalID++
@@ -81,7 +103,51 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 		r.terminalOutbox = append(r.terminalOutbox, rec)
 	}
 	r.ensureFakeMatchRelease(result.GetMatchId(), result.GetStats())
-	return false, nil
+	return false, settleInfo, nil
+}
+
+// ── 实时进度通道 fake(复刻 progress_repo 水位 CAS / 出箱语义)────────────────
+
+func (r *fakeRepo) GetProgressWatermark(_ context.Context, matchID uint64) (uint64, bool, bool, error) {
+	seq, ok := r.progressSeq[matchID]
+	settled := r.progressSettled[matchID]
+	return seq, settled, ok || settled, nil
+}
+
+func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, rows []data.ProgressOutboxRecord) error {
+	if r.progressSettled[matchID] {
+		return errcode.New(errcode.ErrUnavailable, "progress watermark moved or settled match=%d", matchID)
+	}
+	if r.progressSeq[matchID] != expectedSeq {
+		return errcode.New(errcode.ErrUnavailable, "progress watermark contended match=%d", matchID)
+	}
+	r.progressSeq[matchID] = newSeq
+	for _, row := range rows {
+		r.nextProgressID++
+		row.ID = r.nextProgressID
+		row.ItemConfigIDs = append([]uint32(nil), row.ItemConfigIDs...)
+		r.progressOutbox = append(r.progressOutbox, row)
+	}
+	return nil
+}
+
+func (r *fakeRepo) FetchProgressOutbox(_ context.Context, limit int) ([]data.ProgressOutboxRecord, error) {
+	if limit <= 0 || limit > len(r.progressOutbox) {
+		limit = len(r.progressOutbox)
+	}
+	out := make([]data.ProgressOutboxRecord, limit)
+	copy(out, r.progressOutbox[:limit])
+	return out, nil
+}
+
+func (r *fakeRepo) DeleteProgressOutbox(_ context.Context, id int64) error {
+	for i, rec := range r.progressOutbox {
+		if rec.ID == id {
+			r.progressOutbox = append(r.progressOutbox[:i], r.progressOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
 }
 
 func (r *fakeRepo) ensureFakeMatchRelease(matchID uint64, stats []*battlev1.PlayerStats) {
@@ -409,7 +475,7 @@ func TestReportResultAssignsMMRAndIdempotent(t *testing.T) {
 		},
 	}
 
-	already, err := uc.ReportResult(context.Background(), result)
+	already, err := uc.ReportResult(context.Background(), result, 0)
 	if err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
@@ -443,7 +509,7 @@ func TestReportResultAssignsMMRAndIdempotent(t *testing.T) {
 	}
 
 	// 幂等:再报一次同 match_id → alreadyRecorded
-	already2, err := uc.ReportResult(context.Background(), result)
+	already2, err := uc.ReportResult(context.Background(), result, 0)
 	if err != nil {
 		t.Fatalf("second ReportResult err: %v", err)
 	}
@@ -454,10 +520,10 @@ func TestReportResultAssignsMMRAndIdempotent(t *testing.T) {
 
 func TestReportResultValidation(t *testing.T) {
 	uc := newTestUsecase(newFakeRepo(), &fakePusher{})
-	if _, err := uc.ReportResult(context.Background(), &battlev1.BattleResult{MatchId: 0}); err == nil {
+	if _, err := uc.ReportResult(context.Background(), &battlev1.BattleResult{MatchId: 0}, 0); err == nil {
 		t.Fatal("expected error for match_id=0")
 	}
-	if _, err := uc.ReportResult(context.Background(), &battlev1.BattleResult{MatchId: 1}); err == nil {
+	if _, err := uc.ReportResult(context.Background(), &battlev1.BattleResult{MatchId: 1}, 0); err == nil {
 		t.Fatal("expected error for empty stats")
 	}
 }
@@ -483,7 +549,7 @@ func TestReportResultAbandonedForcesZeroDelta(t *testing.T) {
 		},
 	}
 
-	already, err := uc.ReportResult(context.Background(), result)
+	already, err := uc.ReportResult(context.Background(), result, 0)
 	if err != nil {
 		t.Fatalf("ReportResult abandoned err: %v", err)
 	}
@@ -541,7 +607,7 @@ func TestReportResultDoesNotReclaimDS(t *testing.T) {
 	t.Run("normal_settle_persists_without_ds_reclaim", func(t *testing.T) {
 		repo := newFakeRepo()
 		uc := newTestUsecase(repo, &fakePusher{})
-		already, err := uc.ReportResult(context.Background(), mkResult(500, battlev1.BattleOutcome_BATTLE_OUTCOME_UNSPECIFIED))
+		already, err := uc.ReportResult(context.Background(), mkResult(500, battlev1.BattleOutcome_BATTLE_OUTCOME_UNSPECIFIED), 0)
 		if err != nil {
 			t.Fatalf("ReportResult err: %v", err)
 		}
@@ -552,7 +618,7 @@ func TestReportResultDoesNotReclaimDS(t *testing.T) {
 			t.Fatal("normal settlement must be persisted")
 		}
 		// 幂等命中(同 match_id 再报)仍成功,不产生任何 DS 副作用
-		if already2, err := uc.ReportResult(context.Background(), mkResult(500, battlev1.BattleOutcome_BATTLE_OUTCOME_UNSPECIFIED)); err != nil {
+		if already2, err := uc.ReportResult(context.Background(), mkResult(500, battlev1.BattleOutcome_BATTLE_OUTCOME_UNSPECIFIED), 0); err != nil {
 			t.Fatalf("second ReportResult err: %v", err)
 		} else if !already2 {
 			t.Fatal("second report of same match should be alreadyRecorded")
@@ -563,7 +629,7 @@ func TestReportResultDoesNotReclaimDS(t *testing.T) {
 	t.Run("abandoned_settle_persists_without_ds_reclaim", func(t *testing.T) {
 		repo := newFakeRepo()
 		uc := newTestUsecase(repo, &fakePusher{})
-		if _, err := uc.ReportResult(context.Background(), mkResult(501, battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED)); err != nil {
+		if _, err := uc.ReportResult(context.Background(), mkResult(501, battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED), 0); err != nil {
 			t.Fatalf("ReportResult abandoned err: %v", err)
 		}
 		if _, ok, _ := repo.GetResult(context.Background(), 501); !ok {
@@ -649,7 +715,7 @@ func reportFour(t *testing.T, pusher PlayerUpdatePusher) (*BattleResultUsecase, 
 			{PlayerId: 3, Team: 1}, {PlayerId: 4, Team: 1},
 		},
 	}
-	if _, err := uc.ReportResult(context.Background(), result); err != nil {
+	if _, err := uc.ReportResult(context.Background(), result, 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	return uc, repo
@@ -800,7 +866,7 @@ func TestIdempotentReplayRestoresMissingMatchReleaseOutbox(t *testing.T) {
 	uc, repo := reportFour(t, nil)
 	repo.matchReleaseOutbox = nil // 模拟历史 best-effort 已丢释放任务
 	result := proto.Clone(repo.store[700]).(*battlev1.BattleResult)
-	already, err := uc.ReportResult(context.Background(), result)
+	already, err := uc.ReportResult(context.Background(), result, 0)
 	if err != nil || !already {
 		t.Fatalf("idempotent replay: already=%v err=%v", already, err)
 	}
@@ -818,7 +884,7 @@ func TestIdempotentReplayMakesDeferredMatchReleaseImmediatelyDue(t *testing.T) {
 	repo.matchReleaseOutbox[0].AttemptCount = 7
 	repo.matchReleaseOutbox[0].NextAttemptAtMs = time.Now().Add(time.Hour).UnixMilli()
 	result := proto.Clone(repo.store[700]).(*battlev1.BattleResult)
-	if already, err := uc.ReportResult(context.Background(), result); err != nil || !already {
+	if already, err := uc.ReportResult(context.Background(), result, 0); err != nil || !already {
 		t.Fatalf("idempotent replay: already=%v err=%v", already, err)
 	}
 	row := repo.matchReleaseOutbox[0]
@@ -1000,7 +1066,7 @@ func TestTerminalReleaseProofCommitsWithBattleAndGrace(t *testing.T) {
 	uc := newTestUsecase(repo, &fakePusher{})
 	proof := terminalProof(800, "battle-800", "old-jti", 7)
 	before := time.Now().UnixMilli()
-	already, err := uc.ReportAuthorizedResult(context.Background(), terminalResult(800, "battle-800"), proof)
+	already, err := uc.ReportAuthorizedResult(context.Background(), terminalResult(800, "battle-800"), proof, 0)
 	if err != nil || already {
 		t.Fatalf("authorized report already=%v err=%v", already, err)
 	}
@@ -1032,7 +1098,7 @@ func TestAuthorizedResultRosterMustExactlyMatchCanonicalBattle(t *testing.T) {
 			result := terminalResult(899, "battle-899")
 			result.Stats = tc.stats
 			if _, err := uc.ReportAuthorizedResult(
-				context.Background(), result, terminalProof(899, "battle-899", "j1", 1),
+				context.Background(), result, terminalProof(899, "battle-899", "j1", 1), 0,
 			); errcode.As(err) != errcode.ErrUnauthorized {
 				t.Fatalf("code=%v err=%v", errcode.As(err), err)
 			}
@@ -1049,7 +1115,7 @@ func TestTerminalReleaseDBFailureNeverReturnsSuccess(t *testing.T) {
 	repo.saveErr = errors.New("mysql commit failed")
 	uc := newTestUsecase(repo, &fakePusher{})
 	if already, err := uc.ReportAuthorizedResult(
-		context.Background(), terminalResult(801, "battle-801"), terminalProof(801, "battle-801", "j1", 1),
+		context.Background(), terminalResult(801, "battle-801"), terminalProof(801, "battle-801", "j1", 1), 0,
 	); err == nil || already {
 		t.Fatalf("DB failure was accepted: already=%v err=%v", already, err)
 	}
@@ -1063,11 +1129,11 @@ func TestTerminalReleaseOldProofSurvivesCredentialRotationReplay(t *testing.T) {
 	uc := newTestUsecase(repo, &fakePusher{})
 	result := terminalResult(802, "battle-802")
 	oldProof := terminalProof(802, "battle-802", "old-jti", 7)
-	if already, err := uc.ReportAuthorizedResult(context.Background(), result, oldProof); err != nil || already {
+	if already, err := uc.ReportAuthorizedResult(context.Background(), result, oldProof, 0); err != nil || already {
 		t.Fatalf("first report already=%v err=%v", already, err)
 	}
 	newProof := terminalProof(802, "battle-802", "new-jti", 8)
-	if already, err := uc.ReportAuthorizedResult(context.Background(), proto.Clone(result).(*battlev1.BattleResult), newProof); err != nil || !already {
+	if already, err := uc.ReportAuthorizedResult(context.Background(), proto.Clone(result).(*battlev1.BattleResult), newProof, 0); err != nil || !already {
 		t.Fatalf("rotated replay already=%v err=%v", already, err)
 	}
 	if len(repo.terminalOutbox) != 1 {
@@ -1082,7 +1148,7 @@ func TestTerminalReleaseRetriesUnknownAndAckFailure(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newTestUsecase(repo, &fakePusher{})
 	if _, err := uc.ReportAuthorizedResult(
-		context.Background(), terminalResult(803, "battle-803"), terminalProof(803, "battle-803", "j1", 1),
+		context.Background(), terminalResult(803, "battle-803"), terminalProof(803, "battle-803", "j1", 1), 0,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -1130,7 +1196,7 @@ func TestTerminalReleasePhase1DBMarkFailureSurvivesWorkerRestart(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newTestUsecase(repo, &fakePusher{})
 	if _, err := uc.ReportAuthorizedResult(
-		context.Background(), terminalResult(805, "battle-805"), terminalProof(805, "battle-805", "j1", 1),
+		context.Background(), terminalResult(805, "battle-805"), terminalProof(805, "battle-805", "j1", 1), 0,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -1165,7 +1231,7 @@ func TestTerminalReleaseCommittedMarkUnknownRestartsAtFinalizeOnly(t *testing.T)
 	repo := newFakeRepo()
 	uc := newTestUsecase(repo, &fakePusher{})
 	if _, err := uc.ReportAuthorizedResult(
-		context.Background(), terminalResult(806, "battle-806"), terminalProof(806, "battle-806", "j1", 1),
+		context.Background(), terminalResult(806, "battle-806"), terminalProof(806, "battle-806", "j1", 1), 0,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -1261,7 +1327,7 @@ func TestTerminalReleaseUIDMismatchNeverACKsOutbox(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newTestUsecase(repo, &fakePusher{})
 	if _, err := uc.ReportAuthorizedResult(
-		context.Background(), terminalResult(804, "battle-804"), terminalProof(804, "battle-804", "j1", 1),
+		context.Background(), terminalResult(804, "battle-804"), terminalProof(804, "battle-804", "j1", 1), 0,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -1313,7 +1379,7 @@ func TestDropWhitelistFilter(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newDropUsecase(repo, &fakeGranter{}, []uint32{5001, 5002})
 	// player 1 报 [5001(白), 9999(非白)];player 2 报 [8888(非白)]。
-	if _, err := uc.ReportResult(context.Background(), dropResult(600, []uint32{5001, 9999}, []uint32{8888})); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(600, []uint32{5001, 9999}, []uint32{8888}), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	// 只 player 1 有白名单内掉落 → drop 出箱 1 行,内容仅 [5001]。
@@ -1340,7 +1406,7 @@ func TestDropPerPlayerCap(t *testing.T) {
 	for i := range flood {
 		flood[i] = 5001
 	}
-	if _, err := uc.ReportResult(context.Background(), dropResult(610, flood, nil)); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(610, flood, nil), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	if len(repo.dropOutbox) != 1 {
@@ -1367,7 +1433,7 @@ func TestDropCapDefaults(t *testing.T) {
 func TestDropEmptyWhitelistBlocksAll(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newDropUsecase(repo, &fakeGranter{}, nil)
-	if _, err := uc.ReportResult(context.Background(), dropResult(601, []uint32{5001}, []uint32{5002})); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(601, []uint32{5001}, []uint32{5002}), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	if len(repo.dropOutbox) != 0 {
@@ -1381,7 +1447,7 @@ func TestDropAbandonedNoDrops(t *testing.T) {
 	uc := newDropUsecase(repo, &fakeGranter{}, []uint32{5001})
 	res := dropResult(602, []uint32{5001}, []uint32{5001})
 	res.Outcome = battlev1.BattleOutcome_BATTLE_OUTCOME_ABANDONED
-	if _, err := uc.ReportResult(context.Background(), res); err != nil {
+	if _, err := uc.ReportResult(context.Background(), res, 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	if len(repo.dropOutbox) != 0 {
@@ -1394,7 +1460,7 @@ func TestDropPublisherGrantsAndDrains(t *testing.T) {
 	repo := newFakeRepo()
 	granter := &fakeGranter{}
 	uc := newDropUsecase(repo, granter, []uint32{5001, 5002})
-	if _, err := uc.ReportResult(context.Background(), dropResult(603, []uint32{5001}, []uint32{5002})); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(603, []uint32{5001}, []uint32{5002}), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	if len(repo.dropOutbox) != 2 {
@@ -1421,7 +1487,7 @@ func TestDropPublisherPerRowRetry(t *testing.T) {
 	repo := newFakeRepo()
 	granter := &fakeGranter{failPlayer: 2} // player 2 背包满
 	uc := newDropUsecase(repo, granter, []uint32{5001, 5002})
-	if _, err := uc.ReportResult(context.Background(), dropResult(604, []uint32{5001}, []uint32{5002})); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(604, []uint32{5001}, []uint32{5002}), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	n, err := uc.publishDropBatch(context.Background())
@@ -1442,10 +1508,10 @@ func TestDropIdempotentReplay(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newDropUsecase(repo, &fakeGranter{}, []uint32{5001})
 	res := dropResult(605, []uint32{5001}, nil)
-	if _, err := uc.ReportResult(context.Background(), res); err != nil {
+	if _, err := uc.ReportResult(context.Background(), res, 0); err != nil {
 		t.Fatalf("first ReportResult err: %v", err)
 	}
-	if already, err := uc.ReportResult(context.Background(), dropResult(605, []uint32{5001}, nil)); err != nil || !already {
+	if already, err := uc.ReportResult(context.Background(), dropResult(605, []uint32{5001}, nil), 0); err != nil || !already {
 		t.Fatalf("second report expect alreadyRecorded, got already=%v err=%v", already, err)
 	}
 	if len(repo.dropOutbox) != 1 {
@@ -1457,7 +1523,7 @@ func TestDropIdempotentReplay(t *testing.T) {
 func TestDropNilGranterNoLoss(t *testing.T) {
 	repo := newFakeRepo()
 	uc := newDropUsecase(repo, nil, []uint32{5001})
-	if _, err := uc.ReportResult(context.Background(), dropResult(606, []uint32{5001}, nil)); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(606, []uint32{5001}, nil), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	if n, err := uc.publishDropBatch(context.Background()); err != nil || n != 0 {
@@ -1485,7 +1551,7 @@ func TestDropOverflowToMailOnCapacityFull(t *testing.T) {
 	granter := &fakeGranter{capacityFull: true}
 	mail := &fakeMailSender{}
 	uc := newDropUsecaseWithMail(repo, granter, mail, []uint32{5001, 5002})
-	if _, err := uc.ReportResult(context.Background(), dropResult(700, []uint32{5001}, []uint32{5002})); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(700, []uint32{5001}, []uint32{5002}), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	n, err := uc.publishDropBatch(context.Background())
@@ -1520,7 +1586,7 @@ func TestDropOverflowMailFailureKeepsRow(t *testing.T) {
 	granter := &fakeGranter{capacityFull: true}
 	mail := &fakeMailSender{failAll: true}
 	uc := newDropUsecaseWithMail(repo, granter, mail, []uint32{5001})
-	if _, err := uc.ReportResult(context.Background(), dropResult(701, []uint32{5001}, nil)); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(701, []uint32{5001}, nil), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	n, err := uc.publishDropBatch(context.Background())
@@ -1540,7 +1606,7 @@ func TestDropCapacityFullNoMailSenderKeepsRow(t *testing.T) {
 	repo := newFakeRepo()
 	granter := &fakeGranter{capacityFull: true}
 	uc := newDropUsecase(repo, granter, []uint32{5001}) // 无 mailSender
-	if _, err := uc.ReportResult(context.Background(), dropResult(702, []uint32{5001}, nil)); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(702, []uint32{5001}, nil), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	n, err := uc.publishDropBatch(context.Background())
@@ -1561,7 +1627,7 @@ func TestDropTransientErrNoMailOverflow(t *testing.T) {
 	granter := &fakeGranter{failPlayer: 1} // 返回普通 error(非 capacity-full)
 	mail := &fakeMailSender{}
 	uc := newDropUsecaseWithMail(repo, granter, mail, []uint32{5001})
-	if _, err := uc.ReportResult(context.Background(), dropResult(703, []uint32{5001}, nil)); err != nil {
+	if _, err := uc.ReportResult(context.Background(), dropResult(703, []uint32{5001}, nil), 0); err != nil {
 		t.Fatalf("ReportResult err: %v", err)
 	}
 	n, err := uc.publishDropBatch(context.Background())

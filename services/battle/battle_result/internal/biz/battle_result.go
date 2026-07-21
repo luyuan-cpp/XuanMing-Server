@@ -121,6 +121,10 @@ type BattleResultUsecase struct {
 	// nil = mail_addr 未配 → 背包满掉落留在出箱轮询重试(退化为历史行为,不丢)。
 	mailSender MailSender
 
+	// expGranter 把实时进度通道的击杀经验幂等入账到 player(实时成长,nil-safe)。
+	// nil = player_addr 未配 → RunProgressPublisher 跳过经验行,出箱积压不丢。
+	expGranter ExperienceGranter
+
 	// router 是确定性 region/cell 路由器(scale-cellular-20m.md §4.2)。
 	// 可为 nil:单 Cell / dev / 阶段 1~2 不分区,结算回流落点观测退化为不打日志(行为不变)。
 	// 多 Region 部署(阶段 3)由 main 经 SetCellRouter 注入,ReportResult 落库后额外打一条
@@ -174,8 +178,9 @@ func (u *BattleResultUsecase) SetTerminalReleaseRelay(relay TerminalReleaseRelay
 
 // ReportResult 落一场对局结算(消费 battle.result / 同步 RPC 共用)。
 // 返回 alreadyRecorded:true 表示幂等命中,本次跳过(不算错误)。
-func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1.BattleResult) (bool, error) {
-	return u.reportResult(ctx, result, nil)
+// finalProgressSeq 是 DS 上报的实时进度对账水位(0 = 未走实时通道;legacy kafka 路径恒 0)。
+func (u *BattleResultUsecase) ReportResult(ctx context.Context, result *battlev1.BattleResult, finalProgressSeq uint64) (bool, error) {
+	return u.reportResult(ctx, result, nil, finalProgressSeq)
 }
 
 // ReportAuthorizedResult 是 Redis-authority 同步入口。terminalRelease 必须来自 service
@@ -184,11 +189,12 @@ func (u *BattleResultUsecase) ReportAuthorizedResult(
 	ctx context.Context,
 	result *battlev1.BattleResult,
 	terminalRelease data.TerminalReleaseRecord,
+	finalProgressSeq uint64,
 ) (bool, error) {
 	if err := validateAuthorizedResultRoster(result, terminalRelease.PlayerIDs); err != nil {
 		return false, err
 	}
-	return u.reportResult(ctx, result, &terminalRelease)
+	return u.reportResult(ctx, result, &terminalRelease, finalProgressSeq)
 }
 
 // validateAuthorizedResultRoster binds every settlement side effect to the
@@ -226,7 +232,7 @@ func validateAuthorizedResultRoster(result *battlev1.BattleResult, authoritative
 	return nil
 }
 
-func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord) (bool, error) {
+func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1.BattleResult, terminalRelease *data.TerminalReleaseRecord, finalProgressSeq uint64) (bool, error) {
 	if result == nil || result.GetMatchId() == 0 {
 		return false, errcode.New(errcode.ErrInvalidArg, "match_id required")
 	}
@@ -273,7 +279,7 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 		dropOutbox = u.buildDropOutbox(result)
 	}
 
-	already, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox, terminalRelease)
+	already, settleInfo, err := u.repo.SaveResult(ctx, result, outbox, dropOutbox, terminalRelease, finalProgressSeq)
 	if err != nil {
 		return false, err
 	}
@@ -285,6 +291,15 @@ func (u *BattleResultUsecase) reportResult(ctx context.Context, result *battlev1
 	plog.With(ctx).Infow("msg", "battle_result_recorded",
 		"match_id", result.GetMatchId(), "winner_team", result.GetWinnerTeam(),
 		"outcome", result.GetOutcome().String(), "players", len(result.GetStats()))
+
+	// 实时进度通道对账 + 单一权威路径观测(realtime-progression.md §5):
+	// 掉落发放权已归实时通道时,结算上报的 dropped_item_config_ids 只作审计不再发放。
+	reconcileProgress(ctx, result.GetMatchId(), finalProgressSeq, settleInfo)
+	if settleInfo.DropsSuppressed && len(dropOutbox) > 0 {
+		plog.With(ctx).Infow("msg", "battle_drop_suppressed_by_progress",
+			"match_id", result.GetMatchId(), "audit_rows", len(dropOutbox),
+			"hint", "本场掉落已经实时通道逐事件发放,结算掉落字段仅审计")
+	}
 
 	// 多 region:观测本局结算回流落点分布(overflow 对局 region_count>1 → 需回流多 region)。
 	// router 为 nil(单 Cell)→ 不打,行为不变;跨 region 桥 / 多 region topic 回流路径属 infra(§11.1)。
@@ -350,7 +365,9 @@ func (u *BattleResultUsecase) HandleAbandoned(ctx context.Context, matchID uint6
 		return err
 	}
 
-	already, err := u.repo.SaveResult(ctx, result, outbox, nil, nil)
+	// ABANDONED 同样收口实时进度水位(finalProgressSeq=0):打终局标记后,分区恢复的
+	// 僵尸 DS 再上报进度一律拒;崩溃前已入账的经验 / 掉落按需求保留不回滚。
+	already, _, err := u.repo.SaveResult(ctx, result, outbox, nil, nil, 0)
 	if err != nil {
 		return err
 	}

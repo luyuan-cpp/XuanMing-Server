@@ -47,6 +47,7 @@ const (
 	PlayerService_GetLoadout_FullMethodName              = "/pandora.player.v1.PlayerService/GetLoadout"
 	PlayerService_ClaimReward_FullMethodName             = "/pandora.player.v1.PlayerService/ClaimReward"
 	PlayerService_GetRewardClaims_FullMethodName         = "/pandora.player.v1.PlayerService/GetRewardClaims"
+	PlayerService_AddExperience_FullMethodName           = "/pandora.player.v1.PlayerService/AddExperience"
 )
 
 // PlayerServiceClient is the client API for PlayerService service.
@@ -84,6 +85,13 @@ type PlayerServiceClient interface {
 	// 响应只回客户端可见最小视图(§14),不外露存储位图。
 	ClaimReward(ctx context.Context, in *ClaimRewardRequest, opts ...grpc.CallOption) (*ClaimRewardResponse, error)
 	GetRewardClaims(ctx context.Context, in *GetRewardClaimsRequest, opts ...grpc.CallOption) (*GetRewardClaimsResponse, error)
+	// ── 玩家等级经验(实时成长,docs/design/realtime-progression.md)──
+	// AddExperience 幂等入账经验并结算等级(连升多级 / Lv 上限封顶 / 满级 no-op)。
+	// 系统 RPC:只允许后端内部直连(battle_result progress 出箱 worker / 任务完成点 / GM),
+	// 带玩家 JWT 的客户端调用一律拒绝,且不在 Envoy 暴露(客户端不能给自己加经验)。
+	// 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经
+	// pandora.player.update(event_type=1)通知客户端刷新经验条 / 播升级表现。
+	AddExperience(ctx context.Context, in *AddExperienceRequest, opts ...grpc.CallOption) (*AddExperienceResponse, error)
 }
 
 type playerServiceClient struct {
@@ -304,6 +312,16 @@ func (c *playerServiceClient) GetRewardClaims(ctx context.Context, in *GetReward
 	return out, nil
 }
 
+func (c *playerServiceClient) AddExperience(ctx context.Context, in *AddExperienceRequest, opts ...grpc.CallOption) (*AddExperienceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddExperienceResponse)
+	err := c.cc.Invoke(ctx, PlayerService_AddExperience_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerServiceServer is the server API for PlayerService service.
 // All implementations should embed UnimplementedPlayerServiceServer
 // for forward compatibility.
@@ -339,6 +357,13 @@ type PlayerServiceServer interface {
 	// 响应只回客户端可见最小视图(§14),不外露存储位图。
 	ClaimReward(context.Context, *ClaimRewardRequest) (*ClaimRewardResponse, error)
 	GetRewardClaims(context.Context, *GetRewardClaimsRequest) (*GetRewardClaimsResponse, error)
+	// ── 玩家等级经验(实时成长,docs/design/realtime-progression.md)──
+	// AddExperience 幂等入账经验并结算等级(连升多级 / Lv 上限封顶 / 满级 no-op)。
+	// 系统 RPC:只允许后端内部直连(battle_result progress 出箱 worker / 任务完成点 / GM),
+	// 带玩家 JWT 的客户端调用一律拒绝,且不在 Envoy 暴露(客户端不能给自己加经验)。
+	// 入账成功与经验推送出箱(PlayerExperienceEvent)同一事务提交,push 经
+	// pandora.player.update(event_type=1)通知客户端刷新经验条 / 播升级表现。
+	AddExperience(context.Context, *AddExperienceRequest) (*AddExperienceResponse, error)
 }
 
 // UnimplementedPlayerServiceServer should be embedded to have
@@ -410,6 +435,9 @@ func (UnimplementedPlayerServiceServer) ClaimReward(context.Context, *ClaimRewar
 }
 func (UnimplementedPlayerServiceServer) GetRewardClaims(context.Context, *GetRewardClaimsRequest) (*GetRewardClaimsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRewardClaims not implemented")
+}
+func (UnimplementedPlayerServiceServer) AddExperience(context.Context, *AddExperienceRequest) (*AddExperienceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddExperience not implemented")
 }
 func (UnimplementedPlayerServiceServer) testEmbeddedByValue() {}
 
@@ -809,6 +837,24 @@ func _PlayerService_GetRewardClaims_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerService_AddExperience_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddExperienceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServiceServer).AddExperience(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerService_AddExperience_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServiceServer).AddExperience(ctx, req.(*AddExperienceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerService_ServiceDesc is the grpc.ServiceDesc for PlayerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -899,6 +945,10 @@ var PlayerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRewardClaims",
 			Handler:    _PlayerService_GetRewardClaims_Handler,
+		},
+		{
+			MethodName: "AddExperience",
+			Handler:    _PlayerService_AddExperience_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

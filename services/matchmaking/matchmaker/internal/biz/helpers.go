@@ -66,7 +66,9 @@ func binPack(tickets []*matchv1.MatchTicketStorageRecord, teamSize int) (sideA, 
 // ── 进度转换 ──────────────────────────────────────────────────────────────────
 
 // buildProgress 从成员列表构造 MatchProgress(分 team_a/team_b)。
-func buildProgress(matchID uint64, stage matchv1.MatchStage, members []*matchv1.MatchMemberStorageRecord, dsAddr, battleTicket string) *matchv1.MatchProgress {
+// mapID 是本局副本编号(权威 ticket/match 记录的 map_id,0=未指定/默认):客户端在
+// READY 收到时据此预置关卡上下文,不等 DS 握手后按地图名反查。
+func buildProgress(matchID uint64, stage matchv1.MatchStage, members []*matchv1.MatchMemberStorageRecord, dsAddr, battleTicket string, mapID uint32) *matchv1.MatchProgress {
 	teamA := make([]uint64, 0, len(members))
 	teamB := make([]uint64, 0, len(members))
 	for _, m := range members {
@@ -83,12 +85,13 @@ func buildProgress(matchID uint64, stage matchv1.MatchStage, members []*matchv1.
 		BattleTicket: battleTicket,
 		TeamA:        teamA,
 		TeamB:        teamB,
+		MapId:        mapID,
 	}
 }
 
 // matchToProgress 把 MatchStorageRecord 转成客户端可见的 MatchProgress。
 func matchToProgress(m *matchv1.MatchStorageRecord) *matchv1.MatchProgress {
-	return buildProgress(m.MatchId, m.Stage, m.Members, m.BattleDsAddr, m.BattleTicket)
+	return buildProgress(m.MatchId, m.Stage, m.Members, m.BattleDsAddr, m.BattleTicket, m.MapId)
 }
 
 // ticketToProgress 把排队中的票据转成 QUEUEING 进度(用 ticket_id 作 match_id 句柄)。
@@ -96,6 +99,7 @@ func ticketToProgress(t *matchv1.MatchTicketStorageRecord) *matchv1.MatchProgres
 	return &matchv1.MatchProgress{
 		MatchId: t.TicketId,
 		Stage:   stageQueueing,
+		MapId:   t.MapId,
 	}
 }
 

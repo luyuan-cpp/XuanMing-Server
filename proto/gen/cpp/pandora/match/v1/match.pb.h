@@ -1163,8 +1163,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolvePlayerMatchContextResponse f
     kStateFieldNumber = 2,
     kTicketIdFieldNumber = 4,
     kMatchIdFieldNumber = 5,
-    kPlacementVersionFieldNumber = 8,
     kStageFieldNumber = 3,
+    kMapIdFieldNumber = 11,
+    kPlacementVersionFieldNumber = 8,
   };
   // string battle_ds_addr = 6 [json_name = "battleDsAddr"];
   void clear_battle_ds_addr() ;
@@ -1266,16 +1267,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolvePlayerMatchContextResponse f
   void _internal_set_match_id(::uint64_t value);
 
   public:
-  // uint64 placement_version = 8 [json_name = "placementVersion"];
-  void clear_placement_version() ;
-  [[nodiscard]] ::uint64_t placement_version() const;
-  void set_placement_version(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_placement_version() const;
-  void _internal_set_placement_version(::uint64_t value);
-
-  public:
   // .pandora.match.v1.PlayerMatchResumeStage stage = 3 [json_name = "stage"];
   void clear_stage() ;
   [[nodiscard]] ::pandora::match::v1::PlayerMatchResumeStage stage() const;
@@ -1286,11 +1277,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolvePlayerMatchContextResponse f
   void _internal_set_stage(::pandora::match::v1::PlayerMatchResumeStage value);
 
   public:
+  // uint32 map_id = 11 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
+  // uint64 placement_version = 8 [json_name = "placementVersion"];
+  void clear_placement_version() ;
+  [[nodiscard]] ::uint64_t placement_version() const;
+  void set_placement_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_version() const;
+  void _internal_set_placement_version(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.ResolvePlayerMatchContextResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 125,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1327,8 +1338,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolvePlayerMatchContextResponse f
     int state_;
     ::uint64_t ticket_id_;
     ::uint64_t match_id_;
-    ::uint64_t placement_version_;
     int stage_;
+    ::uint32_t map_id_;
+    ::uint64_t placement_version_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2371,6 +2383,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchProgress final : public ::goog
     kStageFieldNumber = 2,
     kQueueSecondsFieldNumber = 3,
     kEstimatedWaitSecondsFieldNumber = 4,
+    kMapIdFieldNumber = 20,
   };
   // repeated uint64 team_a = 7 [json_name = "teamA"];
   [[nodiscard]] int team_a_size()
@@ -2482,11 +2495,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchProgress final : public ::goog
   void _internal_set_estimated_wait_seconds(::int32_t value);
 
   public:
+  // uint32 map_id = 20 [json_name = "mapId"];
+  void clear_map_id() ;
+  [[nodiscard]] ::uint32_t map_id() const;
+  void set_map_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_map_id() const;
+  void _internal_set_map_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:pandora.match.v1.MatchProgress)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<3, 9,
                           0, 74,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2525,6 +2548,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchProgress final : public ::goog
     int stage_;
     ::int32_t queue_seconds_;
     ::int32_t estimated_wait_seconds_;
+    ::uint32_t map_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6615,7 +6639,7 @@ inline void ResolvePlayerMatchContextResponse::_internal_set_state(::pandora::ma
 inline void ResolvePlayerMatchContextResponse::clear_stage() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.stage_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::pandora::match::v1::PlayerMatchResumeStage ResolvePlayerMatchContextResponse::stage() const {
   // @@protoc_insertion_point(field_get:pandora.match.v1.ResolvePlayerMatchContextResponse.stage)
@@ -6623,7 +6647,7 @@ inline ::pandora::match::v1::PlayerMatchResumeStage ResolvePlayerMatchContextRes
 }
 inline void ResolvePlayerMatchContextResponse::set_stage(::pandora::match::v1::PlayerMatchResumeStage value) {
   _internal_set_stage(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:pandora.match.v1.ResolvePlayerMatchContextResponse.stage)
 }
 inline ::pandora::match::v1::PlayerMatchResumeStage ResolvePlayerMatchContextResponse::_internal_stage() const {
@@ -6815,7 +6839,7 @@ inline void ResolvePlayerMatchContextResponse::set_allocated_battle_ticket(::std
 inline void ResolvePlayerMatchContextResponse::clear_placement_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.placement_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t ResolvePlayerMatchContextResponse::placement_version() const {
   // @@protoc_insertion_point(field_get:pandora.match.v1.ResolvePlayerMatchContextResponse.placement_version)
@@ -6823,7 +6847,7 @@ inline ::uint64_t ResolvePlayerMatchContextResponse::placement_version() const {
 }
 inline void ResolvePlayerMatchContextResponse::set_placement_version(::uint64_t value) {
   _internal_set_placement_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:pandora.match.v1.ResolvePlayerMatchContextResponse.placement_version)
 }
 inline ::uint64_t ResolvePlayerMatchContextResponse::_internal_placement_version() const {
@@ -6961,6 +6985,30 @@ inline void ResolvePlayerMatchContextResponse::set_allocated_game_mode(::std::st
     _impl_.game_mode_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:pandora.match.v1.ResolvePlayerMatchContextResponse.game_mode)
+}
+
+// uint32 map_id = 11 [json_name = "mapId"];
+inline void ResolvePlayerMatchContextResponse::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t ResolvePlayerMatchContextResponse::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.ResolvePlayerMatchContextResponse.map_id)
+  return _internal_map_id();
+}
+inline void ResolvePlayerMatchContextResponse::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.ResolvePlayerMatchContextResponse.map_id)
+}
+inline ::uint32_t ResolvePlayerMatchContextResponse::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void ResolvePlayerMatchContextResponse::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -7291,6 +7339,30 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
 MatchProgress::_internal_mutable_team_b() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.team_b_;
+}
+
+// uint32 map_id = 20 [json_name = "mapId"];
+inline void MatchProgress::clear_map_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t MatchProgress::map_id() const {
+  // @@protoc_insertion_point(field_get:pandora.match.v1.MatchProgress.map_id)
+  return _internal_map_id();
+}
+inline void MatchProgress::set_map_id(::uint32_t value) {
+  _internal_set_map_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:pandora.match.v1.MatchProgress.map_id)
+}
+inline ::uint32_t MatchProgress::_internal_map_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.map_id_;
+}
+inline void MatchProgress::_internal_set_map_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.map_id_ = value;
 }
 
 // -------------------------------------------------------------------

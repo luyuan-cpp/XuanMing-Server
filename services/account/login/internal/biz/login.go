@@ -68,6 +68,8 @@ type ResumeContextResult struct {
 	MatchID    uint64
 	MatchStage loginv1.ResumeMatchStage
 	GameMode   string
+	// MapID 本局副本编号(透传 matchmaker 权威,0=未指定/默认;语义见 login.proto ResumeContext.map_id)。
+	MapID uint32
 }
 
 // BattleTicketIssuer 把所有 login 侧 Battle 票据签发统一到带 roster 权威门的入口。
@@ -392,6 +394,7 @@ func hubResumeFromMatchAuthority(ma *data.PlayerMatchAuthority) ResumeContextRes
 		out.MatchID = ma.MatchID
 		out.MatchStage = resumeStageFromMatchStage(ma.Stage)
 		out.GameMode = ma.GameMode
+		out.MapID = ma.MapID
 	}
 	return out
 }
@@ -427,10 +430,13 @@ func (u *LoginUsecase) buildBattleResume(
 		}
 	}
 	gameMode := ""
+	mapID := uint32(0)
 	if ma != nil &&
 		ma.State == matchv1.PlayerMatchContextState_PLAYER_MATCH_CONTEXT_STATE_ACTIVE &&
 		ma.MatchID == bl.MatchID {
 		gameMode = ma.GameMode
+		// map_id 与 game_mode 不同,不 fail-closed:缺失时客户端保留地图名反查兜底。
+		mapID = ma.MapID
 	}
 	if gameMode == "" {
 		if u.requireHubAssignmentBinding {
@@ -449,6 +455,7 @@ func (u *LoginUsecase) buildBattleResume(
 		MatchID:    bl.MatchID,
 		MatchStage: stage,
 		GameMode:   gameMode,
+		MapID:      mapID,
 	}, nil
 }
 

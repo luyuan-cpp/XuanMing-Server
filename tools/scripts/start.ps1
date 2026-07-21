@@ -450,8 +450,26 @@ $script:LocalDsFenceKeysetRevision = 'pandora-ds-auth-v2-local-r1'
 $script:LocalFreshDsAuthMarkerName = 'pandora-local-fresh-dsauth-genesis-v1'
 $script:LocalFreshDsAuthMarkerStateAnnotation = 'pandora.dev/dsauth-bootstrap-state'
 $script:LocalFreshDsAuthMarkerPvcAnnotation = 'pandora.dev/dsauth-etcd-pvc-uid'
+$script:LocalFreshDsAuthMarkerEvidenceCompletedAnnotation = 'pandora.dev/dsauth-evidence-completed-at-ms'
 $script:LocalFreshDsAuthMarkerCompletedAnnotation = 'pandora.dev/dsauth-bootstrap-completed-at-ms'
+$script:LocalFreshDsAuthContinuityTokenField = 'genesis_continuity_token'
 $script:LocalFreshDsAuthEvidenceSha256 = 'sha256:cc675844fffad7d16bfaf31bcbc31a8f4d8bd8ffa0306c8e34d461161b573130'
+$script:LocalFreshDsAuthOriginFresh = 'fresh-pandora-install-v1'
+$script:LocalFreshDsAuthOriginAdopted = 'legacy-infra-only-adoption-v1'
+$script:LocalLegacyAdoptionCohortFingerprintField = 'legacy_adoption_cohort_sha256'
+$script:LocalLegacyAdoptionCohortMaxAgeMS = 2L * 60L * 60L * 1000L
+$script:LocalLegacyAdoptionCohortMaxSpanMS = 10L * 60L * 1000L
+$script:LocalObservedV3WitnessName = 'pandora-local-observed-dsauth-v3-v1'
+$script:LocalFreshNamespaceAnchorSchemaAnnotation = 'pandora.dev/dsauth-fresh-anchor-schema'
+$script:LocalFreshNamespaceAnchorProfileAnnotation = 'pandora.dev/dsauth-fresh-anchor-profile'
+$script:LocalFreshNamespaceAnchorKubeSystemUidAnnotation = 'pandora.dev/dsauth-fresh-anchor-kube-system-uid'
+$script:LocalFreshNamespaceAnchorEvidenceAnnotation = 'pandora.dev/dsauth-fresh-anchor-evidence-sha256'
+
+function New-LocalGenesisContinuityToken {
+    $bytes = [byte[]]::new(32)
+    [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    return 'nonce:' + [Convert]::ToHexString($bytes).ToLowerInvariant()
+}
 
 function Test-MinikubeProfileExists {
     param([Parameter(Mandatory = $true)][string]$Profile)
@@ -467,6 +485,115 @@ function Test-MinikubeProfileExists {
         if ([string]$entry.Name -ceq $Profile) { return $true }
     }
     return $false
+}
+
+function Test-KubernetesNamespaceExists {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$Namespace
+    )
+    $out = @(& kubectl --context $KubeContext get "namespace/$Namespace" --ignore-not-found -o name 2>&1)
+    $flat = ((@($out) | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ($LASTEXITCODE -ne 0) { throw "读取 namespace/$Namespace 状态失败:$flat" }
+    if ([string]::IsNullOrWhiteSpace($flat)) { return $false }
+    if ($flat -cne "namespace/$Namespace") { throw "读取 namespace/$Namespace 返回意外对象:$flat" }
+    return $true
+}
+
+# Namespace 是 fresh 安装的第一个 Kubernetes 写入。若 namespace create 成功后进程恰好在
+# namespaced marker create 前退出，单靠“下次看到 namespace 已存在”会丢失 fresh 事实。
+# 因此首次 create Namespace 时把最小 anchor 作为同一个 API 对象的 annotations 原子落盘；
+# 正式 immutable marker 建好并回读后立刻移除 anchor。namespace 被删除时 anchor 与 marker
+# 一起消失，不会跨新 namespace UID 复用。
+function Get-LocalFreshNamespaceAnchor {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    $namespace = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "namespace/$K8sNamespace", '-o', 'json') -Action '读取 fresh namespace anchor'
+    $annotationsProperty = $namespace.metadata.PSObject.Properties['annotations']
+    $annotations = if ($null -eq $annotationsProperty) { $null } else { $annotationsProperty.Value }
+    function Read-AnchorAnnotation([string]$Name) {
+        if ($null -eq $annotations) { return '' }
+        $property = $annotations.PSObject.Properties[$Name]
+        if ($null -eq $property) { return '' }
+        return [string]$property.Value
+    }
+    $schema = Read-AnchorAnnotation $script:LocalFreshNamespaceAnchorSchemaAnnotation
+    $profile = Read-AnchorAnnotation $script:LocalFreshNamespaceAnchorProfileAnnotation
+    $kubeSystemUid = Read-AnchorAnnotation $script:LocalFreshNamespaceAnchorKubeSystemUidAnnotation
+    $evidence = Read-AnchorAnnotation $script:LocalFreshNamespaceAnchorEvidenceAnnotation
+    $values = @($schema, $profile, $kubeSystemUid, $evidence)
+    if (@($values | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0) { return $false }
+    $actualKubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+    if ($schema -cne '1' -or $profile -cne $MinikubeProfile -or
+        $kubeSystemUid -cne $actualKubeSystemUid -or $evidence -cne $script:LocalFreshDsAuthEvidenceSha256) {
+        throw 'fresh namespace anchor 不完整或 profile/kube-system UID/evidence 漂移，拒绝自动 genesis。'
+    }
+    return $true
+}
+
+function New-LocalFreshAnchoredNamespace {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    if (Test-KubernetesNamespaceExists -KubeContext $KubeContext -Namespace $K8sNamespace) {
+        throw "create-only fresh namespace 前 namespace/$K8sNamespace 已存在。"
+    }
+    $kubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+    $namespaceObject = [ordered]@{
+        apiVersion = 'v1'; kind = 'Namespace'
+        metadata = [ordered]@{
+            name = $K8sNamespace
+            labels = [ordered]@{ 'app.kubernetes.io/part-of' = 'pandora' }
+            annotations = [ordered]@{
+                $script:LocalFreshNamespaceAnchorSchemaAnnotation = '1'
+                $script:LocalFreshNamespaceAnchorProfileAnnotation = $MinikubeProfile
+                $script:LocalFreshNamespaceAnchorKubeSystemUidAnnotation = $kubeSystemUid
+                $script:LocalFreshNamespaceAnchorEvidenceAnnotation = $script:LocalFreshDsAuthEvidenceSha256
+            }
+        }
+    }
+    $json = $namespaceObject | ConvertTo-Json -Depth 10 -Compress
+    $created = @($json | & kubectl --context $KubeContext create -f - 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "create-only 创建带 fresh anchor 的 namespace/$K8sNamespace 失败:$($created -join [Environment]::NewLine)"
+    }
+    if (-not (Get-LocalFreshNamespaceAnchor -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile)) {
+        throw 'fresh namespace 创建后 anchor 回读缺失。'
+    }
+    Write-Ok "namespace/$K8sNamespace 已 create-only 创建并原子携带 fresh anchor。"
+}
+
+function Remove-LocalFreshNamespaceAnchor {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    if ($null -eq $marker) { throw '正式 fresh marker 尚未建立，禁止移除 namespace anchor。' }
+    $null = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    if (-not (Get-LocalFreshNamespaceAnchor -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile)) { return }
+    $namespace = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "namespace/$K8sNamespace", '-o', 'json') -Action '移除前回读 fresh namespace anchor'
+    $patchObject = [ordered]@{ metadata = [ordered]@{
+        resourceVersion = [string]$namespace.metadata.resourceVersion
+        annotations = [ordered]@{
+            $script:LocalFreshNamespaceAnchorSchemaAnnotation = $null
+            $script:LocalFreshNamespaceAnchorProfileAnnotation = $null
+            $script:LocalFreshNamespaceAnchorKubeSystemUidAnnotation = $null
+            $script:LocalFreshNamespaceAnchorEvidenceAnnotation = $null
+        }
+    } }
+    $patchJson = $patchObject | ConvertTo-Json -Depth 10 -Compress
+    $patched = @(& kubectl --context $KubeContext patch "namespace/$K8sNamespace" --type merge -p $patchJson 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "移除 fresh namespace anchor 失败:$($patched -join [Environment]::NewLine)" }
+    if (Get-LocalFreshNamespaceAnchor -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile) {
+        throw 'fresh namespace anchor 移除后仍可回读，拒绝继续配置/infra。'
+    }
+    Write-Ok '正式 immutable marker 已建立；临时 namespace fresh anchor 已移除。'
 }
 
 # fresh DS-auth genesis 不能只依赖“本次 start 前 profile 不存在”这个内存判断：镜像下载或
@@ -499,6 +626,87 @@ function Get-KubernetesNamespaceUid {
     return $uid
 }
 
+# 旧版本可能已经有 canonical V3、但没有 fresh marker。首次线性观察到该状态时写一个
+# create-only terminal witness；以后同 namespace/PVC 若变成 missing，必须按数据丢失阻断，
+# 不能在 legacy cohort 时间窗内再次解释成未完成安装。
+function Get-LocalObservedV3Witness {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $lines = @(& kubectl --context $KubeContext get "configmap/$($script:LocalObservedV3WitnessName)" `
+        -n $K8sNamespace --ignore-not-found -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "读取 observed V3 witness 失败:$($lines -join [Environment]::NewLine)" }
+    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+    try { return ($text | ConvertFrom-Json -ErrorAction Stop) }
+    catch { throw "observed V3 witness 返回非法 JSON:$($_.Exception.Message)" }
+}
+
+function Assert-LocalObservedV3Witness {
+    param(
+        [Parameter(Mandatory = $true)][object]$Witness,
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '校验 observed V3 witness 绑定 PVC'
+    $kubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+    $pandoraUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace $K8sNamespace
+    if ([string]$Witness.metadata.name -cne $script:LocalObservedV3WitnessName -or
+        [string]$Witness.metadata.namespace -cne $K8sNamespace -or $Witness.immutable -ne $true -or
+        [string]$Witness.data.schema_version -cne '1' -or
+        [string]$Witness.data.minikube_profile -cne $MinikubeProfile -or
+        [string]$Witness.data.kube_system_namespace_uid -cne $kubeSystemUid -or
+        [string]$Witness.data.pandora_namespace_uid -cne $pandoraUid -or
+        [string]$Witness.data.etcd_pvc_uid -cne [string]$pvc.metadata.uid -or
+        [string]$pvc.status.phase -cne 'Bound' -or
+        [string]$Witness.data.observed_required_value -cne '2@ds-auth-v2-hub-successor-lease-v1' -or
+        [string]$Witness.data.observed_policy_generation -cne '3') {
+        throw 'observed V3 witness 的 profile/namespace/PVC/required 绑定漂移，拒绝信任。'
+    }
+}
+
+function Ensure-LocalObservedV3Witness {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    $existing = Get-LocalObservedV3Witness -KubeContext $KubeContext
+    if ($null -ne $existing) {
+        Assert-LocalObservedV3Witness -Witness $existing -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+        return $false
+    }
+    $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '建立 observed V3 witness 前读取 PVC'
+    if ([string]$pvc.status.phase -cne 'Bound' -or [string]::IsNullOrWhiteSpace([string]$pvc.metadata.uid)) {
+        throw '建立 observed V3 witness 前 PVC/etcd-data 必须 Bound 且 UID 非空。'
+    }
+    $witnessObject = [ordered]@{
+        apiVersion = 'v1'; kind = 'ConfigMap'; immutable = $true
+        metadata = [ordered]@{
+            name = $script:LocalObservedV3WitnessName; namespace = $K8sNamespace
+            labels = [ordered]@{ 'app.kubernetes.io/part-of' = 'pandora'; 'app.kubernetes.io/component' = 'dsauth-observed-v3-witness' }
+        }
+        data = [ordered]@{
+            schema_version = '1'; minikube_profile = $MinikubeProfile
+            kube_system_namespace_uid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+            pandora_namespace_uid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace $K8sNamespace
+            etcd_pvc_uid = [string]$pvc.metadata.uid
+            observed_required_value = '2@ds-auth-v2-hub-successor-lease-v1'
+            observed_policy_generation = '3'
+            observed_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
+        }
+    }
+    $json = $witnessObject | ConvertTo-Json -Depth 20 -Compress
+    $created = @($json | & kubectl --context $KubeContext create -f - 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        $raced = Get-LocalObservedV3Witness -KubeContext $KubeContext
+        if ($null -eq $raced) { throw "create-only 建立 observed V3 witness 失败:$($created -join [Environment]::NewLine)" }
+    }
+    $readback = Get-LocalObservedV3Witness -KubeContext $KubeContext
+    Assert-LocalObservedV3Witness -Witness $readback -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    Write-Ok '已为 markerless canonical V3 建立 immutable observed witness；未来 missing 将按数据丢失阻断。'
+    return $true
+}
+
 function Assert-LocalFreshGenesisIntent {
     param(
         [Parameter(Mandatory = $true)][object]$Marker,
@@ -515,27 +723,78 @@ function Assert-LocalFreshGenesisIntent {
         [string]$Marker.data.minikube_profile -cne $MinikubeProfile -or
         [string]$Marker.data.kube_system_namespace_uid -cne $kubeSystemUid -or
         [string]$Marker.data.pandora_namespace_uid -cne $pandoraUid -or
+        [string]$Marker.data.intent_origin -cnotin @(
+            $script:LocalFreshDsAuthOriginFresh,
+            $script:LocalFreshDsAuthOriginAdopted
+        ) -or
         [string]$Marker.data.target_writer_epoch -cne '2' -or
         [string]$Marker.data.target_policy_generation -cne '3' -or
         [string]$Marker.data.target_policy_id -cne 'ds-auth-v2-hub-successor-lease-v1' -or
         [string]$Marker.data.activation_evidence_sha256 -cne $script:LocalFreshDsAuthEvidenceSha256) {
         throw 'fresh DS-auth marker 的集群 UID/profile/目标策略证据不匹配，拒绝把旧数据冒充 fresh。'
     }
-    $state = [string]$Marker.metadata.annotations.$($script:LocalFreshDsAuthMarkerStateAnnotation)
-    if ($state -notin @('preinfra', 'pending', 'complete')) {
+    $annotations = $Marker.metadata.annotations
+    function Read-MarkerAnnotation([string]$Name) {
+        if ($null -eq $annotations) { return '' }
+        $property = $annotations.PSObject.Properties[$Name]
+        if ($null -eq $property) { return '' }
+        return [string]$property.Value
+    }
+    $state = Read-MarkerAnnotation $script:LocalFreshDsAuthMarkerStateAnnotation
+    $pvcAnnotation = Read-MarkerAnnotation $script:LocalFreshDsAuthMarkerPvcAnnotation
+    $evidenceCompletedAnnotation = Read-MarkerAnnotation $script:LocalFreshDsAuthMarkerEvidenceCompletedAnnotation
+    $completedAnnotation = Read-MarkerAnnotation $script:LocalFreshDsAuthMarkerCompletedAnnotation
+    $origin = [string]$Marker.data.intent_origin
+    $cohortProperty = $Marker.data.PSObject.Properties[$script:LocalLegacyAdoptionCohortFingerprintField]
+    $cohortFingerprint = if ($null -eq $cohortProperty) { '' } else { [string]$cohortProperty.Value }
+    $continuityProperty = $Marker.data.PSObject.Properties[$script:LocalFreshDsAuthContinuityTokenField]
+    $continuityToken = if ($null -eq $continuityProperty) { '' } else { [string]$continuityProperty.Value }
+    if ($continuityToken -cnotmatch '^nonce:[0-9a-f]{64}$') {
+        throw 'fresh DS-auth marker 缺少合法的 immutable genesis continuity token。'
+    }
+    if ($state -cnotin @('preinfra', 'adopting', 'pending', 'complete')) {
         throw "fresh DS-auth marker 状态非法:$state"
     }
-    if ($state -in @('pending', 'complete')) {
+    if (($origin -ceq $script:LocalFreshDsAuthOriginFresh -and $state -ceq 'adopting') -or
+        ($origin -ceq $script:LocalFreshDsAuthOriginAdopted -and $state -ceq 'preinfra') -or
+        ($state -ceq 'preinfra' -and (-not [string]::IsNullOrWhiteSpace($pvcAnnotation) -or
+            -not [string]::IsNullOrWhiteSpace($evidenceCompletedAnnotation) -or
+            -not [string]::IsNullOrWhiteSpace($completedAnnotation))) -or
+        ($state -ceq 'adopting' -and ([string]::IsNullOrWhiteSpace($pvcAnnotation) -or
+            -not [string]::IsNullOrWhiteSpace($evidenceCompletedAnnotation) -or
+            -not [string]::IsNullOrWhiteSpace($completedAnnotation))) -or
+        ($state -ceq 'pending' -and ([string]::IsNullOrWhiteSpace($pvcAnnotation) -or
+            -not [string]::IsNullOrWhiteSpace($completedAnnotation)))) {
+        throw "fresh DS-auth marker 的 origin/state/PVC/completed annotations 组合非法(origin=$origin,state=$state)。"
+    }
+    if (($origin -ceq $script:LocalFreshDsAuthOriginAdopted -and
+            $cohortFingerprint -cnotmatch '^sha256:[0-9a-f]{64}$') -or
+        ($origin -ceq $script:LocalFreshDsAuthOriginFresh -and
+            -not [string]::IsNullOrWhiteSpace($cohortFingerprint))) {
+        throw "fresh DS-auth marker 的 legacy cohort fingerprint 与 origin 不匹配(origin=$origin)。"
+    }
+    $evidenceCompletedAtMS = 0L
+    if (-not [string]::IsNullOrWhiteSpace($evidenceCompletedAnnotation) -and
+        (-not [long]::TryParse($evidenceCompletedAnnotation, [ref]$evidenceCompletedAtMS) -or $evidenceCompletedAtMS -le 0)) {
+        throw 'fresh DS-auth marker evidence-completed-at-ms 非法。'
+    }
+    if ($state -cin @('adopting', 'pending', 'complete')) {
         $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
             -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '读取 fresh marker 绑定的 PVC/etcd-data'
-        $markerPvcUid = [string]$Marker.metadata.annotations.$($script:LocalFreshDsAuthMarkerPvcAnnotation)
-        if ([string]::IsNullOrWhiteSpace($markerPvcUid) -or $markerPvcUid -cne [string]$pvc.metadata.uid) {
+        $markerPvcUid = $pvcAnnotation
+        if ([string]$pvc.status.phase -cne 'Bound' -or
+            [string]::IsNullOrWhiteSpace([string]$pvc.metadata.uid) -or
+            [string]::IsNullOrWhiteSpace($markerPvcUid) -or
+            $markerPvcUid -cne [string]$pvc.metadata.uid) {
             throw 'fresh DS-auth marker 绑定的 etcd-data PVC UID 已漂移，拒绝自动 genesis。'
         }
     }
-    if ($state -ceq 'complete' -and
-        [string]::IsNullOrWhiteSpace([string]$Marker.metadata.annotations.$($script:LocalFreshDsAuthMarkerCompletedAnnotation))) {
-        throw 'fresh DS-auth marker 已标 complete 但缺少完成时间，拒绝信任。'
+    if ($state -ceq 'complete') {
+        $completedAtMS = 0L
+        if ($evidenceCompletedAtMS -le 0 -or [string]::IsNullOrWhiteSpace($completedAnnotation) -or
+            -not [long]::TryParse($completedAnnotation, [ref]$completedAtMS) -or $completedAtMS -le 0) {
+            throw 'fresh DS-auth marker 已标 complete 但完成时间缺失/非法，拒绝信任。'
+        }
     }
     return $state
 }
@@ -551,6 +810,7 @@ function New-LocalFreshGenesisIntent {
     $kubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
     $pandoraUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace $K8sNamespace
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
+    $continuityToken = New-LocalGenesisContinuityToken
     $markerObject = [ordered]@{
         apiVersion = 'v1'; kind = 'ConfigMap'; immutable = $true
         metadata = [ordered]@{
@@ -561,9 +821,11 @@ function New-LocalFreshGenesisIntent {
         data = [ordered]@{
             schema_version = '1'; minikube_profile = $MinikubeProfile
             kube_system_namespace_uid = $kubeSystemUid; pandora_namespace_uid = $pandoraUid
+            intent_origin = $script:LocalFreshDsAuthOriginFresh
             target_writer_epoch = '2'; target_policy_generation = '3'
             target_policy_id = 'ds-auth-v2-hub-successor-lease-v1'
             activation_evidence_sha256 = $script:LocalFreshDsAuthEvidenceSha256
+            $script:LocalFreshDsAuthContinuityTokenField = $continuityToken
             created_at_ms = $now
         }
     }
@@ -578,6 +840,71 @@ function New-LocalFreshGenesisIntent {
     Write-Ok 'fresh DS-auth intent 已持久化并绑定当前 minikube/namespace UID(state=preinfra)。'
 }
 
+# 兼容 6aff5dd 之前的半成品启动现场：旧脚本可能已创建 namespace、PVC 和纯基础设施，
+# 但在 required policy bootstrap 前退出，因此没有 preinfra marker。收养先把 state=adopting、
+# 当前 Bound PVC UID、cohort fingerprint、随机 continuity token 与 origin 放在同一个 create-only
+# ConfigMap 中；只有同 token 已 create-only 写进 etcd 数据盘后，才允许 CAS patch 到 pending。
+function New-LocalAdoptedGenesisIntent {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile,
+        [Parameter(Mandatory = $true)][string]$ExpectedPvcUid,
+        [Parameter(Mandatory = $true)][string]$ExpectedCohortFingerprintSha256
+    )
+    if ($ExpectedCohortFingerprintSha256 -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        throw 'legacy infra-only 收养要求合法的 cohort sha256 fingerprint。'
+    }
+    if ($null -ne (Get-LocalFreshGenesisIntent -KubeContext $KubeContext)) {
+        throw 'legacy infra-only 收养时意外已存在 DS-auth marker；create-only 契约拒绝覆盖。'
+    }
+    $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '收养 legacy infra-only 现场前读取 PVC/etcd-data'
+    $pvcUid = [string]$pvc.metadata.uid
+    if ([string]$pvc.status.phase -cne 'Bound' -or [string]::IsNullOrWhiteSpace($pvcUid) -or
+        $pvcUid -cne $ExpectedPvcUid) {
+        throw "legacy infra-only 收养前 PVC/etcd-data 未 Bound 或 UID 已漂移(expected=$ExpectedPvcUid,actual=$pvcUid)。"
+    }
+    $kubeSystemUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace 'kube-system'
+    $pandoraUid = Get-KubernetesNamespaceUid -KubeContext $KubeContext -Namespace $K8sNamespace
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
+    $continuityToken = New-LocalGenesisContinuityToken
+    $markerObject = [ordered]@{
+        apiVersion = 'v1'; kind = 'ConfigMap'; immutable = $true
+        metadata = [ordered]@{
+            name = $script:LocalFreshDsAuthMarkerName; namespace = $K8sNamespace
+            labels = [ordered]@{ 'app.kubernetes.io/part-of' = 'pandora'; 'app.kubernetes.io/component' = 'dsauth-bootstrap-intent' }
+            annotations = [ordered]@{
+                $script:LocalFreshDsAuthMarkerStateAnnotation = 'adopting'
+                $script:LocalFreshDsAuthMarkerPvcAnnotation = $pvcUid
+            }
+        }
+        data = [ordered]@{
+            schema_version = '1'; minikube_profile = $MinikubeProfile
+            kube_system_namespace_uid = $kubeSystemUid; pandora_namespace_uid = $pandoraUid
+            intent_origin = $script:LocalFreshDsAuthOriginAdopted
+            target_writer_epoch = '2'; target_policy_generation = '3'
+            target_policy_id = 'ds-auth-v2-hub-successor-lease-v1'
+            activation_evidence_sha256 = $script:LocalFreshDsAuthEvidenceSha256
+            $script:LocalFreshDsAuthContinuityTokenField = $continuityToken
+            $script:LocalLegacyAdoptionCohortFingerprintField = $ExpectedCohortFingerprintSha256
+            created_at_ms = $now
+        }
+    }
+    $json = $markerObject | ConvertTo-Json -Depth 20 -Compress
+    $created = @($json | & kubectl --context $KubeContext create -f - 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "create-only 收养 legacy infra-only DS-auth marker 失败:$($created -join [Environment]::NewLine)"
+    }
+    $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    $state = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    $cohortProperty = $marker.data.PSObject.Properties[$script:LocalLegacyAdoptionCohortFingerprintField]
+    if ($state -cne 'adopting' -or [string]$marker.data.intent_origin -cne $script:LocalFreshDsAuthOriginAdopted -or
+        $null -eq $cohortProperty -or [string]$cohortProperty.Value -cne $ExpectedCohortFingerprintSha256) {
+        throw 'legacy infra-only DS-auth marker 创建后未精确处于 adopted/adopting。'
+    }
+    Write-Ok "legacy infra-only DS-auth 现场已 create-only 收养并绑定 PVC UID=$pvcUid(state=adopting)。"
+}
+
 function Set-LocalFreshGenesisIntentState {
     param(
         [Parameter(Mandatory = $true)][string]$KubeContext,
@@ -588,14 +915,20 @@ function Set-LocalFreshGenesisIntentState {
     if ($null -eq $marker) { throw "缺少 fresh DS-auth marker，不能推进到 $TargetState。" }
     $state = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
     if ($state -ceq $TargetState -or ($state -ceq 'complete' -and $TargetState -ceq 'pending')) { return }
-    $expected = if ($TargetState -ceq 'pending') { 'preinfra' } else { 'pending' }
-    if ($state -cne $expected) { throw "fresh DS-auth marker 非法状态转换:$state->$TargetState" }
+    if (($TargetState -ceq 'pending' -and $state -cnotin @('preinfra', 'adopting')) -or
+        ($TargetState -ceq 'complete' -and $state -cne 'pending')) {
+        throw "fresh DS-auth marker 非法状态转换:$state->$TargetState"
+    }
 
     $annotations = [ordered]@{ $script:LocalFreshDsAuthMarkerStateAnnotation = $TargetState }
     if ($TargetState -ceq 'pending') {
         $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
             -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '绑定 fresh marker 到 PVC/etcd-data'
-        $annotations[$script:LocalFreshDsAuthMarkerPvcAnnotation] = [string]$pvc.metadata.uid
+        $pvcUid = [string]$pvc.metadata.uid
+        if ([string]$pvc.status.phase -cne 'Bound' -or [string]::IsNullOrWhiteSpace($pvcUid)) {
+            throw 'fresh marker 推进 pending 前 PVC/etcd-data 必须为 Bound 且 UID 非空。'
+        }
+        $annotations[$script:LocalFreshDsAuthMarkerPvcAnnotation] = $pvcUid
     } else {
         $annotations[$script:LocalFreshDsAuthMarkerCompletedAnnotation] = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
     }
@@ -612,9 +945,52 @@ function Set-LocalFreshGenesisIntentState {
     Write-Ok "fresh DS-auth marker 已推进:$state->$TargetState"
 }
 
+# evidence completion time 必须在 etcd CAS 前持久化到 pending marker；这样 CAS 已提交但
+# complete 尚未写入时，重跑可以用同一个 sha+time 精确验证 genesis record，而不是接受任意
+# canonical V3 migration record 冒充本次 fresh genesis。
+function Get-OrSetLocalFreshGenesisEvidenceCompletedAtMS {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][string]$MinikubeProfile
+    )
+    $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    if ($null -eq $marker) { throw '缺少 pending marker，不能持久化 genesis evidence time。' }
+    $state = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    if ($state -cne 'pending') { throw "只有 pending marker 可建立 genesis evidence time，实际=$state。" }
+    $property = $marker.metadata.annotations.PSObject.Properties[$script:LocalFreshDsAuthMarkerEvidenceCompletedAnnotation]
+    if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+        $existing = 0L
+        if (-not [long]::TryParse([string]$property.Value, [ref]$existing) -or $existing -le 0) {
+            throw 'pending marker 中已有非法 genesis evidence time。'
+        }
+        return $existing
+    }
+    $completedAtMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $patchObject = [ordered]@{ metadata = [ordered]@{
+        resourceVersion = [string]$marker.metadata.resourceVersion
+        annotations = [ordered]@{
+            $script:LocalFreshDsAuthMarkerEvidenceCompletedAnnotation = $completedAtMS.ToString()
+        }
+    } }
+    $patchJson = $patchObject | ConvertTo-Json -Depth 10 -Compress
+    $patched = @(& kubectl --context $KubeContext patch "configmap/$($script:LocalFreshDsAuthMarkerName)" `
+        -n $K8sNamespace --type merge -p $patchJson 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "CAS 持久化 pending marker genesis evidence time 失败:$($patched -join [Environment]::NewLine)"
+    }
+    $readback = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+    $actualState = Assert-LocalFreshGenesisIntent -Marker $readback -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+    $actualProperty = $readback.metadata.annotations.PSObject.Properties[$script:LocalFreshDsAuthMarkerEvidenceCompletedAnnotation]
+    if ($actualState -cne 'pending' -or $null -eq $actualProperty -or [string]$actualProperty.Value -cne $completedAtMS.ToString()) {
+        throw 'pending marker genesis evidence time 写入后回读不一致。'
+    }
+    Write-Ok "pending marker 已持久化 genesis evidence completed-at=$completedAtMS。"
+    return $completedAtMS
+}
+
 # pending marker 允许 missing->V3 之前，pandora namespace 只能存在本启动器声明的第三方
-# 基础设施 Pod；任何未知/缩到 0/终止中的业务 workload 都阻断。default namespace 只检查
-# Pandora/Agones DS 痕迹，避免把用户无关的本地 workload 误当 writer。
+# 基础设施 workload；任何未知（包括缩到 0 的业务 Deployment）或终止中的 workload 都阻断。
+# 其它 namespace 只按 Pandora/DS 身份筛查，避免把用户无关的本地 workload 误当 writer。
 function Assert-NoLocalFreshGenesisWriters {
     param([Parameter(Mandatory = $true)][string]$KubeContext)
     $allowedImages = [ordered]@{
@@ -622,37 +998,96 @@ function Assert-NoLocalFreshGenesisWriters {
         zookeeper = 'confluentinc/cp-zookeeper:7.9.7'; kafka = 'confluentinc/cp-kafka:7.9.7'
         etcd = 'quay.io/coreos/etcd:v3.6.12'; loki = 'grafana/loki:3.4.1'; alloy = 'grafana/alloy:v1.7.1'
     }
-    $pandoraWorkloads = Get-KubectlJsonObject -KubeContext $KubeContext `
-        -Arguments @('get', 'deployment,statefulset,daemonset,replicaset,pod,job,cronjob', '-n', $K8sNamespace, '-o', 'json') `
-        -Action 'fresh genesis 前枚举 pandora workload'
-    foreach ($item in @($pandoraWorkloads.items)) {
-        $kind = [string]$item.kind
-        if ($kind -notin @('Deployment', 'ReplicaSet', 'Pod')) {
-            throw "fresh genesis 前检测到不允许的 pandora workload:$kind/$($item.metadata.name)"
+    $writerIdentities = @('login', 'player-locator', 'ds-allocator', 'hub-allocator', 'battle-result')
+    function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
+        if ($null -eq $Object) { return $null }
+        $property = $Object.PSObject.Properties[$Name]
+        if ($null -eq $property) { return $null }
+        return $property.Value
+    }
+    function Get-WorkloadPodSpec([object]$Item) {
+        $kind = [string]$Item.kind
+        if ($kind -ceq 'Pod') { return $Item.spec }
+        if ($kind -ceq 'CronJob') { return $Item.spec.jobTemplate.spec.template.spec }
+        return $Item.spec.template.spec
+    }
+    function Get-WorkloadImages([object]$PodSpec) {
+        $images = [System.Collections.Generic.List[string]]::new()
+        foreach ($field in @('containers', 'initContainers', 'ephemeralContainers')) {
+            $containers = Get-OptionalPropertyValue -Object $PodSpec -Name $field
+            foreach ($container in @($containers)) {
+                if ($null -ne $container) { $images.Add([string]$container.image) }
+            }
         }
-        $app = [string]$item.metadata.labels.app
-        if (-not $allowedImages.Contains($app)) {
-            throw "fresh genesis 前检测到未知 pandora workload:$kind/$($item.metadata.name)(app=$app)"
-        }
-        $podSpec = if ($kind -ceq 'Pod') { $item.spec } else { $item.spec.template.spec }
-        $images = @($podSpec.containers | ForEach-Object { [string]$_.image })
-        if ($images.Count -ne 1 -or $images[0] -cne [string]$allowedImages[$app]) {
-            throw "fresh genesis 前基础设施 workload 镜像漂移:$kind/$($item.metadata.name)"
-        }
+        return $images.ToArray()
     }
 
-    $defaultWorkloads = Get-KubectlJsonObject -KubeContext $KubeContext `
-        -Arguments @('get', 'deployment,statefulset,daemonset,replicaset,pod,job,cronjob', '-n', 'default', '-o', 'json') `
-        -Action 'fresh genesis 前枚举 default workload'
-    foreach ($item in @($defaultWorkloads.items)) {
-        $podSpec = if ([string]$item.kind -ceq 'Pod') { $item.spec } elseif ([string]$item.kind -ceq 'CronJob') { $item.spec.jobTemplate.spec.template.spec } else { $item.spec.template.spec }
-        $images = @($podSpec.containers | ForEach-Object { [string]$_.image })
-        $identity = @([string]$item.metadata.name, [string]$item.metadata.labels.app, ($images -join ',')) -join ' '
-        if ($identity -match '(?i)pandora|battle-ds|hub-ds|ds-allocator|player-locator') {
-            throw "fresh genesis 前 default namespace 仍有 Pandora/DS workload:$($item.kind)/$($item.metadata.name)"
+    $allWorkloads = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'deployment,statefulset,daemonset,replicaset,replicationcontroller,pod,job,cronjob', '-A', '-o', 'json') `
+        -Action 'fresh genesis 前枚举全局 workload'
+    $seenInfraDeployments = @{}
+    foreach ($item in @($allWorkloads.items)) {
+        $namespace = [string]$item.metadata.namespace
+        $kind = [string]$item.kind
+        $name = [string]$item.metadata.name
+        $labels = Get-OptionalPropertyValue -Object $item.metadata -Name 'labels'
+        $app = [string](Get-OptionalPropertyValue -Object $labels -Name 'app')
+        $podSpec = Get-WorkloadPodSpec -Item $item
+        $images = @(Get-WorkloadImages -PodSpec $podSpec)
+        if ($namespace -ceq $K8sNamespace) {
+            if ($kind -notin @('Deployment', 'ReplicaSet', 'Pod')) {
+                throw "fresh genesis 前检测到不允许的 pandora workload:$kind/$name"
+            }
+            if (-not $allowedImages.Contains($app)) {
+                throw "fresh genesis 前检测到未知 pandora workload:$kind/$name(app=$app)"
+            }
+            $deletionTimestamp = [string](Get-OptionalPropertyValue -Object $item.metadata -Name 'deletionTimestamp')
+            if (-not [string]::IsNullOrWhiteSpace($deletionTimestamp)) {
+                throw "fresh genesis 前基础设施 workload 正在终止:$kind/$name"
+            }
+            if ($images.Count -ne 1 -or $images[0] -cne [string]$allowedImages[$app]) {
+                throw "fresh genesis 前基础设施 workload 镜像/init/ephemeral 容器漂移:$kind/$name"
+            }
+            $ownerReferenceValue = Get-OptionalPropertyValue -Object $item.metadata -Name 'ownerReferences'
+            $ownerReferences = if ($null -eq $ownerReferenceValue) { @() } else { @($ownerReferenceValue) }
+            $controllerOwner = @($ownerReferences | Where-Object {
+                (Get-OptionalPropertyValue -Object $_ -Name 'controller') -eq $true
+            })
+            if ($kind -ceq 'Deployment') {
+                if ([int]$item.spec.replicas -ne 1 -or $name -cne $app -or $controllerOwner.Count -ne 0) {
+                    throw "fresh genesis 前基础设施 Deployment 结构/replicas 漂移:$name"
+                }
+                if ($seenInfraDeployments.ContainsKey($app)) {
+                    throw "fresh genesis 前基础设施 Deployment 重复:$app"
+                }
+                $seenInfraDeployments[$app] = $true
+            } elseif ($kind -ceq 'ReplicaSet') {
+                if ($controllerOwner.Count -ne 1 -or [string]$controllerOwner[0].kind -cne 'Deployment' -or
+                    [string]$controllerOwner[0].name -cne $app) {
+                    throw "fresh genesis 前基础设施 ReplicaSet owner 漂移:$name"
+                }
+            } else {
+                if ($controllerOwner.Count -ne 1 -or [string]$controllerOwner[0].kind -cne 'ReplicaSet' -or
+                    -not ([string]$controllerOwner[0].name).StartsWith("$app-", [StringComparison]::Ordinal)) {
+                    throw "fresh genesis 前基础设施 Pod owner 漂移:$name"
+                }
+            }
+            continue
+        }
+        $identity = @($namespace, $name, $app, ($images -join ',')) -join ' '
+        $writerEpochLabel = [string](Get-OptionalPropertyValue -Object $labels -Name 'pandora.dev/ds-auth-writer-epoch')
+        if ($name -in $writerIdentities -or $app -in $writerIdentities -or
+            -not [string]::IsNullOrWhiteSpace($writerEpochLabel) -or
+            $identity -match '(?i)pandora|battle-ds|hub-ds|ds-allocator|hub-allocator|player-locator|matchmaker') {
+            throw "fresh genesis 前其它 namespace 仍有 Pandora/DS workload:$namespace/$kind/$name"
         }
     }
-    foreach ($resourceType in @('fleet', 'gameserver', 'gameserverset')) {
+    foreach ($requiredInfra in @('mysql', 'redis', 'zookeeper', 'kafka', 'etcd')) {
+        if (-not $seenInfraDeployments.ContainsKey($requiredInfra)) {
+            throw "fresh genesis 前缺少 canonical 基础设施 Deployment/$requiredInfra"
+        }
+    }
+    foreach ($resourceType in @('fleet', 'fleetautoscaler', 'gameserver', 'gameserverset', 'gameserverallocation')) {
         $lines = @(& kubectl --context $KubeContext get $resourceType -A -o name 2>&1)
         $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
         if ($LASTEXITCODE -ne 0) {
@@ -664,6 +1099,339 @@ function Assert-NoLocalFreshGenesisWriters {
         }
     }
     Write-Ok 'fresh DS-auth zero-writer workload 门禁通过（仅基础设施，无 Pandora/Agones writer）。'
+}
+
+# 6aff5dd 之前的旧启动器没有 fresh marker，只能对“刚刚由同一批 apply 创建”的本地
+# minikube 半成品做一次窄兼容。这个 cohort 是 local-only heuristic，不声称数学证明卷连续性；
+# 权威正确性仍由 PVC/PV UID、revision=1、zero-writer 审计和 etcd CAS 共同收口。
+function Get-LocalLegacyInfraOnlyAdoptionCohort {
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [Parameter(Mandatory = $true)][long]$CollectionTimeUnixMS,
+        [Parameter(Mandatory = $true)][string]$ExpectedPvcUid
+    )
+    if ($CollectionTimeUnixMS -le 0) { throw 'legacy cohort collection time 必须为正 Unix ms。' }
+    if ([string]::IsNullOrWhiteSpace($ExpectedPvcUid)) { throw 'legacy cohort 必须绑定预先读取的 PVC UID。' }
+
+    $allowedImages = [ordered]@{
+        mysql = 'mysql:8.4'; redis = 'redis:8.8.0-alpine'
+        zookeeper = 'confluentinc/cp-zookeeper:7.9.7'; kafka = 'confluentinc/cp-kafka:7.9.7'
+        etcd = 'quay.io/coreos/etcd:v3.6.12'
+    }
+    $createdTimes = [System.Collections.Generic.List[long]]::new()
+    $fingerprintLines = [System.Collections.Generic.List[string]]::new()
+
+    function Get-OptionalPropertyValue([object]$Object, [string]$Name) {
+        if ($null -eq $Object) { return $null }
+        $property = $Object.PSObject.Properties[$Name]
+        if ($null -eq $property) { return $null }
+        return $property.Value
+    }
+    function Get-CanonicalUid([object]$Metadata, [string]$What) {
+        $raw = [string](Get-OptionalPropertyValue -Object $Metadata -Name 'uid')
+        $parsed = [guid]::Empty
+        if (-not [guid]::TryParse($raw, [ref]$parsed) -or $raw -cne $parsed.ToString('D')) {
+            throw "$What 缺少 canonical UID:$raw"
+        }
+        return $raw
+    }
+    function Get-ControllerOwners([object]$Metadata) {
+        $raw = Get-OptionalPropertyValue -Object $Metadata -Name 'ownerReferences'
+        if ($null -eq $raw) { return @() }
+        return @(@($raw) | Where-Object {
+            (Get-OptionalPropertyValue -Object $_ -Name 'controller') -eq $true
+        })
+    }
+    function Get-AllOwnerReferences([object]$Metadata) {
+        $raw = Get-OptionalPropertyValue -Object $Metadata -Name 'ownerReferences'
+        if ($null -eq $raw) { return @() }
+        return @($raw)
+    }
+    function Assert-NoDeletion([object]$Metadata, [string]$What) {
+        $deleting = [string](Get-OptionalPropertyValue -Object $Metadata -Name 'deletionTimestamp')
+        if (-not [string]::IsNullOrWhiteSpace($deleting)) { throw "$What 正在删除，不能进入 legacy cohort。" }
+    }
+    function Add-CohortEvidence([object]$Item, [string]$Identity, [string]$Extra) {
+        if ($null -eq $Item -or $null -eq $Item.metadata) { throw "$Identity 缺少 metadata。" }
+        Assert-NoDeletion -Metadata $Item.metadata -What $Identity
+        $uid = Get-CanonicalUid -Metadata $Item.metadata -What $Identity
+        $rawCreated = Get-OptionalPropertyValue -Object $Item.metadata -Name 'creationTimestamp'
+        if ($null -eq $rawCreated -or [string]::IsNullOrWhiteSpace([string]$rawCreated)) {
+            throw "$Identity 缺少 API creationTimestamp。"
+        }
+        try {
+            if ($rawCreated -is [DateTimeOffset]) {
+                $created = ([DateTimeOffset]$rawCreated).ToUniversalTime()
+            } elseif ($rawCreated -is [DateTime]) {
+                $created = [DateTimeOffset]([DateTime]$rawCreated).ToUniversalTime()
+            } else {
+                $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+                $created = [DateTimeOffset]::Parse([string]$rawCreated, [Globalization.CultureInfo]::InvariantCulture, $styles)
+            }
+        } catch {
+            throw "$Identity creationTimestamp 非法:$rawCreated"
+        }
+        $createdMS = $created.ToUnixTimeMilliseconds()
+        $ageMS = $CollectionTimeUnixMS - $createdMS
+        if ($ageMS -lt 0 -or $ageMS -gt $script:LocalLegacyAdoptionCohortMaxAgeMS) {
+            throw "$Identity 不属于最近 2 小时 cohort(created=$createdMS,collected=$CollectionTimeUnixMS)。"
+        }
+        $null = $createdTimes.Add($createdMS)
+        $null = $fingerprintLines.Add("$Identity|uid=$uid|created_at_ms=$createdMS|$Extra")
+        return [pscustomobject]@{ Uid = $uid; CreatedAtMS = $createdMS }
+    }
+    function Assert-CanonicalContainerSpec([object]$PodSpec, [string]$App, [string]$ExpectedImage, [string]$What) {
+        if ($null -eq $PodSpec) { throw "$What 缺少 pod spec。" }
+        $rawContainers = Get-OptionalPropertyValue -Object $PodSpec -Name 'containers'
+        $rawInitContainers = Get-OptionalPropertyValue -Object $PodSpec -Name 'initContainers'
+        $rawEphemeralContainers = Get-OptionalPropertyValue -Object $PodSpec -Name 'ephemeralContainers'
+        $containers = @(if ($null -ne $rawContainers) { $rawContainers })
+        $initContainers = @(if ($null -ne $rawInitContainers) { $rawInitContainers })
+        $ephemeralContainers = @(if ($null -ne $rawEphemeralContainers) { $rawEphemeralContainers })
+        if ($containers.Count -ne 1 -or [string]$containers[0].name -cne $App -or
+            [string]$containers[0].image -cne $ExpectedImage -or
+            $initContainers.Count -ne 0 -or $ephemeralContainers.Count -ne 0) {
+            throw "$What container/name/image/init/ephemeral 结构漂移。"
+        }
+    }
+    function Assert-CanonicalEtcdStorage([object]$PodSpec, [string]$What) {
+        $containers = @(Get-OptionalPropertyValue -Object $PodSpec -Name 'containers')
+        if ($containers.Count -ne 1) { throw "$What etcd container 数量漂移。" }
+        $container = $containers[0]
+        $rawArgs = Get-OptionalPropertyValue -Object $container -Name 'args'
+        $actualArgs = @(if ($null -ne $rawArgs) { $rawArgs })
+        if ($actualArgs.Count -ne 0) { throw "$What etcd container.args 必须为空，禁止覆盖固定 command。" }
+        $expectedCommand = @(
+            '/usr/local/bin/etcd', '--name=pandora-etcd', '--data-dir=/etcd-data',
+            '--listen-client-urls=http://0.0.0.0:2379', '--advertise-client-urls=http://etcd:2379',
+            '--listen-peer-urls=http://0.0.0.0:2380', '--initial-advertise-peer-urls=http://etcd:2380',
+            '--initial-cluster=pandora-etcd=http://etcd:2380', '--initial-cluster-token=pandora-etcd-cluster',
+            '--initial-cluster-state=new'
+        )
+        $actualCommand = @($container.command)
+        if ($actualCommand.Count -ne $expectedCommand.Count) { throw "$What etcd command 长度漂移。" }
+        for ($i = 0; $i -lt $expectedCommand.Count; $i++) {
+            if ([string]$actualCommand[$i] -cne [string]$expectedCommand[$i]) {
+                throw "$What etcd command 漂移(index=$i)。"
+            }
+        }
+        $dataMounts = @($container.volumeMounts | Where-Object {
+            $mountPath = [string]$_.mountPath
+            [string]$_.name -ceq 'data' -or $mountPath -ceq '/etcd-data' -or
+                $mountPath.StartsWith('/etcd-data/', [StringComparison]::Ordinal)
+        })
+        $dataVolumes = @($PodSpec.volumes | Where-Object { [string]$_.name -ceq 'data' })
+        if ($dataMounts.Count -ne 1 -or [string]$dataMounts[0].name -cne 'data' -or
+            [string]$dataMounts[0].mountPath -cne '/etcd-data' -or
+            (Get-OptionalPropertyValue -Object $dataMounts[0] -Name 'readOnly') -eq $true -or
+            -not [string]::IsNullOrEmpty([string](Get-OptionalPropertyValue -Object $dataMounts[0] -Name 'subPath')) -or
+            -not [string]::IsNullOrEmpty([string](Get-OptionalPropertyValue -Object $dataMounts[0] -Name 'subPathExpr')) -or
+            $dataVolumes.Count -ne 1 -or
+            [string]$dataVolumes[0].persistentVolumeClaim.claimName -cne 'etcd-data' -or
+            (Get-OptionalPropertyValue -Object $dataVolumes[0].persistentVolumeClaim -Name 'readOnly') -eq $true) {
+            throw "$What etcd 必须把 PVC/etcd-data 精确挂载到 /etcd-data。"
+        }
+    }
+    function Assert-AppAndHashLabels([object]$Labels, [string]$App, [string]$ExpectedHash, [string]$What) {
+        $actualApp = [string](Get-OptionalPropertyValue -Object $Labels -Name 'app')
+        $actualHash = [string](Get-OptionalPropertyValue -Object $Labels -Name 'pod-template-hash')
+        if ($actualApp -cne $App -or
+            (-not [string]::IsNullOrWhiteSpace($ExpectedHash) -and $actualHash -cne $ExpectedHash)) {
+            throw "$What app/pod-template-hash labels 漂移。"
+        }
+    }
+
+    $namespace = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "namespace/$K8sNamespace", '-o', 'json') -Action '采集 legacy cohort namespace'
+    if ([string]$namespace.kind -cne 'Namespace' -or [string]$namespace.metadata.name -cne $K8sNamespace) {
+        throw 'legacy cohort namespace 身份漂移。'
+    }
+    $namespaceOwners = @(Get-AllOwnerReferences -Metadata $namespace.metadata)
+    if ($namespaceOwners.Count -ne 0) { throw 'legacy cohort namespace 不得有 controller owner。' }
+    $null = Add-CohortEvidence -Item $namespace -Identity "namespace/$K8sNamespace" -Extra 'kind=Namespace'
+
+    $pvc = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '采集 legacy cohort PVC/etcd-data'
+    $pvcUid = Get-CanonicalUid -Metadata $pvc.metadata -What 'pvc/etcd-data'
+    $pvcAccessModes = @($pvc.spec.accessModes)
+    $pvName = [string]$pvc.spec.volumeName
+    if ([string]$pvc.kind -cne 'PersistentVolumeClaim' -or [string]$pvc.metadata.name -cne 'etcd-data' -or
+        [string]$pvc.metadata.namespace -cne $K8sNamespace -or [string]$pvc.status.phase -cne 'Bound' -or
+        $pvcUid -cne $ExpectedPvcUid -or [string]$pvc.spec.storageClassName -cne 'standard' -or
+        [string]$pvc.spec.volumeMode -cne 'Filesystem' -or $pvcAccessModes.Count -ne 1 -or
+        [string]$pvcAccessModes[0] -cne 'ReadWriteOnce' -or [string]::IsNullOrWhiteSpace($pvName)) {
+        throw 'legacy cohort PVC/etcd-data 的身份/Bound/UID/storageClass/volumeMode/accessMode 漂移。'
+    }
+    if (@(Get-AllOwnerReferences -Metadata $pvc.metadata).Count -ne 0) { throw 'legacy cohort PVC 不得有 ownerReference。' }
+    $null = Add-CohortEvidence -Item $pvc -Identity "pvc/$K8sNamespace/etcd-data" `
+        -Extra "pv=$pvName;storage_class=standard;mode=Filesystem;access=ReadWriteOnce"
+
+    $pv = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', "persistentvolume/$pvName", '-o', 'json') -Action '采集 legacy cohort 绑定 PV'
+    $pvUid = Get-CanonicalUid -Metadata $pv.metadata -What "pv/$pvName"
+    $pvProvisioner = [string](Get-OptionalPropertyValue -Object $pv.metadata.annotations -Name 'pv.kubernetes.io/provisioned-by')
+    $pvAccessModes = @($pv.spec.accessModes)
+    $hostPath = [string](Get-OptionalPropertyValue -Object $pv.spec.hostPath -Name 'path')
+    if ([string]$pv.kind -cne 'PersistentVolume' -or [string]$pv.metadata.name -cne $pvName -or
+        [string]$pv.status.phase -cne 'Bound' -or [string]$pv.spec.claimRef.kind -cne 'PersistentVolumeClaim' -or
+        [string]$pv.spec.claimRef.namespace -cne $K8sNamespace -or [string]$pv.spec.claimRef.name -cne 'etcd-data' -or
+        [string]$pv.spec.claimRef.uid -cne $pvcUid -or [string]$pv.spec.storageClassName -cne 'standard' -or
+        $pvProvisioner -cne 'k8s.io/minikube-hostpath' -or
+        [string]$pv.spec.persistentVolumeReclaimPolicy -cne 'Delete' -or
+        [string]$pv.spec.volumeMode -cne 'Filesystem' -or $pvAccessModes.Count -ne 1 -or
+        [string]$pvAccessModes[0] -cne 'ReadWriteOnce' -or [string]::IsNullOrWhiteSpace($hostPath)) {
+        throw 'legacy cohort PV 的 Bound/claimRef/storageClass/provisioner/reclaimPolicy/volume source 漂移。'
+    }
+    if (@(Get-AllOwnerReferences -Metadata $pv.metadata).Count -ne 0) { throw 'legacy cohort PV 不得有 ownerReference。' }
+    $null = Add-CohortEvidence -Item $pv -Identity "pv/$pvName" `
+        -Extra "claim_uid=$pvcUid;storage_class=standard;provisioner=$pvProvisioner;reclaim=Delete;host_path=$hostPath"
+
+    $workloads = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'deployment,replicaset,pod', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '采集 legacy cohort 基础设施 Deployment/ReplicaSet/Pod'
+    $items = @($workloads.items)
+    foreach ($app in @($allowedImages.Keys)) {
+        $expectedImage = [string]$allowedImages[$app]
+        $deployments = @($items | Where-Object {
+            [string]$_.kind -ceq 'Deployment' -and [string]$_.metadata.namespace -ceq $K8sNamespace -and
+            [string](Get-OptionalPropertyValue -Object $_.metadata.labels -Name 'app') -ceq $app
+        })
+        if ($deployments.Count -ne 1 -or [string]$deployments[0].metadata.name -cne $app) {
+            throw "legacy cohort 要求 app=$app 的唯一 canonical Deployment/$app，实际=$($deployments.Count)。"
+        }
+        $deployment = $deployments[0]
+        Assert-NoDeletion -Metadata $deployment.metadata -What "Deployment/$app"
+        if (@(Get-AllOwnerReferences -Metadata $deployment.metadata).Count -ne 0) {
+            throw "legacy cohort Deployment/$app 不得有 ownerReference。"
+        }
+        Assert-AppAndHashLabels -Labels $deployment.metadata.labels -App $app -ExpectedHash '' -What "Deployment/$app"
+        Assert-AppAndHashLabels -Labels $deployment.spec.selector.matchLabels -App $app -ExpectedHash '' -What "Deployment/$app selector"
+        Assert-AppAndHashLabels -Labels $deployment.spec.template.metadata.labels -App $app -ExpectedHash '' -What "Deployment/$app template"
+        Assert-CanonicalContainerSpec -PodSpec $deployment.spec.template.spec -App $app -ExpectedImage $expectedImage -What "Deployment/$app"
+        $revision = [string](Get-OptionalPropertyValue -Object $deployment.metadata.annotations -Name 'deployment.kubernetes.io/revision')
+        if ($revision -cne '1' -or [long]$deployment.metadata.generation -ne 1 -or
+            [int]$deployment.spec.replicas -ne 1 -or
+            [long](Get-OptionalPropertyValue -Object $deployment.status -Name 'observedGeneration') -ne [long]$deployment.metadata.generation -or
+            [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'replicas') -ne 1 -or
+            [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'updatedReplicas') -ne 1 -or
+            [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'readyReplicas') -ne 1 -or
+            [int](Get-OptionalPropertyValue -Object $deployment.status -Name 'availableReplicas') -ne 1) {
+            throw "legacy cohort Deployment/$app 非唯一完成 rollout。"
+        }
+        if ($app -ceq 'etcd') {
+            Assert-CanonicalEtcdStorage -PodSpec $deployment.spec.template.spec -What 'Deployment/etcd'
+        }
+        $deploymentEvidence = Add-CohortEvidence -Item $deployment -Identity "deployment/$K8sNamespace/$app" `
+            -Extra "generation=$([long]$deployment.metadata.generation);revision=$revision;image=$expectedImage"
+
+        $appReplicaSets = @($items | Where-Object {
+            [string]$_.kind -ceq 'ReplicaSet' -and [string]$_.metadata.namespace -ceq $K8sNamespace -and
+            [string](Get-OptionalPropertyValue -Object $_.metadata.labels -Name 'app') -ceq $app
+        })
+        if ($appReplicaSets.Count -ne 1) {
+            throw "legacy cohort app=$app 必须只有一个（且无 orphan/历史）ReplicaSet，实际=$($appReplicaSets.Count)。"
+        }
+        $replicaSet = $appReplicaSets[0]
+        $rsOwners = @(Get-ControllerOwners -Metadata $replicaSet.metadata)
+        $rsHash = [string](Get-OptionalPropertyValue -Object $replicaSet.metadata.labels -Name 'pod-template-hash')
+        $rsRevision = [string](Get-OptionalPropertyValue -Object $replicaSet.metadata.annotations -Name 'deployment.kubernetes.io/revision')
+        if ($rsOwners.Count -ne 1 -or @(Get-AllOwnerReferences -Metadata $replicaSet.metadata).Count -ne 1 -or
+            [string]$rsOwners[0].kind -cne 'Deployment' -or [string]$rsOwners[0].name -cne $app -or
+            [string]$rsOwners[0].uid -cne $deploymentEvidence.Uid -or $rsRevision -cne $revision -or
+            [string]::IsNullOrWhiteSpace($rsHash) -or -not ([string]$replicaSet.metadata.name).StartsWith("$app-", [StringComparison]::Ordinal) -or
+            [long]$replicaSet.metadata.generation -ne 1 -or [int]$replicaSet.spec.replicas -ne 1 -or
+            [long](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'observedGeneration') -ne [long]$replicaSet.metadata.generation -or
+            [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'replicas') -ne 1 -or
+            [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'readyReplicas') -ne 1 -or
+            [int](Get-OptionalPropertyValue -Object $replicaSet.status -Name 'availableReplicas') -ne 1) {
+            throw "legacy cohort current ReplicaSet/$app 的 owner/UID/revision/replicas 漂移。"
+        }
+        Assert-AppAndHashLabels -Labels $replicaSet.metadata.labels -App $app -ExpectedHash $rsHash -What "ReplicaSet/$app"
+        Assert-AppAndHashLabels -Labels $replicaSet.spec.selector.matchLabels -App $app -ExpectedHash $rsHash -What "ReplicaSet/$app selector"
+        Assert-AppAndHashLabels -Labels $replicaSet.spec.template.metadata.labels -App $app -ExpectedHash $rsHash -What "ReplicaSet/$app template"
+        Assert-CanonicalContainerSpec -PodSpec $replicaSet.spec.template.spec -App $app -ExpectedImage $expectedImage -What "ReplicaSet/$app"
+        if ($app -ceq 'etcd') {
+            Assert-CanonicalEtcdStorage -PodSpec $replicaSet.spec.template.spec -What 'ReplicaSet/etcd'
+        }
+        $replicaSetEvidence = Add-CohortEvidence -Item $replicaSet `
+            -Identity "replicaset/$K8sNamespace/$([string]$replicaSet.metadata.name)" `
+            -Extra "owner_uid=$($deploymentEvidence.Uid);generation=$([long]$replicaSet.metadata.generation);revision=$revision;hash=$rsHash;image=$expectedImage"
+
+        $pods = @($items | Where-Object {
+            [string]$_.kind -ceq 'Pod' -and [string]$_.metadata.namespace -ceq $K8sNamespace -and
+            [string](Get-OptionalPropertyValue -Object $_.metadata.labels -Name 'app') -ceq $app
+        })
+        if ($pods.Count -ne 1) { throw "legacy cohort app=$app 必须只有一个（且无 orphan）Pod，实际=$($pods.Count)。" }
+        $pod = $pods[0]
+        $podOwners = @(Get-ControllerOwners -Metadata $pod.metadata)
+        $readyConditions = @($pod.status.conditions | Where-Object {
+            [string]$_.type -ceq 'Ready' -and [string]$_.status -ceq 'True'
+        })
+        if ($podOwners.Count -ne 1 -or @(Get-AllOwnerReferences -Metadata $pod.metadata).Count -ne 1 -or
+            [string]$podOwners[0].kind -cne 'ReplicaSet' -or
+            [string]$podOwners[0].name -cne [string]$replicaSet.metadata.name -or
+            [string]$podOwners[0].uid -cne $replicaSetEvidence.Uid -or [string]$pod.status.phase -cne 'Running' -or
+            $readyConditions.Count -ne 1) {
+            throw "legacy cohort Pod/$app 的 owner/UID/Running/Ready 结构漂移。"
+        }
+        Assert-AppAndHashLabels -Labels $pod.metadata.labels -App $app -ExpectedHash $rsHash -What "Pod/$app"
+        Assert-CanonicalContainerSpec -PodSpec $pod.spec -App $app -ExpectedImage $expectedImage -What "Pod/$app"
+        if ($app -ceq 'etcd') {
+            Assert-CanonicalEtcdStorage -PodSpec $pod.spec -What 'Pod/etcd'
+        }
+        $null = Add-CohortEvidence -Item $pod -Identity "pod/$K8sNamespace/$([string]$pod.metadata.name)" `
+            -Extra "owner_uid=$($replicaSetEvidence.Uid);hash=$rsHash;image=$expectedImage"
+    }
+
+    if ($createdTimes.Count -ne 18) { throw "legacy cohort 对象数量必须为 18，实际=$($createdTimes.Count)。" }
+    $minCreatedMS = ($createdTimes | Measure-Object -Minimum).Minimum
+    $maxCreatedMS = ($createdTimes | Measure-Object -Maximum).Maximum
+    if (($maxCreatedMS - $minCreatedMS) -gt $script:LocalLegacyAdoptionCohortMaxSpanMS) {
+        throw "legacy cohort creationTimestamp 全体跨度超过 10 分钟(min=$minCreatedMS,max=$maxCreatedMS)。"
+    }
+    $canonicalLines = @("schema=legacy-infra-only-cohort-v1", "collected_at_ms=$CollectionTimeUnixMS") +
+        @($fingerprintLines.ToArray() | Sort-Object -CaseSensitive)
+    $canonical = ($canonicalLines -join "`n") + "`n"
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hex = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical)))).Replace('-', '').ToLowerInvariant()
+    } finally { $sha.Dispose() }
+    return [pscustomobject]@{
+        FingerprintSha256 = "sha256:$hex"
+        CollectionTimeUnixMS = $CollectionTimeUnixMS
+        MinCreatedAtMS = [long]$minCreatedMS
+        MaxCreatedAtMS = [long]$maxCreatedMS
+        PvcUid = $pvcUid
+        PvUid = $pvUid
+    }
+}
+
+# 旧脚本没有来得及写 marker 的兼容收养必须额外证明这块 etcd 数据盘从未发生过任何写入。
+# etcd revision 一旦写入就单调大于 1（压缩不会降回 1）；因此 revision=1 + 整个 ds-auth
+# prefix 无 key 能区分“首次启动中断留下的空 PVC”和“旧权威 key 被删/数据盘被替换”的常见现场。
+function Assert-LocalEtcdStorePristineForGenesis {
+    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    $lines = @(& kubectl --context $KubeContext exec -n $K8sNamespace deployment/etcd -- `
+        /usr/local/bin/etcdctl --endpoints=http://127.0.0.1:2379 `
+        get /pandora/ds-auth/ --prefix --limit=1 --consistency=l -w json 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "读取 legacy infra-only etcd revision/prefix 失败:$($lines -join [Environment]::NewLine)"
+    }
+    $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    try { $result = $text | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "legacy infra-only etcd revision/prefix 返回非法 JSON:$($_.Exception.Message)" }
+    $header = $result.PSObject.Properties['header']
+    if ($null -eq $header -or [long]$header.Value.revision -ne 1) {
+        $actualRevision = if ($null -eq $header) { '<missing>' } else { [string]$header.Value.revision }
+        throw "legacy infra-only 自动收养只接受从未写入的 etcd revision=1，实际=$actualRevision；请 -Reset 或受控迁移。"
+    }
+    $countProperty = $result.PSObject.Properties['count']
+    $kvsProperty = $result.PSObject.Properties['kvs']
+    $count = if ($null -ne $countProperty) { [long]$countProperty.Value } elseif ($null -ne $kvsProperty) { @($kvsProperty.Value).Count } else { 0 }
+    if ($count -ne 0) {
+        throw "legacy infra-only 自动收养要求 /pandora/ds-auth/ 整个前缀为空，实际 key count=$count。"
+    }
+    Write-Ok 'legacy infra-only 收养门禁通过（etcd revision=1，ds-auth prefix 为空）。'
 }
 
 function Invoke-WithLocalEtcdPortForward {
@@ -713,9 +1481,44 @@ function Invoke-WithLocalEtcdPortForward {
 function Assert-LocalDsAuthBaseline {
     param(
         [Parameter(Mandatory = $true)][string]$KubeContext,
-        [Parameter(Mandatory = $true)][bool]$AllowFreshBootstrap
+        [Parameter(Mandatory = $true)][bool]$AllowFreshBootstrap,
+        [string]$MinikubeProfile = '',
+        [bool]$AllowLegacyInfraOnlyAdoption = $false,
+        [string]$ExpectedAdoptionPvcUid = '',
+        [string]$ExpectedAdoptionCohortFingerprintSha256 = '',
+        [long]$LegacyAdoptionCollectionTimeUnixMS = 0,
+        [string]$LegacyAdoptionCohortPreflightError = ''
     )
-    Invoke-WithLocalEtcdPortForward -KubeContext $KubeContext -Action {
+    if ($AllowFreshBootstrap -and [string]::IsNullOrWhiteSpace($MinikubeProfile)) {
+        throw '允许本地 genesis 时必须显式提供已锁定的 minikube profile。'
+    }
+
+    # 同一台宿主机的 minikube 只允许一个 baseline/genesis 状态机运行。命名 Mutex 在进程
+    # 异常退出时由 OS 自动标记 abandoned，不会像持久 ConfigMap 锁那样把下一次一键启动
+    # 永久卡死；同时它封住两个 start.ps1 都曾读到 preinfra/adopting 后重放 prepare 的窗口。
+    $mutexMaterial = "$KubeContext|$MinikubeProfile|$K8sNamespace"
+    $mutexSha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $mutexHex = ([BitConverter]::ToString($mutexSha.ComputeHash(
+                    [Text.Encoding]::UTF8.GetBytes($mutexMaterial)))).Replace('-', '').ToLowerInvariant()
+    } finally { $mutexSha.Dispose() }
+    $mutexScope = if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { 'Global\' } else { '' }
+    $mutexName = "${mutexScope}PandoraDsAuthBaseline-$mutexHex"
+    $baselineMutex = [System.Threading.Mutex]::new($false, $mutexName)
+    $baselineMutexOwned = $false
+    try {
+        Write-Info "等待本机 DS-auth 一键状态机互斥锁(profile=$MinikubeProfile)..."
+        try {
+            $baselineMutexOwned = $baselineMutex.WaitOne([TimeSpan]::FromMinutes(30))
+        } catch [System.Threading.AbandonedMutexException] {
+            $baselineMutexOwned = $true
+            Write-Warn '检测到上次启动进程异常退出；已安全接管 abandoned DS-auth 状态机互斥锁。'
+        }
+        if (-not $baselineMutexOwned) {
+            throw '等待同一 minikube 的 DS-auth 一键状态机超过 30 分钟；拒绝并发执行 genesis。'
+        }
+
+        Invoke-WithLocalEtcdPortForward -KubeContext $KubeContext -Action {
         param($endpoint)
         Push-Location $ProjectRoot
         try {
@@ -723,40 +1526,222 @@ function Assert-LocalDsAuthBaseline {
                 --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
                 --require-v3-activation-record 2>&1)
             $readExit = $LASTEXITCODE
+            $marker = $null
+            $markerState = ''
+            $continuityToken = ''
+            $observedV3Witness = $null
+            if (-not [string]::IsNullOrWhiteSpace($MinikubeProfile)) {
+                $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+                if ($null -ne $marker) {
+                    $markerState = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext `
+                        -MinikubeProfile $MinikubeProfile
+                    $continuityToken = [string]$marker.data.PSObject.Properties[$script:LocalFreshDsAuthContinuityTokenField].Value
+                }
+                $observedV3Witness = Get-LocalObservedV3Witness -KubeContext $KubeContext
+                if ($null -ne $observedV3Witness) {
+                    Assert-LocalObservedV3Witness -Witness $observedV3Witness -KubeContext $KubeContext `
+                        -MinikubeProfile $MinikubeProfile
+                }
+            }
             if ($readExit -eq 0) {
+                # pending + exact V3 是 CAS 已提交、complete annotation 尚未写入时崩溃的正常恢复窗。
+                # 精确 evidence 回读成功后，无论普通启动还是 Resume 都必须补齐 complete；否则
+                # Resume 会让 writers 在永久 pending 上运行，后续数据丢失可能被误判为可重试 genesis。
+                if ($markerState -cin @('preinfra', 'adopting')) {
+                    throw "required policy 已是精确 V3，但 fresh marker 仍为 $markerState；该状态不可能由完整启动事务产生，拒绝伪造 genesis provenance。"
+                }
+                if ($markerState -cin @('pending', 'complete')) {
+                    $evidenceTimeProperty = $marker.metadata.annotations.PSObject.Properties[$script:LocalFreshDsAuthMarkerEvidenceCompletedAnnotation]
+                    $evidenceCompletedAtMS = if ($null -eq $evidenceTimeProperty) { 0L } else { [long]$evidenceTimeProperty.Value }
+                    if ($evidenceCompletedAtMS -le 0) {
+                        throw "marker=$markerState 且 required V3 已存在，但 marker 缺少 CAS 前持久化的 evidence time；拒绝把其它 V3 record 冒充本次 genesis。"
+                    }
+                    $exactEvidenceLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint `
+                        --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
+                        --require-v3-activation-record `
+                        --require-activation-evidence-sha256 $script:LocalFreshDsAuthEvidenceSha256 `
+                        --require-activation-evidence-completed-at-ms $evidenceCompletedAtMS `
+                        --require-genesis-continuity-token $continuityToken 2>&1)
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "marker=$markerState 的 V3 genesis evidence 精确回读失败:$($exactEvidenceLines -join [Environment]::NewLine)"
+                    }
+                    $readLines = $exactEvidenceLines
+                } elseif ($null -eq $marker -and -not [string]::IsNullOrWhiteSpace($MinikubeProfile)) {
+                    $witnessCreated = Ensure-LocalObservedV3Witness -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+                    if ($witnessCreated) {
+                        # witness 创建与 etcd 不是同一事务；创建后必须再次线性证明 V3。若中间盘丢失，
+                        # witness 已经终止后续自动 adoption，本次也在任何 writer 前 fail closed。
+                        $witnessRecheck = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint `
+                            --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
+                            --require-v3-activation-record 2>&1)
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "observed V3 witness 建立后线性复查失败:$($witnessRecheck -join [Environment]::NewLine)"
+                        }
+                        $readLines = $witnessRecheck
+                    }
+                }
+                if ($markerState -ceq 'pending') {
+                    Set-LocalFreshGenesisIntentState -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile -TargetState complete
+                }
                 $readLines | ForEach-Object { Write-Host $_ }
                 return
             }
             $readText = ($readLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+            $requiredIsMissing = $readText -match '(?i)required epoch missing'
+            if ($requiredIsMissing -and $null -ne $observedV3Witness) {
+                throw '同一 namespace/PVC 已有 immutable observed V3 witness，但 required policy 变成 missing；这是权威数据丢失，禁止 legacy 自动收养。请从快照恢复或显式 -Reset。'
+            }
+            if ($requiredIsMissing -and $markerState -ceq 'complete') {
+                throw 'fresh DS-auth marker 已 complete，但同一绑定 PVC 的 required policy 变成 missing；这是权威数据丢失，禁止再次 genesis。请从快照恢复或显式 -Reset。'
+            }
             if (-not $AllowFreshBootstrap) {
                 throw "本地 required policy 不是精确 V3；Resume 禁止让 Hub 以 staging-only 卡住。请执行受控 V2->V3 迁移，或显式 -Reset。详情:$readText"
             }
-            if ($readText -notmatch '(?i)required epoch missing') {
+            if (-not $requiredIsMissing) {
                 throw "fresh 自动 genesis 只接受 missing；检测到 V1/V2/非法状态时拒绝猜测恢复，需 -Reset 或受控 V2->V3 迁移:$readText"
             }
+
+            if ($null -eq $marker) {
+                if (-not $AllowLegacyInfraOnlyAdoption -or [string]::IsNullOrWhiteSpace($ExpectedAdoptionPvcUid)) {
+                    throw 'required policy missing 且没有可信 fresh marker；当前现场不满足一键兼容收养条件。请显式 -Reset，禁止仅凭已有 profile 猜测恢复。'
+                }
+                if ($ExpectedAdoptionCohortFingerprintSha256 -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+                    $LegacyAdoptionCollectionTimeUnixMS -le 0) {
+                    $cohortDetail = if ([string]::IsNullOrWhiteSpace($LegacyAdoptionCohortPreflightError)) {
+                        '启动写入前没有形成合法 cohort fingerprint。'
+                    } else { $LegacyAdoptionCohortPreflightError }
+                    throw "required policy missing；legacy infra-only 短时同批 cohort 门禁未通过:$cohortDetail"
+                }
+                # 初次 cohort 必须在任何 apply 前采集；此处沿用完全相同的采集时刻重算，UID/owner/
+                # creationTimestamp/PV 绑定任一变化都会改变 fingerprint，禁止把 apply 后的新对象收养。
+                $recheckedCohort = Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext $KubeContext `
+                    -CollectionTimeUnixMS $LegacyAdoptionCollectionTimeUnixMS -ExpectedPvcUid $ExpectedAdoptionPvcUid
+                if ([string]$recheckedCohort.FingerprintSha256 -cne $ExpectedAdoptionCohortFingerprintSha256) {
+                    throw "legacy infra-only cohort fingerprint 在 apply 前后漂移(expected=$ExpectedAdoptionCohortFingerprintSha256,actual=$($recheckedCohort.FingerprintSha256))。"
+                }
+                # 只对旧脚本刚留下的同批 cohort 开放：revision=1、整个 ds-auth 前缀为空、
+                # 全局没有 Pandora/Agones writer。先 create-only 落 adopting+PVC+cohort+随机 token；
+                # exact continuity sentinel 建立前 adopting 绝不具备 genesis CAS 权限。
+                Assert-LocalEtcdStorePristineForGenesis -KubeContext $KubeContext
+                Assert-NoLocalFreshGenesisWriters -KubeContext $KubeContext
+                New-LocalAdoptedGenesisIntent -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile `
+                    -ExpectedPvcUid $ExpectedAdoptionPvcUid `
+                    -ExpectedCohortFingerprintSha256 $ExpectedAdoptionCohortFingerprintSha256
+                $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+                $markerState = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext `
+                    -MinikubeProfile $MinikubeProfile
+                $continuityToken = [string]$marker.data.PSObject.Properties[$script:LocalFreshDsAuthContinuityTokenField].Value
+            }
+
+            if ($markerState -cin @('preinfra', 'adopting')) {
+                # preinfra/adopting 允许 create/recover continuity sentinel，但尚无权执行 genesis。
+                # 若 sentinel 不存在，必须紧邻 prepare 再做 pristine -> zero-writer -> pristine；
+                # 若已存在，只允许 Go prepare 以同 token + 空完整 authority prefix 幂等回读。
+                $sentinelReadLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                    --verify-genesis-continuity --genesis-continuity-token $continuityToken 2>&1)
+                $sentinelReadExit = $LASTEXITCODE
+                $sentinelReadText = ($sentinelReadLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+                if ($sentinelReadExit -ne 0) {
+                    if ($sentinelReadText -notmatch '(?i)genesis continuity sentinel missing') {
+                        throw "读取 genesis continuity sentinel 失败/漂移:$sentinelReadText"
+                    }
+                    Assert-LocalEtcdStorePristineForGenesis -KubeContext $KubeContext
+                    Assert-NoLocalFreshGenesisWriters -KubeContext $KubeContext
+                    Assert-LocalEtcdStorePristineForGenesis -KubeContext $KubeContext
+                }
+                # Mutex 已排除其它一键进程；prepare 紧前仍重新线性回读 marker，防止旧分支
+                # 越过已推进的 pending。公开 CLI 不构成绕过 Kubernetes 状态机的授权接口。
+                $prepareMarker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+                $prepareMarkerState = Assert-LocalFreshGenesisIntent -Marker $prepareMarker `
+                    -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile
+                $prepareTokenProperty = $prepareMarker.data.PSObject.Properties[$script:LocalFreshDsAuthContinuityTokenField]
+                if ($prepareMarkerState -cnotin @('preinfra', 'adopting') -or
+                    $null -eq $prepareTokenProperty -or [string]$prepareTokenProperty.Value -cne $continuityToken) {
+                    throw "continuity prepare 紧前 marker 已漂移(state=$prepareMarkerState)；禁止旧分支重放 sentinel。"
+                }
+                $prepareLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                    --prepare-zero-writer-genesis-v3 --apply --genesis-continuity-token $continuityToken 2>&1)
+                if ($LASTEXITCODE -ne 0) {
+                    throw "create-only 建立/回读 genesis continuity sentinel 失败:$($prepareLines -join [Environment]::NewLine)"
+                }
+                $sentinelVerifyLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                    --verify-genesis-continuity --genesis-continuity-token $continuityToken 2>&1)
+                if ($LASTEXITCODE -ne 0) {
+                    throw "pending 前无法线性证明 exact genesis continuity sentinel:$($sentinelVerifyLines -join [Environment]::NewLine)"
+                }
+                Set-LocalFreshGenesisIntentState -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile -TargetState pending
+                $marker = Get-LocalFreshGenesisIntent -KubeContext $KubeContext
+                $markerState = Assert-LocalFreshGenesisIntent -Marker $marker -KubeContext $KubeContext `
+                    -MinikubeProfile $MinikubeProfile
+            }
+            if ($markerState -cne 'pending') {
+                throw "required policy missing 时只允许绑定同一 PVC 的 pending marker 执行 genesis，实际 state=$markerState。"
+            }
+
+            # pending 以后 sentinel 只许精确读取，绝不重建。若 PVC 内容被清空，即使 PVC UID 未变，
+            # sentinel missing 也会在 writer/CAS 前 fail closed。Go genesis CAS 还会在同一事务比较
+            # exact sentinel、activation lock，以及除 lock 外的完整 DS-auth authority prefix 为空。
+            $pendingSentinelLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                --verify-genesis-continuity --genesis-continuity-token $continuityToken 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+                throw "pending marker 绑定的数据盘 continuity sentinel 缺失/漂移，禁止再次 genesis:$($pendingSentinelLines -join [Environment]::NewLine)"
+            }
+            Assert-NoLocalFreshGenesisWriters -KubeContext $KubeContext
             $evidenceText = 'pandora-local-fresh-zero-writer-v1-to-v3/v1'
             $sha = [System.Security.Cryptography.SHA256]::Create()
             try {
                 $evidenceHex = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($evidenceText)))).Replace('-', '').ToLowerInvariant()
             } finally { $sha.Dispose() }
             $evidence = "sha256:$evidenceHex"
-            $completedAtMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-            Write-Info '在任何 writer 启动前执行 missing->V3 zero-writer genesis 单事务 CAS（同时比较 required/record create-only、activation lock、空 capability prefix）...'
-            $advanceLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
-                --zero-writer-genesis-v3 --apply --activation-evidence-sha256 $evidence `
-                --activation-evidence-completed-at-ms $completedAtMS 2>&1)
-            if ($LASTEXITCODE -ne 0) {
-                throw "fresh minikube V1->V3 zero-writer CAS 失败:$($advanceLines -join [Environment]::NewLine)"
+            if ($evidence -cne $script:LocalFreshDsAuthEvidenceSha256) {
+                throw "本地 genesis evidence 常量与计算值漂移(expected=$($script:LocalFreshDsAuthEvidenceSha256),actual=$evidence)。"
+            }
+            $completedAtMS = Get-OrSetLocalFreshGenesisEvidenceCompletedAtMS -KubeContext $KubeContext `
+                -MinikubeProfile $MinikubeProfile
+            Write-Info '在任何 writer 启动前执行 missing->V3 zero-writer genesis 单事务 CAS（exact continuity + required/record create-only + activation lock + 除 lock 外完整 authority prefix 为空）...'
+            $advanceDeadline = [DateTime]::UtcNow.AddSeconds(45)
+            while ($true) {
+                $advanceLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-activate --endpoints $endpoint `
+                    --zero-writer-genesis-v3 --apply --activation-evidence-sha256 $evidence `
+                    --activation-evidence-completed-at-ms $completedAtMS `
+                    --genesis-continuity-token $continuityToken 2>&1)
+                if ($LASTEXITCODE -eq 0) { break }
+                $advanceText = ($advanceLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+                # 并发的一键进程可能已用同 marker/evidence 完成 CAS；先做同一事务 exact 回读。
+                $concurrentVerify = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint `
+                    --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
+                    --require-v3-activation-record --require-activation-evidence-sha256 $evidence `
+                    --require-activation-evidence-completed-at-ms $completedAtMS `
+                    --require-genesis-continuity-token $continuityToken 2>&1)
+                if ($LASTEXITCODE -eq 0) {
+                    $advanceLines = @('并发启动器已完成同一份 exact genesis CAS；按幂等成功继续。')
+                    break
+                }
+                if ($advanceText -notmatch '(?i)activation lock is held' -or [DateTime]::UtcNow -ge $advanceDeadline) {
+                    throw "fresh minikube missing->V3 zero-writer CAS 失败:$advanceText"
+                }
+                Write-Warn '检测到上一进程遗留的短租约 activation lock；在一键入口内有界等待后自动重试...'
+                Start-Sleep -Seconds 3
             }
             $verifyLines = @(& go run ./pkg/dsauthfence/cmd/dsauth-required --endpoints $endpoint `
                 --min-epoch 2 --max-epoch 2 --min-policy-generation 3 --max-policy-generation 3 `
-                --require-v3-activation-record 2>&1)
+                --require-v3-activation-record `
+                --require-activation-evidence-sha256 $evidence `
+                --require-activation-evidence-completed-at-ms $completedAtMS `
+                --require-genesis-continuity-token $continuityToken 2>&1)
             if ($LASTEXITCODE -ne 0) {
                 throw "bootstrap 后无法线性证明 required policy 精确 V3:$($verifyLines -join [Environment]::NewLine)"
             }
             $advanceLines | ForEach-Object { Write-Host $_ }
             $verifyLines | ForEach-Object { Write-Host $_ }
-        } finally { Pop-Location }
+            Set-LocalFreshGenesisIntentState -KubeContext $KubeContext -MinikubeProfile $MinikubeProfile -TargetState complete
+            } finally { Pop-Location }
+        }
+    } finally {
+        if ($baselineMutexOwned) {
+            try { $baselineMutex.ReleaseMutex() } catch { }
+        }
+        $baselineMutex.Dispose()
     }
 }
 
@@ -808,7 +1793,10 @@ function Assert-NoLegacyDSTicketSignerSecret {
 }
 
 function Assert-ExistingLocalEtcdPersistence {
-    param([Parameter(Mandatory = $true)][string]$KubeContext)
+    param(
+        [Parameter(Mandatory = $true)][string]$KubeContext,
+        [bool]$AllowPendingPvcForPreinfra = $false
+    )
     $lines = @(& kubectl --context $KubeContext get deployment/etcd -n $K8sNamespace --ignore-not-found -o json 2>&1)
     if ($LASTEXITCODE -ne 0) { throw "读取本地 Deployment/etcd 失败:$($lines -join [Environment]::NewLine)" }
     $text = (($lines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
@@ -823,7 +1811,22 @@ function Assert-ExistingLocalEtcdPersistence {
     if ([string]$deploy.spec.strategy.type -cne 'Recreate' -or $container.Count -ne 1 -or
         $mount.Count -ne 1 -or $volume.Count -ne 1) {
         throw '现有本地 etcd 仍是旧版非持久布署；直接 apply PVC 会重建 Pod 并丢失 required_writer_epoch/capability。' +
-              '已在任何集群写入前中止。本地可用 -Mode k8s -Reset 显式重建；若必须保留现场，先做 etcd snapshot + restore 到 PVC 并审计 required epoch，禁止自动 missing=>1。'
+              '已在任何集群写入前中止。本地可用 -Mode k8s -Reset 显式重建；若必须保留现场，先做 etcd snapshot + restore 到 PVC 并审计 required policy，禁止无证据自动 missing=>V3。'
+    }
+    # Deployment 已存在却找不到它声明的数据盘，说明旧权威盘被删/漂移。必须在 apply infra
+    # 自动重建同名空 PVC 之前阻断，否则一个“看起来配置正确”的新空盘会被误当成 fresh。
+    $pvcLines = @(& kubectl --context $KubeContext get pvc/etcd-data -n $K8sNamespace --ignore-not-found -o json 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "读取现有本地 PVC/etcd-data 失败:$($pvcLines -join [Environment]::NewLine)" }
+    $pvcText = (($pvcLines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($pvcText)) {
+        throw '现有 Deployment/etcd 引用了 PVC/etcd-data，但该 PVC 已缺失；这是权威数据盘丢失，禁止 apply 自动创建空盘。请从快照恢复或显式 -Reset。'
+    }
+    try { $pvc = $pvcText | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "现有 PVC/etcd-data 返回非法 JSON:$($_.Exception.Message)" }
+    $pvcPhase = [string]$pvc.status.phase
+    if ([string]::IsNullOrWhiteSpace([string]$pvc.metadata.uid) -or
+        ($pvcPhase -cne 'Bound' -and -not ($AllowPendingPvcForPreinfra -and $pvcPhase -ceq 'Pending'))) {
+        throw '现有 PVC/etcd-data 必须为 Bound 且 UID 非空；只有已验证 preinfra marker 的中断恢复可暂时等待 Pending PVC。'
     }
 }
 
@@ -2903,8 +3906,8 @@ function Invoke-K8s {
     # profile 钉死:本次运行的 minikube 全部操作(status/start,以及 Reset 的 delete)都用同一个 profile,
     # 避免 delete 与 rebuild 目标漂移。
     $mkProfile = Get-K8sManagedProfile
-    # 只有 profile 在 start 前完全不存在才属于 fresh cluster。“已有但停止”不是 fresh，
-    # 不得在 required epoch 丢失时自动回填 1。
+    # 记录 profile 是否在本次运行前存在，仅用于区分全新 minikube 与“现有 minikube 上首次
+    # 安装 Pandora”。真正的 genesis 授权不再依赖这个瞬时布尔值，而依赖持久 marker/PVC UID。
     $profileExistedBeforeStart = Test-MinikubeProfileExists -Profile $mkProfile
 
     # 1) minikube 起没起
@@ -2932,13 +3935,93 @@ function Invoke-K8s {
     }
     Write-Ok "kube-context 已锁定本机 minikube:$mkCtx"
     $kubectlContextArgs = @('--context', $mkCtx)
-    Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx
+    $pandoraNamespaceExistedBeforeStart = Test-KubernetesNamespaceExists -KubeContext $mkCtx -Namespace $K8sNamespace
+    # 在任何 apply 前先分类 namespace anchor / marker。preinfra 不依赖 PVC，必须先识别它，
+    # 才能让上次在动态 provision 期间留下的 Pending PVC 继续收敛；pending/complete 仍会
+    # 在 marker 校验中严格绑定同一块 Bound PVC。
+    $initialGenesisMarker = $null
+    $initialGenesisMarkerState = ''
+    $initialFreshNamespaceAnchor = $false
+    if ($pandoraNamespaceExistedBeforeStart) {
+        $initialGenesisMarker = Get-LocalFreshGenesisIntent -KubeContext $mkCtx
+        if ($null -ne $initialGenesisMarker) {
+            $initialGenesisMarkerState = Assert-LocalFreshGenesisIntent -Marker $initialGenesisMarker `
+                -KubeContext $mkCtx -MinikubeProfile $mkProfile
+        }
+        $initialFreshNamespaceAnchor = Get-LocalFreshNamespaceAnchor -KubeContext $mkCtx -MinikubeProfile $mkProfile
+    }
+    Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx `
+        -AllowPendingPvcForPreinfra:($initialGenesisMarkerState -ceq 'preinfra')
     Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment
     Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment
 
+    # 在任何 apply 前回读既有 PVC。已有 Deployment 却缺 PVC 已由上面的 persistence
+    # guard 阻断；无 marker 的旧半成品只有在本次运行前就存在同一个 Bound PVC 时，才有资格
+    # 进入后面的 revision=1 + zero-writer 一次性兼容收养。
+    $legacyAdoptionPvcUid = ''
+    if ($pandoraNamespaceExistedBeforeStart) {
+        if (Test-LocalEtcdDataPvcExists -KubeContext $mkCtx) {
+            $initialPvc = Get-KubectlJsonObject -KubeContext $mkCtx `
+                -Arguments @('get', 'pvc/etcd-data', '-n', $K8sNamespace, '-o', 'json') -Action '启动写入前读取 PVC/etcd-data'
+            $initialPvcUid = [string]$initialPvc.metadata.uid
+            $initialPvcPhase = [string]$initialPvc.status.phase
+            if ([string]::IsNullOrWhiteSpace($initialPvcUid) -or
+                ($initialPvcPhase -cne 'Bound' -and -not ($initialGenesisMarkerState -ceq 'preinfra' -and $initialPvcPhase -ceq 'Pending'))) {
+                throw '启动写入前 PVC/etcd-data 必须为 Bound 且 UID 非空；只有可信 preinfra 可等待 Pending。'
+            }
+            if ($initialPvcPhase -ceq 'Bound') { $legacyAdoptionPvcUid = $initialPvcUid }
+            else { Write-Info '检测到可信 preinfra + Pending PVC；继续 apply/rollout，待 Bound 后再绑定 marker。' }
+        } elseif ($initialGenesisMarkerState -cin @('adopting', 'pending', 'complete')) {
+            throw "marker=$initialGenesisMarkerState 却缺少绑定的 PVC/etcd-data，拒绝重建空盘。"
+        } elseif ($initialFreshNamespaceAnchor -and $null -ne $initialGenesisMarker) {
+            Write-Info 'fresh namespace anchor 与 preinfra marker 均在，继续完成 anchor 清理和 infra。'
+        } elseif ($null -ne $initialGenesisMarker -and $initialGenesisMarkerState -cne 'preinfra') {
+            throw "marker=$initialGenesisMarkerState 时 PVC/etcd-data 缺失，拒绝继续。"
+        }
+        if ($initialGenesisMarkerState -ceq 'preinfra' -and [string]::IsNullOrWhiteSpace($legacyAdoptionPvcUid)) {
+            # preinfra 的 PVC 可以尚未创建或 Pending；它不是 after-the-fact legacy 收养候选。
+            $legacyAdoptionPvcUid = ''
+        }
+    }
+    $allowLegacyInfraOnlyAdoption = $pandoraNamespaceExistedBeforeStart -and
+        $null -eq $initialGenesisMarker -and
+        -not [string]::IsNullOrWhiteSpace($legacyAdoptionPvcUid)
+    $legacyAdoptionCollectionTimeUnixMS = 0L
+    $legacyAdoptionCohortFingerprintSha256 = ''
+    $legacyAdoptionCohortPreflightError = ''
+    if ($allowLegacyInfraOnlyAdoption) {
+        # 必须在本轮任何 apply 前固定采集时刻和对象 identity。这里故意只记录失败而不立刻
+        # throw：无 marker 的既有精确 V3 集群无需收养，稍后的线性 required read 成功即可继续；
+        # 只有 read 证明 missing 时，baseline 才把 cohort 失败升级为阻断。
+        $legacyAdoptionCollectionTimeUnixMS = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        try {
+            $legacyCohort = Get-LocalLegacyInfraOnlyAdoptionCohort -KubeContext $mkCtx `
+                -CollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS -ExpectedPvcUid $legacyAdoptionPvcUid
+            $legacyAdoptionCohortFingerprintSha256 = [string]$legacyCohort.FingerprintSha256
+        } catch {
+            $legacyAdoptionCohortPreflightError = $_.Exception.Message
+        }
+    }
+
     Write-Step "[1/8] namespace"
+    if (-not $pandoraNamespaceExistedBeforeStart) {
+        New-LocalFreshAnchoredNamespace -KubeContext $mkCtx -MinikubeProfile $mkProfile
+    }
     kubectl @kubectlContextArgs apply -f (Join-Path $servicesDir '00-namespace.yaml')
     Assert-LastExit 'kubectl apply namespace'
+    $freshNamespaceAnchor = Get-LocalFreshNamespaceAnchor -KubeContext $mkCtx -MinikubeProfile $mkProfile
+    $currentGenesisMarker = Get-LocalFreshGenesisIntent -KubeContext $mkCtx
+    if ($freshNamespaceAnchor -and $null -eq $currentGenesisMarker) {
+        $installKind = if ($profileExistedBeforeStart) { '中断恢复/现有 minikube 上首次安装 Pandora' } else { '全新 minikube profile' }
+        Write-Info "$installKind：从 namespace 原子 anchor 建立正式 fresh DS-auth intent。"
+        New-LocalFreshGenesisIntent -KubeContext $mkCtx -MinikubeProfile $mkProfile
+        $currentGenesisMarker = Get-LocalFreshGenesisIntent -KubeContext $mkCtx
+    }
+    if ($freshNamespaceAnchor) {
+        Remove-LocalFreshNamespaceAnchor -KubeContext $mkCtx -MinikubeProfile $mkProfile
+    } elseif (-not $pandoraNamespaceExistedBeforeStart -and $null -eq $currentGenesisMarker) {
+        throw 'fresh namespace 已创建但 anchor/marker 均缺失，拒绝进入配置/infra。'
+    }
 
     # DS advertise 地址:默认取本机局域网 IP,让内网其它机器的客户端能连到本机 DS(经容器版 UDP 中继回程)。
     # minikube docker driver 下 Pod IP 局域网不可达,但「advertise=本机局域网 IP + UDP 中继监听 0.0.0.0」
@@ -2989,8 +4072,12 @@ function Invoke-K8s {
     kubectl @kubectlContextArgs rollout status deploy/zookeeper -n $K8sNamespace --timeout=1800s; Assert-LastExit 'zookeeper 就绪'
     kubectl @kubectlContextArgs rollout status deploy/kafka     -n $K8sNamespace --timeout=1800s; Assert-LastExit 'kafka 就绪'
 
-    Write-Step '[3.5/8] DS callback auth required_writer_epoch 线性预检 / fresh-only CAS bootstrap'
-    Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:(-not $profileExistedBeforeStart)
+    Write-Step '[3.5/8] DS callback auth required_writer_epoch 线性预检 / marker 授权的一键 CAS bootstrap'
+    Assert-LocalDsAuthBaseline -KubeContext $mkCtx -MinikubeProfile $mkProfile -AllowFreshBootstrap:$true `
+        -AllowLegacyInfraOnlyAdoption:$allowLegacyInfraOnlyAdoption -ExpectedAdoptionPvcUid $legacyAdoptionPvcUid `
+        -ExpectedAdoptionCohortFingerprintSha256 $legacyAdoptionCohortFingerprintSha256 `
+        -LegacyAdoptionCollectionTimeUnixMS $legacyAdoptionCollectionTimeUnixMS `
+        -LegacyAdoptionCohortPreflightError $legacyAdoptionCohortPreflightError
 
     Write-Step "[4/8] 安装 Agones + apply RBAC/Fleet(真 Linux DS)"
     Build-DsImagesForMinikube
@@ -4088,7 +5175,7 @@ function Resume-K8s {
     Assert-ExistingLocalEtcdPersistence -KubeContext $mkCtx
     Assert-NoLegacyDsFleets -KubeContext $mkCtx -LocalDevelopment
     Assert-NoLegacyDSTicketSignerSecret -KubeContext $mkCtx -LocalDevelopment
-    Assert-LocalDsAuthBaseline -KubeContext $mkCtx -AllowFreshBootstrap:$false
+    Assert-LocalDsAuthBaseline -KubeContext $mkCtx -MinikubeProfile $mkProfile -AllowFreshBootstrap:$false
 
     # advertise 地址重解析(-AdvertiseHost > env > 局域网 IP)。DHCP 换址后本机 IP 可能已变,
     # 但 Secret 里仍是旧地址 —— 必须重生配置 + 覆盖 Secret + 重启读该地址的 Deployment,

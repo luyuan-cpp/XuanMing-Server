@@ -159,6 +159,28 @@
 > 扩展到同一 `PlayerLoadout`(见 `go-services.md` §2.2 与 player 服务 proto)。Battle DS 侧的
 > 快照消费代码在 UE DS 仓库,跟随本契约实现。
 
+#### ③ 局中异步事实上报(realtime progression,2026-07-20 拍板 / 2026-07-21 合入)
+
+在「① 开局快照 + ② 局后上报」之外,Battle DS 可在战斗中把**事实事件**(击杀了怪物 X /
+拾取了白名单内物品 Y)异步批量上报 `battle_result.ReportProgress`,由后端换算入账
+(经验 → player.AddExperience,掉落 → inventory.GrantInstances),实现"打到即所得、
+DS 崩溃已入账部分保住"。约束(逐条硬性):
+
+1. **绝不阻塞 tick**:上报在独立异步任务,fire-and-forget + 本地有界缓冲重试;
+   战斗逻辑不等待、不读取任何回包结果(ACK 只用于清缓冲)。
+2. **DS 只报事实不报数值**:不上报"加多少经验 / 发什么奖";换算与发放全在 Go
+   (怪物经验表 + 掉落白名单在 battle_result,等级曲线在 player)。
+3. **每事件幂等**:事件键 = `(match_id, seq)`,seq 每场单调;at-least-once 重放零副作用
+   (服务端 battle_progress_stream 水位去重,水位推进与发放出箱同一 MySQL 事务)。
+4. **Go 不可用不影响战斗**:上报失败只缓冲重试,战斗照常;进度晚到不丢
+   (尾窗残余风险见 realtime-progression.md §9)。
+5. **单一权威路径**:一场对局的发放要么全走本通道,要么全走局后结算;服务端按自己的
+   水位表强制二选一(结算事务打终局标记 + 掉落发放抑制),不信 DS 声明。
+
+回退路径:battle_result `progress_disabled`(killswitch)置 true → ReportProgress 一律拒
+(ERR_INVALID_STATE),DS 收到即停流,发放自动回退局后结算路径;进行中对局已入账部分不回滚。
+完整设计 / 幂等模型 / 验收矩阵见 `docs/design/realtime-progression.md`。
+
 ### 0.6 ⭐ 延迟不变量:局外系统放 Go = 零战斗延迟(2026-07-08)
 
 **结论**:把角色养成 / 装备 / 属性 / 天赋 / 背包这类**局外(meta)系统**放 Go,
@@ -179,6 +201,8 @@
 **一句话红线**:局外功能尽管往 Go 加,延迟安全的充要条件只有一个 ——
 **DS 战斗中绝不同步调用大厅服务**。任何"战斗内实时读写 player/inventory/economy"的需求,
 都必须改造成"开局快照"或"局后异步上报",否则直接推翻(参照 §0.4 打破原则的门槛)。
+战斗中对大厅服务的**异步事实上报**(§0.5 ③,2026-07-20 拍板)不在禁列,
+但必须满足 ③ 的五条约束;"即时"永远靠异步实现,不靠放开同步调用。
 
 ---
 

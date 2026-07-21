@@ -102,6 +102,15 @@ type PlayerRepo interface {
 	// GetTalents 读已点天赋 + 可点天赋点(total - SUM(level))。
 	GetTalents(ctx context.Context, playerID uint64) (talents []TalentLevel, unspent int, err error)
 
+	// ── 玩家等级经验(实时成长)────────────────────────────────────────────
+	// ApplyExperience 幂等入账经验 + 等级结算 + 经验推送出箱(同一事务)。
+	// 命中幂等键 → (当前权威快照, true, nil);满级 → no-op 返回满级快照。
+	ApplyExperience(ctx context.Context, apply ExpApply) (ExpState, bool, error)
+	// FetchPushOutbox 按 id 升序取最多 limit 条待发布玩家推送出箱记录(FIFO 保序)。
+	FetchPushOutbox(ctx context.Context, limit int) ([]PushOutboxRecord, error)
+	// DeletePushOutbox 删除已成功投递的推送出箱行。
+	DeletePushOutbox(ctx context.Context, id int64) error
+
 	// ── 领奖记录 ───────────────────────────────────────────────────────────
 	// LoadRewardClaims 读玩家领奖记录(RewardClaimStorageRecord 序列化 bytes + 乐观锁版本)。
 	// 未建行 → (nil, 0, nil)(版本 0 表示后续写入按新建处理)。

@@ -705,11 +705,15 @@ func (l *ActivationLock) AdvanceRequiredPolicyV3FromZeroWriters(ctx context.Cont
 // immutable record are created together. The activation lock plus range
 // compare prove no writer capability existed at the linearization point.
 func (l *ActivationLock) BootstrapRequiredPolicyV3FromMissing(ctx context.Context,
-	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64) error {
+	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64,
+	genesisContinuityToken string) error {
 	if l == nil || l.client == nil || l.token == "" {
 		return fmt.Errorf("activation lock is missing")
 	}
 	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
+		return err
+	}
+	if err := ValidateGenesisContinuityToken(genesisContinuityToken); err != nil {
 		return err
 	}
 	nowMS := time.Now().UnixMilli()
@@ -732,7 +736,8 @@ func (l *ActivationLock) BootstrapRequiredPolicyV3FromMissing(ctx context.Contex
 		return err
 	}
 	key := requiredKey(l.client.prefix)
-	compares, err := buildMissingZeroWriterPolicyBootstrapCompares(l.client.prefix, l.token, key, recordKey)
+	compares, err := buildMissingZeroWriterPolicyBootstrapCompares(
+		l.client.prefix, l.token, key, recordKey, genesisContinuityToken)
 	if err != nil {
 		return err
 	}
@@ -742,7 +747,108 @@ func (l *ActivationLock) BootstrapRequiredPolicyV3FromMissing(ctx context.Contex
 		return err
 	}
 	if !resp.Succeeded {
-		return fmt.Errorf("fresh V3 genesis CAS failed; required/record appeared, lock changed, or a capability exists")
+		return fmt.Errorf("fresh V3 genesis CAS failed; required/record/continuity, lock, or capability prefix changed")
+	}
+	return nil
+}
+
+// ValidateGenesisContinuityToken validates the random token mirrored by the
+// immutable Kubernetes genesis marker and the etcd data volume sentinel.
+func ValidateGenesisContinuityToken(token string) error {
+	const prefix = "nonce:"
+	if !strings.HasPrefix(token, prefix) {
+		return fmt.Errorf("genesis continuity token must use nonce:<64 lowercase hex>")
+	}
+	rawHex := strings.TrimPrefix(token, prefix)
+	raw, err := hex.DecodeString(rawHex)
+	if err != nil || len(raw) != 32 || hex.EncodeToString(raw) != rawHex {
+		return fmt.Errorf("genesis continuity token must use nonce:<64 lowercase hex>")
+	}
+	return nil
+}
+
+func genesisContinuityKey(prefix string) string {
+	// Keep the sentinel outside the authoritative DS-auth prefix. This lets
+	// prepare/re-entry prove that the complete prefix is empty and lets the
+	// genesis CAS prove that the activation lock is its only pre-existing key.
+	return strings.TrimSuffix(cleanPrefix(prefix), "/") + "-genesis-continuity"
+}
+
+// PrepareMissingRequiredPolicyV3Continuity creates the data-volume sentinel
+// before Kubernetes is allowed to advance its marker to pending. The create is
+// one transaction that also proves required/record/capabilities/activation-lock
+// are still absent. Re-entry accepts only the exact immutable sentinel while
+// required/record/capabilities remain absent.
+func (c *ActivationClient) PrepareMissingRequiredPolicyV3Continuity(ctx context.Context, token string) error {
+	if c == nil || c.cli == nil {
+		return fmt.Errorf("activation client is missing")
+	}
+	if err := ValidateGenesisContinuityToken(token); err != nil {
+		return err
+	}
+	continuityKey := genesisContinuityKey(c.prefix)
+	compares := buildMissingZeroWriterContinuityPrepareCompares(c.prefix, continuityKey)
+	resp, err := c.cli.Txn(ctx).If(compares...).Then(clientv3.OpPut(continuityKey, token)).Commit()
+	if err != nil {
+		return err
+	}
+	if resp.Succeeded {
+		return nil
+	}
+	if err := c.verifyMissingRequiredPolicyV3Continuity(ctx, token); err != nil {
+		return fmt.Errorf("genesis continuity prepare CAS failed: %w", err)
+	}
+	return nil
+}
+
+// VerifyGenesisContinuity proves the exact create-only sentinel is still on
+// the etcd data volume. A pending/complete Kubernetes marker must never recreate
+// a missing sentinel; absence means data continuity was lost.
+func (c *ActivationClient) VerifyGenesisContinuity(ctx context.Context, token string) error {
+	if c == nil || c.cli == nil {
+		return fmt.Errorf("activation client is missing")
+	}
+	if err := ValidateGenesisContinuityToken(token); err != nil {
+		return err
+	}
+	resp, err := c.cli.Get(ctx, genesisContinuityKey(c.prefix))
+	if err != nil {
+		return err
+	}
+	if len(resp.Kvs) != 1 {
+		return fmt.Errorf("genesis continuity sentinel missing")
+	}
+	kv := resp.Kvs[0]
+	if string(kv.Value) != token || kv.Version != 1 || kv.CreateRevision <= 0 || kv.ModRevision != kv.CreateRevision {
+		return fmt.Errorf("genesis continuity sentinel is not the exact create-only token")
+	}
+	return nil
+}
+
+func (c *ActivationClient) verifyMissingRequiredPolicyV3Continuity(ctx context.Context, token string) error {
+	authorityPrefix := cleanPrefix(c.prefix)
+	resp, err := c.cli.Txn(ctx).Then(
+		clientv3.OpGet(genesisContinuityKey(c.prefix)),
+		clientv3.OpGet(authorityPrefix, clientv3.WithRange(clientv3.GetPrefixRangeEnd(authorityPrefix)), clientv3.WithLimit(1)),
+	).Commit()
+	if err != nil {
+		return err
+	}
+	if len(resp.Responses) != 2 {
+		return fmt.Errorf("genesis continuity verification read is incomplete")
+	}
+	sentinelResp := resp.Responses[0].GetResponseRange()
+	authorityResp := resp.Responses[1].GetResponseRange()
+	if sentinelResp == nil || len(sentinelResp.Kvs) != 1 {
+		return fmt.Errorf("genesis continuity sentinel missing")
+	}
+	sentinelKV := sentinelResp.Kvs[0]
+	if string(sentinelKV.Value) != token || sentinelKV.Version != 1 ||
+		sentinelKV.CreateRevision <= 0 || sentinelKV.ModRevision != sentinelKV.CreateRevision {
+		return fmt.Errorf("genesis continuity sentinel is not the exact create-only token")
+	}
+	if authorityResp == nil || len(authorityResp.Kvs) != 0 {
+		return fmt.Errorf("DS-auth authority prefix is not empty after genesis continuity prepare")
 	}
 	return nil
 }
@@ -751,10 +857,31 @@ func (l *ActivationLock) BootstrapRequiredPolicyV3FromMissing(ctx context.Contex
 // transition record for either a direct V1→V3 or an incremental V2→V3 move.
 func (c *ActivationClient) VerifyRequiredPolicyV3ActivationEvidence(ctx context.Context,
 	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64) error {
+	return c.verifyRequiredPolicyV3ActivationEvidence(ctx, activationEvidenceSHA256,
+		activationEvidenceCompletedAtMS, "")
+}
+
+// VerifyRequiredPolicyV3ActivationEvidenceAndContinuity reads required, the
+// immutable activation record, and the exact data-volume sentinel in one etcd
+// transaction. Local pending/complete markers use this instead of separate
+// reads so a volume replacement cannot be hidden between checks.
+func (c *ActivationClient) VerifyRequiredPolicyV3ActivationEvidenceAndContinuity(ctx context.Context,
+	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64,
+	genesisContinuityToken string) error {
+	if err := ValidateGenesisContinuityToken(genesisContinuityToken); err != nil {
+		return err
+	}
+	return c.verifyRequiredPolicyV3ActivationEvidence(ctx, activationEvidenceSHA256,
+		activationEvidenceCompletedAtMS, genesisContinuityToken)
+}
+
+func (c *ActivationClient) verifyRequiredPolicyV3ActivationEvidence(ctx context.Context,
+	activationEvidenceSHA256 string, activationEvidenceCompletedAtMS int64,
+	genesisContinuityToken string) error {
 	if err := validateActivationEvidenceSHA256(activationEvidenceSHA256); err != nil {
 		return err
 	}
-	record, err := c.verifyRequiredPolicyV3ActivationRecord(ctx)
+	record, err := c.verifyRequiredPolicyV3ActivationRecordWithContinuity(ctx, genesisContinuityToken)
 	if err != nil {
 		return err
 	}
@@ -775,14 +902,51 @@ func (c *ActivationClient) VerifyRequiredPolicyV3ActivationRecord(ctx context.Co
 	return err
 }
 
+func validateZeroWriterServicesTopology(record ActivationRecord) error {
+	if record.ZeroWriterBootstrap && record.ExpectedServicesHash != ExpectedServicesHash(map[string]int{}) {
+		return fmt.Errorf("V3 zero-writer activation record has a non-empty services topology")
+	}
+	return nil
+}
+
+// validateGenesisContinuityActivationProvenance prevents a continuity
+// sentinel from being combined with an unrelated V1/V2 migration record. A
+// local pending marker owns a sentinel only for the direct missing->V3 genesis
+// transaction, and that transaction must happen strictly after the create-only
+// sentinel was persisted.
+func validateGenesisContinuityActivationProvenance(record ActivationRecord,
+	continuityCreateRevision, recordCreateRevision int64) error {
+	if record.FromPolicyGeneration != 0 || !record.GenesisBootstrap ||
+		!record.ZeroWriterBootstrap || record.From != 0 ||
+		record.FromRequiredValue != "" || record.FromModRevision != 0 {
+		return fmt.Errorf("V3 activation record is not the canonical continuity genesis")
+	}
+	if continuityCreateRevision <= 0 || recordCreateRevision <= continuityCreateRevision {
+		return fmt.Errorf("V3 continuity sentinel was not created before the genesis record")
+	}
+	return nil
+}
+
 func (c *ActivationClient) verifyRequiredPolicyV3ActivationRecord(ctx context.Context) (ActivationRecord, error) {
+	return c.verifyRequiredPolicyV3ActivationRecordWithContinuity(ctx, "")
+}
+
+func (c *ActivationClient) verifyRequiredPolicyV3ActivationRecordWithContinuity(ctx context.Context,
+	genesisContinuityToken string) (ActivationRecord, error) {
 	requiredEpochKey := requiredKey(c.prefix)
 	recordKey := policyActivationRecordKey(c.prefix, RequiredPolicyGenerationV3, RequiredPolicyV3)
-	resp, err := c.cli.Txn(ctx).Then(clientv3.OpGet(requiredEpochKey), clientv3.OpGet(recordKey)).Commit()
+	ops := []clientv3.Op{clientv3.OpGet(requiredEpochKey), clientv3.OpGet(recordKey)}
+	if genesisContinuityToken != "" {
+		if err := ValidateGenesisContinuityToken(genesisContinuityToken); err != nil {
+			return ActivationRecord{}, err
+		}
+		ops = append(ops, clientv3.OpGet(genesisContinuityKey(c.prefix)))
+	}
+	resp, err := c.cli.Txn(ctx).Then(ops...).Commit()
 	if err != nil {
 		return ActivationRecord{}, err
 	}
-	if len(resp.Responses) != 2 {
+	if len(resp.Responses) != len(ops) {
 		return ActivationRecord{}, fmt.Errorf("V3 policy activation evidence read is incomplete")
 	}
 	requiredResp, recordResp := resp.Responses[0].GetResponseRange(), resp.Responses[1].GetResponseRange()
@@ -791,6 +955,19 @@ func (c *ActivationClient) verifyRequiredPolicyV3ActivationRecord(ctx context.Co
 		return ActivationRecord{}, fmt.Errorf("required V3 policy or immutable activation record missing")
 	}
 	requiredKV, recordKV := requiredResp.Kvs[0], recordResp.Kvs[0]
+	var continuityCreateRevision int64
+	if genesisContinuityToken != "" {
+		continuityResp := resp.Responses[2].GetResponseRange()
+		if continuityResp == nil || len(continuityResp.Kvs) != 1 {
+			return ActivationRecord{}, fmt.Errorf("genesis continuity sentinel missing from V3 evidence transaction")
+		}
+		continuityKV := continuityResp.Kvs[0]
+		if string(continuityKV.Value) != genesisContinuityToken || continuityKV.Version != 1 ||
+			continuityKV.CreateRevision <= 0 || continuityKV.ModRevision != continuityKV.CreateRevision {
+			return ActivationRecord{}, fmt.Errorf("genesis continuity sentinel is not the exact create-only token")
+		}
+		continuityCreateRevision = continuityKV.CreateRevision
+	}
 	if recordKV.CreateRevision <= 0 || recordKV.Version != 1 ||
 		recordKV.ModRevision != recordKV.CreateRevision || requiredKV.ModRevision != recordKV.CreateRevision {
 		return ActivationRecord{}, fmt.Errorf("V3 policy activation record is not the immutable required-policy transaction")
@@ -798,6 +975,12 @@ func (c *ActivationClient) verifyRequiredPolicyV3ActivationRecord(ctx context.Co
 	record, err := decodeActivationRecord(recordKV.Value)
 	if err != nil {
 		return ActivationRecord{}, fmt.Errorf("decode V3 policy activation record: %w", err)
+	}
+	if genesisContinuityToken != "" {
+		if err := validateGenesisContinuityActivationProvenance(record,
+			continuityCreateRevision, recordKV.CreateRevision); err != nil {
+			return ActivationRecord{}, err
+		}
 	}
 	validFrom := false
 	switch record.FromPolicyGeneration {
@@ -819,6 +1002,13 @@ func (c *ActivationClient) verifyRequiredPolicyV3ActivationRecord(ctx context.Co
 		record.ActivationEvidenceCompletedAtMS <= 0 ||
 		record.ActivationEvidenceCompletedAtMS > record.ActivatedAtMS {
 		return ActivationRecord{}, fmt.Errorf("V3 policy activation record is not canonical")
+	}
+	if err := validateZeroWriterServicesTopology(record); err != nil {
+		return ActivationRecord{}, err
+	}
+	if record.GenesisBootstrap && (requiredKV.Version != 1 ||
+		requiredKV.CreateRevision != recordKV.CreateRevision) {
+		return ActivationRecord{}, fmt.Errorf("V3 genesis record is not a create-only empty-services transaction")
 	}
 	if err := validateActivationEvidenceSHA256(record.ActivationEvidenceSHA256); err != nil {
 		return ActivationRecord{}, fmt.Errorf("V3 policy activation record has invalid evidence: %w", err)
@@ -986,15 +1176,36 @@ func buildZeroWriterPolicyAdvanceCompares(prefix, lockToken, key, recordKey stri
 	}, nil
 }
 
-func buildMissingZeroWriterPolicyBootstrapCompares(prefix, lockToken, key, recordKey string) ([]clientv3.Cmp, error) {
+func buildMissingZeroWriterContinuityPrepareCompares(prefix, continuityKey string) []clientv3.Cmp {
+	authorityPrefix := cleanPrefix(prefix)
+	return []clientv3.Cmp{
+		clientv3.Compare(clientv3.CreateRevision(continuityKey), "=", 0),
+		clientv3.Compare(clientv3.CreateRevision(authorityPrefix), "=", 0).
+			WithRange(clientv3.GetPrefixRangeEnd(authorityPrefix)),
+	}
+}
+
+func buildMissingZeroWriterPolicyBootstrapCompares(prefix, lockToken, key, recordKey,
+	continuityToken string) ([]clientv3.Cmp, error) {
 	if key == "" || recordKey == "" || lockToken == "" {
 		return nil, fmt.Errorf("invalid missing zero-writer V3 bootstrap snapshot")
 	}
+	if err := ValidateGenesisContinuityToken(continuityToken); err != nil {
+		return nil, err
+	}
 	capabilities := capabilityPrefix(prefix)
+	continuityKey := genesisContinuityKey(prefix)
+	authorityPrefix := cleanPrefix(prefix)
+	authorityEnd := clientv3.GetPrefixRangeEnd(authorityPrefix)
+	lockKey := activationLockKey(prefix)
 	return []clientv3.Cmp{
 		clientv3.Compare(clientv3.CreateRevision(key), "=", 0),
 		clientv3.Compare(clientv3.CreateRevision(recordKey), "=", 0),
-		clientv3.Compare(clientv3.Value(activationLockKey(prefix)), "=", lockToken),
+		clientv3.Compare(clientv3.Value(lockKey), "=", lockToken),
+		clientv3.Compare(clientv3.CreateRevision(authorityPrefix), "=", 0).WithRange(lockKey),
+		clientv3.Compare(clientv3.CreateRevision(lockKey+"\x00"), "=", 0).WithRange(authorityEnd),
+		clientv3.Compare(clientv3.Version(continuityKey), "=", 1),
+		clientv3.Compare(clientv3.Value(continuityKey), "=", continuityToken),
 		clientv3.Compare(clientv3.CreateRevision(capabilities), "=", 0).
 			WithRange(clientv3.GetPrefixRangeEnd(capabilities)),
 	}, nil

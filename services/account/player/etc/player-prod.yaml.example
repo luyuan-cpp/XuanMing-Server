@@ -35,3 +35,9 @@ player:
   loadout_customize_enabled: true
   consume_topics:
     - "pandora.player.update"
+  # 玩家等级经验曲线(实时成长):与客户端 j_玩家等级经验.xlsx 同源,14 项 → Lv15 封顶;
+  # 置空 = 经验功能关闭。正式数值以策划确认版为准,两侧必须同步改。
+  exp_curve: [1000, 1800, 2600, 3400, 4200, 5000, 5800, 6600, 7400, 8200, 9000, 9800, 10600, 11400]
+  max_exp_per_grant: 1000000
+  push_outbox_interval: "1s"
+  push_outbox_batch: 128

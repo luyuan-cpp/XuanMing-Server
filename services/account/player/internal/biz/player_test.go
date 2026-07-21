@@ -5,9 +5,12 @@ package biz
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strconv"
 	"testing"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
@@ -38,6 +41,14 @@ type fakeRepo struct {
 	talentGrants map[string]bool   // key=playerID|idempotencyKey
 	rewardRec    map[uint64][]byte // 领奖记录序列化 bytes
 	rewardVer    map[uint64]int32  // 领奖记录乐观锁版本
+
+	// 玩家等级经验(实时成长):level/exp 存在 expLevel/expInLevel,幂等键在 expIdem,
+	// 推送出箱行按序追加(复刻 MySQL 同事务出箱语义)。
+	expLevel   map[uint64]int32
+	expInLevel map[uint64]uint64
+	expIdem    map[string]bool // key=playerID|idempotencyKey
+	pushOutbox []data.PushOutboxRecord
+	pushNextID int64
 }
 
 func newFakeRepo() *fakeRepo {
@@ -55,6 +66,9 @@ func newFakeRepo() *fakeRepo {
 		talentGrants: map[string]bool{},
 		rewardRec:    map[uint64][]byte{},
 		rewardVer:    map[uint64]int32{},
+		expLevel:     map[uint64]int32{},
+		expInLevel:   map[uint64]uint64{},
+		expIdem:      map[string]bool{},
 	}
 }
 
@@ -283,6 +297,67 @@ func (f *fakeRepo) GetTalents(_ context.Context, playerID uint64) ([]data.Talent
 		out = append(out, data.TalentLevel{TalentID: id, Level: lv})
 	}
 	return out, f.talentTotal[playerID] - f.talentUsed(playerID), nil
+}
+
+// ── 玩家等级经验(实时成长)──────────────────────────────────────────────────
+
+func (f *fakeRepo) ApplyExperience(_ context.Context, apply data.ExpApply) (data.ExpState, bool, error) {
+	if _, ok := f.players[apply.PlayerID]; !ok {
+		return data.ExpState{}, false, errcode.New(errcode.ErrPlayerNotFound, "player not found: %d", apply.PlayerID)
+	}
+	maxLevel := int32(len(apply.Curve)) + 1
+	level := f.expLevel[apply.PlayerID]
+	if level < 1 {
+		level = 1
+	}
+	exp := f.expInLevel[apply.PlayerID]
+	// 满级 no-op:不消费幂等键、不出箱(复刻 MySQL 实现)。
+	if level >= maxLevel {
+		return data.ExpState{Level: maxLevel, ExpInLevel: 0, IsMaxLevel: true}, false, nil
+	}
+	key := fmt.Sprintf("%d|%s", apply.PlayerID, apply.IdempotencyKey)
+	if f.expIdem[key] {
+		return data.ExpState{Level: level, ExpInLevel: exp, IsMaxLevel: level >= maxLevel}, true, nil
+	}
+	f.expIdem[key] = true
+	newLevel, newExp, gained := data.AdvanceExperience(level, exp, apply.Delta, apply.Curve)
+	f.expLevel[apply.PlayerID] = newLevel
+	f.expInLevel[apply.PlayerID] = newExp
+	evt := &playerv1.PlayerExperienceEvent{
+		PlayerId: apply.PlayerID, Level: newLevel, ExpInLevel: newExp,
+		IsMaxLevel: newLevel >= maxLevel, LevelsGained: gained,
+	}
+	payload, err := proto.Marshal(evt)
+	if err != nil {
+		return data.ExpState{}, false, err
+	}
+	f.pushNextID++
+	f.pushOutbox = append(f.pushOutbox, data.PushOutboxRecord{
+		ID:        f.pushNextID,
+		PlayerID:  apply.PlayerID,
+		EventType: uint32(playerv1.PlayerPushEventType_PLAYER_PUSH_EVENT_TYPE_EXPERIENCE),
+		Payload:   payload,
+	})
+	return data.ExpState{Level: newLevel, ExpInLevel: newExp, IsMaxLevel: newLevel >= maxLevel, LevelsGained: gained}, false, nil
+}
+
+func (f *fakeRepo) FetchPushOutbox(_ context.Context, limit int) ([]data.PushOutboxRecord, error) {
+	if limit <= 0 || limit > len(f.pushOutbox) {
+		limit = len(f.pushOutbox)
+	}
+	out := make([]data.PushOutboxRecord, limit)
+	copy(out, f.pushOutbox[:limit])
+	return out, nil
+}
+
+func (f *fakeRepo) DeletePushOutbox(_ context.Context, id int64) error {
+	for i, rec := range f.pushOutbox {
+		if rec.ID == id {
+			f.pushOutbox = append(f.pushOutbox[:i], f.pushOutbox[i+1:]...)
+			return nil
+		}
+	}
+	return nil
 }
 
 func (f *fakeRepo) LoadRewardClaims(_ context.Context, playerID uint64) ([]byte, int32, error) {

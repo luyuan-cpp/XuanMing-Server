@@ -98,13 +98,14 @@ type MatchReleaseRecord struct {
 // BattleRepo 是 battle_result 数据层抽象。biz 层只依赖此接口,不依赖 *sql.DB。
 type BattleRepo interface {
 	// SaveResult 事务写 battles + battle_player_stats + player_update_outbox +
-	// battle_drop_outbox + 可选 terminal_release_outbox。
-	// 五者原子提交(不变量 §4:落库、业务出箱、终态资源回收不会半成功)。
-	// 幂等:match_id 已存在 → 返回 (true, nil),不重复写(两路出箱也不写)。
-	// dropOutbox 可为空(无掉落 / ABANDONED)。
+	// battle_drop_outbox + 可选 terminal_release_outbox,并在同一事务内收口实时进度通道
+	// (battle_progress_stream 打终局标记;水位>0 时抑制 dropOutbox 发放,单一权威路径,
+	// realtime-progression.md §5)。六者原子提交(不变量 §4:落库、业务出箱、终态资源回收不会半成功)。
+	// 幂等:match_id 已存在 → 返回 (true, zero, nil),不重复写(两路出箱也不写)。
+	// dropOutbox 可为空(无掉落 / ABANDONED);finalProgressSeq 是 DS 上报的对账水位(0=未走实时通道)。
 	// terminalRelease 仅正常的、已完成 Model-B 鉴权的同步 ReportResult 非空；ABANDONED
 	// 已由 ds_allocator 先回收，不得写 completed 终态行。
-	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord, terminalRelease *TerminalReleaseRecord) (alreadyRecorded bool, err error)
+	SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord, terminalRelease *TerminalReleaseRecord, finalProgressSeq uint64) (alreadyRecorded bool, progress ProgressSettleInfo, err error)
 	// GetResult 读一场对局结算(含全部玩家战绩)。not found → (nil, false, nil)。
 	GetResult(ctx context.Context, matchID uint64) (*battlev1.BattleResult, bool, error)
 	// ListPlayerHistory 倒序列出玩家参与的对局(ended_at_ms < beforeMs,最多 limit 条)。
@@ -128,6 +129,17 @@ type BattleRepo interface {
 	FetchMatchReleaseOutbox(ctx context.Context, limit int, nowMs int64) ([]MatchReleaseRecord, error)
 	DeferMatchReleaseOutbox(ctx context.Context, id uint64, nextAttemptAtMs int64) error
 	DeleteMatchReleaseOutbox(ctx context.Context, id uint64) error
+
+	// ── 实时进度通道(实时成长,realtime-progression.md §3)────────────────────
+	// GetProgressWatermark 读进度水位:(last_applied_seq, 已结算, 行存在, error)。
+	GetProgressWatermark(ctx context.Context, matchID uint64) (uint64, bool, bool, error)
+	// ApplyProgress 原子推进水位(乐观 CAS)并写进度出箱(同一事务)。
+	// CAS 失败 / 已结算 → ErrUnavailable(调用方重读水位收敛)。
+	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, rows []ProgressOutboxRecord) error
+	// FetchProgressOutbox 按 id 升序取最多 limit 条待发放进度出箱记录。
+	FetchProgressOutbox(ctx context.Context, limit int) ([]ProgressOutboxRecord, error)
+	// DeleteProgressOutbox 删除已成功发放的进度出箱行。
+	DeleteProgressOutbox(ctx context.Context, id int64) error
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -158,10 +170,10 @@ func (r *MySQLBattleRepo) ValidateRecoveryOutboxSchema(ctx context.Context) erro
 	return nil
 }
 
-func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord, terminalRelease *TerminalReleaseRecord) (bool, error) {
+func (r *MySQLBattleRepo) SaveResult(ctx context.Context, result *battlev1.BattleResult, outbox []OutboxRecord, dropOutbox []DropOutboxRecord, terminalRelease *TerminalReleaseRecord, finalProgressSeq uint64) (bool, ProgressSettleInfo, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return false, errcode.New(errcode.ErrBattleResultDBWrite, "begin tx: %v", err)
+		return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "begin tx: %v", err)
 	}
 	// 任何提前 return 前回滚;Commit 成功后 Rollback 返回 ErrTxDone 可忽略。
 	defer func() { _ = tx.Rollback() }()
@@ -189,21 +201,21 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 				var qerr error
 				playerIDs, qerr = loadMatchPlayerIDsTx(ctx, tx, result.GetMatchId())
 				if qerr != nil {
-					return false, errcode.New(errcode.ErrBattleResultDBWrite,
+					return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
 						"load idempotent match release players match=%d: %v", result.GetMatchId(), qerr)
 				}
 			}
 			if ierr := insertMatchReleaseOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, time.Now().UnixMilli()); ierr != nil {
-				return false, errcode.New(errcode.ErrBattleResultDBWrite,
+				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
 					"restore match release outbox match=%d: %v", result.GetMatchId(), ierr)
 			}
 			if cerr := tx.Commit(); cerr != nil {
-				return false, errcode.New(errcode.ErrBattleResultDBWrite,
+				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
 					"commit idempotent match release match=%d: %v", result.GetMatchId(), cerr)
 			}
-			return true, nil
+			return true, ProgressSettleInfo{}, nil
 		}
-		return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert battles match=%d: %v", result.GetMatchId(), err)
+		return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "insert battles match=%d: %v", result.GetMatchId(), err)
 	}
 
 	const insStat = `INSERT INTO battle_player_stats
@@ -224,7 +236,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 			s.GetGold(),
 			s.GetMmrDelta(),
 		); serr != nil {
-			return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert stats match=%d player=%d: %v",
+			return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "insert stats match=%d player=%d: %v",
 				result.GetMatchId(), s.GetPlayerId(), serr)
 		}
 	}
@@ -238,24 +250,35 @@ VALUES (?, ?, ?, ?)`
 		if _, oerr := tx.ExecContext(ctx, insOutbox,
 			result.GetMatchId(), o.PlayerID, o.Payload, nowMs,
 		); oerr != nil {
-			return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert outbox match=%d player=%d: %v",
+			return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "insert outbox match=%d player=%d: %v",
 				result.GetMatchId(), o.PlayerID, oerr)
 		}
+	}
+
+	// 实时进度通道结算收口(与落库同事务,realtime-progression.md §5):
+	// 打终局标记封死迟到进度(僵尸 / 分区恢复 DS fencing);水位>0 = 本场发放权已归实时通道,
+	// 结算路径掉落只作对账不再入 drop 出箱(单一权威路径,防双发;判定依据是服务端水位表,不信 DS)。
+	settleInfo, serr := settleProgressStreamTx(ctx, tx, result.GetMatchId(), finalProgressSeq, nowMs)
+	if serr != nil {
+		return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
+			"settle progress stream match=%d: %v", result.GetMatchId(), serr)
 	}
 
 	// 同事务写战斗装备掉落出箱(W5 ④):落库与待发放装备掉落原子提交(不变量 §4)。
 	const insDropOutbox = `INSERT INTO battle_drop_outbox
 (match_id, player_id, item_config_ids, created_at_ms)
 VALUES (?, ?, ?, ?)`
-	for _, d := range dropOutbox {
-		if len(d.ItemConfigIDs) == 0 {
-			continue
-		}
-		if _, derr := tx.ExecContext(ctx, insDropOutbox,
-			result.GetMatchId(), d.PlayerID, encodeConfigIDs(d.ItemConfigIDs), nowMs,
-		); derr != nil {
-			return false, errcode.New(errcode.ErrBattleResultDBWrite, "insert drop outbox match=%d player=%d: %v",
-				result.GetMatchId(), d.PlayerID, derr)
+	if !settleInfo.DropsSuppressed {
+		for _, d := range dropOutbox {
+			if len(d.ItemConfigIDs) == 0 {
+				continue
+			}
+			if _, derr := tx.ExecContext(ctx, insDropOutbox,
+				result.GetMatchId(), d.PlayerID, encodeConfigIDs(d.ItemConfigIDs), nowMs,
+			); derr != nil {
+				return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "insert drop outbox match=%d player=%d: %v",
+					result.GetMatchId(), d.PlayerID, derr)
+			}
 		}
 	}
 
@@ -274,7 +297,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 			terminalRelease.AuthKid, terminalRelease.AuthTokenSHA256, terminalRelease.AuthWriterEpoch,
 			terminalRelease.AuthorizedAtMs, terminalRelease.ReleaseAfterMs, nowMs,
 		); terr != nil {
-			return false, errcode.New(errcode.ErrBattleResultDBWrite,
+			return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
 				"insert terminal release outbox match=%d allocation=%s: %v",
 				result.GetMatchId(), terminalRelease.AllocationID, terr)
 		}
@@ -290,14 +313,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		}
 	}
 	if err := insertMatchReleaseOutboxTx(ctx, tx, result.GetMatchId(), playerIDs, nowMs); err != nil {
-		return false, errcode.New(errcode.ErrBattleResultDBWrite,
+		return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite,
 			"insert match release outbox match=%d: %v", result.GetMatchId(), err)
 	}
 
 	if cerr := tx.Commit(); cerr != nil {
-		return false, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
+		return false, ProgressSettleInfo{}, errcode.New(errcode.ErrBattleResultDBWrite, "commit match=%d: %v", result.GetMatchId(), cerr)
 	}
-	return false, nil
+	return false, settleInfo, nil
 }
 
 func authoritativeRecoveryPlayerIDs(rec *TerminalReleaseRecord) []uint64 {

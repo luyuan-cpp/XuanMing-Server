@@ -385,11 +385,11 @@ constexpr ResolvePlayerMatchContextResponse::ParseTableT_ ResolvePlayerMatchCont
     {
       PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -409,8 +409,8 @@ constexpr ResolvePlayerMatchContextResponse::ParseTableT_ ResolvePlayerMatchCont
        {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.state_)}},
       // .pandora.match.v1.PlayerMatchResumeStage stage = 3 [json_name = "stage"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolvePlayerMatchContextResponse, _impl_.stage_), 9>(),
-       {24, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolvePlayerMatchContextResponse, _impl_.stage_), 8>(),
+       {24, 8, 0,
         PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.stage_)}},
       // uint64 ticket_id = 4 [json_name = "ticketId"];
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolvePlayerMatchContextResponse, _impl_.ticket_id_), 6>(),
@@ -429,8 +429,8 @@ constexpr ResolvePlayerMatchContextResponse::ParseTableT_ ResolvePlayerMatchCont
        {58, 1, 0,
         PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.battle_ticket_)}},
       // uint64 placement_version = 8 [json_name = "placementVersion"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolvePlayerMatchContextResponse, _impl_.placement_version_), 8>(),
-       {64, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolvePlayerMatchContextResponse, _impl_.placement_version_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.placement_version_)}},
       // string placement_operation_id = 9 [json_name = "placementOperationId"];
       {::_pbi::TcParser::FastUS1,
@@ -440,7 +440,10 @@ constexpr ResolvePlayerMatchContextResponse::ParseTableT_ ResolvePlayerMatchCont
       {::_pbi::TcParser::FastUS1,
        {82, 3, 0,
         PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.game_mode_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 map_id = 11 [json_name = "mapId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolvePlayerMatchContextResponse, _impl_.map_id_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.map_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -453,7 +456,7 @@ constexpr ResolvePlayerMatchContextResponse::ParseTableT_ ResolvePlayerMatchCont
       // .pandora.match.v1.PlayerMatchContextState state = 2 [json_name = "state"];
       {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.state_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // .pandora.match.v1.PlayerMatchResumeStage stage = 3 [json_name = "stage"];
-      {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.stage_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.stage_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 ticket_id = 4 [json_name = "ticketId"];
       {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.ticket_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 match_id = 5 [json_name = "matchId"];
@@ -463,11 +466,13 @@ constexpr ResolvePlayerMatchContextResponse::ParseTableT_ ResolvePlayerMatchCont
       // string battle_ticket = 7 [json_name = "battleTicket"];
       {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.battle_ticket_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 placement_version = 8 [json_name = "placementVersion"];
-      {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.placement_version_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.placement_version_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string placement_operation_id = 9 [json_name = "placementOperationId"];
       {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.placement_operation_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string game_mode = 10 [json_name = "gameMode"];
       {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.game_mode_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 map_id = 11 [json_name = "mapId"];
+      {PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.map_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -502,8 +507,9 @@ inline constexpr ResolvePlayerMatchContextResponse::Impl_::Impl_(
         state_{static_cast< ::pandora::match::v1::PlayerMatchContextState >(0)},
         ticket_id_{::uint64_t{0u}},
         match_id_{::uint64_t{0u}},
-        placement_version_{::uint64_t{0u}},
-        stage_{static_cast< ::pandora::match::v1::PlayerMatchResumeStage >(0)} {}
+        stage_{static_cast< ::pandora::match::v1::PlayerMatchResumeStage >(0)},
+        map_id_{0u},
+        placement_version_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ResolvePlayerMatchContextResponse::ResolvePlayerMatchContextResponse(::_pbi::ConstantInitialized,
@@ -1216,11 +1222,11 @@ constexpr MatchProgress::ParseTableT_ MatchProgress::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      20, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294442752,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1281,6 +1287,8 @@ constexpr MatchProgress::ParseTableT_ MatchProgress::InternalGenerateParseTable_
       {PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_.team_a_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
       // repeated uint64 team_b = 8 [json_name = "teamB"];
       {PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_.team_b_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // uint32 map_id = 20 [json_name = "mapId"];
+      {PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_.map_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1318,7 +1326,8 @@ inline constexpr MatchProgress::Impl_::Impl_(
         match_id_{::uint64_t{0u}},
         stage_{static_cast< ::pandora::match::v1::MatchStage >(0)},
         queue_seconds_{0},
-        estimated_wait_seconds_{0} {}
+        estimated_wait_seconds_{0},
+        map_id_{0u} {}
 
 template <typename>
 constexpr MatchProgress::MatchProgress(::_pbi::ConstantInitialized,
@@ -3851,7 +3860,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.code_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.state_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.stage_),
@@ -3862,19 +3871,21 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.placement_version_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.placement_operation_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.game_mode_),
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::ResolvePlayerMatchContextResponse, _impl_.map_id_),
         4,
         5,
-        9,
+        8,
         6,
         7,
         0,
         1,
-        8,
+        10,
         2,
         3,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.match_id_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.stage_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.queue_seconds_),
@@ -3883,6 +3894,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.battle_ticket_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.team_a_),
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.team_b_),
+        PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgress, _impl_.map_id_),
         4,
         5,
         6,
@@ -3891,6 +3903,7 @@ const ::uint32_t
         3,
         0,
         1,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::pandora::match::v1::MatchProgressEvent, _impl_._has_bits_),
         6, // hasbit index offset
@@ -4057,15 +4070,15 @@ static const ::_pbi::MigrationSchema
         {59, sizeof(::pandora::match::v1::ReleaseMatchResponse)},
         {64, sizeof(::pandora::match::v1::ResolvePlayerMatchContextRequest)},
         {69, sizeof(::pandora::match::v1::ResolvePlayerMatchContextResponse)},
-        {92, sizeof(::pandora::match::v1::MatchProgress)},
-        {111, sizeof(::pandora::match::v1::MatchProgressEvent)},
-        {120, sizeof(::pandora::match::v1::MatchMemberStorageRecord)},
-        {135, sizeof(::pandora::match::v1::MatchTicketStorageRecord)},
-        {156, sizeof(::pandora::match::v1::MatchStorageRecord)},
-        {189, sizeof(::pandora::match::v1::MatchPlayerPlacementBindingStorageRecord)},
-        {200, sizeof(::pandora::match::v1::MatchBattleTargetStorageRecord)},
-        {217, sizeof(::pandora::match::v1::MatchStartOperationStorageRecord)},
-        {250, sizeof(::pandora::match::v1::MatchReleaseStorageRecord)},
+        {94, sizeof(::pandora::match::v1::MatchProgress)},
+        {115, sizeof(::pandora::match::v1::MatchProgressEvent)},
+        {124, sizeof(::pandora::match::v1::MatchMemberStorageRecord)},
+        {139, sizeof(::pandora::match::v1::MatchTicketStorageRecord)},
+        {160, sizeof(::pandora::match::v1::MatchStorageRecord)},
+        {193, sizeof(::pandora::match::v1::MatchPlayerPlacementBindingStorageRecord)},
+        {204, sizeof(::pandora::match::v1::MatchBattleTargetStorageRecord)},
+        {221, sizeof(::pandora::match::v1::MatchStartOperationStorageRecord)},
+        {254, sizeof(::pandora::match::v1::MatchReleaseStorageRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4117,7 +4130,7 @@ const char descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto[] ABSL
     "rIds\"F\n\024ReleaseMatchResponse\022.\n\004code\030\001 \001"
     "(\0162\032.pandora.common.v1.ErrCodeR\004code\"\?\n "
     "ResolvePlayerMatchContextRequest\022\033\n\tplay"
-    "er_id\030\001 \001(\004R\010playerId\"\327\003\n!ResolvePlayerM"
+    "er_id\030\001 \001(\004R\010playerId\"\356\003\n!ResolvePlayerM"
     "atchContextResponse\022.\n\004code\030\001 \001(\0162\032.pand"
     "ora.common.v1.ErrCodeR\004code\022\?\n\005state\030\002 \001"
     "(\0162).pandora.match.v1.PlayerMatchContext"
@@ -4129,134 +4142,135 @@ const char descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto[] ABSL
     "eTicket\022+\n\021placement_version\030\010 \001(\004R\020plac"
     "ementVersion\0224\n\026placement_operation_id\030\t"
     " \001(\tR\024placementOperationId\022\033\n\tgame_mode\030"
-    "\n \001(\tR\010gameMode\"\270\002\n\rMatchProgress\022\031\n\010mat"
-    "ch_id\030\001 \001(\004R\007matchId\0222\n\005stage\030\002 \001(\0162\034.pa"
-    "ndora.match.v1.MatchStageR\005stage\022#\n\rqueu"
-    "e_seconds\030\003 \001(\005R\014queueSeconds\0224\n\026estimat"
-    "ed_wait_seconds\030\004 \001(\005R\024estimatedWaitSeco"
-    "nds\022$\n\016battle_ds_addr\030\005 \001(\tR\014battleDsAdd"
-    "r\022#\n\rbattle_ticket\030\006 \001(\tR\014battleTicket\022\025"
-    "\n\006team_a\030\007 \003(\004R\005teamA\022\025\n\006team_b\030\010 \003(\004R\005t"
-    "eamBJ\004\010\t\020\024\"\216\001\n\022MatchProgressEvent\022;\n\010pro"
-    "gress\030\001 \001(\0132\037.pandora.match.v1.MatchProg"
-    "ressR\010progress\022 \n\014to_player_id\030\002 \001(\004R\nto"
-    "PlayerId\022\023\n\005ts_ms\030\003 \001(\003R\004tsMsJ\004\010\004\020\n\"\325\001\n\030"
-    "MatchMemberStorageRecord\022\033\n\tplayer_id\030\001 "
-    "\001(\004R\010playerId\022\027\n\007team_id\030\002 \001(\004R\006teamId\022\020"
-    "\n\003mmr\030\003 \001(\005R\003mmr\022\027\n\007hero_id\030\004 \001(\rR\006heroI"
-    "d\022\022\n\004side\030\005 \001(\005R\004side\022>\n\007confirm\030\006 \001(\0162$"
-    ".pandora.match.v1.MatchConfirmStatusR\007co"
-    "nfirmJ\004\010\007\020\n\"\311\002\n\030MatchTicketStorageRecord"
-    "\022\033\n\tticket_id\030\001 \001(\004R\010ticketId\022\027\n\007team_id"
-    "\030\002 \001(\004R\006teamId\022\035\n\ncaptain_id\030\003 \001(\004R\tcapt"
-    "ainId\022D\n\007members\030\004 \003(\0132*.pandora.match.v"
-    "1.MatchMemberStorageRecordR\007members\022\027\n\007a"
-    "vg_mmr\030\005 \001(\005R\006avgMmr\022$\n\016enqueued_at_ms\030\006"
-    " \001(\003R\014enqueuedAtMs\022\031\n\010match_id\030\007 \001(\004R\007ma"
-    "tchId\022\025\n\006map_id\030\n \001(\rR\005mapId\022\033\n\tgame_mod"
-    "e\030\013 \001(\tR\010gameModeJ\004\010\010\020\n\"\364\005\n\022MatchStorage"
-    "Record\022\031\n\010match_id\030\001 \001(\004R\007matchId\0222\n\005sta"
-    "ge\030\002 \001(\0162\034.pandora.match.v1.MatchStageR\005"
-    "stage\022D\n\007members\030\003 \003(\0132*.pandora.match.v"
-    "1.MatchMemberStorageRecordR\007members\022\035\n\nt"
-    "icket_ids\030\004 \003(\004R\tticketIds\022\"\n\rcreated_at"
-    "_ms\030\005 \001(\003R\013createdAtMs\022.\n\023confirm_deadli"
-    "ne_ms\030\006 \001(\003R\021confirmDeadlineMs\022$\n\016battle"
-    "_ds_addr\030\007 \001(\tR\014battleDsAddr\022#\n\rbattle_t"
-    "icket\030\010 \001(\tR\014battleTicket\022\025\n\006map_id\030\n \001("
-    "\rR\005mapId\0226\n\027allocation_operation_id\030\013 \001("
-    "\tR\025allocationOperationId\022Q\n\020allocation_p"
-    "hase\030\014 \001(\0162&.pandora.match.v1.MatchAlloc"
-    "ationPhaseR\017allocationPhase\022-\n\022allocatio"
-    "n_attempt\030\r \001(\rR\021allocationAttempt\022@\n\035al"
-    "location_next_attempt_at_ms\030\016 \001(\003R\031alloc"
-    "ationNextAttemptAtMs\022U\n\rbattle_target\030\017 "
-    "\001(\01320.pandora.match.v1.MatchBattleTarget"
-    "StorageRecordR\014battleTarget\022\033\n\tgame_mode"
-    "\030\020 \001(\tR\010gameModeJ\004\010\t\020\n\"\277\001\n(MatchPlayerPl"
-    "acementBindingStorageRecord\022\033\n\tplayer_id"
-    "\030\001 \001(\004R\010playerId\022+\n\021placement_version\030\002 "
-    "\001(\004R\020placementVersion\022!\n\014operation_id\030\003 "
-    "\001(\tR\013operationId\022&\n\017source_match_id\030\004 \001("
-    "\004R\rsourceMatchId\"\334\002\n\036MatchBattleTargetSt"
-    "orageRecord\022\027\n\007ds_addr\030\001 \001(\tR\006dsAddr\022\036\n\013"
-    "ds_pod_name\030\002 \001(\tR\tdsPodName\022&\n\017ds_insta"
-    "nce_uid\030\003 \001(\tR\rdsInstanceUid\022*\n\021ds_insta"
-    "nce_epoch\030\004 \001(\rR\017dsInstanceEpoch\022#\n\rallo"
-    "cation_id\030\005 \001(\tR\014allocationId\022#\n\rrelease"
-    "_track\030\006 \001(\tR\014releaseTrack\022c\n\017player_bin"
-    "dings\030\007 \003(\0132:.pandora.match.v1.MatchPlay"
-    "erPlacementBindingStorageRecordR\016playerB"
-    "indings\"\314\004\n MatchStartOperationStorageRe"
-    "cord\022!\n\014operation_id\030\001 \001(\tR\013operationId\022"
-    "\033\n\tticket_id\030\002 \001(\004R\010ticketId\022\027\n\007team_id\030"
-    "\003 \001(\004R\006teamId\022\035\n\ncaptain_id\030\004 \001(\004R\tcapta"
-    "inId\022D\n\007members\030\005 \003(\0132*.pandora.match.v1"
-    ".MatchMemberStorageRecordR\007members\022\027\n\007av"
-    "g_mmr\030\006 \001(\005R\006avgMmr\022\025\n\006map_id\030\007 \001(\rR\005map"
-    "Id\0227\n\005phase\030\010 \001(\0162!.pandora.match.v1.Mat"
-    "chStartPhaseR\005phase\022,\n\022claimed_player_id"
-    "s\030\t \003(\004R\020claimedPlayerIds\022\030\n\007attempt\030\n \001"
-    "(\rR\007attempt\022+\n\022next_attempt_at_ms\030\013 \001(\003R"
-    "\017nextAttemptAtMs\022\037\n\013lease_token\030\014 \001(\tR\nl"
-    "easeToken\022*\n\021lease_deadline_ms\030\r \001(\003R\017le"
-    "aseDeadlineMs\022\"\n\rcreated_at_ms\030\016 \001(\003R\013cr"
-    "eatedAtMs\022\033\n\tgame_mode\030\017 \001(\tR\010gameMode\"\234"
-    "\001\n\031MatchReleaseStorageRecord\022!\n\014operatio"
-    "n_id\030\001 \001(\tR\013operationId\022\031\n\010match_id\030\002 \001("
-    "\004R\007matchId\022\035\n\nplayer_ids\030\003 \003(\004R\tplayerId"
-    "s\022\"\n\rcreated_at_ms\030\004 \001(\003R\013createdAtMs*\276\001"
-    "\n\nMatchStage\022\033\n\027MATCH_STAGE_UNSPECIFIED\020"
-    "\000\022\030\n\024MATCH_STAGE_QUEUEING\020\001\022\025\n\021MATCH_STA"
-    "GE_FOUND\020\002\022\027\n\023MATCH_STAGE_CONFIRM\020\003\022\032\n\026M"
-    "ATCH_STAGE_ALLOCATING\020\004\022\025\n\021MATCH_STAGE_R"
-    "EADY\020\005\022\026\n\022MATCH_STAGE_FAILED\020\006*\367\001\n\024Match"
-    "AllocationPhase\022&\n\"MATCH_ALLOCATION_PHAS"
-    "E_UNSPECIFIED\020\000\022\"\n\036MATCH_ALLOCATION_PHAS"
-    "E_PENDING\020\001\022%\n!MATCH_ALLOCATION_PHASE_RE"
-    "QUESTING\020\002\022$\n MATCH_ALLOCATION_PHASE_COM"
-    "PLETED\020\003\022!\n\035MATCH_ALLOCATION_PHASE_FAILE"
-    "D\020\004\022#\n\037MATCH_ALLOCATION_PHASE_ABORTING\020\005"
-    "*\234\002\n\017MatchStartPhase\022!\n\035MATCH_START_PHAS"
-    "E_UNSPECIFIED\020\000\022\036\n\032MATCH_START_PHASE_ACC"
-    "EPTED\020\001\022\"\n\036MATCH_START_PHASE_TICKET_READ"
-    "Y\020\002\022\036\n\032MATCH_START_PHASE_CLAIMING\020\003\022\"\n\036M"
-    "ATCH_START_PHASE_CLAIMS_READY\020\004\022\034\n\030MATCH"
-    "_START_PHASE_QUEUED\020\005\022\"\n\036MATCH_START_PHA"
-    "SE_COMPENSATING\020\006\022\034\n\030MATCH_START_PHASE_F"
-    "AILED\020\007*\221\001\n\027PlayerMatchContextState\022*\n&P"
-    "LAYER_MATCH_CONTEXT_STATE_UNSPECIFIED\020\000\022"
-    "#\n\037PLAYER_MATCH_CONTEXT_STATE_NONE\020\001\022%\n!"
-    "PLAYER_MATCH_CONTEXT_STATE_ACTIVE\020\002*\212\002\n\026"
-    "PlayerMatchResumeStage\022)\n%PLAYER_MATCH_R"
-    "ESUME_STAGE_UNSPECIFIED\020\000\022&\n\"PLAYER_MATC"
-    "H_RESUME_STAGE_STARTING\020\001\022$\n PLAYER_MATC"
-    "H_RESUME_STAGE_QUEUED\020\002\022(\n$PLAYER_MATCH_"
-    "RESUME_STAGE_CONFIRMING\020\003\022(\n$PLAYER_MATC"
-    "H_RESUME_STAGE_ALLOCATING\020\004\022#\n\037PLAYER_MA"
-    "TCH_RESUME_STAGE_READY\020\005*;\n\022MatchPushEve"
-    "ntType\022%\n!MATCH_PUSH_EVENT_TYPE_UNSPECIF"
-    "IED\020\000*\242\001\n\022MatchConfirmStatus\022$\n MATCH_CO"
-    "NFIRM_STATUS_UNSPECIFIED\020\000\022 \n\034MATCH_CONF"
-    "IRM_STATUS_PENDING\020\001\022!\n\035MATCH_CONFIRM_ST"
-    "ATUS_ACCEPTED\020\002\022!\n\035MATCH_CONFIRM_STATUS_"
-    "REJECTED\020\0032\363\004\n\014MatchService\022W\n\nStartMatc"
-    "h\022#.pandora.match.v1.StartMatchRequest\032$"
-    ".pandora.match.v1.StartMatchResponse\022Z\n\013"
-    "CancelMatch\022$.pandora.match.v1.CancelMat"
-    "chRequest\032%.pandora.match.v1.CancelMatch"
-    "Response\022]\n\014ConfirmMatch\022%.pandora.match"
-    ".v1.ConfirmMatchRequest\032&.pandora.match."
-    "v1.ConfirmMatchResponse\022i\n\020GetMatchProgr"
-    "ess\022).pandora.match.v1.GetMatchProgressR"
-    "equest\032*.pandora.match.v1.GetMatchProgre"
-    "ssResponse\022]\n\014ReleaseMatch\022%.pandora.mat"
-    "ch.v1.ReleaseMatchRequest\032&.pandora.matc"
-    "h.v1.ReleaseMatchResponse\022\204\001\n\031ResolvePla"
-    "yerMatchContext\0222.pandora.match.v1.Resol"
-    "vePlayerMatchContextRequest\0323.pandora.ma"
-    "tch.v1.ResolvePlayerMatchContextResponse"
-    "b\006proto3"
+    "\n \001(\tR\010gameMode\022\025\n\006map_id\030\013 \001(\rR\005mapId\"\317"
+    "\002\n\rMatchProgress\022\031\n\010match_id\030\001 \001(\004R\007matc"
+    "hId\0222\n\005stage\030\002 \001(\0162\034.pandora.match.v1.Ma"
+    "tchStageR\005stage\022#\n\rqueue_seconds\030\003 \001(\005R\014"
+    "queueSeconds\0224\n\026estimated_wait_seconds\030\004"
+    " \001(\005R\024estimatedWaitSeconds\022$\n\016battle_ds_"
+    "addr\030\005 \001(\tR\014battleDsAddr\022#\n\rbattle_ticke"
+    "t\030\006 \001(\tR\014battleTicket\022\025\n\006team_a\030\007 \003(\004R\005t"
+    "eamA\022\025\n\006team_b\030\010 \003(\004R\005teamB\022\025\n\006map_id\030\024 "
+    "\001(\rR\005mapIdJ\004\010\t\020\024\"\216\001\n\022MatchProgressEvent\022"
+    ";\n\010progress\030\001 \001(\0132\037.pandora.match.v1.Mat"
+    "chProgressR\010progress\022 \n\014to_player_id\030\002 \001"
+    "(\004R\ntoPlayerId\022\023\n\005ts_ms\030\003 \001(\003R\004tsMsJ\004\010\004\020"
+    "\n\"\325\001\n\030MatchMemberStorageRecord\022\033\n\tplayer"
+    "_id\030\001 \001(\004R\010playerId\022\027\n\007team_id\030\002 \001(\004R\006te"
+    "amId\022\020\n\003mmr\030\003 \001(\005R\003mmr\022\027\n\007hero_id\030\004 \001(\rR"
+    "\006heroId\022\022\n\004side\030\005 \001(\005R\004side\022>\n\007confirm\030\006"
+    " \001(\0162$.pandora.match.v1.MatchConfirmStat"
+    "usR\007confirmJ\004\010\007\020\n\"\311\002\n\030MatchTicketStorage"
+    "Record\022\033\n\tticket_id\030\001 \001(\004R\010ticketId\022\027\n\007t"
+    "eam_id\030\002 \001(\004R\006teamId\022\035\n\ncaptain_id\030\003 \001(\004"
+    "R\tcaptainId\022D\n\007members\030\004 \003(\0132*.pandora.m"
+    "atch.v1.MatchMemberStorageRecordR\007member"
+    "s\022\027\n\007avg_mmr\030\005 \001(\005R\006avgMmr\022$\n\016enqueued_a"
+    "t_ms\030\006 \001(\003R\014enqueuedAtMs\022\031\n\010match_id\030\007 \001"
+    "(\004R\007matchId\022\025\n\006map_id\030\n \001(\rR\005mapId\022\033\n\tga"
+    "me_mode\030\013 \001(\tR\010gameModeJ\004\010\010\020\n\"\364\005\n\022MatchS"
+    "torageRecord\022\031\n\010match_id\030\001 \001(\004R\007matchId\022"
+    "2\n\005stage\030\002 \001(\0162\034.pandora.match.v1.MatchS"
+    "tageR\005stage\022D\n\007members\030\003 \003(\0132*.pandora.m"
+    "atch.v1.MatchMemberStorageRecordR\007member"
+    "s\022\035\n\nticket_ids\030\004 \003(\004R\tticketIds\022\"\n\rcrea"
+    "ted_at_ms\030\005 \001(\003R\013createdAtMs\022.\n\023confirm_"
+    "deadline_ms\030\006 \001(\003R\021confirmDeadlineMs\022$\n\016"
+    "battle_ds_addr\030\007 \001(\tR\014battleDsAddr\022#\n\rba"
+    "ttle_ticket\030\010 \001(\tR\014battleTicket\022\025\n\006map_i"
+    "d\030\n \001(\rR\005mapId\0226\n\027allocation_operation_i"
+    "d\030\013 \001(\tR\025allocationOperationId\022Q\n\020alloca"
+    "tion_phase\030\014 \001(\0162&.pandora.match.v1.Matc"
+    "hAllocationPhaseR\017allocationPhase\022-\n\022all"
+    "ocation_attempt\030\r \001(\rR\021allocationAttempt"
+    "\022@\n\035allocation_next_attempt_at_ms\030\016 \001(\003R"
+    "\031allocationNextAttemptAtMs\022U\n\rbattle_tar"
+    "get\030\017 \001(\01320.pandora.match.v1.MatchBattle"
+    "TargetStorageRecordR\014battleTarget\022\033\n\tgam"
+    "e_mode\030\020 \001(\tR\010gameModeJ\004\010\t\020\n\"\277\001\n(MatchPl"
+    "ayerPlacementBindingStorageRecord\022\033\n\tpla"
+    "yer_id\030\001 \001(\004R\010playerId\022+\n\021placement_vers"
+    "ion\030\002 \001(\004R\020placementVersion\022!\n\014operation"
+    "_id\030\003 \001(\tR\013operationId\022&\n\017source_match_i"
+    "d\030\004 \001(\004R\rsourceMatchId\"\334\002\n\036MatchBattleTa"
+    "rgetStorageRecord\022\027\n\007ds_addr\030\001 \001(\tR\006dsAd"
+    "dr\022\036\n\013ds_pod_name\030\002 \001(\tR\tdsPodName\022&\n\017ds"
+    "_instance_uid\030\003 \001(\tR\rdsInstanceUid\022*\n\021ds"
+    "_instance_epoch\030\004 \001(\rR\017dsInstanceEpoch\022#"
+    "\n\rallocation_id\030\005 \001(\tR\014allocationId\022#\n\rr"
+    "elease_track\030\006 \001(\tR\014releaseTrack\022c\n\017play"
+    "er_bindings\030\007 \003(\0132:.pandora.match.v1.Mat"
+    "chPlayerPlacementBindingStorageRecordR\016p"
+    "layerBindings\"\314\004\n MatchStartOperationSto"
+    "rageRecord\022!\n\014operation_id\030\001 \001(\tR\013operat"
+    "ionId\022\033\n\tticket_id\030\002 \001(\004R\010ticketId\022\027\n\007te"
+    "am_id\030\003 \001(\004R\006teamId\022\035\n\ncaptain_id\030\004 \001(\004R"
+    "\tcaptainId\022D\n\007members\030\005 \003(\0132*.pandora.ma"
+    "tch.v1.MatchMemberStorageRecordR\007members"
+    "\022\027\n\007avg_mmr\030\006 \001(\005R\006avgMmr\022\025\n\006map_id\030\007 \001("
+    "\rR\005mapId\0227\n\005phase\030\010 \001(\0162!.pandora.match."
+    "v1.MatchStartPhaseR\005phase\022,\n\022claimed_pla"
+    "yer_ids\030\t \003(\004R\020claimedPlayerIds\022\030\n\007attem"
+    "pt\030\n \001(\rR\007attempt\022+\n\022next_attempt_at_ms\030"
+    "\013 \001(\003R\017nextAttemptAtMs\022\037\n\013lease_token\030\014 "
+    "\001(\tR\nleaseToken\022*\n\021lease_deadline_ms\030\r \001"
+    "(\003R\017leaseDeadlineMs\022\"\n\rcreated_at_ms\030\016 \001"
+    "(\003R\013createdAtMs\022\033\n\tgame_mode\030\017 \001(\tR\010game"
+    "Mode\"\234\001\n\031MatchReleaseStorageRecord\022!\n\014op"
+    "eration_id\030\001 \001(\tR\013operationId\022\031\n\010match_i"
+    "d\030\002 \001(\004R\007matchId\022\035\n\nplayer_ids\030\003 \003(\004R\tpl"
+    "ayerIds\022\"\n\rcreated_at_ms\030\004 \001(\003R\013createdA"
+    "tMs*\276\001\n\nMatchStage\022\033\n\027MATCH_STAGE_UNSPEC"
+    "IFIED\020\000\022\030\n\024MATCH_STAGE_QUEUEING\020\001\022\025\n\021MAT"
+    "CH_STAGE_FOUND\020\002\022\027\n\023MATCH_STAGE_CONFIRM\020"
+    "\003\022\032\n\026MATCH_STAGE_ALLOCATING\020\004\022\025\n\021MATCH_S"
+    "TAGE_READY\020\005\022\026\n\022MATCH_STAGE_FAILED\020\006*\367\001\n"
+    "\024MatchAllocationPhase\022&\n\"MATCH_ALLOCATIO"
+    "N_PHASE_UNSPECIFIED\020\000\022\"\n\036MATCH_ALLOCATIO"
+    "N_PHASE_PENDING\020\001\022%\n!MATCH_ALLOCATION_PH"
+    "ASE_REQUESTING\020\002\022$\n MATCH_ALLOCATION_PHA"
+    "SE_COMPLETED\020\003\022!\n\035MATCH_ALLOCATION_PHASE"
+    "_FAILED\020\004\022#\n\037MATCH_ALLOCATION_PHASE_ABOR"
+    "TING\020\005*\234\002\n\017MatchStartPhase\022!\n\035MATCH_STAR"
+    "T_PHASE_UNSPECIFIED\020\000\022\036\n\032MATCH_START_PHA"
+    "SE_ACCEPTED\020\001\022\"\n\036MATCH_START_PHASE_TICKE"
+    "T_READY\020\002\022\036\n\032MATCH_START_PHASE_CLAIMING\020"
+    "\003\022\"\n\036MATCH_START_PHASE_CLAIMS_READY\020\004\022\034\n"
+    "\030MATCH_START_PHASE_QUEUED\020\005\022\"\n\036MATCH_STA"
+    "RT_PHASE_COMPENSATING\020\006\022\034\n\030MATCH_START_P"
+    "HASE_FAILED\020\007*\221\001\n\027PlayerMatchContextStat"
+    "e\022*\n&PLAYER_MATCH_CONTEXT_STATE_UNSPECIF"
+    "IED\020\000\022#\n\037PLAYER_MATCH_CONTEXT_STATE_NONE"
+    "\020\001\022%\n!PLAYER_MATCH_CONTEXT_STATE_ACTIVE\020"
+    "\002*\212\002\n\026PlayerMatchResumeStage\022)\n%PLAYER_M"
+    "ATCH_RESUME_STAGE_UNSPECIFIED\020\000\022&\n\"PLAYE"
+    "R_MATCH_RESUME_STAGE_STARTING\020\001\022$\n PLAYE"
+    "R_MATCH_RESUME_STAGE_QUEUED\020\002\022(\n$PLAYER_"
+    "MATCH_RESUME_STAGE_CONFIRMING\020\003\022(\n$PLAYE"
+    "R_MATCH_RESUME_STAGE_ALLOCATING\020\004\022#\n\037PLA"
+    "YER_MATCH_RESUME_STAGE_READY\020\005*;\n\022MatchP"
+    "ushEventType\022%\n!MATCH_PUSH_EVENT_TYPE_UN"
+    "SPECIFIED\020\000*\242\001\n\022MatchConfirmStatus\022$\n MA"
+    "TCH_CONFIRM_STATUS_UNSPECIFIED\020\000\022 \n\034MATC"
+    "H_CONFIRM_STATUS_PENDING\020\001\022!\n\035MATCH_CONF"
+    "IRM_STATUS_ACCEPTED\020\002\022!\n\035MATCH_CONFIRM_S"
+    "TATUS_REJECTED\020\0032\363\004\n\014MatchService\022W\n\nSta"
+    "rtMatch\022#.pandora.match.v1.StartMatchReq"
+    "uest\032$.pandora.match.v1.StartMatchRespon"
+    "se\022Z\n\013CancelMatch\022$.pandora.match.v1.Can"
+    "celMatchRequest\032%.pandora.match.v1.Cance"
+    "lMatchResponse\022]\n\014ConfirmMatch\022%.pandora"
+    ".match.v1.ConfirmMatchRequest\032&.pandora."
+    "match.v1.ConfirmMatchResponse\022i\n\020GetMatc"
+    "hProgress\022).pandora.match.v1.GetMatchPro"
+    "gressRequest\032*.pandora.match.v1.GetMatch"
+    "ProgressResponse\022]\n\014ReleaseMatch\022%.pando"
+    "ra.match.v1.ReleaseMatchRequest\032&.pandor"
+    "a.match.v1.ReleaseMatchResponse\022\204\001\n\031Reso"
+    "lvePlayerMatchContext\0222.pandora.match.v1"
+    ".ResolvePlayerMatchContextRequest\0323.pand"
+    "ora.match.v1.ResolvePlayerMatchContextRe"
+    "sponseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_deps[1] = {
@@ -4266,7 +4280,7 @@ static ::absl::once_flag descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto = {
     false,
     false,
-    6528,
+    6574,
     descriptor_table_protodef_pandora_2fmatch_2fv1_2fmatch_2eproto,
     "pandora/match/v1/match.proto",
     &descriptor_table_pandora_2fmatch_2fv1_2fmatch_2eproto_once,
@@ -6741,9 +6755,9 @@ ResolvePlayerMatchContextResponse::ResolvePlayerMatchContextResponse(
                offsetof(Impl_, code_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, code_),
-           offsetof(Impl_, stage_) -
+           offsetof(Impl_, placement_version_) -
                offsetof(Impl_, code_) +
-               sizeof(Impl_::stage_));
+               sizeof(Impl_::placement_version_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.match.v1.ResolvePlayerMatchContextResponse)
 }
@@ -6761,9 +6775,9 @@ inline void ResolvePlayerMatchContextResponse::SharedCtor(::_pb::Arena* PROTOBUF
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, code_),
            0,
-           offsetof(Impl_, stage_) -
+           offsetof(Impl_, placement_version_) -
                offsetof(Impl_, code_) +
-               sizeof(Impl_::stage_));
+               sizeof(Impl_::placement_version_));
 }
 ResolvePlayerMatchContextResponse::~ResolvePlayerMatchContextResponse() {
   // @@protoc_insertion_point(destructor:pandora.match.v1.ResolvePlayerMatchContextResponse)
@@ -6836,10 +6850,10 @@ PROTOBUF_NOINLINE void ResolvePlayerMatchContextResponse::Clear() {
         reinterpret_cast<char*>(&_impl_.match_id_) -
         reinterpret_cast<char*>(&_impl_.code_)) + sizeof(_impl_.match_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    ::memset(&_impl_.placement_version_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.stage_) -
-        reinterpret_cast<char*>(&_impl_.placement_version_)) + sizeof(_impl_.stage_));
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.stage_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.placement_version_) -
+        reinterpret_cast<char*>(&_impl_.stage_)) + sizeof(_impl_.placement_version_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6883,7 +6897,7 @@ PROTOBUF_NOINLINE void ResolvePlayerMatchContextResponse::Clear() {
   }
 
   // .pandora.match.v1.PlayerMatchResumeStage stage = 3 [json_name = "stage"];
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_stage() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -6930,7 +6944,7 @@ PROTOBUF_NOINLINE void ResolvePlayerMatchContextResponse::Clear() {
   }
 
   // uint64 placement_version = 8 [json_name = "placementVersion"];
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_placement_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -6955,6 +6969,15 @@ PROTOBUF_NOINLINE void ResolvePlayerMatchContextResponse::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "pandora.match.v1.ResolvePlayerMatchContextResponse.game_mode");
       target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // uint32 map_id = 11 [json_name = "mapId"];
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_map_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_map_id(), target);
     }
   }
 
@@ -7041,19 +7064,26 @@ PROTOBUF_NOINLINE void ResolvePlayerMatchContextResponse::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    // uint64 placement_version = 8 [json_name = "placementVersion"];
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_placement_version() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_placement_version());
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // .pandora.match.v1.PlayerMatchResumeStage stage = 3 [json_name = "stage"];
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_stage() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_stage());
+      }
+    }
+    // uint32 map_id = 11 [json_name = "mapId"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_map_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_map_id());
+      }
+    }
+    // uint64 placement_version = 8 [json_name = "placementVersion"];
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_placement_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_placement_version());
       }
     }
   }
@@ -7132,15 +7162,20 @@ void ResolvePlayerMatchContextResponse::MergeImpl(::google::protobuf::MessageLit
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_placement_version() != 0) {
-        _this->_impl_.placement_version_ = from._impl_.placement_version_;
+      if (from._internal_stage() != 0) {
+        _this->_impl_.stage_ = from._impl_.stage_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_stage() != 0) {
-        _this->_impl_.stage_ = from._impl_.stage_;
+      if (from._internal_map_id() != 0) {
+        _this->_impl_.map_id_ = from._impl_.map_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_placement_version() != 0) {
+        _this->_impl_.placement_version_ = from._impl_.placement_version_;
       }
     }
   }
@@ -7168,8 +7203,8 @@ void ResolvePlayerMatchContextResponse::InternalSwap(ResolvePlayerMatchContextRe
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.placement_operation_id_, &other->_impl_.placement_operation_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.game_mode_, &other->_impl_.game_mode_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.stage_)
-      + sizeof(ResolvePlayerMatchContextResponse::_impl_.stage_)
+      PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.placement_version_)
+      + sizeof(ResolvePlayerMatchContextResponse::_impl_.placement_version_)
       - PROTOBUF_FIELD_OFFSET(ResolvePlayerMatchContextResponse, _impl_.code_)>(
           reinterpret_cast<char*>(&_impl_.code_),
           reinterpret_cast<char*>(&other->_impl_.code_));
@@ -7232,9 +7267,9 @@ MatchProgress::MatchProgress(
                offsetof(Impl_, match_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, match_id_),
-           offsetof(Impl_, estimated_wait_seconds_) -
+           offsetof(Impl_, map_id_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::estimated_wait_seconds_));
+               sizeof(Impl_::map_id_));
 
   // @@protoc_insertion_point(copy_constructor:pandora.match.v1.MatchProgress)
 }
@@ -7262,9 +7297,9 @@ inline void MatchProgress::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, match_id_),
            0,
-           offsetof(Impl_, estimated_wait_seconds_) -
+           offsetof(Impl_, map_id_) -
                offsetof(Impl_, match_id_) +
-               sizeof(Impl_::estimated_wait_seconds_));
+               sizeof(Impl_::map_id_));
 }
 MatchProgress::~MatchProgress() {
   // @@protoc_insertion_point(destructor:pandora.match.v1.MatchProgress)
@@ -7335,6 +7370,7 @@ PROTOBUF_NOINLINE void MatchProgress::Clear() {
         reinterpret_cast<char*>(&_impl_.estimated_wait_seconds_) -
         reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.estimated_wait_seconds_));
   }
+  _impl_.map_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -7436,6 +7472,15 @@ PROTOBUF_NOINLINE void MatchProgress::Clear() {
     }
   }
 
+  // uint32 map_id = 20 [json_name = "mapId"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_map_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_map_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7519,6 +7564,15 @@ PROTOBUF_NOINLINE void MatchProgress::Clear() {
       }
     }
   }
+   {
+    // uint32 map_id = 20 [json_name = "mapId"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_map_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_map_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -7582,6 +7636,11 @@ void MatchProgress::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_map_id() != 0) {
+      _this->_impl_.map_id_ = from._impl_.map_id_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -7606,8 +7665,8 @@ void MatchProgress::InternalSwap(MatchProgress* PROTOBUF_RESTRICT PROTOBUF_NONNU
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ds_addr_, &other->_impl_.battle_ds_addr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_ticket_, &other->_impl_.battle_ticket_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_.estimated_wait_seconds_)
-      + sizeof(MatchProgress::_impl_.estimated_wait_seconds_)
+      PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_.map_id_)
+      + sizeof(MatchProgress::_impl_.map_id_)
       - PROTOBUF_FIELD_OFFSET(MatchProgress, _impl_.match_id_)>(
           reinterpret_cast<char*>(&_impl_.match_id_),
           reinterpret_cast<char*>(&other->_impl_.match_id_));

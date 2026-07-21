@@ -213,6 +213,29 @@ func (s *PlayerService) GrantAttributePoints(ctx context.Context, req *playerv1.
 	return &playerv1.GrantAttributePointsResponse{Code: commonv1.ErrCode_OK, UnspentPoints: int32(unspent)}, nil
 }
 
+// AddExperience 幂等入账经验并结算等级(实时成长)。系统 RPC:只允许后端内部直连
+// (battle_result progress 出箱 worker / 任务完成点 / GM),带玩家 JWT 一律拒,不在 Envoy 暴露。
+func (s *PlayerService) AddExperience(ctx context.Context, req *playerv1.AddExperienceRequest) (*playerv1.AddExperienceResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &playerv1.AddExperienceResponse{Code: code}, nil
+	}
+	if req.GetPlayerId() == 0 || req.GetExpDelta() == 0 || req.GetIdempotencyKey() == "" {
+		return &playerv1.AddExperienceResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	st, already, err := s.uc.AddExperience(ctx, req.GetPlayerId(), req.GetExpDelta(), req.GetReason(), req.GetIdempotencyKey())
+	if err != nil {
+		return &playerv1.AddExperienceResponse{Code: toProtoCode(err)}, nil
+	}
+	return &playerv1.AddExperienceResponse{
+		Code:         commonv1.ErrCode_OK,
+		Level:        st.Level,
+		ExpInLevel:   st.ExpInLevel,
+		IsMaxLevel:   st.IsMaxLevel,
+		LevelsGained: st.LevelsGained,
+		Already:      already,
+	}, nil
+}
+
 // AllocateAttributePoints 分配属性点。以调用者身份为准。
 func (s *PlayerService) AllocateAttributePoints(ctx context.Context, req *playerv1.AllocateAttributePointsRequest) (*playerv1.AllocateAttributePointsResponse, error) {
 	playerID, code := selfPlayerID(ctx, req.GetPlayerId())
