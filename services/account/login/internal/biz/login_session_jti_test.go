@@ -92,10 +92,11 @@ func TestRequireCurrentSessionJTI(t *testing.T) {
 	t.Run("顶号后旧 jti 拒绝(核心负例)", func(t *testing.T) {
 		// uc 的权威代际为 new-generation，调用方故意携带已被顶掉的旧代际。
 		uc := newSessionJTIUsecase(t, &jtiSessionRepo{cur: "new-generation", found: true}, true)
-		// err 锁定旧设备必须被 fencing，不能继续 SelectRole 并取得第二张 Hub 票。
+		// err 锁定旧设备必须被 fencing，且用顶号专属码(R4 P0):与自然过期可判别，
+		// 被顶设备据此转交互登录而非自动重登反顶新设备。
 		err := uc.RequireCurrentSessionJTI(ctx, 42, "old-generation")
-		if errcode.As(err) != errcode.ErrUnauthorized {
-			t.Fatalf("superseded jti must be Unauthorized, got %v", err)
+		if errcode.As(err) != errcode.ErrSessionSuperseded {
+			t.Fatalf("superseded jti must be ErrSessionSuperseded, got %v", err)
 		}
 	})
 

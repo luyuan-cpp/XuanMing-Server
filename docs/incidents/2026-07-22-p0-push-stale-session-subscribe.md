@@ -83,16 +83,40 @@ deploy/envoy/envoy.yaml push 路由(修复前)
    `stream.Send`（慢客户端流控）或首轮 replay 期间，复查永远轮不到；实际最坏收敛由
    gRPC `max_connection_age`(15m)+grace 决定。补修：会话复查改为**独立看门狗 goroutine**
    （不受写者阻塞影响），失效后 ≤30s 取消流上下文；写者每次 Send 前检查取消，不再投
-   递任何新帧，并以映射后的 gRPC 状态（UNAUTHENTICATED/UNAVAILABLE，见
-   `pkg/errcode/grpc.go`）关流。**诚实契约**：30s 界定的是「停止投递 + 发起关流」；
+   递任何新帧，并以映射后的 gRPC 状态（顶号 ABORTED / 过期登出 UNAUTHENTICATED /
+   权威故障 UNAVAILABLE，见 `pkg/errcode/grpc.go`）关流。**诚实契约**：30s 界定的是「停止投递 + 发起关流」；
    写者已阻塞在传输层的至多一帧、以及 TCP/流句柄的物理回收，仍由 keepalive/
    max_connection_age/Envoy max_stream_duration 有界收敛，不是 ≤30s。
    回归：`TestRunSubscribeStream_WatchdogClosesBlockedWriter`（写者阻塞在 Send 时顶号，
-   断言解除阻塞后零新帧投递并以 ErrUnauthorized 关流）。
+   断言解除阻塞后零新帧投递并以 ErrSessionSuperseded 关流）。
+
+### 4.1.2 R4 二轮复审补修：顶号/过期可判别，双设备稳定赢家（2026-07-22，同日）
+
+首轮+补修后仍存在一个 P0 行为环：push 关流与 login 会话门把「自然过期、登出、被新设备
+顶号」全部映射为 `ErrUnauthorized` → gRPC UNAUTHENTICATED；UE 客户端对 UNAUTHENTICATED
+统一走 `RenewSessionForRecovery`（用缓存凭据自动完整 Login），Login 必然轮换 jti，于是
+被顶设备自动反顶新设备，两台设备互踢无限循环，没有稳定赢家。
+
+判别契约（本次落地）：
+
+- `pkg/errcode`：新增 `ErrSessionSuperseded = 14`（proto `ERR_SESSION_SUPERSEDED` 数值
+  1:1 对齐；生成代码由 buf 重新生成）。`IsRetryable(14) == false`。
+- `pkg/errcode/grpc.go`：`ErrSessionSuperseded → codes.Aborted`。选 ABORTED 而非
+  UNAUTHENTICATED 变体：Envoy jwt_authn 对自然过期同样产出 UNAUTHENTICATED，只有独立
+  顶层状态才能让客户端在流 trailer 上判别；ABORTED 在本项目其余路径未使用，语义唯一。
+- 产生点：push `AuthorizeSubscribe` / `recheckSession` 的 jti 已轮换分支，以及 login
+  `requireCurrentSession` 的 `cur != jti` 分支，改返 `ErrSessionSuperseded`；
+  `jti == ""`（证据缺失）与过期/登出维持 `ErrUnauthorized`（允许客户端自动换新）。
+- UE 客户端（`MyDsRecoveryCoordinator` / `MyAccountModel`）：收到业务码 14 或流关闭
+  gRPC ABORTED(10) 时调用 `HandleSessionSupersededByOtherLogin`——停战斗重连、清缓存
+  凭据、回登录关卡走**交互登录**，绝不自动完整 Login；UNAUTHENTICATED(16)/码 8 才保留
+  自动换新。由此顶号收敛为：最后登录的设备是唯一稳定赢家。
 
 ### 4.2 回归测试（已落地，全绿）
 
 - `internal/biz/replay_duplicate_test.go`：`TestAuthorizeSubscribe_SessionCurrency`（现行放行/旧 jti 拒/登出拒/require 档缺 jti 拒/权威故障 fail-closed/dev 档语义）、`TestRecheckSession_ExpiryClosesStream`（token 到期关流）、`TestRecheckSession_SupersededAndRetryable`（顶号关流含跨 Pod 语义/权威故障可重试）。
+- `internal/biz/session_register_race_test.go`：`TestKickedStaleSessionRetriesNeverDisplaceWinner`（R4 二轮：A 被顶后重试 5 次，每次均以 `ErrSessionSuperseded` 拒绝，B 从未被取消，A 迟到的 Unregister 不得删掉 B 的槽位——双设备稳定赢家回归）。
+- push/login 相关断言全部收紧为区分 `ErrSessionSuperseded`（顶号）与 `ErrUnauthorized`（过期/登出/证据缺失），含 `login_session_jti_test.go` 顶号核心负例。
 - `internal/data/session_gate_test.go`：miniredis 验证跨服务 key 契约、无会话、空 jti 防御、权威不可达必须报错。
 - `tools/scripts/tests/gen_cluster_prod_progress_contract_test.ps1`：`-Prod` 产物恰好一处 `require_session_gate: true`、dev 产物保持 false（PASS）。
 
@@ -100,10 +124,11 @@ deploy/envoy/envoy.yaml push 路由(修复前)
 
 | 场景 | 期望 | 状态 |
 |---|---|---|
-| 旧 token 重连（已被新登录顶号） | 建流拒绝 `session superseded`（UNAUTHENTICATED） | 单测绿；真实 Envoy 链路未验 |
+| 旧 token 重连（已被新登录顶号） | 建流拒绝 `session superseded`（gRPC **ABORTED**，业务码 14，与自然过期 UNAUTHENTICATED 可判别） | 单测绿；真实 Envoy 链路未验 |
+| **双设备稳定赢家（R4 二轮 P0）**：A 被 B 顶号后反复重试 | A 每次均被 ABORTED/14 拒绝且不得顶回 B；客户端对 14/ABORTED 只转交互登录，不自动 Login 反顶 | 服务端确定性回归绿；真实双设备 E2E 未跑 |
 | **建流并发交错（R4 复审①）**：旧会话校验通过后暂停 → 新会话注册 → 旧会话再注册 | 任意交错下新会话持有连接槽，旧会话不得取消新设备 | 确定性交错回归绿；真实并发/多 Pod 实测未跑 |
 | 跨 Pod 顶号（旧流在 A Pod，新登录经 B Pod） | 旧流 ≤30s 停止投递并发起关流 | 单测绿（逻辑层）；多 Pod 实测未跑 |
-| **写者阻塞在 Send（R4 复审②）**：慢客户端流控期间顶号 | 看门狗独立裁决；解除阻塞后零新帧、以 UNAUTHENTICATED 关流；句柄回收由 keepalive/max_conn_age/Envoy 1h 有界兜底 | 阻塞写者回归绿；真实流控/慢客户端实测未跑 |
+| **写者阻塞在 Send（R4 复审②）**：慢客户端流控期间顶号 | 看门狗独立裁决；解除阻塞后零新帧、以 ABORTED（顶号）关流；句柄回收由 keepalive/max_conn_age/Envoy 1h 有界兜底 | 阻塞写者回归绿；真实流控/慢客户端实测未跑 |
 | 会话轮换（同设备重登） | 旧 jti 流关闭，新 jti 建流成功 | 单测绿；E2E 未跑 |
 | token 到期 | ≤30s 停止投递并发起关流；Envoy 1h 流寿命兜底 | 单测绿；Envoy max_stream_duration 未实测 |
 | Redis 故障 | 建流 fail-closed 拒；在流连续 3 次失败关流 | 单测绿；真实故障注入未跑 |

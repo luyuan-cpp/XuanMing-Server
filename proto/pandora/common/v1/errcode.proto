@@ -41,6 +41,10 @@ enum ErrCode {
   ERR_CANCELED         = 11;
   ERR_INVALID_STATE    = 12;
   ERR_SERVICE_DISABLED = 13;  // RPC 被 Kill-Switch 临时关停(维护中,稍后可重试)
+  // 会话已被同账号更新登录顶替(顶号,→ gRPC ABORTED)。与 ERR_UNAUTHORIZED(自然过期/
+  // 登出,允许自动换新)可判别:客户端对本码只能转交互登录,不得自动完整 Login 反顶
+  // 新设备(INC-20260722-004 R4 P0 互踢循环)。
+  ERR_SESSION_SUPERSEDED = 14;
 
   // 1000-1999 login
   ERR_LOGIN_ACCOUNT_NOT_FOUND  = 1001;

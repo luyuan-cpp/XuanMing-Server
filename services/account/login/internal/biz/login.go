@@ -1157,9 +1157,17 @@ func (u *LoginUsecase) requireCurrentSession(ctx context.Context, playerID uint6
 	if !found {
 		return errcode.New(errcode.ErrUnauthorized, "session expired or logged out; login again")
 	}
-	if jti == "" || cur != jti {
+	if jti == "" {
+		// 缺 jti 证据(绕网关/无 payload 头):无法证明现行性,维持普通未授权语义,
+		// 不得当顶号——客户端对 ErrUnauthorized 允许自动换新,对顶号码则转交互登录。
+		return errcode.New(errcode.ErrUnauthorized, "session jti evidence required")
+	}
+	if cur != jti {
+		// 顶号专属码(→ gRPC ABORTED,R4 P0 互踢循环):与自然过期/登出的 ErrUnauthorized
+		// 可判别。被顶设备对本码只能转交互登录,不得用缓存凭据自动完整 Login——那会
+		// 轮换会话 jti 反顶新设备,两台设备互踢死循环。
 		plog.With(ctx).Warnw("msg", "session_superseded_rejected", "player_id", playerID)
-		return errcode.New(errcode.ErrUnauthorized, "session superseded by a newer login")
+		return errcode.New(errcode.ErrSessionSuperseded, "session superseded by a newer login")
 	}
 	return nil
 }
