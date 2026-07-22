@@ -3842,6 +3842,21 @@ function Apply-AgonesManifests {
             }
         }
         if (-not $agonesReleaseDeployed) {
+            # 兼容历史上由 kubectl/旧安装器部署、但没有 Helm release 元数据的本地集群。
+            # 不能只看 namespace；必须同时证明核心 CRD 存在且 controller 已可用，才可
+            # 跳过 Helm 接管。否则 upgrade --install 会因既有 cluster-scoped 资源没有
+            # Helm ownership 而失败，阻断本地恢复流程。
+            $agonesCrdName = (kubectl @kubectlContextArgs get crd gameservers.agones.dev --ignore-not-found -o name 2>$null | Out-String).Trim()
+            $agonesCrdReady = ($LASTEXITCODE -eq 0 -and $agonesCrdName -ceq 'customresourcedefinition.apiextensions.k8s.io/gameservers.agones.dev')
+            $agonesAvailableText = (kubectl @kubectlContextArgs get deployment agones-controller -n agones-system -o jsonpath='{.status.availableReplicas}' 2>$null | Out-String).Trim()
+            $agonesAvailable = 0
+            $agonesControllerReady = ($LASTEXITCODE -eq 0 -and [int]::TryParse($agonesAvailableText, [ref]$agonesAvailable) -and $agonesAvailable -gt 0)
+            if ($agonesCrdReady -and $agonesControllerReady) {
+                $agonesReleaseDeployed = $true
+                Write-Warn 'Agones 没有 Helm release 元数据，但核心 CRD 与 controller 已就绪；沿用现有本地安装。'
+            }
+        }
+        if (-not $agonesReleaseDeployed) {
             Write-Info "安装/修复 Agones(helm,装到 agones-system)..."
             helm repo add agones https://agones.dev/chart/stable 2>$null | Out-Null
             helm repo update 2>$null | Out-Null

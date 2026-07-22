@@ -49,12 +49,15 @@ inventory:
 # 生产启用前必须先重放 14-bag-tables.sql(启动 schema gate 会 fail-fast 提示)。
 bag:
   dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_bag?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+  owner_addr: "127.0.0.1:50017" # 集群生成器改写为 owner:50017；背包写路径 fail-closed 校验 owner
   # 额度(五要件④,反作弊封顶;必须显著高于合法玩法产出)
   max_journal_batch: 64
   max_items_per_op: 64
   hourly_journal_quota: 2000
-  # 后端驻留段容量(未配置的段 fail-closed 拒写;随身组容量归 DS,不在此配)
+  # 段基础容量(未配置的段 fail-closed；身上容量用于 LoadBag/扩容规则，物品权威仍在 DS)
   section_capacities:
+    - bag_type: 0        # 身上(基础容量;扩容规则校验与 LoadBag 权威下发使用)
+      capacity: 100
     - bag_type: 1        # 仓库
       capacity: 200
     - bag_type: 100      # 活动背包样例段(联调用;活动开启由运营写 bag_generation)
