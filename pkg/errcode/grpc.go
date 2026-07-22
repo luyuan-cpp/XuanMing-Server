@@ -35,6 +35,13 @@ func GRPCCode(c Code) codes.Code {
 		return codes.PermissionDenied
 	case ErrUnauthorized:
 		return codes.Unauthenticated
+	case ErrSessionSuperseded:
+		// 顶号刻意**不**映射 UNAUTHENTICATED:网关(Envoy jwt_authn)对自然过期 token 也产
+		// UNAUTHENTICATED,客户端无法据此判别「允许自动换新」还是「另一设备已登录」。被顶
+		// 设备把顶号当过期自动完整 Login 会反顶新设备形成互踢循环(INC-20260722-004 R4 P0)。
+		// ABORTED = 「被并发的更新登录中止」,本工程无其它错误码映射到它,网关也不会产生,
+		// 客户端可用该状态码唯一判别顶号并转交互登录。
+		return codes.Aborted
 	case ErrRateLimited:
 		return codes.ResourceExhausted
 	case ErrUnavailable, ErrServiceDisabled:

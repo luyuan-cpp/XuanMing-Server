@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/data"
 )
@@ -315,6 +316,10 @@ func TestAuthorizeSubscribe_SessionCurrency(t *testing.T) {
 	}
 	if err := uc.AuthorizeSubscribe(ctx, 7, SessionInfo{JTI: "jti-old"}); err == nil {
 		t.Fatal("superseded session must be rejected (P0: 旧 token 不得建流)")
+	} else if errcode.As(err) != errcode.ErrSessionSuperseded {
+		// R4 P0 互踢循环:顶号必须与自然过期/登出(ErrUnauthorized)可判别,
+		// 否则被顶设备会自动完整 Login 反顶新设备。
+		t.Fatalf("superseded must map to ErrSessionSuperseded (kick discriminable), got: %v", err)
 	}
 	if err := uc.AuthorizeSubscribe(ctx, 8, SessionInfo{JTI: "any"}); err == nil {
 		t.Fatal("logged-out player must be rejected")
@@ -363,6 +368,8 @@ func TestRecheckSession_SupersededAndRetryable(t *testing.T) {
 	gate.set(7, "jti-B") // 顶号(可能发生在另一个 Pod 的新建流)
 	if retryable, err := uc.recheckSession(ctx, 7, sess); err == nil || retryable {
 		t.Fatalf("superseded recheck must close non-retryably: retryable=%v err=%v", retryable, err)
+	} else if errcode.As(err) != errcode.ErrSessionSuperseded {
+		t.Fatalf("superseded recheck must be discriminable from expiry/logout, got: %v", err)
 	}
 	gate.set(7, "jti-A")
 	gate.err = errors.New("redis blip")

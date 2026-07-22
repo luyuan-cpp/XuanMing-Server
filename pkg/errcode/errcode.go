@@ -46,6 +46,11 @@ const (
 	ErrCanceled        Code = 11
 	ErrInvalidState    Code = 12
 	ErrServiceDisabled Code = 13 // RPC 被 Kill-Switch 临时关停(维护中,稍后可重试)
+	// ErrSessionSuperseded 会话已被同账号更新的登录顶替(顶号)。必须与 ErrUnauthorized
+	// (自然过期/登出,客户端允许用缓存凭据自动换新会话)可判别:被顶设备若对本码自动
+	// 完整 Login,会轮换服务端会话 jti 反顶新设备,两台设备形成互踢死循环
+	// (INC-20260722-004 R4 P0)。客户端对本码只能转交互登录,由玩家显式决定是否夺回会话。
+	ErrSessionSuperseded Code = 14
 )
 
 // login(1000-1999)

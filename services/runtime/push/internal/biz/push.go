@@ -162,8 +162,10 @@ func (u *PushUsecase) AuthorizeSubscribe(ctx context.Context, playerID uint64, s
 		return errcode.New(errcode.ErrUnauthorized, "session expired or logged out; login again")
 	}
 	if cur != sess.JTI {
+		// 顶号用专属码(→ gRPC ABORTED):与自然过期/登出的 ErrUnauthorized 可判别,
+		// 被顶设备不得自动完整 Login 反顶新设备(INC-20260722-004 R4 P0 互踢循环)。
 		plog.With(ctx).Warnw("msg", "push_subscribe_superseded_rejected", "player_id", playerID)
-		return errcode.New(errcode.ErrUnauthorized, "session superseded by a newer login")
+		return errcode.New(errcode.ErrSessionSuperseded, "session superseded by a newer login")
 	}
 	return nil
 }
@@ -185,7 +187,8 @@ func (u *PushUsecase) recheckSession(ctx context.Context, playerID uint64, sess 
 		return false, errcode.New(errcode.ErrUnauthorized, "session logged out; stream closed")
 	}
 	if cur != sess.JTI {
-		return false, errcode.New(errcode.ErrUnauthorized, "session superseded; stream closed")
+		// 同上:顶号专属码,客户端据 ABORTED 转交互登录而非自动重登(R4 P0 互踢循环)。
+		return false, errcode.New(errcode.ErrSessionSuperseded, "session superseded; stream closed")
 	}
 	return false, nil
 }

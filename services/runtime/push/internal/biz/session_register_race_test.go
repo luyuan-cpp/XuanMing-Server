@@ -1,7 +1,8 @@
 // session_register_race_test.go — P0(INC-20260722-004)R4 复审回归:
-//  ① 建流「会话校验+注册」TOCTOU:旧会话不得在任何交错下顶掉新设备连接;
-//  ② 会话看门狗独立于写者:写者阻塞在 stream.Send 时,会话失效仍须在有界时间内
-//     取消流并阻止后续投递。
+//
+//	① 建流「会话校验+注册」TOCTOU:旧会话不得在任何交错下顶掉新设备连接;
+//	② 会话看门狗独立于写者:写者阻塞在 stream.Send 时,会话失效仍须在有界时间内
+//	   取消流并阻止后续投递。
 package biz
 
 import (
@@ -197,13 +198,65 @@ func TestRunSubscribeStream_WatchdogClosesBlockedWriter(t *testing.T) {
 		if err == nil {
 			t.Fatal("superseded session must close the stream with an error")
 		}
-		if errcode.As(err) != errcode.ErrUnauthorized {
-			t.Fatalf("close reason must map to ErrUnauthorized, got: %v", err)
+		if errcode.As(err) != errcode.ErrSessionSuperseded {
+			// R4 P0 互踢循环:顶号关流必须用专属码(→ABORTED),不得与自然过期的
+			// ErrUnauthorized(→UNAUTHENTICATED)混同,否则被顶设备自动重登反顶新设备。
+			t.Fatalf("close reason must map to ErrSessionSuperseded, got: %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("stream did not close after writer unblocked (watchdog starved?)")
 	}
 	if got := stream.sentCount(); got != 1 {
 		t.Fatalf("no further frames may be delivered after session invalidation, sent=%d", got)
+	}
+}
+
+// R4 P0(顶号互踢循环)双设备「稳定赢家」回归:B 登录顶掉 A 后,A 的旧 token 无论
+// 自动重连多少次都必须被拒、且每次都以 ErrSessionSuperseded 判别(客户端据此转交互
+// 登录,不再自动完整 Login 反顶 B)。全程 B 的连接槽不得被 A 的重试取消或替换;
+// A 的迟到反注册也不得误删赢家槽位。
+func TestKickedStaleSessionRetriesNeverDisplaceWinner(t *testing.T) {
+	gate := &fakeSessionGate{}
+	gate.set(7, "jti-A")
+	uc := NewPushUsecase(NewConnectionManager(), &pullRepo{})
+	uc.SetSessionGate(gate, true)
+	ctx := context.Background()
+
+	var aCancelled, bCancelled atomic.Bool
+	slotA, err := uc.AuthorizeAndRegister(ctx, 7, SessionInfo{JTI: "jti-A"},
+		&captureStream{ctx: ctx}, func() { aCancelled.Store(true) })
+	if err != nil {
+		t.Fatalf("device A initial subscribe must succeed: %v", err)
+	}
+
+	// 设备 B 登录:login 轮换会话权威到 jti-B,B 随即建流(顶号语义取消 A)。
+	gate.set(7, "jti-B")
+	if _, err := uc.AuthorizeAndRegister(ctx, 7, SessionInfo{JTI: "jti-B"},
+		&captureStream{ctx: ctx}, func() { bCancelled.Store(true) }); err != nil {
+		t.Fatalf("device B (current session) must register: %v", err)
+	}
+	if !aCancelled.Load() {
+		t.Fatal("device A's stale slot must be superseded when B registers")
+	}
+
+	// A 客户端的自动重连风暴:旧 token 重试建流,每次都必须拒 + 可判别为顶号。
+	for i := 0; i < 5; i++ {
+		slot, rerr := uc.AuthorizeAndRegister(ctx, 7, SessionInfo{JTI: "jti-A"},
+			&captureStream{ctx: ctx}, func() {})
+		if rerr == nil {
+			uc.Conns().Unregister(7, slot)
+			t.Fatalf("retry %d: stale token re-subscribe must be rejected", i)
+		}
+		if errcode.As(rerr) != errcode.ErrSessionSuperseded {
+			t.Fatalf("retry %d: kick must be discriminable (ErrSessionSuperseded), got: %v", i, rerr)
+		}
+	}
+	if bCancelled.Load() {
+		t.Fatal("P0: winner (device B) connection must be stable across stale retries")
+	}
+	// A 的流退出时 defer Unregister(迟到反注册)不得误删 B 的槽位。
+	uc.Conns().Unregister(7, slotA)
+	if !uc.Conns().SendTo(7) {
+		t.Fatal("winner slot must survive stale slot's late unregister")
 	}
 }
