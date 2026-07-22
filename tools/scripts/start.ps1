@@ -340,7 +340,8 @@ function Apply-PandoraConfigSecret {
 # 该对象不含密钥，不混入 pandora-config Secret 的 21 份服务 YAML 契约。
 # 发布纪律与 configtable_publish.ps1 一致:先把候选完整读入内存快照并校验 checksum/rows/语义，
 # 再按 version 单调 + resourceVersion CAS 写固定 ConfigMap；同版本不同内容与低版本均拒绝。
-$script:PandoraConfigTableRollback = $null
+# ConfigMap 一旦升版就只向前收敛:player 进程内 Store 拒绝降版，失败时若只回滚文件会造成
+# 文件与已启动进程的快照分裂。因此 rollout 失败保留候选批次，重跑同版本继续完成收敛。
 
 function Get-PandoraConfigTableSha256Hex([byte[]]$Bytes) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -357,6 +358,38 @@ function ConvertTo-PandoraConfigTableUInt32([object]$Value, [string]$What) {
     } catch { throw "$What 必须是 uint32,实为 '$text'" }
     if ($number -gt [uint32]::MaxValue) { throw "$What 超过 uint32 上限:$number" }
     return [uint32]$number
+}
+
+function ConvertTo-PandoraConfigTableJsonUInt64 {
+    param(
+        [object]$Value,
+        [string]$What,
+        [uint64]$Max = [uint64]::MaxValue
+    )
+    if ($null -eq $Value) { throw "$What 缺失" }
+    if ($Value -is [System.Numerics.BigInteger]) {
+        $bigMax = [System.Numerics.BigInteger]::Parse([string]$Max, [Globalization.CultureInfo]::InvariantCulture)
+        if ($Value -lt [System.Numerics.BigInteger]::Zero -or $Value -gt $bigMax) {
+            throw "$What 超过无符号整数范围 0..${Max}:$Value"
+        }
+        return [uint64]$Value
+    }
+    $typeCode = [Type]::GetTypeCode($Value.GetType())
+    $integerTypes = @(
+        [TypeCode]::Byte, [TypeCode]::SByte, [TypeCode]::Int16, [TypeCode]::UInt16,
+        [TypeCode]::Int32, [TypeCode]::UInt32, [TypeCode]::Int64, [TypeCode]::UInt64
+    )
+    if ($typeCode -notin $integerTypes) {
+        throw "$What 必须是 JSON 整数,实为 $($Value.GetType().FullName)"
+    }
+    if ($typeCode -in @([TypeCode]::SByte, [TypeCode]::Int16, [TypeCode]::Int32, [TypeCode]::Int64) -and
+        [int64]$Value -lt 0) {
+        throw "$What 必须是非负 JSON 整数,实为 $Value"
+    }
+    try { $number = [uint64]$Value }
+    catch { throw "$What 超出 uint64:$Value" }
+    if ($number -gt $Max) { throw "$What 超过上限 ${Max}:$number" }
+    return $number
 }
 
 function Assert-PandoraConfigTableCurrentSemantics([System.Collections.IDictionary]$TableDocs) {
@@ -430,14 +463,18 @@ function Get-PandoraConfigTableCandidate {
     try { $manifest = $manifestText | ConvertFrom-Json -ErrorAction Stop }
     catch { throw "pandora-configtable manifest 非法:$($_.Exception.Message)" }
 
-    $versionText = ([string]$manifest.version).Trim()
-    if ($versionText -cnotmatch '^[1-9][0-9]*$') { throw "pandora-configtable version 非法:$versionText" }
-    try { $version = [uint64]::Parse($versionText, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture) }
-    catch { throw "pandora-configtable version 超出 uint64:$versionText" }
+    $version = ConvertTo-PandoraConfigTableJsonUInt64 $manifest.version 'pandora-configtable version'
+    if ($version -eq 0) { throw 'pandora-configtable version 必须大于 0' }
+    $null = ConvertTo-PandoraConfigTableJsonUInt64 $manifest.generated_at_ms 'pandora-configtable generated_at_ms'
+    if ($manifest.generator -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$manifest.generator)) {
+        throw 'pandora-configtable generator 必须是非空 JSON 字符串'
+    }
+    if ($manifest.source_rev -isnot [string]) { throw 'pandora-configtable source_rev 必须是 JSON 字符串' }
     $sourceRev = ([string]$manifest.source_rev).Trim()
     if ([string]::IsNullOrWhiteSpace($sourceRev) -or $sourceRev -ieq 'unknown') {
         throw "pandora-configtable source_rev 不可追溯:'$sourceRev'"
     }
+    if ($manifest.tables -isnot [System.Array]) { throw 'pandora-configtable manifest.tables 必须是 JSON 数组' }
     $tables = @($manifest.tables)
     if ($tables.Count -eq 0) { throw 'pandora-configtable manifest.tables 为空。' }
 
@@ -445,6 +482,9 @@ function Get-PandoraConfigTableCandidate {
     $tableDocs = [ordered]@{}
     $seen = @{}
     foreach ($table in $tables) {
+        foreach ($field in @('name', 'file', 'proto', 'checksum')) {
+            if ($table.$field -isnot [string]) { throw "pandora-configtable manifest 表字段 $field 必须是 JSON 字符串" }
+        }
         $name = ([string]$table.name).Trim()
         $file = ([string]$table.file).Trim()
         if ($name -cnotmatch '^[a-z0-9_]+$' -or $seen.ContainsKey($name)) {
@@ -455,10 +495,8 @@ function Get-PandoraConfigTableCandidate {
             throw "pandora-configtable 表 $name 的 file 非法:'$file'"
         }
         if ([string]::IsNullOrWhiteSpace([string]$table.proto)) { throw "pandora-configtable 表 $name 缺 proto 全名" }
-        $rowsText = ([string]$table.rows).Trim()
-        if ($rowsText -cnotmatch '^[1-9][0-9]*$') { throw "pandora-configtable 表 $name rows 非法:$rowsText" }
-        try { $declaredRows = [uint32]::Parse($rowsText, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture) }
-        catch { throw "pandora-configtable 表 $name rows 超出 uint32:$rowsText" }
+        $declaredRows = ConvertTo-PandoraConfigTableJsonUInt64 $table.rows "pandora-configtable 表 $name rows" ([uint32]::MaxValue)
+        if ($declaredRows -eq 0) { throw "pandora-configtable 表 $name rows 必须大于 0" }
         $checksum = ([string]$table.checksum).Trim()
         if ($checksum -cnotmatch '^sha256:[0-9a-f]{64}$') { throw "pandora-configtable 表 $name checksum 非法:$checksum" }
 
@@ -512,12 +550,87 @@ function Assert-PandoraConfigTableDataEqual {
     }
 }
 
-function ConvertFrom-PandoraConfigTableLiveData([object]$Data) {
-    $copy = [ordered]@{}
-    if ($null -ne $Data) {
-        foreach ($property in $Data.PSObject.Properties) { $copy[$property.Name] = [string]$property.Value }
+function Assert-PandoraConfigTableSameVersionCompatible {
+    param(
+        [System.Collections.IDictionary]$Expected,
+        [object]$Actual,
+        [string]$What
+    )
+    $expectedNames = @($Expected.Keys | Sort-Object)
+    $actualNames = if ($null -eq $Actual) { @() } else { @($Actual.PSObject.Properties.Name | Sort-Object) }
+    $diff = @(Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames -CaseSensitive)
+    if ($diff.Count -ne 0) { throw "$What key 集不精确:$($diff | Out-String)" }
+    foreach ($name in $expectedNames) {
+        if ($name -ceq 'manifest.json') { continue }
+        $property = $Actual.PSObject.Properties[$name]
+        if ($null -eq $property -or [string]$Expected[$name] -cne [string]$property.Value) {
+            throw "$What 文件 $name 内容不同;同版本只允许纠正 manifest 溯源字段"
+        }
     }
-    return $copy
+
+    try { $expectedManifest = ([string]$Expected['manifest.json']) | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "$What 候选 manifest.json 非法:$($_.Exception.Message)" }
+    try { $actualManifest = ([string]$Actual.PSObject.Properties['manifest.json'].Value) | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "$What live manifest.json 非法:$($_.Exception.Message)" }
+    $topLevelFields = @('generated_at_ms', 'generator', 'source_rev', 'tables', 'version')
+    foreach ($item in @(@{ Name = '候选'; Manifest = $expectedManifest }, @{ Name = 'live'; Manifest = $actualManifest })) {
+        $fields = @($item.Manifest.PSObject.Properties.Name | Sort-Object)
+        $fieldDiff = @(Compare-Object -ReferenceObject $topLevelFields -DifferenceObject $fields -CaseSensitive)
+        if ($fieldDiff.Count -ne 0) { throw "$What $($item.Name) manifest 字段集异常:$($fieldDiff | Out-String)" }
+        if ($item.Manifest.tables -isnot [System.Array]) { throw "$What $($item.Name) manifest.tables 必须是 JSON 数组" }
+    }
+    $expectedVersion = ConvertTo-PandoraConfigTableJsonUInt64 $expectedManifest.version "$What 候选 manifest.version"
+    $actualVersion = ConvertTo-PandoraConfigTableJsonUInt64 $actualManifest.version "$What live manifest.version"
+    $null = ConvertTo-PandoraConfigTableJsonUInt64 $expectedManifest.generated_at_ms "$What 候选 manifest.generated_at_ms"
+    $null = ConvertTo-PandoraConfigTableJsonUInt64 $actualManifest.generated_at_ms "$What live manifest.generated_at_ms"
+    foreach ($item in @(@{ Name = '候选'; Manifest = $expectedManifest }, @{ Name = 'live'; Manifest = $actualManifest })) {
+        foreach ($field in @('generator', 'source_rev')) {
+            if ($item.Manifest.$field -isnot [string]) { throw "$What $($item.Name) manifest.$field 必须是 JSON 字符串" }
+        }
+    }
+    if ($expectedVersion -ne $actualVersion) {
+        throw "$What manifest version 不同"
+    }
+
+    $tableFields = @('checksum', 'file', 'name', 'proto', 'rows')
+    $expectedByName = @{}
+    $actualByName = @{}
+    foreach ($side in @(
+        @{ Name = '候选'; Tables = @($expectedManifest.tables); Map = $expectedByName },
+        @{ Name = 'live'; Tables = @($actualManifest.tables); Map = $actualByName }
+    )) {
+        foreach ($table in $side.Tables) {
+            $fields = @($table.PSObject.Properties.Name | Sort-Object)
+            $fieldDiff = @(Compare-Object -ReferenceObject $tableFields -DifferenceObject $fields -CaseSensitive)
+            if ($fieldDiff.Count -ne 0) { throw "$What $($side.Name) manifest.tables 字段集异常:$($fieldDiff | Out-String)" }
+            foreach ($field in @('name', 'file', 'proto', 'checksum')) {
+                if ($table.$field -isnot [string]) { throw "$What $($side.Name) manifest.tables.$field 必须是 JSON 字符串" }
+            }
+            $null = ConvertTo-PandoraConfigTableJsonUInt64 $table.rows "$What $($side.Name) manifest.tables.rows" ([uint32]::MaxValue)
+            $name = [string]$table.name
+            if ([string]::IsNullOrWhiteSpace($name) -or $side.Map.ContainsKey($name)) {
+                throw "$What $($side.Name) manifest.tables 表名为空或重复:'$name'"
+            }
+            $side.Map[$name] = $table
+        }
+    }
+    $tableNameDiff = @(Compare-Object -ReferenceObject @($expectedByName.Keys | Sort-Object) `
+        -DifferenceObject @($actualByName.Keys | Sort-Object) -CaseSensitive)
+    if ($tableNameDiff.Count -ne 0) { throw "$What manifest.tables 表名集不同:$($tableNameDiff | Out-String)" }
+    foreach ($name in $expectedByName.Keys) {
+        foreach ($field in @('file', 'proto', 'checksum')) {
+            if ([string]$expectedByName[$name].$field -cne [string]$actualByName[$name].$field) {
+                throw "$What manifest.tables[$name].$field 运行语义不同;必须生成更高版本"
+            }
+        }
+        $expectedRows = ConvertTo-PandoraConfigTableJsonUInt64 $expectedByName[$name].rows `
+            "$What 候选 manifest.tables[$name].rows" ([uint32]::MaxValue)
+        $actualRows = ConvertTo-PandoraConfigTableJsonUInt64 $actualByName[$name].rows `
+            "$What live manifest.tables[$name].rows" ([uint32]::MaxValue)
+        if ($expectedRows -ne $actualRows) {
+            throw "$What manifest.tables[$name].rows 运行语义不同;必须生成更高版本"
+        }
+    }
 }
 
 function Get-PandoraConfigTableVersionFromData([object]$Data, [string]$What) {
@@ -526,10 +639,9 @@ function Get-PandoraConfigTableVersionFromData([object]$Data, [string]$What) {
     }
     try { $manifest = ([string]$Data.PSObject.Properties['manifest.json'].Value) | ConvertFrom-Json -ErrorAction Stop }
     catch { throw "$What manifest.json 非法:$($_.Exception.Message)" }
-    $text = ([string]$manifest.version).Trim()
-    if ($text -cnotmatch '^[1-9][0-9]*$') { throw "$What version 非法:$text" }
-    try { return [uint64]::Parse($text, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture) }
-    catch { throw "$What version 超出 uint64:$text" }
+    $version = ConvertTo-PandoraConfigTableJsonUInt64 $manifest.version "$What version"
+    if ($version -eq 0) { throw "$What version 必须大于 0" }
+    return $version
 }
 
 function New-PandoraConfigTableConfigMapObject {
@@ -549,9 +661,6 @@ function Apply-PandoraConfigTableConfigMap {
         [object]$Candidate = $null,
         [string]$ConfigTableDir = ''
     )
-    if ($null -ne $script:PandoraConfigTableRollback) {
-        throw '上一次 pandora-configtable 切换尚未由 player Ready 确认或回滚,拒绝叠加发布。'
-    }
     if ($null -eq $Candidate) {
         if ([string]::IsNullOrWhiteSpace($ConfigTableDir)) { $ConfigTableDir = Join-Path $ProjectRoot 'configtable/dist' }
         $Candidate = Get-PandoraConfigTableCandidate -ConfigTableDir $ConfigTableDir
@@ -573,92 +682,70 @@ function Apply-PandoraConfigTableConfigMap {
             throw "$Action:候选 version $($Candidate.Version) 低于 live $liveVersion,拒绝回退。"
         }
         if ([uint64]$Candidate.Version -eq $liveVersion) {
-            Assert-PandoraConfigTableDataEqual -Expected $Candidate.Data -Actual $live.data `
-                -What "pandora-configtable 同版本 v$liveVersion"
-            Write-Ok "pandora-configtable 已是相同批次 v$liveVersion,ConfigMap no-op。"
-            return $Candidate
+            try {
+                Assert-PandoraConfigTableDataEqual -Expected $Candidate.Data -Actual $live.data `
+                    -What "pandora-configtable 同版本 v$liveVersion"
+                Write-Ok "pandora-configtable 已是相同批次 v$liveVersion,ConfigMap no-op。"
+                return $Candidate
+            } catch {
+                Assert-PandoraConfigTableSameVersionCompatible -Expected $Candidate.Data -Actual $live.data `
+                    -What "pandora-configtable 同版本 v$liveVersion"
+                $candidateManifest = ([string]$Candidate.Data['manifest.json']) | ConvertFrom-Json
+                $liveManifest = ([string]$live.data.PSObject.Properties['manifest.json'].Value) | ConvertFrom-Json
+                if ([string]$candidateManifest.source_rev -ceq [string]$liveManifest.source_rev -and
+                    [string]$candidateManifest.generator -ceq [string]$liveManifest.generator) {
+                    Write-Ok "pandora-configtable 已是相同运行批次 v$liveVersion;仅 manifest 格式/时间不同,ConfigMap no-op。"
+                    return $Candidate
+                }
+                Write-Warn "pandora-configtable v$liveVersion 表内容未变,将以 CAS 同步 manifest source_rev/generator 溯源修正(并携带候选 generated_at_ms)。"
+            }
         }
     }
 
-    $previousData = if ($null -eq $live) { $null } else { ConvertFrom-PandoraConfigTableLiveData $live.data }
     $resourceVersion = if ($null -eq $live) { '' } else { [string]$live.metadata.resourceVersion }
+    $previousUID = if ($null -eq $live) { '' } else { [string]$live.metadata.uid }
     if ($null -ne $live -and [string]::IsNullOrWhiteSpace($resourceVersion)) {
         throw "$Action:live ConfigMap resourceVersion 为空,无法 CAS 更新。"
+    }
+    if ($null -ne $live -and [string]::IsNullOrWhiteSpace($previousUID)) {
+        throw "$Action:live ConfigMap UID 为空,无法校验对象身份。"
     }
     $object = New-PandoraConfigTableConfigMapObject -Data $Candidate.Data -ResourceVersion $resourceVersion
     $objectJson = $object | ConvertTo-Json -Depth 10
     if ($null -eq $live) {
-        $objectJson | kubectl @kubectlContextArgs create -f - *> $null
-        Assert-LastExit "$Action(create-only)"
+        $writeLines = @($objectJson | kubectl @kubectlContextArgs create -f - -o json 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            throw "$Action(create-only)失败(exit=$LASTEXITCODE),写入结果可能未知;禁止回退,请以同一候选批次重跑。"
+        }
     } else {
-        $objectJson | kubectl @kubectlContextArgs replace -f - *> $null
-        Assert-LastExit "$Action(resourceVersion CAS replace)"
+        $writeLines = @($objectJson | kubectl @kubectlContextArgs replace -f - -o json 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            throw "$Action(resourceVersion CAS replace)失败(exit=$LASTEXITCODE),写入结果可能未知;禁止回退,请以同一候选批次重跑。"
+        }
     }
 
-    $applied = Get-KubectlJsonObject -KubeContext $KubeContext `
-        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
-        -Action '回读 pandora-configtable ConfigMap'
+    $writeText = (($writeLines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($writeText)) { throw "$Action:写入成功但 kubectl 未返回对象 JSON。" }
+    try { $applied = $writeText | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "$Action:写入返回非法 JSON:$($_.Exception.Message)" }
     $appliedUID = [string]$applied.metadata.uid
-    if ([string]::IsNullOrWhiteSpace($appliedUID)) { throw "$Action:写后 ConfigMap UID 为空。" }
-    $script:PandoraConfigTableRollback = [pscustomobject]@{
-        KubeContext = $KubeContext
-        PreviousData = $previousData
-        AppliedData = $Candidate.Data
-        AppliedUID = $appliedUID
-        AppliedVersion = [uint64]$Candidate.Version
+    if ([string]::IsNullOrWhiteSpace($appliedUID)) { throw "$Action:写入返回的 ConfigMap UID 为空。" }
+    if ($null -ne $live -and $appliedUID -cne $previousUID) {
+        throw "$Action:replace 返回 UID=$appliedUID,写前 UID=$previousUID,对象身份已变化。"
     }
     Assert-PandoraConfigTableDataEqual -Expected $Candidate.Data -Actual $applied.data `
+        -What "pandora-configtable 写入返回 v$($Candidate.Version)"
+
+    $current = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '回读 pandora-configtable ConfigMap'
+    if ([string]$current.metadata.uid -cne $appliedUID) {
+        throw "$Action:写后回读 UID=$([string]$current.metadata.uid),写入返回 UID=$appliedUID,对象已被并发替换。"
+    }
+    Assert-PandoraConfigTableDataEqual -Expected $Candidate.Data -Actual $current.data `
         -What "pandora-configtable 写后 v$($Candidate.Version)"
-    Write-Ok "pandora-configtable 已 CAS 切到 v$($Candidate.Version)(source_rev=$($Candidate.SourceRev));等待 player Ready 后确认。"
+    Write-Ok "pandora-configtable 已前向 CAS 切到 v$($Candidate.Version)(source_rev=$($Candidate.SourceRev));rollout 失败时保留本批次供同版本重跑。"
     return $Candidate
-}
-
-function Confirm-PandoraConfigTableConfigMap {
-    if ($null -eq $script:PandoraConfigTableRollback) { return }
-    Write-Ok "pandora-configtable v$($script:PandoraConfigTableRollback.AppliedVersion) 已由 player Ready 确认。"
-    $script:PandoraConfigTableRollback = $null
-}
-
-function Restore-PandoraConfigTableConfigMapOnFailure {
-    $state = $script:PandoraConfigTableRollback
-    if ($null -eq $state) { return }
-    if ($null -eq $state.PreviousData) {
-        Write-Warn "pandora-configtable v$($state.AppliedVersion) 是首次创建且候选已完整校验；后续流程失败但无旧批次可恢复,保留该对象供重试。"
-        $script:PandoraConfigTableRollback = $null
-        return
-    }
-
-    $current = Get-KubectlJsonObject -KubeContext $state.KubeContext `
-        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
-        -Action '失败回滚前读取 pandora-configtable'
-    if ([string]$current.metadata.uid -cne [string]$state.AppliedUID) {
-        throw 'pandora-configtable UID 已变化,拒绝回滚覆盖他人新对象。'
-    }
-    Assert-PandoraConfigTableDataEqual -Expected $state.AppliedData -Actual $current.data `
-        -What 'pandora-configtable 回滚前 CAS 内容'
-    $rv = [string]$current.metadata.resourceVersion
-    if ([string]::IsNullOrWhiteSpace($rv)) { throw 'pandora-configtable 回滚前 resourceVersion 为空。' }
-    $previousVersion = Get-PandoraConfigTableVersionFromData ([pscustomobject]$state.PreviousData) 'pandora-configtable 旧批次'
-    $restoreObject = New-PandoraConfigTableConfigMapObject -Data $state.PreviousData -ResourceVersion $rv
-    ($restoreObject | ConvertTo-Json -Depth 10) | kubectl --context $state.KubeContext replace -f - *> $null
-    Assert-LastExit 'pandora-configtable 失败回滚(resourceVersion CAS replace)'
-    $restored = Get-KubectlJsonObject -KubeContext $state.KubeContext `
-        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
-        -Action '回读已回滚 pandora-configtable'
-    Assert-PandoraConfigTableDataEqual -Expected $state.PreviousData -Actual $restored.data `
-        -What "pandora-configtable 回滚后 v$previousVersion"
-    Write-Warn "player 未 Ready,已把 pandora-configtable 从 v$($state.AppliedVersion) CAS 回滚到 v$previousVersion。"
-    $script:PandoraConfigTableRollback = $null
-}
-
-function Invoke-WithPandoraConfigTableRollback([scriptblock]$Operation) {
-    try { & $Operation }
-    catch {
-        $failure = $_
-        try { Restore-PandoraConfigTableConfigMapOnFailure }
-        catch { throw "原流程失败:$($failure.Exception.Message);pandora-configtable 自动回滚也失败:$($_.Exception.Message)" }
-        throw $failure
-    }
 }
 
 function Get-KubectlJsonObject {
@@ -4476,7 +4563,6 @@ function Invoke-K8s {
     foreach ($svc in (Get-ServiceList)) {
         kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(新 Pod 未就绪,查:kubectl describe/logs)"
-        if ([string]$svc.Name -ceq 'player') { Confirm-PandoraConfigTableConfigMap }
     }
     Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
@@ -5125,7 +5211,6 @@ function Invoke-Online {
         $deploymentName = if ($Env -eq 'prod' -and $writerServices -contains [string]$svc.Name) { "$($svc.Name)-ds-auth-green" } else { [string]$svc.Name }
         kubectl @kubectlContextArgs rollout status "deploy/$deploymentName" -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $deploymentName(Secret 传播后未就绪,查:kubectl describe/logs)"
-        if ([string]$svc.Name -ceq 'player') { Confirm-PandoraConfigTableConfigMap }
     }
     Assert-OnlineDeploymentImageState -KubeContext $ctx -Pins $goPins -Digests $goDigests `
         -WriterServices $writerServices -CanonicalGreen:($Env -eq 'prod')
@@ -5626,7 +5711,6 @@ function Resume-K8s {
     foreach ($svc in (Get-ServiceList)) {
         kubectl --context $mkCtx rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(Secret 刷新后未就绪)"
-        if ([string]$svc.Name -ceq 'player') { Confirm-PandoraConfigTableConfigMap }
     }
     Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
@@ -5800,16 +5884,14 @@ if ($BuildOnly) {
     exit 0
 }
 
-if ($Reset)  { Invoke-WithPandoraConfigTableRollback { Invoke-Reset };  exit 0 }
-if ($Resume) { Invoke-WithPandoraConfigTableRollback { Invoke-Resume }; exit 0 }
+if ($Reset)  { Invoke-Reset;  exit 0 }
+if ($Resume) { Invoke-Resume; exit 0 }
 
-Invoke-WithPandoraConfigTableRollback {
-    switch ($Mode) {
-        'local'    { Invoke-Local }
-        'docker'   { Invoke-Docker }
-        'intranet' { Invoke-Intranet }
-        'battle'   { Invoke-Battle }
-        'k8s'      { Invoke-K8s }
-        'online'   { Invoke-Online }
-    }
+switch ($Mode) {
+    'local'    { Invoke-Local }
+    'docker'   { Invoke-Docker }
+    'intranet' { Invoke-Intranet }
+    'battle'   { Invoke-Battle }
+    'k8s'      { Invoke-K8s }
+    'online'   { Invoke-Online }
 }

@@ -62,12 +62,13 @@ type SubscribeRequest struct {
 	// 推送以最新为准天然幂等)。游标保证不漏与每玩家有序,不保证不重。缓冲窗口
 	// (默认 5min / 512 帧)外的超长离线走各业务全量拉取兜底。
 	//
-	// resync 信号(R4 gap 闭环):带游标重连时,若服务端确证 last_seen_ms 之后已有帧
-	// 被修剪/滑出保留窗(补推无法闭合),会在补推之前先下发一条合成帧
-	// topic = "pandora.push.resync"(payload 空,ts_ms=0,不推进游标)。客户端收到后
-	// 必须把增量推送视为不完整,对推送驱动的各业务域回源全量拉取权威态(邮件列表、
-	// 好友申请、公会事件等),不得只依赖后续增量。该 topic 不是 kafka topic,仅存在于
-	// Subscribe 下行。
+	// resync 信号(R4 gap 闭环;R4 复审 P1-2 改为拉空后终检):服务端每次把投递缓冲
+	// 拉空后核对丢失证据,确证客户端游标之后已有帧被修剪/滑出保留窗(补推无法闭合)
+	// 时,下发一条合成帧 topic = "pandora.push.resync"(payload 空,ts_ms=0,不推进
+	// 游标)。信号可能出现在补推的幸存帧**之后**,也可能在流中途(在线期间发生修剪)
+	// 出现;同一段丢失只信号一次。客户端收到后必须把此前的增量推送视为不完整,对
+	// 推送驱动的各业务域回源全量拉取权威态(邮件列表、好友申请、公会事件等),不得
+	// 只依赖增量。该 topic 不是 kafka topic,仅存在于 Subscribe 下行。
 	LastSeenMs    int64 `protobuf:"varint,2,opt,name=last_seen_ms,json=lastSeenMs,proto3" json:"last_seen_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

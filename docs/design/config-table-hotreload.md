@@ -214,6 +214,10 @@ F:\work\XuanMing-Server\configtable\dist\
 - player:配置表为启动强依赖;从 `player_level_exp` 生成本次经验事务的曲线副本,加载/热更均执行
   整表不变量校验,并拒绝降低最高等级。Compose 只读挂 `configtable/dist`;K8s 由
   `pandora-configtable` ConfigMap 整目录挂到 `/app/configtable/active`。YAML `exp_curve` 已删除。
+  `start.ps1` 发布该 ConfigMap 时先冻结并校验完整候选,再以 version 单调、同版本表内容精确一致、
+  `resourceVersion` CAS 和 UID 回读门禁前向切换;同版本只允许在表运行语义不变时同步
+  `source_rev/generator/generated_at_ms` manifest 溯源纠正。Player Store 不接受降版,所以 rollout 失败保留
+  新批次并由同版本重跑继续收敛,禁止只回滚文件造成进程内快照与挂载文件分裂。
 
 **生成器是 protogen 式的(2026-07-21 定稿,做法对齐旧项目 tools/proto_generator/protogen)**:
 proto 即单一事实源——表与列的导表元信息全部标注在 `proto/pandora/config/v1/excel.proto`

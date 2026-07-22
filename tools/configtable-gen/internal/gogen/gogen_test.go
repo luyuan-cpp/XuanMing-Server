@@ -22,6 +22,18 @@ func discover(t *testing.T) []tablegen.TableDef {
 	return defs
 }
 
+// collapseSpaces 把连续空白折叠为单个空格(R4 复审:形状断言不得依赖 gofmt 的
+// map/struct 对齐空格——表数量一变对齐宽度就变,断言随之无谓变红)。
+func collapseSpaces(s string) string {
+	fields := strings.Fields(s)
+	return strings.Join(fields, " ")
+}
+
+// containsShape 空白不敏感的包含断言:want 与 got 都折叠连续空白后比较。
+func containsShape(got []byte, want string) bool {
+	return strings.Contains(collapseSpaces(string(got)), collapseSpaces(want))
+}
+
 func TestFilesShape(t *testing.T) {
 	files, err := Files(discover(t))
 	if err != nil {
@@ -43,7 +55,7 @@ func TestFilesShape(t *testing.T) {
 		"func (t *LevelTable) Where(",
 		"func (t *LevelTable) First(",
 	} {
-		if !strings.Contains(string(tbl), want) {
+		if !containsShape(tbl, want) {
 			t.Errorf("level_table.gen.go 缺少 %q", want)
 		}
 	}
@@ -55,12 +67,12 @@ func TestFilesShape(t *testing.T) {
 		"type Tables struct",
 		"Level *LevelTable",
 		"PlayerLevelExp *PlayerLevelExpTable",
-		`"level":            {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable}`,
+		`"level": {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable}`,
 		`"player_level_exp": {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable}`,
 		"func buildLevelTable(raw []byte, mt ManifestTable, dst *Tables) error",
 		"func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error",
 	} {
-		if !strings.Contains(string(reg), want) {
+		if !containsShape(reg, want) {
 			t.Errorf("tables.gen.go 缺少 %q", want)
 		}
 	}

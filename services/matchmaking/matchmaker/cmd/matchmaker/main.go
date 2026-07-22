@@ -28,8 +28,8 @@ import (
 
 	"github.com/luyuancpp/pandora/pkg/auth"
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
-	"github.com/luyuancpp/pandora/pkg/configtable"
 	pconfig "github.com/luyuancpp/pandora/pkg/config"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/grpcclient"
 	"github.com/luyuancpp/pandora/pkg/internalrpcauth"
 	"github.com/luyuancpp/pandora/pkg/kafkax"

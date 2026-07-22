@@ -257,20 +257,30 @@ if (-not $sameVersion) {
 
 # 回滚磁盘 active:reload 被服务端拒绝(校验失败)时,坏批次不能留在 active——
 # 服务端内存虽保留旧表,但下次进程重启会 fail-closed 加载失败(启动强依赖)。
-# 坏批次移到 history\failed-v<版本> 留证,恢复归档的旧批次。
-# 旧批次来源(审计 P1):优先本次运行归档的 $prevSlot;$prevSlot 为空(上次运行在
-# "归档旧 active"与"staging 补位"之间崩溃,本次续跑没有归档动作)时,从 history
-# 里找版本号最高且 < 新版本的 v* 槽位恢复——旧版本实际躺在 history 里,不能因为
-# 变量丢失就放弃回滚。
-function Restore-PreviousActive([string]$Reason) {
+# 坏批次移到 history\failed-v<版本> 留证,再恢复旧批次。
+# 恢复目标(R4 复审 P1-7):**优先精确恢复服务端上报的 activeVersion**——服务内存 v7、
+# 磁盘曾发过 v9 时,恢复 v9 仍是"内存 v7/磁盘 v9"劈叉(下次重启静默换表);只有磁盘
+# 收敛到 v<服务端版本> 才与运行态一致。该槽位缺失时才退回:本次归档的 $prevSlot →
+# history 最高且 < 候选版本的 v* 槽位,并明示磁盘与服务端内存仍劈叉、需人工收敛。
+function Restore-PreviousActive([string]$Reason, [uint64]$ServiceActiveVersion = 0) {
     $failedSlot = Join-Path $history "failed-v$newVersion"
     New-Item -ItemType Directory -Force $history | Out-Null
     if (Test-Path $failedSlot) { Remove-Item -Recurse -Force $failedSlot }
     Move-Item $active $failedSlot
 
-    $restoreSlot = $prevSlot
-    if ($null -eq $restoreSlot -or -not (Test-Path $restoreSlot)) {
-        $restoreSlot = $null
+    $restoreSlot = $null
+    if ($ServiceActiveVersion -gt 0) {
+        $exact = Join-Path $history "v$ServiceActiveVersion"
+        if (Test-Path $exact) {
+            $restoreSlot = $exact
+        } else {
+            Write-Host "[WARN] history 缺服务端当前版本 v$ServiceActiveVersion 的槽位,无法精确恢复;退回可用旧批次后磁盘与服务端内存仍劈叉,需人工收敛(用服务端版本重发或生成更高版本)。" -ForegroundColor Yellow
+        }
+    }
+    if ($null -eq $restoreSlot -and $null -ne $prevSlot -and (Test-Path $prevSlot)) {
+        $restoreSlot = $prevSlot
+    }
+    if ($null -eq $restoreSlot) {
         $best = [uint64]0
         if (Test-Path $history) {
             foreach ($d in Get-ChildItem -Directory $history) {
@@ -339,7 +349,7 @@ if ($ReloadAddr -ne "") {
         if ($gotVersion -gt $newVersion) {
             Write-Host "[ERR] 服务端已在更高版本 v$gotVersion(候选 v$newVersion 过旧):磁盘不回滚;请基于最新源表生成更高版本重新发布。" -ForegroundColor Red
         } elseif ($codeText -ne 'OK' -and $gotVersion -gt 0 -and $gotVersion -lt $newVersion) {
-            Restore-PreviousActive "服务端拒绝批次 v$newVersion(code=$codeText activeVersion=$gotVersion detail=$($resp.detail);sameVersion=$sameVersion);服务端内存保留旧表"
+            Restore-PreviousActive -Reason "服务端拒绝批次 v$newVersion(code=$codeText activeVersion=$gotVersion detail=$($resp.detail);sameVersion=$sameVersion);服务端内存保留旧表" -ServiceActiveVersion $gotVersion
         } else {
             Write-Host "[ERR] reload 未确认(code=$codeText activeVersion=$gotVersion detail=$($resp.detail)):形态不像'坏批次被拒'(可能鉴权/协议问题),磁盘保持 v$newVersion 不回滚;排查后手动重试:" -ForegroundColor Red
             Write-Host "  grpcurl -plaintext -d '{\"expect_version\": $newVersion}' $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable"

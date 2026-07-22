@@ -994,6 +994,20 @@ Assert-True (-not $source.Contains('Sync-ImagesToMinikube -Images (Get-ServiceIm
 # 精确核验 service/config-file 标签、按容器 ID 停本 compose 的 envoy、等待三个端口释放，
 # 再启动新容器；禁止通过进程级命令杀 Docker backend。
 $bridgeSource = Get-Content -LiteralPath $bridgePath -Raw
+$forwardEntries = @([regex]::Matches(
+    $bridgeSource,
+    '@\{\s*Name\s*=\s*''(?<name>[^'']+)'';\s*Port\s*=\s*(?<port>\d+);\s*Essential\s*=\s*\$(?<essential>true|false)\s*\}'))
+Assert-True ($forwardEntries.Count -eq 21) 'bridge 必须映射全部 21 个 Go Deployment'
+$forwardNames = @($forwardEntries | ForEach-Object { $_.Groups['name'].Value })
+$forwardPorts = @($forwardEntries | ForEach-Object { [int]$_.Groups['port'].Value })
+Assert-True (@($forwardNames | Sort-Object -Unique).Count -eq 21) 'bridge 服务名必须 21 个且唯一'
+Assert-True (@($forwardPorts | Sort-Object -Unique).Count -eq 21) 'bridge 服务端口必须 21 个且唯一'
+$ownerForward = @($forwardEntries | Where-Object {
+    $_.Groups['name'].Value -ceq 'owner' -and
+    [int]$_.Groups['port'].Value -eq 50017 -and
+    $_.Groups['essential'].Value -ceq 'true'
+})
+Assert-True ($ownerForward.Count -eq 1) 'owner 必须唯一映射 50017 且作为必需权威服务'
 $bridgeFunctions = @($bridgeAst.FindAll({
     param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and

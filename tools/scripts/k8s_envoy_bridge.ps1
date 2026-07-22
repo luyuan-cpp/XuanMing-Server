@@ -1,7 +1,7 @@
 # Pandora 本地 k8s 真 DS 联调的宿主 Envoy 桥接器
 #
 # 为什么需要它:
-#   - k8s 模式里 20 个 Go Deployment 都跑在 pandora namespace 的 ClusterIP Service 后面
+#   - k8s 模式里 21 个 Go Deployment 都跑在 pandora namespace 的 ClusterIP Service 后面
 #   - UE 客户端打宿主 Envoy :8443；GameServer DS 回调走集群内 pandora-envoy :8444
 #   - 现有 deploy/envoy/envoy.yaml 的 upstream 全指向 host.docker.internal:500xx
 #
@@ -78,6 +78,8 @@ $Forwards = @(
     @{ Name = 'push';           Port = 50014; Essential = $true  }
     @{ Name = 'inventory';      Port = 50015; Essential = $false }
     @{ Name = 'auction';        Port = 50016; Essential = $false }
+    # Owner 是登录/分配/DS 归属权威；即使 Envoy 不直接路由它，也必须映射并通过健康门禁。
+    @{ Name = 'owner';          Port = 50017; Essential = $true  }
     @{ Name = 'ds-allocator';   Port = 50020; Essential = $true  }
     @{ Name = 'hub-allocator';  Port = 50021; Essential = $true  }
     @{ Name = 'battle-result';  Port = 50022; Essential = $true  }

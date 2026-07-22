@@ -1,6 +1,6 @@
 # [INC-20260722-004][P0] 旧/被顶号会话 token 仍能订阅私有推送流
 
-> **状态**：修复实施中（会话现行性门 + 流内复查 + 生成器强制档已落码测试绿，2026-07-22；真实 Envoy/Redis 环境验收未跑，未关闭）
+> **状态**：修复实施中（会话现行性门 + 流内复查 + 生成器强制档已落码测试绿，2026-07-22；R4 复审发现两处仍可达窗口——建流校验/注册 TOCTOU、写者 Send 阻塞时复查饿死——已于同日修复并补确定性回归；真实 Envoy/Redis 环境验收未跑，未关闭）
 > **类型**：`security` / `session-fencing` / `near-miss`
 > **环境**：本机源码与单测审计（未确认在线上发生）
 > **首次发生时间（UTC）**：未在线上确认；受影响行为自 push Subscribe 上线（W3 ④）即存在
@@ -68,6 +68,28 @@ deploy/envoy/envoy.yaml push 路由(修复前)
 - `tools/scripts/gen_cluster_config.ps1`：`Set-ProdPushSessionGateOn`，`-Prod` 产物强制 `require_session_gate: true`，模板锚点异常拒绝生成。
 - `deploy/envoy/envoy.yaml`：push 路由加 `max_stream_duration: 3600s`（独立兜底层：流寿命有界，到期强制带新 token 重建再过建流门）。
 
+### 4.1.1 R4 复审补修（2026-07-22，同日）
+
+首轮修复存在两处仍可达窗口，复审确认后补修：
+
+1. **建流校验/注册 TOCTOU**：`AuthorizeSubscribe` 与 `Register` 分离执行——旧会话校验
+   通过后暂停、新会话完成校验+注册、旧会话恢复再注册，会反过来取消新设备连接并接管
+   槽位（“旧 token 不再能顶掉新设备”不成立）。补修：`AuthorizeAndRegister` 在同玩家
+   64 条带锁内串行执行「校验 → 注册」；任一交错都收敛到新会话持有连接（旧会话校验排
+   在新会话注册后必读到已轮换 jti 被拒；排在前则旧流短暂注册后立即被新注册顶掉）。
+   回归：`TestAuthorizeAndRegister_StaleSessionCannotDisplaceNewer`（用可阻塞 gate 确定
+   性复现原交错）。
+2. **“30 秒内关闭旧流”无时限保证**：流内复查与写者共用同一 select，写者阻塞在
+   `stream.Send`（慢客户端流控）或首轮 replay 期间，复查永远轮不到；实际最坏收敛由
+   gRPC `max_connection_age`(15m)+grace 决定。补修：会话复查改为**独立看门狗 goroutine**
+   （不受写者阻塞影响），失效后 ≤30s 取消流上下文；写者每次 Send 前检查取消，不再投
+   递任何新帧，并以映射后的 gRPC 状态（UNAUTHENTICATED/UNAVAILABLE，见
+   `pkg/errcode/grpc.go`）关流。**诚实契约**：30s 界定的是「停止投递 + 发起关流」；
+   写者已阻塞在传输层的至多一帧、以及 TCP/流句柄的物理回收，仍由 keepalive/
+   max_connection_age/Envoy max_stream_duration 有界收敛，不是 ≤30s。
+   回归：`TestRunSubscribeStream_WatchdogClosesBlockedWriter`（写者阻塞在 Send 时顶号，
+   断言解除阻塞后零新帧投递并以 ErrUnauthorized 关流）。
+
 ### 4.2 回归测试（已落地，全绿）
 
 - `internal/biz/replay_duplicate_test.go`：`TestAuthorizeSubscribe_SessionCurrency`（现行放行/旧 jti 拒/登出拒/require 档缺 jti 拒/权威故障 fail-closed/dev 档语义）、`TestRecheckSession_ExpiryClosesStream`（token 到期关流）、`TestRecheckSession_SupersededAndRetryable`（顶号关流含跨 Pod 语义/权威故障可重试）。
@@ -78,16 +100,18 @@ deploy/envoy/envoy.yaml push 路由(修复前)
 
 | 场景 | 期望 | 状态 |
 |---|---|---|
-| 旧 token 重连（已被新登录顶号） | 建流拒绝 `session superseded` | 单测绿；真实 Envoy 链路未验 |
-| 跨 Pod 顶号（旧流在 A Pod，新登录经 B Pod） | 旧流 ≤30s 内被流内复查关闭 | 单测绿（逻辑层）；多 Pod 实测未跑 |
+| 旧 token 重连（已被新登录顶号） | 建流拒绝 `session superseded`（UNAUTHENTICATED） | 单测绿；真实 Envoy 链路未验 |
+| **建流并发交错（R4 复审①）**：旧会话校验通过后暂停 → 新会话注册 → 旧会话再注册 | 任意交错下新会话持有连接槽，旧会话不得取消新设备 | 确定性交错回归绿；真实并发/多 Pod 实测未跑 |
+| 跨 Pod 顶号（旧流在 A Pod，新登录经 B Pod） | 旧流 ≤30s 停止投递并发起关流 | 单测绿（逻辑层）；多 Pod 实测未跑 |
+| **写者阻塞在 Send（R4 复审②）**：慢客户端流控期间顶号 | 看门狗独立裁决；解除阻塞后零新帧、以 UNAUTHENTICATED 关流；句柄回收由 keepalive/max_conn_age/Envoy 1h 有界兜底 | 阻塞写者回归绿；真实流控/慢客户端实测未跑 |
 | 会话轮换（同设备重登） | 旧 jti 流关闭，新 jti 建流成功 | 单测绿；E2E 未跑 |
-| token 到期 | 流 ≤30s 内关闭；Envoy 1h 流寿命兜底 | 单测绿；Envoy max_stream_duration 未实测 |
+| token 到期 | ≤30s 停止投递并发起关流；Envoy 1h 流寿命兜底 | 单测绿；Envoy max_stream_duration 未实测 |
 | Redis 故障 | 建流 fail-closed 拒；在流连续 3 次失败关流 | 单测绿；真实故障注入未跑 |
 | dev 直连联调 | 缺省档行为不变（无 jti 放行，有 jti 仍校验） | 单测绿 |
 
 ## 6. 剩余风险与关闭条件
 
-- **未关闭原因**：真实 Envoy(:8443 jwt_authn + payload 头) + 共享 Redis + 多 Pod 环境的验收矩阵未执行；`go test -race` 需 CGO/Linux CI。
+- **未关闭原因**：真实 Envoy(:8443 jwt_authn + payload 头) + 共享 Redis + 多 Pod 环境的验收矩阵未执行；建流并发交错与阻塞写者两条 R4 复审场景目前只有确定性单测，缺真实并发/流控实测；`go test -race` 需 CGO/Linux CI。
 - 会话权威与 push 必须指向**同一** Redis（infra 单实例部署契约）；分库部署会让门失效——部署清单 review 项。
-- 30s 复查窗口内旧 token 仍可短暂收推送（有界暴露，契约已注释）；缩窗需以 Redis QPS 为代价，当前取 30s。
+- 30s 复查窗口内旧 token 仍可短暂收推送（有界暴露，契约已注释）；缩窗需以 Redis QPS 为代价，当前取 30s。**表述修正（R4 复审）**：30s 界定的是「停止投递 + 发起关流」，不是流句柄消亡；句柄物理回收由 gRPC keepalive/max_connection_age(15m)+grace 与 Envoy max_stream_duration(1h) 有界收敛。修复前的准确表述是「已建立的流不能随会话失效及时关闭」（修复前另有 Envoy 1h 流寿命上界，非字面「无限期」）。
 - 关闭条件：验收矩阵全绿 + 生产产物 dbcheck/发布门禁通过 + 观察窗口无复发。
