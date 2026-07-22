@@ -64,7 +64,7 @@ $LogDir = Join-Path $RunDir 'logs'
 New-Item -ItemType Directory -Force -Path $BinDir, $LogDir | Out-Null
 
 # ===== 服务清单(数组顺序 = 依赖启动顺序:leaf 依赖在前,login 最后)=====
-# 全部 20 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
+# 全部 21 个服务(含 social/friend、social/chat、social/guild、social/mail、social/dialogue、
 # data/data_service、economy/trade、economy/inventory、economy/auction、runtime/leaderboard 等)。
 # 启动策略:要么全起(默认),要么用 -Service 单起某一个,不做分档启动。
 $Services = @(

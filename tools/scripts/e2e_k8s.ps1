@@ -8,7 +8,7 @@
 #   5) (可选)起容器版 UDP 回程中继(--network <minikube profile>;docker driver 下客户端连 DS 必需)
 #   6) 打印端到端验收清单(用真 UE 客户端验:登录→hub→战斗→结算回 hub)
 #
-# 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、20 个后端 Deployment 部署。
+# 前置(由 start.ps1 -Mode k8s 完成):minikube 起、Agones 装好、RBAC/Fleet apply、21 个后端 Deployment 部署。
 #   pwsh tools/scripts/start.ps1 -Mode k8s
 #   # start.ps1 会按 live allocator 地址自动把正确的 RelayBindHost 传给本脚本
 #
