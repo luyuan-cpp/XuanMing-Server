@@ -39,11 +39,28 @@ type PushConf struct {
 	// 业务侧 producer 用 kafkax.PushToPlayers helper 发送,key=player_id。
 	Topics []string `yaml:"topics,omitempty" json:"topics,omitempty"`
 
-	// OfflineCacheTTL 离线消息缓存 redis ZSET 的 TTL,默认 5min。
-	//
-	// 玩家不在线时 kafka 消息暂存到 pandora:push:offline:<player_id> ZSET
-	// (score=ts_ms, member=PushFrame proto bytes);重连时按 last_seen_ms 补推。
+	// OfflineCacheTTL 投递缓冲的帧保留窗口,默认 5min(2026-07-22 v2:**所有**定向帧
+	// 先入 pandora:push:offline:<player_id> ZSET 再投递,score = 服务端投递游标;
+	// 在线实时投递 + 离线/跨 Pod 由连接写者按游标拉取,见 data/offline.go)。
+	// 整 key TTL 另有 7 天游标基线保活(哨兵 member),本值只控帧 member 修剪窗口。
 	OfflineCacheTTL config.Duration `yaml:"offline_cache_ttl,omitempty" json:"offline_cache_ttl,omitempty"`
+
+	// OfflineCacheMaxFrames 单玩家投递缓冲条数硬上限(§9.18 有界纪律),默认 512。
+	// 写入侧保留最新 N 条 + 按 TTL 窗口修剪(持续有消息时整 key TTL 一直被刷新,
+	// 不修剪 member 会让旧帧永久保留);读取侧同值兜底 LIMIT。
+	OfflineCacheMaxFrames int `yaml:"offline_cache_max_frames,omitempty" json:"offline_cache_max_frames,omitempty"`
+
+	// RequireSessionGate 会话现行性门强制档(P0,INC-20260722-004;prod 生成器机械置 true)。
+	// true:建流必须携带 Envoy 验签 jti 且为当前一代会话,权威不可达 fail-closed 拒;
+	// false(缺省,§14.2 dev 直连联调不变):有 jti 仍校验,无 jti 放行。
+	RequireSessionGate bool `yaml:"require_session_gate,omitempty" json:"require_session_gate,omitempty"`
+
+	// AllowUnverifiedEvictionPolicy 托管 Redis 禁用 CONFIG 导致 maxmemory-policy 无法
+	// 核验时,是否放行启动(R4 复审:核验失败缺省 fail-closed 拒启动——「查不了」不等于
+	// 「配置正确」,驱逐策略错配会静默丢帧/放行旧会话)。只允许在**人工确认**目标
+	// Redis 全拓扑 maxmemory-policy=noeviction 的托管环境显式置 true,并把该确认列入
+	// 部署核对清单;自建 Redis(仓内 compose/k8s 基线)一律保持 false。
+	AllowUnverifiedEvictionPolicy bool `yaml:"allow_unverified_eviction_policy,omitempty" json:"allow_unverified_eviction_policy,omitempty"`
 }
 
 // Defaults 把零值填成 Pandora 标准默认值。
@@ -53,6 +70,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Push.OfflineCacheTTL == 0 {
 		c.Push.OfflineCacheTTL = config.Duration(5 * time.Minute)
+	}
+	if c.Push.OfflineCacheMaxFrames <= 0 {
+		c.Push.OfflineCacheMaxFrames = 512
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50014"

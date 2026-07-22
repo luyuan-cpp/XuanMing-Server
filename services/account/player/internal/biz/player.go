@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	playerv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/player/v1"
@@ -40,6 +41,39 @@ type PlayerUsecase struct {
 	// expPusher 把经验推送出箱行投 kafka(实时成长;nil-safe:未注入时出箱积压不丢)。
 	// 由 main 经 SetExperiencePusher 注入(与 SetCellRouter 同风格)。
 	expPusher ExperiencePusher
+
+	// expLevels 提供当前策划等级经验曲线。生产实现包装 configtable.Store 的原子快照；
+	// 玩家等级经验只从 j_玩家等级经验.xlsx 读取，不保留 YAML 双数据源。
+	expLevels experienceLevelSource
+}
+
+// SetConfigTables 注入启动时已成功加载、并注册等级曲线整表校验器的配置表容器。
+// Store 热更以整批不可变快照原子切换；单次经验事务先取一份曲线副本，不会跨版本混算。
+func (u *PlayerUsecase) SetConfigTables(store *configtable.Store) {
+	if store == nil {
+		u.expLevels = nil
+		return
+	}
+	u.expLevels = configTableExperienceLevels{store: store}
+}
+
+type experienceLevelSource interface {
+	ExperienceCurve() []uint64
+}
+
+type configTableExperienceLevels struct {
+	store *configtable.Store
+}
+
+func (s configTableExperienceLevels) ExperienceCurve() []uint64 {
+	if s.store == nil {
+		return nil
+	}
+	tables := s.store.Tables()
+	if tables == nil || tables.PlayerLevelExp == nil {
+		return nil
+	}
+	return tables.PlayerLevelExp.ExperienceCurve()
 }
 
 // NewPlayerUsecase 构造。

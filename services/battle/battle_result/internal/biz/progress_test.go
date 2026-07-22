@@ -199,20 +199,34 @@ func TestReportProgress_AggregatesAndAcks(t *testing.T) {
 	}
 }
 
-func TestReportProgress_UnknownFactRejectsBatch(t *testing.T) {
-	// 未知事实类型(新 DS 新 fact 打到旧 Go)必须整批拒,不得"跳过发放但推进水位"
-	// (静默 ACK = 事实永久丢失,审计 P1 向前兼容性)。
+func TestReportProgress_UnknownFactStopsStream(t *testing.T) {
+	// 未知事实类型(新 DS 新 fact 打到旧 Go)= 整场性质的能力不匹配:必须整批拒且
+	// 返回 ErrInvalidState(DS 停流;停流后本场剩余实时奖励按契约明示永久丢失,
+	// 不结算兜底——只该出现在违反 Go 先行发布纪律时)。不得"跳过发放但推进水位"
+	// (静默丢失),也不得 ErrInvalidArg(丢批继续 = 后续每批照样丢,逐批永久丢失,审计 P1)。
 	repo := newFakeRepo()
 	uc := progressUsecase(repo)
 	events := []*battlev1.BattleProgressEvent{
 		killEvent(1, 7, 101, 1),
 		{Seq: 2, PlayerId: 7}, // oneof 未设置 = 本副本不认识的事实类型
 	}
-	if _, err := uc.ReportProgress(context.Background(), 904, []uint64{7}, events); errcode.As(err) != errcode.ErrInvalidArg {
-		t.Fatalf("unknown fact want ErrInvalidArg, got %v", err)
+	if _, err := uc.ReportProgress(context.Background(), 904, []uint64{7}, events); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("unknown fact want ErrInvalidState (stop stream), got %v", err)
 	}
 	if repo.progressSeq[904] != 0 || len(repo.progressOutbox) != 0 {
 		t.Fatalf("rejected batch must be side-effect free: seq=%d rows=%d", repo.progressSeq[904], len(repo.progressOutbox))
+	}
+	// 停流标记必须持久化(审计 P1):违纪 DS 随后只发已知事实的批也一律拒,
+	// 禁止重新开流(否则"整场停流"契约被绕过)。
+	if !repo.progressStopped[904] {
+		t.Fatal("unknown fact must persist the stopped marker")
+	}
+	if _, err := uc.ReportProgress(context.Background(), 904, []uint64{7},
+		[]*battlev1.BattleProgressEvent{killEvent(3, 7, 101, 1)}); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("known-fact batch after stop must stay rejected, got %v", err)
+	}
+	if repo.progressSeq[904] != 0 || len(repo.progressOutbox) != 0 {
+		t.Fatalf("post-stop batch must be side-effect free: seq=%d rows=%d", repo.progressSeq[904], len(repo.progressOutbox))
 	}
 }
 
@@ -245,6 +259,120 @@ func TestReportProgress_PerMatchCumulativeCaps(t *testing.T) {
 		pickupEvent(1, 7, 5001, 2), pickupEvent(2, 7, 5001, 2),
 	}); errcode.As(err) != errcode.ErrInvalidArg {
 		t.Fatalf("cumulative items over cap want ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestReportProgress_PerPlayerCumulativeCaps(t *testing.T) {
+	// 单场单玩家上限(realtime-progression.md 反作弊上限):只有按场累计时,
+	// 失陷 DS 仍可把全场额度灌给一人,必须按玩家封顶(审计 P1)。
+	repo := newFakeRepo()
+	cfg := conf.BattleConf{
+		ProgressEnabled: true,
+		MonsterExp:      map[uint32]uint64{101: 10},
+		DropWhitelist:   []uint32{5001},
+		// 场上限放宽,确保拦截全部来自单玩家上限。
+		MaxProgressExpPerMatch:    1000,
+		MaxProgressItemsPerMatch:  100,
+		MaxProgressExpPerPlayer:   25,
+		MaxProgressItemsPerPlayer: 3,
+		MaxProgressKillsPerPlayer: 5,
+	}
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	ctx := context.Background()
+	roster := []uint64{7, 8}
+
+	// 第一批:玩家 7 两杀=20 exp,玩家 8 一杀=10,均未超单玩家上限。
+	if acked, err := uc.ReportProgress(ctx, 910, roster, []*battlev1.BattleProgressEvent{
+		killEvent(1, 7, 101, 2), killEvent(2, 8, 101, 1),
+	}); err != nil || acked != 2 {
+		t.Fatalf("first batch acked=%d err=%v", acked, err)
+	}
+	// 第二批:玩家 7 再一杀累计 30 超单玩家 exp 上限 25 → 整批拒且零副作用。
+	if _, err := uc.ReportProgress(ctx, 910, roster, []*battlev1.BattleProgressEvent{killEvent(3, 7, 101, 1)}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("per-player exp over cap want ErrInvalidArg, got %v", err)
+	}
+	if repo.progressSeq[910] != 2 {
+		t.Fatalf("rejected batch must not advance seq, got %d", repo.progressSeq[910])
+	}
+	// 其他玩家额度独立:玩家 8 继续入账。
+	if acked, err := uc.ReportProgress(ctx, 910, roster, []*battlev1.BattleProgressEvent{killEvent(4, 8, 101, 1)}); err != nil || acked != 4 {
+		t.Fatalf("other player batch acked=%d err=%v", acked, err)
+	}
+
+	// 单玩家掉落上限:同一人 4 件超 3 → 拒。
+	if _, err := uc.ReportProgress(ctx, 911, roster, []*battlev1.BattleProgressEvent{
+		pickupEvent(1, 7, 5001, 2), pickupEvent(2, 7, 5001, 2),
+	}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("per-player items over cap want ErrInvalidArg, got %v", err)
+	}
+
+	// 单玩家击杀上限:未配置经验的怪(999)同样计入击杀额度,6 杀超 5 → 拒
+	// (失陷 DS 不能靠刷未知怪 ID 绕过反作弊额度)。
+	if _, err := uc.ReportProgress(ctx, 912, roster, []*battlev1.BattleProgressEvent{killEvent(1, 7, 999, 6)}); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("per-player kills over cap want ErrInvalidArg, got %v", err)
+	}
+}
+
+func TestReportProgress_StaleWatermarkRetryStaysRetryable(t *testing.T) {
+	// 审计 P1 回归:重试请求读到旧水位(首请求已提交推进)时,绝不能在混合快照上
+	// 永久拒(旧实现在事务外用 旧水位+新累计 判上限:同批 delta 被重复计入,
+	// 20+20 > 25 → ErrInvalidArg → DS 丢批并释放拾取认领 → 可重复发放)。
+	// 新实现上限判定在 ApplyProgress 事务内:过期期望水位在 CAS 处以 ErrUnavailable
+	// 收敛,DS 重读新水位后按纯重放 ACK,零副作用。
+	repo := newFakeRepo()
+	cfg := conf.BattleConf{
+		ProgressEnabled:         true,
+		MonsterExp:              map[uint32]uint64{101: 10},
+		MaxProgressExpPerPlayer: 25, // 首批 2 杀=20:若同批 delta 被重复计入(40)即误超限
+	}
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	ctx := context.Background()
+	roster := []uint64{7}
+	batch := []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 2)}
+
+	if acked, err := uc.ReportProgress(ctx, 920, roster, batch); err != nil || acked != 1 {
+		t.Fatalf("first batch acked=%d err=%v", acked, err)
+	}
+
+	// 注入过期水位快照(seq=0 / 累计 0,行已存在):模拟重试请求的读落在首请求提交之前。
+	repo.staleWatermark = &data.ProgressWatermark{Existed: true}
+	if _, err := uc.ReportProgress(ctx, 920, roster, batch); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("stale-watermark retry must stay retryable (ErrUnavailable), got %v", err)
+	}
+	// 零副作用:累计不变、出箱不重复。
+	if repo.progressExp[920] != 20 || repo.progressPlayers[920][7].TotalExp != 20 {
+		t.Fatalf("retry must not double-count: match=%d player=%d",
+			repo.progressExp[920], repo.progressPlayers[920][7].TotalExp)
+	}
+	if len(repo.progressOutbox) != 1 {
+		t.Fatalf("retry must not duplicate outbox rows, got %d", len(repo.progressOutbox))
+	}
+
+	// DS 收到 ErrUnavailable 后重读(拿到新水位)→ 纯重放 ACK 收敛。
+	if acked, err := uc.ReportProgress(ctx, 920, roster, batch); err != nil || acked != 1 {
+		t.Fatalf("converged replay acked=%d err=%v", acked, err)
+	}
+}
+
+func TestReportProgress_ZeroExpMonsterNoOutboxRow(t *testing.T) {
+	// monster_exp 显式配 0(无经验怪):不得产生 0 额度 exp 出箱行(player 拒收会永久重试),
+	// 但击杀仍计入单玩家击杀额度。
+	repo := newFakeRepo()
+	cfg := conf.BattleConf{
+		ProgressEnabled: true,
+		MonsterExp:      map[uint32]uint64{101: 0},
+	}
+	uc := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, cfg)
+	ctx := context.Background()
+
+	if acked, err := uc.ReportProgress(ctx, 913, []uint64{7}, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 2)}); err != nil || acked != 1 {
+		t.Fatalf("acked=%d err=%v", acked, err)
+	}
+	if len(repo.progressOutbox) != 0 {
+		t.Fatalf("zero-exp kill must not enqueue outbox rows, got %d", len(repo.progressOutbox))
+	}
+	if repo.progressPlayers[913][7].TotalKills != 2 {
+		t.Fatalf("kills must still accumulate, got %d", repo.progressPlayers[913][7].TotalKills)
 	}
 }
 
@@ -402,5 +530,139 @@ func TestPublishProgressBatch_NilGrantersKeepRows(t *testing.T) {
 	}
 	if len(repo.progressOutbox) != 1 {
 		t.Fatalf("rows must stay when granters missing, got %d", len(repo.progressOutbox))
+	}
+}
+
+// 停流标记写失败必须保持可重试(审计 P1:吞失败返终态 InvalidState 会让 DS 永久停流
+// 而库无标记,后续已知批被误收)。
+func TestReportProgress_MarkStoppedFailureIsRetryable(t *testing.T) {
+	repo := newFakeRepo()
+	repo.markStoppedErr = errcode.New(errcode.ErrInternal, "db down")
+	uc := progressUsecase(repo)
+	events := []*battlev1.BattleProgressEvent{{Seq: 1, PlayerId: 7}} // 未知事实
+
+	if _, err := uc.ReportProgress(context.Background(), 930, []uint64{7}, events); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("mark failure must be retryable ErrUnavailable, got %v", err)
+	}
+	if repo.progressStopped[930] {
+		t.Fatal("marker must not be set when persist failed")
+	}
+	// 恢复后重试同批 → 落标记 + 停流终态。
+	repo.markStoppedErr = nil
+	if _, err := uc.ReportProgress(context.Background(), 930, []uint64{7}, events); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("retry after recovery want ErrInvalidState, got %v", err)
+	}
+	if !repo.progressStopped[930] {
+		t.Fatal("marker must be persisted on retry")
+	}
+}
+
+// 停流与正常批的 CAS 竞态(审计 P1):正常批读到停流前旧快照,事务侧 stopped 条件
+// 必须拒推进(Unavailable 重读收敛),不得写出箱。
+func TestReportProgress_StopRaceFencedByCAS(t *testing.T) {
+	repo := newFakeRepo()
+	uc := progressUsecase(repo)
+	ctx := context.Background()
+	roster := []uint64{7}
+
+	if _, err := uc.ReportProgress(ctx, 931, roster, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}); err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	// 注入旧快照(停流发生前),同时另一路已停流。
+	repo.staleWatermark = &data.ProgressWatermark{LastAppliedSeq: 1, Existed: true}
+	_ = repo.MarkProgressStopped(ctx, 931)
+
+	rows := len(repo.progressOutbox)
+	if _, err := uc.ReportProgress(ctx, 931, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)}); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("stale-snapshot batch vs stop must fence at CAS (ErrUnavailable), got %v", err)
+	}
+	if len(repo.progressOutbox) != rows || repo.progressSeq[931] != 1 {
+		t.Fatalf("fenced batch must be side-effect free: rows=%d seq=%d", len(repo.progressOutbox), repo.progressSeq[931])
+	}
+	// 重读后收敛为停流终态。
+	if _, err := uc.ReportProgress(ctx, 931, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)}); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("converged read want ErrInvalidState, got %v", err)
+	}
+}
+
+// 通道关闭时固化 legacy 标记(审计 P1):对局中途重新开启配置,同一对局也不得晚开流。
+func TestReportProgress_DisabledPersistsLegacyMarker(t *testing.T) {
+	repo := newFakeRepo()
+	off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
+		MonsterExp: map[uint32]uint64{101: 10},
+	})
+	ctx := context.Background()
+	roster := []uint64{7}
+	batch := []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}
+
+	if _, err := off.ReportProgress(ctx, 932, roster, batch); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("disabled want ErrInvalidState, got %v", err)
+	}
+	if !repo.progressStopped[932] {
+		t.Fatal("disabled rejection must persist legacy marker")
+	}
+	// 配置翻开后同一对局仍拒(本场结算模式已固化)。
+	on := progressUsecase(repo)
+	if _, err := on.ReportProgress(ctx, 932, roster, batch); errcode.As(err) != errcode.ErrInvalidState {
+		t.Fatalf("re-enabled config must not late-open a legacy match, got %v", err)
+	}
+	if repo.progressSeq[932] != 0 {
+		t.Fatalf("legacy match must never open stream, seq=%d", repo.progressSeq[932])
+	}
+}
+
+// 关闭副本 vs 开启副本的开流竞态(审计 R4 #11):关闭副本读到"行不存在"的旧快照后,
+// 固化 legacy 必须是"无行才认领"——认领输给已开流的行时,不得停掉开启副本刚开的流,
+// 必须重读水位并按已开流继续入账。
+func TestReportProgress_DisabledClaimLosesToOpenStream(t *testing.T) {
+	repo := newFakeRepo()
+	ctx := context.Background()
+	roster := []uint64{7}
+
+	// 开启副本先开流(seq=1 已入账)。
+	on := progressUsecase(repo)
+	if _, err := on.ReportProgress(ctx, 933, roster, []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}); err != nil {
+		t.Fatalf("open stream on enabled replica: %v", err)
+	}
+
+	// 关闭副本处理后续批:注入"行不存在"旧快照(它读水位发生在开启副本建行之前)。
+	off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
+		MonsterExp: map[uint32]uint64{101: 10},
+	})
+	repo.staleWatermark = &data.ProgressWatermark{Existed: false}
+	acked, err := off.ReportProgress(ctx, 933, roster, []*battlev1.BattleProgressEvent{killEvent(2, 7, 101, 1)})
+	if err != nil || acked != 2 {
+		t.Fatalf("claim-losing disabled replica must join the open stream, acked=%d err=%v", acked, err)
+	}
+	if repo.progressStopped[933] {
+		t.Fatal("disabled replica must NOT stop a stream the enabled replica opened (upsert bug)")
+	}
+	if repo.progressSeq[933] != 2 {
+		t.Fatalf("batch must be applied to the open stream, seq=%d", repo.progressSeq[933])
+	}
+}
+
+// 认领竞态输给"已停流/已结算"的行:重读后按对应终态拒绝,不得入账。
+func TestReportProgress_DisabledClaimLosesToStoppedOrSettled(t *testing.T) {
+	ctx := context.Background()
+	roster := []uint64{7}
+	batch := []*battlev1.BattleProgressEvent{killEvent(1, 7, 101, 1)}
+
+	for name, prep := range map[string]func(*fakeRepo){
+		"stopped": func(r *fakeRepo) { _ = r.MarkProgressStopped(ctx, 934) },
+		"settled": func(r *fakeRepo) { r.progressSettled[934] = true },
+	} {
+		repo := newFakeRepo()
+		prep(repo)
+		off := NewBattleResultUsecase(repo, NewStaticMMRReader(1500), &fakePusher{}, nil, conf.BattleConf{
+			MonsterExp: map[uint32]uint64{101: 10},
+		})
+		repo.staleWatermark = &data.ProgressWatermark{Existed: false}
+		if _, err := off.ReportProgress(ctx, 934, roster, batch); errcode.As(err) != errcode.ErrInvalidState {
+			t.Fatalf("%s: claim-losing batch must converge to terminal rejection, got %v", name, err)
+		}
+		if repo.progressSeq[934] != 0 {
+			t.Fatalf("%s: must not apply, seq=%d", name, repo.progressSeq[934])
+		}
 	}
 }

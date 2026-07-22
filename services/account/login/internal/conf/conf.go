@@ -40,6 +40,17 @@ type LoginConf struct {
 	// 不变量 §3:DS 票据短时效。默认 5 分钟。
 	DSTicketTTL config.Duration `yaml:"ds_ticket_ttl,omitempty" json:"ds_ticket_ttl,omitempty"`
 
+	// OwnerAddr owner 权威服务地址(owner-authority.md migrate ⑤)。
+	// 空 = 不接 owner(未启用,现网行为不变,安全默认);非空时 Logout 成功后弱调用
+	// Query+Release(compare-delete 自己,失败仅告警,不影响登出)。
+	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
+
+	// DeviceRetentionDays account_devices 设备绑定行保留天数(默认 90,§9.24)。
+	// device_id 由客户端上报,单账号可无限堆新行;按 last_login_at 超期批删兜底有界,
+	// 被删设备下次登录 TouchDevice upsert 自然重建。account_bans 不清理(运营合规审计,
+	// 量级 = 运营操作数,§9.24 登记豁免)。
+	DeviceRetentionDays int `yaml:"device_retention_days,omitempty" json:"device_retention_days,omitempty"`
+
 	// RequireHubAssignmentBinding 是 Hub DSTicket 归属绑定的机械激活栅栏。
 	// false(默认):滚动兼容旧的无绑定 hub 票，但带绑定票仍会严格查 Redis 当前归属。
 	// true:拒绝所有无绑定 hub 票，并禁止 login 在 hub_allocator 缺失/失败时自签回退。
@@ -170,6 +181,9 @@ func (c *Config) Defaults() {
 	}
 	if c.Login.DSTicketTTL == 0 {
 		c.Login.DSTicketTTL = config.Duration(5 * time.Minute)
+	}
+	if c.Login.DeviceRetentionDays <= 0 {
+		c.Login.DeviceRetentionDays = 90
 	}
 	if c.Login.MockHubDSAddr == "" {
 		c.Login.MockHubDSAddr = "127.0.0.1:7777"

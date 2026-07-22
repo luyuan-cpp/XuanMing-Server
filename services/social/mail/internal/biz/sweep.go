@@ -61,9 +61,10 @@ func (u *MailUsecase) SweepExpired(ctx context.Context, nowMs int64) {
 	}
 
 	// 领取记录:雪花 mail_id 时间段单调,mail_id < MinIDAt(cutoff) ⇔ 邮件创建早于 cutoff。
-	// ClaimRetentionDays 大于一切邮件最长寿命 → 被删 claim 的邮件本体必已清;即便运营
-	// 显式设了超长 end_ms 的例外邮件,提前删 claim 也只影响 UI 已领标记,重复发奖被
-	// inventory 幂等键(mail:{mail_id}:{player_id})兜住,不会重发。
+	// ClaimRetentionDays ≥ 一切邮件可领窗口由发送侧强制(defaultEnd 把 end_ms 钳到
+	// 创建时刻 + ClaimRetentionDays 内)→ 被删 claim 的邮件本体必已失效,重复领取不可能
+	// 发生。不再依赖 inventory 幂等键永久兜底:inventory_ledger 自身有 90 天保留期
+	// (CLAUDE.md §9.24),超期后同 key 重放不会被 uk 拦截。
 	claimCutoffSec := (nowMs - int64(u.cfg.ClaimRetentionDays)*dayMs) / 1000
 	if maxID := snowflake.MinIDAt(claimCutoffSec); maxID > 0 {
 		if n, err := u.repo.DeleteClaimsBefore(ctx, maxID, u.cfg.SweepBatch); err != nil {

@@ -169,17 +169,21 @@ func TestBitStateSaveLoadRoundTrip(t *testing.T) {
 	if err := SaveBitState(path, s); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := LoadBitState(path)
+	loaded, err := LoadBitState(path, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(loaded.Entries) != 2 || loaded.BitCount() != 2 {
 		t.Fatalf("回环失败: %+v", loaded)
 	}
-	// 缺失文件 = 空状态
-	empty, err := LoadBitState(filepath.Join(t.TempDir(), "none.json"))
+	// 缺失文件:默认 fail-closed(已发布表丢状态 = 位图错位事故),显式 bootstrap 才允许空状态。
+	missing := filepath.Join(t.TempDir(), "none.json")
+	if _, err := LoadBitState(missing, false); err == nil {
+		t.Fatal("缺失状态文件默认必须失败(fail-closed)")
+	}
+	empty, err := LoadBitState(missing, true)
 	if err != nil || len(empty.Entries) != 0 {
-		t.Fatalf("缺失状态应为空: %+v err=%v", empty, err)
+		t.Fatalf("bootstrap 下缺失状态应为空: %+v err=%v", empty, err)
 	}
 }
 

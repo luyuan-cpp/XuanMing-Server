@@ -1,21 +1,17 @@
-// Package biz 是 push 服务的业务逻辑层(usecase)。
+// connection.go — 玩家长连接索引(2026-07-22 审计 v2:拉取式投递)。
 //
-// 本文件实现 ConnectionManager:player_id → stream 的内存索引。
+// 投递模型:Redis 投递缓冲是唯一定序与投递权威(data/offline.go)。连接写者
+// (RunSubscribeStream)按「本地唤醒信号 + 定时轮询」从缓冲 Range(>游标) 拉取投递:
+//   - 本 Pod 消费到该玩家消息 → SendTo 置一个唤醒信号(不传帧,帧已在缓冲);
+//   - **其他 Pod** 消费到(滚动重叠 / 跨 topic consumer 落位不同)→ 本 Pod 收不到
+//     信号,由写者的定时轮询(默认 1s)兜底拉到 —— 在线客户端不再依赖断线重连
+//     才能看到跨 Pod 写入(审计 P1)。
 //
-// W3 ④ 真实化:
-//   - kafka consumer 收到事件 → 用 manager.SendTo(player_id, frame) 路由
-//   - 系统公告类(pandora.system.notify)走 manager.Broadcast
-//
-// 设计要点(对齐 docs/design/gateway-decision.md):
-//   - 一个 player_id 只允许有一个在线 stream(同账号顶号:旧 stream Close,新 stream 替换)
-//   - 不变量 §3.1:玩家在线只能在一个 DS(push 服务并发场景同理:同账号一条 push 长连)
-//
-// W3 ④ 二次修复(Opus 审查):
-//   - **gRPC ServerStream.SendMsg 非并发安全**(google.golang.org/grpc 文档明确),
-//     KafkaConsumer goroutine 与 RunSubscribeStream replay goroutine 可能同时 Send 同一 stream,
-//     HTTP/2 帧编码无锁 → 会撕坏 stream(对端 RST_STREAM / 解码失败)。
-//   - 解法:每个 slot 自带 sendMu,SendTo / Broadcast / replay 都走 SafeSend(slot) 串行化。
-//     sendMu 不能放 manager.mu(那是保护 map 的,SendTo 持太久会阻塞 Register/Unregister)。
+// 单写者不变:每条 stream 只有写者 goroutine 调 stream.Send;SendTo/Broadcast 都是
+// 非阻塞投递(信号 size-1 去重;广播箱有界,满则丢弃计数——广播本就丢失容忍),
+// 慢客户端最多卡住自己的写者 goroutine,绝不阻塞 Kafka 分区 handler。
+// 慢客户端的 stream.Send 阻塞由 gRPC keepalive/连接生命周期收敛(写者阻塞期间
+// 缓冲照常累积,连接断开重连后按游标补推,不丢)。
 package biz
 
 import (
@@ -27,64 +23,58 @@ import (
 )
 
 // PushStream 是 push 服务对 gRPC server stream 的别名。
-//
-// 用 grpc.ServerStreamingServer[PushFrame] 是 gRPC v1.62+ 的泛型形态,
-// 跟 push_grpc.pb.go 里 Subscribe 的签名一致。
 type PushStream = grpc.ServerStreamingServer[pushv1.PushFrame]
 
-// StreamSlot 持有一条玩家 stream + 串行化 Send 的互斥锁。
-//
-// 暴露 SafeSend(frame) 给所有发送方(KafkaConsumer.SendTo / RunSubscribeStream replay 循环);
-// 不要直接 stream.Send,绕过 SafeSend 会引入并发竞态(参见 package 注释)。
-//
-// 不暴露 Stream 字段读取(避免外部绕开 sendMu),replay 循环需要拿到 slot 时通过 Register 返回值。
+// broadcastQueueSize 每连接广播箱容量(广播丢失容忍:离线不补推,满即丢)。
+const broadcastQueueSize = 64
+
+// StreamSlot 持有一条玩家 stream + 唤醒信号 + 广播箱。stream.Send 只准写者调用。
 type StreamSlot struct {
 	stream PushStream
-	sendMu sync.Mutex
+	cancel func() // 顶号踢线(关闭 Subscribe ctx)
+
+	// notify size-1:合并多次唤醒(写者每次醒来都会把缓冲拉到空,信号无需计数)。
+	notify chan struct{}
+	// bcast 广播帧箱(不入投递缓冲,无游标;满即丢)。
+	bcast chan *pushv1.PushFrame
 }
 
-// SafeSend 串行化地往 stream 发一帧。同一 slot 上的所有 SafeSend 严格串行。
-func (s *StreamSlot) SafeSend(frame *pushv1.PushFrame) error {
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	return s.stream.Send(frame)
+// wake 非阻塞置唤醒信号。
+func (s *StreamSlot) wake() {
+	select {
+	case s.notify <- struct{}{}:
+	default:
+	}
 }
 
 // ConnectionManager 维护 player_id → StreamSlot 的索引。
-//
-// 并发安全(读写锁,仅保护 map 本身;Send 的串行化在 StreamSlot.sendMu)。
 type ConnectionManager struct {
-	mu       sync.RWMutex
-	bySlot   map[uint64]*StreamSlot // key = player_id;value = 该玩家当前 slot
-	closeFns map[uint64]func()      // 旧 stream 被顶号时的 close 回调
+	mu     sync.RWMutex
+	bySlot map[uint64]*StreamSlot // key = player_id;value = 该玩家当前 slot
 }
 
 // NewConnectionManager 构造空索引。
 func NewConnectionManager() *ConnectionManager {
-	return &ConnectionManager{
-		bySlot:   make(map[uint64]*StreamSlot),
-		closeFns: make(map[uint64]func()),
-	}
+	return &ConnectionManager{bySlot: make(map[uint64]*StreamSlot)}
 }
 
 // Register 把 (player_id, stream) 加入索引,返回新建的 slot 给调用方持有。
-//
-// 若已存在则触发旧的 closeFn(顶号语义)。closeFn 由调用方提供,用于通知旧 Subscribe goroutine
-// 主动退出(接 ctx cancel)。调用方应在 Subscribe 阻塞结束后调 Unregister 反注册。
-//
-// 返回的 *StreamSlot 用于 RunSubscribeStream replay 循环 — 与 KafkaConsumer.SendTo 共享 sendMu。
+// 若已存在则触发旧 slot 的 cancel(顶号语义)。
 func (m *ConnectionManager) Register(playerID uint64, stream PushStream, closeFn func()) *StreamSlot {
-	slot := &StreamSlot{stream: stream}
+	slot := &StreamSlot{
+		stream: stream,
+		cancel: closeFn,
+		notify: make(chan struct{}, 1),
+		bcast:  make(chan *pushv1.PushFrame, broadcastQueueSize),
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if oldClose, exists := m.closeFns[playerID]; exists && oldClose != nil {
-		// 顶号:先通知旧 stream 退出
-		oldClose()
+	if old, exists := m.bySlot[playerID]; exists && old.cancel != nil {
+		old.cancel()
 	}
 	m.bySlot[playerID] = slot
-	m.closeFns[playerID] = closeFn
 	return slot
 }
 
@@ -96,35 +86,28 @@ func (m *ConnectionManager) Unregister(playerID uint64, slot *StreamSlot) {
 
 	if cur, ok := m.bySlot[playerID]; ok && cur == slot {
 		delete(m.bySlot, playerID)
-		delete(m.closeFns, playerID)
 	}
 }
 
-// SendTo 给指定 player 发送一帧 PushFrame(走 slot.SafeSend 串行化)。
-// 玩家不在线返回 (false, nil)(由调用方决定写离线缓存还是丢弃)。
-//
-// KafkaConsumer 路由 push 消息时调本方法。
-func (m *ConnectionManager) SendTo(playerID uint64, frame *pushv1.PushFrame) (bool, error) {
+// SendTo 唤醒该玩家的连接写者去缓冲拉新帧(帧本体已在投递缓冲,这里只传信号)。
+// 返回是否在线(仅作观测;不在线也不是错误——缓冲已有,重连/轮询恢复)。
+func (m *ConnectionManager) SendTo(playerID uint64) (online bool) {
 	m.mu.RLock()
 	slot, ok := m.bySlot[playerID]
 	m.mu.RUnlock()
 
 	if !ok {
-		return false, nil
+		return false
 	}
-	if err := slot.SafeSend(frame); err != nil {
-		return true, err
-	}
-	return true, nil
+	slot.wake()
+	return true
 }
 
-// Broadcast 给所有在线玩家发送一帧(系统公告类用)。
-// 返回成功发送数 + 失败数(失败按 stream 计,本方法不打日志)。
-//
-// 每个 slot 各自 Lock 调 SafeSend,不会阻塞 manager.mu。
+// Broadcast 给**本 Pod** 所有在线玩家投递一帧广播(广播 topic 每 Pod 独立 consumer
+// group,全 Pod 都消费到同一条,见 consumer.go;满箱即丢,丢失容忍)。
+// 返回入箱数 + 丢弃数,本方法不打日志。
 func (m *ConnectionManager) Broadcast(frame *pushv1.PushFrame) (sent int, failed int) {
 	m.mu.RLock()
-	// 快照一份 slice,避免长时间持锁
 	slots := make([]*StreamSlot, 0, len(m.bySlot))
 	for _, s := range m.bySlot {
 		slots = append(slots, s)
@@ -132,10 +115,11 @@ func (m *ConnectionManager) Broadcast(frame *pushv1.PushFrame) (sent int, failed
 	m.mu.RUnlock()
 
 	for _, s := range slots {
-		if err := s.SafeSend(frame); err != nil {
-			failed++
-		} else {
+		select {
+		case s.bcast <- frame:
 			sent++
+		default:
+			failed++
 		}
 	}
 	return

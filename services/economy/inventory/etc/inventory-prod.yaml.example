@@ -24,6 +24,12 @@ node:
     ping_timeout: "3s"
 
 inventory:
+  # 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界,失效数据最多保留 90 天)。
+  sweep_interval: "5m"
+  sweep_batch: 500
+  ledger_retention_days: 90
+  escrow_retention_days: 90
+
   # 生产道具规则应由配置表服务下发 / 同步;此处仅占位示例。
   item_rules:
     - item_config_id: 2001

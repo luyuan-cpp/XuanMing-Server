@@ -30,7 +30,8 @@ import (
 //	srv := kgrpc.NewServer(kgrpc.Middleware(middleware.AuthRequired()))
 //
 // W3+:Envoy 配 jwt_authn filter + extract_claim 把 sub claim 写到 header:
-//   x-pandora-player-id: 1001
+//
+//	x-pandora-player-id: 1001
 func AuthRequired() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -96,30 +97,53 @@ func SessionJTIFromContext(ctx context.Context) string {
 	return ParseJWTPayloadJTI(tr.RequestHeader().Get(MetadataKeyJWTPayload))
 }
 
+// SessionPayloadClaims 是从 Envoy 验签后 payload 头提取的会话声明子集
+// (长连接会话现行性门用,push.Subscribe P0 修复 2026-07-22)。
+type SessionPayloadClaims struct {
+	JTI   string // 会话代际标识(与 login pandora:sess 的 jti 现行性判定)
+	ExpMs int64  // 会话 JWT 到期毫秒时间戳(0 = 未携带;长连接须在流内自查到期)
+}
+
+// SessionClaimsFromContext 同 SessionJTIFromContext,但同时取 exp(长连接建立后
+// JWT 会持续"有效",exp 只在建流时被 Envoy 校验一次;流内到期收口靠业务自查)。
+func SessionClaimsFromContext(ctx context.Context) SessionPayloadClaims {
+	tr, ok := transport.FromServerContext(ctx)
+	if !ok {
+		return SessionPayloadClaims{}
+	}
+	return ParseJWTPayloadClaims(tr.RequestHeader().Get(MetadataKeyJWTPayload))
+}
+
 // ParseJWTPayloadJTI 解析 Envoy forward_payload_header 的 base64url JSON,取 jti。
 // 纯函数供测试;任何解码 / 结构异常都返回 ""(调用方按"头缺失"同等处理)。
-// payload 是完整 JWT payload 的 base64url 文本,不是原始 JWT,也不在这里重复做签名校验。
 func ParseJWTPayloadJTI(payload string) string {
+	return ParseJWTPayloadClaims(payload).JTI
+}
+
+// ParseJWTPayloadClaims 解析 Envoy forward_payload_header 的 base64url JSON,取
+// jti + exp。纯函数供测试;任何解码 / 结构异常都返回零值(调用方按"头缺失"同等处理)。
+// payload 是完整 JWT payload 的 base64url 文本,不是原始 JWT,也不在这里重复做签名校验。
+func ParseJWTPayloadClaims(payload string) SessionPayloadClaims {
 	// 空字符串表示网关没有提供可信 payload 头,无需进入解码流程。
 	if payload == "" {
-		return ""
+		return SessionPayloadClaims{}
 	}
 	// raw 保存解码后的 JSON 字节;err 仅描述当前 base64url 编码形式是否可解。
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
 		// Envoy 输出无 padding;兼容带 padding 的实现差异后仍失败才放弃。
 		if raw, err = base64.URLEncoding.DecodeString(payload); err != nil {
-			return ""
+			return SessionPayloadClaims{}
 		}
 	}
-	// claims 只声明当前逻辑需要的 jti,其余 JWT claim 由 json.Unmarshal 安全忽略。
+	// claims 只声明当前逻辑需要的字段,其余 JWT claim 由 json.Unmarshal 安全忽略。
 	var claims struct {
 		JTI string `json:"jti"`
+		Exp int64  `json:"exp"` // JWT 标准秒级时间戳
 	}
-	// JSON 结构异常与头缺失使用同一空值语义,禁止向调用方暴露半解析结果。
+	// JSON 结构异常与头缺失使用同一零值语义,禁止向调用方暴露半解析结果。
 	if json.Unmarshal(raw, &claims) != nil {
-		return ""
+		return SessionPayloadClaims{}
 	}
-	// 缺少 jti 时字段零值自然为空,继续由上层会话现行性策略处理。
-	return claims.JTI
+	return SessionPayloadClaims{JTI: claims.JTI, ExpMs: claims.Exp * 1000}
 }

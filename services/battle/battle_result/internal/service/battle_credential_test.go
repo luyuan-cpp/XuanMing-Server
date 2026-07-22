@@ -302,14 +302,29 @@ func (*serviceBattleRepo) DeleteMatchReleaseOutbox(context.Context, uint64) erro
 func (*serviceBattleRepo) GetProgressWatermark(context.Context, uint64) (data.ProgressWatermark, error) {
 	return data.ProgressWatermark{}, nil
 }
-func (*serviceBattleRepo) DeferProgressOutbox(context.Context, int64) error { return nil }
-func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, uint64, uint32, []data.ProgressOutboxRecord) error {
+func (*serviceBattleRepo) DeferProgressOutbox(context.Context, int64) error  { return nil }
+func (*serviceBattleRepo) MarkProgressStopped(context.Context, uint64) error { return nil }
+func (*serviceBattleRepo) ClaimProgressLegacy(context.Context, uint64) (bool, error) {
+	return true, nil
+}
+func (*serviceBattleRepo) ApplyProgress(context.Context, uint64, uint64, uint64, uint64, uint32, []data.ProgressPlayerDelta, []data.ProgressOutboxRecord, data.ProgressCaps) error {
 	return nil
 }
 func (*serviceBattleRepo) FetchProgressOutbox(context.Context, int) ([]data.ProgressOutboxRecord, error) {
 	return nil, nil
 }
 func (*serviceBattleRepo) DeleteProgressOutbox(context.Context, int64) error { return nil }
+
+// 保留期清理(§9.24):service 单测不涉及,默认 no-op。
+func (*serviceBattleRepo) PurgeExpiredBattles(context.Context, int64, int) (int64, error) {
+	return 0, nil
+}
+func (*serviceBattleRepo) PurgeSettledProgress(context.Context, int64, int) (int64, error) {
+	return 0, nil
+}
+func (*serviceBattleRepo) CountStaleUnsettledProgress(context.Context, int64) (int64, error) {
+	return 0, nil
+}
 
 type guardedReportFixture struct {
 	svc    *BattleResultService

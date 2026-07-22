@@ -36,11 +36,16 @@ func (g *GrpcItemGranter) Close() error {
 	return nil
 }
 
-// Grant 调 inventory.GrantItems 幂等发放附件;返回非 OK 透传错误,gRPC 错误原样返回。
+// Grant 调 inventory.GrantItems 幂等发放 stack 形态附件;返回非 OK 透传错误,gRPC 错误原样返回。
+// 调用方(biz.ClaimMail)已按 oneof 分组只传 stack;混入其它形态说明分组逻辑被破坏,报错不静默跳过。
 func (g *GrpcItemGranter) Grant(ctx context.Context, playerID uint64, atts []*mailv1.MailAttachment, idempotencyKey string) error {
 	items := make([]*inventoryv1.ItemGrant, 0, len(atts))
 	for _, a := range atts {
-		items = append(items, &inventoryv1.ItemGrant{ItemConfigId: a.GetItemConfigId(), Count: int64(a.GetCount())})
+		s := a.GetStack()
+		if s == nil {
+			return errcode.New(errcode.ErrMailAttachmentUnsupported, "non-stack attachment in stack grant")
+		}
+		items = append(items, &inventoryv1.ItemGrant{ItemConfigId: s.GetItemConfigId(), Count: int64(s.GetCount())})
 	}
 	resp, err := g.cli.GrantItems(ctx, &inventoryv1.GrantItemsRequest{
 		PlayerId:       playerID,
@@ -69,6 +74,52 @@ func (g *GrpcItemGranter) GrantInstances(ctx context.Context, playerID uint64, i
 	}
 	if resp.GetCode() != commonv1.ErrCode_OK {
 		return errcode.New(errcode.Code(resp.GetCode()), "inventory grant instances code=%d", resp.GetCode())
+	}
+	return nil
+}
+
+// ClaimTransfers 调 inventory.ClaimTransferInstances 交付 transfer 形态附件(既存实例
+// 托管转移只改归属,bag-domain.md §7.1)。请求只带 instance_id+config 核对项——领取内容
+// 以 inventory 托管行为权威,附件快照不参与写入;inventory 侧按幂等键去重。
+// 调用方(biz.ClaimMail)已按 oneof 分组只传 transfer;混入其它形态说明分组被破坏,报错不静默跳过。
+func (g *GrpcItemGranter) ClaimTransfers(ctx context.Context, playerID uint64, atts []*mailv1.MailAttachment, idempotencyKey string) error {
+	items := make([]*inventoryv1.TransferClaimItem, 0, len(atts))
+	for _, a := range atts {
+		xfer := a.GetTransfer()
+		if xfer == nil {
+			return errcode.New(errcode.ErrMailAttachmentUnsupported, "non-transfer attachment in transfer claim")
+		}
+		items = append(items, &inventoryv1.TransferClaimItem{
+			InstanceId:   xfer.GetItem().GetInstanceId(),
+			ItemConfigId: xfer.GetItem().GetItemConfigId(),
+		})
+	}
+	resp, err := g.cli.ClaimTransferInstances(ctx, &inventoryv1.ClaimTransferInstancesRequest{
+		ToPlayerId:     playerID,
+		Items:          items,
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "inventory claim transfers code=%d", resp.GetCode())
+	}
+	return nil
+}
+
+// ConsumeTransferEscrow 调 inventory.ConsumeTransferEscrow 消托管行不物化
+// (bag phase 2 DS 领取链:资产已经 bag journal 入包,托管行只删防双持;幂等)。
+func (g *GrpcItemGranter) ConsumeTransferEscrow(ctx context.Context, playerID uint64, instanceIDs []uint64) error {
+	resp, err := g.cli.ConsumeTransferEscrow(ctx, &inventoryv1.ConsumeTransferEscrowRequest{
+		ToPlayerId:  playerID,
+		InstanceIds: instanceIDs,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.GetCode() != commonv1.ErrCode_OK {
+		return errcode.New(errcode.Code(resp.GetCode()), "inventory consume escrow code=%d", resp.GetCode())
 	}
 	return nil
 }

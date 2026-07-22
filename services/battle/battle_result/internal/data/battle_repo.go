@@ -131,17 +131,47 @@ type BattleRepo interface {
 	DeleteMatchReleaseOutbox(ctx context.Context, id uint64) error
 
 	// ── 实时进度通道(实时成长,realtime-progression.md §3)────────────────────
-	// GetProgressWatermark 读进度水位快照(seq / 累计入账 / 结算态 / 行存在性)。
+	// GetProgressWatermark 读进度水位快照(seq / 累计入账 / 结算态 / 停流态 / 行存在性)。
 	GetProgressWatermark(ctx context.Context, matchID uint64) (ProgressWatermark, error)
-	// ApplyProgress 原子推进水位(乐观 CAS)+ 累计本批经验/件数 + 写进度出箱(同一事务)。
-	// CAS 失败 / 已结算 → ErrUnavailable(调用方重读水位收敛)。
-	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, rows []ProgressOutboxRecord) error
+	// MarkProgressStopped 持久化本场停流标记(未知事实场景;幂等,只记首次)。
+	// 停流后 ReportProgress 一律拒,已知事实批也不得重新开流(审计 P1)。
+	// ⚠️ 本方法是 upsert(行存在也写停流位),只能用于"流内确定要停"的场景;
+	// 通道关闭副本固化 legacy 模式必须走 ClaimProgressLegacy(审计 R4 #11:
+	// 滚动混版下 upsert 会把开启副本并发刚开的流停掉,整场实时奖励丢失)。
+	MarkProgressStopped(ctx context.Context, matchID uint64) error
+	// ClaimProgressLegacy 仅当水位行**不存在**时原子创建停流标记行(INSERT IGNORE
+	// 语义,claimed=true);行已存在(开启副本已开流/已认领/已结算)时不修改任何
+	// 内容返回 claimed=false,调用方必须重读水位按现行状态继续。
+	ClaimProgressLegacy(ctx context.Context, matchID uint64) (claimed bool, err error)
+	// ApplyProgress 原子推进水位(乐观 CAS)+ 累计本批经验/件数(场 + 单玩家)+
+	// **事务内一致快照上判定 caps 累计上限** + 写进度出箱(同一事务)。
+	// CAS 失败 / 已结算 → ErrUnavailable(调用方重读水位收敛);超限 → ErrInvalidArg
+	// 整体回滚。上限判定必须留在事务内:事务外读-判与 CAS 分属不同快照,重试请求
+	// 会把同批 delta 重复计入后永久误拒(审计 P1,§16.1 TOCTOU)。
+	ApplyProgress(ctx context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []ProgressPlayerDelta, rows []ProgressOutboxRecord, caps ProgressCaps) error
 	// FetchProgressOutbox 按 id 升序取最多 limit 条已到重试时点的待发放进度出箱记录。
 	FetchProgressOutbox(ctx context.Context, limit int) ([]ProgressOutboxRecord, error)
 	// DeleteProgressOutbox 删除已成功发放的进度出箱行。
 	DeleteProgressOutbox(ctx context.Context, id int64) error
 	// DeferProgressOutbox 发放失败后指数退避推迟该行(行不丢,防队首阻塞)。
 	DeferProgressOutbox(ctx context.Context, id int64) error
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──────────────────────
+	// PurgeExpiredBattles 删服务端落库时间 created_at 早于 cutoffMs 的对局
+	// (battles + battle_player_stats 同事务批删,单批最多 batch 场)。清理依据必须是
+	// 服务端时间(§9.6 数值不信 DS):ended_at_ms 是 DS 上报,失陷 DS 报过去时间可让
+	// 新战绩立即可删(毁审计证据)、报未来时间可让行永不可删。battles.match_id 是结算
+	// 幂等键:删除后同 match 重放已不可能到达(权威 BattleStorageRecord / active match /
+	// Guard 早已释放,ReportResult 在凭据层就被拒),幂等键只需覆盖结算重试窗口(小时级)。
+	// 返回删除的对局数。
+	PurgeExpiredBattles(ctx context.Context, cutoffMs int64, batch int) (int64, error)
+	// PurgeSettledProgress 删已结算(settled_at_ms>0,服务端结算打标)且早于 cutoffMs
+	// 的进度水位(battle_progress_stream + battle_progress_player 同事务批删)。未结算行
+	// 永不清理(陈年未结算 = 补偿链 bug,应告警修复而不是静默删证据)。返回删除的对局数。
+	PurgeSettledProgress(ctx context.Context, cutoffMs int64, batch int) (int64, error)
+	// CountStaleUnsettledProgress 数超保留期仍未结算的水位行(结算补偿链 bug 证据,
+	// 永不自动清理;sweep 每轮告警暴露)。updated_at_ms 为服务端写入时间。
+	CountStaleUnsettledProgress(ctx context.Context, cutoffMs int64) (int64, error)
 }
 
 // MySQLBattleRepo 是基于 database/sql 的 BattleRepo 实现。
@@ -752,4 +782,95 @@ func isDupErr(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "1062") || strings.Contains(msg, "Duplicate entry")
+}
+
+// ── 保留期清理(CLAUDE.md §9 不变量 24)────────────────────────────────────────
+//
+// 多副本各自跑,无锁:SELECT 候选 → 同事务批删,并发副本重复选中只多花空删,幂等。
+// 单批 batch 场有界,积压跨轮摊平,不长事务锁表。
+
+// selectMatchIDs 按查询取一批 match_id(保留期清理候选)。
+func (r *MySQLBattleRepo) selectMatchIDs(ctx context.Context, q string, args ...any) ([]uint64, error) {
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, errcode.New(errcode.ErrInternal, "select purge candidates: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []uint64
+	for rows.Next() {
+		var id uint64
+		if serr := rows.Scan(&id); serr != nil {
+			return nil, errcode.New(errcode.ErrInternal, "scan purge candidate: %v", serr)
+		}
+		ids = append(ids, id)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return nil, errcode.New(errcode.ErrInternal, "iterate purge candidates: %v", rerr)
+	}
+	return ids, nil
+}
+
+// deleteByMatchIDsTx 在一个事务里按 match_id 列表依次清多张表(子表在前,主表最后)。
+func (r *MySQLBattleRepo) deleteByMatchIDsTx(ctx context.Context, tables []string, ids []uint64) error {
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "begin purge tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, table := range tables {
+		if _, derr := tx.ExecContext(ctx,
+			`DELETE FROM `+table+` WHERE match_id IN (`+placeholders+`)`, args...); derr != nil {
+			return errcode.New(errcode.ErrInternal, "purge %s: %v", table, derr)
+		}
+	}
+	if cerr := tx.Commit(); cerr != nil {
+		return errcode.New(errcode.ErrInternal, "commit purge tx: %v", cerr)
+	}
+	return nil
+}
+
+func (r *MySQLBattleRepo) PurgeExpiredBattles(ctx context.Context, cutoffMs int64, batch int) (int64, error) {
+	// 清理依据 = 服务端落库时间 created_at(§9.6 数值不信 DS,接口注释;走 idx_created)。
+	// 行龄 = 结算落库距今,比 ended_at 晚一个对局时长,相对 90 天保留期误差可忽略,
+	// 且偏保守方向(只会晚删,不会早删)。
+	ids, err := r.selectMatchIDs(ctx,
+		`SELECT match_id FROM battles WHERE created_at < FROM_UNIXTIME(? / 1000) LIMIT ?`,
+		cutoffMs, batch)
+	if err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	if derr := r.deleteByMatchIDsTx(ctx, []string{"battle_player_stats", "battles"}, ids); derr != nil {
+		return 0, derr
+	}
+	return int64(len(ids)), nil
+}
+
+func (r *MySQLBattleRepo) PurgeSettledProgress(ctx context.Context, cutoffMs int64, batch int) (int64, error) {
+	// settled_at_ms 由服务端结算事务打标(settleProgressStreamTx),服务端时间权威;走 idx_settled。
+	ids, err := r.selectMatchIDs(ctx,
+		`SELECT match_id FROM battle_progress_stream WHERE settled_at_ms > 0 AND settled_at_ms < ? LIMIT ?`,
+		cutoffMs, batch)
+	if err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	if derr := r.deleteByMatchIDsTx(ctx, []string{"battle_progress_player", "battle_progress_stream"}, ids); derr != nil {
+		return 0, derr
+	}
+	return int64(len(ids)), nil
+}
+
+func (r *MySQLBattleRepo) CountStaleUnsettledProgress(ctx context.Context, cutoffMs int64) (int64, error) {
+	// settled_at_ms=0 走 idx_settled 前缀,未结算行本就该是极少数(结算链正常时趋零)。
+	var n int64
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM battle_progress_stream WHERE settled_at_ms = 0 AND updated_at_ms < ?`,
+		cutoffMs).Scan(&n); err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "count stale unsettled progress: %v", err)
+	}
+	return n, nil
 }

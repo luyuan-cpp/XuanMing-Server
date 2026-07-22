@@ -854,3 +854,589 @@
 - 既有阻断(非本次引入):tools/migrate 在 GOWORK=off -mod=readonly 下编译失败,
   go.sum 缺 go.uber.org/atomic 条目;修复(go mod tidy)按 AGENTS.md §11.1 交 Codex,
   修好前 README 的 docker 镜像构建路径走不通。
+
+## 2026-07-21(续8):MailAttachment 重构为 oneof 形态(Claude)
+
+- 背景:附件旧结构 config_id+count+as_instance bool,bool 本质是伪装的类型判别器,
+  再加附件种类(货币/已存在实例转移等)会组合爆炸;开发期是最后的免费重构窗口
+  (上线后字段编号冻结、oneof 迁移不再 wire 兼容,邮件 blob 长期存活)。
+- mail.proto:MailAttachment 改 oneof body{ stack=StackAttachment | instance=InstanceAttachment },
+  两分支均 config_id+count。stack=无唯一 ID 可堆叠(GrantItems);instance=有唯一 ID 物品/装备,
+  领取时逐件铸实例(GrantInstances,实例雪花 uint64 ID 领取时生成,铸出未鉴定、词条鉴定时掷)。
+  将来新形态(货币、按 instance_id 托管转移已存在实例)加新分支新编号。
+  顺带修正旧注释误导:GrantInstances 并不"含随机词条"。
+- 未识别形态契约(§9.21 滚更共存):发送侧 buildPayload 校验 body 必设 + config/count 非零,
+  拒空 body 入库;领取侧 partitionAttachments 计 unknown,>0 整封 fail-closed 报
+  ERR_MAIL_ATTACHMENT_UNSUPPORTED(=9606,errcode.proto+pkg/errcode 同步新增),
+  不发放任何附件、不记 claim,邮件保持可领,禁止静默跳过。
+- 跟改:mail biz partition/expand 按 oneof、mail inventory_client Grant 只认 stack(混入报错)、
+  battle_result mail_client 溢出附件拼 instance 形态;instance_grant_key 幂等语义不变。
+- 测试:既有 5 个领取/源键用例迁到新构造;新增 fail-closed 领取(不发已识别部分、不记 claim)、
+  发送侧拒空 body/零值、battle_result 分组纯函数(含"绝不拼成 stack")。
+- ⚠️ 待办:mail pb(go/cpp)+ errcode pb 需 Codex 重生后才能编译验证(本次改动含
+  生成代码新 API,重生前 go build 红);UE 侧仅生成 pb 无手写引用,同步后无需改客户端代码;
+  dev 库 pandora_social 存量邮件 blob 旧编码不兼容,需清空
+  sys_mail/guild_mail/player_mail/player_mail_cursor/player_mail_claim/player_mail_archive。
+
+## 2026-07-21(续9):掉落零丢失——拾取 ACK 门控(MMO 化拍板,Claude)
+
+- 背景:产品形态 MOBA→MMO,"局中已得掉落绝对不丢"升级为硬需求;原 realtime-progression.md
+  §9"尾窗丢失明示接受"(DS 崩溃丢 ≤1s 未发缓冲)作废。DS 本地 WAL 方案评估后否决:
+  Agones 临时 Pod 本地盘在 Pod 替换/节点宕机时消失,加 PV+回捞成本高且仍非零丢失。
+- 方案(用户拍板"拾取 ACK 门控"):UE 侧把"捡到"反转为入包=已持久化——拾取权威点先认领
+  锁定掉落物(他人不可拾、暂停 LifeSpan),事实上报 ReportProgress,服务端水位+出箱同事务
+  提交回 acked_seq 覆盖整组后才入战斗背包并销毁;确定未应用(未发送即丢弃/整批拒/停流)
+  释放认领回地面。新不变量:战斗背包 ⊆ 后端已入账,DS 任意时刻崩溃不丢已见入包物品。
+- Go 侧:零功能改动(ReportProgress ACK 本就是持久化确认);仅修订 realtime-progression.md
+  (拍板记录、§1 约束④措辞、§3 门控协议、§5 对账语义降级为审计、§9 残余风险改写)。
+- UE 侧(Pandora-Client,待用户编译验证):
+  - PandoraBattleProgressReporter:RecordItemPickup 加认领回执委托+返回末 seq、入队即发、
+    认领组不拆批、按 acked_seq 前缀提交/整批拒收释放、停流释放全部认领、
+    缓冲满丢最老未发认领组并释放;
+  - AMyDropItemActor:门控路径(CanAddItem 预检→认领→回执入包/释放)+回退路径保持旧行为
+    (通道停流/无 player_id/死亡再分配 persist=false);
+  - APandoraBattleGameMode:IsPickupAckGatingActive/BeginGatedPickup/FinishGatedPickup;
+  - UMyBagComponent::CanAddItem 只读空间预检(权威端专用,委托 FMyBag::CheckSpaceFor)。
+- 防复制关键:已发送未确认的认领只能经回执终结(停流释放后重拾走回退路径不再产生持久化
+  事实,与服务端水位抑制协同=恰好一次发放,任一侧成功归原认领玩家)。
+- ⚠️ 残余边界(§9 已明示):seq/单场累计上限触顶停流后超限部分不入账(反作弊封顶,
+  配置须远高于合法单场产出);认领玩家掉线/背包满时发放不回滚仅损局内表现。
+- (续9 补充)经济模式开关:UPandoraBattleSettlementRule::AreDropsPersistent()(默认 true),
+  MOBA 类玩法 override false ⇒ 掉落随局清零、拾取即入包零后端交互,门控/上报整体旁路;
+  掉落物与战斗背包始终在 DS,门控只是"跨局持久"经济语义的实现,玩法回摆无需改拾取链。
+
+## 2026-07-21(续10):背包预留制 + §9.6 信任模型改写(Claude)
+
+- 预留制(用户拍板"预检→预留",消 TOCTOU):FMyBag 新增 ReserveSpaceFor/CommitReservation/
+  ReleaseReservation + 活跃预留计入 CheckSpaceFor 与 AddItem 容量门(仅有预留时启用,
+  无预留行为与原规划器等价);Commit 先摘除自身预留再入包(合并判定保证必成,失败仅可能
+  来自配置热更破坏,错误如实传播);ClearAllItems 只清物品不清预留(死亡散布不动容量承诺)。
+  UMyBagComponent 加权威端包装(Commit 同步复制快照);AMyDropItemActor 门控路径改
+  预留→认领→回执转正/释放。回归测试 PandoraTests/MyBagReservationTest.cpp(挡直写/
+  释放归还/恰好一次/堆叠共享池/ClearAllItems 保留预留)。全部待用户 UE 编译验证。
+- CLAUDE.md §9.6 正式改写:"MMR 计算在 battle_result(DS 不可信)" → "派生数值一律服务端
+  计算;DS 的写权限有范围、可验证、有额度"。数值仍不信 DS;DS 作受信写者须满足五要件:
+  身份(DS JWT/writer epoch)+ owner 授权(按 owner 权威校验"该 DS 持有该玩家",禁只验
+  合法 DS)+ fencing(owner_epoch 失租拒写)+ 额度(journal 层速率/单场上限)+ 审计(journal
+  流水)。原则内核(限制爆炸半径)不变;为 MMO 化"背包权威跟随 owner DS"铺路。
+
+## 2026-07-21(续11):数据库增长有界 —— inventory 保留期清理 + §9.24 新不变量(Claude)
+
+- 背景:用户问"玩家已没有的道具在 MySQL 还存在吗,怕库越来越大"。审计结论:
+  player_items 扣到 0 保留行但被 uk 有界(玩家数×配置数,故意不清,清了错误码语义漂移);
+  player_item_instance 丢弃是硬 DELETE 无残留;真正无界的是 inventory_ledger(每笔操作
+  1~2 行永不删)与 auction_escrow closed 行(每挂单 1 行永不删)。
+- inventory 落地(对齐 mail sweep 模式,多副本无锁幂等,单批 LIMIT 防长事务):
+  - data:DeleteLedgerBefore / DeleteClosedEscrowBefore(closed 且超期才删,active 永不清);
+  - biz/sweep.go SweepRetention + main ticker 接线;conf 新增 sweep_interval(5m)/
+    sweep_batch(500)/ledger_retention_days(90)/escrow_retention_days(90),yaml 同步;
+  - schema:inventory_ledger 加 idx_created、auction_escrow 加 idx_status_updated
+    (既有库需手动 ALTER,SQL 文件内附语句);EnsureAuctionEscrow 注释同步。
+- 跨服务闭环(隐蔽 bug 修复):mail claim 180 天清理原依赖"inventory 幂等键永久兜底"防
+  重复领奖;ledger 限 90 天后该兜底失效 → mail defaultEnd 把 sys/guild 邮件 end_ms 钳到
+  「创建时刻 + claim_retention_days」内(钳后 end<=start 拒收),保证 claim 行存活 ≥ 可领
+  窗口,防重不再依赖任何永久流水;sweep/conf 注释同步改写。
+- 规范:CLAUDE.md §9 新增不变量 24(只增表必须有保留期+清理任务,失效数据默认且最多
+  90 天,幂等行删后重放须 fail-closed,只增表登记清单,mail claim 180 天为登记例外);
+  AGENTS.md §10 红线追加同条。
+- 验证:build/vet/单测绿;集成测试(随机临时库夹具)在本机 TiDB 4000 全过
+  (LedgerDeletesOnlyExpired / LedgerBatchLimitBounded / EscrowDeletesOnlyClosedExpired +
+  既有 EnsureAuctionEscrow 套件);真 MySQL 8.4 环境未跑(本机无 MySQL 容器,剩余风险低:
+  语句均为标准 DELETE..LIMIT/DATE_SUB)。
+
+## 2026-07-21(续11):背包域设计文档定稿(Claude)
+
+- 新增 docs/design/bag-domain.md:独立背包域(pandora.bag.v1)蓝图——三域定界(battle 事实/
+  背包 journal/经济 escrow,货币留经济域)、权威跟随 owner(五要件+flush-before-fence)、
+  journal/checkpoint 分层(判据=效果是否被本人之外观察到;恢复=快照+尾部重放)、存储模型
+  (bag_meta/bag_checkpoint/bag_journal/bag_generation,pb blob+行式流水,90 天保留)、
+  背包类型×策略矩阵(bag_type uint32,0-3 对齐 UE,100+ 活动段)、邮件中转层、拍卖在线扣+
+  邮件到账、bag.v1 契约草案(LoadBag/AppendJournal/SaveCheckpoint,前缀确认语义同
+  ReportProgress)、四阶段迁移路径、失败模式验证矩阵、复杂度举证。
+- **活动背包代际设计(本次新需求:类型重用+活动结束清空)**:段身份=(player,bag_type,
+  generation);切代=读过滤瞬时逻辑清空+generation fencing 拒迟到旧代写(fail-closed)+
+  后台 sweep 物理回收;salvage_mode 可配 discard/mail 补发;类型重用天然安全。
+- 决策已登记 pandora-arch §11。**契约草案暂不落 .proto 文件**(journal fencing 字段依赖
+  owner authority 最终形态,§9.22 未建成;phase 1 开工时落文件+Codex proto_gen,避免二次
+  返工)。phase 1 硬前置 = owner authority 落地。
+- (续11 修正,用户拍板)驻留分层:只有随身组(身上背包/装备栏/临时格)checkout 进 owner DS
+  内存权威;仓库与临时活动背包**后端驻留**(存储侧权威,DS 只发起操作+只读视图)。收益:
+  checkout/flush 面收窄、活动切代不涉及 DS 状态(拒绝旧代写后 DS 仅刷视图)、仓库⇄身上
+  转移=一条 journal 存储侧同事务改两侧(无跨服务 saga,随身侧走预留制)。bag-domain.md
+  §0/§2/§3/§4/§5/§6/§9/§11 已同步修订(新增 bag_section 表 + GetSections RPC)。
+- (续11 补充)后端驻留段物品的使用语义(bag-domain.md §5.1):①持久产出型=扣除+产出同一
+  存储事务(零窗口,产出进身上背包走预留/或邮件);②局内瞬时效果型=先扣后生效,崩溃时
+  效果与局内状态同命回档自洽,贵重道具做激活型归①;③高频消耗型=先 journal 装填到随身组
+  再按 DS 速度消耗,后端驻留段保持 UI 频率定位。
+
+## 2026-07-21(续12):背包域 phase 1 服务端落码(Claude)
+
+- 契约:proto/pandora/bag/v1/bag.proto(LoadBag/AppendJournal/SaveCheckpoint/GetSections;
+  BagStorageRecord/BagSection/BagItem;journal oneof = pickup_grant/mail_claim/transfer/consume;
+  前缀确认 acked_seq 语义同 ReportProgress);errcode.proto 新增 bag 段 14001-14009
+  (EPOCH_FENCED/GENERATION_MISMATCH/SEQ_CONFLICT/CAPACITY_FULL/QUOTA_EXCEEDED/
+  IDEMPOTENCY_CONFLICT/ITEM_NOT_FOUND/CHECKPOINT_STALE/SECTION_NOT_ALLOWED)+ pkg/errcode 常量。
+- 存储:01-create-databases.sql 加 pandora_bag 库;新 14-bag-tables.sql 五表
+  (bag_meta fencing 锚点/bag_checkpoint/bag_section/bag_journal 双唯一键+指纹/bag_generation)。
+- 实现(inventory 进程承载,bag.dsn 空=不启用):data/bag_repo.go(bag_meta FOR UPDATE 锁 =
+  每玩家写串行化 + owner_epoch 单调 CAS;活动段代际 fail-closed;journal 前缀确认+纯重放安全+
+  幂等指纹;后端驻留段与 journal 同事务读改写;滑窗额度;90 天 sweep)、data/bag_apply.go
+  (op 应用纯函数:随身组只记账不落 section,仓库/活动段真实入扣,consume 扣+产同事务,
+  未知 op 整批拒)、biz/bag.go(形状校验/段类型合法性/批量与单 op 上限)、service/bag.go
+  (拒客户端 JWT)、server 注册、main 装配(schema gate fail-fast + sweep 协程)、
+  conf.BagConf(默认 batch 64/items 64/时额度 2000/仓库容量 200)、inventory-dev.yaml bag 块、
+  Envoy /pandora.bag.v1/ 前缀 403。
+- 测试:data/bag_apply_test.go(随身组 no-op/仓库领取容量堆叠/转移/开箱扣产/代际/未配置段,
+  失败场景独立 store 模拟事务回滚)、data/bag_repo_mysql_test.go(DSN 门控随机库:重放安全/
+  整批回滚/epoch fence 读写/切代读过滤+迟到写拒+类型重用/幂等冲突/checkpoint 单调/额度)、
+  biz/bag_test.go(校验层假仓)。
+- ⚠️ 交接阻断项:
+  1. **Codex proto_gen 重生 pb(bag.proto 新包 + errcode.proto),重生前 go build 红**
+     (先例同 mail oneof 重构);cpp pb 同步 UE 仓库(errcode 增量 additive,UE 无 bag 引用);
+  2. 既有 MySQL volume 需手动重放 01(建 pandora_bag)+ 14(建表),启动 schema gate 会
+     fail-fast 提示;3. MySQL 集成测试需设 PANDORA_TEST_MYSQL_DSN 跑一轮;
+  4. phase 2(DS 写路径接入)前置 = owner authority(§9.22),未落地前 BagService 仅供
+     联调/工具调用,不接 DS 生产写。
+
+## 2026-07-21(续12):全库只增表审计 + 保留期清理全量落地(§9.24 收口,Claude)
+
+- 背景:续11 之后用户问"其他表呢"。全量审计 13 个 mysql-init 建表文件 + 各服务 data 层,
+  逐表分类:出箱表投递即删(有界)、per-player/config 表有界、其余只增表逐个接清理。
+- 新增清理(8 服务,全部对齐 mail sweep 模式:多副本无锁幂等、单批 LIMIT、失败不阻断):
+  - battle_result:battles+battle_player_stats(ended_at_ms 超 90 天,同事务批删,异常
+    ended=0 行按 created_at 兜底)、battle_progress_stream+player(仅 settled 行,未结算
+    陈年行=补偿链 bug 证据永不清);match_id 幂等键删除安全性:重放在凭据层(Guard/
+    active match/roster)就被拒。
+  - player:RunHistoryJanitor 清 mmr_history / attr_point_grants / talent_point_grants
+    (90 天,下限 30;**默认关**,与 exp_history 同理由:上游 kafka 重放/授予补扫须先有界,
+    dev yaml 开启)。
+  - chat:chat_private_messages 按雪花 message_id cutoff 主键范围删(90 天,无需新索引)。
+  - friend/guild:终态申请行(status≠pending 且 updated_at 超 90 天)批删;pending 永不清;
+    行按 (requester,target)/(guild,player) uk 复用,删后再发起=全新请求,行为等价。
+  - auction:逐分片(DBRouter.All())清终态订单(且 release/match_pending=0)、已结算成交
+    (settlement=COMPLETED 且 event_pending=0)、超期 idempotency_keys(与 orders 异分片
+    无法 join,按 created_at_ms 独立清)。
+  - leaderboard:snapshot + reward_log(仅 GRANTED;PENDING/FAILED 是补发工作集)90 天;
+    **settlement 行故意不清**(settle uk 永久闸:删了会让超期重放当新结算重复发奖,保留则
+    already+空快照回放,fail-safe)。
+  - login:account_devices 按 last_login_at 90 天(client 可刷 device_id 的只增行兜底有界,
+    下次登录 upsert 重建);account_bans 登记豁免(运营合规审计)。
+- schema:7 张表新增清理索引(mysql-init 原地 + tidb-init 同步);存量库走 tools/migrate
+  新增 7 库 *_retention_indexes 迁移(幂等条件建索引,ALGORITHM=INPLACE,down 条件删)。
+- 规范:CLAUDE.md §9.24 登记表补全 17 类只增表 + 豁免清单(settlement/owner_guards/bans/
+  出箱表/player_items 0 行)。
+- 验证:8 服务 build/vet/单测全绿;集成测试(本机 TiDB 4000):battle retention(自建随机
+  库重放 03+05 schema,批删+未结算保留断言)、inventory/guild 全套全过。已知非回归失败:
+  auction ConcurrentGlobalIdempotency 在 TiDB 上原版 schema 同样失败(auction 设计只跑
+  MySQL 分库,历史审核在真 MySQL 过);battle terminal_release 集成测须 DSN 直指已迁移库
+  (测试前置,与本次无关)。真 MySQL 8.4 未跑(本机无容器),剩余风险低(标准 DELETE..LIMIT)。
+
+## 2026-07-22(续):owner authority 权威本体落码(Claude)
+
+- 设计:docs/design/owner-authority.md(§9.22 落地蓝图):宿主=新独立 owner 服务(runtime 域,
+  50017/51017,infra.md 已登记);存储=生产 TiDB(线性一致+确认写不回滚)/dev 单机 MySQL,
+  三表同库单事务域;租约分层=实例级租约(allocator 心跳代写)派生玩家 owner lease,
+  续租 QPS 钉在实例粒度;fence 常量单一来源 pkg/placement(20/7/27s 不动)。
+- 契约:proto/pandora/owner/v1/owner.proto(Query/BeginTransition/Admit/RenewInstanceLease/
+  ReleaseOwner;OwnerRecord 含派生 lease_deadline;BARRIER_NOT_OPEN 带 retry_after_ms 对应
+  §9.23 WAIT);errcode 15000-15005 + pkg/errcode 常量。
+- 存储:mysql-init/01 加 pandora_owner 库;15-owner-tables.sql(owner_record/ds_instance_lease/
+  owner_transition_log);tidb-init/02-owner-tidb.sql(NONCLUSTERED+SHARD_ROW_ID_BITS 打散
+  雪花热点,AUTO_RANDOM 审计主键,utf8mb4_bin,悲观锁写法)。
+- 实现:services/runtime/owner(独立 module,已入 go.work):data 层状态机(owner_record 行锁=
+  每玩家串行化锚点;epoch 单调 CAS;admit_not_before=CAS 时点 FOR UPDATE 观察旧实例租约
+  最晚截止+margin,后续续租不回写;Begin/Admit 幂等重放;Release 迟到 no-op;租约只前进+
+  实例纪元守卫;审计 90 天 sweep)、biz(UUIDv4/身份完整性/lease 硬钳 ≤ 协议上限)、
+  service(拒客户端 JWT)、grpc/http server、main(schema gate + sweep)、owner-dev.yaml;
+  Envoy /pandora.owner.v1/ 前缀 403。
+- 测试:**biz 单测已真跑绿**(margin 来自 placement 常量/校验不触数据层/lease 钳制);
+  data MySQL 集成测试(DSN 门控)覆盖:首迁移无屏障+Begin/Admit 幂等重放、并发双迁移
+  恰好一胜一冲突、屏障≥旧租约+余量、早到 Admit 拒(带 retry_after)、Begin 后旧实例续租
+  不回写屏障、旧 epoch/换实例 UID Admit 拒、迟到 Release no-op、租约单调+纪元守卫。
+- ⚠️ 交接:1. Codex proto_gen 重生 pb(owner.proto 新包 + errcode 增量;service/server/main
+  在此之前编译红,data/biz 层已可编译测试)+ owner module go mod tidy;2. 部署接线
+  (docker-compose/start.ps1/gen_cluster/离线镜像)按 §11.1 Codex/人;3. 生产 TiDB 需重放
+  tidb-init/02;4. **集成属 migrate 阶段**(login query-first/allocator 双写租约/DS Admission/
+  battle_result 终局/logout Release),旧 last_heartbeat_ms 再入门保留双门并行到 contract。
+
+## 2026-07-22(续13):dbcheck 无界增长发布门禁 + 压测库增长断言(§9.24 收口,Claude)
+
+- 用户拍板"上线前要检查所有库有没有无上限,压测也要测这个"→ 机械化落地,不靠人肉过表:
+- **tools/migrate/cmd/dbcheck**(同 module 零新依赖,不需 tidy):内嵌与 §9.24 同步的全库
+  登记清单(9 库 65 表,类别 bounded/swept/outbox/exempt),对真实库断言:①无未登记表
+  ②swept 表清理索引齐备 ③outbox 无堆积;-snapshot/-compare 压测前后行数对比;
+  -force-sweep -confirm=YES-DELETE 清理速率抽测(与服务同构批删,cutoff=now,只准压测库;
+  player_mail/bag_journal/battles 组不重复实现,由服务 sweep 覆盖)。
+- 规范接线:CLAUDE.md §9.24 增"机械化检查=发布门禁"段 + §8 压测核心句;AGENTS.md §10
+  红线注明须同步 dbcheck 清单;stress-discipline.md §4.1.1(压前基线)/§4.3(压后三断言 +
+  清理速率抽测)/完成清单加两项。
+- 实测(本机 TiDB 重放全部 15 个 init SQL):工具当场抓到 pandora_owner 三张新表未登记
+  (owner 线刚建,transition_log 正是只增流水——已登记:record/lease bounded,
+  transition_log swept 且 owner 线已按 §9.24 预留 idx_created_at)+ 遗留旧 social 库缺
+  5 个清理索引(ALTER 补齐后 PASS);造 3×20000 行流水 → -compare 增量精确 →
+  -force-sweep 批删 14~18k rows/s 清空,全链路 PASS。
+- 剩余:生产/CI 接线(发布 pipeline 里跑 dbcheck)由部署侧接;真 MySQL 8.4 未跑(同续12)。
+
+## 2026-07-22(续2):邮件附件"实例托管转移"形态定契约(Claude)
+
+- 背景(用户需求):领取附件里的**既存装备**必须"只改归属",实例身份与全部数据(鉴定态/
+  词条等)不得改变;且机制要对未来一切实例类物品通用,不限装备。
+- 现状确认:InstanceAttachment 是**铸造凭证**(config+count,领取时铸全新实例:新雪花 ID、
+  未鉴定、词条鉴定时 roll)——只适用"发新物品",无法转移既存实例;误用会把玩家装备变成
+  另一件东西。
+- 落地:mail.proto 新增 oneof 分支 transfer = TransferAttachment{ bag.v1.BagItem item
+  (快照,instance_id 必填,count 恒 1), source_player_id }(复用 bag 域 BagItem,§5.8 不造
+  并行 struct);MailAttachment 头注释改三形态表 + instance 分支标注"仅发新物品"误用警示。
+- **接线前两侧 fail-closed(已落码)**:发送侧 buildPayload 显式拒收 transfer(托管扣出机制
+  未落地前放行 = 可伪造"声称托管但实例未扣出"的附件,§9.7);领取侧 partitionAttachments
+  显式计 unknown → 整封 9606 保持未领取(不得落进 GrantInstances 铸造路径)。回归测试
+  TestTransferAttachmentFailClosedUntilWired(发送拒 + 领取整封拒不发放不记 claim)。
+- 三不变量入 bag-domain.md §7.1(全局唯一/归属变更快照原样/接线前 fail-closed);
+  放开时机 = 拍卖成交走邮件(phase 3)或玩家转赠落地,必须与托管扣出 + bag 域领取链同一提交。
+- ⚠️ pb 重生清单追加:mail.proto(新分支 + import bag/v1)——与既有 mail/bag/errcode/owner
+  重生同一批交 Codex;mail biz 新测试在重生前编译红(同批闭合)。
+
+## 2026-07-22(续3):owner migrate ⑥ 实例租约双写落码(Claude)
+
+- hub_allocator / ds_allocator 两侧接线:Model B 授权心跳成功后、**响应返回前**经
+  renewOwnerLeaseGate 调 owner.RenewInstanceLease(时序关键:DS 收到响应才延长本地租约,
+  权威侧 lease 必须先覆盖该认知,否则 BeginTransition 屏障计算偏小)。
+- 弱/强双模式完整实现(§14):owner_addr 空=不启用(默认,现网零变化);启用后默认弱依赖
+  (失败仅告警,migrate 窗口由旧 last_heartbeat_ms 再入门双门并行兜底);contract 阶段置
+  owner_lease_required=true 转强依赖(续租失败→心跳失败→DS 拿不到响应不延长本地租约→
+  连续失败自我 fencing,权威侧租约滞后时 DS 必然停玩,屏障时序闭合)。
+- hub 凭据无实例纪元:续租 epoch 传 0;owner 侧纪元守卫放宽为"双方都非零且不同才拒,
+  存量 0 请求非零则补齐"(owner repo/biz 已改,身份完整性只要求 pod+uid)。
+- 客户端:两服务各自 data/owner_lease_client.go(内网 insecure 直连,单调用 2s 超时,
+  租约秒数=placement.DSFenceLeaseMaxSeconds,owner 侧再钳一次双保险)。
+- 测试:renewOwnerLeaseGate 纯单测两侧**已真跑绿**(nil no-op/身份透传/弱依赖放行/
+  强依赖失败,biz 包整体编译过=接线无编译错误);dev yaml 加注释配置块(owner 服务进
+  编排后再开)。
+- ⚠️ 交接:data 客户端依赖 owner pb(Codex proto_gen 后闭合);migrate ①-⑤(login/
+  BeginTransition/Admit/battle_result/logout)未开工,依赖 pb 重生后按 owner-authority.md
+  §4 顺序推进。
+
+## 2026-07-22(续4):owner migrate ①-⑤ 全部接线(Claude;三服务编译测试全绿)
+
+- pb 已由并行会话重生(owner/bag/mail/errcode),owner 服务整体 go build 通过,本轮全部
+  改动可真实编译验证。
+- **①/④ hub 归属 Begin(HUB)**:插在 hub_allocator signHubTicket(签票统一出口——分配/
+  恢复/转移/Battle→Hub 回流全路径过此),弱 Query→decide→BeginTransition;hub 无独立
+  实例纪元,以 ProtocolEpoch 充当(census Admit 同源,exact 等值自洽)。
+- **② battle Begin(BATTLE)**:ds_allocator AllocateBattle READY 确认后、交付 matchmaker 前
+  逐玩家弱 Begin(AllocateResult 全 Target);3s 批预算防 owner 卡顿拖慢分配。
+- **③ census 代提交 Admit(migrate 近似)**:两 allocator 授权心跳 census 首见玩家
+  Query→(记录指向本实例且 PENDING)→Admit(目标取记录字段,pod/uid 为调用方独立断言);
+  屏障未开静默跳过下轮重试;进程内 sync.Map 已准入缓存(重启重查一轮收敛);
+  contract 阶段移交 DS Admission 链原生提交后本近似退役。
+- **⑤ logout Release**:login 登出成功(session compare-delete 命中)后弱 Query→Release
+  (携带观察 epoch+operation,owner 侧幂等 no-op 防误删新 owner)。
+- **§9.23 幂等规则落进 decideOwnerBegin**:记录已指向同一实例(类型+pod+uid 同)且
+  PENDING/ADMITTED → 跳过不推进 epoch(同目标重连/重复交付零副作用)。
+- 装配:三服务 owner_addr 空=整体不启用;allocator 复用 ⑥ 的同一连接(SetOwnerAuthority);
+  login 新增 GrpcOwnerReleaser。全部弱依赖:任何 owner 故障只告警,路由决策不变,
+  旧 last_heartbeat_ms 再入门双门并行(行为切换属 contract 阶段)。
+- 验证:ds_allocator/hub_allocator/login 三服务全量 go test 通过(含既有心跳/分配/登录
+  大 fixture 用例,零回归);owner 服务四包测试通过;gofmt 干净。
+- ⚠️ contract 阶段待办(全链验证后):owner_lease_required=true 转强依赖;login 路由决策
+  改 query-first 消费 owner 记录(§9.23 WAIT/TARGET 语义);Admit 移交 DS Admission 链;
+  last_heartbeat_ms 旧门退役;CLAUDE.md §22"尚未实现"注记删除。
+
+## 2026-07-22(续5):owner 服务部署编排 + dev 全链闭环(Claude)
+
+- 五处登记:docker-compose.services.yml(owner 块,50017)、start.ps1 镜像构建清单、
+  run_services.ps1 宿主运行清单、gen_cluster_config.ps1 服务清单、export_images.ps1
+  业务镜像清单(20→21)。gen_cluster prod progress / B1 两个合约测试 PASS。
+- dev 闭环:ds_allocator/hub_allocator/login 三处 owner_addr 置 127.0.0.1:50017
+  (dev 一键启动含 owner;弱依赖,owner 掉线仅告警);owner_lease_required 保持缺省 false,
+  contract 阶段才转强。
+- ⚠️ 事故与修复(自查自纠):清理 yaml 尾部过时注释时误用 powershell 5(违反本仓
+  "PowerShell 优先 7"),三个 dev yaml 被 cp1252 双重编码 + BOM 损坏;经确定性反向映射
+  (UTF-8 读→cp1252 编码回原始字节)无损还原,xxd/乱码计数/中文/配置逐项验证恢复。
+  教训:本仓一律 pwsh,或改文件只用 Edit 工具。
+- 剩余非代码项不变:dev 库重放 01/14/15 SQL、UE 编译、DSN 集成测试、生产 TiDB 02、
+  contract 阶段(强依赖/query-first/Admit 移交/旧门退役)。
+
+## 2026-07-22(续6):堆叠扣空即删行 + 邮件 transfer 计数显式化(Claude)
+
+- **堆叠道具用尽即删行(用户要求)**:inventory deductItemTx 扣到 0 时 DELETE player_items 行
+  (原为 UPDATE count=0 留死行;读侧本就过滤 count>0,留行只会无界堆积)。再发放同 config
+  走 GrantItems upsert 重建,行为不变;UseItem/SellItem/SettlePlayerTrade/FreezeForOrder
+  全部经此函数统一生效。测试助手 queryItemCount 无行返回 0(语义=持有 0);新增回归
+  TestUseItemEmptiedRowDeleted(用尽→行物理删除→幂等重放快照 0 不复活→重发放重建)。
+  bag 域 sectionRemoveItems 本就扣空移格,无需改。
+- **partitionAttachments transfer 单列(用户指出计数混同)**:transfer 从 unknown 拆出
+  独立计数,ClaimMail 对两者给出不同错误消息(transfer="已识别但领取链未接线,
+  bag-domain phase 2";unknown="未识别形态")——同为 9606 整封 fail-closed 保持未领取,
+  但排查语义一眼可辨。既有 fail-closed 测试全部保持通过。
+- mail/inventory 编译+测试全绿。
+
+### 2026-07-22(勘误)retention_indexes 迁移 down 语义修订
+
+此前条目写"新增 7 库 *_retention_indexes 迁移(…down 条件删)":down 已全部改为**有意
+no-op**——清理索引属权威表定义(fresh-init 自带),回滚删索引会让"fresh 建表 + 回滚"的库
+与权威定义不一致(2026-07-22 审计 P1)。migrate 测试锁死该语义(down 含 DROP KEY 即 FAIL)。
+
+## 2026-07-22(续7):邮件 transfer 附件托管转移链接线完成(Claude)
+
+- **transfer 三不变量落地(bag-domain.md §7.1,两侧同一提交放开)**:既存实例"只改归属"
+  的托管转移链全通,经济域闭环(当前实例权威在 player_item_instance;phase 2 写权威切 DS
+  后领取入包路径迁 bag journal,托管语义不变)。
+- **inventory 三个系统 RPC**(内网直连,Envoy 精确 403 + 服务层 callerID==0 兜底):
+  - EscrowOutInstances:同事务从 player_item_instance 扣出 + 写 mail_transfer_escrow
+    (两表各以 instance_id 为 PK + 事务性搬移 = 实例全局唯一);bound 拒
+    (新 errcode 7018 ERR_INVENTORY_INSTANCE_BOUND);幂等 ledger op=escrow_out。
+  - ClaimTransferInstances:托管行 INSERT...SELECT 原样搬进领取人实例表(鉴定态/词条/绑定
+    逐字节保留,零重铸零重 roll);**领取只认托管行**(缺行/收件人不符/config 漂移整批拒,
+    伪造附件必 fail-closed);容量满可重试;幂等 ledger op=transfer_claim。
+  - ReleaseTransferEscrow:saga 补偿归还源玩家;幂等由行存在性承担;不设容量闸
+    (slot NULL 入包,资产归还优先)。
+- **mail 侧**:个人邮件放开 transfer 发送(系统/公会邮件仍拒:多人可领与单实例矛盾;
+  形状校验 instance_id/config 必填、count 恒 1、同封不重复);ClaimMail 接 TransferClaimer
+  (幂等键 mail_xfer:{mail}:{player});transfer 无空领豁免(AllowNoopGrant 不放行,
+  空领=托管行滞留资产静默丢失);过期未领沿用归档补偿链,托管行保持在途。
+- **存储/登记**:mail_transfer_escrow 建表(mysql-init/08 + pandora_trade 000003 迁移,
+  down=additive-only no-op:在途行是已扣出资产唯一持有处);dbcheck 登记 classBounded;
+  CLAUDE.md §9.24 豁免表登记。
+- **验证**:mail biz 4 例新回归(全链路由/系统邮件拒/形状校验/无 claimer 严格拒)+
+  inventory biz transfer_test.go(fakeRepo 全链)+ data TestMailTransferEscrow_MySQL
+  (真 MySQL 3307 绿:原子搬移/幂等回放/指纹冲突/越权/漂移/容量/释放);
+  mail+inventory+migrate 编译测试全绿。go pb 已本地经官方 proto_gen.ps1 重生(lint 过)。
+- **现状无生产发送方**:拍卖成交到账/玩家转赠/活动补发接入时走
+  EscrowOut → SendPersonalMail → (失败)Release saga,零机制改动。
+- 待办:cpp pb 同步 UE 仓(errcode/mail/inventory,Codex);dev 库重放 08 SQL 或跑
+  pandora_trade 000003 迁移。
+
+## 2026-07-22(续8):bag 域 phase 2 全链接线(门控默认关;Claude)
+
+- **Go / BagService 五要件补全**:①身份 = DSCallbackGuard 验签 DS Bearer(inventory 新增
+  ds_auth 配置,与 battle_result 同密钥体系);②owner 授权 = 逐写 QueryOwner,
+  record.target 与调用方 pod/uid 全等 + ADMITTED + 租约在效,owner_epoch 由服务端解析代填
+  (请求 0 = 代填;非 0 须相等,为票据携带 epoch 的 contract 阶段预留)。LoadBag 也过授权
+  (伪造高 epoch 的加载会围栏真 owner)。bag.owner_addr 必填门(allow_unverified_owner
+  仅 dev);授权门单测 3 例绿。
+- **mail DS 三段式领取**:GetClaimableAttachments(意图落库 player_mail_claim 加
+  claimed/intent_payload 列,pandora_social 000005 迁移 + TiDB init 同步;instance 形态
+  一次性铸 ID,重放逐字节同内容)/ MarkMailClaimed(先消 transfer 托管行
+  inventory.ConsumeTransferEscrow(新 RPC)再置终态);旧直连 ClaimMail 对意图行互斥拒
+  (新 errcode 9607)。恰好一次:journal 幂等键 = mail_claim:{mail}:{player},
+  崩溃任意点重驱动收敛。mail biz 新增 4 例回归全绿。
+- **UE 侧(编译待用户)**:cpp pb 同步 bag/mail/inventory/common + 生成包装 0032;
+  Codec_Bag / Codec_MailClaim;DS 子系统 5 个新 RPC(BagLoad/Append/Checkpoint +
+  MailGetClaimable/MarkClaimed,bag 方法 hub/battle 双类型凭据域);
+  **UMyBagPersistenceComponent**(挂 MyEntityPlayerState:SetPandoraPlayerId 即
+  StartCheckout;单飞行单条批 journal 写者,EPOCH_FENCED 永久停写并释放认领;
+  checkpoint 周期 8s + EndPlay 冲刷,实例鉴定态/词条 sidecar 保真;邮件领取驱动:
+  预留→journal→Mark,实例项以权威 instance_id 入包);UMyBagComponent 加
+  AddItemAuthoritative(权威 Guid 保留);BeginGatedPickup 按 checkout 状态选路
+  (journal / 旧 ReportProgress,认领/回执/预留机制原样);PlayerState 加
+  ServerClaimMailAttachments/ClientMailClaimResult 入口。
+- **部署面**:Envoy DS 面加 bag 三写路径 + mail 两领取路径;客户端面 403
+  GetClaimableAttachments/MarkMailClaimed/ConsumeTransferEscrow;UseItem/SellItem/
+  ClaimMail cutover 403 以注释预留(DS 链全量启用并排空旧客户端后启用)。
+  ds-arch §0.5 新增合法通道 ④(journal 直写五条硬约束)+ §0.6 红线措辞同步。
+- **启用顺序**(全默认关,任一步可回退):迁移(social 000005)→ inventory 配
+  bag.dsn+owner_addr+ds_auth=enforce → mail 配 inventory_addr(已有)→ Envoy 下发 →
+  UE 设 PANDORA_BAG_JOURNAL_ENABLED=1(金丝雀 DS)→ 观察后全量 → cutover 403。
+- 验证:mail/inventory 全测绿(真 MySQL 3307);全 14 服务模块编译零失败(待终验);
+  UE 全量编译/联调交用户;phase 2 与并行落地的服务端拆堆(bag §5.2)改动已合并共存。
+- 剩余(phase 3 前置):拾取切 journal 后 battle_result 掉落分支退役、仓库/活动段 UI 走
+  GetSections、拍卖/交易在线扣、owner contract 阶段(票据带 epoch/强依赖)。
+
+## 2026-07-22(续8):后端驻留段服务端建模 MaxStack 拆堆(用户拍板,Claude)
+
+- 背景:架构评审确认 bag 域 sectionAddItems"同 config 无限合并单格"与 UE 格子语义矛盾
+  (容量按条目数判定形同虚设 + uint32 Count 无检查累加存在回绕 + 客户端展示拆堆会画出
+  超 capacity 格数);用户拍板"堆叠语义一段一权威,后端段由 Go 建模"。
+- 实现(services/economy/inventory):
+  - data/bag_apply.go sectionAddItems 重写:可堆叠按 MaxStack 拆堆——先规划(不改段)
+    既有未满堆吸纳量,溢出按上限整格折算新格数,容量不足在任何写入前整体拒;应用阶段
+    填堆+整格铺开。计数运算全程 uint64,回绕构造上不可能;超上限历史脏堆跳过不吸纳
+    (防下溢)、资产原样保留。实例分支不变(每件一格)。
+  - data/bag_repo.go 新增 BagMaxStack 回调类型;BagRepo.AppendJournal 接口与 MySQL 实现
+    增参透传 applyBagOpTx→grantIntoBagType→sectionAddItems。
+  - conf:BagConf 新增 default_max_stack(默认 99,与 UE MyBag::DefaultMaxStackSize 同值)
+    + item_max_stacks 覆盖表 + BagConf.Validate(段容量/堆叠上限启动 fail-fast,main 接线);
+    正式数据源为 §9.15 配置表管线道具表(与 CfgItem 同源),接入前由本配置承载,0 =
+    未配置 fail-closed 拒写。
+  - biz/bag.go AppendJournal 注入 cfg.ItemMaxStackOf。
+- 测试:新增 TestSectionAddItemsMaxStackSplit 六例(拆堆 [5 5 2]/先填零头再开格/容量不足
+  写前整体拒且零头不被部分填充/上限未配置 fail-closed/超满脏堆跳过/uint32 极值 4294967295
+  入账不回绕);既有 bag 全部单测与边界测试按新签名平移,断言语义不变(合并计数均 <99)。
+  inventory 全包 build/vet/test 绿;mail 构建绿(其对 bag 仅注释引用)。
+- 文档:bag-domain.md 新增 §5.2(一段一权威堆叠语义表 + 无限合并三否决理由 + 数据源与
+  禁令)。MySQL 集成测试仍门控于 PANDORA_TEST_MYSQL_DSN,本轮未跑真库(纯内存变换逻辑,
+  事务边界未动)。
+- 关联决策(评审已给、待用户拍板,未实施):重放容量语义(fail-closed→资产守恒+溢出临时
+  格)、随身组 journal 组级寻址、UE FMyBag 幽灵格修复、存量 player_items 迁仓库、邮件领取
+  默认目标段;拍板后先写 decision-revisit-bag-replay-semantics.md 再动码。
+- 备注:biz/sweep_test.go 存在 gofmt 未格式化(并行会话文件,未动)。
+
+## 2026-07-22(续9):bag 重放语义/存量迁移/幽灵格全量拍板落地(用户拍板"全部实现";Claude)
+
+(注:上方存在两条「续8」,系并行会话编号撞车,内容各自独立有效。)
+
+- **决策文档**:新增 docs/design/decision-revisit-bag-replay-semantics.md(D1-D7 全拍板):
+  D1 重放容量语义 = 数据完整性 fail-closed 不变 + 容量冲突改"资产守恒 + 溢出临时格 +
+  超容只出不进"(初版 fail-closed 拒载作废,违反不变量 20);D2 随身组 journal 组级寻址;
+  D3 邮件领取默认进身上(评审建议进仓库,被并行落地的三段式链事实修正,机制均备可切);
+  D4 checkout 失败 WAIT 降级;D5 存量迁仓库 + bag_migration 幂等闸 + contract 冻结时序 +
+  transfer 托管链割接互锁;D6 FMyBag 扣空即删格;D7 整理后即时 checkpoint(优化项)。
+  已否决:全量 op-log(TMap 迭代非确定)/写前强制 checkpoint/迁邮件(寿命钳丢资产)。
+- **bag-domain.md 修订**:新增 §3.2(重放两类处置 + 组级寻址 + 守恒证明 + checkout WAIT);
+  §7 默认领取形态定型进身上;§10 phase 3 行补存量迁移与托管链割接互锁;§11 矩阵加
+  重放容量冲突/组级扣减/迁移双算三行。bag.proto BagJournalEntry 头注释补组级寻址契约
+  (字段形状零变化;cpp pb 注释同步列 Codex 重生清单,非阻塞)。
+- **Go 存量迁移作业(全落码,配置门 bag.legacy_migration_enabled 默认关)**:
+  - 14-bag-tables.sql 新增 bag_migration(player_id PK + 对账三元组;一玩家一行永久幂等闸,
+    §9.24 豁免登记 + dbcheck classExempt + CLAUDE.md 豁免清单 + main schema gate 补表);
+  - data/bag_migration.go:ListLegacyBagPlayers(双表并集游标)/LoadLegacyBagStock(实例
+    鉴定态词条 JSON 保真;**bound 实例 fail-closed 拒迁**——BagItem 尚无 bound 字段,
+    phase 3 proto 批次补齐后放开,防绑定约束静默丢失)/SeedLegacyWarehouse(bag 库单事务:
+    锁 bag_meta 行不 CAS epoch + 幂等闸 + sectionAddItems 容量豁免超容落位复用拆堆单源)/
+    VerifyLegacyWarehouse(实例逐个在段 + 计数 ≥ + 记录三元组与 legacy 相等,冻结违反即暴露);
+  - biz/bag_migrate.go:游标批量 runner,单玩家失败告警不阻断,重跑 no-op;main 接线
+    (开启时告警提示 D5 时序纪律)。
+- **测试**:biz 迁移 runner 纯单测 3 例(翻批/幂等 skip/失败继续/统计/取消);data 集成测试
+  TestBagLegacyMigration_MySQL(DSN 门控:枚举游标/快照保真/bound 拒/幂等落位拆堆 6 格/
+  对账过/超容段真实 journal 路径新格拒扣减照常/冻结漂移暴露);纯单测新增
+  TestSectionOverCapacityDrainOnly(超容只出不进 + 低于容量恢复)。inventory + migrate
+  全包 build/vet/test 绿,gofmt 干净。
+- **UE 侧(D6,编译交用户)**:FMyBag DrainItemStacks/RemoveItemByPos 扣空即删格
+  (Items+PosToGuid 同步清理,TMap 迭代后统一删);MyBagComponent ServerUseBagItem 的
+  逐点幽灵格补偿删除(语义下沉后冗余);MyBagMergeTest 新增 DrainDestroysEmptyGrid
+  回归(全量/部分/按格扣空 + 空位复用)。既有 SyncPrivateIncremental"清空后容器无残留"
+  断言在旧实现下本应是红的,修复后语义对齐。历史 checkpoint 中已存在的 Size=0 条目
+  经 AddItem 校验会被拒(dev 数据,bag 域未上生产,无存量风险)。
+- **本轮未实施(有意,非遗漏)**:UE 重放溢出临时格/组级寻址重放/整理后即时 checkpoint
+  属 UMyBagPersistenceComponent 恢复路径(续8 phase 2 刚落地待用户编译),按 §3.2 契约
+  在其 LoadBag 重放器上实现,避免在未编译验证的新组件上叠改;邮件领取切仓库形态不做
+  (D3 定型进身上)。
+- ⚠️ 交接:1. Codex:bag.proto 注释重生(go/cpp,非阻塞)+ 本轮 Go/文档 commit;
+  2. 用户:UE 全量编译(含续8 并行大改 + 本轮 4 文件)+ 跑 Pandora.Module.Bag.* 自动化
+  测试;3. dev 库重放 14-bag-tables.sql(新增 bag_migration;schema gate 会 fail-fast 提示);
+  4. phase 3 前置:BagItem 加 bound 字段后放开 bound 实例迁移。
+
+## 2026-07-22(续10):背包容量购买链全量落码(用户"按建议"拍板;Claude)
+
+- 需求:容量有配置初始值,玩家可花钱购买扩容(§5.3 契约 2026-07-22 已先行,本轮落码)。
+- **proto(本地官方 proto_gen.ps1 重生 go+cpp,buf lint 绿)**:bag.proto 新增
+  PurchaseCapacity RPC(幂等身份 = (player, bag_type, 第 N 档),价格/档位/封顶服务端
+  权威)、BagEffectiveCapacity、LoadBagResponse.effective_capacities=5(随身段权威有效
+  容量,checkpoint 内 capacity 仅回显);errcode 新增 ERR_BAG_CAPACITY_MAXED=14010。
+- **存储**:14-bag-tables.sql 新增 bag_capacity(player+bag_type PK,extra 单调只增 +
+  purchases 档数游标;dbcheck classBounded + main schema gate 登记)。
+- **实现(inventory)**:
+  - conf:BagCapacityPurchaseRule 阶梯价规则 + 默认档位(身上 0:10 档×10 格,第 N 档
+    100N 金;仓库 1:15 档×20 格,第 N 档 200N 金;§5.3 拍板值,正式数值走导表管线覆盖);
+    Validate 锁死仅 0/1 可买、档位合法、总格数 ≤ max_extra、可买段必须有 base;
+    SectionCapacities 默认补身上 base 100。
+  - data/bag_capacity.go:ChargeBagCapacity(trade 库;claimLedger 幂等
+    key=bagcap:{bag}:{tier} + 指纹钳档参数 + deductGoldTx)/ ApplyCapacityPurchase
+    (bag 库;锁 bag_meta 行不 CAS epoch + 档数 CAS:== tier-1 应用、>= tier 幂等回放、
+    超 max_extra fail-closed)/ GetCapacityState;AppendJournal 事务内预取触及段 extra,
+    判定容量 = base+extra(判定与权威同址);GetSections 返回有效容量。
+  - biz:PurchaseCapacity(定档 → 预检 → 扣费 → 落位;两步间崩溃同档重试收敛,双击并发
+    同幂等身份单扣单生效)+ CarryEffectiveCapacities(LoadBag 下发,只含配置 base 的段);
+    CapacityCharger 注入(main 同进程直用 inventory repo)。
+  - service:PurchaseCapacity handler + LoadBag effective_capacities 组装;
+    Envoy DS 面两文件补 PurchaseCapacity 路由(客户端面整前缀 403 自动覆盖)。
+- **测试全绿**(inventory/migrate/mail/battle_result/owner build+vet+test):biz 单测
+  (顺序两档/购罄拒且不扣费/扣费后落位前崩溃重试收敛零重扣/金币不足不落位/不可买段/
+  未装配 fail-closed/授权失败不扣费/LoadBag 有效容量视图);data 集成测试
+  TestBagCapacityPurchase_MySQL(DSN 门控:扣费幂等/指纹冲突/余额不足/档数 CAS/乱序拒/
+  超上限拒/有效容量进真实 journal 判定恰满边界/GetSections 有效容量/状态读取)。
+- 文档:bag-domain.md §5.3 定稿(拍板值 + 已落码范围)。
+- ⚠️ 交接:1. Codex:cpp pb 同步 UE 仓(bag/errcode)+ commit;2. UE 侧待 pb 同步后接:
+  购买入口(UI → PlayerState Server RPC → DS 子系统 PurchaseCapacity Codec)、ACK 后
+  ExpandCapacity、UMyBagPersistenceComponent checkout 用 LoadBag effective_capacities
+  Init 随身段容量(不信 checkpoint capacity);3. dev 库重放 14-bag-tables.sql
+  (新增 bag_capacity + bag_migration);4. gofmt 残留(并行会话文件,未动):
+  services/economy/inventory/internal/biz/sweep_test.go、pkg/errcode/errcode_cause_test.go。
+
+## 2026-07-22(续11):owner K8s manifests 补齐 + buf breaking 规则对齐(Claude)
+
+- **owner K8s 编排缺口关闭**(续5 五处登记后唯一遗漏):deploy/k8s/services/services.yaml
+  新增 owner Deployment+Service(50017,标准段:conf secret subPath owner.yaml + gRPC
+  readiness probe;无状态 CAS 通道,标准滚更,不需 Recreate/POD_UID);文件头计数 20→21。
+  overlays/online/kustomization.yaml images 补 pandora/owner 占位(20→21 条);
+  netpol.yaml 注释计数 19/20→20/21(label 分层策略本身自动覆盖 owner,无需逐条加白)。
+  验证:kubectl apply --dry-run=client 全过;kubectl kustomize online overlay 构建过,
+  21 个 Deployment,owner 镜像钉扎生效。
+- **buf breaking 58 项分诊完毕**(基线 = main HEAD a138ff2 = DS 旧协议锁):
+  ①43 项 = R5 自报身份字段删除,8 proto 全部 number+name 双 reserved,属 §5.4/§9.17
+  认可路径 → proto/buf.yaml breaking 规则改 FIELD_NO_DELETE_UNLESS_NUMBER_RESERVED
+  + UNLESS_NAME_RESERVED(except FIELD_NO_DELETE),误删(未 reserved)仍拦;
+  ②15 项 = mail MailAttachment 字段 1/2/3 原地改 oneof 三形态(开发期编号复用,proto
+  注释有完整设计语义),不可也不应用规则放行 → 保留为"DS 必须重打包"的诚实证据,
+  冻结提交落 main 后自然清零。改后 buf lint 过、breaking 余 15 项(全 mail)。
+- ⚠️ 交接:1. run/cluster/etc 缺 owner.yaml(陈旧产物,下次 gen_cluster_config.ps1
+  重跑自动生成,secret pandora-config 随之含 owner.yaml);2. 生成链无 TiDB DSN 处理:
+  -Prod 产物 owner 仍指 mysql:3306,违反 §9.22 生产必须 TiDB——需运维提供 TiDB 端点
+  后加 prod 改写规则或独立 owner prod 配置,当前仅 dev/minikube 可部署 owner;
+  3. 本轮未部署未编译,集群未动。
+
+## 2026-07-22(续12):独立复核回应 —— -Prod owner TiDB 门落地 + 部署计数硬门修复(Claude)
+
+- 独立复核结论核实:buf lint=0 / breaking 15 项分诊准确;owner manifests kustomize 过
+  (21 Deployment/21 Service);`git diff --check` 过;复核提出的两个硬问题均成立。
+- **硬问题1(15 项 mail breaking)定性修正**:续11"冻结提交落 main 后自然清零"的表述
+  不当——提交只移动 buf 比较基线,不构成兼容修复。真实关闭条件:
+  ①开发期编号复用属 §5.4/§9.5 认可路径,前提 = 重生 go+cpp pb 并全量编译所有启用
+  module(cpp pb 待 Codex 同步 UE 仓,UE 编译待用户);
+  ②消费者穷举:mail 服务/battle_result 发送方(同仓重编)、UE 客户端+DS(同一 SVN 重
+  打包);无线上老消费者(-Prod 路径尚不可用,不存在生产部署);
+  ③存量数据是硬前提:player_mail/sys_mail/guild_mail/player_mail_archive 的 payload
+  blob(MailContentStorageRecord)旧格式行在新 schema 下 wire type 不匹配 → 附件字段
+  落 unknown,**附件静默丢失**;dev 邮件表清空(续10 已在案)必须在新版本部署前执行;
+  ④上线后该路径永久关闭(§9.5 编号不复用/§9.17 兼容演进/§9.21 共存窗口双向兼容)。
+- **硬问题2(-Prod owner 不安全)落地关闭**(续11 交接点2):
+  - gen_cluster_config.ps1:新增 -OwnerStoreDsn / PANDORA_OWNER_TIDB_DSN;-Prod 强制
+    非空 + 拒 dev 凭据(pandora_dev_pwd)+ 拒 dev MySQL 地址(mysql:3306/127.0.0.1:3307)
+    + 必须 pandora_owner 库 + 拒控制字符;owner.yaml DSN 整行注入(复用既有 YAML 精确
+    定位/转义,旧值必须含 dev 凭据特征防覆盖未知配置);require_tidb 机械翻转 true;
+    **全部 21 服务 -Prod 统一 enable_reflection: false**(锚点 count==1,违例拒生成)。
+  - owner 服务:新增 owner.require_tidb 配置(dev 默认 false)+ data.AssertTiDBBackend
+    启动强校验(SELECT VERSION() 必须含 "-TiDB-",不符 fail-fast 拒启;DSN 字符串证不了
+    后端真是 TiDB,与生成器校验构成双层防线)。
+  - start.ps1:online -Prod 预检 PANDORA_OWNER_TIDB_DSN(BuildPush 推镜像前 fail-fast,
+    dev 凭据/地址即拒,防"半推+未部署"脏状态)。
+  - **修复部署必炸 bug**:Get-ServiceList 已含 owner(21 项)但 Apply-PandoraConfigSecret
+    硬门仍 `-ne 20`——续5/续11 加 owner 后任何 k8s/online 部署在 Secret 组装即 throw。
+    改 21,并同步 start.ps1/gen/docker-compose 全部 20→21 计数文案(battle 模式 18→19 容器)。
+- 测试:owner 全 go test 绿(新增 isTiDBVersion 单测 + 真 MySQL 负向集成用例,后者
+  PANDORA_TEST_MYSQL_DSN 门控);新增 gen_cluster_prod_owner_contract_test.ps1 PASS
+  (缺失/dev 凭据/dev 地址/错库 4 负向 + 正向注入断言 + dev 行为不变);
+  gen_cluster_prod_progress_contract_test.ps1 补 -OwnerStoreDsn 后 PASS。
+- ⚠️ 交接:1. gen_cluster_b1_contract_test.ps1 在 **HEAD 基线即失败**(placement_mode
+  enforce 断言 vs 已提交的 $PlacementSecretBindings=@() 清空,owner 迁移后测试未跟上;
+  已用 HEAD 版生成器复现,与本轮改动无关,已建独立修复任务);2. push 副本 2→1 是
+  07-22 push 审计的**有意**行为改动,拆分提交时应随 push 投递游标 v2 提交或单独提交,
+  勿混入 owner manifests 提交;3. require_tidb 对真实 TiDB 的端到端放行未验(需真
+  TiDB 实例,当前仅负向真 MySQL 拒 + 版本串单测);4. 本轮未提交未部署,集群未动。
+
+## 2026-07-22(续13):玩家等级经验改为策划表单一数据源(Codex,用户授权)
+
+- **删除 YAML 双曲线**:`player.exp_curve` 与 `PlayerConf.ExpCurve/ValidateExpCurve` 已移除;
+  `experience_enabled` 只保留为功能开关。生产生成链机械保持 false,因为源 Excel 备注仍说明
+  当前 Lv1-Lv15 数值是联调占位(仅 Lv8→Lv9=6600 已确认),不得把“已接单源”误报成
+  “正式数值已确认”。
+- **新增导表**:`player_level_exp.proto` 对应
+  `Pandora-Client-SVN/Table/角色/j_玩家等级经验.xlsx`;该表数据从第 4 行开始,因此给生成器
+  新增 `(excel_data_start_row)=4` 覆盖(未设置仍默认第 5 行),防漏 Lv1。当前真实产物
+  `configtable/dist` = v20260722002 / svn-r1306,15 行;曲线为 1000..11400,Lv15
+  UpgradeExp=0、累计 86800。重复生成确认内容不变、未写盘。
+- **player 接线**:启动前强制加载配置表并校验 `ID==level`、等级 1 起连续、非末级经验>0、
+  唯一末级经验=0、累计经验精确匹配;同时检查数据库 `players.level` 在表范围内。每次
+  AddExperience 从单个不可变快照复制曲线,热更坏批次保留旧快照,且拒绝降低最高等级;
+  同 gRPC 端口注册内部 `ConfigTableAdminService`。
+- **运行载体**:宿主 dev 读仓库 `configtable/dist`;Compose 只读挂载;
+  K8s/online/start-resume 由 `pandora-configtable` ConfigMap 整目录挂到
+  `/app/configtable/active`。生成器把 player 集群配置固定改写到该路径,并断言不再出现
+  `exp_curve`。
+- **验证**:`buf lint`;configtable/configtable-gen/player 全量 Go 测试;matchmaker 受新增必需表
+  影响的两组夹具回归;生成器真实源表幂等复跑;prod/dev 配置生成契约;start/gen PowerShell
+  语法解析;K8s client dry-run;Docker Compose config 均通过。`go test -race` 未运行成功:
+  本机没有 gcc(CGO 开启后 runtime/cgo 构建失败),未安装工具、未改系统环境。
+- **边界**:`Store` 原子切换只保证单进程,当前单地址发布脚本不提供多副本原子切换;
+  正式改曲线前仍须关闭经验入口并完成全 fleet 版本收敛。本轮未部署、未提交。

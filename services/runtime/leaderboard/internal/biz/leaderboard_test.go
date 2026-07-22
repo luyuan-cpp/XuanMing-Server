@@ -233,6 +233,51 @@ func TestRetryUngrantedRewards_RegrantsFailed(t *testing.T) {
 	}
 }
 
+// TestGetRank_EstimatedFallback 精确榜命中回精确名次;被 max_size 截断的玩家回退直方图估算;
+// 从未上报 Found=false。
+func TestGetRank_EstimatedFallback(t *testing.T) {
+	uc, _, _, _ := newTestUsecase(t)
+	ctx := context.Background()
+	b := data.BoardKey{BoardType: 9, Scope: data.ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := data.Options{MaxSize: 2, EstimateBucketWidth: 10}
+
+	for i := uint64(1); i <= 5; i++ {
+		if _, _, err := uc.SubmitScore(ctx, b, i, int64(i*10), data.ModeSet, opt); err != nil {
+			t.Fatalf("submit %d: %v", i, err)
+		}
+	}
+	// 榜内(id5=50,第 1 名):精确名次
+	top, err := uc.GetRank(ctx, b, 5)
+	if err != nil || !top.Found {
+		t.Fatalf("rank id=5: found=%v err=%v", top.Found, err)
+	}
+	if top.Estimated || top.Entry.Rank != 1 {
+		t.Fatalf("id=5: estimated=%v rank=%d, want precise rank 1", top.Estimated, top.Entry.Rank)
+	}
+	// 榜外(id2=20,真实第 4 名):估算名次 + 参与总人数
+	off, err := uc.GetRank(ctx, b, 2)
+	if err != nil || !off.Found {
+		t.Fatalf("rank id=2: found=%v err=%v", off.Found, err)
+	}
+	if !off.Estimated {
+		t.Fatalf("id=2 should be estimated (truncated out of top-2)")
+	}
+	if off.Entry.Rank != 4 || off.TotalSubmitters != 5 {
+		t.Fatalf("id=2: rank=%d total=%d, want 4/5", off.Entry.Rank, off.TotalSubmitters)
+	}
+	if off.Entry.Score != 20 {
+		t.Fatalf("id=2: score=%d, want 20", off.Entry.Score)
+	}
+	// 从未上报
+	none, err := uc.GetRank(ctx, b, 999)
+	if err != nil {
+		t.Fatalf("rank id=999: %v", err)
+	}
+	if none.Found {
+		t.Fatalf("id=999 should not be found")
+	}
+}
+
 func TestSubmitAndRange(t *testing.T) {
 	uc, _, _, _ := newTestUsecase(t)
 	ctx := context.Background()

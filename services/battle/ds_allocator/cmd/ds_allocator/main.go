@@ -286,6 +286,18 @@ func main() {
 	uc := biz.NewAllocatorUsecase(repo, allocator, cfg.Allocator)
 	lifecycleRequired := cfg.RequiresReliableLifecyclePublication()
 	uc.SetLifecyclePusherRequired(lifecycleRequired)
+
+	// owner 权威实例租约双写(owner-authority.md migrate ⑥):owner_addr 空 = 不启用。
+	// 弱/强依赖语义见 conf.OwnerLeaseRequired 注释。
+	if cfg.Allocator.OwnerAddr != "" {
+		ownerLease := data.NewGrpcOwnerLeaseRenewer(cfg.Allocator.OwnerAddr)
+		defer func() { _ = ownerLease.Close() }()
+		uc.SetOwnerLeaseRenewer(ownerLease, cfg.Allocator.OwnerLeaseRequired)
+		// migrate ②/③:READY 交付 Begin(BATTLE) + census 代提交 Admit(同一连接,弱依赖)。
+		uc.SetOwnerAuthority(ownerLease)
+		helper.Infow("msg", "owner_lease_dual_write_enabled",
+			"owner_addr", cfg.Allocator.OwnerAddr, "required", cfg.Allocator.OwnerLeaseRequired)
+	}
 	releasePolicy, policyErr := releasetrack.New(cfg.Agones.CanaryPercent, cfg.Agones.CanarySeed)
 	if policyErr != nil {
 		helper.Errorw("msg", "battle_release_track_policy_invalid", "err", policyErr)

@@ -53,9 +53,10 @@ CREATE TABLE IF NOT EXISTS `friend_requests` (
     `updated_at`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`request_id`) /*T![clustered_index] NONCLUSTERED */,
     UNIQUE KEY `uk_requester_target` (`requester_id`, `target_id`),
-    KEY `idx_target_status` (`target_id`, `status`)
+    KEY `idx_target_status` (`target_id`, `status`),
+    KEY `idx_status_updated` (`status`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
-  COMMENT='Pandora 好友请求(挂起 / 接受 / 拒绝,TiDB)'
+  COMMENT='Pandora 好友请求(挂起 / 接受 / 拒绝,TiDB;终态行保留 90 天由 friend sweep 清理,§9.24)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
 
 -- 黑名单。代理主键 id 用 AUTO_RANDOM 打散写热点。
@@ -136,9 +137,10 @@ CREATE TABLE IF NOT EXISTS `guild_join_requests` (
     `updated_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`request_id`) /*T![clustered_index] NONCLUSTERED */,
     UNIQUE KEY `uk_guild_player` (`guild_id`, `player_id`),
-    KEY `idx_guild_status` (`guild_id`, `status`)
+    KEY `idx_guild_status` (`guild_id`, `status`),
+    KEY `idx_status_updated` (`status`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
-  COMMENT='Pandora 公会加入申请(挂起 / 通过 / 拒绝,TiDB)'
+  COMMENT='Pandora 公会加入申请(挂起 / 通过 / 拒绝,TiDB;终态行保留 90 天由 guild sweep 清理,§9.24)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
 
 CREATE TABLE IF NOT EXISTS `chat_groups` (
@@ -237,10 +239,12 @@ CREATE TABLE IF NOT EXISTS `player_mail_cursor` (
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;
 
 CREATE TABLE IF NOT EXISTS `player_mail_claim` (
-    `player_id`  BIGINT UNSIGNED NOT NULL COMMENT '领取人',
-    `mail_id`    BIGINT UNSIGNED NOT NULL COMMENT '被领邮件(任意 channel)',
-    `claimed_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `player_id`      BIGINT UNSIGNED NOT NULL COMMENT '领取人',
+    `mail_id`        BIGINT UNSIGNED NOT NULL COMMENT '被领邮件(任意 channel)',
+    `claimed`        TINYINT         NOT NULL DEFAULT 1 COMMENT '1=终态已领 0=DS 领取意图(bag phase 2)',
+    `intent_payload` BLOB            NULL COMMENT 'DS 领取意图(pb MailClaimIntentStorageRecord;直连链为 NULL)',
+    `claimed_at`     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`, `mail_id`) /*T![clustered_index] NONCLUSTERED */
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
-  COMMENT='Pandora 邮件附件领取幂等(player_id+mail_id 唯一,TiDB)'
+  COMMENT='Pandora 邮件附件领取幂等 + DS 领取意图(player_id+mail_id 唯一,TiDB)'
   SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4;

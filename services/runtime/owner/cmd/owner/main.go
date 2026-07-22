@@ -1,0 +1,172 @@
+// Pandora owner 服务入口(每玩家 owner 权威,§9.22;owner-authority.md,2026-07-21)。
+//
+// 职责:owner_record 单调 epoch CAS、PENDING/ADMITTED 两阶段、admit_not_before 迁移屏障、
+// DS 实例租约(pandora_owner 库,强依赖)。生产必须连 TiDB(线性一致 + 确认写不回滚);
+// dev 允许单机 MySQL 联调(无复制,天然线性一致)。
+//
+// 启动顺序(对齐 inventory):
+//  1. Logger
+//  2. 加载 yaml → conf.Defaults
+//  3. MySQL/TiDB client + schema gate(缺表 fail-fast 指向 15-owner-tables.sql / 02-owner-tidb.sql)
+//  4. 装配 OwnerUsecase → OwnerService → gRPC/HTTP server
+//  5. kratos.New(...).Run() 阻塞
+package main
+
+import (
+	"context"
+	"flag"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/go-kratos/kratos/v2"
+	kconfig "github.com/go-kratos/kratos/v2/config"
+	"github.com/go-kratos/kratos/v2/config/file"
+	klog "github.com/go-kratos/kratos/v2/log"
+
+	plog "github.com/luyuancpp/pandora/pkg/log"
+	"github.com/luyuancpp/pandora/pkg/mysqlx"
+
+	"github.com/luyuancpp/pandora/services/runtime/owner/internal/biz"
+	"github.com/luyuancpp/pandora/services/runtime/owner/internal/conf"
+	"github.com/luyuancpp/pandora/services/runtime/owner/internal/data"
+	"github.com/luyuancpp/pandora/services/runtime/owner/internal/server"
+	"github.com/luyuancpp/pandora/services/runtime/owner/internal/service"
+)
+
+const serviceName = "owner"
+
+var flagConf string
+
+func init() {
+	flag.StringVar(&flagConf, "conf", "etc/owner-dev.yaml", "config file path")
+}
+
+func main() {
+	flag.Parse()
+
+	// 1. Logger
+	logger := plog.Setup(serviceName)
+	helper := plog.NewHelper(logger)
+	helper.Infow("msg", "service_starting", "conf", flagConf)
+
+	// 2. 加载 yaml
+	cfgPath, err := filepath.Abs(flagConf)
+	if err != nil {
+		helper.Errorw("msg", "abs_conf_path_failed", "err", err)
+		os.Exit(1)
+	}
+	c := kconfig.New(kconfig.WithSource(file.NewSource(cfgPath)))
+	defer func() { _ = c.Close() }()
+
+	if err := c.Load(); err != nil {
+		helper.Errorw("msg", "config_load_failed", "err", err, "path", cfgPath)
+		os.Exit(1)
+	}
+
+	var cfg conf.Config
+	if err := c.Scan(&cfg); err != nil {
+		helper.Errorw("msg", "config_scan_failed", "err", err)
+		os.Exit(1)
+	}
+	cfg.Defaults()
+
+	// 3. 权威存储(强依赖:owner CAS 不可降级;生产 TiDB / dev 单机 MySQL,DDL 同构)
+	if cfg.Node.MySQLClient.DSN == "" {
+		helper.Errorw("msg", "mysql_dsn_required", "hint", "node.mysql_client.dsn required (pandora_owner;生产必须 TiDB,§9.22)")
+		os.Exit(1)
+	}
+	db := mysqlx.MustNewClient(cfg.Node.MySQLClient)
+	defer func() { _ = db.Close() }()
+	helper.Infow("msg", "owner_store_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
+
+	// schema gate:pandora_owner 是后建库,既有 volume 不会自动重放 init SQL;缺表 fail-fast。
+	schemaCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if serr := mysqlx.CheckTables(schemaCtx, db, "deploy/mysql-init/15-owner-tables.sql",
+		"owner_record", "ds_instance_lease", "owner_transition_log"); serr != nil {
+		cancel()
+		helper.Errorw("msg", "owner_schema_check_failed", "err", serr)
+		os.Exit(1)
+	}
+	cancel()
+
+	// 后端强校验(§9.22):require_tidb=true(-Prod 产物注入)时权威库必须是 TiDB;
+	// MySQL 异步复制切换会回滚已确认写,owner CAS 回滚即可能双 owner,fail-fast 拒启。
+	if cfg.Owner.RequireTiDB {
+		verifyCtx, verifyCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if verr := data.AssertTiDBBackend(verifyCtx, db); verr != nil {
+			verifyCancel()
+			helper.Errorw("msg", "owner_backend_not_tidb", "err", verr)
+			os.Exit(1)
+		}
+		verifyCancel()
+		helper.Infow("msg", "owner_backend_tidb_verified")
+	}
+
+	// 4. 装配链
+	uc := biz.NewOwnerUsecase(data.NewMySQLOwnerRepo(db), cfg.Owner)
+	svc := service.NewOwnerService(uc)
+
+	// 审计流水保留期清理(§9.24;多副本各自跑,DELETE 幂等无需锁)。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go runTransitionLogSweep(sweepCtx, uc, helper, cfg.Owner.SweepInterval.Std(), cfg.Owner.SweepBatch)
+
+	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	httpSrv := server.NewHTTPServer(&cfg)
+
+	helper.Infow(
+		"msg", "service_ready",
+		"grpc", cfg.Server.Grpc.Addr,
+		"http", cfg.Server.Http.Addr,
+		"log_retention_days", cfg.Owner.LogRetentionDays,
+	)
+
+	// 5. Kratos App
+	app := kratos.New(
+		kratos.Name(serviceName),
+		kratos.Logger(logger),
+		kratos.Server(grpcSrv, httpSrv),
+	)
+	if err := app.Run(); err != nil {
+		helper.Errorw("msg", "app_run_failed", "err", err)
+		os.Exit(1)
+	}
+}
+
+// runTransitionLogSweep 周期清理超保留期审计流水。
+func runTransitionLogSweep(ctx context.Context, uc *biz.OwnerUsecase, helper *klog.Helper, interval time.Duration, batch int) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			if _, err := uc.RunTransitionLogSweep(sweepCtx, batch); err != nil {
+				helper.Errorw("msg", "owner_transition_log_sweep_failed", "err", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// maskDSN 脱敏 DSN 里的密码(对齐 inventory main.go)。
+func maskDSN(dsn string) string {
+	at := -1
+	colon := -1
+	for i := 0; i < len(dsn); i++ {
+		if dsn[i] == ':' && colon == -1 {
+			colon = i
+		}
+		if dsn[i] == '@' {
+			at = i
+			break
+		}
+	}
+	if colon != -1 && at != -1 && at > colon {
+		return dsn[:colon+1] + "***" + dsn[at:]
+	}
+	return dsn
+}

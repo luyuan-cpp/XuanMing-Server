@@ -59,12 +59,14 @@ battle:
   # 缺省 false=关闭(新对局拒开流,DS 自动走局后结算路径;已开流对局不受影响)。
   # ⚠️ 启用纪律(P0 级,不变量 §21 混版安全):必须先把 battle_result **全部副本**升级到
   # 含实时进度收口逻辑的版本(≥2026-07-21,启动日志有 battle_progress schema gate),
-  # 且 pandora_player 000002 / pandora_battle 000005 迁移已全绿,再置 true 滚动下发。
+  # 且 pandora_player 000002+000003 / pandora_battle 000005+000006+000007+000008 迁移
+  # 已全绿(000006 单玩家累计表与 000008 停流标记列是启动 schema gate 的强依赖),
+  # 再置 true 滚动下发。
   # 旧代码副本结算不感知水位表、不抑制结算掉落 —— 提前打开会在混版窗口双发掉落。
   # 回滚:置 false 只停新对局开流,进行中对局继续收流到结算,不丢已入账产出。
   progress_enabled: false
   # monster_exp: 怪物击杀经验表(monster_config_id → 单只经验;空 = 击杀不折算经验)。
-  # 与客户端角色配置表同源;正式数值随 exp_curve 一起等策划确认(见 player prod example)。
+  # 正式数值需与玩家等级经验表一起由策划确认；玩家升级曲线已迁 configtable/player_level_exp。
   monster_exp: {}
   # 单场累计硬上限(事务权威侧封顶,失陷 DS 跨 seq 刷产出在此拦截)
   max_progress_exp_per_match: 1000000

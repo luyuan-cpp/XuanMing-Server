@@ -119,6 +119,10 @@ type FriendRepo interface {
 	// RecommendRandom 从好友图里的玩家随机兜底,返回至多 limit 个候选;尾部不足时可少于 limit。
 	// 排除条件同上。
 	RecommendRandom(ctx context.Context, playerID uint64, exclude []uint64, limit int) ([]RecommendRow, error)
+	// DeleteTerminalRequestsBefore 删终态(accepted/rejected/expired)且 updated_at 超保留期的
+	// 好友请求行(保留期清理,§9.24;单批 limit 行)。pending 永不清;删后再次发起等价于
+	// 全新请求(好友关系权威在 friendships,请求行无资产语义)。返回删除行数。
+	DeleteTerminalRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error)
 }
 
 // MySQLFriendRepo 是基于 database/sql 的 FriendRepo 实现。
@@ -208,21 +212,23 @@ VALUES (?, ?, ?, ?)`, newRequestID, requesterID, targetID, requestStatusPending)
 			}
 			return existingID, true, nil
 		}
-		// rejected/expired/accepted → 重置为 pending 再发起。
-		// 复用旧行(request_id 不变),从非 pending 转 pending 也会占用 target 收件箱一格,
-		// 故同样校验上限(不变量 §9.18)。
+		// rejected/expired/accepted → 复用旧行重置为 pending,但换**新 request_id**
+		// (R4 复审 P1-4:推送为 at-least-once,客户端按 (request_id, reason) 判重;
+		// 复用旧 ID 会让「申请→拒绝→再次申请」的新推送被当成重投丢弃。新一次申请
+		// 是新事件,必须携带新 ID;旧 ID 随之失效,迟到的旧 Accept 自然查无此请求)。
+		// 从非 pending 转 pending 也会占用 target 收件箱一格,故同样校验上限(§9.18)。
 		if ierr := checkIncomingLimit(ctx, tx, targetID, maxIncoming); ierr != nil {
 			return 0, false, ierr
 		}
 		if _, uerr := tx.ExecContext(ctx,
-			`UPDATE friend_requests SET status = ?, updated_at = NOW() WHERE request_id = ?`,
-			requestStatusPending, existingID); uerr != nil {
+			`UPDATE friend_requests SET request_id = ?, status = ?, updated_at = NOW() WHERE request_id = ?`,
+			newRequestID, requestStatusPending, existingID); uerr != nil {
 			return 0, false, errcode.New(errcode.ErrInternal, "reset request %d: %v", existingID, uerr)
 		}
 		if cerr := tx.Commit(); cerr != nil {
 			return 0, false, errcode.New(errcode.ErrInternal, "commit: %v", cerr)
 		}
-		return existingID, false, nil
+		return newRequestID, false, nil
 	}
 }
 
@@ -638,4 +644,18 @@ func (r *MySQLFriendRepo) scanRecommend(ctx context.Context, kind string, player
 		return nil, errcode.New(errcode.ErrInternal, "iterate recommend %s player=%d: %v", kind, playerID, rerr)
 	}
 	return out, nil
+}
+
+// DeleteTerminalRequestsBefore 删终态且超保留期的好友请求行(保留期清理,§9.24)。
+// 条件走 idx_status_updated(status, updated_at);pending(=1)永不匹配。
+// 多副本并发调用安全(各删各的行)。
+func (r *MySQLFriendRepo) DeleteTerminalRequestsBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM friend_requests WHERE status <> ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
+		requestStatusPending, retentionDays, limit)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "delete terminal requests: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }

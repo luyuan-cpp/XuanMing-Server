@@ -312,11 +312,14 @@ func (f *fakeRepo) ApplyExperience(_ context.Context, apply data.ExpApply) (data
 		level = 1
 	}
 	exp := f.expInLevel[apply.PlayerID]
-	// 满级 no-op:不消费幂等键、不出箱(复刻 MySQL 实现)。
-	if level >= maxLevel {
-		return data.ExpState{Level: maxLevel, ExpInLevel: 0, IsMaxLevel: true}, false, nil
-	}
 	key := fmt.Sprintf("%d|%s", apply.PlayerID, apply.IdempotencyKey)
+	// 满级 no-op:不加经验、不出箱,但仍消费幂等键落 no-op 收据;重放命中收据
+	// 返回 already=true(复刻 MySQL 实现,审计 P2 契约)。
+	if level >= maxLevel {
+		already := f.expIdem[key]
+		f.expIdem[key] = true
+		return data.ExpState{Level: maxLevel, ExpInLevel: 0, IsMaxLevel: true}, already, nil
+	}
 	if f.expIdem[key] {
 		return data.ExpState{Level: level, ExpInLevel: exp, IsMaxLevel: level >= maxLevel}, true, nil
 	}
@@ -362,6 +365,19 @@ func (f *fakeRepo) DeletePushOutbox(_ context.Context, id int64) error {
 }
 
 func (f *fakeRepo) PurgeExpHistory(_ context.Context, _ time.Time, _ int) (int64, error) {
+	return 0, nil
+}
+
+// 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
+func (f *fakeRepo) PurgeMMRHistory(_ context.Context, _ time.Time, _ int) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeRepo) PurgeAttrPointGrants(_ context.Context, _ time.Time, _ int) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeRepo) PurgeTalentPointGrants(_ context.Context, _ time.Time, _ int) (int64, error) {
 	return 0, nil
 }
 

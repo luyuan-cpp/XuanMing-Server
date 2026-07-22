@@ -28,10 +28,16 @@ type BitEntry struct {
 	Bit uint32 `json:"bit"`
 }
 
-// LoadBitState 读状态文件;不存在 = 全新空状态。
-func LoadBitState(path string) (*BitState, error) {
+// LoadBitState 读状态文件。文件不存在时只有 allowBootstrap=true 才返回全新空状态:
+// 已发布过的表若状态文件丢失被静默当首次初始化,重新分配的位序会让历史落库位图
+// 全部错位重释义(审计 P1)。丢失属事故:从 git 恢复,或人工确认无位图数据落库后
+// 显式带 -bitindex-bootstrap 重建。
+func LoadBitState(path string, allowBootstrap bool) (*BitState, error) {
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
+		if !allowBootstrap {
+			return nil, fmt.Errorf("位序状态文件缺失: %s(丢失会导致已落库位图错位;从 git 恢复,或确认表从未发布后用 -bitindex-bootstrap 显式初始化)", path)
+		}
 		return &BitState{}, nil
 	}
 	if err != nil {
@@ -93,6 +99,8 @@ func (s *BitState) BitCount() uint32 {
 }
 
 // SaveBitState 确定性落盘(按 bit 升序,带缩进,尾随换行)。
+// 临时文件 + 原子重命名(审计 P1:位序状态是已落库位图的唯一权威,直接 WriteFile
+// 崩溃可截断;rename 同目录原子替换,旧状态要么完整保留要么完整替换)。
 func SaveBitState(path string, s *BitState) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -101,7 +109,15 @@ func SaveBitState(path string, s *BitState) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(raw, '\n'), 0o644)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(raw, '\n'), 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // ParseJSON 把 dist 产物 JSON 读回容器 message(工具 / 测试用,口径同 marshalDeterministic)。

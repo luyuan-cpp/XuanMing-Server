@@ -32,6 +32,10 @@ kafka:
   group_id: "pandora-player"
   partition_cnt: 4
 
+# 玩家等级经验唯一读取源。宿主从仓库生成产物加载；集群配置生成器会改写为 Pod 挂载路径。
+config_table:
+  dir: "../../../configtable/dist"
+
 player:
   # base_mmr: 新玩家缺省 MMR(与 battle_result base_mmr 对齐)
   base_mmr: 1500
@@ -50,19 +54,22 @@ player:
     - "pandora.player.update"
 
   # ── 玩家等级经验(实时成长,realtime-progression.md)──
-  # exp_curve: 第 i 项 = 从 Lv(i+1) 升到 Lv(i+2) 所需级内经验;最高等级 = 项数+1。
-  # 14 项 → Lv15 封顶。数值与客户端 Table/角色/j_玩家等级经验.xlsx 同源
-  # (当前为联调占位曲线,步进 800,累计 86800;正式数值待策划确认后两侧同步改。
-  #  dev 专用:本地单副本联调可用占位曲线;生产必须等正式数值,见 prod example)。
-  # 置空 = 经验功能关闭(AddExperience 拒,行为与历史一致)。
-  # ⚠️ 曲线是入账即生效的持久数值:改曲线必须全 fleet 同配置一起换(先关金丝雀分流),
-  #    不同曲线副本混跑会按不同阈值结算同一玩家,结果不可逆(§9.21;后续迁 configtable 管线)。
-  exp_curve: [1000, 1800, 2600, 3400, 4200, 5000, 5800, 6600, 7400, 8200, 9000, 9800, 10600, 11400]
+  # 升级曲线不在 YAML 重复配置；唯一读取 config_table 的 player_level_exp 表。
+  experience_enabled: true
   # max_exp_per_grant: 单次 AddExperience 入账上限(防异常调用方一次灌满;缺省 1000000)
   max_exp_per_grant: 1000000
   # push_outbox_interval / push_outbox_batch: 经验推送出箱发布节奏(缺省 1s / 128;
   # 满批自动连续排空,吞吐不受 interval 钉死)
   push_outbox_interval: "1s"
   push_outbox_batch: 128
-  # exp_history_retention: 经验幂等收据留存期(缺省 7d,下限 7d,后台每小时分批清理)
+  # exp_history_cleanup_enabled: 收据清理开关(**缺省 false=不清理**:progress 出箱无总重试
+  # 期限,清收据会破坏幂等造成双发;上游具备小于留存期的有界重试后才可开启)。dev 本地
+  # 联调开启以覆盖清理代码路径,无双发风险(本地数据可弃)。
+  exp_history_cleanup_enabled: true
+  # exp_history_retention: 经验幂等收据留存期(缺省 7d,下限 7d;仅清理开启时生效)
   exp_history_retention: "168h"
+  # history_cleanup_enabled: mmr_history / 点数授予幂等历史清理开关(缺省 false,§9.24;
+  # 前置条件:上游 kafka retention / 授予补扫窗口 < 留存期)。dev 开启覆盖清理代码路径。
+  history_cleanup_enabled: true
+  # history_retention_days: 上述三表留存天数(缺省 90,下限 30;仅清理开启时生效)
+  history_retention_days: 90

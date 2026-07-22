@@ -228,3 +228,35 @@ func isDupErr(err error) bool {
 	}
 	return false
 }
+
+// ── 保留期清理(CLAUDE.md §9 不变量 24)────────────────────────────────────────
+//
+// leaderboard_snapshot / leaderboard_reward_log(GRANTED)随结算批次×名次数线性增长,
+// 超保留期(默认 90 天)批删。leaderboard_settlement **故意不清**(每批次 1 行,慢增长):
+// settle_idempotency_key 的 uk 是防重复结算的永久闸——若删除,超期后同 key 重放会被当
+// 新结算重新发奖;保留它则重放 already=true + 快照已清 → 回放空 winners,fail-safe。
+// reward_log 只清 GRANTED:PENDING/FAILED 是补发扫描工作集,陈年残留属告警问题不是增长问题。
+// 多副本各自跑,DELETE 幂等无需锁;单批 limit 有界。
+
+// PurgeSnapshotsBefore 删 created_at_ms 超保留期的名次快照(单批 limit 行)。
+func (r *MySQLLeaderboardRepo) PurgeSnapshotsBefore(ctx context.Context, cutoffMs int64, limit int) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM leaderboard_snapshot WHERE created_at_ms < ? LIMIT ?`, cutoffMs, limit)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "purge snapshots: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// PurgeGrantedRewardsBefore 删已发放(GRANTED)且 updated_at_ms 超保留期的发奖记录(单批 limit 行)。
+func (r *MySQLLeaderboardRepo) PurgeGrantedRewardsBefore(ctx context.Context, cutoffMs int64, limit int) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM leaderboard_reward_log WHERE status = ? AND updated_at_ms < ? LIMIT ?`,
+		RewardGranted, cutoffMs, limit)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "purge granted rewards: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}

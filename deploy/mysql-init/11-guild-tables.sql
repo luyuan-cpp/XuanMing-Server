@@ -55,9 +55,12 @@ CREATE TABLE IF NOT EXISTS `guild_join_requests` (
     `updated_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`request_id`),
     UNIQUE KEY `uk_guild_player` (`guild_id`, `player_id`),
-    KEY `idx_guild_status` (`guild_id`, `status`)
+    KEY `idx_guild_status` (`guild_id`, `status`),
+    KEY `idx_status_updated` (`status`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 公会加入申请(挂起 / 通过 / 拒绝)';
+  COMMENT='Pandora 公会加入申请(挂起 / 通过 / 拒绝;终态行保留 90 天由 guild sweep 清理,pending 永不清,§9.24)';
+-- idx_status_updated 服务保留期清理(DELETE WHERE status<>pending AND updated_at<cutoff)。
+-- 既有库需手动补:ALTER TABLE guild_join_requests ADD KEY idx_status_updated (status, updated_at);
 
 CREATE TABLE IF NOT EXISTS `chat_groups` (
     `group_id`     BIGINT UNSIGNED NOT NULL COMMENT 'snowflake 群 ID(uint64)',

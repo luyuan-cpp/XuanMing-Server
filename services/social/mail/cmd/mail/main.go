@@ -78,23 +78,34 @@ func main() {
 	// inventory 客户端:领附件入库用。地址缺省且非测试空领 → 拒启,防裸奔丢奖
 	var granter biz.ItemGranter
 	var instGranter biz.InstanceGranter
+	var xferClaimer biz.TransferClaimer
 	if cfg.Mail.InventoryAddr != "" {
 		g := data.NewGrpcItemGranter(cfg.Mail.InventoryAddr)
 		defer func() { _ = g.Close() }()
 		granter = g
 		instGranter = g // 同一连接:装备实例型附件领取走 GrantInstances
+		xferClaimer = g // 同一连接:transfer 托管转移附件领取走 ClaimTransferInstances
 		helper.Infow("msg", "inventory_client_ready", "addr", cfg.Mail.InventoryAddr)
 	} else if !cfg.Mail.AllowNoopGrant {
 		helper.Errorw("msg", "inventory_addr_required", "hint", "mail.inventory_addr required, or set mail.allow_noop_grant for test")
 		os.Exit(1)
 	} else {
-		helper.Warnw("msg", "inventory_noop_grant", "hint", "claim will only mark, no items granted")
+		helper.Warnw("msg", "inventory_noop_grant", "hint", "claim will only mark, no items granted (transfer claim stays rejected)")
 	}
 
 	uc := biz.NewMailUsecase(repo, cfg.Mail, granter)
 	if instGranter != nil {
 		uc.SetInstanceGranter(instGranter)
 	}
+	if xferClaimer != nil {
+		uc.SetTransferClaimer(xferClaimer)
+		// 同一连接:DS 三段式 Mark 消托管行(GrpcItemGranter 同时实现 TransferEscrowConsumer)。
+		if consumer, ok := xferClaimer.(biz.TransferEscrowConsumer); ok {
+			uc.SetTransferEscrowConsumer(consumer)
+		}
+	}
+	// DS 三段式领取意图展开铸 instance ID(与系统/公会邮件 mail_id 共用同一雪花节点)。
+	uc.SetInstanceIDGen(sf)
 	mailSvc := service.NewMailService(uc, sf)
 
 	// 过期清理:周期批量回收过期邮件 / 领取记录 / 归档,保证各表增长有界(biz/sweep.go)。

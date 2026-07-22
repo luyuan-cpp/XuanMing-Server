@@ -68,3 +68,9 @@ push:
 
   # 离线消息 redis ZSET TTL(每次写入刷新)。
   offline_cache_ttl: "5m"
+
+  # 会话现行性门强制档(P0,INC-20260722-004):true = 建流必须携带 Envoy 验签 jti 且为
+  # login 会话权威(pandora:sess)当前一代,权威不可达 fail-closed 拒;流内 30s 复查
+  # jti/exp(顶号/登出/过期关流)。dev 直连内网端口联调保持 false(有 jti 仍校验);
+  # **生产由 gen_cluster_config -Prod 机械置 true**,不允许生产关闭。
+  require_session_gate: false

@@ -149,11 +149,11 @@ function Get-NewestFileTimeUtc([string[]]$Paths) {
     return $newest
 }
 
-# 20 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
+# 21 个业务服务镜像名(与 start.ps1 的 Get-ServiceList 一致)
 $BusinessImages = @(
     'pandora/login:dev','pandora/player:dev','pandora/data-service:dev',
     'pandora/friend:dev','pandora/chat:dev','pandora/guild:dev','pandora/mail:dev',
-    'pandora/player-locator:dev','pandora/leaderboard:dev','pandora/team:dev',
+    'pandora/player-locator:dev','pandora/leaderboard:dev','pandora/owner:dev','pandora/team:dev',
     'pandora/matchmaker:dev','pandora/matchmaker-pve:dev','pandora/trade:dev','pandora/dialogue:dev',
     'pandora/push:dev','pandora/inventory:dev','pandora/auction:dev',
     'pandora/ds-allocator:dev','pandora/hub-allocator:dev','pandora/battle-result:dev'

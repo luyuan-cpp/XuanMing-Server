@@ -1,16 +1,19 @@
-// consumer_sharding_test.go — push 消费者按 owner cell 归属定向路由单测(2026-06-26)。
+// consumer_sharding_test.go — push 消费者按 owner cell 归属定向路由单测。
 //
 // 覆盖:ownsPlayer nil-router 退化(拥有全部 / known=false)/ player_id 为 0 退化 / 本 cell 玩家
-// owned=true / 非本 cell 玩家 owned=false。验证 router 为 nil(单 Cell)时本实例拥有全部玩家
-// (行为不变),注入后能正确判定归属;且非 owner 玩家不阻断交付(guardPlayerOwnership 仅观测)。
+// owned=true / 非本 cell 玩家 owned=false。2026-07-22 审计修订:非 owner cell 玩家消息
+// **毒丸投 DLQ、不本地处理**(本 cell Redis 对连接所在 cell 不可见,本地"照常交付"
+// 实为写错缓存 + ACK = 静默丢)。
 package biz
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute"
+	"github.com/luyuancpp/pandora/pkg/kafkax"
 )
 
 // twoRegionPushRouter 造一张前半 region1/cell1、后半 region2/cell2 的均衡路由表,
@@ -92,8 +95,9 @@ func TestOwnsPlayer_ForeignCellNotOwned(t *testing.T) {
 	}
 }
 
-// 非 owner 玩家不阻断交付:在线玩家仍被 SendTo(guardPlayerOwnership 仅观测,handle 行为不变)。
-func TestHandle_ForeignPlayerStillDelivered(t *testing.T) {
+// 非 owner cell 玩家消息 → 毒丸投 DLQ,零本地副作用(审计 P1:写本 cell 缓存 + ACK
+// 对连接所在 cell 是静默丢;DLQ 留证可重投 owner cell)。
+func TestHandle_ForeignPlayerPoisoned(t *testing.T) {
 	sender := newMockSender()
 	foreign := pushPlayerCell2()
 	sender.online[foreign] = true
@@ -102,10 +106,12 @@ func TestHandle_ForeignPlayerStillDelivered(t *testing.T) {
 	kc.SetCellOwnership(twoRegionPushRouter(t), 1, 1) // 本实例 region1/cell1,玩家是 cell2 外来户
 
 	msg := makeMsg("pandora.team.update", strconv.FormatUint(foreign, 10), []byte("evt"), "")
-	if err := kc.handle(context.Background(), msg); err != nil {
-		t.Fatalf("handle err=%v", err)
+	err := kc.handle(context.Background(), msg)
+	var poison *kafkax.PoisonError
+	if err == nil || !errors.As(err, &poison) {
+		t.Fatalf("foreign-cell message must be poisoned to DLQ, got=%v", err)
 	}
-	if _, ok := sender.frames[foreign]; !ok {
-		t.Fatal("foreign-cell online player should still be delivered (guard is observe-only)")
+	if len(offline.buffered) != 0 || len(sender.wakes) != 0 {
+		t.Fatal("foreign-cell message must have zero local side effects")
 	}
 }

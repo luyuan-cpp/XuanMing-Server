@@ -72,7 +72,8 @@ spec:
       containers:
         - name: redis
           image: redis:8.8.0-alpine
-          args: ["redis-server", "--appendonly", "yes", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
+          # noeviction(R4 复审 P1-5):权威态(会话/push 缓冲/租约)不容 LRU 静默驱逐;push 启动门强制核验。
+          args: ["redis-server", "--appendonly", "yes", "--maxmemory", "1gb", "--maxmemory-policy", "noeviction"]
           ports: [ { containerPort: 6379 } ]
           readinessProbe:
             exec: { command: ["redis-cli", "ping"] }

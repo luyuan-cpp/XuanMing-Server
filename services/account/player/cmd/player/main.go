@@ -7,15 +7,17 @@
 //  1. 解析 -conf 路径,加载 yaml
 //  2. conf.Defaults 填默认值
 //  3. log.Setup → 全局 zap logger
-//  4. MySQL client + Ping(强依赖:玩家档案落库不可降级)
-//  5. 装配 PlayerUsecase → PlayerService → gRPC/HTTP server
-//  6. 按 ConsumeTopics 每 topic 一个 KafkaConsumer(player.update)
-//  7. kratos.New(...).Run() 阻塞
+//  4. 加载并校验玩家等级经验配置表(强依赖,唯一数值源)
+//  5. MySQL client + Ping(强依赖:玩家档案落库不可降级)
+//  6. 装配 PlayerUsecase → PlayerService → gRPC/HTTP server
+//  7. 按 ConsumeTopics 每 topic 一个 KafkaConsumer(player.update)
+//  8. kratos.New(...).Run() 阻塞
 package main
 
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -27,6 +29,7 @@ import (
 	klog "github.com/go-kratos/kratos/v2/log"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	"github.com/luyuancpp/pandora/pkg/configtable"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
@@ -81,13 +84,43 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.Defaults()
-	if err := cfg.Player.ValidateExpCurve(); err != nil {
-		helper.Errorw("msg", "exp_curve_invalid", "err", err,
-			"hint", "player.exp_curve 每项须 >0,与客户端 j_玩家等级经验.xlsx 同源")
+
+	// 3. 玩家等级经验配置表:策划 j_玩家等级经验.xlsx 是唯一数值源。
+	// player 不保留 YAML 曲线兜底；目录缺失/坏批次均在监听端口前 fail-closed。
+	if cfg.ConfigTable.Dir == "" {
+		helper.Errorw("msg", "configtable_dir_required",
+			"hint", "config_table.dir required; player experience reads j_玩家等级经验.xlsx only")
 		os.Exit(1)
 	}
+	ctStore := configtable.NewStore()
+	ctStore.AddValidator(func(tb *configtable.Tables) error {
+		if tb.PlayerLevelExp == nil {
+			return fmt.Errorf("缺少 player_level_exp 配置表")
+		}
+		if err := tb.PlayerLevelExp.ValidateCurve(); err != nil {
+			return err
+		}
+		// 配置热更不得缩短最高等级，否则已有高等级玩家会在后续入账时被错误降级。
+		if current := ctStore.Tables(); current != nil && current.PlayerLevelExp != nil &&
+			tb.PlayerLevelExp.MaxLevel() < current.PlayerLevelExp.MaxLevel() {
+			return fmt.Errorf("玩家最高等级不允许从 %d 降到 %d",
+				current.PlayerLevelExp.MaxLevel(), tb.PlayerLevelExp.MaxLevel())
+		}
+		return nil
+	})
+	loadResult, err := ctStore.Load(cfg.ConfigTable.Dir, 0)
+	if err != nil {
+		helper.Errorw("msg", "configtable_load_failed", "dir", cfg.ConfigTable.Dir, "err", err)
+		os.Exit(1)
+	}
+	for _, warning := range loadResult.Warnings {
+		helper.Warnw("msg", "configtable_load_warning", "warning", warning)
+	}
+	levelTable := ctStore.Tables().PlayerLevelExp
+	helper.Infow("msg", "player_level_exp_loaded", "dir", cfg.ConfigTable.Dir,
+		"version", loadResult.Version, "levels", levelTable.Count(), "max_level", levelTable.MaxLevel())
 
-	// 3. MySQL(强依赖:玩家档案落库不可降级)
+	// 4. MySQL(强依赖:玩家档案落库不可降级)
 	if cfg.Node.MySQLClient.DSN == "" {
 		helper.Errorw("msg", "mysql_dsn_required", "hint", "node.mysql_client.dsn required (pandora_player)")
 		os.Exit(1)
@@ -96,7 +129,7 @@ func main() {
 	defer func() { _ = db.Close() }()
 	helper.Infow("msg", "mysql_connected", "dsn", maskDSN(cfg.Node.MySQLClient.DSN))
 
-	// 4. 装配链
+	// 5. 装配链
 	repo := data.NewMySQLPlayerRepo(db)
 	// 启动 schema gate:经验相关表列缺失时 fail-fast,不能让副本 Ready 后在首个
 	// GetProfile / AddExperience 才大面积报错(迁移顺序错误要在发布时拦住)。
@@ -107,8 +140,15 @@ func main() {
 			"hint", "先执行 pandora_player migration 000002_experience(players.exp / exp_history / player_push_outbox)")
 		os.Exit(1)
 	}
+	if err := repo.ValidateExperienceLevels(schemaCtx, levelTable.MaxLevel()); err != nil {
+		schemaCancel()
+		helper.Errorw("msg", "player_experience_level_invalid", "err", err,
+			"hint", "修复 players.level 脏数据或发布不低于现存等级上限的玩家等级经验表")
+		os.Exit(1)
+	}
 	schemaCancel()
 	uc := biz.NewPlayerUsecase(repo, cfg.Player)
+	uc.SetConfigTables(ctStore)
 	if closeCell, e := etcdtable.WireRouter(context.Background(), cfg.CellRoute, uc.SetCellRouter); e != nil {
 		helper.Errorw("msg", "cellroute_init_failed", "err", e)
 		os.Exit(1)
@@ -116,11 +156,12 @@ func main() {
 		defer func() { _ = closeCell() }()
 	}
 	svc := service.NewPlayerService(uc)
+	ctAdmin := configtable.NewAdminService(ctStore, cfg.ConfigTable.Dir)
 
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	grpcSrv := server.NewGRPCServer(&cfg, svc, ctAdmin)
 	httpSrv := server.NewHTTPServer(&cfg)
 
-	// 5. 经验推送出箱发布器(实时成长):producer 可用才注入,失败只警告(出箱积压不丢,
+	// 6. 经验推送出箱发布器(实时成长):producer 可用才注入,失败只警告(出箱积压不丢,
 	// 与 battle_result player.update producer 同语义)。event_type 走 kafka header,push 透传。
 	// ⚠️ 经验事件走独立 topic pandora.player.experience,绝不能发 pandora.player.update:
 	// 旧 player 副本消费 player.update 时不看 event_type header,会把经验事件误解码成
@@ -140,8 +181,10 @@ func main() {
 	}
 	go uc.RunPushOutboxPublisher(pubCtx)
 	go uc.RunExpHistoryJanitor(pubCtx)
+	// mmr_history / 点数授予幂等历史保留期清理(默认关,前置条件见 conf,§9.24)。
+	go uc.RunHistoryJanitor(pubCtx)
 
-	// 6. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
+	// 7. KafkaConsumer:按 ConsumeTopics 每 topic 一个,handler 按 topic 路由
 	consumers, dlqProducers := mustBuildConsumers(&cfg, uc, helper)
 	for _, kc := range consumers {
 		kc.Start()
@@ -167,7 +210,7 @@ func main() {
 		"base_mmr", cfg.Player.BaseMMR,
 	)
 
-	// 6. Kratos App
+	// 8. Kratos App
 	app := kratos.New(
 		kratos.Name(serviceName),
 		kratos.Logger(logger),

@@ -145,6 +145,23 @@ data:
                   # 战斗 DS 结算同步上报(match_id 幂等)
                   - match: { path: "/pandora.battle.v1.BattleResultService/ReportResult" }
                     route: { cluster: battle_result_cluster, timeout: 15s, idle_timeout: 60s }
+                  # 战斗 DS 实时进度批上报(seq 幂等,realtime-progression.md)
+                  - match: { path: "/pandora.battle.v1.BattleResultService/ReportProgress" }
+                    route: { cluster: battle_result_cluster, timeout: 15s, idle_timeout: 60s }
+                  # owner DS 背包域 journal 直写(bag-domain.md phase 2;BagService 由 inventory 承载)
+                  - match: { path: "/pandora.bag.v1.BagService/LoadBag" }
+                    route: { cluster: inventory_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.bag.v1.BagService/AppendJournal" }
+                    route: { cluster: inventory_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.bag.v1.BagService/SaveCheckpoint" }
+                    route: { cluster: inventory_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.bag.v1.BagService/PurchaseCapacity" }
+                    route: { cluster: inventory_cluster, timeout: 15s, idle_timeout: 60s }
+                  # Hub DS 邮件三段式领取(bag phase 2:Get 意图 / Mark 终结)
+                  - match: { path: "/pandora.mail.v1.MailService/GetClaimableAttachments" }
+                    route: { cluster: mail_cluster, timeout: 15s, idle_timeout: 60s }
+                  - match: { path: "/pandora.mail.v1.MailService/MarkMailClaimed" }
+                    route: { cluster: mail_cluster, timeout: 15s, idle_timeout: 60s }
       clusters:
       # 回环 admin(仅供 :9902 健康监听器转发 /ready,不对 Pod 外暴露)
       - name: local_admin_cluster
@@ -237,6 +254,40 @@ data:
             - endpoint:
                 address:
                   socket_address: { address: battle-result.pandora.svc.cluster.local, port_value: 50022 }
+      # 背包域(BagService 由 inventory 进程承载;bag phase 2 journal 直写)
+      - name: inventory_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: inventory_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: inventory.pandora.svc.cluster.local, port_value: 50015 }
+      # 邮件(Hub DS 三段式领取;bag phase 2)
+      - name: mail_cluster
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        connect_timeout: 1s
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: { http2_protocol_options: {} }
+        load_assignment:
+          cluster_name: mail_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address: { address: mail.pandora.svc.cluster.local, port_value: 50009 }
 ---
 apiVersion: apps/v1
 kind: Deployment

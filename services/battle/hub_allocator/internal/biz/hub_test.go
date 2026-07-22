@@ -1244,16 +1244,37 @@ func TestTransferToLineForPlayer_BattleBlocked(t *testing.T) {
 	}
 }
 
-// locator 抖动(返回 err)不硬阻断大厅切线(弱依赖:放行,不占冷却外的额外风险)。
-func TestTransferToLineForPlayer_LocatorErrorAllows(t *testing.T) {
+// locator 查询失败必须 fail-closed 拒绝切线且零副作用(INC-20260722-002 回归:
+// 原"弱依赖告警放行"契约已废止——切线进入另一台 Hub DS,presence 不确定放行 =
+// 潜在双 DS;§9.22 UNKNOWN 不得授权新归属)。
+func TestTransferToLineForPlayer_LocatorErrorFailsClosed(t *testing.T) {
 	uc, repo, _ := newTestUsecase(500, 3)
-	uc.SetLocationChecker(&fakeLocator{err: errcode.New(errcode.ErrInternal, "locator down")})
+	uc.SetLocationChecker(&fakeLocator{err: errcode.New(errcode.ErrUnavailable, "locator down")})
+	ctx := context.Background()
+	seedShard(repo, "hub-a", 1, 1)
+	seedShard(repo, "hub-b", 2, 1)
+	seedPlayer(repo, 1001, "hub-a", 1)
+
+	if _, err := uc.TransferToLineForPlayer(ctx, 1001, 2); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("locator error must fail-closed with retryable ErrUnavailable, got %v", err)
+	}
+	// 零副作用:拒绝发生在冷却占坑之前 → locator 恢复后立即可切,不吃冷却窗口。
+	uc.SetLocationChecker(&fakeLocator{blocked: false})
+	if _, err := uc.TransferToLineForPlayer(ctx, 1001, 2); err != nil {
+		t.Fatalf("after locator recovers transfer should succeed immediately, err: %v", err)
+	}
+}
+
+// nil checker = dev 联调模式(locator 未配):护栏跳过但放行留痕(生产装配缺失属部署
+// 错误,由 Warn 日志暴露;彻底关死双 DS 仍需 Owner Authority 接线)。
+func TestTransferToLineForPlayer_NilCheckerDevModeAllows(t *testing.T) {
+	uc, repo, _ := newTestUsecase(500, 3)
 	ctx := context.Background()
 	seedShard(repo, "hub-a", 1, 1)
 	seedShard(repo, "hub-b", 2, 1)
 	seedPlayer(repo, 1001, "hub-a", 1)
 
 	if _, err := uc.TransferToLineForPlayer(ctx, 1001, 2); err != nil {
-		t.Fatalf("locator error should not block hub line switch, err: %v", err)
+		t.Fatalf("nil checker (dev mode) should allow transfer, err: %v", err)
 	}
 }

@@ -70,8 +70,13 @@ func (f *fakeRepo) CreateRequest(_ context.Context, newRequestID, requesterID, t
 		if maxIncoming > 0 && f.countIncomingPending(targetID) >= maxIncoming {
 			return 0, false, errcode.New(errcode.ErrFriendRequestLimit, "incoming limit")
 		}
+		// 对齐 MySQL 实现(R4 复审 P1-4):非 pending 重新申请复用行但换新 request_id,
+		// 客户端 (request_id, reason) 判重不再吞掉合法的再次申请推送。
+		delete(f.requests, existing.RequestID)
+		existing.RequestID = newRequestID
 		existing.Status = requestStatusPending
-		return existing.RequestID, false, nil
+		f.requests[newRequestID] = existing
+		return newRequestID, false, nil
 	}
 	if maxIncoming > 0 && f.countIncomingPending(targetID) >= maxIncoming {
 		return 0, false, errcode.New(errcode.ErrFriendRequestLimit, "incoming limit")
@@ -227,6 +232,11 @@ func (f *fakeRepo) RecommendByMutual(_ context.Context, _ uint64, exclude []uint
 func (f *fakeRepo) RecommendRandom(_ context.Context, _ uint64, exclude []uint64, limit int) ([]data.RecommendRow, error) {
 	f.randomCalls++
 	return pickRecommendRows(f.recommendRandom, exclude, limit), nil
+}
+
+// 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
+func (f *fakeRepo) DeleteTerminalRequestsBefore(context.Context, int, int) (int64, error) {
+	return 0, nil
 }
 
 func pickRecommendRows(rows []data.RecommendRow, exclude []uint64, limit int) []data.RecommendRow {
@@ -552,6 +562,42 @@ func TestRejectFriend_OK_NoPush(t *testing.T) {
 	// 请求已不再 pending
 	if reqs, _ := uc.ListFriendRequests(context.Background(), 200); len(reqs) != 0 {
 		t.Fatalf("rejected request should not be pending, got %d", len(reqs))
+	}
+}
+
+// 申请→拒绝→再次申请必须携带**新 request_id**(R4 复审 P1-4):推送 at-least-once,
+// 客户端按 (request_id, reason) 判重,复用旧 ID 会让合法的再次申请推送被当重投丢弃。
+func TestRejectThenReapply_PushesNewRequestID(t *testing.T) {
+	repo := newFakeRepo()
+	pusher := &fakePusher{}
+	uc := newUC(repo, pusher, nil)
+
+	firstID, err := uc.AddFriend(context.Background(), 100, 200, 111)
+	if err != nil {
+		t.Fatalf("first AddFriend err: %v", err)
+	}
+	if err := uc.RejectFriend(context.Background(), 200, firstID); err != nil {
+		t.Fatalf("RejectFriend err: %v", err)
+	}
+	pusher.events = nil
+
+	secondID, err := uc.AddFriend(context.Background(), 100, 200, 222)
+	if err != nil {
+		t.Fatalf("re-apply AddFriend err: %v", err)
+	}
+	if secondID == firstID {
+		t.Fatalf("re-apply must rotate request_id, still %d", secondID)
+	}
+	if len(pusher.events) != 1 || pusher.events[0].GetRequestId() != secondID {
+		t.Fatalf("re-apply push must carry the new request_id %d, got %+v", secondID, pusher.events)
+	}
+	// 旧 ID 已失效:迟到的 Accept 不得命中新申请。
+	if err := uc.AcceptFriend(context.Background(), 200, firstID); errcode.As(err) != errcode.ErrFriendNotFound {
+		t.Fatalf("stale request_id accept must be ErrFriendNotFound, got %v", err)
+	}
+	// 新 ID 正常可接受。
+	if err := uc.AcceptFriend(context.Background(), 200, secondID); err != nil {
+		t.Fatalf("accept new request err: %v", err)
 	}
 }
 

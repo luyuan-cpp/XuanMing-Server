@@ -42,8 +42,10 @@ type MailConf struct {
 	// ArchiveRetentionDays 归档表保留天数(默认 90,超期物理清除,归档表自身有界)。
 	ArchiveRetentionDays int `yaml:"archive_retention_days,omitempty" json:"archive_retention_days,omitempty"`
 
-	// ClaimRetentionDays 领取记录保留天数(默认 180)。须大于一切邮件的最长有效期:
-	// 邮件本体删除后 claim 行只剩审计价值;即便误删,重复发奖仍被 inventory 幂等键兜住。
+	// ClaimRetentionDays 领取记录保留天数(默认 180)。发送侧把一切邮件的 end_ms 钳到
+	// 「创建时刻 + 本值」以内(biz.defaultEnd),保证 claim 行存活 ≥ 邮件可领窗口:
+	// 重复领取永远先被 claim 行挡住,不依赖 inventory 幂等流水兜底(其自身只保留 90 天,
+	// CLAUDE.md §9.24)。本值是 §9.24「失效数据最多 90 天」的登记例外:须覆盖邮件最长寿命。
 	ClaimRetentionDays int `yaml:"claim_retention_days,omitempty" json:"claim_retention_days,omitempty"`
 
 	// MaxTitleLen 邮件标题最大长度(utf8 rune,默认 64)。

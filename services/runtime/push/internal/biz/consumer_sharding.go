@@ -6,17 +6,14 @@
 // (owner cell == 本实例 cell)的玩家消息;非本 cell 玩家的消息说明发生了路由抖动 / topic 分区漂移 /
 // rebalance,应由边缘网关 / 服务发现 / 跨 cell 桥(基础设施)转投到对的 cell。
 //
-// 与 auction guardMarket(⑦)同款「可观测、不阻断」纪律:本实例即使收到非 owner 玩家的消息也
-// **照常交付**(SendTo / offline 本地语义正确,丢消息风险更大),只打告警暴露路由漂移,真正的
-// 转投 / topic 按 cell 分区属基础设施(AGENTS.md §11.1,Codex/人接)。router 为 nil(单 Cell)时
-// 本实例拥有全部玩家,行为与历史一致。
+// 2026-07-22 审计修订:非 owner cell 的玩家消息从「告警 + 照常交付」改为**毒丸投 DLQ**
+// (handle 内判定)——本 cell 的 Redis 投递缓冲对连接所在 cell 不可见,"照常交付"实为
+// 写错缓存 + ACK = 静默丢;DLQ 留证可由基础设施 / 人工重投到 owner cell。router 为 nil
+// (单 Cell)时本实例拥有全部玩家,行为与历史一致。
 package biz
 
 import (
-	"context"
-
 	"github.com/luyuancpp/pandora/pkg/cellroute"
-	plog "github.com/luyuancpp/pandora/pkg/log"
 )
 
 // PlayerOwner 是一名玩家 push 连接锚定的 owner 落点(只取归属判定需要的维度)。
@@ -54,23 +51,4 @@ func (k *KafkaConsumer) ownsPlayer(playerID uint64) (owner PlayerOwner, owned bo
 	}
 	o := PlayerOwner{RegionID: loc.RegionID, CellID: loc.CellID}
 	return o, o.RegionID == k.selfRegion && o.CellID == k.selfCell, true
-}
-
-// guardPlayerOwnership 在 router 注入后,对落到本实例但非本 cell 所有的玩家消息打漂移告警。
-//
-// 仅可观测、不阻断(与 auction guardMarket 同纪律):本实例仍照常交付(SendTo / offline 本地正确),
-// 真正的跨 cell 转投 / topic 按 cell 分区属基础设施(AGENTS.md §11.1,Codex/人接)。router 为 nil
-// (单 Cell)或归属未知时不告警。
-func (k *KafkaConsumer) guardPlayerOwnership(ctx context.Context, playerID uint64, topic string) {
-	owner, owned, known := k.ownsPlayer(playerID)
-	if !known || owned {
-		return
-	}
-	plog.With(ctx).Warnw("msg", "push_player_not_owned",
-		"player_id", playerID,
-		"topic", topic,
-		"self_region", k.selfRegion,
-		"self_cell", k.selfCell,
-		"owner_region", owner.RegionID,
-		"owner_cell", owner.CellID)
 }

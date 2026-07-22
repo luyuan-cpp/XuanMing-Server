@@ -25,7 +25,7 @@ import (
 
 // ExpApply 是一次经验入账请求(biz 校验合法性后传入)。
 // Curve 是等级经验曲线:第 i 项(0 基)= 从 Lv(i+1) 升到 Lv(i+2) 所需级内经验(>0);
-// 最高等级 = len(Curve)+1(与 conf.ExpCurve / 客户端 CfgPlayerLevelExp 同源)。
+// 最高等级 = len(Curve)+1(与策划 j_玩家等级经验.xlsx / 客户端 CfgPlayerLevelExp 同源)。
 type ExpApply struct {
 	PlayerID       uint64
 	Delta          uint64
@@ -83,7 +83,8 @@ func AdvanceExperience(level int32, expInLevel uint64, delta uint64, curve []uin
 //
 // 事务顺序(锁序固定,防死锁):先锁 players 行 → 满级判定 → INSERT exp_history(幂等)
 // → UPDATE players → INSERT player_push_outbox。
-// 满级 no-op:不消费幂等键、不出箱、无任何写(重复调用恒无副作用)。
+// 满级 no-op:不加经验、不出箱,但仍消费幂等键落 no-op 收据(见分支内注释);
+// 重放命中收据按契约返回 already=true(proto:true = 幂等命中,本次未重复入账)。
 func (r *MySQLPlayerRepo) ApplyExperience(ctx context.Context, apply ExpApply) (ExpState, bool, error) {
 	maxLevel := int32(len(apply.Curve)) + 1
 
@@ -107,12 +108,29 @@ func (r *MySQLPlayerRepo) ApplyExperience(ctx context.Context, apply ExpApply) (
 		return ExpState{}, false, errcode.New(errcode.ErrInternal, "lock player=%d: %v", apply.PlayerID, err)
 	}
 
-	// 满级 no-op:零写返回(不消费幂等键;Commit 只为干净释放行锁)。
+	// 满级 no-op:不加经验、不出箱,但**仍消费幂等键**(审计 P2):事件语义是"已消费并
+	// 丢弃"。若不落收据,成功响应丢失 + 未来曲线扩容(上限提升)后,滞留在上游出箱的
+	// 同一事件重试会被重新入账,破坏 exactly-once。
 	if level >= maxLevel {
+		alreadyConsumed := false
+		const insNoopHistory = `INSERT INTO exp_history
+(player_id, idempotency_key, exp_delta, reason, old_level, old_exp, new_level, new_exp)
+VALUES (?, ?, ?, ?, ?, 0, ?, 0)`
+		if _, herr := tx.ExecContext(ctx, insNoopHistory,
+			apply.PlayerID, apply.IdempotencyKey, apply.Delta, apply.Reason,
+			maxLevel, maxLevel,
+		); herr != nil {
+			if !isDupErr(herr) {
+				return ExpState{}, false, errcode.New(errcode.ErrInternal, "insert max-level noop receipt player=%d: %v", apply.PlayerID, herr)
+			}
+			// 幂等命中(收据已在):契约 already=true(审计 P2:重放返回 false 违反
+			// proto "true = 幂等命中" 语义,上游据 already 区分首次/重放时会误判)。
+			alreadyConsumed = true
+		}
 		if cerr := tx.Commit(); cerr != nil {
 			return ExpState{}, false, errcode.New(errcode.ErrInternal, "commit max-level noop player=%d: %v", apply.PlayerID, cerr)
 		}
-		return ExpState{Level: maxLevel, ExpInLevel: 0, IsMaxLevel: true}, false, nil
+		return ExpState{Level: maxLevel, ExpInLevel: 0, IsMaxLevel: true}, alreadyConsumed, nil
 	}
 
 	newLevel, newExp, gained := AdvanceExperience(level, exp, apply.Delta, apply.Curve)
@@ -222,15 +240,36 @@ func (r *MySQLPlayerRepo) DeletePushOutbox(ctx context.Context, id int64) error 
 }
 
 // PurgeExpHistory 删除 created_at < cutoff 的经验幂等收据(最多 limit 行)。
-// 表按 PK 升序物理扫描,老行在前,LIMIT 删除无需额外索引;多副本并发调用安全。
+// 走 idx_created 前导索引(无索引时收据全部未到期的稳态下会每小时全表扫,审计 P2);
+// 多副本并发调用安全(各删各的行)。
 func (r *MySQLPlayerRepo) PurgeExpHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return r.purgeByCreatedAt(ctx, "exp_history", cutoff, limit)
+}
+
+// PurgeMMRHistory / PurgeAttrPointGrants / PurgeTalentPointGrants:保留期清理
+// (CLAUDE.md §9 不变量 24)。三表均按 created_at 批删(需 idx_created,见 04-player-tables.sql);
+// 多副本并发调用安全(各删各的行)。
+func (r *MySQLPlayerRepo) PurgeMMRHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return r.purgeByCreatedAt(ctx, "mmr_history", cutoff, limit)
+}
+
+func (r *MySQLPlayerRepo) PurgeAttrPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return r.purgeByCreatedAt(ctx, "attr_point_grants", cutoff, limit)
+}
+
+func (r *MySQLPlayerRepo) PurgeTalentPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error) {
+	return r.purgeByCreatedAt(ctx, "talent_point_grants", cutoff, limit)
+}
+
+// purgeByCreatedAt 按 created_at < cutoff 批删指定表(表名只来自本文件内固定调用点,非外部输入)。
+func (r *MySQLPlayerRepo) purgeByCreatedAt(ctx context.Context, table string, cutoff time.Time, limit int) (int64, error) {
 	if limit <= 0 {
 		limit = 1000
 	}
 	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM exp_history WHERE created_at < ? LIMIT ?`, cutoff, limit)
+		`DELETE FROM `+table+` WHERE created_at < ? LIMIT ?`, cutoff, limit)
 	if err != nil {
-		return 0, errcode.New(errcode.ErrInternal, "purge exp history: %v", err)
+		return 0, errcode.New(errcode.ErrInternal, "purge %s: %v", table, err)
 	}
 	n, _ := res.RowsAffected()
 	return n, nil
@@ -253,6 +292,66 @@ func (r *MySQLPlayerRepo) ValidateExperienceSchema(ctx context.Context) error {
 		if err := rows.Close(); err != nil {
 			return errcode.New(errcode.ErrInternal, "close experience schema probe: %v", err)
 		}
+	}
+	// 幂等唯一索引是 exactly-once 的权威机制(不变量 §2),不是可选优化:列探测通过但
+	// uk 缺失(手工建表漂移)时 isDupErr 永不触发,重试直接双发。启动即失败(审计 P2)。
+	// 必须核对**列名、顺序与 SUB_PART**(审计 P1:同名错列的 UNIQUE(id,idempotency_key)
+	// 有两列也得拦;前缀唯一索引 UNIQUE(player_id, idempotency_key(1)) 列名顺序全对,
+	// 却会把首字符相同的不同幂等键判成 duplicate,静默少发经验——SUB_PART 必须为 NULL)。
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT SEQ_IN_INDEX, COLUMN_NAME, SUB_PART FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'exp_history' AND INDEX_NAME = 'uk_player_idem' AND NON_UNIQUE = 0
+ORDER BY SEQ_IN_INDEX`)
+	if err != nil {
+		return errcode.New(errcode.ErrInternal, "probe exp_history unique index: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var cols []string
+	for rows.Next() {
+		var (
+			seq     int
+			name    string
+			subPart sql.NullInt64
+		)
+		if serr := rows.Scan(&seq, &name, &subPart); serr != nil {
+			return errcode.New(errcode.ErrInternal, "scan exp_history unique index: %v", serr)
+		}
+		if seq != len(cols)+1 {
+			return errcode.New(errcode.ErrInternal,
+				"exp_history uk_player_idem column sequence broken at %d (got seq %d)", len(cols)+1, seq)
+		}
+		if subPart.Valid {
+			return errcode.New(errcode.ErrInternal,
+				"exp_history uk_player_idem column %s is a prefix index (SUB_PART=%d): full-column uniqueness required, idempotency broken",
+				name, subPart.Int64)
+		}
+		cols = append(cols, name)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return errcode.New(errcode.ErrInternal, "iterate exp_history unique index: %v", rerr)
+	}
+	if len(cols) != 2 || cols[0] != "player_id" || cols[1] != "idempotency_key" {
+		return errcode.New(errcode.ErrInternal,
+			"exp_history uk_player_idem missing or malformed (columns=%v, want [player_id idempotency_key]): idempotency broken", cols)
+	}
+	return nil
+}
+
+// ValidateExperienceLevels 在副本 Ready 前确认持久化等级落在当前策划表范围内。
+// 热更另由 Store validator 禁止降低最高等级，因此通过启动门后不会因换表把玩家降级。
+func (r *MySQLPlayerRepo) ValidateExperienceLevels(ctx context.Context, maxLevel int32) error {
+	if maxLevel < 1 {
+		return errcode.New(errcode.ErrInvalidState, "player level table max_level invalid: %d", maxLevel)
+	}
+	var minLevel, storedMax int32
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(MIN(level), 1), COALESCE(MAX(level), 1) FROM players`,
+	).Scan(&minLevel, &storedMax); err != nil {
+		return errcode.New(errcode.ErrInternal, "validate player level range: %v", err)
+	}
+	if minLevel < 1 || storedMax > maxLevel {
+		return errcode.New(errcode.ErrInvalidState,
+			"players.level range [%d,%d] outside config range [1,%d]", minLevel, storedMax, maxLevel)
 	}
 	return nil
 }

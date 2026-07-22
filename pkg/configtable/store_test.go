@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,22 @@ func marshalLevel(t *testing.T, data *configpb.LevelTableData) []byte {
 	return raw
 }
 
+func marshalPlayerLevelExp(t *testing.T, data *configpb.PlayerLevelExpTableData) []byte {
+	t.Helper()
+	raw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal player level exp: %v", err)
+	}
+	return raw
+}
+
+func samplePlayerLevelExpData() *configpb.PlayerLevelExpTableData {
+	return &configpb.PlayerLevelExpTableData{Rows: []*configpb.PlayerLevelExpRow{
+		{Id: 1, Level: 1, UpgradeExp: 100, CumulativeExp: 0},
+		{Id: 2, Level: 2, UpgradeExp: 0, CumulativeExp: 100},
+	}}
+}
+
 func sampleLevelData() *configpb.LevelTableData {
 	return &configpb.LevelTableData{Rows: []*configpb.LevelRow{
 		{Id: 1, Name: "登录", AssetPath: "/Game/Level/Login/Lvl_Login.Lvl_Login",
@@ -43,8 +60,16 @@ func checksumOf(raw []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-// writeBatch 在 dir 写出一批产物(level.json + manifest.json),mutate 可在写盘前篡改清单。
+// writeBatch 在 dir 写出一批完整产物,mutate 可在写盘前篡改清单。
 func writeBatch(t *testing.T, dir string, version uint64, levelRaw []byte, rows uint32, mutate func(*Manifest)) {
+	t.Helper()
+	writeBatchWithPlayerLevel(t, dir, version, levelRaw, rows,
+		marshalPlayerLevelExp(t, samplePlayerLevelExpData()), 2, mutate)
+}
+
+func writeBatchWithPlayerLevel(t *testing.T, dir string, version uint64, levelRaw []byte, levelRows uint32,
+	playerLevelRaw []byte, playerLevelRows uint32, mutate func(*Manifest),
+) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -52,14 +77,24 @@ func writeBatch(t *testing.T, dir string, version uint64, levelRaw []byte, rows 
 	if err := os.WriteFile(filepath.Join(dir, "level.json"), levelRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "player_level_exp.json"), playerLevelRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	m := &Manifest{
 		Version:   version,
 		Generator: "configtable-gen@test",
 		SourceRev: "test",
-		Tables: []ManifestTable{{
-			Name: "level", File: "level.json",
-			Proto: "pandora.config.v1.LevelTableData", Checksum: checksumOf(levelRaw), Rows: rows,
-		}},
+		Tables: []ManifestTable{
+			{
+				Name: "level", File: "level.json",
+				Proto: "pandora.config.v1.LevelTableData", Checksum: checksumOf(levelRaw), Rows: levelRows,
+			},
+			{
+				Name: "player_level_exp", File: "player_level_exp.json",
+				Proto:    "pandora.config.v1.PlayerLevelExpTableData",
+				Checksum: checksumOf(playerLevelRaw), Rows: playerLevelRows,
+			},
+		},
 	}
 	if mutate != nil {
 		mutate(m)
@@ -73,9 +108,80 @@ func writeBatch(t *testing.T, dir string, version uint64, levelRaw []byte, rows 
 	}
 }
 
+func TestLoadPlayerLevelExpHotReloadAndBadBatchRetention(t *testing.T) {
+	levelRaw := marshalLevel(t, sampleLevelData())
+	playerRaw := func(rows ...*configpb.PlayerLevelExpRow) []byte {
+		return marshalPlayerLevelExp(t, &configpb.PlayerLevelExpTableData{Rows: rows})
+	}
+	v1, v2, bad := t.TempDir(), t.TempDir(), t.TempDir()
+	writeBatchWithPlayerLevel(t, v1, 100, levelRaw, 3, playerRaw(
+		&configpb.PlayerLevelExpRow{Id: 1, Level: 1, UpgradeExp: 100},
+		&configpb.PlayerLevelExpRow{Id: 2, Level: 2, CumulativeExp: 100},
+	), 2, nil)
+	writeBatchWithPlayerLevel(t, v2, 200, levelRaw, 3, playerRaw(
+		&configpb.PlayerLevelExpRow{Id: 1, Level: 1, UpgradeExp: 250},
+		&configpb.PlayerLevelExpRow{Id: 2, Level: 2, CumulativeExp: 250},
+	), 2, nil)
+	writeBatchWithPlayerLevel(t, bad, 300, levelRaw, 3, playerRaw(
+		&configpb.PlayerLevelExpRow{Id: 1, Level: 1, UpgradeExp: 999},
+		&configpb.PlayerLevelExpRow{Id: 2, Level: 2, CumulativeExp: 1},
+	), 2, nil)
+
+	s := NewStore()
+	s.AddValidator(func(tb *Tables) error { return tb.PlayerLevelExp.ValidateCurve() })
+	if _, err := s.Load(v1, 0); err != nil {
+		t.Fatalf("首载 v1: %v", err)
+	}
+	if got := s.Tables().PlayerLevelExp.ExperienceCurve(); len(got) != 1 || got[0] != 100 {
+		t.Fatalf("v1 曲线=%v, want [100]", got)
+	}
+	if _, err := s.Load(v2, 0); err != nil {
+		t.Fatalf("热更 v2: %v", err)
+	}
+	if got := s.Tables().PlayerLevelExp.ExperienceCurve(); len(got) != 1 || got[0] != 250 {
+		t.Fatalf("v2 曲线=%v, want [250]", got)
+	}
+	if _, err := s.Load(bad, 0); err == nil || !strings.Contains(err.Error(), "语义校验失败") {
+		t.Fatalf("累计经验错误批次应被拒绝: %v", err)
+	}
+	if tb := s.Tables(); tb.Version != 200 || tb.PlayerLevelExp.ExperienceCurve()[0] != 250 {
+		t.Fatalf("坏批次后应保留 v2: version=%d curve=%v", tb.Version, tb.PlayerLevelExp.ExperienceCurve())
+	}
+}
+
 func writeGoodBatch(t *testing.T, dir string, version uint64) {
 	t.Helper()
 	writeBatch(t, dir, version, marshalLevel(t, sampleLevelData()), 3, nil)
+}
+
+// 批次级语义校验器:启动与热 reload 同一门禁,失败整批不切换保留旧批次(审计 P1)。
+func TestLoadValidatorGatesReload(t *testing.T) {
+	dirOK := t.TempDir()
+	writeGoodBatch(t, dirOK, 100)
+	s := NewStore()
+	s.AddValidator(func(tb *Tables) error {
+		if !tb.Level.IsBattleLevel(6) {
+			return fmt.Errorf("默认 map 6 不是战斗关卡")
+		}
+		return nil
+	})
+	if _, err := s.Load(dirOK, 0); err != nil {
+		t.Fatalf("首载应通过校验器: %v", err)
+	}
+
+	// 新批次删掉 id=6 → 校验器失败 → 整批不切换,旧批次(v100)继续生效。
+	bad := &configpb.LevelTableData{Rows: []*configpb.LevelRow{
+		{Id: 1, Name: "登录", AssetPath: "/Game/Level/Login/Lvl_Login.Lvl_Login",
+			Category: configpb.LevelCategory_LEVEL_CATEGORY_LOGIN, DisableUiShortcut: true},
+	}}
+	dirBad := t.TempDir()
+	writeBatch(t, dirBad, 101, marshalLevel(t, bad), 1, nil)
+	if _, err := s.Load(dirBad, 0); err == nil || !strings.Contains(err.Error(), "语义校验失败") {
+		t.Fatalf("坏批次应被校验器拒绝, got %v", err)
+	}
+	if tb := s.Tables(); tb == nil || tb.Version != 100 || !tb.Level.IsBattleLevel(6) {
+		t.Fatalf("校验失败必须保留旧批次: %+v", tb)
+	}
 }
 
 func TestLoadHappyPath(t *testing.T) {
@@ -310,6 +416,10 @@ func TestConcurrentReadDuringReload(t *testing.T) {
 				tb := s.Tables()
 				if tb.Level.Count() != 3 {
 					t.Error("读到不完整批次")
+					return
+				}
+				if tb.PlayerLevelExp.Count() != 2 {
+					t.Error("读到不完整玩家等级经验表")
 					return
 				}
 				if v := tb.Version; v != 100 && v != 200 {

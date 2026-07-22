@@ -320,4 +320,226 @@ func TestSubmit_SetsTTL(t *testing.T) {
 	if ttl := mr.TTL(b.zKey()); ttl <= 0 {
 		t.Fatalf("zkey TTL=%v, want >0 (temporary board)", ttl)
 	}
+	// 全员分 / 直方图同样跟随临时榜 TTL 自清
+	if ttl := mr.TTL(b.sKey()); ttl <= 0 {
+		t.Fatalf("skey TTL=%v, want >0 (temporary board)", ttl)
+	}
+	if ttl := mr.TTL(b.hKey()); ttl <= 0 {
+		t.Fatalf("hkey TTL=%v, want >0 (temporary board)", ttl)
+	}
+}
+
+// ── 截断后分数语义(全员分 :s)────────────────────────────────────────────────
+
+// 截断出榜后 INCREMENT 必须在原累计分上继续累加,不得从 0 重算。
+func TestSubmit_Increment_PreservedAfterTruncation(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 7, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := Options{Ascending: false, MaxSize: 1, EstimateBucketWidth: 10}
+
+	_, _, _ = s.Submit(ctx, b, 1, 10, ModeIncrement, opt, 1000)  // id1=10,在榜
+	_, _, _ = s.Submit(ctx, b, 2, 100, ModeIncrement, opt, 2000) // id2=100,把 id1 挤出榜
+	got, rank, err := s.Submit(ctx, b, 1, 5, ModeIncrement, opt, 3000)
+	if err != nil {
+		t.Fatalf("inc after truncation: %v", err)
+	}
+	if got != 15 {
+		t.Fatalf("score=%d after truncated increment, want 15 (10+5, not reset)", got)
+	}
+	if rank != 0 {
+		t.Fatalf("rank=%d, want 0 (still off board)", rank)
+	}
+}
+
+// 截断出榜后 SET_IF_HIGHER 不得放进更低分。
+func TestSubmit_SetIfHigher_NoDowngradeAfterTruncation(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 8, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := Options{Ascending: false, MaxSize: 1, EstimateBucketWidth: 10}
+
+	_, _, _ = s.Submit(ctx, b, 1, 50, ModeSetIfHigher, opt, 1000)
+	_, _, _ = s.Submit(ctx, b, 2, 60, ModeSetIfHigher, opt, 2000) // id1 被挤出
+	got, _, err := s.Submit(ctx, b, 1, 40, ModeSetIfHigher, opt, 3000)
+	if err != nil {
+		t.Fatalf("set_if_higher after truncation: %v", err)
+	}
+	if got != 50 {
+		t.Fatalf("score=%d after lower submit, want 50 (no downgrade off board)", got)
+	}
+}
+
+// ── 榜外区间估算 ─────────────────────────────────────────────────────────────
+
+// 降序榜:10 人上分,精确榜只留 Top-3,榜外玩家的估算名次应接近真实名次。
+func TestEstimate_TruncatedDescending(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 9, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := Options{Ascending: false, MaxSize: 3, EstimateBucketWidth: 10}
+
+	for i := uint64(1); i <= 10; i++ {
+		_, _, _ = s.Submit(ctx, b, i, int64(i*10), ModeSet, opt, 1000) // id1=10 … id10=100
+	}
+	// id5(=50,真实第 6 名)已被截断:精确查不到
+	if _, found, _ := s.Rank(ctx, b, 5, false); found {
+		t.Fatalf("id=5 should be truncated out of precise board")
+	}
+	e, total, found, err := s.Estimate(ctx, b, 5, false)
+	if err != nil || !found {
+		t.Fatalf("estimate id=5: found=%v err=%v", found, err)
+	}
+	if e.Score != 50 {
+		t.Fatalf("estimate score=%d, want 50", e.Score)
+	}
+	if total != 10 {
+		t.Fatalf("total=%d, want 10", total)
+	}
+	// 桶宽 10,每人一桶:better=5(60..100)+ 本桶一半 → 恰为真实名次 6
+	if e.Rank != 6 {
+		t.Fatalf("estimate rank=%d, want 6", e.Rank)
+	}
+}
+
+// 升序榜(分低者优)的估算方向。
+func TestEstimate_TruncatedAscending(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 10, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := Options{Ascending: true, MaxSize: 2, EstimateBucketWidth: 10}
+
+	for i := uint64(1); i <= 10; i++ {
+		_, _, _ = s.Submit(ctx, b, i, int64(i*10), ModeSet, opt, 1000) // 优→劣:id1=10 … id10=100
+	}
+	e, total, found, err := s.Estimate(ctx, b, 5, true) // id5=50,真实第 5 名
+	if err != nil || !found {
+		t.Fatalf("estimate asc id=5: found=%v err=%v", found, err)
+	}
+	if total != 10 || e.Rank != 5 {
+		t.Fatalf("estimate asc rank=%d total=%d, want 5/10", e.Rank, total)
+	}
+}
+
+// 估算名次不得落进精确榜区间(钳制 ZCARD+1)。
+func TestEstimate_ClampedBelowPreciseBoard(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 11, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	// 桶宽极大:所有人同桶 → 直方图无法区分,估算=本桶一半,可能小于榜内人数 → 必须被钳制
+	opt := Options{Ascending: false, MaxSize: 3, EstimateBucketWidth: 1000000}
+
+	for i := uint64(1); i <= 5; i++ {
+		_, _, _ = s.Submit(ctx, b, i, int64(i*10), ModeSet, opt, 1000)
+	}
+	e, _, found, err := s.Estimate(ctx, b, 1, false) // id1 最低分,被截断
+	if err != nil || !found {
+		t.Fatalf("estimate id=1: found=%v err=%v", found, err)
+	}
+	if e.Rank < 4 {
+		t.Fatalf("estimate rank=%d, want >= 4 (clamped after precise top-3)", e.Rank)
+	}
+}
+
+// 从未上报的 entity:估算也查不到。
+func TestEstimate_NeverSubmitted(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	_, _, _ = s.Submit(ctx, testBoard, 1, 30, ModeSet, descOpt(), 1000)
+	_, _, found, err := s.Estimate(ctx, testBoard, 999, false)
+	if err != nil {
+		t.Fatalf("estimate: %v", err)
+	}
+	if found {
+		t.Fatalf("found=true for never-submitted entity, want false")
+	}
+}
+
+// Remove 必须同步回扣直方图与全员分。
+func TestRemove_UpdatesEstimateState(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 12, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := Options{Ascending: false, MaxSize: 1, EstimateBucketWidth: 10}
+
+	_, _, _ = s.Submit(ctx, b, 1, 10, ModeSet, opt, 1000)
+	_, _, _ = s.Submit(ctx, b, 2, 20, ModeSet, opt, 1000)
+	_, _, _ = s.Submit(ctx, b, 3, 30, ModeSet, opt, 1000) // 榜内只剩 id3
+
+	if err := s.Remove(ctx, b, 1); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if _, _, found, _ := s.Estimate(ctx, b, 1, false); found {
+		t.Fatalf("removed entity still estimable")
+	}
+	_, total, found, err := s.Estimate(ctx, b, 2, false)
+	if err != nil || !found {
+		t.Fatalf("estimate id=2: found=%v err=%v", found, err)
+	}
+	if total != 2 {
+		t.Fatalf("total=%d after remove, want 2", total)
+	}
+}
+
+// Clear(周期 reset)清空全员分与直方图。
+func TestClear_ClearsEstimateState(t *testing.T) {
+	s, _ := newTestStore(t)
+	ctx := context.Background()
+	opt := Options{Ascending: false, MaxSize: 1, EstimateBucketWidth: 10}
+	_, _, _ = s.Submit(ctx, testBoard, 1, 10, ModeSet, opt, 1000)
+	_, _, _ = s.Submit(ctx, testBoard, 2, 20, ModeSet, opt, 1000) // id1 出榜但仍可估算
+
+	if err := s.Clear(ctx, testBoard); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if _, _, found, _ := s.Estimate(ctx, testBoard, 1, false); found {
+		t.Fatalf("estimate state should be cleared with board reset")
+	}
+}
+
+// 桶宽建榜定死:后续上报换宽度不生效(防直方图桶宽混用)。
+func TestSubmit_BucketWidthImmutable(t *testing.T) {
+	s, mr := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 13, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+
+	_, _, _ = s.Submit(ctx, b, 1, 10, ModeSet, Options{EstimateBucketWidth: 10}, 1000)
+	_, _, _ = s.Submit(ctx, b, 2, 20, ModeSet, Options{EstimateBucketWidth: 999}, 1000)
+	bw := mr.HGet(b.mKey(), "bw")
+	if bw != "10" {
+		t.Fatalf("meta bw=%q, want \"10\" (immutable after board creation)", bw)
+	}
+}
+
+// 升级兼容:本改动前建的榜(:s/:h 为空)成员再上报时,旧分从 ZSET 回退补记,不丢累计。
+func TestSubmit_LegacyBoardBackfill(t *testing.T) {
+	s, mr := newTestStore(t)
+	ctx := context.Background()
+	b := BoardKey{BoardType: 14, Scope: ScopeGlobal, ScopeID: 0, Period: "-"}
+	opt := Options{Ascending: false, EstimateBucketWidth: 10}
+
+	_, _, _ = s.Submit(ctx, b, 1, 50, ModeSetIfHigher, opt, 1000)
+	// 模拟旧版本产生的数据:删掉新结构,只留 z/t/m(m 里去掉 bw)
+	mr.Del(b.sKey())
+	mr.Del(b.hKey())
+	mr.HDel(b.mKey(), "bw")
+
+	// 再上报更低分:SET_IF_HIGHER 不写 z,但旧分应从 z 回退补进 :s / :h
+	got, _, err := s.Submit(ctx, b, 1, 40, ModeSetIfHigher, opt, 2000)
+	if err != nil {
+		t.Fatalf("legacy resubmit: %v", err)
+	}
+	if got != 50 {
+		t.Fatalf("score=%d, want 50 (kept from legacy zset)", got)
+	}
+	if v := mr.HGet(b.sKey(), "1"); v != "50" {
+		t.Fatalf("skey backfill=%q, want \"50\"", v)
+	}
+	_, total, found, err := s.Estimate(ctx, b, 1, false)
+	if err != nil || !found {
+		t.Fatalf("estimate after backfill: found=%v err=%v", found, err)
+	}
+	if total != 1 {
+		t.Fatalf("total=%d after backfill, want 1", total)
+	}
 }

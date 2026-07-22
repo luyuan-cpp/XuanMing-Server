@@ -83,6 +83,7 @@ $Services = @(
     @{ Name = 'trade';          Dir = 'services/economy/trade';             Cmd = 'trade';          Conf = 'etc/trade-dev.yaml';          Port = 50012 }
     @{ Name = 'inventory';      Dir = 'services/economy/inventory';         Cmd = 'inventory';      Conf = 'etc/inventory-dev.yaml';      Port = 50015 }
     @{ Name = 'leaderboard';    Dir = 'services/runtime/leaderboard';       Cmd = 'leaderboard';    Conf = 'etc/leaderboard-dev.yaml';    Port = 50007 }
+    @{ Name = 'owner';          Dir = 'services/runtime/owner';             Cmd = 'owner';          Conf = 'etc/owner-dev.yaml';          Port = 50017 }
     @{ Name = 'auction';        Dir = 'services/economy/auction';           Cmd = 'auction';        Conf = 'etc/auction-dev.yaml';        Port = 50016 }
     @{ Name = 'battle_result';  Dir = 'services/battle/battle_result';      Cmd = 'battle_result';  Conf = 'etc/battle_result-dev.yaml';  Port = 50022 }
     @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';    Cmd = 'matchmaker';     Conf = 'etc/matchmaker-dev.yaml';     Port = 50011 }

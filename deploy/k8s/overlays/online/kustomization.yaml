@@ -25,7 +25,7 @@ resources:
   - netpol.yaml
   - ds-auth-admission.yaml
 
-# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(20 个)。
+# 占位镜像:start.ps1 -Mode online 会用真实仓库地址 + tag 覆盖这里(21 个)。
 images:
   - { name: pandora/login,          newName: registry.example.com/pandora/login,          newTag: latest }
   - { name: pandora/player,         newName: registry.example.com/pandora/player,         newTag: latest }
@@ -36,6 +36,7 @@ images:
   - { name: pandora/mail,           newName: registry.example.com/pandora/mail,           newTag: latest }
   - { name: pandora/player-locator, newName: registry.example.com/pandora/player-locator, newTag: latest }
   - { name: pandora/leaderboard,    newName: registry.example.com/pandora/leaderboard,    newTag: latest }
+  - { name: pandora/owner,          newName: registry.example.com/pandora/owner,          newTag: latest }
   - { name: pandora/team,           newName: registry.example.com/pandora/team,           newTag: latest }
   - { name: pandora/matchmaker,     newName: registry.example.com/pandora/matchmaker,     newTag: latest }
   - { name: pandora/matchmaker-pve, newName: registry.example.com/pandora/matchmaker-pve, newTag: latest }
@@ -49,7 +50,12 @@ images:
   - { name: pandora/battle-result,  newName: registry.example.com/pandora/battle-result,  newTag: latest }
 
 # 关键链路服务线上副本数(其余默认 1,按容量再调)。
+#
+# ⚠️ push 保持 1 副本(2026-07-22 审计,二次修订):正确性已由投递缓冲保证(每帧
+# 先入 redis 缓冲再 best-effort 实时,非 owner 副本消费只降级为"重连补推交付",
+# 零丢失,不再是阻断项);但多副本下实时时延会经常性退化为补推,常态多副本前仍需
+# 连接 owner 路由(副本间转发或按 player_id 分区消费亲和)。容量不足先垂直扩。
 replicas:
   - { name: login, count: 2 }
   - { name: player-locator, count: 2 }
-  - { name: push, count: 2 }
+  - { name: push, count: 1 }

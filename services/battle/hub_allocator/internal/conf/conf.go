@@ -217,6 +217,15 @@ type HubConf struct {
 	// 依赖 autoscale_enabled=true + kafka.brokers 非空(推迁迁移通知);任一缺失只记日志不生效。
 	ConsolidationEnabled bool `yaml:"consolidation_enabled,omitempty" json:"consolidation_enabled,omitempty"`
 
+	// OwnerAddr owner 权威服务地址(owner-authority.md migrate ⑥)。
+	// 空 = 不双写实例租约(未启用,现网行为不变,安全默认)。
+	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
+
+	// OwnerLeaseRequired 实例租约双写失败是否令授权心跳失败。
+	// 默认 false = migrate 弱依赖(失败只告警,旧 last_heartbeat_ms 再入门双门并行兜底);
+	// contract 阶段全链验证后置 true 转强依赖(续租失败心跳必须失败 → DS 自我 fencing)。
+	OwnerLeaseRequired bool `yaml:"owner_lease_required,omitempty" json:"owner_lease_required,omitempty"`
+
 	// MigrateGraceSeconds 迁移优雅倒计时(秒,默认 30)。
 	// 下发给客户端/Hub DS 的提示倒计时;也是排空分片可被缩容回收的最短等待(避免提前杀 pod)。
 	MigrateGraceSeconds int32 `yaml:"migrate_grace_seconds,omitempty" json:"migrate_grace_seconds,omitempty"`

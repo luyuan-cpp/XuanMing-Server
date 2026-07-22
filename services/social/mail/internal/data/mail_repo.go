@@ -72,6 +72,19 @@ type MailRepo interface {
 	HasClaimed(ctx context.Context, playerID, mailID uint64) (bool, error)
 	RecordClaim(ctx context.Context, playerID, mailID uint64) (firstTime bool, err error)
 
+	// ── DS 三段式领取(bag phase 2,2026-07-22;行复用 player_mail_claim:
+	// claimed=0+intent_payload=意图,claimed=1=终态;HasClaimed 只认终态)──
+
+	// GetClaimState 返回领取状态:claimed=终态已领;intentOpen=意图行存在且未终态。
+	GetClaimState(ctx context.Context, playerID, mailID uint64) (claimed, intentOpen bool, err error)
+	// GetClaimIntent 读意图行 payload(仅 claimed=0 行;终态/无行 → found=false)。
+	GetClaimIntent(ctx context.Context, playerID, mailID uint64) (payload []byte, found bool, err error)
+	// CreateClaimIntent 建意图行(claimed=0;INSERT IGNORE):已有任何行 → created=false,
+	// 调用方重读状态决策(并发/重放安全,不覆盖既有意图或终态)。
+	CreateClaimIntent(ctx context.Context, playerID, mailID uint64, payload []byte) (created bool, err error)
+	// MarkClaimed 意图行置终态(claimed=1;已终态幂等 no-op)。无行 → found=false。
+	MarkClaimed(ctx context.Context, playerID, mailID uint64) (found bool, err error)
+
 	InsertSysMail(ctx context.Context, mailID uint64, startMs, endMs int64, payload []byte) error
 	InsertGuildMail(ctx context.Context, mailID, guildID uint64, startMs, endMs int64, payload []byte) error
 	// InsertPersonalMail 写收件箱,事务内原子校验单玩家行数上限(§9 不变量 18):
@@ -277,9 +290,11 @@ func (r *MySQLMailRepo) GetClaimablePayload(ctx context.Context, playerID, mailI
 }
 
 func (r *MySQLMailRepo) HasClaimed(ctx context.Context, playerID, mailID uint64) (bool, error) {
+	// 只认终态(claimed=1);DS 领取意图行(claimed=0)不算已领——它由 ClaimMail 的
+	// 互斥检查(GetClaimState.intentOpen → 9607)单独处理。
 	var x int
 	err := r.db.QueryRowContext(ctx,
-		`SELECT 1 FROM player_mail_claim WHERE player_id = ? AND mail_id = ?`, playerID, mailID).Scan(&x)
+		`SELECT 1 FROM player_mail_claim WHERE player_id = ? AND mail_id = ? AND claimed = 1`, playerID, mailID).Scan(&x)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -287,6 +302,68 @@ func (r *MySQLMailRepo) HasClaimed(ctx context.Context, playerID, mailID uint64)
 		return false, errcode.New(errcode.ErrInternal, "has claimed: %v", err)
 	}
 	return true, nil
+}
+
+// GetClaimState 读领取状态(终态 / 意图进行中)。
+func (r *MySQLMailRepo) GetClaimState(ctx context.Context, playerID, mailID uint64) (bool, bool, error) {
+	var claimedI8 int8
+	err := r.db.QueryRowContext(ctx,
+		`SELECT claimed FROM player_mail_claim WHERE player_id = ? AND mail_id = ?`, playerID, mailID).Scan(&claimedI8)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, errcode.New(errcode.ErrInternal, "get claim state: %v", err)
+	}
+	if claimedI8 != 0 {
+		return true, false, nil
+	}
+	return false, true, nil
+}
+
+// GetClaimIntent 读意图行 payload(仅未终态行)。
+func (r *MySQLMailRepo) GetClaimIntent(ctx context.Context, playerID, mailID uint64) ([]byte, bool, error) {
+	var payload []byte
+	err := r.db.QueryRowContext(ctx,
+		`SELECT intent_payload FROM player_mail_claim WHERE player_id = ? AND mail_id = ? AND claimed = 0`,
+		playerID, mailID).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, errcode.New(errcode.ErrInternal, "get claim intent: %v", err)
+	}
+	return payload, true, nil
+}
+
+// CreateClaimIntent 建意图行(INSERT IGNORE:已有行不覆盖,created=false 由调用方重读)。
+func (r *MySQLMailRepo) CreateClaimIntent(ctx context.Context, playerID, mailID uint64, payload []byte) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT IGNORE INTO player_mail_claim (player_id, mail_id, claimed, intent_payload) VALUES (?, ?, 0, ?)`,
+		playerID, mailID, payload)
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "create claim intent: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// MarkClaimed 意图行置终态(幂等:已终态 no-op)。
+func (r *MySQLMailRepo) MarkClaimed(ctx context.Context, playerID, mailID uint64) (bool, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE player_mail_claim SET claimed = 1 WHERE player_id = ? AND mail_id = ?`, playerID, mailID)
+	if err != nil {
+		return false, errcode.New(errcode.ErrInternal, "mark claimed: %v", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil
+	}
+	// RowsAffected=0:行不存在,或已是 claimed=1(MySQL 不计未变更行)——补一次存在性判定。
+	claimed, intentOpen, serr := r.GetClaimState(ctx, playerID, mailID)
+	if serr != nil {
+		return false, serr
+	}
+	return claimed || intentOpen, nil
 }
 
 func (r *MySQLMailRepo) RecordClaim(ctx context.Context, playerID, mailID uint64) (bool, error) {

@@ -130,6 +130,11 @@ func main() {
 	}
 	svc := service.NewFriendService(uc, sf)
 
+	// 终态好友请求保留期清理:只增终态行 90 天后批删,增长有界(§9.24,biz/sweep.go)。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go uc.RunRequestSweep(sweepCtx)
+
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
 

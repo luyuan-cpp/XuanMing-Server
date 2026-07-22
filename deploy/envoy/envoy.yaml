@@ -207,7 +207,8 @@ static_resources:
                 requires:
                   provider_name: "pandora_session"
               # inventory 服务所有 RPC 均需 JWT(player_id 以 JWT sub 为准,R5;系统方法
-              # GrantItems/GrantInstances/Freeze*/EnsureAuctionEscrow/Settle*/ReleaseEscrow
+              # GrantItems/GrantInstances/Freeze*/EnsureAuctionEscrow/Settle*/ReleaseEscrow/
+              # EscrowOutInstances/ClaimTransferInstances/ReleaseTransferEscrow
               # 由下方 route 精确 403 拦截)。
               - match:
                   prefix: "/pandora.inventory.v1.InventoryService/"
@@ -263,6 +264,13 @@ static_resources:
                   # ⭐ server stream 铁律:timeout=0(否则 Envoy 默认 15s 后断流)
                   timeout: 0s
                   idle_timeout: 0s
+                  # 会话门纵深(P0,INC-20260722-004):JWT 只在建流被 jwt_authn 验一次,
+                  # 流本身要有界寿命,到期强制客户端带新 token 重建(重建再过建流会话门)。
+                  # 服务端流内另有 30s jti/exp 复查(biz/push.go),这里是独立兜底层,
+                  # 取 1h 平衡重连风暴与 token 逾期存活上限;grpc-status 可重试,UE 自动重订。
+                  max_stream_duration:
+                    max_stream_duration: 3600s
+                    grpc_timeout_header_max: 0s
 
               # ----- team(unary,立即完成型,demo 15s 超时)-----
               - match:
@@ -352,6 +360,18 @@ static_resources:
               - match:
                   path: "/pandora.mail.v1.MailService/SendPersonalMail"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # DS 三段式领取(bag phase 2):owner DS 内网直连专用,客户端一律 403
+              # (服务层 systemOnly 兜底;玩家可自助调用 = 冒领意图/伪造终结)。
+              - match:
+                  path: "/pandora.mail.v1.MailService/GetClaimableAttachments"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.mail.v1.MailService/MarkMailClaimed"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # phase 2 cutover 预留:DS 领取链全量启用并排空旧客户端后取消注释(与 UseItem/SellItem 同批)。
+              # - match:
+              #     path: "/pandora.mail.v1.MailService/ClaimMail"
+              #   direct_response: { status: 403, body: { inline_string: "moved to ds claim chain (phase 2)" } }
               - match:
                   prefix: "/pandora.mail.v1.MailService/"
                 route:
@@ -442,12 +462,47 @@ static_resources:
               - match:
                   path: "/pandora.inventory.v1.InventoryService/ReleaseEscrow"
                 direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # 邮件 transfer 实例托管三 RPC(2026-07-22,bag-domain.md §7.1):同为系统方法,
+              # 玩家可自助调用 = 凭空托管/冒领/释放他人实例,精确 403 + 服务层 callerID==0 兜底。
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/EscrowOutInstances"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/ClaimTransferInstances"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/ReleaseTransferEscrow"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              - match:
+                  path: "/pandora.inventory.v1.InventoryService/ConsumeTransferEscrow"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+              # ----- phase 2 cutover 预留(bag-domain.md §10):DS 背包/领取链全量启用并排空旧客户端后,
+              # 取消注释砍客户端直连 UseItem/SellItem(mail 侧同批砍 ClaimMail,见 mail 路由段)。
+              # - match:
+              #     path: "/pandora.inventory.v1.InventoryService/UseItem"
+              #   direct_response: { status: 403, body: { inline_string: "moved to ds bag journal (phase 2)" } }
+              # - match:
+              #     path: "/pandora.inventory.v1.InventoryService/SellItem"
+              #   direct_response: { status: 403, body: { inline_string: "moved to ds bag journal (phase 2)" } }
               - match:
                   prefix: "/pandora.inventory.v1.InventoryService/"
                 route:
                   cluster: inventory_cluster
                   timeout: 15s
                   idle_timeout: 60s
+
+              # ----- 背包域(pandora.bag.v1,bag-domain.md)-----
+              # 全部是内部系统接口(调用方 = owner DS 内网直连),不对客户端开放:
+              # 整个前缀 403(即使未来误配路由,service 层还有拒客户端 JWT 的双保险)。
+              - match:
+                  prefix: "/pandora.bag.v1.BagService/"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
+
+              # ----- owner 权威(pandora.owner.v1,owner-authority.md,§9.22)-----
+              # 内部系统接口(调用方 = login / allocator / DS 回调链),不对客户端开放。
+              - match:
+                  prefix: "/pandora.owner.v1.OwnerService/"
+                direct_response: { status: 403, body: { inline_string: "internal rpc" } }
 
               # ----- gRPC reflection(联调用,grpcurl list/describe)-----
               # W2 dev:放行,联调省心
@@ -617,6 +672,52 @@ static_resources:
                   path: "/pandora.battle.v1.BattleResultService/ReportResult"
                 route:
                   cluster: battle_result_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- Battle DS → battle_result.ReportProgress(战斗中实时进度批,realtime-progression.md)-----
+              - match:
+                  path: "/pandora.battle.v1.BattleResultService/ReportProgress"
+                route:
+                  cluster: battle_result_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- owner DS → bag 域 journal 直写(bag-domain.md phase 2,BagService 由 inventory 承载)-----
+              # hub/battle owner DS 三条写路径;五要件①身份由服务侧 DSCallbackGuard 验签 Bearer。
+              - match:
+                  path: "/pandora.bag.v1.BagService/LoadBag"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.bag.v1.BagService/AppendJournal"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.bag.v1.BagService/SaveCheckpoint"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.bag.v1.BagService/PurchaseCapacity"
+                route:
+                  cluster: inventory_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              # ----- Hub DS → mail DS 三段式领取(bag phase 2)-----
+              - match:
+                  path: "/pandora.mail.v1.MailService/GetClaimableAttachments"
+                route:
+                  cluster: mail_cluster
+                  timeout: 15s
+                  idle_timeout: 60s
+              - match:
+                  path: "/pandora.mail.v1.MailService/MarkMailClaimed"
+                route:
+                  cluster: mail_cluster
                   timeout: 15s
                   idle_timeout: 60s
 

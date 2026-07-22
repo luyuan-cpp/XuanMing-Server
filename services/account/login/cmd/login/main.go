@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -122,6 +123,29 @@ func main() {
 		}
 	}()
 
+	// account_devices 保留期清理(§9.24):不活跃设备行超期批删,客户端可刷的只增行兜底有界。
+	// 多副本各自跑,DELETE 幂等无需锁;mock 模式(非 MySQL 库)不跑。
+	if sdb, ok := db.(*sql.DB); ok && sdb != nil {
+		deviceSweepCtx, deviceSweepCancel := context.WithCancel(context.Background())
+		defer deviceSweepCancel()
+		go func(sdb *sql.DB, retentionDays int) {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-deviceSweepCtx.Done():
+					return
+				case <-ticker.C:
+					if n, err := data.PurgeStaleDevices(deviceSweepCtx, sdb, retentionDays, 500); err != nil {
+						helper.Warnw("msg", "device_purge_failed", "err", err)
+					} else if n > 0 {
+						helper.Infow("msg", "stale_devices_purged", "rows", n, "retention_days", retentionDays)
+					}
+				}
+			}
+		}(sdb, cfg.Login.DeviceRetentionDays)
+	}
+
 	sessionRepo, jtiRepo, rdb := mustBuildRedisRepos(&cfg, helper)
 	defer func() {
 		if rdb != nil {
@@ -176,6 +200,14 @@ func main() {
 
 	// 6. biz + service 装配
 	loginUC := biz.NewLoginUsecase(accountRepo, sessionRepo, locatorNotifier, hubAssigner, roleRepo, sf, cfg.Login.MockHubDSAddr, cfg.Login.Hub.Region, signer, verifier, v2Verifier, cfg.Login.DevSkipPassword, cfg.Login.DevAutoRegister, cfg.Login.AllowedRoleIDs, cfg.Login.DevAllowAnyRole)
+
+	// owner 迁移登出释放(owner-authority.md migrate ⑤):owner_addr 空 = 不启用。
+	if cfg.Login.OwnerAddr != "" {
+		ownerReleaser := data.NewGrpcOwnerReleaser(cfg.Login.OwnerAddr)
+		defer func() { _ = ownerReleaser.Close() }()
+		loginUC.SetOwnerReleaser(ownerReleaser)
+		helper.Infow("msg", "owner_release_enabled", "owner_addr", cfg.Login.OwnerAddr)
+	}
 	loginUC.SetRequireHubAssignmentBinding(cfg.Login.RequireHubAssignmentBinding)
 	loginUC.SetMatchContextResolver(matchResolver)
 	if cfg.Login.DevSkipPassword {

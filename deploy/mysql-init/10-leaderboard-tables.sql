@@ -41,9 +41,11 @@ CREATE TABLE IF NOT EXISTS `leaderboard_snapshot` (
     `score`         BIGINT          NOT NULL COMMENT '结算时真实分数',
     `created_at_ms` BIGINT          NOT NULL COMMENT '落快照时间(毫秒)',
     PRIMARY KEY (`settlement_id`, `rank`),
-    KEY `idx_entity` (`entity_id`)
+    KEY `idx_entity` (`entity_id`),
+    KEY `idx_created` (`created_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 排行榜结算 Top-N 名次快照(归档 / 对账)';
+  COMMENT='Pandora 排行榜结算 Top-N 名次快照(归档 / 对账;保留 90 天由 leaderboard 保留期清理回收,§9.24)';
+-- 既有库需手动补:ALTER TABLE leaderboard_snapshot ADD KEY idx_created (created_at_ms);
 
 CREATE TABLE IF NOT EXISTS `leaderboard_reward_log` (
     `id`                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',
@@ -58,6 +60,8 @@ CREATE TABLE IF NOT EXISTS `leaderboard_reward_log` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_grant_idem` (`grant_idempotency_key`),
     KEY `idx_settlement` (`settlement_id`),
-    KEY `idx_entity` (`entity_id`)
+    KEY `idx_entity` (`entity_id`),
+    KEY `idx_status_updated` (`status`, `updated_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 排行榜逐名次发奖记录(uk grant_idem 防重复发奖)';
+  COMMENT='Pandora 排行榜逐名次发奖记录(uk grant_idem 防重复发奖;GRANTED 行保留 90 天由 leaderboard 保留期清理回收,PENDING/FAILED 永不清,§9.24)';
+-- 既有库需手动补:ALTER TABLE leaderboard_reward_log ADD KEY idx_status_updated (status, updated_at_ms);

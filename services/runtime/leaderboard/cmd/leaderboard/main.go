@@ -29,6 +29,7 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
+	klog "github.com/go-kratos/kratos/v2/log"
 
 	"github.com/luyuancpp/pandora/pkg/config"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -157,6 +158,9 @@ func main() {
 	sweepCtx, sweepCancel := context.WithCancel(context.Background())
 	defer sweepCancel()
 	go runRewardRetrySweep(sweepCtx, uc)
+	// 8.6 保留期清理(§9.24):名次快照 + 已发放发奖记录 90 天后批删;settlement 行故意
+	// 保留(settle uk 防重复结算的永久闸,每批次 1 行慢增长豁免)。
+	go runRetentionSweep(sweepCtx, repo, cfg.Leaderboard.RetentionDays, cfg.Leaderboard.RetentionSweepBatch, helper)
 
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
@@ -206,6 +210,31 @@ func runRewardRetrySweep(ctx context.Context, uc *biz.LeaderboardUsecase) {
 			return
 		case <-ticker.C:
 			uc.RetryUngrantedRewards(ctx, rewardSweepGrace, rewardSweepLimit)
+		}
+	}
+}
+
+// runRetentionSweep 周期清理超保留期的名次快照与已发放发奖记录(§9.24,每小时一轮)。
+// 多副本各自跑,DELETE 幂等无需锁;单批有界,积压跨轮摊平。
+func runRetentionSweep(ctx context.Context, repo *data.MySQLLeaderboardRepo, retentionDays, batch int, helper *klog.Helper) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoffMs := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+			if n, err := repo.PurgeSnapshotsBefore(ctx, cutoffMs, batch); err != nil {
+				helper.Warnw("msg", "leaderboard_snapshot_purge_failed", "err", err)
+			} else if n > 0 {
+				helper.Infow("msg", "leaderboard_snapshot_purged", "rows", n, "retention_days", retentionDays)
+			}
+			if n, err := repo.PurgeGrantedRewardsBefore(ctx, cutoffMs, batch); err != nil {
+				helper.Warnw("msg", "leaderboard_reward_log_purge_failed", "err", err)
+			} else if n > 0 {
+				helper.Infow("msg", "leaderboard_reward_log_purged", "rows", n, "retention_days", retentionDays)
+			}
 		}
 	}
 }

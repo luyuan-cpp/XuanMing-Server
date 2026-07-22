@@ -3,7 +3,8 @@
 // 接线对齐 inventory_client:内网 insecure 直连,无 JWT(系统接口)。
 // 传 instance_grant_key = battle_drop:{match_id}:{player_id}(与直发 GrantInstances 相同源键):
 // 邮件领取时走 GrantInstances 用同键去重,使直发链与邮件领取链共享幂等键 → 至多一次(即便偶发重复邮件)。
-// 装备型附件 as_instance=true:领取时逐件铸造独立实例(保持装备实例语义)。
+// 装备附件用 instance 形态(oneof):领取时逐件铸造独立实例(保持装备=唯一实例语义;
+// 实例唯一 ID 由 inventory 领取时雪花生成,铸出默认未鉴定)。
 package data
 
 import (
@@ -43,7 +44,7 @@ func (g *GrpcMailSender) Close() error {
 	return nil
 }
 
-// SendOverflowMail 把溢出装备(itemConfigIDs 逐件)按 config_id 分组成装备型附件,
+// SendOverflowMail 把溢出装备(itemConfigIDs 逐件)按 config_id 分组成 instance 形态附件,
 // 调 mail.SendPersonalMail 发个人邮件。grantKey 传源键 battle_drop:{match}:{player},
 // 领取时 GrantInstances 用它去重(与直发链共享 → 至多一次)。
 func (g *GrpcMailSender) SendOverflowMail(ctx context.Context, playerID uint64, itemConfigIDs []uint32, grantKey string) error {
@@ -67,7 +68,7 @@ func (g *GrpcMailSender) SendOverflowMail(ctx context.Context, playerID uint64, 
 	return nil
 }
 
-// groupInstanceAttachments 把逐件展开的配置 ID 按 config_id 聚合成 count,标记 as_instance=true。
+// groupInstanceAttachments 把逐件展开的配置 ID 按 config_id 聚合成 count,拼 instance 形态附件。
 func groupInstanceAttachments(itemConfigIDs []uint32) []*mailv1.MailAttachment {
 	order := make([]uint32, 0, len(itemConfigIDs))
 	counts := make(map[uint32]uint32, len(itemConfigIDs))
@@ -80,9 +81,9 @@ func groupInstanceAttachments(itemConfigIDs []uint32) []*mailv1.MailAttachment {
 	atts := make([]*mailv1.MailAttachment, 0, len(order))
 	for _, id := range order {
 		atts = append(atts, &mailv1.MailAttachment{
-			ItemConfigId: id,
-			Count:        counts[id],
-			AsInstance:   true,
+			Body: &mailv1.MailAttachment_Instance{
+				Instance: &mailv1.InstanceAttachment{ItemConfigId: id, Count: counts[id]},
+			},
 		})
 	}
 	return atts

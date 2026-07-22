@@ -26,6 +26,10 @@ type LeaderboardConf struct {
 	// DefaultSettleTopN SettleBoard 未指定 top_n 时默认结算前 N 名(默认 100)。
 	DefaultSettleTopN int `yaml:"default_settle_top_n,omitempty" json:"default_settle_top_n,omitempty"`
 
+	// DefaultEstimateBucketWidth 建榜未指定 estimate_bucket_width 时的直方图桶宽默认值
+	// (默认 25,MMR 量纲;榜外名次区间估算用,建榜后不可变)。
+	DefaultEstimateBucketWidth int64 `yaml:"default_estimate_bucket_width,omitempty" json:"default_estimate_bucket_width,omitempty"`
+
 	// InventoryAddr 是 inventory 服务的内网 gRPC 地址(host:port,如 127.0.0.1:50015)。
 	// 配了 → 结算发奖走真实 GrantItems(幂等键 lb:<settlement_id>:<entity_id>);
 	// 留空 → 退回 NoopRewardGranter(占位,不真实发奖),仅供无背包联调 / 单测环境用。
@@ -34,6 +38,16 @@ type LeaderboardConf struct {
 	// AllowNoopReward 显式允许在 InventoryAddr 为空时退回 NoopRewardGranter(不真实发奖)。
 	// 默认 false:InventoryAddr 缺失即 fail-fast,防生产漏配后静默以「结算不发奖」启动。
 	AllowNoopReward bool `yaml:"allow_noop_reward,omitempty" json:"allow_noop_reward,omitempty"`
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// RetentionDays 名次快照(leaderboard_snapshot)与已发放发奖记录(reward_log GRANTED)
+	// 保留天数(默认 90)。leaderboard_settlement 故意不清:settle uk 是防重复结算的永久闸,
+	// 每批次仅 1 行,慢增长登记豁免(§9.24 清单)。
+	RetentionDays int `yaml:"retention_days,omitempty" json:"retention_days,omitempty"`
+
+	// RetentionSweepBatch 每轮每表清理行数上限(默认 500)。清理与发奖补扫共用扫描节拍。
+	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -49,6 +63,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Leaderboard.DefaultSettleTopN <= 0 {
 		c.Leaderboard.DefaultSettleTopN = 100
+	}
+	if c.Leaderboard.DefaultEstimateBucketWidth <= 0 {
+		c.Leaderboard.DefaultEstimateBucketWidth = 25
+	}
+	if c.Leaderboard.RetentionDays <= 0 {
+		c.Leaderboard.RetentionDays = 90
+	}
+	if c.Leaderboard.RetentionSweepBatch <= 0 {
+		c.Leaderboard.RetentionSweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50007"

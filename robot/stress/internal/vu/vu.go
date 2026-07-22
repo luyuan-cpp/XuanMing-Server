@@ -243,7 +243,7 @@ func (v *VU) actGetMyTeam(ctx context.Context) {
 
 func (v *VU) actListFriends(ctx context.Context) {
 	_ = v.timed("friend.ListFriends", func() error {
-		_, e := v.pool.Friend.ListFriends(v.authCtx(ctx), &friendv1.ListFriendsRequest{PlayerId: v.playerID})
+		_, e := v.pool.Friend.ListFriends(v.authCtx(ctx), &friendv1.ListFriendsRequest{})
 		return e
 	})
 }
@@ -251,7 +251,6 @@ func (v *VU) actListFriends(ctx context.Context) {
 func (v *VU) actSendMessage(ctx context.Context) {
 	_ = v.timed("chat.SendMessage", func() error {
 		_, e := v.pool.Chat.SendMessage(v.authCtx(ctx), &chatv1.SendMessageRequest{
-			SenderId:  v.playerID,
 			Channel:   chatv1.ChatChannel_CHAT_CHANNEL_WORLD,
 			Content:   "stress hi",
 			RequestId: client.NewTraceID(),
@@ -297,10 +296,9 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 	// 2) 单人队也必须 READY 后才能通过 matchmaker 的 team 校验。
 	if err := v.timed("team.SetReady", func() error {
 		resp, e := v.pool.Team.SetReady(v.authCtx(ctx), &teamv1.SetReadyRequest{
-			TeamId:   teamID,
-			PlayerId: v.playerID,
-			Ready:    true,
-			HeroId:   1,
+			TeamId: teamID,
+			Ready:  true,
+			HeroId: 1,
 		})
 		if e != nil {
 			return e
@@ -359,9 +357,8 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 		(stage == matchv1.MatchStage_MATCH_STAGE_FOUND || stage == matchv1.MatchStage_MATCH_STAGE_CONFIRM) {
 		if err := v.timed("match.ConfirmMatch", func() error {
 			resp, e := v.pool.Matchmaker.ConfirmMatch(v.authCtx(ctx), &matchv1.ConfirmMatchRequest{
-				PlayerId: v.playerID,
-				MatchId:  realMatchID,
-				Accept:   true,
+				MatchId: realMatchID,
+				Accept:  true,
 			})
 			if e != nil {
 				return e
@@ -402,8 +399,7 @@ func (v *VU) actMatchFlow(ctx context.Context) {
 func (v *VU) leaveTeamBestEffort(ctx context.Context, teamID uint64) {
 	start := time.Now()
 	_, _ = v.pool.Team.LeaveTeam(v.authCtx(ctx), &teamv1.LeaveTeamRequest{
-		TeamId:   teamID,
-		PlayerId: v.playerID,
+		TeamId: teamID,
 	})
 	v.stat.ObserveRPC(float64(time.Since(start).Microseconds()) / 1000.0)
 }

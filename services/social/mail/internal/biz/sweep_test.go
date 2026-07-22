@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/snowflake"
 	mailv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/mail/v1"
 
@@ -49,6 +50,37 @@ func TestSendPersonalMailDefaultTTL(t *testing.T) {
 	}
 }
 
+// TestSendSysMailEndClamped 系统邮件 end_ms 钳到「创建时刻 + claim_retention_days」内:
+// claim 行按创建时刻 + 180 天清理,可领窗口不得超过它 —— 否则 claim 行先消失,而
+// inventory 幂等流水只保留 90 天(§9.24),超长邮件将可重复领奖。
+func TestSendSysMailEndClamped(t *testing.T) {
+	repo := newFakeMailRepo()
+	uc := NewMailUsecase(repo, testCfg(), &fakeItemGranter{})
+
+	const now = int64(1_000_000)
+
+	// 显式 end 超过 180 天 → 钳到 now + 180 天
+	if _, err := uc.SendSystemMail(context.Background(), 1, "t", "b", nil, 0, now+400*dayMs, now); err != nil {
+		t.Fatalf("SendSystemMail err: %v", err)
+	}
+	if want := now + 180*dayMs; repo.sysEnd != want {
+		t.Fatalf("end not clamped: got %d want %d", repo.sysEnd, want)
+	}
+
+	// end=0 默认 TTL(7 天)不受钳制影响
+	if _, err := uc.SendSystemMail(context.Background(), 2, "t", "b", nil, 0, 0, now); err != nil {
+		t.Fatalf("SendSystemMail err: %v", err)
+	}
+	if want := now + 7*dayMs; repo.sysEnd != want {
+		t.Fatalf("default end wrong: got %d want %d", repo.sysEnd, want)
+	}
+
+	// start 定得比「创建 + 180 天」还晚 → 钳后窗口无效(end<=start),fail-fast 拒收
+	if _, err := uc.SendSystemMail(context.Background(), 3, "t", "b", nil, now+200*dayMs, 0, now); errcode.As(err) != errcode.ErrInvalidArg {
+		t.Fatalf("invalid window code=%v err=%v, want ErrInvalidArg", errcode.As(err), err)
+	}
+}
+
 // TestPartitionExpired 归档/直删分流:已领直删;未领带附件归档;无附件直删;坏 payload 保守归档。
 func TestPartitionExpired(t *testing.T) {
 	withAtt := []data.ExpiredPersonalRow{
@@ -57,7 +89,7 @@ func TestPartitionExpired(t *testing.T) {
 		{MailID: 3, PlayerID: 11, Status: data.StatusRead},    // 已读无附件 → 直删
 		{MailID: 4, PlayerID: 12, Status: data.StatusUnread},  // 坏 payload → 保守归档
 	}
-	withAtt[1].Payload = mustPayload(t, []*mailv1.MailAttachment{{ItemConfigId: 3001, Count: 1}})
+	withAtt[1].Payload = mustPayload(t, []*mailv1.MailAttachment{stackAtt(3001, 1)})
 	withAtt[2].Payload = mustPayload(t, nil)
 	withAtt[3].Payload = []byte{0xff, 0xfe, 0x01} // 非法 proto
 

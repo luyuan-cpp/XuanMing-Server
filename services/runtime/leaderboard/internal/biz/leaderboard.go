@@ -74,6 +74,9 @@ func NewLeaderboardUsecase(repo data.LeaderboardRepo, board data.BoardStore, gra
 	if cfg.DefaultSettleTopN <= 0 {
 		cfg.DefaultSettleTopN = 100
 	}
+	if cfg.DefaultEstimateBucketWidth <= 0 {
+		cfg.DefaultEstimateBucketWidth = data.DefaultEstimateBucketWidth
+	}
 	return &LeaderboardUsecase{repo: repo, board: board, granter: granter, events: events, sf: sf, cfg: cfg}
 }
 
@@ -102,6 +105,9 @@ func (u *LeaderboardUsecase) SubmitScore(ctx context.Context, b data.BoardKey, e
 	if mode < data.ModeSetIfHigher || mode > data.ModeIncrement {
 		mode = data.ModeSetIfHigher
 	}
+	if opt.EstimateBucketWidth <= 0 {
+		opt.EstimateBucketWidth = u.cfg.DefaultEstimateBucketWidth
+	}
 	return u.board.Submit(ctx, b, entityID, score, mode, opt, nowMs())
 }
 
@@ -114,16 +120,41 @@ func (u *LeaderboardUsecase) boardAscending(ctx context.Context, b data.BoardKey
 	return asc, exists, nil
 }
 
-// GetRank 查某 entity 名次。
-func (u *LeaderboardUsecase) GetRank(ctx context.Context, b data.BoardKey, entityID uint64) (data.Entry, bool, error) {
+// RankView 是 GetRank 的返回:精确名次或(未进精确榜时)直方图区间估算名次。
+type RankView struct {
+	Entry data.Entry
+	Found bool
+	// Estimated true=Entry.Rank 是榜外区间估算(约值),Entry.UpdatedAtMs 恒 0。
+	Estimated bool
+	// TotalSubmitters 直方图口径参与总人数(仅 Estimated=true 时填,供百分位展示)。
+	TotalSubmitters int64
+}
+
+// GetRank 查某 entity 名次:精确榜命中返回精确名次;被 max_size 截断出榜的玩家回退
+// 直方图区间估算(约值);从未上报 → Found=false。
+func (u *LeaderboardUsecase) GetRank(ctx context.Context, b data.BoardKey, entityID uint64) (RankView, error) {
 	if err := validateBoard(b); err != nil {
-		return data.Entry{}, false, err
+		return RankView{}, err
 	}
 	asc, _, err := u.boardAscending(ctx, b)
 	if err != nil {
-		return data.Entry{}, false, err
+		return RankView{}, err
 	}
-	return u.board.Rank(ctx, b, entityID, asc)
+	entry, found, err := u.board.Rank(ctx, b, entityID, asc)
+	if err != nil {
+		return RankView{}, err
+	}
+	if found {
+		return RankView{Entry: entry, Found: true}, nil
+	}
+	estEntry, total, estFound, err := u.board.Estimate(ctx, b, entityID, asc)
+	if err != nil {
+		return RankView{}, err
+	}
+	if !estFound {
+		return RankView{}, nil
+	}
+	return RankView{Entry: estEntry, Found: true, Estimated: true, TotalSubmitters: total}, nil
 }
 
 // GetRange 取榜区间;返回 entries + 榜总人数。

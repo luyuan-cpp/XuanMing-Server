@@ -47,13 +47,27 @@ type fakeRepo struct {
 	matchReleaseDeleteErr     error
 
 	// 实时进度通道(实时成长):复刻 MySQL 水位 / 终局标记 / 累计上限 / 进度出箱语义。
-	progressSeq     map[uint64]uint64 // match_id → last_applied_seq
-	progressExp     map[uint64]uint64 // match_id → total_exp
-	progressItems   map[uint64]uint32 // match_id → total_items
-	progressSettled map[uint64]bool   // match_id → 已结算(打过终局标记)
-	progressOutbox  []data.ProgressOutboxRecord
-	nextProgressID  int64
-	deferredIDs     []int64 // DeferProgressOutbox 调用记录(fake 不真正推迟,行保持可取)
+	progressSeq     map[uint64]uint64                               // match_id → last_applied_seq
+	progressExp     map[uint64]uint64                               // match_id → total_exp
+	progressItems   map[uint64]uint32                               // match_id → total_items
+	progressPlayers map[uint64]map[uint64]data.ProgressPlayerTotals // match_id → player_id → 累计
+	progressSettled map[uint64]bool                                 // match_id → 已结算(打过终局标记)
+	progressStopped map[uint64]bool                                 // match_id → 已停流(未知事实持久标记)
+	markStoppedErr  error                                           // 非 nil 时 MarkProgressStopped 直接返错(可重试语义单测)
+	// staleWatermark 非 nil 时被下一次 GetProgressWatermark 消费一次(返回过期快照),
+	// 模拟"重试请求读到旧水位而权威状态已被首请求推进"的竞态窗口(审计 P1 回归)。
+	staleWatermark *data.ProgressWatermark
+
+	// 保留期清理 fake 状态(排空循环 / 陈年未结算告警单测)。
+	purgeBattlesResults  []int64
+	purgeProgressResults []int64
+	purgeBattlesCalls    int
+	purgeProgressCalls   int
+	staleUnsettled       int64
+	staleUnsettledCalls  int
+	progressOutbox       []data.ProgressOutboxRecord
+	nextProgressID       int64
+	deferredIDs          []int64 // DeferProgressOutbox 调用记录(fake 不真正推迟,行保持可取)
 }
 
 func newFakeRepo() *fakeRepo {
@@ -62,6 +76,7 @@ func newFakeRepo() *fakeRepo {
 		progressSeq:     map[uint64]uint64{},
 		progressExp:     map[uint64]uint64{},
 		progressItems:   map[uint64]uint32{},
+		progressPlayers: map[uint64]map[uint64]data.ProgressPlayerTotals{},
 		progressSettled: map[uint64]bool{},
 	}
 }
@@ -114,27 +129,92 @@ func (r *fakeRepo) SaveResult(_ context.Context, result *battlev1.BattleResult, 
 // ── 实时进度通道 fake(复刻 progress_repo 水位 CAS / 出箱语义)────────────────
 
 func (r *fakeRepo) GetProgressWatermark(_ context.Context, matchID uint64) (data.ProgressWatermark, error) {
+	if r.staleWatermark != nil {
+		wm := *r.staleWatermark
+		r.staleWatermark = nil
+		return wm, nil
+	}
 	seq, ok := r.progressSeq[matchID]
 	settled := r.progressSettled[matchID]
+	stopped := r.progressStopped[matchID]
 	return data.ProgressWatermark{
 		LastAppliedSeq: seq,
 		TotalExp:       r.progressExp[matchID],
 		TotalItems:     r.progressItems[matchID],
 		Settled:        settled,
-		Existed:        ok || settled,
+		Stopped:        stopped,
+		Existed:        ok || settled || stopped,
 	}, nil
 }
 
-func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, rows []data.ProgressOutboxRecord) error {
-	if r.progressSettled[matchID] {
-		return errcode.New(errcode.ErrUnavailable, "progress watermark moved or settled match=%d", matchID)
+func (r *fakeRepo) MarkProgressStopped(_ context.Context, matchID uint64) error {
+	if r.markStoppedErr != nil {
+		return r.markStoppedErr
+	}
+	if r.progressStopped == nil {
+		r.progressStopped = map[uint64]bool{}
+	}
+	r.progressStopped[matchID] = true
+	return nil
+}
+
+// ClaimProgressLegacy 复刻 INSERT IGNORE 语义(审计 R4 #11):行已存在(已开流/
+// 已认领/已结算)零修改返回 false;不存在才落停流标记行。
+func (r *fakeRepo) ClaimProgressLegacy(_ context.Context, matchID uint64) (bool, error) {
+	if r.markStoppedErr != nil {
+		return false, r.markStoppedErr
+	}
+	if _, open := r.progressSeq[matchID]; open || r.progressSettled[matchID] || r.progressStopped[matchID] {
+		return false, nil
+	}
+	if r.progressStopped == nil {
+		r.progressStopped = map[uint64]bool{}
+	}
+	r.progressStopped[matchID] = true
+	return true, nil
+}
+
+func (r *fakeRepo) ApplyProgress(_ context.Context, matchID, expectedSeq, newSeq uint64, addExp uint64, addItems uint32, playerDeltas []data.ProgressPlayerDelta, rows []data.ProgressOutboxRecord, caps data.ProgressCaps) error {
+	if r.progressSettled[matchID] || r.progressStopped[matchID] {
+		// 复刻 SQL 事务侧 fencing:settled_at_ms=0 AND stopped_at_ms=0 条件
+		// (停流与正常批的 CAS 竞态,审计 P1)。
+		return errcode.New(errcode.ErrUnavailable, "progress watermark moved/settled/stopped match=%d", matchID)
 	}
 	if r.progressSeq[matchID] != expectedSeq {
 		return errcode.New(errcode.ErrUnavailable, "progress watermark contended match=%d", matchID)
 	}
+	// 复刻事务内一致快照上限判定:超限整体"回滚"= 不落任何状态(审计 P1)。
+	if r.progressExp[matchID]+addExp > caps.MatchExp {
+		return errcode.New(errcode.ErrInvalidArg, "match %d cumulative exp exceeds per-match cap %d", matchID, caps.MatchExp)
+	}
+	if r.progressItems[matchID]+addItems > caps.MatchItems {
+		return errcode.New(errcode.ErrInvalidArg, "match %d cumulative items exceeds per-match cap %d", matchID, caps.MatchItems)
+	}
+	for _, d := range playerDeltas {
+		t := r.progressPlayers[matchID][d.PlayerID]
+		if t.TotalExp+d.Exp > caps.PlayerExp {
+			return errcode.New(errcode.ErrInvalidArg, "match %d player %d cumulative exp exceeds per-player cap %d", matchID, d.PlayerID, caps.PlayerExp)
+		}
+		if t.TotalItems+d.Items > caps.PlayerItems {
+			return errcode.New(errcode.ErrInvalidArg, "match %d player %d cumulative items exceeds per-player cap %d", matchID, d.PlayerID, caps.PlayerItems)
+		}
+		if t.TotalKills+d.Kills > caps.PlayerKills {
+			return errcode.New(errcode.ErrInvalidArg, "match %d player %d cumulative kills exceeds per-player cap %d", matchID, d.PlayerID, caps.PlayerKills)
+		}
+	}
 	r.progressSeq[matchID] = newSeq
 	r.progressExp[matchID] += addExp
 	r.progressItems[matchID] += addItems
+	if r.progressPlayers[matchID] == nil {
+		r.progressPlayers[matchID] = map[uint64]data.ProgressPlayerTotals{}
+	}
+	for _, d := range playerDeltas {
+		t := r.progressPlayers[matchID][d.PlayerID]
+		t.TotalExp += d.Exp
+		t.TotalItems += d.Items
+		t.TotalKills += d.Kills
+		r.progressPlayers[matchID][d.PlayerID] = t
+	}
 	for _, row := range rows {
 		r.nextProgressID++
 		row.ID = r.nextProgressID
@@ -167,6 +247,33 @@ func (r *fakeRepo) DeferProgressOutbox(_ context.Context, id int64) error {
 	// fake 只记录调用不真正推迟(单测里行保持可取,复刻"下轮重试"语义)。
 	r.deferredIDs = append(r.deferredIDs, id)
 	return nil
+}
+
+// 保留期清理:SQL 行为由 data 层集成测试覆盖;biz 侧用可配批次序列验证排空循环。
+// purge*Results 依次弹出每次调用的返回值,耗尽后返回 0(= 追平)。
+func (r *fakeRepo) PurgeExpiredBattles(context.Context, int64, int) (int64, error) {
+	r.purgeBattlesCalls++
+	if len(r.purgeBattlesResults) == 0 {
+		return 0, nil
+	}
+	n := r.purgeBattlesResults[0]
+	r.purgeBattlesResults = r.purgeBattlesResults[1:]
+	return n, nil
+}
+
+func (r *fakeRepo) PurgeSettledProgress(context.Context, int64, int) (int64, error) {
+	r.purgeProgressCalls++
+	if len(r.purgeProgressResults) == 0 {
+		return 0, nil
+	}
+	n := r.purgeProgressResults[0]
+	r.purgeProgressResults = r.purgeProgressResults[1:]
+	return n, nil
+}
+
+func (r *fakeRepo) CountStaleUnsettledProgress(context.Context, int64) (int64, error) {
+	r.staleUnsettledCalls++
+	return r.staleUnsettled, nil
 }
 
 func (r *fakeRepo) ensureFakeMatchRelease(matchID uint64, stats []*battlev1.PlayerStats) {

@@ -1,0 +1,92 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "level": 1,
+      "upgrade_exp": 1000
+    },
+    {
+      "id": 2,
+      "level": 2,
+      "upgrade_exp": 1800,
+      "cumulative_exp": 1000
+    },
+    {
+      "id": 3,
+      "level": 3,
+      "upgrade_exp": 2600,
+      "cumulative_exp": 2800
+    },
+    {
+      "id": 4,
+      "level": 4,
+      "upgrade_exp": 3400,
+      "cumulative_exp": 5400
+    },
+    {
+      "id": 5,
+      "level": 5,
+      "upgrade_exp": 4200,
+      "cumulative_exp": 8800
+    },
+    {
+      "id": 6,
+      "level": 6,
+      "upgrade_exp": 5000,
+      "cumulative_exp": 13000
+    },
+    {
+      "id": 7,
+      "level": 7,
+      "upgrade_exp": 5800,
+      "cumulative_exp": 18000
+    },
+    {
+      "id": 8,
+      "level": 8,
+      "upgrade_exp": 6600,
+      "cumulative_exp": 23800
+    },
+    {
+      "id": 9,
+      "level": 9,
+      "upgrade_exp": 7400,
+      "cumulative_exp": 30400
+    },
+    {
+      "id": 10,
+      "level": 10,
+      "upgrade_exp": 8200,
+      "cumulative_exp": 37800
+    },
+    {
+      "id": 11,
+      "level": 11,
+      "upgrade_exp": 9000,
+      "cumulative_exp": 46000
+    },
+    {
+      "id": 12,
+      "level": 12,
+      "upgrade_exp": 9800,
+      "cumulative_exp": 55000
+    },
+    {
+      "id": 13,
+      "level": 13,
+      "upgrade_exp": 10600,
+      "cumulative_exp": 64800
+    },
+    {
+      "id": 14,
+      "level": 14,
+      "upgrade_exp": 11400,
+      "cumulative_exp": 75400
+    },
+    {
+      "id": 15,
+      "level": 15,
+      "cumulative_exp": 86800
+    }
+  ]
+}

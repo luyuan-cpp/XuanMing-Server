@@ -64,9 +64,12 @@ CREATE TABLE IF NOT EXISTS `mmr_history` (
     `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_idem` (`player_id`, `idempotency_key`),
-    KEY `idx_player_created` (`player_id`, `created_at`)
+    KEY `idx_player_created` (`player_id`, `created_at`),
+    KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 玩家 MMR 变化历史 + 幂等键(不变量 §2)';
+  COMMENT='Pandora 玩家 MMR 变化历史 + 幂等键(不变量 §2;保留期清理见 §9.24,默认关)';
+-- idx_created 服务保留期清理(player RunHistoryJanitor)。存量库由 tools/migrate
+-- pandora_player 000003_retention_indexes 条件补齐。
 
 CREATE TABLE IF NOT EXISTS `player_attributes` (
     `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -88,9 +91,11 @@ CREATE TABLE IF NOT EXISTS `attr_point_grants` (
     `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_grant` (`player_id`, `idempotency_key`),
-    KEY `idx_player` (`player_id`)
+    KEY `idx_player` (`player_id`),
+    KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 属性点授予幂等表';
+  COMMENT='Pandora 属性点授予幂等表(保留期清理见 §9.24,默认关)';
+-- 存量库由 tools/migrate pandora_player 000003_retention_indexes 条件补齐。
 
 CREATE TABLE IF NOT EXISTS `player_equipment` (
     `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -137,7 +142,8 @@ CREATE TABLE IF NOT EXISTS `exp_history` (
     `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_idem` (`player_id`, `idempotency_key`),
-    KEY `idx_player_created` (`player_id`, `created_at`)
+    KEY `idx_player_created` (`player_id`, `created_at`),
+    KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家经验入账历史 + 幂等键(实时成长,不变量 §2)';
 
@@ -159,6 +165,8 @@ CREATE TABLE IF NOT EXISTS `talent_point_grants` (
     `created_at`      DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_talent_grant` (`player_id`, `idempotency_key`),
-    KEY `idx_player` (`player_id`)
+    KEY `idx_player` (`player_id`),
+    KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 天赋点授予幂等表';
+  COMMENT='Pandora 天赋点授予幂等表(保留期清理见 §9.24,默认关)';
+-- 存量库由 tools/migrate pandora_player 000003_retention_indexes 条件补齐。

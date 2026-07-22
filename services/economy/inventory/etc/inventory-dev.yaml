@@ -27,6 +27,14 @@ node:
     ping_timeout: "3s"
 
 inventory:
+  # 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界,失效数据最多保留 90 天)。
+  # inventory_ledger 超期流水 / auction_escrow closed 超期行由 sweep 周期批量删除;
+  # 多副本各自跑,DELETE 幂等无需锁。缺省即以下默认值,列出便于运维一眼看到。
+  sweep_interval: "5m"
+  sweep_batch: 500
+  ledger_retention_days: 90   # 幂等流水保留天数(≫ 一切重试窗口;≥ mail 可领窗口闭环见 conf.go)
+  escrow_retention_days: 90   # closed 托管行保留天数(active 行永不清理)
+
   # item_rules: 道具大厅经济规则表(留空 = 任何道具都不可大厅使用 / 出售,安全默认)。
   # 正式项目应来自配置表服务;W5 ③ demo 给两条样例(经验书可用,材料可卖)。
   item_rules:
@@ -35,3 +43,20 @@ inventory:
     - item_config_id: 3001     # 材料:可出售,单价 10 金币
       sellable: true
       sell_unit_price: 10
+
+# 背包域(pandora.bag.v1,bag-domain.md;phase 1 由本进程承载)。
+# dsn 为空 = 未启用(不注册 BagService)。dev 直接开启联调;
+# 生产启用前必须先重放 14-bag-tables.sql(启动 schema gate 会 fail-fast 提示)。
+bag:
+  dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_bag?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+  # 额度(五要件④,反作弊封顶;必须显著高于合法玩法产出)
+  max_journal_batch: 64
+  max_items_per_op: 64
+  hourly_journal_quota: 2000
+  # 后端驻留段容量(未配置的段 fail-closed 拒写;随身组容量归 DS,不在此配)
+  section_capacities:
+    - bag_type: 1        # 仓库
+      capacity: 200
+    - bag_type: 100      # 活动背包样例段(联调用;活动开启由运营写 bag_generation)
+      capacity: 50
+  journal_retention_days: 90

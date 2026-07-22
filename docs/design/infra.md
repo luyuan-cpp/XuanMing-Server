@@ -321,6 +321,7 @@ prefix 默认 `/pandora/leader/`,可经 `match.leader.prefix` 按环境配成 `/
 | **push** ⭐ | **50014**(gRPC server stream)| **51014** |
 | inventory | 50015 | 51015 |
 | auction | 50016 | 51016 |
+| owner | 50017 | 51017 |
 | ds_allocator | 50020 | 51020 |
 | hub_allocator | 50021 | 51021 |
 | battle_result | 50022 | 51022 |

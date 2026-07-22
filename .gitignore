@@ -13,6 +13,10 @@
 bin/
 build/
 dist/
+# configtable 发布产物必须入库(manifest+表体是部署契约;真实产物测试依赖干净检出即有文件,
+# 审计 P1:上面的 dist/ 会把它一并忽略,这里显式放行)
+!configtable/dist/
+!configtable/dist/**
 
 # Go module 本地缓存
 vendor/

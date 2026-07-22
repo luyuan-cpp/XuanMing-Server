@@ -1,6 +1,6 @@
 # Pandora 全业务服务容器编排(docker 模式)
 #
-# 这是「整套后端跑在容器里」的编排：20 个 go 服务各一个容器，全部接到基础设施所在的
+# 这是「整套后端跑在容器里」的编排：21 个 go 服务各一个容器，全部接到基础设施所在的
 # 外部网络 pandora-net(由 deploy/docker-compose.dev.yml 创建)。
 #
 # 用法(推荐用一键脚本,自动先拉基础设施再起服务):
@@ -54,7 +54,9 @@ services:
       args: { SERVICE_DIR: services/account/player, CMD_NAME: player }
     image: pandora/player:dev
     container_name: pandora-player
-    volumes: [ "../run/cluster/etc/player.yaml:/app/etc/cluster.yaml:ro" ]
+    volumes:
+      - "../run/cluster/etc/player.yaml:/app/etc/cluster.yaml:ro"
+      - "../configtable/dist:/app/configtable/active:ro"
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50002:50002" ]
 
   data-service:
@@ -195,6 +197,18 @@ services:
     container_name: pandora-leaderboard
     volumes: [ "../run/cluster/etc/leaderboard.yaml:/app/etc/cluster.yaml:ro" ]
     ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50007:50007" ]
+
+  # owner:每玩家 owner 权威(§9.22,owner-authority.md;dev 连单机 MySQL pandora_owner,
+  # 生产必须 TiDB)。调用方 = login / allocator(owner_addr 指向本服务)。
+  owner:
+    <<: *svc-base
+    build:
+      <<: *build-base
+      args: { SERVICE_DIR: services/runtime/owner, CMD_NAME: owner }
+    image: pandora/owner:dev
+    container_name: pandora-owner
+    volumes: [ "../run/cluster/etc/owner.yaml:/app/etc/cluster.yaml:ro" ]
+    ports: [ "${PANDORA_SERVICE_BIND_HOST:-127.0.0.1}:50017:50017" ]
 
   inventory:
     <<: *svc-base

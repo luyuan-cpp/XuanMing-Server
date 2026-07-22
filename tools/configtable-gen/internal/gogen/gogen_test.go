@@ -54,8 +54,11 @@ func TestFilesShape(t *testing.T) {
 	for _, want := range []string{
 		"type Tables struct",
 		"Level *LevelTable",
-		`"level": {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable}`,
+		"PlayerLevelExp *PlayerLevelExpTable",
+		`"level":            {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable}`,
+		`"player_level_exp": {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable}`,
 		"func buildLevelTable(raw []byte, mt ManifestTable, dst *Tables) error",
+		"func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error",
 	} {
 		if !strings.Contains(string(reg), want) {
 			t.Errorf("tables.gen.go 缺少 %q", want)
@@ -116,7 +119,7 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 		if _, err := os.Stat(distPath); err != nil {
 			t.Skipf("dist 未生成,跳过 bitindex 比对: %v", err)
 		}
-		state, err := tablegen.LoadBitState(statePath)
+		state, err := tablegen.LoadBitState(statePath, false)
 		if err != nil {
 			t.Fatalf("表 %s: %v(bit_index 表必须有状态文件)", def.Name, err)
 		}
@@ -183,8 +186,8 @@ func TestFixtureRendering(t *testing.T) {
 	}
 	for _, want := range []string{
 		"func validateCrossTables(dst *Tables) error",
-		"dst.TestScene.Exists(v)",  // 跨表兜底校验
-		"为 0(必填外键)",                // required fk 拒 0
+		"dst.TestScene.Exists(v)", // 跨表兜底校验
+		"为 0(必填外键)",               // required fk 拒 0
 		"func (tb *Tables) TestDungeonSceneIdRow(row *configpb.TestDungeonRow) (*configpb.TestSceneRow, bool)",
 		"func (tb *Tables) TestDungeonSceneIdRowByID(id uint32)",
 	} {

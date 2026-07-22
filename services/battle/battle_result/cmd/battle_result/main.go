@@ -148,12 +148,12 @@ func main() {
 			"hint", "apply pandora_battle migration 000003_match_release_outbox")
 		os.Exit(1)
 	}
-	// 实时进度两表在每次结算都被无条件访问(settleProgressStreamTx 收口),
+	// 实时进度三表在每次结算都被无条件访问(settleProgressStreamTx 收口),
 	// 与 killswitch 无关,必须启动即探测(不能 Ready 后首个结算才炸,§16.4)。
 	if err := repo.ValidateProgressSchema(schemaCtx); err != nil {
 		schemaCancel()
 		helper.Errorw("msg", "battle_progress_schema_invalid", "err", err,
-			"hint", "apply pandora_battle migration 000005_battle_progress")
+			"hint", "apply pandora_battle migrations 000005_battle_progress + 000006_battle_progress_player + 000008_battle_progress_stopped")
 		os.Exit(1)
 	}
 	schemaCancel()
@@ -324,6 +324,8 @@ func main() {
 	go uc.RunDropPublisher(pubCtx)
 	go uc.RunProgressPublisher(pubCtx)
 	go uc.RunMatchReleasePublisher(pubCtx)
+	// 保留期清理:battles/stats + 已结算进度水位超期批删,只增表增长有界(§9.24,biz/retention.go)。
+	go uc.RunRetentionSweep(pubCtx)
 	if terminalRelay != nil {
 		go uc.RunTerminalReleasePublisher(pubCtx)
 	}

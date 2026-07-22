@@ -86,6 +86,19 @@ type AuctionConf struct {
 
 	// MarketLockMaxWaitMs 抢 market 锁最大等待(毫秒,默认 3000);超时返回 ERR_AUCTION_MARKET_BUSY。
 	MarketLockMaxWaitMs int64 `yaml:"market_lock_max_wait_ms,omitempty" json:"market_lock_max_wait_ms,omitempty"`
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// RetentionDays 终态挂单(FILLED/CANCELED/EXPIRED 且 escrow 已释放)、已结算成交流水
+	// (settlement/event 均完成)与超期幂等键映射(auction_idempotency_keys)的保留天数(默认 90)。
+	// 远大于挂单/结算重试窗口(分钟级);ListMyOrders 历史窗口同步受此限。
+	RetentionDays int `yaml:"retention_days,omitempty" json:"retention_days,omitempty"`
+
+	// RetentionSweepIntervalSeconds 保留期清理扫描间隔(秒,默认 3600)。逐分片跑,DELETE 幂等无需锁。
+	RetentionSweepIntervalSeconds int64 `yaml:"retention_sweep_interval_seconds,omitempty" json:"retention_sweep_interval_seconds,omitempty"`
+
+	// RetentionSweepBatch 每轮每分片每表清理行数上限(默认 500)。
+	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -128,6 +141,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Auction.MarketLockMaxWaitMs <= 0 {
 		c.Auction.MarketLockMaxWaitMs = 3000
+	}
+	if c.Auction.RetentionDays <= 0 {
+		c.Auction.RetentionDays = 90
+	}
+	if c.Auction.RetentionSweepIntervalSeconds <= 0 {
+		c.Auction.RetentionSweepIntervalSeconds = 3600
+	}
+	if c.Auction.RetentionSweepBatch <= 0 {
+		c.Auction.RetentionSweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50016"

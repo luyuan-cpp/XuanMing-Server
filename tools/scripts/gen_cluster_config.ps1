@@ -30,11 +30,14 @@
 #    对应 PANDORA_PLACEMENT_*_SECRET；Login→Matchmaker 另用 PANDORA_MATCH_RESUME_AUTH_SECRET；
 #    Matchmaker→DS allocator 销毁未入场分配另用 PANDORA_ALLOCATION_ABORT_AUTH_SECRET；
 #    生成器拒绝全部权限域之间的密钥复用。
+#    owner 权威库另需 -OwnerStoreDsn / PANDORA_OWNER_TIDB_DSN(真 TiDB DSN,pandora_owner 库,
+#    §9.22 确认写不回滚;拒绝 dev 凭据 / dev mysql 地址),并机械翻转 require_tidb: true +
+#    全服务 enable_reflection: false(owner 启动强校验 VERSION() 含 -TiDB-,双层防线)。
 #
 # 三条链路与 allocator 模式的对应(由 start.ps1 驱动):
 #   本地 windows (-Mode local)  → dev yaml 原样 mode=local,不过本生成器(宿主 exec Windows DS)
 #   docker        (-Mode docker) → -AllocatorMode mock  (容器内无真 DS,假地址只测后端链路)
-#   battle       (-Mode battle) → -AllocatorMode mock -HostAllocators(18 容器 + 2 宿主 allocator)
+#   battle       (-Mode battle) → -AllocatorMode mock -HostAllocators(19 容器 + 2 宿主 allocator)
 #   线上 k8s     (-Mode online) → -AllocatorMode agones(GameServer status.address 直连真 Linux DS)
 #   本地 k8s     (-Mode k8s)    → -AllocatorMode agones -AllocatorAdvertiseHost 127.0.0.1 + udp_relay.ps1
 
@@ -99,6 +102,10 @@ param(
     [string]$DsTicketKeysetRevision = $env:PANDORA_DSTICKET_KEYSET_REVISION,
     # DSTicket v2 票据 TTL(默认 120s;机械上限 180s,UE 验票侧同样强制 exp-iat ≤ 180s)。
     [string]$DsTicketTTL = '120s',
+    # owner 权威库 DSN(§9.22 确认写不回滚):-Prod 必须显式提供真 TiDB DSN(pandora_owner 库);
+    # dev 模板连单机 MySQL(无复制天然线性一致)只服务本地联调,MySQL 异步复制主从切换会回滚
+    # 已确认写,owner CAS 回滚即可能双 owner,生产禁用。非 -Prod 也可显式覆盖(本地连真 TiDB 测)。
+    [string]$OwnerStoreDsn = $env:PANDORA_OWNER_TIDB_DSN,
     # Stable/Canary DS 轨道：百分比按服务端确定性 cohort 分桶，seed 是发布配置而非密钥，
     # 但启用灰度后必须稳定不漂移；普通发布与两条 Fleet 共用同一 DSTicket keyset。
     [ValidateRange(0, 100)][int]$BattleCanaryPercent = 0,
@@ -419,6 +426,35 @@ if ($DsAuthorityModeToInject -eq 'redis') {
     }
 } elseif ($Prod) {
     throw '[FATAL] -Prod 未进入 redis authority，拒绝生成。'
+}
+
+# ===== owner 权威库 DSN(§9.22:线性一致 + 确认写不回滚;生产必须 TiDB)=====
+# dev 模板 owner-dev.yaml 连单机 MySQL(pandora_dev_pwd 公开凭据)只服务本地联调;
+# MySQL 异步复制主从切换会回滚已确认写,owner CAS 回滚即可能双 owner(脑裂),生产禁用。
+# -Prod 必须注入真 TiDB DSN,并由 Set-ProdOwnerRequireTiDB 机械打开服务端启动强校验
+# (owner 启动查 VERSION() 必须含 -TiDB-,不符 fail-fast),双层防线防 dev mysql 带上线。
+if ($Prod) {
+    if ([string]::IsNullOrWhiteSpace($OwnerStoreDsn)) {
+        throw '[FATAL] -Prod 必须提供 -OwnerStoreDsn 或环境变量 PANDORA_OWNER_TIDB_DSN(owner 权威库真 TiDB DSN,pandora_owner 库)。' +
+              ' owner CAS 依赖线性一致 + 确认写不回滚(§9.22),不允许 -Prod 产物继承 dev mysql 配置。'
+    }
+    if ($OwnerStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
+        throw '[FATAL] owner DSN 含控制字符(换行/制表等),多为误带的尾部空白,请清理后再注入。'
+    }
+    if ($OwnerStoreDsn.Contains('pandora_dev_pwd')) {
+        throw '[FATAL] -Prod 的 owner DSN 不能使用公开 dev 凭据(pandora_dev_pwd)。请换成 CI/CD 注入的真 TiDB 凭据。'
+    }
+    if ($OwnerStoreDsn.Contains('mysql:3306') -or $OwnerStoreDsn.Contains('127.0.0.1:3307')) {
+        throw '[FATAL] -Prod 的 owner DSN 指向 dev MySQL(mysql:3306 / 127.0.0.1:3307)。生产必须连 TiDB(deploy/tidb-init/02-owner-tidb.sql,§9.22)。'
+    }
+    if ($OwnerStoreDsn -cnotmatch '/pandora_owner(?:[?]|$)') {
+        throw '[FATAL] -Prod 的 owner DSN 必须指向 pandora_owner 库(形如 user:pwd@tcp(tidb-host:4000)/pandora_owner?parseTime=true&loc=UTC)。'
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($OwnerStoreDsn)) {
+    # 非 -Prod 显式覆盖(本地连真 TiDB 测):只做注入安全校验,不强制 TiDB。
+    if ($OwnerStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
+        throw '[FATAL] -OwnerStoreDsn 含控制字符,不能安全写入 YAML。'
+    }
 }
 
 # ===== agones 链路必须显式声明生产或本地(审核 P1:agones 不带 -Prod 会写入公开 dev 密钥)=====
@@ -1116,6 +1152,7 @@ $Services = @(
     @{ Name = 'chat';           Conf = 'services/social/chat/etc/chat-dev.yaml';                   Port = 50005 }
     @{ Name = 'player-locator'; Conf = 'services/runtime/player_locator/etc/locator-dev.yaml';     Port = 50006 }
     @{ Name = 'leaderboard';    Conf = 'services/runtime/leaderboard/etc/leaderboard-dev.yaml';    Port = 50007 }
+    @{ Name = 'owner';          Conf = 'services/runtime/owner/etc/owner-dev.yaml';                Port = 50017 }
     @{ Name = 'guild';          Conf = 'services/social/guild/etc/guild-dev.yaml';                 Port = 50008 }
     @{ Name = 'mail';           Conf = 'services/social/mail/etc/mail-dev.yaml';                   Port = 50009 }
     @{ Name = 'team';           Conf = 'services/matchmaking/team/etc/team-dev.yaml';              Port = 50010 }
@@ -1188,6 +1225,104 @@ function Set-AuctionClusterSafety([string]$text) {
         '$1 true',
         1)
     return $text
+}
+
+# -Prod 机械关断实时成长通道(审核 P0,2026-07-21):生成链以 dev 模板为唯一输入,
+# dev 里 progress_enabled: true 只服务本地联调。线上产物若顺手继承,新旧 fleet 混跑
+# 窗口会实时+终局双发掉落(§9.21)。玩家升级曲线已迁到 configtable 单一数据源。
+# 生产启用是**独立显式动作**:battle_result 全 fleet 升级完成后按 realtime-progression.md
+# 发布纪律另行开启(人工改产物或未来 configtable 门禁),不允许由本生成器默认放行。
+function Set-ProdBattleResultProgressOff([string]$text) {
+    $anchorCount = [regex]::Matches($text, '(?m)^[ \t]{2}progress_enabled:[ \t]*(?:true|false)[ \t]*(?:#.*)?$').Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] battle-result 模板 progress_enabled 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text,
+        '(?m)^([ \t]{2})progress_enabled:[ \t]*(?:true|false)[ \t]*(?:#.*)?$',
+        '${1}progress_enabled: false', 1)
+}
+
+function Set-PlayerClusterConfigTableDir([string]$text) {
+    $location = Get-YamlSectionSecretLocation 'player' $text 'config_table' 'dir'
+    if ($location.RawValue -cne '../../../configtable/dist') {
+        throw '[FATAL] player.config_table.dir 不是宿主 dev 模板路径,拒绝静默覆盖未知配置。'
+    }
+    $location.Lines[$location.SecretIndex] = $location.Prefix + '"/app/configtable/active"' + $location.Suffix
+    return ($location.Lines -join $location.Newline)
+}
+
+function Set-ProdPlayerExperienceOff([string]$text) {
+    $pattern = '(?m)^([ \t]{2})experience_enabled:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] player 模板 experience_enabled 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern, '${1}experience_enabled: false', 1)
+}
+
+# -Prod 机械强制 push 会话现行性门(审核 P0,INC-20260722-004,2026-07-22):JWT 验签只证明
+# "曾经登录过",旧/被顶号 token 在 exp 前仍能过 Envoy jwt_authn 重建 Subscribe 流收私有推送。
+# dev 模板 require_session_gate: false 只服务直连内网端口联调;生产必须 true(建流校验
+# jti == login 会话权威当前一代,权威不可达 fail-closed 拒),不允许由产物继承 dev 宽松档。
+function Set-ProdPushSessionGateOn([string]$text) {
+    $pattern = '(?m)^([ \t]{2})require_session_gate:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] push 模板 require_session_gate 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern, '${1}require_session_gate: true', 1)
+}
+
+# -Prod 机械关断幂等历史清理(审核 P1,2026-07-21):dev 开启 exp_history_cleanup_enabled /
+# history_cleanup_enabled 只为覆盖清理代码路径(本地数据可弃)。上游 progress 出箱与
+# kafka 重放目前没有小于留存期的有界重试,生产删收据后迟到重放会重复入账经验/MMR/点数
+# (不可逆)。生产开启是独立显式动作:上游具备有界重试后按 §9.24 前置条件另行开启。
+function Set-ProdPlayerHistoryCleanupOff([string]$text) {
+    foreach ($key in @('exp_history_cleanup_enabled', 'history_cleanup_enabled')) {
+        $pattern = '(?m)^([ \t]{2})' + $key + ':[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+        $anchorCount = [regex]::Matches($text, $pattern).Count
+        if ($anchorCount -ne 1) {
+            throw "[FATAL] player 模板 $key 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+        }
+        $text = [regex]::Replace($text, $pattern, ('${1}' + $key + ': false'))
+    }
+    return $text
+}
+
+# owner 权威库 DSN 注入(§9.22):整行替换 owner.yaml 的 node.mysql_client.dsn。
+# 复用 Get-YamlSectionSecretLocation 的精确定位(节点唯一 + 直接子项 + 双引号标量),
+# 旧值必须仍含 dev 凭据特征(pandora_dev_pwd),证明是权威 dev 模板值,拒绝静默覆盖未知配置。
+function Set-OwnerStoreDsn([string]$Text, [string]$NewDsn) {
+    $location = Get-YamlSectionSecretLocation 'owner' $Text 'mysql_client' 'dsn'
+    if (-not $location.RawValue.Contains('pandora_dev_pwd')) {
+        throw '[FATAL] owner.mysql_client.dsn 不是权威 dev 模板值(未见 dev 凭据特征),拒绝静默覆盖未知配置。'
+    }
+    $location.Lines[$location.SecretIndex] = $location.Prefix + '"' + (ConvertTo-YamlDoubleQuoted $NewDsn) + '"' + $location.Suffix
+    return ($location.Lines -join $location.Newline)
+}
+
+# -Prod 机械打开 owner 服务端 TiDB 强校验(§9.22):dev 模板 require_tidb: false 只服务
+# 本地单机 MySQL 联调;线上产物必须 true —— owner 启动查 VERSION() 必须含 -TiDB-,
+# 不符 fail-fast 拒启。与生成器侧 DSN 校验构成双层防线(DSN 字符串证不了后端真是 TiDB)。
+function Set-ProdOwnerRequireTiDB([string]$text) {
+    $pattern = '(?m)^([ \t]{2})require_tidb:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] owner 模板 require_tidb 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern, '${1}require_tidb: true', 1)
+}
+
+# -Prod 全量机械关闭 gRPC reflection(审核 2026-07-22):dev 模板 enable_reflection: true
+# 只供本地 grpcurl 联调;线上开 reflection 会把全部服务面/消息结构暴露给任何可达客户端,
+# 便于探测攻击面。所有服务统一关,不许任何 -Prod 产物继承 dev 宽松档。
+function Set-ProdReflectionOff([string]$svcName, [string]$text) {
+    $pattern = '(?m)^([ \t]+)enable_reflection:[ \t]*(?:true|false)[ \t]*(?:#.*)?$'
+    $anchorCount = [regex]::Matches($text, $pattern).Count
+    if ($anchorCount -ne 1) {
+        throw "[FATAL] $svcName 模板 enable_reflection 锚点异常(count=$anchorCount),拒绝生成 -Prod 产物。"
+    }
+    return [regex]::Replace($text, $pattern, '${1}enable_reflection: false', 1)
 }
 
 # allocator(ds-allocator / hub-allocator)专用改写:根据 -AllocatorMode 把 dev 的
@@ -1331,6 +1466,23 @@ function Assert-GeneratedSet {
                 Assert-BattleResultConsumeTopics $yaml @('pandora.ds.lifecycle')
             } else {
                 Assert-BattleResultConsumeTopics $yaml @('pandora.battle.result', 'pandora.ds.lifecycle')
+            }
+        }
+        # -Prod 产物合约(审核 P0):实时成长通道必须被机械关断,
+        # 任何模板漂移/替换 0 次都在发布前失败,不允许静默放行。
+        if ($Prod -and $svc.Name -eq 'battle-result') {
+            if (([regex]::Matches($yaml, '(?m)^[ \t]{2}progress_enabled:[ \t]*false[ \t]*$')).Count -ne 1 -or
+                [regex]::IsMatch($yaml, '(?m)^[ \t]{2}progress_enabled:[ \t]*true')) {
+                throw '[FATAL] -Prod 产物 battle-result progress_enabled 必须且只能为 false(实时通道启用是独立显式动作)。'
+            }
+        }
+        if ($svc.Name -eq 'player') {
+            if (([regex]::Matches($yaml, '(?m)^[ \t]{2}dir:[ \t]*"/app/configtable/active"[ \t]*$')).Count -ne 1 -or
+                [regex]::IsMatch($yaml, 'exp_curve:')) {
+                throw '[FATAL] player 集群产物必须只读 /app/configtable/active 且不得残留 exp_curve。'
+            }
+            if ($Prod -and ([regex]::Matches($yaml, '(?m)^[ \t]{2}experience_enabled:[ \t]*false[ \t]*$')).Count -ne 1) {
+                throw '[FATAL] -Prod 产物 player experience_enabled 必须为 false(策划正式数值确认后独立启用)。'
             }
         }
     }
@@ -1524,7 +1676,20 @@ try {
         $src = Join-Path $ProjectRoot $s.Conf
         $raw = Get-Content -LiteralPath $src -Raw
         $out = Convert-DevToCluster $raw
+        if ($s.Name -eq 'player') { $out = Set-PlayerClusterConfigTableDir $out }
         if ($s.Name -eq 'auction') { $out = Set-AuctionClusterSafety $out }
+        if ($Prod -and $s.Name -eq 'battle-result') { $out = Set-ProdBattleResultProgressOff $out }
+        if ($Prod -and $s.Name -eq 'push') { $out = Set-ProdPushSessionGateOn $out }
+        if ($Prod -and $s.Name -eq 'player') {
+            $out = Set-ProdPlayerExperienceOff $out
+            $out = Set-ProdPlayerHistoryCleanupOff $out
+        }
+        if ($Prod) { $out = Set-ProdReflectionOff $s.Name $out }
+        if ($s.Name -eq 'owner' -and -not [string]::IsNullOrWhiteSpace($OwnerStoreDsn)) {
+            # -Prod 时 OwnerStoreDsn 已强制非空(§9.22 校验块);非 -Prod 为显式本地覆盖。
+            $out = Set-OwnerStoreDsn $out $OwnerStoreDsn
+        }
+        if ($Prod -and $s.Name -eq 'owner') { $out = Set-ProdOwnerRequireTiDB $out }
         $out = Convert-Secret $s.Name $out
         if ($s.Name -eq 'battle-result' -and $DsAuthorityModeToInject -eq 'redis') {
             $out = Set-BattleResultRedisAuthorityIngress $out
@@ -1555,4 +1720,4 @@ finally {
     }
 }
 
-Write-Host "[ OK ] 生成并事务发布 $($yamlNames.Count) 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators, player_secret=$(if ($null -ne $PlayerSecretToInject) { '真密钥' } else { 'dev' }), ds_secret=$(if ($null -ne $DsSecretToInject) { '真密钥' } else { 'dev' }), match_resume_auth=$(if ($EffectiveMatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) { 'dev' } else { '真密钥' }), allocation_abort_auth=$(if ($EffectiveAllocationAbortAuthSecret -ceq $DevAllocationAbortAuthSecret) { 'dev' } else { '真密钥' })) -> $OutDir" -ForegroundColor Green
+Write-Host "[ OK ] 生成并事务发布 $($yamlNames.Count) 个集群版配置(allocator=$AllocatorMode, host_allocators=$HostAllocators, player_secret=$(if ($null -ne $PlayerSecretToInject) { '真密钥' } else { 'dev' }), ds_secret=$(if ($null -ne $DsSecretToInject) { '真密钥' } else { 'dev' }), match_resume_auth=$(if ($EffectiveMatchResumeAuthSecret -ceq $DevMatchResumeAuthSecret) { 'dev' } else { '真密钥' }), allocation_abort_auth=$(if ($EffectiveAllocationAbortAuthSecret -ceq $DevAllocationAbortAuthSecret) { 'dev' } else { '真密钥' }), owner_store=$(if (-not [string]::IsNullOrWhiteSpace($OwnerStoreDsn)) { '注入DSN' } else { 'dev-mysql' })) -> $OutDir" -ForegroundColor Green

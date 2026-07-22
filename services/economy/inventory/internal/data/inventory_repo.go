@@ -135,6 +135,36 @@ type InventoryRepo interface {
 	// DiscardInstance 丢弃实例(DELETE WHERE instance_id AND player_id)。
 	// 幂等:不存在(已丢弃)→ OK no-op(auth 已保证只能删自己的)。
 	DiscardInstance(ctx context.Context, playerID, instanceID uint64) error
+
+	// ── 邮件 transfer 附件实例托管(2026-07-22,bag-domain.md §7.1;inventory_transfer.go)──
+
+	// EscrowOutInstances 从源玩家同事务扣出实例并托管(bound 实例拒);幂等键 = escrowKey
+	// (指纹含 to_player+ids)。返回托管快照(调用方装 TransferAttachment.item,原样不改)。
+	EscrowOutInstances(ctx context.Context, sourcePlayerID, toPlayerID uint64, instanceIDs []uint64, escrowKey, detail string) ([]EscrowedInstance, bool, error)
+
+	// ClaimTransferInstances 托管行原样搬进领取人实例表(同事务;只认托管行:缺行 / 收件人
+	// 不符 / config 漂移 → ErrInventoryItemNotFound 整批拒;容量满 → ErrInventoryCapacityFull)。
+	ClaimTransferInstances(ctx context.Context, toPlayerID uint64, items []TransferClaimItem, capacity int32, idempotencyKey, detail string) (already bool, err error)
+
+	// ReleaseTransferEscrow 托管释放回各行 source 玩家(saga 补偿;行缺失 no-op 幂等,
+	// 不设容量闸,slot NULL 入包)。返回实际释放行数。
+	ReleaseTransferEscrow(ctx context.Context, instanceIDs []uint64) (released int, err error)
+
+	// ConsumeTransferEscrow 消托管行不物化(bag phase 2 DS 领取链;资产已经 journal 入包)。
+	// 存在的行必须 destined to 该玩家;行缺失 no-op 幂等。返回实际消费行数。
+	ConsumeTransferEscrow(ctx context.Context, toPlayerID uint64, instanceIDs []uint64) (consumed int, err error)
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// DeleteLedgerBefore 删 created_at 超过保留期的幂等流水(单批 limit 行,防长事务锁表)。
+	// 保留期必须远大于一切发放/使用/出售/结算的重试窗口(分钟级):行删除后同 key 重放
+	// 不再被 uk 拦截,靠"对应操作早已终态、调用方不会再重试"保证不重复入账。
+	DeleteLedgerBefore(ctx context.Context, retentionDays, limit int) (int64, error)
+
+	// DeleteClosedEscrowBefore 删已关闭(status=closed)且 updated_at 超过保留期的托管行
+	// (单批 limit 行)。active 行永不清理(EnsureAuctionEscrow 依赖其存在性核对遗留订单)。
+	// 删后迟到 ReleaseEscrow 命中 ErrNoRows → already no-op,fail-safe。
+	DeleteClosedEscrowBefore(ctx context.Context, retentionDays, limit int) (int64, error)
 }
 
 // MySQLInventoryRepo 是基于 database/sql 的 InventoryRepo 实现。
@@ -353,6 +383,17 @@ func deductItemTx(ctx context.Context, tx *sql.Tx, playerID uint64, itemConfigID
 		return 0, errcode.New(errcode.ErrInventoryInsufficient, "insufficient item player=%d item=%d need=%d have=%d", playerID, itemConfigID, n, have)
 	}
 	remaining := have - n
+	if remaining == 0 {
+		// 堆叠扣空即删行(2026-07-22 用户要求):不留 count=0 死行(读侧本就过滤 count>0,
+		// 留行只会让 player_items 无界堆积)。后续再发放同 config 走 GrantItems 的
+		// upsert(INSERT ... ON DUPLICATE)重建行,行为不变。
+		if _, derr := tx.ExecContext(ctx,
+			`DELETE FROM player_items WHERE player_id = ? AND item_config_id = ?`,
+			playerID, itemConfigID); derr != nil {
+			return 0, errcode.New(errcode.ErrInternal, "delete emptied item player=%d item=%d: %v", playerID, itemConfigID, derr)
+		}
+		return 0, nil
+	}
 	if _, uerr := tx.ExecContext(ctx,
 		`UPDATE player_items SET count = ? WHERE player_id = ? AND item_config_id = ?`,
 		remaining, playerID, itemConfigID); uerr != nil {
@@ -742,8 +783,10 @@ func (r *MySQLInventoryRepo) EnsureAuctionEscrow(
 		if found {
 			return true, nil
 		}
-		// auction_escrow 正常流程从不 DELETE。仅防御外部清理恰好发生在 1062 与复查之间；
-		// 重新竞争 INSERT，仍不把不可解释的消失当成功。
+		// auction_escrow 的 active 行正常流程从不 DELETE(保留期清理只删 closed 且超期 90 天
+		// 的行,见 DeleteClosedEscrowBefore;本函数只服务 OPEN/PARTIAL 遗留订单,其 escrow 若存在
+		// 必为 active,不会被清理命中)。此处仅防御外部清理恰好发生在 1062 与复查之间;
+		// 重新竞争 INSERT,仍不把不可解释的消失当成功。
 	}
 	return false, errcode.New(errcode.ErrInternal,
 		"escrow disappeared after duplicate player=%d order=%d attempts=%d",
@@ -989,6 +1032,32 @@ func consumeGoldEscrowTx(ctx context.Context, tx *sql.Tx, playerID, orderID uint
 		return errcode.New(errcode.ErrInternal, "consume gold escrow player=%d order=%d: %v", playerID, orderID, uerr)
 	}
 	return nil
+}
+
+// ── 保留期清理(CLAUDE.md §9 不变量 24)────────────────────────────────────────
+//
+// inventory_ledger / auction_escrow(closed) 是只增表,靠 biz/sweep.go 周期批量删除保证有界。
+// DELETE ... LIMIT 幂等,多副本并发跑只多花空批,不需要锁(对齐 mail sweep)。
+
+func (r *MySQLInventoryRepo) DeleteLedgerBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
+	return r.execAffected(ctx, "delete ledger",
+		`DELETE FROM inventory_ledger WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
+		retentionDays, limit)
+}
+
+func (r *MySQLInventoryRepo) DeleteClosedEscrowBefore(ctx context.Context, retentionDays, limit int) (int64, error) {
+	return r.execAffected(ctx, "delete closed escrow",
+		`DELETE FROM auction_escrow WHERE status = ? AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY) LIMIT ?`,
+		escrowStatusClosed, retentionDays, limit)
+}
+
+func (r *MySQLInventoryRepo) execAffected(ctx context.Context, op, q string, args ...any) (int64, error) {
+	res, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "%s: %v", op, err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }
 
 // isDupErr 判断是否 MySQL 1062 唯一键冲突(go-sql-driver 错误串含 "Error 1062")。

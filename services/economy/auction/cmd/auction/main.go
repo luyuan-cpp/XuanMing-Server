@@ -324,6 +324,37 @@ func main() {
 			"interval_s", cfg.Auction.SideEffectReconcileIntervalSeconds,
 			"batch_per_shard", cfg.Auction.SideEffectReconcileBatch)
 
+		// 9c. 保留期清理(§9.24):终态挂单 / 已结算成交流水 / 超期幂等键映射逐分片批删,
+		//     只增表增长有界(data/retention.go)。多副本各自跑,DELETE 幂等无需锁。
+		retentionCtx, stopRetention := context.WithCancel(context.Background())
+		defer stopRetention()
+		go func() {
+			interval := time.Duration(cfg.Auction.RetentionSweepIntervalSeconds) * time.Second
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-retentionCtx.Done():
+					return
+				case <-ticker.C:
+					cutoffMs := time.Now().AddDate(0, 0, -cfg.Auction.RetentionDays).UnixMilli()
+					orders, matches, keys, rerr := repo.PurgeRetention(retentionCtx, cutoffMs, cfg.Auction.RetentionSweepBatch)
+					if rerr != nil {
+						helper.Warnw("msg", "auction_retention_sweep_failed", "err", rerr,
+							"orders", orders, "matches", matches, "idem_keys", keys)
+					} else if orders > 0 || matches > 0 || keys > 0 {
+						helper.Infow("msg", "auction_retention_swept",
+							"orders", orders, "matches", matches, "idem_keys", keys,
+							"retention_days", cfg.Auction.RetentionDays)
+					}
+				}
+			}
+		}()
+		helper.Infow("msg", "retention_sweeper_ready",
+			"retention_days", cfg.Auction.RetentionDays,
+			"interval_s", cfg.Auction.RetentionSweepIntervalSeconds,
+			"batch_per_shard", cfg.Auction.RetentionSweepBatch)
+
 		// 9b. 过期清扫(限制#1 补偿):OrderTTLSeconds > 0 时起后台 ticker,周期把超 TTL 仍未成交的
 		//     挂单置 EXPIRED、移出簿、退还 escrow。随 app 生命周期退出(ctx 取消)。
 		if cfg.Auction.OrderTTLSeconds > 0 {

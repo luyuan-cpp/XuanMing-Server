@@ -107,6 +107,11 @@ SendPersonalMail(player_id, Mail) → mail_id
 2. 系统邮件零写扩散(发邮件 O(1),不随玩家数增长)。
 3. 客户端只拿 `Mail` 视图,不回 StorageRecord。
 4. 过期附件清理后必有补偿或归档,不静默丢失。
+5. 附件三形态各走各的交付链(2026-07-22,bag-domain.md §7.1):stack → GrantItems、
+   instance(铸造凭证)→ GrantInstances、transfer(既存实例托管转移,只改归属)→
+   ClaimTransferInstances(领取只认 inventory 托管行,伪造附件必 fail-closed)。
+   transfer 仅个人邮件可携带;发送方必须先 EscrowOutInstances 托管(saga,失败补偿
+   ReleaseTransferEscrow);任一形态交付失败整封保持未领取,重领靠各自幂等键去重。
 
 ## 8. 待人拍板
 

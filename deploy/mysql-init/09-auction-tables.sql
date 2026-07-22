@@ -54,9 +54,12 @@ CREATE TABLE IF NOT EXISTS `auction_orders` (
     KEY `idx_market_side_status` (`market_id`, `side`, `status`),
     KEY `idx_owner_status` (`owner_id`, `status`),
     KEY `idx_owner_order` (`owner_id`, `order_id`),
-    KEY `idx_status_created` (`status`, `created_at_ms`)
+    KEY `idx_status_created` (`status`, `created_at_ms`),
+    KEY `idx_terminal_purge` (`status`, `updated_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 拍卖行挂单/出价(撮合权威;uk owner+idem 防重复挂单)';
+  COMMENT='Pandora 拍卖行挂单/出价(撮合权威;uk owner+idem 防重复挂单;终态行保留 90 天由 auction 保留期清理回收,§9.24)';
+-- idx_terminal_purge 服务保留期清理(DELETE WHERE status IN 终态 AND updated_at_ms<cutoff)。
+-- 既有库需手动补:ALTER TABLE auction_orders ADD KEY idx_terminal_purge (status, updated_at_ms);
 
 CREATE TABLE IF NOT EXISTS `auction_matches` (
     `match_id`       BIGINT UNSIGNED NOT NULL COMMENT '雪花成交 ID(结算幂等键,不变量 §9.2)',
@@ -80,9 +83,11 @@ CREATE TABLE IF NOT EXISTS `auction_matches` (
     KEY `idx_sell_order` (`sell_order_id`),
     KEY `idx_buy_order` (`buy_order_id`),
     KEY `idx_sell_settlement` (`sell_order_id`, `settlement_status`),
-    KEY `idx_buy_settlement` (`buy_order_id`, `settlement_status`)
+    KEY `idx_buy_settlement` (`buy_order_id`, `settlement_status`),
+    KEY `idx_settled_purge` (`settlement_status`, `event_pending`, `matched_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 拍卖行成交流水(PK match_id 防重复结算,不变量 §9.2/§9.7)';
+  COMMENT='Pandora 拍卖行成交流水(PK match_id 防重复结算,不变量 §9.2/§9.7;已结算行保留 90 天由 auction 保留期清理回收,§9.24)';
+-- 既有库需手动补:ALTER TABLE auction_matches ADD KEY idx_settled_purge (settlement_status, event_pending, matched_at_ms);
 
 -- owner 维度的幂等协调表放在 owner_id 对应的确定性分片。新二进制先锁 guard 行，再广播
 -- 一次兼容历史订单并登记 canonical 请求，保证同一 owner+key 跨 market 分片仍只能映射一单。
@@ -104,9 +109,11 @@ CREATE TABLE IF NOT EXISTS `auction_idempotency_keys` (
     `price`           BIGINT          NOT NULL,
     `created_at_ms`   BIGINT          NOT NULL,
     PRIMARY KEY (`owner_id`, `idempotency_key`),
-    UNIQUE KEY `uk_idempotency_order` (`order_id`)
+    UNIQUE KEY `uk_idempotency_order` (`order_id`),
+    KEY `idx_created` (`created_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='拍卖 owner+idempotency_key 跨 market 分片 canonical 映射';
+  COMMENT='拍卖 owner+idempotency_key 跨 market 分片 canonical 映射(保留 90 天由 auction 保留期清理回收,§9.24)';
+-- 既有库需手动补:ALTER TABLE auction_idempotency_keys ADD KEY idx_created (created_at_ms);
 
 CREATE TABLE IF NOT EXISTS `auction_shard_topology` (
     `singleton_id`          TINYINT UNSIGNED NOT NULL COMMENT '固定为 1',

@@ -17,7 +17,10 @@ package biz
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/IBM/sarama"
 
@@ -30,9 +33,12 @@ import (
 	"github.com/luyuancpp/pandora/services/runtime/push/internal/data"
 )
 
-// FrameSender 抽象 ConnectionManager.SendTo(便于 consumer 单测注入)。
+// FrameSender 抽象 ConnectionManager 的唤醒面(便于 consumer 单测注入)。
+// SendTo 只传唤醒信号(帧本体已在投递缓冲);返回是否在线,仅作观测——不在线不是
+// 错误,缓冲已有,轮询/重连恢复。跨 Pod / 跨 topic 定序由 Redis 单 key Lua 保证,
+// 进程内不再需要玩家锁(审计 v2)。
 type FrameSender interface {
-	SendTo(playerID uint64, frame *pushv1.PushFrame) (online bool, err error)
+	SendTo(playerID uint64) (online bool)
 }
 
 // FrameBroadcaster 抽象 ConnectionManager.Broadcast(广播类 topic 用,便于单测注入)。
@@ -91,13 +97,32 @@ func NewKafkaConsumer(
 
 	kc := &KafkaConsumer{topic: topic, broadcast: kafkax.IsBroadcastTopic(topic), cm: cm, offline: offline}
 
+	initialOffset := int64(0) // 缺省 OffsetOldest(定向 topic:组内断点续传)
+	if kc.broadcast {
+		// 广播 topic 每 Pod 独立 consumer group(审计 P1:共享 group 只有一个 Pod 消费
+		// 到广播,其他 Pod 上的在线玩家收不到;广播不缓存,必须每 Pod 都消费)。
+		// fresh group 从 Newest 起消费:广播丢失容忍,新 Pod 不回放历史公告刷屏。
+		// 同时关闭 offset 提交(审计 R4 P1 回滚重放):group 名按 hostname 派生,Pod
+		// 重启同名(StatefulSet/主机名复用)时若存在 committed offset,sarama 会忽略
+		// Newest 从旧位点续读,把停机窗口积压的广播整段重放给全部在线连接。纯实时
+		// 消费不留位点,每次启动恒从 Newest 开始,停机窗口内广播有意丢弃(契约)。
+		host, herr := os.Hostname()
+		if herr != nil || host == "" {
+			host = fmt.Sprintf("anon-%d", time.Now().UnixNano())
+		}
+		groupID = groupID + "-bcast-" + host
+		initialOffset = sarama.OffsetNewest
+	}
+
 	c, err := kafkax.NewKeyOrderedConsumer(kafkax.ConsumerConfig{
-		Brokers:        brokers,
-		Topic:          topic,
-		GroupID:        groupID,
-		PartitionCount: partitionCnt,
-		RetryPolicy:    retry,
-		DLQ:            dlq,
+		Brokers:             brokers,
+		Topic:               topic,
+		GroupID:             groupID,
+		PartitionCount:      partitionCnt,
+		RetryPolicy:         retry,
+		DLQ:                 dlq,
+		InitialOffset:       initialOffset,
+		DisableOffsetCommit: kc.broadcast,
 	}, kc.handle)
 	if err != nil {
 		return nil, err
@@ -126,22 +151,24 @@ func (k *KafkaConsumer) Close() error { return k.consumer.Close() }
 func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	h := plog.With(ctx)
 
-	// 广播类 topic(chat.world / system.notify):key 为空,给全部在线玩家 Broadcast。
-	// 不写离线缓存(广播无 per-player 归属;离线玩家重连后不补推全服广播,避免历史公告刷屏)。
+	// 广播类 topic(chat.world / system.notify):key 为空,给本 Pod 全部在线玩家投递
+	// (每 Pod 独立 consumer group,全 Pod 都消费同一条,见 NewKafkaConsumer)。
+	// 不写投递缓冲(广播无 per-player 归属;离线玩家重连后不补推全服广播)。
 	if k.broadcast {
-		// frame 是向所有当前连接复用的只读推送帧;EventType 从 Kafka header 解析并保留 0 兼容值。
+		// ts_ms 置 0(审计 P1:客户端用所有帧的最大 ts_ms 推进恢复游标,广播若携带
+		// kafka 时间戳会永久越过较小的玩家专属游标,导致定向帧被补推跳过。广播不参与
+		// 游标体系;客户端 max(cursor, 0) 恒 no-op)。
 		frame := &pushv1.PushFrame{
 			Topic:     msg.Topic,
 			Payload:   msg.Value,
-			TsMs:      msg.Timestamp.UnixMilli(),
+			TsMs:      0,
 			TraceId:   headerStr(msg.Headers, "trace_id"),
 			EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
 		}
-		// sent 与 failed 分别记录本次广播成功、失败的在线连接数,仅部分失败需要告警。
 		sent, failed := k.cm.Broadcast(frame)
 		if failed > 0 {
-			h.Warnw("msg", "push_broadcast_partial_failed",
-				"topic", msg.Topic, "sent", sent, "failed", failed)
+			h.Warnw("msg", "push_broadcast_partial_dropped",
+				"topic", msg.Topic, "sent", sent, "dropped", failed)
 		}
 		return nil
 	}
@@ -160,13 +187,24 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 		return kafkax.Poison(err)
 	}
 
-	// 分片:多 Cell 下本实例只应拥有 owner cell == 本 cell 的玩家;收到非本 cell 玩家消息
-	// 说明路由漂移 / rebalance,仅告警不阻断(本地交付仍正确),转投属基础设施。router 为 nil
-	// (单 Cell)→ 不告警。
-	k.guardPlayerOwnership(ctx, playerID, msg.Topic)
+	// 2. Cell 归属:非本 cell 玩家的消息**毒丸投 DLQ,不本地处理**(审计 P1:本 cell
+	// Redis 对连接所在 cell 不可见,"照常交付"实为写错缓存 + ACK = 静默丢;DLQ 留证
+	// 可由基础设施 / 人工重投到 owner cell)。router 为 nil(单 Cell)不判定。
+	// ⚠️ 诚实标注(审计 R4:路由闭环未实现):当前没有自动转投——业务生产者按
+	// player_id 路由到正确 cell 的 kafka 集群是**部署面契约**(多 cell 上线前置项),
+	// 本判定只是错配的兜底暴露(DLQ 告警 = 生产者路由或 cell 表配置有 bug),
+	// 不是跨 cell 消息通道。单 Cell 部署(当前唯一形态)不受影响。
+	if owner, owned, known := k.ownsPlayer(playerID); known && !owned {
+		h.Errorw("msg", "push_player_not_owned_poisoned",
+			"player_id", playerID, "topic", msg.Topic,
+			"self_region", k.selfRegion, "self_cell", k.selfCell,
+			"owner_region", owner.RegionID, "owner_cell", owner.CellID)
+		return kafkax.Poison(fmt.Errorf("player %d owned by region=%d cell=%d, not self region=%d cell=%d",
+			playerID, owner.RegionID, owner.CellID, k.selfRegion, k.selfCell))
+	}
 
-	// 2. 构 PushFrame(payload 直接是业务 Event proto bytes;ts_ms 取 kafka 消息时间)
-	// frame 保留业务 payload 原字节,只补齐 topic、时间、链路与域内事件类型等路由元数据。
+	// 3. 构 PushFrame(payload 直接是业务 Event proto bytes;ts_ms 初值为 kafka 消息
+	// 时间,AssignAndBuffer 会重铸为该玩家的投递游标——原始事件时间由业务 payload 自带)。
 	frame := &pushv1.PushFrame{
 		Topic:     msg.Topic,
 		Payload:   msg.Value,
@@ -175,32 +213,23 @@ func (k *KafkaConsumer) handle(ctx context.Context, msg *sarama.ConsumerMessage)
 		EventType: headerUint32(msg.Headers, kafkax.HeaderEventType),
 	}
 
-	// 3. 路由:在线 → SendTo;离线或 send 失败 → 写 ZSET
-	online, sendErr := k.cm.SendTo(playerID, frame)
-	if online && sendErr == nil {
-		// 成功交付,无需写 offline
-		return nil
-	}
-
-	// 在线但 stream.Send 失败:帧未交付,写 offline 让客户端重连后通过 last_seen_ms 补推。
-	// (client 端用 ts_ms + trace_id 做幂等判重,不依赖 push 侧规避双投递)
-	if online && sendErr != nil {
-		h.Warnw("msg", "push_send_failed_fallback_offline",
-			"topic", msg.Topic, "player_id", playerID, "err", sendErr)
-	}
-
-	// offline:append 到 redis ZSET(在线 send 失败 / 玩家真离线均走此路径)
-	if err := k.offline.Append(ctx, playerID, frame); err != nil {
+	// 4. 交付(审计 v2):① 单 Lua 原子「分配游标 + 入投递缓冲」(Redis 单点定序,
+	// 跨 Pod / 跨 topic 并发安全,无进程锁;失败拒 ack → kafkax 重试/DLQ);
+	// ② 唤醒本 Pod 连接写者拉取(跨 Pod 写入由写者定时轮询兜底)。
+	// kafka 重投(ack 前崩溃 / rebalance)会给同一业务事件分配新游标 → 可能重复投递,
+	// at-least-once 诚实契约(push.proto),业务侧幂等/按业务 ID 判重。
+	if _, err := k.offline.AssignAndBuffer(ctx, playerID, frame); err != nil {
 		OfflineAppendFailed.WithLabelValues(msg.Topic).Inc()
 		h.Errorw(
-			"msg", "push_offline_append_failed",
+			"msg", "push_delivery_buffer_failed",
 			"topic", msg.Topic,
 			"player_id", playerID,
 			"code", errcode.ErrPushOfflineCorrupted,
 			"err", err,
 		)
-		return errcode.New(errcode.ErrPushOfflineCorrupted, "offline append failed: %v", err)
+		return errcode.New(errcode.ErrPushOfflineCorrupted, "delivery buffer failed: %v", err)
 	}
+	k.cm.SendTo(playerID)
 	return nil
 }
 

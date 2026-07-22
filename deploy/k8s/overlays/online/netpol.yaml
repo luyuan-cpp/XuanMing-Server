@@ -6,7 +6,7 @@
 #     ② 基础设施层(mysql/redis/kafka/etcd/zookeeper):**只接受来自业务层**的入站,
 #        且只开各自服务端口;基础设施之间除「kafka→zookeeper」「etcd 自连 peer」这两条
 #        必要边外互相不可达 → 被攻破的某个基础设施 Pod 无法横向 pivot 到其它存储。
-#     ③ 业务层(19 个 Go 服务类型 / 20 个 Deployment)之间保持 mesh 全通 —— **这是有意保留的开放面**:
+#     ③ 业务层(20 个 Go 服务类型 / 21 个 Deployment)之间保持 mesh 全通 —— **这是有意保留的开放面**:
 #        业务调用图复杂(login→data-service、matchmaker→ds-allocator、各服务→push 等)
 #        且尚未逐服务梳理;真正的「业务服之间按调用图收敛 + 身份认证」交给未来的
 #        service mesh sidecar mTLS/AuthorizationPolicy(见 gateway-decision.md §16.2)。
@@ -28,7 +28,7 @@
 #     dev 的 Envoy 在宿主 docker-compose,强制 default-deny 会挡宿主→集群联调。
 #
 # 拓扑依据(2026-07-03 核实):
-#   业务层 19 服务端口 50001~50022(metrics 51001~51022);
+#   业务层 20 服务端口 50001~50022(metrics 51001~51022);
 #   基础设施 mysql:3306 / redis:6379 / kafka:9092 / etcd:2379(peer 2380) / zookeeper:2181;
 #   infra→infra 仅 kafka→zookeeper:2181;客户端(:8443)与 DS(:8444)统一经 Envoy 进,不直连业务端口。
 ---

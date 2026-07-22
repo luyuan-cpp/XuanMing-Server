@@ -248,6 +248,32 @@ func (p *KeyOrderedProducer) SendRawWithEventType(ctx context.Context, key strin
 	return nil
 }
 
+// SendRawWithHeaders 与 SendRaw 相同,额外原样携带调用方给定的 kafka headers。
+// DLQ 投递用:保留原消息全部 header(event_type 等)+ 溯源 header,回放不丢判别信息。
+func (p *KeyOrderedProducer) SendRawWithHeaders(ctx context.Context, key string, payload []byte, headers []sarama.RecordHeader) error {
+	if p.isClosed() {
+		return fmt.Errorf("producer closed")
+	}
+	partition, ok := p.consistent.GetPartition(key)
+	if !ok {
+		return fmt.Errorf("no partition")
+	}
+	pm := &sarama.ProducerMessage{
+		Topic:     p.topic,
+		Key:       sarama.StringEncoder(key),
+		Value:     sarama.ByteEncoder(payload),
+		Partition: partition,
+		Timestamp: time.Now(),
+		Headers:   headers,
+	}
+	if _, _, err := p.producer.SendMessage(pm); err != nil {
+		atomic.AddInt64(&p.errorCount, 1)
+		return fmt.Errorf("send: %w", err)
+	}
+	atomic.AddInt64(&p.successCount, 1)
+	return nil
+}
+
 // PushToPlayers 把同一份 payload 按 player_id 路由分发到 N 个玩家(W3 ④,2026-06-05)。
 //
 // 这是 push 推送的统一入口,**业务服必须走本方法**,review 时只看一处:

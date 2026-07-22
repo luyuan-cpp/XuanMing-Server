@@ -113,6 +113,13 @@ type PlayerRepo interface {
 	DeletePushOutbox(ctx context.Context, id int64) error
 	// PurgeExpHistory 删除 created_at < cutoff 的经验幂等收据(最多 limit 行,返回删除数)。
 	PurgeExpHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error)
+	// PurgeMMRHistory / PurgeAttrPointGrants / PurgeTalentPointGrants 删除 created_at < cutoff
+	// 的幂等历史行(最多 limit 行,返回删除数;CLAUDE.md §9 不变量 24)。
+	// 前置条件同 exp_history:上游重放(kafka player.update 消费 / 授予补扫)须有小于
+	// 保留期的有界期限,否则清掉幂等行 = 同一事件双发(重复加段位分/加点)。
+	PurgeMMRHistory(ctx context.Context, cutoff time.Time, limit int) (int64, error)
+	PurgeAttrPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error)
+	PurgeTalentPointGrants(ctx context.Context, cutoff time.Time, limit int) (int64, error)
 
 	// ── 领奖记录 ───────────────────────────────────────────────────────────
 	// LoadRewardClaims 读玩家领奖记录(RewardClaimStorageRecord 序列化 bytes + 乐观锁版本)。

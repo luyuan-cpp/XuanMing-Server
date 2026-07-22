@@ -1,0 +1,69 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "name": "登录",
+      "asset_path": "/Game/Level/Login/Lvl_Login.Lvl_Login",
+      "category": 1,
+      "disable_ui_shortcut": true
+    },
+    {
+      "id": 2,
+      "name": "选角",
+      "asset_path": "/Game/Level/RoleSelect/Lvl_RoleSelect.Lvl_RoleSelect",
+      "category": 2,
+      "disable_ui_shortcut": true
+    },
+    {
+      "id": 3,
+      "name": "主城",
+      "asset_path": "/Game/Test/Level/MainCity.MainCity",
+      "category": 3
+    },
+    {
+      "id": 4,
+      "name": "战斗测试",
+      "asset_path": "/Game/Test/Level/Fight/Lvl_Test_Fight.Lvl_Test_Fight",
+      "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
+      "category": 4
+    },
+    {
+      "id": 5,
+      "name": "测试场景",
+      "asset_path": "/Game/Test/Level/_Test/Level_TopDown_Test02.Level_TopDown_Test02",
+      "category": 4
+    },
+    {
+      "id": 6,
+      "name": "MOBA战斗",
+      "asset_path": "/Game/Test/Level/MobaLevel.MobaLevel",
+      "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
+      "category": 4,
+      "show_in_match_list": true
+    },
+    {
+      "id": 7,
+      "name": "松林镇副本",
+      "asset_path": "/Game/Test/Level/SonglinTown.SonglinTown",
+      "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
+      "category": 4,
+      "show_in_match_list": true
+    },
+    {
+      "id": 9,
+      "name": "PVP战斗",
+      "asset_path": "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon.map_dungeon_level_1_dungeon",
+      "game_mode_class": "/Script/Pandora.PandoraBattleGameMode",
+      "category": 4,
+      "show_in_match_list": true
+    },
+    {
+      "id": 10,
+      "name": "PVE战斗",
+      "asset_path": "/Game/Fantastic_Dungeon_Pack/maps/map_dungeon_level_1_dungeon_Pve.map_dungeon_level_1_dungeon_Pve",
+      "game_mode_class": "/Script/Pandora.PandoraPveGameMode",
+      "category": 4,
+      "show_in_match_list": true
+    }
+  ]
+}

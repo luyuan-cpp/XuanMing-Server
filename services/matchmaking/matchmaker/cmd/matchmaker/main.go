@@ -91,6 +91,16 @@ func main() {
 	var ctStore *configtable.Store
 	if dir := cfg.ConfigTable.Dir; dir != "" {
 		ctStore = configtable.NewStore()
+		// 兜底默认副本(match.map_id)必须是关卡表里的战斗类关卡。注册为批次级校验器:
+		// 启动首载与之后每次热 reload 走同一门禁(审计 P1:只查启动时,坏批次热更后
+		// 默认 map_id 请求会全部失败),失败整批不切换保留旧表。
+		defaultMapID := cfg.Match.MapId
+		ctStore.AddValidator(func(tb *configtable.Tables) error {
+			if !tb.Level.IsBattleLevel(defaultMapID) {
+				return fmt.Errorf("match.map_id %d 不是关卡表中的战斗类关卡(g_关卡.xlsx)", defaultMapID)
+			}
+			return nil
+		})
 		res, err := ctStore.Load(dir, 0)
 		if err != nil {
 			helper.Errorw("msg", "configtable_load_failed", "dir", dir, "err", err)
@@ -98,13 +108,6 @@ func main() {
 		}
 		for _, w := range res.Warnings {
 			helper.Warnw("msg", "configtable_load_warning", "warning", w)
-		}
-		// 兜底默认副本(match.map_id)必须是关卡表里的战斗类关卡,配置漂移在启动时暴露,
-		// 而不是等第一个 StartMatch(map_id=0) 被拒。
-		if !ctStore.Tables().Level.IsBattleLevel(cfg.Match.MapId) {
-			helper.Errorw("msg", "configtable_default_map_invalid", "map_id", cfg.Match.MapId,
-				"hint", "match.map_id must be a battle-category level in g_关卡.xlsx")
-			os.Exit(1)
 		}
 		helper.Infow("msg", "configtable_loaded", "dir", dir,
 			"version", res.Version, "levels", ctStore.Tables().Level.Count())

@@ -1,0 +1,37 @@
+# Pandora owner 服务开发期配置(owner-authority.md,2026-07-21)。
+#
+# - gRPC :50017 / HTTP :51017(仅 /metrics)
+# - 权威存储强依赖:dev 连本机 docker mysql 的 pandora_owner 库(单机无复制,线性一致);
+#   ⚠️ 生产必须连 TiDB(deploy/tidb-init/02-owner-tidb.sql;MySQL 异步复制切换会回滚已确认写,
+#   违反 §9.22"确认写不回滚",生产禁用)。
+# - fence/lease 协议常量不在配置(单一来源 pkg/placement,正确性常量禁调优)。
+
+server:
+  grpc:
+    network: tcp
+    addr: ":50017"
+    timeout: "5s"               # owner CAS 都是单行事务,快;卡顿宁可让调用方按 UNKNOWN 重试
+    enable_reflection: true     # dev 开;prod 关(零值=false)
+    max_conn_age: "15m"
+  http:
+    network: tcp
+    addr: ":51017"
+
+node:
+  node_id: 1
+  mysql_client:
+    dsn: "pandora:pandora_dev_pwd@tcp(127.0.0.1:3307)/pandora_owner?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_0900_ai_ci"
+    max_open_conns: 32
+    max_idle_conns: 8
+    conn_max_lifetime: "30m"
+    ping_timeout: "3s"
+
+owner:
+  # 启动时强校验权威库确为 TiDB(§9.22:MySQL 异步复制切换会回滚已确认写,生产禁用)。
+  # dev 单机 MySQL 无复制天然线性一致,保持 false;-Prod 产物由 gen_cluster_config.ps1
+  # 机械翻转为 true(配合注入的真 TiDB DSN),不允许线上产物继承 dev 宽松档。
+  require_tidb: false
+  # 审计流水保留期清理(§9.24)。
+  sweep_interval: "5m"
+  sweep_batch: 500
+  log_retention_days: 90

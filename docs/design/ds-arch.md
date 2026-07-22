@@ -177,9 +177,36 @@ DS 崩溃已入账部分保住"。约束(逐条硬性):
 5. **单一权威路径**:一场对局的发放要么全走本通道,要么全走局后结算;服务端按自己的
    水位表强制二选一(结算事务打终局标记 + 掉落发放抑制),不信 DS 声明。
 
-回退路径:battle_result `progress_disabled`(killswitch)置 true → ReportProgress 一律拒
-(ERR_INVALID_STATE),DS 收到即停流,发放自动回退局后结算路径;进行中对局已入账部分不回滚。
+回退路径:battle_result `progress_enabled`(缺省 false)置 false → **新对局**不再开流
+(ReportProgress 拒 ERR_INVALID_STATE,DS 停流回退局后结算);**已开流的进行中对局**
+继续收流到结算(每场模式以水位行存在性固化,防"部分实时 + 结算抑制"丢奖),已入账部分不回滚。
+服务端不认识的新事实类型同样返回 ERR_INVALID_STATE 整场停流(Go 先行 / DS 后行纪律),
+并**持久化停流标记**(已知事实批也不得重新开流;通道关闭拒开流同样落标记固化本场
+legacy 模式,中途重开配置不得晚开流);**已开流(水位>0)对局停流后没有结算兜底**——
+结算掉落保持抑制,停流之后的拾取 / 经验永久丢失(2026-07-22 拍板明示,与 battle.proto /
+realtime-progression.md §9 同步;该场景只该出现在违反发布纪律时,不为违纪场景做兜底)。
+首批即停流(零实时入账,水位=0)无抑制,结算路径正常发放全部产出(零双发面)。
 完整设计 / 幂等模型 / 验收矩阵见 `docs/design/realtime-progression.md`。
+
+#### ④ 背包 journal 直写(bag 域 phase 2,2026-07-22 接线)
+
+owner DS(hub 与 battle)可把**背包写操作**(拾取入包 pickup_grant / 邮件领取 mail_claim)
+异步批量直写 `pandora.bag.v1.BagService/AppendJournal`(受信写者,CLAUDE.md §9.6 五要件),
+并以 LoadBag(Admission 后 checkout)/ SaveCheckpoint(周期快照)维护随身组权威内存态。
+约束(逐条硬性,与 ③ 同族):
+
+1. **绝不阻塞 tick**:journal 单飞行单条批 + 有界超时 + 指数退避;拾取 ACK 门控语义不变
+   (入包 = 已持久化,回执确认才提交预留销毁掉落物)。
+2. **五要件逐笔满足**:①DS 凭据 Bearer(服务侧 DSCallbackGuard 验签)②owner 授权
+   (服务端 QueryOwner,record.target 与调用方 pod/uid 全等 + ADMITTED + 租约在效)
+   ③owner_epoch fencing(服务端解析代填,存储侧 CAS)④额度(单批/滑窗封顶)⑤journal 审计。
+3. **每笔幂等**:uk(player, idempotency_key)+ 内容指纹;原批原 seq 重发,前缀确认。
+4. **EPOCH_FENCED 即停写**:owner 迁移/失租后本实例永久停写,pending 按"确定未应用"
+   释放认领;新 owner DS 重新 checkout(flush-before-fence 时序继承 §9.22)。
+5. **killswitch 回退**:UE `PANDORA_BAG_JOURNAL_ENABLED`(缺省关)关闭后拾取回 ③ 通道、
+   邮件领取回客户端直连,phase 0 双路径行为不变;服务端幂等各自防双发。
+
+完整设计见 `docs/design/bag-domain.md`(§2 权威模型 / §7 邮件三段式领取 / §10 迁移路径)。
 
 ### 0.6 ⭐ 延迟不变量:局外系统放 Go = 零战斗延迟(2026-07-08)
 
@@ -201,8 +228,9 @@ DS 崩溃已入账部分保住"。约束(逐条硬性):
 **一句话红线**:局外功能尽管往 Go 加,延迟安全的充要条件只有一个 ——
 **DS 战斗中绝不同步调用大厅服务**。任何"战斗内实时读写 player/inventory/economy"的需求,
 都必须改造成"开局快照"或"局后异步上报",否则直接推翻(参照 §0.4 打破原则的门槛)。
-战斗中对大厅服务的**异步事实上报**(§0.5 ③,2026-07-20 拍板)不在禁列,
-但必须满足 ③ 的五条约束;"即时"永远靠异步实现,不靠放开同步调用。
+战斗中对大厅服务的**异步事实上报**(§0.5 ③,2026-07-20 拍板)与**背包 journal 直写**
+(§0.5 ④,2026-07-22 bag 域 phase 2)不在禁列,但必须各自满足其硬性约束;
+"即时"永远靠异步实现,不靠放开同步调用。
 
 ---
 

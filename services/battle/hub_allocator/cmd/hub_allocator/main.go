@@ -402,6 +402,18 @@ func main() {
 		}
 	}
 	uc := biz.NewHubUsecase(repo, fleet, &hubTicketSigner{signer: signer, v2: dstV2}, cfg.Hub)
+
+	// owner 权威实例租约双写(owner-authority.md migrate ⑥):owner_addr 空 = 不启用。
+	// 弱/强依赖语义见 conf.OwnerLeaseRequired 注释。
+	if cfg.Hub.OwnerAddr != "" {
+		ownerLease := data.NewGrpcOwnerLeaseRenewer(cfg.Hub.OwnerAddr)
+		defer func() { _ = ownerLease.Close() }()
+		uc.SetOwnerLeaseRenewer(ownerLease, cfg.Hub.OwnerLeaseRequired)
+		// migrate ①/③④:签票点 Begin(HUB) + census 代提交 Admit(同一连接,弱依赖)。
+		uc.SetOwnerAuthority(ownerLease)
+		helper.Infow("msg", "owner_lease_dual_write_enabled",
+			"owner_addr", cfg.Hub.OwnerAddr, "required", cfg.Hub.OwnerLeaseRequired)
+	}
 	canaryPercent, canarySeed := uint32(0), ""
 	if cfg.Mode == conf.ModeAgones {
 		canaryPercent, canarySeed = cfg.Agones.CanaryPercent, cfg.Agones.CanarySeed

@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -62,9 +63,12 @@ type RetryPolicy struct {
 }
 
 // DLQProducer 是死信队列投递抽象(kafkax.KeyOrderedProducer 直接满足)。
-// key 用原消息 key 保序;payload 为原始 bytes。
+// key 用原消息 key 保序;payload 为原始 bytes;headers 携带原消息全部 header
+// (含 event_type)+ 溯源 header(原 topic/partition/offset)——否则回放 DLQ 时
+// 无 header 消息会再次被当 legacy 解码,且无法定位原始来源(审计 P2)。
 type DLQProducer interface {
 	SendRaw(ctx context.Context, key string, payload []byte) error
+	SendRawWithHeaders(ctx context.Context, key string, payload []byte, headers []sarama.RecordHeader) error
 }
 
 // KeyOrderedConsumer 是 Pandora 通用 Kafka 消费者。
@@ -93,6 +97,16 @@ type ConsumerConfig struct {
 	RetryPolicy RetryPolicy
 	// DLQ 非 nil 时,重试耗尽 / 毒丸消息投递到死信队列;为 nil 时退化为「log + ack」(loss-tolerant 消费者)。
 	DLQ DLQProducer
+	// InitialOffset 新 consumer group 首次消费的起点:0(缺省)= OffsetOldest(历史保序
+	// 消费,§14.2 默认行为不变);sarama.OffsetNewest = 只收新消息(每 Pod 独立 group 的
+	// 广播消费用:fresh group 不得回放全部留存广播)。
+	InitialOffset int64
+	// DisableOffsetCommit 关闭 offset 提交(审计 R4 P1:广播 per-Pod group 若复用了
+	// 带已提交 offset 的 group 名——Pod 重启同名/StatefulSet——sarama 会**忽略 Initial
+	// 从旧 committed offset 续读**,把积压广播整段重放给全部在线连接)。true = 纯实时
+	// 消费者:group 永无 committed offset,每次启动必从 InitialOffset(Newest)开始,
+	// 停机窗口内的消息**有意丢弃**(广播契约:不承诺离线补投,定向帧才走投递缓冲)。
+	DisableOffsetCommit bool
 }
 
 // NewKeyOrderedConsumer 创建消费者。
@@ -111,6 +125,12 @@ func NewKeyOrderedConsumer(cfg ConsumerConfig, handler Handler) (*KeyOrderedCons
 		c.Version = cfg.Version
 	}
 	c.Consumer.Offsets.Initial = sarama.OffsetOldest
+	if cfg.InitialOffset != 0 {
+		c.Consumer.Offsets.Initial = cfg.InitialOffset
+	}
+	if cfg.DisableOffsetCommit {
+		c.Consumer.Offsets.AutoCommit.Enable = false
+	}
 	c.Consumer.Return.Errors = true
 
 	cg, err := sarama.NewConsumerGroup(cfg.Brokers, cfg.GroupID, c)
@@ -266,7 +286,19 @@ func (k *KeyOrderedConsumer) toDLQ(ctx context.Context, msg *sarama.ConsumerMess
 	if k.dlq == nil {
 		return true // 无 DLQ 通道:沿用旧行为 log + ack(已在调用点 log)
 	}
-	if err := k.dlq.SendRaw(ctx, string(msg.Key), msg.Value); err != nil {
+	// 原样保留全部原消息 header(event_type 等,回放不再被当 legacy)+ 溯源 header。
+	headers := make([]sarama.RecordHeader, 0, len(msg.Headers)+3)
+	for _, h := range msg.Headers {
+		if h != nil {
+			headers = append(headers, *h)
+		}
+	}
+	headers = append(headers,
+		sarama.RecordHeader{Key: []byte("dlq-src-topic"), Value: []byte(msg.Topic)},
+		sarama.RecordHeader{Key: []byte("dlq-src-partition"), Value: []byte(strconv.FormatInt(int64(msg.Partition), 10))},
+		sarama.RecordHeader{Key: []byte("dlq-src-offset"), Value: []byte(strconv.FormatInt(msg.Offset, 10))},
+	)
+	if err := k.dlq.SendRawWithHeaders(ctx, string(msg.Key), msg.Value, headers); err != nil {
 		klog.Errorf("[kafkax] DLQ send failed (will not ack) topic=%s partition=%d offset=%d key=%s: %v",
 			msg.Topic, msg.Partition, msg.Offset, string(msg.Key), err)
 		return false

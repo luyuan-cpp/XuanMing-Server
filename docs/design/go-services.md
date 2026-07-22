@@ -109,6 +109,7 @@ VerifyDSTicket(ticket, ds_pod_name, admission_id; Authorization: Bearer <active 
 - 英雄解锁记录
 - 皮肤记录
 - MMR 读写(写由 battle_result 调)
+- 玩家经验幂等入账、连升结算与经验快照推送
 
 **对外 RPC**:
 ```
@@ -118,10 +119,15 @@ ListHeroes(player_id) → []hero_id
 UnlockHero(player_id, hero_id, source) → ok
 GetMMR(player_id) → mmr
 UpdateMMR(player_id, delta, reason, idempotency_key) → new_mmr
+AddExperience(player_id, delta, reason, idempotency_key) → level/exp/is_max
 ```
 
 **关键不变量**:
 - `UpdateMMR` 必须**幂等**(idempotency_key = match_id),防重复扣段位
+- `AddExperience` 必须幂等;等级曲线唯一来自 `configtable/player_level_exp`(策划
+  `j_玩家等级经验.xlsx`),不允许 YAML 兜底或调用方自报阈值。player 启动前校验整表与
+  `players.level` 范围;生产正式数值确认前 `experience_enabled=false`。
+- 配置表热更只保证单 player 进程原子切换;曲线变更需先关入账入口并完成全 fleet 收敛。
 - 所有读优先走 redis 缓存(5min TTL)
 
 ---

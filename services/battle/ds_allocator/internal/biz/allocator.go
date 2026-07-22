@@ -20,6 +20,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -134,7 +135,17 @@ type AllocatorUsecase struct {
 	// 被未来改坏，nil publisher 也只能保留 active outbox 重试，绝不能把 abandoned
 	// 当作已恢复并 Expire 掉 Battle fence。
 	lifecycleRequired bool
-	locator           LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
+
+	// ownerLease / ownerLeaseRequired:owner 权威实例租约双写(owner-authority.md
+	// migrate ⑥;nil = 未启用;required 语义见 biz/owner_lease.go renewOwnerLeaseGate)。
+	ownerLease         OwnerLeaseRenewer
+	ownerLeaseRequired bool
+
+	// ownerAuth / ownerAdmitted:owner 迁移弱依赖调用面 + census 已准入缓存
+	// (owner-authority.md migrate ②/③;见 biz/owner_authority.go)。
+	ownerAuth     OwnerAuthority
+	ownerAdmitted sync.Map
+	locator       LocationRefresher // 可为 nil(未配 locator_addr 时不续期 BATTLE 位置)
 
 	// Model B 仅在 agones+enforce+authority_mode=redis 时由 main 注入。Redis authRepo 是
 	// 唯一授权权威；K8s annotation 只投递 pending 凭据。
@@ -528,6 +539,16 @@ func (u *AllocatorUsecase) AllocateBattleWithCombatFactions(
 		u.cleanupAllocatedBattle(ctx, matchID, allocationID, podName, authoritative)
 		return nil, werr
 	}
+
+	// owner 迁移双写(owner-authority.md migrate ②):READY 交付前逐玩家弱 Begin(BATTLE)。
+	// 失败仅告警,分配照常(路由决策不变,行为切换属 contract);预算限界防 owner 卡顿拖慢分配。
+	ownerBeginPlayersWeak(ctx, u.ownerAuth, playerIDs, ownerTypeBattle, data.OwnerTargetView{
+		PodName:                  res.DSPodName,
+		InstanceUID:              res.GameserverUID,
+		InstanceEpoch:            res.InstanceEpoch,
+		AssignmentOrAllocationID: res.AllocationID,
+		ReleaseTrack:             res.ReleaseTrack,
+	}, 3*time.Second)
 
 	plog.With(ctx).Infow("msg", "battle_ready_after_heartbeat", "match_id", matchID, "pod", podName, "ds_addr", addr)
 	return res, nil
@@ -1688,6 +1709,22 @@ func (u *AllocatorUsecase) HeartbeatAuthorizedWithPlayers(
 	})
 	if err != nil {
 		return nil, err
+	}
+	// owner 权威实例租约双写(owner-authority.md migrate ⑥):必须在心跳响应返回前完成,
+	// 失败语义(弱/强依赖)见 renewOwnerLeaseGate。
+	ownerLeaseTrack := ""
+	if out.Battle != nil {
+		ownerLeaseTrack = out.Battle.GetReleaseTrack()
+	}
+	if lerr := renewOwnerLeaseGate(ctx, u.ownerLease, u.ownerLeaseRequired,
+		id.PodName, id.InstanceUID, id.InstanceEpoch, ownerLeaseTrack); lerr != nil {
+		return nil, lerr
+	}
+	// owner 迁移准入代提交(owner-authority.md migrate ③,近似:授权 census 即准入证据;
+	// contract 阶段移交 DS Admission 链)。弱依赖,失败/屏障未开都不影响心跳。
+	if snapshotPresent && len(activePlayerIDs) > 0 {
+		ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, activePlayerIDs,
+			ownerTypeBattle, id.PodName, id.InstanceUID, 2*time.Second)
 	}
 	result := &HeartbeatResult{
 		AcceptedTokenGen:      out.Active.Gen,

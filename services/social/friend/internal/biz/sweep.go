@@ -1,0 +1,38 @@
+// sweep.go — friend 终态请求保留期清理(2026-07-21,CLAUDE.md §9 不变量 24 落地)。
+//
+// 背景:friend_requests 每对 (requester,target) 至多一行(uk 复用),但 accepted/rejected/
+// expired 终态行随社交图对数累积。终态行无资产语义(好友关系权威在 friendships),
+// 超保留期(默认 90 天)删除后再次发起 = 全新 INSERT pending,行为等价。pending 永不清。
+//
+// 多副本:各副本独立跑,无锁(对齐 mail sweep)——DELETE 幂等,并发只多花空批。
+package biz
+
+import (
+	"context"
+	"time"
+
+	plog "github.com/luyuancpp/pandora/pkg/log"
+)
+
+// SweepTerminalRequests 跑一轮终态请求清理(至多一批 cfg.SweepBatch),由调用方 ticker 驱动。
+func (u *FriendUsecase) SweepTerminalRequests(ctx context.Context) {
+	if n, err := u.repo.DeleteTerminalRequestsBefore(ctx, u.cfg.RequestRetentionDays, u.cfg.SweepBatch); err != nil {
+		plog.With(ctx).Warnw("msg", "friend_request_sweep_failed", "err", err)
+	} else if n > 0 {
+		plog.With(ctx).Infow("msg", "friend_request_swept", "deleted", n, "retention_days", u.cfg.RequestRetentionDays)
+	}
+}
+
+// RunRequestSweep 周期跑终态请求保留期清理,直到 ctx 取消。
+func (u *FriendUsecase) RunRequestSweep(ctx context.Context) {
+	ticker := time.NewTicker(u.cfg.SweepInterval.Std())
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			u.SweepTerminalRequests(ctx)
+		}
+	}
+}

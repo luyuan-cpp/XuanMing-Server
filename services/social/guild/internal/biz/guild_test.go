@@ -257,6 +257,11 @@ func (f *fakeGuildRepo) ListPendingRequests(_ context.Context, guildID, cursor u
 	return out, nil
 }
 
+// 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
+func (f *fakeGuildRepo) DeleteTerminalJoinRequestsBefore(context.Context, int, int) (int64, error) {
+	return 0, nil
+}
+
 // ── fakeGuildPusher ─────────────────────────────────────────────────────────────
 
 type guildPushRecord struct {

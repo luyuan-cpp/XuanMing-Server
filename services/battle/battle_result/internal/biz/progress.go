@@ -9,11 +9,16 @@
 // 错误语义(DS 侧行为契约,battle.proto ReportProgress 注释):
 //   - ErrUnavailable(水位竞争 / DB 瞬时)→ DS 原批重试;
 //   - ErrInvalidArg / ErrUnauthorized(坏批 / 越权)→ DS 丢批告警,继续后续批;
-//   - ErrInvalidState(对局已结算 / 通道关闭)→ DS 停流,回退局后结算路径。
+//   - ErrInvalidState(对局已结算 / 通道关闭 / 未知事实类型)→ DS 停流,不得无限重试
+//     (未知事实 = 新 DS 对旧 Go,能力不匹配是整场性质的,丢批语义会造成逐批永久丢失)。
+//     停流后果:已 ACK 部分保持有效;水位>0 时结算掉落发放保持抑制(单一权威路径),
+//     停流之后的拾取 / 经验不结算兜底,本场剩余实时奖励永久丢失,错误日志告警留证
+//     (该场景只该出现在违反 Go 先行发布纪律时,不为违纪场景做兜底)。
 package biz
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 
@@ -67,11 +72,52 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 	if wm.Settled {
 		return 0, errcode.New(errcode.ErrInvalidState, "match %d already settled, progress rejected", matchID)
 	}
+	if wm.Stopped {
+		// 停流标记持久化(审计 P1):未知事实停流后,违纪 DS 再发只含已知事实的批
+		// 也一律拒,禁止重新开流(契约:整场停流、剩余实时奖励永久丢失)。
+		return 0, errcode.New(errcode.ErrInvalidState,
+			"match %d progress stream permanently stopped, rejected", matchID)
+	}
 	// 每场模式以水位行存在性固化(§22 单一权威):行已存在 = 本场发放权已归实时通道,
 	// killswitch 中途关闭不影响进行中对局(否则"部分实时 + 结算掉落被整体抑制"会丢奖);
 	// 行不存在时由开关决定能否开流(默认关,混版发布纪律见 conf.ProgressEnabled)。
 	if !wm.Existed && !u.cfg.ProgressEnabled {
-		return 0, errcode.New(errcode.ErrInvalidState, "realtime progress channel disabled")
+		// 固化"本场 legacy 结算模式"权威事实(审计 P1:只返回错误不落标记时,对局
+		// 中途重新开启配置会让同一对局**晚开流**,与已按 legacy 进行的前半场混用)。
+		// 停流标记行 lastSeq=0 → 结算路径正常发放全部产出(零实时入账,无双发面)。
+		// 认领必须是"无行才创建"(审计 R4 #11):滚动混版下开启副本可能在本副本读
+		// 水位之后、认领之前已创建行开流,upsert 会把那条**合法已开的流**停掉——
+		// 认领失败(claimed=false)= 输给并发写者,重读水位按现行状态继续。
+		// 认领错误保持可重试(与未知事实路径同纪律)。
+		claimed, merr := u.repo.ClaimProgressLegacy(ctx, matchID)
+		if merr != nil {
+			plog.With(ctx).Errorw("msg", "progress_claim_legacy_failed_retryable", "match_id", matchID, "err", merr)
+			return 0, errcode.New(errcode.ErrUnavailable,
+				"progress channel disabled and legacy claim persist failed, retry: %v", merr)
+		}
+		if claimed {
+			return 0, errcode.New(errcode.ErrInvalidState, "realtime progress channel disabled")
+		}
+		// 竞态输给已存在的行:可能是开启副本已开流(继续在途流程入账)、已认领
+		// legacy、或已结算——重读后按与首读相同的裁决顺序处理。
+		wm, err = u.repo.GetProgressWatermark(ctx, matchID)
+		if err != nil {
+			return 0, err
+		}
+		if wm.Settled {
+			return 0, errcode.New(errcode.ErrInvalidState, "match %d already settled, progress rejected", matchID)
+		}
+		if wm.Stopped {
+			return 0, errcode.New(errcode.ErrInvalidState,
+				"match %d progress stream permanently stopped, rejected", matchID)
+		}
+		if !wm.Existed {
+			// INSERT IGNORE 没生效行却不存在(并发删除/复制异常):按瞬时态重试收敛。
+			return 0, errcode.New(errcode.ErrUnavailable, "progress legacy claim raced, retry")
+		}
+		plog.With(ctx).Warnw("msg", "progress_disabled_replica_joins_open_stream",
+			"match_id", matchID, "last_seq", wm.LastAppliedSeq,
+			"hint", "通道关闭副本遇到已开流对局(滚动混版/killswitch 中途关闭),按已开流继续入账")
 	}
 	lastSeq := wm.LastAppliedSeq
 
@@ -81,14 +127,16 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 	maxKill := u.cfg.MaxKillCountPerFactOrDefault()
 	maxPickup := u.cfg.MaxPickupCountPerFactOrDefault()
 	expByPlayer := make(map[uint64]uint64)
+	itemsByPlayer := make(map[uint64]uint32)
+	killsByPlayer := make(map[uint64]uint32)
 	var (
-		itemRows    []data.ProgressOutboxRecord
-		prevSeq     uint64
-		newSeq      = lastSeq
-		firstNew    uint64
-		skippedFact int
-		batchExp    uint64
-		batchItems  uint32
+		itemRows       []data.ProgressOutboxRecord
+		prevSeq        uint64
+		newSeq         = lastSeq
+		prevAppliedSeq = lastSeq
+		skippedFact    int
+		batchExp       uint64
+		batchItems     uint32
 	)
 	for _, e := range events {
 		seq := e.GetSeq()
@@ -97,14 +145,23 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		}
 		prevSeq = seq
 		if seq > maxSeqCap {
+			// seq 硬上限拒收也要告警(契约:拒收并告警;与累计 cap 的 progress_cap_rejected
+			// 同名同监控面——失陷 DS 刷 seq 的第一现场信号)。
+			plog.With(ctx).Errorw("msg", "progress_cap_rejected",
+				"match_id", matchID, "kind", "seq", "seq", seq, "cap", maxSeqCap)
 			return 0, errcode.New(errcode.ErrInvalidArg, "event seq %d exceeds per-match cap %d", seq, maxSeqCap)
 		}
 		if seq <= lastSeq {
 			continue // 旧事件重放(at-least-once),已入账,跳过
 		}
-		if firstNew == 0 {
-			firstNew = seq
+		if seq > prevAppliedSeq+1 {
+			// seq 跳号合法(DS 有界缓冲满载丢最老事件,realtime-progression.md §3/§9),
+			// 但必须留痕(批首与批内统一检测,批内 [1,3] 同样告警):跳过的 seq 永不再来,
+			// 结算对账 gap 告警的先导信号。
+			plog.With(ctx).Warnw("msg", "progress_seq_gap",
+				"match_id", matchID, "prev_applied", prevAppliedSeq, "next", seq)
 		}
+		prevAppliedSeq = seq
 		newSeq = seq
 		playerID := e.GetPlayerId()
 		if playerID == 0 {
@@ -121,6 +178,9 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 			if cnt == 0 || cnt > maxKill {
 				return 0, errcode.New(errcode.ErrInvalidArg, "kill count %d out of range (max %d)", cnt, maxKill)
 			}
+			// 击杀计数在经验换算前累计:未配置经验的怪也计入单玩家击杀上限,
+			// 失陷 DS 不能靠刷未知怪 ID 绕过反作弊额度。
+			killsByPlayer[playerID] += cnt
 			expPer, ok := u.cfg.MonsterExpOf(fact.MonsterKill.GetMonsterConfigId())
 			if !ok {
 				skippedFact++
@@ -153,11 +213,30 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 				Kind: data.ProgressGrantItem, ItemConfigIDs: items,
 			})
 			batchItems += cnt
+			itemsByPlayer[playerID] += cnt
 		default:
-			// 未知事实类型:整批拒收,绝不"跳过发放但推进水位"(静默 ACK = 新事实永久丢失,
-			// 审计 P1)。新 DS 携带新事实类型必须先升级 battle_result 全 fleet 再放量
+			// 未知事实类型 = 能力不匹配(新 DS 对旧 Go),是整场性质而非单批坏数据:
+			// ErrInvalidArg 的"丢批继续"语义会让 DS 逐批丢弃所有含新事实的批(永久丢失,
+			// 审计 P1)。改用 ErrInvalidState → DS 停流。停流后果(审计明示,proto 同步):
+			// 水位>0 时结算掉落发放保持抑制,停流之后的拾取 / 经验不结算兜底,本场剩余
+			// 实时奖励永久丢失——该场景只该出现在违反发布纪律时,不为违纪场景做兜底。
+			// 新 DS 携带新事实类型必须先升级 battle_result 全 fleet 再放量
 			// (与 conf.ProgressEnabled 混版纪律同向:Go 先行,DS 后行)。
-			return 0, errcode.New(errcode.ErrInvalidArg, "unknown progress fact seq=%d (upgrade battle_result before new DS fact types)", seq)
+			// 停流标记持久化:防违纪 DS 用后续"只含已知事实"的批重新开流(审计 P1)。
+			// 标记失败必须**保持可重试**(审计 P1:吞掉失败直接返回终态 InvalidState 会让
+			// DS 永久停流而库里没有标记,后续已知批仍可能被接受)——返回 ErrUnavailable,
+			// DS 原批重试 → 再次命中未知事实 → 重试落标记,收敛后才返回停流终态。
+			// "已停流"日志只在标记成功后打(审计 R4 P2:先打日志再落标记,标记失败时
+			// 日志与库状态矛盾,排障会按已停流处理)。
+			if merr := u.repo.MarkProgressStopped(ctx, matchID); merr != nil {
+				plog.With(ctx).Errorw("msg", "progress_mark_stopped_failed_retryable", "match_id", matchID, "err", merr)
+				return 0, errcode.New(errcode.ErrUnavailable,
+					"unknown progress fact seq=%d and stop marker persist failed, retry batch: %v", seq, merr)
+			}
+			plog.With(ctx).Errorw("msg", "progress_unknown_fact_stream_stopped",
+				"match_id", matchID, "seq", seq,
+				"hint", "新 DS 事实类型早于 battle_result 升级放量(违反 Go 先行纪律),本场已停流,停流后实时奖励永久丢失")
+			return 0, errcode.New(errcode.ErrInvalidState, "unknown progress fact seq=%d: upgrade battle_result fleet before enabling new DS fact types (stream stopped; remaining realtime rewards for this match are permanently lost)", seq)
 		}
 	}
 
@@ -165,26 +244,40 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 		// 整批都是旧事件(原批重发)→ 纯重放 ACK,零副作用。
 		return lastSeq, nil
 	}
-	if firstNew > lastSeq+1 {
-		// seq 跳号合法(DS 有界缓冲满载丢最老事件,realtime-progression.md §3/§9),
-		// 但必须留痕:跳过的 seq 永不再来,结算对账 gap 告警的先导信号。
-		plog.With(ctx).Warnw("msg", "progress_seq_gap",
-			"match_id", matchID, "last_applied", lastSeq, "first_new", firstNew)
-	}
 
-	// 单场累计上限(事务权威侧封顶,审计 P1):失陷 DS 跨大量 seq 累计巨额产出在此拦截。
-	// 读-判-写受水位 CAS 保护无竞态(并发批次只有一个能 CAS 成功,失败方重读后重判)。
-	if capExp := u.cfg.MaxProgressExpPerMatchOrDefault(); wm.TotalExp+batchExp > capExp {
-		return 0, errcode.New(errcode.ErrInvalidArg,
-			"match %d cumulative exp %d+%d exceeds per-match cap %d", matchID, wm.TotalExp, batchExp, capExp)
+	// 单场 / 单玩家累计上限统一在 ApplyProgress 事务内的一致快照上判定(审计 P1:
+	// 此处若按事务外读到的 wm / player totals 先判,与水位 CAS 分属不同快照——重试
+	// 请求可能读到旧水位 + 首请求已提交的新累计,把同批 delta 重复计入后永久误拒,
+	// DS 据契约丢批并释放拾取认领,而首请求出箱已提交 → 重新拾取可重复发放)。
+	// 这里只聚合本批 delta:expByPlayer 键集 ⊆ killsByPlayer 键集(经验只源自击杀),
+	// 触达玩家 = 击杀 ∪ 拾取。
+	touched := make(map[uint64]struct{}, len(killsByPlayer)+len(itemsByPlayer))
+	for pid := range killsByPlayer {
+		touched[pid] = struct{}{}
 	}
-	if capItems := u.cfg.MaxProgressItemsPerMatchOrDefault(); wm.TotalItems+batchItems > capItems {
-		return 0, errcode.New(errcode.ErrInvalidArg,
-			"match %d cumulative items %d+%d exceeds per-match cap %d", matchID, wm.TotalItems, batchItems, capItems)
+	for pid := range itemsByPlayer {
+		touched[pid] = struct{}{}
+	}
+	playerDeltas := make([]data.ProgressPlayerDelta, 0, len(touched))
+	for pid := range touched {
+		playerDeltas = append(playerDeltas, data.ProgressPlayerDelta{
+			PlayerID: pid, Exp: expByPlayer[pid], Items: itemsByPlayer[pid], Kills: killsByPlayer[pid],
+		})
+	}
+	sort.Slice(playerDeltas, func(i, j int) bool { return playerDeltas[i].PlayerID < playerDeltas[j].PlayerID })
+	caps := data.ProgressCaps{
+		MatchExp:    u.cfg.MaxProgressExpPerMatchOrDefault(),
+		MatchItems:  u.cfg.MaxProgressItemsPerMatchOrDefault(),
+		PlayerExp:   u.cfg.MaxProgressExpPerPlayerOrDefault(),
+		PlayerItems: u.cfg.MaxProgressItemsPerPlayerOrDefault(),
+		PlayerKills: u.cfg.MaxProgressKillsPerPlayerOrDefault(),
 	}
 
 	rows := make([]data.ProgressOutboxRecord, 0, len(expByPlayer)+len(itemRows))
 	for playerID, exp := range expByPlayer {
+		if exp == 0 {
+			continue // monster_exp 显式配 0(无经验怪):不产生 0 额度出箱行(player 拒收会永久重试)
+		}
 		rows = append(rows, data.ProgressOutboxRecord{
 			MatchID: matchID, Seq: newSeq, PlayerID: playerID,
 			Kind: data.ProgressGrantExp, ExpDelta: exp,
@@ -192,13 +285,21 @@ func (u *BattleResultUsecase) ReportProgress(ctx context.Context, matchID uint64
 	}
 	rows = append(rows, itemRows...)
 
-	if err := u.repo.ApplyProgress(ctx, matchID, lastSeq, newSeq, batchExp, batchItems, rows); err != nil {
+	if err := u.repo.ApplyProgress(ctx, matchID, lastSeq, newSeq, batchExp, batchItems, playerDeltas, rows, caps); err != nil {
+		if errcode.As(err) == errcode.ErrInvalidArg {
+			// 累计上限拒收告警(契约:拒收**并告警**,审计 P2):这是失陷 DS 刷产出的
+			// 第一现场信号,不能只静默返回业务错误。biz 层 InvalidArg 前置校验都在
+			// ApplyProgress 之前,此处 InvalidArg 只来自事务内单场/单玩家累计上限。
+			plog.With(ctx).Errorw("msg", "progress_cap_rejected",
+				"match_id", matchID, "batch_exp", batchExp, "batch_items", batchItems,
+				"players", len(playerDeltas), "err", err)
+		}
 		return 0, err
 	}
 	plog.With(ctx).Infow("msg", "battle_progress_applied",
 		"match_id", matchID, "acked_seq", newSeq, "events", len(events),
 		"grant_rows", len(rows), "skipped_facts", skippedFact,
-		"total_exp", wm.TotalExp+batchExp, "total_items", wm.TotalItems+batchItems)
+		"batch_exp", batchExp, "batch_items", batchItems)
 	return newSeq, nil
 }
 

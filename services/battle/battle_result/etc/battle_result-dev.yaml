@@ -98,6 +98,11 @@ battle:
   # 单场累计硬上限(事务权威侧封顶,失陷 DS 跨 seq 刷产出在此拦截;缺省 1000000 / 500)
   max_progress_exp_per_match: 1000000
   max_progress_items_per_match: 500
+  # 单场单玩家累计硬上限(反作弊,realtime-progression.md:只按场累计时失陷 DS 仍可把
+  # 全场额度灌给一人;缺省 200000 / 100 / 1000,击杀含未配置经验的怪)
+  max_progress_exp_per_player: 200000
+  max_progress_items_per_player: 100
+  max_progress_kills_per_player: 1000
   # 进度出箱发布节奏(经验/掉落即时到账的体感上界;缺省 1s / 128)
   progress_publish_interval: "1s"
   progress_batch_size: 128

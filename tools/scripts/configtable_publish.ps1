@@ -12,9 +12,17 @@
 #   pwsh tools/scripts/configtable_publish.ps1 -DeployRoot D:\pandora-deploy -ReloadAddr 127.0.0.1:50011
 #
 # 幂等 / 容错:
-#   - staging 版本 == active 版本 → no-op 退出 0;
+#   - dist 版本 == active 版本 → 文件面 no-op,但 -ReloadAddr 仍会触发 reload
+#     (崩溃续跑 / 服务重启后内存落后磁盘 / 新副本上线,都靠幂等 reload 收敛,审计 P1);
 #   - staging 版本 <  active 版本 → 拒绝(防回退;回滚 = 重新生成更高版本);
 #   - 两次改名之间进程崩溃:重跑本脚本即可恢复(active 缺失时 staging 直接补位)。
+#
+# ⚠️ 定位与边界(2026-07-22 审计钉死):本脚本是**单实例 / dev 联调**发布工具:
+#   - 同一 DeployRoot **禁止并发发布**:staging / history 是共用固定目录,无发布锁,
+#     并发跑会互删对方中间产物;
+#   - -ReloadAddr 只支持单个服务地址,不能替代"全 fleet 原子切换";
+#   - 多副本生产发布走 etcd version 键 watch 方案(config-table-hotreload.md 待排期),
+#     落地前不得把本脚本包装成生产发布门禁。
 
 param(
     [Parameter(Mandatory = $true)][string]$DeployRoot,
@@ -38,20 +46,82 @@ function Read-Manifest([string]$dir) {
     return Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
-# 1. dist 检查
+# 比较两份 manifest 表清单的**运行语义字段**(name/file/checksum/proto/rows),返回差异
+# 描述列表(空 = 语义一致)。R4 复审 P1-8:同版本门禁只比表文件 hash 时,同字节文件、
+# 不同 proto/rows 的 manifest 也能冒充同批次——proto 决定服务端解析容器,rows 参与
+# 加载校验,都是会改变运行行为的语义,必须一并入比。
+function Compare-ManifestTables($aTables, $bTables) {
+    $diff = @()
+    if ($null -eq $aTables) { $aTables = @() }
+    if ($null -eq $bTables) { $bTables = @() }
+    $byName = @{}
+    foreach ($t in $aTables) { $byName[[string]$t.name] = $t }
+    foreach ($t in $bTables) {
+        $name = [string]$t.name
+        if (-not $byName.ContainsKey($name)) { $diff += "$name(对侧缺失)"; continue }
+        $p = $byName[$name]
+        if ([string]$p.file -ne [string]$t.file) { $diff += "$name(file)" }
+        elseif ([string]$p.checksum -ne [string]$t.checksum) { $diff += "$name(checksum)" }
+        elseif ([string]$p.proto -ne [string]$t.proto) { $diff += "$name(proto)" }
+        elseif ([uint64]$p.rows -ne [uint64]$t.rows) { $diff += "$name(rows)" }
+        $byName.Remove($name)
+    }
+    foreach ($name in $byName.Keys) { $diff += "$name(本侧独有)" }
+    return $diff
+}
+
+# 0. 前置依赖检查(审计 P1:grpcurl 检查原在切换 active 之后,明确无法发 RPC 时
+# 磁盘已被改动;所有依赖必须在动盘之前验清)。
+if ($ReloadAddr -ne "") {
+    $grpcurl = Get-Command grpcurl -ErrorAction SilentlyContinue
+    if ($null -eq $grpcurl) {
+        Write-Host "[ERR] 已请求 -ReloadAddr 但未安装 grpcurl:发布未开始,磁盘未改动。请安装 grpcurl 后重跑,或去掉 -ReloadAddr 只做文件面发布并手动触发 reload。" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# 1. dist 检查(含 source_rev 溯源门禁,审计 P1:生成器已拒 unknown/空白,但历史
+# 产物可能带着坏值,发布链必须自己把关——不可追溯批次不得进入 active)。
 $distManifest = Read-Manifest $DistDir
 if ($null -eq $distManifest) { Write-Host "[ERR] $DistDir 缺少 manifest.json(先跑 go run ./tools/configtable-gen)" -ForegroundColor Red; exit 1 }
 $newVersion = [uint64]$distManifest.version
-Write-Host "dist 批次 version = $newVersion($($distManifest.tables.Count) 张表)"
+$srcRev = ([string]$distManifest.source_rev).Trim()
+if ($srcRev -eq "" -or $srcRev -ieq "unknown") {
+    Write-Host "[ERR] dist manifest source_rev='$srcRev' 不可追溯:用真实 -source-rev(如 svn-r123)重跑 configtable-gen 后再发布(同内容重跑会原地纠正 manifest,版本不变)。" -ForegroundColor Red
+    exit 1
+}
+Write-Host "dist 批次 version = $newVersion($($distManifest.tables.Count) 张表,source_rev=$srcRev)"
 
 # 2. dist → staging(先清后拷,staging 永远是完整一批)
 New-Item -ItemType Directory -Force $ctRoot | Out-Null
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 Copy-Item -Recurse $DistDir $staging
 
-# 3. staging 逐表 sha256 校验(防拷贝截断)
+# 3. staging 结构 + 逐表 sha256 校验(审计 P1:只验 checksum 不验结构,
+# version=42/tables=[] 的非法 manifest 也能落 active,服务重启才 fail-fast)。
 $stagingManifest = Read-Manifest $staging
+if ($null -eq $stagingManifest) { Write-Host "[ERR] staging 缺 manifest.json" -ForegroundColor Red; exit 1 }
+if ($newVersion -le 0) { Write-Host "[ERR] manifest version=$newVersion 非法(必须 > 0)" -ForegroundColor Red; exit 1 }
+if ($null -eq $stagingManifest.tables -or $stagingManifest.tables.Count -eq 0) {
+    Write-Host "[ERR] manifest 表清单为空:空批次不可发布" -ForegroundColor Red
+    exit 1
+}
+$seenNames = @{}
 foreach ($t in $stagingManifest.tables) {
+    $name = [string]$t.name
+    if ($name -notmatch '^[a-z0-9_]+$') {
+        Write-Host "[ERR] 非法表名 '$name'(只允许 [a-z0-9_])" -ForegroundColor Red
+        exit 1
+    }
+    if ($seenNames.ContainsKey($name)) {
+        Write-Host "[ERR] 表名重复 '$name'" -ForegroundColor Red
+        exit 1
+    }
+    $seenNames[$name] = $true
+    if ([string]$t.file -ne "$name.json") {
+        Write-Host "[ERR] 表 '$name' 的 file='$($t.file)' 非法(必须为 <name>.json,防路径逃逸)" -ForegroundColor Red
+        exit 1
+    }
     $f = Join-Path $staging $t.file
     if (-not (Test-Path $f)) { Write-Host "[ERR] staging 缺文件 $($t.file)" -ForegroundColor Red; exit 1 }
     $got = "sha256:" + (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
@@ -63,39 +133,223 @@ foreach ($t in $stagingManifest.tables) {
 Write-Host "staging 校验通过($($stagingManifest.tables.Count) 张表)"
 
 # 4. 版本单调检查
+$prevSlot = $null
+$sameVersion = $false
 $activeManifest = Read-Manifest $active
+# 残缺 active(目录在、manifest.json 缺失,R4 复审 P1-6):不得落入下方"active 缺失"
+# 恢复分支——那条路最终 Move-Item $staging $active 会因目标目录已存在而把 staging
+# 挪成 active\staging 嵌套子目录,脚本却退出 0 误报发布成功(根目录无 manifest,
+# 服务端加载必失败)。该形态只能来自外部篡改/手工误删(归档与补位均为原子改名,
+# 崩溃续跑不会留下无 manifest 的 active),fail-fast 留给人工核对,不自动清场。
+if ((Test-Path $active) -and ($null -eq $activeManifest)) {
+    Write-Host "[ERR] active 目录存在但 manifest.json 缺失:active 已残缺(非崩溃续跑形态)。人工核对内容后把整个 active 目录移走留证(如 history\corrupt-active),再重跑发布。" -ForegroundColor Red
+    Remove-Item -Recurse -Force $staging
+    exit 1
+}
 if ($null -ne $activeManifest) {
     $activeVersion = [uint64]$activeManifest.version
     if ($newVersion -eq $activeVersion) {
-        Write-Host "active 已是 version $activeVersion,无需发布(no-op)" -ForegroundColor Yellow
+        # 同版本必须先证明**同批次**(审计 P1:版本相同但表 checksum 不同 = 生成纪律
+        # 破坏或 active 被篡改,此前会静默"成功"而 active 内容与 dist 不一致)。
+        # 比对**重算 active 磁盘实际 hash**,不信 active manifest 的自述(审计 R4 #13:
+        # active 表文件被篡改/损坏而 manifest 未变时,声明比对静默放行,脚本声称
+        # no-op 而 active 实际内容 ≠ dist)。staging 侧 hash 已在第 3 步重算验证。
+        $mismatch = @()
+        foreach ($t in $stagingManifest.tables) {
+            $name = [string]$t.name
+            $af = Join-Path $active ([string]$t.file)
+            if (-not (Test-Path $af)) { $mismatch += $name; continue }
+            $got = "sha256:" + (Get-FileHash $af -Algorithm SHA256).Hash.ToLower()
+            if ($got -ne [string]$t.checksum) { $mismatch += $name }
+        }
+        # manifest 运行语义比对(R4 复审 P1-8):文件字节相同但 active manifest 声明的
+        # proto/rows 与 dist 不同,同样不是同批次(no-op 路径会保留 active 旧 manifest,
+        # 语义漂移被静默放行)。
+        $mismatch += Compare-ManifestTables $activeManifest.tables $stagingManifest.tables
+        if ($activeManifest.tables.Count -ne $stagingManifest.tables.Count -or $mismatch.Count -gt 0) {
+            Write-Host "[ERR] dist 与 active 版本同为 $newVersion 但内容/语义不同(差异: $($mismatch -join ', '));同版本必须同批次——active 被篡改/损坏或版本号被复用:重新生成更高版本发布,并排查来源。" -ForegroundColor Red
+            Remove-Item -Recurse -Force $staging
+            exit 1
+        }
+        # 文件面 no-op,但**不能跳过 reload**(审计 P1):上次发布在 reload 前崩溃、
+        # 服务重启后内存落后、或另一副本尚未加载时,active 同版本 ≠ 服务端已加载。
+        # reload 幂等(服务端已是该版本时返回 code=OK + activeVersion),放心重发。
+        # 同版本同批次但 source_rev 不同(生成器同内容原地纠正过溯源):把纠正后的
+        # manifest 同步进 active(表内容 checksum 相同,只换 manifest)。
+        $activeSrcRev = ([string]$activeManifest.source_rev).Trim()
+        if ($activeSrcRev -ne $srcRev) {
+            Copy-Item (Join-Path $staging "manifest.json") (Join-Path $active "manifest.json") -Force
+            Write-Host "active manifest source_rev 已纠正:'$activeSrcRev' → '$srcRev'(版本与表内容不变)" -ForegroundColor Yellow
+        }
+        Write-Host "active 已是 version $activeVersion,文件面无需发布;继续确认服务端已加载" -ForegroundColor Yellow
         Remove-Item -Recurse -Force $staging
-        exit 0
+        $sameVersion = $true
     }
-    if ($newVersion -lt $activeVersion) {
-        Write-Host "[ERR] dist 版本 $newVersion 低于 active $activeVersion,拒绝回退(回滚请重新生成更高版本)" -ForegroundColor Red
+    if (-not $sameVersion) {
+        if ($newVersion -lt $activeVersion) {
+            Write-Host "[ERR] dist 版本 $newVersion 低于 active $activeVersion,拒绝回退(回滚请重新生成更高版本)" -ForegroundColor Red
+            exit 1
+        }
+        # 5. 归档旧 active → history\v<版本>
+        New-Item -ItemType Directory -Force $history | Out-Null
+        $slot = Join-Path $history "v$activeVersion"
+        if (Test-Path $slot) { Remove-Item -Recurse -Force $slot }
+        Move-Item $active $slot
+        Write-Host "旧批次 v$activeVersion 已归档 → $slot"
+        $prevSlot = $slot   # reload 校验失败时用于回滚磁盘 active
+    }
+} else {
+    # active 缺失(全新部署,或上次崩在"归档旧 active"与"staging 补位"之间):
+    # 不能只信 dist 版本——history 里可能躺着更高版本(审计 P1:否则崩溃续跑可以把
+    # 比 history 最高版更旧的 dist 装成 active,真实降级)。
+    $histTop = [uint64]0
+    if (Test-Path $history) {
+        foreach ($d in Get-ChildItem -Directory $history) {
+            if ($d.Name -match '^v(\d+)$') {
+                $v = [uint64]$Matches[1]
+                if ($v -gt $histTop) { $histTop = $v }
+            }
+        }
+    }
+    if ($histTop -gt 0 -and $newVersion -lt $histTop) {
+        Write-Host "[ERR] active 缺失且 dist 版本 $newVersion 低于 history 最高版 v$histTop:拒绝降级装载。恢复 = 把 history\v$histTop 复制回 active,或用更高版本重新生成发布。" -ForegroundColor Red
         exit 1
     }
-    # 5. 归档旧 active → history\v<版本>
-    New-Item -ItemType Directory -Force $history | Out-Null
-    $slot = Join-Path $history "v$activeVersion"
-    if (Test-Path $slot) { Remove-Item -Recurse -Force $slot }
-    Move-Item $active $slot
-    Write-Host "旧批次 v$activeVersion 已归档 → $slot"
+    if ($histTop -gt 0 -and $newVersion -eq $histTop) {
+        # 同版本必须同批次(审计 R4 #13):active 缺失续跑的合法场景只有"同一批次补位"
+        # (上次崩在归档与补位之间)。版本号被复用的**不同批次**不得借 active 缺失窗口
+        # 装载成 active——与 history 槽位的磁盘实际 hash 比对(不信槽内 manifest 自述)。
+        $slotDir = Join-Path $history "v$histTop"
+        $mismatch = @()
+        foreach ($t in $stagingManifest.tables) {
+            $hf = Join-Path $slotDir ([string]$t.file)
+            if (-not (Test-Path $hf)) { $mismatch += [string]$t.name; continue }
+            $got = "sha256:" + (Get-FileHash $hf -Algorithm SHA256).Hash.ToLower()
+            if ($got -ne [string]$t.checksum) { $mismatch += [string]$t.name }
+        }
+        # manifest 运行语义比对(R4 复审 P1-8):槽位 manifest 与 dist 的 proto/rows 声明
+        # 必须一致,同字节文件不同语义同样拒绝借"active 缺失"窗口装载。
+        $slotManifest = Read-Manifest $slotDir
+        if ($null -eq $slotManifest) { $mismatch += 'manifest(槽位缺失)' }
+        else { $mismatch += Compare-ManifestTables $slotManifest.tables $stagingManifest.tables }
+        $histJson = @(Get-ChildItem -File $slotDir -Filter '*.json' -ErrorAction SilentlyContinue |
+            Where-Object Name -ne 'manifest.json')
+        if ($mismatch.Count -gt 0 -or $histJson.Count -ne $stagingManifest.tables.Count) {
+            Write-Host "[ERR] active 缺失且 dist 版本 $newVersion 等于 history 最高版 v$histTop,但内容/语义与该槽位不同(差异: $($mismatch -join ', '));同版本必须同批次——版本号复用的不同批次拒绝装载,用更高版本重新生成发布。" -ForegroundColor Red
+            Remove-Item -Recurse -Force $staging
+            exit 1
+        }
+        Write-Host "active 缺失恢复:dist 与 history v$histTop 磁盘实际内容一致(同批次补位),继续装载" -ForegroundColor Yellow
+    }
 }
 
-# 6. staging → active(同卷改名,近原子;两步间崩溃重跑本脚本即恢复)
-Move-Item $staging $active
-Write-Host "发布完成:active = version $newVersion" -ForegroundColor Green
+if (-not $sameVersion) {
+    # 6. staging → active(同卷改名,近原子;两步间崩溃重跑本脚本即恢复)。
+    # 目标必须不存在(R4 复审 P1-6):Move-Item 到已存在目录会生成 active\staging 嵌套,
+    # 上方已对"残缺 active"fail-fast,此处为最后一道内部不变量护栏。
+    if (Test-Path $active) {
+        Write-Host "[ERR] 内部不变量被破坏:切换前 active 目录仍存在(应已归档或缺失),拒绝生成嵌套目录;staging 保留于 $staging 供排查。" -ForegroundColor Red
+        exit 1
+    }
+    Move-Item $staging $active
+    Write-Host "发布完成:active = version $newVersion" -ForegroundColor Green
+}
 
-# 7. 触发热更(可选;也可由运维手动调 ReloadConfigTable)
+# 回滚磁盘 active:reload 被服务端拒绝(校验失败)时,坏批次不能留在 active——
+# 服务端内存虽保留旧表,但下次进程重启会 fail-closed 加载失败(启动强依赖)。
+# 坏批次移到 history\failed-v<版本> 留证,恢复归档的旧批次。
+# 旧批次来源(审计 P1):优先本次运行归档的 $prevSlot;$prevSlot 为空(上次运行在
+# "归档旧 active"与"staging 补位"之间崩溃,本次续跑没有归档动作)时,从 history
+# 里找版本号最高且 < 新版本的 v* 槽位恢复——旧版本实际躺在 history 里,不能因为
+# 变量丢失就放弃回滚。
+function Restore-PreviousActive([string]$Reason) {
+    $failedSlot = Join-Path $history "failed-v$newVersion"
+    New-Item -ItemType Directory -Force $history | Out-Null
+    if (Test-Path $failedSlot) { Remove-Item -Recurse -Force $failedSlot }
+    Move-Item $active $failedSlot
+
+    $restoreSlot = $prevSlot
+    if ($null -eq $restoreSlot -or -not (Test-Path $restoreSlot)) {
+        $restoreSlot = $null
+        $best = [uint64]0
+        if (Test-Path $history) {
+            foreach ($d in Get-ChildItem -Directory $history) {
+                if ($d.Name -match '^v(\d+)$') {
+                    $v = [uint64]$Matches[1]
+                    if ($v -lt $newVersion -and $v -gt $best) {
+                        $best = $v
+                        $restoreSlot = $d.FullName
+                    }
+                }
+            }
+        }
+    }
+    if ($null -ne $restoreSlot -and (Test-Path $restoreSlot)) {
+        Copy-Item -Recurse $restoreSlot $active
+        Write-Host "[ERR] $Reason;磁盘 active 已回滚到旧批次($(Split-Path -Leaf $restoreSlot)),坏批次留证 → $failedSlot" -ForegroundColor Red
+    } else {
+        Write-Host "[ERR] $Reason;history 无可用旧批次,active 已移除,坏批次留证 → $failedSlot" -ForegroundColor Red
+    }
+}
+
+# 7. 触发热更(可选;也可由运维手动调 ReloadConfigTable)。
+# grpcurl 退出码 0 只代表 RPC 传输成功;服务端校验失败通过 payload 的 code/detail 返回
+# (加载失败保留旧表,hotreload doc §6),必须解析响应判定,否则坏批次留在磁盘 active
+# 且脚本误报成功(审计 P1)。
 if ($ReloadAddr -ne "") {
     $grpcurl = Get-Command grpcurl -ErrorAction SilentlyContinue
     if ($null -eq $grpcurl) {
-        Write-Host "[WARN] 未安装 grpcurl,请手动触发 reload:" -ForegroundColor Yellow
-    } else {
-        & grpcurl -plaintext -d "{`"expect_version`": $newVersion}" $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable
-        if ($LASTEXITCODE -eq 0) { exit 0 }
-        Write-Host "[WARN] reload 调用失败,请手动触发:" -ForegroundColor Yellow
+        # 要求触发 reload 但无法执行 = 发布未完成,必须非 0 退出(审计:退出 0 会被
+        # 上层当成"已发布已加载",服务端实际从未加载新批次)。
+        Write-Host "[ERR] 已请求 -ReloadAddr 但未安装 grpcurl,reload 未触发;请安装 grpcurl 或手动触发并核对响应 code=OK 且 activeVersion=${newVersion}:" -ForegroundColor Red
+        Write-Host "  grpcurl -plaintext -d '{\"expect_version\": $newVersion}' $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable"
+        exit 1
     }
-    Write-Host "  grpcurl -plaintext -d '{\"expect_version\": $newVersion}' $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable"
+    # -max-time:reload 内含全表加载校验,给足预算但必须有界(挂死的调用会让发布卡住)。
+    $respRaw = & grpcurl -plaintext -max-time 30 -d "{`"expect_version`": $newVersion}" $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        # 传输失败(服务不可达 / 超时):磁盘 active 保持新批次(服务端内存未动或未知),
+        # 人工重试 reload;不回滚磁盘——回滚只对"服务端明确拒绝"成立。
+        Write-Host "[ERR] reload RPC 调用失败(exit=$LASTEXITCODE):`n$respRaw" -ForegroundColor Red
+        Write-Host "  磁盘 active 已是 v$newVersion,服务端加载状态未知;请排查后手动触发:" -ForegroundColor Yellow
+        Write-Host "  grpcurl -plaintext -d '{\"expect_version\": $newVersion}' $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable"
+        exit 1
+    }
+    try { $resp = $respRaw | ConvertFrom-Json }
+    catch {
+        # UNKNOWN ≠ 拒绝(审计 P1):RPC 已送达,reload 可能已经成功,只是响应解析不了。
+        # 此时回滚磁盘会造成"内存新版本、磁盘旧版本"劈叉(下次重启加载旧表,静默降级)。
+        # 保持磁盘 active = 新批次,非 0 退出,人工重查服务端 activeVersion 收敛。
+        Write-Host "[ERR] reload 响应无法解析(UNKNOWN,不回滚磁盘):$respRaw" -ForegroundColor Red
+        Write-Host "  磁盘 active 保持 v$newVersion;请人工核对服务端 activeVersion:" -ForegroundColor Yellow
+        Write-Host "  grpcurl -plaintext -d '{\"expect_version\": $newVersion}' $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable"
+        exit 1
+    }
+    # proto3 JSON:code=OK(0)/reloaded=false 等零值字段会被省略。code 缺省 = OK。
+    $codeText = if ($null -ne $resp.code) { [string]$resp.code } else { 'OK' }
+    $gotVersion = if ($null -ne $resp.activeVersion) { [uint64]$resp.activeVersion } else { [uint64]0 }
+    if ($codeText -ne 'OK' -or $gotVersion -ne $newVersion) {
+        # 回滚分类(审计 P1:所有非 OK 一律回滚会把磁盘错误回退——服务端已领先候选
+        # 版本时回滚是真实降级;鉴权/协议错误也不是"坏批次"):
+        #   a) 服务端已领先(gotVersion > newVersion):别的发布已上更高版本,磁盘不动,
+        #      指引用更高版本重新生成;
+        #   b) 服务端仍在旧版本且明确拒绝候选(code!=OK 且 0<gotVersion<newVersion):
+        #      坏批次,回滚磁盘(移 failed-v 留证 + 从 prevSlot/history 恢复);
+        #   c) 其它(gotVersion=0 = 鉴权/协议/未知形态):磁盘不动,人工排查后重试 reload。
+        if ($gotVersion -gt $newVersion) {
+            Write-Host "[ERR] 服务端已在更高版本 v$gotVersion(候选 v$newVersion 过旧):磁盘不回滚;请基于最新源表生成更高版本重新发布。" -ForegroundColor Red
+        } elseif ($codeText -ne 'OK' -and $gotVersion -gt 0 -and $gotVersion -lt $newVersion) {
+            Restore-PreviousActive "服务端拒绝批次 v$newVersion(code=$codeText activeVersion=$gotVersion detail=$($resp.detail);sameVersion=$sameVersion);服务端内存保留旧表"
+        } else {
+            Write-Host "[ERR] reload 未确认(code=$codeText activeVersion=$gotVersion detail=$($resp.detail)):形态不像'坏批次被拒'(可能鉴权/协议问题),磁盘保持 v$newVersion 不回滚;排查后手动重试:" -ForegroundColor Red
+            Write-Host "  grpcurl -plaintext -d '{\"expect_version\": $newVersion}' $ReloadAddr pandora.config.v1.ConfigTableAdminService/ReloadConfigTable"
+        }
+        exit 1
+    }
+    Write-Host "reload 生效:服务端 activeVersion=$gotVersion(detail=$($resp.detail))" -ForegroundColor Green
+    exit 0
+}
+
+if ($sameVersion) {
+    Write-Host "[WARN] 文件面同版本 no-op 且未指定 -ReloadAddr:无法确认服务端已加载 v$newVersion(崩溃续跑 / 服务重启场景请带 -ReloadAddr 重跑)" -ForegroundColor Yellow
 }

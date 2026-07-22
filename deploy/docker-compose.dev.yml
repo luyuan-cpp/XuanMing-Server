@@ -47,8 +47,10 @@ services:
       - "yes"
       - --maxmemory
       - "1gb"
+      # noeviction(R4 复审 P1-5):本实例承载会话权威(pandora:sess)、push 投递缓冲、
+      # owner 租约、交易等权威态,LRU 驱逐 = 静默丢帧/放行旧会话;push 启动门强制核验。
       - --maxmemory-policy
-      - "allkeys-lru"
+      - "noeviction"
     volumes:
       - redis-data:/data
     healthcheck:

@@ -45,6 +45,15 @@ CREATE DATABASE IF NOT EXISTS `pandora_ops`
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_0900_ai_ci;
 
+CREATE DATABASE IF NOT EXISTS `pandora_bag`
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_0900_ai_ci;
+
+-- dev 联调用;生产 owner 权威库必须在 TiDB(deploy/tidb-init/02-owner-tidb.sql,§9.22)。
+CREATE DATABASE IF NOT EXISTS `pandora_owner`
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_0900_ai_ci;
+
 -- 把 pandora 用户授权到所有 pandora_* 库
 GRANT ALL PRIVILEGES ON `pandora_account`.* TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_player`.*  TO 'pandora'@'%';
@@ -54,5 +63,7 @@ GRANT ALL PRIVILEGES ON `pandora_trade`.*   TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_auction`.* TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_leaderboard`.* TO 'pandora'@'%';
 GRANT ALL PRIVILEGES ON `pandora_ops`.*     TO 'pandora'@'%';
+GRANT ALL PRIVILEGES ON `pandora_bag`.*     TO 'pandora'@'%';
+GRANT ALL PRIVILEGES ON `pandora_owner`.*   TO 'pandora'@'%';
 
 FLUSH PRIVILEGES;

@@ -14,13 +14,13 @@ import (
 // 主键唯一、必填 / 前缀,任一失败整批不产出,错误定位到「表 + 行 + 列」。
 //
 // 源表格式契约(Pandora 策划表通用版式,与旧项目 mmorpg 20 行版式不同):
-//   第 1 行 = 列名(与 (excel_col) 注解逐列精确一致,列序 = 字段号序);
-//   第 2-4 行 = 策划注释 / 取值说明(始终跳过);
-//   第 5 行起 = 数据区:整行全空跳过,主键列为空但行内有值 → 报错。
-const (
-	headerRow = 0
-	dataStart = 4
-)
+//
+//	第 1 行 = 列名(与 (excel_col) 注解逐列精确一致,列序 = 字段号序);
+//	默认第 2-4 行 = 策划注释 / 取值说明(跳过);
+//	默认第 5 行起 = 数据区；特殊版式由 (excel_data_start_row) 显式覆盖。
+//
+// 数据区整行全空跳过,主键列为空但行内有值 → 报错。
+const headerRow = 0
 
 // Build 网格 → (容器 message, 行数)。
 func (d *TableDef) Build(grid [][]string) (proto.Message, int, error) {
@@ -35,7 +35,7 @@ func (d *TableDef) Build(grid [][]string) (proto.Message, int, error) {
 	list := container.Mutable(d.rowsField).List()
 	seen := make(map[uint64]int)          // 主键 → 已出现的 xlsx 行号
 	seenKeys := make(map[int]map[any]int) // 唯一二级键列序 → 取值 → xlsx 行号((excel_key) §7.4 同级查重)
-	for i := dataStart; i < len(grid); i++ {
+	for i := d.DataStart - 1; i < len(grid); i++ {
 		xlsxRow := i + 1
 		cells := padTo(grid[i], len(d.columns))
 		if allEmpty(cells) {

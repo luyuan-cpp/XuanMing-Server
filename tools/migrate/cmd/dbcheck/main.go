@@ -1,0 +1,474 @@
+// dbcheck — 数据库无界增长检查工具(CLAUDE.md §9 不变量 24,2026-07-22)。
+//
+// 用途:
+//  1. 上线前检查:枚举 MySQL 上全部 pandora_% 库的全部表,对照内嵌登记清单
+//     (与 CLAUDE.md §9.24 只增表清单同步维护)——清单外的表、swept 表缺清理索引 → 退出码 1。
+//  2. 压测断言:压前 -snapshot before.json,压后 -snapshot after.json -compare before.json,
+//     断言 outbox 类表已排空(≤ -outbox-max)、无未登记表;各表增量打印供"增长 = 业务量可解释"核对。
+//  3. 清理压测:-force-sweep -confirm=YES-DELETE 以 cutoff=now 复用与服务同构的批删语句
+//     循环删到空并输出 rows/s(验证清理速率追得上写入、批删不锁表)。**会删光对应表数据,
+//     只准对压测/一次性库使用**。player_mail(归档分流)与 bag_journal(checkpoint 条件)
+//     不在工具内重复实现,由各自服务 sweep + 集成测试覆盖。
+//
+// 用法:
+//
+//	go run ./cmd/dbcheck -dsn "root:pwd@tcp(127.0.0.1:3307)/" [-exact] [-snapshot out.json]
+//	    [-compare before.json] [-outbox-max 200] [-force-sweep -confirm=YES-DELETE]
+//
+// 登记清单口径:新增任何表必须先在 CLAUDE.md §9.24 登记再同步到本清单;
+// 本工具报"未登记表"即 PR review 拒绝口径的机械化(AGENTS.md §10 红线)。
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"sort"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+)
+
+// tableClass 是表的增长类别(与 CLAUDE.md §9.24 分类一致)。
+type tableClass string
+
+const (
+	classBounded tableClass = "bounded" // 按玩家/配置有界(行数 ∝ 玩家数×常数)
+	classSwept   tableClass = "swept"   // 只增表,有保留期清理任务
+	classOutbox  tableClass = "outbox"  // 事务出箱:投递成功即删,稳态应接近空
+	classExempt  tableClass = "exempt"  // 登记豁免(慢增长/权威闸/运营审计)
+)
+
+// indexSpec 是清理路径必需索引的名字 + 前导列(按顺序)。
+// 校验列名与顺序而不只是索引名(审计 P1:同名错列的索引会让门禁误报健康);
+// spec 列必须是实际索引的**前缀**(实际索引多出的尾列不影响清理扫描路径)。
+type indexSpec struct {
+	Name    string
+	Columns []string
+}
+
+// tableEntry 是登记清单一项。
+type tableEntry struct {
+	Class tableClass
+	// RequiredIndexes 是 swept 表清理路径必需的索引(名字 + 前导列核对)。
+	RequiredIndexes []indexSpec
+	// SweepSQL 是 -force-sweep 用的批删语句(与服务实现同构,cutoff=now;须恰含一个 LIMIT ? 占位)。
+	// 空 = 不支持工具直删(多表事务/归档分流/条件复杂,由服务 sweep + 集成测试覆盖)。
+	SweepSQL string
+}
+
+// registry 是全库表登记清单(与 CLAUDE.md §9.24 同步;新表未登记 → 检查失败)。
+var registry = map[string]map[string]tableEntry{
+	"pandora_account": {
+		"accounts":        {Class: classBounded},
+		"player_roles":    {Class: classBounded},
+		"account_devices": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_last_login", Columns: []string{"last_login_at"}}}, SweepSQL: "DELETE FROM account_devices WHERE last_login_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"account_bans":    {Class: classExempt}, // 运营合规审计,量级 = 运营操作数
+	},
+	"pandora_player": {
+		"players":              {Class: classBounded},
+		"player_data":          {Class: classBounded}, // data_service proto2mysql 自动建表,per-player
+		"player_heroes":        {Class: classBounded},
+		"player_attributes":    {Class: classBounded},
+		"player_equipment":     {Class: classBounded},
+		"player_talents":       {Class: classBounded},
+		"player_reward_claims": {Class: classBounded},
+		"player_push_outbox":   {Class: classOutbox},
+		"mmr_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM mmr_history WHERE created_at < NOW() LIMIT ?"},
+		"exp_history":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM exp_history WHERE created_at < NOW() LIMIT ?"},
+		"attr_point_grants":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM attr_point_grants WHERE created_at < NOW() LIMIT ?"},
+		"talent_point_grants":  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM talent_point_grants WHERE created_at < NOW() LIMIT ?"},
+	},
+	"pandora_battle": {
+		"battles":                  {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}},                // 清理按服务端 created_at(§9.6 不信 DS ended_at_ms);与 stats 同事务批删,不支持工具直删
+		"battle_player_stats":      {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "uk_match_player", Columns: []string{"match_id", "player_id"}}}}, // 随 battles 批删(按 match_id 前缀)
+		"battle_progress_stream":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_settled", Columns: []string{"settled_at_ms"}}}},
+		"battle_progress_player":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "PRIMARY", Columns: []string{"match_id", "player_id"}}}}, // 随 stream 批删(PK 前缀 match_id)
+		"player_update_outbox":     {Class: classOutbox},
+		"battle_drop_outbox":       {Class: classOutbox},
+		"terminal_release_outbox":  {Class: classOutbox},
+		"match_release_outbox":     {Class: classOutbox},
+		"battle_progress_outbox":   {Class: classOutbox},
+		"battle_exit_proof_outbox": {Class: classOutbox},
+	},
+	"pandora_social": {
+		"friendships":           {Class: classBounded},
+		"blocks":                {Class: classBounded},
+		"friend_requests":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM friend_requests WHERE status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"chat_private_messages": {Class: classSwept, SweepSQL: "DELETE FROM chat_private_messages WHERE message_id < 18446744073709551615 LIMIT ?"}, // 雪花 PK 范围删,无需时间索引
+		"guilds":                {Class: classBounded},
+		"guild_members":         {Class: classBounded},
+		"guild_join_requests":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM guild_join_requests WHERE status <> 1 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"chat_groups":           {Class: classBounded},
+		"chat_group_members":    {Class: classBounded},
+		"player_group_counts":   {Class: classBounded},
+		"sys_mail":              {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_end", Columns: []string{"end_ms"}}}, SweepSQL: "DELETE FROM sys_mail WHERE end_ms > 0 AND end_ms <= UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"guild_mail":            {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_end", Columns: []string{"end_ms"}}}, SweepSQL: "DELETE FROM guild_mail WHERE end_ms > 0 AND end_ms <= UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"player_mail":           {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_expire", Columns: []string{"expire_ms"}}}}, // 归档分流(未领附件先归档),不支持工具直删
+		"player_mail_cursor":    {Class: classBounded},
+		"player_mail_claim":     {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_mail", Columns: []string{"mail_id"}}}, SweepSQL: "DELETE FROM player_mail_claim WHERE mail_id < 18446744073709551615 LIMIT ?"},
+		"player_mail_archive":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_archived", Columns: []string{"archived_at"}}}, SweepSQL: "DELETE FROM player_mail_archive WHERE archived_at < NOW() LIMIT ?"},
+	},
+	"pandora_trade": {
+		"player_currency":      {Class: classBounded},
+		"player_items":         {Class: classBounded}, // count=0 行被 uk(player,item) 有界,故意不清(§9.24 豁免注记)
+		"player_item_instance": {Class: classBounded}, // 容量上限×玩家数;丢弃硬删
+		"mail_transfer_escrow": {Class: classBounded}, // 在途托管行,领取/释放即删;量级=在途 transfer 邮件数(§9.24 豁免注记)
+		"inventory_ledger":     {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM inventory_ledger WHERE created_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+		"auction_escrow":       {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at"}}}, SweepSQL: "DELETE FROM auction_escrow WHERE status = 2 AND updated_at < DATE_SUB(NOW(), INTERVAL 0 DAY) LIMIT ?"},
+	},
+	"pandora_auction": {
+		"auction_orders":           {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_terminal_purge", Columns: []string{"status", "updated_at_ms"}}}, SweepSQL: "DELETE FROM auction_orders WHERE status IN (3,4,5) AND release_pending = 0 AND match_pending = 0 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"auction_matches":          {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_settled_purge", Columns: []string{"settlement_status", "event_pending", "matched_at_ms"}}}, SweepSQL: "DELETE FROM auction_matches WHERE settlement_status = 1 AND event_pending = 0 AND matched_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"auction_idempotency_keys": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at_ms"}}}, SweepSQL: "DELETE FROM auction_idempotency_keys WHERE created_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"auction_owner_guards":     {Class: classExempt}, // 每 owner 一行,被玩家数有界
+		"auction_shard_topology":   {Class: classBounded},
+	},
+	"pandora_leaderboard": {
+		"leaderboard_settlement": {Class: classExempt}, // settle uk 防重复结算永久闸,每批次 1 行
+		"leaderboard_snapshot":   {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created", Columns: []string{"created_at_ms"}}}, SweepSQL: "DELETE FROM leaderboard_snapshot WHERE created_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+		"leaderboard_reward_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_status_updated", Columns: []string{"status", "updated_at_ms"}}}, SweepSQL: "DELETE FROM leaderboard_reward_log WHERE status = 1 AND updated_at_ms < UNIX_TIMESTAMP(NOW(3))*1000 LIMIT ?"},
+	},
+	"pandora_bag": {
+		"bag_meta":       {Class: classBounded},
+		"bag_checkpoint": {Class: classBounded},
+		"bag_section":    {Class: classBounded},
+		"bag_generation": {Class: classBounded},
+		"bag_journal":    {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created_at", Columns: []string{"created_at"}}}}, // checkpoint 覆盖位条件,由服务 sweep 负责
+		"bag_migration":  {Class: classExempt},                                                                                         // 存量迁移幂等闸,一玩家一行永久保留(D5)
+		"bag_capacity":   {Class: classBounded},                                                                                        // 已购容量增量,每玩家×可买段一行(§5.3)
+	},
+	"pandora_owner": {
+		"owner_record":         {Class: classBounded},                                                                                                                                                                       // 每玩家一行(§9.22 owner 权威)
+		"ds_instance_lease":    {Class: classBounded},                                                                                                                                                                       // 每 DS 实例一行
+		"owner_transition_log": {Class: classSwept, RequiredIndexes: []indexSpec{{Name: "idx_created_at", Columns: []string{"created_at"}}}, SweepSQL: "DELETE FROM owner_transition_log WHERE created_at < NOW() LIMIT ?"}, // 迁移审计流水,90 天(owner 线负责 sweep 落地)
+	},
+	// 预留库:当前应无业务表;一旦出现新表必须先登记。
+	"pandora_ops": {},
+}
+
+// ignoredTables 是所有库都允许存在的框架元表。
+var ignoredTables = map[string]bool{"schema_migrations": true}
+
+type snapshot map[string]int64 // "db.table" → rows
+
+func main() {
+	dsn := flag.String("dsn", "", "不带 database 的 MySQL DSN,如 root:pwd@tcp(127.0.0.1:3307)/")
+	exact := flag.Bool("exact", false, "用 COUNT(*) 精确行数(默认 information_schema 估算;压测对比建议开)")
+	snapshotOut := flag.String("snapshot", "", "把各表行数快照写入该 JSON 文件")
+	compareWith := flag.String("compare", "", "与该 JSON 快照对比并输出增量")
+	outboxMax := flag.Int64("outbox-max", 200, "outbox 类表允许的残留行数上限(压后断言;在途少量属正常)")
+	forceSweep := flag.Bool("force-sweep", false, "以 cutoff=now 跑与服务同构的批删并输出 rows/s(会删光可清数据,只准对压测库)")
+	confirm := flag.String("confirm", "", "-force-sweep 必须同时传 -confirm=YES-DELETE")
+	batch := flag.Int("batch", 500, "-force-sweep 单批行数(与服务 sweep 默认一致)")
+	flag.Parse()
+
+	if *dsn == "" {
+		fmt.Fprintln(os.Stderr, "用法: dbcheck -dsn 'user:pwd@tcp(host:port)/' [flags];见文件头注释")
+		os.Exit(2)
+	}
+	if *forceSweep && *confirm != "YES-DELETE" {
+		fmt.Fprintln(os.Stderr, "FATAL: -force-sweep 会删光可清数据,必须同时传 -confirm=YES-DELETE(只准对压测库)")
+		os.Exit(2)
+	}
+	if *batch <= 0 {
+		// 审计 P2:-batch 0 时 RowsAffected 恒 0 < batch 恒假不成立…… LIMIT 0 删 0 行,
+		// n(0) < batch(0) 为假 → 无限空转到全局超时。参数必须为正。
+		fmt.Fprintln(os.Stderr, "FATAL: -batch 必须 > 0")
+		os.Exit(2)
+	}
+
+	db, err := sql.Open("mysql", *dsn)
+	if err != nil {
+		fatal("open mysql: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		fatal("ping mysql: %v", err)
+	}
+
+	violations := 0
+
+	// 1. 枚举全部 pandora_% 库的表,对照登记清单。
+	actual, err := listTables(ctx, db)
+	if err != nil {
+		fatal("list tables: %v", err)
+	}
+	for dbName, tables := range actual {
+		reg, dbKnown := registry[dbName]
+		if !dbKnown {
+			fmt.Printf("[FAIL] 未登记的库: %s(先在 CLAUDE.md §9.24 登记,再同步 dbcheck 清单)\n", dbName)
+			violations++
+			continue
+		}
+		for _, t := range tables {
+			if ignoredTables[t] {
+				continue
+			}
+			if _, ok := reg[t]; !ok {
+				fmt.Printf("[FAIL] 未登记的表: %s.%s(只增表必须有保留期+清理任务并登记 §9.24)\n", dbName, t)
+				violations++
+			}
+		}
+	}
+
+	// 1.5 登记库/表必须**真实存在**(审计 P1:只校验可见对象时,空库、连错实例或
+	// 权限不全都会"零违规"误报 PASS——门禁检查不到东西 ≠ 东西没问题)。
+	// 全部环境统一由 mysql-init fresh-init / migrate 建齐登记表,缺失即部署残缺。
+	for dbName, reg := range registry {
+		if len(reg) == 0 {
+			continue // 预留空库(pandora_ops)不强制存在
+		}
+		present, dbExists := actual[dbName]
+		if !dbExists {
+			fmt.Printf("[FAIL] 登记库缺失: %s(连错实例 / 初始化未跑 / 权限不可见)\n", dbName)
+			violations++
+			continue
+		}
+		presentSet := toSet(present)
+		for t := range reg {
+			if !presentSet[t] {
+				fmt.Printf("[FAIL] 登记表缺失: %s.%s(初始化/迁移未跑或权限不可见)\n", dbName, t)
+				violations++
+			}
+		}
+	}
+
+	// 2. swept 表清理索引核对(表存在才查;缺表已由 1.5 记违规)。
+	for dbName, reg := range registry {
+		present := toSet(actual[dbName])
+		for t, e := range reg {
+			if e.Class != classSwept || len(e.RequiredIndexes) == 0 || !present[t] {
+				continue
+			}
+			for _, idx := range e.RequiredIndexes {
+				ok, detail, ierr := indexMatches(ctx, db, dbName, t, idx)
+				if ierr != nil {
+					fatal("probe index %s.%s.%s: %v", dbName, t, idx.Name, ierr)
+				}
+				if !ok {
+					fmt.Printf("[FAIL] %s.%s 清理索引 %s 缺失或列不匹配(%s;要求前导列 %v;跑 tools/migrate 对应 *_retention_indexes)\n",
+						dbName, t, idx.Name, detail, idx.Columns)
+					violations++
+				}
+			}
+		}
+	}
+
+	// 3. 行数快照。outbox 类表**强制精确 COUNT**(审计 P1:InnoDB TABLE_ROWS 是估算值,
+	// 统计滞后/低估时真实积压超阈值仍可能 PASS;outbox 稳态接近空,精确计数代价可忽略)。
+	// 其余大表默认估算(-exact 全表精确,压测对比建议开)。
+	snap := snapshot{}
+	for dbName, tables := range actual {
+		for _, t := range tables {
+			if ignoredTables[t] {
+				continue
+			}
+			useExact := *exact
+			if e, ok := registry[dbName][t]; ok && e.Class == classOutbox {
+				useExact = true
+			}
+			n, cerr := rowCount(ctx, db, dbName, t, useExact)
+			if cerr != nil {
+				fatal("count %s.%s: %v", dbName, t, cerr)
+			}
+			snap[dbName+"."+t] = n
+		}
+	}
+	if *snapshotOut != "" {
+		b, _ := json.MarshalIndent(snap, "", "  ")
+		if werr := os.WriteFile(*snapshotOut, b, 0o644); werr != nil {
+			fatal("write snapshot: %v", werr)
+		}
+		fmt.Printf("[OK] 行数快照已写入 %s(%d 表)\n", *snapshotOut, len(snap))
+	}
+
+	// 4. 快照对比(压测前后):打印增量;outbox 残留断言。
+	if *compareWith != "" {
+		before := snapshot{}
+		b, rerr := os.ReadFile(*compareWith)
+		if rerr != nil {
+			fatal("read compare snapshot: %v", rerr)
+		}
+		if jerr := json.Unmarshal(b, &before); jerr != nil {
+			fatal("parse compare snapshot: %v", jerr)
+		}
+		keys := make([]string, 0, len(snap))
+		for k := range snap {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Println("── 压测前后行数增量(核对:增长必须能用业务量解释)──")
+		for _, k := range keys {
+			delta := snap[k] - before[k]
+			if delta != 0 {
+				fmt.Printf("  %-50s %+d(%d → %d)\n", k, delta, before[k], snap[k])
+			}
+		}
+	}
+
+	// 5. outbox 残留断言(有无 -compare 都执行:上线前 / 压后 outbox 都不应堆积)。
+	for dbName, reg := range registry {
+		present := toSet(actual[dbName])
+		for t, e := range reg {
+			if e.Class != classOutbox || !present[t] {
+				continue
+			}
+			if n := snap[dbName+"."+t]; n > *outboxMax {
+				fmt.Printf("[FAIL] outbox 未排空: %s.%s = %d 行(> %d;投递链堵塞或下游长期不可用)\n", dbName, t, n, *outboxMax)
+				violations++
+			}
+		}
+	}
+
+	// 6. 清理压测:cutoff=now 批删到空,输出 rows/s。
+	if *forceSweep {
+		fmt.Println("── 清理压测(cutoff=now,与服务同构批删;player_mail / bag_journal / battles 组由服务 sweep 覆盖,跳过)──")
+		for dbName, reg := range registry {
+			present := toSet(actual[dbName])
+			names := make([]string, 0, len(reg))
+			for t := range reg {
+				names = append(names, t)
+			}
+			sort.Strings(names)
+			for _, t := range names {
+				e := reg[t]
+				if e.Class != classSwept || e.SweepSQL == "" || !present[t] {
+					continue
+				}
+				// 独占连接执行 USE + DELETE(审计 P1:经连接池分别执行时 USE 与 DELETE
+				// 可能落在不同连接——随机失败,DSN 带默认库时甚至删默认库同名表)。
+				conn, cerr := db.Conn(ctx)
+				if cerr != nil {
+					fatal("acquire conn for %s: %v", dbName, cerr)
+				}
+				if _, uerr := conn.ExecContext(ctx, "USE `"+dbName+"`"); uerr != nil {
+					_ = conn.Close()
+					fatal("use %s: %v", dbName, uerr)
+				}
+				var total int64
+				start := time.Now()
+				for {
+					res, derr := conn.ExecContext(ctx, e.SweepSQL, *batch)
+					if derr != nil {
+						_ = conn.Close()
+						fatal("sweep %s.%s: %v", dbName, t, derr)
+					}
+					n, aerr := res.RowsAffected()
+					if aerr != nil {
+						_ = conn.Close()
+						fatal("rows affected %s.%s: %v", dbName, t, aerr)
+					}
+					total += n
+					if n < int64(*batch) {
+						break
+					}
+				}
+				_ = conn.Close()
+				elapsed := time.Since(start)
+				rate := float64(total) / max(elapsed.Seconds(), 0.001)
+				fmt.Printf("  %-40s 删 %8d 行,耗时 %8s,%10.0f rows/s\n", dbName+"."+t, total, elapsed.Round(time.Millisecond), rate)
+			}
+		}
+	}
+
+	if violations > 0 {
+		fmt.Printf("\n[RESULT] FAIL:%d 项违规(未登记表 / 缺清理索引 / outbox 堆积)\n", violations)
+		os.Exit(1)
+	}
+	fmt.Println("\n[RESULT] PASS:全部表已登记,清理索引齐备,outbox 无堆积")
+}
+
+func listTables(ctx context.Context, db *sql.DB) (map[string][]string, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.TABLES
+		 WHERE TABLE_SCHEMA LIKE 'pandora\_%' AND TABLE_TYPE = 'BASE TABLE'
+		 ORDER BY TABLE_SCHEMA, TABLE_NAME`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string][]string{}
+	for rows.Next() {
+		var d, t string
+		if err := rows.Scan(&d, &t); err != nil {
+			return nil, err
+		}
+		out[d] = append(out[d], t)
+	}
+	return out, rows.Err()
+}
+
+// indexMatches 校验索引存在且**前导列名与顺序**与 spec 一致(审计 P1:只查索引名
+// 会让同名错列的索引通过门禁;spec 列必须是实际索引列序列的前缀,多出的尾列不影响
+// 清理扫描路径)。返回 (匹配, 不匹配时的实际列描述, err)。
+func indexMatches(ctx context.Context, db *sql.DB, dbName, table string, spec indexSpec) (bool, string, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT COLUMN_NAME FROM information_schema.STATISTICS
+		 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?
+		 ORDER BY SEQ_IN_INDEX`, dbName, table, spec.Name)
+	if err != nil {
+		return false, "", err
+	}
+	defer func() { _ = rows.Close() }()
+	var cols []string
+	for rows.Next() {
+		var c string
+		if serr := rows.Scan(&c); serr != nil {
+			return false, "", serr
+		}
+		cols = append(cols, c)
+	}
+	if rerr := rows.Err(); rerr != nil {
+		return false, "", rerr
+	}
+	if len(cols) == 0 {
+		return false, "索引不存在", nil
+	}
+	if len(cols) < len(spec.Columns) {
+		return false, fmt.Sprintf("实际列 %v", cols), nil
+	}
+	for i, want := range spec.Columns {
+		if cols[i] != want {
+			return false, fmt.Sprintf("实际列 %v", cols), nil
+		}
+	}
+	return true, "", nil
+}
+
+func rowCount(ctx context.Context, db *sql.DB, dbName, table string, exact bool) (int64, error) {
+	var n int64
+	if exact {
+		err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+dbName+"`.`"+table+"`").Scan(&n)
+		return n, err
+	}
+	err := db.QueryRowContext(ctx,
+		`SELECT COALESCE(TABLE_ROWS, 0) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`,
+		dbName, table).Scan(&n)
+	return n, err
+}
+
+func toSet(list []string) map[string]bool {
+	out := make(map[string]bool, len(list))
+	for _, s := range list {
+		out[s] = true
+	}
+	return out
+}
+
+func fatal(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
+	os.Exit(2)
+}
+
+func max(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}

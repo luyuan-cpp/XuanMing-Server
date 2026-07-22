@@ -43,6 +43,18 @@ type fakeRepo struct {
 	// 装备实例(W5 ④):instances[playerID][instanceID]=inst;instGrant 复刻 grant_inst 幂等。
 	instances map[uint64]map[uint64]*data.ItemInstance
 	instGrant map[string]instGrantEntry // key=playerID|idempotencyKey
+
+	// 邮件 transfer 托管(2026-07-22):xferEscrow 复刻 mail_transfer_escrow 行,
+	// xferLedger 复刻 escrow_out / transfer_claim 幂等流水(指纹比对)。
+	xferEscrow map[uint64]*xferEscrowRow // instance_id → 托管行
+	xferLedger map[string]string         // key=playerID|idempotencyKey → fingerprint
+}
+
+// xferEscrowRow 复刻 mail_transfer_escrow 一行(实例数据 + 归属上下文)。
+type xferEscrowRow struct {
+	inst           data.ItemInstance
+	sourcePlayerID uint64
+	toPlayerID     uint64
 }
 
 // instGrantEntry 复刻 grant_inst 幂等流水:指纹 + 首次发放的 instance_id 列表(回放用)。
@@ -53,12 +65,14 @@ type instGrantEntry struct {
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		gold:      map[uint64]int64{},
-		items:     map[uint64]map[uint32]int64{},
-		ledger:    map[string]ledgerEntry{},
-		escrow:    map[string]*escrowEntry{},
-		instances: map[uint64]map[uint64]*data.ItemInstance{},
-		instGrant: map[string]instGrantEntry{},
+		gold:       map[uint64]int64{},
+		items:      map[uint64]map[uint32]int64{},
+		ledger:     map[string]ledgerEntry{},
+		escrow:     map[string]*escrowEntry{},
+		instances:  map[uint64]map[uint64]*data.ItemInstance{},
+		instGrant:  map[string]instGrantEntry{},
+		xferEscrow: map[uint64]*xferEscrowRow{},
+		xferLedger: map[string]string{},
 	}
 }
 
@@ -444,9 +458,129 @@ func (f *fakeRepo) MoveInstance(_ context.Context, playerID, instanceID uint64, 
 	return *inst, nil
 }
 
+// 保留期清理:biz 单测不模拟时间,默认 no-op(行为断言见 sweep_test.go 的 recording 替身)。
+func (f *fakeRepo) DeleteLedgerBefore(context.Context, int, int) (int64, error)       { return 0, nil }
+func (f *fakeRepo) DeleteClosedEscrowBefore(context.Context, int, int) (int64, error) { return 0, nil }
+
 func (f *fakeRepo) DiscardInstance(_ context.Context, playerID, instanceID uint64) error {
 	delete(f.instances[playerID], instanceID)
 	return nil
+}
+
+// ── 邮件 transfer 托管(2026-07-22)内存实现,复刻 mail_transfer_escrow 事务搬移语义 ──
+
+func (f *fakeRepo) EscrowOutInstances(_ context.Context, sourcePlayerID, toPlayerID uint64, instanceIDs []uint64, escrowKey, _ string) ([]data.EscrowedInstance, bool, error) {
+	gk := keyOf(sourcePlayerID, escrowKey)
+	fp := data.EscrowOutFingerprint(toPlayerID, instanceIDs)
+	toSnapshot := func(row *xferEscrowRow) data.EscrowedInstance {
+		return data.EscrowedInstance{
+			InstanceID:     row.inst.InstanceID,
+			ItemConfigID:   row.inst.ItemConfigID,
+			Identified:     row.inst.Identified,
+			Attributes:     row.inst.Attributes,
+			SourcePlayerID: row.sourcePlayerID,
+			ToPlayerID:     row.toPlayerID,
+		}
+	}
+	if stored, ok := f.xferLedger[gk]; ok {
+		if stored != fp {
+			return nil, false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		out := make([]data.EscrowedInstance, 0, len(instanceIDs))
+		for _, id := range instanceIDs {
+			row, ok := f.xferEscrow[id]
+			if !ok {
+				return nil, false, errcode.New(errcode.ErrInventoryItemNotFound, "escrow replay row missing")
+			}
+			out = append(out, toSnapshot(row))
+		}
+		return out, true, nil
+	}
+	// 先全量校验再搬移(复刻 MySQL 事务整批回滚语义)。
+	for _, id := range instanceIDs {
+		inst, ok := f.instances[sourcePlayerID][id]
+		if !ok {
+			return nil, false, errcode.New(errcode.ErrInventoryItemNotFound, "instance not found")
+		}
+		if inst.Bound {
+			return nil, false, errcode.New(errcode.ErrInventoryInstanceBound, "bound instance not transferable")
+		}
+	}
+	out := make([]data.EscrowedInstance, 0, len(instanceIDs))
+	for _, id := range instanceIDs {
+		inst := f.instances[sourcePlayerID][id]
+		row := &xferEscrowRow{inst: *inst, sourcePlayerID: sourcePlayerID, toPlayerID: toPlayerID}
+		f.xferEscrow[id] = row
+		delete(f.instances[sourcePlayerID], id)
+		out = append(out, toSnapshot(row))
+	}
+	f.xferLedger[gk] = fp
+	return out, false, nil
+}
+
+func (f *fakeRepo) ClaimTransferInstances(_ context.Context, toPlayerID uint64, items []data.TransferClaimItem, capacity int32, idempotencyKey, _ string) (bool, error) {
+	gk := keyOf(toPlayerID, idempotencyKey)
+	fp := data.TransferClaimFingerprint(items)
+	if stored, ok := f.xferLedger[gk]; ok {
+		if stored != fp {
+			return false, errcode.New(errcode.ErrInventoryIdempotencyConflict, "idempotency conflict")
+		}
+		return true, nil
+	}
+	for _, it := range items {
+		row, ok := f.xferEscrow[it.InstanceID]
+		if !ok || row.toPlayerID != toPlayerID || row.inst.ItemConfigID != it.ItemConfigID {
+			return false, errcode.New(errcode.ErrInventoryItemNotFound, "escrow row missing/mismatch")
+		}
+	}
+	if capacity <= 0 || len(f.instances[toPlayerID])+len(items) > int(capacity) {
+		return false, errcode.New(errcode.ErrInventoryCapacityFull, "capacity full")
+	}
+	for _, it := range items {
+		row := f.xferEscrow[it.InstanceID]
+		inst := row.inst
+		slot, ok := f.lowestFreeSlot(toPlayerID, capacity)
+		if !ok {
+			return false, errcode.New(errcode.ErrInventoryCapacityFull, "no free slot")
+		}
+		inst.SlotIndex = slot
+		f.instMap(toPlayerID)[it.InstanceID] = &inst
+		delete(f.xferEscrow, it.InstanceID)
+	}
+	f.xferLedger[gk] = fp
+	return false, nil
+}
+
+func (f *fakeRepo) ReleaseTransferEscrow(_ context.Context, instanceIDs []uint64) (int, error) {
+	released := 0
+	for _, id := range instanceIDs {
+		row, ok := f.xferEscrow[id]
+		if !ok {
+			continue
+		}
+		inst := row.inst
+		inst.SlotIndex = -1 // 复刻 slot NULL(未分配格)入包
+		f.instMap(row.sourcePlayerID)[id] = &inst
+		delete(f.xferEscrow, id)
+		released++
+	}
+	return released, nil
+}
+
+func (f *fakeRepo) ConsumeTransferEscrow(_ context.Context, toPlayerID uint64, instanceIDs []uint64) (int, error) {
+	consumed := 0
+	for _, id := range instanceIDs {
+		row, ok := f.xferEscrow[id]
+		if !ok {
+			continue
+		}
+		if row.toPlayerID != toPlayerID {
+			return 0, errcode.New(errcode.ErrInventoryItemNotFound, "escrow not destined to player")
+		}
+		delete(f.xferEscrow, id)
+		consumed++
+	}
+	return consumed, nil
 }
 
 func newUC(repo data.InventoryRepo) *InventoryUsecase {

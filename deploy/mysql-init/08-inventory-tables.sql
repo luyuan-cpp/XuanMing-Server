@@ -49,9 +49,13 @@ CREATE TABLE IF NOT EXISTS `inventory_ledger` (
     `created_at`          DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_idem` (`player_id`, `idempotency_key`),
-    KEY `idx_player_created` (`player_id`, `created_at`)
+    KEY `idx_player_created` (`player_id`, `created_at`),
+    KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 背包发放/使用/出售幂等流水(不变量 §9.7;指纹防 key 复用,快照可回放)';
+  COMMENT='Pandora 背包发放/使用/出售幂等流水(不变量 §9.7;指纹防 key 复用,快照可回放;保留期 90 天由 inventory sweep 清理,§9.24)';
+-- idx_created 服务保留期清理(DELETE WHERE created_at < cutoff LIMIT n,biz/sweep.go)。
+-- 既有库(已建 volume 不重放 init SQL)需手动补:
+--   ALTER TABLE inventory_ledger ADD KEY idx_created (created_at);
 
 CREATE TABLE IF NOT EXISTS `auction_escrow` (
     `id`             BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
@@ -66,9 +70,13 @@ CREATE TABLE IF NOT EXISTS `auction_escrow` (
     `updated_at`     DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_order` (`player_id`, `order_id`),
-    KEY `idx_player` (`player_id`)
+    KEY `idx_player` (`player_id`),
+    KEY `idx_status_updated` (`status`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 拍卖挂单托管(escrow:挂单冻结/成交消费/撤单过期退还,资产不在活跃余额可被双花)';
+  COMMENT='Pandora 拍卖挂单托管(escrow:挂单冻结/成交消费/撤单过期退还;closed 行保留期 90 天由 inventory sweep 清理,active 永不清,§9.24)';
+-- idx_status_updated 服务保留期清理(DELETE WHERE status=closed AND updated_at < cutoff LIMIT n)。
+-- 既有库需手动补:
+--   ALTER TABLE auction_escrow ADD KEY idx_status_updated (status, updated_at);
 
 -- W5 ④ 装备实例背包(2026-07-08)
 --
@@ -95,3 +103,27 @@ CREATE TABLE IF NOT EXISTS `player_item_instance` (
     UNIQUE KEY `uk_player_slot` (`player_id`, `slot_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 玩家装备类道具唯一实例(实例化背包;每件独立 + 鉴定后随机属性)';
+
+-- 邮件 transfer 附件实例托管(2026-07-22,bag-domain.md §7.1 三不变量落地)
+--
+--   既存实例"只改归属"的在途托管行:EscrowOutInstances 从 player_item_instance 同事务
+--   DELETE + INSERT 本表(托管期间实例不存在于任何玩家背包);ClaimTransferInstances /
+--   ReleaseTransferEscrow 同事务 DELETE 本表 + INSERT 回实例表。instance_id 双表各自 PK +
+--   事务性搬移 = "同一 instance 全局唯一"不变量。
+--   增长有界(§9.24 豁免登记):行只存在于托管在途期,领取/释放即删;过期未领个人邮件
+--   由 mail sweep 归档(player_mail_archive)留补偿凭据,运营凭归档重发/释放对应托管行。
+CREATE TABLE IF NOT EXISTS `mail_transfer_escrow` (
+    `instance_id`      BIGINT UNSIGNED  NOT NULL COMMENT '托管中的实例唯一 ID(与 player_item_instance 互斥存在)',
+    `item_config_id`   INT UNSIGNED     NOT NULL COMMENT '配置表道具 ID(uint32,§12;领取侧交叉核对)',
+    `identified`       TINYINT          NOT NULL DEFAULT 0 COMMENT '扣出时鉴定态原样保留',
+    `attributes`       JSON             NULL COMMENT '扣出时词条原样保留;未鉴定为 NULL',
+    `bound`            TINYINT          NOT NULL DEFAULT 0 COMMENT '扣出时绑定态原样保留(扣出侧已拒绑定实例,防御性冗余)',
+    `source_player_id` BIGINT UNSIGNED  NOT NULL COMMENT '扣出来源玩家(释放归还目标;审计)',
+    `to_player_id`     BIGINT UNSIGNED  NOT NULL COMMENT '预期领取人(领取校验,防其它邮件冒领)',
+    `escrow_key`       VARCHAR(64)      NOT NULL COMMENT '托管操作键(审计;幂等由 inventory_ledger 承担)',
+    `created_at`       DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`instance_id`),
+    KEY `idx_to_player` (`to_player_id`),
+    KEY `idx_source_player` (`source_player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 邮件 transfer 附件实例托管(在途行,领取/释放即删;§9.24 豁免登记)';

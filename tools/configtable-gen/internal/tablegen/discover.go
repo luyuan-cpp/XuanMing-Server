@@ -29,6 +29,7 @@ type TableDef struct {
 	ExcelFile string // 源表相对路径((excel_file) 注解)
 	KeyType   string // 主键 Go 类型(现约定 uint32,CLAUDE.md §5.6)
 	BitIndex  bool   // (excel_bit_index):生成稳定 ID→位序映射
+	DataStart int    // 数据区起始 Excel 行号(1 基,(excel_data_start_row),默认 5)
 
 	container protoreflect.MessageType
 	rowsField protoreflect.FieldDescriptor
@@ -68,7 +69,9 @@ type FKGen struct {
 }
 
 // UniqueKeys 全部唯一二级键((excel_key))。
-func (d TableDef) UniqueKeys() []KeyGen { return d.keysWhere(func(c columnSpec) bool { return c.unique }) }
+func (d TableDef) UniqueKeys() []KeyGen {
+	return d.keysWhere(func(c columnSpec) bool { return c.unique })
+}
 
 // MultiKeys 全部非唯一索引((excel_multi_key) + (excel_fk) 隐含的反查索引)。
 func (d TableDef) MultiKeys() []KeyGen {
@@ -166,6 +169,10 @@ func buildDef(mt protoreflect.MessageType, mopts *descriptorpb.MessageOptions) (
 	full := string(desc.FullName())
 	dataType := string(desc.Name())
 	excelFile := proto.GetExtension(mopts, configpb.E_ExcelFile).(string)
+	dataStart := int(proto.GetExtension(mopts, configpb.E_ExcelDataStartRow).(uint32))
+	if dataStart == 0 {
+		dataStart = 5
+	}
 
 	if !strings.HasSuffix(dataType, "TableData") {
 		return TableDef{}, fmt.Errorf("%s: 打了 (excel_file) 的容器必须命名为 <Name>TableData", full)
@@ -173,6 +180,9 @@ func buildDef(mt protoreflect.MessageType, mopts *descriptorpb.MessageOptions) (
 	goName := strings.TrimSuffix(dataType, "TableData")
 	if excelFile == "" {
 		return TableDef{}, fmt.Errorf("%s: (excel_file) 不能为空", full)
+	}
+	if dataStart < 2 {
+		return TableDef{}, fmt.Errorf("%s: (excel_data_start_row) 必须 >= 2,实为 %d", full, dataStart)
 	}
 
 	rowsField := desc.Fields().ByName("rows")
@@ -226,6 +236,7 @@ func buildDef(mt protoreflect.MessageType, mopts *descriptorpb.MessageOptions) (
 		ExcelFile: excelFile,
 		KeyType:   "uint32",
 		BitIndex:  proto.GetExtension(mopts, configpb.E_ExcelBitIndex).(bool),
+		DataStart: dataStart,
 		container: mt,
 		rowsField: rowsField,
 		keyField:  keyField,

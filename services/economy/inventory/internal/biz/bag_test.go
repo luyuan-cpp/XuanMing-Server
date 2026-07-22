@@ -1,0 +1,294 @@
+// bag_test.go — 背包域 biz 校验层单测(假仓;数据层语义由 data 侧单测/集成测试覆盖)。
+package biz
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/luyuancpp/pandora/pkg/errcode"
+	bagv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/bag/v1"
+
+	"github.com/luyuancpp/pandora/services/economy/inventory/internal/conf"
+	"github.com/luyuancpp/pandora/services/economy/inventory/internal/data"
+)
+
+// fakeBagRepo 记录调用的假仓(校验层测试只关心"是否放行到数据层")。
+type fakeBagRepo struct {
+	appendCalls int
+	lastEntries []*bagv1.BagJournalEntry
+
+	// 容量购买状态(§5.3 单测用;镜像 ApplyCapacityPurchase 的档数 CAS 语义)。
+	capExtra     map[uint32]uint32
+	capPurchases map[uint32]uint32
+	applyErr     error
+}
+
+func (f *fakeBagRepo) LoadBag(context.Context, uint64, uint64) ([]byte, []data.BagJournalRow, uint64, error) {
+	return nil, nil, 0, nil
+}
+
+func (f *fakeBagRepo) AppendJournal(_ context.Context, _ uint64, _ uint64, entries []*bagv1.BagJournalEntry, _ data.BagSectionCapacity, _ data.BagMaxStack, _ int64) (uint64, error) {
+	f.appendCalls++
+	f.lastEntries = entries
+	return entries[len(entries)-1].GetJournalSeq(), nil
+}
+
+func (f *fakeBagRepo) SaveCheckpoint(context.Context, uint64, uint64, []byte, uint64) error {
+	return nil
+}
+
+func (f *fakeBagRepo) GetSections(context.Context, uint64, []uint32, data.BagSectionCapacity) ([]*bagv1.BagSection, error) {
+	return nil, nil
+}
+
+func (f *fakeBagRepo) SweepJournal(context.Context, time.Duration, int) (int64, error) { return 0, nil }
+
+func (f *fakeBagRepo) ApplyCapacityPurchase(_ context.Context, _ uint64, bagType, tier, slots, maxExtra uint32) (uint32, uint32, bool, error) {
+	if f.applyErr != nil {
+		return 0, 0, false, f.applyErr
+	}
+	if f.capExtra == nil {
+		f.capExtra = map[uint32]uint32{}
+		f.capPurchases = map[uint32]uint32{}
+	}
+	if f.capPurchases[bagType] >= tier {
+		return f.capExtra[bagType], f.capPurchases[bagType], false, nil
+	}
+	if f.capPurchases[bagType] != tier-1 {
+		return 0, 0, false, errcode.New(errcode.ErrInvalidState, "tier out of order")
+	}
+	if f.capExtra[bagType]+slots > maxExtra {
+		return 0, 0, false, errcode.New(errcode.ErrBagCapacityMaxed, "maxed")
+	}
+	f.capExtra[bagType] += slots
+	f.capPurchases[bagType] = tier
+	return f.capExtra[bagType], f.capPurchases[bagType], true, nil
+}
+
+func (f *fakeBagRepo) GetCapacityState(_ context.Context, _ uint64, bagType uint32) (uint32, uint32, error) {
+	return f.capExtra[bagType], f.capPurchases[bagType], nil
+}
+
+// fakeCapacityCharger 可编程扣费器(记录扣费次数;同 key 幂等由 chargedTiers 模拟)。
+type fakeCapacityCharger struct {
+	gold         int64
+	chargedTiers map[string]bool
+	charges      int
+}
+
+func capChargeKey(bagType, tier uint32) string {
+	return data.BagCapacityChargeKey(bagType, tier)
+}
+
+func (f *fakeCapacityCharger) ChargeBagCapacity(_ context.Context, _ uint64, bagType, tier, _ uint32, priceGold int64) (bool, int64, error) {
+	if f.chargedTiers == nil {
+		f.chargedTiers = map[string]bool{}
+	}
+	key := capChargeKey(bagType, tier)
+	if f.chargedTiers[key] {
+		return true, f.gold, nil
+	}
+	if f.gold < priceGold {
+		return false, 0, errcode.New(errcode.ErrInventoryInsufficient, "insufficient gold")
+	}
+	f.gold -= priceGold
+	f.chargedTiers[key] = true
+	f.charges++
+	return false, f.gold, nil
+}
+
+func newBagUsecaseForTest() (*BagUsecase, *fakeBagRepo) {
+	repo := &fakeBagRepo{}
+	// AllowUnverifiedOwner:本组单测聚焦形状校验/repo 委托;owner 授权门有专属测试
+	// (TestBagOwnerAuthorization*),此处显式跳过以隔离关注点。
+	cfg := conf.BagConf{MaxJournalBatch: 4, MaxItemsPerOp: 2, HourlyJournalQuota: 100,
+		SectionCapacities:    []conf.BagSectionCapacityRule{{BagType: 1, Capacity: 10}},
+		AllowUnverifiedOwner: true}
+	return NewBagUsecase(repo, cfg), repo
+}
+
+// fakeOwnerAuthorizer 可编程授权结果(owner 授权门单测用)。
+type fakeOwnerAuthorizer struct {
+	err           error
+	resolvedEpoch uint64
+	calls         int
+}
+
+func (f *fakeOwnerAuthorizer) AuthorizeOwnerWrite(_ context.Context, _ uint64, claimedEpoch uint64, _, _ string) (uint64, error) {
+	f.calls++
+	if f.err != nil {
+		return 0, f.err
+	}
+	if f.resolvedEpoch != 0 {
+		return f.resolvedEpoch, nil
+	}
+	return claimedEpoch, nil
+}
+
+func pickupEntry(seq uint64, bagType uint32, generation uint64, key string, items int) *bagv1.BagJournalEntry {
+	list := make([]*bagv1.BagItem, 0, items)
+	for i := 0; i < items; i++ {
+		list = append(list, &bagv1.BagItem{ItemConfigId: 10001, Count: 1})
+	}
+	return &bagv1.BagJournalEntry{
+		JournalSeq: seq, BagType: bagType, Generation: generation, IdempotencyKey: key,
+		Op: &bagv1.BagJournalEntry_PickupGrant{PickupGrant: &bagv1.PickupGrantOp{Items: list}},
+	}
+}
+
+func wantBizCode(t *testing.T, err error, code errcode.Code, what string) {
+	t.Helper()
+	if errcode.As(err) != code {
+		t.Fatalf("%s: 期望 %d,实际 %v", what, code, err)
+	}
+}
+
+func TestBagAppendJournalValidation(t *testing.T) {
+	uc, repo := newBagUsecaseForTest()
+	ctx := context.Background()
+
+	if _, err := uc.AppendJournal(ctx, 0, 1, []*bagv1.BagJournalEntry{pickupEntry(1, 0, 0, "k", 1)}, DSCallerIdentity{}); err == nil {
+		t.Fatal("player_id=0 应拒")
+	}
+	if _, err := uc.AppendJournal(ctx, 1, 1, nil, DSCallerIdentity{}); err == nil {
+		t.Fatal("空批应拒")
+	}
+	over := make([]*bagv1.BagJournalEntry, 5)
+	for i := range over {
+		over[i] = pickupEntry(uint64(i+1), 0, 0, "k", 1)
+	}
+	wantBizCode(t, func() error { _, err := uc.AppendJournal(ctx, 1, 1, over, DSCallerIdentity{}); return err }(),
+		errcode.ErrBagQuotaExceeded, "超批")
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{pickupEntry(1, 7, 0, "k", 1)}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrBagSectionNotAllowed, "未知段类型")
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{pickupEntry(1, 0, 3, "k", 1)}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "固定段带非零代际")
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{pickupEntry(1, 0, 0, "", 1)}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "空幂等键")
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{pickupEntry(1, 0, 0, "k", 3)}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrBagQuotaExceeded, "单 op 物品超限")
+	// 同段转移拒。
+	sameType := &bagv1.BagJournalEntry{
+		JournalSeq: 1, BagType: 1, IdempotencyKey: "k",
+		Op: &bagv1.BagJournalEntry_Transfer{Transfer: &bagv1.TransferOp{
+			ToBagType: 1, Items: []*bagv1.BagItem{{ItemConfigId: 1, Count: 1}},
+		}},
+	}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{sameType}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "同段转移")
+	// 缺 op 拒(未知 op fail-closed)。
+	noOp := &bagv1.BagJournalEntry{JournalSeq: 1, BagType: 0, IdempotencyKey: "k"}
+	wantBizCode(t, func() error {
+		_, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{noOp}, DSCallerIdentity{})
+		return err
+	}(), errcode.ErrInvalidArg, "缺 op")
+
+	if repo.appendCalls != 0 {
+		t.Fatalf("校验失败不得触达数据层: %d", repo.appendCalls)
+	}
+	// 合法批放行。
+	if _, err := uc.AppendJournal(ctx, 1, 1, []*bagv1.BagJournalEntry{
+		pickupEntry(1, 0, 0, "k1", 1), pickupEntry(2, 100, 8, "k2", 1),
+	}, DSCallerIdentity{}); err != nil {
+		t.Fatalf("合法批应放行: %v", err)
+	}
+	if repo.appendCalls != 1 || len(repo.lastEntries) != 2 {
+		t.Fatalf("放行批未触达数据层: calls=%d", repo.appendCalls)
+	}
+}
+
+func TestBagCheckpointAndSectionsValidation(t *testing.T) {
+	uc, _ := newBagUsecaseForTest()
+	ctx := context.Background()
+
+	// checkpoint 含后端驻留段拒(仓库本体不归 checkpoint)。
+	record := &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 1}}}
+	wantBizCode(t, uc.SaveCheckpoint(ctx, 1, 1, record, nil, 0, DSCallerIdentity{}),
+		errcode.ErrBagSectionNotAllowed, "checkpoint 含仓库段")
+	// 随身组快照放行。
+	carry := &bagv1.BagStorageRecord{Sections: []*bagv1.BagSection{{BagType: 0}, {BagType: 2}, {BagType: 3}}}
+	if err := uc.SaveCheckpoint(ctx, 1, 1, carry, nil, 0, DSCallerIdentity{}); err != nil {
+		t.Fatalf("随身组快照应放行: %v", err)
+	}
+
+	// GetSections 只允许后端驻留段。
+	wantBizCode(t, func() error { _, err := uc.GetSections(ctx, 1, []uint32{0}); return err }(),
+		errcode.ErrBagSectionNotAllowed, "查随身段")
+	if _, err := uc.GetSections(ctx, 1, []uint32{1, 100}); err != nil {
+		t.Fatalf("查仓库/活动段应放行: %v", err)
+	}
+}
+
+// ── owner 授权门(五要件②,phase 2)────────────────────────────────────────────
+
+// bagOwnerTestEntry 构造一条最小合法 journal 条目(授权门测试专用)。
+func bagOwnerTestEntry() *bagv1.BagJournalEntry {
+	return &bagv1.BagJournalEntry{
+		JournalSeq: 1, BagType: 0, IdempotencyKey: "k1",
+		Op: &bagv1.BagJournalEntry_PickupGrant{PickupGrant: &bagv1.PickupGrantOp{
+			Items: []*bagv1.BagItem{{ItemConfigId: 10001, Count: 1}},
+		}},
+	}
+}
+
+// TestBagOwnerAuthorizationFailClosed 未配置授权器且未显式跳过 → 三条写路径全 fail-closed,
+// 不触 repo(生产缺 owner_addr 不得放行任何写)。
+func TestBagOwnerAuthorizationFailClosed(t *testing.T) {
+	repo := &fakeBagRepo{}
+	cfg := conf.BagConf{MaxJournalBatch: 4, MaxItemsPerOp: 2,
+		SectionCapacities: []conf.BagSectionCapacityRule{{BagType: 1, Capacity: 10}}}
+	uc := NewBagUsecase(repo, cfg) // AllowUnverifiedOwner 缺省 false,未注入授权器
+
+	if _, _, _, err := uc.LoadBag(context.Background(), 100, 1, DSCallerIdentity{}); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("LoadBag want ErrUnavailable, got %v", err)
+	}
+	if _, err := uc.AppendJournal(context.Background(), 100, 1, []*bagv1.BagJournalEntry{bagOwnerTestEntry()}, DSCallerIdentity{}); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("AppendJournal want ErrUnavailable, got %v", err)
+	}
+	if err := uc.SaveCheckpoint(context.Background(), 100, 1, &bagv1.BagStorageRecord{}, nil, 0, DSCallerIdentity{}); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("SaveCheckpoint want ErrUnavailable, got %v", err)
+	}
+	if repo.appendCalls != 0 {
+		t.Fatalf("fail-closed 不得触 repo, appendCalls=%d", repo.appendCalls)
+	}
+}
+
+// TestBagOwnerAuthorizationDenied 授权器拒(epoch 不符/未 ADMITTED/失租)→ 错误原样上抛,不触 repo。
+func TestBagOwnerAuthorizationDenied(t *testing.T) {
+	uc, repo := newBagUsecaseForTest()
+	auth := &fakeOwnerAuthorizer{err: errcode.New(errcode.ErrBagEpochFenced, "epoch mismatch")}
+	uc.SetOwnerAuthorizer(auth)
+
+	if _, err := uc.AppendJournal(context.Background(), 100, 1, []*bagv1.BagJournalEntry{bagOwnerTestEntry()}, DSCallerIdentity{}); errcode.As(err) != errcode.ErrBagEpochFenced {
+		t.Fatalf("want ErrBagEpochFenced, got %v", err)
+	}
+	if auth.calls != 1 || repo.appendCalls != 0 {
+		t.Fatalf("授权拒后不得触 repo: auth=%d repo=%d", auth.calls, repo.appendCalls)
+	}
+}
+
+// TestBagOwnerAuthorizationPassed 授权通过 → 写路径照常委托 repo;授权器注入后即使
+// AllowUnverifiedOwner=true 也必须逐调执行(显式注入优先于跳过开关)。
+func TestBagOwnerAuthorizationPassed(t *testing.T) {
+	uc, repo := newBagUsecaseForTest()
+	auth := &fakeOwnerAuthorizer{}
+	uc.SetOwnerAuthorizer(auth)
+
+	if _, err := uc.AppendJournal(context.Background(), 100, 1, []*bagv1.BagJournalEntry{bagOwnerTestEntry()}, DSCallerIdentity{}); err != nil {
+		t.Fatalf("AppendJournal err: %v", err)
+	}
+	if auth.calls != 1 || repo.appendCalls != 1 {
+		t.Fatalf("授权通过应触 repo: auth=%d repo=%d", auth.calls, repo.appendCalls)
+	}
+}

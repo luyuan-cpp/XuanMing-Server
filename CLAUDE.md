@@ -73,7 +73,7 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 
 ## 8. 压测纪律
 
-详见 [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md)。**核心**:跑测前必有 `prev-summary.txt` 且清空 redis/mysql/etcd/kafka offset/k8s GameServer;至少 3 次 prom snapshot(ramp 完/稳态中/稳态末);用 summarize 脚本输出五段二维表,不手 grep raw prom;没对比表不准声明"性能提升";压期不上传日志。
+详见 [`docs/design/stress-discipline.md`](./docs/design/stress-discipline.md)。**核心**:跑测前必有 `prev-summary.txt` 且清空 redis/mysql/etcd/kafka offset/k8s GameServer;至少 3 次 prom snapshot(ramp 完/稳态中/稳态末);用 summarize 脚本输出五段二维表,不手 grep raw prom;没对比表不准声明"性能提升";压期不上传日志。**库增长断言(§9.24)**:压前用 `tools/migrate/cmd/dbcheck` 抓行数基线并核对登记清单/清理索引,压后 `-compare` 断言 outbox 排空、每表增量能用业务量解释、无未登记表;压测库丢弃前用 `-force-sweep` 抽测批删速率 ≥ 峰值写入速率。任一不过不许宣布本轮通过。
 
 ## 9. 不变量(数据一致性 / 安全)
 
@@ -84,7 +84,16 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
 3. **DS 票据短时效**(JWT exp 5min)
 4. **DS 崩溃必有补偿**(Battle DS 15s 心跳超时 → abandoned → 段位回滚;Hub DS 默认 30s 超时 → draining/停止分配)
 5. **proto 字段编号上线后不复用**;开发期间已删除字段可复用编号,但必须重新生成 proto 并完整编译所有已启用 module
-6. **MMR 计算在 battle_result**(DS 不可信)
+6. **派生数值一律服务端计算;DS 的写权限有范围、可验证、有额度**(原"DS 不可信",
+   2026-07-21 MMO 化修订——原则内核"限制单实例被攻破/出 bug 的爆炸半径"不变):
+   - **数值不信 DS**:MMR / 经验换算 / 掉落发放判定等派生数值仍只在 battle_result 等
+     Go 服务由**事实**换算(DS 只报事实不报数值),换算表 / 白名单 / 上限在服务端;
+   - **DS 可作受信写者**(玩家背包等在线权威态,MMO 化方向),但每笔写必须同时满足五要件:
+     ①**身份**可验证(DS JWT / writer epoch);②**owner 授权**(该 DS 当前持有该玩家的
+     owner lease,服务端按 owner 权威校验,不得只验"是合法 DS"——模板见 battle_result
+     的 Guard + active match + roster 链);③**fencing**(写带 owner_epoch,失租旧写一律拒);
+     ④**额度**(journal / 入账层保留速率与单场 / 单时段上限);⑤**审计**(写走 journal
+     流水,可发现可修复)。任何绕过五要件的 DS 直写权威库一律拒。
 7. **交易资源扣减必须原子 + 有补偿幂等键**
 8. **所有写都要带 trace_id**
 9. **kafka topic key = 业务实体 ID**(同一玩家 / 同一对局事件有序)
@@ -161,6 +170,36 @@ UE 客户端 + DS                  # 独立仓库，工程统一为 Pandora
     - **完成点分层**：返回票据、调用 `ClientTravel`、World BeginPlay 或 locator 出现 HUB / BATTLE 都不算完成。服务端完成点是当前 owner epoch 仍在有效 lease 内、Admission 幂等提交且该场景要求的角色 / Pawn / 玩家态创建成功，并把 owner 标记为 `ADMITTED`；客户端连接 exact DS 且收到 connection-specific ACK 后才进入本地 `PLAYABLE`。ACK 丢失时重查 / 重放同一 Admission 必须返回原 `ADMITTED` 并重新确认，不能再次分配、占座或盲目 Travel。每一阶段都有 deadline、退避 + jitter、前台唤醒驱动和可见恢复 UI；每次等待有界，整体可持续重试。
     - **脑裂时安全优先但不能永久卡流程**：为了守住一人一 DS，可以在新 owner 的 `admit_not_before` 前返回带明确原因、`retry_after` 和 deadline 的 `WAIT`，但必须保留 session 与原 `operation_id`，由同一 coordinator 的 watchdog 到期重查，不能等待旧 DS 某个可能永不到达的回调。旧 lease 到期且 authority / 健康 DS 恢复后必须自动继续，无需重登、手工清状态或另走 fallback。若 owner authority 永久失去法定多数或长期无容量，“立即进入新 DS”与“绝不双 DS”无法同时保证，此时只能停在可见、可交互、可持续重试 / 可退出的 UI；不得默认 Hub、清 session、黑屏或静默 loading。这里的“永不卡”是没有内部永久中间态或无出口等待，并以 authority 与容量最终恢复为收敛前提，不能靠放开第二个 DS 换取表面可用性。
     - **验收矩阵**：至少覆盖重复 Login / SelectRole、响应丢失、MATCHING 各阶段切后台 / 杀进程、locator / Redis / matchmaker 分区、READY push 丢失、地图加载无回调、Admission ACK 丢失、同 Hub 旧 Controller 不退出、旧 DS 分区后恢复、迟到 Logout / Heartbeat、服务进程重启以及 Stable / Canary 新旧组合。测试未覆盖前不得声称“永远不卡”“幂等进场”或“无 bug”。
+
+24. **持久化数据增长必须有界:失效数据最多保留 90 天,禁止只增不删的无界表**:任何随时间或玩家活跃度线性增长的只增表(幂等流水、审计、托管、归档、领取记录、outbox、历史/日志类表等)必须同时具备**保留期配置(带默认值)**和**周期清理任务**;玩家已失去 / 已终态 / 已关闭的数据(用完道具的流水、closed escrow、过期邮件、已结算订单等)物理保留**默认且最多 90 天**。清理必须小批量(`DELETE ... LIMIT`)防长事务锁表,多副本并发跑必须幂等;清理列必须有可用索引。幂等 / 防重行的保留期必须**远大于对应操作的最大重试 / 回放窗口**,且删除后迟到重放必须 fail-closed 或 no-op(不得重复入账 / 重复发放 / 重复冻结)——依赖某流水"永久兜底"的防重设计一律改为在源头闭环(例:邮件寿命钳到 claim 保留期内,而不是靠 inventory 流水永存)。确需超过 90 天必须写明理由并在下表登记为例外。**新增只增表必须同步登记到下表,没有清理方案的只增表 PR review 直接拒**:
+
+    | 只增表 | 清理条件 | 保留期 | 清理任务 |
+    |---|---|---|---|
+    | inventory_ledger | created_at 超期 | 90 天(`ledger_retention_days`) | inventory `biz/sweep.go` |
+    | auction_escrow(closed) | status=closed 且 updated_at 超期(active 永不清) | 90 天(`escrow_retention_days`) | inventory `biz/sweep.go` |
+    | player_mail / sys_mail / guild_mail | 过期 / 失效 + 缓冲期 | 过期后 7 天(`expired_retention_days`) | mail `biz/sweep.go` |
+    | player_mail_archive | archived_at 超期 | 90 天(`archive_retention_days`) | mail `biz/sweep.go` |
+    | player_mail_claim | mail_id 早于 cutoff(雪花时间) | **180 天(登记例外)**:发送侧已把邮件可领窗口钳到本值内,claim 行必须活得比可领窗口长 | mail `biz/sweep.go` |
+    | battles + battle_player_stats | created_at(服务端落库时间;§9.6 不信 DS 上报的 ended_at_ms,防伪造提前删/永不删)超期,同事务批删 | 90 天(`history_retention_days`) | battle_result `biz/retention.go` |
+    | battle_progress_stream + battle_progress_player | settled_at_ms>0 且超期(未结算行永不清:陈年未结算 = 补偿链 bug 证据) | 90 天(同上) | battle_result `biz/retention.go` |
+    | exp_history | created_at 超期(**默认关**:上游 progress 出箱无总重试期限,清收据会双发;上游有界后运维显式开启) | 7 天(`exp_history_retention`) | player `RunExpHistoryJanitor` |
+    | mmr_history / attr_point_grants / talent_point_grants | created_at 超期(**默认关**,同上:kafka 重放 / 授予补扫须先有界) | 90 天(`history_retention_days`,下限 30) | player `RunHistoryJanitor` |
+    | chat_private_messages | message_id 早于雪花 cutoff | 90 天(`history_retention_days`) | chat `biz/sweep.go` |
+    | friend_requests(终态) | status≠pending 且 updated_at 超期(pending 永不清) | 90 天(`request_retention_days`) | friend `biz/sweep.go` |
+    | guild_join_requests(终态) | status≠pending 且 updated_at 超期(pending 永不清) | 90 天(`request_retention_days`) | guild `biz/sweep.go` |
+    | auction_orders(终态) | status∈{FILLED,CANCELED,EXPIRED} 且 release/match_pending=0 且 updated_at_ms 超期 | 90 天(`retention_days`) | auction `data/retention.go`(逐分片) |
+    | auction_matches(已结算) | settlement=COMPLETED 且 event_pending=0 且 matched_at_ms 超期 | 90 天(同上) | auction `data/retention.go` |
+    | auction_idempotency_keys | created_at_ms 超期 | 90 天(同上) | auction `data/retention.go` |
+    | leaderboard_snapshot | created_at_ms 超期 | 90 天(`retention_days`) | leaderboard `runRetentionSweep` |
+    | leaderboard_reward_log(GRANTED) | status=GRANTED 且 updated_at_ms 超期(PENDING/FAILED 是补发工作集,永不清) | 90 天(同上) | leaderboard `runRetentionSweep` |
+    | account_devices | last_login_at 超期(下次登录 upsert 自然重建) | 90 天(`device_retention_days`) | login `PurgeStaleDevices` |
+    | bag_journal | checkpoint 覆盖位之前且超期 | 90 天(`journal_retention_days`) | inventory(bag 域)journal sweep |
+    | owner_transition_log | created_at 超期(idx_created_at 已预留) | 90 天 | owner 服务 sweep(§9.22 工作线落地中) |
+
+    **登记豁免(慢增长 / 权威闸,不清理)**:`leaderboard_settlement`(settle uk 是防重复结算的永久闸,每批次 1 行)、`auction_owner_guards`(每 owner 1 行,被玩家数有界)、`account_bans`(运营合规审计,量级 = 运营操作数)、各出箱表(投递成功即删,积压属告警问题)、`player_items` count=0 行(被 uk 有界,删行会漂移错误码语义)、`mail_transfer_escrow`(邮件 transfer 附件在途托管行,领取/释放即删;行是已扣出实例资产的唯一持有处,量级 = 在途 transfer 邮件数,被个人邮件 TTL + 归档补偿链兜底,不得按时间清理)、`bag_migration`(旧 inventory 存量迁移幂等闸,一玩家一行永久保留;删行会让迁移作业重跑双倍入账,decision-revisit-bag-replay-semantics.md D5)。
+    存量库补清理索引统一走 `tools/migrate` 各库 `*_retention_indexes` 迁移(幂等条件建索引);未登记不等于已达标。
+
+    **机械化检查(上线前 / 压测强制)**:`tools/migrate/cmd/dbcheck` 内嵌与本清单同步的登记表,对真实库枚举全部 `pandora_%` 表并断言:①无未登记表;②swept 表清理索引齐备;③outbox 无堆积;`-snapshot`/`-compare` 供压测前后行数对比(增量必须能用业务量解释),`-force-sweep -confirm=YES-DELETE` 供压测库清理速率抽测(cutoff=now,只准对可丢弃库)。**上线前对生产库跑一次 dbcheck 且 PASS 是发布门禁**;新增表必须同时登记本清单与 dbcheck 内嵌清单,漂移即检查失败。压测接线见 `stress-discipline.md` §4.1.1/§4.3。
 
 ## 10. AI 协作约定
 

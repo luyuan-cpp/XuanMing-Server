@@ -32,4 +32,19 @@ func TestLoadRealDistIfPresent(t *testing.T) {
 	if tb.Level.IsBattleLevel(1) {
 		t.Fatal("1(登录)不应为战斗关卡")
 	}
+	if err := tb.PlayerLevelExp.ValidateCurve(); err != nil {
+		t.Fatalf("真实玩家等级经验表不合法: %v", err)
+	}
+	if tb.PlayerLevelExp.Count() != 15 || tb.PlayerLevelExp.MaxLevel() != 15 {
+		t.Fatalf("玩家等级经验表等级数=%d max=%d, want 15/15",
+			tb.PlayerLevelExp.Count(), tb.PlayerLevelExp.MaxLevel())
+	}
+	curve := tb.PlayerLevelExp.ExperienceCurve()
+	if len(curve) != 14 || curve[0] != 1000 || curve[7] != 6600 || curve[13] != 11400 {
+		t.Fatalf("真实曲线关键值错误: %v", curve)
+	}
+	last, ok := tb.PlayerLevelExp.ByID(15)
+	if !ok || last.GetUpgradeExp() != 0 || last.GetCumulativeExp() != 86800 {
+		t.Fatalf("Lv15 终点错误: row=%+v ok=%v", last, ok)
+	}
 }

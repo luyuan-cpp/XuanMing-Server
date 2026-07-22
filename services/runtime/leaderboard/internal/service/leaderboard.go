@@ -52,19 +52,21 @@ func (s *LeaderboardService) SubmitScore(ctx context.Context, req *leaderboardv1
 	return &leaderboardv1.SubmitScoreResponse{Code: commonv1.ErrCode_OK, NewScore: newScore, Rank: rank}, nil
 }
 
-// GetRank 查名次(读接口,允许客户端)。
+// GetRank 查名次(读接口,允许客户端)。精确榜命中回精确名次;被截断玩家回区间估算(estimated=true)。
 func (s *LeaderboardService) GetRank(ctx context.Context, req *leaderboardv1.GetRankRequest) (*leaderboardv1.GetRankResponse, error) {
 	b, ok := toBoardKey(req.GetBoard())
 	if !ok {
 		return &leaderboardv1.GetRankResponse{Code: commonv1.ErrCode_ERR_LEADERBOARD_INVALID_BOARD}, nil
 	}
-	entry, found, err := s.uc.GetRank(ctx, b, req.GetEntityId())
+	view, err := s.uc.GetRank(ctx, b, req.GetEntityId())
 	if err != nil {
 		return &leaderboardv1.GetRankResponse{Code: toProtoCode(err)}, nil
 	}
-	resp := &leaderboardv1.GetRankResponse{Code: commonv1.ErrCode_OK, Found: found}
-	if found {
-		resp.Entry = toEntry(entry)
+	resp := &leaderboardv1.GetRankResponse{Code: commonv1.ErrCode_OK, Found: view.Found}
+	if view.Found {
+		resp.Entry = toEntry(view.Entry)
+		resp.Estimated = view.Estimated
+		resp.TotalSubmitters = view.TotalSubmitters
 	}
 	return resp, nil
 }
@@ -172,10 +174,11 @@ func toOptions(pb *leaderboardv1.BoardOptions) data.Options {
 		return data.Options{}
 	}
 	return data.Options{
-		TTLSeconds:     pb.GetTtlSeconds(),
-		MaxSize:        pb.GetMaxSize(),
-		TieBreakByTime: pb.GetTieBreakByTime(),
-		Ascending:      pb.GetAscending(),
+		TTLSeconds:          pb.GetTtlSeconds(),
+		MaxSize:             pb.GetMaxSize(),
+		TieBreakByTime:      pb.GetTieBreakByTime(),
+		Ascending:           pb.GetAscending(),
+		EstimateBucketWidth: pb.GetEstimateBucketWidth(),
 	}
 }
 

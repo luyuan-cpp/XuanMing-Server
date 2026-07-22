@@ -130,11 +130,34 @@ type BattleConf struct {
 	// MaxProgressItemsPerMatch 单场累计掉落件数硬上限(默认 500),语义同上。
 	MaxProgressItemsPerMatch uint32 `yaml:"max_progress_items_per_match,omitempty" json:"max_progress_items_per_match,omitempty"`
 
+	// MaxProgressExpPerPlayer 单场单玩家累计经验硬上限(默认 200000)。只有按场累计时,
+	// 失陷 DS 仍可把全场额度灌给一人;设计要求的反作弊上限是单场单玩家粒度
+	// (realtime-progression.md 反作弊上限),按玩家在事务权威侧封顶。
+	MaxProgressExpPerPlayer uint64 `yaml:"max_progress_exp_per_player,omitempty" json:"max_progress_exp_per_player,omitempty"`
+
+	// MaxProgressItemsPerPlayer 单场单玩家累计掉落件数硬上限(默认 100),语义同上。
+	MaxProgressItemsPerPlayer uint32 `yaml:"max_progress_items_per_player,omitempty" json:"max_progress_items_per_player,omitempty"`
+
+	// MaxProgressKillsPerPlayer 单场单玩家累计击杀数硬上限(默认 1000),语义同上。
+	MaxProgressKillsPerPlayer uint32 `yaml:"max_progress_kills_per_player,omitempty" json:"max_progress_kills_per_player,omitempty"`
+
 	// ProgressPublishInterval 进度出箱发布轮询间隔(默认 1s;经验/掉落到账体感由它决定上界)。
 	ProgressPublishInterval config.Duration `yaml:"progress_publish_interval,omitempty" json:"progress_publish_interval,omitempty"`
 
 	// ProgressBatchSize 每轮发布取多少条进度出箱记录(默认 128)。
 	ProgressBatchSize int `yaml:"progress_batch_size,omitempty" json:"progress_batch_size,omitempty"`
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// HistoryRetentionDays 对局结算(battles+stats)与已结算进度水位(stream+player)
+	// 保留天数(默认 90)。远大于结算重试窗口(小时级);对局历史查询窗口同步受此限。
+	HistoryRetentionDays int `yaml:"history_retention_days,omitempty" json:"history_retention_days,omitempty"`
+
+	// RetentionSweepInterval 保留期清理轮询间隔(默认 1h)。多副本各自跑,批删幂等无需锁。
+	RetentionSweepInterval config.Duration `yaml:"retention_sweep_interval,omitempty" json:"retention_sweep_interval,omitempty"`
+
+	// RetentionSweepBatch 每轮每类清理的对局数上限(默认 200 场;stats 行数 ≈ 场数×人数)。
+	RetentionSweepBatch int `yaml:"retention_sweep_batch,omitempty" json:"retention_sweep_batch,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -168,6 +191,20 @@ func (c *Config) Defaults() {
 	}
 	if c.Battle.DropBatchSize <= 0 {
 		c.Battle.DropBatchSize = 128
+	}
+	if c.Battle.HistoryRetentionDays <= 0 {
+		c.Battle.HistoryRetentionDays = 90
+	}
+	if c.Battle.HistoryRetentionDays > 90 {
+		// §9.24 硬上限:失效数据最多保留 90 天(审计 P1:配置 365 不得原样生效;
+		// 确需更长必须走 §9.24 登记例外,不允许静默配置突破)。
+		c.Battle.HistoryRetentionDays = 90
+	}
+	if c.Battle.RetentionSweepInterval.Std() <= 0 {
+		c.Battle.RetentionSweepInterval = config.Duration(time.Hour)
+	}
+	if c.Battle.RetentionSweepBatch <= 0 {
+		c.Battle.RetentionSweepBatch = 200
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50022"
@@ -291,6 +328,30 @@ func (b *BattleConf) MaxProgressItemsPerMatchOrDefault() uint32 {
 		return b.MaxProgressItemsPerMatch
 	}
 	return 500
+}
+
+// MaxProgressExpPerPlayerOrDefault 单场单玩家累计经验硬上限(默认 200000)。
+func (b *BattleConf) MaxProgressExpPerPlayerOrDefault() uint64 {
+	if b.MaxProgressExpPerPlayer > 0 {
+		return b.MaxProgressExpPerPlayer
+	}
+	return 200_000
+}
+
+// MaxProgressItemsPerPlayerOrDefault 单场单玩家累计掉落件数硬上限(默认 100)。
+func (b *BattleConf) MaxProgressItemsPerPlayerOrDefault() uint32 {
+	if b.MaxProgressItemsPerPlayer > 0 {
+		return b.MaxProgressItemsPerPlayer
+	}
+	return 100
+}
+
+// MaxProgressKillsPerPlayerOrDefault 单场单玩家累计击杀数硬上限(默认 1000)。
+func (b *BattleConf) MaxProgressKillsPerPlayerOrDefault() uint32 {
+	if b.MaxProgressKillsPerPlayer > 0 {
+		return b.MaxProgressKillsPerPlayer
+	}
+	return 1000
 }
 
 // ProgressPublishIntervalOrDefault 进度出箱发布轮询间隔(默认 1s)。

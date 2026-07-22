@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -374,11 +375,57 @@ func seedGold(t *testing.T, db *sql.DB, playerID uint64, gold int64) {
 func queryItemCount(t *testing.T, db *sql.DB, playerID uint64, itemID uint32) int64 {
 	t.Helper()
 	var got int64
-	if err := db.QueryRow(`SELECT count FROM player_items WHERE player_id=? AND item_config_id=?`,
-		playerID, itemID).Scan(&got); err != nil {
+	err := db.QueryRow(`SELECT count FROM player_items WHERE player_id=? AND item_config_id=?`,
+		playerID, itemID).Scan(&got)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0 // 堆叠扣空即删行(2026-07-22):无行 = 持有 0,语义一致。
+	}
+	if err != nil {
 		t.Fatalf("query item player=%d item=%d: %v", playerID, itemID, err)
 	}
 	return got
+}
+
+// queryItemRowExists 断言行物理存在性(扣空即删行回归专用)。
+func queryItemRowExists(t *testing.T, db *sql.DB, playerID uint64, itemID uint32) bool {
+	t.Helper()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM player_items WHERE player_id=? AND item_config_id=?`,
+		playerID, itemID).Scan(&n); err != nil {
+		t.Fatalf("count item rows player=%d item=%d: %v", playerID, itemID, err)
+	}
+	return n > 0
+}
+
+// TestUseItemEmptiedRowDeleted 堆叠道具用尽即删行(2026-07-22 用户要求):
+// 扣到 0 时 player_items 行物理删除(不留 count=0 死行);再发放同 config 走 upsert 重建。
+func TestUseItemEmptiedRowDeleted(t *testing.T) {
+	f := openInventoryMySQLFixture(t)
+	repo := NewMySQLInventoryRepo(f.db)
+	ctx := context.Background()
+
+	const player, item = 901, 7901
+	if _, _, err := repo.GrantItems(ctx, player, []ItemGrant{{ItemConfigID: item, Count: 3}}, 0, "g1", ""); err != nil {
+		t.Fatalf("发放: %v", err)
+	}
+	remaining, _, err := repo.UseItem(ctx, player, item, 3, "u1", "")
+	if err != nil || remaining != 0 {
+		t.Fatalf("用尽: remaining=%d err=%v", remaining, err)
+	}
+	if queryItemRowExists(t, f.db, player, item) {
+		t.Fatal("扣空后行必须物理删除,不得留 count=0 死行")
+	}
+	// 幂等重放:同 key 重试仍返回快照 0,不复活行。
+	if remaining, already, err := repo.UseItem(ctx, player, item, 3, "u1", ""); err != nil || !already || remaining != 0 {
+		t.Fatalf("幂等重放: remaining=%d already=%v err=%v", remaining, already, err)
+	}
+	// 再发放同 config:upsert 重建行,行为不变。
+	if _, _, err := repo.GrantItems(ctx, player, []ItemGrant{{ItemConfigID: item, Count: 2}}, 0, "g2", ""); err != nil {
+		t.Fatalf("重建发放: %v", err)
+	}
+	if got := queryItemCount(t, f.db, player, item); got != 2 {
+		t.Fatalf("重建后应为 2,实际 %d", got)
+	}
 }
 
 func queryGold(t *testing.T, db *sql.DB, playerID uint64) int64 {

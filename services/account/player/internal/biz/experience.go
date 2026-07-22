@@ -39,9 +39,10 @@ func (u *PlayerUsecase) SetExperiencePusher(p ExperiencePusher) {
 // AddExperience 幂等入账经验并结算等级(实时成长唯一入口,系统调用)。
 // 返回 (入账后快照, 是否幂等命中, error)。
 //
-//	曲线未配置(exp_curve 空)→ ErrPlayerFeatureDisabled(功能关闭,默认行为不变 §14.2)
+//	配置表未加载 → ErrPlayerFeatureDisabled(启动主链要求配置表加载成功；这里只做防御)
 //	delta 超单次上限 → ErrInvalidArg(防异常调用方一次灌满;上限见 conf.MaxExpPerGrant)
-//	满级 → no-op:返回满级快照,不消费幂等键、不出箱
+//	满级 → no-op:返回满级快照,不加经验、不出箱,但仍消费幂等键落 no-op 收据
+//	(重放命中收据返回 already=true;防曲线扩容后滞留事件重入账,审计 P2)
 func (u *PlayerUsecase) AddExperience(ctx context.Context, playerID uint64, delta uint64, reason, idempotencyKey string) (data.ExpState, bool, error) {
 	if playerID == 0 {
 		return data.ExpState{}, false, errcode.New(errcode.ErrInvalidArg, "player_id required")
@@ -56,9 +57,12 @@ func (u *PlayerUsecase) AddExperience(ctx context.Context, playerID uint64, delt
 		return data.ExpState{}, false, errcode.New(errcode.ErrInvalidArg,
 			"exp_delta %d exceeds max_exp_per_grant %d", delta, maxGrant)
 	}
-	curve := u.cfg.ExpCurve
+	if !u.cfg.ExperienceEnabled {
+		return data.ExpState{}, false, errcode.New(errcode.ErrPlayerFeatureDisabled, "experience disabled")
+	}
+	curve := u.experienceCurve()
 	if len(curve) == 0 {
-		return data.ExpState{}, false, errcode.New(errcode.ErrPlayerFeatureDisabled, "experience disabled (exp_curve empty)")
+		return data.ExpState{}, false, errcode.New(errcode.ErrPlayerFeatureDisabled, "experience disabled (player level table unavailable)")
 	}
 	if err := u.repo.EnsureProfile(ctx, playerID, u.defaultNickname(playerID), u.cfg.BaseMMR); err != nil {
 		return data.ExpState{}, false, err
@@ -91,14 +95,26 @@ func (u *PlayerUsecase) AddExperience(ctx context.Context, playerID uint64, delt
 // 满级 → is_max_level=true 且级内经验按 0 展示(权威列已保证满级恒 0,此处防御性夹紧)。
 // 曲线未配置(功能关闭)→ 不标满级,exp 原样(默认 0),行为与历史一致。
 func (u *PlayerUsecase) DecorateExperience(level int32, expInLevel uint64) (uint64, bool) {
-	if len(u.cfg.ExpCurve) == 0 {
+	if !u.cfg.ExperienceEnabled {
 		return expInLevel, false
 	}
-	maxLevel := int32(len(u.cfg.ExpCurve)) + 1
+	curve := u.experienceCurve()
+	if len(curve) == 0 {
+		return expInLevel, false
+	}
+	maxLevel := int32(len(curve)) + 1
 	if level >= maxLevel {
 		return 0, true
 	}
 	return expInLevel, false
+}
+
+// experienceCurve 从当前原子快照提取本次调用使用的曲线副本。
+func (u *PlayerUsecase) experienceCurve() []uint64 {
+	if u.expLevels == nil {
+		return nil
+	}
+	return u.expLevels.ExperienceCurve()
 }
 
 // RunPushOutboxPublisher 启动后台玩家推送出箱发布循环,直到 ctx 取消
@@ -138,10 +154,17 @@ func (u *PlayerUsecase) RunPushOutboxPublisher(ctx context.Context) {
 
 // RunExpHistoryJanitor 启动 exp_history 幂等收据的后台清理循环,直到 ctx 取消。
 //
-// 设计(realtime-progression.md §4.2):留存期默认 7 天(覆盖 progress 出箱最长重试窗,
-// 出箱重试退避上限 5min,量级远小于留存期),到期分批删除防表无限增长。
-// 多副本并发 DELETE ... LIMIT 安全(各删各的行);表按 PK 升序扫,老行在前,无需新索引。
+// **默认关闭**(审计 P1):battle_result progress 出箱是永久重试链(退避上限 5min,
+// 无总重试期限)。入账成功但响应丢失/删行持续失败超过留存期时,清掉收据 = 同一事件
+// 再次入账(双发)。幂等正确性优先于表增长;开启(exp_history_cleanup_enabled)的前置
+// 条件是上游出箱先具备**小于留存期的有界重试/隔离期限**,由运维显式确认后配置。
+// 多副本并发 DELETE ... LIMIT 安全(各删各的行);表按 PK 升序扫,老行在前。
 func (u *PlayerUsecase) RunExpHistoryJanitor(ctx context.Context) {
+	if !u.cfg.ExpHistoryCleanupEnabled {
+		plog.With(ctx).Infow("msg", "exp_history_janitor_disabled",
+			"hint", "progress 出箱无总重试期限,清收据会破坏幂等;上游具备有界重试后再显式开启")
+		return
+	}
 	const (
 		sweepInterval = time.Hour
 		purgeBatch    = 1000
@@ -168,6 +191,61 @@ func (u *PlayerUsecase) RunExpHistoryJanitor(ctx context.Context) {
 			}
 			if total > 0 {
 				plog.With(ctx).Infow("msg", "exp_history_purged", "rows", total)
+			}
+		}
+	}
+}
+
+// RunHistoryJanitor 启动 mmr_history / attr_point_grants / talent_point_grants 幂等历史
+// 的后台清理循环,直到 ctx 取消(CLAUDE.md §9 不变量 24:只增表必须有界)。
+//
+// **默认关闭**,与 RunExpHistoryJanitor 同理由:上游 kafka player.update 消费与授予补扫
+// 是 at-least-once,清掉幂等行后同一事件重放 = 双发(重复加段位分/加点)。开启前置条件:
+// 上游重放期限(kafka retention / 补扫窗口)必须小于留存期(默认 90 天,下限 30 天)。
+// 多副本并发 DELETE ... LIMIT 安全(各删各的行)。
+func (u *PlayerUsecase) RunHistoryJanitor(ctx context.Context) {
+	if !u.cfg.HistoryCleanupEnabled {
+		plog.With(ctx).Infow("msg", "history_janitor_disabled",
+			"hint", "mmr/点数授予幂等历史不清理;确认上游重放期限 < 留存期后显式开启 history_cleanup_enabled")
+		return
+	}
+	const (
+		sweepInterval = time.Hour
+		purgeBatch    = 1000
+	)
+	type purgeFn struct {
+		name string
+		fn   func(context.Context, time.Time, int) (int64, error)
+	}
+	purges := []purgeFn{
+		{"mmr_history", u.repo.PurgeMMRHistory},
+		{"attr_point_grants", u.repo.PurgeAttrPointGrants},
+		{"talent_point_grants", u.repo.PurgeTalentPointGrants},
+	}
+	ticker := time.NewTicker(sweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-u.cfg.HistoryRetentionOrDefault())
+			for _, p := range purges {
+				var total int64
+				for ctx.Err() == nil {
+					n, err := p.fn(ctx, cutoff, purgeBatch)
+					if err != nil {
+						plog.With(ctx).Warnw("msg", "history_purge_failed", "table", p.name, "purged", total, "err", err)
+						break
+					}
+					total += n
+					if n < purgeBatch {
+						break
+					}
+				}
+				if total > 0 {
+					plog.With(ctx).Infow("msg", "history_purged", "table", p.name, "rows", total)
+				}
 			}
 		}
 	}

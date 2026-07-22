@@ -1,4 +1,4 @@
-# Pandora 20 个业务 Deployment + Service（19 个 Go 服务类型，matchmaker 含 PVP/PVE 双实例）
+# Pandora 21 个业务 Deployment + Service（20 个 Go 服务类型，matchmaker 含 PVP/PVE 双实例）
 #
 # 镜像:pandora/<svc>:dev(k8s 模式由 start.ps1 docker build 后 `minikube image load`;
 #       online 模式先回读 registry，再由 runtime overlay 固定为 repo@sha256:digest)。
@@ -70,9 +70,13 @@ spec:
           args: ["-conf", "etc/cluster.yaml"]
           ports: [ { containerPort: 50002 } ]
           readinessProbe: { grpc: { port: 50002 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
-          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player.yaml, readOnly: true } ]
+          volumeMounts:
+            - { name: conf, mountPath: /app/etc/cluster.yaml, subPath: player.yaml, readOnly: true }
+            - { name: configtable, mountPath: /app/configtable/active, readOnly: true }
           resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
-      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
+      volumes:
+        - { name: conf, secret: { secretName: pandora-config } }
+        - { name: configtable, configMap: { name: pandora-configtable } }
 ---
 apiVersion: v1
 kind: Service
@@ -380,6 +384,11 @@ kind: Deployment
 metadata: { name: push, namespace: pandora, labels: { app: push } }
 spec:
   replicas: 1
+  # RollingUpdate(默认)= 不停服硬要求(§9.16/§9.21;Recreate 全量断流被审计否决)。
+  # 滚动重叠窗的正确性由投递缓冲保证:每帧先入 redis 缓冲(游标权威)再 best-effort
+  # 实时转发,消息被"不持有连接的 Pod"消费只降级为缓冲交付,客户端重连按游标补推,
+  # 零丢失(见 push data/offline.go 邮箱模型)。多副本常态化仍需连接 owner 路由
+  # (实时时延优化,非正确性前提),见 online overlay 注释。
   selector: { matchLabels: { app: push } }
   template:
     metadata: { labels: { app: push } }
@@ -477,6 +486,35 @@ apiVersion: v1
 kind: Service
 metadata: { name: auction, namespace: pandora }
 spec: { selector: { app: auction }, ports: [ { port: 50016, targetPort: 50016 } ] }
+---
+# owner:每玩家 owner 权威(§9.22,owner-authority.md)。服务本身无状态(原子性在存储 CAS,
+# 副本只是通道),标准滚动更新即可。dev/minikube 连集群单机 MySQL pandora_owner;
+# 生产必须连 TiDB(deploy/tidb-init/02-owner-tidb.sql,MySQL 异步复制切换会回滚已确认写,生产禁用)。
+# 调用方 = login / ds-allocator / hub-allocator,集群内直连 owner:50017,不经 Envoy。
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: owner, namespace: pandora, labels: { app: owner } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: owner } }
+  template:
+    metadata: { labels: { app: owner } }
+    spec:
+      containers:
+        - name: owner
+          image: pandora/owner:dev
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "etc/cluster.yaml"]
+          ports: [ { containerPort: 50017 } ]
+          readinessProbe: { grpc: { port: 50017 }, initialDelaySeconds: 2, periodSeconds: 5, failureThreshold: 3 }
+          volumeMounts: [ { name: conf, mountPath: /app/etc/cluster.yaml, subPath: owner.yaml, readOnly: true } ]
+          resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: "1", memory: 256Mi } }
+      volumes: [ { name: conf, secret: { secretName: pandora-config } } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: owner, namespace: pandora }
+spec: { selector: { app: owner }, ports: [ { port: 50017, targetPort: 50017 } ] }
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -240,19 +240,23 @@ func countAttributeRows(t *testing.T, db *sql.DB, playerID uint64) int {
 	return count
 }
 
-// waitForAttributeLockWaiters 严格确认 want 个 writer 正阻塞在 players 的首个
-// SELECT ... FOR UPDATE，而不是已经读了旧余额后阻塞在最终 UPDATE。
+// waitForAttributeLockWaiters 严格确认 want 个 writer 同时等待临时库 players 的记录锁。
+// 两个 writer 分配同一属性:若删掉首个 SELECT ... FOR UPDATE,一个会先阻塞在
+// player_attributes,最多只有一个能走到最终 UPDATE players,因此这里要求两个独立等待
+// 线程仍可杀死该 mutant。不要依赖 INNODB_TRX.trx_query:MySQL 8.4 在锁等待期间可能
+// 暂时返回 NULL,会让已经存在的 data_lock_waits 被误报为 0。
 // 锁视图不可读时必须硬失败；固定 sleep 会使删除 FOR UPDATE 的 mutant false-green。
 func waitForAttributeLockWaiters(t *testing.T, db *sql.DB, dbName string, want int) {
 	t.Helper()
-	const query = `SELECT COUNT(*)
-		FROM information_schema.INNODB_TRX AS trx
-		JOIN information_schema.PROCESSLIST AS proc
-		  ON proc.ID = trx.trx_mysql_thread_id
-		WHERE trx.trx_state = 'LOCK WAIT'
-		  AND proc.DB = ?
-		  AND LOCATE('SELECT unspent_attr_points FROM players', COALESCE(trx.trx_query, '')) > 0
-		  AND LOCATE('FOR UPDATE', COALESCE(trx.trx_query, '')) > 0`
+	const query = `SELECT COUNT(DISTINCT waits.REQUESTING_THREAD_ID)
+		FROM performance_schema.data_lock_waits AS waits
+		JOIN performance_schema.data_locks AS requested
+		  ON requested.ENGINE = waits.ENGINE
+		 AND requested.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
+		WHERE requested.OBJECT_SCHEMA = ?
+		  AND requested.OBJECT_NAME = 'players'
+		  AND requested.LOCK_TYPE = 'RECORD'
+		  AND requested.LOCK_STATUS = 'WAITING'`
 
 	deadline := time.Now().Add(attributeLockWaitTimeout)
 	lastCount := 0
@@ -261,19 +265,19 @@ func waitForAttributeLockWaiters(t *testing.T, db *sql.DB, dbName string, want i
 		err := db.QueryRowContext(ctx, query, dbName).Scan(&lastCount)
 		cancel()
 		if err != nil {
-			// 共享 MySQL 测试实例高负载时，information_schema 快照本身可能短暂超过 1s；
+			// 共享 MySQL 测试实例高负载时,performance_schema 快照本身可能短暂超过 1s；
 			// 继续主动查询直到总 deadline，但最终仍必须真实观测到两个 LOCK WAIT，绝不以 sleep 代替。
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 				continue
 			}
-			t.Fatalf("查询 InnoDB 锁等待视图失败(已设 DSN 时不允许降级为 sleep；请给测试账号查看本账号事务的权限): %v", err)
+			t.Fatalf("查询 performance_schema 锁等待视图失败(已设 DSN 时不允许降级为 sleep；请给测试账号读取 data_lock_waits/data_locks 的权限): %v", err)
 		}
 		if lastCount >= want {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("未在 %s 内建立 %d 个阻塞于首个 SELECT ... FOR UPDATE 的 writer，最后观测为 %d；拒绝把未确定并发当作通过",
+	t.Fatalf("未在 %s 内建立 %d 个同时等待 players 记录锁的 writer，最后观测为 %d；拒绝把未确定并发当作通过",
 		attributeLockWaitTimeout, want, lastCount)
 }
 

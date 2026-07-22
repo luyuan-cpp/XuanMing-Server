@@ -22,7 +22,7 @@ import (
 
 func writeLevelBatchDir(t *testing.T, dir string, version uint64) {
 	t.Helper()
-	raw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(
+	levelRaw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(
 		&configpb.LevelTableData{Rows: []*configpb.LevelRow{{
 			Id: 6, Name: "MOBA战斗", AssetPath: "/Game/L/MobaLevel.MobaLevel",
 			Category: configpb.LevelCategory_LEVEL_CATEGORY_BATTLE,
@@ -30,20 +30,41 @@ func writeLevelBatchDir(t *testing.T, dir string, version uint64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(raw)
+	playerLevelExpRows := []*configpb.PlayerLevelExpRow{
+		{Id: 1, Level: 1, UpgradeExp: 100, CumulativeExp: 0},
+		{Id: 2, Level: 2, UpgradeExp: 0, CumulativeExp: 100},
+	}
+	playerLevelExpRaw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.Marshal(
+		&configpb.PlayerLevelExpTableData{Rows: playerLevelExpRows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	levelSum := sha256.Sum256(levelRaw)
+	playerLevelExpSum := sha256.Sum256(playerLevelExpRaw)
 	mraw, err := json.Marshal(map[string]any{
 		"version": version,
-		"tables": []map[string]any{{
-			"name": "level", "file": "level.json",
-			"proto":    "pandora.config.v1.LevelTableData",
-			"checksum": "sha256:" + hex.EncodeToString(sum[:]),
-			"rows":     1,
-		}},
+		"tables": []map[string]any{
+			{
+				"name": "level", "file": "level.json",
+				"proto":    "pandora.config.v1.LevelTableData",
+				"checksum": "sha256:" + hex.EncodeToString(levelSum[:]),
+				"rows":     1,
+			},
+			{
+				"name": "player_level_exp", "file": "player_level_exp.json",
+				"proto":    "pandora.config.v1.PlayerLevelExpTableData",
+				"checksum": "sha256:" + hex.EncodeToString(playerLevelExpSum[:]),
+				"rows":     len(playerLevelExpRows),
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "level.json"), raw, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "level.json"), levelRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "player_level_exp.json"), playerLevelExpRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, configtable.ManifestFileName), mraw, 0o644); err != nil {
@@ -81,14 +102,8 @@ func TestReloadConfigTable(t *testing.T) {
 	}
 
 	// active 目录损坏 → 失败保留旧表(标准流水线核心不变量)
+	writeLevelBatchDir(t, dir, 300)
 	if err := os.WriteFile(filepath.Join(dir, "level.json"), []byte("{broken"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mraw, _ := json.Marshal(map[string]any{"version": 300, "tables": []map[string]any{{
-		"name": "level", "file": "level.json",
-		"proto": "pandora.config.v1.LevelTableData", "checksum": "sha256:deadbeef", "rows": 1,
-	}}})
-	if err := os.WriteFile(filepath.Join(dir, configtable.ManifestFileName), mraw, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	resp, err = svc.ReloadConfigTable(ctx, &configv1.ReloadConfigTableRequest{})

@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"time"
+
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
@@ -38,6 +40,19 @@ type FriendConf struct {
 	// 已支持:mutual(熟人,共同好友数)/ random(随机兜底)。
 	// 未来扩展:similar_power(实力相当)/ same_region(同区域),待 player 服务接画像后接。
 	RecommendStrategies []string `yaml:"recommend_strategies,omitempty" json:"recommend_strategies,omitempty"`
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// RequestRetentionDays 终态好友请求(accepted/rejected/expired)保留天数(默认 90)。
+	// friend_requests 每对玩家至多一行,但终态行随社交图对数累积;删后再次发起 = 重新
+	// INSERT pending,行为等价(好友关系权威在 friendships,请求行无资产语义)。pending 永不清。
+	RequestRetentionDays int `yaml:"request_retention_days,omitempty" json:"request_retention_days,omitempty"`
+
+	// SweepInterval 保留期清理轮询间隔(默认 5m)。多副本各自跑,DELETE 幂等无需锁。
+	SweepInterval config.Duration `yaml:"sweep_interval,omitempty" json:"sweep_interval,omitempty"`
+
+	// SweepBatch 每轮清理行数上限(默认 500)。
+	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -56,6 +71,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Friend.RecommendLimit > 20 {
 		c.Friend.RecommendLimit = 20
+	}
+	if c.Friend.RequestRetentionDays <= 0 {
+		c.Friend.RequestRetentionDays = 90
+	}
+	if c.Friend.SweepInterval <= 0 {
+		c.Friend.SweepInterval = config.Duration(5 * time.Minute)
+	}
+	if c.Friend.SweepBatch <= 0 {
+		c.Friend.SweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50004"

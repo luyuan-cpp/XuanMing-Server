@@ -24,12 +24,23 @@ type LoadResult struct {
 // Store 配置表持有者:Load 全批构建 + 校验成功才原子切换,失败保留旧批次。
 // 读路径无锁(atomic.Pointer);Load 由互斥锁单飞,并发 reload 串行化。
 type Store struct {
-	mu  sync.Mutex
-	cur atomic.Pointer[Tables]
+	mu         sync.Mutex
+	cur        atomic.Pointer[Tables]
+	validators []func(*Tables) error
 }
 
 // NewStore 创建空 Store;服务启动必须先 Load 成功再对外服务(fail-closed)。
 func NewStore() *Store { return &Store{} }
+
+// AddValidator 注册批次级语义校验(服务特有约束,如 matchmaker 的"默认 map 必须是
+// 战斗关卡")。Load 在全部表构建 + 跨表校验通过后、指针切换前运行;任一失败整批不切换
+// (审计 P1:启动门禁必须在每次热 reload 同样生效,否则坏批次热更后新请求全部失败)。
+// 只允许在首次 Load 前注册(启动期单线程接线),运行期不得再调用。
+func (s *Store) AddValidator(v func(*Tables) error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.validators = append(s.validators, v)
+}
 
 // Tables 当前生效批次;从未加载成功过返回 nil。
 func (s *Store) Tables() *Tables { return s.cur.Load() }
@@ -95,6 +106,12 @@ func (s *Store) Load(activeDir string, expectVersion uint64) (*LoadResult, error
 	// 跨表引用完整性((excel_fk),tables.gen.go 生成):全过才允许切换。
 	if err := validateCrossTables(next); err != nil {
 		return nil, err
+	}
+	// 服务注册的批次级语义校验(启动与热 reload 同一门禁):失败整批不切换,保留旧批次。
+	for _, v := range s.validators {
+		if err := v(next); err != nil {
+			return nil, fmt.Errorf("批次 v%d 语义校验失败(保留旧批次): %w", m.Version, err)
+		}
 	}
 	warnings = append(warnings, strayFileWarnings(activeDir, m)...)
 

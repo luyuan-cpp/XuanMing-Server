@@ -24,6 +24,9 @@ type PrivateRepo interface {
 	//   beforeMs > 0 时只取 send_time_ms < beforeMs 的(翻页游标);=0 取最新。
 	//   返回结果已是客户端可见结构 ChatMessage(CLAUDE.md §14)。
 	ListPrivate(ctx context.Context, playerID, peerID uint64, limit int, beforeMs int64) ([]*chatv1.ChatMessage, error)
+	// DeleteMessagesBefore 删 message_id < maxMessageID 的私聊历史(保留期清理,§9.24;
+	// message_id 雪花时间段单调 → 主键范围删,单批 limit 行)。返回删除行数。
+	DeleteMessagesBefore(ctx context.Context, maxMessageID uint64, limit int) (int64, error)
 }
 
 // MySQLPrivateRepo 是基于 database/sql 的 PrivateRepo 实现。
@@ -73,4 +76,16 @@ LIMIT ?`
 		return nil, errcode.New(errcode.ErrInternal, "iterate private msgs: %v", err)
 	}
 	return out, nil
+}
+
+// DeleteMessagesBefore 删 message_id < maxMessageID 的私聊历史(保留期清理,§9.24)。
+// 雪花 message_id 时间段单调 → 主键范围删,无需时间列索引;多副本并发安全(各删各的行)。
+func (r *MySQLPrivateRepo) DeleteMessagesBefore(ctx context.Context, maxMessageID uint64, limit int) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM chat_private_messages WHERE message_id < ? LIMIT ?`, maxMessageID, limit)
+	if err != nil {
+		return 0, errcode.New(errcode.ErrInternal, "delete private history: %v", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }

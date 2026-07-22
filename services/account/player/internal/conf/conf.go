@@ -2,7 +2,6 @@
 package conf
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/luyuancpp/pandora/pkg/config"
@@ -48,14 +47,9 @@ type PlayerConf struct {
 	// ConsumeTopics 本服订阅的 kafka topic(默认 [player.update])。
 	ConsumeTopics []string `yaml:"consume_topics,omitempty" json:"consume_topics,omitempty"`
 
-	// ── 玩家等级经验(实时成长,docs/design/realtime-progression.md)──
-
-	// ExpCurve 等级经验曲线:第 i 项(0 基)= 从 Lv(i+1) 升到 Lv(i+2) 所需级内经验(须 >0)。
-	// 最高等级 = len(ExpCurve)+1(需求 Lv15 → 配 14 项)。
-	// **空 = 经验功能关闭**(AddExperience 返回 ERR_PLAYER_FEATURE_DISABLED,GetProfile 不标满级),
-	// 默认关闭保持现有行为不变(§14.2)。数值必须与客户端 j_玩家等级经验.xlsx / CfgPlayerLevelExp
-	// 同源(客户端用同表补 RequiredExp 显示;漂移只影响显示,权威在本服务)。
-	ExpCurve []uint64 `yaml:"exp_curve,omitempty" json:"exp_curve,omitempty"`
+	// ExperienceEnabled 玩家经验入账开关。曲线始终来自 configtable；本开关只控制功能放行，
+	// 不再兼任数值载体。策划正式数值确认前生产保持 false。
+	ExperienceEnabled bool `yaml:"experience_enabled,omitempty" json:"experience_enabled,omitempty"`
 
 	// MaxExpPerGrant 单次 AddExperience 入账上限(默认 1000000)。
 	// 防异常 / 越权调用方一次灌满等级(DS 不可信纵深:battle_result 已按怪物表换算,
@@ -68,9 +62,26 @@ type PlayerConf struct {
 	// PushOutboxBatch 每轮发布取多少条推送出箱记录(默认 128)。
 	PushOutboxBatch int `yaml:"push_outbox_batch,omitempty" json:"push_outbox_batch,omitempty"`
 
+	// ExpHistoryCleanupEnabled 经验幂等收据(exp_history)后台清理开关(**默认 false=不清理**,
+	// 审计 P1:battle_result progress 出箱只有退避上限(5min)没有总重试期限——入账成功但
+	// 响应/删行持续失败超过留存期后,同一事件会被再次入账(双发)。开启前置条件:上游出箱
+	// 必须先有小于留存期的有界重试/隔离期限,否则收据表宁可增长也不能破坏幂等,§9.2)。
+	ExpHistoryCleanupEnabled bool `yaml:"exp_history_cleanup_enabled,omitempty" json:"exp_history_cleanup_enabled,omitempty"`
+
 	// ExpHistoryRetention 经验幂等收据(exp_history)留存期(默认 7 天,下限 7 天:
-	// 必须覆盖 battle_result progress 出箱最长重试窗,收据被提前清掉会破坏幂等,§9.2)。
+	// 必须严格覆盖 battle_result progress 出箱最长重试窗;仅在 cleanup 开关开启时生效)。
 	ExpHistoryRetention config.Duration `yaml:"exp_history_retention,omitempty" json:"exp_history_retention,omitempty"`
+
+	// HistoryCleanupEnabled mmr_history / attr_point_grants / talent_point_grants 幂等
+	// 历史行后台清理开关(**默认 false=不清理**,与 exp_history 同理由:上游 kafka
+	// player.update 消费与授予补扫是 at-least-once,清掉幂等行后同一事件重放 = 双发
+	// (重复加段位分/重复加点)。开启前置条件:上游重放期限(kafka retention / 补扫窗口)
+	// 必须小于留存期,由运维确认后配置。CLAUDE.md §9 不变量 24)。
+	HistoryCleanupEnabled bool `yaml:"history_cleanup_enabled,omitempty" json:"history_cleanup_enabled,omitempty"`
+
+	// HistoryRetentionDays mmr_history / 点数授予幂等表留存天数(默认 90,下限 30:
+	// 必须远大于 kafka retention 与一切授予补扫窗口;仅在 cleanup 开关开启时生效)。
+	HistoryRetentionDays int `yaml:"history_retention_days,omitempty" json:"history_retention_days,omitempty"`
 }
 
 // Defaults 填默认值。
@@ -96,22 +107,6 @@ func (c *Config) Defaults() {
 	if c.Server.Http.Addr == "" {
 		c.Server.Http.Addr = ":51002"
 	}
-}
-
-// ValidateExpCurve 校验等级经验曲线(main 启动时调,失败即退出):
-// 空 = 功能关闭合法;非空时每项须 >0(0 会让该级永不可升,属配置错误),
-// 且长度有 sanity 上限(防手滑配出千级曲线)。
-func (p *PlayerConf) ValidateExpCurve() error {
-	const maxCurveLen = 200
-	if len(p.ExpCurve) > maxCurveLen {
-		return fmt.Errorf("player.exp_curve too long: %d > %d", len(p.ExpCurve), maxCurveLen)
-	}
-	for i, need := range p.ExpCurve {
-		if need == 0 {
-			return fmt.Errorf("player.exp_curve[%d] must be positive (Lv%d→Lv%d)", i, i+1, i+2)
-		}
-	}
-	return nil
 }
 
 // MaxExpPerGrantOrDefault 返回生效的单次入账上限(未配置 → 1000000)。
@@ -141,9 +136,34 @@ func (p *PlayerConf) PushOutboxBatchOrDefault() int {
 // ExpHistoryRetentionOrDefault 返回生效的 exp_history 留存期(未配置 → 7 天;
 // 配置低于 7 天按 7 天,防手滑把幂等窗清穿)。
 func (p *PlayerConf) ExpHistoryRetentionOrDefault() time.Duration {
-	const min = 7 * 24 * time.Hour
-	if d := p.ExpHistoryRetention.Std(); d > min {
-		return d
+	const (
+		min = 7 * 24 * time.Hour
+		cap = 90 * 24 * time.Hour // §9.24 硬上限:失效数据最多保留 90 天(审计 P1:上限必须钳制,不能只信配置)
+	)
+	d := p.ExpHistoryRetention.Std()
+	if d < min {
+		return min
 	}
-	return min
+	if d > cap {
+		return cap
+	}
+	return d
+}
+
+// HistoryRetentionOrDefault 返回生效的 mmr/点数授予幂等历史留存期(未配置 → 90 天;
+// 低于 30 天按 30 天,防手滑把幂等窗清穿;高于 90 天按 90 天,§9.24 硬上限)。
+// 先钳**天数整数**再乘 Duration(审计 P1:先乘后判时,极大天数乘 24h 溢出为负,
+// 会误落 floor 分支返回 30 天,清理开启时提前删幂等收据)。
+func (p *PlayerConf) HistoryRetentionOrDefault() time.Duration {
+	days := p.HistoryRetentionDays
+	if days <= 0 {
+		days = 90
+	}
+	if days < 30 {
+		days = 30
+	}
+	if days > 90 {
+		days = 90
+	}
+	return time.Duration(days) * 24 * time.Hour
 }

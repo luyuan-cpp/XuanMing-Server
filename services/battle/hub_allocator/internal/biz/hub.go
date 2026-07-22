@@ -20,6 +20,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,6 +97,16 @@ type HubUsecase struct {
 	migrate HubMigratePusher
 	locator data.HubLocationChecker
 	cfg     conf.HubConf
+
+	// ownerLease / ownerLeaseRequired:owner 权威实例租约双写(owner-authority.md
+	// migrate ⑥;nil = 未启用;required 语义见 biz/owner_lease.go renewOwnerLeaseGate)。
+	ownerLease         OwnerLeaseRenewer
+	ownerLeaseRequired bool
+
+	// ownerAuth / ownerAdmitted:owner 迁移弱依赖调用面 + census 已准入缓存
+	// (owner-authority.md migrate ①/③④;见 biz/owner_authority.go)。
+	ownerAuth     OwnerAuthority
+	ownerAdmitted sync.Map
 	// requireHeartbeatReady:播种分片镜像时先置 warming,等首个通过 Guard 的 Hub DS 心跳才转 ready
 	// (审核 P1:agones PATCH/进程拉起成功 ≠ DS 已真正鉴权回调,不能直接当 ready 否则会把玩家路由到
 	// 一个从未成功心跳的 Hub)。mode=agones 置 true;mock/local 不置(无真实心跳/保 dev 自测不坏)。
@@ -771,7 +782,7 @@ type TransferToLineResult struct {
 }
 
 // TransferToLineForPlayer 玩家主动切换到指定线路(换实例,AB 互不可见)。护栏:
-//  1. 战斗/匹配中禁切(查 player_locator,弱依赖:locator 不可达时放行低危的大厅切线)
+//  1. 战斗/匹配中禁切(查 player_locator,fail-closed:presence 不确定即拒,INC-20260722-002)
 //  2. 冷却防刷(SET NX EX,窗口内再切拒绝;失败释放占坑让玩家可重试)
 //  3. 目标线路不存在/非本 region → ErrHubTransferFailed;已满 → ErrHubLineFull
 //  4. 复用内部 TransferHub 完成 占新→切归属→退旧→重签票
@@ -780,14 +791,27 @@ func (u *HubUsecase) TransferToLineForPlayer(ctx context.Context, playerID uint6
 		return nil, errcode.New(errcode.ErrInvalidArg, "player_id required")
 	}
 
-	// 护栏 1:战斗/匹配中禁切(弱依赖,locator 不可达仅告警放行)
+	// 护栏 1:战斗/匹配中禁切。切线 = 进入另一台 Hub DS:locator RPC 失败、非 OK、
+	// OFFLINE/未知状态都不能证明玩家不在旧 DS 战斗/匹配,必须在任何副作用(冷却
+	// 占坑/占座/签票)之前 fail-closed 拒绝,客户端退避重试(§9.22 UNKNOWN 不得授权
+	// 新归属;INC-20260722-002 废止原"弱依赖告警放行"契约)。彻底关死双 DS 口子仍
+	// 需 Owner Authority 全链路接线(owner-authority migrate,独立工作流)。
 	if u.locator != nil {
-		if blocked, err := u.locator.InBattleOrMatching(ctx, playerID); err != nil {
-			plog.With(ctx).Warnw("msg", "transfer_locator_check_failed", "player_id", playerID, "err", err)
-		} else if blocked {
+		blocked, lerr := u.locator.InBattleOrMatching(ctx, playerID)
+		if lerr != nil {
+			plog.With(ctx).Warnw("msg", "transfer_locator_check_failed_fail_closed",
+				"player_id", playerID, "err", lerr)
+			return nil, errcode.New(errcode.ErrUnavailable,
+				"player %d presence unknown, hub line switch rejected, retry later", playerID)
+		}
+		if blocked {
 			return nil, errcode.New(errcode.ErrHubTransferNotInHub,
 				"player %d in battle/matching, cannot switch hub line", playerID)
 		}
+	} else {
+		// nil checker = dev 联调模式(locator 未配)。生产装配缺失属部署错误:
+		// 每次放行都留痕,防静默跳过护栏(INC-20260722-002 放大因素)。
+		plog.With(ctx).Warnw("msg", "transfer_locator_checker_absent_dev_only", "player_id", playerID)
 	}
 
 	// 任何 cooldown SET 副作用之前先证明当前 assignment 是完整 writer-v2 且仍精确绑定
@@ -1049,6 +1073,18 @@ func (u *HubUsecase) heartbeatModelB(ctx context.Context, pod string, playerCoun
 			plog.With(ctx).Warnw("msg", "heartbeat_unknown_hub_waiting_topology", "pod", pod)
 			return nil, errcode.New(errcode.ErrUnavailable, "hub shard %s topology not confirmed", pod)
 		}
+	}
+	// owner 权威实例租约双写(owner-authority.md migrate ⑥):必须在心跳响应返回前完成,
+	// 失败语义(弱/强依赖)见 renewOwnerLeaseGate。hub 凭据无实例纪元 → epoch 传 0。
+	if lerr := renewOwnerLeaseGate(ctx, u.ownerLease, u.ownerLeaseRequired,
+		pod, res.InstanceUID, 0, ""); lerr != nil {
+		return nil, lerr
+	}
+	// owner 迁移准入代提交(owner-authority.md migrate ③,近似:授权 census 即准入证据;
+	// contract 阶段移交 DS Admission 链)。弱依赖,失败/屏障未开都不影响心跳。
+	if len(playerIDs) > 0 {
+		ownerAdmitCensusWeak(ctx, u.ownerAuth, &u.ownerAdmitted, playerIDs,
+			ownerTypeHub, pod, res.InstanceUID, 2*time.Second)
 	}
 	command, graceSeconds := commandNone, int32(0)
 	switch res.ShardState {
@@ -2167,6 +2203,16 @@ func (u *HubUsecase) signHubTicket(ctx context.Context, playerID uint64, roleID 
 		plog.With(ctx).Errorw("msg", "sign_hub_ticket_failed", "player_id", playerID, "err", err)
 		return "", 0, errcode.New(errcode.ErrInternal, "sign hub ticket failed")
 	}
+	// owner 迁移双写(owner-authority.md migrate ①/④):签票是 hub 归属定案的统一出口
+	// (分配/恢复/转移/Battle→Hub 回流全路径过此),此处弱 Begin(HUB) 一处覆盖全部。
+	// hub 无独立实例纪元语义,以 ProtocolEpoch 充当(census Admit 侧同源,exact 等值自洽)。
+	ownerBeginPlayersWeak(ctx, u.ownerAuth, []uint64{playerID}, ownerTypeHub, data.OwnerTargetView{
+		PodName:                  binding.PodName,
+		InstanceUID:              binding.InstanceUID,
+		InstanceEpoch:            binding.ProtocolEpoch,
+		AssignmentOrAllocationID: binding.HubAssignmentID,
+		ReleaseTrack:             binding.ReleaseTrack,
+	}, 1500*time.Millisecond)
 	return token, expMs, nil
 }
 

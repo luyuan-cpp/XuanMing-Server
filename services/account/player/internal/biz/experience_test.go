@@ -17,10 +17,15 @@ import (
 func expUsecase(t *testing.T) (*PlayerUsecase, *fakeRepo) {
 	t.Helper()
 	repo := newFakeRepo()
-	uc := NewPlayerUsecase(repo, conf.PlayerConf{
-		ExpCurve: []uint64{100, 200, 300}, // MaxLevel = 4
-	})
+	uc := NewPlayerUsecase(repo, conf.PlayerConf{ExperienceEnabled: true})
+	uc.expLevels = staticExperienceLevels{curve: []uint64{100, 200, 300}} // MaxLevel = 4
 	return uc, repo
+}
+
+type staticExperienceLevels struct{ curve []uint64 }
+
+func (s staticExperienceLevels) ExperienceCurve() []uint64 {
+	return append([]uint64(nil), s.curve...)
 }
 
 func TestAddExperience_Validation(t *testing.T) {
@@ -40,11 +45,20 @@ func TestAddExperience_Validation(t *testing.T) {
 	}
 }
 
-func TestAddExperience_DisabledWithoutCurve(t *testing.T) {
-	uc := NewPlayerUsecase(newFakeRepo(), conf.PlayerConf{})
+func TestAddExperience_DisabledWithoutLevelTable(t *testing.T) {
+	uc := NewPlayerUsecase(newFakeRepo(), conf.PlayerConf{ExperienceEnabled: true})
 	_, _, err := uc.AddExperience(context.Background(), 1, 10, "quest", "k1")
 	if errcode.As(err) != errcode.ErrPlayerFeatureDisabled {
-		t.Fatalf("empty curve want ErrPlayerFeatureDisabled, got %v", err)
+		t.Fatalf("missing level table want ErrPlayerFeatureDisabled, got %v", err)
+	}
+}
+
+func TestAddExperience_DisabledByFeatureGate(t *testing.T) {
+	uc := NewPlayerUsecase(newFakeRepo(), conf.PlayerConf{})
+	uc.expLevels = staticExperienceLevels{curve: []uint64{100}}
+	_, _, err := uc.AddExperience(context.Background(), 1, 10, "quest", "k1")
+	if errcode.As(err) != errcode.ErrPlayerFeatureDisabled {
+		t.Fatalf("experience_enabled=false want ErrPlayerFeatureDisabled, got %v", err)
 	}
 }
 
@@ -109,7 +123,7 @@ func TestAddExperience_MaxLevelNoop(t *testing.T) {
 		t.Fatalf("fill to max got %+v err=%v", st, err)
 	}
 	rows := len(repo.pushOutbox)
-	// 满级后再加 → no-op:快照不变、无新出箱、不消费幂等键。
+	// 满级后再加 → no-op:快照不变、无新出箱,但消费幂等键落 no-op 收据(首次 already=false)。
 	st2, already, err := uc.AddExperience(ctx, 7, 100, "quest", "k-after-max")
 	if err != nil || already {
 		t.Fatalf("max noop err=%v already=%v", err, already)
@@ -119,6 +133,18 @@ func TestAddExperience_MaxLevelNoop(t *testing.T) {
 	}
 	if len(repo.pushOutbox) != rows {
 		t.Fatalf("max noop must not enqueue outbox: %d → %d", rows, len(repo.pushOutbox))
+	}
+	// 同键重放 → 幂等命中收据,按 proto 契约 already=true(审计 P2:
+	// "true = 幂等命中,本次未重复入账",满级 no-op 重放同样是幂等命中)。
+	st3, already3, err := uc.AddExperience(ctx, 7, 100, "quest", "k-after-max")
+	if err != nil || !already3 {
+		t.Fatalf("max noop replay want already=true, err=%v already=%v", err, already3)
+	}
+	if !st3.IsMaxLevel || st3.Level != 4 || st3.ExpInLevel != 0 {
+		t.Fatalf("max noop replay snapshot %+v", st3)
+	}
+	if len(repo.pushOutbox) != rows {
+		t.Fatalf("max noop replay must not enqueue outbox: %d → %d", rows, len(repo.pushOutbox))
 	}
 }
 

@@ -16,9 +16,10 @@ import (
 
 // fakeDLQ 是 DLQProducer 的内存桩,记录投递次数并可注入失败。
 type fakeDLQ struct {
-	calls   int32
-	lastKey string
-	failErr error
+	calls       int32
+	lastKey     string
+	lastHeaders []sarama.RecordHeader
+	failErr     error
 }
 
 func (f *fakeDLQ) SendRaw(_ context.Context, key string, _ []byte) error {
@@ -27,8 +28,42 @@ func (f *fakeDLQ) SendRaw(_ context.Context, key string, _ []byte) error {
 	return f.failErr
 }
 
+func (f *fakeDLQ) SendRawWithHeaders(_ context.Context, key string, _ []byte, headers []sarama.RecordHeader) error {
+	atomic.AddInt32(&f.calls, 1)
+	f.lastKey = key
+	f.lastHeaders = headers
+	return f.failErr
+}
+
 func newTestConsumer(handler Handler, retry RetryPolicy, dlq DLQProducer) *KeyOrderedConsumer {
 	return &KeyOrderedConsumer{handler: handler, retry: retry, dlq: dlq}
+}
+
+// DLQ 投递必须原样保留原消息 header(event_type 等)并附带溯源 header,
+// 否则回放 DLQ 时无 header 消息会再次被当 legacy 解码(审计 P2)。
+func TestToDLQ_ForwardsHeadersAndProvenance(t *testing.T) {
+	dlq := &fakeDLQ{}
+	k := newTestConsumer(nil, RetryPolicy{}, dlq)
+	msg := testMsg()
+	msg.Headers = []*sarama.RecordHeader{{Key: []byte("event_type"), Value: []byte("7")}}
+	if !k.toDLQ(context.Background(), msg) {
+		t.Fatal("DLQ 投递成功应 ack")
+	}
+	got := map[string]string{}
+	for _, h := range dlq.lastHeaders {
+		got[string(h.Key)] = string(h.Value)
+	}
+	want := map[string]string{
+		"event_type":        "7",
+		"dlq-src-topic":     "pandora.battle.result",
+		"dlq-src-partition": "0",
+		"dlq-src-offset":    "1",
+	}
+	for key, val := range want {
+		if got[key] != val {
+			t.Fatalf("header %s=%q want %q (all=%v)", key, got[key], val, got)
+		}
+	}
 }
 
 func testMsg() *sarama.ConsumerMessage {

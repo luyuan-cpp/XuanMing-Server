@@ -1,18 +1,20 @@
-// W3 ④(2026-06-05)KafkaConsumer.handle 单测。
+// KafkaConsumer.handle 单测(2026-07-22 v2 拉取模型)。
 //
-// 直接调 handle 方法,不起真实 sarama broker;FrameSender / OfflineCacheRepo
-// 用本文件内的 mock 实现,验证三条路径:在线发送、离线写入、key 非数字跳过。
+// 验证:每帧原子入投递缓冲(游标重铸)→ 唤醒信号;缓冲失败拒 ack(9301);
+// key 非数字毒丸;广播 ts=0 + 不入缓冲;非 owner cell 毒丸不 ACK。
 package biz
 
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/IBM/sarama"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/luyuancpp/pandora/pkg/errcode"
 	"github.com/luyuancpp/pandora/pkg/kafkax"
@@ -25,9 +27,8 @@ import (
 
 type mockSender struct {
 	mu     sync.Mutex
-	frames map[uint64]*pushv1.PushFrame
+	wakes  map[uint64]int
 	online map[uint64]bool
-	sendEr error
 
 	broadcastFrames []*pushv1.PushFrame
 	broadcastSent   int
@@ -35,23 +36,17 @@ type mockSender struct {
 }
 
 func newMockSender() *mockSender {
-	return &mockSender{
-		frames: make(map[uint64]*pushv1.PushFrame),
-		online: make(map[uint64]bool),
-	}
+	return &mockSender{wakes: make(map[uint64]int), online: make(map[uint64]bool)}
 }
 
-func (m *mockSender) SendTo(playerID uint64, frame *pushv1.PushFrame) (bool, error) {
+func (m *mockSender) SendTo(playerID uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.online[playerID] {
-		return false, nil
+		return false
 	}
-	if m.sendEr != nil {
-		return true, m.sendEr
-	}
-	m.frames[playerID] = frame
-	return true, nil
+	m.wakes[playerID]++
+	return true
 }
 
 func (m *mockSender) Broadcast(frame *pushv1.PushFrame) (sent int, failed int) {
@@ -63,31 +58,41 @@ func (m *mockSender) Broadcast(frame *pushv1.PushFrame) (sent int, failed int) {
 
 type mockOffline struct {
 	mu        sync.Mutex
-	appended  map[uint64][]*pushv1.PushFrame
-	appendErr error // 非 nil 时,Append 直接返这个错(用于 R2 用例)
+	buffered  map[uint64][]*pushv1.PushFrame
+	cursors   map[uint64]int64
+	bufferErr error
 }
 
 func newMockOffline() *mockOffline {
-	return &mockOffline{appended: make(map[uint64][]*pushv1.PushFrame)}
+	return &mockOffline{buffered: make(map[uint64][]*pushv1.PushFrame), cursors: make(map[uint64]int64)}
 }
 
-func (o *mockOffline) Append(_ context.Context, playerID uint64, frame *pushv1.PushFrame) error {
+func (o *mockOffline) AssignAndBuffer(_ context.Context, playerID uint64, frame *pushv1.PushFrame) (int64, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.appendErr != nil {
-		return o.appendErr
+	if o.bufferErr != nil {
+		return 0, o.bufferErr
 	}
-	o.appended[playerID] = append(o.appended[playerID], frame)
-	return nil
+	cursor := o.cursors[playerID] + 1
+	if ts := frame.GetTsMs(); ts > cursor {
+		cursor = ts
+	}
+	o.cursors[playerID] = cursor
+	frame.TsMs = cursor
+	o.buffered[playerID] = append(o.buffered[playerID], proto.Clone(frame).(*pushv1.PushFrame))
+	return cursor, nil
 }
 
-func (o *mockOffline) Range(_ context.Context, playerID uint64, _ int64) ([]data.OfflineFrame, error) {
+func (o *mockOffline) Range(_ context.Context, playerID uint64, afterCursor int64) ([]data.OfflineFrame, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	out := make([]data.OfflineFrame, 0, len(o.appended[playerID]))
-	for _, f := range o.appended[playerID] {
-		out = append(out, data.OfflineFrame{Frame: f, ScoreMs: f.GetTsMs()})
+	var out []data.OfflineFrame
+	for _, f := range o.buffered[playerID] {
+		if f.GetTsMs() > afterCursor {
+			out = append(out, data.OfflineFrame{Frame: proto.Clone(f).(*pushv1.PushFrame), ScoreMs: f.GetTsMs()})
+		}
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ScoreMs < out[j].ScoreMs })
 	return out, nil
 }
 
@@ -119,7 +124,7 @@ func makeMsg(topic, key string, value []byte, traceID string) *sarama.ConsumerMe
 
 // =============== cases ===============
 
-// 用例 1:在线玩家 → SendTo 收到 PushFrame,offline 没写。
+// 用例 1:在线玩家 → 帧入投递缓冲(ts 重铸为游标)+ 唤醒一次。
 func TestKafkaConsumer_HandleOnline(t *testing.T) {
 	sender := newMockSender()
 	sender.online[42] = true
@@ -131,70 +136,69 @@ func TestKafkaConsumer_HandleOnline(t *testing.T) {
 		t.Fatalf("handle err=%v", err)
 	}
 
-	f, ok := sender.frames[42]
-	if !ok {
-		t.Fatal("expected SendTo(42) but no frame recorded")
+	got := offline.buffered[42]
+	if len(got) != 1 {
+		t.Fatalf("buffered=%d want=1", len(got))
 	}
-	if f.GetTopic() != "pandora.team.update" || string(f.GetPayload()) != "team-event-bytes" {
+	f := got[0]
+	if f.GetTopic() != "pandora.team.update" || string(f.GetPayload()) != "team-event-bytes" ||
+		f.GetTraceId() != "trace-abc" || f.GetEventType() != 0 {
 		t.Fatalf("frame=%+v", f)
 	}
-	if f.GetTraceId() != "trace-abc" {
-		t.Fatalf("trace_id=%q want=trace-abc", f.GetTraceId())
+	if f.GetTsMs() != offline.cursors[42] {
+		t.Fatalf("frame ts must be recast to cursor: ts=%d cursor=%d", f.GetTsMs(), offline.cursors[42])
 	}
-	if f.GetEventType() != 0 {
-		t.Fatalf("event_type=%d want=0 when Kafka header is absent", f.GetEventType())
-	}
-	if len(offline.appended) != 0 {
-		t.Fatalf("offline should be empty when online, got=%+v", offline.appended)
+	if sender.wakes[42] != 1 {
+		t.Fatalf("wakes=%d want=1", sender.wakes[42])
 	}
 }
 
-// event_type 是域内 payload 类型判别键；push 必须把 Kafka header 原样透传到 PushFrame。
+// event_type 透传。
 func TestKafkaConsumer_HandleEventType(t *testing.T) {
 	sender := newMockSender()
 	sender.online[42] = true
 	offline := newMockOffline()
 	kc := makeConsumer(t, sender, offline)
 
-	msg := makeMsg("pandora.team.update", "42", []byte("team-invite-event-bytes"), "trace-invite")
+	msg := makeMsg("pandora.team.update", "42", []byte("invite"), "trace-invite")
 	msg.Headers = append(msg.Headers, &sarama.RecordHeader{
-		Key:   []byte(kafkax.HeaderEventType),
-		Value: []byte("1"),
+		Key: []byte(kafkax.HeaderEventType), Value: []byte("1"),
 	})
 	if err := kc.handle(context.Background(), msg); err != nil {
 		t.Fatalf("handle err=%v", err)
 	}
-
-	f, ok := sender.frames[42]
-	if !ok {
-		t.Fatal("expected SendTo(42) but no frame recorded")
-	}
-	if f.GetEventType() != 1 {
+	if f := offline.buffered[42][0]; f.GetEventType() != 1 {
 		t.Fatalf("event_type=%d want=1", f.GetEventType())
 	}
 }
 
-// 用例 2:离线玩家 → SendTo 返 false,offline 写一条。
-func TestKafkaConsumer_HandleOffline(t *testing.T) {
+// 用例 2:离线玩家 → 只入缓冲,无唤醒;游标严格递增。
+func TestKafkaConsumer_HandleOfflineAndCursor(t *testing.T) {
 	sender := newMockSender() // 不标 online
 	offline := newMockOffline()
 	kc := makeConsumer(t, sender, offline)
 
-	msg := makeMsg("pandora.match.progress", "99", []byte("match-event"), "")
-	if err := kc.handle(context.Background(), msg); err != nil {
-		t.Fatalf("handle err=%v", err)
+	for i := 0; i < 3; i++ {
+		msg := makeMsg("pandora.match.progress", "99", []byte("e"), "")
+		if err := kc.handle(context.Background(), msg); err != nil {
+			t.Fatalf("i=%d handle err=%v", i, err)
+		}
 	}
-
-	if got := offline.appended[99]; len(got) != 1 {
-		t.Fatalf("offline[99] len=%d want=1", len(got))
+	frames := offline.buffered[99]
+	if len(frames) != 3 {
+		t.Fatalf("buffered=%d want=3", len(frames))
 	}
-	if len(sender.frames) != 0 {
-		t.Fatalf("sender should not have sent any frame, got=%+v", sender.frames)
+	for i := 1; i < len(frames); i++ {
+		if frames[i].GetTsMs() <= frames[i-1].GetTsMs() {
+			t.Fatalf("cursor must strictly increase: %d then %d", frames[i-1].GetTsMs(), frames[i].GetTsMs())
+		}
+	}
+	if len(sender.wakes) != 0 {
+		t.Fatalf("offline player must not be woken, wakes=%+v", sender.wakes)
 	}
 }
 
-// 用例 3:key 非数字 → 返回毒丸错误(kafkax 会投 DLQ 留证,不静默丢),
-// SendTo 和 offline 都没动。
+// 用例 3:key 非数字 → 毒丸投 DLQ,零副作用。
 func TestKafkaConsumer_HandleInvalidKey(t *testing.T) {
 	sender := newMockSender()
 	sender.online[1] = true
@@ -203,88 +207,61 @@ func TestKafkaConsumer_HandleInvalidKey(t *testing.T) {
 
 	msg := makeMsg("pandora.team.update", "not-a-number", []byte("x"), "")
 	err := kc.handle(context.Background(), msg)
-	if err == nil {
-		t.Fatal("invalid key should return poison error (routed to DLQ), got nil")
-	}
 	var poison *kafkax.PoisonError
-	if !errors.As(err, &poison) {
+	if err == nil || !errors.As(err, &poison) {
 		t.Fatalf("invalid key should be PoisonError, got=%v", err)
 	}
-	if len(sender.frames) != 0 || len(offline.appended) != 0 {
-		t.Fatal("invalid key should not invoke sender or offline")
+	if len(sender.wakes) != 0 || len(offline.buffered) != 0 {
+		t.Fatal("invalid key should not touch sender or buffer")
 	}
 }
 
-// 用例 4:在线但 SendTo 返 err(stream 已断)→ handle 仍返 nil(让 kafka ack),
-// 帧未交付,必须写 offline 让客户端重连后通过 last_seen_ms 补推。
-// 幂等判重由客户端按 ts_ms + trace_id 处理,push 侧不应丢帧。
-func TestKafkaConsumer_HandleOnlineSendFail(t *testing.T) {
+// 用例 4:缓冲写入失败 → 返回 errcode 9301 拒 ack(缓冲是交付权威)。
+func TestKafkaConsumer_HandleBufferFail(t *testing.T) {
 	sender := newMockSender()
-	sender.online[7] = true
-	sender.sendEr = errors.New("stream closed")
 	offline := newMockOffline()
-	kc := makeConsumer(t, sender, offline)
-
-	msg := makeMsg("pandora.team.update", "7", []byte("payload"), "")
-	if err := kc.handle(context.Background(), msg); err != nil {
-		t.Fatalf("handle err=%v", err)
-	}
-	if len(offline.appended) != 1 {
-		t.Fatalf("send fail must write offline (fallback), got=%d entries", len(offline.appended))
-	}
-}
-
-// 用例 5(W3 ④ 二次修复 Opus R2):offline.Append 失败 → handle 返回 errcode 9301。
-//
-// 防止"redis down → 只 log、kafka 仍 ack → 客户端补不回"的静默丢消息隐患。
-// metric pandora_push_offline_append_failed_total 由 handle 内部 Inc,本测试通过
-// errcode 断言确认调用链已经进入失败分支。
-func TestKafkaConsumer_HandleOfflineFail(t *testing.T) {
-	sender := newMockSender() // 离线
-	offline := newMockOffline()
-	offline.appendErr = errors.New("redis dial timeout")
+	offline.bufferErr = errors.New("redis dial timeout")
 	kc := makeConsumer(t, sender, offline)
 
 	msg := makeMsg("pandora.chat.private", "123", []byte("hi"), "trace-r2")
 	err := kc.handle(context.Background(), msg)
-	if err == nil {
-		t.Fatal("handle should return errcode when offline.Append fails")
-	}
-	if code := errcode.As(err); code != errcode.ErrPushOfflineCorrupted {
-		t.Fatalf("err code=%d want=%d (9301)", code, errcode.ErrPushOfflineCorrupted)
+	if err == nil || errcode.As(err) != errcode.ErrPushOfflineCorrupted {
+		t.Fatalf("want 9301, got=%v", err)
 	}
 	if !strings.Contains(err.Error(), "redis dial timeout") {
-		t.Fatalf("err should wrap original cause, got=%v", err)
+		t.Fatalf("err should wrap cause, got=%v", err)
+	}
+	if len(sender.wakes) != 0 {
+		t.Fatal("buffer failure must not wake")
 	}
 }
 
-// 用例 6(chat 三频道补全):广播类 topic(chat.world)空 key → 走 Broadcast,
-// 不按 player_id 解析(空 key 不会被当 invalid key 丢弃),也不写离线缓存。
+// 用例 5:广播 topic → ts_ms 置 0(不污染客户端恢复游标,审计 P1)、不入缓冲、
+// 空 key 不按 player 解析。
 func TestKafkaConsumer_HandleBroadcastWorld(t *testing.T) {
 	sender := newMockSender()
-	sender.broadcastSent = 3 // 模拟 3 个在线玩家收到
+	sender.broadcastSent = 3
 	offline := newMockOffline()
 	kc := makeConsumer(t, sender, offline)
 	kc.topic = "pandora.chat.world"
 	kc.broadcast = true
 
-	// 世界聊天是空 key 广播;旧逻辑会 ParseUint("") 失败丢弃。
 	msg := makeMsg("pandora.chat.world", "", []byte("world-chat-bytes"), "trace-world")
 	if err := kc.handle(context.Background(), msg); err != nil {
 		t.Fatalf("handle err=%v", err)
 	}
 
 	if len(sender.broadcastFrames) != 1 {
-		t.Fatalf("expected 1 broadcast frame, got=%d", len(sender.broadcastFrames))
+		t.Fatalf("broadcast frames=%d want=1", len(sender.broadcastFrames))
 	}
 	f := sender.broadcastFrames[0]
+	if f.GetTsMs() != 0 {
+		t.Fatalf("broadcast ts_ms=%d want=0(防游标污染)", f.GetTsMs())
+	}
 	if f.GetTopic() != "pandora.chat.world" || string(f.GetPayload()) != "world-chat-bytes" {
 		t.Fatalf("broadcast frame=%+v", f)
 	}
-	if len(sender.frames) != 0 {
-		t.Fatalf("broadcast must not call SendTo, got=%+v", sender.frames)
-	}
-	if len(offline.appended) != 0 {
-		t.Fatalf("broadcast must not write offline, got=%+v", offline.appended)
+	if len(offline.buffered) != 0 {
+		t.Fatalf("broadcast must not enter buffer, got=%+v", offline.buffered)
 	}
 }

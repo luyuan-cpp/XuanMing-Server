@@ -138,6 +138,7 @@ const (
 	ErrInventoryIdempotencyConflict Code = 7015
 	ErrInventoryCapacityFull        Code = 7016 // 背包格子已满(装备实例数达 capacity 上限)
 	ErrInventorySlotOccupied        Code = 7017 // 目标格子已被占用 / 越界(移动实例)
+	ErrInventoryInstanceBound       Code = 7018 // 绑定实例不可托管转移(邮件 transfer 扣出拒;bound=不可交易)
 )
 
 // dialogue(8000-8999)
@@ -192,6 +193,12 @@ const (
 	ErrMailNoAttachment   Code = 9603 // 该邮件无附件可领
 	ErrMailAlreadyClaimed Code = 9604 // 附件已领取(幂等命中)
 	ErrMailBoxFull        Code = 9605 // 收件箱已满(写入侧上限,§9 不变量 18;驱逐已领邮件后仍满)
+	// ErrMailAttachmentUnsupported 附件 oneof body 未设置/未识别(滚更共存窗口旧端读到
+	// 新增形态,§9.21):发送侧拒收;领取侧整封 fail-closed 保持未领取,禁止静默跳过。
+	ErrMailAttachmentUnsupported Code = 9606
+	// ErrMailClaimInProgress DS 三段式领取意图已创建(bag phase 2):该邮件只能经
+	// bag journal 领取链终结,旧直连 ClaimMail 互斥拒(防 journal + inventory 双发)。
+	ErrMailClaimInProgress Code = 9607
 )
 
 // data_service(10000-10999)
@@ -219,6 +226,29 @@ const (
 	ErrLeaderboardInvalidBoard   Code = 13003 // BoardKey 非法(board_type / scope 缺失)
 	ErrLeaderboardSettleConflict Code = 13004 // settle_idempotency_key 复用到不同请求
 	ErrLeaderboardRewardFailed   Code = 13005 // 结算发奖失败(inventory 不可用 / 扣发异常)
+)
+
+// bag(14000-14999,背包域;bag-domain.md 五要件受信写)
+const (
+	ErrBagEpochFenced         Code = 14001 // owner_epoch 落后于 bag_meta(失租旧写整批拒)
+	ErrBagGenerationMismatch  Code = 14002 // 活动段代际不符(切代后迟到写,fail-closed 整批拒)
+	ErrBagSeqConflict         Code = 14003 // journal_seq 非法(批内乱序 / 与水位冲突且非纯重放)
+	ErrBagCapacityFull        Code = 14004 // 目标段容量不足(入包 / 转移 / 产出)
+	ErrBagQuotaExceeded       Code = 14005 // 超出 journal 额度(单批 / 单窗上限,反作弊封顶)
+	ErrBagIdempotencyConflict Code = 14006 // idempotency_key 复用到不同内容(指纹不一致)
+	ErrBagItemNotFound        Code = 14007 // 扣除 / 转移的物品不存在或数量不足(整批拒)
+	ErrBagCheckpointStale     Code = 14008 // checkpoint covered_seq 回退或超出已确认水位
+	ErrBagSectionNotAllowed   Code = 14009 // 段类型不合法(查随身段 / checkpoint 含后端驻留段等)
+	ErrBagCapacityMaxed       Code = 14010 // 容量扩容档位已购罄 / 达硬上限(§5.3;不可再买,非"袋满")
+)
+
+// owner(15000-15999,每玩家 owner 权威;owner-authority.md,§9.22)
+const (
+	ErrOwnerEpochConflict    Code = 15001 // expect_epoch 不等于当前(带当前记录,重查再决策)
+	ErrOwnerBarrierNotOpen   Code = 15002 // now < admit_not_before(带 retry_after,退避重试)
+	ErrOwnerIdentityMismatch Code = 15003 // epoch/operation/实例四元组不一致(fail-closed)
+	ErrOwnerLeaseRegressed   Code = 15004 // 续租实例身份不符或 deadline 回退
+	ErrOwnerInvalidOperation Code = 15005 // operation_id 非法或目标身份不完整
 )
 
 // Error 是带错误码的标准错误类型。

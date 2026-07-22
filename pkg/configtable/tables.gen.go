@@ -19,11 +19,15 @@ type Tables struct {
 
 	// Level 配置表 level(关卡/g_关卡.xlsx)
 	Level *LevelTable
+
+	// PlayerLevelExp 配置表 player_level_exp(角色/j_玩家等级经验.xlsx)
+	PlayerLevelExp *PlayerLevelExpTable
 }
 
 // specByName 清单表名 → 解析构建注册(Store.Load 消费)。
 var specByName = map[string]tableSpec{
-	"level": {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
+	"level":            {protoName: "pandora.config.v1.LevelTableData", build: buildLevelTable},
+	"player_level_exp": {protoName: "pandora.config.v1.PlayerLevelExpTableData", build: buildPlayerLevelExpTable},
 }
 
 // validateCrossTables 批内跨表引用完整性((excel_fk);生成阶段已校验,
@@ -45,5 +49,21 @@ func buildLevelTable(raw []byte, mt ManifestTable, dst *Tables) error {
 		return err
 	}
 	dst.Level = t
+	return nil
+}
+
+func buildPlayerLevelExpTable(raw []byte, mt ManifestTable, dst *Tables) error {
+	var data configpb.PlayerLevelExpTableData
+	if err := unmarshalTable(raw, &data); err != nil {
+		return fmt.Errorf("表 player_level_exp 解析失败: %w", err)
+	}
+	if got := uint32(len(data.GetRows())); got != mt.Rows {
+		return fmt.Errorf("表 player_level_exp 行数 %d 与 manifest 声明 %d 不一致(疑似截断)", got, mt.Rows)
+	}
+	t, err := newPlayerLevelExpTable(&data)
+	if err != nil {
+		return err
+	}
+	dst.PlayerLevelExp = t
 	return nil
 }

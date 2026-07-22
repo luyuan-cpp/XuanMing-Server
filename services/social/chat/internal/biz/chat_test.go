@@ -27,6 +27,11 @@ func (f *fakeRepo) SavePrivate(_ context.Context, msg *chatv1.ChatMessage) error
 	return nil
 }
 
+// 保留期清理(§9.24):biz 单测不模拟时间,默认 no-op。
+func (f *fakeRepo) DeleteMessagesBefore(context.Context, uint64, int) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeRepo) ListPrivate(_ context.Context, playerID, peerID uint64, limit int, beforeMs int64) ([]*chatv1.ChatMessage, error) {
 	var out []*chatv1.ChatMessage
 	for i := len(f.saved) - 1; i >= 0; i-- {

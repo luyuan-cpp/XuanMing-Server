@@ -85,6 +85,18 @@ F:/work/Pandora/
    kubectl delete fleet --all -n pandora && kubectl apply -f deploy/k8s/fleets.yaml
    ```
 
+### 4.1.1 库增长基线快照(§9.24,强制)
+
+清库重建后、开压前抓一次全库行数基线:
+
+```powershell
+cd tools/migrate
+go run ./cmd/dbcheck -dsn 'root:<pwd>@tcp(127.0.0.1:3307)/' -exact -snapshot robot/logs/stress-<name>-<ts>/db-before.json
+```
+
+该命令同时断言:**所有 pandora_% 库的表已在登记清单内(§9.24)、swept 表清理索引齐备、
+outbox 无堆积**。FAIL → 不许开压(新表未登记 = 无界增长风险,先登记 + 落清理再压)。
+
 ### 4.2 压测中
 
 - **至少 3 次 snapshot**:ramp 完成 / 稳态中段 / 稳态末
@@ -104,9 +116,25 @@ F:/work/Pandora/
    pwsh tools/scripts/stress_summarize.ps1 -RunDir robot/logs/stress-<name>-<ts>
    ```
 2. 与 `prev-summary.txt` 二维对比,写进 `round-N-vs-N-1.md`
-3. 贴决策行 + 更新 `docs/design/pandora-arch.md` §11
-4. 更新 `PROGRESS.md`
-5. **压期间不上传日志,只上传 summary 表格**
+3. **库增长断言(§9.24,强制)**:
+   ```powershell
+   cd tools/migrate
+   go run ./cmd/dbcheck -dsn 'root:<pwd>@tcp(127.0.0.1:3307)/' -exact -compare robot/logs/stress-<name>-<ts>/db-before.json
+   ```
+   核对三件事,任一不过 = 本轮不许宣布通过:
+   - **outbox 已排空**(工具自动断言 ≤ `-outbox-max`,默认 200;堆积 = 投递链堵塞);
+   - **每张表的增量能用业务量解释**(流水/历史行数 ≈ 对局数×人数、操作数;数量级对不上 =
+     重复写入 / 幂等失效 / 泄漏,当 bug 查);
+   - **无未登记表**(压测中间接建出的新表也会被抓)。
+4. **清理速率抽测(压测库专用,会删数据)**:压测数据即将丢弃时,顺手验证批删速率追得上写入:
+   ```powershell
+   go run ./cmd/dbcheck -dsn '...' -force-sweep -confirm=YES-DELETE
+   ```
+   输出各 swept 表 rows/s;要求 **批删速率 ≥ 峰值写入速率**(否则 90 天后清理永远追不上,
+   需调大 sweep batch / 频率)。⚠️ 只准对压测库跑,cutoff=now 会删光可清数据。
+5. 贴决策行 + 更新 `docs/design/pandora-arch.md` §11
+6. 更新 `PROGRESS.md`
+7. **压期间不上传日志,只上传 summary 表格**
 
 ### 4.4 完成清单
 
@@ -116,8 +144,10 @@ F:/work/Pandora/
 [ ] kafka offset 已 reset
 [ ] DS pod 已清干净
 [ ] prom-snapshots/ 目录已建
+[ ] dbcheck 压前基线 db-before.json 已抓且 PASS(无未登记表/缺索引)
 [ ] 至少 3 次 snapshot 已抓
 [ ] summarize.ps1 输出五段表
+[ ] dbcheck -compare 已跑:outbox 排空 + 增量可解释 + 无未登记表
 [ ] 对比表已写
 [ ] 决策行已贴
 [ ] PROGRESS.md 已更新

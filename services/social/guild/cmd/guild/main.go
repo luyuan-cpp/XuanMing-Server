@@ -149,6 +149,11 @@ func main() {
 	guildSvc := service.NewGuildService(guildUC, sf)
 	groupSvc := service.NewGroupService(groupUC, sf)
 
+	// 终态入会申请保留期清理:只增终态行 90 天后批删,增长有界(§9.24,biz/sweep.go)。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go guildUC.RunRequestSweep(sweepCtx)
+
 	grpcSrv := server.NewGRPCServer(&cfg, guildSvc, groupSvc)
 	httpSrv := server.NewHTTPServer(&cfg)
 

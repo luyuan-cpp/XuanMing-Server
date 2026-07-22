@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS `match_release_outbox` (
 --   battle_progress_stream 每场进度水位:last_applied_seq 只增(乐观 CAS 推进,与出箱同事务);
 --     settled_at_ms>0 = 对局已结算(正常 / ABANDONED 都打标记),此后 ReportProgress 一律拒
 --     (僵尸 / 分区恢复 DS fencing);结算时水位>0 → 结算路径掉落只对账不发放(单一权威路径)。
---     行不随对局清理(体量小:一场一行),final_seq 留存对账证据。
+--     已结算行保留 90 天后由 battle_result 保留期清理回收(§9.24;final_seq 在保留期内
+--     留存对账证据);未结算行永不自动清理(陈年未结算 = 补偿链 bug 证据,每轮告警)。
 --   battle_progress_outbox 进度发放事务出箱:exp → player.AddExperience /
 --     item → inventory.GrantInstances,幂等键 progress:{match_id}:{seq}:{player_id}:{kind};
 --     发放成功即 DELETE,只保留待发放行。
@@ -126,10 +127,14 @@ CREATE TABLE IF NOT EXISTS `battle_progress_stream` (
     `total_items`      INT UNSIGNED    NOT NULL DEFAULT 0 COMMENT '本场累计入账掉落件数(单场上限封顶依据)',
     `final_seq`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'DS 结算上报的对账水位(0=未走实时通道)',
     `settled_at_ms`    BIGINT          NOT NULL DEFAULT 0 COMMENT '>0 = 对局已结算,进度一律拒',
+    `stopped_at_ms`    BIGINT          NOT NULL DEFAULT 0 COMMENT '>0 = 实时通道已停流(未知事实/违纪混版),后续进度一律拒',
     `updated_at_ms`    BIGINT          NOT NULL DEFAULT 0,
-    PRIMARY KEY (`match_id`)
+    PRIMARY KEY (`match_id`),
+    KEY `idx_settled` (`settled_at_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 战斗实时进度水位(去重 + 结算 fencing + 单场累计上限,实时成长)';
+  COMMENT='Pandora 战斗实时进度水位(去重 + 结算 fencing + 单场累计上限,实时成长;已结算行保留 90 天由 battle_result 保留期清理回收,§9.24)';
+-- idx_settled 服务保留期清理(SELECT ... WHERE settled_at_ms>0 AND settled_at_ms<cutoff)。
+-- 存量库由 tools/migrate pandora_battle 000007_battle_retention_indexes 条件补齐。
 
 CREATE TABLE IF NOT EXISTS `battle_progress_outbox` (
     `id`                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -166,3 +171,14 @@ CREATE TABLE IF NOT EXISTS `battle_exit_proof_outbox` (
     KEY `idx_battle_exit_due` (`superseded_at_ms`, `next_attempt_at_ms`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Battle terminal/leave placement proof durable relay';
+
+CREATE TABLE IF NOT EXISTS `battle_progress_player` (
+    `match_id`      BIGINT UNSIGNED NOT NULL,
+    `player_id`     BIGINT UNSIGNED NOT NULL,
+    `total_exp`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '本场该玩家累计入账经验(单玩家上限封顶依据)',
+    `total_items`   INT UNSIGNED    NOT NULL DEFAULT 0 COMMENT '本场该玩家累计入账掉落件数',
+    `total_kills`   INT UNSIGNED    NOT NULL DEFAULT 0 COMMENT '本场该玩家累计击杀数(反作弊上限依据)',
+    `updated_at_ms` BIGINT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (`match_id`, `player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Pandora 战斗实时进度单玩家累计(单场单玩家 经验/掉落/击杀 上限,实时成长)';

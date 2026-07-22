@@ -141,6 +141,12 @@ func main() {
 	}
 	svc := service.NewChatService(uc, sf)
 
+	// 私聊历史保留期清理:按雪花 message_id cutoff 批删超期行,只增表增长有界
+	// (§9.24,biz/sweep.go)。多副本各自跑,DELETE 幂等无需锁。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go uc.RunHistorySweep(sweepCtx)
+
 	grpcSrv := server.NewGRPCServer(&cfg, svc)
 	httpSrv := server.NewHTTPServer(&cfg)
 

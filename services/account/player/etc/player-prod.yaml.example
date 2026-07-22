@@ -26,6 +26,10 @@ kafka:
   group_id: "pandora-player"
   partition_cnt: 4
 
+# 发布流水线落地的 active 批次；目录缺失或等级表校验失败时 player 拒绝启动。
+config_table:
+  dir: "/app/configtable/active"
+
 player:
   base_mmr: 1500
   mmr_floor: 0
@@ -35,12 +39,9 @@ player:
   loadout_customize_enabled: true
   consume_topics:
     - "pandora.player.update"
-  # 玩家等级经验曲线(实时成长):与客户端 j_玩家等级经验.xlsx 同源,14 项 → Lv15 封顶。
-  # ⚠️ 生产默认注释 = 功能关闭(AddExperience 拒,行为与历史一致):经验入账是**不可逆
-  # 持久数值**,必须等策划正式数值确认后才启用,不得用联调占位曲线上线。
-  # 启用纪律(§9.21):改/配曲线必须全 fleet 同配置一起换(先关金丝雀分流),不同曲线副本
-  # 混跑会按不同阈值结算同一玩家;后续曲线迁 configtable 热更管线(单源+原子切换)。
-  # exp_curve: [<策划确认后填写>]
+  # 玩家等级经验唯一读取 config_table/player_level_exp，不在 YAML 维护第二份曲线。
+  # 当前策划表仍标注为联调占位数值；正式确认前保持 false。
+  experience_enabled: false
   max_exp_per_grant: 1000000
   push_outbox_interval: "1s"
   push_outbox_batch: 128

@@ -20,30 +20,51 @@ import (
 	"github.com/luyuancpp/pandora/services/matchmaking/matchmaker/internal/conf"
 )
 
-// writeLevelBatch 在临时目录写一批 level 表产物(与 tools/configtable-gen 同一 JSON 口径)。
+// writeLevelBatch 在临时目录写一批完整配置表产物(与 tools/configtable-gen 同一 JSON 口径)。
 func writeLevelBatch(t *testing.T, dir string, version uint64, rows []*configpb.LevelRow) {
 	t.Helper()
-	raw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.
+	levelRaw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.
 		Marshal(&configpb.LevelTableData{Rows: rows})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(raw)
+	playerLevelExpRows := []*configpb.PlayerLevelExpRow{
+		{Id: 1, Level: 1, UpgradeExp: 100, CumulativeExp: 0},
+		{Id: 2, Level: 2, UpgradeExp: 0, CumulativeExp: 100},
+	}
+	playerLevelExpRaw, err := protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}.
+		Marshal(&configpb.PlayerLevelExpTableData{Rows: playerLevelExpRows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	levelSum := sha256.Sum256(levelRaw)
+	playerLevelExpSum := sha256.Sum256(playerLevelExpRaw)
 	manifest := map[string]any{
 		"version":   version,
 		"generator": "test",
-		"tables": []map[string]any{{
-			"name": "level", "file": "level.json",
-			"proto":    "pandora.config.v1.LevelTableData",
-			"checksum": "sha256:" + hex.EncodeToString(sum[:]),
-			"rows":     len(rows),
-		}},
+		"tables": []map[string]any{
+			{
+				"name": "level", "file": "level.json",
+				"proto":    "pandora.config.v1.LevelTableData",
+				"checksum": "sha256:" + hex.EncodeToString(levelSum[:]),
+				"rows":     len(rows),
+			},
+			{
+				"name": "player_level_exp", "file": "player_level_exp.json",
+				"proto":    "pandora.config.v1.PlayerLevelExpTableData",
+				"checksum": "sha256:" + hex.EncodeToString(playerLevelExpSum[:]),
+				"rows":     len(playerLevelExpRows),
+			},
+		},
 	}
 	mraw, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "level.json"), raw, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "level.json"), levelRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "player_level_exp.json"), playerLevelExpRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, configtable.ManifestFileName), mraw, 0o644); err != nil {

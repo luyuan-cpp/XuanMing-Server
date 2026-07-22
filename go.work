@@ -57,6 +57,8 @@ use ./services/runtime/player_locator
 
 use ./services/runtime/leaderboard
 
+use ./services/runtime/owner
+
 use ./services/matchmaking/team
 
 use ./services/matchmaking/matchmaker

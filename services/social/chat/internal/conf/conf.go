@@ -2,6 +2,8 @@
 package conf
 
 import (
+	"time"
+
 	"github.com/luyuancpp/pandora/pkg/config"
 )
 
@@ -32,6 +34,18 @@ type ChatConf struct {
 	// SensitiveWords 敏感词列表(命中后整词替换为等长 *,大小写不敏感)。
 	// 默认空 → 不过滤。仅做最小化屏蔽,真正风控由独立服务接管(后续)。
 	SensitiveWords []string `yaml:"sensitive_words,omitempty" json:"sensitive_words,omitempty"`
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// HistoryRetentionDays 私聊历史(chat_private_messages)保留天数(默认 90)。
+	// message_id 是雪花 ID(时间段单调),按 snowflake.MinIDAt(cutoff) 走主键范围删,无需新索引。
+	HistoryRetentionDays int `yaml:"history_retention_days,omitempty" json:"history_retention_days,omitempty"`
+
+	// SweepInterval 保留期清理轮询间隔(默认 5m)。多副本各自跑,DELETE 幂等无需锁。
+	SweepInterval config.Duration `yaml:"sweep_interval,omitempty" json:"sweep_interval,omitempty"`
+
+	// SweepBatch 每轮清理行数上限(默认 500,小批量防长事务锁表)。
+	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -41,6 +55,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Chat.HistoryLimit <= 0 {
 		c.Chat.HistoryLimit = 50
+	}
+	if c.Chat.HistoryRetentionDays <= 0 {
+		c.Chat.HistoryRetentionDays = 90
+	}
+	if c.Chat.SweepInterval <= 0 {
+		c.Chat.SweepInterval = config.Duration(5 * time.Minute)
+	}
+	if c.Chat.SweepBatch <= 0 {
+		c.Chat.SweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50005"

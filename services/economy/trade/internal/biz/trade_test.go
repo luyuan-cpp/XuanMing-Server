@@ -354,3 +354,177 @@ func TestCreateOrder_QuotaPrunesDeadSlots(t *testing.T) {
 		t.Fatal("reclaimed order slot must be pruned")
 	}
 }
+
+// ── INC-20260722-001 回归:结算意图先落库 + Cancel 结算围栏 + 幂等恢复 ─────────────
+
+// scriptedLedger 可编排结算账本:errs 依次弹出(耗尽后成功);applyBeforeErr 模拟
+// "已入账但回包丢失/超时";applied 复刻 order_id 幂等键(重复 Settle 不二次入账)。
+type scriptedLedger struct {
+	errs          []error
+	applyBeforeErr bool   // true:弹出 err 前仍完成入账(超时窗口:资产已动)
+	applied       bool
+	settles       int
+	applies       int
+	onSettle      func() // Settle 执行中回调(模拟结算窗口内的并发事件)
+}
+
+func (s *scriptedLedger) Settle(_ context.Context, _ *tradev1.Order, _ uint64) error {
+	s.settles++
+	if s.onSettle != nil {
+		s.onSettle()
+	}
+	var err error
+	if len(s.errs) > 0 {
+		err = s.errs[0]
+		s.errs = s.errs[1:]
+	}
+	apply := err == nil || (s.applyBeforeErr && errcode.As(err) != errcode.ErrTradeInsufficient)
+	if apply && !s.applied {
+		s.applied = true
+		s.applies++
+	}
+	return err
+}
+
+// confirmedOrder 建一笔已买方确认(BUYER_CONFIRMED)的订单,返回 orderID。
+func confirmedOrder(t *testing.T, uc *TradeUsecase) uint64 {
+	t.Helper()
+	ctx := context.Background()
+	orderID, err := uc.CreateOrder(ctx, 1, 2, items(), nil, 100)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := uc.ConfirmOrder(ctx, 2, orderID); err != nil {
+		t.Fatalf("buyer confirm: %v", err)
+	}
+	return orderID
+}
+
+// 事故场景本体:结算执行中并发 Cancel。旧实现 Settle 在 WATCH 回调内先执行,Cancel
+// 可把权威终态提交成 CANCELED 而资产已转移(撕裂)。新实现结算意图 SELLER_CONFIRMED
+// 先落库,窗口内 Cancel 必须被 fail-closed 拒绝,终态只能是 COMPLETED。
+func TestConfirmOrder_ConcurrentCancelDuringSettlementCannotTear(t *testing.T) {
+	repo := newFakeRepo()
+	ledger := &scriptedLedger{}
+	uc, _ := newUC(repo, ledger)
+	ctx := context.Background()
+	orderID := confirmedOrder(t, uc)
+
+	var cancelErr error
+	ledger.onSettle = func() {
+		cancelErr = uc.CancelOrder(ctx, 2, orderID) // 买方在结算窗口内并发取消
+	}
+	st, err := uc.ConfirmOrder(ctx, 1, orderID)
+	if err != nil || st != tradev1.OrderState_ORDER_STATE_COMPLETED {
+		t.Fatalf("seller confirm: st=%s err=%v", st, err)
+	}
+	wantCode(t, cancelErr, errcode.ErrTradeWrongState)
+	if ledger.applies != 1 {
+		t.Fatalf("settle applies=%d want=1", ledger.applies)
+	}
+	o, _, _ := repo.GetOrder(ctx, orderID)
+	if o.GetState() != tradev1.OrderState_ORDER_STATE_COMPLETED {
+		t.Fatalf("终态=%s,资产已结算的订单绝不能是 CANCELED(撕裂)", o.GetState())
+	}
+}
+
+// 瞬时结算失败:意图态留库(不置 FAILED、不回滚),Cancel 拒,重试幂等收敛 COMPLETED。
+func TestConfirmOrder_TransientSettleFailureConvergesOnRetry(t *testing.T) {
+	repo := newFakeRepo()
+	ledger := &scriptedLedger{errs: []error{errcode.New(errcode.ErrInternal, "inventory timeout")}}
+	uc, _ := newUC(repo, ledger)
+	ctx := context.Background()
+	orderID := confirmedOrder(t, uc)
+
+	st, err := uc.ConfirmOrder(ctx, 1, orderID)
+	wantCode(t, err, errcode.ErrUnavailable)
+	if st != tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {
+		t.Fatalf("瞬时失败后应停留 SELLER_CONFIRMED,得 %s", st)
+	}
+	// 结算围栏:意图落库后 Cancel / 过期清理一律拒。
+	wantCode(t, uc.CancelOrder(ctx, 2, orderID), errcode.ErrTradeWrongState)
+
+	// 买方重试也能驱动恢复(不只卖方)。
+	st, err = uc.ConfirmOrder(ctx, 2, orderID)
+	if err != nil || st != tradev1.OrderState_ORDER_STATE_COMPLETED {
+		t.Fatalf("retry confirm: st=%s err=%v", st, err)
+	}
+	if ledger.settles != 2 || ledger.applies != 1 {
+		t.Fatalf("settles=%d applies=%d want 2/1", ledger.settles, ledger.applies)
+	}
+}
+
+// 超时但已入账(回包丢失):重试 Settle 幂等命中,不双发,收敛 COMPLETED。
+func TestConfirmOrder_AppliedButLostResponseConvergesOnce(t *testing.T) {
+	repo := newFakeRepo()
+	ledger := &scriptedLedger{
+		errs:           []error{errcode.New(errcode.ErrInternal, "response lost")},
+		applyBeforeErr: true, // 第一次调用已入账,但响应丢了
+	}
+	uc, _ := newUC(repo, ledger)
+	ctx := context.Background()
+	orderID := confirmedOrder(t, uc)
+
+	if _, err := uc.ConfirmOrder(ctx, 1, orderID); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("lost response want ErrUnavailable, got %v", err)
+	}
+	st, err := uc.ConfirmOrder(ctx, 1, orderID)
+	if err != nil || st != tradev1.OrderState_ORDER_STATE_COMPLETED {
+		t.Fatalf("retry: st=%s err=%v", st, err)
+	}
+	if ledger.applies != 1 {
+		t.Fatalf("资产必须恰好入账一次,applies=%d", ledger.applies)
+	}
+}
+
+// SELLER_CONFIRMED 不过期:结算意图落库后哪怕 expires_at_ms 已过,访问路径也不得置
+// EXPIRED(资产可能已转移,置 EXPIRED 即撕裂),重试确认继续收敛 COMPLETED。
+func TestConfirmOrder_SellerConfirmedNeverExpires(t *testing.T) {
+	repo := newFakeRepo()
+	ledger := &scriptedLedger{errs: []error{errcode.New(errcode.ErrInternal, "boom")}}
+	uc, _ := newUC(repo, ledger)
+	ctx := context.Background()
+	orderID := confirmedOrder(t, uc)
+
+	if _, err := uc.ConfirmOrder(ctx, 1, orderID); errcode.As(err) != errcode.ErrUnavailable {
+		t.Fatalf("want transient, got %v", err)
+	}
+	// 把订单时间推成已过期。
+	o, _, _ := repo.GetOrder(ctx, orderID)
+	o.ExpiresAtMs = nowMs() - 1
+
+	// 列表路径不得把它惰性置 EXPIRED。
+	if _, _, err := uc.ListMyOrders(ctx, 1, false, 0, 10); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if o.GetState() != tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {
+		t.Fatalf("列表惰性过期不得动结算中订单,得 %s", o.GetState())
+	}
+	// 确认路径继续驱动结算而不是判过期。
+	st, err := uc.ConfirmOrder(ctx, 1, orderID)
+	if err != nil || st != tradev1.OrderState_ORDER_STATE_COMPLETED {
+		t.Fatalf("drive after expiry: st=%s err=%v", st, err)
+	}
+}
+
+// 结算余额/物品不足:资产未动(inventory 原子拒),SELLER_CONFIRMED → FAILED 终态。
+func TestConfirmOrder_InsufficientFromIntentMarksFailed(t *testing.T) {
+	repo := newFakeRepo()
+	ledger := &scriptedLedger{errs: []error{errcode.New(errcode.ErrTradeInsufficient, "no gold")}}
+	uc, _ := newUC(repo, ledger)
+	ctx := context.Background()
+	orderID := confirmedOrder(t, uc)
+
+	st, err := uc.ConfirmOrder(ctx, 1, orderID)
+	wantCode(t, err, errcode.ErrTradeInsufficient)
+	if st != tradev1.OrderState_ORDER_STATE_FAILED {
+		t.Fatalf("want FAILED, got %s", st)
+	}
+	if ledger.applies != 0 {
+		t.Fatalf("insufficient 不得入账,applies=%d", ledger.applies)
+	}
+	o, _, _ := repo.GetOrder(ctx, orderID)
+	if o.GetState() != tradev1.OrderState_ORDER_STATE_FAILED {
+		t.Fatalf("落库终态=%s want FAILED", o.GetState())
+	}
+}

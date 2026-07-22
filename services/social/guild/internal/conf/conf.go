@@ -39,6 +39,19 @@ type GuildConf struct {
 	// 读 miss 回填按此 TTL;写路径写库后主动删缓存,删失败靠 TTL 兜底(read-cache-strategy.md §3/§4)。
 	// Redis 弱依赖:node.redis_client 未配 / Ping 失败则降级直连 MySQL(cache 关闭)。
 	CacheTTL config.Duration `yaml:"cache_ttl,omitempty" json:"cache_ttl,omitempty"`
+
+	// ── 保留期清理(CLAUDE.md §9 不变量 24:只增表必须有界)──
+
+	// RequestRetentionDays 终态入会申请(approved/rejected)保留天数(默认 90)。
+	// guild_join_requests 每对 (guild,player) 至多一行,终态行随申请对数累积;
+	// 删后再次申请 = 重新 INSERT pending,行为等价(成员权威在 guild_members)。pending 永不清。
+	RequestRetentionDays int `yaml:"request_retention_days,omitempty" json:"request_retention_days,omitempty"`
+
+	// SweepInterval 保留期清理轮询间隔(默认 5m)。多副本各自跑,DELETE 幂等无需锁。
+	SweepInterval config.Duration `yaml:"sweep_interval,omitempty" json:"sweep_interval,omitempty"`
+
+	// SweepBatch 每轮清理行数上限(默认 500)。
+	SweepBatch int `yaml:"sweep_batch,omitempty" json:"sweep_batch,omitempty"`
 }
 
 // Defaults 填默认值,防止 yaml 缺字段时零值引发非预期行为。
@@ -60,6 +73,15 @@ func (c *Config) Defaults() {
 	}
 	if c.Guild.CacheTTL <= 0 {
 		c.Guild.CacheTTL = config.Duration(60 * time.Second)
+	}
+	if c.Guild.RequestRetentionDays <= 0 {
+		c.Guild.RequestRetentionDays = 90
+	}
+	if c.Guild.SweepInterval <= 0 {
+		c.Guild.SweepInterval = config.Duration(5 * time.Minute)
+	}
+	if c.Guild.SweepBatch <= 0 {
+		c.Guild.SweepBatch = 500
 	}
 	if c.Server.Grpc.Addr == "" {
 		c.Server.Grpc.Addr = ":50008"

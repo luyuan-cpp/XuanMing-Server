@@ -23,6 +23,21 @@ func levelDef(t *testing.T) *TableDef {
 	return nil
 }
 
+func playerLevelExpDef(t *testing.T) *TableDef {
+	t.Helper()
+	defs, err := Discover()
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	for i := range defs {
+		if defs[i].Name == "player_level_exp" {
+			return &defs[i]
+		}
+	}
+	t.Fatalf("未发现 player_level_exp 表,defs=%v", defs)
+	return nil
+}
+
 func TestDiscoverLevel(t *testing.T) {
 	d := levelDef(t)
 	if d.GoName != "Level" || d.RowType != "LevelRow" || d.DataType != "LevelTableData" ||
@@ -32,8 +47,33 @@ func TestDiscoverLevel(t *testing.T) {
 	if d.ExcelFile != "关卡/g_关卡.xlsx" {
 		t.Fatalf("ExcelFile=%q", d.ExcelFile)
 	}
+	if d.DataStart != 5 {
+		t.Fatalf("level 默认 DataStart=%d, want 5", d.DataStart)
+	}
 	if len(d.columns) != 7 || d.columns[0].header != "ID" || d.columns[6].header != "匹配列表显示" {
 		t.Fatalf("columns=%d", len(d.columns))
+	}
+}
+
+func TestBuildPlayerLevelExpStartsAtFourthRow(t *testing.T) {
+	d := playerLevelExpDef(t)
+	if d.DataStart != 4 {
+		t.Fatalf("player_level_exp DataStart=%d, want 4", d.DataStart)
+	}
+	grid := [][]string{
+		{"ID", "等级", "升级所需经验", "到达本级累计经验"},
+		{"说明", "说明", "说明", "说明"},
+		{},
+		{"1", "1", "1000", "0"},
+		{"2", "2", "0", "1000"},
+	}
+	msg, rows, err := d.Build(grid)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	data := msg.(*configpb.PlayerLevelExpTableData)
+	if rows != 2 || len(data.GetRows()) != 2 || data.GetRows()[0].GetId() != 1 || data.GetRows()[0].GetUpgradeExp() != 1000 {
+		t.Fatalf("第4行 Lv1 被跳过: rows=%d data=%+v", rows, data.GetRows())
 	}
 }
 

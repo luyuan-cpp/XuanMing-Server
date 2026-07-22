@@ -12,6 +12,7 @@ package service
 import (
 	"context"
 
+	"github.com/luyuancpp/pandora/pkg/errcode"
 	plog "github.com/luyuancpp/pandora/pkg/log"
 	pmw "github.com/luyuancpp/pandora/pkg/middleware"
 	pushv1 "github.com/luyuancpp/pandora/proto/gen/go/pandora/push/v1"
@@ -60,7 +61,7 @@ func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.Push
 	// server stream 不跑 unary 中间件链,KillSwitch 不会自动生效,这里手动查一次开关。
 	// 命中 Subscribe 关停规则时拒绝建连(返回 ErrServiceDisabled),修好后删规则即恢复。
 	if err := pmw.KillSwitchStreamCheck(ctx); err != nil {
-		return err
+		return errcode.ToGRPCError(err)
 	}
 
 	// server stream 不跑 unary 中间件链,直接从 transport header 取 Envoy 注入的 player_id。
@@ -70,10 +71,27 @@ func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.Push
 	}
 	h := plog.With(ctx)
 
-	// 注册到内存索引(KafkaConsumer 路由 SendTo 时按 player_id 找到这个 slot)
+	// 会话现行性门(P0,INC-20260722-004):JWT 验签只证明"曾经登录过";旧/被顶号
+	// token 在 exp 前仍能过 Envoy jwt_authn。建流前必须核对请求 jti == login 会话
+	// 权威当前一代,否则旧设备可重建流收私有推送、并顶掉新设备连接。
+	// 会话身份取自 Envoy 验签后重写的 payload 头(入站无条件剥离,客户端无法伪造)。
+	//
+	// R4 复审①:校验与注册必须在同玩家锁内原子完成(AuthorizeAndRegister)——分离
+	// 执行存在 TOCTOU:旧会话校验通过后暂停、新会话注册,旧会话恢复再注册会反过来
+	// 取消新设备连接并接管槽位。
+	//
+	// 错误统一经 errcode.ToGRPCError 映射标准 gRPC 状态(R4 复审 P1-1):server stream
+	// 不经 Kratos 错误编码,*errcode.Error 原样返回时客户端只见 UNKNOWN,无法区分
+	// 「会话失效须换新」与「依赖故障可退避重连」。
+	claims := pmw.SessionClaimsFromContext(ctx)
+	sess := biz.SessionInfo{JTI: claims.JTI, ExpMs: claims.ExpMs}
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	slot := s.uc.Conns().Register(playerID, stream, cancel)
+	slot, err := s.uc.AuthorizeAndRegister(ctx, playerID, sess, stream, cancel)
+	if err != nil {
+		h.Warnw("msg", "push_subscribe_rejected", "player_id", playerID, "err", err)
+		return errcode.ToGRPCError(err)
+	}
 	defer s.uc.Conns().Unregister(playerID, slot)
 
 	h.Infow(
@@ -83,5 +101,5 @@ func (s *PushService) Subscribe(req *pushv1.SubscribeRequest, stream pushv1.Push
 		"online_total", s.uc.Conns().Size(),
 	)
 
-	return s.uc.RunSubscribeStream(subCtx, slot, playerID, req.GetLastSeenMs())
+	return errcode.ToGRPCError(s.uc.RunSubscribeStream(subCtx, slot, playerID, req.GetLastSeenMs(), sess))
 }

@@ -6,18 +6,27 @@
 //   - 结算走 ResourceLedger 原子扣减 + 幂等键 = order_id(不变量 §9.7)
 //   - 每次状态流转把订单快照发 kafka pandora.trade.audit(弱依赖,审计)
 //
-// 状态机(OrderState):
+// 状态机(OrderState,INC-20260722-001 修订:结算意图先落库):
 //
-//	PENDING ──买方确认──▶ BUYER_CONFIRMED ──卖方确认+结算──▶ COMPLETED
-//	   │                       │
-//	   └──任一方 Cancel────────┴────▶ CANCELED
+//	PENDING ──买方确认──▶ BUYER_CONFIRMED ──卖方确认──▶ SELLER_CONFIRMED ──结算成功──▶ COMPLETED
+//	   │                       │                            │
+//	   │                       │                            └──结算余额/物品不足──▶ FAILED
+//	   └──任一方 Cancel────────┴──▶ CANCELED    (SELLER_CONFIRMED 拒 Cancel/过期:结算围栏)
 //	   └──超时(惰性)──────────────▶ EXPIRED
-//	结算扣减失败 ───────────────────▶ FAILED
 //
 // 关键规则:
 //   - 卖方挂单(CreateOrder),买方先确认,卖方后确认触发结算(双确认防单方面成交)
-//   - 任一方可在终态前 Cancel
-//   - 过期惰性判定:访问订单时若已过 expires_at_ms 且非终态 → 置 EXPIRED
+//   - **结算意图先原子落库**(INC-20260722-001):Settle 是不可回滚的跨服务资产转移,
+//     绝不能放在"可能不提交、也可能重跑"的 Redis WATCH 回调里。卖方确认先把
+//     SELLER_CONFIRMED 经 WATCH/EXEC 原子提交(= 本订单进入结算通道的线性化点),
+//     提交成功后才调用 Settle(幂等键 order_id);成功再 CAS → COMPLETED。
+//   - SELLER_CONFIRMED 是结算围栏:Cancel / 惰性过期 / 配额清理一律 fail-closed,
+//     订单只向 COMPLETED / FAILED 收敛(资产账本为权威)。
+//   - 恢复路径:结算窗口内进程退出 / Settle 瞬时失败 / 终态写失败 → 订单停留
+//     SELLER_CONFIRMED,任一方重试 Confirm 幂等重新驱动结算(Settle 幂等命中,
+//     终态 CAS 幂等),无需回滚。
+//   - 任一方可在 PENDING / BUYER_CONFIRMED 下 Cancel
+//   - 过期惰性判定:访问订单时若已过 expires_at_ms 且非终态且非 SELLER_CONFIRMED → 置 EXPIRED
 //   - player_id 一律以 JWT ctx 为准(R5),service 层注入
 package biz
 
@@ -224,6 +233,9 @@ func (u *TradeUsecase) pruneDeadOrderSlots(ctx context.Context, playerID uint64)
 		if gerr != nil {
 			continue // 单条读失败不阻断扫描(fail-closed:查不到状态不清理)
 		}
+		if ok && o.GetState() == tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {
+			continue // 结算中(意图已落库,不过期):真占用,绝不回收(INC-20260722-001)
+		}
 		if ok && !isTerminal(o.GetState()) && !(o.GetExpiresAtMs() > 0 && nowMs() >= o.GetExpiresAtMs()) {
 			continue // 存活非终态且未过期 → 真占用
 		}
@@ -239,9 +251,12 @@ func (u *TradeUsecase) pruneDeadOrderSlots(ctx context.Context, playerID uint64)
 	return pruned, nil
 }
 
-// ConfirmOrder 买方 / 卖方确认。两阶段:
+// ConfirmOrder 买方 / 卖方确认。两阶段确认 + 两步结算(INC-20260722-001):
 //   - 买方 + PENDING → BUYER_CONFIRMED
-//   - 卖方 + BUYER_CONFIRMED → 结算 → COMPLETED(结算失败 → FAILED 并返错)
+//   - 卖方 + BUYER_CONFIRMED → **先原子提交 SELLER_CONFIRMED(结算意图)** → 结算 →
+//     COMPLETED(余额/物品不足 → FAILED;瞬时失败 → 停留 SELLER_CONFIRMED 可重试)
+//   - 任一方 + SELLER_CONFIRMED → 幂等重新驱动结算(恢复路径:结算窗口崩溃 / 瞬时
+//     失败 / 终态写失败后由重试收敛,Settle 幂等键 = order_id)
 //
 // 返回最新状态。playerID 由 service 从 JWT ctx 得到(R5)。
 func (u *TradeUsecase) ConfirmOrder(ctx context.Context, playerID, orderID uint64) (tradev1.OrderState, error) {
@@ -249,9 +264,10 @@ func (u *TradeUsecase) ConfirmOrder(ctx context.Context, playerID, orderID uint6
 		return tradev1.OrderState_ORDER_STATE_UNSPECIFIED, errcode.New(errcode.ErrInvalidArg, "player / order required")
 	}
 
-	var settled *tradev1.Order // 进入 COMPLETED 时记录,用于事务后 audit
-	var expired bool           // 惰性过期:置 EXPIRED 并持久化,事务后返回 ErrTradeOrderExpired
+	var driveSettle *tradev1.Order // 非 nil = SELLER_CONFIRMED 已落库,锁外驱动结算
+	var expired bool               // 惰性过期:置 EXPIRED 并持久化,事务后返回 ErrTradeOrderExpired
 	err := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
+		driveSettle = nil // WATCH 重试会重跑回调:先清残留,只信最后一次提交成功的快照
 		if expireIfStale(o) {
 			// 访问订单时惰性置 EXPIRED:返回 nil 让 UpdateWithLock 把 EXPIRED 写回 Redis
 			// (此前返回 error → fn 报错不写回,订单状态停留在旧值,过期态永远落不了库)。
@@ -267,14 +283,16 @@ func (u *TradeUsecase) ConfirmOrder(ctx context.Context, playerID, orderID uint6
 			o.State = tradev1.OrderState_ORDER_STATE_BUYER_CONFIRMED
 			return nil
 		case playerID == o.GetSellerId() && o.GetState() == tradev1.OrderState_ORDER_STATE_BUYER_CONFIRMED:
-			// 卖方确认 → 结算(原子扣减 + 幂等键 = order_id,不变量 §9.7)。
-			// 结算失败时透传错误:fn 返回非 nil → UpdateWithLock 不写回,
-			// 由下方单独事务把订单置 FAILED(让双方看到失败终态)。
-			if serr := u.ledger.Settle(ctx, o, o.GetOrderId()); serr != nil {
-				return serr
-			}
-			o.State = tradev1.OrderState_ORDER_STATE_COMPLETED
-			settled = o
+			// 结算意图先原子落库(INC-20260722-001 根因:Settle 曾在 WATCH 回调内先执行,
+			// EXEC 冲突 / 崩溃时资产已转移而订单可被并发 Cancel 成 CANCELED,永久撕裂)。
+			// 本回调只改状态不做任何外部副作用;EXEC 成功 = 结算通道已 fencing
+			// (Cancel/过期从此拒),之后才在锁外调用 Settle。
+			o.State = tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED
+			driveSettle = o
+			return nil
+		case o.GetState() == tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED:
+			// 恢复驱动:意图已落库(买卖任一方重试都可推进;Settle/终态 CAS 均幂等)。
+			driveSettle = o
 			return nil
 		default:
 			return errcode.New(errcode.ErrTradeWrongState,
@@ -290,49 +308,90 @@ func (u *TradeUsecase) ConfirmOrder(ctx context.Context, playerID, orderID uint6
 		return tradev1.OrderState_ORDER_STATE_EXPIRED,
 			errcode.New(errcode.ErrTradeOrderExpired, "order %d expired", orderID)
 	}
-
-	// 结算失败(余额 / 物品不足):把订单从 BUYER_CONFIRMED 推到 FAILED 终态并 audit。
-	if err != nil && errcode.As(err) == errcode.ErrTradeInsufficient {
-		if ferr := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
-			if o.GetState() == tradev1.OrderState_ORDER_STATE_BUYER_CONFIRMED {
-				o.State = tradev1.OrderState_ORDER_STATE_FAILED
-			}
-			return nil
-		}, u.cfg.OrderTTL.Std()); ferr != nil {
-			// 置 FAILED 失败(乐观锁耗尽/redis 抖动):订单暂留 BUYER_CONFIRMED,
-			// 卖方重试 Confirm 会重走结算→再次到达这里,可自愈;必须留 Error 便于告警。
-			plog.With(ctx).Errorw("msg", "trade_mark_failed_state_failed", "order_id", orderID, "err", ferr)
-		}
-		if o, ok, gerr := u.repo.GetOrder(ctx, orderID); gerr == nil && ok {
-			u.pushAudit(ctx, o)
-		}
-		return tradev1.OrderState_ORDER_STATE_FAILED, err
-	}
 	if err != nil {
 		return tradev1.OrderState_ORDER_STATE_UNSPECIFIED, err
 	}
 
-	// 读回最新状态做 audit + 返回。
+	if driveSettle != nil {
+		return u.driveSettlement(ctx, driveSettle)
+	}
+
+	// 买方确认路径:读回最新状态做 audit + 返回。
 	o, ok, gerr := u.repo.GetOrder(ctx, orderID)
 	if gerr != nil || !ok {
-		// 写成功但读回失败:返回我们已知的推进结果(settled 或 buyer_confirmed)。
-		if settled != nil {
-			u.pushAudit(ctx, settled)
-			u.logSettlementRouting(ctx, settled.GetOrderId(), settled.GetBuyerId(), settled.GetSellerId())
-			return tradev1.OrderState_ORDER_STATE_COMPLETED, nil
-		}
+		// 写成功但读回失败:返回我们已知的推进结果。
 		return tradev1.OrderState_ORDER_STATE_BUYER_CONFIRMED, nil
 	}
 	u.pushAudit(ctx, o)
-	// 分片:结算成功(进入 COMPLETED)时观测本笔结算的跨分片落点(买卖双方跨 Cell → 跨分片
-	// 结算,拆 Kafka 出箱幂等消费;跨 region → 走最小跨 region 通道)。router 为 nil(单 Cell)→ 不打。
-	if settled != nil {
-		u.logSettlementRouting(ctx, settled.GetOrderId(), settled.GetBuyerId(), settled.GetSellerId())
-	}
 	return o.GetState(), nil
 }
 
-// CancelOrder 任一方在终态前取消订单。playerID 由 service 从 JWT ctx 得到(R5)。
+// driveSettlement 驱动一个已落库 SELLER_CONFIRMED 意图的订单走完结算(幂等,可重入):
+//
+//	Settle 成功            → CAS SELLER_CONFIRMED → COMPLETED(资产账本为权威:即使状态
+//	                         被某个 bug 改动,也按账本结果收敛到 COMPLETED 并告警)
+//	Settle 余额/物品不足    → 资产未动(inventory 原子拒),CAS → FAILED 终态
+//	Settle 瞬时失败/UNKNOWN → 订单停留 SELLER_CONFIRMED(可能已入账!绝不回滚、绝不置
+//	                         FAILED),返回可重试错误,任一方重试 Confirm 继续驱动
+//	终态 CAS 写失败         → 同上停留 SELLER_CONFIRMED,重试收敛;Error 告警
+func (u *TradeUsecase) driveSettlement(ctx context.Context, order *tradev1.Order) (tradev1.OrderState, error) {
+	orderID := order.GetOrderId()
+	if serr := u.ledger.Settle(ctx, order, orderID); serr != nil {
+		if errcode.As(serr) == errcode.ErrTradeInsufficient {
+			// 结算原子失败(资产未动):SELLER_CONFIRMED → FAILED 终态并 audit。
+			if ferr := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
+				if o.GetState() == tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {
+					o.State = tradev1.OrderState_ORDER_STATE_FAILED
+				}
+				return nil
+			}, u.cfg.OrderTTL.Std()); ferr != nil {
+				// 置 FAILED 失败(乐观锁耗尽/redis 抖动):订单暂留 SELLER_CONFIRMED,
+				// 重试 Confirm 会重走结算→再次到达这里,可自愈;必须留 Error 便于告警。
+				plog.With(ctx).Errorw("msg", "trade_mark_failed_state_failed", "order_id", orderID, "err", ferr)
+			}
+			if o, ok, gerr := u.repo.GetOrder(ctx, orderID); gerr == nil && ok {
+				u.pushAudit(ctx, o)
+			}
+			return tradev1.OrderState_ORDER_STATE_FAILED, serr
+		}
+		// 瞬时/UNKNOWN(超时 / inventory 不可达 / 回包丢失):结算可能已生效,绝不回滚
+		// 订单;意图态留在库里,由重试幂等收敛(Settle 幂等键命中即成功)。
+		plog.With(ctx).Warnw("msg", "trade_settlement_inflight_retryable", "order_id", orderID, "err", serr)
+		return tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED,
+			errcode.New(errcode.ErrUnavailable, "order %d settlement in flight, retry confirm: %v", orderID, serr)
+	}
+
+	// 结算已成功:资产账本为权威,状态收敛到 COMPLETED。
+	var completed *tradev1.Order
+	if cerr := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
+		if o.GetState() != tradev1.OrderState_ORDER_STATE_COMPLETED {
+			if o.GetState() != tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {
+				// 不该发生(SELLER_CONFIRMED 已 fencing Cancel/过期):按账本权威强制收敛并告警。
+				plog.With(ctx).Errorw("msg", "trade_settled_state_diverged_converging",
+					"order_id", orderID, "state", o.GetState().String())
+			}
+			o.State = tradev1.OrderState_ORDER_STATE_COMPLETED
+		}
+		completed = o
+		return nil
+	}, u.cfg.OrderTTL.Std()); cerr != nil {
+		// 资产已结算而终态未落库:停留 SELLER_CONFIRMED,重试 Confirm 收敛
+		// (Settle 幂等命中 → 再次到这里重试 CAS)。Error 告警便于监控收敛积压。
+		plog.With(ctx).Errorw("msg", "trade_mark_completed_failed", "order_id", orderID, "err", cerr)
+		return tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED,
+			errcode.New(errcode.ErrUnavailable, "order %d settled, state convergence pending, retry confirm", orderID)
+	}
+	u.pushAudit(ctx, completed)
+	// 分片:结算成功时观测本笔结算的跨分片落点(买卖双方跨 Cell → 跨分片结算;
+	// 跨 region → 走最小跨 region 通道)。router 为 nil(单 Cell)→ 不打。
+	u.logSettlementRouting(ctx, orderID, completed.GetBuyerId(), completed.GetSellerId())
+	return tradev1.OrderState_ORDER_STATE_COMPLETED, nil
+}
+
+// CancelOrder 任一方在 PENDING / BUYER_CONFIRMED 下取消订单。
+// SELLER_CONFIRMED 一律拒(INC-20260722-001 结算围栏):结算意图已落库,资产转移可能
+// 已发生或即将发生,取消会与账本撕裂;订单只向 COMPLETED / FAILED 收敛。
+// playerID 由 service 从 JWT ctx 得到(R5)。
 func (u *TradeUsecase) CancelOrder(ctx context.Context, playerID, orderID uint64) error {
 	if playerID == 0 || orderID == 0 {
 		return errcode.New(errcode.ErrInvalidArg, "player / order required")
@@ -340,6 +399,10 @@ func (u *TradeUsecase) CancelOrder(ctx context.Context, playerID, orderID uint64
 	err := u.repo.UpdateWithLock(ctx, orderID, u.cfg.OptimisticRetry, func(o *tradev1.Order) error {
 		if playerID != o.GetSellerId() && playerID != o.GetBuyerId() {
 			return errcode.New(errcode.ErrUnauthorized, "player %d not party of order %d", playerID, orderID)
+		}
+		if o.GetState() == tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED {
+			return errcode.New(errcode.ErrTradeWrongState,
+				"order %d is settling (seller confirmed), cannot cancel", orderID)
 		}
 		if isTerminal(o.GetState()) {
 			return errcode.New(errcode.ErrTradeWrongState, "order %d already terminal: %s", orderID, o.GetState())
@@ -384,9 +447,11 @@ func (u *TradeUsecase) ListMyOrders(ctx context.Context, playerID uint64, active
 			continue // 订单已过期被 Redis 回收 → 跳过
 		}
 		// 惰性过期:把已超时的非终态订单置 EXPIRED(尽力,不阻断列表)。
+		// 回调内重判必须同样排除 SELLER_CONFIRMED(读-写间隙订单可能刚进入结算围栏)。
 		if expireIfStale(o) {
 			_ = u.repo.UpdateWithLock(ctx, id, u.cfg.OptimisticRetry, func(x *tradev1.Order) error {
-				if !isTerminal(x.GetState()) && x.GetExpiresAtMs() > 0 && nowMs() >= x.GetExpiresAtMs() {
+				if x.GetState() != tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED &&
+					!isTerminal(x.GetState()) && x.GetExpiresAtMs() > 0 && nowMs() >= x.GetExpiresAtMs() {
 					x.State = tradev1.OrderState_ORDER_STATE_EXPIRED
 				}
 				return nil
@@ -418,9 +483,11 @@ func clampLimit(limit int) int {
 
 // ── 辅助 ──────────────────────────────────────────────────────────────────────
 
-// expireIfStale 若订单已过 expires_at_ms 且非终态,就地把状态改为 EXPIRED 并返回 true。
+// expireIfStale 若订单已过 expires_at_ms 且非终态且非 SELLER_CONFIRMED,就地把状态改为
+// EXPIRED 并返回 true。SELLER_CONFIRMED 不过期(INC-20260722-001 结算围栏):结算意图已
+// 落库、资产可能已转移,置 EXPIRED 会与账本撕裂,只允许向 COMPLETED / FAILED 收敛。
 func expireIfStale(o *tradev1.Order) bool {
-	if isTerminal(o.GetState()) {
+	if o.GetState() == tradev1.OrderState_ORDER_STATE_SELLER_CONFIRMED || isTerminal(o.GetState()) {
 		return false
 	}
 	if o.GetExpiresAtMs() > 0 && nowMs() >= o.GetExpiresAtMs() {

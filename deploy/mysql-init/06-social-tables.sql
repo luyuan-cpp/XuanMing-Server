@@ -38,9 +38,12 @@ CREATE TABLE IF NOT EXISTS `friend_requests` (
     `updated_at`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`request_id`),
     UNIQUE KEY `uk_requester_target` (`requester_id`, `target_id`),
-    KEY `idx_target_status` (`target_id`, `status`)
+    KEY `idx_target_status` (`target_id`, `status`),
+    KEY `idx_status_updated` (`status`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 好友请求(挂起 / 接受 / 拒绝)';
+  COMMENT='Pandora 好友请求(挂起 / 接受 / 拒绝;终态行保留 90 天由 friend sweep 清理,pending 永不清,§9.24)';
+-- idx_status_updated 服务保留期清理(DELETE WHERE status<>pending AND updated_at<cutoff)。
+-- 既有库需手动补:ALTER TABLE friend_requests ADD KEY idx_status_updated (status, updated_at);
 
 CREATE TABLE IF NOT EXISTS `blocks` (
     `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

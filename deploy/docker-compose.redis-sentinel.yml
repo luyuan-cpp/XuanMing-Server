@@ -28,8 +28,10 @@ services:
       - "yes"
       - --maxmemory
       - "2gb"
+      # noeviction(R4 复审 P1-5):权威态(会话/push 缓冲/租约)不容 LRU 静默驱逐;
+      # push 启动门强制核验 maxmemory-policy=noeviction。
       - --maxmemory-policy
-      - "allkeys-lru"
+      - "noeviction"
       - --requirepass
       - "${REDIS_PASSWORD:-pandora_dev_pwd}"
       - --masterauth
@@ -57,6 +59,11 @@ services:
       - --replicaof
       - "redis-master"
       - "6379"
+      # 与 master 同配(R4 复审 P1-5):副本可被 Sentinel 提升为 master,策略必须一致。
+      - --maxmemory
+      - "2gb"
+      - --maxmemory-policy
+      - "noeviction"
       - --requirepass
       - "${REDIS_PASSWORD:-pandora_dev_pwd}"
       - --masterauth
@@ -79,6 +86,11 @@ services:
       - --replicaof
       - "redis-master"
       - "6379"
+      # 与 master 同配(R4 复审 P1-5):副本可被 Sentinel 提升为 master,策略必须一致。
+      - --maxmemory
+      - "2gb"
+      - --maxmemory-policy
+      - "noeviction"
       - --requirepass
       - "${REDIS_PASSWORD:-pandora_dev_pwd}"
       - --masterauth

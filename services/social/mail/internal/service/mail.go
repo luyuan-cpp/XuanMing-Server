@@ -125,6 +125,39 @@ func (s *MailService) SendPersonalMail(ctx context.Context, req *mailv1.SendPers
 	return &mailv1.SendPersonalMailResponse{Code: commonv1.ErrCode_OK, MailId: id}, nil
 }
 
+// ── DS 三段式领取(bag phase 2;系统接口:owner DS 内网直连,客户端一律拒)────────
+
+// GetClaimableAttachments 取(或幂等重取)领取意图(稳定 BagItem 展开 + claim_key)。
+func (s *MailService) GetClaimableAttachments(ctx context.Context, req *mailv1.GetClaimableAttachmentsRequest) (*mailv1.GetClaimableAttachmentsResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &mailv1.GetClaimableAttachmentsResponse{Code: code}, nil
+	}
+	if req.GetPlayerId() == 0 || req.GetMailId() == 0 {
+		return &mailv1.GetClaimableAttachmentsResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	items, claimKey, already, err := s.uc.GetClaimableAttachments(ctx, req.GetPlayerId(), req.GetMailId(), nowMs())
+	if err != nil {
+		return &mailv1.GetClaimableAttachmentsResponse{Code: toProtoCode(err)}, nil
+	}
+	return &mailv1.GetClaimableAttachmentsResponse{
+		Code: commonv1.ErrCode_OK, Items: items, ClaimKey: claimKey, AlreadyClaimed: already,
+	}, nil
+}
+
+// MarkMailClaimed 终结 DS 领取(journal ACK 后调;幂等)。
+func (s *MailService) MarkMailClaimed(ctx context.Context, req *mailv1.MarkMailClaimedRequest) (*mailv1.MarkMailClaimedResponse, error) {
+	if code := systemOnly(ctx); code != commonv1.ErrCode_OK {
+		return &mailv1.MarkMailClaimedResponse{Code: code}, nil
+	}
+	if req.GetPlayerId() == 0 || req.GetMailId() == 0 {
+		return &mailv1.MarkMailClaimedResponse{Code: commonv1.ErrCode_ERR_INVALID_ARG}, nil
+	}
+	if err := s.uc.MarkMailClaimed(ctx, req.GetPlayerId(), req.GetMailId()); err != nil {
+		return &mailv1.MarkMailClaimedResponse{Code: toProtoCode(err)}, nil
+	}
+	return &mailv1.MarkMailClaimedResponse{Code: commonv1.ErrCode_OK}, nil
+}
+
 // ── 辅助 ──────────────────────────────────────────────────────────────────────
 
 func callerID(ctx context.Context) uint64 {

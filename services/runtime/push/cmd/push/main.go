@@ -89,8 +89,11 @@ func main() {
 
 	// 4. 三层装配
 	conns := biz.NewConnectionManager()
-	offline := data.NewRedisOfflineCacheRepo(rdb, cfg.Push.OfflineCacheTTL.Std())
+	offline := data.NewRedisOfflineCacheRepo(rdb, cfg.Push.OfflineCacheTTL.Std(), cfg.Push.OfflineCacheMaxFrames)
 	uc := biz.NewPushUsecase(conns, offline)
+	// 会话现行性门(P0,INC-20260722-004):login 的 pandora:sess 权威在同一 Redis;
+	// require 档由配置控制(prod 生成器机械置 true,dev 直连联调保持宽松)。
+	uc.SetSessionGate(data.NewRedisSessionGate(rdb), cfg.Push.RequireSessionGate)
 	svc := service.NewPushService(uc)
 
 	// 5. KafkaConsumer:每 topic 一个,共享 GroupID
@@ -164,8 +167,69 @@ func mustBuildRedis(cfg *conf.Config, h kratosHelper) redis.UniversalClient {
 		h.Errorw("msg", "redis_ping_failed", "err", err, "addr", rc.Host, "addrs", rc.Addrs)
 		os.Exit(1)
 	}
+	// 持久性/驱逐门(审计 R4 P1 + R4 复审 P1-5):投递缓冲与会话门都以这台 Redis 为
+	// 权威。maxmemory-policy 非 noeviction 时,内存压力下 allkeys-lru 等策略会静默驱逐
+	// offline/sess key = 无告警丢帧 + 会话门失效,必须 fail-fast 拒绝启动。
+	// R4 复审修正两点:
+	//   - CONFIG GET 失败缺省 fail-closed 拒启动(「查不了」≠「配置正确」);托管 Redis
+	//     禁用 CONFIG 的环境须人工确认策略后显式置 push.allow_unverified_eviction_policy
+	//     并列入部署核对清单。
+	//   - Cluster 模式逐 master 核验(单次 CONFIG GET 只落在被路由到的一个节点,
+	//     证明不了整个拓扑);Sentinel/单实例核验当前连接的主节点。
+	verifyEvictionPolicy(ctx, rdb, cfg.Push.AllowUnverifiedEvictionPolicy, h)
 	h.Infow("msg", "redis_connected", "addr", rc.Host, "addrs", rc.Addrs, "db", rc.DB)
 	return rdb
+}
+
+// verifyEvictionPolicy 核验 Redis(含 Cluster 全部 master)maxmemory-policy=noeviction;
+// 违规 fail-fast,核验失败按 allowUnverified 决定放行(告警)或拒启动(缺省)。
+func verifyEvictionPolicy(ctx context.Context, rdb redis.UniversalClient, allowUnverified bool, h kratosHelper) {
+	failUnverifiable := func(err error) {
+		if allowUnverified {
+			h.Warnw("msg", "redis_eviction_policy_unverifiable_allowed", "err", err,
+				"hint", "allow_unverified_eviction_policy=true 放行:必须已人工确认全拓扑 maxmemory-policy=noeviction")
+			return
+		}
+		h.Errorw("msg", "redis_eviction_policy_unverifiable", "err", err,
+			"hint", "CONFIG GET 失败,无法证明 maxmemory-policy=noeviction,fail-closed 拒启动;"+
+				"托管 Redis 禁用 CONFIG 时人工确认策略后置 push.allow_unverified_eviction_policy=true")
+		os.Exit(1)
+	}
+	checkOne := func(c redis.Cmdable, node string) error {
+		vals, cerr := c.ConfigGet(ctx, "maxmemory-policy").Result()
+		if cerr != nil {
+			return cerr
+		}
+		if policy, ok := vals["maxmemory-policy"]; !ok || policy != "noeviction" {
+			h.Errorw("msg", "redis_eviction_policy_unsafe", "policy", vals["maxmemory-policy"], "node", node,
+				"hint", "push 投递缓冲/会话门要求 maxmemory-policy=noeviction,驱逐策略会静默丢帧/放行旧会话")
+			os.Exit(1)
+		}
+		return nil
+	}
+
+	if cc, ok := rdb.(*redis.ClusterClient); ok {
+		err := cc.ForEachMaster(ctx, func(fctx context.Context, node *redis.Client) error {
+			vals, cerr := node.ConfigGet(fctx, "maxmemory-policy").Result()
+			if cerr != nil {
+				return cerr
+			}
+			if policy, pok := vals["maxmemory-policy"]; !pok || policy != "noeviction" {
+				h.Errorw("msg", "redis_eviction_policy_unsafe", "policy", vals["maxmemory-policy"],
+					"node", node.String(),
+					"hint", "cluster master 驱逐策略违规:push 要求全部 master maxmemory-policy=noeviction")
+				os.Exit(1)
+			}
+			return nil
+		})
+		if err != nil {
+			failUnverifiable(err)
+		}
+		return
+	}
+	if err := checkOne(rdb, "primary"); err != nil {
+		failUnverifiable(err)
+	}
 }
 
 // mustBuildConsumers 按 cfg.Push.Topics 列表,每 topic 起一个 KafkaConsumer。

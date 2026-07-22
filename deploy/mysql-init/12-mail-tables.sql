@@ -70,14 +70,22 @@ CREATE TABLE IF NOT EXISTS `player_mail_cursor` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 系统/公会邮件拉取游标(watermark)';
 
+-- claimed / intent_payload(2026-07-22,bag phase 2 DS 三段式领取):
+--   claimed=1(默认)= 终态已领(旧直连链 INSERT 不写该列 → 默认 1,语义不变);
+--   claimed=0 + intent_payload = DS 领取意图(MailClaimIntentStorageRecord blob,
+--   稳定附件展开;重放返回同内容,bag journal 指纹去重的前提)。意图行创建后本邮件
+--   只能经 journal 链终结(旧直连 ClaimMail 互斥拒 9607)。sweep 清理语义不变
+--  (按雪花 mail_id cutoff;意图行同寿命,cutoff 前邮件本体已失效)。
 CREATE TABLE IF NOT EXISTS `player_mail_claim` (
-    `player_id`   BIGINT UNSIGNED NOT NULL COMMENT '领取人',
-    `mail_id`     BIGINT UNSIGNED NOT NULL COMMENT '被领邮件(任意 channel)',
-    `claimed_at`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `player_id`      BIGINT UNSIGNED NOT NULL COMMENT '领取人',
+    `mail_id`        BIGINT UNSIGNED NOT NULL COMMENT '被领邮件(任意 channel)',
+    `claimed`        TINYINT         NOT NULL DEFAULT 1 COMMENT '1=终态已领 0=DS 领取意图(进行中)',
+    `intent_payload` BLOB            NULL COMMENT 'DS 领取意图(pb MailClaimIntentStorageRecord;直连链为 NULL)',
+    `claimed_at`     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`player_id`, `mail_id`),
     KEY `idx_mail` (`mail_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 邮件附件领取幂等(player_id+mail_id 唯一;sweep 按雪花 mail_id cutoff 范围清理)';
+  COMMENT='Pandora 邮件附件领取幂等 + DS 领取意图(player_id+mail_id 唯一;sweep 按雪花 mail_id cutoff 范围清理)';
 
 -- 过期未领附件归档:sweep 清理 player_mail 时,带未领附件的过期邮件先移入本表再删
 -- (mail.md §7.4 "过期附件清理后必有补偿或归档,不静默丢失";已领/无附件的直接删)。

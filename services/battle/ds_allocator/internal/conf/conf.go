@@ -321,6 +321,16 @@ type AllocatorConf struct {
 	// 超过此时长没收到 Heartbeat → 标记 abandoned + 释放(W4 ② 仅释放,补偿留 W4 ③)。
 	HeartbeatTimeout config.Duration `yaml:"heartbeat_timeout,omitempty" json:"heartbeat_timeout,omitempty"`
 
+	// OwnerAddr owner 权威服务地址(owner-authority.md migrate ⑥)。
+	// 空 = 不双写实例租约(未启用,现网行为不变,安全默认)。
+	OwnerAddr string `yaml:"owner_addr,omitempty" json:"owner_addr,omitempty"`
+
+	// OwnerLeaseRequired 实例租约双写失败是否令授权心跳失败。
+	// 默认 false = migrate 弱依赖(失败只告警,旧 last_heartbeat_ms 再入门双门并行兜底);
+	// contract 阶段全链验证后置 true 转强依赖(续租失败心跳必须失败 → DS 自我 fencing,
+	// 权威侧租约滞后时 DS 必然停玩,屏障时序闭合)。
+	OwnerLeaseRequired bool `yaml:"owner_lease_required,omitempty" json:"owner_lease_required,omitempty"`
+
 	// SweepInterval 心跳超时扫描间隔(默认 5s)。
 	SweepInterval config.Duration `yaml:"sweep_interval,omitempty" json:"sweep_interval,omitempty"`
 

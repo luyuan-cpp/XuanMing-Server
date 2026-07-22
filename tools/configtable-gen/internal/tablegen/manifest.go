@@ -47,8 +47,11 @@ type manifestEntry struct {
 // Result 一次生成的结果摘要。
 type Result struct {
 	Version   uint64
-	Unchanged bool // true = 内容与上一批完全一致,未写任何文件、未升版本
-	Tables    []manifestEntry
+	Unchanged bool // true = 表内容与上一批完全一致,未升版本(manifest 仍可能因 source_rev 纠正被重写)
+	// SourceRevCorrected true = 内容不变但 manifest 的 source_rev 与本次不同,已原地重写
+	// (审计 P2:此前快速路径写了盘却报告"未写盘")。
+	SourceRevCorrected bool
+	Tables             []manifestEntry
 }
 
 // Options 生成参数。
@@ -95,7 +98,25 @@ func WriteBatch(tables []Generated, opts Options) (*Result, error) {
 		return nil, err
 	}
 	if prev != nil && sameContent(prev.Tables, entries) && opts.ForceVersion == 0 {
-		return &Result{Version: prev.Version, Unchanged: true, Tables: entries}, nil
+		// 内容不变保持版本,但 source_rev 是溯源门禁的一部分(审计 P1):历史批次可能
+		// 带着 "unknown" 等坏值,快速路径若原样跳过,正常重跑永远纠正不了该产物。
+		// source_rev 有变化时原地重写 manifest(版本不动、表文件不动),并如实上报
+		// SourceRevCorrected(审计 P2:不得写了盘还报告"未写盘")。
+		corrected := false
+		if prev.SourceRev != opts.SourceRev {
+			m := manifestFile{
+				Version:       prev.Version,
+				GeneratedAtMs: uint64(opts.Now.UnixMilli()),
+				Generator:     GeneratorName,
+				SourceRev:     opts.SourceRev,
+				Tables:        entries,
+			}
+			if err := writeManifestAtomic(opts.OutDir, &m); err != nil {
+				return nil, fmt.Errorf("重写 manifest.json source_rev 失败: %w", err)
+			}
+			corrected = true
+		}
+		return &Result{Version: prev.Version, Unchanged: true, SourceRevCorrected: corrected, Tables: entries}, nil
 	}
 	version, err := nextVersion(prev, opts)
 	if err != nil {
@@ -117,15 +138,30 @@ func WriteBatch(tables []Generated, opts Options) (*Result, error) {
 		SourceRev:     opts.SourceRev,
 		Tables:        entries,
 	}
-	rawManifest, err := json.MarshalIndent(&m, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	rawManifest = append(rawManifest, '\n')
-	if err := os.WriteFile(filepath.Join(opts.OutDir, "manifest.json"), rawManifest, 0o644); err != nil {
+	if err := writeManifestAtomic(opts.OutDir, &m); err != nil {
 		return nil, fmt.Errorf("写 manifest.json 失败: %w", err)
 	}
 	return &Result{Version: version, Tables: entries}, nil
+}
+
+// writeManifestAtomic 临时文件 + 同目录 rename(manifest 是批次的原子提交点,
+// 直接 WriteFile 崩溃可截断,审计 P2)。
+func writeManifestAtomic(outDir string, m *manifestFile) error {
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	target := filepath.Join(outDir, "manifest.json")
+	tmp := target + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // marshalDeterministic protojson 产出的空白不稳定(库内故意注入),

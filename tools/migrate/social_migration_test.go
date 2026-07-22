@@ -27,8 +27,8 @@ func TestPandoraSocialV2MigrationContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestMigrationVersion: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("pandora_social latest version=%d, 期望=3", version)
+	if version != 5 {
+		t.Fatalf("pandora_social latest version=%d, 期望=5", version)
 	}
 
 	baseline := readEmbeddedMigration(t, socialBaselinePath)

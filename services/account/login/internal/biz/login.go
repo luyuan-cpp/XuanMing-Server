@@ -91,11 +91,13 @@ type LoginUsecase struct {
 	notifier    data.LocationNotifier
 	hubAssigner data.HubAssigner    // W4 ⑥:hub_allocator 客户端,可为 nil(回退自签)
 	roleRepo    data.PlayerRoleRepo // 选角权威化(2026-07-08):player_roles 仓储,可为 nil(降级无选角)
-	sf          *snowflake.Node
-	hubDSAddr   string // 回退用静态 hub DS 地址(hub_allocator 未配 / 调用失败时)
-	hubRegion   string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
-	signer      *auth.Signer
-	verifier    *auth.Verifier
+	// ownerReleaser:owner 迁移登出释放(owner-authority.md migrate ⑤;弱依赖,nil=未启用)。
+	ownerReleaser OwnerReleaser
+	sf            *snowflake.Node
+	hubDSAddr     string // 回退用静态 hub DS 地址(hub_allocator 未配 / 调用失败时)
+	hubRegion     string // 传给 hub_allocator.AssignHub 的 region(空=allocator 选最空分片)
+	signer        *auth.Signer
+	verifier      *auth.Verifier
 	// v2Verifier 独立验证 Hub allocator 返回的 DSTicket v2(RS256)。非 nil 也机械激活
 	// 玩家 DSTicket 的 RS256-only profile；玩家 Session 仍走独立 HS256 verifier。
 	v2Verifier *auth.DSTicketVerifier
@@ -1122,6 +1124,18 @@ func (u *LoginUsecase) Logout(ctx context.Context, sessionToken string) error {
 	if !deleted {
 		h.Infow("msg", "logout_stale_session_ignored", "player_id", playerID)
 		return nil
+	}
+	// owner 迁移释放(owner-authority.md migrate ⑤,弱依赖):显式登出后释放当前 owner。
+	// Query→Release 携带观察到的 epoch+operation(compare-delete 自己):并发迁移竞态下
+	// Release 在 owner 侧幂等 no-op,绝不误删新 owner;失败仅告警,不影响登出结果。
+	if u.ownerReleaser != nil {
+		if rec, oerr := u.ownerReleaser.QueryOwner(ctx, playerID); oerr != nil {
+			h.Warnw("msg", "logout_owner_query_failed_weak", "player_id", playerID, "err", oerr)
+		} else if rec.OwnerType != 0 {
+			if rerr := u.ownerReleaser.ReleaseOwner(ctx, playerID, rec.OwnerEpoch, rec.OperationID); rerr != nil {
+				h.Warnw("msg", "logout_owner_release_failed_weak", "player_id", playerID, "err", rerr)
+			}
+		}
 	}
 	h.Infow("msg", "logout_ok", "player_id", playerID)
 	return nil

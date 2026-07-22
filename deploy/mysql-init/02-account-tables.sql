@@ -35,9 +35,12 @@ CREATE TABLE IF NOT EXISTS `account_devices` (
     `last_login_ip` VARCHAR(45)      NOT NULL DEFAULT '' COMMENT 'IPv4/IPv6 字符串',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_player_device` (`player_id`, `device_id`),
-    KEY `idx_device` (`device_id`)
+    KEY `idx_device` (`device_id`),
+    KEY `idx_last_login` (`last_login_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='Pandora 账号设备绑定与最近登录';
+  COMMENT='Pandora 账号设备绑定与最近登录(不活跃行保留 90 天由 login 保留期清理回收,§9.24)';
+-- idx_last_login 服务保留期清理(DELETE WHERE last_login_at<cutoff)。
+-- 既有库需手动补:ALTER TABLE account_devices ADD KEY idx_last_login (last_login_at);
 
 CREATE TABLE IF NOT EXISTS `account_bans` (
     `id`         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,

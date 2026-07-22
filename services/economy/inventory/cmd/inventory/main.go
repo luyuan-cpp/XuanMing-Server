@@ -21,9 +21,12 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
+	klog "github.com/go-kratos/kratos/v2/log"
 
 	"github.com/luyuancpp/pandora/pkg/cellroute/etcdtable"
+	pkgconfig "github.com/luyuancpp/pandora/pkg/config"
 	plog "github.com/luyuancpp/pandora/pkg/log"
+	pkgmw "github.com/luyuancpp/pandora/pkg/middleware"
 	"github.com/luyuancpp/pandora/pkg/mysqlx"
 	"github.com/luyuancpp/pandora/pkg/snowflake/etcdnode"
 
@@ -77,6 +80,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 校验背包域配置(段容量 / 堆叠上限;非法配置 fail-fast,bag-domain.md §5.2)。
+	if verr := cfg.Bag.Validate(); verr != nil {
+		helper.Errorw("msg", "bag_conf_invalid", "err", verr)
+		os.Exit(1)
+	}
+
 	// 3. MySQL(强依赖:背包 / 货币落库不可降级)
 	if cfg.Node.MySQLClient.DSN == "" {
 		helper.Errorw("msg", "mysql_dsn_required", "hint", "node.mysql_client.dsn required (pandora_trade)")
@@ -117,7 +126,87 @@ func main() {
 	}
 	svc := service.NewInventoryService(uc)
 
-	grpcSrv := server.NewGRPCServer(&cfg, svc)
+	// 保留期清理:周期批量回收 inventory_ledger / auction_escrow(closed) 超期行,
+	// 保证只增表增长有界(biz/sweep.go,CLAUDE.md §9 不变量 24)。
+	// 多副本各自跑,DELETE 幂等无需锁(对齐 mail sweep)。
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	defer sweepCancel()
+	go runRetentionSweep(sweepCtx, uc, cfg.Inventory.SweepInterval.Std())
+	helper.Infow(
+		"msg", "retention_sweep_enabled",
+		"interval", cfg.Inventory.SweepInterval.Std().String(),
+		"batch", cfg.Inventory.SweepBatch,
+		"ledger_retention_days", cfg.Inventory.LedgerRetentionDays,
+		"escrow_retention_days", cfg.Inventory.EscrowRetentionDays,
+	)
+
+	// 背包域(pandora.bag.v1,bag-domain.md phase 1 由本进程承载):
+	// bag.dsn 为空 = 未启用(不注册 BagService,现网行为不变,安全默认)。
+	var bagSvc *service.BagService
+	if cfg.Bag.DSN != "" {
+		bagDB := mysqlx.MustNewClient(pkgconfig.MySQLConf{DSN: cfg.Bag.DSN})
+		defer func() { _ = bagDB.Close() }()
+		// 启动期 schema gate:pandora_bag 是后建库,既有 MySQL volume 不会自动重放 init SQL;
+		// 缺表时背包域全链路必炸,fail-fast 并指向迁移 SQL。
+		bagSchemaCtx, bagCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if serr := mysqlx.CheckTables(bagSchemaCtx, bagDB, "deploy/mysql-init/14-bag-tables.sql",
+			"bag_meta", "bag_checkpoint", "bag_section", "bag_journal", "bag_generation", "bag_migration", "bag_capacity"); serr != nil {
+			bagCancel()
+			helper.Errorw("msg", "bag_schema_check_failed", "err", serr)
+			os.Exit(1)
+		}
+		bagCancel()
+
+		bagRepo := data.NewMySQLBagRepo(bagDB)
+		bagUC := biz.NewBagUsecase(bagRepo, cfg.Bag)
+		// 容量购买扣费(§5.3):经济域同进程直用 inventory repo(trade 库 ledger 幂等)。
+		bagUC.SetCapacityCharger(repo)
+		// 五要件② owner 授权(phase 2 写权威切换):背包写路径逐调校验当前 ADMITTED owner。
+		// owner_addr 缺省且未显式开 allow_unverified_owner → 拒启(生产禁止无授权写)。
+		if cfg.Bag.OwnerAddr != "" {
+			ownerAuth := data.NewGrpcOwnerAuthorizer(cfg.Bag.OwnerAddr)
+			defer func() { _ = ownerAuth.Close() }()
+			bagUC.SetOwnerAuthorizer(ownerAuth)
+			helper.Infow("msg", "bag_owner_authorizer_ready", "owner_addr", cfg.Bag.OwnerAddr)
+		} else if !cfg.Bag.AllowUnverifiedOwner {
+			helper.Errorw("msg", "bag_owner_addr_required",
+				"hint", "bag.owner_addr required (CLAUDE.md §9.6 要件②), or set bag.allow_unverified_owner for dev only")
+			os.Exit(1)
+		} else {
+			helper.Warnw("msg", "bag_owner_unverified",
+				"hint", "bag writes accepted WITHOUT owner authorization (dev only, never in production)")
+		}
+		bagSvc = service.NewBagService(bagUC)
+		// 五要件① DS 凭据身份:ds_auth.mode=enforce 时验签抽取 pod/uid 供 owner target 全等校验。
+		dsGuard, gerr := pkgmw.NewDSCallbackGuardFromConf(cfg.DSAuth)
+		if gerr != nil {
+			helper.Errorw("msg", "ds_auth_guard_init_failed", "err", gerr)
+			os.Exit(1)
+		}
+		if dsGuard != nil {
+			bagSvc.SetDSGuard(dsGuard)
+			helper.Infow("msg", "bag_ds_guard_ready", "mode", dsGuard.Mode().String())
+		}
+		go runBagJournalSweep(sweepCtx, bagUC, helper, cfg.Inventory.SweepInterval.Std(), cfg.Inventory.SweepBatch)
+		// 存量迁移(D5,decision-revisit-bag-replay-semantics.md):默认关;contract 阶段
+		// 旧写路径冻结后开启,一次性幂等作业(重跑 no-op,多副本并发安全)。
+		if cfg.Bag.LegacyMigrationEnabled {
+			migUC := biz.NewBagMigrationUsecase(repo, bagRepo, cfg.Bag, logger)
+			go runLegacyBagMigration(sweepCtx, migUC, helper)
+			helper.Warnw("msg", "bag_legacy_migration_enabled",
+				"hint", "只准在旧写路径(GrantItems/UseItem/SellItem/escrow)冻结后运行(D5 时序纪律)")
+		}
+		helper.Infow(
+			"msg", "bag_domain_enabled",
+			"dsn", maskDSN(cfg.Bag.DSN),
+			"max_journal_batch", cfg.Bag.MaxJournalBatch,
+			"hourly_journal_quota", cfg.Bag.HourlyJournalQuota,
+			"section_capacities", len(cfg.Bag.SectionCapacities),
+			"journal_retention_days", cfg.Bag.JournalRetentionDays,
+		)
+	}
+
+	grpcSrv := server.NewGRPCServer(&cfg, svc, bagSvc)
 	httpSrv := server.NewHTTPServer(&cfg)
 
 	helper.Infow(
@@ -137,6 +226,56 @@ func main() {
 		helper.Errorw("msg", "app_run_failed", "err", err)
 		os.Exit(1)
 	}
+}
+
+// runRetentionSweep 周期跑一轮保留期清理(对齐 mail runMailSweep 模式)。
+func runRetentionSweep(ctx context.Context, uc *biz.InventoryUsecase, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			uc.SweepRetention(ctx)
+		}
+	}
+}
+
+// runBagJournalSweep 周期清理超保留期背包流水(§9.24;多副本各自跑,DELETE 幂等无需锁)。
+func runBagJournalSweep(ctx context.Context, uc *biz.BagUsecase, helper *klog.Helper, interval time.Duration, batch int) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sweepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			if _, err := uc.RunJournalSweep(sweepCtx, batch); err != nil {
+				helper.Errorw("msg", "bag_journal_sweep_failed", "err", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// runLegacyBagMigration 一次性存量迁移作业(D5;幂等可重跑,失败玩家逐个告警不阻断)。
+func runLegacyBagMigration(ctx context.Context, uc *biz.BagMigrationUsecase, helper *klog.Helper) {
+	sum, err := uc.RunOnce(ctx)
+	if err != nil {
+		helper.Errorw("msg", "bag_legacy_migration_aborted", "err", err,
+			"scanned", sum.Scanned, "migrated", sum.Migrated, "skipped", sum.Skipped, "failed", sum.Failed)
+		return
+	}
+	if sum.Failed > 0 {
+		helper.Errorw("msg", "bag_legacy_migration_done_with_failures",
+			"scanned", sum.Scanned, "migrated", sum.Migrated, "skipped", sum.Skipped, "failed", sum.Failed,
+			"hint", "失败玩家已逐个告警(bound 实例等预期拦截),排障后重启作业重试")
+		return
+	}
+	helper.Infow("msg", "bag_legacy_migration_done",
+		"scanned", sum.Scanned, "migrated", sum.Migrated, "skipped", sum.Skipped, "failed", sum.Failed)
 }
 
 // maskDSN 脱敏 DSN 里的密码(对齐 player / trade main.go)。

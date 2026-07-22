@@ -75,6 +75,10 @@ UE `PandoraBackendSubsystem` 的 dev 开关默认值在 C++ 头文件里,生产*
 - [ ] JWT secret 在 login / matchmaker / hub_allocator / Envoy jwt_authn **四处完全一致**,≥32 字节强随机
 - [ ] ds_allocator / hub_allocator `agones.enabled: true`(接真 Agones,不再用 Mock)
 - [ ] `insecure_skip_tls_verify`(ds_allocator / hub_allocator 的 Agones 段)保持 false
+- [ ] `configtable/dist/manifest.json` 的 `source_rev` 可追溯、逐表 checksum 通过;player Pod 已挂
+      `pandora-configtable` 到 `/app/configtable/active`,启动日志的版本/等级数与 manifest 一致
+- [ ] `player_level_exp` 正式数值已由策划确认并完成全 fleet 收敛门禁后才打开
+      `player.experience_enabled`;当前占位曲线不得在生产启用
 - [ ] 密码 / token / secret 不写进入库 yaml(真值文件已被 gitignore,只提交 `.example` 模板)
 - [ ] Linux DS 符号文件已随版本归档,crash dump / minidump / UE crash report 能自动上传
 - [ ] DS metrics 已接 Prometheus / Grafana,至少能看在线、tick p95/p99、CPU、内存、网络、心跳、崩溃次数

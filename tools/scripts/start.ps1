@@ -4,8 +4,8 @@
 
 .DESCRIPTION
   一条命令把后端跑起来,覆盖 5 套环境(DS 分配模式随环境变):
-    local    本地 windows 调试 —— 基础设施在 docker,20 个 go 服务以宿主进程跑(可断点);DS=local(Windows PandoraServer.exe)
-    docker   本地 docker 启动   —— 基础设施 + 20 个 go 服务全跑在本机 docker;DS=mock(容器内无真 DS)
+    local    本地 windows 调试 —— 基础设施在 docker,21 个 go 服务以宿主进程跑(可断点);DS=local(Windows PandoraServer.exe)
+    docker   本地 docker 启动   —— 基础设施 + 21 个 go 服务全跑在本机 docker;DS=mock(容器内无真 DS)
     intranet 内网测试服     —— 同 docker 全容器,但绑定内网 IP 供多人联调;DS=mock
     online   线上 k8s 集群   —— kustomize 部署到远端 k8s + Agones 真 Linux DS;DS=agones
                              用 -Env test|prod 区分「测试服集群」与「生产 kbs 集群」(不同 kube-context)
@@ -124,7 +124,7 @@ param(
     [string]$DsTicketActiveKid = $env:PANDORA_DSTICKET_ACTIVE_KID,
     # 玩家 DSTicket 公钥 keyset revision，和 DS callback auth 的 keyset revision 是两套独立值。
     [string]$DsTicketKeysetRevision = $env:PANDORA_DSTICKET_KEYSET_REVISION,
-    [switch]$BuildPush    # online:本地构建并推送 20 个镜像到 -Registry(远端发布动作,需人工授权)
+    [switch]$BuildPush    # online:本地构建并推送 21 个镜像到 -Registry(远端发布动作,需人工授权)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -291,7 +291,7 @@ function Assert-LocalEtcdDataPreservedAfterDown {
     Write-Ok "本地 k8s 基础设施已停止；namespace/$K8sNamespace 与 PVC/etcd-data 已保留供下次启动恢复 DS auth 基线。"
 }
 
-# pandora-config Secret 只收录 20 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
+# pandora-config Secret 只收录 21 份服务 YAML。envoy-jwks.json 是给外部边缘网关的产物，
 # OutDir 中其它运维文件也不应被 --from-file=<目录> 意外灌进 Pod Secret。
 function Apply-PandoraConfigSecret {
     param(
@@ -313,7 +313,7 @@ function Apply-PandoraConfigSecret {
             "--from-file=$name=$path"
         }
     )
-    if ($fileArgs.Count -ne 20) { throw "pandora-config Secret 期望 20 份服务配置,实际=$($fileArgs.Count)" }
+    if ($fileArgs.Count -ne 21) { throw "pandora-config Secret 期望 21 份服务配置,实际=$($fileArgs.Count)" }
 
     $manifest = @(kubectl @KubectlContextArgs create secret generic pandora-config @fileArgs `
         -n $K8sNamespace --dry-run=client -o yaml)
@@ -322,7 +322,7 @@ function Apply-PandoraConfigSecret {
     Assert-LastExit $Action
 
     # client-side apply 遇到缺 last-applied annotation 的人工对象时可能保留旧 data key；回读服务端
-    # 严格核对，任何多余/缺失项都阻断 rollout，避免把陈旧配置伪装成“精确 20 文件”。
+    # 严格核对，任何多余/缺失项都阻断 rollout，避免把陈旧配置伪装成“精确 21 文件”。
     $secret = Get-KubectlJsonObject -KubeContext $KubeContext `
         -Arguments @('get', 'secret/pandora-config', '-n', $K8sNamespace, '-o', 'json') `
         -Action '回读 pandora-config Secret'
@@ -333,6 +333,331 @@ function Apply-PandoraConfigSecret {
         $extra = @($keyDiff | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject)
         throw "pandora-config Secret 服务端 key 集不精确:缺少=[$($missing -join ', ')],多余=[$($extra -join ', ')]。" +
               '请先清理漂移 key 后重跑；当前不会继续 rollout。'
+    }
+}
+
+# player 的等级经验表从独立 ConfigMap 挂载；只收录 manifest 声明的精确批次文件。
+# 该对象不含密钥，不混入 pandora-config Secret 的 21 份服务 YAML 契约。
+# 发布纪律与 configtable_publish.ps1 一致:先把候选完整读入内存快照并校验 checksum/rows/语义，
+# 再按 version 单调 + resourceVersion CAS 写固定 ConfigMap；同版本不同内容与低版本均拒绝。
+$script:PandoraConfigTableRollback = $null
+
+function Get-PandoraConfigTableSha256Hex([byte[]]$Bytes) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+
+function ConvertTo-PandoraConfigTableUInt32([object]$Value, [string]$What) {
+    if ($null -eq $Value) { return [uint32]0 }
+    $text = ([string]$Value).Trim()
+    if ($text -cnotmatch '^(?:0|[1-9][0-9]*)$') { throw "$What 必须是 uint32,实为 '$text'" }
+    try {
+        $number = [uint64]::Parse($text, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture)
+    } catch { throw "$What 必须是 uint32,实为 '$text'" }
+    if ($number -gt [uint32]::MaxValue) { throw "$What 超过 uint32 上限:$number" }
+    return [uint32]$number
+}
+
+function Assert-PandoraConfigTableCurrentSemantics([System.Collections.IDictionary]$TableDocs) {
+    foreach ($required in @('level', 'player_level_exp')) {
+        if (-not $TableDocs.Contains($required)) { throw "pandora-configtable 缺少当前二进制必需表:$required" }
+    }
+
+    $levelDoc = $TableDocs['level']
+    $levelRowsProperty = $levelDoc.PSObject.Properties['rows']
+    $levelRows = if ($null -eq $levelRowsProperty -or $null -eq $levelRowsProperty.Value) { @() } else { @($levelRowsProperty.Value) }
+    if ($levelRows.Count -eq 0) { throw 'level 表为空。' }
+    $levelIDs = @{}
+    foreach ($row in $levelRows) {
+        $id = ConvertTo-PandoraConfigTableUInt32 $row.id 'level.id'
+        if ($id -eq 0 -or $levelIDs.ContainsKey([string]$id)) { throw "level.id 非法或重复:$id" }
+        $levelIDs[[string]$id] = $true
+        if ([string]::IsNullOrWhiteSpace([string]$row.asset_path)) { throw "level id=$id asset_path 为空" }
+        if ((ConvertTo-PandoraConfigTableUInt32 $row.category "level id=$id category") -eq 0) {
+            throw "level id=$id category 未填"
+        }
+    }
+
+    $playerDoc = $TableDocs['player_level_exp']
+    $playerRowsProperty = $playerDoc.PSObject.Properties['rows']
+    $playerRows = if ($null -eq $playerRowsProperty -or $null -eq $playerRowsProperty.Value) { @() } else { @($playerRowsProperty.Value) }
+    if ($playerRows.Count -lt 2 -or $playerRows.Count -gt 200) {
+        throw "player_level_exp 等级数必须在 [2,200],实为 $($playerRows.Count)"
+    }
+    $byLevel = @{}
+    foreach ($row in $playerRows) {
+        $id = ConvertTo-PandoraConfigTableUInt32 $row.id 'player_level_exp.id'
+        $level = ConvertTo-PandoraConfigTableUInt32 $row.level "player_level_exp id=$id level"
+        if ($id -eq 0 -or $id -ne $level -or $byLevel.ContainsKey([string]$id)) {
+            throw "player_level_exp id=$id/level=$level 非法、不一致或重复"
+        }
+        $byLevel[[string]$id] = $row
+    }
+    [uint64]$expectedCumulative = 0
+    for ([uint32]$level = 1; $level -le [uint32]$playerRows.Count; $level++) {
+        $key = [string]$level
+        if (-not $byLevel.ContainsKey($key)) { throw "player_level_exp 缺少 Lv$level" }
+        $row = $byLevel[$key]
+        $upgrade = ConvertTo-PandoraConfigTableUInt32 $row.upgrade_exp "player_level_exp Lv$level upgrade_exp"
+        $cumulative = ConvertTo-PandoraConfigTableUInt32 $row.cumulative_exp "player_level_exp Lv$level cumulative_exp"
+        if ([uint64]$cumulative -ne $expectedCumulative) {
+            throw "player_level_exp Lv$level cumulative_exp=$cumulative,期望 $expectedCumulative"
+        }
+        if ($level -eq [uint32]$playerRows.Count) {
+            if ($upgrade -ne 0) { throw "player_level_exp 末级 Lv$level upgrade_exp 必须为 0" }
+            continue
+        }
+        if ($upgrade -eq 0) { throw "player_level_exp 非末级 Lv$level upgrade_exp 必须大于 0" }
+        $expectedCumulative += [uint64]$upgrade
+        if ($expectedCumulative -gt [uint32]::MaxValue) {
+            throw "player_level_exp Lv$level 后累计经验超过 uint32 上限:$expectedCumulative"
+        }
+    }
+}
+
+function Get-PandoraConfigTableCandidate {
+    param([string]$ConfigTableDir = (Join-Path $ProjectRoot 'configtable/dist'))
+
+    $dir = [System.IO.Path]::GetFullPath($ConfigTableDir)
+    $manifestPath = Join-Path $dir 'manifest.json'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "pandora-configtable 缺少 manifest:$manifestPath"
+    }
+    $strictUtf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    try { $manifestText = $strictUtf8.GetString([System.IO.File]::ReadAllBytes($manifestPath)) }
+    catch { throw "pandora-configtable manifest 不是合法 UTF-8:$($_.Exception.Message)" }
+    try { $manifest = $manifestText | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "pandora-configtable manifest 非法:$($_.Exception.Message)" }
+
+    $versionText = ([string]$manifest.version).Trim()
+    if ($versionText -cnotmatch '^[1-9][0-9]*$') { throw "pandora-configtable version 非法:$versionText" }
+    try { $version = [uint64]::Parse($versionText, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture) }
+    catch { throw "pandora-configtable version 超出 uint64:$versionText" }
+    $sourceRev = ([string]$manifest.source_rev).Trim()
+    if ([string]::IsNullOrWhiteSpace($sourceRev) -or $sourceRev -ieq 'unknown') {
+        throw "pandora-configtable source_rev 不可追溯:'$sourceRev'"
+    }
+    $tables = @($manifest.tables)
+    if ($tables.Count -eq 0) { throw 'pandora-configtable manifest.tables 为空。' }
+
+    $data = [ordered]@{ 'manifest.json' = $manifestText }
+    $tableDocs = [ordered]@{}
+    $seen = @{}
+    foreach ($table in $tables) {
+        $name = ([string]$table.name).Trim()
+        $file = ([string]$table.file).Trim()
+        if ($name -cnotmatch '^[a-z0-9_]+$' -or $seen.ContainsKey($name)) {
+            throw "pandora-configtable manifest 表名非法或重复:'$name'"
+        }
+        $seen[$name] = $true
+        if ($file -cne "$name.json" -or [System.IO.Path]::GetFileName($file) -cne $file) {
+            throw "pandora-configtable 表 $name 的 file 非法:'$file'"
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$table.proto)) { throw "pandora-configtable 表 $name 缺 proto 全名" }
+        $rowsText = ([string]$table.rows).Trim()
+        if ($rowsText -cnotmatch '^[1-9][0-9]*$') { throw "pandora-configtable 表 $name rows 非法:$rowsText" }
+        try { $declaredRows = [uint32]::Parse($rowsText, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture) }
+        catch { throw "pandora-configtable 表 $name rows 超出 uint32:$rowsText" }
+        $checksum = ([string]$table.checksum).Trim()
+        if ($checksum -cnotmatch '^sha256:[0-9a-f]{64}$') { throw "pandora-configtable 表 $name checksum 非法:$checksum" }
+
+        $path = Join-Path $dir $file
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "pandora-configtable 缺少表文件:$path" }
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $actualChecksum = 'sha256:' + (Get-PandoraConfigTableSha256Hex $bytes)
+        if ($actualChecksum -cne $checksum) {
+            throw "pandora-configtable 表 $name checksum 不匹配:声明=$checksum 实际=$actualChecksum"
+        }
+        try { $text = $strictUtf8.GetString($bytes) }
+        catch { throw "pandora-configtable 表 $name 不是合法 UTF-8:$($_.Exception.Message)" }
+        try { $doc = $text | ConvertFrom-Json -ErrorAction Stop }
+        catch { throw "pandora-configtable 表 $name JSON 非法:$($_.Exception.Message)" }
+        $rowsProperty = $doc.PSObject.Properties['rows']
+        $actualRows = if ($null -eq $rowsProperty -or $null -eq $rowsProperty.Value) { 0 } else { @($rowsProperty.Value).Count }
+        if ($actualRows -ne $declaredRows) {
+            throw "pandora-configtable 表 $name 行数 $actualRows 与 manifest 声明 $declaredRows 不一致"
+        }
+        $data[$file] = $text
+        $tableDocs[$name] = $doc
+    }
+    $actualNames = @(Get-ChildItem -LiteralPath $dir -File -Filter '*.json' | ForEach-Object Name | Sort-Object)
+    $expectedNames = @($data.Keys | Sort-Object)
+    $keyDiff = @(Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames -CaseSensitive)
+    if ($keyDiff.Count -ne 0) { throw "pandora-configtable JSON 文件集与 manifest 不一致:$($keyDiff | Out-String)" }
+    Assert-PandoraConfigTableCurrentSemantics $tableDocs
+    return [pscustomobject]@{
+        Version = $version
+        SourceRev = $sourceRev
+        Data = $data
+        Directory = $dir
+    }
+}
+
+function Assert-PandoraConfigTableDataEqual {
+    param(
+        [System.Collections.IDictionary]$Expected,
+        [object]$Actual,
+        [string]$What
+    )
+    $expectedNames = @($Expected.Keys | Sort-Object)
+    $actualNames = if ($null -eq $Actual) { @() } else { @($Actual.PSObject.Properties.Name | Sort-Object) }
+    $diff = @(Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames -CaseSensitive)
+    if ($diff.Count -ne 0) { throw "$What key 集不精确:$($diff | Out-String)" }
+    foreach ($name in $expectedNames) {
+        $property = $Actual.PSObject.Properties[$name]
+        if ($null -eq $property -or [string]$Expected[$name] -cne [string]$property.Value) {
+            throw "$What 文件 $name 内容与候选批次不一致"
+        }
+    }
+}
+
+function ConvertFrom-PandoraConfigTableLiveData([object]$Data) {
+    $copy = [ordered]@{}
+    if ($null -ne $Data) {
+        foreach ($property in $Data.PSObject.Properties) { $copy[$property.Name] = [string]$property.Value }
+    }
+    return $copy
+}
+
+function Get-PandoraConfigTableVersionFromData([object]$Data, [string]$What) {
+    if ($null -eq $Data -or $null -eq $Data.PSObject.Properties['manifest.json']) {
+        throw "$What 缺少 manifest.json"
+    }
+    try { $manifest = ([string]$Data.PSObject.Properties['manifest.json'].Value) | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "$What manifest.json 非法:$($_.Exception.Message)" }
+    $text = ([string]$manifest.version).Trim()
+    if ($text -cnotmatch '^[1-9][0-9]*$') { throw "$What version 非法:$text" }
+    try { return [uint64]::Parse($text, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture) }
+    catch { throw "$What version 超出 uint64:$text" }
+}
+
+function New-PandoraConfigTableConfigMapObject {
+    param(
+        [System.Collections.IDictionary]$Data,
+        [string]$ResourceVersion = ''
+    )
+    $metadata = [ordered]@{ name = 'pandora-configtable'; namespace = $K8sNamespace }
+    if (-not [string]::IsNullOrWhiteSpace($ResourceVersion)) { $metadata.resourceVersion = $ResourceVersion }
+    return [ordered]@{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = $metadata; data = $Data }
+}
+
+function Apply-PandoraConfigTableConfigMap {
+    param(
+        [string]$KubeContext,
+        [string]$Action,
+        [object]$Candidate = $null,
+        [string]$ConfigTableDir = ''
+    )
+    if ($null -ne $script:PandoraConfigTableRollback) {
+        throw '上一次 pandora-configtable 切换尚未由 player Ready 确认或回滚,拒绝叠加发布。'
+    }
+    if ($null -eq $Candidate) {
+        if ([string]::IsNullOrWhiteSpace($ConfigTableDir)) { $ConfigTableDir = Join-Path $ProjectRoot 'configtable/dist' }
+        $Candidate = Get-PandoraConfigTableCandidate -ConfigTableDir $ConfigTableDir
+    }
+
+    $kubectlContextArgs = @('--context', $KubeContext)
+    $liveLines = @(& kubectl @kubectlContextArgs get configmap/pandora-configtable -n $K8sNamespace --ignore-not-found -o json 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "$Action(读取 live ConfigMap)失败(exit=$LASTEXITCODE)" }
+    $liveText = (($liveLines | ForEach-Object { $_.ToString() }) -join "`n").Trim()
+    $live = $null
+    if (-not [string]::IsNullOrWhiteSpace($liveText)) {
+        try { $live = $liveText | ConvertFrom-Json -ErrorAction Stop }
+        catch { throw "$Action(live ConfigMap JSON 非法):$($_.Exception.Message)" }
+        if ($null -ne $live.binaryData -and $live.binaryData.PSObject.Properties.Count -gt 0) {
+            throw "$Action:live ConfigMap 含未管理的 binaryData,拒绝覆盖。"
+        }
+        $liveVersion = Get-PandoraConfigTableVersionFromData $live.data 'live pandora-configtable'
+        if ([uint64]$Candidate.Version -lt $liveVersion) {
+            throw "$Action:候选 version $($Candidate.Version) 低于 live $liveVersion,拒绝回退。"
+        }
+        if ([uint64]$Candidate.Version -eq $liveVersion) {
+            Assert-PandoraConfigTableDataEqual -Expected $Candidate.Data -Actual $live.data `
+                -What "pandora-configtable 同版本 v$liveVersion"
+            Write-Ok "pandora-configtable 已是相同批次 v$liveVersion,ConfigMap no-op。"
+            return $Candidate
+        }
+    }
+
+    $previousData = if ($null -eq $live) { $null } else { ConvertFrom-PandoraConfigTableLiveData $live.data }
+    $resourceVersion = if ($null -eq $live) { '' } else { [string]$live.metadata.resourceVersion }
+    if ($null -ne $live -and [string]::IsNullOrWhiteSpace($resourceVersion)) {
+        throw "$Action:live ConfigMap resourceVersion 为空,无法 CAS 更新。"
+    }
+    $object = New-PandoraConfigTableConfigMapObject -Data $Candidate.Data -ResourceVersion $resourceVersion
+    $objectJson = $object | ConvertTo-Json -Depth 10
+    if ($null -eq $live) {
+        $objectJson | kubectl @kubectlContextArgs create -f - *> $null
+        Assert-LastExit "$Action(create-only)"
+    } else {
+        $objectJson | kubectl @kubectlContextArgs replace -f - *> $null
+        Assert-LastExit "$Action(resourceVersion CAS replace)"
+    }
+
+    $applied = Get-KubectlJsonObject -KubeContext $KubeContext `
+        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '回读 pandora-configtable ConfigMap'
+    $appliedUID = [string]$applied.metadata.uid
+    if ([string]::IsNullOrWhiteSpace($appliedUID)) { throw "$Action:写后 ConfigMap UID 为空。" }
+    $script:PandoraConfigTableRollback = [pscustomobject]@{
+        KubeContext = $KubeContext
+        PreviousData = $previousData
+        AppliedData = $Candidate.Data
+        AppliedUID = $appliedUID
+        AppliedVersion = [uint64]$Candidate.Version
+    }
+    Assert-PandoraConfigTableDataEqual -Expected $Candidate.Data -Actual $applied.data `
+        -What "pandora-configtable 写后 v$($Candidate.Version)"
+    Write-Ok "pandora-configtable 已 CAS 切到 v$($Candidate.Version)(source_rev=$($Candidate.SourceRev));等待 player Ready 后确认。"
+    return $Candidate
+}
+
+function Confirm-PandoraConfigTableConfigMap {
+    if ($null -eq $script:PandoraConfigTableRollback) { return }
+    Write-Ok "pandora-configtable v$($script:PandoraConfigTableRollback.AppliedVersion) 已由 player Ready 确认。"
+    $script:PandoraConfigTableRollback = $null
+}
+
+function Restore-PandoraConfigTableConfigMapOnFailure {
+    $state = $script:PandoraConfigTableRollback
+    if ($null -eq $state) { return }
+    if ($null -eq $state.PreviousData) {
+        Write-Warn "pandora-configtable v$($state.AppliedVersion) 是首次创建且候选已完整校验；后续流程失败但无旧批次可恢复,保留该对象供重试。"
+        $script:PandoraConfigTableRollback = $null
+        return
+    }
+
+    $current = Get-KubectlJsonObject -KubeContext $state.KubeContext `
+        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '失败回滚前读取 pandora-configtable'
+    if ([string]$current.metadata.uid -cne [string]$state.AppliedUID) {
+        throw 'pandora-configtable UID 已变化,拒绝回滚覆盖他人新对象。'
+    }
+    Assert-PandoraConfigTableDataEqual -Expected $state.AppliedData -Actual $current.data `
+        -What 'pandora-configtable 回滚前 CAS 内容'
+    $rv = [string]$current.metadata.resourceVersion
+    if ([string]::IsNullOrWhiteSpace($rv)) { throw 'pandora-configtable 回滚前 resourceVersion 为空。' }
+    $previousVersion = Get-PandoraConfigTableVersionFromData ([pscustomobject]$state.PreviousData) 'pandora-configtable 旧批次'
+    $restoreObject = New-PandoraConfigTableConfigMapObject -Data $state.PreviousData -ResourceVersion $rv
+    ($restoreObject | ConvertTo-Json -Depth 10) | kubectl --context $state.KubeContext replace -f - *> $null
+    Assert-LastExit 'pandora-configtable 失败回滚(resourceVersion CAS replace)'
+    $restored = Get-KubectlJsonObject -KubeContext $state.KubeContext `
+        -Arguments @('get', 'configmap/pandora-configtable', '-n', $K8sNamespace, '-o', 'json') `
+        -Action '回读已回滚 pandora-configtable'
+    Assert-PandoraConfigTableDataEqual -Expected $state.PreviousData -Actual $restored.data `
+        -What "pandora-configtable 回滚后 v$previousVersion"
+    Write-Warn "player 未 Ready,已把 pandora-configtable 从 v$($state.AppliedVersion) CAS 回滚到 v$previousVersion。"
+    $script:PandoraConfigTableRollback = $null
+}
+
+function Invoke-WithPandoraConfigTableRollback([scriptblock]$Operation) {
+    try { & $Operation }
+    catch {
+        $failure = $_
+        try { Restore-PandoraConfigTableConfigMapOnFailure }
+        catch { throw "原流程失败:$($failure.Exception.Message);pandora-configtable 自动回滚也失败:$($_.Exception.Message)" }
+        throw $failure
     }
 }
 
@@ -2909,7 +3234,7 @@ function Get-LegacyPandoraConfigMapRefs([object[]]$Items) {
     )
 }
 
-# Secret 迁移的最后一道门：当前 20 个 Deployment 都已改挂 Secret、控制器模板与存活 Pod
+# Secret 迁移的最后一道门：当前 21 个 Deployment 都已改挂 Secret、控制器模板与存活 Pod
 # 均不再引用旧 ConfigMap 后才删除。历史零副本 ReplicaSet 刻意不纳入检查；删除后迁移前 revision
 # 不再可直接 rollout undo，故本次切换是明确的配置载体回退边界。
 function Remove-LegacyPandoraConfigMapAfterRollout([string]$KubeContext) {
@@ -2988,7 +3313,7 @@ function Remove-LegacyPandoraConfigMapAfterRollout([string]$KubeContext) {
     if (-not [string]::IsNullOrWhiteSpace((($remaining | ForEach-Object { $_.ToString() }) -join '').Trim())) {
         throw '旧 pandora-config ConfigMap 删除后仍存在。'
     }
-    Write-Ok '20 个业务 Deployment 与存活 Pod 已迁移到 Secret;旧 pandora-config ConfigMap 已删除。'
+    Write-Ok '21 个业务 Deployment 与存活 Pod 已迁移到 Secret;旧 pandora-config ConfigMap 已删除。'
 }
 
 function Test-CommandExists([string]$cmd) {
@@ -3168,7 +3493,7 @@ function Invoke-Local {
         & "$ScriptDir/dev_all.ps1" -Down
         return
     }
-    Write-Step "local 模式:基础设施(docker) + 20 个 go 服务(宿主进程)"
+    Write-Step "local 模式:基础设施(docker) + 21 个 go 服务(宿主进程)"
     Write-Info "策划本地联调用这个;服务可在 VS Code 断点调试。"
 
     # docker 业务容器会占用同一批端口(50001-50022),与宿主 go 进程互斥。
@@ -3195,7 +3520,7 @@ function Invoke-Docker {
         & "$ScriptDir/dev_down.ps1"
         return
     }
-    Write-Step "docker 模式:基础设施 + 20 个 go 服务全部容器化"
+    Write-Step "docker 模式:基础设施 + 21 个 go 服务全部容器化"
 
     # local 宿主进程会抢同一批端口,先停掉
     Write-Info "先停掉可能在跑的宿主 go 服务(避免端口冲突)..."
@@ -3300,7 +3625,7 @@ function Invoke-Intranet {
 # ===== battle 模式【已废弃 2026-07-14】(原:含战斗混合版,18 业务容器 + 宿主 allocator exec Windows DS)=====
 # 决策(docs/design/decision-revisit-retire-battle-mode.md):Windows DS 只保留给 -Mode local 断点调试,
 # 其他一切要真 DS 的场景一律 -Mode k8s(Agones Linux DS)。本函数仅保留 -Down 分支,
-# 用于清理旧机器上遗留的 battle 栈(18 容器 + 2 宿主 allocator);启动路径一律拒绝。
+# 用于清理旧机器上遗留的 battle 栈(19 容器 + 2 宿主 allocator);启动路径一律拒绝。
 function Invoke-Battle {
     if ($Down) {
         Write-Step "停止含战斗版遗留环境(宿主 allocator + 业务容器 + 基础设施)"
@@ -3795,7 +4120,7 @@ function Ensure-EnvoyImageInMinikube {
 
 # ===== k8s 模式(本地 minikube)=====
 # ===== k8s 模式:把 UE Linux DS 打成镜像并落进 minikube =====
-# DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 20 个 go 业务镜像的一部分,
+# DS 镜像(pandora/battle-ds:dev / pandora/hub-ds:dev)不是 21 个 go 业务镜像的一部分,
 # 由本函数从【同级客户端仓库】的 Linux 打包产物构建。策略(2026-07-09 改为宿主构建 + load):
 #   1) 调 build-image-minikube.ps1 -BuildOnHost:自动解析同级客户端仓库
 #      <sibling>\Packages\Server_Linux_Development\LinuxServer(不写死路径),robocopy /MIR
@@ -4086,6 +4411,7 @@ function Invoke-K8s {
     Assert-LastExit '生成本地 k8s enforce/redis DSTicket v2 配置'
     # 配置含 HS256 密钥(即便本地 dev 也含 ds_auth secret),用 Secret 而非 ConfigMap 承载(P0:密钥不落明文 ConfigMap)。
     Apply-PandoraConfigSecret -KubeContext $mkCtx -Action 'kubectl apply secret pandora-config'
+    $null = Apply-PandoraConfigTableConfigMap -KubeContext $mkCtx -Action 'kubectl apply configmap pandora-configtable'
     kubectl @kubectlContextArgs create configmap pandora-mysql-init --from-file=$mysqlInit -n $K8sNamespace `
         --dry-run=client -o yaml | kubectl @kubectlContextArgs apply -f -
     Assert-LastExit 'kubectl apply configmap pandora-mysql-init'
@@ -4120,7 +4446,7 @@ function Invoke-K8s {
     # -KubeContext:把强删 GameServer 钉在本机 minikube,防误删远端集群。
     Apply-AgonesManifests -InstallAgones -ForceRecreateGameServers -KubeContext $mkCtx
 
-    Write-Step "[5/8] 构建 20 个服务镜像"
+    Write-Step "[5/8] 构建 21 个服务镜像"
     Build-AllImages
 
     Write-Step "[6/8] 把镜像 load 进 minikube(强制刷新固定 :dev tag)"
@@ -4136,7 +4462,7 @@ function Invoke-K8s {
     # 先 patch template annotation，再启动/等待 writer；绝不继承上次发布的旧 annotation。
     Set-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     # 镜像 tag 固定为 :dev,重建/重 load 后 image 字符串不变 -> apply 报 unchanged,旧 Pod 不会换。
-    # 按名强制滚动重启这 20 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
+    # 按名强制滚动重启这 21 个业务 Deployment(不碰 infra,避免重启 kafka 又触发依赖服务 CrashLoop),
     # 确保跑的是刚 build 的新二进制。
     Write-Info "rollout restart 业务 Deployment(同 :dev tag 重建后强制换 Pod)..."
     foreach ($svc in (Get-ServiceList)) {
@@ -4150,6 +4476,7 @@ function Invoke-K8s {
     foreach ($svc in (Get-ServiceList)) {
         kubectl @kubectlContextArgs rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(新 Pod 未就绪,查:kubectl describe/logs)"
+        if ([string]$svc.Name -ceq 'player') { Confirm-PandoraConfigTableConfigMap }
     }
     Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
@@ -4222,7 +4549,7 @@ function Invoke-Online {
 
     if ($Down) {
         Write-Step "删除 online 业务服务 + Agones Fleet/RBAC($Env)"
-        # 业务 overlay(pandora 命名空间 20 个 Deployment/Service/netpol 等)
+        # 业务 overlay(pandora 命名空间 21 个 Deployment/Service/netpol 等)
         kubectl @kubectlContextArgs delete -k $overlay --ignore-not-found
         Assert-LastExit 'kubectl delete -k overlays/online'
         # 启动时 Apply-AgonesManifests 还 apply 了 Fleet(default ns)与 allocator RBAC,否则 Down 后
@@ -4346,14 +4673,28 @@ function Invoke-Online {
             }
         }
     }
+    # owner 权威库 DSN(§9.22):online 部署 owner 服务,必须在推镜像前确认真 TiDB DSN 已提供。
+    # dev 单机 MySQL 无复制天然线性一致仅限本地;MySQL 异步复制切换会回滚已确认写,
+    # owner CAS 回滚即可能双 owner(脑裂)。细校验(库名/格式)由 gen_cluster_config.ps1 复核。
+    $ownerStoreDsn = $env:PANDORA_OWNER_TIDB_DSN
+    if ([string]::IsNullOrWhiteSpace($ownerStoreDsn)) {
+        throw 'online -Prod 部署必须先设环境变量 PANDORA_OWNER_TIDB_DSN(owner 权威库真 TiDB DSN,pandora_owner 库;§9.22 确认写不回滚);缺失已中止,不推镜像不部署(P0)。'
+    }
+    if ($ownerStoreDsn -match '[\x00-\x1F\x7F-\x9F]') {
+        throw 'PANDORA_OWNER_TIDB_DSN 含控制字符(换行/回车/制表等),多半是复制粘贴事故;已中止(P0)。'
+    }
+    if ($ownerStoreDsn.Contains('pandora_dev_pwd') -or $ownerStoreDsn.Contains('mysql:3306') -or $ownerStoreDsn.Contains('127.0.0.1:3307')) {
+        throw 'PANDORA_OWNER_TIDB_DSN 指向公开 dev 凭据或 dev MySQL 地址;生产必须连真 TiDB(deploy/tidb-init/02-owner-tidb.sql)。'
+    }
     # Online 使用本次调用独占的不可复用快照。共享 run/cluster/etc 在 Edge 探测/BuildPush 的长窗口内
     # 可能被 docker/k8s/Resume 重新生成成 dev/mock 配置，不能作为生产预检后的发布源。
     $onlineSnapshotRoot = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot 'run/cluster'))
     $onlineConfigDir = Join-Path $onlineSnapshotRoot "online-$Env-$([guid]::NewGuid().ToString('N'))"
+    $onlineConfigTableBatch = $null
     $runtimeOverlayDir = ''
     $dsticketOperationLock = $null
     try {
-    # 所有本地确定性检查必须先于 BuildPush。生成器在独立 staging 中完成 20 文件精确校验，
+    # 所有本地确定性检查必须先于 BuildPush。生成器在独立 staging 中完成 21 文件精确校验，
     # 发布失败会回滚旧集合；因此源配置缺失、磁盘错误、JWKS/密钥异常都不会等到推镜像后才暴露。
     Write-Step "预生成并完整校验线上集群配置(allocator=agones)"
     $genArgs = @('-OutDir', $onlineConfigDir, '-AllocatorMode', 'agones', '-Prod')
@@ -4393,6 +4734,10 @@ function Invoke-Online {
     if (-not [string]::IsNullOrWhiteSpace($CanarySeed)) { $genArgs += @('-CanarySeed', $CanarySeed) }
     & "$ScriptDir/gen_cluster_config.ps1" @genArgs
     Assert-LastExit '生成 online 候选配置'
+    # 与含密钥 YAML 相同，配置表也在任何镜像构建/registry 等待前冻结为本次调用独占的
+    # 内存快照。后续 apply 不再读取共享 configtable/dist，导表重跑不能撕裂本次发布。
+    $onlineConfigTableBatch = Get-PandoraConfigTableCandidate -ConfigTableDir (Join-Path $ProjectRoot 'configtable/dist')
+    Write-Ok "online 配置表候选已冻结:v$($onlineConfigTableBatch.Version) source_rev=$($onlineConfigTableBatch.SourceRev)。"
 
     # P1:普通发布不是换钥流程。必须比较 live Secret/pandora-config 与本次生成结果中实际落盘的
     # 玩家 Session / DS callback HMAC 指纹及 additional keyset；只比较完整 SHA256，不打印密钥
@@ -4574,9 +4919,9 @@ function Invoke-Online {
             throw 'online BuildPush 禁止 PANDORA_OFFLINE=1：发布必须从当前 clean commit 严格重建，不能导入/复用离线包。'
         }
         throw 'online BuildPush 仍阻断：必须先在目标 registry 启用并由平台验证 native immutable-tag/create-only 策略与发布锁。HEAD 预检存在 TOCTOU，不能作为不可变证明；本次未 build、未 push。'
-        Write-Step '预检 20 个不可变 tag 均不存在（任一鉴权/网络不确定即阻断）'
+        Write-Step '预检 21 个不可变 tag 均不存在（任一鉴权/网络不确定即阻断）'
         foreach ($name in $serviceNames) { Assert-RemoteImageTagAbsent -Reference $remoteRefs[$name] }
-        Write-Step "从当前 clean commit 严格重建并推送 20 个 Go 服务镜像到 $Registry"
+        Write-Step "从当前 clean commit 严格重建并推送 21 个 Go 服务镜像到 $Registry"
         Build-AllImages -StrictRelease
         foreach ($name in $serviceNames) {
             Assert-LocalImageRevision -Reference "pandora/${name}:dev" -Expected $currentCommit
@@ -4589,7 +4934,7 @@ function Invoke-Online {
             $goPins[$svc.Name] = $descriptor.Pinned
         }
     } else {
-        Write-Step '从 registry 解析 20 个 Go 服务镜像 digest（不按 tag 部署）'
+        Write-Step '从 registry 解析 21 个 Go 服务镜像 digest（不按 tag 部署）'
         foreach ($name in $serviceNames) {
             $descriptor = Get-RegistryImageDescriptor -Reference $remoteRefs[$name]
             $goDigests[$name] = $descriptor.Digest
@@ -4637,7 +4982,7 @@ function Invoke-Online {
     $battleCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryBattleDsImage)) { 0 } else { $BattleCanaryReplicas }
     $hubCanaryReplicaApply = if ([string]::IsNullOrWhiteSpace($CanaryHubDsImage)) { 0 } else { $HubCanaryReplicas }
 
-    Write-Step '生成独占 runtime overlay，并验证 20 个 digest pin + 5 个 writer annotation'
+    Write-Step '生成独占 runtime overlay，并验证 21 个 digest pin + 5 个 writer annotation'
     $runtimeOverlayArgs = @{
         SourceOverlay = $overlay; Registry = $registryRoot; Digests = $goDigests
         ServiceNames = $serviceNames; WriterServices = $writerServices; EnvironmentName = $Env
@@ -4726,6 +5071,8 @@ function Invoke-Online {
     $null = Assert-OnlineDSTicketOperationLockHeld -KubeContext $ctx -Identity $dsticketOperationLock
     # 生产配置含两把真 HS256 密钥,用 Secret 承载(P0:严禁把真密钥写进明文 ConfigMap)。
     Apply-PandoraConfigSecret -KubeContext $ctx -ConfigDir $onlineConfigDir -Action 'kubectl apply secret pandora-config'
+    $null = Apply-PandoraConfigTableConfigMap -KubeContext $ctx -Action 'kubectl apply configmap pandora-configtable' `
+        -Candidate $onlineConfigTableBatch
     if ($Env -eq 'prod') {
         $postConfigActivationEvidence = Get-OnlineDsAuthActivationEvidenceState -KubeContext $ctx
         Assert-OnlineDsAuthActivationEvidenceUnchanged $onlineDsAuthActivationEvidence $postConfigActivationEvidence
@@ -4765,7 +5112,7 @@ function Invoke-Online {
 
     # Secret 传播(审核 P1 #4):pandora-config 以 subPath 挂载,Secret 内容更新不会热感知;
     # 且镜像 tag 不变时 apply -k 判定 pod 模板 unchanged 不触发 rollout → Pod 继续用旧密钥/旧配置。
-    # 故显式按名 rollout restart 20 个业务 Deployment,强制重挂最新 Secret(服务支持 SIGTERM 排空,
+    # 故显式按名 rollout restart 21 个业务 Deployment,强制重挂最新 Secret(服务支持 SIGTERM 排空,
     # 滚动重启零停机,见 CLAUDE.md §9 不变量 16),再等关键服务就绪确认新配置生效。
     Write-Step "rollout restart 业务 Deployment(传播更新后的 pandora-config Secret)"
     foreach ($svc in (Get-ServiceList)) {
@@ -4778,6 +5125,7 @@ function Invoke-Online {
         $deploymentName = if ($Env -eq 'prod' -and $writerServices -contains [string]$svc.Name) { "$($svc.Name)-ds-auth-green" } else { [string]$svc.Name }
         kubectl @kubectlContextArgs rollout status "deploy/$deploymentName" -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $deploymentName(Secret 传播后未就绪,查:kubectl describe/logs)"
+        if ([string]$svc.Name -ceq 'player') { Confirm-PandoraConfigTableConfigMap }
     }
     Assert-OnlineDeploymentImageState -KubeContext $ctx -Pins $goPins -Digests $goDigests `
         -WriterServices $writerServices -CanonicalGreen:($Env -eq 'prod')
@@ -4871,6 +5219,7 @@ function Get-ServiceList {
         @{ Name = 'mail';           Dir = 'services/social/mail';              Cmd = 'mail' }
         @{ Name = 'player-locator'; Dir = 'services/runtime/player_locator';   Cmd = 'locator' }
         @{ Name = 'leaderboard';    Dir = 'services/runtime/leaderboard';      Cmd = 'leaderboard' }
+        @{ Name = 'owner';          Dir = 'services/runtime/owner';            Cmd = 'owner' }
         @{ Name = 'team';           Dir = 'services/matchmaking/team';         Cmd = 'team' }
         @{ Name = 'matchmaker';     Dir = 'services/matchmaking/matchmaker';   Cmd = 'matchmaker' }
         # PVE 直进匹配实例:与 matchmaker 同目录同二进制(镜像层全缓存,构建零成本),
@@ -5097,7 +5446,7 @@ function Build-Images-Host {
     $stageRoot = Join-Path $ProjectRoot 'run/docker-build/prebuilt'
     if (-not (Test-Path $stageRoot)) { New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null }
 
-    # 预编译镜像只需 CA + zoneinfo。若 Dockerfile 对 20 个服务都直接 FROM 远程 golang tag，
+    # 预编译镜像只需 CA + zoneinfo。若 Dockerfile 对 21 个服务都直接 FROM 远程 golang tag，
     # BuildKit 即使已有 layer cache 仍可能逐次请求 registry manifest/token；网络抖动会在任意
     # 一个服务处 TLS timeout。循环前只准备一次本地固定 source tag，之后打包完全不访问 registry。
     $runtimeAssetsImage = 'pandora/runtime-assets:local'
@@ -5254,6 +5603,7 @@ function Resume-K8s {
         -DsTicketKeysetRevision 1
     Assert-LastExit '恢复生成本地 k8s enforce/redis DSTicket v2 配置'
     Apply-PandoraConfigSecret -KubeContext $mkCtx -Action 'kubectl apply secret pandora-config(advertise 刷新)'
+    $null = Apply-PandoraConfigTableConfigMap -KubeContext $mkCtx -Action 'kubectl apply configmap pandora-configtable(恢复刷新)'
     # 重新 apply 业务清单(审核 P1 #5):-Resume 若恢复的是「旧版本(挂 ConfigMap)部署的集群」,
     # 光 create Secret 不会让 Pod 改用它 —— 卷源仍指向旧 ConfigMap,新 Secret 完全被忽略。
     # 重 apply 当前清单把卷源纠正为 Secret(:dev tag 不变,未变的 Deployment 报 unchanged 不churn;
@@ -5265,9 +5615,9 @@ function Resume-K8s {
     # 在旧 RollingUpdate 对象上先 patch digest 会短时启动两个 Hub ledger writer。
     # Resume 不构建镜像，节点现存 immutable image config digest 是实际 source of truth。
     Set-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
-    # Secret 以 subPath 挂载不会热感知:按名 rollout restart 全部 20 个业务 Deployment,
+    # Secret 以 subPath 挂载不会热感知:按名 rollout restart 全部 21 个业务 Deployment,
     # 让刷新后的 pandora-config Secret(advertise + 其它配置)在每个 Pod 生效(滚动重启零停机)。
-    # 必须逐个等待全部 20 个 Deployment；只等 allocator 会把其余服务的失败误报成“全部传播完成”。
+    # 必须逐个等待全部 21 个 Deployment；只等 allocator 会把其余服务的失败误报成“全部传播完成”。
     Write-Info "rollout restart 全部业务 Deployment(传播刷新后的 pandora-config Secret)..."
     foreach ($svc in (Get-ServiceList)) {
         kubectl --context $mkCtx rollout restart deploy/$($svc.Name) -n $K8sNamespace
@@ -5276,6 +5626,7 @@ function Resume-K8s {
     foreach ($svc in (Get-ServiceList)) {
         kubectl --context $mkCtx rollout status deploy/$($svc.Name) -n $K8sNamespace --timeout=180s
         Assert-LastExit "rollout status $($svc.Name)(Secret 刷新后未就绪)"
+        if ([string]$svc.Name -ceq 'player') { Confirm-PandoraConfigTableConfigMap }
     }
     Assert-LocalDsAuthImageDigestAnnotations -KubeContext $mkCtx -MinikubeProfile $mkProfile
     Remove-LegacyPandoraConfigMapAfterRollout -KubeContext $mkCtx
@@ -5449,14 +5800,16 @@ if ($BuildOnly) {
     exit 0
 }
 
-if ($Reset)  { Invoke-Reset;  exit 0 }
-if ($Resume) { Invoke-Resume; exit 0 }
+if ($Reset)  { Invoke-WithPandoraConfigTableRollback { Invoke-Reset };  exit 0 }
+if ($Resume) { Invoke-WithPandoraConfigTableRollback { Invoke-Resume }; exit 0 }
 
-switch ($Mode) {
-    'local'    { Invoke-Local }
-    'docker'   { Invoke-Docker }
-    'intranet' { Invoke-Intranet }
-    'battle'   { Invoke-Battle }
-    'k8s'      { Invoke-K8s }
-    'online'   { Invoke-Online }
+Invoke-WithPandoraConfigTableRollback {
+    switch ($Mode) {
+        'local'    { Invoke-Local }
+        'docker'   { Invoke-Docker }
+        'intranet' { Invoke-Intranet }
+        'battle'   { Invoke-Battle }
+        'k8s'      { Invoke-K8s }
+        'online'   { Invoke-Online }
+    }
 }

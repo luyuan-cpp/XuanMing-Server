@@ -1,6 +1,6 @@
 # Pandora 配置表热更流水线
 
-> **状态**:核心链路已落地(2026-07-21,首表 level/g_关卡;§10 有落点清单),方向 2026-06-30 拍板
+> **状态**:核心链路已落地(2026-07-21;现有 `level` + `player_level_exp` 两表,§10 有落点清单),方向 2026-06-30 拍板
 > **本文档地位**:策划配置表(`Table`)→ JSON → 服务端热加载 的契约与目录约定。
 > **关联规范**:`CLAUDE.md §5`(proto 优先 / 配置表 ID `uint32`)、`infra.md`(资源命名)、`pandora-arch.md §11`(决策行)。
 > **一句话**:这是**配置发布 / 热更流水线**,不是分布式配置中心;Apollo / Nacos **现在不接**,以后只可能当"发布通知 / 版本号",不当大量表 JSON 的主存储。
@@ -134,7 +134,9 @@ F:\work\XuanMing-Server\configtable\dist\
 
 - 服务端**只加载 manifest 列出的表**;`active` 目录里有 manifest 之外的文件 = 视为脏数据,告警。
 - 加载前**逐表校验 checksum**,不匹配整批拒绝(防止拷贝过程被截断)。
-- `version` **单调递增**;收到的 version ≤ 当前 active version 时拒绝(防回退 / 重放),除非显式回滚指令。
+- `version` **单调递增**;收到的 version **<** 当前 active version 时拒绝(防回退 / 重放),
+  除非显式回滚指令。version **==** 当前 active 是幂等确认(reload 返回 code=OK +
+  activeVersion,发布脚本崩溃续跑 / 服务重启后内存落后磁盘靠它收敛),不算拒绝。
 
 ## §6 reload 接口契约
 
@@ -147,6 +149,11 @@ F:\work\XuanMing-Server\configtable\dist\
   - **幂等**:同一 version 重复 reload 不产生副作用(已生效则直接返回当前状态)。
   - **同步返回加载结果**:成功返回生效 version;失败返回错误原因(哪张表、哪行、何种校验失败),**且不切换**(保留旧表)。
   - **原子切换**:加载进临时结构 → 全表校验通过 → 原子替换内存指针(`atomic.Pointer` / 参考 `pkg/cellroute` 的 `AtomicTable`)。
+
+**分布式边界**:`atomic.Pointer` 只保证一个服务进程内的批次原子性。当前
+`configtable_publish.ps1 -ReloadAddr` 只面向单实例/dev;逐个调用多个副本会出现部分成功窗口,
+不能宣称全 fleet 原子热更。生产多副本一致切换仍需版本通知、全副本确认与业务写入口屏障;
+在此之前,会改变不可逆结算结果的表(如玩家升级曲线)必须先关入口再滚动收敛。
 - **响应/请求结构**:按 `CLAUDE.md §5` 用 proto message 定义(`ReloadConfigTableRequest` / `ReloadConfigTableResponse`),不手写并行 struct。
 
 ## §7 校验清单(生成阶段严格执行)
@@ -184,25 +191,35 @@ F:\work\XuanMing-Server\configtable\dist\
 > 三处标准化改造:全批快照 + `atomic.Pointer` 原子切换(旧为普通指针赋值)、失败返回 error 保留旧表
 > (旧为 `log.Fatalf`)、manifest 驱动整批 all-or-nothing(旧为逐表独立加载)。
 
-1. [x] 各表 proto message:`proto/pandora/config/v1/level.proto`(LevelRow/LevelTableData,首表 = g_关卡)。
+1. [x] 各表 proto message:`proto/pandora/config/v1/level.proto`(关卡表)与
+       `player_level_exp.proto`(玩家等级经验表,源 `角色/j_玩家等级经验.xlsx`)。
 2. [x] `configtable-gen` 生成器:`tools/configtable-gen`(Go,独立 module;stdlib 自实现 xlsx 最小读取器,
        无 Python 依赖)。§7 校验齐;产物确定性序列化(protojson Compact→Indent);version 自动单调
-       (YYYYMMDD*1000+seq);同内容幂等不写盘。首批产物已入库 `configtable/dist`(v20260721001)。
+       (YYYYMMDD*1000+seq);同内容幂等不写盘。当前批次 `configtable/dist` 为
+       v20260722002 / `svn-r1306`(`level` 9 行、`player_level_exp` 15 行)。
 3. [x] 服务端加载器:`pkg/configtable`(manifest 校验 + checksum + 行数断言 + 运行时 `DiscardUnknown` +
        version 单调防回退 + 全批成功才 `atomic.Pointer` 切换 + 未知新表跳过告警/脏文件告警)。
-4. [~] reload 入口:gRPC `ConfigTableAdminService.ReloadConfigTable` 已落(matchmaker 内部端口,
-       幂等/expect_version/失败保留旧表);**etcd 版本键 watch(多机)待排期**,单机/dev 用 RPC 已够。
+4. [~] reload 入口:gRPC `ConfigTableAdminService.ReloadConfigTable` 已落(matchmaker/player 内部
+       gRPC 端口,幂等/expect_version/失败保留旧表);**etcd 版本键 watch + fleet 确认(多机)
+       待排期**,单机/dev 用 RPC 已够。
 5. [x] staging → active 切换 + history 留档:`tools/scripts/configtable_publish.ps1`(文件面;回滚 =
-       重新生成更高版本发布,脚本拒绝低版本覆盖)。
+       重新生成更高版本发布,脚本拒绝**低版本**覆盖;**同版本**是文件面 no-op 但仍触发
+       幂等 reload——崩溃续跑 / 服务重启后内存落后磁盘靠它收敛,不算拒绝)。
 6. [x] 发布脚本同上(可选 `-ReloadAddr` 用 grpcurl 触发 reload)。
 
-**已接线服务**:matchmaker(`config_table.dir` 开关,空=不启用;启用后启动强依赖 fail-closed,
-StartMatch 校验 map_id ∈ 关卡表且 category=战斗,否则 `ERR_MATCH_INVALID_MAP`)。
+**已接线服务**:
+
+- matchmaker:`config_table.dir` 开关,空=不启用;启用后启动强依赖 fail-closed,StartMatch 校验
+  map_id ∈ 关卡表且 category=战斗,否则 `ERR_MATCH_INVALID_MAP`。当前集群模板仍未默认打开该开关。
+- player:配置表为启动强依赖;从 `player_level_exp` 生成本次经验事务的曲线副本,加载/热更均执行
+  整表不变量校验,并拒绝降低最高等级。Compose 只读挂 `configtable/dist`;K8s 由
+  `pandora-configtable` ConfigMap 整目录挂到 `/app/configtable/active`。YAML `exp_curve` 已删除。
 
 **生成器是 protogen 式的(2026-07-21 定稿,做法对齐旧项目 tools/proto_generator/protogen)**:
 proto 即单一事实源——表与列的导表元信息全部标注在 `proto/pandora/config/v1/excel.proto`
-定义的自定义 option 上(`(excel_file)` 标容器 = 一张表;`(excel_col)/(excel_required)/
-(excel_default)/(excel_prefix)` 标行字段 = 一列),`tools/configtable-gen` 经 protoreflect
+定义的自定义 option 上(`(excel_file)` 标容器 = 一张表;`(excel_data_start_row)` 可覆盖默认
+第 5 行数据起点;`(excel_col)/(excel_required)/(excel_default)/(excel_prefix)` 标行字段 = 一列),
+`tools/configtable-gen` 经 protoreflect
 描述符自动发现全部配置表(`internal/tablegen/discover.go`),**零手写登记代码**:
 - 数据侧:通用行构建器(`builder.go`)按注解做 §7 校验(表头精确对齐 / 类型 / 枚举拒 0 /
   必填 / 默认值 / 前缀 / 主键唯一),xlsx → 容器 message → dist JSON;
@@ -227,13 +244,18 @@ proto 即单一事实源——表与列的导表元信息全部标注在 `proto/
 - `(excel_bit_index)`(容器注解)稳定「ID → 位序」映射 → 生成 `<name>_bitindex.gen.go`
   (`<Name>BitIndex(id)` / `<Name>BitCount`),供进度 / 解锁位图存储(旧 mission/reward 用途)。
   **稳定性权威 = `configtable/bitindex_state/<name>.json`(git 跟踪,严禁手改 / 丢弃,
-  丢失 = 已落库位图全部错位作废)**:新 ID 追加分配,删除的 ID 保留占位永不复用。
+  丢失 = 已落库位图全部错位作废;生成器对缺失状态 fail-closed,仅 `-bitindex-bootstrap`
+  可显式初始化从未发布过的表)**:新 ID 追加分配,删除的 ID 保留占位永不复用。
   关卡表已启用(关卡解锁 / 通关进度位图)。
+  ⚠️ **位序映射是编译期 Go map,不随 JSON 热更**:bit_index 表新增 ID 的发布必须
+  「重生代码 + 发新二进制」与 JSON 批次**同步上线**(先二进制后表体),仅热更 JSON
+  会让新 ID 查不到位序;发布清单必须把这一步列为硬依赖。
 这四类注解的端到端测试由 `proto/pandora/configtest/v1` 夹具包承担(角色对齐旧项目
 Test.xlsx / TestMultiKey.xlsx;独立包,生产 Discover 扫不到、不进 dist)。
 未移植 comp(ECS 组件)模板:Go 侧无 ECS 消费方,出现真实需求再加(§15.3)。
 
 **加新表三步**:① 写 proto(行 message 打 `(excel_col)` 等注解,容器打 `(excel_file)`)
 → ② `pwsh tools/scripts/proto_gen.ps1` 重生 pb → ③ `go run ./tools/configtable-gen
--tables <Table根>`(数据 + Go 代码 + 伴生桩一次产出;桩里按需补业务校验与域方法)。
+-tables <Table根> -source-rev svn-r<N>`(数据 + Go 代码 + 伴生桩一次产出;桩里按需补
+业务校验与域方法。`-source-rev` 必填且拒 unknown/空白——发布产物必须可追溯到源表版本)。
 

@@ -27,9 +27,13 @@ CREATE TABLE IF NOT EXISTS `battles` (
     `map_id`        INT UNSIGNED     NOT NULL DEFAULT 0,
     `created_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`match_id`),
-    KEY `idx_ended` (`ended_at_ms`)
+    KEY `idx_ended` (`ended_at_ms`),
+    KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Pandora 对局结算头(幂等键 match_id)';
+-- idx_created 服务保留期清理(§9.24:按服务端落库时间 created_at 超期批删,不信 DS 上报
+-- 的 ended_at_ms;idx_ended 服务玩家对局历史查询)。存量库由 tools/migrate
+-- pandora_battle 000007_battle_retention_indexes 条件补齐。
 
 CREATE TABLE IF NOT EXISTS `battle_player_stats` (
     `id`           BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
